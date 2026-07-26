@@ -1,0 +1,30 @@
+# ============================================================
+#  Moon2D - .gitattributes
+# ============================================================
+# Windows-only project. Sources are CRLF + UTF-8 BOM. The BOM is
+# mandatory: without it Delphi 12 reads Cyrillic string literals as
+# CP1251 and the game ships mojibake (see PORTING-NOTES.md).
+#
+# Hence: no end-of-line conversion anywhere, in either direction.
+# Git stores every byte exactly as it was written.
+
+* -text
+
+# ---- Explicitly binary: never diff, never attempt a merge ----
+*.bmp     binary
+*.png     binary
+*.jpg     binary
+*.ogg     binary
+*.wav     binary
+*.dll     binary
+*.exe     binary
+*.res     binary
+*.masset  binary
+
+# Note: .mns and default.txt are plain text (ordered frame lists) and are
+# deliberately NOT marked binary, so their diffs stay readable.
+
+# ---- GitHub Linguist hints ----
+*.pas     linguist-language=Pascal
+*.dpr     linguist-language=Pascal
+*.dproj   linguist-generated=true

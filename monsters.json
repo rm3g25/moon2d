@@ -1,0 +1,465 @@
+{
+  "version": 1,
+  "comment": "Moon 2D monster definitions. Extracted from monst.pas (backup 2008-05-14). legacyName maps to the old level-file format for the converter.",
+  "defaults": {
+    "bound": 8,
+    "spritesToDeath": 8,
+    "animFreq": 0.25,
+    "score": 1,
+    "dangerous": true
+  },
+  "monsters": [
+    {
+      "id": "gravel",
+      "legacyName": "Базовый монстр",
+      "displayName": "Грейвел",
+      "displayNameEn": "Gravel",
+      "category": "enemy",
+      "spriteList": "gravel.mns",
+      "movement": {
+        "kind": "patrol",
+        "speed": 1
+      },
+      "attack": null,
+      "stats": {
+        "lives": 3,
+        "score": 1
+      },
+      "animFreq": 0.25,
+      "deathText": "Грейвел убит",
+      "deathTextEn": "Gravel bites the dust",
+      "deathSounds": [
+        "death.wav"
+      ]
+    },
+    {
+      "id": "gravelFemale",
+      "legacyName": "Базовый монстр 2",
+      "displayName": "Самка грейвела",
+      "displayNameEn": "Gravel Female",
+      "category": "enemy",
+      "spriteList": "gravel2.mns",
+      "movement": {
+        "kind": "patrolNoEdgeCheck",
+        "speed": 2
+      },
+      "attack": null,
+      "stats": {
+        "lives": 6,
+        "score": 1
+      },
+      "animFreq": 0.25,
+      "deathText": "Самка грейвела убита",
+      "deathTextEn": "Gravel female bites the dust",
+      "deathSounds": [
+        "death2.wav"
+      ]
+    },
+    {
+      "id": "winter",
+      "legacyName": "Винтер",
+      "displayName": "Винтер",
+      "displayNameEn": "Winter",
+      "category": "enemy",
+      "spriteList": null,
+      "movement": {
+        "kind": "chaseHero",
+        "speed": 1
+      },
+      "attack": null,
+      "stats": {
+        "lives": 9,
+        "score": 1
+      },
+      "animFreq": 0.25,
+      "deathText": "Винтер убит",
+      "deathTextEn": "Winter has fallen",
+      "deathSounds": [
+        "vint.wav"
+      ]
+    },
+    {
+      "id": "zombieShooter",
+      "legacyName": "Стрелок",
+      "displayName": "Зомби-стрелок",
+      "displayNameEn": "Zombie Gunner",
+      "category": "enemy",
+      "spriteList": "shoot1.mns",
+      "movement": {
+        "kind": "patrol",
+        "speed": 2
+      },
+      "attack": {
+        "pattern": "straightSingle",
+        "fireEveryTicks": 33,
+        "bulletSpeed": 5
+      },
+      "stats": {
+        "lives": 5,
+        "score": 1
+      },
+      "animFreq": 0.25,
+      "deathText": "Зомби стрелок убит",
+      "deathTextEn": "Zombie gunner put down for good",
+      "deathSounds": [
+        "man.wav"
+      ]
+    },
+    {
+      "id": "betoner",
+      "legacyName": "Стрелок2",
+      "displayName": "Бетонер",
+      "displayNameEn": "Betoner",
+      "category": "enemy",
+      "spriteList": "betoner.mns",
+      "movement": {
+        "kind": "patrol",
+        "speed": 1
+      },
+      "attack": {
+        "pattern": "aimedDouble",
+        "fireEveryTicks": 51,
+        "bulletSpeed": 2,
+        "secondBulletOffsetX": 16
+      },
+      "stats": {
+        "lives": 10,
+        "score": 2
+      },
+      "animFreq": 0.5,
+      "deathText": "Бетонер убит",
+      "deathTextEn": "Betoner demolished",
+      "deathSounds": [
+        "beton.wav"
+      ]
+    },
+    {
+      "id": "platform",
+      "legacyName": "Платформа",
+      "displayName": "Платформа TeK-K10",
+      "displayNameEn": "TeK-K10 Platform",
+      "category": "enemy",
+      "spriteList": null,
+      "movement": {
+        "kind": "patrolNoEdgeCheck",
+        "speed": 2
+      },
+      "attack": {
+        "pattern": "aimedDouble",
+        "fireEveryTicks": 41,
+        "bulletSpeed": 5,
+        "secondBulletOffsetX": 16
+      },
+      "stats": {
+        "lives": 27,
+        "score": 3
+      },
+      "animFreq": 0.5,
+      "deathText": "платформа TeK-K10 уничтожена",
+      "deathTextEn": "TeK-K10 platform decommissioned",
+      "deathSounds": [
+        "platform.wav"
+      ],
+      "affectedByGravity": false,
+      "explodesOnDeath": true
+    },
+    {
+      "id": "tank",
+      "legacyName": "Танк",
+      "displayName": "Танк TeK-J02",
+      "displayNameEn": "TeK-J02 Tank",
+      "category": "enemy",
+      "spriteList": null,
+      "movement": {
+        "kind": "patrol",
+        "speed": 1
+      },
+      "attack": {
+        "pattern": "straightCluster5",
+        "fireEveryTicks": 50,
+        "bulletSpeed": 3,
+        "clusterOffset": 3
+      },
+      "stats": {
+        "lives": 40,
+        "score": 3
+      },
+      "animFreq": 0.25,
+      "deathText": "Танк TeK-J02 уничтожен",
+      "deathTextEn": "TeK-J02 tank scrapped",
+      "deathSounds": [
+        "bottle.wav",
+        "platform.wav"
+      ],
+      "explodesOnDeath": true
+    },
+    {
+      "id": "mount",
+      "legacyName": "Крепление",
+      "displayName": "Крепление",
+      "displayNameEn": "Ceiling Mount",
+      "category": "enemy",
+      "spriteList": null,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": {
+        "pattern": "rainVolley",
+        "fireEveryTicks": 45,
+        "bulletSpeed": 12,
+        "volleyCount": 7,
+        "volleySpacingX": 4,
+        "angleDeg": 270
+      },
+      "stats": {
+        "lives": 15,
+        "score": 2
+      },
+      "animFreq": 0.25,
+      "deathText": "Крепление взорвано",
+      "deathTextEn": "Ceiling mount blown to bits",
+      "deathSounds": [
+        "platform.wav"
+      ],
+      "affectedByGravity": false,
+      "explodesOnDeath": true
+    },
+    {
+      "id": "barrel",
+      "legacyName": "Бочка",
+      "displayName": "Бочка",
+      "displayNameEn": "Barrel",
+      "category": "prop",
+      "spriteList": "barrel.mns",
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "stats": {
+        "lives": 5,
+        "score": 2
+      },
+      "animFreq": 0.25,
+      "deathText": "Бочка взорвана",
+      "deathTextEn": "Barrel went boom",
+      "deathSounds": [
+        "bottle.wav"
+      ],
+      "explodesOnDeath": true
+    },
+    {
+      "id": "medkit",
+      "legacyName": "Аптечка",
+      "displayName": "Аптечка",
+      "displayNameEn": "Medkit",
+      "category": "pickup",
+      "spriteList": "medic.mns",
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "heal"
+      },
+      "stats": {
+        "lives": 300,
+        "score": 1
+      },
+      "animFreq": 0.25,
+      "deathText": "Аптечка активирована",
+      "deathTextEn": "Medkit activated",
+      "deathSounds": [
+        "medic.wav"
+      ]
+    },
+    {
+      "id": "weaponShotgun",
+      "legacyName": "Оружие 1",
+      "displayName": "Дробовик",
+      "displayNameEn": "Shotgun",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 1,
+        "fireCooldown": 20,
+        "bulletSpeed": 8,
+        "bulletGravity": 1
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Дробовик активирован",
+      "deathTextEn": "Shotgun acquired",
+      "deathSounds": [
+        "gun.wav"
+      ]
+    },
+    {
+      "id": "weaponGrenade",
+      "legacyName": "Оружие 2",
+      "displayName": "Гранатомёт",
+      "displayNameEn": "Grenade Launcher",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 2,
+        "fireCooldown": 40,
+        "bulletSpeed": 7,
+        "bulletGravity": 11
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Гранатомёт активирован",
+      "deathTextEn": "Grenade launcher acquired",
+      "deathSounds": [
+        "gun.wav"
+      ]
+    },
+    {
+      "id": "weapon3",
+      "legacyName": "Оружие 3",
+      "displayName": "Оружие 3",
+      "displayNameEn": "Weapon 3",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 3,
+        "fireCooldown": 5,
+        "bulletSpeed": 10,
+        "bulletGravity": 1
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Объект уничтожен",
+      "deathTextEn": "Object destroyed",
+      "deathSounds": [
+        "gun.wav"
+      ]
+    },
+    {
+      "id": "weapon4",
+      "legacyName": "Оружие 4",
+      "displayName": "Оружие 4",
+      "displayNameEn": "Weapon 4",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 4,
+        "fireCooldown": 6,
+        "bulletSpeed": 10,
+        "bulletGravity": 1
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Объект уничтожен",
+      "deathTextEn": "Object destroyed",
+      "deathSounds": [
+        "gun.wav"
+      ],
+      "_note": "Release-only pickup. fireCooldown 6 is the author's 2026 call (assault rifle: ~2.5x faster than the old 15 cloned from weapon3 pacing); other stats still to verify against release monst.pas"
+    },
+    {
+      "id": "boss1",
+      "legacyName": "Босс 1",
+      "displayName": "Охранный робот TEK-R1",
+      "displayNameEn": "Security Robot TEK-R1",
+      "category": "boss",
+      "spriteList": null,
+      "movement": {
+        "kind": "bossFly",
+        "speed": 3
+      },
+      "attack": {
+        "pattern": "aimedSingle",
+        "fireEveryTicks": 20,
+        "bulletSpeed": 4
+      },
+      "stats": {
+        "lives": 400,
+        "score": 10
+      },
+      "animFreq": 0.9,
+      "spawnPos": {
+        "spriteX": 15,
+        "spriteY": 5
+      },
+      "initialAction": "flyDown",
+      "boss": {
+        "endsLevelOnDeath": true,
+        "rageMusic": "boss1b.ogg",
+        "spawnEveryTicks": 170,
+        "spawnScreen": 17,
+        "spawnTable": [
+          {
+            "monsterId": "gravel",
+            "weight": 1
+          },
+          {
+            "monsterId": "gravelFemale",
+            "weight": 1
+          },
+          {
+            "monsterId": "medkit",
+            "weight": 2
+          },
+          {
+            "monsterId": "zombieShooter",
+            "weight": 1
+          },
+          {
+            "monsterId": "betoner",
+            "weight": 1
+          },
+          {
+            "monsterId": "barrel",
+            "weight": 1
+          }
+        ]
+      },
+      "deathText": "Охранный робот третьего поколения TEK-R1 взорван!!!",
+      "deathTextEn": "Third-generation security robot TEK-R1 blown to smithereens!!!",
+      "deathSounds": [
+        "bottle.wav",
+        "platform.wav"
+      ],
+      "affectedByGravity": false
+    }
+  ]
+}

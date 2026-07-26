@@ -1,0 +1,42 @@
+# ============================================================
+#  Moon2D - .gitignore
+# ============================================================
+
+# ---- Delphi build output ----
+*.dcu
+*.exe
+*.map
+*.drc
+*.rsm
+*.identcache
+*.stat
+*.~*
+__history/
+__recovery/
+Win32/
+Win64/
+Debug/
+Release/
+
+# ---- Per-machine IDE state, not project state ----
+*.local
+*.dsk
+*.tvsconfig
+*.deployproj
+*.otares
+
+# ---- Assets withheld for licensing reasons (see ASSETS.md) ----
+# Shipped separately as a release archive, never as repository history.
+music/
+
+# ---- Local runtime configuration ----
+# Uncomment once the game ships config.default.json and writes config.json itself
+# config.json
+
+# ---- Scratch ----
+structure.txt
+
+# ---- OS clutter ----
+Thumbs.db
+desktop.ini
+.DS_Store

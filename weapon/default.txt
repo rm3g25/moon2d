@@ -1,0 +1,7 @@
+weapon0.bmp
+weapon1.bmp
+weapon2.bmp
+weapon3.bmp
+weapon4.bmp
+weapon5.bmp
+weapon6.bmp
