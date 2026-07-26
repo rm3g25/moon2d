@@ -77,7 +77,10 @@ class function TGameConfig.Defaults: TGameConfig;
 begin
   Result.WindowWidth := 1024;
   Result.WindowHeight := 768;
-  Result.Fullscreen := False;
+  // Players expect fullscreen on launch, and config.json ships with
+  // the same value. This default only decides what happens when
+  // config.json is missing or unreadable.
+  Result.Fullscreen := True;
   Result.Vsync := True;
   Result.FpsCap := 120; // comfortable ceiling, far below furnace mode
   // 33 Hz = the real cadence of the 2008 WM_Timer(20ms) on Windows
@@ -180,7 +183,16 @@ begin
   try
     var Root := TryParseJsonObjectFile(AFileName);
     if Root = nil then
-      Root := TJSONObject.Create; // absent or foreign file - start fresh
+    begin
+      // nil means three things here - absent file, broken JSON,
+      // non-object root - and only the first is safe to act on. A
+      // file that exists but will not parse still holds the player's
+      // settings; overwriting it trades an unreadable config for an
+      // empty one. Losing the menu click is the cheaper failure.
+      if FileExists(AFileName) then
+        Exit;
+      Root := TJSONObject.Create; // genuinely absent - start fresh
+    end;
     try
       var Game := Root.GetValue<TJSONObject>(GameSectionKey, nil);
       if Game = nil then
