@@ -1,0 +1,38 @@
+2008.
+A junior dev
+writes a game.
+
+In Delphi.
+
+It runs on a timer
+firing every 20 ms.
+
+It does not.
+
+Eighteen years later,
+the source survives.
+
+The platform does not.
+
+Immediate-mode OpenGL.
+A level format
+nobody wrote down.
+
+Every formula,
+preserved exactly.
+
+Even the wrong ones.
+
+One hero.
+Two levels.
+582 files.
+
+MOON 2D
+Version 2.0
+
+Now boarding.
+Departure: 2008.
+
+Windows will warn you.
+More info.
+Run anyway.

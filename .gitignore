@@ -17,6 +17,7 @@ Win32/
 Win64/
 Debug/
 Release/
+bin/TitleCard.ini
 
 # ---- Per-machine IDE state, not project state ----
 *.local

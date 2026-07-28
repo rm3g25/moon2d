@@ -21,14 +21,28 @@ const
 
   SdlWindowPosCentered = $2FFF0000;
   SdlWindowShown = $00000004;
+  SdlWindowHidden = $00000008; // offscreen work: a renderer still needs
+                               // a window, nobody needs to see it
   SdlWindowFullscreenDesktop = $00001001;
 
+  SdlRendererSoftware = $00000001;
   SdlRendererAccelerated = $00000002;
   SdlRendererPresentVsync = $00000004;
+  SdlRendererTargetTexture = $00000008;
+
+  // SDL_TextureAccess
+  SdlTextureAccessStatic = 0;
+  SdlTextureAccessStreaming = 1;
+  SdlTextureAccessTarget = 2; // can be passed to SDL_SetRenderTarget
 
   // SDL_SetHint key: which renderer backend SDL_CreateRenderer picks.
-  // Values of interest here: 'direct3d11', 'direct3d' (D3D9), 'opengl'.
+  // Values of interest here: 'direct3d11', 'direct3d' (D3D9), 'opengl',
+  // 'software'. The software one has no swapchain and no driver mood
+  // swings - the safe pick for offscreen rendering.
   SdlHintRenderDriver = 'SDL_RENDER_DRIVER';
+  // '0' nearest, '1' linear, '2' anisotropic. A bitmap font scaled with
+  // interpolation turns into porridge; offscreen tools must pin it to 0.
+  SdlHintRenderScaleQuality = 'SDL_RENDER_SCALE_QUALITY';
 
   // Event types
   SdlEventQuit = $100;
@@ -48,6 +62,8 @@ const
   SdlPixelFormatAbgr8888 = $16762004;
 
   // SDL_BlendMode
+  SdlBlendModeNone = 0;  // dst = src, alpha included: the only way a
+                         // RenderClear actually WRITES alpha 0
   SdlBlendModeBlend = 1; // alpha blending: dst = src*a + dst*(1-a)
 
   // Scancodes (physical keys, layout-independent)
@@ -257,6 +273,10 @@ function SDL_SetTextureAlphaMod(ATexture: PSdlTexture;
 function SDL_CreateTextureFromSurface(ARenderer: PSdlRenderer;
   ASurface: PSdlSurface): PSdlTexture; cdecl;
   external SdlLib name 'SDL_CreateTextureFromSurface';
+// AAccess = SdlTextureAccessTarget for an offscreen canvas.
+function SDL_CreateTexture(ARenderer: PSdlRenderer; AFormat: UInt32;
+  AAccess, AW, AH: Integer): PSdlTexture; cdecl;
+  external SdlLib name 'SDL_CreateTexture';
 procedure SDL_DestroyTexture(ATexture: PSdlTexture); cdecl;
   external SdlLib name 'SDL_DestroyTexture';
 function SDL_QueryTexture(ATexture: PSdlTexture; AFormat: PUInt32;
@@ -276,6 +296,23 @@ function SDL_RenderCopyEx(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
 function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
   AW, AH: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderSetLogicalSize';
+function SDL_SetRenderDrawBlendMode(ARenderer: PSdlRenderer;
+  ABlendMode: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_SetRenderDrawBlendMode';
+
+// --- Offscreen rendering (tools: title cards, level editor, screenshots) ---
+// ATexture must have been created with SdlTextureAccessTarget; nil puts
+// the window back on the receiving end.
+function SDL_SetRenderTarget(ARenderer: PSdlRenderer;
+  ATexture: PSdlTexture): Integer; cdecl;
+  external SdlLib name 'SDL_SetRenderTarget';
+// Reads back the CURRENT render target. APitch is bytes per row.
+// With SdlPixelFormatAbgr8888 the buffer comes out as plain R,G,B,A -
+// straight into a PNG encoder, no channel shuffling.
+function SDL_RenderReadPixels(ARenderer: PSdlRenderer;
+  const ARect: PSdlRect; AFormat: UInt32; APixels: Pointer;
+  APitch: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_RenderReadPixels';
 // SDL_bool is a 4-byte C enum: LongBool reads the full EAX return.
 function SDL_SetHint(const AName, AValue: PAnsiChar): LongBool; cdecl;
   external SdlLib name 'SDL_SetHint';
