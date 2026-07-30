@@ -1698,7 +1698,7 @@
       "x": 3,
       "y": 11,
       "triggers": {
-        "changeMusic": "moon_surface.ogg"
+        "changeMusic": "moon_surface2.ogg"
       }
     },
     {

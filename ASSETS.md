@@ -3,46 +3,51 @@
 **The MIT license in `LICENSE` covers the source code only.**
 
 Art, audio and level data are not covered by it. Most of these assets were made
-by the author in 2008, when the original game was written; a few were not, and
-this document says plainly which is which. They are included so the game can be
-built and played, not for reuse.
+by the author — the sprites and textures in 2008, when the original game was
+written, and the soundtrack in 2026. A few were not, and this document says
+plainly which is which. Everything here is included so the game can be built
+and played, not for reuse.
+
+Runtime assets live under `bin/`, next to the executable.
 
 ## Made by the author
 
 | Path | What |
 |---|---|
-| `monsters/` | All enemy, boss, pickup and prop sprite sets |
-| `heroes/` | Hero walk and death frames, health icon |
-| `textures/` | Every tile and decoration |
-| `weapon/` | Weapon, bullet and crosshair sprites |
-| `Stars/`, `sky.bmp`, `fullmoon.bmp`, `logo.bmp` | Menu backdrop and logo |
-| `font.bmp`, `fontx.bmp`, `fonty.bmp` | Bitmap font atlases |
-| `level1.json`, `level2.json`, `monsters.json` | Level and monster design |
+| `bin/monsters/` | All enemy, boss, pickup and prop sprite sets |
+| `bin/heroes/` | Hero walk and death frames, health icon |
+| `bin/textures/` | Every tile and decoration |
+| `bin/weapon/` | Weapon, bullet and crosshair sprites |
+| `bin/Stars/`, `sky.bmp`, `fullmoon.bmp`, `logo.bmp` | Menu backdrop and logo |
+| `bin/font.bmp`, `fontx.bmp`, `fonty.bmp` | Bitmap font atlases |
+| `bin/level1.json`, `level2.json`, `monsters.json` | Level and monster design |
 
 Free to reuse under the same terms as the code, with attribution.
 
+**`bin/music/` — original soundtrack.** Eleven tracks composed by the author
+using Suno for version 2.1.0, replacing the third-party music the 2008 build
+shipped with. Not in the repository: at 17 MB it would outweigh the code, and a
+soundtrack gets revised far more often than an engine does — every revision
+would live in git history forever. It ships with the release archives instead,
+and the game runs silently without it.
+
 ## Not made by the author
 
-**`heroes/ice1.bmp` – `ice8.bmp`** — the transformed ("henshin") hero frames.
-Traced and heavily reworked from screenshots of a tokusatsu television series
-by a fifteen-year-old in 2008. Eight frames at sprite resolution, unrecognisable
-in motion, but the origin is what it is. Scheduled for replacement with original
-artwork. Not licensed for reuse.
+**`bin/heroes/ice1.bmp` – `ice8.bmp`** — the transformed ("henshin") hero
+frames. Traced and heavily reworked from screenshots of a tokusatsu television
+series by a fifteen-year-old in 2008. Eight frames at sprite resolution,
+unrecognisable in motion, but the origin is what it is. Scheduled for
+replacement with original artwork. Not licensed for reuse.
 
-**`music/` — not included in this repository.** Ten tracks of third-party
-origin, retained from the 2008 build. They are distributed only in the release
-archive, and are not licensed for redistribution. The game detects their absence
-and runs silently, so a clone of this repository is playable without them. These
-tracks are scheduled for replacement.
+**`bin/sounds/`** — mixed. Some samples were recorded or synthesised by the
+author; others were collected in 2008 from sources that were not written down.
+Short, heavily processed, and treated here as of unknown provenance. Not
+licensed for reuse.
 
-**`sounds/`** — mixed. Some samples were recorded or synthesised by the author;
-others were collected in 2008 from sources that were not written down. Short,
-heavily processed, and treated here as of unknown provenance. Not licensed for
-reuse.
-
-**Screen backgrounds** (`levels/level1/_scr*.bmp`, `levels/level2/screen*.bmp`)
-— composited from stock photography that was free to use at the time. The
-specific sources were not recorded. Scheduled for replacement.
+**Screen backgrounds** (`bin/levels/level1/_scr*.bmp`,
+`bin/levels/level2/screen*.bmp`) — composited from stock photography that was
+free to use at the time. The specific sources were not recorded. Scheduled for
+replacement.
 
 ## Third-party runtime libraries
 
