@@ -17,7 +17,6 @@ Win32/
 Win64/
 Debug/
 Release/
-bin/TitleCard.ini
 
 # ---- Per-machine IDE state, not project state ----
 *.local
@@ -26,9 +25,17 @@ bin/TitleCard.ini
 *.deployproj
 *.otares
 
-# ---- Assets withheld for licensing reasons (see ASSETS.md) ----
-# Shipped separately as a release archive, never as repository history.
+# ---- Soundtrack ----
+# Kept out for size, not for rights: 17 MB of audio that gets revised
+# far more often than the engine does. Ships with the release archives.
 music/
+
+# ---- TitleCard: generated cards and local settings ----
+# The .res belongs in the repository - it is part of the build, like
+# Moon2D.res. Only the output and the machine-local ini stay out.
+tools/TitleCard/cards/
+tools/TitleCard/*.ini
+bin/TitleCard.ini
 
 # ---- Local runtime configuration ----
 # Uncomment once the game ships config.default.json and writes config.json itself
@@ -36,6 +43,7 @@ music/
 
 # ---- Scratch ----
 structure.txt
+tracked.txt
 
 # ---- OS clutter ----
 Thumbs.db
