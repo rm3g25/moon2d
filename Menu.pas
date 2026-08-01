@@ -23,6 +23,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Menu;
+{$I Moon2D.inc}
 
 interface
 
@@ -56,7 +57,8 @@ type
     msQuitConfirm);
 
   // Trailer frames: the live sky rig alone, with or without the logo.
-  // Entered by the host's debug keys, left by any key or click.
+  // Entered by the host's debug keys, left by any key or click - so
+  // with DEBUGKEYS off nothing can enter one and the state stays skNone.
   TShowcaseKind = (skNone, skLogo, skSky);
 
   // Menu-internal item actions; navigation ones resolve inside the menu,

@@ -8,6 +8,7 @@
   Moon 2D remake. Requires Delphi 12+ (System.JSON, inline var).
 }
 unit Monsters.Defs;
+{$I Moon2D.inc}
 
 interface
 

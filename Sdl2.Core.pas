@@ -11,6 +11,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Sdl2.Core;
+{$I Moon2D.inc}
 
 interface
 

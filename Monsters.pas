@@ -27,6 +27,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Monsters;
+{$I Moon2D.inc}
 
 interface
 

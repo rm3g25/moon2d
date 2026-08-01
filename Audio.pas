@@ -14,6 +14,7 @@
   Moon 2D remake. Requires SDL2_mixer 2.6+ (Vorbis decoder built in).
 }
 unit Audio;
+{$I Moon2D.inc}
 
 interface
 

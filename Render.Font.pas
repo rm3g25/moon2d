@@ -23,6 +23,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Render.Font;
+{$I Moon2D.inc}
 
 interface
 

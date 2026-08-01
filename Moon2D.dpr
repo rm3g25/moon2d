@@ -13,12 +13,7 @@
 program Moon2D;
 
 {$APPTYPE GUI}
-// PgUp/PgDn browse, T inspector, F atlas, M mute, V/B trailer frames,
-// numpad tuners. The Release configuration of Moon2D.dproj defines
-// RELEASE, so shipping builds drop them with no manual step.
-{$IFNDEF RELEASE}
-  {$DEFINE DEBUGKEYS}
-{$ENDIF}
+{$I Moon2D.inc}
 
 uses
   Winapi.Windows,
@@ -133,18 +128,21 @@ const
 
   // Scancodes beyond Sdl2.Core's basic set
   ScancodeA = 4;
-  ScancodeB = 5;  // debug: trailer frame, bare sky (menu only)
   ScancodeD = 7;
-  ScancodeF = 9;  // debug: raw font atlas view (orientation check)
-  ScancodeM = 16; // debug: music mute toggle (trailer capture)
-  ScancodeT = 23; // debug: tile inspector in the window title
-  ScancodeV = 25; // debug: trailer frame, centered logo (menu only)
   ScancodeW = 26;
-  ScancodePageUp = 75; // debug: browse screens
+
+{$IFDEF DEBUGKEYS}
+  // The developer keyboard. The numpad carries the two tuners: the
+  // minigun muzzle on the arrow cluster (4/6/8/2, +/-), the retired
+  // crosshair calibrator on the corners (7/9/1/3).
+  ScancodeB = 5;  // trailer frame, bare sky (menu only)
+  ScancodeF = 9;  // raw font atlas view (orientation check)
+  ScancodeG = 10; // summon the defensive aura on the hero
+  ScancodeM = 16; // music mute toggle (trailer capture)
+  ScancodeT = 23; // tile inspector in the window title
+  ScancodeV = 25; // trailer frame, centered logo (menu only)
+  ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
-  // Debug tuners on the numpad; per-key semantics live at the HandleKey
-  // call sites - the minigun muzzle on the arrow cluster (4/6/8/2, +/-),
-  // the retired crosshair calibrator on the corners (7/9/1/3)
   ScancodeKp1 = 89;
   ScancodeKp2 = 90;
   ScancodeKp3 = 91;
@@ -155,6 +153,7 @@ const
   ScancodeKp9 = 97;
   ScancodeKpMinus = 86;
   ScancodeKpPlus = 87;
+{$ENDIF}
 
 // Every player-facing string lives in lang\*.json now (part 6): the
 // S-keys moved to Localization, call sites fetch them through Tr().
@@ -240,7 +239,10 @@ type
     FGameOverTimer: Integer; // ticks left of the death pause
     FHudCache: TSpriteCache; // health icons (heroes\health.bmp of 2008)
     FRenderer: PSdlRenderer; // kept for level restarts
+{$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
+    FShowAtlas: Boolean; // F: raw font atlas (orientation check)
+{$ENDIF}
     FMouseGX, FMouseGY: Integer;
     FWindow: PSdlWindow;
     FFont: TMoonFont;
@@ -253,7 +255,6 @@ type
     // Entity triggers fire once per game (tutorial hints must not nag);
     // indexed in step with FLevel.Entities.
     FTriggerFired: TArray<Boolean>;
-    FShowAtlas: Boolean; // F: raw font atlas (orientation check)
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     // The transformation cinematic ('Henshin'/'HenshinTime' of 2008):
     // a tick counter walks the wave schedule while the game keeps running
@@ -307,9 +308,18 @@ type
     procedure RestartLevel;
     procedure DrawHud(const ARenderer: PSdlRenderer);
     function CrosshairFrame: Integer;
+    // The debug keyboard reaches the game through these four and
+    // nothing else. All four exist in every build - their BODIES
+    // compile away, so no caller needs an ifdef (codestyle 11).
+    function HandleDebugKey(AScancode: Integer): Boolean;
+    function HandleDebugMenuKey(AScancode: Integer): Boolean;
+    procedure UpdateInspectorCaption;
+    procedure DrawAtlasOverlay;
+{$IFDEF DEBUGKEYS}
     procedure NudgeCrosshair(ADX, ADY: Integer);
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
     procedure DebugBrowseScreen(ADelta: Integer);
+{$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
     procedure TickGravelAttack;
@@ -1426,18 +1436,7 @@ begin
   HandleScreenTransitions;
   HandlePitFall;
 
-  if FInspect and Assigned(FWindow) then
-  begin
-    var Col := FMouseGX div TileSize;
-    var Row := FMouseGY div TileSize;
-    var Tile := FLevel.TileAt(FHero.Screen, Col, Row);
-    var Name := 'empty';
-    if Tile <> EmptyTile then
-      Name := FLevel.TilePalette[Tile - 1];
-    SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(Format(
-      'scr %d cell %d,%d tile %d = %s',
-      [FHero.Screen, Col, Row, Tile, Name]))));
-  end;
+  UpdateInspectorCaption;
 end;
 
 procedure TMoonGame.Render(ARenderer: PSdlRenderer; AAlpha: Double);
@@ -1471,8 +1470,7 @@ begin
       end;
   end;
 
-  if FShowAtlas then
-    FFont.DrawAtlas((GameWidth - GameHeight) div 2, 0, GameHeight);
+  DrawAtlasOverlay;
 end;
 
 procedure TMoonGame.DrawIntro;
@@ -1498,6 +1496,43 @@ begin
   FMessages.Draw(AAlpha);
 end;
 
+// ---------------------------------------------------------------------------
+// THE DEBUG KEYBOARD - everything below is compiled out unless DEBUGKEYS
+// is on in Moon2D.inc. The four entry points keep their signatures in
+// every build so that Update, Render and HandleKey read the same either
+// way; only the bodies vanish.
+// ---------------------------------------------------------------------------
+
+// The tile inspector (T): the window caption reports what sits under the
+// cursor. The fps updater overwrites it once a second - live with it.
+procedure TMoonGame.UpdateInspectorCaption;
+begin
+{$IFDEF DEBUGKEYS}
+  if not (FInspect and Assigned(FWindow)) then
+    Exit;
+  var Col := FMouseGX div TileSize;
+  var Row := FMouseGY div TileSize;
+  var Tile := FLevel.TileAt(FHero.Screen, Col, Row);
+  var Name := 'empty';
+  if Tile <> EmptyTile then
+    Name := FLevel.TilePalette[Tile - 1];
+  SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(Format(
+    'scr %d cell %d,%d tile %d = %s',
+    [FHero.Screen, Col, Row, Tile, Name]))));
+{$ENDIF}
+end;
+
+// The raw font atlas (F), drawn over everything: the orientation check
+// that caught the 90-degrees-clockwise atlas of 2008.
+procedure TMoonGame.DrawAtlasOverlay;
+begin
+{$IFDEF DEBUGKEYS}
+  if FShowAtlas then
+    FFont.DrawAtlas((GameWidth - GameHeight) div 2, 0, GameHeight);
+{$ENDIF}
+end;
+
+{$IFDEF DEBUGKEYS}
 procedure TMoonGame.NudgeCrosshair(ADX, ADY: Integer);
 begin
   FHero.CrossDX := FHero.CrossDX + ADX;
@@ -1529,6 +1564,80 @@ begin
   FHero.Screen := Target;
   FHero.SetY(FHero.Y); // settles or falls, as any teleport
   ArriveOnScreen;
+end;
+{$ENDIF}
+
+// The menu-state debug keys: the two trailer frames. True = consumed.
+function TMoonGame.HandleDebugMenuKey(AScancode: Integer): Boolean;
+begin
+  Result := False;
+{$IFDEF DEBUGKEYS}
+  case AScancode of
+    ScancodeV:
+      FMenu.ShowShowcase(skLogo);
+    ScancodeB:
+      FMenu.ShowShowcase(skSky);
+  else
+    Exit;
+  end;
+  Result := True;
+{$ENDIF}
+end;
+
+// The in-game debug keys. True = consumed, so HandleKey bows out before
+// it reaches the real bindings.
+function TMoonGame.HandleDebugKey(AScancode: Integer): Boolean;
+begin
+  Result := False;
+{$IFDEF DEBUGKEYS}
+  case AScancode of
+    ScancodeT:
+      FInspect := not FInspect;
+    ScancodeF:
+      FShowAtlas := not FShowAtlas;
+    ScancodeG:
+      // The roulette hands the aura out once in four rewards - too
+      // rare to tune against. Straight onto the hero, slot untouched.
+      FHero.Bullets.SpawnStaticAura(FHero.X, FHero.Y);
+    ScancodeM:
+      // Trailer capture: silence the score, keep the gunshots -
+      // the footage gets its music in the edit, not in the engine
+      FAudio.ToggleMusicMuted;
+    // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
+    // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
+    // plus/minus = barrel length; values land in the window caption
+    ScancodeKp4:
+      NudgeMinigunMuzzle(-1, 0, 0);
+    ScancodeKp6:
+      NudgeMinigunMuzzle(1, 0, 0);
+    ScancodeKp8:
+      NudgeMinigunMuzzle(0, -1, 0);
+    ScancodeKp2:
+      NudgeMinigunMuzzle(0, 1, 0);
+    ScancodeKpMinus:
+      NudgeMinigunMuzzle(0, 0, -1);
+    ScancodeKpPlus:
+      NudgeMinigunMuzzle(0, 0, 1);
+    // The crosshair calibrator is DONE (values confirmed by the macro
+    // photo and baked into Create) - it retires to the corner cluster,
+    // kept for the day a new monitor disagrees
+    ScancodeKp7:
+      NudgeCrosshair(-1, 0);
+    ScancodeKp9:
+      NudgeCrosshair(1, 0);
+    ScancodeKp3:
+      NudgeCrosshair(0, -1);
+    ScancodeKp1:
+      NudgeCrosshair(0, 1);
+    ScancodePageDown:
+      DebugBrowseScreen(1);
+    ScancodePageUp:
+      DebugBrowseScreen(-1);
+  else
+    Exit;
+  end;
+  Result := True;
+{$ENDIF}
 end;
 
 // The smart cursor: green over a healthy enemy, yellow when it is
@@ -1609,21 +1718,8 @@ begin
         FMenu.EndShowcase;
       Exit;
     end;
-{$IFDEF DEBUGKEYS}
-    if AAction = kaDown then
-      case AScancode of
-        ScancodeV:
-          begin
-            FMenu.ShowShowcase(skLogo);
-            Exit;
-          end;
-        ScancodeB:
-          begin
-            FMenu.ShowShowcase(skSky);
-            Exit;
-          end;
-      end;
-{$ENDIF}
+    if (AAction = kaDown) and HandleDebugMenuKey(AScancode) then
+      Exit;
     // Escape steps back from a sub-screen; on the main screen it
     // resumes a running game (idle Escape at boot does nothing)
     if (AScancode = SdlScancodeEscape) and (AAction = kaDown) then
@@ -1644,6 +1740,9 @@ begin
   end;
 
   if AAction = kaDown then
+  begin
+    if HandleDebugKey(AScancode) then
+      Exit;
     case AScancode of
       SdlScancodeEscape:
         OpenMenu; // 2008: VK_ESCAPE raised the menu, never quit outright
@@ -1653,47 +1752,8 @@ begin
         FHeldRight := True;
       SdlScancodeSpace, ScancodeW, SdlScancodeUp:
         FHeldJump := True;
-{$IFDEF DEBUGKEYS}
-      ScancodeT:
-        FInspect := not FInspect;
-      ScancodeF:
-        FShowAtlas := not FShowAtlas;
-      ScancodeM:
-        // Trailer capture: silence the score, keep the gunshots -
-        // the footage gets its music in the edit, not in the engine
-        FAudio.ToggleMusicMuted;
-      // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
-      // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
-      // plus/minus = barrel length; values land in the window caption
-      ScancodeKp4:
-        NudgeMinigunMuzzle(-1, 0, 0);
-      ScancodeKp6:
-        NudgeMinigunMuzzle(1, 0, 0);
-      ScancodeKp8:
-        NudgeMinigunMuzzle(0, -1, 0);
-      ScancodeKp2:
-        NudgeMinigunMuzzle(0, 1, 0);
-      ScancodeKpMinus:
-        NudgeMinigunMuzzle(0, 0, -1);
-      ScancodeKpPlus:
-        NudgeMinigunMuzzle(0, 0, 1);
-      // The crosshair calibrator is DONE (values confirmed by the
-      // macro photo and baked into Create) - it retires to the corner
-      // cluster, kept for the day a new monitor disagrees
-      ScancodeKp7:
-        NudgeCrosshair(-1, 0);
-      ScancodeKp9:
-        NudgeCrosshair(1, 0);
-      ScancodeKp3:
-        NudgeCrosshair(0, -1);
-      ScancodeKp1:
-        NudgeCrosshair(0, 1);
-      ScancodePageDown:
-        DebugBrowseScreen(1);
-      ScancodePageUp:
-        DebugBrowseScreen(-1);
-{$ENDIF}
-    end
+    end;
+  end
   else
     case AScancode of
       SdlScancodeLeft, ScancodeA:

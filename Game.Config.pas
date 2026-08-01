@@ -9,6 +9,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Game.Config;
+{$I Moon2D.inc}
 
 interface
 

@@ -18,6 +18,7 @@
   Moon 2D remake. Requires Delphi 12+.
 }
 unit Bullets;
+{$I Moon2D.inc}
 
 interface
 
@@ -106,10 +107,10 @@ type
     // random heading, heavy gravity. Contact=True - the drizzle also
     // shreds monster bullets mid-air.
     procedure SpawnFireRain;
-    // Bonus 'Защитная аура' (moon.dpr 582-586): 500 MOTIONLESS bullets
+    // Bonus 'Защитная аура' (moon.dpr 582-586): MOTIONLESS bullets
     // (speed 0, gravity 0) packed around the hero - a standing cloud of
     // live ammunition that wounds monsters on touch and intercepts
-    // their bullets. The 2008 shield hack, kept verbatim with love.
+    // their bullets. The 2008 shield hack at half strength.
     procedure SpawnStaticAura(ACenterX, ACenterY: Double);
 
     property Bullets: TObjectList<TBullet> read FBullets;
@@ -285,11 +286,15 @@ begin
 end;
 
 procedure TBurst.SpawnStaticAura(ACenterX, ACenterY: Double);
+const
+  // 2008 spawned 500 (moon.dpr 582-586): a free hit and a free
+  // interception each, enough to win a fight alone. Halved in 2.1.1.
+  AuraBulletCount = 250;
 begin
-  // Cos/Sin of an integer k again: 500 points smeared into a fuzzy
+  // Cos/Sin of an integer k again: points smeared into a fuzzy
   // ellipse (32 wide, 38 tall) - the same starburst math as the henshin
   // ring, only frozen in place
-  for var k := 1 to 500 do
+  for var k := 1 to AuraBulletCount do
     NewBullet(0,
       ACenterX + Cos(k) * 32 + Random(6),
       ACenterY + Sin(k) * 38 + Random(6),
