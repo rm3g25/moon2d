@@ -55,6 +55,10 @@ type
   TMenuScreen = (msMain, msLevelSelect, msDifficulty, msCredits,
     msQuitConfirm);
 
+  // Trailer frames: the live sky rig alone, with or without the logo.
+  // Entered by the host's debug keys, left by any key or click.
+  TShowcaseKind = (skNone, skLogo, skSky);
+
   // Menu-internal item actions; navigation ones resolve inside the menu,
   // the rest surface as TMenuCommand.
   TItemAction = (iaNewGame, iaResume, iaFullscreen, iaDifficulty,
@@ -111,6 +115,7 @@ type
     // Owned flag textures per language; the yellow box marks FLanguage
     FFlagTextures: array [TLanguage] of PSdlTexture;
     FLanguage: TLanguage;
+    FShowcase: TShowcaseKind;
     procedure SetHasActiveGame(AValue: Boolean);
     procedure SetDifficulty(AValue: TDifficulty);
     procedure SetLanguage(AValue: TLanguage);
@@ -131,6 +136,7 @@ type
     function TryHoveredFlag(out ALanguage: TLanguage): Boolean;
     function ExecuteItem(const AItem: TMenuItem): TMenuResult;
     procedure DrawLogo;
+    procedure DrawShowcaseLogo;
     procedure DrawItems;
     procedure DrawFlags;
     procedure DrawCredits;
@@ -155,6 +161,11 @@ type
     // (stepped back from a sub-screen); False = main screen, the caller
     // decides (resume the game or ignore).
     function HandleEscape: Boolean;
+    // While a showcase is active the host must feed every key to
+    // EndShowcase instead of running its own menu shortcuts.
+    procedure ShowShowcase(AKind: TShowcaseKind);
+    function ShowcaseActive: Boolean;
+    procedure EndShowcase;
 
     property HasActiveGame: Boolean read FHasActiveGame
       write SetHasActiveGame;
@@ -229,6 +240,11 @@ const
   LogoTop = 0.0;
   LogoWidth = 0.9 * UnitsPerNdcX;  // 230.4
   LogoHeight = 0.6 * UnitsPerNdcY; // 115.2
+
+  // Same 2:1 logo, half again larger and centered.
+  ShowcaseLogoScale = 1.5;
+  ShowcaseLogoWidth = ShowcaseLogoScale * LogoWidth;   // 345.6
+  ShowcaseLogoHeight = ShowcaseLogoScale * LogoHeight; // 172.8
 
   // line2() rows step 12.5 units (the same 'row 12 = Y 150' anchor the
   // message board uses); its x argument steps one big glyph.
@@ -690,6 +706,11 @@ var
   Flag: TLanguage;
 begin
   Result := Default(TMenuResult);
+  if FShowcase <> skNone then
+  begin
+    FShowcase := skNone;
+    Exit;
+  end;
   if TryHoveredFlag(Flag) then
   begin
     // The menu only REPORTS the wish: FLanguage follows through the
@@ -710,9 +731,29 @@ end;
 
 function TMoonMenu.HandleEscape: Boolean;
 begin
+  if FShowcase <> skNone then
+  begin
+    FShowcase := skNone;
+    Exit(True);
+  end;
   Result := FScreen <> msMain;
   if Result then
     ShowMain;
+end;
+
+procedure TMoonMenu.ShowShowcase(AKind: TShowcaseKind);
+begin
+  FShowcase := AKind;
+end;
+
+function TMoonMenu.ShowcaseActive: Boolean;
+begin
+  Result := FShowcase <> skNone;
+end;
+
+procedure TMoonMenu.EndShowcase;
+begin
+  FShowcase := skNone;
 end;
 
 procedure TMoonMenu.Tick;
@@ -855,9 +896,28 @@ begin
     FMouseX + CursorOffsetX, FMouseY + CursorOffsetY, 0, False);
 end;
 
+// No caption line, unlike DrawLogo: the trailer adds its own titles.
+procedure TMoonMenu.DrawShowcaseLogo;
+var
+  Dest: TSdlFRect;
+begin
+  Dest.W := ShowcaseLogoWidth;
+  Dest.H := ShowcaseLogoHeight;
+  Dest.X := (ScreenWidthUnits - Dest.W) / 2;
+  Dest.Y := (ScreenHeightUnits - Dest.H) / 2;
+  SDL_RenderCopyF(FRenderer, FLogoTexture, nil, @Dest);
+end;
+
 procedure TMoonMenu.Draw(AAlpha: Double);
 begin
   DrawSky(AAlpha);
+  // Showcase frames draw no items, flags or cursor
+  if FShowcase <> skNone then
+  begin
+    if FShowcase = skLogo then
+      DrawShowcaseLogo;
+    Exit;
+  end;
   if not FHasActiveGame then
     DrawLogo;
   if FScreen = msCredits then

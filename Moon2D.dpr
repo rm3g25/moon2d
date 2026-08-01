@@ -13,8 +13,12 @@
 program Moon2D;
 
 {$APPTYPE GUI}
-{$DEFINE DEBUGKEYS} // PgUp/PgDn browse, T inspector, F atlas, M mute,
-                    // numpad tuners. Comment out for release builds.
+// PgUp/PgDn browse, T inspector, F atlas, M mute, V/B trailer frames,
+// numpad tuners. The Release configuration of Moon2D.dproj defines
+// RELEASE, so shipping builds drop them with no manual step.
+{$IFNDEF RELEASE}
+  {$DEFINE DEBUGKEYS}
+{$ENDIF}
 
 uses
   Winapi.Windows,
@@ -129,10 +133,12 @@ const
 
   // Scancodes beyond Sdl2.Core's basic set
   ScancodeA = 4;
+  ScancodeB = 5;  // debug: trailer frame, bare sky (menu only)
   ScancodeD = 7;
   ScancodeF = 9;  // debug: raw font atlas view (orientation check)
   ScancodeM = 16; // debug: music mute toggle (trailer capture)
   ScancodeT = 23; // debug: tile inspector in the window title
+  ScancodeV = 25; // debug: trailer frame, centered logo (menu only)
   ScancodeW = 26;
   ScancodePageUp = 75; // debug: browse screens
   ScancodePageDown = 78;
@@ -1596,6 +1602,28 @@ begin
 
   if FState = gsMenu then
   begin
+    // Any key ends a showcase; bare Alt/Ctrl exited above as modifiers
+    if FMenu.ShowcaseActive then
+    begin
+      if AAction = kaDown then
+        FMenu.EndShowcase;
+      Exit;
+    end;
+{$IFDEF DEBUGKEYS}
+    if AAction = kaDown then
+      case AScancode of
+        ScancodeV:
+          begin
+            FMenu.ShowShowcase(skLogo);
+            Exit;
+          end;
+        ScancodeB:
+          begin
+            FMenu.ShowShowcase(skSky);
+            Exit;
+          end;
+      end;
+{$ENDIF}
     // Escape steps back from a sub-screen; on the main screen it
     // resumes a running game (idle Escape at boot does nothing)
     if (AScancode = SdlScancodeEscape) and (AAction = kaDown) then
