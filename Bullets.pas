@@ -175,9 +175,9 @@ begin
   inherited Create;
   FBullets := TObjectList<TBullet>.Create(True);
   FCache := TSpriteCache.Create(ARenderer, 'weapon');
-  FFlightTexture := FCache.Get(ABaseName + '.bmp');
+  FFlightTexture := FCache.Get(ABaseName + '.png');
   for var i := Low(FBurstTextures) to High(FBurstTextures) do
-    FBurstTextures[i] := FCache.Get(ABaseName + IntToStr(i) + '.bmp');
+    FBurstTextures[i] := FCache.Get(ABaseName + IntToStr(i) + '.png');
 end;
 
 destructor TBurst.Destroy;

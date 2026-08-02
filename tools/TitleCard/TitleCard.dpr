@@ -13,6 +13,7 @@ program TitleCard;
 uses
   Vcl.Forms,
   Sdl2.Core in '..\..\Sdl2.Core.pas',
+  Sdl2.Image in '..\..\Sdl2.Image.pas',
   Render.Font in '..\..\Render.Font.pas',
   Image.Png in 'Image.Png.pas',
   TitleCard.Layout in 'TitleCard.Layout.pas',
@@ -23,6 +24,7 @@ uses
 {$R *.res}
 
 begin
+  EnsureImageLib;
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
   Application.Title := 'Moon 2D TitleCard';

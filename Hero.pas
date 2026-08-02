@@ -308,7 +308,7 @@ procedure THero.DrawCrosshair(const ASprites: TSpriteRenderer;
   AFrame: Integer);
 const
   FrameFiles: array [1..4] of string =
-    ('target.bmp', 'target1.bmp', 'target2.bmp', 'target3.bmp');
+    ('target.png', 'target1.png', 'target2.png', 'target3.png');
 begin
   // The art sits off-center inside its bitmap; the offsets are baked in
   // Create (measured live via the NumPad tuner, 2026-07-12). The tuner

@@ -807,7 +807,7 @@ begin
   if FAnimSets.TryGetValue(AMnsName, Result) then
     Exit;
 
-  // Frame BMPs live in a subfolder named after the .mns file:
+  // Frame images live in a subfolder named after the .mns file:
   // monsters\barrel.mns lists bare names found in monsters\barrel\.
   // The shared cache still deduplicates: e1.bmp of two monsters are
   // different files in different subfolders, same-name frames within

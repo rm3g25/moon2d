@@ -38,7 +38,7 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSize=32`, `TileSize=32` (game units!),
   `TileArtSize=64` (texture px!), `FramesAlive=8`, `FramesDeath=8`.
   The 32-vs-64 split is the coordinate-system discipline in code form.
-- **`TSpriteCache`** — dictionary `filename → PSdlTexture`, lazy load of BMPs
+- **`TSpriteCache`** — dictionary `filename → PSdlTexture`, lazy load of PNGs
   from a base dir, optional color key (`SetColorKey`/`DisableColorKey`).
   One cache per asset root (textures\, monsters\, heroes\, weapon\, levels\...).
 - **`TAnimSet`** (record) — `Alive[0..7]` + `Death[0..7]` texture arrays;
@@ -50,7 +50,7 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 
 ### `Render.Tiles.pas` (100 lines)
 - **`TTileScreenRenderer`** — draws one screen: `DrawScreen` =
-  `DrawBackground` (per-screen BMP from `FBackgroundCache`, level dir) +
+  `DrawBackground` (per-screen PNG from `FBackgroundCache`, level dir) +
   `DrawTiles` (palette indices from `TLevel` via `FTileCache`, textures\ dir).
   This background/tiles split is the hook for the future
   "AI backgrounds as art layer" idea.

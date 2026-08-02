@@ -10,7 +10,7 @@
   real window. The old normalized-GL coordinates (0.083, 1/16...) die here.
 
   Sprite data model follows the 2008 .mns format, which proved itself:
-  16 lines of .bmp names - lines 1-8 the "alive" loop, lines 9-16 the
+  16 lines of .png names - lines 1-8 the "alive" loop, lines 9-16 the
   death animation. Frames shared between monsters (e1..e8.bmp explosions)
   are loaded once thanks to the cache.
 
@@ -110,7 +110,7 @@ type
 implementation
 
 uses
-  System.Math;
+  System.Math, Sdl2.Image;
 
 resourcestring
   SBmpLoadFailed = 'Cannot load sprite "%s": %s';
@@ -200,7 +200,7 @@ var
 begin
   var FullPath := FBaseDir + AFileName;
 
-  Surface := SDL_LoadBMP_RW(
+  Surface := IMG_Load_RW(
     SDL_RWFromFile(PAnsiChar(SdlText(FullPath)), 'rb'), 1);
   if Surface = nil then
     raise ESpriteError.CreateFmt(SBmpLoadFailed, [FullPath, SdlErrorText]);

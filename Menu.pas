@@ -180,6 +180,9 @@ type
 
 implementation
 
+uses
+  Sdl2.Image;
+
 // Every caption a player reads lives in lang\*.json now (part 6): the
 // S-keys moved to Localization, sites fetch them through Tr(). The
 // archaeology notes (verbatim colons, hint deviations) moved with them.
@@ -196,14 +199,14 @@ const
   ScreenWidthUnits = 2 * UnitsPerNdcX;
   ScreenHeightUnits = 2 * UnitsPerNdcY;
 
-  SkyFile = 'sky.bmp';           // 512x512, opaque backdrop
-  MoonFile = 'fullmoon.bmp';     // 256x256, black threshold < 33
-  LogoFile = 'logo.bmp';         // 256x256, threshold < 15, alpha 130
+  SkyFile = 'sky.png';           // 512x512, opaque backdrop
+  MoonFile = 'fullmoon.png';     // 256x256, black threshold < 33
+  LogoFile = 'logo.png';         // 256x256, threshold < 15, alpha 130
   MoonAlphaThreshold = 33;
   LogoAlphaThreshold = 15;
   MoonAlpha = 255;   // fully solid disc
   LogoAlpha = 130;   // the 2008 logo is a ghost over the sky - verbatim
-  StarFileFmt = 'Stars\%d.bmp';  // 1..10 on disk
+  StarFileFmt = 'Stars\%d.png';  // 1..10 on disk
 
   StarCount = 350;
   // Random(8) of 2008: star sprites 9 and 10 are loaded but never fly.
@@ -269,8 +272,8 @@ const
 
   // The language flags (part 6.2): top-right corner of the main screen,
   // rightmost = highest TLanguage id. Files follow LanguageIds - a
-  // third language later is one BMP plus one enum entry.
-  FlagFileFmt = 'flag_%s.bmp';   // 60x40 px art drawn into 30x20 units
+  // third language later is one PNG plus one enum entry.
+  FlagFileFmt = 'flag_%s.png';   // 60x40 px art drawn into 30x20 units
   FlagWidth = 30.0;
   FlagHeight = 20.0;
   FlagGap = 8.0;                 // air between the two flags
@@ -288,8 +291,8 @@ const
   // Frame 3 (the wounded-target yellow) rides along unused here - the
   // menu has nothing half-dead to point at; gameplay employs it.
   CursorFrameFiles: array [1..4] of string =
-    ('weapon\target.bmp', 'weapon\target1.bmp', 'weapon\target2.bmp',
-     'weapon\target3.bmp');
+    ('weapon\target.png', 'weapon\target1.png', 'weapon\target2.png',
+     'weapon\target3.png');
   CursorIdleFrame = 1;
   CursorHoverFrame = 2;
   CursorQuitFrame = 4;
@@ -381,7 +384,7 @@ function TMoonMenu.LoadOpaqueTexture(const AFileName: string): PSdlTexture;
 var
   Surface: PSdlSurface;
 begin
-  Surface := SDL_LoadBMP_RW(
+  Surface := IMG_Load_RW(
     SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
   if Surface = nil then
     raise EMenuError.CreateFmt(SMenuTextureFailed,
@@ -408,7 +411,7 @@ type
 var
   Loaded, Surface: PSdlSurface;
 begin
-  Loaded := SDL_LoadBMP_RW(
+  Loaded := IMG_Load_RW(
     SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
   if Loaded = nil then
     raise EMenuError.CreateFmt(SMenuTextureFailed,

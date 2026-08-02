@@ -44,7 +44,7 @@
   `TileArtSize=64` (пиксели текстуры!), `FramesAlive=8`, `FramesDeath=8`.
   Разделение 32 против 64 — та самая дисциплина систем координат в коде.
 - **`TSpriteCache`** — словарь `имя файла → PSdlTexture`, ленивая загрузка
-  BMP из базовой папки, опциональный color key (`SetColorKey` /
+  PNG из базовой папки, опциональный color key (`SetColorKey` /
   `DisableColorKey`). По одному кэшу на корень ассетов (textures\,
   monsters\, heroes\, weapon\, levels\...).
 - **`TAnimSet`** (запись) — массивы текстур `Alive[0..7]` и `Death[0..7]`;
@@ -56,7 +56,7 @@
 
 ### `Render.Tiles.pas` (100 строк)
 - **`TTileScreenRenderer`** — рисует один экран: `DrawScreen` =
-  `DrawBackground` (BMP экрана из `FBackgroundCache`, папка уровня) +
+  `DrawBackground` (PNG экрана из `FBackgroundCache`, папка уровня) +
   `DrawTiles` (индексы палитры из `TLevel` через `FTileCache`, папка
   textures\). Именно это разделение фон/тайлы — точка входа для будущей
   идеи «ИИ-фоны как художественный слой».

@@ -109,6 +109,9 @@ type
 
 implementation
 
+uses
+  Sdl2.Image;
+
 resourcestring
   SFontFileLoadFailed = 'Cannot load font atlas "%s": %s';
   SFontSurfaceFailed = 'Cannot prepare font atlas "%s": %s';
@@ -205,7 +208,7 @@ var
   Loaded: PSdlSurface;
   Atlas: PSdlSurface;
 begin
-  Loaded := SDL_LoadBMP_RW(
+  Loaded := IMG_Load_RW(
     SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
   if Loaded = nil then
     raise EFontError.CreateFmt(SFontFileLoadFailed,

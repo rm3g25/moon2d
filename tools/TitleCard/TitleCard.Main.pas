@@ -85,7 +85,7 @@ uses
   Render.Font, Image.Png;
 
 resourcestring
-  SAtlasMissing = 'fonty.bmp not found next to the tool or up to six ' +
+  SAtlasMissing = 'fonty.png not found next to the tool or up to six ' +
     'folders above it. Point [Paths] Atlas in %s at it.';
   SStatusFits = 'Scale x%.2f (cell %d px) - up to %d characters per line.';
   SStatusOver = 'Line %d is %d characters over the margin.';

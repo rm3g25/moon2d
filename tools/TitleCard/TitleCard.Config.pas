@@ -37,7 +37,7 @@ uses
   System.SysUtils, System.IniFiles, System.IOUtils;
 
 const
-  DefaultAtlasName = 'fonty.bmp';
+  DefaultAtlasName = 'fonty.png';
   // tools\TitleCard\Win32\Debug is already four rungs below the root;
   // six gives room for one more folder without another release.
   MaxLevelsUp = 6;

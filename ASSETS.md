@@ -18,8 +18,8 @@ Runtime assets live under `bin/`, next to the executable.
 | `bin/heroes/` | Hero walk and death frames, health icon |
 | `bin/textures/` | Every tile and decoration |
 | `bin/weapon/` | Weapon, bullet and crosshair sprites |
-| `bin/Stars/`, `sky.bmp`, `fullmoon.bmp`, `logo.bmp` | Menu backdrop and logo |
-| `bin/font.bmp`, `fontx.bmp`, `fonty.bmp` | Bitmap font atlases |
+| `bin/Stars/`, `sky.png`, `fullmoon.png`, `logo.png` | Menu backdrop and logo |
+| `bin/font.png`, `fontx.png`, `fonty.png` | Bitmap font atlases |
 | `bin/level1.json`, `level2.json`, `monsters.json` | Level and monster design |
 
 Free to reuse under the same terms as the code, with attribution.
@@ -33,7 +33,7 @@ and the game runs silently without it.
 
 ## Not made by the author
 
-**`bin/heroes/ice1.bmp` – `ice8.bmp`** — the transformed ("henshin") hero
+**`bin/heroes/ice1.png` – `ice8.png`** — the transformed ("henshin") hero
 frames. Traced and heavily reworked from screenshots of a tokusatsu television
 series by a fifteen-year-old in 2008. Eight frames at sprite resolution,
 unrecognisable in motion, but the origin is what it is. Scheduled for
@@ -44,8 +44,8 @@ author; others were collected in 2008 from sources that were not written down.
 Short, heavily processed, and treated here as of unknown provenance. Not
 licensed for reuse.
 
-**Screen backgrounds** (`bin/levels/level1/_scr*.bmp`,
-`bin/levels/level2/screen*.bmp`) — composited from stock photography that was
+**Screen backgrounds** (`bin/levels/level1/_scr*.png`,
+`bin/levels/level2/screen*.png`) — composited from stock photography that was
 free to use at the time. The specific sources were not recorded. Scheduled for
 replacement.
 

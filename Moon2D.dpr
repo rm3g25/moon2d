@@ -22,6 +22,7 @@ uses
   System.IOUtils,
   System.JSON,
   Sdl2.Core in 'Sdl2.Core.pas',
+  Sdl2.Image in 'Sdl2.Image.pas',
   Game.Config in 'Game.Config.pas',
   Game.Loop in 'Game.Loop.pas',
   Monsters.Defs in 'Monsters.Defs.pas',
@@ -52,7 +53,7 @@ const
   LevelsDir = 'levels';
   HeroSkinFile = 'heroes\default.txt';
   WeaponListFile = 'weapon\default.txt';
-  FontFileName = 'fonty.bmp';
+  FontFileName = 'fonty.png';
 
   SoundsDir = 'sounds';
   MusicDir = 'music';
@@ -1670,7 +1671,7 @@ var
 begin
   // Barrels hurt bystanders and pits cost a life - now the player can
   // SEE it: one icon per health point, top-left.
-  var Icon := FHudCache.Get('health.bmp');
+  var Icon := FHudCache.Get('health.png');
   for var i := 0 to FHeroHealth - 1 do
   begin
     Dest.X := 4 + i * 18;
@@ -1846,6 +1847,8 @@ begin
   // bonus roulette and the moon fly the same route every run
   Randomize;
 
+  EnsureImageLib;
+
   var Config := LoadGameConfig(ConfigFileName);
   // The dictionary must stand before the first Tr() - the menu builds
   // its captions inside TMoonGame.Create. A missing or broken language
@@ -1873,6 +1876,7 @@ begin
     end;
   finally
     Monsters.Free;
+    IMG_Quit;
   end;
 end;
 

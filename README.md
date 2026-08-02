@@ -68,9 +68,10 @@ Delphi 10.3 Rio or later. Nothing newer is used deliberately, but earlier
 releases in that range are untested. The newest free Community Edition at the
 time of writing is Delphi 12.1 Athens, which is well within range.
 
-`SDL2.dll` and `SDL2_mixer.dll` live in `bin\` and are already in the
-repository. Both are loaded through delayed imports, so a missing DLL degrades
-the game rather than killing it.
+`SDL2.dll`, `SDL2_mixer.dll` and `SDL2_image.dll` live in `bin\` and are
+already in the repository. All three are loaded through delayed imports. A
+missing mixer only costs you the sound; a missing image library is fatal and
+says so, since every sprite in the game is a PNG.
 
 ## Layout
 
