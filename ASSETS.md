@@ -51,8 +51,8 @@ replacement.
 
 ## Third-party runtime libraries
 
-`SDL2.dll` and `SDL2_mixer.dll` are redistributed under the zlib license.
-See <https://www.libsdl.org/license.php>.
+`SDL2.dll`, `SDL2_mixer.dll` and `SDL2_image.dll` are redistributed under the
+zlib license. See <https://www.libsdl.org/license.php>.
 
 ## If you hold rights to any of this
 
