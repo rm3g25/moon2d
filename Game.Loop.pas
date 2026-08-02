@@ -211,7 +211,7 @@ begin
     [FRendererBackend, Version.Major, Version.Minor, Version.Patch]);
 
   // One-shot: stamp the backend into the static title at creation.
-  // The periodic stats title is muted (EnableTitleStats experiment),
+  // The periodic stats title is muted (TITLESTATS is off by default),
   // but THIS question - did the d3d11 hint get honored, or did SDL
   // silently fall back to the 2004 D3D9 blt path - must stay readable.
   // A single write at startup carries no per-second DWM rent.
@@ -244,6 +244,7 @@ end;
 procedure TGameHost.UpdateFpsTitle(AFps, AWorstFrameMs,
   AWorstPresentMs: Integer);
 begin
+{$IFDEF TITLESTATS}
   // Instrument v3 (the title write itself measured ~0 and is cleared):
   // 'present' is the worst SDL_RenderPresent of the second. If present
   // tracks worst, the stall lives in the present path - DWM compositor
@@ -255,6 +256,7 @@ begin
       Format('%s - %d fps, worst %d ms (present %d ms) [%s]',
       [FBaseTitle, AFps, AWorstFrameMs, AWorstPresentMs,
        FRendererBackend]))));
+{$ENDIF} // TITLESTATS
 end;
 
 // Waits until AFrameBudget seconds have passed since AFrameStartCounter.
@@ -289,16 +291,6 @@ begin
 end;
 
 procedure TGameHost.Run(const AApp: TGameApp);
-const
-  // EXPERIMENT (perf hunt): the 1 Hz title update is now the PRIME
-  // suspect for the 1 Hz ~50 ms present stall. SetWindowTitle returns
-  // fast, but the bill is deferred: DWM recomposits the window's
-  // decoration+content on the NEXT present - a cost that scales with
-  // window area (why honest-DPI fullscreen joined the lag). The old
-  // 'title = 0' reading timed the call, not the aftermath. False =
-  // the instrument goes silent; if the stall dies with it, the
-  // instrument found itself - exactly as the note below predicted.
-  EnableTitleStats = False;
 var
   Frequency: Double;
   PreviousCounter: UInt64;
@@ -360,12 +352,8 @@ begin
       begin
         // 'worst N ms' in the title turns invisible stalls into data:
         // a clean second reads ~budget, a hitch prints its own size.
-        // (The title write itself is a suspect - SetWindowTitle is a
-        // synchronous window-proc round trip; if worst spikes align
-        // 1 Hz with this very update, the instrument found itself.)
-        if EnableTitleStats then
-          UpdateFpsTitle(FpsFrames, Round(WorstFrameSeconds * 1000.0),
-            Round(WorstPresentSeconds * 1000.0));
+        UpdateFpsTitle(FpsFrames, Round(WorstFrameSeconds * 1000.0),
+          Round(WorstPresentSeconds * 1000.0));
         FpsFrames := 0;
         FpsElapsed := FpsElapsed - 1.0;
         WorstFrameSeconds := 0.0;
