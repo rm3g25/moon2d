@@ -1,4 +1,4 @@
-# Porting notes
+﻿# Porting notes
 
 Moon 2D was written in 2005–2008 in Delphi 2005, using immediate-mode OpenGL,
 a hand-rolled binary level format, and a 20 ms `WM_Timer` doing duty as a game
@@ -253,6 +253,11 @@ The complete list. Anything else that differs is a defect.
    `DIFFICULTY: NORMAL` is seventeen glyphs and ran into the right edge. Moving
    the column left buys about 33 units of slack. The hover hitbox follows the
    constant automatically.
+8. **The defensive aura holds 250 bullets, not 500.** The 2008 bonus packed
+   five hundred motionless, contact-enabled bullets around the hero — each one
+   both a free hit and a free interception, and the cloud survived until he
+   left the screen. It won encounters on its own. Halved in 2.1.1 as a balance
+   decision; the ellipse arithmetic is untouched.
 
 ---
 
@@ -289,3 +294,10 @@ Athens**, which is well within range on the language side.
 
 No third-party components. `SDL2.dll` and `SDL2_mixer.dll` ship with the
 repository.
+
+Compile-time switches live in `Moon2D.inc`, included by every unit and by the
+project file. It currently holds one: `DEBUGKEYS`, the developer keyboard, off
+by default. A `{$DEFINE}` in Delphi is file-scoped — defining a symbol in
+`Moon2D.dpr` would never reach `Hero.pas` — so the textual include is what
+makes a switch mean the same thing across the project. The Release
+configuration undefines `DEBUGKEYS` regardless of what the file says.
