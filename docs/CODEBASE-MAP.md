@@ -48,6 +48,31 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   `DrawTile` (tile grid), `Draw` (free position, optional mirror),
   `DrawRect`, `DrawRotated` (weapon arm).
 
+### `Sprites.Sets.pas` (~430 lines)
+The `.mset` sprite set container: a JSON manifest followed by every image
+concatenated behind it. Read by the game, the packer and (later) the level
+editor — one unit, three callers. Nothing in the engine calls it yet.
+- **Constants**: `MsetVersion=1`. Manifest field names are constants
+  (`KeyId`, `KeySprites`, `KeyOffset`…) — a typo in a literal compiles.
+- **Records**: `TSpriteEntry` (name, description, offset, size — offset is
+  measured from the start of the blob block, not the file), `TSpriteSequence`
+  (name, description, frames), `TMsetHeader` (packed: magic, version,
+  manifest size), `TMsetMagic` (named type — an anonymous
+  `array[0..3] of AnsiChar` will not assign to another one).
+- **`TSpriteSet`** — read side. Opening parses the manifest only; image bytes
+  arrive on demand via `ReadSprite(name)`. `Contains`, `SequenceFrames`.
+- **`TSpriteSetWriter`** — write side. `AddSprite`/`AddSpriteFile`,
+  `AddSequence`, `SaveToFile`. Offsets are handed out at save time in add
+  order; writing is deterministic, so an unchanged set rebuilds byte for byte.
+  Validates duplicate names and sequences pointing at absent frames.
+- Format spec: `docs/MSET-FORMAT.md`.
+
+### `Sdl2.Image.pas` (~75 lines)
+SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
+`IMG_Load_RW` replaced `SDL_LoadBMP_RW` at all four load sites.
+`EnsureImageLib` runs at startup and raises plainly if the DLL is absent —
+unlike the optional mixer, missing art is fatal.
+
 ### `Render.Tiles.pas` (100 lines)
 - **`TTileScreenRenderer`** — draws one screen: `DrawScreen` =
   `DrawBackground` (per-screen PNG from `FBackgroundCache`, level dir) +
@@ -296,6 +321,20 @@ Renders arbitrary text in the game's bitmap font to PNG. Reuses
   aspect/scale/margins, live preview, single save + batch render.
 - **`Image.Png.pas`** — `SavePngRgba` free function, hand-rolled PNG writer.
 
+### `tools/SpritePack/` — sprite set packer (console app)
+Builds and inspects `.mset` files. Wraps `Sprites.Sets` and nothing else.
+- **`SpritePackCli.dpr`** — commands `pack` / `list` / `unpack`. `pack` takes
+  every PNG in a folder in natural order (2 before 10); `--list` splits a
+  2008 sprite list into named sequences by its length (16 lines →
+  alive+death, 24 → walk+death+henshin, else one group). `unpack` writes the
+  images plus `manifest.json`, so a set can always be taken apart.
+- **`pack-sets.ps1`** — builds all 29 sets in one run and holds the tile
+  theme tables: first matching pattern claims a name, leftovers are packed
+  separately and reported. Tiles are staged through a scratch folder because
+  the game still reads the loose images where they are.
+- A VCL half (`SpritePack.exe`, sprite/description editing) is planned; the
+  logic stays in `Sprites.Sets` so both executables are thin.
+
 ---
 
 ## JSON data (bin\)
@@ -354,3 +393,6 @@ in-place in level/monster JSONs via the base-field + `En`-sibling pattern.
 | Sound / music | Audio.pas (+data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
 | Trailer cards | tools/TitleCard/* |
+| Sprite sets / .mset format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
+| Packing or inspecting sets | tools/SpritePack/* |
+| PNG loading / image DLL | Sdl2.Image.pas |
