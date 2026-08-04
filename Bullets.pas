@@ -175,7 +175,7 @@ constructor TBurst.Create(const ARenderer: PSdlRenderer;
 begin
   inherited Create;
   FBullets := TObjectList<TBullet>.Create(True);
-  FCache := TSpriteCache.Create(ARenderer, 'weapon');
+  FCache := TSpriteCache.Create(ARenderer);
   if FileExists(SpriteSetsDir + 'weapon.mset') then
   begin
     FSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');

@@ -38,17 +38,22 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSize=32`, `TileSize=32` (game units!),
   `TileArtSize=64` (texture px!), `FramesAlive=8`, `FramesDeath=8`.
   The 32-vs-64 split is the coordinate-system discipline in code form.
-- **`TSpriteCache`** — dictionary `filename → PSdlTexture`, lazy load of PNGs.
-  Two sources: a base dir, or a `TSpriteSet` attached via `AttachSpriteSet`
-  (not owned — the opener frees it). In set mode `Get('1.png')` and
-  `Get('1')` are one slot: sets name sprites, not files, so folder-era call
-  sites keep working unchanged. Optional color key
-  (`SetColorKey`/`DisableColorKey`). One cache per asset root or per set.
-  `SpriteSetsDir` ('sprites\') lives here — the asset subsystem's home.
+- **`TSpriteCache`** — dictionary `set:name → PSdlTexture`, lazy load from
+  the sprite sets attached via `AttachSpriteSet` (not owned — the opener
+  frees them). Resolution: a qualified name (`common:pustota`) goes to that
+  set alone; a bare name takes the first attached set that has it; a name no
+  set has raises. Path and extension are dropped when looking up, so the 2008
+  spellings in level palettes (`level1\doom1.png`) still resolve.
+  `AmbiguousNames` reports bare names carried by more than one attached set —
+  those resolve by declaration order, which is exactly what the qualifier
+  exists to avoid. Optional color key (`SetColorKey`/`DisableColorKey`).
+  `SpriteSetsDir` ('sprites\') lives here — the asset subsystem's home, as
+  does free function **`LoadImageSurface`**, the one place that turns stored
+  bytes into a surface.
 - **`TAnimSet`** (record) — `Alive[0..7]` + `Death[0..7]` texture arrays;
-  `IsLoaded`. Built by overloaded **`LoadAnimSet`**: `(cache, mnsFile)`
-  parses a 2008 `.mns` list; `(cache, spriteSet)` reads the manifest's
-  `alive`/`death` sequences, each validated to exactly eight frames.
+  `IsLoaded`. Built by **`LoadAnimSet(cache, spriteSet)`** from the
+  manifest's `alive` and `death` sequences, each validated to exactly eight
+  frames — `TAnimSet` is the 2008 contract and it is fixed-size.
 - **`TSpriteRenderer`** — draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid), `Draw` (free position, optional mirror),
   `DrawRect`, `DrawRotated` (weapon arm).
@@ -56,9 +61,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 ### `Sprites.Sets.pas` (~430 lines)
 The `.mset` sprite set container: a JSON manifest followed by every image
 concatenated behind it. Read by the game, the packer and (later) the level
-editor — one unit, three callers. The engine reads sets for monsters, the
-hero, the weapons and the bullets; environment (tiles, backgrounds, menu,
-font) is still on loose files until the level format learns `spriteSets`.
+editor — one unit, three callers. Every sprite in the game comes from a set;
+loose image files no longer ship. `SetQualifier` (':') lives here too, since
+the editor and the packer read the same syntax.
 - **Constants**: `MsetVersion=1`. Manifest field names are constants
   (`KeyId`, `KeySprites`, `KeyOffset`…) — a typo in a literal compiles.
 - **Records**: `TSpriteEntry` (name, description, offset, size — offset is
@@ -337,8 +342,9 @@ Builds and inspects `.mset` files. Wraps `Sprites.Sets` and nothing else.
   images plus `manifest.json`, so a set can always be taken apart.
 - **`pack-sets.ps1`** — builds all 29 sets in one run and holds the tile
   theme tables: first matching pattern claims a name, leftovers are packed
-  separately and reported. Tiles are staged through a scratch folder because
-  the game still reads the loose images where they are.
+  separately and reported. It rebuilds every set from a working copy of the
+  loose art — the shipped game has none, so this is a maintenance tool, not
+  a build step.
 - A VCL half (`SpritePack.exe`, sprite/description editing) is planned; the
   logic stays in `Sprites.Sets` so both executables are thin.
 

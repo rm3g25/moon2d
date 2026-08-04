@@ -17,8 +17,10 @@
   clockwise: AngleSign compensates - if the arm mirrors the cursor
   vertically on the first run, flip that constant.
 
-  Skin file (heroes/default.txt): 24 frames - 1..8 walk, 9..16 death,
-  17..24 ice form (FORM=1 adds +16 to every frame index).
+  Skin set (hero.mset): 24 frames as walk + death + henshin, in that
+  order - 1..8 walk, 9..16 death, 17..24 ice form (FORM=1 adds +16 to
+  every frame index, which is why the sequences concatenate rather than
+  being asked for by name at the point of use).
 
   Moon 2D remake. Requires Delphi 12+.
 }
@@ -28,7 +30,7 @@ unit Hero;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Math,
+  System.SysUtils, System.Math,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Levels.Defs, Bullets;
 
 const
@@ -91,7 +93,7 @@ type
 
     function OpenFrames(const ACache: TSpriteCache;
       out ASpriteSet: TSpriteSet; const ASetName: string;
-      const ASequences: array of string; const AListFile: string;
+      const ASequences: array of string;
       ACount: Integer): TArray<PSdlTexture>;
     procedure SetWeaponAngle;
     // --- verbatim ports of the 2008 collision oracles ---
@@ -132,8 +134,7 @@ type
     procedure BumpCeiling(ANextFall: THeroAction);
     procedure BeginJumpBoost;
   public
-    constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
-      const ASkinFile, AWeaponFile: string);
+    constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel);
     destructor Destroy; override;
 
     procedure Command(ACmd: THeroCommand);
@@ -198,10 +199,8 @@ begin
 end;
 
 resourcestring
-  SSpriteListNotFound = 'Sprite list not found: %s';
   SSetFrameCount =
     'Set "%s" sequences must supply exactly %d frames, got %d';
-  SSpriteListTooShort = 'Sprite list "%s": expected %d lines, got %d';
 
 const
   // Original constants, names preserved for archaeology
@@ -248,28 +247,6 @@ begin
       [ASpriteSet.Id, ACount, Length(Result)]);
 end;
 
-function ReadListFrames(const AFileName: string; ACount: Integer;
-  const ACache: TSpriteCache): TArray<PSdlTexture>;
-var
-  Lines: TStringList;
-begin
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(AFileName);
-    while (Lines.Count > 0) and (Trim(Lines[Lines.Count - 1]) = '') do
-      Lines.Delete(Lines.Count - 1);
-    if Lines.Count < ACount then
-      raise ESpriteError.CreateFmt(SSpriteListTooShort,
-        [AFileName, ACount, Lines.Count]);
-
-    SetLength(Result, ACount);
-    for var i := 0 to ACount - 1 do
-      Result[i] := ACache.Get(Trim(Lines[i]));
-  finally
-    Lines.Free;
-  end;
-end;
-
 // The frame arrays are 1-based static arrays; an open array parameter
 // indexes from zero regardless, which is why the copy lives in one
 // place instead of at every call site.
@@ -280,35 +257,25 @@ begin
     ATarget[i] := ASource[i];
 end;
 
-// Reads one flat frame array from the sprite set when there is one, and
-// from the 2008 list when there is not. ASpriteSet receives the opened
-// set - nil in folder mode - and the hero frees it.
+// Opens a set, attaches it to the cache and reads one flat frame array
+// out of it. ASpriteSet receives the set; the hero frees it.
 function THero.OpenFrames(const ACache: TSpriteCache;
   out ASpriteSet: TSpriteSet; const ASetName: string;
-  const ASequences: array of string; const AListFile: string;
+  const ASequences: array of string;
   ACount: Integer): TArray<PSdlTexture>;
 begin
-  var SetFile := SpriteSetsDir + ASetName + '.mset';
-  if FileExists(SetFile) then
-  begin
-    ASpriteSet := TSpriteSet.Create(SetFile);
-    ACache.AttachSpriteSet(ASpriteSet);
-    Exit(ReadSetFrames(ACache, ASpriteSet, ASequences, ACount));
-  end;
-
-  ASpriteSet := nil;
-  if not FileExists(AListFile) then
-    raise ESpriteError.CreateFmt(SSpriteListNotFound, [AListFile]);
-  Result := ReadListFrames(AListFile, ACount, ACache);
+  ASpriteSet := TSpriteSet.Create(SpriteSetsDir + ASetName + '.mset');
+  ACache.AttachSpriteSet(ASpriteSet);
+  Result := ReadSetFrames(ACache, ASpriteSet, ASequences, ACount);
 end;
 
 constructor THero.Create(const ARenderer: PSdlRenderer;
-  const ALevel: TLevel; const ASkinFile, AWeaponFile: string);
+  const ALevel: TLevel);
 begin
   inherited Create;
   FLevel := ALevel;
-  FCache := TSpriteCache.Create(ARenderer, 'heroes');
-  FWeaponCache := TSpriteCache.Create(ARenderer, 'weapon');
+  FCache := TSpriteCache.Create(ARenderer);
+  FWeaponCache := TSpriteCache.Create(ARenderer);
 
   FAction := haStand;
   FDirection := True; // hero looks forward at birth, as in 2008
@@ -335,9 +302,9 @@ begin
   // The hero's 1..24 is walk, then death, then the transformed frames -
   // named here rather than counted, as the 2008 list required.
   StoreFrames(FFrames, OpenFrames(FCache, FSkinSet, 'hero',
-    ['walk', 'death', 'henshin'], ASkinFile, Length(FFrames)));
+    ['walk', 'death', 'henshin'], Length(FFrames)));
   StoreFrames(FWeaponFrames, OpenFrames(FWeaponCache, FWeaponSet, 'weapon',
-    ['frames'], AWeaponFile, Length(FWeaponFrames)));
+    ['frames'], Length(FWeaponFrames)));
 end;
 
 destructor THero.Destroy;

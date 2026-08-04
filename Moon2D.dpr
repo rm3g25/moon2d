@@ -51,10 +51,6 @@ const
   // menu saved startcfg.txt the same way (1448)
   ConfigFileName = 'config.json';
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
-  TexturesDir = 'textures';
-  LevelsDir = 'levels';
-  HeroSkinFile = 'heroes\default.txt';
-  WeaponListFile = 'weapon\default.txt';
   FontFileName = 'fonty.png';
 
   SoundsDir = 'sounds';
@@ -406,7 +402,7 @@ begin
     FWeaponSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
   FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
-  FHudCache := TSpriteCache.Create(ARenderer, 'heroes');
+  FHudCache := TSpriteCache.Create(ARenderer);
   if FileExists(SpriteSetsDir + 'hero.mset') then
   begin
     FHudSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'hero.mset');
@@ -481,7 +477,7 @@ begin
     FLevelSets.Add(TSpriteSet.Create(SetFile));
   end;
 
-  FTileCache := TSpriteCache.Create(FRenderer, TexturesDir);
+  FTileCache := TSpriteCache.Create(FRenderer);
   for var LevelSet in FLevelSets do
     FTileCache.AttachSpriteSet(LevelSet);
 
@@ -494,21 +490,20 @@ begin
     raise ELevelError.CreateFmt(SAmbiguousSprites,
       [FLevel.Id, string.Join(sLineBreak + '  ', Ambiguous)]);
 
-  FBackgroundCache := TSpriteCache.Create(FRenderer,
-    IncludeTrailingPathDelimiter(LevelsDir) + FLevel.AssetsDir);
-  FBackgroundCache.DisableColorKey;
-
-  // Screen backdrops follow the level automatically: <assetsDir> owns
-  // its images today, <assetsDir>-backdrops.mset owns them tomorrow.
+  // Screen backdrops follow the level by convention rather than by
+  // declaration: one set per assetsDir, named after it.
   var Backdrops := SpriteSetsDir + FLevel.AssetsDir + '-backdrops.mset';
-  if FileExists(Backdrops) then
-  begin
-    FLevelSets.Add(TSpriteSet.Create(Backdrops));
-    FBackgroundCache.AttachSpriteSet(FLevelSets.Last);
-  end;
+  if not FileExists(Backdrops) then
+    raise ELevelError.CreateFmt(SSpriteSetMissing,
+      [FLevel.Id, FLevel.AssetsDir + '-backdrops']);
+  FLevelSets.Add(TSpriteSet.Create(Backdrops));
+
+  FBackgroundCache := TSpriteCache.Create(FRenderer);
+  FBackgroundCache.DisableColorKey;
+  FBackgroundCache.AttachSpriteSet(FLevelSets.Last);
   FTiles := TTileScreenRenderer.Create(FSprites, FTileCache,
     FBackgroundCache, FLevel);
-  FHero := THero.Create(FRenderer, FLevel, HeroSkinFile, WeaponListFile);
+  FHero := THero.Create(FRenderer, FLevel);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
 

@@ -26,7 +26,7 @@ unit Render.Sprites;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, Sdl2.Core,
+  System.SysUtils, System.Generics.Collections, Sdl2.Core,
   Sprites.Sets;
 
 const
@@ -43,7 +43,6 @@ const
                           // scales back up with the window - net loss zero
   FramesAlive = 8;
   FramesDeath = 8;
-  MnsLineCount = FramesAlive + FramesDeath;
 
 type
   ESpriteError = class(Exception);
@@ -55,8 +54,7 @@ type
   TSpriteCache = class
   private
     FRenderer: PSdlRenderer;
-    FBaseDir: string;
-    FSpriteSets: TList<TSpriteSet>; // attached, not owned; empty = folder
+    FSpriteSets: TList<TSpriteSet>; // attached, not owned
     FTextures: TDictionary<string, PSdlTexture>;
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
@@ -65,7 +63,7 @@ type
     function LoadTexture(const ASurface: PSdlSurface;
       const AName: string): PSdlTexture;
   public
-    constructor Create(const ARenderer: PSdlRenderer; const ABaseDir: string);
+    constructor Create(const ARenderer: PSdlRenderer);
     destructor Destroy; override;
 
     // Adds a sprite set as a source, in declaration order: the first
@@ -101,24 +99,19 @@ type
   end;
 
 // Free function: parsing a text file into a record needs no object state.
-// Decodes an image from a sprite set when the set is given and carries
-// the name, and from a file path otherwise. The one place in the engine
-// that knows an image can come from either - the cache, the menu and
-// the font atlas all ask here rather than each growing a branch.
-// Returns nil on failure; the caller words the error, since only it
-// knows what the picture was for.
+// Decodes one sprite out of a set. The single place in the engine that
+// turns stored bytes into a surface - the cache, the menu and the font
+// atlas ask here rather than each opening its own reader. Returns nil
+// on failure; the caller words the error, since only it knows what the
+// picture was for.
 function LoadImageSurface(const ASpriteSet: TSpriteSet;
   const AName: string): PSdlSurface;
 
+// The 'alive' and 'death' sequences must both be exactly eight frames:
+// TAnimSet is the 2008 contract and it is fixed-size. The cache must
+// have the same set attached - names resolve through it.
 function LoadAnimSet(const ACache: TSpriteCache;
-  const AMnsFileName: string): TAnimSet; overload;
-
-// Same shape, fed by a set's manifest instead of a .mns file: the
-// 'alive' and 'death' sequences must both be exactly eight frames,
-// because TAnimSet is the 2008 contract and it is fixed-size. The cache
-// must have the same set attached - names resolve through it.
-function LoadAnimSet(const ACache: TSpriteCache;
-  const ASpriteSet: TSpriteSet): TAnimSet; overload;
+  const ASpriteSet: TSpriteSet): TAnimSet;
 
 type
   TSpriteRenderer = class
@@ -156,12 +149,11 @@ uses
 resourcestring
   SBmpLoadFailed = 'Cannot load sprite "%s": %s';
   STextureCreateFailed = 'Cannot create texture for "%s": %s';
-  SMnsNotFound = 'Sprite list not found: %s';
   SNoSuchSet = 'No sprite set "%s" is attached (asked for "%s")';
   SNoSuchSprite = 'Sprite "%s" is not in set "%s"';
+  SNotInAnySet = 'No attached sprite set has "%s"';
   SSequenceLength =
     'Sequence "%s" of set "%s" must be %d frames, got %d';
-  SMnsTooShort = 'Sprite list "%s": expected %d frame lines, got %d';
 
 // Free function: mapping a Boolean to an SDL flip flag needs no state
 function FlipOf(AMirrored: Boolean): Integer;
@@ -176,12 +168,10 @@ end;
 // TSpriteCache
 // ---------------------------------------------------------------------------
 
-constructor TSpriteCache.Create(const ARenderer: PSdlRenderer;
-  const ABaseDir: string);
+constructor TSpriteCache.Create(const ARenderer: PSdlRenderer);
 begin
   inherited Create;
   FRenderer := ARenderer;
-  FBaseDir := IncludeTrailingPathDelimiter(ABaseDir);
   FSpriteSets := TList<TSpriteSet>.Create;
   FTextures := TDictionary<string, PSdlTexture>.Create;
 
@@ -232,14 +222,15 @@ end;
 function LoadImageSurface(const ASpriteSet: TSpriteSet;
   const AName: string): PSdlSurface;
 begin
+  if ASpriteSet = nil then
+    Exit(nil);
+
   var Bare := ChangeFileExt(ExtractFileName(AName), '');
-  if (ASpriteSet <> nil) and ASpriteSet.Contains(Bare) then
-  begin
-    var Blob := ASpriteSet.ReadSprite(Bare);
-    Exit(IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1));
-  end;
-  Result := IMG_Load_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(AName)), 'rb'), 1);
+  if not ASpriteSet.Contains(Bare) then
+    Exit(nil);
+
+  var Blob := ASpriteSet.ReadSprite(Bare);
+  Result := IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1);
 end;
 
 function TSpriteCache.FindSet(const AName: string): TSpriteSet;
@@ -260,8 +251,8 @@ end;
 
 function TSpriteCache.Get(const AFileName: string): PSdlTexture;
 begin
-  // Sets name sprites, not files: 'level1\doom1.png' and 'doom1' are
-  // the same sprite. The folder fallback keeps the full relative path.
+  // Sets name sprites, not files, and the 2008 spellings survive in
+  // level palettes: 'level1\doom1.png' and 'doom1' are one sprite.
   var Bare := ChangeFileExt(ExtractFileName(AFileName), '');
   var Source: TSpriteSet;
 
@@ -279,24 +270,19 @@ begin
       raise ESpriteError.CreateFmt(SNoSuchSprite, [Bare, SetId]);
   end
   else
+  begin
     Source := FindSet(Bare);
+    if Source = nil then
+      raise ESpriteError.CreateFmt(SNotInAnySet, [Bare]);
+  end;
 
-  // The key carries the qualifier when there was one: 'common:pustota'
-  // and 'mine-interior:pustota' are two pictures and two slots.
-  var Key: string;
-  if Source <> nil then
-    Key := LowerCase(Source.Id + SetQualifier + Bare)
-  else
-    Key := LowerCase(AFileName);
-
+  // The key carries the set: 'common:pustota' and
+  // 'mine-interior:pustota' are two pictures and two slots.
+  var Key := LowerCase(Source.Id + SetQualifier + Bare);
   if FTextures.TryGetValue(Key, Result) then
     Exit;
 
-  var Surface: PSdlSurface;
-  if Source <> nil then
-    Surface := LoadImageSurface(Source, Bare)
-  else
-    Surface := LoadImageSurface(nil, FBaseDir + AFileName);
+  var Surface := LoadImageSurface(Source, Bare);
   if Surface = nil then
     raise ESpriteError.CreateFmt(SBmpLoadFailed, [AFileName, SdlErrorText]);
 
@@ -359,38 +345,6 @@ end;
 function TAnimSet.IsLoaded: Boolean;
 begin
   Result := Assigned(Alive[Low(TFrameIndex)]);
-end;
-
-function LoadAnimSet(const ACache: TSpriteCache;
-  const AMnsFileName: string): TAnimSet;
-var
-  Lines: TStringList;
-begin
-  Result := Default(TAnimSet);
-
-  if not FileExists(AMnsFileName) then
-    raise ESpriteError.CreateFmt(SMnsNotFound, [AMnsFileName]);
-
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(AMnsFileName);
-
-    // Trailing blank lines are part of the 2008 charm; drop them.
-    while (Lines.Count > 0) and (Trim(Lines[Lines.Count - 1]) = '') do
-      Lines.Delete(Lines.Count - 1);
-
-    if Lines.Count < MnsLineCount then
-      raise ESpriteError.CreateFmt(SMnsTooShort,
-        [AMnsFileName, MnsLineCount, Lines.Count]);
-
-    for var i := Low(TFrameIndex) to High(TFrameIndex) do
-    begin
-      Result.Alive[i] := ACache.Get(Trim(Lines[i]));
-      Result.Death[i] := ACache.Get(Trim(Lines[FramesAlive + i]));
-    end;
-  finally
-    Lines.Free;
-  end;
 end;
 
 function LoadAnimSet(const ACache: TSpriteCache;

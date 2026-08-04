@@ -341,8 +341,7 @@ begin
   FFont := AFont;
   FLevels := ALevels;
 
-  // Base '.' so star and cursor paths keep their subfolders in the key
-  FCache := TSpriteCache.Create(ARenderer, '.');
+  FCache := TSpriteCache.Create(ARenderer);
   if ASpriteSet <> nil then
     FCache.AttachSpriteSet(ASpriteSet);
   if AWeaponSet <> nil then

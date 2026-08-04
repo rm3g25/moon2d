@@ -32,7 +32,7 @@ unit Monsters;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, System.Math,
+  System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Levels.Defs,
   Monsters.Defs, Bullets;
@@ -123,12 +123,10 @@ type
   private
     FMonsters: TObjectList<TMonster>;
     FAnimSets: TDictionary<string, TAnimSet>; // .mns name -> frames
-    // Monsters migrating to .mset: each gets its own set + cache pair,
-    // both owned here. The shared FCache keeps serving the rest.
+    // One set and one cache per monster, both owned here.
     FSpriteSets: TObjectList<TSpriteSet>;
     FSetCaches: TObjectList<TSpriteCache>;
     FRenderer: PSdlRenderer;
-    FCache: TSpriteCache; // rooted at monsters\
     FRegistry: TMonsterRegistry;
     FLevel: TLevel;
     // The difficulty multiplier of FindMostersOnScreen (moon.dpr
@@ -168,7 +166,6 @@ end;
 const
   MonsterBound = 8;
   SpriteResetThreshold = 8.7;
-  MonstersDir = 'monsters';
   // Patrol turns AT the right edge, not beyond it: GameWidth - SpriteSize
   PatrolRightLimit = 480;
   TankRageLives = 20;      // cluster5 shooters double up below this
@@ -739,7 +736,6 @@ begin
   FSpriteSets := TObjectList<TSpriteSet>.Create(True);
   FSetCaches := TObjectList<TSpriteCache>.Create(True);
   FRenderer := ARenderer;
-  FCache := TSpriteCache.Create(ARenderer, MonstersDir);
   FRegistry := ARegistry;
   FLevel := ALevel;
   FLivesScale := ALivesScale;
@@ -809,57 +805,26 @@ begin
   // teardown mirrors it.
   FSetCaches.Free;
   FSpriteSets.Free;
-  FCache.Free;
   inherited;
 end;
 
+// AMnsName is still the 2008 spelling from monsters.json ('gravel.mns');
+// the stem names the set. Renaming the field is a data change and waits
+// for its own step.
 function TMonsterField.AnimFor(const AMnsName: string): TAnimSet;
-var
-  Lines: TStringList;
 begin
   if FAnimSets.TryGetValue(AMnsName, Result) then
     Exit;
 
-  // A monster whose set exists reads it; the folder remains the
-  // fallback until step 5 retires the loose images. The gravel pilot
-  // proved the path, so the gate is gone rather than grown.
-  var Sub := ChangeFileExt(AMnsName, '');
-  var SetFile := SpriteSetsDir + Sub + '.mset';
-  if FileExists(SetFile) then
-  begin
-    var SpriteSet := TSpriteSet.Create(SetFile);
-    FSpriteSets.Add(SpriteSet);
-    var Cache := TSpriteCache.Create(FRenderer, '');
-    Cache.AttachSpriteSet(SpriteSet);
-    FSetCaches.Add(Cache);
-    Result := LoadAnimSet(Cache, SpriteSet);
-    FAnimSets.Add(AMnsName, Result);
-    Exit;
-  end;
+  var SetName := ChangeFileExt(AMnsName, '');
+  var SpriteSet := TSpriteSet.Create(SpriteSetsDir + SetName + '.mset');
+  FSpriteSets.Add(SpriteSet);
 
-  // Frame images live in a subfolder named after the .mns file:
-  // monsters\barrel.mns lists bare names found in monsters\barrel\.
-  // The shared cache still deduplicates: e1.bmp of two monsters are
-  // different files in different subfolders, same-name frames within
-  // one folder load once.
-  Result := Default(TAnimSet);
-  Lines := TStringList.Create;
-  try
-    Lines.LoadFromFile(
-      IncludeTrailingPathDelimiter(MonstersDir) + AMnsName);
-    while (Lines.Count > 0) and (Trim(Lines[Lines.Count - 1]) = '') do
-      Lines.Delete(Lines.Count - 1);
-    // Lines 1..8 are the alive cycle, 9..16 the death cycle; a shorter
-    // file fills what it can (bounds come from the arrays, not lore)
-    for var i := 0 to Min(High(Result.Alive), Lines.Count - 1) do
-      Result.Alive[i] := FCache.Get(Sub + '\' + Trim(Lines[i]));
-    for var i := 0 to Min(High(Result.Death),
-        Lines.Count - 1 - Length(Result.Alive)) do
-      Result.Death[i] :=
-        FCache.Get(Sub + '\' + Trim(Lines[Length(Result.Alive) + i]));
-  finally
-    Lines.Free;
-  end;
+  var Cache := TSpriteCache.Create(FRenderer);
+  Cache.AttachSpriteSet(SpriteSet);
+  FSetCaches.Add(Cache);
+
+  Result := LoadAnimSet(Cache, SpriteSet);
   FAnimSets.Add(AMnsName, Result);
 end;
 
