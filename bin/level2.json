@@ -4,6 +4,13 @@
   "title": "Уровень 2 - Туннели",
   "titleEn": "Level 2 - Tunnels",
   "assetsDir": "level2",
+  "spriteSets": [
+    "moon-surface",
+    "machinery",
+    "facility",
+    "common",
+    "mine-interior"
+  ],
   "music": "hallu.ogg",
   "legacyTrailing": [
     "4",

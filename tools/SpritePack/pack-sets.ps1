@@ -171,6 +171,13 @@ Invoke-PackThemes -Folder (Join-Path $Bin 'textures') `
 Invoke-PackThemes -Folder (Join-Path $Bin 'textures\level1') `
                   -Themes $mineThemes -LeftoverSet 'mine-unsorted'
 
+# Screen backdrops: one set per level folder, named by the convention
+# the engine follows - <assetsDir>-backdrops. Big opaque images, packed
+# as they are.
+foreach ($folder in Get-ChildItem (Join-Path $Bin 'levels') -Directory) {
+    Invoke-Pack -Folder $folder.FullName -SetName "$($folder.Name)-backdrops"
+}
+
 Write-Host ''
 Write-Host "Sets written to $Output" -ForegroundColor Green
 Get-ChildItem $Output -Filter *.mset |

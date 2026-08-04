@@ -56,26 +56,27 @@ type
   private
     FRenderer: PSdlRenderer;
     FBaseDir: string;
-    FSpriteSet: TSpriteSet; // attached, not owned; nil = folder mode
+    FSpriteSets: TList<TSpriteSet>; // attached, not owned; empty = folder
     FTextures: TDictionary<string, PSdlTexture>;
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
-    function LoadTexture(const AName: string): PSdlTexture;
-    function LoadSurface(const AName: string): PSdlSurface;
+    function FindSet(const AName: string): TSpriteSet;
+    function LoadTexture(const ASurface: PSdlSurface;
+      const AName: string): PSdlTexture;
   public
     constructor Create(const ARenderer: PSdlRenderer; const ABaseDir: string);
     destructor Destroy; override;
 
-    // Switches the cache from the folder to a sprite set. The set is
-    // not owned: whoever opened it frees it, after every cache using it
-    // is gone. Call before the first Get - textures already loaded from
-    // the folder stay as they are.
+    // Adds a sprite set as a source, in declaration order: the first
+    // attached set containing a name wins, and a name no set knows
+    // still falls back to the folder. Sets are not owned - whoever
+    // opened them frees them, after every cache using them is gone.
     procedure AttachSpriteSet(const ASpriteSet: TSpriteSet);
 
     // Returns a cached texture, loading the image on first request.
-    // Callers may keep passing '1.png': in set mode the extension is
-    // dropped, because sets name sprites, not files. Both spellings hit
-    // the same cache slot either way.
+    // Callers may keep passing 'level1\doom1.png': for the set lookup
+    // the path and extension are dropped, because sets name sprites,
+    // not files. Only the folder fallback reads the name as a path.
     function Get(const AFileName: string): PSdlTexture;
     // Color key applies to textures loaded AFTER the call; set it up first.
     procedure SetColorKey(AR, AG, AB: UInt8);
@@ -161,6 +162,7 @@ begin
   inherited Create;
   FRenderer := ARenderer;
   FBaseDir := IncludeTrailingPathDelimiter(ABaseDir);
+  FSpriteSets := TList<TSpriteSet>.Create;
   FTextures := TDictionary<string, PSdlTexture>.Create;
 
   // 2008 sprites live on black backgrounds; key it out by default.
@@ -185,6 +187,7 @@ begin
       SDL_DestroyTexture(Texture);
     FTextures.Free;
   end;
+  FSpriteSets.Free; // the list, not the sets - they have owners
   inherited;
 end;
 
@@ -206,52 +209,59 @@ begin
   Result := FTextures.Count;
 end;
 
-function TSpriteCache.Get(const AFileName: string): PSdlTexture;
-var
-  Key: string;
+function TSpriteCache.FindSet(const AName: string): TSpriteSet;
 begin
-  // Set mode names sprites, not files; '1.png' and '1' are one slot.
-  if FSpriteSet <> nil then
-    Key := LowerCase(ChangeFileExt(AFileName, ''))
+  for var Attached in FSpriteSets do
+    if Attached.Contains(AName) then
+      Exit(Attached);
+  Result := nil;
+end;
+
+function TSpriteCache.Get(const AFileName: string): PSdlTexture;
+begin
+  // Sets name sprites, not files: 'level1\doom1.png' and 'doom1' are
+  // the same sprite. The folder fallback keeps the full relative path.
+  var Bare := ChangeFileExt(ExtractFileName(AFileName), '');
+  var Source := FindSet(Bare);
+
+  var Key: string;
+  if Source <> nil then
+    Key := LowerCase(Bare)
   else
     Key := LowerCase(AFileName);
 
   if FTextures.TryGetValue(Key, Result) then
     Exit;
 
-  Result := LoadTexture(Key);
+  var Surface: PSdlSurface;
+  if Source <> nil then
+  begin
+    var Blob := Source.ReadSprite(Bare);
+    Surface := IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1);
+  end
+  else
+    Surface := IMG_Load_RW(
+      SDL_RWFromFile(PAnsiChar(SdlText(FBaseDir + AFileName)), 'rb'), 1);
+  if Surface = nil then
+    raise ESpriteError.CreateFmt(SBmpLoadFailed, [AFileName, SdlErrorText]);
+
+  Result := LoadTexture(Surface, AFileName);
   FTextures.Add(Key, Result);
 end;
 
 procedure TSpriteCache.AttachSpriteSet(const ASpriteSet: TSpriteSet);
 begin
-  FSpriteSet := ASpriteSet;
+  FSpriteSets.Add(ASpriteSet);
 end;
 
-// The two sources differ only in where the bytes come from; decoding
-// and the color key are one pipeline either way.
-function TSpriteCache.LoadSurface(const AName: string): PSdlSurface;
-begin
-  if FSpriteSet <> nil then
-  begin
-    var Blob := FSpriteSet.ReadSprite(AName);
-    Result := IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1);
-  end
-  else
-  begin
-    var FullPath := FBaseDir + AName;
-    Result := IMG_Load_RW(
-      SDL_RWFromFile(PAnsiChar(SdlText(FullPath)), 'rb'), 1);
-  end;
-  if Result = nil then
-    raise ESpriteError.CreateFmt(SBmpLoadFailed, [AName, SdlErrorText]);
-end;
-
-function TSpriteCache.LoadTexture(const AName: string): PSdlTexture;
+// The sources differ only in where the bytes came from; the color key
+// and texture creation are one pipeline, and it starts here.
+function TSpriteCache.LoadTexture(const ASurface: PSdlSurface;
+  const AName: string): PSdlTexture;
 var
   Surface: PSdlSurface;
 begin
-  Surface := LoadSurface(AName);
+  Surface := ASurface;
   try
     if FUseColorKey then
       SDL_SetColorKey(Surface, 1,

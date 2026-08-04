@@ -94,6 +94,7 @@ type
     FId: string;
     FTitle: TLocalizedText;
     FAssetsDir: string;
+    FSpriteSets: TArray<string>;
     FMusic: string;
     FIntroText: TLocalizedText;
     FGridWidth: Integer;
@@ -122,6 +123,10 @@ type
     property Id: string read FId;
     property Title: TLocalizedText read FTitle;
     property AssetsDir: string read FAssetsDir;
+    // Environment sprite sets, in resolution order: the first declared
+    // set containing a name wins. Tiles only - screen backdrops follow
+    // the <assetsDir>-backdrops convention and never appear here.
+    property SpriteSets: TArray<string> read FSpriteSets;
     property Music: string read FMusic;
     // Story text shown before the level starts; '' = jump straight in.
     property IntroText: TLocalizedText read FIntroText;
@@ -250,6 +255,12 @@ begin
   FId := ARoot.GetValue<string>('id');
   FTitle := ReadLocalizedText(ARoot, 'title', FId);
   FAssetsDir := ARoot.GetValue<string>('assetsDir', '');
+
+  FSpriteSets := [];
+  var SetNames: TJSONArray;
+  if ARoot.TryGetValue<TJSONArray>('spriteSets', SetNames) then
+    for var Name in SetNames do
+      FSpriteSets := FSpriteSets + [Name.Value];
   FMusic := ARoot.GetValue<string>('music', '');
   FIntroText := ReadLocalizedText(ARoot, 'introText');
 

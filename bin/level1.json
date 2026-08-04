@@ -4,6 +4,17 @@
   "title": "Уровень 1 - Космопорт",
   "titleEn": "Level 1 - Spaceport",
   "assetsDir": "level1",
+  "spriteSets": [
+    "brickwork",
+    "mine-structure",
+    "facility",
+    "conveyor",
+    "mining-rig",
+    "railway",
+    "mine-walls",
+    "cargo",
+    "mine-interior"
+  ],
   "music": "moon_surface.ogg",
   "legacyTrailing": [
     "4",

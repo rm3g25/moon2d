@@ -21,6 +21,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.JSON,
+  System.Generics.Collections,
   Sdl2.Core in 'Sdl2.Core.pas',
   Sdl2.Image in 'Sdl2.Image.pas',
   Sprites.Sets in 'Sprites.Sets.pas',
@@ -163,6 +164,7 @@ resourcestring
   // Developer-facing startup error - may fire before any dictionary
   // is loaded, hence English and outside the localization system
   SNoLevelsFound = 'No levels found (level1.json onward)';
+  SSpriteSetMissing = 'Level "%s": declared sprite set "%s" not found';
 
 type
   // gsMenu: the moon-over-starfield menu (Menu) - the boot state.
@@ -220,6 +222,9 @@ type
     FLevel: TLevel;
     FTileCache: TSpriteCache;
     FBackgroundCache: TSpriteCache;
+    // The sets the current level declared, owned here; both level
+    // caches resolve through them and are freed before them.
+    FLevelSets: TObjectList<TSpriteSet>;
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
     FHero: THero;
@@ -383,8 +388,9 @@ begin
   FDifficulty := AStartDifficulty;
 
   // Level-independent subsystems live for the whole process; everything
-  // bound to a particular level is born inside LoadLevel.
-  FTileCache := TSpriteCache.Create(ARenderer, TexturesDir);
+  // bound to a particular level - including the tile cache, now that it
+  // resolves through the level's sprite sets - is born inside LoadLevel.
+  FLevelSets := TObjectList<TSpriteSet>.Create(True);
   FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FHudCache := TSpriteCache.Create(ARenderer, 'heroes');
@@ -420,6 +426,7 @@ begin
   FSprites.Free;
   FBackgroundCache.Free;
   FTileCache.Free;
+  FLevelSets.Free;
   FLevel.Free; // owned here since the menu became the level picker
   inherited;
 end;
@@ -433,19 +440,46 @@ begin
   FHero.Free;
   FTiles.Free;
   FBackgroundCache.Free;
+  FTileCache.Free;
   FLevel.Free;
   FField := nil;
   FHero := nil;
   FTiles := nil;
   FBackgroundCache := nil;
+  FTileCache := nil;
+  FLevelSets.Clear; // caches are gone, the sets may follow
 
   FLevel := TLevel.Create;
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
 
+  // A declared set that is absent is a broken install, not a fallback
+  // case - the fallback exists for names, not for whole sets.
+  for var SetName in FLevel.SpriteSets do
+  begin
+    var SetFile := SpriteSetsDir + SetName + '.mset';
+    if not FileExists(SetFile) then
+      raise ELevelError.CreateFmt(SSpriteSetMissing,
+        [FLevel.Id, SetName]);
+    FLevelSets.Add(TSpriteSet.Create(SetFile));
+  end;
+
+  FTileCache := TSpriteCache.Create(FRenderer, TexturesDir);
+  for var LevelSet in FLevelSets do
+    FTileCache.AttachSpriteSet(LevelSet);
+
   FBackgroundCache := TSpriteCache.Create(FRenderer,
     IncludeTrailingPathDelimiter(LevelsDir) + FLevel.AssetsDir);
   FBackgroundCache.DisableColorKey;
+
+  // Screen backdrops follow the level automatically: <assetsDir> owns
+  // its images today, <assetsDir>-backdrops.mset owns them tomorrow.
+  var Backdrops := SpriteSetsDir + FLevel.AssetsDir + '-backdrops.mset';
+  if FileExists(Backdrops) then
+  begin
+    FLevelSets.Add(TSpriteSet.Create(Backdrops));
+    FBackgroundCache.AttachSpriteSet(FLevelSets.Last);
+  end;
   FTiles := TTileScreenRenderer.Create(FSprites, FTileCache,
     FBackgroundCache, FLevel);
   FHero := THero.Create(FRenderer, FLevel, HeroSkinFile, WeaponListFile);
