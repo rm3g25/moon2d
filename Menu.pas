@@ -28,7 +28,8 @@ unit Menu;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Render.Sprites, Render.Font, Game.Config,
+  System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
+  Game.Config,
   Localization;
 
 type
@@ -102,6 +103,7 @@ type
     FSprites: TSpriteRenderer;
     FFont: TMoonFont;
     FCache: TSpriteCache; // color-keyed: star sprites + cursor frames
+    FSpriteSet: TSpriteSet; // attached, not owned; nil = folder era
     FSkyTexture: PSdlTexture;
     FMoonTexture: PSdlTexture;
     FLogoTexture: PSdlTexture;
@@ -147,7 +149,8 @@ type
   public
     constructor Create(const ARenderer: PSdlRenderer;
       const ASprites: TSpriteRenderer; const AFont: TMoonFont;
-      const ALevels: TArray<TLevelChoice>);
+      const ALevels: TArray<TLevelChoice>; const ASpriteSet: TSpriteSet;
+      const AWeaponSet: TSpriteSet);
     destructor Destroy; override;
 
     procedure ShowMain;
@@ -328,9 +331,11 @@ end;
 
 constructor TMoonMenu.Create(const ARenderer: PSdlRenderer;
   const ASprites: TSpriteRenderer; const AFont: TMoonFont;
-  const ALevels: TArray<TLevelChoice>);
+  const ALevels: TArray<TLevelChoice>; const ASpriteSet: TSpriteSet;
+  const AWeaponSet: TSpriteSet);
 begin
   inherited Create;
+  FSpriteSet := ASpriteSet;
   FRenderer := ARenderer;
   FSprites := ASprites;
   FFont := AFont;
@@ -338,6 +343,10 @@ begin
 
   // Base '.' so star and cursor paths keep their subfolders in the key
   FCache := TSpriteCache.Create(ARenderer, '.');
+  if ASpriteSet <> nil then
+    FCache.AttachSpriteSet(ASpriteSet);
+  if AWeaponSet <> nil then
+    FCache.AttachSpriteSet(AWeaponSet);
   // Warm the star sprites - all ten, as 2008 loaded them (see
   // StarKindCount for why two of them never take the stage)
   for var i := 1 to StarSpriteCount do
@@ -384,8 +393,7 @@ function TMoonMenu.LoadOpaqueTexture(const AFileName: string): PSdlTexture;
 var
   Surface: PSdlSurface;
 begin
-  Surface := IMG_Load_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
+  Surface := LoadImageSurface(FSpriteSet, AFileName);
   if Surface = nil then
     raise EMenuError.CreateFmt(SMenuTextureFailed,
       [AFileName, SdlErrorText]);
@@ -411,8 +419,7 @@ type
 var
   Loaded, Surface: PSdlSurface;
 begin
-  Loaded := IMG_Load_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
+  Loaded := LoadImageSurface(FSpriteSet, AFileName);
   if Loaded = nil then
     raise EMenuError.CreateFmt(SMenuTextureFailed,
       [AFileName, SdlErrorText]);

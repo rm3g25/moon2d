@@ -171,6 +171,18 @@ Invoke-PackThemes -Folder (Join-Path $Bin 'textures') `
 Invoke-PackThemes -Folder (Join-Path $Bin 'textures\level1') `
                   -Themes $mineThemes -LeftoverSet 'mine-unsorted'
 
+# Interface art: the menu backdrop, moon, logo, flags, the star sprites
+# and the font atlases. Staged together because they share one purpose,
+# not one folder - the stars live in a subfolder of their own.
+$uiStage = Join-Path ([IO.Path]::GetTempPath()) 'mset-ui'
+Remove-Item $uiStage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $uiStage | Out-Null
+Get-ChildItem $Bin -Filter *.png | Copy-Item -Destination $uiStage
+Get-ChildItem (Join-Path $Bin 'Stars') -Filter *.png |
+    Copy-Item -Destination $uiStage
+Invoke-Pack -Folder $uiStage -SetName 'ui'
+Remove-Item $uiStage -Recurse -Force -ErrorAction SilentlyContinue
+
 # Screen backdrops: one set per level folder, named by the convention
 # the engine follows - <assetsDir>-backdrops. Big opaque images, packed
 # as they are.

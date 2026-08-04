@@ -19,12 +19,17 @@
 *.dll     binary
 *.exe     binary
 *.res     binary
-*.masset  binary
 
-# Note: .mns and default.txt are plain text (ordered frame lists) and are
-# deliberately NOT marked binary, so their diffs stay readable.
+# The .mns and default.txt frame lists retired with the loose images:
+# frame order lives in each set's manifest now.
 
 # ---- GitHub Linguist hints ----
 *.pas     linguist-language=Pascal
 *.dpr     linguist-language=Pascal
 *.dproj   linguist-generated=true
+
+# Sprite sets are binary, but their manifest is text. Teach git to show
+# it and a renamed sprite or a reordered animation reads as a line
+# instead of "binary files differ". Needs one local setting, once:
+#   git config diff.mset.textconv "bin/SpritePackCli.exe list"
+*.mset diff=mset

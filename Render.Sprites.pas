@@ -61,6 +61,7 @@ type
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
     function FindSet(const AName: string): TSpriteSet;
+    function NamedSet(const AId: string): TSpriteSet;
     function LoadTexture(const ASurface: PSdlSurface;
       const AName: string): PSdlTexture;
   public
@@ -72,6 +73,14 @@ type
     // still falls back to the folder. Sets are not owned - whoever
     // opened them frees them, after every cache using them is gone.
     procedure AttachSpriteSet(const ASpriteSet: TSpriteSet);
+
+    // Of the names given, the ones asked for WITHOUT a qualifier that
+    // more than one attached set carries - reported as
+    // 'name: winner, loser'. Those resolve silently by declaration
+    // order, so reordering the declaration would change the picture
+    // without changing the palette. Two sets merely sharing a name is
+    // not a problem; asking bare is, and qualifying the name fixes it.
+    function AmbiguousNames(const AWanted: TArray<string>): TArray<string>;
 
     // Returns a cached texture, loading the image on first request.
     // Callers may keep passing 'level1\doom1.png': for the set lookup
@@ -92,6 +101,15 @@ type
   end;
 
 // Free function: parsing a text file into a record needs no object state.
+// Decodes an image from a sprite set when the set is given and carries
+// the name, and from a file path otherwise. The one place in the engine
+// that knows an image can come from either - the cache, the menu and
+// the font atlas all ask here rather than each growing a branch.
+// Returns nil on failure; the caller words the error, since only it
+// knows what the picture was for.
+function LoadImageSurface(const ASpriteSet: TSpriteSet;
+  const AName: string): PSdlSurface;
+
 function LoadAnimSet(const ACache: TSpriteCache;
   const AMnsFileName: string): TAnimSet; overload;
 
@@ -139,6 +157,8 @@ resourcestring
   SBmpLoadFailed = 'Cannot load sprite "%s": %s';
   STextureCreateFailed = 'Cannot create texture for "%s": %s';
   SMnsNotFound = 'Sprite list not found: %s';
+  SNoSuchSet = 'No sprite set "%s" is attached (asked for "%s")';
+  SNoSuchSprite = 'Sprite "%s" is not in set "%s"';
   SSequenceLength =
     'Sequence "%s" of set "%s" must be %d frames, got %d';
   SMnsTooShort = 'Sprite list "%s": expected %d frame lines, got %d';
@@ -209,10 +229,31 @@ begin
   Result := FTextures.Count;
 end;
 
+function LoadImageSurface(const ASpriteSet: TSpriteSet;
+  const AName: string): PSdlSurface;
+begin
+  var Bare := ChangeFileExt(ExtractFileName(AName), '');
+  if (ASpriteSet <> nil) and ASpriteSet.Contains(Bare) then
+  begin
+    var Blob := ASpriteSet.ReadSprite(Bare);
+    Exit(IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1));
+  end;
+  Result := IMG_Load_RW(
+    SDL_RWFromFile(PAnsiChar(SdlText(AName)), 'rb'), 1);
+end;
+
 function TSpriteCache.FindSet(const AName: string): TSpriteSet;
 begin
   for var Attached in FSpriteSets do
     if Attached.Contains(AName) then
+      Exit(Attached);
+  Result := nil;
+end;
+
+function TSpriteCache.NamedSet(const AId: string): TSpriteSet;
+begin
+  for var Attached in FSpriteSets do
+    if SameText(Attached.Id, AId) then
       Exit(Attached);
   Result := nil;
 end;
@@ -222,11 +263,29 @@ begin
   // Sets name sprites, not files: 'level1\doom1.png' and 'doom1' are
   // the same sprite. The folder fallback keeps the full relative path.
   var Bare := ChangeFileExt(ExtractFileName(AFileName), '');
-  var Source := FindSet(Bare);
+  var Source: TSpriteSet;
 
+  // 'common:pustota' - say which set and declaration order stops
+  // mattering. Written where two declared sets share a sprite name.
+  var Split := Pos(SetQualifier, Bare);
+  if Split > 0 then
+  begin
+    var SetId := Copy(Bare, 1, Split - 1);
+    Bare := Copy(Bare, Split + 1, Length(Bare));
+    Source := NamedSet(SetId);
+    if Source = nil then
+      raise ESpriteError.CreateFmt(SNoSuchSet, [SetId, AFileName]);
+    if not Source.Contains(Bare) then
+      raise ESpriteError.CreateFmt(SNoSuchSprite, [Bare, SetId]);
+  end
+  else
+    Source := FindSet(Bare);
+
+  // The key carries the qualifier when there was one: 'common:pustota'
+  // and 'mine-interior:pustota' are two pictures and two slots.
   var Key: string;
   if Source <> nil then
-    Key := LowerCase(Bare)
+    Key := LowerCase(Source.Id + SetQualifier + Bare)
   else
     Key := LowerCase(AFileName);
 
@@ -235,18 +294,35 @@ begin
 
   var Surface: PSdlSurface;
   if Source <> nil then
-  begin
-    var Blob := Source.ReadSprite(Bare);
-    Surface := IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1);
-  end
+    Surface := LoadImageSurface(Source, Bare)
   else
-    Surface := IMG_Load_RW(
-      SDL_RWFromFile(PAnsiChar(SdlText(FBaseDir + AFileName)), 'rb'), 1);
+    Surface := LoadImageSurface(nil, FBaseDir + AFileName);
   if Surface = nil then
     raise ESpriteError.CreateFmt(SBmpLoadFailed, [AFileName, SdlErrorText]);
 
   Result := LoadTexture(Surface, AFileName);
   FTextures.Add(Key, Result);
+end;
+
+function TSpriteCache.AmbiguousNames(
+  const AWanted: TArray<string>): TArray<string>;
+begin
+  Result := [];
+  for var Wanted in AWanted do
+  begin
+    if Pos(SetQualifier, Wanted) > 0 then
+      Continue;
+
+    var Bare := ChangeFileExt(ExtractFileName(Wanted), '');
+    var Holders: TArray<string> := [];
+    for var Attached in FSpriteSets do
+      if Attached.Contains(Bare) then
+        Holders := Holders + [Attached.Id];
+
+    if Length(Holders) > 1 then
+      Result := Result + [Format('%s: %s',
+        [Bare, string.Join(', ', Holders)])];
+  end;
 end;
 
 procedure TSpriteCache.AttachSpriteSet(const ASpriteSet: TSpriteSet);

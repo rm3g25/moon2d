@@ -20,7 +20,7 @@
 // Off since 2.1.1: releases were being built from the Debug
 // configuration and carried the whole keyboard into shipping archives.
 // Remove the dot below for a session of tuning, put it back after.
-{$DEFINE DEBUGKEYS}
+{.$DEFINE DEBUGKEYS}
 
 // TITLESTATS - the frame instrument: once a second the window title
 // prints fps, the worst frame of that second and the worst

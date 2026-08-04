@@ -165,6 +165,10 @@ resourcestring
   // is loaded, hence English and outside the localization system
   SNoLevelsFound = 'No levels found (level1.json onward)';
   SSpriteSetMissing = 'Level "%s": declared sprite set "%s" not found';
+  SAmbiguousSprites =
+    'Level "%s": these sprite names live in more than one declared set.' +
+    sLineBreak + 'Qualify them in the palette as set:name.' + sLineBreak +
+    '  %s';
 
 type
   // gsMenu: the moon-over-starfield menu (Menu) - the boot state.
@@ -225,6 +229,11 @@ type
     // The sets the current level declared, owned here; both level
     // caches resolve through them and are freed before them.
     FLevelSets: TObjectList<TSpriteSet>;
+    // Interface art - sky, moon, logo, flags, stars, font atlas - and
+    // the weapon set the menu borrows its cursor from. Both outlive
+    // every level, both owned here.
+    FUiSet: TSpriteSet;
+    FWeaponSet: TSpriteSet;
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
     FHero: THero;
@@ -391,6 +400,10 @@ begin
   // bound to a particular level - including the tile cache, now that it
   // resolves through the level's sprite sets - is born inside LoadLevel.
   FLevelSets := TObjectList<TSpriteSet>.Create(True);
+  if FileExists(SpriteSetsDir + 'ui.mset') then
+    FUiSet := TSpriteSet.Create(SpriteSetsDir + 'ui.mset');
+  if FileExists(SpriteSetsDir + 'weapon.mset') then
+    FWeaponSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
   FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FHudCache := TSpriteCache.Create(ARenderer, 'heroes');
@@ -399,12 +412,14 @@ begin
     FHudSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'hero.mset');
     FHudCache.AttachSpriteSet(FHudSpriteSet);
   end;
-  FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation);
+  FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
+    FUiSet);
   FMessages := TMessageBoard.Create(FFont, GameWidth);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
-  FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels);
+  FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
+    FUiSet, FWeaponSet);
   FMenu.Difficulty := FDifficulty;
   FState := gsMenu;
   FResumeState := gsMenu;
@@ -427,6 +442,8 @@ begin
   FBackgroundCache.Free;
   FTileCache.Free;
   FLevelSets.Free;
+  FUiSet.Free;
+  FWeaponSet.Free;
   FLevel.Free; // owned here since the menu became the level picker
   inherited;
 end;
@@ -467,6 +484,15 @@ begin
   FTileCache := TSpriteCache.Create(FRenderer, TexturesDir);
   for var LevelSet in FLevelSets do
     FTileCache.AttachSpriteSet(LevelSet);
+
+  // Two declared sets sharing a sprite name still resolve - first wins -
+  // but silently, so that reordering the declaration would change a
+  // picture without changing a palette. Refuse to start instead: the
+  // palette should say 'common:pustota' and mean it.
+  var Ambiguous := FTileCache.AmbiguousNames(FLevel.TilePalette);
+  if Length(Ambiguous) > 0 then
+    raise ELevelError.CreateFmt(SAmbiguousSprites,
+      [FLevel.Id, string.Join(sLineBreak + '  ', Ambiguous)]);
 
   FBackgroundCache := TSpriteCache.Create(FRenderer,
     IncludeTrailingPathDelimiter(LevelsDir) + FLevel.AssetsDir);

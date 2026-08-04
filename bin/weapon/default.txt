@@ -1,7 +1,0 @@
-weapon0.png
-weapon1.png
-weapon2.png
-weapon3.png
-weapon4.png
-weapon5.png
-weapon6.png

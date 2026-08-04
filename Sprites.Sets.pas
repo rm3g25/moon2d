@@ -35,6 +35,12 @@ uses
 const
   MsetVersion = 1;
 
+  // Separates a set name from a sprite name: 'common:pustota'. Chosen
+  // over '.' because it cannot be mistaken for a file extension, and
+  // over '\' because it cannot be mistaken for a path. A qualified
+  // name resolves in the named set only, ignoring declaration order.
+  SetQualifier = ':';
+
 type
   ESpriteSetError = class(Exception);
 

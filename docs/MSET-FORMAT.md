@@ -74,6 +74,21 @@ rounding difference.
   `"spriteSets": ["moon-surface", "machinery"]`. Sets are searched in the
   order declared, first match wins.
 
+A bare name that two declared sets both carry would resolve silently,
+and reordering the declaration would then change a picture without
+changing a palette. The engine refuses to load a level that asks for
+such a name and lists the offenders. Two sets merely sharing a name is
+not a problem — that is what the qualifier is for. The fix is to say
+which set is meant:
+
+```json
+"tilePalette": ["common:pustota", "moon-surface:moongrunt1"]
+```
+
+A qualified name resolves in the named set only and ignores declaration
+order. Qualify what is ambiguous, leave the rest bare — a qualifier on
+every name would be noise on the 180 names that are not in question.
+
 Environment sets are split by theme, not by level. Tiles have always
 crossed level boundaries — level 2 uses art from level 1 — so a set per
 level would need duplication or cross-references from the first day.

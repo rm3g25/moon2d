@@ -28,7 +28,7 @@ unit Render.Font;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core;
+  System.SysUtils, Sdl2.Core, Sprites.Sets;
 
 const
   FontAtlasSize = 448; // atlas side in pixels (TexSizeX/TexSizeY of 2008)
@@ -68,6 +68,7 @@ type
   TMoonFont = class
   private
     FRenderer: PSdlRenderer;
+    FSpriteSet: TSpriteSet; // attached, not owned; nil = plain file
     FAtlas: PSdlTexture;
     procedure LoadAtlas(const AFileName: string;
       AOrientation: TFontAtlasOrientation);
@@ -75,7 +76,8 @@ type
       AX, AY, AGlyphW, AGlyphH, AAdvance: Double; AAlpha: UInt8);
   public
     constructor Create(const ARenderer: PSdlRenderer;
-      const AFileName: string; AOrientation: TFontAtlasOrientation);
+      const AFileName: string; AOrientation: TFontAtlasOrientation;
+      const ASpriteSet: TSpriteSet = nil);
     destructor Destroy; override;
 
     // line() of 2008: small text. AX/AY are game units of the top-left.
@@ -110,7 +112,7 @@ type
 implementation
 
 uses
-  Sdl2.Image;
+  Sdl2.Image, Render.Sprites;
 
 resourcestring
   SFontFileLoadFailed = 'Cannot load font atlas "%s": %s';
@@ -188,10 +190,12 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TMoonFont.Create(const ARenderer: PSdlRenderer;
-  const AFileName: string; AOrientation: TFontAtlasOrientation);
+  const AFileName: string; AOrientation: TFontAtlasOrientation;
+  const ASpriteSet: TSpriteSet);
 begin
   inherited Create;
   FRenderer := ARenderer;
+  FSpriteSet := ASpriteSet;
   LoadAtlas(AFileName, AOrientation);
 end;
 
@@ -208,8 +212,7 @@ var
   Loaded: PSdlSurface;
   Atlas: PSdlSurface;
 begin
-  Loaded := IMG_Load_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(AFileName)), 'rb'), 1);
+  Loaded := LoadImageSurface(FSpriteSet, AFileName);
   if Loaded = nil then
     raise EFontError.CreateFmt(SFontFileLoadFailed,
       [AFileName, SdlErrorText]);
