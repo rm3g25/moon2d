@@ -26,9 +26,13 @@ unit Render.Sprites;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, Sdl2.Core;
+  System.SysUtils, System.Classes, System.Generics.Collections, Sdl2.Core,
+  Sprites.Sets;
 
 const
+  // Where the .mset containers live, relative to the working dir (bin).
+  SpriteSetsDir = 'sprites\';
+
   SpriteSize = 32;        // entity sprite side, as in 2008 (SptSize)
   TileSize = 32;          // tile side in GAME UNITS: logic runs in 512x384
   TileArtSize = 64;       // tile side in TEXTURE PIXELS (sttextures 64x64
@@ -52,15 +56,26 @@ type
   private
     FRenderer: PSdlRenderer;
     FBaseDir: string;
+    FSpriteSet: TSpriteSet; // attached, not owned; nil = folder mode
     FTextures: TDictionary<string, PSdlTexture>;
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
-    function LoadTexture(const AFileName: string): PSdlTexture;
+    function LoadTexture(const AName: string): PSdlTexture;
+    function LoadSurface(const AName: string): PSdlSurface;
   public
     constructor Create(const ARenderer: PSdlRenderer; const ABaseDir: string);
     destructor Destroy; override;
 
-    // Returns a cached texture, loading the BMP on first request.
+    // Switches the cache from the folder to a sprite set. The set is
+    // not owned: whoever opened it frees it, after every cache using it
+    // is gone. Call before the first Get - textures already loaded from
+    // the folder stay as they are.
+    procedure AttachSpriteSet(const ASpriteSet: TSpriteSet);
+
+    // Returns a cached texture, loading the image on first request.
+    // Callers may keep passing '1.png': in set mode the extension is
+    // dropped, because sets name sprites, not files. Both spellings hit
+    // the same cache slot either way.
     function Get(const AFileName: string): PSdlTexture;
     // Color key applies to textures loaded AFTER the call; set it up first.
     procedure SetColorKey(AR, AG, AB: UInt8);
@@ -77,7 +92,14 @@ type
 
 // Free function: parsing a text file into a record needs no object state.
 function LoadAnimSet(const ACache: TSpriteCache;
-  const AMnsFileName: string): TAnimSet;
+  const AMnsFileName: string): TAnimSet; overload;
+
+// Same shape, fed by a set's manifest instead of a .mns file: the
+// 'alive' and 'death' sequences must both be exactly eight frames,
+// because TAnimSet is the 2008 contract and it is fixed-size. The cache
+// must have the same set attached - names resolve through it.
+function LoadAnimSet(const ACache: TSpriteCache;
+  const ASpriteSet: TSpriteSet): TAnimSet; overload;
 
 type
   TSpriteRenderer = class
@@ -116,6 +138,8 @@ resourcestring
   SBmpLoadFailed = 'Cannot load sprite "%s": %s';
   STextureCreateFailed = 'Cannot create texture for "%s": %s';
   SMnsNotFound = 'Sprite list not found: %s';
+  SSequenceLength =
+    'Sequence "%s" of set "%s" must be %d frames, got %d';
   SMnsTooShort = 'Sprite list "%s": expected %d frame lines, got %d';
 
 // Free function: mapping a Boolean to an SDL flip flag needs no state
@@ -186,24 +210,48 @@ function TSpriteCache.Get(const AFileName: string): PSdlTexture;
 var
   Key: string;
 begin
-  Key := LowerCase(AFileName);
+  // Set mode names sprites, not files; '1.png' and '1' are one slot.
+  if FSpriteSet <> nil then
+    Key := LowerCase(ChangeFileExt(AFileName, ''))
+  else
+    Key := LowerCase(AFileName);
+
   if FTextures.TryGetValue(Key, Result) then
     Exit;
 
-  Result := LoadTexture(AFileName);
+  Result := LoadTexture(Key);
   FTextures.Add(Key, Result);
 end;
 
-function TSpriteCache.LoadTexture(const AFileName: string): PSdlTexture;
+procedure TSpriteCache.AttachSpriteSet(const ASpriteSet: TSpriteSet);
+begin
+  FSpriteSet := ASpriteSet;
+end;
+
+// The two sources differ only in where the bytes come from; decoding
+// and the color key are one pipeline either way.
+function TSpriteCache.LoadSurface(const AName: string): PSdlSurface;
+begin
+  if FSpriteSet <> nil then
+  begin
+    var Blob := FSpriteSet.ReadSprite(AName);
+    Result := IMG_Load_RW(SDL_RWFromMem(@Blob[0], Length(Blob)), 1);
+  end
+  else
+  begin
+    var FullPath := FBaseDir + AName;
+    Result := IMG_Load_RW(
+      SDL_RWFromFile(PAnsiChar(SdlText(FullPath)), 'rb'), 1);
+  end;
+  if Result = nil then
+    raise ESpriteError.CreateFmt(SBmpLoadFailed, [AName, SdlErrorText]);
+end;
+
+function TSpriteCache.LoadTexture(const AName: string): PSdlTexture;
 var
   Surface: PSdlSurface;
 begin
-  var FullPath := FBaseDir + AFileName;
-
-  Surface := IMG_Load_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(FullPath)), 'rb'), 1);
-  if Surface = nil then
-    raise ESpriteError.CreateFmt(SBmpLoadFailed, [FullPath, SdlErrorText]);
+  Surface := LoadSurface(AName);
   try
     if FUseColorKey then
       SDL_SetColorKey(Surface, 1,
@@ -212,7 +260,7 @@ begin
     Result := SDL_CreateTextureFromSurface(FRenderer, Surface);
     if Result = nil then
       raise ESpriteError.CreateFmt(STextureCreateFailed,
-        [FullPath, SdlErrorText]);
+        [AName, SdlErrorText]);
   finally
     SDL_FreeSurface(Surface);
   end;
@@ -256,6 +304,28 @@ begin
     end;
   finally
     Lines.Free;
+  end;
+end;
+
+function LoadAnimSet(const ACache: TSpriteCache;
+  const ASpriteSet: TSpriteSet): TAnimSet;
+
+  function FramesOf(const ASequence: string): TArray<string>;
+  begin
+    Result := ASpriteSet.SequenceFrames(ASequence);
+    if Length(Result) <> FramesAlive then
+      raise ESpriteError.CreateFmt(SSequenceLength,
+        [ASequence, ASpriteSet.Id, FramesAlive, Length(Result)]);
+  end;
+
+begin
+  Result := Default(TAnimSet);
+  var Alive := FramesOf('alive');
+  var Death := FramesOf('death');
+  for var i := Low(TFrameIndex) to High(TFrameIndex) do
+  begin
+    Result.Alive[i] := ACache.Get(Alive[i]);
+    Result.Death[i] := ACache.Get(Death[i]);
   end;
 end;
 

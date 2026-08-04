@@ -38,12 +38,17 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSize=32`, `TileSize=32` (game units!),
   `TileArtSize=64` (texture px!), `FramesAlive=8`, `FramesDeath=8`.
   The 32-vs-64 split is the coordinate-system discipline in code form.
-- **`TSpriteCache`** — dictionary `filename → PSdlTexture`, lazy load of PNGs
-  from a base dir, optional color key (`SetColorKey`/`DisableColorKey`).
-  One cache per asset root (textures\, monsters\, heroes\, weapon\, levels\...).
+- **`TSpriteCache`** — dictionary `filename → PSdlTexture`, lazy load of PNGs.
+  Two sources: a base dir, or a `TSpriteSet` attached via `AttachSpriteSet`
+  (not owned — the opener frees it). In set mode `Get('1.png')` and
+  `Get('1')` are one slot: sets name sprites, not files, so folder-era call
+  sites keep working unchanged. Optional color key
+  (`SetColorKey`/`DisableColorKey`). One cache per asset root or per set.
+  `SpriteSetsDir` ('sprites\') lives here — the asset subsystem's home.
 - **`TAnimSet`** (record) — `Alive[0..7]` + `Death[0..7]` texture arrays;
-  `IsLoaded`. Built by free function **`LoadAnimSet(cache, mnsFile)`**
-  which parses a `.mns` sprite list.
+  `IsLoaded`. Built by overloaded **`LoadAnimSet`**: `(cache, mnsFile)`
+  parses a 2008 `.mns` list; `(cache, spriteSet)` reads the manifest's
+  `alive`/`death` sequences, each validated to exactly eight frames.
 - **`TSpriteRenderer`** — draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid), `Draw` (free position, optional mirror),
   `DrawRect`, `DrawRotated` (weapon arm).
@@ -51,7 +56,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 ### `Sprites.Sets.pas` (~430 lines)
 The `.mset` sprite set container: a JSON manifest followed by every image
 concatenated behind it. Read by the game, the packer and (later) the level
-editor — one unit, three callers. Nothing in the engine calls it yet.
+editor — one unit, three callers. The engine reads sets for monsters, the
+hero, the weapons and the bullets; environment (tiles, backgrounds, menu,
+font) is still on loose files until the level format learns `spriteSets`.
 - **Constants**: `MsetVersion=1`. Manifest field names are constants
   (`KeyId`, `KeySprites`, `KeyOffset`…) — a typo in a literal compiles.
 - **Records**: `TSpriteEntry` (name, description, offset, size — offset is
@@ -202,7 +209,7 @@ The hero: physics, weapons, death. Owns `GameWidth=512`, `GameHeight=384`,
     `SetMouse`, `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit-by-unit,
     stops at walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Monsters.pas` (~840 lines)
+### `Monsters.pas` (~870 lines)
 Monster behavior (data-driven off `TMonsterDef`) + the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly×4),
   `TMonsterLife` (mlAlive/Dying/Dead),
@@ -394,5 +401,6 @@ in-place in level/monster JSONs via the base-field + `En`-sibling pattern.
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
 | Trailer cards | tools/TitleCard/* |
 | Sprite sets / .mset format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
+| A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas LoadSetSequences |
 | Packing or inspecting sets | tools/SpritePack/* |
 | PNG loading / image DLL | Sdl2.Image.pas |

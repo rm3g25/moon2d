@@ -34,8 +34,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Math,
   System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Game.Config, Levels.Defs, Monsters.Defs,
-  Bullets;
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Levels.Defs,
+  Monsters.Defs, Bullets;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling,
@@ -123,6 +123,11 @@ type
   private
     FMonsters: TObjectList<TMonster>;
     FAnimSets: TDictionary<string, TAnimSet>; // .mns name -> frames
+    // Monsters migrating to .mset: each gets its own set + cache pair,
+    // both owned here. The shared FCache keeps serving the rest.
+    FSpriteSets: TObjectList<TSpriteSet>;
+    FSetCaches: TObjectList<TSpriteCache>;
+    FRenderer: PSdlRenderer;
     FCache: TSpriteCache; // rooted at monsters\
     FRegistry: TMonsterRegistry;
     FLevel: TLevel;
@@ -731,6 +736,9 @@ begin
   inherited Create;
   FMonsters := TObjectList<TMonster>.Create(True);
   FAnimSets := TDictionary<string, TAnimSet>.Create;
+  FSpriteSets := TObjectList<TSpriteSet>.Create(True);
+  FSetCaches := TObjectList<TSpriteCache>.Create(True);
+  FRenderer := ARenderer;
   FCache := TSpriteCache.Create(ARenderer, MonstersDir);
   FRegistry := ARegistry;
   FLevel := ALevel;
@@ -796,6 +804,11 @@ destructor TMonsterField.Destroy;
 begin
   FMonsters.Free;
   FAnimSets.Free;
+  // Caches before sets: a cache holds no set resources at destroy time,
+  // but the reading order of the living pair was cache -> set, and the
+  // teardown mirrors it.
+  FSetCaches.Free;
+  FSpriteSets.Free;
   FCache.Free;
   inherited;
 end;
@@ -807,13 +820,29 @@ begin
   if FAnimSets.TryGetValue(AMnsName, Result) then
     Exit;
 
+  // A monster whose set exists reads it; the folder remains the
+  // fallback until step 5 retires the loose images. The gravel pilot
+  // proved the path, so the gate is gone rather than grown.
+  var Sub := ChangeFileExt(AMnsName, '');
+  var SetFile := SpriteSetsDir + Sub + '.mset';
+  if FileExists(SetFile) then
+  begin
+    var SpriteSet := TSpriteSet.Create(SetFile);
+    FSpriteSets.Add(SpriteSet);
+    var Cache := TSpriteCache.Create(FRenderer, '');
+    Cache.AttachSpriteSet(SpriteSet);
+    FSetCaches.Add(Cache);
+    Result := LoadAnimSet(Cache, SpriteSet);
+    FAnimSets.Add(AMnsName, Result);
+    Exit;
+  end;
+
   // Frame images live in a subfolder named after the .mns file:
   // monsters\barrel.mns lists bare names found in monsters\barrel\.
   // The shared cache still deduplicates: e1.bmp of two monsters are
   // different files in different subfolders, same-name frames within
   // one folder load once.
   Result := Default(TAnimSet);
-  var Sub := ChangeFileExt(AMnsName, '');
   Lines := TStringList.Create;
   try
     Lines.LoadFromFile(

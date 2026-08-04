@@ -245,6 +245,8 @@ function SDL_PollEvent(AEvent: PSdlEvent): Integer; cdecl;
 
 function SDL_RWFromFile(const AFile, AMode: PAnsiChar): PSdlRWops; cdecl;
   external SdlLib name 'SDL_RWFromFile';
+function SDL_RWFromMem(AMem: Pointer; ASize: Integer): PSdlRWops; cdecl;
+  external SdlLib name 'SDL_RWFromMem';
 function SDL_LoadBMP_RW(ASrc: PSdlRWops; AFreeSrc: Integer): PSdlSurface;
   cdecl; external SdlLib name 'SDL_LoadBMP_RW';
 procedure SDL_FreeSurface(ASurface: PSdlSurface); cdecl;

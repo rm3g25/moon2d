@@ -29,7 +29,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Math,
-  Sdl2.Core, Render.Sprites, Levels.Defs, Bullets;
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Levels.Defs, Bullets;
 
 const
   GameWidth = 512;  // logic units, = 16 cells
@@ -57,8 +57,11 @@ type
     FMinigunBaseX: Double;
     FMinigunBaseY: Double;
     FMinigunMuzzleLen: Double;
-    FCache: TSpriteCache;   // rooted at heroes\
+    FCache: TSpriteCache; // rooted at heroes\
     FWeaponCache: TSpriteCache; // rooted at weapon\
+    // Sets are owned here when present; nil means the folder era.
+    FSkinSet: TSpriteSet;
+    FWeaponSet: TSpriteSet;
     FFrames: array [1..24] of PSdlTexture;
     FWeaponFrames: array [1..7] of PSdlTexture;
 
@@ -83,9 +86,13 @@ type
     FMinigunUpDown: Boolean;
     FDead: Boolean;
     FCorpseSettled: Boolean; // gravity releases the body exactly once
-    FDeathFrame: Double;    // 9 -> 16
+    FDeathFrame: Double;
     FDeathFacingRight: Boolean;
 
+    function OpenFrames(const ACache: TSpriteCache;
+      out ASpriteSet: TSpriteSet; const ASetName: string;
+      const ASequences: array of string; const AListFile: string;
+      ACount: Integer): TArray<PSdlTexture>;
     procedure SetWeaponAngle;
     // --- verbatim ports of the 2008 collision oracles ---
     function Solid(ACol, ARow: Integer): Boolean; // 1-based, like WhatTheSprite
@@ -191,9 +198,10 @@ begin
 end;
 
 resourcestring
-  SSkinNotFound = 'Hero skin list not found: %s';
+  SSpriteListNotFound = 'Sprite list not found: %s';
+  SSetFrameCount =
+    'Set "%s" sequences must supply exactly %d frames, got %d';
   SSpriteListTooShort = 'Sprite list "%s": expected %d lines, got %d';
-  SWeaponListNotFound = 'Weapon sprite list not found: %s';
 
 const
   // Original constants, names preserved for archaeology
@@ -223,8 +231,25 @@ const
 
 // Reads a sprite-list file (one texture name per line, trailing blanks
 // tolerated) and hands each texture to AStore by 1-based index.
-procedure LoadSpriteList(const AFileName: string; ACount: Integer;
-  const ACache: TSpriteCache; const AStore: TProc<Integer, PSdlTexture>);
+// The set's sequences, concatenated in the order given, must add up to
+// exactly ACount frames: the arrays they fill are the fixed-size 2008
+// contract, and a set that supplies the wrong number is a broken set.
+function ReadSetFrames(const ACache: TSpriteCache;
+  const ASpriteSet: TSpriteSet; const ASequences: array of string;
+  ACount: Integer): TArray<PSdlTexture>;
+begin
+  Result := [];
+  for var Sequence in ASequences do
+    for var Frame in ASpriteSet.SequenceFrames(Sequence) do
+      Result := Result + [ACache.Get(Frame)];
+
+  if Length(Result) <> ACount then
+    raise ESpriteError.CreateFmt(SSetFrameCount,
+      [ASpriteSet.Id, ACount, Length(Result)]);
+end;
+
+function ReadListFrames(const AFileName: string; ACount: Integer;
+  const ACache: TSpriteCache): TArray<PSdlTexture>;
 var
   Lines: TStringList;
 begin
@@ -236,11 +261,45 @@ begin
     if Lines.Count < ACount then
       raise ESpriteError.CreateFmt(SSpriteListTooShort,
         [AFileName, ACount, Lines.Count]);
-    for var i := 1 to ACount do
-      AStore(i, ACache.Get(Trim(Lines[i - 1])));
+
+    SetLength(Result, ACount);
+    for var i := 0 to ACount - 1 do
+      Result[i] := ACache.Get(Trim(Lines[i]));
   finally
     Lines.Free;
   end;
+end;
+
+// The frame arrays are 1-based static arrays; an open array parameter
+// indexes from zero regardless, which is why the copy lives in one
+// place instead of at every call site.
+procedure StoreFrames(var ATarget: array of PSdlTexture;
+  const ASource: TArray<PSdlTexture>);
+begin
+  for var i := 0 to High(ATarget) do
+    ATarget[i] := ASource[i];
+end;
+
+// Reads one flat frame array from the sprite set when there is one, and
+// from the 2008 list when there is not. ASpriteSet receives the opened
+// set - nil in folder mode - and the hero frees it.
+function THero.OpenFrames(const ACache: TSpriteCache;
+  out ASpriteSet: TSpriteSet; const ASetName: string;
+  const ASequences: array of string; const AListFile: string;
+  ACount: Integer): TArray<PSdlTexture>;
+begin
+  var SetFile := SpriteSetsDir + ASetName + '.mset';
+  if FileExists(SetFile) then
+  begin
+    ASpriteSet := TSpriteSet.Create(SetFile);
+    ACache.AttachSpriteSet(ASpriteSet);
+    Exit(ReadSetFrames(ACache, ASpriteSet, ASequences, ACount));
+  end;
+
+  ASpriteSet := nil;
+  if not FileExists(AListFile) then
+    raise ESpriteError.CreateFmt(SSpriteListNotFound, [AListFile]);
+  Result := ReadListFrames(AListFile, ACount, ACache);
 end;
 
 constructor THero.Create(const ARenderer: PSdlRenderer;
@@ -273,28 +332,22 @@ begin
   FBulletGravity := 1;
   PlaceAtCell(1, 11); // original start: SpriteToPixelX(1), SpriteToPixelY(11)
 
-  if not FileExists(ASkinFile) then
-    raise ESpriteError.CreateFmt(SSkinNotFound, [ASkinFile]);
-  LoadSpriteList(ASkinFile, Length(FFrames), FCache,
-    procedure(AIndex: Integer; ATexture: PSdlTexture)
-    begin
-      FFrames[AIndex] := ATexture;
-    end);
-
-  if not FileExists(AWeaponFile) then
-    raise ESpriteError.CreateFmt(SWeaponListNotFound, [AWeaponFile]);
-  LoadSpriteList(AWeaponFile, Length(FWeaponFrames), FWeaponCache,
-    procedure(AIndex: Integer; ATexture: PSdlTexture)
-    begin
-      FWeaponFrames[AIndex] := ATexture;
-    end);
+  // The hero's 1..24 is walk, then death, then the transformed frames -
+  // named here rather than counted, as the 2008 list required.
+  StoreFrames(FFrames, OpenFrames(FCache, FSkinSet, 'hero',
+    ['walk', 'death', 'henshin'], ASkinFile, Length(FFrames)));
+  StoreFrames(FWeaponFrames, OpenFrames(FWeaponCache, FWeaponSet, 'weapon',
+    ['frames'], AWeaponFile, Length(FWeaponFrames)));
 end;
 
 destructor THero.Destroy;
 begin
   FBullets.Free;
+  // Caches before the sets they read from, mirroring the living order.
   FWeaponCache.Free;
   FCache.Free;
+  FWeaponSet.Free;
+  FSkinSet.Free;
   inherited;
 end;
 

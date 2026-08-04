@@ -24,7 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
-  Sdl2.Core, Render.Sprites;
+  Sdl2.Core, Render.Sprites, Sprites.Sets;
 
 type
   // The k/t fan formula of 2008 appears five times across the game with
@@ -68,6 +68,7 @@ type
   private
     FBullets: TObjectList<TBullet>;
     FCache: TSpriteCache;     // rooted at weapon\
+    FSpriteSet: TSpriteSet;   // owned; nil = folder era
     FFlightTexture: PSdlTexture;
     FBurstTextures: array [2..8] of PSdlTexture;
   public
@@ -175,6 +176,11 @@ begin
   inherited Create;
   FBullets := TObjectList<TBullet>.Create(True);
   FCache := TSpriteCache.Create(ARenderer, 'weapon');
+  if FileExists(SpriteSetsDir + 'weapon.mset') then
+  begin
+    FSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
+    FCache.AttachSpriteSet(FSpriteSet);
+  end;
   FFlightTexture := FCache.Get(ABaseName + '.png');
   for var i := Low(FBurstTextures) to High(FBurstTextures) do
     FBurstTextures[i] := FCache.Get(ABaseName + IntToStr(i) + '.png');
@@ -184,6 +190,7 @@ destructor TBurst.Destroy;
 begin
   FBullets.Free;
   FCache.Free;
+  FSpriteSet.Free;
   inherited;
 end;
 

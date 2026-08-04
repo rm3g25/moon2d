@@ -23,6 +23,7 @@ uses
   System.JSON,
   Sdl2.Core in 'Sdl2.Core.pas',
   Sdl2.Image in 'Sdl2.Image.pas',
+  Sprites.Sets in 'Sprites.Sets.pas',
   Game.Config in 'Game.Config.pas',
   Game.Loop in 'Game.Loop.pas',
   Monsters.Defs in 'Monsters.Defs.pas',
@@ -239,6 +240,7 @@ type
     FCheckpointX, FCheckpointY: Double;
     FGameOverTimer: Integer; // ticks left of the death pause
     FHudCache: TSpriteCache; // health icons (heroes\health.bmp of 2008)
+    FHudSpriteSet: TSpriteSet; // owned; nil = folder era
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
@@ -386,6 +388,11 @@ begin
   FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FHudCache := TSpriteCache.Create(ARenderer, 'heroes');
+  if FileExists(SpriteSetsDir + 'hero.mset') then
+  begin
+    FHudSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'hero.mset');
+    FHudCache.AttachSpriteSet(FHudSpriteSet);
+  end;
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation);
   FMessages := TMessageBoard.Create(FFont, GameWidth);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
@@ -405,6 +412,7 @@ begin
   FMessages.Free;
   FFont.Free;
   FHudCache.Free;
+  FHudSpriteSet.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
