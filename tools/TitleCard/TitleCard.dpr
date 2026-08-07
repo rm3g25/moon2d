@@ -14,6 +14,8 @@ uses
   Vcl.Forms,
   Sdl2.Core in '..\..\Sdl2.Core.pas',
   Sdl2.Image in '..\..\Sdl2.Image.pas',
+  Sprites.Sets in '..\..\Sprites.Sets.pas',
+  Render.Sprites in '..\..\Render.Sprites.pas',
   Render.Font in '..\..\Render.Font.pas',
   Image.Png in 'Image.Png.pas',
   TitleCard.Layout in 'TitleCard.Layout.pas',

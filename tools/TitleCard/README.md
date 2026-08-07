@@ -7,16 +7,20 @@ level editor will need exactly the same trick.
 
 ## Build
 
-1. Open `TitleCard.dpr` in Delphi 12. The IDE creates `TitleCard.dproj`
-   and `TitleCard.res` on the first save - the `{$R *.res}` line expects
-   them to exist by then.
-2. Build. The shared units are pulled in by relative path from the `uses`
-   clause of the `.dpr`, so there is no search path to configure.
-3. **Copy `SDL2.dll` next to the produced exe.** `Sdl2.Core` imports it
-   statically, so Windows resolves it at process load - before any code
-   of ours could point the loader anywhere else. No DLL, no start.
-4. `fonty.bmp` is *not* copied anywhere: the tool walks up from the exe
-   folder (six levels, enough for `Win32\Release`) until it finds it.
+1. Open `Moon2D.groupproj` in the repository root and build the group -
+   the tool compiles alongside the game, which is the point: a change to
+   a shared unit breaks here the day it is made, not the day you sit
+   down to edit a trailer.
+2. The shared units are pulled in by relative path from the `uses`
+   clause of the `.dpr`, so there is no search path to configure. That
+   also means the tool only builds inside a full checkout.
+3. **Copy `SDL2.dll` and `SDL2_image.dll` next to the produced exe.**
+   `Sdl2.Core` imports SDL2 statically, so Windows resolves it at process
+   load, before any code of ours could point the loader elsewhere. The
+   image DLL decodes the PNG the atlas is stored as. No DLLs, no start.
+4. Nothing is copied next to the exe beyond that: the tool walks up from
+   its own folder (six levels, enough for `Win32\Release`) until it finds
+   `bin\sprites\ui.mset`, and reads the `fonty` sprite out of it.
 
 ## Using it
 
@@ -45,6 +49,8 @@ writing:
 
 | card         | x1 | x2 | x3 |
 |--------------|----|----|----|
+| 1024 x 768   | 23 | 11 |  7 |
+| 2048 x 1536  | 47 | 23 | 15 |
 | 1920 x 1080  | 44 | 22 | 14 |
 | 1080 x 1440  | 25 | 12 |  8 |
 
@@ -52,10 +58,20 @@ writing:
 does not exist - it has to become two lines. That is not a limitation to
 work around, it is what a trailer card looks like anyway.
 
+Note the first two rows: 4:3 is the game's own aspect, so cards in that
+shape cut against gameplay footage without black bars. `1024 x 768` is
+native but cramped - eleven characters at `x2`. Author on `2048 x 1536`
+instead: same proportions, same line breaks, twice the pixels, and the
+character budget matches 16:9. Downscale it in the edit only by a whole
+factor, or the bitmap font smears back into the greyness it was drawn to
+avoid.
+
 ## Settings
 
 `TitleCard.ini` sits next to the exe and is written with defaults on the
-first run. Every measurement in it is a whole percent on purpose:
+first run. `[Paths] SpriteSet` pins the container and `FontSprite` picks
+the atlas inside it - `fontx` is the same font in the other orientation,
+should the trap in `Render.Font` ever need re-testing. Every measurement in it is a whole percent on purpose:
 `ReadFloat` would go through the locale decimal separator, and an INI
 that silently reverts to defaults on a comma locale is a bad afternoon.
 

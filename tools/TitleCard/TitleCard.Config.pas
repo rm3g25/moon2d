@@ -19,7 +19,8 @@ uses
 
 type
   TTitleCardConfig = record
-    AtlasFileName: string;
+    SpriteSetFileName: string;
+    FontSpriteName: string;
     RenderDriver: string;
     Geometry: TCardGeometry;
     ScaleSteps: Integer; // 0 = auto-fit to the margins
@@ -37,7 +38,11 @@ uses
   System.SysUtils, System.IniFiles, System.IOUtils;
 
 const
-  DefaultAtlasName = 'fonty.png';
+  // The loose images retired into .mset containers; the font atlas is
+  // a sprite named 'fonty' inside the ui set. The search below wants a
+  // path relative to the repository root, not a bare file name.
+  DefaultSetName = 'bin\sprites\ui.mset';
+  DefaultFontSprite = 'fonty';
   // tools\TitleCard\Win32\Debug is already four rungs below the root;
   // six gives room for one more folder without another release.
   MaxLevelsUp = 6;
@@ -48,7 +53,7 @@ const
 
 function TTitleCardConfig.IsUsable: Boolean;
 begin
-  Result := (AtlasFileName <> '') and TFile.Exists(AtlasFileName);
+  Result := (SpriteSetFileName <> '') and TFile.Exists(SpriteSetFileName);
 end;
 
 function ConfigFileName: string;
@@ -74,10 +79,10 @@ begin
   Result := '';
 end;
 
-function ResolveAtlas(const AConfigured: string): string;
+function ResolveSpriteSet(const AConfigured: string): string;
 begin
   if AConfigured = '' then
-    Exit(FindAssetUpwards(DefaultAtlasName));
+    Exit(FindAssetUpwards(DefaultSetName));
   if TPath.IsPathRooted(AConfigured) then
     Exit(AConfigured);
   Result := FindAssetUpwards(AConfigured);
@@ -85,7 +90,8 @@ end;
 
 function DefaultConfig: TTitleCardConfig;
 begin
-  Result.AtlasFileName := '';
+  Result.SpriteSetFileName := '';
+  Result.FontSpriteName := DefaultFontSprite;
   Result.RenderDriver := 'software';
   Result.Geometry := DefaultCardGeometry;
   Result.ScaleSteps := 2;
@@ -95,7 +101,8 @@ end;
 
 procedure WriteConfig(const AIni: TIniFile; const AConfig: TTitleCardConfig);
 begin
-  AIni.WriteString(SectionPaths, 'Atlas', AConfig.AtlasFileName);
+  AIni.WriteString(SectionPaths, 'SpriteSet', AConfig.SpriteSetFileName);
+  AIni.WriteString(SectionPaths, 'FontSprite', AConfig.FontSpriteName);
   AIni.WriteString(SectionPaths, 'RenderDriver', AConfig.RenderDriver);
   AIni.WriteInteger(SectionCard, 'Width', AConfig.Geometry.Width);
   AIni.WriteInteger(SectionCard, 'Height', AConfig.Geometry.Height);
@@ -116,8 +123,10 @@ end;
 function ReadConfig(const AIni: TIniFile): TTitleCardConfig;
 begin
   Result := DefaultConfig;
-  Result.AtlasFileName :=
-    AIni.ReadString(SectionPaths, 'Atlas', '');
+  Result.SpriteSetFileName :=
+    AIni.ReadString(SectionPaths, 'SpriteSet', '');
+  Result.FontSpriteName := AIni.ReadString(SectionPaths, 'FontSprite',
+    Result.FontSpriteName);
   Result.RenderDriver :=
     AIni.ReadString(SectionPaths, 'RenderDriver', Result.RenderDriver);
   Result.Geometry.Width :=
@@ -155,7 +164,7 @@ begin
   finally
     Ini.Free;
   end;
-  Result.AtlasFileName := ResolveAtlas(Result.AtlasFileName);
+  Result.SpriteSetFileName := ResolveSpriteSet(Result.SpriteSetFileName);
 end;
 
 end.

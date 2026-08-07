@@ -23,7 +23,7 @@ unit TitleCard.Renderer;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Render.Font, TitleCard.Layout;
+  System.SysUtils, Sdl2.Core, Sprites.Sets, Render.Font, TitleCard.Layout;
 
 type
   ECardRenderError = class(Exception);
@@ -34,11 +34,13 @@ type
   private
     FWindow: PSdlWindow;
     FRenderer: PSdlRenderer;
+    FSpriteSet: TSpriteSet;
     FFont: TMoonFont;
     procedure ClearTarget(ABackground: TCardBackground);
     procedure DrawLines(const ALayout: TCardLayout);
   public
-    constructor Create(const AAtlasFileName, ARenderDriver: string);
+    constructor Create(const ASetFileName, AFontSpriteName,
+      ARenderDriver: string);
     destructor Destroy; override;
     // Returns AWidth*AHeight*4 bytes, top-down, R,G,B,A - the exact
     // input SavePngRgba wants.
@@ -63,7 +65,7 @@ const
   // Char does not go where SDL_SetHint wants a PAnsiChar.
   ScaleQualityNearest: AnsiString = '0';
 
-constructor TCardRenderer.Create(const AAtlasFileName,
+constructor TCardRenderer.Create(const ASetFileName, AFontSpriteName,
   ARenderDriver: string);
 begin
   inherited Create;
@@ -85,13 +87,19 @@ begin
   if FRenderer = nil then
     raise ECardRenderError.CreateFmt(SRendererFailed, [SdlErrorText]);
 
-  FFont := TMoonFont.Create(FRenderer, AAtlasFileName, faRotatedCw);
+  // The atlas is a sprite in a container now, so the set has to outlive
+  // the font's constructor - and the font does not own it.
+  FSpriteSet := TSpriteSet.Create(ASetFileName);
+  FFont := TMoonFont.Create(FRenderer, AFontSpriteName, faRotatedCw,
+    FSpriteSet);
 end;
 
 destructor TCardRenderer.Destroy;
 begin
-  // Order matters: the font holds a texture born of this renderer.
+  // Order matters: the font holds a texture born of this renderer, and
+  // it reads through the set while loading.
   FFont.Free;
+  FSpriteSet.Free;
   if Assigned(FRenderer) then
     SDL_DestroyRenderer(FRenderer);
   if Assigned(FWindow) then

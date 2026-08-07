@@ -85,8 +85,8 @@ uses
   Render.Font, Image.Png;
 
 resourcestring
-  SAtlasMissing = 'fonty.png not found next to the tool or up to six ' +
-    'folders above it. Point [Paths] Atlas in %s at it.';
+  SAtlasMissing = 'bin\sprites\ui.mset not found next to the tool or ' +
+    'up to six folders above it. Point [Paths] SpriteSet in %s at it.';
   SStatusFits = 'Scale x%.2f (cell %d px) - up to %d characters per line.';
   SStatusOver = 'Line %d is %d characters over the margin.';
   SStatusBelowNative = 'Below x1: glyphs are downscaled, the bitmap ' +
@@ -111,7 +111,13 @@ type
   end;
 
 const
-  CardPresets: array [0..3] of TCardPreset = (
+  // The game renders 4:3 (512x384 logic space, 1024x768 windowed), so a
+  // card in any other aspect meets the footage as letterbox bars. The
+  // 4:3 pair leads the list for that reason; 2048x1536 is the same card
+  // at x2, for a timeline that finishes above 768 lines.
+  CardPresets: array [0..5] of TCardPreset = (
+    (Caption: '1024 x 768  (4:3, game)'; Width: 1024; Height: 768),
+    (Caption: '2048 x 1536  (4:3, x2)'; Width: 2048; Height: 1536),
     (Caption: '1920 x 1080  (16:9)'; Width: 1920; Height: 1080),
     (Caption: '1080 x 1440  (3:4)'; Width: 1080; Height: 1440),
     (Caption: '1080 x 1080  (1:1)'; Width: 1080; Height: 1080),
@@ -183,8 +189,8 @@ begin
   end;
 
   try
-    FRenderer := TCardRenderer.Create(FConfig.AtlasFileName,
-      FConfig.RenderDriver);
+    FRenderer := TCardRenderer.Create(FConfig.SpriteSetFileName,
+      FConfig.FontSpriteName, FConfig.RenderDriver);
   except
     on E: Exception do
     begin
