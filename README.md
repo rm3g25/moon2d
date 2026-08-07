@@ -81,6 +81,7 @@ says so, since every sprite in the game is a PNG.
 
 ```
 *.pas, *.dpr           engine sources
+Moon2D.groupproj       the game and both tools, built together
 bin/                   everything the game needs at runtime
   Moon2D.exe             built here
   level1.json            level geometry, backgrounds, entities, triggers
@@ -88,11 +89,10 @@ bin/                   everything the game needs at runtime
   monsters.json          movement, attacks, spawn tables, pickup effects
   config.json            window, tick rate, difficulty, language
   lang/                  en.json, ru.json
-  heroes/  monsters/     sprite sets, each with an ordered frame list
-  weapon/  textures/
-  levels/                per-screen background art
+  sprites/               all art, one .mset container per set
   sounds/
   music/                 release-only, see ASSETS.md
+tools/SpritePack/      builds and inspects the .mset containers
 tools/TitleCard/       renders text through the game's own font engine
 docs/                  working notes
 ```
