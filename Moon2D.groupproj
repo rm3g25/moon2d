@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{239B63C8-DA78-4322-898D-CEC3D1C71E5E}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="Moon2D.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="tools\SpritePack\SpritePackCli.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="tools\TitleCard\TitleCard.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <BorlandProject xmlns="">
+                <Default.Personality/>
+            </BorlandProject>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="Moon2D">
+        <MSBuild Projects="Moon2D.dproj"/>
+    </Target>
+    <Target Name="Moon2D:Clean">
+        <MSBuild Projects="Moon2D.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Moon2D:Make">
+        <MSBuild Projects="Moon2D.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SpritePackCli">
+        <MSBuild Projects="tools\SpritePack\SpritePackCli.dproj"/>
+    </Target>
+    <Target Name="SpritePackCli:Clean">
+        <MSBuild Projects="tools\SpritePack\SpritePackCli.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SpritePackCli:Make">
+        <MSBuild Projects="tools\SpritePack\SpritePackCli.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TitleCard">
+        <MSBuild Projects="tools\TitleCard\TitleCard.dproj"/>
+    </Target>
+    <Target Name="TitleCard:Clean">
+        <MSBuild Projects="tools\TitleCard\TitleCard.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TitleCard:Make">
+        <MSBuild Projects="tools\TitleCard\TitleCard.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="Moon2D;SpritePackCli;TitleCard"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="Moon2D:Clean;SpritePackCli:Clean;TitleCard:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="Moon2D:Make;SpritePackCli:Make;TitleCard:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
