@@ -10,6 +10,13 @@
 
 * -text
 
+# ---- Sources: CRLF in the working tree, always ----
+*.pas text eol=crlf
+*.dpr text eol=crlf
+*.dpk text eol=crlf
+*.dfm text eol=crlf
+*.inc text eol=crlf
+
 # ---- Explicitly binary: never diff, never attempt a merge ----
 *.bmp     binary
 *.png     binary
