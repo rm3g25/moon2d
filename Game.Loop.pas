@@ -195,6 +195,11 @@ begin
     raise EGameHostError.CreateFmt(SSdlRendererFailed,
       [SdlErrorText]);
 
+  // The game draws its own crosshair (Hero.FCrossDX/DY, Menu.DrawCursor),
+  // so the OS arrow on top is a second cursor a few units off the first.
+  // Invisible in play, plainly visible in a screen capture.
+  SDL_ShowCursor(SdlCursorDisable);
+
   // Surface the backend that actually got created - stutter diagnostics
   // are meaningless without knowing which present path is on stage.
   // The DLL version rides along: SDL_Delay is ~1 ms accurate only from

@@ -241,6 +241,15 @@ procedure SDL_RenderPresent(ARenderer: PSdlRenderer); cdecl;
 function SDL_PollEvent(AEvent: PSdlEvent): Integer; cdecl;
   external SdlLib name 'SDL_PollEvent';
 
+// --- Mouse cursor ---
+
+const
+  SdlCursorDisable = 0;
+  SdlCursorEnable = 1;
+
+function SDL_ShowCursor(AToggle: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_ShowCursor';
+
 // --- Surfaces and textures (sprite pipeline) ---
 
 function SDL_RWFromFile(const AFile, AMode: PAnsiChar): PSdlRWops; cdecl;
