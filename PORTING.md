@@ -5,7 +5,7 @@ a hand-rolled binary level format, and a 20 ms `WM_Timer` doing duty as a game
 loop. It ran. Most of it ran for reasons that were never written down.
 
 This document is about what happened when it was rebuilt eighteen years later
-on Delphi 13 and SDL2 — specifically the parts that were surprising.
+on current Delphi and SDL2 — specifically the parts that were surprising.
 
 ---
 
@@ -33,8 +33,8 @@ back.
 
 ### The migration itself
 
-The version distance is not trivial. Delphi 2005 to Delphi 13 crosses the 2009
-Unicode transition, where `string` stopped meaning `AnsiString` and every
+The version distance is not trivial. Delphi 2005 to a current release crosses
+the 2009 Unicode transition, where `string` stopped meaning `AnsiString` and every
 codebase in the language broke at once. It crosses the arrival of generics,
 inline variable declarations, and `System.IOUtils`. On the rendering side it
 crosses the retirement of immediate-mode OpenGL, and on the timing side it
@@ -65,7 +65,7 @@ the code they described, every time. A meaningful fraction were wrong — not
 maliciously, just left behind by an edit. A comment is a claim about the code,
 and claims get verified.
 
-**3. Enumerate every deliberate deviation.** There are exactly seven, listed
+**3. Enumerate every deliberate deviation.** There are exactly eight, listed
 below. Anything not on that list and not matching the original is a bug, not
 an improvement. Without a closed list, drift hides behind good intentions and
 after six months nobody can tell a fix from a regression.
@@ -206,7 +206,7 @@ Collected because each of these cost real time and none of them are in the
 documentation where you would look for them.
 
 **UTF-8 BOM is mandatory.** A `.pas` file containing Cyrillic string literals
-and saved *without* a byte-order mark is read by Delphi 12+ as ANSI, i.e.
+and saved *without* a byte-order mark is read by Delphi as ANSI, i.e.
 CP1251, and every Russian string in the build becomes mojibake. The file looks
 identical in every editor. The compiler issues no warning. Set your editor to
 write the BOM and never think about it again.
@@ -271,6 +271,17 @@ surrounding lines contradicted it. Grep locates; it does not conclude.
 formats committed and then converted live in version-control history twice,
 forever. The cost here is trivial. On a larger project it would not be.
 
+**A shared unit is a dependency in both directions.** `TitleCard` reuses the
+game's own `Render.Font` by relative path, which is the whole point of the
+tool — the cards are rendered in the game's typeface because they are rendered
+*by the game's code*. When the asset pipeline moved from loose PNGs to `.mset`
+containers, the font loader changed its contract and TitleCard stopped
+building. Nobody noticed for three months, because nothing in the game's own
+build touches it: the group project built green while one of its members was
+broken. A tool that shares a unit is a consumer of that unit's contract, and it
+has to be in the loop that verifies a contract change — either in the same
+`groupproj` build, or in a checklist that says so out loud.
+
 **Write the deviations list on day one.** It was started late, which meant an
 archaeological pass over changes already made to work out which had been
 decisions and which had been accidents. Some of that is unrecoverable — a
@@ -281,16 +292,17 @@ months later, including to the person who made it.
 
 ## Build requirements
 
-Developed on **Delphi 13 Florence**, targeting Win32.
+Win32 target, built and played on **Delphi 10.x and upward**.
 
 The binding language constraint is inline variable declarations
-(`for var i := 0 to ...`), which require **Delphi 10.3 Rio or later**. Nothing
-newer than that is used deliberately, so earlier releases in that range should
-work — but this has not been tested, and the project file is saved by Delphi 13
-and may need its version attribute adjusted before an older IDE will open it.
+(`for var i := 0 to ...`), which arrived in **Delphi 10.3 Rio**. Nothing newer
+than that is used deliberately, so anything from 10.3 up should build this.
+Releases below the ones actually run are untested rather than excluded — the
+`.dproj` is saved by a recent IDE and may need its version attribute adjusted
+before an older one will open it, but that is a project-file question, not a
+language one.
 
-The newest free Community Edition at the time of writing is **Delphi 12.1
-Athens**, which is well within range on the language side.
+The free Community Edition sits comfortably inside that range.
 
 No third-party components. `SDL2.dll` and `SDL2_mixer.dll` ship with the
 repository.
