@@ -6,7 +6,7 @@
   search path, so the tool follows the game around without any IDE
   settings to forget.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 program TitleCard;
 

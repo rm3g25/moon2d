@@ -33,7 +33,7 @@
   The board owns no textures - it borrows a TMoonFont for drawing and
   expects Tick once per logic tick and Draw once per frame.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hud.Messages;
 {$I Moon2D.inc}

@@ -18,7 +18,7 @@
   dissolved into the night sky. Here black is a color key by default, so
   the sprites finally become honestly transparent on any background.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.Sprites;
 {$I Moon2D.inc}

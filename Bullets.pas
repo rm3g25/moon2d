@@ -15,7 +15,7 @@
   A bullet never just disappears against a wall: it switches to
   bsBursting and plays destruction frames 2..8 in place.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Bullets;
 {$I Moon2D.inc}

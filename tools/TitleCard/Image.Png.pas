@@ -11,7 +11,7 @@
   Input is exactly what SDL_RenderReadPixels produces with
   SdlPixelFormatAbgr8888 - top-down rows of R,G,B,A bytes.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Image.Png;
 
@@ -140,7 +140,7 @@ var
 begin
   Output := TMemoryStream.Create;
   try
-    // Delphi 12 offers Create(dest), Create(dest, level, windowBits) and
+    // The RTL offers Create(dest), Create(dest, level, windowBits) and
     // the legacy Create(level, dest) - there is no (dest, level) pair.
     // The three-argument form is the one that says what it does.
     var Compressor := TZCompressionStream.Create(Output, zcDefault,

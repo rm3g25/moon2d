@@ -8,7 +8,7 @@
   file, the community SDL2-for-Pascal headers are a uses-clause swap -
   the function signatures are identical.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Sdl2.Core;
 {$I Moon2D.inc}

@@ -10,7 +10,7 @@
   Usage: subclass TGameApp, override Update/Render/HandleKey, pass the
   instance to TGameHost.Run.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Loop;
 {$I Moon2D.inc}

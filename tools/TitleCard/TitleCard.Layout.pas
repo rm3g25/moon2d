@@ -19,7 +19,7 @@
      4..22 of the 28 px cell (measured on fonty.bmp), so a block centred
      by cells sits visibly low. See InkTopRatio below.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit TitleCard.Layout;
 

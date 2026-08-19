@@ -7,7 +7,7 @@
   card looks like in the edit; the alpha channel only matters in the
   saved file, and the checkbox says so.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit TitleCard.Main;
 

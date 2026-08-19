@@ -20,7 +20,7 @@
   the two orientations of the same atlas. Press F in a DEBUGKEYS build
   to see the raw atlas and pick the right TFontAtlasOrientation.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.Font;
 {$I Moon2D.inc}

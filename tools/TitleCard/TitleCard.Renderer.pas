@@ -16,7 +16,7 @@
   This unit is also the dress rehearsal for the level editor, which will
   want exactly this: game renderers, no game loop.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit TitleCard.Renderer;
 

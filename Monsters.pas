@@ -24,7 +24,7 @@
   lives (turns the HERO into ice form), rage under 80 lives (speed x2,
   fire x3, music change, a 24x44 fragment wave), victory double-fan.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Monsters;
 {$I Moon2D.inc}

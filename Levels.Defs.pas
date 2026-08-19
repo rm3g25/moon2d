@@ -8,7 +8,7 @@
   (location titles, music changes) - faithfully carrying over the
   component system the 2008 .mon format invented by accident.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Defs;
 {$I Moon2D.inc}

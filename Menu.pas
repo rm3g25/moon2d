@@ -20,7 +20,7 @@
   The menu produces TMenuResult commands; it never touches the game -
   the composition root (Moon2D.dpr) decides what starting a level means.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Menu;
 {$I Moon2D.inc}

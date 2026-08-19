@@ -8,7 +8,7 @@
   walking up from the exe until the file turns up. The INI can still
   pin an absolute path when the search guesses wrong.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit TitleCard.Config;
 

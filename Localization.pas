@@ -21,7 +21,7 @@
   archaeology says so; per-key notes sit at the key constants because
   JSON has no comments.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Localization;
 {$I Moon2D.inc}

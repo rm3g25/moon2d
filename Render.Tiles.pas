@@ -12,7 +12,7 @@
   paths relative to textures\ ("level1\doom1.bmp"), background images
   live in the level's own folder ("levels\level1\_scr0.bmp").
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.Tiles;
 {$I Moon2D.inc}

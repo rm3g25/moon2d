@@ -6,7 +6,7 @@
   file, missing keys or broken values fall back to defaults - the game
   must always start.
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Config;
 {$I Moon2D.inc}

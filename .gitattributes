@@ -2,7 +2,7 @@
 #  Moon2D - .gitattributes
 # ============================================================
 # Windows-only project. Sources are CRLF + UTF-8 BOM. The BOM is
-# mandatory: without it Delphi 12 reads Cyrillic string literals as
+# mandatory: without it Delphi reads Cyrillic string literals as
 # CP1251 and the game ships mojibake (see PORTING-NOTES.md).
 #
 # Hence: no end-of-line conversion anywhere, in either direction.

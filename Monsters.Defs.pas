@@ -5,7 +5,7 @@
   (monst.pas, 2008). Definitions are immutable data: the registry owns them,
   gameplay code reads them and never writes.
 
-  Moon 2D remake. Requires Delphi 12+ (System.JSON, inline var).
+  Moon 2D remake. Requires Delphi 10.3+ (System.JSON, inline var).
 }
 unit Monsters.Defs;
 {$I Moon2D.inc}

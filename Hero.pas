@@ -22,7 +22,7 @@
   every frame index, which is why the sequences concatenate rather than
   being asked for by name at the point of use).
 
-  Moon 2D remake. Requires Delphi 12+.
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hero;
 {$I Moon2D.inc}
