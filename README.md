@@ -44,7 +44,7 @@ rule, and it is the only interesting thing about this project.
 | Third-party music → an original score | The bitmap font, glyph for glyph |
 | One long file → a unit per responsibility | The feel. Which is the whole point. |
 
-Seven deliberate departures from the original exist. They are enumerated in
+Eight deliberate departures from the original exist. They are enumerated in
 [`PORTING.md`](PORTING.md). Anything else that differs is a bug, not an
 improvement — a closed list is the only thing that stops a rewrite from drifting
 into a remake.
@@ -137,11 +137,11 @@ Take the release archive, unpack it, run `Moon2D.exe`. Nothing installs, nothing
 registers, nothing phones anywhere. Starts fullscreen; if the screen stays
 black, set `"fullscreen"` to `false` in `config.json`.
 
-Cloning and building works too, but the soundtrack is not in the repository — at
-17 MB it would outweigh the code and it changes far more often. Take
-`moon2d-music-*.zip` from the latest release and unpack it over your clone, or
-don't: the audio DLL is a delayed import, so the game notices its absence and
-runs silently rather than refusing to start.
+Cloning and building works too, and the clone is complete — the soundtrack is
+in the repository now that the tracks are finished and mine. If you delete
+`bin/music/` anyway, the game does not care: the audio DLL is a delayed import,
+so a missing library or a missing track degrades to silence rather than to a
+crash.
 
 ## Building
 
@@ -166,14 +166,17 @@ repository already.
 *.pas, *.dpr           engine sources
 bin/                   everything the game reads at runtime, and nothing else
   Moon2D.exe
+  SDL2*.dll              renderer, image and mixer
   level1.json            geometry, backgrounds, entities, triggers, per screen
   level2.json
   monsters.json          movement, attacks, spawn tables, pickup effects
   config.json            window, tick rate, difficulty, language
   lang/                  en.json, ru.json
-  *.mset                 sprite containers: manifest + packed frames, one file
-  levels/                per-screen background art
-  sounds/  music/        music is release-only, see ASSETS.md
+  sprites/               *.mset containers: manifest + packed frames, one file
+                         per subject - a monster, a tile theme, the hero,
+                         one level's screen backdrops
+  sounds/                WAV one-shots
+  music/                 OGG tracks
 tools/                 SpritePackCli (asset packer), TitleCard (trailer text)
 docs/                  working notes, codebase map, screenshots
 ```
