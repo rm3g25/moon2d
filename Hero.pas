@@ -503,8 +503,11 @@ end;
 function THero.Solid(ACol, ARow: Integer): Boolean;
 begin
   // WhatTheSprite took 1-based cell coordinates; SolidAt is 0-based
-  // and treats off-grid as air, which the original did by accident
-  // (its lookup loop simply never matched).
+  // and treats off-grid as air. The original did not: an unmatched
+  // column ran its lookup loop to the end and read the NEXT screen's
+  // cell (col 1, row 4) whatever row was asked - past the last screen,
+  // bytes beyond the string. That accident walled the gravel screen
+  // while level2 still had screens after it (coordinates.pas 113-131).
   Result := FLevel.SolidAt(FScreen, ACol - 1, ARow - 1);
 end;
 

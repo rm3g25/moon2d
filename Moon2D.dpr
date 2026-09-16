@@ -848,8 +848,9 @@ begin
     FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
     // The breakthrough shatter RINGS, unlike the silent level-complete
     // one: Snd_bottle right before the same 12x16 fan (397-403). The
-    // 2008 tile edit that retired the trigger for good (391-392) is
-    // replaced by the once-per-life trigger reading (see RestartLevel).
+    // levelmass write before it (391-392) is dropped: physics read the
+    // hero's and monsters' own copies of the level string, so the
+    // write only split off a copy nobody collided with.
     if FHero.HeroForm <> hfNormal then
       FAudio.Play(BottleSoundFile);
     RemoveIceForm;
@@ -1316,8 +1317,9 @@ begin
   // Death re-enters the screen: its one-shot triggers re-arm and fire
   // again - teleports are idempotent (the checkpoint IS their target),
   // captions re-introduce the place, the gravel trial rises with the
-  // barrels. The 2008 'for good' tile edit (391-392) becomes this
-  // once-per-LIFE reading.
+  // barrels. In 2008 once-per-game came for free - doors open one way
+  // and death led to the menu; here death stays on the screen, so the
+  // reading is once-per-LIFE.
   for var i := 0 to High(FLevel.Entities) do
     if FLevel.Entities[i].Screen = FHero.Screen then
       FTriggerFired[i] := False;
