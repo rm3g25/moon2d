@@ -700,28 +700,41 @@ begin
 end;
 
 procedure TMoonGame.HandleScreenTransitions;
+const
+  // Verbatim moon.dpr 1071-1073: the door sits at x > 512-33
+  RightDoorX = GameWidth - 33;
 begin
-  // Verbatim moon.dpr 1071-1073: transition at x > 512-33, blocked
-  // while the gravel trial runs and for the dead; land at x=4,
-  // checkpoint there
-  if (FHero.X > GameWidth - 33) and not FGravelAttack and
-     not FHero.Dead then
+  if FHero.X < 2 then
+    FHero.SetScreenX(2); // no way back - the 2008 doors open one way
+  if FHero.X <= RightDoorX then
+    Exit;
+
+  // Transition blocked while the gravel trial runs and for the dead;
+  // land at x=4, checkpoint there
+  if not FGravelAttack and not FHero.Dead then
   begin
     if FHero.Screen < FLevel.ScreenCount then
     begin
       FHero.Screen := FHero.Screen + 1;
       FHero.SetScreenX(4);
       ArriveOnScreen;
-    end
-    else if CurrentLevelIsLast then
+      Exit;
+    end;
+    if CurrentLevelIsLast then
+    begin
       // The 2008 door out of the last screen called GameFree - the game
       // ENDED by walking out. Same door, kinder farewell (part 5.4).
       BeginEnding;
-    // else: the last screen of a mid-campaign level stays walled - its
-    // exit is the boss (meLevelComplete), not the edge
-  end
-  else if FHero.X < 2 then
-    FHero.SetScreenX(2); // no way back - the 2008 doors open one way
+      Exit;
+    end;
+  end;
+
+  // A closed door is a wall. Refusing only the transition let the hero
+  // walk on past x=512 - on the gravel screen through the floor-level
+  // gap in the right wall, into off-grid air and down the pit. He waits
+  // at the threshold until the breakthrough opens the door; the last
+  // screen of a mid-campaign level stays closed, its exit is the boss.
+  FHero.SetScreenX(RightDoorX);
 end;
 
 // 'Падаем в лунку' verbatim: the pit returns the hero to the
