@@ -172,6 +172,7 @@
         <DCCReference Include="Sdl2.Image.pas"/>
         <DCCReference Include="Sprites.Sets.pas"/>
         <DCCReference Include="Game.Config.pas"/>
+        <DCCReference Include="Game.Version.pas"/>
         <DCCReference Include="Game.Loop.pas"/>
         <DCCReference Include="Monsters.Defs.pas"/>
         <DCCReference Include="Render.Sprites.pas"/>

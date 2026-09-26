@@ -30,7 +30,7 @@ interface
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config,
-  Localization;
+  Localization, Game.Version;
 
 type
   EMenuError = class(Exception);
@@ -146,6 +146,7 @@ type
     procedure DrawCredits;
     procedure DrawDifficultyHint;
     procedure DrawCursor;
+    procedure DrawVersion;
   public
     constructor Create(const ARenderer: PSdlRenderer;
       const ASprites: TSpriteRenderer; const AFont: TMoonFont;
@@ -288,6 +289,9 @@ const
   FlagBoxRed = 255;
   FlagBoxGreen = 255;
   FlagBoxBlue = 0;
+  // The version tag sits in the bottom-right corner, the one spot no
+  // screen of the menu ever draws into
+  VersionMargin = 6.0;
 
   // Cursor frames, same art the gameplay crosshair uses (target.pas):
   // 1 idle, 2 over an item, 4 over anything that quits (VidKursora).
@@ -889,6 +893,14 @@ begin
   end;
 end;
 
+procedure TMoonMenu.DrawVersion;
+begin
+  var Text := 'v' + GameVersion;
+  FFont.DrawSmall(Text,
+    ScreenWidthUnits - FFont.SmallTextWidth(Text) - VersionMargin,
+    ScreenHeightUnits - SmallLineStep - VersionMargin);
+end;
+
 procedure TMoonMenu.DrawCursor;
 var
   FlagUnderCursor: TLanguage;
@@ -938,6 +950,7 @@ begin
   DrawItems;
   if FScreen = msMain then
     DrawFlags;
+  DrawVersion;
   DrawCursor;
 end;
 

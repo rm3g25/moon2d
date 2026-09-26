@@ -26,6 +26,7 @@ uses
   Sdl2.Image in 'Sdl2.Image.pas',
   Sprites.Sets in 'Sprites.Sets.pas',
   Game.Config in 'Game.Config.pas',
+  Game.Version in 'Game.Version.pas',
   Game.Loop in 'Game.Loop.pas',
   Monsters.Defs in 'Monsters.Defs.pas',
   Render.Sprites in 'Render.Sprites.pas',
@@ -1980,7 +1981,7 @@ begin
   try
     Monsters.LoadFromFile(MonstersFileName);
 
-    Host := TGameHost.Create(Config, 'Moon 2D');
+    Host := TGameHost.Create(Config, 'Moon 2D ' + GameVersion);
     try
       Game := TMoonGame.Create(Monsters, Host.Renderer, Host.Window,
         Levels, Config.Fullscreen, Config.Difficulty);
