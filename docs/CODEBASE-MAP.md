@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/` · Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512×384 game units (16×12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `39a6ef7`. Where the map and the code disagree, the code is right.
+Regenerated at `v2.4.1`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` → `Render.*` / `Audio` / `Game.Config` /
@@ -148,6 +148,12 @@ the sound bank.
   `PlayMusic`/`StopMusic` (music\, OGG, lenient: a missing track skips
   silently), `ToggleMusicMuted`, `Enabled` (False when the mixer DLL is absent
   → every call becomes a no-op).
+
+### `Game.Version.pas` (~20 lines)
+One constant, `GameVersion`, the only place the game knows its own version.
+It moves with the git tag: bumped in the commit that becomes the version.
+Read by `Menu` (the corner tag) and the dpr (window title). The dproj carries
+no version resource, so nothing else has to agree with it.
 
 ### `Game.Config.pas` (~225 lines)
 - **`TDifficulty`** = (`dfNormal`, `dfHard`, `dfWild`); `TDifficultyGrades`
@@ -297,7 +303,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   (screen transitions strand popups over the wrong geometry), `Clear` (death
   silences the board).
 
-### `Menu.pas` (~945 lines)
+### `Menu.pas` (~955 lines)
 The main menu with its flying moon and starfield.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
   the composition root, which owns the file system), `TMenuResult` (command +
@@ -317,7 +323,8 @@ The main menu with its flying moon and starfield.
   (attached, not owned). `ShowMain`, `Tick`, `Draw(alpha)`, `DrawSky(alpha)`
   (the story screen reuses the live sky as scenery), `MouseMove`,
   `Click → TMenuResult`, `HandleEscape` (True = consumed),
-  `ShowShowcase`/`ShowcaseActive`/`EndShowcase`. Properties `HasActiveGame`,
+  `ShowShowcase`/`ShowcaseActive`/`EndShowcase`, `DrawVersion` (the `vX.Y.Z`
+  tag in the bottom-right corner of every menu screen). Properties `HasActiveGame`,
   `Difficulty`, `Language` (the setter rebuilds captions through `Tr` — set it
   AFTER the dictionary swap).
 
