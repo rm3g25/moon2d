@@ -39,6 +39,10 @@
       "image": "_scr2.png"
     },
     {
+      "fromScreen": 12,
+      "image": "_black.png"
+    },
+    {
       "fromScreen": 14,
       "image": "_scr3.png"
     }
