@@ -100,12 +100,12 @@ SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
 runs at startup and raises plainly if the DLL is absent — unlike the optional
 mixer, missing art is fatal.
 
-### `Render.Tiles.pas` (~100 lines)
-- **`TTileScreenRenderer`** — draws one screen: `DrawScreen` =
-  `DrawBackground` (the screen's backdrop sprite via `FBackgroundCache`) +
-  `DrawTiles` (palette indices from `TLevel` via `FTileCache`). Both halves
-  are public: the game draws them separately so the backdrop can stand still
-  while the tiles shake. Both caches are fed from `.mset` sets by the
+### `Render.Tiles.pas` (~95 lines)
+- **`TTileScreenRenderer`** — draws one screen as two layers the caller
+  orders: `DrawBackground` (the screen's backdrop sprite via
+  `FBackgroundCache`), then `DrawTiles` (palette indices from `TLevel` via
+  `FTileCache`). Separate calls, no combined one, so the backdrop can stand
+  still while the tiles shake. Both caches are fed from `.mset` sets by the
   composition root, and neither is owned here. The background/tiles split is
   also the hook for the future "AI backgrounds as art layer" idea.
 

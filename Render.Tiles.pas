@@ -39,7 +39,8 @@ type
       const ATileCache, ABackgroundCache: TSpriteCache;
       const ALevel: TLevel);
 
-    procedure DrawScreen(AScreen: Integer);
+    // Two layers, drawn by the caller in this order - separately, so the
+    // backdrop can stand still while the tiles shake
     procedure DrawBackground(AScreen: Integer);
     procedure DrawTiles(AScreen: Integer);
   end;
@@ -59,12 +60,6 @@ begin
   FLevel := ALevel;
   FScreenWidth := ALevel.GridWidth * TileSize;
   FScreenHeight := ALevel.GridHeight * TileSize;
-end;
-
-procedure TTileScreenRenderer.DrawScreen(AScreen: Integer);
-begin
-  DrawBackground(AScreen);
-  DrawTiles(AScreen);
 end;
 
 procedure TTileScreenRenderer.DrawBackground(AScreen: Integer);
