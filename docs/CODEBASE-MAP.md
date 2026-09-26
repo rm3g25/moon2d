@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/` · Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512×384 game units (16×12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `c4896e0`. Where the map and the code disagree, the code is right.
+Regenerated at `39a6ef7`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` → `Render.*` / `Audio` / `Game.Config` /
@@ -63,7 +63,7 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Render.Sprites.pas` (~455 lines)
+### `Render.Sprites.pas` (~465 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
@@ -90,7 +90,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **`TSpriteRenderer`** — draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid, the top-left 64×64 crop reproduced from
   `sttextures.pas`), `Draw` (free position, optional mirror), `DrawRect`,
-  `DrawRotated` (weapon arm).
+  `DrawRotated` (weapon arm). **`Origin`** (a `TSdlPoint`) shifts every one of
+  them — the screen-shake hook; nothing here resets it, the caller sets it per
+  layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`.
 
 ### `Sdl2.Image.pas` (~70 lines)
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
@@ -101,10 +103,27 @@ mixer, missing art is fatal.
 ### `Render.Tiles.pas` (~100 lines)
 - **`TTileScreenRenderer`** — draws one screen: `DrawScreen` =
   `DrawBackground` (the screen's backdrop sprite via `FBackgroundCache`) +
-  `DrawTiles` (palette indices from `TLevel` via `FTileCache`). Both caches are
-  fed from `.mset` sets by the composition root, and neither is owned here.
-  The background/tiles split is the hook for the future "AI backgrounds as art
-  layer" idea.
+  `DrawTiles` (palette indices from `TLevel` via `FTileCache`). Both halves
+  are public: the game draws them separately so the backdrop can stand still
+  while the tiles shake. Both caches are fed from `.mset` sets by the
+  composition root, and neither is owned here. The background/tiles split is
+  also the hook for the future "AI backgrounds as art layer" idea.
+
+### `Render.Shake.pas` (~110 lines)
+Screen shake as one trauma meter for the whole game, read back as a draw
+offset per layer. Draw-side only: the world's arithmetic never sees it.
+- **`TShakeChannel`** = (`scWorld`, `scHero`, `scMonsters`) — the world (tiles,
+  bullets) jolts as one piece; the hero and the monsters ride it with a small
+  jitter of their own (`FigureJitterRatio=0.25`), so the figures look loose.
+- **`TScreenShake`** — `AddTrauma(amount)` (soft saturation `T += A·(1−T)`: a
+  chain of barrels climbs toward the ceiling without hitting it), `Tick` (once
+  per logic tick: linear decay `TraumaDecayPerTick=0.03`, then a fresh roll of
+  all three offsets — amplitude is `T²·MaxShakeOffset(8)`, so a lone barrel is
+  a nudge and a boss is the ceiling), `Offset(channel)`. Its own xorshift
+  stream, not `Random`: that one feeds the boss spawn table. `NoShake` is the
+  zero offset constant.
+- The doses live in the dpr (`*Trauma` constants), not here — what shakes how
+  much is game-flow policy; this unit is the mechanism.
 
 ### `Render.Font.pas` (~350 lines)
 Bitmap font, 448 px atlas, 16×16 glyph grid (CP1251 layout).
@@ -312,7 +331,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1955 lines — NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2010 lines — NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon→shot sound map, named one-shot
@@ -320,14 +339,17 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
   cadence, ticker durations, the henshin wave schedule (`HenshinWaves[0..4]`:
-  tick/bullets/radius), flash and finish ticks, ending-screen layout rows,
-  countdown tuning (the 3..2..1 prelude — a 2026 authorial addition).
+  tick/bullets/radius), flash and finish ticks, the screen-shake doses
+  (`ExploderTrauma`, `HenshinWaveTrauma`, `HenshinFinishTrauma`,
+  `BossBlastTrauma`, `BonusExplosionTrauma`, `BonusFireRainTrauma` — a 2026
+  addition), ending-screen layout rows, countdown tuning (the 3..2..1
+  prelude — also 2026).
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding), `THenshinWave`
   (record), `TBonusKind` (bkNone/Health/FireRain/Aura/Explosion).
 - **`TMoonGame`** (extends `TGameApp`) — owns everything: registry, level, the
   level's sprite sets and both level caches, the ui and weapon sets, sprite and
-  tile renderers, hero, monster field, both bursts, font, message board, sound
-  bank, menu. Key state: game state + resume state, held-key flags (the 2008
+  tile renderers, hero, monster field, both bursts, font, message board, the
+  screen shake, sound bank, menu. Key state: game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, henshin
   (active/tick) + countdown (digit/tick/handover), the bonus slot (+ its queued
@@ -335,14 +357,17 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   end-level timer, the level list + current file + current music, fullscreen
   and difficulty.
   Method clusters:
-  - Flow: `Update`, `Render`, `LoadLevel`, `StartPlaying`, `RestartLevel`,
+  - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
+    still, tiles + bullets on the world channel, monsters and hero on their
+    own, cursor and HUD still), `LoadLevel`, `StartPlaying`, `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen`, `PreloadSounds`.
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`.
   - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
     `ResolveMonsterContact`, `RewardMonsterKill`, `HurtHero`,
-    `DrainMonsterEvents`, `ProcessKillStreak`, `AwardStreakBonus`.
+    `DrainMonsterEvents` (also where explosions and boss blasts feed the
+    shake), `ProcessKillStreak`, `AwardStreakBonus`.
   - Henshin/bonus: `StartHenshinCountdown`/`TickCountdown`/`DrawCountdown`,
     `StartHenshin`/`TickHenshin`/`FinishHenshin`, `RemoveIceForm`, `CureHero`,
     `AwardRandomBonus`, `ActivateQueuedBonus`, `DrawBonusHud`.
@@ -434,7 +459,8 @@ pending), `grid` (16×12), `backgrounds` (fromScreen + image), `tilePalette`
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
 `overrides`, `triggers` — messages/hints/changeMusic/heroX-heroY/gravelBoss),
 `introText`/`introTextEn`.
-- level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds; sets
+- level1: 17 screens, 145 entities, a 156-tile palette, 5 backgrounds (the
+  fifth is `_black` for the fully tiled lab screens 12–13); sets
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`.
 - level2: 9 screens, 38 entities, a 35-tile palette, 3 backgrounds; sets
@@ -488,6 +514,7 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
+| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
