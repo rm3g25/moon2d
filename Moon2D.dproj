@@ -177,6 +177,7 @@
         <DCCReference Include="Render.Sprites.pas"/>
         <DCCReference Include="Levels.Defs.pas"/>
         <DCCReference Include="Render.Tiles.pas"/>
+        <DCCReference Include="Render.Shake.pas"/>
         <DCCReference Include="Hero.pas"/>
         <DCCReference Include="Bullets.pas"/>
         <DCCReference Include="Monsters.pas"/>

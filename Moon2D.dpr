@@ -31,6 +31,7 @@ uses
   Render.Sprites in 'Render.Sprites.pas',
   Levels.Defs in 'Levels.Defs.pas',
   Render.Tiles in 'Render.Tiles.pas',
+  Render.Shake in 'Render.Shake.pas',
   Hero in 'Hero.pas',
   Bullets in 'Bullets.pas',
   Monsters in 'Monsters.pas',
@@ -197,6 +198,16 @@ const
   HenshinFlashTick = 135;  // bottle.wav teaser before the finale (498)
   HenshinFinishTick = 140; // the suit goes on (499-513)
 
+  // Screen-shake doses (2026 addition), in trauma shares - see
+  // Render.Shake for the meter. One exploder is a nudge, a chain of
+  // them climbs; the boss's two blasts open at the ceiling
+  ExploderTrauma = 0.4;       // barrel, tank, mount, platform
+  HenshinWaveTrauma = 0.4;    // each of the five rings
+  HenshinFinishTrauma = 0.7;  // the suit-on fan
+  BossBlastTrauma = 1.0;      // rage wave and the death double fan
+  BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
+  BonusFireRainTrauma = 0.5;  // 768 embers hitting the sky at once
+
   // Campaign-end screen layout, in Render.Font grid steps
   EndingTextColumn = 3;    // farewell prose column (small font)
   EndingTextFirstRow = 7;  // first prose row (small line steps)
@@ -260,6 +271,7 @@ type
     FWindow: PSdlWindow;
     FFont: TMoonFont;
     FMessages: TMessageBoard;
+    FShake: TScreenShake;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
     // the hero taking ANY damage; any hit resets the count to zero.
@@ -411,6 +423,7 @@ begin
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
     FUiSet);
   FMessages := TMessageBoard.Create(FFont, GameWidth);
+  FShake := TScreenShake.Create;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -426,6 +439,7 @@ destructor TMoonGame.Destroy;
 begin
   FMenu.Free;
   FAudio.Free;
+  FShake.Free;
   FMessages.Free;
   FFont.Free;
   FHudCache.Free;
@@ -997,6 +1011,7 @@ begin
       FMessages.AddTicker(Tr(SIceRegen), HenshinRegenTicks);
       FHero.Bullets.SpawnConvergingRing(FHero.X, FHero.Y,
         Wave.Bullets, Wave.RadiusX);
+      FShake.AddTrauma(HenshinWaveTrauma);
     end;
 
   if FHenshinTick = HenshinFlashTick then
@@ -1014,6 +1029,7 @@ begin
   FHero.HeroForm := hfIce;
   FAudio.Play(BottleSoundFile);
   FHero.Bullets.SpawnFan(FHero.X, FHero.Y, FinishFan);
+  FShake.AddTrauma(HenshinFinishTrauma);
   FMessages.ShowBig(Tr(SIceForm), BigMessageTicks);
   FHenshinActive := False;
   FHenshinTick := 0;
@@ -1091,7 +1107,10 @@ begin
       for var i := 1 to HealCharges do
         CureHero;
     bkFireRain:
-      FHero.Bullets.SpawnFireRain;
+      begin
+        FHero.Bullets.SpawnFireRain;
+        FShake.AddTrauma(BonusFireRainTrauma);
+      end;
     bkAura:
       FHero.Bullets.SpawnStaticAura(FHero.X, FHero.Y);
     bkExplosion:
@@ -1100,6 +1119,7 @@ begin
         // work in silence, verbatim
         FAudio.Play(BottleSoundFile);
         FHero.Bullets.SpawnFan(FHero.X, FHero.Y, ExplosionFan);
+        FShake.AddTrauma(BonusExplosionTrauma);
       end;
   end;
   FBonus := bkNone;
@@ -1399,20 +1419,29 @@ begin
     begin
       case Event of
         meDied:
-          // Everything dies through TakeDamage, so pickups chirp here
-          // too (medic/gun of 2008); tank and boss carry two sounds -
-          // the double explosion plays both, verbatim 903-925
-          for var Name in Monster.Def.DeathSounds do
-            FAudio.Play(Name);
+          begin
+            // Everything dies through TakeDamage, so pickups chirp here
+            // too (medic/gun of 2008); tank and boss carry two sounds -
+            // the double explosion plays both, verbatim 903-925
+            for var Name in Monster.Def.DeathSounds do
+              FAudio.Play(Name);
+            if Monster.Def.Boss.EndsLevelOnDeath then
+              FShake.AddTrauma(BossBlastTrauma)
+            else if Monster.Def.ExplodesOnDeath then
+              FShake.AddTrauma(ExploderTrauma);
+          end;
         meHenshin:
           // The boss dropped below 2/3 - three seconds of countdown,
           // then the cinematic; the ice form arrives 140 ticks of
           // waves after that
           StartHenshinCountdown(0);
         meBossRage:
-          // 'Сменить музыку' of 2008 (868-869): the rage track loops
-          // until the boss dies or the hero does
-          FAudio.PlayMusic(Monster.Def.Boss.RageMusic, mmLoop);
+          begin
+            // 'Сменить музыку' of 2008 (868-869): the rage track loops
+            // until the boss dies or the hero does
+            FAudio.PlayMusic(Monster.Def.Boss.RageMusic, mmLoop);
+            FShake.AddTrauma(BossBlastTrauma);
+          end;
         meBossWantsMinion:
           // The weighted table of AddMonstOnBoss1 (medkit counted
           // twice) rains reinforcements - and mercy - from the sky
@@ -1446,6 +1475,7 @@ begin
     Exit; // the farewell screen is static; only the mouse works there
 
   FMessages.Tick;
+  FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
   // Everything below touches the OLD level's objects - hence the hard
@@ -1537,11 +1567,21 @@ begin
       DrawEnding;
     gsPlaying:
       begin
-        FTiles.DrawScreen(FHero.Screen);
+        // Back to front, each layer on its own shake channel. The
+        // backdrop stands still - what a jolt bares at the edge is sky,
+        // not void; cursor and HUD are glass over the world and stand too
+        FSprites.Origin := NoShake;
+        FTiles.DrawBackground(FHero.Screen);
+        FSprites.Origin := FShake.Offset(scWorld);
+        FTiles.DrawTiles(FHero.Screen);
+        FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);
+        FSprites.Origin := FShake.Offset(scHero);
         FHero.Draw(FSprites);
+        FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         DrawHud(ARenderer);
         DrawMessages(AAlpha);
