@@ -109,15 +109,15 @@ const
   // Ticker lane: 2008 drew at column 2 from row 3 downward. Rows moved
   // below the marquee lane so the two never overlap.
   TickerX = 2 * LegacyColumnWidth;
-  TickerTopY = 36;
+  TickerTopY = 52;
   FadeTicks = 33; // ~1 s of fade-out at tickRate 33 (remake deviation)
 
   // Marquee: start and speed verbatim from moon.dpr. The lane is the
   // agreed deviation: 2008 ran it at row 2 (y=19.2) UNDER the health
-  // display and it was hard to read; parked just below the icons now.
+  // display and it was hard to read; parked just below the monitor now.
   MarqueeStartX = 41 * LegacyColumnWidth;  // RunningStringPos := 41
   MarqueeStepX = 0.15 * LegacyColumnWidth; // RunningStringPos - 0.15
-  MarqueeY = 24;
+  MarqueeY = 40;
 
   // Score popups: mechanics verbatim moonmessage.pas (rise per tick,
   // hard vanish); the caller finally surfaced and testified.
