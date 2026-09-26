@@ -7,11 +7,12 @@ Repo: `https://github.com/rm3g25/moon2d/` · Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512×384 game units (16×12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v2.4.1`. Where the map and the code disagree, the code is right.
+Regenerated at `v2.5.2`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` → `Render.*` / `Audio` / `Game.Config` /
-`Localization` → `Levels.Defs` / `Monsters.Defs` → `Bullets` → `Hero` /
+`Game.Bonus` / `Localization` / `Hud.Draw` → `Levels.Defs` / `Monsters.Defs` /
+`Hud.Health` / `Hud.Score` → `Bullets` / `Hud.Vitals` / `Hud.Charge` → `Hero` /
 `Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` → `Game.Loop` →
 `Moon2D.dpr`.
 
@@ -25,8 +26,8 @@ declarations against `SDL2.dll`.
 - **Constants**: init flags, window flags (incl. `SdlWindowHidden` for the
   offscreen tools), renderer flags, texture access (incl. `Target`), hints
   (`SdlHintRenderDriver`, `SdlHintRenderScaleQuality`), event type ids, flip
-  flags, pixel format `SdlPixelFormatAbgr8888`, blend modes, the scancodes the
-  game uses.
+  flags, pixel format `SdlPixelFormatAbgr8888`, blend modes (`None`, `Blend`,
+  `Add` — the last one is the HUD's glints), the scancodes the game uses.
 - **Records**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlRendererInfo`,
   `TSdlVersion`, `TSdlSurface` (partial mirror — leading fields only),
   `TSdlKeysym`, `TSdlKeyboardEvent`, `TSdlMouseMotionEvent`,
@@ -155,25 +156,29 @@ It moves with the git tag: bumped in the commit that becomes the version.
 Read by `Menu` (the corner tag) and the dpr (window title). The dproj carries
 no version resource, so nothing else has to agree with it.
 
-### `Game.Config.pas` (~225 lines)
+### `Game.Config.pas` (~255 lines)
 - **`TDifficulty`** = (`dfNormal`, `dfHard`, `dfWild`); `TDifficultyGrades`
   set; `DifficultyIds` protocol strings ('normal'/'hard'/'wild');
   `AllDifficultyGrades`.
 - **`TLanguage`** = (`lgEnglish`, `lgRussian`); `LanguageIds` ('en'/'ru') — one
   vocabulary serving both config.json and the dictionary file names.
+- **`TEra`** = (`eraRemake`, `era2008`); `EraIds` ('remake'/'2008'). The
+  "2008 mode": the original's health icons, score text and text lanes on the
+  levels that declare `era2008` (see `Levels.Defs`). This unit only stores
+  the wish; `TMoonGame.LevelEra` decides what a level shows.
 - **`TGameConfig`** (record) — window w/h, fullscreen, vsync, fpsCap, tickRate,
-  difficulty, language; `Defaults` factory. Any parse problem returns
+  difficulty, language, era; `Defaults` factory. Any parse problem returns
   `Defaults`: configuration is a preference, never a reason to crash.
-- Free functions: `LoadGameConfig`, `SaveGameDifficulty`, `SaveGameLanguage`
-  (partial rewrites of config.json, silent on a locked file).
+- Free functions: `LoadGameConfig`, `SaveGameDifficulty`, `SaveGameLanguage`,
+  `SaveGameEra` (partial rewrites of config.json, silent on a locked file).
 
 ### `Localization.pas` (~310 lines)
 - **`TLocalizedText`** (record) — `Values[TLanguage]`, `Current`. Used for
   level and monster content (base JSON field = RU, `En` sibling = EN, an absent
   sibling falls back at parse time).
-- ~60 `S*` string-key constants (protocol ids into the lang dictionaries):
+- ~65 `S*` string-key constants (protocol ids into the lang dictionaries):
   gameplay tickers, streak captions, henshin/bonus texts, ending screen, the
-  full menu vocabulary.
+  full menu vocabulary (including the `2008 mode:On/Off` line).
 - Free functions: `LoadLanguage` (swaps the flat dictionary from
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
@@ -198,7 +203,9 @@ Level data model + JSON parser. No game logic.
 - **`TLevel`** (class) — the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/music/introText, grid dims,
-  screenCount. `SpriteSets` is the environment sets in resolution order — tiles
+  screenCount, `SupportsEra2008` (the `era2008` key: True on the two levels
+  the 2008 original shipped with — only there the 2008 mode has anything to
+  show). `SpriteSets` is the environment sets in resolution order — tiles
   only; screen backdrops follow the `<assetsDir>-backdrops` convention and
   never appear there. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (last
   change wins). `LoadFromFile`.
@@ -294,16 +301,86 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   screen), `SpawnFromSky` (boss minions at a random top cell),
   `AnyAliveOnScreen` (the breakthrough gate — pickups count, verbatim), `Draw`.
 
-### `Hud.Messages.pas` (~310 lines)
+### `Hud.Messages.pas` (~325 lines)
+- **`TTextLanes`** (record) — where the marquee and the ticker stack run:
+  `MarqueeY`, `TickerTopY`. Two ready sets: `LanesUnderIcons` (24/36, under
+  the 2008 health icons) and `LanesUnderMonitor` (40/52, under the heart
+  monitor); the composition root picks one per era.
 - **`TMessageBoard`** — the 2008 message system: ticker lines (slide-in,
   private `TTickerLine` record), the big mid-screen headline, the marquee
   ('Бегущая строка'), score popups (private `TScorePopup`, '+N' rising).
   `Tick` / `Draw(alpha)` — draw is interpolation-aware (marquee, popups).
   API: `AddTicker`, `ShowBig`, `StartMarquee`, `AddScorePopup`, `ClearPopups`
   (screen transitions strand popups over the wrong geometry), `Clear` (death
-  silences the board).
+  silences the board), property `Lanes`.
 
-### `Menu.pas` (~955 lines)
+### `Game.Bonus.pas` (~25 lines)
+The vocabulary of the bonus roulette, shared by the game that runs it and the
+HUD that shows it: **`TBonusKind`** (bkNone/Health/FireRain/Aura/Explosion;
+bkNone = empty slot) and `BonusCost=50`. Since 2.5.2 the cost is paid when
+the reward is activated, not when it is rolled, so the score keeps climbing
+past 50 while a reward waits.
+
+### `Hud.Draw.pas` (~175 lines)
+The brush the primitive-drawn HUD panels share. No sprite, no font atlas.
+- **`TRgb`** (record); the palette as typed constants (`CalmColor` blue,
+  `WaryColor` amber, `AlarmColor` red, `BonusColor` lime + `BonusShade`,
+  `CalmShade`, `PanelColor`, `White`); `Mix` (lerp).
+- **`TXorShift`** (record) — an own random stream for HUD flourishes; `Random`
+  feeds the boss spawn table and must not be touched by a spark.
+- **`THudBrush`** — `Fill` (alpha blended rect in game units), `Glow`
+  (additive), `Frame` (a one-unit outline from four rects), `DrawNumber` (3×5
+  pixel digits; `NumberWidth` measures), `BeginDraw`/`EndDraw` (blend mode on
+  and off again — the rest of the game draws opaque).
+- Panel geometry constants shared by both corners: `PanelMargin=6`,
+  `PanelY=4`, `PanelH=32`, `PanelW=118`, `ReadoutY`, the cell row (`CellY`,
+  `CellW=7`, `CellH=4`, `CellGap=1`), `DigitPixel=3`.
+
+### `Hud.Health.pas` (~90 lines)
+The hero's health display, one class per era.
+- **`THealthHud`** (abstract) — `Tick(health, invulnerable)` once per logic
+  tick, `Draw`. The game holds one and never asks which; `ApplyLevelEra` in
+  the dpr picks the class.
+- **`THealthIcons`** — the 2008 display: one `health` orb of `hero.mset` per
+  point, top-left, 18 units apart (owns its set and cache).
+
+### `Hud.Vitals.pas` (~365 lines)
+The remake's health display: a heart monitor in the top-left corner, drawn
+with the brush alone. **`THudVitals`** (extends `THealthHud`).
+- `HealthyHealth=5` (interface const): the base row of five cells; empty ones
+  stay as outlines, so hard/wild start visibly wounded. Health above five is
+  bonus and gets lime cells past a divider (cure ceiling 10).
+- The ECG lane: an 88-sample ring buffer, two samples per tick, a PQRST beat
+  shape, tempo by health (62 bpm with bonus, 70 at 4–5, 92, 118, 152 at 1),
+  flat at zero, noise for 10 ticks after a hit; a 4-sample wipe ahead of the
+  sweep, the trace fades with age.
+- The readout: 3×5 digits, lime while a bonus is held, blinking at 1.
+- Observes rather than listens: reacts to the difference between ticks
+  (lost cell flash, grown cell glow, cure sweep on the trace, red frame on a
+  hit, white blink of the cells during the mercy window).
+
+### `Hud.Score.pas` (~65 lines)
+The score display, one class per era — the twin of `Hud.Health`.
+- **`TScoreHud`** (abstract) — `Tick(score, streak, bonus)`, `Draw`.
+- **`TScoreText`** — the 2008 display: `Score: N` in the small font, top-right
+  (takes the font and the screen width).
+
+### `Hud.Charge.pas` (~365 lines)
+The remake's score display: the bonus charge in the top-right corner, the
+twin of the heart monitor. **`THudCharge`** (extends `TScoreHud`).
+- The readout (36 units, three digits, capped at 999), a bar filling toward
+  `BonusCost` with a tick every ten points (a stiff spring, so a kill jolts),
+  and the kill streak as a row of ten cells (`StreakGoal`) — the ten kills
+  without a scratch the game rewards but never showed.
+- A waiting reward turns the bar lime, breathing, with the reward's 9×9 icon
+  punched into it (`HealthIcon`/`FireRainIcon`/`AuraIcon`/`ExplosionIcon` as
+  rect lists) and a glint every 2 s; sparks fly when it lands; the frame
+  flashes white when it is spent.
+- Streak endings are told apart by the score: reset with points = the tenth
+  kill paid out (white flash), reset without = a hit (red flash on the lost
+  cells).
+
+### `Menu.pas` (~990 lines)
 The main menu with its flying moon and starfield.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
   the composition root, which owns the file system), `TMenuResult` (command +
@@ -312,9 +389,10 @@ The main menu with its flying moon and starfield.
   `TMoonDrift` (the drifting moon in the 2008 "sdvig" ±500 space; `Respawn`,
   `Tick`).
 - **Enums**: `TMenuCommand` (mcNone/StartLevel/Resume/ToggleFullscreen/
-  SetDifficulty/SetLanguage/Quit), `TMenuScreen` (msMain/LevelSelect/
+  SetDifficulty/SetLanguage/SetEra/Quit), `TMenuScreen` (msMain/LevelSelect/
   Difficulty/Credits/QuitConfirm), `TItemAction` (internal navigation vs
-  surfaced commands), **`TShowcaseKind`** (skNone/skLogo/skSky) — the trailer
+  surfaced commands; `iaToggleEra` flips the `2008 mode` line in place — two
+  states need no submenu), **`TShowcaseKind`** (skNone/skLogo/skSky) — the trailer
   frames: the live sky rig alone, with or without the logo. Only the debug keys
   can enter one, so with DEBUGKEYS off the state stays skNone.
 - **`TMoonMenu`** — sky/moon/logo textures, stars, an item list per screen,
@@ -325,8 +403,8 @@ The main menu with its flying moon and starfield.
   `Click → TMenuResult`, `HandleEscape` (True = consumed),
   `ShowShowcase`/`ShowcaseActive`/`EndShowcase`, `DrawVersion` (the `vX.Y.Z`
   tag in the bottom-right corner of every menu screen). Properties `HasActiveGame`,
-  `Difficulty`, `Language` (the setter rebuilds captions through `Tr` — set it
-  AFTER the dictionary swap).
+  `Difficulty`, `Era`, `Language` (the setter rebuilds captions through `Tr` —
+  set it AFTER the dictionary swap).
 
 ### `Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
@@ -338,11 +416,11 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2010 lines — NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2025 lines — NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon→shot sound map, named one-shot
-  sounds, the bonus roulette (`BonusCost=50` and its HUD slide),
+  sounds, the bonus caption slide (the cost itself lives in `Game.Bonus`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
   cadence, ticker durations, the henshin wave schedule (`HenshinWaves[0..4]`:
@@ -352,23 +430,28 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   addition), ending-screen layout rows, countdown tuning (the 3..2..1
   prelude — also 2026).
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding), `THenshinWave`
-  (record), `TBonusKind` (bkNone/Health/FireRain/Aura/Explosion).
+  (record).
 - **`TMoonGame`** (extends `TGameApp`) — owns everything: registry, level, the
   level's sprite sets and both level caches, the ui and weapon sets, sprite and
   tile renderers, hero, monster field, both bursts, font, message board, the
-  screen shake, sound bank, menu. Key state: game state + resume state, held-key flags (the 2008
+  screen shake, sound bank, menu, and the two corner HUDs (`THealthHud`,
+  `TScoreHud` — reborn with every level, since the era may differ). Key state:
+  game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, henshin
   (active/tick) + countdown (digit/tick/handover), the bonus slot (+ its queued
   activation), the gravel trial (attack flag, quota, wave timer, screen), the
-  end-level timer, the level list + current file + current music, fullscreen
-  and difficulty.
+  end-level timer, the level list + current file + current music, fullscreen,
+  difficulty and era (the player's wish; `LevelEra` = wish AND the level's
+  `SupportsEra2008`).
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
     still, tiles + bullets on the world channel, monsters and hero on their
     own, cursor and HUD still), `LoadLevel`, `StartPlaying`, `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
-    `ApplyMenuResult`, `ToggleFullscreen`, `PreloadSounds`.
+    `ApplyMenuResult`, `ToggleFullscreen`, `PreloadSounds`, `LevelEra`,
+    `ApplyLevelEra` (builds both corner HUDs and sets the text lanes for the
+    era — on level load and again when the menu flips the mode mid-game).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`.
   - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
@@ -377,8 +460,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     shake), `ProcessKillStreak`, `AwardStreakBonus`.
   - Henshin/bonus: `StartHenshinCountdown`/`TickCountdown`/`DrawCountdown`,
     `StartHenshin`/`TickHenshin`/`FinishHenshin`, `RemoveIceForm`, `CureHero`,
-    `AwardRandomBonus`, `ActivateQueuedBonus`, `DrawBonusHud`.
-  - Drawing/input: `DrawHud`, `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
+    `AwardRandomBonus`, `ActivateQueuedBonus` (pays `BonusCost` on use),
+    `DrawBonusHud`.
+  - Drawing/input: `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `DrawMessages`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton`.
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
@@ -444,8 +528,8 @@ transparent). Kept for provenance; nothing calls it now.
 
 ### `config.json` (tiny)
 `window` (width/height/fullscreen/vsync/fpsCap) + `game` (tickRate, difficulty
-id, language id). Read by `Game.Config`; difficulty and language are saved back
-individually.
+id, language id, era id). Read by `Game.Config`; difficulty, language and era
+are saved back individually.
 
 ### `monsters.json` (~11 KB)
 Keys: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
@@ -458,9 +542,9 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 
 ### `level1.json` (~49 KB) / `level2.json` (~19 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
-`title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in
-resolution order), `music`, `legacyTrailing` (a migration artifact, cleanup
-pending), `grid` (16×12), `backgrounds` (fromScreen + image), `tilePalette`
+`title`/`titleEn`, `era2008` (true on both: the 2008 mode applies here),
+`assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
+`music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid` (16×12), `backgrounds` (fromScreen + image), `tilePalette`
 (sprite names; index N in tiles → palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
@@ -476,7 +560,7 @@ monsterId, screen, x, y, spriteList, optional `difficulty` grades,
 
 ### `sprites\*.mset` (32 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences plus the
-  health icon), `weapon` (held gun frames, bullets, crosshair),
+  health icon of the 2008 mode), `weapon` (held gun frames, bullets, crosshair),
   `weapon1`–`weapon4` (the pickups).
 - **Entities**: `gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`,
   `medic`, `krep`, `platform`, `tank`, `boss1` — referenced by a placement's
@@ -515,6 +599,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Explosions / particles / henshin visuals | Bullets.pas (+dpr henshin cluster) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
+| Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Hud.Draw.pas for the brush and palette) |
+| 2008 mode: what it switches, where it applies | Moon2D.dpr (`LevelEra`, `ApplyLevelEra`) + Game.Config.pas + `era2008` in levelN.json + Hud.Health.pas / Hud.Score.pas |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
 | Menu / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
