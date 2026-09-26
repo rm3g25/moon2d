@@ -1,4 +1,4 @@
-{
+﻿{
   "window": {
     "width": 1024,
     "height": 768,
@@ -9,6 +9,7 @@
   "game": {
     "tickRate": 33,
     "difficulty": "normal",
-    "language": "en"
+    "language": "en",
+    "era": "remake"
   }
 }

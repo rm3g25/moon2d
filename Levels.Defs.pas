@@ -97,6 +97,7 @@ type
     FSpriteSets: TArray<string>;
     FMusic: string;
     FIntroText: TLocalizedText;
+    FSupportsEra2008: Boolean;
     FGridWidth: Integer;
     FGridHeight: Integer;
     FScreenCount: Integer;
@@ -128,6 +129,9 @@ type
     // the <assetsDir>-backdrops convention and never appear here.
     property SpriteSets: TArray<string> read FSpriteSets;
     property Music: string read FMusic;
+    // True on the levels the 2008 original shipped with: only there
+    // the 2008 mode has anything to show
+    property SupportsEra2008: Boolean read FSupportsEra2008;
     // Story text shown before the level starts; '' = jump straight in.
     property IntroText: TLocalizedText read FIntroText;
     property GridWidth: Integer read FGridWidth;
@@ -262,6 +266,7 @@ begin
     for var Name in SetNames do
       FSpriteSets := FSpriteSets + [Name.Value];
   FMusic := ARoot.GetValue<string>('music', '');
+  FSupportsEra2008 := ARoot.GetValue<Boolean>('era2008', False);
   FIntroText := ReadLocalizedText(ARoot, 'introText');
 
   var Grid := ARoot.GetValue<TJSONObject>('grid');

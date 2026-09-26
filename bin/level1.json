@@ -3,6 +3,7 @@
   "id": "level1",
   "title": "Уровень 1 - Космопорт",
   "titleEn": "Level 1 - Spaceport",
+  "era2008": true,
   "assetsDir": "level1",
   "spriteSets": [
     "brickwork",
