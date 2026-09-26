@@ -38,6 +38,7 @@ uses
   Monsters in 'Monsters.pas',
   Render.Font in 'Render.Font.pas',
   Hud.Messages in 'Hud.Messages.pas',
+  Hud.Vitals in 'Hud.Vitals.pas',
   Audio in 'Audio.pas',
   Localization in 'Localization.pas',
   Menu in 'Menu.pas';
@@ -261,8 +262,7 @@ type
     // guaranteed walkable: the hero has just stood there.
     FCheckpointX, FCheckpointY: Double;
     FGameOverTimer: Integer; // ticks left of the death pause
-    FHudCache: TSpriteCache; // health icons (heroes\health.bmp of 2008)
-    FHudSpriteSet: TSpriteSet; // owned; nil = folder era
+    FVitals: THudVitals;
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
@@ -332,7 +332,6 @@ type
     procedure DrainMonsterEvents;
     procedure HurtHero;
     procedure RestartLevel;
-    procedure DrawHud(const ARenderer: PSdlRenderer);
     function CrosshairFrame: Integer;
     // The debug keyboard reaches the game through these four and
     // nothing else. All four exist in every build - their BODIES
@@ -415,16 +414,11 @@ begin
     FWeaponSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
   FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
-  FHudCache := TSpriteCache.Create(ARenderer);
-  if FileExists(SpriteSetsDir + 'hero.mset') then
-  begin
-    FHudSpriteSet := TSpriteSet.Create(SpriteSetsDir + 'hero.mset');
-    FHudCache.AttachSpriteSet(FHudSpriteSet);
-  end;
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
     FUiSet);
   FMessages := TMessageBoard.Create(FFont, GameWidth);
   FShake := TScreenShake.Create;
+  FVitals := THudVitals.Create(ARenderer);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -443,8 +437,7 @@ begin
   FShake.Free;
   FMessages.Free;
   FFont.Free;
-  FHudCache.Free;
-  FHudSpriteSet.Free;
+  FVitals.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -1476,6 +1469,7 @@ begin
     Exit; // the farewell screen is static; only the mouse works there
 
   FMessages.Tick;
+  FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
@@ -1584,7 +1578,7 @@ begin
         FMonsterBullets.Draw(FSprites);
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
-        DrawHud(ARenderer);
+        FVitals.Draw;
         DrawMessages(AAlpha);
         DrawCountdown(AAlpha); // topmost: the ceremony outranks the news
       end;
@@ -1781,23 +1775,6 @@ begin
     if Monster.Lives > Round(Monster.LivesAll / 3) then
       Exit(3);
     Exit(4);
-  end;
-end;
-
-procedure TMoonGame.DrawHud(const ARenderer: PSdlRenderer);
-var
-  Dest: TSdlRect;
-begin
-  // Barrels hurt bystanders and pits cost a life - now the player can
-  // SEE it: one icon per health point, top-left.
-  var Icon := FHudCache.Get('health.png');
-  for var i := 0 to FHeroHealth - 1 do
-  begin
-    Dest.X := 4 + i * 18;
-    Dest.Y := 4;
-    Dest.W := 16;
-    Dest.H := 16;
-    FSprites.DrawRect(Icon, Dest);
   end;
 end;
 

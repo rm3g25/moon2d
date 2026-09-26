@@ -66,6 +66,7 @@ const
   SdlBlendModeNone = 0;  // dst = src, alpha included: the only way a
                          // RenderClear actually WRITES alpha 0
   SdlBlendModeBlend = 1; // alpha blending: dst = src*a + dst*(1-a)
+  SdlBlendModeAdd = 2; // additive: dst = src*a + dst - the HUD's glints
 
   // Scancodes (physical keys, layout-independent)
   SdlScancodeReturn = 40;
