@@ -33,8 +33,6 @@ type
     // whole pipeline draws in, not window pixels.
     FScreenWidth: Integer;
     FScreenHeight: Integer;
-    procedure DrawBackground(AScreen: Integer);
-    procedure DrawTiles(AScreen: Integer);
   public
     // Does not own any of the collaborators; the composition root does.
     constructor Create(const ASprites: TSpriteRenderer;
@@ -42,6 +40,8 @@ type
       const ALevel: TLevel);
 
     procedure DrawScreen(AScreen: Integer);
+    procedure DrawBackground(AScreen: Integer);
+    procedure DrawTiles(AScreen: Integer);
   end;
 
 implementation

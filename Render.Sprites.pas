@@ -117,9 +117,15 @@ type
   TSpriteRenderer = class
   private
     FRenderer: PSdlRenderer;
+    FOrigin: TSdlPoint;
   public
     constructor Create(const ARenderer: PSdlRenderer;
       ALogicalWidth, ALogicalHeight: Integer);
+
+    // Every draw below lands shifted by Origin - the screen-shake hook.
+    // Layers that must stay put (backdrop, cursor, HUD) draw with it at
+    // zero; the caller sets it per layer, nothing here resets it.
+    property Origin: TSdlPoint read FOrigin write FOrigin;
 
     // PutStaticSprite: draw at a sprite-grid cell, forced to 32x32.
     procedure DrawCell(ATexture: PSdlTexture; AGridX, AGridY: Integer);
@@ -407,8 +413,8 @@ begin
   Src.W := Min(NativeW, TileArtSize);
   Src.H := Min(NativeH, TileArtSize);
 
-  Dest.X := AGridX * TileSize;
-  Dest.Y := AGridY * TileSize;
+  Dest.X := AGridX * TileSize + FOrigin.X;
+  Dest.Y := AGridY * TileSize + FOrigin.Y;
   // Destination is ONE CELL in game units; the 64px art downsamples into
   // it and scales back up with the window (net 1:1 at 1024x768).
   Dest.W := TileSize;
@@ -422,8 +428,8 @@ procedure TSpriteRenderer.Draw(ATexture: PSdlTexture; AX, AY: Integer;
 var
   Dest: TSdlRect;
 begin
-  Dest.X := AX;
-  Dest.Y := AY;
+  Dest.X := AX + FOrigin.X;
+  Dest.Y := AY + FOrigin.Y;
   Dest.W := SpriteSize;
   Dest.H := SpriteSize;
 
@@ -434,7 +440,10 @@ end;
 procedure TSpriteRenderer.DrawRect(ATexture: PSdlTexture;
   const ADest: TSdlRect);
 begin
-  SDL_RenderCopy(FRenderer, ATexture, nil, @ADest);
+  var Dest := ADest;
+  Dest.X := Dest.X + FOrigin.X;
+  Dest.Y := Dest.Y + FOrigin.Y;
+  SDL_RenderCopy(FRenderer, ATexture, nil, @Dest);
 end;
 
 procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;
@@ -442,8 +451,8 @@ procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;
 var
   Dest: TSdlRect;
 begin
-  Dest.X := ACenterX - SpriteSize div 2;
-  Dest.Y := ACenterY - SpriteSize div 2;
+  Dest.X := ACenterX - SpriteSize div 2 + FOrigin.X;
+  Dest.Y := ACenterY - SpriteSize div 2 + FOrigin.Y;
   Dest.W := SpriteSize;
   Dest.H := SpriteSize;
 
