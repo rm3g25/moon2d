@@ -22,7 +22,7 @@ unit Hud.Vitals;
 interface
 
 uses
-  Sdl2.Core, Hud.Health;
+  Sdl2.Core, Hud.Draw, Hud.Health;
 
 const
   // A full base row. Every point above it is bonus; a difficulty may
@@ -30,21 +30,15 @@ const
   HealthyHealth = 5;
 
 type
-  TRgb = record
-    R, G, B: Byte;
-  end;
-
   THudVitals = class(THealthHud)
   private const
     TraceSamples = 88; // one sample per game unit of trace width
   private
-    FRenderer: PSdlRenderer;
+    FBrush: THudBrush;
     FHealth: Integer;
     FInvulnerable: Boolean;
     FTick: Integer;
-    // Own xorshift stream, not Random: that one feeds the boss spawn
-    // table, and a hit on the hero must not reshuffle what falls
-    FSeed: Cardinal;
+    FNoise: TXorShift;
     FTrace: array [0..TraceSamples - 1] of Single;
     FHead: Integer; // next slot to write; the freshest sample sits before it
     FBeatPhase: Integer;
@@ -64,14 +58,9 @@ type
     procedure ReactToHurt;
     procedure ReactToCure;
     procedure CoolEffects;
-    procedure Fill(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
-    procedure Glow(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
-    procedure Frame(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
     procedure DrawPanel;
     procedure DrawTrace;
     procedure DrawReadout;
-    procedure DrawNumber(AValue: Integer; AX, AY: Single; AColor: TRgb);
-    procedure DrawDigit(ADigit: Integer; AX, AY: Single; AColor: TRgb);
     function CellX(AIndex: Integer): Single;
     procedure DrawCells;
     procedure DrawFullCell(AX: Single; AColor: TRgb; ABlink: Boolean);
@@ -80,6 +69,7 @@ type
     procedure DrawCellEffects;
   public
     constructor Create(ARenderer: PSdlRenderer);
+    destructor Destroy; override;
 
     // A drop or a rise against the last call is what the monitor animates
     procedure Tick(AHealth: Integer; AInvulnerable: Boolean); override;
@@ -89,7 +79,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math;
+  System.Math;
 
 const
   // The pulse is timed in ticks, so the beats-per-minute figures hold
@@ -110,9 +100,7 @@ const
   ShimmerPeriod = 66; // a glint runs down the bonus cells every 2 s
   ShimmerLag = 3;
 
-  PanelX = 6;
-  PanelY = 4;
-  PanelH = 32;
+  PanelX = PanelMargin;
   ReadoutWidth = 30;
   GridStep = 8;
   TraceX = PanelX + 1;
@@ -120,36 +108,7 @@ const
   TraceHeight = 22;
   TraceMidY = PanelY + 13;
   CellsX = TraceX + 3;
-  CellY = PanelY + 25;
-  CellW = 7;
-  CellH = 4;
-  CellGap = 1;
   BonusGap = 5; // extra room before the first bonus cell, the divider inside
-  DigitPixel = 3;
-  DigitCols = 3;
-  DigitRows = 5;
-  DigitAdvance = (DigitCols + 1) * DigitPixel;
-  // 3x5 pixel digits, row by row
-  DigitGlyphs: array [0..9] of string = (
-    '111101101101111', '010110010010111', '111001111100111',
-    '111001111001111', '101101111001001', '111100111001111',
-    '111100111101111', '111001001001001', '111101111101111',
-    '111101111001111');
-
-  CalmColor: TRgb = (R: 72; G: 196; B: 255);
-  WaryColor: TRgb = (R: 255; G: 178; B: 56);
-  AlarmColor: TRgb = (R: 255; G: 74; B: 61);
-  BonusColor: TRgb = (R: 124; G: 255; B: 80);
-  BonusShade: TRgb = (R: 40; G: 150; B: 30);
-  PanelColor: TRgb = (R: 4; G: 12; B: 12);
-  White: TRgb = (R: 255; G: 255; B: 255);
-
-function Mix(AFrom, ATo: TRgb; AAmount: Single): TRgb;
-begin
-  Result.R := Round(AFrom.R + (ATo.R - AFrom.R) * AAmount);
-  Result.G := Round(AFrom.G + (ATo.G - AFrom.G) * AAmount);
-  Result.B := Round(AFrom.B + (ATo.B - AFrom.B) * AAmount);
-end;
 
 procedure Cool(var ATicks: Integer);
 begin
@@ -160,8 +119,14 @@ end;
 constructor THudVitals.Create(ARenderer: PSdlRenderer);
 begin
   inherited Create;
-  FRenderer := ARenderer;
-  FSeed := $9E3779B9;
+  FBrush := THudBrush.Create(ARenderer);
+  FNoise.Seed := $9E3779B9;
+end;
+
+destructor THudVitals.Destroy;
+begin
+  FBrush.Free;
+  inherited;
 end;
 
 procedure THudVitals.Tick(AHealth: Integer; AInvulnerable: Boolean);
@@ -224,10 +189,7 @@ end;
 
 function THudVitals.NoiseSample: Single;
 begin
-  FSeed := FSeed xor (FSeed shl 13);
-  FSeed := FSeed xor (FSeed shr 17);
-  FSeed := FSeed xor (FSeed shl 5);
-  Result := Integer(FSeed mod 11) - 5;
+  Result := Round(FNoise.NextUnit * 10) - 5;
 end;
 
 function THudVitals.NextSample: Single;
@@ -260,62 +222,30 @@ begin
   end;
 end;
 
-procedure THudVitals.Fill(AX, AY, AW, AH: Single; AColor: TRgb;
-  AAlpha: Single);
-begin
-  var Rect: TSdlFRect;
-  Rect.X := AX;
-  Rect.Y := AY;
-  Rect.W := AW;
-  Rect.H := AH;
-  SDL_SetRenderDrawColor(FRenderer, AColor.R, AColor.G, AColor.B,
-    Round(EnsureRange(AAlpha, 0, 1) * 255));
-  SDL_RenderFillRectF(FRenderer, @Rect);
-end;
-
-procedure THudVitals.Glow(AX, AY, AW, AH: Single; AColor: TRgb;
-  AAlpha: Single);
-begin
-  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeAdd);
-  Fill(AX, AY, AW, AH, AColor, AAlpha);
-  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeBlend);
-end;
-
-procedure THudVitals.Frame(AX, AY, AW, AH: Single; AColor: TRgb;
-  AAlpha: Single);
-begin
-  Fill(AX, AY, AW, 1, AColor, AAlpha);
-  Fill(AX, AY + AH - 1, AW, 1, AColor, AAlpha);
-  Fill(AX, AY + 1, 1, AH - 2, AColor, AAlpha);
-  Fill(AX + AW - 1, AY + 1, 1, AH - 2, AColor, AAlpha);
-end;
-
 procedure THudVitals.Draw;
 begin
-  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeBlend);
+  FBrush.BeginDraw;
   DrawPanel;
   DrawTrace;
   DrawReadout;
   DrawCells;
-  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeNone);
+  FBrush.EndDraw;
 end;
 
 procedure THudVitals.DrawPanel;
-const
-  PanelW = TraceSamples + ReadoutWidth;
 begin
   var Tint := BaseColor;
-  Fill(PanelX, PanelY, PanelW, PanelH, PanelColor, 0.72);
+  FBrush.Fill(PanelX, PanelY, PanelW, PanelH, PanelColor, 0.72);
   for var i := 1 to (TraceSamples - 1) div GridStep do
-    Fill(TraceX + i * GridStep, TraceTop, 1, TraceHeight, Tint, 0.07);
-  Fill(TraceX + 1, CellY - 2, TraceSamples - 2, 1, Tint, 0.12);
-  Fill(PanelX + TraceSamples + 2, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
+    FBrush.Fill(TraceX + i * GridStep, TraceTop, 1, TraceHeight, Tint, 0.07);
+  FBrush.Fill(TraceX + 1, CellY - 2, TraceSamples - 2, 1, Tint, 0.12);
+  FBrush.Fill(PanelX + TraceSamples + 2, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
 
   if FHurtTicks > 0 then
-    Frame(PanelX, PanelY, PanelW, PanelH, AlarmColor,
+    FBrush.Frame(PanelX, PanelY, PanelW, PanelH, AlarmColor,
       0.4 + 0.6 * FHurtTicks / HurtFlashTicks)
   else
-    Frame(PanelX, PanelY, PanelW, PanelH, Tint, 0.3);
+    FBrush.Frame(PanelX, PanelY, PanelW, PanelH, Tint, 0.3);
 end;
 
 procedure THudVitals.DrawTrace;
@@ -336,7 +266,7 @@ begin
       PreviousY := Y;
     var Top := Min(PreviousY, Y);
     var Bottom := Max(PreviousY, Y);
-    Fill(TraceX + i, Top, 1, Bottom - Top + 1, Tint,
+    FBrush.Fill(TraceX + i, Top, 1, Bottom - Top + 1, Tint,
       1 - 0.85 * Age / TraceSamples);
     PreviousY := Y;
     HasPrevious := True;
@@ -344,11 +274,11 @@ begin
 
   var Newest := (FHead - 1 + TraceSamples) mod TraceSamples;
   var NewestY: Integer := Round(TraceMidY - FTrace[Newest]);
-  Glow(TraceX + Newest - 1, NewestY - 1, 3, 3, White, 0.9);
+  FBrush.Glow(TraceX + Newest - 1, NewestY - 1, 3, 3, White, 0.9);
   if FHealth > HealthyHealth then
-    Glow(TraceX + Newest - 2, NewestY - 2, 5, 5, BonusColor, 0.35)
+    FBrush.Glow(TraceX + Newest - 2, NewestY - 2, 5, 5, BonusColor, 0.35)
   else
-    Glow(TraceX + Newest - 2, NewestY - 2, 5, 5, Tint, 0.35);
+    FBrush.Glow(TraceX + Newest - 2, NewestY - 2, 5, 5, Tint, 0.35);
 end;
 
 procedure THudVitals.DrawReadout;
@@ -357,33 +287,11 @@ begin
   if Blink then
     Exit;
   var Value := Max(FHealth, 0);
-  var Width := Length(IntToStr(Value)) * DigitAdvance - DigitPixel;
-  var X := PanelX + TraceSamples + (ReadoutWidth - Width) / 2;
+  var X := PanelX + TraceSamples + (ReadoutWidth - NumberWidth(Value)) / 2;
   if FHealth > HealthyHealth then
-    DrawNumber(Value, X, PanelY + 8, BonusColor)
+    FBrush.DrawNumber(Value, X, ReadoutY, BonusColor)
   else
-    DrawNumber(Value, X, PanelY + 8, BaseColor);
-end;
-
-procedure THudVitals.DrawNumber(AValue: Integer; AX, AY: Single;
-  AColor: TRgb);
-begin
-  var Text := IntToStr(AValue);
-  for var i := 1 to Length(Text) do
-    DrawDigit(Ord(Text[i]) - Ord('0'), AX + (i - 1) * DigitAdvance, AY, AColor);
-end;
-
-procedure THudVitals.DrawDigit(ADigit: Integer; AX, AY: Single;
-  AColor: TRgb);
-begin
-  var Glyph := DigitGlyphs[ADigit];
-  for var i := 0 to DigitCols * DigitRows - 1 do
-  begin
-    if Glyph[i + 1] = '0' then
-      Continue;
-    Fill(AX + (i mod DigitCols) * DigitPixel, AY + (i div DigitCols) * DigitPixel,
-      DigitPixel, DigitPixel, AColor, 1);
-  end;
+    FBrush.DrawNumber(Value, X, ReadoutY, BaseColor);
 end;
 
 function THudVitals.CellX(AIndex: Integer): Single;
@@ -407,7 +315,7 @@ begin
   if BonusCount > 0 then
   begin
     var DividerX := CellX(HealthyHealth) - BonusGap div 2 - 1;
-    Fill(DividerX, CellY - 1, 1, CellH + 2, White, 0.35);
+    FBrush.Fill(DividerX, CellY - 1, 1, CellH + 2, White, 0.35);
     for var i := 0 to BonusCount - 1 do
       DrawBonusCell(i, Blink);
   end;
@@ -417,38 +325,38 @@ end;
 procedure THudVitals.DrawFullCell(AX: Single; AColor: TRgb;
   ABlink: Boolean);
 begin
-  Fill(AX, CellY, CellW, CellH, AColor, 1);
-  Glow(AX, CellY, CellW, 1, White, 0.35);
+  FBrush.Fill(AX, CellY, CellW, CellH, AColor, 1);
+  FBrush.Glow(AX, CellY, CellW, 1, White, 0.35);
   if ABlink then
-    Glow(AX, CellY, CellW, CellH, White, 0.4);
+    FBrush.Glow(AX, CellY, CellW, CellH, White, 0.4);
 end;
 
 procedure THudVitals.DrawEmptyCell(AX: Single; AColor: TRgb);
 begin
-  Fill(AX, CellY, CellW, CellH, AColor, 0.08);
-  Frame(AX, CellY, CellW, CellH, AColor, 0.3);
+  FBrush.Fill(AX, CellY, CellW, CellH, AColor, 0.08);
+  FBrush.Frame(AX, CellY, CellW, CellH, AColor, 0.3);
 end;
 
 procedure THudVitals.DrawBonusCell(AIndex: Integer; ABlink: Boolean);
 begin
   var X := CellX(HealthyHealth + AIndex);
-  Fill(X, CellY, CellW, CellH, BonusColor, 1);
-  Glow(X, CellY, CellW, 1, White, 0.35);
-  Fill(X, CellY + CellH - 1, CellW, 1, BonusShade, 0.8);
+  FBrush.Fill(X, CellY, CellW, CellH, BonusColor, 1);
+  FBrush.Glow(X, CellY, CellW, 1, White, 0.35);
+  FBrush.Fill(X, CellY + CellH - 1, CellW, 1, BonusShade, 0.8);
   var Shimmer := Abs(FTick mod ShimmerPeriod - AIndex * ShimmerLag) < 2;
   if Shimmer then
-    Glow(X, CellY, CellW, CellH, White, 0.55);
+    FBrush.Glow(X, CellY, CellW, CellH, White, 0.55);
   if ABlink then
-    Glow(X, CellY, CellW, CellH, White, 0.4);
+    FBrush.Glow(X, CellY, CellW, CellH, White, 0.4);
 end;
 
 procedure THudVitals.DrawCellEffects;
 begin
   if FLostTicks > 0 then
-    Fill(CellX(FLostCell), CellY, CellW, CellH, White,
+    FBrush.Fill(CellX(FLostCell), CellY, CellW, CellH, White,
       FLostTicks / LostCellTicks);
   if FGrownTicks > 0 then
-    Glow(CellX(FGrownCell) - 1, CellY - 1, CellW + 2, CellH + 2, White,
+    FBrush.Glow(CellX(FGrownCell) - 1, CellY - 1, CellW + 2, CellH + 2, White,
       0.7 * FGrownTicks / GrownCellTicks);
 end;
 

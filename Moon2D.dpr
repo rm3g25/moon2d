@@ -38,8 +38,12 @@ uses
   Monsters in 'Monsters.pas',
   Render.Font in 'Render.Font.pas',
   Hud.Messages in 'Hud.Messages.pas',
+  Hud.Draw in 'Hud.Draw.pas',
   Hud.Health in 'Hud.Health.pas',
   Hud.Vitals in 'Hud.Vitals.pas',
+  Game.Bonus in 'Game.Bonus.pas',
+  Hud.Score in 'Hud.Score.pas',
+  Hud.Charge in 'Hud.Charge.pas',
   Audio in 'Audio.pas',
   Localization in 'Localization.pas',
   Menu in 'Menu.pas';
@@ -75,9 +79,6 @@ const
   CountdownBeepFile = 'countdown.wav';
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
 
-  // The bonus roulette of moon.dpr 531-543: every 50 points buys one
-  // random reward, held until the right mouse button spends it
-  BonusCost = 50;
   BonusHudStartCol = -35.0; // the caption crawls in from off-screen...
   BonusHudTargetCol = 1.0;  // ...to column 1 at 0.1 col/tick (315-319)
   BonusHudSlideStep = 0.1;
@@ -183,11 +184,6 @@ type
     RadiusX: Integer;
   end;
 
-  // The four rewards of bonus.pas. bkNone doubles as 'slot is empty';
-  // the roulette picks uniformly from the four real ones - the exact
-  // index order of the 2008 BonusName[] array is irrelevant for that.
-  TBonusKind = (bkNone, bkHealth, bkFireRain, bkAura, bkExplosion);
-
 const
   // The five converging waves of moon.dpr 453-497: the ring tightens
   // (40 -> 5) while the fragment count grows (50 -> 100) - the ice
@@ -264,6 +260,7 @@ type
     FCheckpointX, FCheckpointY: Double;
     FGameOverTimer: Integer; // ticks left of the death pause
     FHealthHud: THealthHud; // reborn with the level: the era may differ
+    FScoreHud: TScoreHud;
     FEra: TEra; // the player's wish; LevelEra says what the level allows
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
@@ -443,6 +440,7 @@ begin
   FMessages.Free;
   FFont.Free;
   FHealthHud.Free;
+  FScoreHud.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -715,19 +713,22 @@ begin
     Result := eraRemake;
 end;
 
-// The era on screen: the health display and the text lanes under it.
-// Runs when a level loads and again when the menu flips the mode.
+// The era on screen: the two corner displays and the text lanes under
+// them. Runs when a level loads and again when the menu flips the mode.
 procedure TMoonGame.ApplyLevelEra;
 begin
   FreeAndNil(FHealthHud);
+  FreeAndNil(FScoreHud);
   if LevelEra = era2008 then
   begin
     FHealthHud := THealthIcons.Create(FRenderer, FSprites);
+    FScoreHud := TScoreText.Create(FFont, GameWidth);
     FMessages.Lanes := LanesUnderIcons;
   end
   else
   begin
     FHealthHud := THudVitals.Create(FRenderer);
+    FScoreHud := THudCharge.Create(FRenderer, GameWidth);
     FMessages.Lanes := LanesUnderMonitor;
   end;
 end;
@@ -1110,7 +1111,6 @@ end;
 
 procedure TMoonGame.AwardRandomBonus;
 begin
-  Dec(FScore, BonusCost);
   // repeat Random(BonusCount+1) until <>0 of 2008 collapses to this -
   // same uniform pick over the real rewards, without the dice dance
   FBonus := TBonusKind(1 + Random(Ord(High(TBonusKind))));
@@ -1156,6 +1156,7 @@ begin
         FShake.AddTrauma(BonusExplosionTrauma);
       end;
   end;
+  Dec(FScore, BonusCost); // paid on use, not on the roll
   FBonus := bkNone;
 end;
 
@@ -1510,6 +1511,7 @@ begin
 
   FMessages.Tick;
   FHealthHud.Tick(FHeroHealth, FHurtCooldown > 0);
+  FScoreHud.Tick(FScore, FKillStreak, FBonus);
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
@@ -1619,6 +1621,7 @@ begin
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FHealthHud.Draw;
+        FScoreHud.Draw;
         DrawMessages(AAlpha);
         DrawCountdown(AAlpha); // topmost: the ceremony outranks the news
       end;
@@ -1639,13 +1642,7 @@ begin
 end;
 
 procedure TMoonGame.DrawMessages(AAlpha: Double);
-const
-  ScoreMargin = 6; // top-right corner, clear of the ticker lane
 begin
-  var ScoreText := Format(Tr(SScoreFmt), [FScore]);
-  FFont.DrawSmall(ScoreText,
-    GameWidth - FFont.SmallTextWidth(ScoreText) - ScoreMargin, ScoreMargin);
-
   DrawBonusHud(AAlpha);
   FMessages.Draw(AAlpha);
 end;
