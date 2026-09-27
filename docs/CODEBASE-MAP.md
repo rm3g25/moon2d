@@ -7,13 +7,14 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.0`. Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.1`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
-`Game.Bonus` / `Localization` / `Hud.Draw` -> `Levels.Defs` / `Monsters.Defs` /
-`Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` / `Monsters` / `Hud.Messages` /
-`Menu` / `Render.Tiles` -> `Hud.Marks` -> `Game.Loop` -> `Moon2D.dpr`.
+`Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
+`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` /
+`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` -> `Hud.Marks` ->
+`Game.Loop` -> `Moon2D.dpr`.
 
 ---
 
@@ -245,8 +246,8 @@ Projectiles + all the 2008 particle-hack spawners.
   interpolation for the game world.
 
 ### `Hero.pas` (~1170 lines)
-The hero: physics, weapons, death. Owns `GameWidth=512`, `GameHeight=384`,
-`HeroSize=32`.
+The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
+moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
   (go/stop left/right, jump/stopJump), `THeroForm` (hfNormal/hfIce),
   `TPendingSide` ('ExtraInstruction' of 2008 - a queued side intent executed
@@ -315,6 +316,17 @@ HUD that shows it: **`TBonusKind`** (bkNone/Health/FireRain/Aura/Explosion;
 bkNone = empty slot) and `BonusCost=50`. Since 2.5.2 the cost is paid when
 the reward is activated, not when it is rolled, so the score keeps climbing
 past 50 while a reward waits.
+
+### `Game.Space.pas` (~45 lines)
+The two sizes of the coordinate space, kept apart on purpose. The SCREEN is
+one flip-screen of a level (`ScreenCols=16`, `ScreenRows=12`,
+`ScreenWidth=512`, `ScreenHeight=384` - cells, walls, doors, bullets
+leaving the world). The FRAME is what the window shows (`FrameWidth`,
+`FrameHeight` - the SDL logical size, HUD corners, centered text, the
+menu). Equal today; the wide frame grows past a 4:3 screen, and later the
+screen size follows the level. Every reader of either must survive the two
+diverging. Replaced `GameWidth`/`GameHeight` of `Hero` and the literal
+512/384 of `Monsters`, `Bullets` and the dpr (3.0.1).
 
 ### `Hud.Draw.pas` (~215 lines)
 The brush the primitive-drawn HUD panels share. No sprite, no font atlas.
@@ -606,6 +618,7 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Explosions / particles / henshin visuals | Bullets.pas (+dpr henshin cluster) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
+| Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Hud.Draw.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Hud.Draw.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
