@@ -7,14 +7,14 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.1`. Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.2`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` /
-`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` -> `Hud.Marks` ->
-`Game.Loop` -> `Moon2D.dpr`.
+`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` -> `Hud.Marks` /
+`Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`.
 
 ---
 
@@ -308,7 +308,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   API: `AddTicker`, `ShowBig`, `StartMarquee`, `AddScorePopup`, `ClearPopups`
   (screen transitions strand popups over the wrong geometry), `Clear` (death
   silences the board). The lanes are constants: the marquee runs at y=40, the
-  ticker stacks from y=52 - both below the heart monitor.
+  ticker stacks from y=52 - both below the heart monitor. `BigMessageTicks=100`
+  (interface const) is the standard life of a headline.
 
 ### `Game.Bonus.pas` (~25 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
@@ -403,6 +404,27 @@ the dpr with the corner HUDs. **`THudMarks`**.
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
+### `Game.Henshin.pas` (~280 lines)
+The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
+the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
+flash, the suit going on - and the suit coming off. **`THenshin`** takes the
+stage it acts on (hero, sound bank, message board, shake meter) plus a
+`TCureHero` callback (`reference to procedure`) for the one thing it does not
+own, the hero's health; the game passes its `CureHero` method directly.
+Reborn with the hero on every level load.
+- `StartCountdown(henshinAtTick)` (the boss path: prelude, then the
+  cinematic), `Start(atTick)` (straight in; 30 skips the first wave - the
+  gravel trial), `Tick` (prelude and cinematic in one breath, every logic
+  tick, even over the corpse), `DrawCountdown(font, alpha)` (the growing,
+  dissolving digit, topmost), `RemoveIceForm` (the shatter fan, no sound of
+  its own), `Reset` (restart: everything dies, the suit comes off silently).
+- Owns its schedule and tuning: the wave table (`Waves[0..4]`:
+  tick/bullets/radius), `FlashTick=135`, `FinishTick=140`, the regen and perk
+  ticker lives, its two shake doses (`WaveTrauma`, `FinishTrauma`), the
+  countdown tuning, and its sound names - loaded strictly in the
+  constructor. `BottleSoundFile` is public: the barrel burst doubles as the
+  bonus explosion, and the dpr reads the name from here.
+
 ### `Menu.pas` (~955 lines)
 The main menu with its flying moon and starfield.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
@@ -438,33 +460,29 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2000 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1815 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
   sounds, the bonus caption slide (the cost itself lives in `Game.Bonus`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
-  cadence, ticker durations, the henshin wave schedule (`HenshinWaves[0..4]`:
-  tick/bullets/radius), flash and finish ticks, the screen-shake doses
-  (`ExploderTrauma`, `HenshinWaveTrauma`, `HenshinFinishTrauma`,
+  cadence, ticker durations, the screen-shake doses (`ExploderTrauma`,
   `BossBlastTrauma`, `BonusExplosionTrauma`, `BonusFireRainTrauma` - a 2026
-  addition), ending-screen layout rows, countdown tuning (the 3..2..1
-  prelude - also 2026).
-- **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding), `THenshinWave`
-  (record).
+  addition; the ceremony's own live in `Game.Henshin`), ending-screen layout
+  rows.
+- **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (extends `TGameApp`) - owns everything: registry, level, the
   level's sprite sets and both level caches, the ui and weapon sets, sprite and
   tile renderers, hero, monster field, both bursts, font, message board, the
-  screen shake, sound bank, menu, the two corner HUDs (`THudVitals`,
-  `THudCharge`) and the health rows over the figures (`THudMarks`) - the
-  three HUD objects are reborn with every level, so no animation carries
-  over. Key state:
+  screen shake, sound bank, menu, the ceremony (`THenshin`), the two corner
+  HUDs (`THudVitals`, `THudCharge`) and the health rows over the figures
+  (`THudMarks`) - the ceremony and the three HUD objects are reborn with
+  every level, so nothing carries over. Key state:
   game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
-  X/Y, score + kill streak, per-entity trigger-fired flags, henshin
-  (active/tick) + countdown (digit/tick/handover), the bonus slot (+ its queued
-  activation), the gravel trial (attack flag, quota, wave timer, screen), the
+  X/Y, score + kill streak, per-entity trigger-fired flags, the bonus slot
+  (+ its queued activation), the gravel trial (attack flag, quota, wave timer, screen), the
   end-level timer, the level list + current file + current music, fullscreen,
   difficulty.
   Method clusters:
@@ -480,10 +498,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ResolveMonsterContact`, `RewardMonsterKill`, `HurtHero`,
     `DrainMonsterEvents` (also where explosions and boss blasts feed the
     shake), `ProcessKillStreak`, `AwardStreakBonus`.
-  - Henshin/bonus: `StartHenshinCountdown`/`TickCountdown`/`DrawCountdown`,
-    `StartHenshin`/`TickHenshin`/`FinishHenshin`, `RemoveIceForm`, `CureHero`,
+  - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus`, `ActivateQueuedBonus` (pays `BonusCost` on use),
-    `DrawBonusHud`.
+    `DrawBonusHud`. The ceremony itself is driven through `FHenshin`: started
+    by `meHenshin` (countdown) and the gravel trigger (straight in), ticked in
+    `Update`, drawn last in `Render`, reset in `RestartLevel`.
   - Drawing/input: `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `DrawMessages`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton`.
@@ -615,7 +634,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
-| Explosions / particles / henshin visuals | Bullets.pas (+dpr henshin cluster) |
+| Explosions / particles | Bullets.pas |
+| The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
