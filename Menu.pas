@@ -93,6 +93,7 @@ type
     FCache: TSpriteCache; // color-keyed: cursor frames
     FSpriteSet: TSpriteSet; // attached, not owned; nil = folder era
     FSkyTexture: PSdlTexture;
+    FSkySource: TSdlRect; // the part of the sky art the frame shows
     FMoonTexture: PSdlTexture;
     FLogoTexture: PSdlTexture;
     FStarfield: TStarfield;
@@ -189,7 +190,10 @@ const
   UnitsPerNdcX = 256.0; // 2.0 NDC = 512 game units
   UnitsPerNdcY = 192.0; // 2.0 NDC = 384 game units
 
-  SkyFile = 'sky.png';           // 512x512, opaque backdrop
+  SkyFile = 'sky.png';           // 16:9 nebula, cropped to the frame
+  // The art is stored brighter than it is shown: the shade is the live
+  // tuning knob, and the stored pixels keep their dither
+  SkyShade = 170;
   MoonFile = 'fullmoon.png';     // 256x256, black threshold < 33
   LogoFile = 'logo.png';         // 256x256, threshold < 15, alpha 130
   MoonAlphaThreshold = 33;
@@ -278,6 +282,23 @@ const
   CursorOffsetX = 9;
   CursorOffsetY = 10;
 
+// The largest centered window of the texture with the frame's
+// proportions: the backdrop is cropped to the frame, never squeezed
+function CoverSource(ATexture: PSdlTexture; AAspect: Single): TSdlRect;
+var
+  Width, Height: Integer;
+begin
+  SDL_QueryTexture(ATexture, nil, nil, @Width, @Height);
+  Result.W := Width;
+  Result.H := Height;
+  if Width / Height > AAspect then
+    Result.W := Round(Height * AAspect)
+  else
+    Result.H := Round(Width / AAspect);
+  Result.X := (Width - Result.W) div 2;
+  Result.Y := (Height - Result.H) div 2;
+end;
+
 // ---------------------------------------------------------------------------
 // TMoonDrift - verbatim MoonTimer / LoadMoonTexture tail of MenuPic.pas
 // ---------------------------------------------------------------------------
@@ -322,6 +343,10 @@ begin
     FCache.AttachSpriteSet(AWeaponSet);
 
   FSkyTexture := LoadOpaqueTexture(SkyFile);
+  // Shrunk from the art's own size: nearest-neighbor would sparkle
+  SDL_SetTextureScaleMode(FSkyTexture, SdlScaleModeLinear);
+  SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
+  FSkySource := CoverSource(FSkyTexture, FrameWidth / FrameHeight);
   FMoonTexture := LoadThresholdTexture(MoonFile, MoonAlphaThreshold,
     MoonAlpha);
   FLogoTexture := LoadThresholdTexture(LogoFile, LogoAlphaThreshold,
@@ -730,7 +755,7 @@ begin
   Dest.Y := 0;
   Dest.W := FrameWidth;
   Dest.H := FrameHeight;
-  SDL_RenderCopyF(FRenderer, FSkyTexture, nil, @Dest);
+  SDL_RenderCopyF(FRenderer, FSkyTexture, @FSkySource, @Dest);
 
   FStarfield.Draw(AAlpha);
 
