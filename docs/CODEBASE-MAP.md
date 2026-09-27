@@ -7,14 +7,14 @@ Repo: `https://github.com/rm3g25/moon2d/` · Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512×384 game units (16×12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v2.5.2`. Where the map and the code disagree, the code is right.
+Regenerated at `v2.5.3`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` → `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Localization` / `Hud.Draw` → `Levels.Defs` / `Monsters.Defs` /
 `Hud.Health` / `Hud.Score` → `Bullets` / `Hud.Vitals` / `Hud.Charge` → `Hero` /
-`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` → `Game.Loop` →
-`Moon2D.dpr`.
+`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` → `Hud.Marks` →
+`Game.Loop` → `Moon2D.dpr`.
 
 ---
 
@@ -277,7 +277,7 @@ The hero: physics, weapons, death. Owns `GameWidth=512`, `GameHeight=384`,
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Monsters.pas` (~830 lines)
+### `Monsters.pas` (~890 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly×4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
@@ -291,8 +291,12 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `FireAt` (patterns from `TAttackDef`), `TakeDamage` (knockback through the
   wall oracle + explosion fans + events), `EnrageTankIfLow`,
   `ProcessBossThresholds`, `BeginDying`. Public: `Tick(heroX, heroY, bullets)`,
-  `Draw`, `DrainEvent`. `FSecret` is declared and always False — the placement
-  flag it waits for is not in the level format yet.
+  `Draw`, `DrainEvent`, `HealthTier` (the crosshair's thirds of `LivesAll` as
+  `TMonsterHealthTier` — the one home of that rule, via `ThirdMark`),
+  `TierShare` (how full the current third is, 0..1), `TicksSinceHit` /
+  `HitWithin(ticks)` (-1 until the first hit; the health rows read it, so the
+  HUD keeps no memory of the field). `FSecret` is declared and always False —
+  the placement flag it waits for is not in the level format yet.
 - **`TMonsterField`** — owns `TObjectList<TMonster>`, the animset cache keyed
   by the placement's spriteList name, and one `TSpriteSet` plus one
   `TSpriteCache` per monster (all owned here; `AnimFor` opens
@@ -321,17 +325,21 @@ bkNone = empty slot) and `BonusCost=50`. Since 2.5.2 the cost is paid when
 the reward is activated, not when it is rolled, so the score keeps climbing
 past 50 while a reward waits.
 
-### `Hud.Draw.pas` (~175 lines)
+### `Hud.Draw.pas` (~205 lines)
 The brush the primitive-drawn HUD panels share. No sprite, no font atlas.
 - **`TRgb`** (record); the palette as typed constants (`CalmColor` blue,
-  `WaryColor` amber, `AlarmColor` red, `BonusColor` lime + `BonusShade`,
-  `CalmShade`, `PanelColor`, `White`); `Mix` (lerp).
+  `WaryColor` amber, `AlarmColor` red, `HaleColor` green, `BonusColor` lime +
+  `BonusShade`, `CalmShade`, `PanelColor`, `White`); `Mix` (lerp);
+  `HealthColor(health)` (red at 0–1, amber at 2, calm above).
 - **`TXorShift`** (record) — an own random stream for HUD flourishes; `Random`
   feeds the boss spawn table and must not be touched by a spark.
 - **`THudBrush`** — `Fill` (alpha blended rect in game units), `Glow`
   (additive), `Frame` (a one-unit outline from four rects), `DrawNumber` (3×5
-  pixel digits; `NumberWidth` measures), `BeginDraw`/`EndDraw` (blend mode on
-  and off again — the rest of the game draws opaque).
+  pixel digits; `NumberWidth` measures), the cells every health row is made
+  of — `FullCell` (fill + top sheen), `EmptyCell` (dim outline), `BonusCell`
+  (lime with a shaded foot), all with an alpha so a row can fade —
+  `BeginDraw`/`EndDraw` (blend mode on and off again — the rest of the game
+  draws opaque).
 - Panel geometry constants shared by both corners: `PanelMargin=6`,
   `PanelY=4`, `PanelH=32`, `PanelW=118`, `ReadoutY`, the cell row (`CellY`,
   `CellW=7`, `CellH=4`, `CellGap=1`), `DigitPixel=3`.
@@ -344,7 +352,7 @@ The hero's health display, one class per era.
 - **`THealthIcons`** — the 2008 display: one `health` orb of `hero.mset` per
   point, top-left, 18 units apart (owns its set and cache).
 
-### `Hud.Vitals.pas` (~365 lines)
+### `Hud.Vitals.pas` (~355 lines)
 The remake's health display: a heart monitor in the top-left corner, drawn
 with the brush alone. **`THudVitals`** (extends `THealthHud`).
 - `HealthyHealth=5` (interface const): the base row of five cells; empty ones
@@ -365,7 +373,7 @@ The score display, one class per era — the twin of `Hud.Health`.
 - **`TScoreText`** — the 2008 display: `Score: N` in the small font, top-right
   (takes the font and the screen width).
 
-### `Hud.Charge.pas` (~365 lines)
+### `Hud.Charge.pas` (~360 lines)
 The remake's score display: the bonus charge in the top-right corner, the
 twin of the heart monitor. **`THudCharge`** (extends `TScoreHud`).
 - The readout (36 units, three digits, capped at 999), a bar filling toward
@@ -379,6 +387,30 @@ twin of the heart monitor. **`THudCharge`** (extends `TScoreHud`).
 - Streak endings are told apart by the score: reset with points = the tenth
   kill paid out (white flash), reset without = a hit (red flash on the lost
   cells).
+
+### `Hud.Marks.pas` (~285 lines)
+Health rows over the figures, drawn with the brush; remake only — built by
+`ApplyLevelEra` with the corner HUDs, nil in the 2008 mode. **`THudMarks`**.
+- The hero's row: 4×4 cells with a gap of 2, centered over the head (9 units
+  above the sprite's top), the monitor's grammar — `HealthyHealth` cells of
+  norm with the empty ones as outlines, bonus cells past a divider, on a dark
+  plate. Shows on any change (`Tick(health, invulnerable, screen)` — observes
+  the difference like the monitor), 80 ticks with a 20-tick fade; stays while
+  health is 1; nothing over a dead hero; a new screen drops it. On a hit the
+  cells, plate and a frame come up red and cool over 12 ticks; lost cell
+  flashes white, grown cell glows, mercy-window blink.
+- A monster's row: six cells, a pair per third (`MonsterFullCells`: full
+  pairs below the current third + one or two by `TierShare`), so a pair
+  empties in the tick the color turns; colored by `HealthTier`
+  (green/amber/red like the crosshair), only over
+  `mcEnemy`/`mcBoss` on the hero's screen and only within 80 ticks of a hit
+  (`HitWithin`); a hit extends the row, nothing flashes. A kill finishes it:
+  the cells drop to zero over the dying figure and the row dissolves in 20
+  ticks (`MonsterAlpha`).
+- `Draw(hero, field, heroShift, monsterShift)`: the rows ride their figures'
+  shake channels — the brush draws past the sprite renderer's `Origin`, so the
+  offsets are passed by hand. Drawn after the bullets, before the crosshair
+  and the corner HUDs.
 
 ### `Menu.pas` (~990 lines)
 The main menu with its flying moon and starfield.
@@ -434,8 +466,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **`TMoonGame`** (extends `TGameApp`) — owns everything: registry, level, the
   level's sprite sets and both level caches, the ui and weapon sets, sprite and
   tile renderers, hero, monster field, both bursts, font, message board, the
-  screen shake, sound bank, menu, and the two corner HUDs (`THealthHud`,
-  `TScoreHud` — reborn with every level, since the era may differ). Key state:
+  screen shake, sound bank, menu, the two corner HUDs (`THealthHud`,
+  `TScoreHud` — reborn with every level, since the era may differ) and the
+  health rows over the figures (`THudMarks`, remake only, nil in the 2008
+  mode). Key state:
   game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, henshin
@@ -600,7 +634,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Hud.Draw.pas for the brush and palette) |
-| 2008 mode: what it switches, where it applies | Moon2D.dpr (`LevelEra`, `ApplyLevelEra`) + Game.Config.pas + `era2008` in levelN.json + Hud.Health.pas / Hud.Score.pas |
+| Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Hud.Draw.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
+| 2008 mode: what it switches, where it applies | Moon2D.dpr (`LevelEra`, `ApplyLevelEra`) + Game.Config.pas + `era2008` in levelN.json + Hud.Health.pas / Hud.Score.pas (+Hud.Marks.pas: remake only) |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
 | Menu / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
