@@ -348,15 +348,9 @@ begin
   begin
     var X := FStreakX + i * (StreakCellW + CellGap);
     if i < FStreak then
-    begin
-      FBrush.Fill(X, CellY, StreakCellW, CellH, CalmColor, 1);
-      FBrush.Glow(X, CellY, StreakCellW, 1, White, 0.35);
-    end
+      FBrush.FullCell(X, CellY, StreakCellW, CellH, CalmColor, 1)
     else
-    begin
-      FBrush.Fill(X, CellY, StreakCellW, CellH, CalmColor, 0.08);
-      FBrush.Frame(X, CellY, StreakCellW, CellH, CalmColor, 0.3);
-    end;
+      FBrush.EmptyCell(X, CellY, StreakCellW, CellH, CalmColor, 1);
     if FStreakGoalTicks > 0 then
       FBrush.Glow(X, CellY, StreakCellW, CellH, White,
         0.8 * FStreakGoalTicks / StreakGoalTicks);

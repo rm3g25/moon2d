@@ -1,8 +1,9 @@
 ﻿{
   Hud.Draw - the brush the primitive-drawn HUD panels share: fill rects
-  in game units with alpha or additive glow, one-unit frames, and 3x5
-  pixel digits. No sprite, no font atlas. The palette and the panel
-  geometry live here too, so the two panels stay one instrument.
+  in game units with alpha or additive glow, one-unit frames, 3x5 pixel
+  digits, and the cells every health row is made of. No sprite, no font
+  atlas. The palette and the panel geometry live here too, so the panels
+  and the marks over the figures stay one instrument.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -42,15 +43,24 @@ type
     procedure Frame(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
     procedure DrawNumber(AValue: Integer; AX, AY: Single; AColor: TRgb;
       AAlpha: Single = 1);
+    // The cells of a health row: full with a sheen along the top, empty
+    // as a dim outline, bonus in its own color with a shaded foot
+    procedure FullCell(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
+    procedure EmptyCell(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
+    procedure BonusCell(AX, AY, AW, AH: Single; AAlpha: Single);
   end;
 
 function Mix(AFrom, ATo: TRgb; AAmount: Single): TRgb;
 function NumberWidth(AValue: Integer): Integer;
+// The hero's color by health: red at the last point, amber at two, calm
+// above - the crosshair's language
+function HealthColor(AHealth: Integer): TRgb;
 
 const
   CalmColor: TRgb = (R: 72; G: 196; B: 255);
   WaryColor: TRgb = (R: 255; G: 178; B: 56);
   AlarmColor: TRgb = (R: 255; G: 74; B: 61);
+  HaleColor: TRgb = (R: 64; G: 208; B: 96);
   BonusColor: TRgb = (R: 124; G: 255; B: 80);
   BonusShade: TRgb = (R: 40; G: 150; B: 30);
   CalmShade: TRgb = (R: 20; G: 90; B: 140);
@@ -104,6 +114,16 @@ end;
 function NumberWidth(AValue: Integer): Integer;
 begin
   Result := Length(IntToStr(AValue)) * DigitAdvance - DigitPixel;
+end;
+
+function HealthColor(AHealth: Integer): TRgb;
+begin
+  case AHealth of
+    0, 1: Result := AlarmColor;
+    2: Result := WaryColor;
+  else
+    Result := CalmColor;
+  end;
 end;
 
 constructor THudBrush.Create(ARenderer: PSdlRenderer);
@@ -169,6 +189,27 @@ begin
     Fill(AX + (i mod DigitCols) * DigitPixel, AY + (i div DigitCols) * DigitPixel,
       DigitPixel, DigitPixel, AColor, AAlpha);
   end;
+end;
+
+procedure THudBrush.FullCell(AX, AY, AW, AH: Single; AColor: TRgb;
+  AAlpha: Single);
+begin
+  Fill(AX, AY, AW, AH, AColor, AAlpha);
+  Glow(AX, AY, AW, 1, White, 0.35 * AAlpha);
+end;
+
+procedure THudBrush.EmptyCell(AX, AY, AW, AH: Single; AColor: TRgb;
+  AAlpha: Single);
+begin
+  Fill(AX, AY, AW, AH, AColor, 0.08 * AAlpha);
+  Frame(AX, AY, AW, AH, AColor, 0.3 * AAlpha);
+end;
+
+procedure THudBrush.BonusCell(AX, AY, AW, AH: Single; AAlpha: Single);
+begin
+  Fill(AX, AY, AW, AH, BonusColor, AAlpha);
+  Glow(AX, AY, AW, 1, White, 0.35 * AAlpha);
+  Fill(AX, AY + AH - 1, AW, 1, BonusShade, 0.8 * AAlpha);
 end;
 
 end.

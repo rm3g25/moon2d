@@ -214,12 +214,7 @@ end;
 
 function THudVitals.BaseColor: TRgb;
 begin
-  case FHealth of
-    0, 1: Result := AlarmColor;
-    2: Result := WaryColor;
-  else
-    Result := CalmColor;
-  end;
+  Result := HealthColor(FHealth);
 end;
 
 procedure THudVitals.Draw;
@@ -325,24 +320,20 @@ end;
 procedure THudVitals.DrawFullCell(AX: Single; AColor: TRgb;
   ABlink: Boolean);
 begin
-  FBrush.Fill(AX, CellY, CellW, CellH, AColor, 1);
-  FBrush.Glow(AX, CellY, CellW, 1, White, 0.35);
+  FBrush.FullCell(AX, CellY, CellW, CellH, AColor, 1);
   if ABlink then
     FBrush.Glow(AX, CellY, CellW, CellH, White, 0.4);
 end;
 
 procedure THudVitals.DrawEmptyCell(AX: Single; AColor: TRgb);
 begin
-  FBrush.Fill(AX, CellY, CellW, CellH, AColor, 0.08);
-  FBrush.Frame(AX, CellY, CellW, CellH, AColor, 0.3);
+  FBrush.EmptyCell(AX, CellY, CellW, CellH, AColor, 1);
 end;
 
 procedure THudVitals.DrawBonusCell(AIndex: Integer; ABlink: Boolean);
 begin
   var X := CellX(HealthyHealth + AIndex);
-  FBrush.Fill(X, CellY, CellW, CellH, BonusColor, 1);
-  FBrush.Glow(X, CellY, CellW, 1, White, 0.35);
-  FBrush.Fill(X, CellY + CellH - 1, CellW, 1, BonusShade, 0.8);
+  FBrush.BonusCell(X, CellY, CellW, CellH, 1);
   var Shimmer := Abs(FTick mod ShimmerPeriod - AIndex * ShimmerLag) < 2;
   if Shimmer then
     FBrush.Glow(X, CellY, CellW, CellH, White, 0.55);
