@@ -194,6 +194,7 @@
         <DCCReference Include="Audio.pas"/>
         <DCCReference Include="Localization.pas"/>
         <DCCReference Include="Menu.Starfield.pas"/>
+        <DCCReference Include="Menu.Globe.pas"/>
         <DCCReference Include="Menu.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

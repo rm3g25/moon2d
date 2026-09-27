@@ -11,11 +11,10 @@
   what you click.
 
   The moon drifting left on a random diagonal is verbatim 2008; the
-  stars are drawn (Menu.Starfield), the logo carries its own alpha.
-  The 2008 NDC geometry is converted once into 512x384 game units
-  (1 NDC-x = 256 units, 1 NDC-y = 192 units) and frozen as constants -
-  including the 4:3 stretch that made the moon slightly wider than tall.
-  That IS the moon this game always had.
+  moon itself is a spinning globe (Menu.Globe), the stars are drawn
+  (Menu.Starfield), the logo carries its own alpha. The 2008 NDC
+  geometry is converted once into 512x384 game units (1 NDC-x = 256
+  units, 1 NDC-y = 192 units) and frozen as constants.
 
   The menu produces TMenuResult commands; it never touches the game -
   the composition root (Moon2D.dpr) decides what starting a level means.
@@ -30,7 +29,7 @@ interface
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config, Game.Space,
-  Localization, Game.Version, Menu.Starfield;
+  Localization, Game.Version, Menu.Starfield, Menu.Globe;
 
 type
   EMenuError = class(Exception);
@@ -94,7 +93,7 @@ type
     FSpriteSet: TSpriteSet; // attached, not owned; nil = folder era
     FSkyTexture: PSdlTexture;
     FSkySource: TSdlRect; // the part of the sky art the frame shows
-    FMoonTexture: PSdlTexture;
+    FGlobe: TMoonGlobe;
     FLogoTexture: PSdlTexture;
     FStarfield: TStarfield;
     FMoon: TMoonDrift;
@@ -113,8 +112,6 @@ type
     procedure SetDifficulty(AValue: TDifficulty);
     procedure SetLanguage(AValue: TLanguage);
     function LoadTexture(const AFileName: string): PSdlTexture;
-    function LoadThresholdTexture(const AFileName: string;
-      AThreshold, AOpaqueAlpha: Byte): PSdlTexture;
     procedure ShowScreen(AScreen: TMenuScreen);
     procedure AddItem(const ACaption: string; AAction: TItemAction;
       const ALevelFile: string = '');
@@ -194,10 +191,8 @@ const
   // The art is stored brighter than it is shown: the shade is the live
   // tuning knob, and the stored pixels keep their dither
   SkyShade = 170;
-  MoonFile = 'fullmoon.png';     // 256x256, black threshold < 33
+  MoonMapFile = 'moonmap.png';   // 2048x1024 equirectangular surface
   LogoFile = 'logo.png';         // 1024x512, soft alpha, opaque letters
-  MoonAlphaThreshold = 33;
-  MoonAlpha = 255;   // fully solid disc
 
   // TMoonDrift passport, verbatim MoonTimer / LoadMoonTexture:
   MoonDriftSpeed = 1;        // drift units per tick, leftward
@@ -207,11 +202,10 @@ const
   MoonDeltaYSteps = 40;      // DeltaY = (Random(40) - 20) / 50
   MoonDeltaYScale = 50;
 
-  // PutMoonTexture quad: 0.6 NDC on both axes. Horizontally that is
-  // 153.6 units, vertically 115.2 - the moon of 2008 was a 4:3-stretched
-  // disc on every resolution it ever ran at. The house moon stays wide.
-  MoonWidth = 0.6 * UnitsPerNdcX;
-  MoonHeight = 0.6 * UnitsPerNdcY;
+  // The globe is round and sized by the frame's height, so it keeps its
+  // share of the picture when the frame grows wide. The 2008 quad was
+  // 0.6 NDC on both axes - 153.6 x 115.2 units, a 4:3-stretched disc.
+  MoonDiameter = 0.35 * FrameHeight; // 134.4
   // Drift space: +-500 "sdvig" = one half-screen on the respective axis
   MoonUnitsPerDriftX = UnitsPerNdcX / 500;
   MoonUnitsPerDriftY = UnitsPerNdcY / 500;
@@ -345,8 +339,7 @@ begin
   SDL_SetTextureScaleMode(FSkyTexture, SdlScaleModeLinear);
   SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
   FSkySource := CoverSource(FSkyTexture, FrameWidth / FrameHeight);
-  FMoonTexture := LoadThresholdTexture(MoonFile, MoonAlphaThreshold,
-    MoonAlpha);
+  FGlobe := TMoonGlobe.Create(ARenderer, ASpriteSet, MoonMapFile);
   FLogoTexture := LoadTexture(LogoFile);
   // Scaled to the window: nearest-neighbor would stair-step the letters
   SDL_SetTextureScaleMode(FLogoTexture, SdlScaleModeLinear);
@@ -374,8 +367,7 @@ begin
       SDL_DestroyTexture(FFlagTextures[Language]);
   if Assigned(FLogoTexture) then
     SDL_DestroyTexture(FLogoTexture);
-  if Assigned(FMoonTexture) then
-    SDL_DestroyTexture(FMoonTexture);
+  FGlobe.Free;
   if Assigned(FSkyTexture) then
     SDL_DestroyTexture(FSkyTexture);
   FStarfield.Free;
@@ -398,55 +390,6 @@ begin
     if Result = nil then
       raise EMenuError.CreateFmt(SMenuTextureFailed,
         [AFileName, SdlErrorText]);
-  finally
-    SDL_FreeSurface(Surface);
-  end;
-end;
-
-// The 2008 loaders keyed out "black" by a per-channel THRESHOLD, not by
-// exact zero - the art has near-black dirt around the shapes, and an
-// exact color key would leave a dark halo. Same trick the font atlas
-// loader uses.
-function TMoonMenu.LoadThresholdTexture(const AFileName: string;
-  AThreshold, AOpaqueAlpha: Byte): PSdlTexture;
-type
-  PPixelBytes = ^TPixelBytes;
-  TPixelBytes = array [0..3] of Byte; // R,G,B,A of SdlPixelFormatAbgr8888
-var
-  Loaded, Surface: PSdlSurface;
-begin
-  Loaded := LoadImageSurface(FSpriteSet, AFileName);
-  if Loaded = nil then
-    raise EMenuError.CreateFmt(SMenuTextureFailed,
-      [AFileName, SdlErrorText]);
-
-  Surface := SDL_ConvertSurfaceFormat(Loaded, SdlPixelFormatAbgr8888, 0);
-  SDL_FreeSurface(Loaded);
-  if Surface = nil then
-    raise EMenuError.CreateFmt(SMenuTextureFailed,
-      [AFileName, SdlErrorText]);
-  try
-    SDL_LockSurface(Surface);
-    for var Row := 0 to Surface.H - 1 do
-    begin
-      var Pixel := PPixelBytes(PByte(Surface.Pixels) + Row * Surface.Pitch);
-      for var Col := 0 to Surface.W - 1 do
-      begin
-        if (Pixel[0] < AThreshold) and (Pixel[1] < AThreshold) and
-           (Pixel[2] < AThreshold) then
-          Pixel[3] := 0
-        else
-          Pixel[3] := AOpaqueAlpha;
-        Inc(Pixel);
-      end;
-    end;
-    SDL_UnlockSurface(Surface);
-
-    Result := SDL_CreateTextureFromSurface(FRenderer, Surface);
-    if Result = nil then
-      raise EMenuError.CreateFmt(SMenuTextureFailed,
-        [AFileName, SdlErrorText]);
-    SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
   finally
     SDL_FreeSurface(Surface);
   end;
@@ -744,6 +687,7 @@ procedure TMoonMenu.Tick;
 begin
   // MoonTimer + StarsTimer of 2008, fused: one heartbeat for the sky
   FMoon.Tick;
+  FGlobe.Tick;
   FStarfield.Tick;
 end;
 
@@ -766,11 +710,11 @@ begin
   var DriftY := FMoon.DriftY + FMoon.DeltaY * AAlpha;
   var CenterX := FrameWidth / 2 + DriftX * MoonUnitsPerDriftX;
   var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY;
-  Dest.X := CenterX - MoonWidth / 2;
-  Dest.Y := CenterY - MoonHeight / 2;
-  Dest.W := MoonWidth;
-  Dest.H := MoonHeight;
-  SDL_RenderCopyF(FRenderer, FMoonTexture, nil, @Dest);
+  Dest.X := CenterX - MoonDiameter / 2;
+  Dest.Y := CenterY - MoonDiameter / 2;
+  Dest.W := MoonDiameter;
+  Dest.H := MoonDiameter;
+  FGlobe.Draw(Dest);
 end;
 
 // The logo greets fresh visitors; over a running game the menu keeps

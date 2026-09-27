@@ -294,6 +294,13 @@ function SDL_SetTextureColorMod(ATexture: PSdlTexture;
 function SDL_SetTextureScaleMode(ATexture: PSdlTexture;
   AScaleMode: Integer): Integer; cdecl;
   external SdlLib name 'SDL_SetTextureScaleMode';
+// Streaming textures: APixels and APitch describe the write-only buffer
+// until SDL_UnlockTexture; every texel must be written, nothing is kept
+function SDL_LockTexture(ATexture: PSdlTexture; const ARect: PSdlRect;
+  out APixels: Pointer; out APitch: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_LockTexture';
+procedure SDL_UnlockTexture(ATexture: PSdlTexture); cdecl;
+  external SdlLib name 'SDL_UnlockTexture';
 function SDL_CreateTextureFromSurface(ARenderer: PSdlRenderer;
   ASurface: PSdlSurface): PSdlTexture; cdecl;
   external SdlLib name 'SDL_CreateTextureFromSurface';

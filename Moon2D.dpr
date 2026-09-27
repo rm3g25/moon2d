@@ -48,6 +48,7 @@ uses
   Audio in 'Audio.pas',
   Localization in 'Localization.pas',
   Menu.Starfield in 'Menu.Starfield.pas',
+  Menu.Globe in 'Menu.Globe.pas',
   Menu in 'Menu.pas';
 
 const
