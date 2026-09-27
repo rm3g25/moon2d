@@ -190,6 +190,7 @@
         <DCCReference Include="Game.Bonus.pas"/>
         <DCCReference Include="Hud.Score.pas"/>
         <DCCReference Include="Hud.Charge.pas"/>
+        <DCCReference Include="Hud.Marks.pas"/>
         <DCCReference Include="Audio.pas"/>
         <DCCReference Include="Localization.pas"/>
         <DCCReference Include="Menu.pas"/>

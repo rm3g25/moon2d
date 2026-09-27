@@ -44,6 +44,7 @@ uses
   Game.Bonus in 'Game.Bonus.pas',
   Hud.Score in 'Hud.Score.pas',
   Hud.Charge in 'Hud.Charge.pas',
+  Hud.Marks in 'Hud.Marks.pas',
   Audio in 'Audio.pas',
   Localization in 'Localization.pas',
   Menu in 'Menu.pas';
@@ -261,6 +262,7 @@ type
     FGameOverTimer: Integer; // ticks left of the death pause
     FHealthHud: THealthHud; // reborn with the level: the era may differ
     FScoreHud: TScoreHud;
+    FMarks: THudMarks; // remake only; nil in the 2008 mode
     FEra: TEra; // the player's wish; LevelEra says what the level allows
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
@@ -436,6 +438,7 @@ destructor TMoonGame.Destroy;
 begin
   FMenu.Free;
   FAudio.Free;
+  FMarks.Free;
   FShake.Free;
   FMessages.Free;
   FFont.Free;
@@ -713,12 +716,14 @@ begin
     Result := eraRemake;
 end;
 
-// The era on screen: the two corner displays and the text lanes under
-// them. Runs when a level loads and again when the menu flips the mode.
+// The era on screen: the two corner displays, the health rows over the
+// figures and the text lanes. Runs when a level loads and again when the
+// menu flips the mode.
 procedure TMoonGame.ApplyLevelEra;
 begin
   FreeAndNil(FHealthHud);
   FreeAndNil(FScoreHud);
+  FreeAndNil(FMarks);
   if LevelEra = era2008 then
   begin
     FHealthHud := THealthIcons.Create(FRenderer, FSprites);
@@ -729,6 +734,7 @@ begin
   begin
     FHealthHud := THudVitals.Create(FRenderer);
     FScoreHud := THudCharge.Create(FRenderer, GameWidth);
+    FMarks := THudMarks.Create(FRenderer);
     FMessages.Lanes := LanesUnderMonitor;
   end;
 end;
@@ -1511,6 +1517,8 @@ begin
 
   FMessages.Tick;
   FHealthHud.Tick(FHeroHealth, FHurtCooldown > 0);
+  if FMarks <> nil then
+    FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
   FScoreHud.Tick(FScore, FKillStreak, FBonus);
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
@@ -1618,6 +1626,9 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        if FMarks <> nil then
+          FMarks.Draw(FHero, FField, FShake.Offset(scHero),
+            FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FHealthHud.Draw;
@@ -1807,11 +1818,12 @@ begin
        (FMouseGY + SpriteSize >= Monster.Y + SpriteSize) then
       Continue;
 
-    if Monster.Lives > Round(Monster.LivesAll * 2 / 3) then
-      Exit(2);
-    if Monster.Lives > Round(Monster.LivesAll / 3) then
-      Exit(3);
-    Exit(4);
+    case Monster.HealthTier of
+      htHale: Exit(2);
+      htWounded: Exit(3);
+    else
+      Exit(4);
+    end;
   end;
 end;
 

@@ -48,6 +48,9 @@ type
   TMonsterEvent = (meNone, meBossWantsMinion, meHenshin, meBossRage,
     meLevelComplete, meDied);
 
+  // Thirds of full health, the crosshair's language
+  TMonsterHealthTier = (htHale, htWounded, htCritical);
+
   TMonster = class
   private
     FDef: TMonsterDef;
@@ -68,6 +71,7 @@ type
     // meHenshin is a one-shot; the event list drains every tick, so it
     // cannot remember what was already sent - this flag can
     FHenshinSent: Boolean;
+    FTicksSinceHit: Integer; // NeverHit until the first hit
     FFireEveryTicks: Integer;
     FBossMinionTimer: Integer;
     FSecret: Boolean;
@@ -93,6 +97,7 @@ type
     procedure EnrageTankIfLow;
     procedure ProcessBossThresholds(const AEnemyBullets: TBurst);
     procedure BeginDying(const AEnemyBullets: TBurst);
+    function ThirdMark(AThirds: Integer): Integer;
   public
     constructor Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
       const ALevel: TLevel; const APlacement: TEntityPlacement;
@@ -108,6 +113,10 @@ type
     procedure TakeDamage(AKnockDx, ALosses: Integer;
       const AEnemyBullets: TBurst);
     function DrainEvent: TMonsterEvent;
+    function HealthTier: TMonsterHealthTier;
+    // How full the current third is, 0..1
+    function TierShare: Single;
+    function HitWithin(ATicks: Integer): Boolean;
 
     property Def: TMonsterDef read FDef;
     property X: Double read FX;
@@ -117,6 +126,7 @@ type
     property Lives: Integer read FLives;
     property LivesAll: Integer read FLivesAll;
     property Direction: Boolean read FDirection;
+    property TicksSinceHit: Integer read FTicksSinceHit;
   end;
 
   TMonsterField = class
@@ -171,6 +181,7 @@ const
   TankRageLives = 20;      // cluster5 shooters double up below this
   BossRageLives = 80;      // the boss goes berserk below this
   EnragedMinionTicks = 100; // rage shortens the reinforcement interval
+  NeverHit = -1;
 
 // ---------------------------------------------------------------------------
 // TMonster
@@ -216,6 +227,7 @@ begin
   FFireEveryTicks := ADef.Attack.FireEveryTicks;
 
   FSecret := False; // placement 'secret' flag arrives via level JSON later
+  FTicksSinceHit := NeverHit;
 
   FLife := mlAlive;
   FCurrentSprite := 1;
@@ -238,6 +250,51 @@ begin
     Exit(meNone);
   Result := FEvents[0];
   FEvents.Delete(0);
+end;
+
+// The lives at the top of the given third; the crosshair's boundaries
+function TMonster.ThirdMark(AThirds: Integer): Integer;
+begin
+  Result := Round(FLivesAll * AThirds / 3);
+end;
+
+function TMonster.HealthTier: TMonsterHealthTier;
+begin
+  if FLives > ThirdMark(2) then
+    Result := htHale
+  else if FLives > ThirdMark(1) then
+    Result := htWounded
+  else
+    Result := htCritical;
+end;
+
+function TMonster.TierShare: Single;
+var
+  Lower, Upper: Integer;
+begin
+  case HealthTier of
+    htHale:
+      begin
+        Lower := ThirdMark(2);
+        Upper := FLivesAll;
+      end;
+    htWounded:
+      begin
+        Lower := ThirdMark(1);
+        Upper := ThirdMark(2);
+      end;
+  else
+    Lower := 0;
+    Upper := ThirdMark(1);
+  end;
+  if Upper <= Lower then
+    Exit(1);
+  Result := EnsureRange((FLives - Lower) / (Upper - Lower), 0.0, 1.0);
+end;
+
+function TMonster.HitWithin(ATicks: Integer): Boolean;
+begin
+  Result := (FTicksSinceHit <> NeverHit) and (FTicksSinceHit < ATicks);
 end;
 
 // --- coordinate and collision oracles, verbatim -----------------------------
@@ -553,6 +610,8 @@ procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
 begin
   FHeroX := AHeroX;
   FHeroY := AHeroY;
+  if FTicksSinceHit <> NeverHit then
+    Inc(FTicksSinceHit);
 
   if FDef.Category = mcBoss then
   begin
@@ -677,6 +736,7 @@ end;
 procedure TMonster.TakeDamage(AKnockDx, ALosses: Integer;
   const AEnemyBullets: TBurst);
 begin
+  FTicksSinceHit := 0;
   EnrageTankIfLow;
   ProcessBossThresholds(AEnemyBullets);
 
