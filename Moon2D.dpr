@@ -7,8 +7,8 @@
   fullscreen anywhere. In game: WASD/arrows move, Space/W jumps, the arm
   tracks the mouse. PgUp/PgDn browse screens for debugging.
 
-  Logic runs in the original 512x384 game units (SetMaxC of 2008);
-  SDL logical size matches, so mouse events arrive already in game units.
+  Logic runs in game units (SetMaxC of 2008, see Game.Space); the SDL
+  logical size is the frame, so mouse events arrive already in game units.
 }
 program Moon2D;
 
@@ -41,6 +41,7 @@ uses
   Hud.Draw in 'Hud.Draw.pas',
   Hud.Vitals in 'Hud.Vitals.pas',
   Game.Bonus in 'Game.Bonus.pas',
+  Game.Space in 'Game.Space.pas',
   Hud.Charge in 'Hud.Charge.pas',
   Hud.Marks in 'Hud.Marks.pas',
   Audio in 'Audio.pas',
@@ -411,11 +412,11 @@ begin
     FUiSet := TSpriteSet.Create(SpriteSetsDir + 'ui.mset');
   if FileExists(SpriteSetsDir + 'weapon.mset') then
     FWeaponSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
-  FSprites := TSpriteRenderer.Create(ARenderer, GameWidth, GameHeight);
+  FSprites := TSpriteRenderer.Create(ARenderer, FrameWidth, FrameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
     FUiSet);
-  FMessages := TMessageBoard.Create(FFont, GameWidth);
+  FMessages := TMessageBoard.Create(FFont, FrameWidth);
   FShake := TScreenShake.Create;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
@@ -579,7 +580,7 @@ end;
 
 procedure TMoonGame.DrawCenteredBig(const AText: string; ARow: Integer);
 begin
-  FFont.DrawBig(AText, (GameWidth - FFont.BigTextWidth(AText)) / 2,
+  FFont.DrawBig(AText, (FrameWidth - FFont.BigTextWidth(AText)) / 2,
     ARow * SmallLineStep);
 end;
 
@@ -600,7 +601,7 @@ end;
 function TMoonGame.HitEndingLine(const AText: string;
   ATopRow: Integer): Boolean;
 begin
-  var Left := (GameWidth - FFont.BigTextWidth(AText)) / 2;
+  var Left := (FrameWidth - FFont.BigTextWidth(AText)) / 2;
   Result := (FMouseGX >= Left) and
     (FMouseGX <= Left + FFont.BigTextWidth(AText)) and
     (FMouseGY >= ATopRow * SmallLineStep) and
@@ -701,7 +702,7 @@ begin
   FreeAndNil(FCharge);
   FreeAndNil(FMarks);
   FVitals := THudVitals.Create(FRenderer);
-  FCharge := THudCharge.Create(FRenderer, GameWidth);
+  FCharge := THudCharge.Create(FRenderer, FrameWidth);
   FMarks := THudMarks.Create(FRenderer);
 end;
 
@@ -723,7 +724,7 @@ end;
 procedure TMoonGame.HandleScreenTransitions;
 const
   // Verbatim moon.dpr 1071-1073: the door sits at x > 512-33
-  RightDoorX = GameWidth - 33;
+  RightDoorX = ScreenWidth - 33;
 begin
   if FHero.X < 2 then
     FHero.SetScreenX(2); // no way back - the 2008 doors open one way
@@ -988,7 +989,7 @@ begin
 
   var Digit := IntToStr(FCountdownDigit);
   FFont.DrawScaled(Digit,
-    (GameWidth - FFont.ScaledTextWidth(Digit, GlyphHeight)) / 2,
+    (FrameWidth - FFont.ScaledTextWidth(Digit, GlyphHeight)) / 2,
     CountdownCenterY - GlyphHeight / 2,
     GlyphHeight, Opacity);
 end;
@@ -1161,23 +1162,23 @@ begin
   FireScreenTriggers;
 end;
 
-// Cell mapping of the 2008 bullet block: the 16x12 wall grid, 0-based
-// (BelongToX/YSprite[1] of WindowProc)
+// Cell mapping of the 2008 bullet block: the wall grid of the screen,
+// 0-based (BelongToX/YSprite[1] of WindowProc)
 function BulletCellCol(AX: Double): Integer;
 begin
-  Result := Trunc(16 * AX / GameWidth); // CellOfX - 1
+  Result := Trunc(ScreenCols * AX / ScreenWidth); // CellOfX - 1
 end;
 
 function BulletCellRow(AY: Double): Integer;
 begin
-  Result := Trunc(12 * AY / GameHeight) - 1;
+  Result := Trunc(ScreenRows * AY / ScreenHeight) - 1;
 end;
 
 function BulletOffScreen(const ABullet: TBullet): Boolean;
 begin
-  Result := (ABullet.X > GameWidth) or (ABullet.X < 0) or
-    (ABullet.Y > GameHeight + SpriteSize) or
-    (ABullet.Y < -GameHeight / 2);
+  Result := (ABullet.X > ScreenWidth) or (ABullet.X < 0) or
+    (ABullet.Y > ScreenHeight + SpriteSize) or
+    (ABullet.Y < -ScreenHeight / 2);
 end;
 
 // Verbatim port of the hero half of the WindowProc bullet block: a
@@ -1613,7 +1614,7 @@ const
 begin
   FFont.DrawSmallBlock(FLevel.IntroText.Current, TextLeft, TextTop);
   FFont.DrawSmall(Tr(SPressAnyKey),
-    (GameWidth - FFont.SmallTextWidth(Tr(SPressAnyKey))) / 2, PromptY);
+    (FrameWidth - FFont.SmallTextWidth(Tr(SPressAnyKey))) / 2, PromptY);
 end;
 
 procedure TMoonGame.DrawMessages(AAlpha: Double);
@@ -1654,7 +1655,7 @@ procedure TMoonGame.DrawAtlasOverlay;
 begin
 {$IFDEF DEBUGKEYS}
   if FShowAtlas then
-    FFont.DrawAtlas((GameWidth - GameHeight) div 2, 0, GameHeight);
+    FFont.DrawAtlas((FrameWidth - FrameHeight) div 2, 0, FrameHeight);
 {$ENDIF}
 end;
 

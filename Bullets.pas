@@ -24,7 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Sprites.Sets;
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Space;
 
 type
   // The k/t fan formula of 2008 appears five times across the game with
@@ -285,10 +285,10 @@ end;
 
 procedure TBurst.SpawnFireRain;
 const
-  GridStep = 16; // 32 columns x 24 rows fill 512x384 exactly
+  GridStep = 16; // 32 columns x 24 rows fill the 512x384 screen exactly
 begin
-  for var k := 1 to 32 do
-    for var t := 1 to 24 do
+  for var k := 1 to ScreenWidth div GridStep do
+    for var t := 1 to ScreenHeight div GridStep do
       NewBullet(1, k * GridStep, t * GridStep, Random(360), 2, True);
 end;
 

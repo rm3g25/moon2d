@@ -29,7 +29,7 @@ interface
 
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
-  Game.Config,
+  Game.Config, Game.Space,
   Localization, Game.Version;
 
 type
@@ -196,12 +196,11 @@ resourcestring
 
 const
   // 2008 drew the menu in GL normalized device coords over the whole
-  // window; the conversion is the same one Render.Font froze:
+  // window; the conversion is the same one Render.Font froze. These
+  // size the 2008 quads (moon, logo, stars); positions and spans go by
+  // the frame, which the wide screen will grow past the 2008 window.
   UnitsPerNdcX = 256.0; // 2.0 NDC = 512 game units
   UnitsPerNdcY = 192.0; // 2.0 NDC = 384 game units
-  // Full 2.0-NDC span of every 2008 quad, in game units
-  ScreenWidthUnits = 2 * UnitsPerNdcX;
-  ScreenHeightUnits = 2 * UnitsPerNdcY;
 
   SkyFile = 'sky.png';           // 512x512, opaque backdrop
   MoonFile = 'fullmoon.png';     // 256x256, black threshold < 33
@@ -469,10 +468,8 @@ begin
   begin
     var Star: TStar;
     Star.Kind := Random(StarKindCount);
-    Star.X := Random(StarPositionSteps) / StarPositionSteps *
-      ScreenWidthUnits;
-    Star.Y := Random(StarPositionSteps) / StarPositionSteps *
-      ScreenHeightUnits;
+    Star.X := Random(StarPositionSteps) / StarPositionSteps * FrameWidth;
+    Star.Y := Random(StarPositionSteps) / StarPositionSteps * FrameHeight;
     Star.Speed := Star.Kind * StarSpeedPerKind;
     var SizeNdc := StarBaseSizeNdc +
       Random(StarSizeJitterSteps) / StarSizeJitterScale;
@@ -647,7 +644,7 @@ begin
   // Rightmost slot belongs to the highest language id; earlier ids
   // stack leftward, one flag plus one gap per slot
   var SlotsFromRight := Ord(High(TLanguage)) - Ord(ALanguage);
-  Result.X := ScreenWidthUnits - FlagMargin - FlagWidth
+  Result.X := FrameWidth - FlagMargin - FlagWidth
     - SlotsFromRight * (FlagWidth + FlagGap);
   Result.Y := FlagTop;
   Result.W := FlagWidth;
@@ -778,7 +775,7 @@ begin
   for var i := 0 to High(FStars) do
   begin
     FStars[i].X := FStars[i].X + FStars[i].Speed;
-    if FStars[i].X > ScreenWidthUnits then
+    if FStars[i].X > FrameWidth then
       FStars[i].X := 0; // wrapped to the left edge, as 2008 did
   end;
 end;
@@ -787,11 +784,11 @@ procedure TMoonMenu.DrawSky(AAlpha: Double);
 var
   Dest: TSdlFRect;
 begin
-  // Sky fills the screen edge to edge (PutSkyTexture quad -1..1)
+  // Sky fills the frame edge to edge (PutSkyTexture quad -1..1)
   Dest.X := 0;
   Dest.Y := 0;
-  Dest.W := ScreenWidthUnits;
-  Dest.H := ScreenHeightUnits;
+  Dest.W := FrameWidth;
+  Dest.H := FrameHeight;
   SDL_RenderCopyF(FRenderer, FSkyTexture, nil, @Dest);
 
   // Stars move fractions of a unit per tick - interpolate with the
@@ -809,8 +806,8 @@ begin
   // the same constant or the two would silently disagree
   var DriftX := FMoon.DriftX - MoonDriftSpeed * AAlpha;
   var DriftY := FMoon.DriftY + FMoon.DeltaY * AAlpha;
-  var CenterX := UnitsPerNdcX + DriftX * MoonUnitsPerDriftX;
-  var CenterY := UnitsPerNdcY - DriftY * MoonUnitsPerDriftY;
+  var CenterX := FrameWidth / 2 + DriftX * MoonUnitsPerDriftX;
+  var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY;
   Dest.X := CenterX - MoonWidth / 2;
   Dest.Y := CenterY - MoonHeight / 2;
   Dest.W := MoonWidth;
@@ -897,8 +894,8 @@ procedure TMoonMenu.DrawVersion;
 begin
   var Text := 'v' + GameVersion;
   FFont.DrawSmall(Text,
-    ScreenWidthUnits - FFont.SmallTextWidth(Text) - VersionMargin,
-    ScreenHeightUnits - SmallLineStep - VersionMargin);
+    FrameWidth - FFont.SmallTextWidth(Text) - VersionMargin,
+    FrameHeight - SmallLineStep - VersionMargin);
 end;
 
 procedure TMoonMenu.DrawCursor;
@@ -926,8 +923,8 @@ var
 begin
   Dest.W := ShowcaseLogoWidth;
   Dest.H := ShowcaseLogoHeight;
-  Dest.X := (ScreenWidthUnits - Dest.W) / 2;
-  Dest.Y := (ScreenHeightUnits - Dest.H) / 2;
+  Dest.X := (FrameWidth - Dest.W) / 2;
+  Dest.Y := (FrameHeight - Dest.H) / 2;
   SDL_RenderCopyF(FRenderer, FLogoTexture, nil, @Dest);
 end;
 

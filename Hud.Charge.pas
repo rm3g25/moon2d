@@ -66,7 +66,7 @@ type
     procedure DrawSparks;
     procedure DrawStreak;
   public
-    constructor Create(ARenderer: PSdlRenderer; AScreenWidth: Integer);
+    constructor Create(ARenderer: PSdlRenderer; AFrameWidth: Integer);
     destructor Destroy; override;
     // Once per logic tick: the score, the kill streak and the reward
     // held (bkNone when the slot is empty), all as of now
@@ -127,12 +127,12 @@ const
     (X: 1; Y: 6; W: 2; H: 2), (X: 6; Y: 6; W: 2; H: 2),
     (X: 3; Y: 3; W: 3; H: 3));
 
-constructor THudCharge.Create(ARenderer: PSdlRenderer; AScreenWidth: Integer);
+constructor THudCharge.Create(ARenderer: PSdlRenderer; AFrameWidth: Integer);
 begin
   inherited Create;
   FBrush := THudBrush.Create(ARenderer);
   FNoise.Seed := $2545F491;
-  FPanelX := AScreenWidth - PanelMargin - PanelW;
+  FPanelX := AFrameWidth - PanelMargin - PanelW;
   FBarX := FPanelX + ReadoutWidth + InnerMargin;
   FStreakX := FBarX;
 end;

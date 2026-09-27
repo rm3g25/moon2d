@@ -38,7 +38,7 @@ type
     procedure HandleKey(AScancode: Integer; AAction: TKeyAction;
       AIsRepeat: Boolean); virtual;
     // X/Y arrive in logical coordinates (SDL translates when logical
-    // size is active) - for Moon 2D that is the native 512x384.
+    // size is active) - for Moon 2D that is the frame of Game.Space.
     procedure HandleMouseMove(AX, AY: Integer); virtual;
     procedure HandleMouseButton(AButton: Integer; ADown: Boolean); virtual;
 

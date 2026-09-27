@@ -34,7 +34,7 @@ interface
 uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Levels.Defs,
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
   Monsters.Defs, Bullets;
 
 type
@@ -176,8 +176,8 @@ end;
 const
   MonsterBound = 8;
   SpriteResetThreshold = 8.7;
-  // Patrol turns AT the right edge, not beyond it: GameWidth - SpriteSize
-  PatrolRightLimit = 480;
+  // Patrol turns AT the right edge, not beyond it
+  PatrolRightLimit = ScreenWidth - SpriteSize; // 480
   TankRageLives = 20;      // cluster5 shooters double up below this
   BossRageLives = 80;      // the boss goes berserk below this
   EnragedMinionTicks = 100; // rage shortens the reinforcement interval
@@ -301,12 +301,12 @@ end;
 
 function TMonster.CellOfX(APixel: Integer): Integer;
 begin
-  Result := Trunc(16 * APixel / 512 + 1);
+  Result := Trunc(ScreenCols * APixel / ScreenWidth + 1);
 end;
 
 function TMonster.CellOfY(APixel: Integer): Integer;
 begin
-  Result := Trunc(12 * APixel / 384 + 1);
+  Result := Trunc(ScreenRows * APixel / ScreenHeight + 1);
 end;
 
 function TMonster.Solid(ACol, ARow: Integer): Boolean;
@@ -370,7 +370,7 @@ begin
   Result := True;
   if Solid(CellOfX(Round(FX) + MonsterBound), CellOfY(Round(FY) + 3)) then
     Result := False;
-  if CellOfX(Round(FX)) <> 16 then
+  if CellOfX(Round(FX)) <> ScreenCols then
   begin
     var Pixel := Round(FX) - MonsterBound;
     var Col := CellOfX(Pixel);
@@ -549,8 +549,8 @@ end;
 procedure TMonster.MoveFalling;
 const
   // Verbatim: below this line the original kept falling out of the
-  // world instead of snapping to a cell (GameHeight - 17)
-  BelowFloorY = 367;
+  // world instead of snapping to a cell
+  BelowFloorY = ScreenHeight - 17; // 367
 begin
   if CanGoDown or (FY > BelowFloorY) then
   begin

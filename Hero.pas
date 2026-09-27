@@ -1,7 +1,7 @@
 ﻿{
   Hero - the player, ported line-for-line from the release hero.pas.
 
-  The game thinks in 512x384 units (moon.dpr:1839 SetMaxC(512,384));
+  The game thinks in the screen units of Game.Space (SetMaxC of 2008);
   a grid cell is 32 units, the hero is exactly one cell. All original
   constants (bound=8, step=2, jump start 8, gravity step/14, landing
   snap y+16) transfer unchanged.
@@ -31,11 +31,9 @@ interface
 
 uses
   System.SysUtils, System.Math,
-  Sdl2.Core, Render.Sprites, Sprites.Sets, Levels.Defs, Bullets;
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Space, Levels.Defs, Bullets;
 
 const
-  GameWidth = 512;  // logic units, = 16 cells
-  GameHeight = 384; // logic units, = 12 cells
   HeroSize = 32;
 
 type
@@ -452,7 +450,7 @@ begin
   if Solid(LeftCell, CellOfY(Round(FY) + 1)) then
     Exit(True);
 
-  if CellOfX(Round(FX)) <> 16 then
+  if CellOfX(Round(FX)) <> ScreenCols then
   begin
     CellsOfX(Round(FX) - Bound - 8, LeftCell, RightCell);
     if Solid(RightCell, CellOfY(Round(FY) + 1)) then
@@ -469,17 +467,17 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Coordinate oracles - verbatim from coordinates.pas, 512x384 fixed
+// Coordinate oracles - verbatim from coordinates.pas, over the screen grid
 // ---------------------------------------------------------------------------
 
 function THero.CellOfX(APixel: Integer): Integer;
 begin
-  Result := Trunc(16 * APixel / GameWidth + 1);
+  Result := Trunc(ScreenCols * APixel / ScreenWidth + 1);
 end;
 
 function THero.CellOfY(APixel: Integer): Integer;
 begin
-  Result := Trunc(12 * APixel / GameHeight + 1);
+  Result := Trunc(ScreenRows * APixel / ScreenHeight + 1);
 end;
 
 procedure THero.CellsOfX(APixel: Integer; out ALeftCell, ARightCell: Integer);
@@ -576,7 +574,7 @@ begin
   if Solid(LeftCell, CellOfY(Round(FY) - 4) - 1) then
     Result := False;
 
-  if CellOfX(Round(FX)) <> 16 then
+  if CellOfX(Round(FX)) <> ScreenCols then
   begin
     CellsOfX(Round(FX) - Bound - 8, LeftCell, RightCell);
     if Solid(RightCell, CellOfY(Round(FY) - 4) - 1) then
@@ -597,7 +595,7 @@ begin
   if Solid(LeftCell, CellOfY(Round(FY) - 3)) then
     Result := False;
 
-  if CellOfX(Round(FX)) <> 16 then
+  if CellOfX(Round(FX)) <> ScreenCols then
   begin
     CellsOfX(Round(FX) - Bound - 8, LeftCell, RightCell);
     if Solid(RightCell, CellOfY(Round(FY) - 3)) then
@@ -606,7 +604,7 @@ begin
 
   // The famous hardcode: below the screen you always fall (original kept
   // y>384 from the fixed game-unit era; with SetMaxC(512,384) it's exact).
-  if (FY < 4) or (FY > GameHeight) then
+  if (FY < 4) or (FY > ScreenHeight) then
     Result := True;
 end;
 

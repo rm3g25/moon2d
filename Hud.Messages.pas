@@ -60,7 +60,7 @@ type
       end;
   private
     FFont: TMoonFont;
-    FScreenWidth: Integer;
+    FFrameWidth: Integer; // the big headline centers on the display
     FTicker: TArray<TTickerLine>;
     FBigText: string;
     FBigTicksLeft: Integer;
@@ -76,7 +76,7 @@ type
     procedure DrawPopups(AAlpha: Double);
     procedure DrawBig;
   public
-    constructor Create(const AFont: TMoonFont; AScreenWidth: Integer);
+    constructor Create(const AFont: TMoonFont; AFrameWidth: Integer);
 
     // Drops everything - StartMess of 2008. Death silences the board.
     procedure Clear;
@@ -132,11 +132,11 @@ const
   BigMessageY = 150;
 
 constructor TMessageBoard.Create(const AFont: TMoonFont;
-  AScreenWidth: Integer);
+  AFrameWidth: Integer);
 begin
   inherited Create;
   FFont := AFont;
-  FScreenWidth := AScreenWidth;
+  FFrameWidth := AFrameWidth;
 end;
 
 procedure TMessageBoard.Clear;
@@ -305,7 +305,7 @@ procedure TMessageBoard.DrawBig;
 begin
   if FBigTicksLeft > 0 then
     FFont.DrawBig(FBigText,
-      (FScreenWidth - FFont.BigTextWidth(FBigText)) / 2, BigMessageY);
+      (FFrameWidth - FFont.BigTextWidth(FBigText)) / 2, BigMessageY);
 end;
 
 end.
