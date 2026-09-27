@@ -188,6 +188,7 @@
         <DCCReference Include="Hud.Vitals.pas"/>
         <DCCReference Include="Game.Bonus.pas"/>
         <DCCReference Include="Game.Space.pas"/>
+        <DCCReference Include="Game.Henshin.pas"/>
         <DCCReference Include="Hud.Charge.pas"/>
         <DCCReference Include="Hud.Marks.pas"/>
         <DCCReference Include="Audio.pas"/>

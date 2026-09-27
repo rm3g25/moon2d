@@ -101,6 +101,11 @@ type
     procedure ClearPopups;
   end;
 
+const
+  // The standard life of a headline: bonuses, EVOLUTION, ICE FORM, the
+  // boss break (2008 passim)
+  BigMessageTicks = 100;
+
 implementation
 
 const

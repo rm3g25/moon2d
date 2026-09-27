@@ -42,6 +42,7 @@ uses
   Hud.Vitals in 'Hud.Vitals.pas',
   Game.Bonus in 'Game.Bonus.pas',
   Game.Space in 'Game.Space.pas',
+  Game.Henshin in 'Game.Henshin.pas',
   Hud.Charge in 'Hud.Charge.pas',
   Hud.Marks in 'Hud.Marks.pas',
   Audio in 'Audio.pas',
@@ -69,14 +70,6 @@ const
     ('shoot.wav', 'shootgun.wav', 'granade.wav', 'shoot.wav', 'shoot2.wav');
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
-  HenshinSoundFile = 'evolution.wav'; // the transformation sting (878/966)
-  // The waves ring platform.wav; bottle.wav is the barrel burst that
-  // doubles as the henshin flash (498) and the bonus explosion (592)
-  HenshinWaveSoundFile = 'platform.wav';
-  BottleSoundFile = 'bottle.wav';
-  // Synthesized tick for the countdown - see PORTING-NOTES for why this
-  // one is code-generated instead of downloaded
-  CountdownBeepFile = 'countdown.wav';
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
 
   BonusHudStartCol = -35.0; // the caption crawls in from off-screen...
@@ -115,11 +108,8 @@ const
   // deathText times live in monst.pas, not yet on hand -
   // TODO: verify against monst.pas (tracked: part 2 review)
   TickerDeathTextTicks = 125;
-  BigMessageTicks = 100;     // bonuses, EVOLUTION, boss break (passim)
   BigTitleTicks = 200;       // level title splash (1682)
   TickerStreakTicks = 200;   // kill-streak bonus captions (837/849/860)
-  HenshinRegenTicks = 100;   // 'регенерировала здоровье +1' (457 et al.)
-  HenshinPerkTicks = 300;    // 'ICE FORM: прыжок +25%' (501)
 
   // Damage bookkeeping, values verbatim 2008:
   HurtMercyTicks = 50;      // 'permission': mercy window after any hit
@@ -177,32 +167,12 @@ type
   // gsEnding: the campaign-end screen - mouse-only exit (part 5.4).
   TGameState = (gsMenu, gsIntro, gsPlaying, gsEnding);
 
-  // One healing wave of the transformation cinematic
-  THenshinWave = record
-    AtTick: Integer;
-    Bullets: Integer;
-    RadiusX: Integer;
-  end;
-
 const
-  // The five converging waves of moon.dpr 453-497: the ring tightens
-  // (40 -> 5) while the fragment count grows (50 -> 100) - the ice
-  // closing in on the hero. Each wave heals +1 and rings platform.wav.
-  HenshinWaves: array [0..4] of THenshinWave = (
-    (AtTick: 20; Bullets: 50; RadiusX: 40),
-    (AtTick: 40; Bullets: 60; RadiusX: 30),
-    (AtTick: 60; Bullets: 70; RadiusX: 20),
-    (AtTick: 80; Bullets: 80; RadiusX: 10),
-    (AtTick: 100; Bullets: 100; RadiusX: 5));
-  HenshinFlashTick = 135;  // bottle.wav teaser before the finale (498)
-  HenshinFinishTick = 140; // the suit goes on (499-513)
-
   // Screen-shake doses (2026 addition), in trauma shares - see
   // Render.Shake for the meter. One exploder is a nudge, a chain of
-  // them climbs; the boss's two blasts open at the ceiling
+  // them climbs; the boss's two blasts open at the ceiling. The
+  // ceremony's own doses live with it in Game.Henshin.
   ExploderTrauma = 0.4;       // barrel, tank, mount, platform
-  HenshinWaveTrauma = 0.4;    // each of the five rings
-  HenshinFinishTrauma = 0.7;  // the suit-on fan
   BossBlastTrauma = 1.0;      // rage wave and the death double fan
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
   BonusFireRainTrauma = 0.5;  // 768 embers hitting the sky at once
@@ -213,17 +183,6 @@ const
   EndingAuthorRow = 14;    // clickable big lines, centered
   EndingMenuRow = 17;
   EndingClickRows = 2;     // click band height of a big line
-
-  // Pre-henshin countdown (author's 2026 addition, not in the original):
-  // 3..2..1 in screen center telegraphs the ceremony - one second of
-  // logic per digit, three seconds to run INTO the monster crowd (ring
-  // fragments are live hero bullets, positioning is a damage buff)
-  CountdownStartValue = 3;
-  CountdownTicksPerDigit = 33;      // = one second at tickRate 33
-  CountdownFadeStartRatio = 0.6;    // opaque for 60%, dissolves over 40%
-  CountdownMinGlyphHeight = 24.0;   // birth size, game units
-  CountdownMaxGlyphHeight = 132.0;  // size at the moment it dies
-  CountdownCenterY = 168.0;         // above true center: clears hero/HUD
 
 type
   TMoonGame = class(TGameApp)
@@ -281,15 +240,7 @@ type
     // indexed in step with FLevel.Entities.
     FTriggerFired: TArray<Boolean>;
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
-    // The transformation cinematic ('Henshin'/'HenshinTime' of 2008):
-    // a tick counter walks the wave schedule while the game keeps running
-    FHenshinActive: Boolean;
-    FHenshinTick: Integer;
-    // The 3..2..1 prelude; 0 = idle. Carries the AtTick for the
-    // cinematic it hands over to when the last digit dissolves.
-    FCountdownDigit: Integer;
-    FCountdownTick: Integer;
-    FCountdownHenshinAtTick: Integer;
+    FHenshin: THenshin; // the ceremony; reborn with the hero
     // The bonus slot: one reward at a time, spent by right click.
     // The HUD caption position lives here because it belongs to the
     // slot's lifetime, not to the drawing code.
@@ -357,15 +308,6 @@ type
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
     procedure PreloadSounds;
-    // AAtTick 0 = the boss path; 30 skips the first wave - the gravel
-    // trial of level 2 starts mid-sequence (moon.dpr 969), wired later
-    procedure StartHenshinCountdown(AAtTick: Integer);
-    procedure TickCountdown;
-    procedure DrawCountdown(AAlpha: Double);
-    procedure StartHenshin(AAtTick: Integer);
-    procedure TickHenshin;
-    procedure FinishHenshin;
-    procedure RemoveIceForm;
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -439,6 +381,7 @@ begin
   FFont.Free;
   FVitals.Free;
   FCharge.Free;
+  FHenshin.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -513,6 +456,8 @@ begin
   FTiles := TTileScreenRenderer.Create(FSprites, FTileCache,
     FBackgroundCache, FLevel);
   FHero := THero.Create(FRenderer, FLevel);
+  FreeAndNil(FHenshin);
+  FHenshin := THenshin.Create(FHero, FAudio, FMessages, FShake, CureHero);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
@@ -531,10 +476,6 @@ begin
   FScore := 0;
   FKillStreak := 0;
   FStreakBonusCount := 0;
-  FCountdownDigit := 0;
-  FCountdownTick := 0;
-  FHenshinActive := False;
-  FHenshinTick := 0;
   FBonus := bkNone;
   FBonusActivateQueued := False;
   FTriggerFired := nil;
@@ -840,7 +781,7 @@ begin
       FGravelLeft := Triggers.GravelQuota.ForGrade(FDifficulty);
       FToNextGravel := GravelFirstWaveTicks;
       FGravelScreen := FHero.Screen;
-      StartHenshin(30);
+      FHenshin.Start(30);
     end;
   end;
 end;
@@ -875,7 +816,7 @@ begin
     // write only split off a copy nobody collided with.
     if FHero.HeroForm <> hfNormal then
       FAudio.Play(BottleSoundFile);
-    RemoveIceForm;
+    FHenshin.RemoveIceForm;
   end;
 end;
 
@@ -918,10 +859,7 @@ procedure TMoonGame.PreloadSounds;
 begin
   FAudio.Load(PainSoundFile);
   FAudio.Load(PitSoundFile);
-  FAudio.Load(HenshinSoundFile);
-  FAudio.Load(HenshinWaveSoundFile);
-  FAudio.Load(BottleSoundFile);
-  FAudio.Load(CountdownBeepFile);
+  FAudio.Load(BottleSoundFile); // the ceremony loads its own; the bonus's
   FAudio.Load(BonusSoundFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
@@ -937,123 +875,6 @@ end;
 // boss keeps shooting through the ceremony, and the ring fragments are
 // honest hero bullets that can wound him back. That is the 2008 deal.
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// COUNTDOWN - the 3..2..1 prelude to the transformation. Each digit is
-// born small in screen center, grows for its whole second of life and
-// dissolves near the peak; when the last one dies, the cinematic starts.
-// ---------------------------------------------------------------------------
-
-procedure TMoonGame.StartHenshinCountdown(AAtTick: Integer);
-begin
-  FCountdownDigit := CountdownStartValue;
-  FCountdownTick := 0;
-  FCountdownHenshinAtTick := AAtTick;
-  FAudio.Play(CountdownBeepFile); // '3' announces itself too
-end;
-
-procedure TMoonGame.TickCountdown;
-begin
-  if FCountdownDigit = 0 then
-    Exit;
-  Inc(FCountdownTick);
-  if FCountdownTick < CountdownTicksPerDigit then
-    Exit;
-
-  FCountdownTick := 0;
-  Dec(FCountdownDigit);
-  if FCountdownDigit = 0 then
-    StartHenshin(FCountdownHenshinAtTick) // EVOLUTION shout replaces the tick
-  else
-    FAudio.Play(CountdownBeepFile);
-end;
-
-procedure TMoonGame.DrawCountdown(AAlpha: Double);
-begin
-  if FCountdownDigit = 0 then
-    Exit;
-
-  // Fractional progress through the digit's life: logic runs at 33 Hz,
-  // rendering at ~164 fps - without the timestep alpha the growth would
-  // stutter in 3.3-unit jumps (the marquee lesson of part 2). Stays
-  // below 1.0 by construction: the tick resets at the boundary and the
-  // timestep alpha never reaches a full tick.
-  var Progress := (FCountdownTick + AAlpha) / CountdownTicksPerDigit;
-  var GlyphHeight := CountdownMinGlyphHeight +
-    (CountdownMaxGlyphHeight - CountdownMinGlyphHeight) * Progress;
-
-  var Opacity := 255;
-  if Progress > CountdownFadeStartRatio then
-    Opacity := Round(255 * (1 - (Progress - CountdownFadeStartRatio) /
-      (1 - CountdownFadeStartRatio)));
-
-  var Digit := IntToStr(FCountdownDigit);
-  FFont.DrawScaled(Digit,
-    (FrameWidth - FFont.ScaledTextWidth(Digit, GlyphHeight)) / 2,
-    CountdownCenterY - GlyphHeight / 2,
-    GlyphHeight, Opacity);
-end;
-
-procedure TMoonGame.StartHenshin(AAtTick: Integer);
-begin
-  FMessages.ShowBig(Tr(SEvolution), BigMessageTicks);
-  // The sting fires twice back to back (878-879 / 966-967) - a poor
-  // man's volume boost, kept verbatim
-  FAudio.Play(HenshinSoundFile);
-  FAudio.Play(HenshinSoundFile);
-  FHenshinActive := True;
-  FHenshinTick := AAtTick;
-end;
-
-procedure TMoonGame.TickHenshin;
-begin
-  if not FHenshinActive then
-    Exit;
-  Inc(FHenshinTick);
-
-  for var Wave in HenshinWaves do
-    if FHenshinTick = Wave.AtTick then
-    begin
-      FAudio.Play(HenshinWaveSoundFile);
-      CureHero;
-      FMessages.AddTicker(Tr(SIceRegen), HenshinRegenTicks);
-      FHero.Bullets.SpawnConvergingRing(FHero.X, FHero.Y,
-        Wave.Bullets, Wave.RadiusX);
-      FShake.AddTrauma(HenshinWaveTrauma);
-    end;
-
-  if FHenshinTick = HenshinFlashTick then
-    FAudio.Play(BottleSoundFile);
-  if FHenshinTick = HenshinFinishTick then
-    FinishHenshin;
-end;
-
-procedure TMoonGame.FinishHenshin;
-const
-  FinishFan: TFanShape = (Rows: 12; Cols: 42; BaseSpeed: 6; SpeedSpread: 3);
-begin
-  FMessages.AddTicker(Tr(SIceFormPerk), HenshinPerkTicks);
-  CureHero;
-  FHero.HeroForm := hfIce;
-  FAudio.Play(BottleSoundFile);
-  FHero.Bullets.SpawnFan(FHero.X, FHero.Y, FinishFan);
-  FShake.AddTrauma(HenshinFinishTrauma);
-  FMessages.ShowBig(Tr(SIceForm), BigMessageTicks);
-  FHenshinActive := False;
-  FHenshinTick := 0;
-end;
-
-procedure TMoonGame.RemoveIceForm;
-const
-  ShatterFan: TFanShape = (Rows: 12; Cols: 16; BaseSpeed: 4; SpeedSpread: 3);
-begin
-  if FHero.HeroForm = hfNormal then
-    Exit;
-  // Verbatim 940-947: the suit shatters with a fan but NO sound of its
-  // own - the victory music covers the moment (2008 played nothing here)
-  FHero.HeroForm := hfNormal;
-  FHero.Bullets.SpawnFan(FHero.X, FHero.Y, ShatterFan);
-end;
 
 // Original cured up to 15; we agreed on a modest 10
 procedure TMoonGame.CureHero;
@@ -1326,14 +1147,9 @@ begin
   FKillStreak := 0;
   FStreakBonusCount := 0;
   FMessages.Clear;
-  // A fresh boss means a fresh ceremony: the countdown, the cinematic
-  // and the ice form die with the hero (the new TMonster resets its
+  // A fresh boss means a fresh ceremony (the new TMonster resets its
   // henshin flag too)
-  FCountdownDigit := 0;
-  FCountdownTick := 0;
-  FHenshinActive := False;
-  FHenshinTick := 0;
-  FHero.HeroForm := hfNormal;
+  FHenshin.Reset;
   // Score burns on restart (anti-farm), so the unspent reward burns too
   FBonus := bkNone;
   FBonusActivateQueued := False;
@@ -1442,7 +1258,7 @@ begin
           // The boss dropped below 2/3 - three seconds of countdown,
           // then the cinematic; the ice form arrives 140 ticks of
           // waves after that
-          StartHenshinCountdown(0);
+          FHenshin.StartCountdown(0);
         meBossRage:
           begin
             // 'Сменить музыку' of 2008 (868-869): the rage track loops
@@ -1460,7 +1276,7 @@ begin
             // The suit comes off with a shatter, the victory track plays
             // over the wreckage, and 'ToEndLev := 400' (949) starts the
             // walk-out timer - Update loads the next level when it dries
-            RemoveIceForm;
+            FHenshin.RemoveIceForm;
             FAudio.PlayMusic(VictoryMusicFile, mmOnce);
             FEndLevelTimer := LevelEndLingerTicks;
           end;
@@ -1500,11 +1316,9 @@ begin
       Exit;
     end;
   end;
-  // The prelude and the cinematic count in the same breath as the 2008
-  // timer did (450): they keep ticking even over the hero's corpse -
-  // restart resets both
-  TickCountdown;
-  TickHenshin;
+  // The ceremony counts in the same breath as the 2008 timer did (450):
+  // it keeps ticking even over the hero's corpse - restart resets it
+  FHenshin.Tick;
 
   // Enough points on the meter and an empty slot: the roulette spins (531)
   if (FScore >= BonusCost) and (FBonus = bkNone) then
@@ -1599,7 +1413,8 @@ begin
         FVitals.Draw;
         FCharge.Draw;
         DrawMessages(AAlpha);
-        DrawCountdown(AAlpha); // topmost: the ceremony outranks the news
+        // Topmost: the ceremony outranks the news
+        FHenshin.DrawCountdown(FFont, AAlpha);
       end;
   end;
 
