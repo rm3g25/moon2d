@@ -68,6 +68,11 @@ const
   SdlBlendModeBlend = 1; // alpha blending: dst = src*a + dst*(1-a)
   SdlBlendModeAdd = 2; // additive: dst = src*a + dst - the HUD's glints
 
+  // SDL_ScaleMode (2.0.12+): per-texture filtering, over the scale
+  // quality hint the texture was created under
+  SdlScaleModeNearest = 0;
+  SdlScaleModeLinear = 1;
+
   // Scancodes (physical keys, layout-independent)
   SdlScancodeReturn = 40;
   SdlScancodeEscape = 41;
@@ -283,6 +288,12 @@ function SDL_SetTextureBlendMode(ATexture: PSdlTexture;
 function SDL_SetTextureAlphaMod(ATexture: PSdlTexture;
   AAlpha: UInt8): Integer; cdecl;
   external SdlLib name 'SDL_SetTextureAlphaMod';
+function SDL_SetTextureColorMod(ATexture: PSdlTexture;
+  AR, AG, AB: UInt8): Integer; cdecl;
+  external SdlLib name 'SDL_SetTextureColorMod';
+function SDL_SetTextureScaleMode(ATexture: PSdlTexture;
+  AScaleMode: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_SetTextureScaleMode';
 function SDL_CreateTextureFromSurface(ARenderer: PSdlRenderer;
   ASurface: PSdlSurface): PSdlTexture; cdecl;
   external SdlLib name 'SDL_CreateTextureFromSurface';

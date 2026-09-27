@@ -10,12 +10,12 @@
   from the same font metrics that draw the captions - what you see is
   what you click.
 
-  The scenery is verbatim: 350 stars in eight speed classes crawling
-  right, the full moon drifting left on a random diagonal, the logo
-  ghosted at 130/255 alpha. All 2008 NDC geometry is converted once into
-  512x384 game units (1 NDC-x = 256 units, 1 NDC-y = 192 units) and
-  frozen as constants - including the 4:3 stretch that made the moon
-  slightly wider than tall. That IS the moon this game always had.
+  The moon drifting left on a random diagonal and the logo ghosted at
+  130/255 alpha are verbatim 2008; the stars are drawn (Menu.Starfield).
+  The 2008 NDC geometry is converted once into 512x384 game units
+  (1 NDC-x = 256 units, 1 NDC-y = 192 units) and frozen as constants -
+  including the 4:3 stretch that made the moon slightly wider than tall.
+  That IS the moon this game always had.
 
   The menu produces TMenuResult commands; it never touches the game -
   the composition root (Moon2D.dpr) decides what starting a level means.
@@ -30,7 +30,7 @@ interface
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config, Game.Space,
-  Localization, Game.Version;
+  Localization, Game.Version, Menu.Starfield;
 
 type
   EMenuError = class(Exception);
@@ -75,18 +75,6 @@ type
     Difficulty: TDifficulty; // meaningful for iaSetDifficulty only
   end;
 
-  // One background star, verbatim TStar of MenuPic.pas converted to game
-  // units. Kind 0 stars stand still - the 2008 parallax at its cheapest.
-  // The texture is resolved once at init: 350 stars at render rate would
-  // otherwise burn a string format + dictionary lookup per star per frame.
-  TStar = record
-    Kind: Integer;      // 0..7: speed class AND sprite index - 1
-    X, Y: Double;       // game units
-    Speed: Double;      // units per logic tick, rightward
-    Width, Height: Double;
-    Texture: PSdlTexture;
-  end;
-
   // The drifting moon. Lives in the 2008 "sdvig" space (+-500 = one
   // half-screen) because the respawn thresholds are calibrated in it;
   // converted to units only at draw time.
@@ -102,12 +90,12 @@ type
     FRenderer: PSdlRenderer;
     FSprites: TSpriteRenderer;
     FFont: TMoonFont;
-    FCache: TSpriteCache; // color-keyed: star sprites + cursor frames
+    FCache: TSpriteCache; // color-keyed: cursor frames
     FSpriteSet: TSpriteSet; // attached, not owned; nil = folder era
     FSkyTexture: PSdlTexture;
     FMoonTexture: PSdlTexture;
     FLogoTexture: PSdlTexture;
-    FStars: TArray<TStar>;
+    FStarfield: TStarfield;
     FMoon: TMoonDrift;
     FLevels: TArray<TLevelChoice>;
     FScreen: TMenuScreen;
@@ -126,7 +114,6 @@ type
     function LoadOpaqueTexture(const AFileName: string): PSdlTexture;
     function LoadThresholdTexture(const AFileName: string;
       AThreshold, AOpaqueAlpha: Byte): PSdlTexture;
-    procedure InitStars;
     procedure ShowScreen(AScreen: TMenuScreen);
     procedure AddItem(const ACaption: string; AAction: TItemAction;
       const ALevelFile: string = '');
@@ -197,7 +184,7 @@ resourcestring
 const
   // 2008 drew the menu in GL normalized device coords over the whole
   // window; the conversion is the same one Render.Font froze. These
-  // size the 2008 quads (moon, logo, stars); positions and spans go by
+  // size the 2008 quads (moon, logo); positions and spans go by
   // the frame, which the wide screen will grow past the 2008 window.
   UnitsPerNdcX = 256.0; // 2.0 NDC = 512 game units
   UnitsPerNdcY = 192.0; // 2.0 NDC = 384 game units
@@ -209,22 +196,6 @@ const
   LogoAlphaThreshold = 15;
   MoonAlpha = 255;   // fully solid disc
   LogoAlpha = 130;   // the 2008 logo is a ghost over the sky - verbatim
-  StarFileFmt = 'Stars\%d.png';  // 1..10 on disk
-
-  StarCount = 350;
-  // Random(8) of 2008: star sprites 9 and 10 are loaded but never fly.
-  // Kept verbatim - they are the two understudies of this theater.
-  StarKindCount = 8;
-  StarSpriteCount = 10;
-  // StarSpeed = StarType/7000 NDC/tick (MenuPic.StarsTimer)
-  StarSpeedPerKind = UnitsPerNdcX / 7000;
-  StarBaseSizeNdc = 0.03;        // PutStars quad: x .. x+0.03+razmer
-  // LoadStars rolled positions on a permille grid: Random(1000)/1000
-  StarPositionSteps = 1000;
-  // ...and size jitter as Random(100)/3000 - up to 0.033 NDC on top of
-  // the base. Kept as the exact same rolls, not a rescaled equivalent.
-  StarSizeJitterSteps = 100;
-  StarSizeJitterScale = 3000;
 
   // TMoonDrift passport, verbatim MoonTimer / LoadMoonTexture:
   MoonDriftSpeed = 1;        // drift units per tick, leftward
@@ -349,10 +320,6 @@ begin
     FCache.AttachSpriteSet(ASpriteSet);
   if AWeaponSet <> nil then
     FCache.AttachSpriteSet(AWeaponSet);
-  // Warm the star sprites - all ten, as 2008 loaded them (see
-  // StarKindCount for why two of them never take the stage)
-  for var i := 1 to StarSpriteCount do
-    FCache.Get(Format(StarFileFmt, [i]));
 
   FSkyTexture := LoadOpaqueTexture(SkyFile);
   FMoonTexture := LoadThresholdTexture(MoonFile, MoonAlphaThreshold,
@@ -369,7 +336,7 @@ begin
   // yellow box must agree with it from the very first frame
   FLanguage := CurrentLanguage;
 
-  InitStars;
+  FStarfield := TStarfield.Create(ARenderer, FrameWidth, FrameHeight);
   FMoon.Respawn;
   FMoon.DriftX := MoonFirstEntryX;
 
@@ -387,6 +354,7 @@ begin
     SDL_DestroyTexture(FMoonTexture);
   if Assigned(FSkyTexture) then
     SDL_DestroyTexture(FSkyTexture);
+  FStarfield.Free;
   FCache.Free;
   inherited;
 end;
@@ -455,28 +423,6 @@ begin
     SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
   finally
     SDL_FreeSurface(Surface);
-  end;
-end;
-
-// Verbatim LoadStars tail: position uniform over the screen, speed
-// proportional to the kind, size 0.03 NDC plus up to 0.033 of jitter.
-// The NDC quads were stretched 4:3 exactly like the moon - preserved.
-procedure TMoonMenu.InitStars;
-begin
-  SetLength(FStars, StarCount);
-  for var i := 0 to High(FStars) do
-  begin
-    var Star: TStar;
-    Star.Kind := Random(StarKindCount);
-    Star.X := Random(StarPositionSteps) / StarPositionSteps * FrameWidth;
-    Star.Y := Random(StarPositionSteps) / StarPositionSteps * FrameHeight;
-    Star.Speed := Star.Kind * StarSpeedPerKind;
-    var SizeNdc := StarBaseSizeNdc +
-      Random(StarSizeJitterSteps) / StarSizeJitterScale;
-    Star.Width := SizeNdc * UnitsPerNdcX;
-    Star.Height := SizeNdc * UnitsPerNdcY;
-    Star.Texture := FCache.Get(Format(StarFileFmt, [Star.Kind + 1]));
-    FStars[i] := Star;
   end;
 end;
 
@@ -772,12 +718,7 @@ procedure TMoonMenu.Tick;
 begin
   // MoonTimer + StarsTimer of 2008, fused: one heartbeat for the sky
   FMoon.Tick;
-  for var i := 0 to High(FStars) do
-  begin
-    FStars[i].X := FStars[i].X + FStars[i].Speed;
-    if FStars[i].X > FrameWidth then
-      FStars[i].X := 0; // wrapped to the left edge, as 2008 did
-  end;
+  FStarfield.Tick;
 end;
 
 procedure TMoonMenu.DrawSky(AAlpha: Double);
@@ -791,16 +732,7 @@ begin
   Dest.H := FrameHeight;
   SDL_RenderCopyF(FRenderer, FSkyTexture, nil, @Dest);
 
-  // Stars move fractions of a unit per tick - interpolate with the
-  // timestep alpha or the slow ones shimmer (the marquee lesson)
-  for var Star in FStars do
-  begin
-    Dest.X := Star.X + Star.Speed * AAlpha;
-    Dest.Y := Star.Y;
-    Dest.W := Star.Width;
-    Dest.H := Star.Height;
-    SDL_RenderCopyF(FRenderer, Star.Texture, nil, @Dest);
-  end;
+  FStarfield.Draw(AAlpha);
 
   // The moon slides MoonDriftSpeed per tick; the interpolation must use
   // the same constant or the two would silently disagree
