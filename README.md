@@ -77,10 +77,10 @@ and Russian. Eight more are coming. The tenth does not end on the Moon.
 | Use the held bonus | Right mouse button |
 | Pause / menu | Esc |
 
-The health monitor and the bonus charge in the top corners are 2026 work,
-drawn with rectangles rather than sprites. **2008 mode** in the menu puts the
-original's health orbs and score line back on the two original levels; every
-later level plays as the remake regardless.
+The health monitor and the bonus charge in the top corners, and the health
+rows over the hero and the monsters, are 2026 work, drawn with rectangles
+rather than sprites. The original's health orbs and score line live on in the
+2.5.3 "Farewell 2008" release, the last one with the 2008 mode.
 
 ---
 
@@ -176,7 +176,7 @@ bin/                   everything the game reads at runtime, and nothing else
   level1.json            geometry, backgrounds, entities, triggers, per screen
   level2.json
   monsters.json          movement, attacks, spawn tables, pickup effects
-  config.json            window, tick rate, difficulty, language, 2008 mode
+  config.json            window, tick rate, difficulty, language
   lang/                  en.json, ru.json
   sprites/               *.mset containers: manifest + packed frames, one file
                          per subject - a monster, a tile theme, the hero,
