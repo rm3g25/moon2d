@@ -92,11 +92,11 @@ const
   DensityArea = 10000.0; // square game units
 
   StarLayers: array [0..2] of TStarLayer = (
-    (Density: 14.0; Speed: 0.02; Size: (Min: 1.8; Max: 2.6);
+    (Density: 14.0; Speed: 0.06; Size: (Min: 1.8; Max: 2.6);
       Brightness: (Min: 0.35; Max: 0.8); FlareShare: 0.0),
-    (Density: 5.0; Speed: 0.06; Size: (Min: 2.6; Max: 3.8);
+    (Density: 5.0; Speed: 0.12; Size: (Min: 2.6; Max: 3.8);
       Brightness: (Min: 0.6; Max: 1.0); FlareShare: 0.0),
-    (Density: 1.4; Speed: 0.14; Size: (Min: 3.6; Max: 5.0);
+    (Density: 1.4; Speed: 0.22; Size: (Min: 3.6; Max: 5.0);
       Brightness: (Min: 0.9; Max: 1.0); FlareShare: 0.25));
   FlareSize: TSpan = (Min: 12.0; Max: 17.0);
   // Raises the brightness roll: most stars of a layer sit near its dim
@@ -322,8 +322,8 @@ begin
     DrawStar(Star, AAlpha);
 end;
 
-// Interpolated with the timestep alpha: the far layer moves a fiftieth
-// of a unit per tick and would shimmer otherwise
+// Interpolated with the timestep alpha: the far layer moves a few
+// hundredths of a unit per tick and would shimmer otherwise
 procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double);
 var
   Dest: TSdlFRect;
