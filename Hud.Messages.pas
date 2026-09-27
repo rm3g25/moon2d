@@ -44,13 +44,6 @@ uses
   System.SysUtils, Render.Font;
 
 type
-  // Where the ticker stack and the marquee run. Both sit under the
-  // health display, and the two displays differ in height.
-  TTextLanes = record
-    MarqueeY: Single;
-    TickerTopY: Single;
-  end;
-
   TMessageBoard = class
   private
     type
@@ -75,7 +68,6 @@ type
     FMarqueeX: Double;
     FMarqueeActive: Boolean;
     FPopups: TArray<TScorePopup>;
-    FLanes: TTextLanes;
     procedure TickMarquee;
     procedure AgeTicker;
     procedure AgePopups;
@@ -107,14 +99,7 @@ type
     // Popups are positional: a screen transition strands them over the
     // wrong geometry, so the game wipes them alongside the bullets.
     procedure ClearPopups;
-
-    property Lanes: TTextLanes read FLanes write FLanes;
   end;
-
-const
-  // The 2008 icons stand 16 units tall, the heart monitor 32
-  LanesUnderIcons: TTextLanes = (MarqueeY: 24; TickerTopY: 36);
-  LanesUnderMonitor: TTextLanes = (MarqueeY: 40; TickerTopY: 52);
 
 implementation
 
@@ -124,13 +109,15 @@ const
   // Ticker lane: 2008 drew at column 2 from row 3 downward. Rows moved
   // below the marquee lane so the two never overlap.
   TickerX = 2 * LegacyColumnWidth;
+  TickerTopY = 52;
   FadeTicks = 33; // ~1 s of fade-out at tickRate 33 (remake deviation)
 
   // Marquee: start and speed verbatim from moon.dpr. The lane is the
   // agreed deviation: 2008 ran it at row 2 (y=19.2) UNDER the health
-  // display and it was hard to read; parked just below the display now.
+  // display and it was hard to read; parked just below the monitor now.
   MarqueeStartX = 41 * LegacyColumnWidth;  // RunningStringPos := 41
   MarqueeStepX = 0.15 * LegacyColumnWidth; // RunningStringPos - 0.15
+  MarqueeY = 40;
 
   // Score popups: mechanics verbatim moonmessage.pas (rise per tick,
   // hard vanish); the caller finally surfaced and testified.
@@ -150,7 +137,6 @@ begin
   inherited Create;
   FFont := AFont;
   FScreenWidth := AScreenWidth;
-  FLanes := LanesUnderMonitor;
 end;
 
 procedure TMessageBoard.Clear;
@@ -293,7 +279,7 @@ begin
 
     FFont.DrawSmall(FTicker[i].Text,
       TickerX - SlideColumns * LegacyColumnWidth,
-      FLanes.TickerTopY + i * SmallLineStep, Alpha);
+      TickerTopY + i * SmallLineStep, Alpha);
   end;
 end;
 
@@ -305,7 +291,7 @@ begin
   // current one: logic runs at 33 Hz, frames come much faster - without
   // this the line freezes for a few frames and lurches 2 units at once.
   FFont.DrawSmall(FMarqueeText,
-    FMarqueeX + MarqueeStepX * (1 - AAlpha), FLanes.MarqueeY);
+    FMarqueeX + MarqueeStepX * (1 - AAlpha), MarqueeY);
 end;
 
 procedure TMessageBoard.DrawPopups(AAlpha: Double);

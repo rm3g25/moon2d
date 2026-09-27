@@ -22,7 +22,7 @@ unit Hud.Vitals;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw, Hud.Health;
+  Sdl2.Core, Hud.Draw;
 
 const
   // A full base row. Every point above it is bonus; a difficulty may
@@ -30,7 +30,7 @@ const
   HealthyHealth = 5;
 
 type
-  THudVitals = class(THealthHud)
+  THudVitals = class
   private const
     TraceSamples = 88; // one sample per game unit of trace width
   private
@@ -71,9 +71,10 @@ type
     constructor Create(ARenderer: PSdlRenderer);
     destructor Destroy; override;
 
-    // A drop or a rise against the last call is what the monitor animates
-    procedure Tick(AHealth: Integer; AInvulnerable: Boolean); override;
-    procedure Draw; override;
+    // Once per logic tick. The health is the hero's as of now; a drop
+    // or a rise against the last call is what the monitor animates.
+    procedure Tick(AHealth: Integer; AInvulnerable: Boolean);
+    procedure Draw;
   end;
 
 implementation

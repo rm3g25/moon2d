@@ -67,7 +67,6 @@ const
   SStreakSmallInvincible = 'streakSmallInvincible';
   SStreakBigWarGod = 'streakBigWarGod';
   SStreakSmallWarGod = 'streakSmallWarGod';
-  SScoreFmt = 'scoreFmt';
   SPressAnyKey = 'pressAnyKey';
   SEvolution = 'evolution';
   SIceForm = 'iceForm';
@@ -106,10 +105,6 @@ const
   // monsters were reborn per screen - ours live per level (deviation)
   SDiffHintLive = 'diffHintLive';
   SDiffHintIdle = 'diffHintIdle';
-  // Same colon shape as SDifficultyFmt; the state word follows
-  SEraFmt = 'eraFmt';
-  SEraOn = 'eraOn';
-  SEraOff = 'eraOff';
   SCreditsTitle = 'creditsTitle';
   SCreditsDone = 'creditsDone';
   SQuitTitle = 'quitTitle';
@@ -181,13 +176,13 @@ const
     SEndingLine5, SEndingAuthor, SEndingMenu, SHitByBullet, SHurtByMonster,
     SStreakBigTen, SStreakSmallTen, SStreakBigInvincible,
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,
-    SScoreFmt, SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,
+    SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
     SBonusAwardFmt, SBrokeThrough, SBonusHudFmt, SBonusHudHint,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyFmt, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive, SDiffHintIdle,
-    SEraFmt, SEraOn, SEraOff, SCreditsTitle, SCreditsDone, SQuitTitle, SYes, SNo, SLogoCaption,
+    SCreditsTitle, SCreditsDone, SQuitTitle, SYes, SNo, SLogoCaption,
     SCreditsLine1, SCreditsLine2, SCreditsLine3, SCreditsLine4];
 
 var

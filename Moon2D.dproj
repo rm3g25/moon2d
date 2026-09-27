@@ -185,10 +185,8 @@
         <DCCReference Include="Render.Font.pas"/>
         <DCCReference Include="Hud.Messages.pas"/>
         <DCCReference Include="Hud.Draw.pas"/>
-        <DCCReference Include="Hud.Health.pas"/>
         <DCCReference Include="Hud.Vitals.pas"/>
         <DCCReference Include="Game.Bonus.pas"/>
-        <DCCReference Include="Hud.Score.pas"/>
         <DCCReference Include="Hud.Charge.pas"/>
         <DCCReference Include="Hud.Marks.pas"/>
         <DCCReference Include="Audio.pas"/>

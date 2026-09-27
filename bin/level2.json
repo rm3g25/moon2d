@@ -3,7 +3,6 @@
   "id": "level2",
   "title": "Уровень 2 - Туннели",
   "titleEn": "Level 2 - Tunnels",
-  "era2008": true,
   "assetsDir": "level2",
   "spriteSets": [
     "moon-surface",

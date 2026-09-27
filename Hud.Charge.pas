@@ -22,10 +22,10 @@ unit Hud.Charge;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw, Hud.Score, Game.Bonus;
+  Sdl2.Core, Hud.Draw, Game.Bonus;
 
 type
-  THudCharge = class(TScoreHud)
+  THudCharge = class
   private type
     TSpark = record
       X, Y, VX, VY: Single;
@@ -68,8 +68,10 @@ type
   public
     constructor Create(ARenderer: PSdlRenderer; AScreenWidth: Integer);
     destructor Destroy; override;
-    procedure Tick(AScore, AStreak: Integer; ABonus: TBonusKind); override;
-    procedure Draw; override;
+    // Once per logic tick: the score, the kill streak and the reward
+    // held (bkNone when the slot is empty), all as of now
+    procedure Tick(AScore, AStreak: Integer; ABonus: TBonusKind);
+    procedure Draw;
   end;
 
 implementation

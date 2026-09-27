@@ -9,7 +9,6 @@
   "game": {
     "tickRate": 33,
     "difficulty": "normal",
-    "language": "en",
-    "era": "2008"
+    "language": "en"
   }
 }

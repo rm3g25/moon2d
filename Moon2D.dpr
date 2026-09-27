@@ -39,10 +39,8 @@ uses
   Render.Font in 'Render.Font.pas',
   Hud.Messages in 'Hud.Messages.pas',
   Hud.Draw in 'Hud.Draw.pas',
-  Hud.Health in 'Hud.Health.pas',
   Hud.Vitals in 'Hud.Vitals.pas',
   Game.Bonus in 'Game.Bonus.pas',
-  Hud.Score in 'Hud.Score.pas',
   Hud.Charge in 'Hud.Charge.pas',
   Hud.Marks in 'Hud.Marks.pas',
   Audio in 'Audio.pas',
@@ -260,10 +258,9 @@ type
     // guaranteed walkable: the hero has just stood there.
     FCheckpointX, FCheckpointY: Double;
     FGameOverTimer: Integer; // ticks left of the death pause
-    FHealthHud: THealthHud; // reborn with the level: the era may differ
-    FScoreHud: TScoreHud;
-    FMarks: THudMarks; // remake only; nil in the 2008 mode
-    FEra: TEra; // the player's wish; LevelEra says what the level allows
+    FVitals: THudVitals; // the HUD is reborn with the level
+    FCharge: THudCharge;
+    FMarks: THudMarks;
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
@@ -331,8 +328,7 @@ type
     procedure ResolveMonsterContact;
     procedure RewardMonsterKill(const AMonster: TMonster);
     procedure DrainMonsterEvents;
-    function LevelEra: TEra;
-    procedure ApplyLevelEra;
+    procedure CreateHud;
     procedure HurtHero;
     procedure RestartLevel;
     function CrosshairFrame: Integer;
@@ -384,7 +380,7 @@ type
     constructor Create(const AMonsters: TMonsterRegistry;
       const ARenderer: PSdlRenderer; const AWindow: PSdlWindow;
       const ALevels: TArray<TLevelChoice>; AStartFullscreen: Boolean;
-      AStartDifficulty: TDifficulty; AStartEra: TEra);
+      AStartDifficulty: TDifficulty);
     destructor Destroy; override;
     procedure Update(ADeltaSeconds: Double); override;
     procedure Render(ARenderer: PSdlRenderer; AAlpha: Double); override;
@@ -397,7 +393,7 @@ type
 constructor TMoonGame.Create(const AMonsters: TMonsterRegistry;
   const ARenderer: PSdlRenderer; const AWindow: PSdlWindow;
   const ALevels: TArray<TLevelChoice>; AStartFullscreen: Boolean;
-  AStartDifficulty: TDifficulty; AStartEra: TEra);
+  AStartDifficulty: TDifficulty);
 begin
   inherited Create;
   FMonsters := AMonsters;
@@ -406,7 +402,6 @@ begin
   FFullscreen := AStartFullscreen;
   FLevels := ALevels;
   FDifficulty := AStartDifficulty;
-  FEra := AStartEra;
 
   // Level-independent subsystems live for the whole process; everything
   // bound to a particular level - including the tile cache, now that it
@@ -428,7 +423,6 @@ begin
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet);
   FMenu.Difficulty := FDifficulty;
-  FMenu.Era := FEra;
   FState := gsMenu;
   FResumeState := gsMenu;
   FAudio.PlayMusic(MenuMusicFile, mmLoop); // moon.ogg of 2008 (1857)
@@ -442,8 +436,8 @@ begin
   FShake.Free;
   FMessages.Free;
   FFont.Free;
-  FHealthHud.Free;
-  FScoreHud.Free;
+  FVitals.Free;
+  FCharge.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -520,7 +514,7 @@ begin
   FHero := THero.Create(FRenderer, FLevel);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
-  ApplyLevelEra;
+  CreateHud;
 
   FMonsterBullets.Clear;
   FMessages.Clear;
@@ -685,13 +679,6 @@ begin
         FDifficulty := AResult.Difficulty;
         SaveGameDifficulty(ConfigFileName, FDifficulty);
       end;
-    mcSetEra:
-      begin
-        FEra := AResult.Era;
-        SaveGameEra(ConfigFileName, FEra);
-        if Assigned(FLevel) then
-          ApplyLevelEra; // mid-game: the resumed screen already wears it
-      end;
     mcSetLanguage:
       begin
         // Dictionary first, THEN the menu: the Language setter rebuilds
@@ -706,37 +693,16 @@ begin
   end;
 end;
 
-// The 2008 mode is a wish; a level drawn after 2008 has nothing to
-// show for it and plays as the remake whatever the wish
-function TMoonGame.LevelEra: TEra;
+// A new level starts with a fresh HUD: no animation carried over from
+// the last one, the charge empty along with the score
+procedure TMoonGame.CreateHud;
 begin
-  if (FEra = era2008) and FLevel.SupportsEra2008 then
-    Result := era2008
-  else
-    Result := eraRemake;
-end;
-
-// The era on screen: the two corner displays, the health rows over the
-// figures and the text lanes. Runs when a level loads and again when the
-// menu flips the mode.
-procedure TMoonGame.ApplyLevelEra;
-begin
-  FreeAndNil(FHealthHud);
-  FreeAndNil(FScoreHud);
+  FreeAndNil(FVitals);
+  FreeAndNil(FCharge);
   FreeAndNil(FMarks);
-  if LevelEra = era2008 then
-  begin
-    FHealthHud := THealthIcons.Create(FRenderer, FSprites);
-    FScoreHud := TScoreText.Create(FFont, GameWidth);
-    FMessages.Lanes := LanesUnderIcons;
-  end
-  else
-  begin
-    FHealthHud := THudVitals.Create(FRenderer);
-    FScoreHud := THudCharge.Create(FRenderer, GameWidth);
-    FMarks := THudMarks.Create(FRenderer);
-    FMessages.Lanes := LanesUnderMonitor;
-  end;
+  FVitals := THudVitals.Create(FRenderer);
+  FCharge := THudCharge.Create(FRenderer, GameWidth);
+  FMarks := THudMarks.Create(FRenderer);
 end;
 
 // The hero has just landed on a new screen: pin the checkpoint (pits
@@ -1516,10 +1482,9 @@ begin
     Exit; // the farewell screen is static; only the mouse works there
 
   FMessages.Tick;
-  FHealthHud.Tick(FHeroHealth, FHurtCooldown > 0);
-  if FMarks <> nil then
-    FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
-  FScoreHud.Tick(FScore, FKillStreak, FBonus);
+  FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
+  FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
+  FCharge.Tick(FScore, FKillStreak, FBonus);
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
@@ -1626,13 +1591,12 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
-        if FMarks <> nil then
-          FMarks.Draw(FHero, FField, FShake.Offset(scHero),
-            FShake.Offset(scMonsters));
+        FMarks.Draw(FHero, FField, FShake.Offset(scHero),
+          FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
-        FHealthHud.Draw;
-        FScoreHud.Draw;
+        FVitals.Draw;
+        FCharge.Draw;
         DrawMessages(AAlpha);
         DrawCountdown(AAlpha); // topmost: the ceremony outranks the news
       end;
@@ -2010,7 +1974,7 @@ begin
     Host := TGameHost.Create(Config, 'Moon 2D ' + GameVersion);
     try
       Game := TMoonGame.Create(Monsters, Host.Renderer, Host.Window,
-        Levels, Config.Fullscreen, Config.Difficulty, Config.Era);
+        Levels, Config.Fullscreen, Config.Difficulty);
       try
         Host.Run(Game);
       finally

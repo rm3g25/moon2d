@@ -45,14 +45,13 @@ type
   // What the click asked the game to do. mcNone covers both a miss and
   // a navigation click that the menu resolved internally.
   TMenuCommand = (mcNone, mcStartLevel, mcResume, mcToggleFullscreen,
-    mcSetDifficulty, mcSetLanguage, mcSetEra, mcQuit);
+    mcSetDifficulty, mcSetLanguage, mcQuit);
 
   TMenuResult = record
     Command: TMenuCommand;
     LevelFile: string;        // meaningful for mcStartLevel only
     Difficulty: TDifficulty;  // meaningful for mcSetDifficulty only
     Language: TLanguage;      // meaningful for mcSetLanguage only
-    Era: TEra; // meaningful for mcSetEra only
   end;
 
   TMenuScreen = (msMain, msLevelSelect, msDifficulty, msCredits,
@@ -66,8 +65,8 @@ type
   // Menu-internal item actions; navigation ones resolve inside the menu,
   // the rest surface as TMenuCommand.
   TItemAction = (iaNewGame, iaResume, iaFullscreen, iaDifficulty,
-    iaSetDifficulty, iaToggleEra, iaCredits, iaAskQuit, iaBack,
-    iaStartLevel, iaConfirmQuit);
+    iaSetDifficulty, iaCredits, iaAskQuit, iaBack, iaStartLevel,
+    iaConfirmQuit);
 
   TMenuItem = record
     Caption: string;
@@ -117,14 +116,12 @@ type
     FMouseX, FMouseY: Integer;
     FHasActiveGame: Boolean;
     FDifficulty: TDifficulty; // display copy: caption + hint follow it
-    FEra: TEra; // display copy: the caption follows it
     // Owned flag textures per language; the yellow box marks FLanguage
     FFlagTextures: array [TLanguage] of PSdlTexture;
     FLanguage: TLanguage;
     FShowcase: TShowcaseKind;
     procedure SetHasActiveGame(AValue: Boolean);
     procedure SetDifficulty(AValue: TDifficulty);
-    procedure SetEra(AValue: TEra);
     procedure SetLanguage(AValue: TLanguage);
     function LoadOpaqueTexture(const AFileName: string): PSdlTexture;
     function LoadThresholdTexture(const AFileName: string;
@@ -180,7 +177,6 @@ type
       write SetHasActiveGame;
     property Difficulty: TDifficulty read FDifficulty
       write SetDifficulty;
-    property Era: TEra read FEra write SetEra;
     // Set by the composition root AFTER it swapped the dictionary -
     // the setter rebuilds the current screen's captions through Tr
     property Language: TLanguage read FLanguage write SetLanguage;
@@ -505,15 +501,6 @@ begin
     ShowMain; // the 'Сложность: ...' caption follows the value
 end;
 
-procedure TMoonMenu.SetEra(AValue: TEra);
-begin
-  if FEra = AValue then
-    Exit;
-  FEra := AValue;
-  if FScreen = msMain then
-    ShowMain; // the '2008 mode: ...' caption follows the value
-end;
-
 procedure TMoonMenu.SetLanguage(AValue: TLanguage);
 begin
   if FLanguage = AValue then
@@ -534,14 +521,6 @@ begin
   else
     Result := Tr(SDiffNormal);
   end;
-end;
-
-function EraName(AValue: TEra): string;
-begin
-  if AValue = era2008 then
-    Result := Tr(SEraOn)
-  else
-    Result := Tr(SEraOff);
 end;
 
 procedure TMoonMenu.AddItem(const ACaption: string; AAction: TItemAction;
@@ -597,7 +576,6 @@ begin
         // the current grade the way 'Сложность:Обычная' did (1291)
         AddItem(Format(Tr(SDifficultyFmt), [DifficultyName(FDifficulty)]),
           iaDifficulty);
-        AddItem(Format(Tr(SEraFmt), [EraName(FEra)]), iaToggleEra);
         AddItem(Tr(SCredits), iaCredits);
         AddItem(Tr(SQuit), iaAskQuit);
       end;
@@ -721,16 +699,6 @@ begin
         ShowMain;
         Result.Command := mcSetDifficulty;
         Result.Difficulty := AItem.Difficulty;
-      end;
-    iaToggleEra:
-      begin
-        if FEra = era2008 then
-          FEra := eraRemake
-        else
-          FEra := era2008;
-        ShowMain; // the caption flips in place; two states need no submenu
-        Result.Command := mcSetEra;
-        Result.Era := FEra;
       end;
     iaCredits:
       ShowScreen(msCredits);

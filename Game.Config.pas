@@ -25,11 +25,6 @@ type
   // - which dictionary file to read - is Localization's business.
   TLanguage = (lgEnglish, lgRussian);
 
-  // The 2008 mode: the original's health icons and text lanes on the
-  // levels drawn for them. Which levels those are is the level file's
-  // business; what the era MEANS on screen is the game's.
-  TEra = (eraRemake, era2008);
-
   TGameConfig = record
     WindowWidth: Integer;
     WindowHeight: Integer;
@@ -39,7 +34,6 @@ type
     TickRate: Integer; // fixed logic updates per second
     Difficulty: TDifficulty;
     Language: TLanguage;
-    Era: TEra;
     class function Defaults: TGameConfig; static;
   end;
 
@@ -52,8 +46,6 @@ const
   // Protocol ids for the "language" key of config.json AND the names of
   // the dictionary files (lang\en.json) - one vocabulary, two readers
   LanguageIds: array [TLanguage] of string = ('en', 'ru');
-  // Protocol ids for the "era" key of config.json
-  EraIds: array [TEra] of string = ('remake', '2008');
 
 // Reads AFileName; on any problem (absent file, broken JSON, unreadable
 // content, values of the wrong type) returns Defaults - configuration
@@ -70,9 +62,6 @@ procedure SaveGameDifficulty(const AFileName: string; AValue: TDifficulty);
 // click persists, a locked file loses only the memory of the choice.
 procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 
-// Same contract as SaveGameDifficulty, for the "era" key.
-procedure SaveGameEra(const AFileName: string; AValue: TEra);
-
 implementation
 
 uses
@@ -84,7 +73,6 @@ const
   GameSectionKey = 'game';
   DifficultyKey = 'difficulty';
   LanguageKey = 'language';
-  EraKey = 'era';
 
 class function TGameConfig.Defaults: TGameConfig;
 begin
@@ -103,7 +91,6 @@ begin
   Result.TickRate := 33;
   Result.Difficulty := dfNormal;
   Result.Language := lgEnglish; // the release speaks English first
-  Result.Era := eraRemake;
 end;
 
 // Deliberately lenient, in contrast to ParseGrades/GradeOf in
@@ -124,15 +111,6 @@ begin
     if SameText(AId, LanguageIds[Language]) then
       Exit(Language);
   Result := lgEnglish; // unknown or absent id - the safe default
-end;
-
-// Same lenient contract as DifficultyFromId.
-function EraFromId(const AId: string): TEra;
-begin
-  for var Era := Low(TEra) to High(TEra) do
-    if SameText(AId, EraIds[Era]) then
-      Exit(Era);
-  Result := eraRemake; // unknown or absent id - the safe default
 end;
 
 // Parses AFileName as a JSON object. nil on an absent file, broken
@@ -181,7 +159,6 @@ begin
           DifficultyFromId(Game.GetValue<string>(DifficultyKey, ''));
         Result.Language :=
           LanguageFromId(Game.GetValue<string>(LanguageKey, ''));
-        Result.Era := EraFromId(Game.GetValue<string>(EraKey, ''));
       end;
     finally
       Root.Free;
@@ -243,11 +220,6 @@ end;
 procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 begin
   SaveGameKey(AFileName, LanguageKey, LanguageIds[AValue]);
-end;
-
-procedure SaveGameEra(const AFileName: string; AValue: TEra);
-begin
-  SaveGameKey(AFileName, EraKey, EraIds[AValue]);
 end;
 
 end.
