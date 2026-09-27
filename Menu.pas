@@ -10,8 +10,8 @@
   from the same font metrics that draw the captions - what you see is
   what you click.
 
-  The moon drifting left on a random diagonal and the logo ghosted at
-  130/255 alpha are verbatim 2008; the stars are drawn (Menu.Starfield).
+  The moon drifting left on a random diagonal is verbatim 2008; the
+  stars are drawn (Menu.Starfield), the logo carries its own alpha.
   The 2008 NDC geometry is converted once into 512x384 game units
   (1 NDC-x = 256 units, 1 NDC-y = 192 units) and frozen as constants -
   including the 4:3 stretch that made the moon slightly wider than tall.
@@ -112,7 +112,7 @@ type
     procedure SetHasActiveGame(AValue: Boolean);
     procedure SetDifficulty(AValue: TDifficulty);
     procedure SetLanguage(AValue: TLanguage);
-    function LoadOpaqueTexture(const AFileName: string): PSdlTexture;
+    function LoadTexture(const AFileName: string): PSdlTexture;
     function LoadThresholdTexture(const AFileName: string;
       AThreshold, AOpaqueAlpha: Byte): PSdlTexture;
     procedure ShowScreen(AScreen: TMenuScreen);
@@ -195,11 +195,9 @@ const
   // tuning knob, and the stored pixels keep their dither
   SkyShade = 170;
   MoonFile = 'fullmoon.png';     // 256x256, black threshold < 33
-  LogoFile = 'logo.png';         // 256x256, threshold < 15, alpha 130
+  LogoFile = 'logo.png';         // 1024x512, soft alpha, opaque letters
   MoonAlphaThreshold = 33;
-  LogoAlphaThreshold = 15;
   MoonAlpha = 255;   // fully solid disc
-  LogoAlpha = 130;   // the 2008 logo is a ghost over the sky - verbatim
 
   // TMoonDrift passport, verbatim MoonTimer / LoadMoonTexture:
   MoonDriftSpeed = 1;        // drift units per tick, leftward
@@ -342,21 +340,22 @@ begin
   if AWeaponSet <> nil then
     FCache.AttachSpriteSet(AWeaponSet);
 
-  FSkyTexture := LoadOpaqueTexture(SkyFile);
+  FSkyTexture := LoadTexture(SkyFile);
   // Shrunk from the art's own size: nearest-neighbor would sparkle
   SDL_SetTextureScaleMode(FSkyTexture, SdlScaleModeLinear);
   SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
   FSkySource := CoverSource(FSkyTexture, FrameWidth / FrameHeight);
   FMoonTexture := LoadThresholdTexture(MoonFile, MoonAlphaThreshold,
     MoonAlpha);
-  FLogoTexture := LoadThresholdTexture(LogoFile, LogoAlphaThreshold,
-    LogoAlpha);
+  FLogoTexture := LoadTexture(LogoFile);
+  // Scaled to the window: nearest-neighbor would stair-step the letters
+  SDL_SetTextureScaleMode(FLogoTexture, SdlScaleModeLinear);
   // Flags are plain rectangles - no transparency, the color-key
   // machinery stays out (the Union Jack navy would survive the
   // threshold anyway, but why even ask)
   for var Language := Low(TLanguage) to High(TLanguage) do
     FFlagTextures[Language] :=
-      LoadOpaqueTexture(Format(FlagFileFmt, [LanguageIds[Language]]));
+      LoadTexture(Format(FlagFileFmt, [LanguageIds[Language]]));
   // The dictionary is already loaded by the composition root; the
   // yellow box must agree with it from the very first frame
   FLanguage := CurrentLanguage;
@@ -384,7 +383,9 @@ begin
   inherited;
 end;
 
-function TMoonMenu.LoadOpaqueTexture(const AFileName: string): PSdlTexture;
+// The art as stored: opaque art stays opaque, art with an alpha channel
+// comes out alpha-blended - SDL sets the blend mode for it
+function TMoonMenu.LoadTexture(const AFileName: string): PSdlTexture;
 var
   Surface: PSdlSurface;
 begin
@@ -405,7 +406,7 @@ end;
 // The 2008 loaders keyed out "black" by a per-channel THRESHOLD, not by
 // exact zero - the art has near-black dirt around the shapes, and an
 // exact color key would leave a dark halo. Same trick the font atlas
-// loader uses; AOpaqueAlpha < 255 reproduces the ghosted logo.
+// loader uses.
 function TMoonMenu.LoadThresholdTexture(const AFileName: string;
   AThreshold, AOpaqueAlpha: Byte): PSdlTexture;
 type
