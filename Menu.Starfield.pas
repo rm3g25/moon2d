@@ -8,7 +8,9 @@
 
   Three depth layers crawl right, each at its own speed. The star count
   of a layer is a density times the frame area: a wider frame gets more
-  stars, not stretched ones.
+  stars, not stretched ones. Draw takes a zoom about the frame center;
+  each layer answers with its share of it, the near layer with all, so
+  a dolly toward the sky reads as depth.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -33,6 +35,7 @@ type
     Speed: Single; // game units per tick, rightward
     Size: Single; // quad side, game units
     Brightness: Single; // 0..1
+    ZoomShare: Single; // of the frame zoom this star takes: near = 1
     Tint: TRgb;
     IsFlare: Boolean;
     Twinkle: TTwinkle;
@@ -44,13 +47,15 @@ type
     FPointTexture: PSdlTexture;
     FFlareTexture: PSdlTexture;
     FStars: TArray<TStar>;
-    FWidth: Single;
-    procedure DrawStar(const AStar: TStar; AAlpha: Double);
+    FWidth, FHeight: Single;
+    procedure DrawStar(const AStar: TStar; AAlpha: Double; AZoom: Single);
   public
     constructor Create(ARenderer: PSdlRenderer; AWidth, AHeight: Single);
     destructor Destroy; override;
     procedure Tick;
-    procedure Draw(AAlpha: Double);
+    // AZoom = 1 is the sky at rest; above it the frame center stays and
+    // the stars spread out from it
+    procedure Draw(AAlpha: Double; AZoom: Single);
   end;
 
 implementation
@@ -70,6 +75,7 @@ type
     Size: TSpan;
     Brightness: TSpan;
     FlareShare: Single;
+    ZoomShare: Single;
   end;
 
   TStarTint = record
@@ -86,11 +92,11 @@ const
 
   StarLayers: array [0..2] of TStarLayer = (
     (Density: 14.0; Speed: 0.06; Size: (Min: 1.8; Max: 2.6);
-      Brightness: (Min: 0.35; Max: 0.8); FlareShare: 0.0),
+      Brightness: (Min: 0.35; Max: 0.8); FlareShare: 0.0; ZoomShare: 0.4),
     (Density: 5.0; Speed: 0.12; Size: (Min: 2.6; Max: 3.8);
-      Brightness: (Min: 0.6; Max: 1.0); FlareShare: 0.0),
+      Brightness: (Min: 0.6; Max: 1.0); FlareShare: 0.0; ZoomShare: 0.7),
     (Density: 1.4; Speed: 0.22; Size: (Min: 3.6; Max: 5.0);
-      Brightness: (Min: 0.9; Max: 1.0); FlareShare: 0.25));
+      Brightness: (Min: 0.9; Max: 1.0); FlareShare: 0.25; ZoomShare: 1.0));
   FlareSize: TSpan = (Min: 12.0; Max: 17.0);
   // Raises the brightness roll: most stars of a layer sit near its dim
   // end, a few reach the bright one. Typed: Power has three overloads.
@@ -157,6 +163,7 @@ begin
   var BrightnessRoll: Single := ARandom.NextUnit;
   Result.Brightness :=
     ALayer.Brightness.At(Power(BrightnessRoll, BrightnessSkew));
+  Result.ZoomShare := ALayer.ZoomShare;
   Result.Tint := PickTint(ARandom);
   Result.IsFlare := ARandom.NextUnit < ALayer.FlareShare;
   if Result.IsFlare then
@@ -189,6 +196,7 @@ begin
   inherited Create;
   FRenderer := ARenderer;
   FWidth := AWidth;
+  FHeight := AHeight;
   FPointTexture := CreateGlowShape(ARenderer, gsPoint, PointTextureSide);
   FFlareTexture := CreateGlowShape(ARenderer, gsFlare, FlareTextureSide);
 
@@ -214,15 +222,16 @@ begin
     AdvanceStar(FStars[i], FWidth);
 end;
 
-procedure TStarfield.Draw(AAlpha: Double);
+procedure TStarfield.Draw(AAlpha: Double; AZoom: Single);
 begin
   for var Star in FStars do
-    DrawStar(Star, AAlpha);
+    DrawStar(Star, AAlpha, AZoom);
 end;
 
 // Interpolated with the timestep alpha: the far layer moves a few
 // hundredths of a unit per tick and would shimmer otherwise
-procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double);
+procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double;
+  AZoom: Single);
 begin
   var Texture := FPointTexture;
   if AStar.IsFlare then
@@ -231,8 +240,11 @@ begin
   var Phase := AStar.Twinkle.Phase + AStar.Twinkle.Step * AAlpha;
   var Dip := AStar.Twinkle.Depth * (0.5 + 0.5 * Sin(Phase));
   var Level := AStar.Brightness * (1 - Dip);
-  DrawGlow(FRenderer, Texture, AStar.X + AStar.Speed * AAlpha, AStar.Y,
-    AStar.Size, AStar.Tint, Level);
+  var Zoom := 1 + (AZoom - 1) * AStar.ZoomShare;
+  var CenterX := FWidth / 2 + (AStar.X + AStar.Speed * AAlpha - FWidth / 2) * Zoom;
+  var CenterY := FHeight / 2 + (AStar.Y - FHeight / 2) * Zoom;
+  DrawGlow(FRenderer, Texture, CenterX, CenterY, AStar.Size * Zoom,
+    AStar.Tint, Level);
 end;
 
 end.

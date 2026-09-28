@@ -12,7 +12,9 @@
 
   The moon drifting left on a random diagonal is verbatim 2008; the
   moon itself is a spinning globe (Menu.Globe), the stars are drawn
-  (Menu.Starfield), the logo sheds its own light (Menu.Logo). The 2008 NDC
+  (Menu.Starfield), the logo sheds its own light (Menu.Logo). Entering
+  a submenu dollies the sky in: nebula, stars and moon grow toward the
+  frame center, each by its depth; leaving dollies it back. The 2008 NDC
   geometry is converted once into 512x384 game units (1 NDC-x = 256
   units, 1 NDC-y = 192 units) and frozen as constants.
 
@@ -95,6 +97,10 @@ type
     FLogo: TMenuLogo;
     FStarfield: TStarfield;
     FBrush: THudBrush;
+    // The dolly: 0 = main menu, 1 = a submenu; Depth walks toward
+    // DepthTarget one step per tick, Draw eases it
+    FDepth: Single;
+    FDepthTarget: Single;
     FMoon: TMoonDrift;
     FLevels: TArray<TLevelChoice>;
     FScreen: TMenuScreen;
@@ -121,6 +127,8 @@ type
     function FlagRect(ALanguage: TLanguage): TSdlFRect;
     function TryHoveredFlag(out ALanguage: TLanguage): Boolean;
     function ExecuteItem(const AItem: TMenuItem): TMenuResult;
+    function DepthStep: Single;
+    function DrawDepth(AAlpha: Double): Single;
     procedure DrawLogo(AAlpha: Double);
     procedure DrawShowcaseLogo(AAlpha: Double);
     procedure DrawItems;
@@ -167,7 +175,7 @@ type
 implementation
 
 uses
-  Sdl2.Image;
+  System.Math, Sdl2.Image;
 
 // Every caption a player reads lives in lang\*.json now (part 6): the
 // S-keys moved to Localization, sites fetch them through Tr(). The
@@ -198,6 +206,13 @@ const
   MoonRespawnYSpread = 350;  // DriftY = Random(350) - 175
   MoonDeltaYSteps = 40;      // DeltaY = (Random(40) - 20) / 50
   MoonDeltaYScale = 50;
+
+  // The dolly into a submenu: how far each plane comes toward the eye
+  // at full depth, near to far, and how many ticks the ride takes
+  MoonZoom = 0.2;
+  StarZoom = 0.2; // the near layer; farther layers take their share
+  SkyZoom = 0.04;
+  DollyTicks = 26; // 0.8 s
 
   // The globe is round and sized by the frame's height, so it keeps its
   // share of the picture when the frame grows wide. The 2008 quad was
@@ -454,6 +469,10 @@ procedure TMoonMenu.ShowScreen(AScreen: TMenuScreen);
 begin
   FScreen := AScreen;
   FItems := nil;
+  if AScreen = msMain then
+    FDepthTarget := 0
+  else
+    FDepthTarget := 1;
   case AScreen of
     msMain:
       begin
@@ -673,31 +692,55 @@ begin
   FGlobe.Tick;
   FStarfield.Tick;
   FLogo.Tick;
+  FDepth := FDepth + DepthStep;
+end;
+
+// Toward the target, one tick's worth, never past it
+function TMoonMenu.DepthStep: Single;
+begin
+  Result := FDepthTarget - FDepth;
+  if Abs(Result) > 1 / DollyTicks then
+    Result := Sign(Result) / DollyTicks;
+end;
+
+// The depth of the frame being drawn: the walk interpolated, then eased
+// so the ride starts and stops softly
+function TMoonMenu.DrawDepth(AAlpha: Double): Single;
+begin
+  var Linear := FDepth + DepthStep * AAlpha;
+  Result := Linear * Linear * (3 - 2 * Linear);
 end;
 
 procedure TMoonMenu.DrawSky(AAlpha: Double);
 var
   Dest: TSdlFRect;
 begin
-  // Sky fills the frame edge to edge (PutSkyTexture quad -1..1)
-  Dest.X := 0;
-  Dest.Y := 0;
-  Dest.W := FrameWidth;
-  Dest.H := FrameHeight;
+  var Depth := DrawDepth(AAlpha);
+
+  // Sky fills the frame edge to edge (PutSkyTexture quad -1..1); the
+  // dolly grows the quad past the edges, the renderer clips it
+  var Zoom := 1 + SkyZoom * Depth;
+  Dest.W := FrameWidth * Zoom;
+  Dest.H := FrameHeight * Zoom;
+  Dest.X := (FrameWidth - Dest.W) / 2;
+  Dest.Y := (FrameHeight - Dest.H) / 2;
   SDL_RenderCopyF(FRenderer, FSkyTexture, @FSkySource, @Dest);
 
-  FStarfield.Draw(AAlpha);
+  FStarfield.Draw(AAlpha, 1 + StarZoom * Depth);
 
   // The moon slides MoonDriftSpeed per tick; the interpolation must use
-  // the same constant or the two would silently disagree
+  // the same constant or the two would silently disagree. Its drift
+  // grows with the zoom too: a closer moon crosses the frame faster.
+  Zoom := 1 + MoonZoom * Depth;
   var DriftX := FMoon.DriftX - MoonDriftSpeed * AAlpha;
   var DriftY := FMoon.DriftY + FMoon.DeltaY * AAlpha;
-  var CenterX := FrameWidth / 2 + DriftX * MoonUnitsPerDriftX;
-  var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY;
-  Dest.X := CenterX - MoonDiameter / 2;
-  Dest.Y := CenterY - MoonDiameter / 2;
-  Dest.W := MoonDiameter;
-  Dest.H := MoonDiameter;
+  var CenterX := FrameWidth / 2 + DriftX * MoonUnitsPerDriftX * Zoom;
+  var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY * Zoom;
+  var Diameter := MoonDiameter * Zoom;
+  Dest.X := CenterX - Diameter / 2;
+  Dest.Y := CenterY - Diameter / 2;
+  Dest.W := Diameter;
+  Dest.H := Diameter;
   FGlobe.Draw(Dest);
 end;
 
