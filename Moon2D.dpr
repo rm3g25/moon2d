@@ -47,6 +47,7 @@ uses
   Hud.Marks in 'Hud.Marks.pas',
   Audio in 'Audio.pas',
   Localization in 'Localization.pas',
+  Render.Glow in 'Render.Glow.pas',
   Menu.Starfield in 'Menu.Starfield.pas',
   Menu.Globe in 'Menu.Globe.pas',
   Menu in 'Menu.pas';

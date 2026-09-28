@@ -1,10 +1,10 @@
 ﻿{
   Menu.Starfield - the stars of the menu sky, drawn instead of loaded.
 
-  Two textures are generated at startup: a soft point for the ordinary
-  star and a four-spike flare for the rare bright one. Every star is one
-  of them, tinted and dimmed at draw time and added onto the sky, so the
-  art has no pixels to show at any resolution.
+  Two glow textures are made at startup (Render.Glow): a soft point for
+  the ordinary star and a four-spike flare for the rare bright one.
+  Every star is one of them, tinted and dimmed at draw time and added
+  onto the sky, so the art has no pixels to show at any resolution.
 
   Three depth layers crawl right, each at its own speed. The star count
   of a layer is a density times the frame area: a wider frame gets more
@@ -18,11 +18,9 @@ unit Menu.Starfield;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Hud.Draw;
+  Sdl2.Core, Hud.Draw;
 
 type
-  EStarfieldError = class(Exception);
-
   // Depth = 0 is a steady star
   TTwinkle = record
     Phase: Single; // radians
@@ -58,18 +56,13 @@ type
 implementation
 
 uses
-  System.Math;
-
-resourcestring
-  SStarTextureFailed = 'Cannot create a star texture: %s';
+  System.Math, Render.Glow;
 
 type
   TSpan = record
     Min, Max: Single;
     function At(AFraction: Single): Single;
   end;
-
-  TStarShape = (ssPoint, ssFlare);
 
   TStarLayer = record
     Density: Single; // stars per DensityArea of frame
@@ -120,107 +113,12 @@ const
   // Texture sides in pixels, close to the drawn size in window pixels:
   // linear filtering without mipmaps shimmers on a moving star when it
   // shrinks a texture more than about twice
-  StarTextureSides: array [TStarShape] of Integer = (8, 48);
-  // Shape metrics in half-sides: 1.0 = from the center to the edge
-  PointSigma = 0.3;
-  FlareCoreRadius = 0.07;
-  FlareHaloRadius = 0.28;
-  FlareHaloLevel = 0.22;
-  FlareSpikeWidth = 0.03;
-  FlareSpikeLevel = 0.55;
-
-// ---------------------------------------------------------------------------
-// Shapes
-// ---------------------------------------------------------------------------
+  PointTextureSide = 8;
+  FlareTextureSide = 48;
 
 function TSpan.At(AFraction: Single): Single;
 begin
   Result := Min + AFraction * (Max - Min);
-end;
-
-function PointAlpha(ADX, ADY: Single): Single;
-begin
-  Result := Exp(-(ADX * ADX + ADY * ADY) / (2 * PointSigma * PointSigma));
-end;
-
-// One spike along the X axis: thin across, fading toward the edge
-function SpikeAlpha(AAlong, AAcross: Single): Single;
-begin
-  var Reach: Single := 1 - Abs(AAlong);
-  if Reach <= 0 then
-    Exit(0);
-  var Fade := Reach * Reach * Reach;
-  Result := Exp(-Sqr(AAcross / FlareSpikeWidth)) * Fade;
-end;
-
-function FlareAlpha(ADX, ADY: Single): Single;
-begin
-  var Radius: Single := Sqrt(ADX * ADX + ADY * ADY);
-  Result := Exp(-Sqr(Radius / FlareCoreRadius)) + FlareSpikeLevel *
-    (SpikeAlpha(ADX, ADY) + SpikeAlpha(ADY, ADX));
-  if Radius < 1 then
-    Result := Result + FlareHaloLevel *
-      Exp(-Sqr(Radius / FlareHaloRadius)) * (1 - Radius);
-  if Result > 1 then
-    Result := 1;
-end;
-
-function ShapeAlpha(AShape: TStarShape; ADX, ADY: Single): Single;
-begin
-  case AShape of
-    ssPoint:
-      Result := PointAlpha(ADX, ADY);
-  else
-    Result := FlareAlpha(ADX, ADY);
-  end;
-end;
-
-// White pixels, the shape in alpha: the tint arrives per star as a
-// color mod, the brightness as an alpha mod
-procedure FillShape(ASurface: PSdlSurface; AShape: TStarShape);
-type
-  PPixelBytes = ^TPixelBytes;
-  TPixelBytes = array [0..3] of Byte; // R,G,B,A of SdlPixelFormatAbgr8888
-begin
-  var Half := ASurface.W / 2;
-  SDL_LockSurface(ASurface);
-  for var Row := 0 to ASurface.H - 1 do
-  begin
-    var Pixel := PPixelBytes(PByte(ASurface.Pixels) + Row * ASurface.Pitch);
-    for var Col := 0 to ASurface.W - 1 do
-    begin
-      var DX := (Col + 0.5 - Half) / Half;
-      var DY := (Row + 0.5 - Half) / Half;
-      Pixel[0] := 255;
-      Pixel[1] := 255;
-      Pixel[2] := 255;
-      Pixel[3] := Round(255 * ShapeAlpha(AShape, DX, DY));
-      Inc(Pixel);
-    end;
-  end;
-  SDL_UnlockSurface(ASurface);
-end;
-
-function CreateStarTexture(ARenderer: PSdlRenderer;
-  AShape: TStarShape): PSdlTexture;
-begin
-  var Side := StarTextureSides[AShape];
-  var Surface := SDL_CreateRGBSurfaceWithFormat(0, Side, Side, 32,
-    SdlPixelFormatAbgr8888);
-  if Surface = nil then
-    raise EStarfieldError.CreateFmt(SStarTextureFailed, [SdlErrorText]);
-  try
-    FillShape(Surface, AShape);
-    Result := SDL_CreateTextureFromSurface(ARenderer, Surface);
-    if Result = nil then
-      raise EStarfieldError.CreateFmt(SStarTextureFailed, [SdlErrorText]);
-  finally
-    SDL_FreeSurface(Surface);
-  end;
-  SDL_SetTextureBlendMode(Result, SdlBlendModeAdd);
-  // The game renders nearest-neighbor; a star must not turn into a
-  // square when it is scaled up to the window
-  SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
 end;
 
 function PickTint(var ARandom: TXorShift): TRgb;
@@ -291,8 +189,8 @@ begin
   inherited Create;
   FRenderer := ARenderer;
   FWidth := AWidth;
-  FPointTexture := CreateStarTexture(ARenderer, ssPoint);
-  FFlareTexture := CreateStarTexture(ARenderer, ssFlare);
+  FPointTexture := CreateGlowShape(ARenderer, gsPoint, PointTextureSide);
+  FFlareTexture := CreateGlowShape(ARenderer, gsFlare, FlareTextureSide);
 
   StarRandom.Seed := StarfieldSeed;
   var Area := AWidth * AHeight / DensityArea;
@@ -325,8 +223,6 @@ end;
 // Interpolated with the timestep alpha: the far layer moves a few
 // hundredths of a unit per tick and would shimmer otherwise
 procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double);
-var
-  Dest: TSdlFRect;
 begin
   var Texture := FPointTexture;
   if AStar.IsFlare then
@@ -335,14 +231,8 @@ begin
   var Phase := AStar.Twinkle.Phase + AStar.Twinkle.Step * AAlpha;
   var Dip := AStar.Twinkle.Depth * (0.5 + 0.5 * Sin(Phase));
   var Level := AStar.Brightness * (1 - Dip);
-  SDL_SetTextureColorMod(Texture, AStar.Tint.R, AStar.Tint.G, AStar.Tint.B);
-  SDL_SetTextureAlphaMod(Texture, Round(255 * Level));
-
-  Dest.X := AStar.X + AStar.Speed * AAlpha - AStar.Size / 2;
-  Dest.Y := AStar.Y - AStar.Size / 2;
-  Dest.W := AStar.Size;
-  Dest.H := AStar.Size;
-  SDL_RenderCopyF(FRenderer, Texture, nil, @Dest);
+  DrawGlow(FRenderer, Texture, AStar.X + AStar.Speed * AAlpha, AStar.Y,
+    AStar.Size, AStar.Tint, Level);
 end;
 
 end.
