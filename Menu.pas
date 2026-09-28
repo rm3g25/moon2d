@@ -248,7 +248,7 @@ const
   // The language flags (part 6.2): top-right corner of the main screen,
   // rightmost = highest TLanguage id. Files follow LanguageIds - a
   // third language later is one PNG plus one enum entry.
-  FlagFileFmt = 'flag_%s.png';   // 60x40 px art drawn into 30x20 units
+  FlagFileFmt = 'flag_%s.png';   // 240x160 px art drawn into 30x20 units
   FlagWidth = 30.0;
   FlagHeight = 20.0;
   FlagGap = 8.0;                 // air between the two flags
@@ -354,8 +354,12 @@ begin
   // machinery stays out (the Union Jack navy would survive the
   // threshold anyway, but why even ask)
   for var Language := Low(TLanguage) to High(TLanguage) do
+  begin
     FFlagTextures[Language] :=
       LoadTexture(Format(FlagFileFmt, [LanguageIds[Language]]));
+    // Shrunk to the window: nearest-neighbor would saw the diagonals
+    SDL_SetTextureScaleMode(FFlagTextures[Language], SdlScaleModeLinear);
+  end;
   // The dictionary is already loaded by the composition root; the
   // yellow box must agree with it from the very first frame
   FLanguage := CurrentLanguage;
