@@ -6,7 +6,8 @@
   brings its own glow. The alpha of the letters is shrunk, blurred wide
   and normalized into a glow texture (Render.Glow) that is added onto
   the sky beneath the letters; its tint is the letters' own hue at full
-  brightness. The halo breathes: a slow sine on its level.
+  brightness. The halo breathes: a slow sine on its level. Sparks
+  (Menu.Embers) drift off the outline of the letters.
 
   The halo reaches past the logo quad, as light does: Draw takes the
   letters' rectangle and spreads the halo around it by the same scale.
@@ -19,7 +20,7 @@ unit Menu.Logo;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Sprites.Sets, Hud.Draw;
+  System.SysUtils, Sdl2.Core, Sprites.Sets, Hud.Draw, Menu.Embers;
 
 type
   ELogoError = class(Exception);
@@ -30,6 +31,7 @@ type
     FLetters: PSdlTexture;
     FHalo: PSdlTexture;
     FHaloTint: TRgb;
+    FEmbers: TEmbers;
     FLettersWidth, FLettersHeight: Integer; // texels
     FPhase: Single; // radians of the breathing
     procedure BuildHalo(ASurface: PSdlSurface);
@@ -38,7 +40,8 @@ type
       const AFileName: string);
     destructor Destroy; override;
     procedure Tick;
-    // Letters into ADest, the halo beneath them and around
+    // Letters into ADest, the halo beneath them and around, the
+    // embers over everything
     procedure Draw(const ADest: TSdlFRect; AAlpha: Double);
   end;
 
@@ -175,6 +178,7 @@ begin
     try
       FHaloTint := InkTint(Surface);
       BuildHalo(Surface);
+      FEmbers := TEmbers.Create(ARenderer, Surface);
     finally
       SDL_UnlockSurface(Surface);
     end;
@@ -185,6 +189,7 @@ end;
 
 destructor TMenuLogo.Destroy;
 begin
+  FEmbers.Free;
   if Assigned(FHalo) then
     SDL_DestroyTexture(FHalo);
   if Assigned(FLetters) then
@@ -255,6 +260,7 @@ begin
   FPhase := FPhase + 2 * Pi / HaloBreathTicks;
   if FPhase > 2 * Pi then
     FPhase := FPhase - 2 * Pi;
+  FEmbers.Tick;
 end;
 
 procedure TMenuLogo.Draw(const ADest: TSdlFRect; AAlpha: Double);
@@ -274,6 +280,7 @@ begin
   DrawGlowRect(FRenderer, FHalo, HaloDest, FHaloTint, Level);
 
   SDL_RenderCopyF(FRenderer, FLetters, nil, @ADest);
+  FEmbers.Draw(ADest, AAlpha, FLettersWidth, FLettersHeight);
 end;
 
 end.
