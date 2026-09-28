@@ -23,7 +23,7 @@ that matters. The format is described in [`docs/MSET-FORMAT.md`](docs/MSET-FORMA
 | `sprites/gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`, `medic`, `krep`, `platform`, `tank`, `boss1` | Every enemy, boss, pickup and prop |
 | `sprites/weapon.mset`, `weapon1`–`weapon4` | Weapon, bullet, crosshair and pickup sprites |
 | `sprites/brickwork`, `cargo`, `common`, `conveyor`, `facility`, `machinery`, `mine-interior`, `mine-structure`, `mine-walls`, `mining-rig`, `moon-surface`, `railway` | Every tile and decoration, grouped by theme rather than by level |
-| `sprites/ui.mset` | Menu sky, moon, logo, star sprites, language flags, the `font`/`fontx`/`fonty` bitmap atlases |
+| `sprites/ui.mset` | Menu nebula (`sky`), the lunar surface map (`moonmap`), the logo letters, the language flags, the `font`/`fontx`/`fonty` bitmap atlases; stars, halo and embers are generated in code |
 | `bin/level1.json`, `level2.json`, `monsters.json` | Level and monster design |
 
 Free to reuse under the same terms as the code, with attribution.

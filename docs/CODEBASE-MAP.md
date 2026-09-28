@@ -7,14 +7,16 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.2`. Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.3`. Where the map and the code disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` /
-`Monsters` / `Hud.Messages` / `Menu` / `Render.Tiles` -> `Hud.Marks` /
-`Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`.
+`Monsters` / `Hud.Messages` / `Render.Tiles` -> `Hud.Marks` /
+`Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
+side: `Hud.Draw` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
+`Menu.Logo` -> `Menu` (with `Menu.Globe`).
 
 ---
 
@@ -169,11 +171,11 @@ no version resource, so nothing else has to agree with it.
   (partial rewrites of config.json, silent on a locked file). An `era` key
   left over from a 2.5.x config is ignored, not rejected.
 
-### `Localization.pas` (~310 lines)
+### `Localization.pas` (~305 lines)
 - **`TLocalizedText`** (record) - `Values[TLanguage]`, `Current`. Used for
   level and monster content (base JSON field = RU, `En` sibling = EN, an absent
   sibling falls back at parse time).
-- ~65 `S*` string-key constants (protocol ids into the lang dictionaries):
+- ~60 `S*` string-key constants (protocol ids into the lang dictionaries):
   gameplay tickers, streak captions, henshin/bonus texts, ending screen, the
   full menu vocabulary.
 - Free functions: `LoadLanguage` (swaps the flat dictionary from
@@ -425,30 +427,116 @@ Reborn with the hero on every level load.
   constructor. `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion, and the dpr reads the name from here.
 
-### `Menu.pas` (~955 lines)
-The main menu with its flying moon and starfield.
+### `Render.Glow.pas` (~165 lines)
+Light drawn instead of loaded: white textures with the shape in their alpha,
+additive, linear-filtered, so one texture serves every tint and level.
+- **`TGlowShape`** = (`gsPoint`, `gsFlare`) - a Gaussian point and a
+  four-spike flare, analytic (`PointSigma`, `Flare*` metrics in half-sides).
+- Free functions: `CreateGlowShape(renderer, shape, side)`,
+  `CreateGlowTexture(renderer, surface)` (a shape computed elsewhere - the
+  logo halo - arrives as a surface and leaves with the same settings),
+  `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (centered
+  square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
+  alpha mod.
+- Users: the stars, the embers, the logo halo. `EGlowError`.
+
+### `Menu.Starfield.pas` (~250 lines)
+The stars of the menu sky, generated, not loaded. **`TStarfield`**.
+- Three depth layers (`StarLayers`: density per 10000 square units, speed
+  rightward, size and brightness spans, flare share, **`ZoomShare`** - the
+  share of a frame zoom the layer answers with: 0.4 / 0.7 / 1.0). Star count
+  = density x frame area, so a wide frame gets more stars, not stretched
+  ones. Tints by temperature (`StarTints`, weighted toward white), twinkle
+  on 35% (`TTwinkle`: phase, step, depth). Own `TXorShift` stream, seed
+  "Moon" - the same sky on every run, the trailer relies on it.
+- `Tick` (crawl + wrap fully off-screen), `Draw(alpha, zoom)` - interpolated
+  with the timestep alpha; zoom > 1 spreads the stars from the frame center
+  by each star's share (the submenu dolly). Textures: an 8 px point and a
+  48 px flare from `Render.Glow`.
+
+### `Menu.Globe.pas` (~400 lines)
+The moon of the menu as a spinning globe on the CPU. **`TMoonGlobe`** takes
+the ui set and the map name (`moonmap`, 2048x1024 equirectangular, must be a
+power-of-two width twice its height).
+- Startup: `LoadMap` -> `BuildPyramid` (four halved levels: the limb samples
+  a coarser level instead of skipping texels) -> `BuildTables` (every texel of
+  the 512-texel disc gets its map row, longitude as a 32-bit turn, detail
+  level, sunlight - Lommel-Seeliger with a `LimbFade`, earthshine on the
+  night side, a `TGlobePixel` each) -> `BuildCurves` (gain and tone tables,
+  `Exposure`, the cool 2008 tint, a soft `ToneKnee`).
+- Runtime: `Tick` adds `FSpinStep` (one turn in 2640 ticks = 80 s) and marks
+  dirty; `Draw(dest)` repaints the streaming texture once per tick and copies
+  it into the square. The axis leans (`AxisRollDegrees`, `AxisTipDegrees`) so
+  the spin reads as a globe, not a scrolling picture. Compiled `{$O+,R-,Q-}`
+  whatever the build: a 33 Hz walk over a quarter million texels.
+
+### `Menu.Logo.pas` (~285 lines)
+The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
+(2:1, letters alone on transparent) and builds everything else from it, so a
+redrawn logo brings its own glow.
+- Halo: the letters' alpha shrunk 4x into an apron-padded image, three box
+  blurs (`HaloBlurRadius=5`, `HaloBlurPasses=3`), normalized to a peak of one,
+  handed to `CreateGlowTexture`; tinted with `InkTint` (the mean ink color
+  at full brightness); breathes on a 16 s sine (`HaloBaseLevel=0.55`,
+  `HaloSwing=0.2`).
+- Owns a `TEmbers`. `Tick`, `Draw(dest, alpha)` - halo under, letters, embers
+  over; the halo reaches `HaloApron` texels past the letters' rectangle,
+  scaled by the same factor the letters are.
+
+### `Menu.Embers.pas` (~220 lines)
+Sparks drifting off the outline of the logo. **`TEmbers`** takes the locked
+letters surface and reads the outline itself (`ReadOutline`: every ink texel
+with air beside it is a `TEmberSeed` with the alpha slope as its normal).
+- One ember in flight per `OutlinePerEmber=200` outline texels (26 on the
+  current logo). An ember (`TEmber`) is born on a random seed, flies out
+  along the normal with a sideways throw, `EmberLift` bends it upward,
+  `EmberDrag` slows it, it cools `EmberBirthColor` -> `EmberDeathColor` and
+  fades over the last `EmberFadeShare` of a 70..140-tick life, then is
+  reborn elsewhere. Ages staggered at start. Own `TXorShift`, seed "Fire".
+- Everything in letter texels; `Draw(dest, alpha, lettersW, lettersH)` scales
+  to the units of the rectangle, so the trailer's larger logo scales its
+  sparks too. Drawn with the `gsPoint` glow.
+
+### `Menu.pas` (~915 lines)
+The main menu: the sky rig, the screens, the dolly between them.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
   the composition root, which owns the file system), `TMenuResult` (command +
-  payload), `TMenuItem`, `TStar` (verbatim TStar of MenuPic.pas: kind 0..7 =
-  speed class AND sprite index; the texture is resolved once at init),
-  `TMoonDrift` (the drifting moon in the 2008 "sdvig" +-500 space; `Respawn`,
-  `Tick`).
+  payload), `TMenuItem`, `TMoonDrift` (the drifting moon in the 2008 "sdvig"
+  +-500 space; `Respawn`, `Tick`).
 - **Enums**: `TMenuCommand` (mcNone/StartLevel/Resume/ToggleFullscreen/
   SetDifficulty/SetLanguage/Quit), `TMenuScreen` (msMain/LevelSelect/
-  Difficulty/Credits/QuitConfirm), `TItemAction` (internal navigation vs
-  surfaced commands), **`TShowcaseKind`** (skNone/skLogo/skSky) - the trailer
-  frames: the live sky rig alone, with or without the logo. Only the debug keys
-  can enter one, so with DEBUGKEYS off the state stays skNone.
-- **`TMoonMenu`** - sky/moon/logo textures, stars, an item list per screen,
-  language flags (owned textures; `FlagRect` is the draw AND hit-test
+  Credits/QuitConfirm - the difficulty submenu is gone), `TItemAction`
+  (internal navigation vs surfaced commands; `iaDifficulty` cycles the grade
+  in place), **`TShowcaseKind`** (skNone/skLogo/skSky) - the trailer frames:
+  the live sky rig alone, with or without the logo. Only the debug keys can
+  enter one, so with DEBUGKEYS off the state stays skNone.
+- **`TMoonMenu`** - the sky texture (16:9 nebula, `CoverSource` crops it to
+  the frame, `SkyShade` dims it), `TStarfield`, `TMoonGlobe` (sized by the
+  frame height, `MoonDiameter`), `TMenuLogo`, a `THudBrush` for the
+  difficulty cells, an item list per screen, language flags (owned textures,
+  240x160 drawn into 30x20 units; `FlagRect` is the draw AND hit-test
   geometry), a difficulty display copy. Takes the ui set and the weapon set
-  (attached, not owned). `ShowMain`, `Tick`, `Draw(alpha)`, `DrawSky(alpha)`
-  (the story screen reuses the live sky as scenery), `MouseMove`,
-  `Click -> TMenuResult`, `HandleEscape` (True = consumed),
-  `ShowShowcase`/`ShowcaseActive`/`EndShowcase`, `DrawVersion` (the `vX.Y.Z`
-  tag in the bottom-right corner of every menu screen). Properties `HasActiveGame`,
-  `Difficulty`, `Language` (the setter rebuilds captions through `Tr` -
-  set it AFTER the dictionary swap).
+  (attached, not owned).
+  - Layout constants: the 2008 NDC geometry frozen in units (`LogoLeft/Top/
+    Width/Height`, `BigRowStep=12.5`, `ItemColumnX` = column 17, `TitleX/Y`
+    on the flags' line, `LogoCaptionX/Y`, the difficulty cell metrics
+    (`DifficultyCell*`, `MenuInkColor` = the atlas green), the flags, the
+    version tag margin, the cursor frames and offsets).
+  - The dolly: `FDepth`/`FDepthTarget` (0 = main, 1 = a submenu), one step per
+    tick over `DollyTicks=26`, eased in `DrawDepth`; `DrawSky` grows the
+    nebula by `SkyZoom`, the stars by `StarZoom` (via their shares), the moon
+    and its drift by `MoonZoom` - all 0.2 but the sky's 0.04.
+  - `ShowMain`, `Tick`, `Draw(alpha)`, `DrawSky(alpha)` (the story screen
+    reuses the live sky as scenery), `MouseMove`, `Click -> TMenuResult`,
+    `HandleEscape` (True = consumed), `ShowShowcase`/`ShowcaseActive`/
+    `EndShowcase`, `DrawVersion` (the `vX.Y.Z` tag in the bottom-right corner
+    of every menu screen), `DrawDifficultyCells`, `DrawDifficultyNote` (the
+    grade's name and, over a running game, when it bites - while the cursor
+    rests on the item), `DrawCredits` (five lines on the 2008 rows).
+    `ItemWidth` = caption plus whatever rides after it, one width for drawing
+    and hit-testing. Properties `HasActiveGame`, `Difficulty`, `Language`
+    (the setter rebuilds captions through `Tr` - set it AFTER the dictionary
+    swap).
 
 ### `Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
@@ -460,7 +548,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1815 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1820 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -609,8 +697,9 @@ monsterId, screen, x, y, spriteList, optional `difficulty` grades,
   share tiles.
 - **Backdrops**: `level1-backdrops`, `level2-backdrops` - found by the
   `<assetsDir>-backdrops` convention, never declared in `spriteSets`.
-- **Interface**: `ui` - sky, fullmoon, logo, the star sprites, language flags,
-  and the `font`/`fontx`/`fonty` atlases.
+- **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
+  surface), `logo` (letters alone), the language flags (240x160) and the
+  `font`/`fontx`/`fonty` atlases. Stars, halo and embers are generated.
 
 ### `lang/en.json` / `lang/ru.json` (~2-3 KB)
 Flat key->string dictionaries for UI and gameplay text (every `S*` key of
@@ -642,7 +731,10 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Hud.Draw.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Hud.Draw.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
-| Menu / language switching / trailer showcase frames | Menu.pas + Localization.pas |
+| Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
+| Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
+| Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
+| Anything that glows additively | Render.Glow.pas |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+data fields in JSONs) |
