@@ -29,7 +29,7 @@ interface
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config, Game.Space,
-  Localization, Game.Version, Menu.Starfield, Menu.Globe;
+  Localization, Game.Version, Menu.Starfield, Menu.Globe, Hud.Draw;
 
 type
   EMenuError = class(Exception);
@@ -53,8 +53,7 @@ type
     Language: TLanguage;      // meaningful for mcSetLanguage only
   end;
 
-  TMenuScreen = (msMain, msLevelSelect, msDifficulty, msCredits,
-    msQuitConfirm);
+  TMenuScreen = (msMain, msLevelSelect, msCredits, msQuitConfirm);
 
   // Trailer frames: the live sky rig alone, with or without the logo.
   // Entered by the host's debug keys, left by any key or click - so
@@ -64,14 +63,12 @@ type
   // Menu-internal item actions; navigation ones resolve inside the menu,
   // the rest surface as TMenuCommand.
   TItemAction = (iaNewGame, iaResume, iaFullscreen, iaDifficulty,
-    iaSetDifficulty, iaCredits, iaAskQuit, iaBack, iaStartLevel,
-    iaConfirmQuit);
+    iaCredits, iaAskQuit, iaBack, iaStartLevel, iaConfirmQuit);
 
   TMenuItem = record
     Caption: string;
     Action: TItemAction;
     LevelFile: string;
-    Difficulty: TDifficulty; // meaningful for iaSetDifficulty only
   end;
 
   // The drifting moon. Lives in the 2008 "sdvig" space (+-500 = one
@@ -96,6 +93,7 @@ type
     FGlobe: TMoonGlobe;
     FLogoTexture: PSdlTexture;
     FStarfield: TStarfield;
+    FBrush: THudBrush;
     FMoon: TMoonDrift;
     FLevels: TArray<TLevelChoice>;
     FScreen: TMenuScreen;
@@ -103,21 +101,19 @@ type
     FItems: TArray<TMenuItem>;
     FMouseX, FMouseY: Integer;
     FHasActiveGame: Boolean;
-    FDifficulty: TDifficulty; // display copy: caption + hint follow it
+    FDifficulty: TDifficulty; // display copy: the cells and the note follow it
     // Owned flag textures per language; the yellow box marks FLanguage
     FFlagTextures: array [TLanguage] of PSdlTexture;
     FLanguage: TLanguage;
     FShowcase: TShowcaseKind;
     procedure SetHasActiveGame(AValue: Boolean);
-    procedure SetDifficulty(AValue: TDifficulty);
     procedure SetLanguage(AValue: TLanguage);
     function LoadTexture(const AFileName: string): PSdlTexture;
     procedure ShowScreen(AScreen: TMenuScreen);
     procedure AddItem(const ACaption: string; AAction: TItemAction;
       const ALevelFile: string = '');
-    procedure AddDifficultyItem(const ACaption: string;
-      AValue: TDifficulty);
     function ItemTop(AIndex: Integer): Double;
+    function ItemWidth(const AItem: TMenuItem): Double;
     function HoveredIndex: Integer;
     // One geometry for drawing AND hit-testing a flag - what you see
     // is what you click, same principle as the caption rectangles
@@ -127,9 +123,10 @@ type
     procedure DrawLogo;
     procedure DrawShowcaseLogo;
     procedure DrawItems;
+    procedure DrawDifficultyCells(AX, AY: Double);
     procedure DrawFlags;
     procedure DrawCredits;
-    procedure DrawDifficultyHint;
+    procedure DrawDifficultyNote;
     procedure DrawCursor;
     procedure DrawVersion;
   public
@@ -160,8 +157,7 @@ type
 
     property HasActiveGame: Boolean read FHasActiveGame
       write SetHasActiveGame;
-    property Difficulty: TDifficulty read FDifficulty
-      write SetDifficulty;
+    property Difficulty: TDifficulty read FDifficulty write FDifficulty;
     // Set by the composition root AFTER it swapped the dictionary -
     // the setter rebuilds the current screen's captions through Tr
     property Language: TLanguage read FLanguage write SetLanguage;
@@ -224,21 +220,29 @@ const
   // line2() rows step 12.5 units (the same 'row 12 = Y 150' anchor the
   // message board uses); its x argument steps one big glyph.
   BigRowStep = 12.5;
-  // Menu geometry verbatim: title line(...,24,1) small, items
-  // line2(...,17,2+i*2) big (moon.dpr 348-351)
-  TitleX = 24 * LegacyColumnWidth;   // 307.2
-  TitleY = 1 * SmallLineStep;        // 9.6
-  // Deliberate deviation: 2008 drew items at column 17 (line2 348-351),
-  // but the English DIFFICULTY:NORMAL grew to 17 glyphs and pressed the
-  // longest line against the right edge. Two columns left buys a margin
-  // (Ilya, 2026-07-21); the hover hitbox follows this constant for free.
-  ItemColumnX = 15 * BigGlyphWidth;  // 249.6
+  // Items stand at the 2008 column 17: the gap to the logo then equals
+  // the logo's own left margin. The hover hitbox follows this constant.
+  ItemColumnX = 17 * BigGlyphWidth; // 282.9
   LogoCaptionX = 1 * BigGlyphWidth;
   LogoCaptionY = 28 * BigRowStep;    // line2(...,1,28)
 
   // Hovered caption is double-drawn with this offset - a faux bold.
   // 2008 signalled hover through the cursor sprite alone.
   HoverBoldOffset = 0.7;
+
+  // The difficulty grade as a row of health cells - the instrument that
+  // shows monster vitality in play, and vitality is what the grade sets.
+  // Fonty glyphs keep their ink in pixels 4..22 of the 28-pixel cell;
+  // the cells sit in that band, as tall as a capital.
+  DifficultyGrades = Ord(High(TDifficulty)) + 1;
+  DifficultyCellTop = 4 / FontCellPx * BigGlyphHeight;
+  DifficultyCellSize = 18 / FontCellPx * BigGlyphHeight;
+  DifficultyCellGap = 2.0;
+  DifficultyCellsIndent = 0.5 * BigGlyphWidth; // air after the caption
+  DifficultyCellsWidth = DifficultyGrades * DifficultyCellSize +
+    (DifficultyGrades - 1) * DifficultyCellGap;
+  // The glyph color of the fonty atlas
+  MenuInkColor: TRgb = (R: 188; G: 255; B: 0);
 
   // The language flags (part 6.2): top-right corner of the main screen,
   // rightmost = highest TLanguage id. Files follow LanguageIds - a
@@ -255,6 +259,10 @@ const
   FlagBoxRed = 255;
   FlagBoxGreen = 255;
   FlagBoxBlue = 0;
+  // Deviation from 2008 (column 24, row 1): the title opens the item
+  // column and sits centered on the flags, one top line for both
+  TitleX = ItemColumnX;
+  TitleY = FlagTop + (FlagHeight - SmallGlyphHeight) / 2; // 13.2
   // The version tag sits in the bottom-right corner, the one spot no
   // screen of the menu ever draws into
   VersionMargin = 6.0;
@@ -354,6 +362,7 @@ begin
   FLanguage := CurrentLanguage;
 
   FStarfield := TStarfield.Create(ARenderer, FrameWidth, FrameHeight);
+  FBrush := THudBrush.Create(ARenderer);
   FMoon.Respawn;
   FMoon.DriftX := MoonFirstEntryX;
 
@@ -370,6 +379,7 @@ begin
   FGlobe.Free;
   if Assigned(FSkyTexture) then
     SDL_DestroyTexture(FSkyTexture);
+  FBrush.Free;
   FStarfield.Free;
   FCache.Free;
   inherited;
@@ -404,15 +414,6 @@ begin
     ShowMain; // the 'Продолжить игру' line appears/disappears
 end;
 
-procedure TMoonMenu.SetDifficulty(AValue: TDifficulty);
-begin
-  if FDifficulty = AValue then
-    Exit;
-  FDifficulty := AValue;
-  if FScreen = msMain then
-    ShowMain; // the 'Сложность: ...' caption follows the value
-end;
-
 procedure TMoonMenu.SetLanguage(AValue: TLanguage);
 begin
   if FLanguage = AValue then
@@ -423,18 +424,6 @@ begin
   ShowScreen(FScreen);
 end;
 
-// Maps the grade to its 2008 caption. About captions, not about the
-// menu class - a free function per the codestyle.
-function DifficultyName(AValue: TDifficulty): string;
-begin
-  case AValue of
-    dfHard: Result := Tr(SDiffHard);
-    dfWild: Result := Tr(SDiffWild);
-  else
-    Result := Tr(SDiffNormal);
-  end;
-end;
-
 procedure TMoonMenu.AddItem(const ACaption: string; AAction: TItemAction;
   const ALevelFile: string);
 begin
@@ -442,16 +431,6 @@ begin
   Item.Caption := ACaption;
   Item.Action := AAction;
   Item.LevelFile := ALevelFile;
-  FItems := FItems + [Item];
-end;
-
-procedure TMoonMenu.AddDifficultyItem(const ACaption: string;
-  AValue: TDifficulty);
-begin
-  var Item := Default(TMenuItem);
-  Item.Caption := ACaption;
-  Item.Action := iaSetDifficulty;
-  Item.Difficulty := AValue;
   FItems := FItems + [Item];
 end;
 
@@ -484,10 +463,9 @@ begin
         // resolution now, this line (and Alt/Ctrl+Enter) is the only knob.
         // No on/off suffix - the screen itself shows which mode you are in.
         AddItem(Tr(SFullscreen), iaFullscreen);
-        // The survivor of the 2008 'Опции' screen: the caption carries
-        // the current grade the way 'Сложность:Обычная' did (1291)
-        AddItem(Format(Tr(SDifficultyFmt), [DifficultyName(FDifficulty)]),
-          iaDifficulty);
+        // The survivor of the 2008 'Опции' screen and its grade
+        // submenu: a click cycles the grade in place, the cells show it
+        AddItem(Tr(SDifficultyTitle), iaDifficulty);
         AddItem(Tr(SCredits), iaCredits);
         AddItem(Tr(SQuit), iaAskQuit);
       end;
@@ -501,15 +479,6 @@ begin
           AddItem(Format('%d. %s',
             [i + 1, ShortLevelName(FLevels[i].Title.Current)]),
             iaStartLevel, FLevels[i].FileName);
-        AddItem(Tr(SBack), iaBack);
-      end;
-    msDifficulty:
-      begin
-        // The 2008 submenu verbatim (1360-1363): title + three grades
-        FTitle := Tr(SDifficultyTitle);
-        AddDifficultyItem(Tr(SDiffNormal), dfNormal);
-        AddDifficultyItem(Tr(SDiffHard), dfHard);
-        AddDifficultyItem(Tr(SDiffWild), dfWild);
         AddItem(Tr(SBack), iaBack);
       end;
     msCredits:
@@ -548,10 +517,18 @@ begin
     var Top := ItemTop(i);
     if (FMouseY >= Top) and (FMouseY < Top + BigGlyphHeight) and
        (FMouseX >= ItemColumnX) and
-       (FMouseX < ItemColumnX + FFont.BigTextWidth(FItems[i].Caption)) then
+       (FMouseX < ItemColumnX + ItemWidth(FItems[i])) then
       Exit(i);
   end;
   Result := -1;
+end;
+
+// The caption plus whatever rides after it
+function TMoonMenu.ItemWidth(const AItem: TMenuItem): Double;
+begin
+  Result := FFont.BigTextWidth(AItem.Caption);
+  if AItem.Action = iaDifficulty then
+    Result := Result + DifficultyCellsIndent + DifficultyCellsWidth;
 end;
 
 function TMoonMenu.FlagRect(ALanguage: TLanguage): TSdlFRect;
@@ -591,6 +568,15 @@ begin
   FMouseY := AY;
 end;
 
+// Wild wraps around to normal
+function NextDifficulty(AValue: TDifficulty): TDifficulty;
+begin
+  if AValue = High(TDifficulty) then
+    Result := Low(TDifficulty)
+  else
+    Result := Succ(AValue);
+end;
+
 function TMoonMenu.ExecuteItem(const AItem: TMenuItem): TMenuResult;
 begin
   Result := Default(TMenuResult);
@@ -602,15 +588,10 @@ begin
     iaFullscreen:
       Result.Command := mcToggleFullscreen;
     iaDifficulty:
-      ShowScreen(msDifficulty);
-    iaSetDifficulty:
       begin
-        FDifficulty := AItem.Difficulty;
-        // Back to the parent screen with the updated caption - 2008
-        // returned to its options list the same way (1452-1459)
-        ShowMain;
+        FDifficulty := NextDifficulty(FDifficulty);
         Result.Command := mcSetDifficulty;
-        Result.Difficulty := AItem.Difficulty;
+        Result.Difficulty := FDifficulty;
       end;
     iaCredits:
       ShowScreen(msCredits);
@@ -740,12 +721,33 @@ begin
   for var i := 0 to High(FItems) do
   begin
     FFont.DrawBig(FItems[i].Caption, ItemColumnX, ItemTop(i));
+    if FItems[i].Action = iaDifficulty then
+      DrawDifficultyCells(ItemColumnX + FFont.BigTextWidth(FItems[i].Caption) +
+        DifficultyCellsIndent, ItemTop(i));
     // Faux bold on hover: the same caption a hair to the right fattens
     // every stroke (2008 signalled hover only through the cursor)
     if i = Hovered then
       FFont.DrawBig(FItems[i].Caption, ItemColumnX + HoverBoldOffset,
         ItemTop(i));
   end;
+end;
+
+// Grades fill from the left: normal lights one cell, wild all of them
+procedure TMoonMenu.DrawDifficultyCells(AX, AY: Double);
+begin
+  var RowY := AY + DifficultyCellTop;
+  FBrush.BeginDraw;
+  for var i := 0 to DifficultyGrades - 1 do
+  begin
+    var CellX := AX + i * (DifficultyCellSize + DifficultyCellGap);
+    if i <= Ord(FDifficulty) then
+      FBrush.FullCell(CellX, RowY, DifficultyCellSize, DifficultyCellSize,
+        MenuInkColor, 1)
+    else
+      FBrush.EmptyCell(CellX, RowY, DifficultyCellSize, DifficultyCellSize,
+        MenuInkColor, 1);
+  end;
+  FBrush.EndDraw;
 end;
 
 // Verbatim credits block of moon.dpr 361-365
@@ -759,17 +761,27 @@ begin
     18 * SmallLineStep);
 end;
 
-// The 2008 submenu explained itself in a small line at column 5, row 18
-// (moon.dpr 355-356) - same spot, wording adjusted for the live game
-// (see the resourcestring comment).
-procedure TMoonMenu.DrawDifficultyHint;
+function DifficultyNote(AValue: TDifficulty): string;
 begin
-  if FHasActiveGame then
-    FFont.DrawSmall(Tr(SDiffHintLive), 5 * LegacyColumnWidth,
-      18 * SmallLineStep)
+  case AValue of
+    dfHard: Result := Tr(SDiffHard);
+    dfWild: Result := Tr(SDiffWild);
   else
-    FFont.DrawSmall(Tr(SDiffHintIdle), 5 * LegacyColumnWidth,
-      18 * SmallLineStep);
+    Result := Tr(SDiffNormal);
+  end;
+end;
+
+// While the cursor rests on Difficulty, the slot of a would-be next item
+// names the grade; over a running game a second line says when it bites
+procedure TMoonMenu.DrawDifficultyNote;
+begin
+  var Hovered := HoveredIndex;
+  if (Hovered < 0) or (FItems[Hovered].Action <> iaDifficulty) then
+    Exit;
+  var NoteY := ItemTop(Length(FItems));
+  FFont.DrawSmall(DifficultyNote(FDifficulty), ItemColumnX, NoteY);
+  if FHasActiveGame then
+    FFont.DrawSmall(Tr(SDiffHintLive), ItemColumnX, NoteY + SmallLineStep);
 end;
 
 procedure TMoonMenu.DrawFlags;
@@ -844,9 +856,8 @@ begin
     DrawLogo;
   if FScreen = msCredits then
     DrawCredits;
-  if FScreen = msDifficulty then
-    DrawDifficultyHint;
   DrawItems;
+  DrawDifficultyNote;
   if FScreen = msMain then
     DrawFlags;
   DrawVersion;

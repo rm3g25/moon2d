@@ -92,19 +92,13 @@ const
   SQuit = 'quit';
   SLevelSelectTitle = 'levelSelectTitle';
   SBack = 'back';
-  // No space after the colon in ru - verbatim 'Сложность:'+cfg[5]
-  // (1291); en mirrors the shape and its longest grade still fits the
-  // item column (the last glyph kisses the right edge - playtest)
-  SDifficultyFmt = 'difficultyFmt';
   SDifficultyTitle = 'difficultyTitle';
   SDiffNormal = 'diffNormal';
   SDiffHard = 'diffHard';
   SDiffWild = 'diffWild';
-  // The idle ru line is verbatim moon.dpr 356. The in-game line is
-  // ours: 2008 promised the change 'on the next screen' because its
-  // monsters were reborn per screen - ours live per level (deviation)
+  // 2008 promised the change 'on the next screen' because its monsters
+  // were reborn per screen - ours live per level (deviation)
   SDiffHintLive = 'diffHintLive';
-  SDiffHintIdle = 'diffHintIdle';
   SCreditsTitle = 'creditsTitle';
   SCreditsDone = 'creditsDone';
   SQuitTitle = 'quitTitle';
@@ -180,8 +174,8 @@ const
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
     SBonusAwardFmt, SBrokeThrough, SBonusHudFmt, SBonusHudHint,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
-    SLevelSelectTitle, SBack, SDifficultyFmt, SDifficultyTitle,
-    SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive, SDiffHintIdle,
+    SLevelSelectTitle, SBack, SDifficultyTitle,
+    SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,
     SCreditsTitle, SCreditsDone, SQuitTitle, SYes, SNo, SLogoCaption,
     SCreditsLine1, SCreditsLine2, SCreditsLine3, SCreditsLine4];
 
