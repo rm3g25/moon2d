@@ -8,7 +8,7 @@
   },
   "game": {
     "tickRate": 33,
-    "language": "ru",
-    "difficulty": "hard"
+    "language": "en",
+    "difficulty": "normal"
   }
 }
