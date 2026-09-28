@@ -50,8 +50,9 @@
   "yes": "Yes",
   "no": "No",
   "logoCaption": "Computer Dragon 2008-2026",
-  "creditsLine1": "2DGames Software and the 2DGames.ru portal",
+  "creditsLine1": "Computer Dragon presents",
   "creditsLine2": "MOON2D",
   "creditsLine3": "Idea, code, art, story: Ilia Kuzmin (RedMask)",
-  "creditsLine4": "Original idea: Alexander Friz (sw0000)"
+  "creditsLine4": "Original idea: Alexander Friz (sw0000)",
+  "creditsLine5": "Released in 2008, remade in 2026"
 }

@@ -105,13 +105,14 @@ const
   SYes = 'yes';
   SNo = 'no';
   SLogoCaption = 'logoCaption';
-  // The credits block, ru verbatim moon.dpr 361-365 EXCEPT line 4:
-  // the co-author renamed himself since - 'Фриз'/'Friz' by his 2026
-  // spelling, not the 2008 'Фризе' (deviation, requested by Ilya)
+  // The credits block. Lines 2 and 3 keep the 2008 wording; line 4
+  // spells the co-author 'Фриз'/'Friz' the way he does now, not the
+  // 2008 'Фризе'
   SCreditsLine1 = 'creditsLine1';
   SCreditsLine2 = 'creditsLine2';
   SCreditsLine3 = 'creditsLine3';
   SCreditsLine4 = 'creditsLine4';
+  SCreditsLine5 = 'creditsLine5';
 
 // Reads lang\<id>.json for ALanguage, validates it against the full
 // key roster and replaces the active dictionary. Raises
@@ -177,7 +178,8 @@ const
     SLevelSelectTitle, SBack, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,
     SCreditsTitle, SCreditsDone, SQuitTitle, SYes, SNo, SLogoCaption,
-    SCreditsLine1, SCreditsLine2, SCreditsLine3, SCreditsLine4];
+    SCreditsLine1, SCreditsLine2, SCreditsLine3, SCreditsLine4,
+    SCreditsLine5];
 
 var
   Texts: TDictionary<string, string>;

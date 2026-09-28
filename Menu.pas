@@ -796,7 +796,7 @@ begin
   FBrush.EndDraw;
 end;
 
-// Verbatim credits block of moon.dpr 361-365
+// The 2008 rows: two big lines, then the small ones every other row
 procedure TMoonMenu.DrawCredits;
 begin
   FFont.DrawBig(Tr(SCreditsLine1), 1 * BigGlyphWidth, 8 * BigRowStep);
@@ -805,6 +805,8 @@ begin
     16 * SmallLineStep);
   FFont.DrawSmall(Tr(SCreditsLine4), 3 * LegacyColumnWidth,
     18 * SmallLineStep);
+  FFont.DrawSmall(Tr(SCreditsLine5), 3 * LegacyColumnWidth,
+    20 * SmallLineStep);
 end;
 
 function DifficultyNote(AValue: TDifficulty): string;
