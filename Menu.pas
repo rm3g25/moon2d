@@ -12,7 +12,7 @@
 
   The moon drifting left on a random diagonal is verbatim 2008; the
   moon itself is a spinning globe (Menu.Globe), the stars are drawn
-  (Menu.Starfield), the logo carries its own alpha. The 2008 NDC
+  (Menu.Starfield), the logo sheds its own light (Menu.Logo). The 2008 NDC
   geometry is converted once into 512x384 game units (1 NDC-x = 256
   units, 1 NDC-y = 192 units) and frozen as constants.
 
@@ -29,7 +29,8 @@ interface
 uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config, Game.Space,
-  Localization, Game.Version, Menu.Starfield, Menu.Globe, Hud.Draw;
+  Localization, Game.Version, Menu.Starfield, Menu.Globe, Menu.Logo,
+  Hud.Draw;
 
 type
   EMenuError = class(Exception);
@@ -91,7 +92,7 @@ type
     FSkyTexture: PSdlTexture;
     FSkySource: TSdlRect; // the part of the sky art the frame shows
     FGlobe: TMoonGlobe;
-    FLogoTexture: PSdlTexture;
+    FLogo: TMenuLogo;
     FStarfield: TStarfield;
     FBrush: THudBrush;
     FMoon: TMoonDrift;
@@ -120,8 +121,8 @@ type
     function FlagRect(ALanguage: TLanguage): TSdlFRect;
     function TryHoveredFlag(out ALanguage: TLanguage): Boolean;
     function ExecuteItem(const AItem: TMenuItem): TMenuResult;
-    procedure DrawLogo;
-    procedure DrawShowcaseLogo;
+    procedure DrawLogo(AAlpha: Double);
+    procedure DrawShowcaseLogo(AAlpha: Double);
     procedure DrawItems;
     procedure DrawDifficultyCells(AX, AY: Double);
     procedure DrawFlags;
@@ -188,7 +189,7 @@ const
   // tuning knob, and the stored pixels keep their dither
   SkyShade = 170;
   MoonMapFile = 'moonmap.png';   // 2048x1024 equirectangular surface
-  LogoFile = 'logo.png';         // 1024x512, soft alpha, opaque letters
+  LogoFile = 'logo.png';         // 2:1, letters alone, transparent around
 
   // TMoonDrift passport, verbatim MoonTimer / LoadMoonTexture:
   MoonDriftSpeed = 1;        // drift units per tick, leftward
@@ -348,9 +349,7 @@ begin
   SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
   FSkySource := CoverSource(FSkyTexture, FrameWidth / FrameHeight);
   FGlobe := TMoonGlobe.Create(ARenderer, ASpriteSet, MoonMapFile);
-  FLogoTexture := LoadTexture(LogoFile);
-  // Scaled to the window: nearest-neighbor would stair-step the letters
-  SDL_SetTextureScaleMode(FLogoTexture, SdlScaleModeLinear);
+  FLogo := TMenuLogo.Create(ARenderer, ASpriteSet, LogoFile);
   // Flags are plain rectangles - no transparency, the color-key
   // machinery stays out (the Union Jack navy would survive the
   // threshold anyway, but why even ask)
@@ -374,8 +373,7 @@ begin
   for var Language := Low(TLanguage) to High(TLanguage) do
     if Assigned(FFlagTextures[Language]) then
       SDL_DestroyTexture(FFlagTextures[Language]);
-  if Assigned(FLogoTexture) then
-    SDL_DestroyTexture(FLogoTexture);
+  FLogo.Free;
   FGlobe.Free;
   if Assigned(FSkyTexture) then
     SDL_DestroyTexture(FSkyTexture);
@@ -670,6 +668,7 @@ begin
   FMoon.Tick;
   FGlobe.Tick;
   FStarfield.Tick;
+  FLogo.Tick;
 end;
 
 procedure TMoonMenu.DrawSky(AAlpha: Double);
@@ -701,7 +700,7 @@ end;
 // The logo greets fresh visitors; over a running game the menu keeps
 // the scenery but drops the marquee sign (LogoView of 2008). The story
 // screen never shows it - text and logo shared no frame in the original.
-procedure TMoonMenu.DrawLogo;
+procedure TMoonMenu.DrawLogo(AAlpha: Double);
 var
   Dest: TSdlFRect;
 begin
@@ -709,7 +708,7 @@ begin
   Dest.Y := LogoTop;
   Dest.W := LogoWidth;
   Dest.H := LogoHeight;
-  SDL_RenderCopyF(FRenderer, FLogoTexture, nil, @Dest);
+  FLogo.Draw(Dest, AAlpha);
   FFont.DrawBig(Tr(SLogoCaption), LogoCaptionX, LogoCaptionY);
 end;
 
@@ -831,7 +830,7 @@ begin
 end;
 
 // No caption line, unlike DrawLogo: the trailer adds its own titles.
-procedure TMoonMenu.DrawShowcaseLogo;
+procedure TMoonMenu.DrawShowcaseLogo(AAlpha: Double);
 var
   Dest: TSdlFRect;
 begin
@@ -839,7 +838,7 @@ begin
   Dest.H := ShowcaseLogoHeight;
   Dest.X := (FrameWidth - Dest.W) / 2;
   Dest.Y := (FrameHeight - Dest.H) / 2;
-  SDL_RenderCopyF(FRenderer, FLogoTexture, nil, @Dest);
+  FLogo.Draw(Dest, AAlpha);
 end;
 
 procedure TMoonMenu.Draw(AAlpha: Double);
@@ -849,11 +848,11 @@ begin
   if FShowcase <> skNone then
   begin
     if FShowcase = skLogo then
-      DrawShowcaseLogo;
+      DrawShowcaseLogo(AAlpha);
     Exit;
   end;
   if not FHasActiveGame then
-    DrawLogo;
+    DrawLogo(AAlpha);
   if FScreen = msCredits then
     DrawCredits;
   DrawItems;

@@ -50,6 +50,7 @@ uses
   Render.Glow in 'Render.Glow.pas',
   Menu.Starfield in 'Menu.Starfield.pas',
   Menu.Globe in 'Menu.Globe.pas',
+  Menu.Logo in 'Menu.Logo.pas',
   Menu in 'Menu.pas';
 
 const

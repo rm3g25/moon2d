@@ -39,6 +39,8 @@ function CreateGlowTexture(ARenderer: PSdlRenderer;
 // The texture centered on the point, ASize units on a side
 procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   ACenterX, ACenterY, ASize: Single; ATint: TRgb; ALevel: Single);
+procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const ADest: TSdlFRect; ATint: TRgb; ALevel: Single);
 
 implementation
 
@@ -147,13 +149,19 @@ procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
 var
   Dest: TSdlFRect;
 begin
-  SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
-  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
   Dest.X := ACenterX - ASize / 2;
   Dest.Y := ACenterY - ASize / 2;
   Dest.W := ASize;
   Dest.H := ASize;
-  SDL_RenderCopyF(ARenderer, ATexture, nil, @Dest);
+  DrawGlowRect(ARenderer, ATexture, Dest, ATint, ALevel);
+end;
+
+procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const ADest: TSdlFRect; ATint: TRgb; ALevel: Single);
+begin
+  SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
+  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_RenderCopyF(ARenderer, ATexture, nil, @ADest);
 end;
 
 end.
