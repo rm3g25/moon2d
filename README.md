@@ -124,10 +124,10 @@ aligned columns, no `u` prefixes. Every unit declares one responsibility.
 
 Good places to start:
 
-- **`Hero.pas`** — physics, weapons, death. The densest concentration of
+- **`Game/Hero.pas`** — physics, weapons, death. The densest concentration of
   cited-2008 arithmetic in the project, and the clearest picture of what
   "preserve the formula" means in practice.
-- **`Bullets.pas`** — the particle system, which in 2008 was five different
+- **`Game/Bullets.pas`** — the particle system, which in 2008 was five different
   abuses of the projectile list. A 180-fragment explosion fan; 768 slow bullets
   raining on a grid; a motionless cloud of them used as a shield. All still
   hacks. All now named.
@@ -169,7 +169,12 @@ repository already.
 ## Layout
 
 ```
-*.pas, *.dpr           engine sources
+Moon2D.dpr, .dproj     composition root and the project
+Core/                  shared with the tools and the level editor: SDL,
+                       sprite sets, rendering, level and monster models
+Game/                  hero, monsters, bullets, sound, the game loop
+Hud/                   everything drawn over the playfield, the story screen
+Menu/                  the main menu and its sky
 bin/                   everything the game reads at runtime, and nothing else
   Moon2D.exe
   SDL2*.dll              renderer, image and mixer

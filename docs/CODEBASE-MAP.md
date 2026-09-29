@@ -7,25 +7,46 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.8`. Where the map and the code
-disagree, the code is right.
+Regenerated at `v3.0.3`, patched through `v3.0.8` and the folder layout that
+followed it. Where the map and the code disagree, the code is right.
+
+## Source layout
+
+The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
+`Moon2D.inc` stay in the root, and every unit includes `{$I ..\Moon2D.inc}`.
+
+- `Core/` - what the level editor and the tools share: SDL bindings, sprite
+  sets, rendering, the brush, the level/monster/config/language models, the
+  frame-vs-screen space. **Core never uses a unit outside Core** - a tool or
+  the editor that references only `Core/` fails to build the day that rule
+  breaks.
+- `Game/` - the game itself: hero, monsters, bullets, sound, the loop host,
+  the bonus vocabulary, the henshin ceremony, the version.
+- `Hud/` - everything drawn over the playfield, plus the story screen and the
+  typewriter they share.
+- `Menu/` - the main menu and its sky rig.
+
+Game, Hud and Menu are peers above Core and may use each other. Level events
+driven from level JSON are expected to get their own folder (`Game/Events/`).
+Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
+`Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
-`Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
+`Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` -> `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` -> `Hud.Marks` /
 `Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
-side: `Hud.Draw` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
+side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`).
 
 ---
 
 ## Game units
 
-### `Sdl2.Core.pas` (~365 lines)
+### `Core/Sdl2.Core.pas` (~365 lines)
 Hand-written SDL2 bindings. No classes - constants, records, `external`
 declarations against `SDL2.dll`.
 - **Constants**: init flags, window flags (incl. `SdlWindowHidden` for the
@@ -46,7 +67,7 @@ declarations against `SDL2.dll`.
 - Touch this file when: a new SDL function is needed, event handling, ABI
   questions.
 
-### `Sprites.Sets.pas` (~445 lines)
+### `Core/Sprites.Sets.pas` (~445 lines)
 The `.mset` sprite set container: a JSON manifest followed by every image
 concatenated behind it. Read by the game, the packer and (later) the level
 editor - one unit, three callers. Every sprite in the game comes from a set;
@@ -69,7 +90,7 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Render.Sprites.pas` (~465 lines)
+### `Core/Render.Sprites.pas` (~465 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
@@ -100,13 +121,13 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   them - the screen-shake hook; nothing here resets it, the caller sets it per
   layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`.
 
-### `Sdl2.Image.pas` (~70 lines)
+### `Core/Sdl2.Image.pas` (~70 lines)
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
 `IMG_Load_RW` replaced `SDL_LoadBMP_RW` at every load site. `EnsureImageLib`
 runs at startup and raises plainly if the DLL is absent - unlike the optional
 mixer, missing art is fatal.
 
-### `Render.Tiles.pas` (~95 lines)
+### `Core/Render.Tiles.pas` (~95 lines)
 - **`TTileScreenRenderer`** - draws one screen as two layers the caller
   orders: `DrawBackground` (the screen's backdrop sprite via
   `FBackgroundCache`), then `DrawTiles` (palette indices from `TLevel` via
@@ -115,7 +136,7 @@ mixer, missing art is fatal.
   composition root, and neither is owned here. The background/tiles split is
   also the hook for the future "AI backgrounds as art layer" idea.
 
-### `Render.Shake.pas` (~110 lines)
+### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
 offset per layer. Draw-side only: the world's arithmetic never sees it.
 - **`TShakeChannel`** = (`scWorld`, `scHero`, `scMonsters`) - the world (tiles,
@@ -131,7 +152,7 @@ offset per layer. Draw-side only: the world's arithmetic never sees it.
 - The doses live in the dpr (`*Trauma` constants), not here - what shakes how
   much is game-flow policy; this unit is the mechanism.
 
-### `Render.Font.pas` (~405 lines)
+### `Core/Render.Font.pas` (~405 lines)
 Bitmap font, 448 px atlas, 16x16 glyph grid (CP1251 layout).
 - **Constants**: atlas geometry (`FontAtlasSize`, `FontGridCells`,
   `FontCellPx`) + verbatim-2008 glyph metrics derived from the original's NDC
@@ -145,7 +166,7 @@ Bitmap font, 448 px atlas, 16x16 glyph grid (CP1251 layout).
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
 
-### `Audio.pas` (~230 lines)
+### `Game/Audio.pas` (~230 lines)
 SDL2_mixer bindings (`delayed` imports - the game survives a missing DLL) plus
 the sound bank.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
@@ -155,13 +176,13 @@ the sound bank.
   silently), `ToggleMusicMuted`, `Enabled` (False when the mixer DLL is absent
   -> every call becomes a no-op).
 
-### `Game.Version.pas` (~20 lines)
+### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
 It moves with the git tag: bumped in the commit that becomes the version.
 Read by `Menu` (the corner tag) and the dpr (window title). The dproj carries
 no version resource, so nothing else has to agree with it.
 
-### `Game.Config.pas` (~225 lines)
+### `Core/Game.Config.pas` (~225 lines)
 - **`TDifficulty`** = (`dfNormal`, `dfHard`, `dfWild`); `TDifficultyGrades`
   set; `DifficultyIds` protocol strings ('normal'/'hard'/'wild');
   `AllDifficultyGrades`.
@@ -174,7 +195,7 @@ no version resource, so nothing else has to agree with it.
   (partial rewrites of config.json, silent on a locked file). An `era` key
   left over from a 2.5.x config is ignored, not rejected.
 
-### `Localization.pas` (~305 lines)
+### `Core/Localization.pas` (~305 lines)
 - **`TLocalizedText`** (record) - `Values[TLanguage]`, `Current`. Used for
   level and monster content (base JSON field = RU, `En` sibling = EN, an absent
   sibling falls back at parse time).
@@ -185,7 +206,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Levels.Defs.pas` (~405 lines)
+### `Core/Levels.Defs.pas` (~405 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -212,7 +233,7 @@ Level data model + JSON parser. No game logic.
   never appear there. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (last
   change wins). `LoadFromFile`.
 
-### `Monsters.Defs.pas` (~440 lines)
+### `Core/Monsters.Defs.pas` (~440 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
@@ -231,7 +252,7 @@ Monster definition model + registry (parses monsters.json). No behavior.
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table validation.
 
-### `Bullets.pas` (~310 lines)
+### `Game/Bullets.pas` (~310 lines)
 Projectiles + all the 2008 particle-hack spawners.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
   formula (the travel-test record: one template, five wearers).
@@ -252,7 +273,7 @@ Projectiles + all the 2008 particle-hack spawners.
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
 
-### `Hero.pas` (~1170 lines)
+### `Game/Hero.pas` (~1170 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -279,7 +300,7 @@ moves in comes from `Game.Space`.
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Monsters.pas` (~890 lines)
+### `Game/Monsters.pas` (~890 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
@@ -309,7 +330,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `AnyAliveOnScreenOf(screen, ids)` (the same, only among the given monster
   ids - the hint hold), `Draw`.
 
-### `Hud.Messages.pas` (~335 lines)
+### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
   private `TTickerLine` record), the big mid-screen headline, score popups
   (private `TScorePopup`, '+N' rising), and the comm terminal it owns
@@ -326,7 +347,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   optional note - a small line under the headline, gone with it (the first
   bonus names the mouse button this way).
 
-### `Hud.Typewriter.pas` (~145 lines)
+### `Hud/Hud.Typewriter.pas` (~145 lines)
 - **`TTypewriter`** - text that types itself out, logic only (no drawing, no
   sound): one letter a tick, a line break costs a tick, an empty line between
   paragraphs pauses 12 ticks. `Start(lines)` (trailing empty lines dropped),
@@ -336,7 +357,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `CursorVisible(TBlinkPace)` (`bpTyping` 8-tick half-period, `bpOnHold` 32).
   Shared by `Hud.Terminal` and `Hud.Briefing`.
 
-### `Hud.Briefing.pas` (~170 lines)
+### `Hud/Hud.Briefing.pas` (~170 lines)
 - **`THudBriefing`** - the story before a level (`introText`), typed over the
   menu sky. No frame: a dark plate (`PanelColor`, 0.72) under the header and
   text only. The author's line breaks and indents are kept, nothing is
@@ -346,7 +367,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `KeyStruck`. Owned by `TMoonGame`; `AdvanceBriefing` there decides
   "finish typing" or "start the level".
 
-### `Hud.Terminal.pas` (~255 lines)
+### `Hud/Hud.Terminal.pas` (~255 lines)
 - **`THudTerminal`** - the station's comm channel: a framed box (x=6, y=40,
   360 wide) under the heart monitor. A long text is word-wrapped by glyph count
   (45 per line - the small font is monospaced), typed by its own `TTypewriter`,
@@ -362,14 +383,14 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   The game's side is `THintHold` + `HintHeld` in `Moon2D.dpr`; `LoadLevel`
   refuses a level whose `hintHoldWhileAlive` names an unknown monster.
 
-### `Game.Bonus.pas` (~25 lines)
+### `Game/Game.Bonus.pas` (~25 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
 HUD that shows it: **`TBonusKind`** (bkNone/Health/FireRain/Aura/Explosion;
 bkNone = empty slot) and `BonusCost=50`. Since 2.5.2 the cost is paid when
 the reward is activated, not when it is rolled, so the score keeps climbing
 past 50 while a reward waits.
 
-### `Game.Space.pas` (~45 lines)
+### `Core/Game.Space.pas` (~45 lines)
 The two sizes of the coordinate space, kept apart on purpose. The SCREEN is
 one flip-screen of a level (`ScreenCols=16`, `ScreenRows=12`,
 `ScreenWidth=512`, `ScreenHeight=384` - cells, walls, doors, bullets
@@ -380,8 +401,11 @@ screen size follows the level. Every reader of either must survive the two
 diverging. Replaced `GameWidth`/`GameHeight` of `Hero` and the literal
 512/384 of `Monsters`, `Bullets` and the dpr (3.0.1).
 
-### `Hud.Draw.pas` (~215 lines)
-The brush the primitive-drawn HUD panels share. No sprite, no font atlas.
+### `Core/Render.Brush.pas` (~215 lines)
+The brush everything drawn with primitives shares: the HUD panels, the menu sky
+rig and `Render.Glow`. No sprite, no font atlas. (Was Hud.Draw until the menu
+started drawing with it; the class inside still carries the old name,
+`THudBrush`.)
 - **`TRgb`** (record); the palette as typed constants (`CalmColor` blue,
   `WaryColor` amber, `AlarmColor` red, `HaleColor` green, `BonusColor` lime +
   `BonusShade`, `CalmShade`, `PanelColor`, `White`); `Mix` (lerp);
@@ -399,7 +423,7 @@ The brush the primitive-drawn HUD panels share. No sprite, no font atlas.
   `PanelY=4`, `PanelH=32`, `PanelW=118`, `ReadoutY`, the cell row (`CellY`,
   `CellW=7`, `CellH=4`, `CellGap=1`), `DigitPixel=3`.
 
-### `Hud.Vitals.pas` (~355 lines)
+### `Hud/Hud.Vitals.pas` (~355 lines)
 The hero's health display: a heart monitor in the top-left corner, drawn
 with the brush alone. **`THudVitals`** - `Tick(health, invulnerable)` once
 per logic tick, `Draw`.
@@ -415,7 +439,7 @@ per logic tick, `Draw`.
   (lost cell flash, grown cell glow, cure sweep on the trace, red frame on a
   hit, white blink of the cells during the mercy window).
 
-### `Hud.Charge.pas` (~460 lines)
+### `Hud/Hud.Charge.pas` (~460 lines)
 The score display: the bonus charge in the top-right corner, the twin of the
 heart monitor, widened on the left by the reward slot (150 units against the
 monitor's 118). **`THudCharge`** - `Tick(score, streak, bonus, novice)` once
@@ -438,7 +462,7 @@ per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
   kill paid out (white flash), reset without = a hit (red flash on the lost
   cells).
 
-### `Hud.Marks.pas` (~290 lines)
+### `Hud/Hud.Marks.pas` (~290 lines)
 Health rows over the figures, drawn with the brush; built by `CreateHud` in
 the dpr with the corner HUDs. **`THudMarks`**.
 - The hero's row: 4x4 cells with a gap of 2, centered over the head (9 units
@@ -462,7 +486,7 @@ the dpr with the corner HUDs. **`THudMarks`**.
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
-### `Game.Henshin.pas` (~280 lines)
+### `Game/Game.Henshin.pas` (~280 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
 the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
 flash, the suit going on - and the suit coming off. **`THenshin`** takes the
@@ -483,7 +507,7 @@ Reborn with the hero on every level load.
   constructor. `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion, and the dpr reads the name from here.
 
-### `Render.Glow.pas` (~165 lines)
+### `Core/Render.Glow.pas` (~165 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
 - **`TGlowShape`** = (`gsPoint`, `gsFlare`) - a Gaussian point and a
@@ -496,7 +520,7 @@ additive, linear-filtered, so one texture serves every tint and level.
   alpha mod.
 - Users: the stars, the embers, the logo halo. `EGlowError`.
 
-### `Menu.Starfield.pas` (~250 lines)
+### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
 - Three depth layers (`StarLayers`: density per 10000 square units, speed
   rightward, size and brightness spans, flare share, **`ZoomShare`** - the
@@ -510,7 +534,7 @@ The stars of the menu sky, generated, not loaded. **`TStarfield`**.
   by each star's share (the submenu dolly). Textures: an 8 px point and a
   48 px flare from `Render.Glow`.
 
-### `Menu.Globe.pas` (~400 lines)
+### `Menu/Menu.Globe.pas` (~400 lines)
 The moon of the menu as a spinning globe on the CPU. **`TMoonGlobe`** takes
 the ui set and the map name (`moonmap`, 2048x1024 equirectangular, must be a
 power-of-two width twice its height).
@@ -526,7 +550,7 @@ power-of-two width twice its height).
   the spin reads as a globe, not a scrolling picture. Compiled `{$O+,R-,Q-}`
   whatever the build: a 33 Hz walk over a quarter million texels.
 
-### `Menu.Logo.pas` (~285 lines)
+### `Menu/Menu.Logo.pas` (~285 lines)
 The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
 (2:1, letters alone on transparent) and builds everything else from it, so a
 redrawn logo brings its own glow.
@@ -539,7 +563,7 @@ redrawn logo brings its own glow.
   over; the halo reaches `HaloApron` texels past the letters' rectangle,
   scaled by the same factor the letters are.
 
-### `Menu.Embers.pas` (~220 lines)
+### `Menu/Menu.Embers.pas` (~220 lines)
 Sparks drifting off the outline of the logo. **`TEmbers`** takes the locked
 letters surface and reads the outline itself (`ReadOutline`: every ink texel
 with air beside it is a `TEmberSeed` with the alpha slope as its normal).
@@ -553,7 +577,7 @@ with air beside it is a `TEmberSeed` with the alpha slope as its normal).
   to the units of the rectangle, so the trailer's larger logo scales its
   sparks too. Drawn with the `gsPoint` glow.
 
-### `Menu.pas` (~915 lines)
+### `Menu/Menu.pas` (~915 lines)
 The main menu: the sky rig, the screens, the dolly between them.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
   the composition root, which owns the file system), `TMenuResult` (command +
@@ -594,7 +618,7 @@ The main menu: the sky rig, the screens, the dolly between them.
     (the setter rebuilds captions through `Tr` - set it AFTER the dictionary
     swap).
 
-### `Game.Loop.pas` (~385 lines)
+### `Game/Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
 - **`TGameApp`** (abstract) - `Update(dt)` (fixed), `Render(renderer, alpha)`
   (alpha = the interpolation fraction), `HandleKey/MouseMove/MouseButton`,
@@ -681,8 +705,8 @@ Builds and inspects `.mset` files. Wraps `Sprites.Sets` and nothing else.
 
 ### `tools/TitleCard/` - trailer text-card generator (VCL app)
 Renders arbitrary text in the game's bitmap font to PNG. Reuses `Sdl2.Core`,
-`Sprites.Sets` and `Render.Font` by relative path - it opens `ui.mset` and asks
-for the `fonty` sprite, the same path the game takes.
+`Sprites.Sets` and `Render.Font` from `Core/` by relative path - it opens
+`ui.mset` and asks for the `fonty` sprite, the same path the game takes.
 - **`TitleCard.dpr`** - VCL bootstrap.
 - **`TitleCard.Layout.pas`** (~355 lines) - pure layout math. Constants:
   measured font ink metrics (`InkTopRatio`, `CapHeightRatio`). Records:
@@ -788,8 +812,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
-| Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Hud.Draw.pas for the brush and palette) |
-| Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Hud.Draw.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
+| Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
+| Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
