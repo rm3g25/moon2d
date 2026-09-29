@@ -341,8 +341,7 @@ type
   public
     constructor Create(const AMonsters: TMonsterRegistry;
       const ARenderer: PSdlRenderer; const AWindow: PSdlWindow;
-      const ALevels: TArray<TLevelChoice>; AStartFullscreen: Boolean;
-      AStartDifficulty: TDifficulty);
+      const ALevels: TArray<TLevelChoice>; const AConfig: TGameConfig);
     destructor Destroy; override;
     procedure Update(ADeltaSeconds: Double); override;
     procedure Render(ARenderer: PSdlRenderer; AAlpha: Double); override;
@@ -354,16 +353,15 @@ type
 
 constructor TMoonGame.Create(const AMonsters: TMonsterRegistry;
   const ARenderer: PSdlRenderer; const AWindow: PSdlWindow;
-  const ALevels: TArray<TLevelChoice>; AStartFullscreen: Boolean;
-  AStartDifficulty: TDifficulty);
+  const ALevels: TArray<TLevelChoice>; const AConfig: TGameConfig);
 begin
   inherited Create;
   FMonsters := AMonsters;
   FWindow := AWindow;
   FRenderer := ARenderer;
-  FFullscreen := AStartFullscreen;
+  FFullscreen := AConfig.Fullscreen;
   FLevels := ALevels;
-  FDifficulty := AStartDifficulty;
+  FDifficulty := AConfig.Difficulty;
 
   // Level-independent subsystems live for the whole process; everything
   // bound to a particular level - including the tile cache, now that it
@@ -1847,7 +1845,7 @@ begin
     Host := TGameHost.Create(Config, 'Moon 2D ' + GameVersion);
     try
       Game := TMoonGame.Create(Monsters, Host.Renderer, Host.Window,
-        Levels, Config.Fullscreen, Config.Difficulty);
+        Levels, Config);
       try
         Host.Run(Game);
       finally
