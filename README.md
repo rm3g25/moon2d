@@ -140,8 +140,14 @@ Good places to start:
 ## Playing
 
 Take the release archive, unpack it, run `Moon2D.exe`. Nothing installs, nothing
-registers, nothing phones anywhere. Starts fullscreen; if the screen stays
-black, set `"fullscreen"` to `false` in `config.json`.
+registers, nothing phones anywhere. The one file written outside the game
+folder is `%APPDATA%\Moon2D\settings.json` - what you chose in the game
+(difficulty, language, fullscreen), laid over the shipped `config.json`.
+
+Starts fullscreen; Alt+Enter switches to a window and back, and the choice is
+remembered. If the screen stays black, press Alt+Enter. Failing that, set
+`"fullscreen"` to `false` in `config.json` and delete `settings.json` if it
+exists - it overrides `config.json`.
 
 Cloning and building works too, and the clone is complete — the soundtrack is
 in the repository now that the tracks are finished and mine. If you delete
@@ -181,7 +187,7 @@ bin/                   everything the game reads at runtime, and nothing else
   level1.json            geometry, backgrounds, entities, triggers, per screen
   level2.json
   monsters.json          movement, attacks, spawn tables, pickup effects
-  config.json            window, tick rate, difficulty, language
+  config.json            shipped defaults: window, tick rate, difficulty, language
   lang/                  en.json, ru.json
   sprites/               *.mset containers: manifest + packed frames, one file
                          per subject - a monster, a tile theme, the hero,

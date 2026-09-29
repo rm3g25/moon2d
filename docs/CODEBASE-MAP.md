@@ -7,8 +7,8 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.8` and the folder layout that
-followed it. Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.3`, patched through `v3.0.9` (the folder layout came
+between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
 
@@ -182,18 +182,25 @@ It moves with the git tag: bumped in the commit that becomes the version.
 Read by `Menu` (the corner tag) and the dpr (window title). The dproj carries
 no version resource, so nothing else has to agree with it.
 
-### `Core/Game.Config.pas` (~225 lines)
+### `Core/Game.Config.pas` (~285 lines)
 - **`TDifficulty`** = (`dfNormal`, `dfHard`, `dfWild`); `TDifficultyGrades`
   set; `DifficultyIds` protocol strings ('normal'/'hard'/'wild');
   `AllDifficultyGrades`.
 - **`TLanguage`** = (`lgEnglish`, `lgRussian`); `LanguageIds` ('en'/'ru') - one
-  vocabulary serving both config.json and the dictionary file names.
+  vocabulary serving both config files and the dictionary file names.
 - **`TGameConfig`** (record) - window w/h, fullscreen, vsync, fpsCap, tickRate,
-  difficulty, language; `Defaults` factory. Any parse problem returns
-  `Defaults`: configuration is a preference, never a reason to crash.
-- Free functions: `LoadGameConfig`, `SaveGameDifficulty`, `SaveGameLanguage`
-  (partial rewrites of config.json, silent on a locked file). An `era` key
-  left over from a 2.5.x config is ignored, not rejected.
+  difficulty, language; `Defaults` factory.
+- Two layers over `Defaults`: `bin\config.json` (shipped, read only) and
+  `%APPDATA%\Moon2D\settings.json` (the player's choices; the path comes from
+  `UserSettingsFileName`). `LoadGameConfig(shipped, settings)` overlays them in
+  that order, key by key (private `OverlayConfigFile`); a file with any problem
+  is skipped whole and the layers below stay - configuration is a preference,
+  never a reason to crash.
+- Savers: `SaveGameDifficulty`, `SaveGameLanguage`, `SaveWindowFullscreen` -
+  one key each into settings.json through the private `SaveKey` (section, key,
+  owned `TJSONValue`). The folder is created on the first save, an unparsable
+  file is left alone, a locked one is swallowed. Nothing writes config.json.
+  An `era` key left over from a 2.5.x config is ignored, not rejected.
 
 ### `Core/Localization.pas` (~305 lines)
 - **`TLocalizedText`** (record) - `Values[TLanguage]`, `Current`. Used for
@@ -660,8 +667,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     still, tiles + bullets on the world channel, monsters and hero on their
     own, cursor and HUD still), `LoadLevel`, `StartPlaying`, `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
-    `ApplyMenuResult`, `ToggleFullscreen`, `PreloadSounds`, `CreateHud`
-    (builds the three HUD objects afresh on every level load).
+    `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
+    settings.json), `SetFullscreen` (the bare switch - the ending screen drops
+    fullscreen for the browser through it, unremembered), `PreloadSounds`,
+    `CreateHud` (builds the three HUD objects afresh on every level load).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`.
   - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
@@ -737,9 +746,15 @@ transparent). Kept for provenance; nothing calls it now.
 ## Runtime data (`bin\`)
 
 ### `config.json` (tiny)
-`window` (width/height/fullscreen/vsync/fpsCap) + `game` (tickRate, difficulty
-id, language id). Read by `Game.Config`; difficulty and language are saved
-back individually.
+Shipped defaults: `window` (width/height/fullscreen/vsync/fpsCap) + `game`
+(tickRate, difficulty id, language id). Read by `Game.Config`, never written by
+the game.
+
+The player's layer, `%APPDATA%\Moon2D\settings.json`, has the same shape but
+holds only the keys the player touched (difficulty, language, fullscreen - or
+anything written in by hand) and overrides config.json key by key. It lives
+outside the game folder: not in the repository, not in a release, kept when a
+new release is unpacked over the old one.
 
 ### `monsters.json` (~11 KB)
 Keys: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,

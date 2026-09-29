@@ -8,8 +8,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 тайловая графика 64 px, фиксированный тик 33 Гц, уровни по экранам (без
 скролла).
 
-Перегенерировано на `v3.0.3`, поправлено по `v3.0.8` и раскладке по папкам после
-неё. Где карта и код расходятся, прав код.
+Перегенерировано на `v3.0.3`, поправлено по `v3.0.9` (раскладка по папкам
+случилась между 3.0.8 и 3.0.9). Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
 
@@ -191,18 +191,25 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 версией. Читают `Menu` (метка в углу) и dpr (заголовок окна). В dproj ресурса
 версии нет, так что больше ничему с ней сходиться не нужно.
 
-### `Core/Game.Config.pas` (~225 строк)
+### `Core/Game.Config.pas` (~285 строк)
 - **`TDifficulty`** = (`dfNormal`, `dfHard`, `dfWild`); множество
   `TDifficultyGrades`; протокольные строки `DifficultyIds`
   ('normal'/'hard'/'wild'); `AllDifficultyGrades`.
 - **`TLanguage`** = (`lgEnglish`, `lgRussian`); `LanguageIds` ('en'/'ru') - один
-  словарь обслуживает и config.json, и имена файлов словарей.
+  словарь обслуживает и оба файла конфига, и имена файлов словарей.
 - **`TGameConfig`** (запись) - ширина/высота окна, полный экран, vsync, fpsCap,
-  tickRate, сложность, язык; фабрика `Defaults`. Любая проблема разбора
-  возвращает `Defaults`: конфигурация это предпочтение, а не повод падать.
-- Свободные функции: `LoadGameConfig`, `SaveGameDifficulty`,
-  `SaveGameLanguage` (частичная перезапись config.json, молча переживает
-  заблокированный файл). Ключ `era`, оставшийся от конфига 2.5.x,
+  tickRate, сложность, язык; фабрика `Defaults`.
+- Два слоя поверх `Defaults`: `bin\config.json` (поставка, только чтение) и
+  `%APPDATA%\Moon2D\settings.json` (выбор игрока; путь даёт
+  `UserSettingsFileName`). `LoadGameConfig(поставка, настройки)` накладывает
+  их в этом порядке, по ключам (приватная `OverlayConfigFile`); файл с любой
+  проблемой пропускается целиком, нижние слои остаются - конфигурация это
+  предпочтение, а не повод падать.
+- Сохранение: `SaveGameDifficulty`, `SaveGameLanguage`, `SaveWindowFullscreen` -
+  по одному ключу в settings.json через приватную `SaveKey` (секция, ключ,
+  `TJSONValue` во владение). Папка создаётся при первом сохранении,
+  неразбираемый файл не трогается, заблокированный молча переживается.
+  config.json не пишет никто. Ключ `era`, оставшийся от конфига 2.5.x,
   игнорируется, а не отвергается.
 
 ### `Core/Localization.pas` (~305 строк)
@@ -676,8 +683,11 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
     задник стоит, тайлы + пули на канале мира, монстры и герой на своих,
     курсор и HUD стоят), `LoadLevel`, `StartPlaying`, `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
-    `ApplyMenuResult`, `ToggleFullscreen`, `PreloadSounds`, `CreateHud`
-    (строит три объекта HUD заново при каждой загрузке уровня).
+    `ApplyMenuResult`, `ToggleFullscreen` (переключение игроком, запоминается
+    в settings.json), `SetFullscreen` (голое переключение - через него
+    финальный экран сбрасывает полный экран перед браузером, без записи),
+    `PreloadSounds`, `CreateHud` (строит три объекта HUD заново при каждой
+    загрузке уровня).
   - Мир: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`.
   - Бой: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
@@ -756,9 +766,14 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 ## Данные времени выполнения (`bin\`)
 
 ### `config.json` (крошечный)
-`window` (width/height/fullscreen/vsync/fpsCap) + `game` (tickRate,
-идентификатор сложности, идентификатор языка). Читается `Game.Config`;
-сложность и язык сохраняются обратно поодиночке.
+Дефолты поставки: `window` (width/height/fullscreen/vsync/fpsCap) + `game`
+(tickRate, идентификатор сложности, идентификатор языка). Читается
+`Game.Config`, игра его не пишет.
+
+Слой игрока, `%APPDATA%\Moon2D\settings.json`, той же формы, но держит только
+тронутые игроком ключи (сложность, язык, полный экран - или что вписано
+руками) и перекрывает config.json по ключам. Живёт вне папки игры: не в
+репозитории, не в релизе, переживает распаковку новой версии поверх старой.
 
 ### `monsters.json` (~11 КБ)
 Ключи: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
