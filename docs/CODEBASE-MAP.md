@@ -302,7 +302,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   screen), `SpawnFromSky` (boss minions at a random top cell),
   `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim), `Draw`.
 
-### `Hud.Messages.pas` (~310 lines)
+### `Hud.Messages.pas` (~325 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
   private `TTickerLine` record), the big mid-screen headline, the marquee
   ('Бегущая строка'), score popups (private `TScorePopup`, '+N' rising).
@@ -311,7 +311,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   (screen transitions strand popups over the wrong geometry), `Clear` (death
   silences the board). The lanes are constants: the marquee runs at y=40, the
   ticker stacks from y=52 - both below the heart monitor. `BigMessageTicks=100`
-  (interface const) is the standard life of a headline.
+  (interface const) is the standard life of a headline. `ShowBig` takes an
+  optional note - a small line under the headline, gone with it (the first
+  bonus names the mouse button this way).
 
 ### `Game.Bonus.pas` (~25 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
@@ -366,18 +368,25 @@ per logic tick, `Draw`.
   (lost cell flash, grown cell glow, cure sweep on the trace, red frame on a
   hit, white blink of the cells during the mercy window).
 
-### `Hud.Charge.pas` (~365 lines)
+### `Hud.Charge.pas` (~460 lines)
 The score display: the bonus charge in the top-right corner, the twin of the
-heart monitor. **`THudCharge`** - `Tick(score, streak, bonus)` once per logic
-tick (bonus = the reward held, bkNone when the slot is empty), `Draw`.
+heart monitor, widened on the left by the reward slot (150 units against the
+monitor's 118). **`THudCharge`** - `Tick(score, streak, bonus, novice)` once
+per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
+= no reward spent yet), `Draw`.
 - The readout (36 units, three digits, capped at 999), a bar filling toward
   `BonusCost` with a tick every ten points (a stiff spring, so a kill jolts),
   and the kill streak as a row of ten cells (`StreakGoal`) - the ten kills
   without a scratch the game rewards but never showed.
-- A waiting reward turns the bar lime, breathing, with the reward's 9x9 icon
-  punched into it (`HealthIcon`/`FireRainIcon`/`AuraIcon`/`ExplosionIcon` as
-  rect lists) and a glint every 2 s; sparks fly when it lands; the frame
-  flashes white when it is spent.
+- A waiting reward turns the bar lime, breathing, with a glint every 2 s.
+  The reward itself sits in the slot: a 24x24 cell with its icon at double
+  scale (`HealthIcon`/`FireRainIcon`/`AuraIcon`/`ExplosionIcon` as 9x9 rect
+  lists) and a 7x10 mouse glyph (`MouseBody`, `MouseRightButton`) hanging off
+  the corner like a hotkey badge. On award, sparks burst from the bar and are
+  pulled into the slot; the icon appears with a flash when they land. The
+  frame flashes white when the reward is spent.
+- A novice gets insisted on: the slot pulses and the right button blinks like
+  a press. After the first reward spent the button stays lit, dim and still.
 - Streak endings are told apart by the score: reset with points = the tenth
   kill paid out (white flash), reset without = a hit (red flash on the lost
   cells).
@@ -552,7 +561,7 @@ Host: window and renderer plus the fixed-timestep loop.
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
-  sounds, the bonus caption slide (the cost itself lives in `Game.Bonus`),
+  sounds (the bonus cost lives in `Game.Bonus`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
   cadence, ticker durations, the screen-shake doses (`ExploderTrauma`,
@@ -570,7 +579,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, the bonus slot
-  (+ its queued activation), the gravel trial (attack flag, quota, wave timer, screen), the
+  (+ its queued activation; `FBonusLearned` - the first reward spent - is the
+  one thing that survives levels, so the HUD insists once per launch), the
+  gravel trial (attack flag, quota, wave timer, screen), the
   end-level timer, the level list + current file + current music, fullscreen,
   difficulty.
   Method clusters:
@@ -587,12 +598,13 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `DrainMonsterEvents` (also where explosions and boss blasts feed the
     shake), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
-    `AwardRandomBonus`, `ActivateQueuedBonus` (pays `BonusCost` on use),
-    `DrawBonusHud`. The ceremony itself is driven through `FHenshin`: started
+    `AwardRandomBonus` (the headline carries the mouse hint until the first
+    reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
+    ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (countdown) and the gravel trigger (straight in), ticked in
     `Update`, drawn last in `Render`, reset in `RestartLevel`.
   - Drawing/input: `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
-    `HitEndingLine`, `HandleEndingClick`, `DrawMessages`, `CrosshairFrame`,
+    `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton`.
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
