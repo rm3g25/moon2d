@@ -80,7 +80,6 @@ const
   SBonusExplosion = 'bonusExplosion';
   SBonusAwardFmt = 'bonusAwardFmt';
   SBrokeThrough = 'brokeThrough';
-  SBonusHudFmt = 'bonusHudFmt';
   SBonusHudHint = 'bonusHudHint';
 
   // --- Menu texts ---
@@ -173,7 +172,7 @@ const
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,
     SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
-    SBonusAwardFmt, SBrokeThrough, SBonusHudFmt, SBonusHudHint,
+    SBonusAwardFmt, SBrokeThrough, SBonusHudHint,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,

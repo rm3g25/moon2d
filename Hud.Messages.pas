@@ -19,6 +19,7 @@
 
   3. BIG MESSAGE (AddBigMessage of 2008): one headline mid-screen -
      level titles, bonuses, EVOLUTION. A newcomer replaces the current.
+     The remake may hang a small note under it for the same lifetime.
 
   4. SCORE POPUPS (AddScoreMessage of 2008): '+N' floating up from a
      kill. Structure verbatim; monst.pas (1248) confirms the lifetime
@@ -63,6 +64,7 @@ type
     FFrameWidth: Integer; // the big headline centers on the display
     FTicker: TArray<TTickerLine>;
     FBigText: string;
+    FBigNote: string;
     FBigTicksLeft: Integer;
     FMarqueeText: string;
     FMarqueeX: Double;
@@ -89,7 +91,9 @@ type
     // AddMess of 2008: a notice line for the ticker. '' is ignored.
     procedure AddTicker(const AText: string; ATicks: Integer);
     // AddBigMessage of 2008: the mid-screen headline. '' is ignored.
-    procedure ShowBig(const AText: string; ATicks: Integer);
+    // ANote is a small line under it, gone with the headline.
+    procedure ShowBig(const AText: string; ATicks: Integer;
+      const ANote: string = '');
     // 'Бегущая строка' of 2008: starts the marquee, replacing any
     // current one mid-run - exactly as the original overwrote its vars.
     procedure StartMarquee(const AText: string);
@@ -135,6 +139,7 @@ const
   // horizontal was approximated as (17 - len/2) columns; the remake
   // centers exactly - same look, honest math.
   BigMessageY = 150;
+  BigNoteGap = 6;
 
 constructor TMessageBoard.Create(const AFont: TMoonFont;
   AFrameWidth: Integer);
@@ -173,11 +178,13 @@ begin
   FTicker := FTicker + [Line];
 end;
 
-procedure TMessageBoard.ShowBig(const AText: string; ATicks: Integer);
+procedure TMessageBoard.ShowBig(const AText: string; ATicks: Integer;
+  const ANote: string);
 begin
   if AText = '' then
     Exit;
   FBigText := AText;
+  FBigNote := ANote;
   FBigTicksLeft := ATicks;
 end;
 
@@ -308,9 +315,13 @@ end;
 
 procedure TMessageBoard.DrawBig;
 begin
-  if FBigTicksLeft > 0 then
-    FFont.DrawBig(FBigText,
-      (FFrameWidth - FFont.BigTextWidth(FBigText)) / 2, BigMessageY);
+  if FBigTicksLeft <= 0 then
+    Exit;
+  FFont.DrawBig(FBigText,
+    (FFrameWidth - FFont.BigTextWidth(FBigText)) / 2, BigMessageY);
+  if FBigNote <> '' then
+    FFont.DrawSmall(FBigNote, (FFrameWidth - FFont.SmallTextWidth(FBigNote)) / 2,
+      BigMessageY + BigGlyphHeight + BigNoteGap);
 end;
 
 end.

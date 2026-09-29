@@ -77,10 +77,6 @@ const
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
 
-  BonusHudStartCol = -35.0; // the caption crawls in from off-screen...
-  BonusHudTargetCol = 1.0;  // ...to column 1 at 0.1 col/tick (315-319)
-  BonusHudSlideStep = 0.1;
-  BonusHudTopRow = 37;      // two small lines at the screen bottom
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
   VictoryMusicFile = 'win.ogg';
@@ -251,11 +247,11 @@ type
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     FHenshin: THenshin; // the ceremony; reborn with the hero
     // The bonus slot: one reward at a time, spent by right click.
-    // The HUD caption position lives here because it belongs to the
-    // slot's lifetime, not to the drawing code.
     FBonus: TBonusKind;
-    FBonusHudCol: Double;
     FBonusActivateQueued: Boolean; // right click lands between ticks
+    // Set by the first reward spent and kept across levels: until then
+    // the HUD slot insists and the award names the mouse button
+    FBonusLearned: Boolean;
     FMenu: TMoonMenu;
     FLevelLoaded: Boolean;      // 'StartGame' of 2008
     FResumeState: TGameState;   // where Escape-to-menu came from
@@ -321,8 +317,6 @@ type
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
-    procedure DrawBonusHud(AAlpha: Double);
-    procedure DrawMessages(AAlpha: Double);
     procedure DrawIntro;
     procedure LoadLevel(const AFileName: string);
     procedure AdvanceToNextLevel;
@@ -898,8 +892,8 @@ end;
 
 // ---------------------------------------------------------------------------
 // BONUSES - the reward roulette of moon.dpr 531-543 / 565-602. Every 50
-// points buys one random reward; it sits in the slot (bottom-left HUD
-// caption crawls in to remind) until the right mouse button spends it.
+// points buys one random reward; it sits in the slot (the charge HUD
+// shows it) until the right mouse button spends it.
 // ---------------------------------------------------------------------------
 
 function BonusDisplayName(AKind: TBonusKind): string;
@@ -919,14 +913,16 @@ begin
   // repeat Random(BonusCount+1) until <>0 of 2008 collapses to this -
   // same uniform pick over the real rewards, without the dice dance
   FBonus := TBonusKind(1 + Random(Ord(High(TBonusKind))));
-  FBonusHudCol := BonusHudStartCol;
   // The fanfare fires THRICE (539-541) - the loudest sound in the game,
   // as befits free stuff; kept verbatim
   FAudio.Play(BonusSoundFile);
   FAudio.Play(BonusSoundFile);
   FAudio.Play(BonusSoundFile);
+  var Note: string := '';
+  if not FBonusLearned then
+    Note := Tr(SBonusHudHint);
   FMessages.ShowBig(Format(Tr(SBonusAwardFmt), [BonusDisplayName(FBonus)]),
-    BigMessageTicks);
+    BigMessageTicks, Note);
 end;
 
 procedure TMoonGame.ActivateQueuedBonus;
@@ -963,23 +959,7 @@ begin
   end;
   Dec(FScore, BonusCost); // paid on use, not on the roll
   FBonus := bkNone;
-end;
-
-procedure TMoonGame.DrawBonusHud(AAlpha: Double);
-begin
-  if FBonus = bkNone then
-    Exit;
-
-  // The crawl moves 0.77 units/tick - interpolate or it stutters at
-  // render rate (the marquee lesson, third time a charm)
-  var Col := FBonusHudCol;
-  if Col < BonusHudTargetCol then
-    Col := Col + BonusHudSlideStep * AAlpha;
-
-  FFont.DrawSmall(Format(Tr(SBonusHudFmt), [BonusDisplayName(FBonus)]),
-    Col * SmallGlyphWidth, BonusHudTopRow * SmallLineStep);
-  FFont.DrawSmall(Tr(SBonusHudHint),
-    Col * SmallGlyphWidth, (BonusHudTopRow + 1) * SmallLineStep);
+  FBonusLearned := True;
 end;
 
 procedure TMoonGame.StartPlaying;
@@ -1312,7 +1292,7 @@ begin
   FMessages.Tick;
   FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
   FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
-  FCharge.Tick(FScore, FKillStreak, FBonus);
+  FCharge.Tick(FScore, FKillStreak, FBonus, not FBonusLearned);
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
@@ -1335,8 +1315,6 @@ begin
   if (FScore >= BonusCost) and (FBonus = bkNone) then
     AwardRandomBonus;
   ActivateQueuedBonus;
-  if (FBonus <> bkNone) and (FBonusHudCol < BonusHudTargetCol) then
-    FBonusHudCol := FBonusHudCol + BonusHudSlideStep;
 
   // 'if GravelAttack then GravAttack' (545) sat right after the
   // roulette - same slot here
@@ -1423,7 +1401,7 @@ begin
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
         FCharge.Draw;
-        DrawMessages(AAlpha);
+        FMessages.Draw(AAlpha);
         // Topmost: the ceremony outranks the news
         FHenshin.DrawCountdown(FFont, AAlpha);
       end;
@@ -1441,12 +1419,6 @@ begin
   FFont.DrawSmallBlock(FLevel.IntroText.Current, TextLeft, TextTop);
   FFont.DrawSmall(Tr(SPressAnyKey),
     (FrameWidth - FFont.SmallTextWidth(Tr(SPressAnyKey))) / 2, PromptY);
-end;
-
-procedure TMoonGame.DrawMessages(AAlpha: Double);
-begin
-  DrawBonusHud(AAlpha);
-  FMessages.Draw(AAlpha);
 end;
 
 // ---------------------------------------------------------------------------

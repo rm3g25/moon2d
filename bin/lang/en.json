@@ -28,7 +28,6 @@
   "bonusExplosion": "Explosion",
   "bonusAwardFmt": "BONUS: %s",
   "brokeThrough": "You broke through! Onward!",
-  "bonusHudFmt": "Current bonus: %s",
   "bonusHudHint": "Right mouse button to activate",
 
   "mainTitle": "Main menu",

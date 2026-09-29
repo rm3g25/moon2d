@@ -5,10 +5,12 @@
   HUD brush alone - no sprite, no font atlas.
 
   The bar fills to BonusCost and turns bonus-colored when a reward is
-  waiting, with the reward's icon punched into it; the number keeps
-  climbing past the cost until the reward is spent. The streak row
-  shows the ten kills without a scratch that the game rewards but
-  never showed.
+  waiting; the number keeps climbing past the cost until the reward is
+  spent. The reward itself flies as sparks from the bar into a slot at
+  the panel's left edge, with a mouse glyph in its corner: the right
+  button spends it. Until the player has spent one, the slot insists -
+  it pulses and the button blinks. The streak row shows the ten kills
+  without a scratch that the game rewards but never showed.
 
   The panel observes rather than listens: it takes the score, the
   streak and the held reward every tick and reacts to the difference
@@ -35,16 +37,20 @@ type
     FBrush: THudBrush;
     FNoise: TXorShift;
     FPanelX: Integer;
+    FSlotX: Integer;
+    FReadoutX: Integer;
     FBarX: Integer;
     FStreakX: Integer;
     FScore: Integer;
     FStreak: Integer;
     FBonus: TBonusKind;
+    FNovice: Boolean; // no reward spent yet: the slot insists
     FTick: Integer;
     FBarShown: Single; // the bar eases toward the score, this is where it is
     FBarSpeed: Single;
     FGainTicks: Integer;
     FReadyTicks: Integer;
+    FLandTicks: Integer; // the sparks are still on their way to the slot
     FSpentTicks: Integer;
     FStreakGoalTicks: Integer;
     FStreakLostTicks: Integer;
@@ -52,6 +58,7 @@ type
     FSparks: TArray<TSpark>;
     function Tint: TRgb;
     function BarWidth: Single;
+    function MouseButtonAlpha: Single;
     procedure ReactToScore(AScore: Integer);
     procedure ReactToBonus(ABonus: TBonusKind);
     procedure ReactToStreak(AStreak, AScore: Integer);
@@ -62,15 +69,19 @@ type
     procedure DrawPanel;
     procedure DrawReadout;
     procedure DrawBar;
+    procedure DrawSlot;
     procedure DrawBonusIcon(AX, AY: Single);
+    procedure DrawMouse(AX, AY: Single);
     procedure DrawSparks;
     procedure DrawStreak;
   public
     constructor Create(ARenderer: PSdlRenderer; AFrameWidth: Integer);
     destructor Destroy; override;
-    // Once per logic tick: the score, the kill streak and the reward
-    // held (bkNone when the slot is empty), all as of now
-    procedure Tick(AScore, AStreak: Integer; ABonus: TBonusKind);
+    // Once per logic tick: the score, the kill streak, the reward held
+    // (bkNone when the slot is empty) and whether the player has yet to
+    // spend a reward, all as of now
+    procedure Tick(AScore, AStreak: Integer; ABonus: TBonusKind;
+      ANovice: Boolean);
     procedure Draw;
   end;
 
@@ -94,6 +105,10 @@ const
   StreakLostTicks = 12;
   SparkCount = 14;
   SparkLifeTicks = 24;
+  // Each tick a spark keeps this share of its burst and closes this
+  // share of the way to the slot: a pop, then a pull
+  SparkDrag = 0.8;
+  SparkPull = 0.12;
   ShimmerPeriod = 66; // a glint runs down the full bar every 2 s
   BarSegments = 5; // a tick every ten points
 
@@ -106,6 +121,22 @@ const
   BarW = StreakRowWidth;
   BarH = 10;
   IconSize = 9;
+
+  SlotWidth = 32; // the reward slot widens the panel to the left
+  SlotInset = 4;
+  SlotCell = SlotWidth - 2 * SlotInset;
+  SlotY = PanelY + SlotInset;
+  IconScale = 2;
+  IconInset = (SlotCell - IconSize * IconScale) div 2;
+  NovicePulseSpeed = 0.2;
+
+  // The mouse glyph hangs off the cell's corner like a hotkey badge
+  MouseW = 7;
+  MouseH = 10;
+  MouseOverhangX = 2;
+  MouseOverhangY = 3;
+  MouseBlinkPeriod = 40;
+  MouseBlinkLit = 26; // ticks of each period the button is lit
 
   // 9x9 icons of the four rewards, as rects: a cross, three pairs of
   // falling drops, a ring, a star
@@ -127,13 +158,22 @@ const
     (X: 1; Y: 6; W: 2; H: 2), (X: 6; Y: 6; W: 2; H: 2),
     (X: 3; Y: 3; W: 3; H: 3));
 
+  // A 7x10 mouse outline split into two buttons, and the right one
+  MouseBody: array [0..5] of TIconRect = (
+    (X: 1; Y: 0; W: 5; H: 1), (X: 1; Y: 9; W: 5; H: 1),
+    (X: 0; Y: 1; W: 1; H: 8), (X: 6; Y: 1; W: 1; H: 8),
+    (X: 3; Y: 1; W: 1; H: 3), (X: 1; Y: 4; W: 5; H: 1));
+  MouseRightButton: TIconRect = (X: 4; Y: 1; W: 2; H: 3);
+
 constructor THudCharge.Create(ARenderer: PSdlRenderer; AFrameWidth: Integer);
 begin
   inherited Create;
   FBrush := THudBrush.Create(ARenderer);
   FNoise.Seed := $2545F491;
-  FPanelX := AFrameWidth - PanelMargin - PanelW;
-  FBarX := FPanelX + ReadoutWidth + InnerMargin;
+  FPanelX := AFrameWidth - PanelMargin - PanelW - SlotWidth;
+  FSlotX := FPanelX + SlotInset;
+  FReadoutX := FPanelX + SlotWidth;
+  FBarX := FReadoutX + ReadoutWidth + InnerMargin;
   FStreakX := FBarX;
 end;
 
@@ -143,7 +183,8 @@ begin
   inherited;
 end;
 
-procedure THudCharge.Tick(AScore, AStreak: Integer; ABonus: TBonusKind);
+procedure THudCharge.Tick(AScore, AStreak: Integer; ABonus: TBonusKind;
+  ANovice: Boolean);
 begin
   Inc(FTick);
   ReactToScore(AScore);
@@ -152,6 +193,7 @@ begin
   FScore := AScore;
   FStreak := AStreak;
   FBonus := ABonus;
+  FNovice := ANovice;
 
   EaseBar;
   MoveSparks;
@@ -168,11 +210,14 @@ procedure THudCharge.ReactToBonus(ABonus: TBonusKind);
 begin
   if (ABonus <> bkNone) and (FBonus = bkNone) then
   begin
-    FReadyTicks := ReadyFlashTicks;
+    FLandTicks := SparkLifeTicks;
     SpawnSparks;
   end;
   if (ABonus = bkNone) and (FBonus <> bkNone) then
+  begin
     FSpentTicks := SpentFlashTicks;
+    FLandTicks := 0; // spent in flight: nothing lands
+  end;
 end;
 
 // A streak ends two ways, told apart by the score: the tenth kill pays
@@ -197,22 +242,25 @@ begin
   begin
     FSparks[i].X := FBarX + FNoise.NextUnit * BarW;
     FSparks[i].Y := BarY + FNoise.NextUnit * BarH;
-    FSparks[i].VX := FNoise.NextUnit * 1.2 - 0.6;
-    FSparks[i].VY := -0.3 - FNoise.NextUnit * 1.1;
+    FSparks[i].VX := FNoise.NextUnit * 2 - 1;
+    FSparks[i].VY := -0.5 - FNoise.NextUnit * 1.5;
     FSparks[i].Ticks := SparkLifeTicks;
   end;
 end;
 
 procedure THudCharge.MoveSparks;
 begin
+  var TargetX := FSlotX + SlotCell / 2;
+  var TargetY := SlotY + SlotCell / 2;
   for var i := 0 to High(FSparks) do
   begin
     if FSparks[i].Ticks = 0 then
       Continue;
     Dec(FSparks[i].Ticks);
-    FSparks[i].VY := FSparks[i].VY + 0.05;
-    FSparks[i].X := FSparks[i].X + FSparks[i].VX;
-    FSparks[i].Y := FSparks[i].Y + FSparks[i].VY;
+    FSparks[i].VX := FSparks[i].VX * SparkDrag;
+    FSparks[i].VY := FSparks[i].VY * SparkDrag;
+    FSparks[i].X := FSparks[i].X + FSparks[i].VX + (TargetX - FSparks[i].X) * SparkPull;
+    FSparks[i].Y := FSparks[i].Y + FSparks[i].VY + (TargetY - FSparks[i].Y) * SparkPull;
   end;
 end;
 
@@ -231,6 +279,12 @@ begin
     Dec(FGainTicks);
   if FReadyTicks > 0 then
     Dec(FReadyTicks);
+  if FLandTicks > 0 then
+  begin
+    Dec(FLandTicks);
+    if FLandTicks = 0 then
+      FReadyTicks := ReadyFlashTicks; // the sparks have landed
+  end;
   if FSpentTicks > 0 then
     Dec(FSpentTicks);
   if FStreakGoalTicks > 0 then
@@ -258,6 +312,7 @@ begin
   DrawPanel;
   DrawReadout;
   DrawBar;
+  DrawSlot;
   DrawSparks;
   DrawStreak;
   FBrush.EndDraw;
@@ -265,20 +320,22 @@ end;
 
 procedure THudCharge.DrawPanel;
 begin
-  FBrush.Fill(FPanelX, PanelY, PanelW, PanelH, PanelColor, 0.72);
-  FBrush.Fill(FPanelX + ReadoutWidth, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
+  var FullWidth := PanelW + SlotWidth;
+  FBrush.Fill(FPanelX, PanelY, FullWidth, PanelH, PanelColor, 0.72);
+  FBrush.Fill(FReadoutX, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
+  FBrush.Fill(FReadoutX + ReadoutWidth, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
   FBrush.Fill(FBarX, CellY - 2, BarW, 1, Tint, 0.12);
   if FSpentTicks > 0 then
-    FBrush.Frame(FPanelX, PanelY, PanelW, PanelH, White,
+    FBrush.Frame(FPanelX, PanelY, FullWidth, PanelH, White,
       0.3 + 0.7 * FSpentTicks / SpentFlashTicks)
   else
-    FBrush.Frame(FPanelX, PanelY, PanelW, PanelH, Tint, 0.3);
+    FBrush.Frame(FPanelX, PanelY, FullWidth, PanelH, Tint, 0.3);
 end;
 
 procedure THudCharge.DrawReadout;
 begin
   var Value := Min(FScore, MaxShownScore);
-  var X := FPanelX + (ReadoutWidth - NumberWidth(Value)) / 2;
+  var X := FReadoutX + (ReadoutWidth - NumberWidth(Value)) / 2;
   FBrush.DrawNumber(Value, X, ReadoutY,
     Mix(Tint, White, FGainTicks / GainFlashTicks));
 end;
@@ -307,10 +364,28 @@ begin
     var Glint := (FTick mod ShimmerPeriod) * 2 - 6;
     if Glint < BarW then
       FBrush.Glow(FBarX + Max(0, Glint), BarY, 4, BarH, White, 0.5);
-    DrawBonusIcon(FBarX + Round(BarW / 2) - IconSize div 2, BarY + 1);
   end;
+end;
+
+// Empty, or the sparks still in flight: a dim cell waiting to be filled
+procedure THudCharge.DrawSlot;
+begin
+  if (FBonus = bkNone) or (FLandTicks > 0) then
+  begin
+    FBrush.Frame(FSlotX, SlotY, SlotCell, SlotCell, Tint, 0.25);
+    Exit;
+  end;
+
+  FBrush.Fill(FSlotX, SlotY, SlotCell, SlotCell, BonusColor, 0.08);
+  FBrush.Frame(FSlotX, SlotY, SlotCell, SlotCell, BonusColor, 0.6);
+  if FNovice then
+    FBrush.Glow(FSlotX - 1, SlotY - 1, SlotCell + 2, SlotCell + 2, BonusColor,
+      0.25 + 0.25 * Sin(FTick * NovicePulseSpeed));
+  DrawBonusIcon(FSlotX + IconInset, SlotY + IconInset);
+  DrawMouse(FSlotX + SlotCell + MouseOverhangX - MouseW,
+    SlotY + SlotCell + MouseOverhangY - MouseH);
   if FReadyTicks > 0 then
-    FBrush.Glow(FBarX - 2, BarY - 2, BarW + 4, BarH + 4, White,
+    FBrush.Glow(FSlotX - 2, SlotY - 2, SlotCell + 4, SlotCell + 4, White,
       0.7 * FReadyTicks / ReadyFlashTicks);
 end;
 
@@ -319,18 +394,38 @@ procedure THudCharge.DrawBonusIcon(AX, AY: Single);
   procedure DrawRects(const ARects: array of TIconRect);
   begin
     for var i := 0 to High(ARects) do
-      FBrush.Fill(AX + ARects[i].X, AY + ARects[i].Y, ARects[i].W, ARects[i].H,
-        BonusColor, 1);
+      FBrush.Fill(AX + ARects[i].X * IconScale, AY + ARects[i].Y * IconScale,
+        ARects[i].W * IconScale, ARects[i].H * IconScale, BonusColor, 1);
   end;
 
 begin
-  FBrush.Fill(AX - 2, AY - 1, IconSize + 4, IconSize + 2, PanelColor, 0.85);
   case FBonus of
     bkHealth: DrawRects(HealthIcon);
     bkFireRain: DrawRects(FireRainIcon);
     bkAura: DrawRects(AuraIcon);
     bkExplosion: DrawRects(ExplosionIcon);
   end;
+end;
+
+// A novice sees the right button blink like a press; after the first
+// reward spent it stays lit, quietly
+procedure THudCharge.DrawMouse(AX, AY: Single);
+begin
+  FBrush.Fill(AX - 1, AY - 1, MouseW + 2, MouseH + 2, PanelColor, 0.9);
+  for var Part in MouseBody do
+    FBrush.Fill(AX + Part.X, AY + Part.Y, Part.W, Part.H, White, 0.75);
+
+  FBrush.Fill(AX + MouseRightButton.X, AY + MouseRightButton.Y,
+    MouseRightButton.W, MouseRightButton.H, BonusColor, MouseButtonAlpha);
+end;
+
+function THudCharge.MouseButtonAlpha: Single;
+begin
+  if not FNovice then
+    Exit(0.6);
+  if (FTick mod MouseBlinkPeriod) < MouseBlinkLit then
+    Exit(1);
+  Result := 0.15;
 end;
 
 procedure THudCharge.DrawSparks;
@@ -340,7 +435,7 @@ begin
     if Spark.Ticks = 0 then
       Continue;
     FBrush.Glow(Round(Spark.X), Round(Spark.Y), 1, 1, BonusColor,
-      Spark.Ticks / SparkLifeTicks);
+      0.3 + 0.7 * Spark.Ticks / SparkLifeTicks);
   end;
 end;
 
