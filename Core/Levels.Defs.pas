@@ -18,7 +18,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
-  Localization;
+  Localization, Levels.Events;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -58,10 +58,6 @@ type
     BigMessage: TLocalizedText;   // location title; '' = none
     SmallMessage: TLocalizedText; // minor caption; '' = none
     HintText: TLocalizedText;     // one-shot hint ('_string:' of .mon)
-    // Monster ids that keep the hint readable through a fight: while one
-    // of them lives on this screen and the hero is there, the hint's
-    // reading time stands still. JSON: "hintHoldWhileAlive": ["tank"].
-    HintHoldWhileAlive: TArray<string>;
     ChangeMusic: string;  // music file to switch to; '' = none
     // Hero reposition on screen entry (vertical transitions in tunnels).
     HasHeroX: Boolean;
@@ -86,6 +82,9 @@ type
     Grades: TDifficultyGrades;
     Overrides: TEntityOverrides;
     Triggers: TEntityTriggers;
+    // Names the placement for the level's events ("allDead" waits for
+    // every body carrying the tag). JSON: "tag": "labGuard"; '' = none.
+    Tag: string;
   end;
 
   TBackgroundChange = record
@@ -109,10 +108,12 @@ type
     FTilePalette: TArray<string>;
     FBackgrounds: TArray<TBackgroundChange>;
     FEntities: TArray<TEntityPlacement>;
+    FEvents: TArray<TLevelEvent>;
     procedure ParseRoot(const ARoot: TJSONObject);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
+    procedure CheckEvents;
   public
     procedure LoadFromFile(const AFileName: string);
 
@@ -140,6 +141,9 @@ type
     property TilePalette: TArray<string> read FTilePalette;
     property Backgrounds: TArray<TBackgroundChange> read FBackgrounds;
     property Entities: TArray<TEntityPlacement> read FEntities;
+    // The level's events, in file order (Levels.Events); the game runs
+    // them through Events.Director
+    property Events: TArray<TLevelEvent> read FEvents;
   end;
 
 implementation
@@ -154,6 +158,9 @@ resourcestring
     + '%d chars, expected %d';
   SLevelBadScreen = 'TileAt: screen %d out of 1..%d';
   SLevelBadGrade = 'Level entity "%s": unknown difficulty id "%s"';
+  SLevelEventBadScreen = 'Level "%s": event "%s" sits on screen %d of %d';
+  SLevelEventTagUnknown = 'Level "%s": event "%s" waits for tag "%s", '
+    + 'which no entity carries';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -280,6 +287,34 @@ begin
   ParseTiles(ARoot.GetValue<TJSONObject>('tiles'));
   ParseBackgrounds(ARoot.GetValue<TJSONArray>('backgrounds'));
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
+  FEvents := ParseLevelEvents(ARoot, FId);
+  CheckEvents;
+end;
+
+function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;
+  const ATag: string): Boolean;
+begin
+  for var Entity in AEntities do
+    if Entity.Tag = ATag then
+      Exit(True);
+  Result := False;
+end;
+
+// An event off the screen list never fires; one waiting for a tag no
+// entity carries fires at once, since nobody is alive to hold it. Both
+// are typos that must die at load, not mid-level.
+procedure TLevel.CheckEvents;
+begin
+  for var Event in FEvents do
+  begin
+    if (Event.Screen < 1) or (Event.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelEventBadScreen,
+        [FId, Event.Id, Event.Screen, FScreenCount]);
+    if (Event.Condition = ecAllDead) and
+      not AnyPlacementTagged(FEntities, Event.Tag) then
+      raise ELevelError.CreateFmt(SLevelEventTagUnknown,
+        [FId, Event.Id, Event.Tag]);
+  end;
 end;
 
 function TLevel.SolidAt(AScreen, AX, AY: Integer): Boolean;
@@ -379,10 +414,6 @@ begin
   AOut.BigMessage := ReadLocalizedText(TriggersObj, 'bigMessage');
   AOut.SmallMessage := ReadLocalizedText(TriggersObj, 'smallMessage');
   AOut.HintText := ReadLocalizedText(TriggersObj, 'hintText');
-  var HoldIds := TriggersObj.GetValue<TJSONArray>('hintHoldWhileAlive', nil);
-  if HoldIds <> nil then
-    for var Item in HoldIds do
-      AOut.HintHoldWhileAlive := AOut.HintHoldWhileAlive + [Item.Value];
   AOut.ChangeMusic := TriggersObj.GetValue<string>('changeMusic', '');
   AOut.HasHeroX := TriggersObj.TryGetValue<Integer>('heroX', AOut.HeroX);
   AOut.HasHeroY := TriggersObj.TryGetValue<Integer>('heroY', AOut.HeroY);
@@ -405,6 +436,7 @@ begin
       Obj.GetValue<TJSONArray>('difficulty', nil), FEntities[i].MonsterId);
     ReadOverrides(Obj, FEntities[i].Overrides);
     ReadTriggers(Obj, FEntities[i].Triggers);
+    FEntities[i].Tag := Obj.GetValue<string>('tag', '');
   end;
 end;
 

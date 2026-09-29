@@ -31,6 +31,7 @@ uses
   Monsters.Defs in 'Core\Monsters.Defs.pas',
   Render.Sprites in 'Core\Render.Sprites.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
+  Levels.Events in 'Core\Levels.Events.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Shake in 'Core\Render.Shake.pas',
   Hero in 'Game\Hero.pas',
@@ -46,6 +47,7 @@ uses
   Game.Bonus in 'Game\Game.Bonus.pas',
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
+  Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
   Audio in 'Game\Audio.pas',
@@ -107,8 +109,6 @@ const
   MenuMusicFile = 'moon.ogg';
 
   // Message display times in logic ticks, verbatim moon.dpr call sites:
-  TickerNoticeTicks = 125;   // 'Вас задело пулей' (752), 'Вы ранены
-                             // монстром' (985), small trigger captions
   TickerPitTicks = 170;      // 'Вы упали в лунку' (781)
   // deathText times live in monst.pas, not yet on hand -
   // TODO: verify against monst.pas (tracked: part 2 review)
@@ -165,7 +165,6 @@ resourcestring
   // is loaded, hence English and outside the localization system
   SNoLevelsFound = 'No levels found (level1.json onward)';
   SSpriteSetMissing = 'Level "%s": declared sprite set "%s" not found';
-  SHintHoldUnknown = 'Level "%s": hintHoldWhileAlive names unknown monster "%s"';
   SAmbiguousSprites =
     'Level "%s": these sprite names live in more than one declared set.' +
     sLineBreak + 'Qualify them in the palette as set:name.' + sLineBreak +
@@ -176,12 +175,6 @@ type
   // gsIntro: the level's story text waits for a key.
   // gsEnding: the campaign-end screen - mouse-only exit (part 5.4).
   TGameState = (gsMenu, gsIntro, gsPlaying, gsEnding);
-
-  // The last hint and the fight it waits for (hintHoldWhileAlive)
-  THintHold = record
-    Screen: Integer;
-    MonsterIds: TArray<string>;
-  end;
 
 const
   // Screen-shake doses (2026 addition), in trauma shares - see
@@ -256,9 +249,9 @@ type
     // Entity triggers fire once per game (tutorial hints must not nag);
     // indexed in step with FLevel.Entities.
     FTriggerFired: TArray<Boolean>;
-    FHintHold: THintHold;
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     FHenshin: THenshin; // the ceremony; reborn with the hero
+    FDirector: TEventDirector; // the level's events; reborn with the level
     // The bonus slot: one reward at a time, spent by right click.
     FBonus: TBonusKind;
     FBonusActivateQueued: Boolean; // right click lands between ticks
@@ -327,8 +320,7 @@ type
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
     procedure PreloadSounds;
-    procedure CheckHintHold(const AMonsterIds: TArray<string>);
-    function HintHeld: Boolean;
+    procedure ChangeMusic(const AFileName: string);
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -403,6 +395,7 @@ begin
   FVitals.Free;
   FCharge.Free;
   FHenshin.Free;
+  FDirector.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -438,8 +431,6 @@ begin
   FLevel := TLevel.Create;
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
-  for var Entity in FLevel.Entities do
-    CheckHintHold(Entity.Triggers.HintHoldWhileAlive);
 
   // A declared set that is absent is a broken install, not a fallback
   // case - the fallback exists for names, not for whole sets.
@@ -484,6 +475,8 @@ begin
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
+  FreeAndNil(FDirector);
+  FDirector := TEventDirector.Create(FLevel.Events, FMessages, ChangeMusic);
 
   FMonsterBullets.Clear;
   FMessages.Clear;
@@ -503,7 +496,6 @@ begin
   FBonusActivateQueued := False;
   FTriggerFired := nil;
   SetLength(FTriggerFired, Length(FLevel.Entities));
-  FHintHold := Default(THintHold);
 
   FLevelLoaded := True;
   FMenu.HasActiveGame := True;
@@ -778,16 +770,9 @@ begin
     FMessages.ShowBig(Triggers.BigMessage.Current, BigMessageTicks);
     FMessages.AddTicker(Triggers.SmallMessage.Current, TickerNoticeTicks);
     FMessages.StartTerminal(Tr(STerminalHeader), Triggers.HintText.Current);
-    if Triggers.HintText.Current <> '' then
-    begin
-      FHintHold.Screen := FLevel.Entities[i].Screen;
-      FHintHold.MonsterIds := Triggers.HintHoldWhileAlive;
-    end;
     // The changeMusic field of level JSON waited since part 1 for a
     // player to exist - here it is (empty name is a no-op inside)
-    if Triggers.ChangeMusic <> '' then
-      FCurrentMusic := Triggers.ChangeMusic; // restarts respawn into it
-    FAudio.PlayMusic(Triggers.ChangeMusic, mmLoop);
+    ChangeMusic(Triggers.ChangeMusic);
     // 'Сменить X/Y герою' of 2008 (884-898): the trigger relocates the
     // hero by CELL number (value*32, no off-by-one - raw as the original
     // did it) and writes the checkpoint for its axis. Death and pits now
@@ -890,30 +875,20 @@ begin
   Inc(FScore, APoints);
 end;
 
+// A trigger's or an event's track: played now and remembered, so a
+// restart respawns into it. '' is a no-op.
+procedure TMoonGame.ChangeMusic(const AFileName: string);
+begin
+  if AFileName = '' then
+    Exit;
+  FCurrentMusic := AFileName;
+  FAudio.PlayMusic(AFileName, mmLoop);
+end;
+
 // Warm the sound cache at startup so the first shot reads from RAM,
 // not from disk. The roster assembles itself: hero one-shots + the
 // weapon map + every deathSounds entry of monsters.json - no second
 // hand-maintained list to drift out of sync.
-// A misspelled id would never match, and the hint would silently stop
-// waiting for its fight - refuse the level instead
-procedure TMoonGame.CheckHintHold(const AMonsterIds: TArray<string>);
-var
-  Def: TMonsterDef;
-begin
-  for var Id in AMonsterIds do
-    if not FMonsters.TryFind(Id, Def) then
-      raise ELevelError.CreateFmt(SHintHoldUnknown, [FLevel.Id, Id]);
-end;
-
-// Only on the hint's own screen: a hero who walks away from the fight
-// takes the reading time back with him
-function TMoonGame.HintHeld: Boolean;
-begin
-  Result := (FHintHold.MonsterIds <> nil) and
-    (FHero.Screen = FHintHold.Screen) and
-    FField.AnyAliveOnScreenOf(FHintHold.Screen, FHintHold.MonsterIds);
-end;
-
 procedure TMoonGame.PreloadSounds;
 begin
   FAudio.Load(PainSoundFile);
@@ -1213,6 +1188,7 @@ begin
   for var i := 0 to High(FLevel.Entities) do
     if FLevel.Entities[i].Screen = FHero.Screen then
       FTriggerFired[i] := False;
+  FDirector.ReArm(FHero.Screen);
   FireScreenTriggers;
 end;
 
@@ -1348,7 +1324,6 @@ begin
   if FState = gsEnding then
     Exit; // the farewell screen is static; only the mouse works there
 
-  FMessages.HoldTerminal(HintHeld);
   FMessages.Tick;
   if FMessages.TerminalKeyStruck then
     FAudio.Play(TerminalKeySoundFile);
@@ -1409,6 +1384,10 @@ begin
   ResolveHeroBulletHits;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
+  // The verdicts of the tick are in; the dead watch no events - the
+  // restart re-arms the screen anyway
+  if not FHero.Dead then
+    FDirector.Tick(FHero.Screen, FField);
   if FHurtCooldown > 0 then
     Dec(FHurtCooldown);
   if FHero.Dead then

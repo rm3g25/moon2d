@@ -1439,6 +1439,7 @@
       "spriteList": "tank.mns",
       "x": 9,
       "y": 11,
+      "tag": "labGuard",
       "triggers": {
         "changeMusic": "underground.ogg"
       }
@@ -1449,6 +1450,7 @@
       "spriteList": "tank.mns",
       "x": 11,
       "y": 11,
+      "tag": "labGuard",
       "triggers": {
         "bigMessage": "помещения мед.лаборатории",
         "bigMessageEn": "med lab facilities"
@@ -1473,12 +1475,7 @@
       "screen": 12,
       "spriteList": "medic.mns",
       "x": 7,
-      "y": 8,
-      "triggers": {
-        "hintText": "Помещения медицинских лабораторий - отличный способ поправить здоровье, но тут же вас подстерегает множество опасностей",
-        "hintTextEn": "Medical lab facilities are a great way to restore your health, but plenty of dangers lurk there as well",
-        "hintHoldWhileAlive": ["tank"]
-      }
+      "y": 8
     },
     {
       "monsterId": "medkit",
@@ -1499,7 +1496,8 @@
       "screen": 12,
       "spriteList": "gravel2.mns",
       "x": 16,
-      "y": 8
+      "y": 8,
+      "tag": "labGuard"
     },
     {
       "monsterId": "gravel",
@@ -1527,7 +1525,8 @@
       "screen": 12,
       "spriteList": "betoner.mns",
       "x": 12,
-      "y": 8
+      "y": 8,
+      "tag": "labGuard"
     },
     {
       "monsterId": "platform",
@@ -1952,6 +1951,22 @@
       "spriteList": "medic.mns",
       "x": 15,
       "y": 1
+    }
+  ],
+  "events": [
+    {
+      "id": "labHint",
+      "screen": 12,
+      "when": "allDead",
+      "tag": "labGuard",
+      "delay": 33,
+      "then": [
+        {
+          "action": "hint",
+          "text": "Помещения медицинских лабораторий - отличный способ поправить здоровье, но тут же вас подстерегает множество опасностей",
+          "textEn": "Medical lab facilities are a great way to restore your health, but plenty of dangers lurk there as well"
+        }
+      ]
     }
   ],
   "introText": "  Связь с лунной научно-исследовательской базой ТЕК\nпрервалась. Одновременно замолкли все передатчики.\n\n  Через несколько суток был запущен космический челнок\nс несколькими учёными и лейтенантом подразделения \nвооружённых сил ТЕК\n\n  Его цель - выяснить причину обрыва связи, а, также\nвосстановить работу одного из передатчиков, чтобы \nпереслать всю информацию о проведённых исследованиях\nна Землю.\n\n  Для начала нужно пройти через весь транспортный узел\nкосмопорта до туннелей... Это - единственный путь к \nлабораториям и передатчикам\n",

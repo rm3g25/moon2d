@@ -177,6 +177,7 @@
         <DCCReference Include="Core\Monsters.Defs.pas"/>
         <DCCReference Include="Core\Render.Sprites.pas"/>
         <DCCReference Include="Core\Levels.Defs.pas"/>
+        <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Shake.pas"/>
         <DCCReference Include="Game\Hero.pas"/>
@@ -192,6 +193,7 @@
         <DCCReference Include="Game\Game.Bonus.pas"/>
         <DCCReference Include="Core\Game.Space.pas"/>
         <DCCReference Include="Game\Game.Henshin.pas"/>
+        <DCCReference Include="Game\Events\Events.Director.pas"/>
         <DCCReference Include="Hud\Hud.Charge.pas"/>
         <DCCReference Include="Hud\Hud.Marks.pas"/>
         <DCCReference Include="Game\Audio.pas"/>

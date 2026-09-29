@@ -102,8 +102,6 @@ type
     // True on a tick the terminal typed a clicking key - the game owns
     // the sound
     function TerminalKeyStruck: Boolean;
-    // The game's verdict each tick: the fight the hint waits for is on
-    procedure HoldTerminal(AHeld: Boolean);
     // AddScoreMessage of 2008: '+N' rising from a kill. Coordinates are
     // game units of the popup's top-left. '' is ignored.
     procedure AddScorePopup(const AText: string; AX, AY: Double);
@@ -116,6 +114,9 @@ const
   // The standard life of a headline: bonuses, EVOLUTION, ICE FORM, the
   // boss break (2008 passim)
   BigMessageTicks = 100;
+  // The standard life of a ticker notice: hits, small captions (2008
+  // passim)
+  TickerNoticeTicks = 125;
 
 implementation
 
@@ -211,11 +212,6 @@ end;
 function TMessageBoard.TerminalKeyStruck: Boolean;
 begin
   Result := FTerminal.KeyStruck;
-end;
-
-procedure TMessageBoard.HoldTerminal(AHeld: Boolean);
-begin
-  FTerminal.Held := AHeld;
 end;
 
 procedure TMessageBoard.AddScorePopup(const AText: string; AX, AY: Double);

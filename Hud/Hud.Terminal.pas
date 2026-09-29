@@ -9,9 +9,7 @@
 
   The typing itself is Hud.Typewriter's. The terminal makes no sound of
   its own: KeyStruck goes up on the ticks a key should click, and the
-  game plays the click. Nor does it know the fight: the game sets Held
-  while the text should wait, and the reading time stands still with the
-  cursor blinking slower, on hold.
+  game plays the click.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -35,7 +33,6 @@ type
     FPhase: TTerminalPhase;
     FPhaseTicksLeft: Integer;
     FKeyStruck: Boolean;
-    FHeld: Boolean;
     procedure EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
     procedure CountDown(ANextPhase: TTerminalPhase; ANextTicks: Integer);
     function BoxHeight: Single;
@@ -58,8 +55,6 @@ type
     // The lowest game-unit Y the box covers; meaningful while Visible
     function Bottom: Single;
     property KeyStruck: Boolean read FKeyStruck;
-    // Set every tick by the owner; typing goes on, the reading time waits
-    property Held: Boolean read FHeld write FHeld;
   end;
 
 implementation
@@ -139,7 +134,6 @@ procedure THudTerminal.Clear;
 begin
   FPhase := tpOff;
   FKeyStruck := False;
-  FHeld := False;
 end;
 
 procedure THudTerminal.EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
@@ -162,8 +156,7 @@ begin
         EnterPhase(tpHolding,
           ReadBaseTicks + FTypewriter.CharCount * ReadTicksPerChar);
     tpHolding:
-      if not FHeld then
-        CountDown(tpFading, FadeTicks);
+      CountDown(tpFading, FadeTicks);
     tpFading:
       CountDown(tpOff, 0);
   end;
@@ -210,10 +203,7 @@ function THudTerminal.CursorVisible: Boolean;
 begin
   if FPhase = tpFading then
     Exit(False);
-  if FHeld and (FPhase = tpHolding) then
-    Result := FTypewriter.CursorVisible(bpOnHold)
-  else
-    Result := FTypewriter.CursorVisible(bpTyping);
+  Result := FTypewriter.CursorVisible(bpTyping);
 end;
 
 procedure THudTerminal.Draw;

@@ -57,6 +57,7 @@ type
     FAnim: TAnimSet;
     FX, FY: Double;
     FScreen: Integer;
+    FTag: string; // the placement's tag, '' for most; the events read it
     FDirection: Boolean; // True = right
     FAction: TMonsterAction;
     FLife: TMonsterLife;
@@ -122,6 +123,7 @@ type
     property X: Double read FX;
     property Y: Double read FY;
     property Screen: Integer read FScreen;
+    property Tag: string read FTag;
     property Life: TMonsterLife read FLife;
     property Lives: Integer read FLives;
     property LivesAll: Integer read FLivesAll;
@@ -161,18 +163,15 @@ type
     // reading is kept: the trial medkits lie on the floor by the entry
     // and get trampled in the chaos anyway).
     function AnyAliveOnScreen(AScreen: Integer): Boolean;
-    // Any live body on the screen whose monster id is in the list
-    function AnyAliveOnScreenOf(AScreen: Integer;
-      const AMonsterIds: TArray<string>): Boolean;
+    // Any live body carrying the placement tag, on any screen - the
+    // events' allDead condition asks here
+    function AnyAliveTagged(const ATag: string): Boolean;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer);
 
     property Monsters: TObjectList<TMonster> read FMonsters;
   end;
 
 implementation
-
-uses
-  System.StrUtils;
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -204,6 +203,7 @@ begin
   FEvents := TList<TMonsterEvent>.Create;
 
   FScreen := APlacement.Screen;
+  FTag := APlacement.Tag;
   // Placement coordinates are sprite-grid cells, as FindMostersOnScreen read
   FX := (APlacement.X - 1) * SpriteSize;
   FY := APlacement.Y * SpriteSize;
@@ -846,12 +846,10 @@ begin
   Result := False;
 end;
 
-function TMonsterField.AnyAliveOnScreenOf(AScreen: Integer;
-  const AMonsterIds: TArray<string>): Boolean;
+function TMonsterField.AnyAliveTagged(const ATag: string): Boolean;
 begin
   for var Monster in FMonsters do
-    if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) and
-      MatchStr(Monster.Def.Id, AMonsterIds) then
+    if (Monster.Life = mlAlive) and (Monster.Tag = ATag) then
       Exit(True);
   Result := False;
 end;
