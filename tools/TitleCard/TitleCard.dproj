@@ -152,9 +152,9 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\..\Sdl2.Core.pas"/>
-        <DCCReference Include="..\..\Sdl2.Image.pas"/>
-        <DCCReference Include="..\..\Render.Font.pas"/>
+        <DCCReference Include="..\..\Core\Sdl2.Core.pas"/>
+        <DCCReference Include="..\..\Core\Sdl2.Image.pas"/>
+        <DCCReference Include="..\..\Core\Render.Font.pas"/>
         <DCCReference Include="Image.Png.pas"/>
         <DCCReference Include="TitleCard.Layout.pas"/>
         <DCCReference Include="TitleCard.Config.pas"/>

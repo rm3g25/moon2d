@@ -42,7 +42,7 @@ uses
   System.JSON,
   System.Generics.Collections,
   System.Generics.Defaults,
-  Sprites.Sets in '..\..\Sprites.Sets.pas';
+  Sprites.Sets in '..\..\Core\Sprites.Sets.pas';
 
 const
   ManifestFileName = 'manifest.json';

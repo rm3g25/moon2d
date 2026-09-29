@@ -12,11 +12,11 @@ program TitleCard;
 
 uses
   Vcl.Forms,
-  Sdl2.Core in '..\..\Sdl2.Core.pas',
-  Sdl2.Image in '..\..\Sdl2.Image.pas',
-  Sprites.Sets in '..\..\Sprites.Sets.pas',
-  Render.Sprites in '..\..\Render.Sprites.pas',
-  Render.Font in '..\..\Render.Font.pas',
+  Sdl2.Core in '..\..\Core\Sdl2.Core.pas',
+  Sdl2.Image in '..\..\Core\Sdl2.Image.pas',
+  Sprites.Sets in '..\..\Core\Sprites.Sets.pas',
+  Render.Sprites in '..\..\Core\Render.Sprites.pas',
+  Render.Font in '..\..\Core\Render.Font.pas',
   Image.Png in 'Image.Png.pas',
   TitleCard.Layout in 'TitleCard.Layout.pas',
   TitleCard.Config in 'TitleCard.Config.pas',
