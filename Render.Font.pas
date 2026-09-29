@@ -1,8 +1,10 @@
 ﻿{
   Render.Font - bitmap font renderer, the SDL2 heir of moonfont1.pas (2008).
 
-  The atlas is a single 448x448 BMP holding a 16x16 grid of glyph cells
-  (28x28 px each). A glyph is found by its CP1251 byte code MINUS ONE -
+  The atlas is a single square image holding a 16x16 grid of glyph cells.
+  The 2008 one is 448x448 (28 px cells); a redrawn one may be any square
+  whose side divides by 16, and the cell size is read from the image at
+  load. A glyph is found by its CP1251 byte code MINUS ONE -
   the 2008 atlas is shifted one cell ("зачем -1 непомню хоть убейте",
   as the original author documented). Transparency follows the original
   threshold, not a plain color key: everything darker than (43,33,23)
@@ -33,7 +35,10 @@ uses
 const
   FontAtlasSize = 448; // atlas side in pixels (TexSizeX/TexSizeY of 2008)
   FontGridCells = 16;  // glyphs per atlas row/column (q = 1/16 of 2008)
-  FontCellPx = FontAtlasSize div FontGridCells; // 28 px per glyph cell
+  // The 2008 cell, 28 px. Pixel measurements taken on the 2008 atlas are
+  // divided by this and stay valid as ratios for an atlas of any size;
+  // sampling uses the cell size of the atlas actually loaded.
+  FontCellPx = FontAtlasSize div FontGridCells;
 
   // 2008 drew text in GL normalized device coords (-1..1 over the whole
   // window) while the game logic ran in 512x384 units. Conversion:
@@ -70,6 +75,7 @@ type
     FRenderer: PSdlRenderer;
     FSpriteSet: TSpriteSet; // attached, not owned; nil = plain file
     FAtlas: PSdlTexture;
+    FAtlasCellPx: Integer;
     procedure LoadAtlas(const AFileName: string;
       AOrientation: TFontAtlasOrientation);
     procedure DrawTextLine(const AText: string;
@@ -118,6 +124,8 @@ resourcestring
   SFontFileLoadFailed = 'Cannot load font atlas "%s": %s';
   SFontSurfaceFailed = 'Cannot prepare font atlas "%s": %s';
   SFontTextureFailed = 'Cannot create font texture for "%s": %s';
+  SFontGridMismatch =
+    'Font atlas "%s" is %dx%d: it must be square with a side divisible by %d';
 
 type
   // The 2008 glyph index is the CP1251 byte of the character; modern
@@ -225,6 +233,11 @@ begin
       [AFileName, SdlErrorText]);
 
   try
+    if (Atlas.W <> Atlas.H) or (Atlas.W mod FontGridCells <> 0) then
+      raise EFontError.CreateFmt(SFontGridMismatch,
+        [AFileName, Atlas.W, Atlas.H, FontGridCells]);
+    FAtlasCellPx := Atlas.W div FontGridCells;
+
     if AOrientation = faRotatedCw then
     begin
       var Upright := RebuildUpright(Atlas);
@@ -239,6 +252,11 @@ begin
       raise EFontError.CreateFmt(SFontTextureFailed,
         [AFileName, SdlErrorText]);
     SDL_SetTextureBlendMode(FAtlas, SdlBlendModeBlend);
+    // A redrawn atlas is drawn both smaller and larger than its cells, and
+    // nearest drops whole strokes on the way down. The 2008 atlas is only
+    // ever enlarged and keeps nearest, so its pixels stay square.
+    if FAtlasCellPx > FontCellPx then
+      SDL_SetTextureScaleMode(FAtlas, SdlScaleModeLinear);
   finally
     SDL_FreeSurface(Atlas);
   end;
@@ -254,8 +272,8 @@ begin
   Bytes := TCp1251String(AText);
   SDL_SetTextureAlphaMod(FAtlas, AAlpha);
 
-  Src.W := FontCellPx;
-  Src.H := FontCellPx;
+  Src.W := FAtlasCellPx;
+  Src.H := FAtlasCellPx;
   Dest.W := AGlyphW;
   Dest.H := AGlyphH;
   Dest.Y := AY;
@@ -270,8 +288,8 @@ begin
     if GlyphIndex < 0 then
       Continue;
 
-    Src.X := (GlyphIndex mod FontGridCells) * FontCellPx;
-    Src.Y := (GlyphIndex div FontGridCells) * FontCellPx;
+    Src.X := (GlyphIndex mod FontGridCells) * FAtlasCellPx;
+    Src.Y := (GlyphIndex div FontGridCells) * FAtlasCellPx;
     Dest.X := AX + (i - 1) * AAdvance;
 
     SDL_RenderCopyF(FRenderer, FAtlas, @Src, @Dest);
