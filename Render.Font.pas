@@ -108,10 +108,6 @@ type
     // line2() of 2008: big text for titles and location names.
     procedure DrawBig(const AText: string; AX, AY: Double;
       AAlpha: UInt8 = 255);
-    // Multi-line small text: splits on LF, one SmallLineStep per line
-    // (2008 stepped intro lines by whole y positions - zero leading;
-    // the glyph cells carry their own margins).
-    procedure DrawSmallBlock(const AText: string; AX, AY: Double);
 
     // Widths in game units - for centering text on screen.
     function SmallTextWidth(const AText: string): Double;
@@ -357,13 +353,6 @@ procedure TMoonFont.DrawBig(const AText: string; AX, AY: Double;
 begin
   DrawTextLine(AText, tsLarge, AX, AY, BigGlyphWidth, BigGlyphHeight, BigAdvance,
     AAlpha);
-end;
-
-procedure TMoonFont.DrawSmallBlock(const AText: string; AX, AY: Double);
-begin
-  var Lines := AText.Replace(#13, '').Split([#10]);
-  for var i := 0 to High(Lines) do
-    DrawSmall(Lines[i], AX, AY + i * SmallLineStep);
 end;
 
 function TMoonFont.SmallTextWidth(const AText: string): Double;

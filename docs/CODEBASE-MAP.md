@@ -131,7 +131,7 @@ offset per layer. Draw-side only: the world's arithmetic never sees it.
 - The doses live in the dpr (`*Trauma` constants), not here - what shakes how
   much is game-flow policy; this unit is the mechanism.
 
-### `Render.Font.pas` (~350 lines)
+### `Render.Font.pas` (~405 lines)
 Bitmap font, 448 px atlas, 16x16 glyph grid (CP1251 layout).
 - **Constants**: atlas geometry (`FontAtlasSize`, `FontGridCells`,
   `FontCellPx`) + verbatim-2008 glyph metrics derived from the original's NDC
@@ -140,8 +140,8 @@ Bitmap font, 448 px atlas, 16x16 glyph grid (CP1251 layout).
 - **`TFontAtlasOrientation`** = (`faUpright`, `faRotatedCw`) - the atlas
   orientation fix.
 - **`TMoonFont`** - takes an optional `TSpriteSet` (attached, not owned) and
-  reads its atlas sprite out of it. `DrawSmall`, `DrawBig`, `DrawSmallBlock`
-  (multi-line), `DrawScaled` (arbitrary glyph height - the countdown digits),
+  reads its atlas sprite out of it. `DrawSmall`, `DrawBig`, `DrawScaled`
+  (arbitrary glyph height - the countdown digits),
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
 
