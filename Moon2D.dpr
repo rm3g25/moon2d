@@ -337,6 +337,7 @@ type
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
     procedure ApplyMenuResult(const AResult: TMenuResult);
+    procedure SetFullscreen(AValue: Boolean);
     procedure ToggleFullscreen;
   public
     constructor Create(const AMonsters: TMonsterRegistry;
@@ -579,9 +580,10 @@ procedure TMoonGame.HandleEndingClick;
 begin
   if HitEndingLine(Tr(SEndingAuthor), EndingAuthorRow) then
   begin
-    // The browser must land in a visible window - fullscreen drops first
-    if FFullscreen then
-      ToggleFullscreen;
+    // The browser must land in a visible window - fullscreen drops
+    // first. SetFullscreen, not ToggleFullscreen: the player did not
+    // choose windowed, and the next run must not remember it
+    SetFullscreen(False);
     OpenWebPage(AuthorLinkedInUrl);
   end
   else if HitEndingLine(Tr(SEndingMenu), EndingMenuRow) then
@@ -622,13 +624,19 @@ begin
   // Level music keeps playing under the menu - verbatim 2008 behavior
 end;
 
-procedure TMoonGame.ToggleFullscreen;
+procedure TMoonGame.SetFullscreen(AValue: Boolean);
 begin
-  FFullscreen := not FFullscreen;
+  FFullscreen := AValue;
   if FFullscreen then
     SDL_SetWindowFullscreen(FWindow, SdlWindowFullscreenDesktop)
   else
     SDL_SetWindowFullscreen(FWindow, 0);
+end;
+
+procedure TMoonGame.ToggleFullscreen;
+begin
+  SetFullscreen(not FFullscreen);
+  SaveWindowFullscreen(UserSettingsFileName, FFullscreen);
 end;
 
 procedure TMoonGame.ApplyMenuResult(const AResult: TMenuResult);

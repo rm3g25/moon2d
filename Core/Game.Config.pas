@@ -73,6 +73,10 @@ procedure SaveGameDifficulty(const AFileName: string; AValue: TDifficulty);
 // click persists, a locked file loses only the memory of the choice.
 procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 
+// Same contract as SaveGameDifficulty, for the "fullscreen" key of the
+// "window" section.
+procedure SaveWindowFullscreen(const AFileName: string; AValue: Boolean);
+
 implementation
 
 uses
@@ -82,6 +86,8 @@ const
   // config.json keys read by both the loader and a saver - protocol
   // vocabulary shared by two places, hence constants (guide sect. 7)
   GameSectionKey = 'game';
+  WindowSectionKey = 'window';
+  FullscreenKey = 'fullscreen';
   DifficultyKey = 'difficulty';
   LanguageKey = 'language';
 
@@ -164,14 +170,14 @@ begin
     if Root = nil then
       Exit;
     try
-      var Window := Root.GetValue<TJSONObject>('window', nil);
+      var Window := Root.GetValue<TJSONObject>(WindowSectionKey, nil);
       if Assigned(Window) then
       begin
         Result.WindowWidth := Window.GetValue<Integer>('width',
           Result.WindowWidth);
         Result.WindowHeight := Window.GetValue<Integer>('height',
           Result.WindowHeight);
-        Result.Fullscreen := Window.GetValue<Boolean>('fullscreen',
+        Result.Fullscreen := Window.GetValue<Boolean>(FullscreenKey,
           Result.Fullscreen);
         Result.Vsync := Window.GetValue<Boolean>('vsync', Result.Vsync);
         Result.FpsCap := Window.GetValue<Integer>('fpsCap', Result.FpsCap);
@@ -267,6 +273,11 @@ procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 begin
   SaveKey(AFileName, GameSectionKey, LanguageKey,
     TJSONString.Create(LanguageIds[AValue]));
+end;
+
+procedure SaveWindowFullscreen(const AFileName: string; AValue: Boolean);
+begin
+  SaveKey(AFileName, WindowSectionKey, FullscreenKey, TJSONBool.Create(AValue));
 end;
 
 end.
