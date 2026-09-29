@@ -70,15 +70,30 @@ type
   // un-rotated once at load. faUpright = a normally drawn atlas.
   TFontAtlasOrientation = (faUpright, faRotatedCw);
 
+  // How a redrawn atlas is filtered. Linear is smooth; nearest keeps the
+  // hard stepped edge of the 2008 font. The 2008 atlas is always nearest.
+  TFontFiltering = (ffLinear, ffNearest, ffLinearSmallOnly);
+
+  // Small = line() of 2008; large = line2() and DrawScaled.
+  TTextSize = (tsSmall, tsLarge);
+
   TMoonFont = class
   private
     FRenderer: PSdlRenderer;
     FSpriteSet: TSpriteSet; // attached, not owned; nil = plain file
-    FAtlas: PSdlTexture;
+    FAtlas: PSdlTexture; // nearest
+    // The same pixels filtered linearly; nil for the 2008 atlas. Two
+    // textures, not one switched per draw: a batching renderer reads the
+    // filter at flush time, so a switch would repaint the whole frame.
+    FLinearAtlas: PSdlTexture;
     FAtlasCellPx: Integer;
+    FFiltering: TFontFiltering;
     procedure LoadAtlas(const AFileName: string;
       AOrientation: TFontAtlasOrientation);
-    procedure DrawTextLine(const AText: string;
+    function CreateAtlasTexture(const ASurface: PSdlSurface;
+      const AFileName: string): PSdlTexture;
+    function AtlasFor(ASize: TTextSize): PSdlTexture;
+    procedure DrawTextLine(const AText: string; ASize: TTextSize;
       AX, AY, AGlyphW, AGlyphH, AAdvance: Double; AAlpha: UInt8);
   public
     constructor Create(const ARenderer: PSdlRenderer;
@@ -113,6 +128,8 @@ type
     // Debug: the raw atlas, scaled into a square - the one-glance test
     // for the orientation trap described in the unit header.
     procedure DrawAtlas(AX, AY, ASize: Integer);
+
+    property Filtering: TFontFiltering read FFiltering write FFiltering;
   end;
 
 implementation
@@ -209,6 +226,8 @@ end;
 
 destructor TMoonFont.Destroy;
 begin
+  if Assigned(FLinearAtlas) then
+    SDL_DestroyTexture(FLinearAtlas);
   if Assigned(FAtlas) then
     SDL_DestroyTexture(FAtlas);
   inherited;
@@ -247,30 +266,56 @@ begin
 
     ApplyAlphaThreshold(Atlas);
 
-    FAtlas := SDL_CreateTextureFromSurface(FRenderer, Atlas);
-    if FAtlas = nil then
-      raise EFontError.CreateFmt(SFontTextureFailed,
-        [AFileName, SdlErrorText]);
-    SDL_SetTextureBlendMode(FAtlas, SdlBlendModeBlend);
-    // A redrawn atlas is drawn both smaller and larger than its cells, and
-    // nearest drops whole strokes on the way down. The 2008 atlas is only
-    // ever enlarged and keeps nearest, so its pixels stay square.
+    FAtlas := CreateAtlasTexture(Atlas, AFileName);
+    SDL_SetTextureScaleMode(FAtlas, SdlScaleModeNearest);
+    // Only a redrawn atlas gets the linear copy: the 2008 atlas is only
+    // ever enlarged, and linear would turn its square pixels to soap.
     if FAtlasCellPx > FontCellPx then
-      SDL_SetTextureScaleMode(FAtlas, SdlScaleModeLinear);
+    begin
+      FLinearAtlas := CreateAtlasTexture(Atlas, AFileName);
+      SDL_SetTextureScaleMode(FLinearAtlas, SdlScaleModeLinear);
+    end;
   finally
     SDL_FreeSurface(Atlas);
   end;
 end;
 
-procedure TMoonFont.DrawTextLine(const AText: string;
+function TMoonFont.CreateAtlasTexture(const ASurface: PSdlSurface;
+  const AFileName: string): PSdlTexture;
+begin
+  Result := SDL_CreateTextureFromSurface(FRenderer, ASurface);
+  if Result = nil then
+    raise EFontError.CreateFmt(SFontTextureFailed,
+      [AFileName, SdlErrorText]);
+  SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
+end;
+
+function TMoonFont.AtlasFor(ASize: TTextSize): PSdlTexture;
+begin
+  Result := FAtlas;
+  if FLinearAtlas = nil then
+    Exit;
+
+  case FFiltering of
+    ffLinear:
+      Result := FLinearAtlas;
+    ffLinearSmallOnly:
+      if ASize = tsSmall then
+        Result := FLinearAtlas;
+  end;
+end;
+
+procedure TMoonFont.DrawTextLine(const AText: string; ASize: TTextSize;
   AX, AY, AGlyphW, AGlyphH, AAdvance: Double; AAlpha: UInt8);
 var
   Bytes: TCp1251String;
+  Atlas: PSdlTexture;
   Src: TSdlRect;
   Dest: TSdlFRect;
 begin
   Bytes := TCp1251String(AText);
-  SDL_SetTextureAlphaMod(FAtlas, AAlpha);
+  Atlas := AtlasFor(ASize);
+  SDL_SetTextureAlphaMod(Atlas, AAlpha);
 
   Src.W := FAtlasCellPx;
   Src.H := FAtlasCellPx;
@@ -292,25 +337,25 @@ begin
     Src.Y := (GlyphIndex div FontGridCells) * FAtlasCellPx;
     Dest.X := AX + (i - 1) * AAdvance;
 
-    SDL_RenderCopyF(FRenderer, FAtlas, @Src, @Dest);
+    SDL_RenderCopyF(FRenderer, Atlas, @Src, @Dest);
   end;
 
   // Leave the atlas opaque for whoever draws next (DrawAtlas included).
   if AAlpha <> 255 then
-    SDL_SetTextureAlphaMod(FAtlas, 255);
+    SDL_SetTextureAlphaMod(Atlas, 255);
 end;
 
 procedure TMoonFont.DrawSmall(const AText: string; AX, AY: Double;
   AAlpha: UInt8);
 begin
-  DrawTextLine(AText, AX, AY,
+  DrawTextLine(AText, tsSmall, AX, AY,
     SmallGlyphWidth, SmallGlyphHeight, SmallAdvance, AAlpha);
 end;
 
 procedure TMoonFont.DrawBig(const AText: string; AX, AY: Double;
   AAlpha: UInt8);
 begin
-  DrawTextLine(AText, AX, AY, BigGlyphWidth, BigGlyphHeight, BigAdvance,
+  DrawTextLine(AText, tsLarge, AX, AY, BigGlyphWidth, BigGlyphHeight, BigAdvance,
     AAlpha);
 end;
 
@@ -340,7 +385,7 @@ procedure TMoonFont.DrawScaled(const AText: string;
   AX, AY, AGlyphHeight: Double; AAlpha: UInt8);
 begin
   var GlyphW := AGlyphHeight * BigGlyphAspect;
-  DrawTextLine(AText, AX, AY, GlyphW, AGlyphHeight,
+  DrawTextLine(AText, tsLarge, AX, AY, GlyphW, AGlyphHeight,
     BigAdvanceRatio * GlyphW, AAlpha);
 end;
 

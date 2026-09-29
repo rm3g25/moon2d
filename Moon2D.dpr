@@ -124,6 +124,9 @@ const
   // (see Render.Font header). If F shows readable glyphs already upright,
   // switch to faUpright - or point FontFileName at the other font file.
   FontOrientation = faRotatedCw;
+  // Nearest keeps the hard stepped edge the 2008 font is recognised by;
+  // side by side in play, linear bought no visible clarity in exchange.
+  FontFiltering = ffNearest;
 
   // Scancodes beyond Sdl2.Core's basic set
   ScancodeA = 4;
@@ -138,6 +141,7 @@ const
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeM = 16; // music mute toggle (trailer capture)
+  ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeT = 23; // tile inspector in the window title
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodePageUp = 75; // browse screens
@@ -300,6 +304,7 @@ type
     procedure NudgeCrosshair(ADX, ADY: Integer);
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
     procedure DebugBrowseScreen(ADelta: Integer);
+    procedure CycleFontFiltering;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -363,6 +368,7 @@ begin
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
     FUiSet);
+  FFont.Filtering := FontFiltering;
   FMessages := TMessageBoard.Create(FFont, FrameWidth);
   FShake := TScreenShake.Create;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
@@ -1512,6 +1518,21 @@ begin
   FHero.SetY(FHero.Y); // settles or falls, as any teleport
   ArriveOnScreen;
 end;
+
+// N: the three ways to filter a redrawn font, compared live on the
+// same screen. The 2008 atlas ignores it - it is nearest in every mode.
+procedure TMoonGame.CycleFontFiltering;
+const
+  FilteringNames: array[TFontFiltering] of string = ('linear', 'nearest',
+    'linear small, nearest large');
+begin
+  if FFont.Filtering = High(TFontFiltering) then
+    FFont.Filtering := Low(TFontFiltering)
+  else
+    FFont.Filtering := Succ(FFont.Filtering);
+  SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(
+    'font: ' + FilteringNames[FFont.Filtering])));
+end;
 {$ENDIF}
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
@@ -1524,6 +1545,8 @@ begin
       FMenu.ShowShowcase(skLogo);
     ScancodeB:
       FMenu.ShowShowcase(skSky);
+    ScancodeN:
+      CycleFontFiltering;
   else
     Exit;
   end;
@@ -1542,6 +1565,8 @@ begin
       FInspect := not FInspect;
     ScancodeF:
       FShowAtlas := not FShowAtlas;
+    ScancodeN:
+      CycleFontFiltering;
     ScancodeG:
       // The roulette hands the aura out once in four rewards - too
       // rare to tune against. Straight onto the hero, slot untouched.
