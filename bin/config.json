@@ -3,7 +3,7 @@
     "width": 1024,
     "height": 768,
     "fullscreen": true,
-    "vsync": false,
+    "vsync": true,
     "fpsCap": 120
   },
   "game": {
