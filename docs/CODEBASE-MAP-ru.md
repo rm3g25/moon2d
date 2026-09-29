@@ -8,13 +8,15 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 тайловая графика 64 px, фиксированный тик 33 Гц, уровни по экранам (без
 скролла).
 
-Перегенерировано на `v3.0.3`, поправлено по `v3.0.5`. Где карта и код
+Перегенерировано на `v3.0.3`, поправлено по `v3.0.8`. Где карта и код
 расходятся, прав код.
 
 Направление зависимостей (примерно снизу вверх):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
-`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` /
+`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
+`Hud.Terminal` / `Hud.Briefing` ->
+`Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` -> `Hud.Marks` /
 `Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`. Небесная установка меню
 сбоку: `Hud.Draw` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
@@ -204,7 +206,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 - **`TEntityTriggers`** (запись) - `BigMessage`/`SmallMessage`/`HintText`
   (локализованные), `ChangeMusic`, перестановка героя по heroX/heroY
   (вертикальные переходы), квота испытания грейвелов (`HasGravelBoss` +
-  `GravelQuota: TDifficultyValue`).
+  `GravelQuota: TDifficultyValue`), `HintHoldWhileAlive` (id монстров; пока
+  хоть один жив на экране подсказки и герой там, время чтения стоит).
 - **`TEntityPlacement`** (запись) - monsterId, экран (с единицы), x/y
   (спрайтовая сетка), spriteList, `Grades` (идиома doom-овских флагов
   сложности), overrides, triggers. `SpriteList` до сих пор несёт написание 2008
@@ -314,20 +317,61 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   первом обращении). `FLivesScale` - множитель сложности, применяемый к каждому
   монстру, рождённому в этом поле. `Tick` (текущий экран), `SpawnFromSky`
   (миньоны босса в случайной верхней клетке), `AnyAliveOnScreen` (ворота
-  прорыва - пикапы считаются, дословно), `Draw`.
+  прорыва - пикапы считаются, дословно), `AnyAliveOnScreenOf(screen, ids)` (то
+  же, но только среди заданных id - удержание подсказки), `Draw`.
 
-### `Hud.Messages.pas` (~325 строк)
+### `Hud.Messages.pas` (~335 строк)
 - **`TMessageBoard`** - система сообщений 2008: строки тикера (выезд, приватная
-  запись `TTickerLine`), большой заголовок посреди экрана, бегущая строка,
-  всплывающие очки (приватная `TScorePopup`, поднимающееся '+N'). `Tick` /
-  `Draw(alpha)` - отрисовка учитывает интерполяцию (бегущая строка, всплывашки).
-  API: `AddTicker`, `ShowBig`, `StartMarquee`, `AddScorePopup`, `ClearPopups`
+  запись `TTickerLine`), большой заголовок посреди экрана, всплывающие очки
+  (приватная `TScorePopup`, поднимающееся '+N') и терминал связи, которым доска
+  владеет (`Hud.Terminal`), на месте бегущей строки 2008. `Tick` /
+  `Draw(alpha)` - отрисовка учитывает интерполяцию (всплывашки, шаг тикера).
+  API: `AddTicker`, `ShowBig`, `StartTerminal(header, text)`,
+  `TerminalKeyStruck` (щелчок играет игра), `AddScorePopup`, `ClearPopups`
   (переход между экранами оставляет всплывашки над чужой геометрией), `Clear`
-  (смерть заставляет доску замолчать). Дорожки - константы: бегущая строка
-  на y=40, стопка тикера от y=52, обе под кардиомонитором.
+  (смерть заставляет доску замолчать, терминал тоже). Стопка тикера от y=52;
+  пока стоит рамка терминала, стопка съезжает под неё (`ShiftTicker`, 4
+  единицы за тик) и возвращается, когда рамка ушла. Конструктор берёт
+  рендерер для кисти терминала.
   `BigMessageTicks=100` (константа интерфейса) - стандартная жизнь заголовка.
   `ShowBig` принимает необязательную подпись - мелкую строку под заголовком,
   живёт и уходит вместе с ним (так первый бонус называет кнопку мыши).
+
+### `Hud.Typewriter.pas` (~145 строк)
+- **`TTypewriter`** - текст, который печатает себя сам, только логика (ни
+  отрисовки, ни звука): буква за тик, перевод строки стоит тик, пустая строка
+  между абзацами - пауза 12 тиков. `Start(lines)` (хвостовые пустые строки
+  отбрасываются), `Tick` (считает и после конца - на нём мигание), `Finish`,
+  `Done`, `Shown(row)` (напечатанная часть строки), `CursorRow`/`CursorColumn`,
+  `CharCount`, `KeyStruck` (каждая вторая напечатанная буква, не пробел),
+  `CursorVisible(TBlinkPace)` (`bpTyping` - полупериод 8 тиков, `bpOnHold` -
+  32). Общий для `Hud.Terminal` и `Hud.Briefing`.
+
+### `Hud.Briefing.pas` (~170 строк)
+- **`THudBriefing`** - рассказ перед уровнем (`introText`), печатается поверх
+  неба меню. Без рамки: тёмная подложка (`PanelColor`, 0.72) только под
+  заголовком и текстом. Авторские переносы и отступы сохраняются, ничего не
+  переносится заново; текст в (26, 60), над ним заголовок `> ` +
+  `briefingHeader`, подсказка по центру на y=344, когда текст вышел, мигает с
+  медленным курсором. `Start(header, text)`, `Tick`, `Finish`, `Done`,
+  `Draw(prompt)`, `KeyStruck`. Владелец - `TMoonGame`; там `AdvanceBriefing`
+  решает "допечатать" или "начать уровень".
+
+### `Hud.Terminal.pas` (~255 строк)
+- **`THudTerminal`** - канал связи станции: рамка (x=6, y=40, ширина 360) под
+  кардиомонитором. Длинный текст переносится по словам по числу глифов (45 в
+  строке - мелкий шрифт моноширинный), печатает его собственный `TTypewriter`,
+  стоит 1 с плюс тик на букву, гаснет за 1 с. `TTerminalPhase` =
+  (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`). `Start` (заголовок, текст;
+  новый заменяет текущий), `Clear`, `Tick`, `Draw`, `Visible`, `Bottom` (его
+  читает дорожка тикера), `KeyStruck` (каждая вторая напечатанная буква, не
+  пробел - сам терминал не звучит). Заголовок сегодня `> ` + `terminalHeader`
+  из языковых файлов; позже - имя говорящего. Рамка и курсор - своей
+  `THudBrush`, текст - шрифтом. `Held` (игра ставит каждый тик через
+  `TMessageBoard.HoldTerminal`): печать идёт, время чтения ждёт, курсор мигает
+  вчетверо медленнее. Сторона игры - `THintHold` + `HintHeld` в `Moon2D.dpr`;
+  `LoadLevel` отказывается грузить уровень, где `hintHoldWhileAlive` называет
+  неизвестного монстра.
 
 ### `Game.Bonus.pas` (~25 строк)
 Словарь бонусной рулетки, общий для игры, которая её крутит, и HUD, который её
@@ -577,7 +621,7 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   диагностикой худшего кадра, ожидание бюджета кадра для пути без vsync.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1820 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~1875 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
@@ -624,7 +668,7 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
     при использовании). Сама церемония ведётся через `FHenshin`:
     запускается по `meHenshin` (отсчёт) и триггеру грейвелов (сразу), тикает
     в `Update`, рисуется последней в `Render`, сбрасывается в `RestartLevel`.
-  - Отрисовка и ввод: `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
+  - Отрисовка и ввод: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton`.
   - Отладка: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
@@ -711,7 +755,8 @@ dangerous - наследуются монстрами), массив `monsters`.
 спрайтов; индекс N в тайлах -> palette[N-1]), `tiles` (`encoding`, `emptyValue`,
 массив `screens` из сеток [строка][столбец]), `entities` (расстановки:
 monsterId, screen, x, y, spriteList, необязательные грейды `difficulty`,
-`overrides`, `triggers` - сообщения/подсказки/changeMusic/heroX-heroY/
+`overrides`, `triggers` - сообщения/подсказки/hintHoldWhileAlive/
+changeMusic/heroX-heroY/
 gravelBoss), `introText`/`introTextEn`.
 - level1: 17 экранов, 145 сущностей, палитра из 156 тайлов, 5 фонов (пятый -
   `_black` для целиком замощённых экранов лаборатории 12-13); наборы
@@ -773,6 +818,8 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Ореол и угли логотипа; перерисованный логотип | Menu.Logo.pas + Menu.Embers.pas (+ спрайт `logo` в ui.mset) |
 | Всё, что светится аддитивно | Render.Glow.pas |
 | Отрисовка текста / новые подписи | Render.Font.pas + Hud.Messages.pas + JSON языков |
+| Подсказки уровня / терминал связи | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня) |
+| Экран рассказа перед уровнем / ритм печати | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` в JSON уровня) |
 | Ритм кадров / окно / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Звук / музыка | Audio.pas (+поля данных в JSON) |
 | Отрисовка тайлов и фонов | Render.Tiles.pas + Render.Sprites.pas |

@@ -7,13 +7,15 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.5`. Where the map and the code
+Regenerated at `v3.0.3`, patched through `v3.0.8`. Where the map and the code
 disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Hud.Draw` -> `Levels.Defs` /
-`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` -> `Bullets` -> `Hero` /
+`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
+`Hud.Terminal` / `Hud.Briefing` ->
+`Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` -> `Hud.Marks` /
 `Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
 side: `Hud.Draw` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
@@ -193,7 +195,9 @@ Level data model + JSON parser. No game logic.
   `{"normal":..,"hard":..,"wild":..}`; `Uniform`, `ForGrade`.
 - **`TEntityTriggers`** (record) - `BigMessage`/`SmallMessage`/`HintText`
   (localized), `ChangeMusic`, heroX/heroY reposition (vertical transitions),
-  the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`).
+  the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`),
+  `HintHoldWhileAlive` (monster ids; while one lives on the hint's screen and
+  the hero is there, the hint's reading time stands still).
 - **`TEntityPlacement`** (record) - monsterId, screen (1-based), x/y (sprite
   grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides, triggers.
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
@@ -301,20 +305,62 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `sprites\<stem>.mset` on first use). `FLivesScale` is the difficulty
   multiplier applied to every monster born in this field. `Tick` (current
   screen), `SpawnFromSky` (boss minions at a random top cell),
-  `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim), `Draw`.
+  `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
+  `AnyAliveOnScreenOf(screen, ids)` (the same, only among the given monster
+  ids - the hint hold), `Draw`.
 
-### `Hud.Messages.pas` (~325 lines)
+### `Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
-  private `TTickerLine` record), the big mid-screen headline, the marquee
-  ('Бегущая строка'), score popups (private `TScorePopup`, '+N' rising).
-  `Tick` / `Draw(alpha)` - draw is interpolation-aware (marquee, popups).
-  API: `AddTicker`, `ShowBig`, `StartMarquee`, `AddScorePopup`, `ClearPopups`
-  (screen transitions strand popups over the wrong geometry), `Clear` (death
-  silences the board). The lanes are constants: the marquee runs at y=40, the
-  ticker stacks from y=52 - both below the heart monitor. `BigMessageTicks=100`
+  private `TTickerLine` record), the big mid-screen headline, score popups
+  (private `TScorePopup`, '+N' rising), and the comm terminal it owns
+  (`Hud.Terminal`) in place of the 2008 marquee. `Tick` / `Draw(alpha)` - draw
+  is interpolation-aware (popups, the ticker's step). API: `AddTicker`,
+  `ShowBig`, `StartTerminal(header, text)`, `TerminalKeyStruck` (the game plays
+  the click), `AddScorePopup`, `ClearPopups` (screen transitions strand popups
+  over the wrong geometry), `Clear` (death silences the board, the terminal
+  too). The ticker stacks from y=52; while the terminal box stands the stack
+  steps down below it (`ShiftTicker`, 4 units a tick) and climbs back when the
+  box is gone. The constructor takes the renderer for the terminal's brush.
+  `BigMessageTicks=100`
   (interface const) is the standard life of a headline. `ShowBig` takes an
   optional note - a small line under the headline, gone with it (the first
   bonus names the mouse button this way).
+
+### `Hud.Typewriter.pas` (~145 lines)
+- **`TTypewriter`** - text that types itself out, logic only (no drawing, no
+  sound): one letter a tick, a line break costs a tick, an empty line between
+  paragraphs pauses 12 ticks. `Start(lines)` (trailing empty lines dropped),
+  `Tick` (counts even when done - the blink runs on it), `Finish`, `Done`,
+  `Shown(row)` (the typed part of a line), `CursorRow`/`CursorColumn`,
+  `CharCount`, `KeyStruck` (every second typed letter that is not a space),
+  `CursorVisible(TBlinkPace)` (`bpTyping` 8-tick half-period, `bpOnHold` 32).
+  Shared by `Hud.Terminal` and `Hud.Briefing`.
+
+### `Hud.Briefing.pas` (~170 lines)
+- **`THudBriefing`** - the story before a level (`introText`), typed over the
+  menu sky. No frame: a dark plate (`PanelColor`, 0.72) under the header and
+  text only. The author's line breaks and indents are kept, nothing is
+  re-wrapped; text at (26, 60), header `> ` + `briefingHeader` above it, prompt
+  centered at y=344 once the text is out, blinking with the slow cursor.
+  `Start(header, text)`, `Tick`, `Finish`, `Done`, `Draw(prompt)`,
+  `KeyStruck`. Owned by `TMoonGame`; `AdvanceBriefing` there decides
+  "finish typing" or "start the level".
+
+### `Hud.Terminal.pas` (~255 lines)
+- **`THudTerminal`** - the station's comm channel: a framed box (x=6, y=40,
+  360 wide) under the heart monitor. A long text is word-wrapped by glyph count
+  (45 per line - the small font is monospaced), typed by its own `TTypewriter`,
+  held for 1 s plus a tick per letter, then faded in 1 s.
+  `TTerminalPhase` = (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`). `Start`
+  (header, text; a newcomer replaces the current), `Clear`, `Tick`, `Draw`,
+  `Visible`, `Bottom` (the ticker lane reads it), `KeyStruck` (every second
+  typed letter that is not a space - the terminal makes no sound itself).
+  Header `> ` + `terminalHeader` from the lang files today; a named speaker
+  later. Box and cursor through its own `THudBrush`, text through the font.
+  `Held` (set by the game every tick through `TMessageBoard.HoldTerminal`):
+  typing goes on, the reading time waits, the cursor blinks four times slower.
+  The game's side is `THintHold` + `HintHeld` in `Moon2D.dpr`; `LoadLevel`
+  refuses a level whose `hintHoldWhileAlive` names an unknown monster.
 
 ### `Game.Bonus.pas` (~25 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
@@ -558,7 +604,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1820 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1875 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -604,7 +650,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (countdown) and the gravel trigger (straight in), ticked in
     `Update`, drawn last in `Render`, reset in `RestartLevel`.
-  - Drawing/input: `DrawIntro`, `DrawEnding`, `DrawCenteredBig`,
+  - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton`.
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
@@ -687,7 +733,8 @@ The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
-`overrides`, `triggers` - messages/hints/changeMusic/heroX-heroY/gravelBoss),
+`overrides`, `triggers` - messages/hints/hintHoldWhileAlive/changeMusic/
+heroX-heroY/gravelBoss),
 `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 5 backgrounds (the
   fifth is `_black` for the fully tiled lab screens 12-13); sets
@@ -749,6 +796,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
+| Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
+| Story screen before a level / typing rhythm | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` in level JSON) |
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
