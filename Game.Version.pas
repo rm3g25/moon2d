@@ -14,7 +14,7 @@ unit Game.Version;
 interface
 
 const
-  GameVersion = '3.0.3';
+  GameVersion = '3.0.4';
 
 implementation
 
