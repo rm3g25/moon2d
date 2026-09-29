@@ -19,7 +19,7 @@ unit Hud.Marks;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw, Hero, Monsters;
+  Sdl2.Core, Render.Brush, Hero, Monsters;
 
 type
   THudMarks = class

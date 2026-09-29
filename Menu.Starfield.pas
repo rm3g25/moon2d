@@ -20,7 +20,7 @@ unit Menu.Starfield;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw;
+  Sdl2.Core, Render.Brush;
 
 type
   // Depth = 0 is a steady star

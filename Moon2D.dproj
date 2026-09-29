@@ -187,7 +187,7 @@
         <DCCReference Include="Hud.Terminal.pas"/>
         <DCCReference Include="Hud.Briefing.pas"/>
         <DCCReference Include="Hud.Messages.pas"/>
-        <DCCReference Include="Hud.Draw.pas"/>
+        <DCCReference Include="Render.Brush.pas"/>
         <DCCReference Include="Hud.Vitals.pas"/>
         <DCCReference Include="Game.Bonus.pas"/>
         <DCCReference Include="Game.Space.pas"/>

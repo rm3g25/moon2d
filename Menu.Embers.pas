@@ -19,7 +19,7 @@ unit Menu.Embers;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw;
+  Sdl2.Core, Render.Brush;
 
 type
   TEmberSeed = record

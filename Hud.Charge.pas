@@ -24,7 +24,7 @@ unit Hud.Charge;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw, Game.Bonus;
+  Sdl2.Core, Render.Brush, Game.Bonus;
 
 type
   THudCharge = class

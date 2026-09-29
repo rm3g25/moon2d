@@ -17,7 +17,7 @@ unit Hud.Briefing;
 interface
 
 uses
-  Sdl2.Core, Render.Font, Hud.Draw, Hud.Typewriter;
+  Sdl2.Core, Render.Font, Render.Brush, Hud.Typewriter;
 
 type
   THudBriefing = class

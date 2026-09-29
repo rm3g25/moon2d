@@ -22,7 +22,7 @@ unit Hud.Vitals;
 interface
 
 uses
-  Sdl2.Core, Hud.Draw;
+  Sdl2.Core, Render.Brush;
 
 const
   // A full base row. Every point above it is bonus; a difficulty may

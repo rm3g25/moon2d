@@ -32,7 +32,7 @@ uses
   System.SysUtils, Sdl2.Core, Render.Sprites, Sprites.Sets, Render.Font,
   Game.Config, Game.Space,
   Localization, Game.Version, Menu.Starfield, Menu.Globe, Menu.Logo,
-  Hud.Draw;
+  Render.Brush;
 
 type
   EMenuError = class(Exception);

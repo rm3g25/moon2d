@@ -20,7 +20,7 @@ unit Menu.Logo;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Sprites.Sets, Hud.Draw, Menu.Embers;
+  System.SysUtils, Sdl2.Core, Sprites.Sets, Render.Brush, Menu.Embers;
 
 type
   ELogoError = class(Exception);

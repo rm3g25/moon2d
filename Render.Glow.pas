@@ -21,7 +21,7 @@ unit Render.Glow;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Hud.Draw;
+  System.SysUtils, Sdl2.Core, Render.Brush;
 
 type
   EGlowError = class(Exception);

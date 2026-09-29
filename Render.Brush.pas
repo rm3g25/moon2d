@@ -1,5 +1,5 @@
 ﻿{
-  Hud.Draw - the brush the primitive-drawn HUD panels share: fill rects
+  Render.Brush - the brush the primitive-drawn HUD panels share: fill rects
   in game units with alpha or additive glow, one-unit frames, 3x5 pixel
   digits, and the cells every health row is made of. No sprite, no font
   atlas. The palette and the panel geometry live here too, so the panels
@@ -7,7 +7,7 @@
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
-unit Hud.Draw;
+unit Render.Brush;
 {$I Moon2D.inc}
 
 interface

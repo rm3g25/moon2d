@@ -41,7 +41,7 @@ uses
   Hud.Terminal in 'Hud.Terminal.pas',
   Hud.Briefing in 'Hud.Briefing.pas',
   Hud.Messages in 'Hud.Messages.pas',
-  Hud.Draw in 'Hud.Draw.pas',
+  Render.Brush in 'Render.Brush.pas',
   Hud.Vitals in 'Hud.Vitals.pas',
   Game.Bonus in 'Game.Bonus.pas',
   Game.Space in 'Game.Space.pas',
