@@ -81,6 +81,11 @@ const
   SBonusAwardFmt = 'bonusAwardFmt';
   SBrokeThrough = 'brokeThrough';
   SBonusHudHint = 'bonusHudHint';
+  // The header over the comm terminal: the channel speaks until a voice
+  // has a name
+  STerminalHeader = 'terminalHeader';
+  // The header over the story before a level - a narrator, not a radio
+  SBriefingHeader = 'briefingHeader';
 
   // --- Menu texts ---
   SMainTitle = 'mainTitle';
@@ -172,7 +177,8 @@ const
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,
     SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
-    SBonusAwardFmt, SBrokeThrough, SBonusHudHint,
+    SBonusAwardFmt, SBrokeThrough, SBonusHudHint, STerminalHeader,
+    SBriefingHeader,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,

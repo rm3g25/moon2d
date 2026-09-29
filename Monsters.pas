@@ -161,12 +161,18 @@ type
     // reading is kept: the trial medkits lie on the floor by the entry
     // and get trampled in the chaos anyway).
     function AnyAliveOnScreen(AScreen: Integer): Boolean;
+    // Any live body on the screen whose monster id is in the list
+    function AnyAliveOnScreenOf(AScreen: Integer;
+      const AMonsterIds: TArray<string>): Boolean;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer);
 
     property Monsters: TObjectList<TMonster> read FMonsters;
   end;
 
 implementation
+
+uses
+  System.StrUtils;
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -836,6 +842,16 @@ function TMonsterField.AnyAliveOnScreen(AScreen: Integer): Boolean;
 begin
   for var Monster in FMonsters do
     if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) then
+      Exit(True);
+  Result := False;
+end;
+
+function TMonsterField.AnyAliveOnScreenOf(AScreen: Integer;
+  const AMonsterIds: TArray<string>): Boolean;
+begin
+  for var Monster in FMonsters do
+    if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) and
+      MatchStr(Monster.Def.Id, AMonsterIds) then
       Exit(True);
   Result := False;
 end;

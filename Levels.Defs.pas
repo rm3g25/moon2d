@@ -58,6 +58,10 @@ type
     BigMessage: TLocalizedText;   // location title; '' = none
     SmallMessage: TLocalizedText; // minor caption; '' = none
     HintText: TLocalizedText;     // one-shot hint ('_string:' of .mon)
+    // Monster ids that keep the hint readable through a fight: while one
+    // of them lives on this screen and the hero is there, the hint's
+    // reading time stands still. JSON: "hintHoldWhileAlive": ["tank"].
+    HintHoldWhileAlive: TArray<string>;
     ChangeMusic: string;  // music file to switch to; '' = none
     // Hero reposition on screen entry (vertical transitions in tunnels).
     HasHeroX: Boolean;
@@ -375,6 +379,10 @@ begin
   AOut.BigMessage := ReadLocalizedText(TriggersObj, 'bigMessage');
   AOut.SmallMessage := ReadLocalizedText(TriggersObj, 'smallMessage');
   AOut.HintText := ReadLocalizedText(TriggersObj, 'hintText');
+  var HoldIds := TriggersObj.GetValue<TJSONArray>('hintHoldWhileAlive', nil);
+  if HoldIds <> nil then
+    for var Item in HoldIds do
+      AOut.HintHoldWhileAlive := AOut.HintHoldWhileAlive + [Item.Value];
   AOut.ChangeMusic := TriggersObj.GetValue<string>('changeMusic', '');
   AOut.HasHeroX := TriggersObj.TryGetValue<Integer>('heroX', AOut.HeroX);
   AOut.HasHeroY := TriggersObj.TryGetValue<Integer>('heroY', AOut.HeroY);

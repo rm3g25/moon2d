@@ -29,6 +29,8 @@
   "bonusAwardFmt": "BONUS: %s",
   "brokeThrough": "You broke through! Onward!",
   "bonusHudHint": "Right mouse button to activate",
+  "terminalHeader": "COMM",
+  "briefingHeader": "MISSION LOG",
 
   "mainTitle": "Main menu",
   "newGame": "New game",

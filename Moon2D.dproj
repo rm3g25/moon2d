@@ -183,6 +183,9 @@
         <DCCReference Include="Bullets.pas"/>
         <DCCReference Include="Monsters.pas"/>
         <DCCReference Include="Render.Font.pas"/>
+        <DCCReference Include="Hud.Typewriter.pas"/>
+        <DCCReference Include="Hud.Terminal.pas"/>
+        <DCCReference Include="Hud.Briefing.pas"/>
         <DCCReference Include="Hud.Messages.pas"/>
         <DCCReference Include="Hud.Draw.pas"/>
         <DCCReference Include="Hud.Vitals.pas"/>

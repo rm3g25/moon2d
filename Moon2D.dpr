@@ -37,6 +37,9 @@ uses
   Bullets in 'Bullets.pas',
   Monsters in 'Monsters.pas',
   Render.Font in 'Render.Font.pas',
+  Hud.Typewriter in 'Hud.Typewriter.pas',
+  Hud.Terminal in 'Hud.Terminal.pas',
+  Hud.Briefing in 'Hud.Briefing.pas',
   Hud.Messages in 'Hud.Messages.pas',
   Hud.Draw in 'Hud.Draw.pas',
   Hud.Vitals in 'Hud.Vitals.pas',
@@ -76,6 +79,7 @@ const
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
+  TerminalKeySoundFile = 'terminal.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -161,6 +165,7 @@ resourcestring
   // is loaded, hence English and outside the localization system
   SNoLevelsFound = 'No levels found (level1.json onward)';
   SSpriteSetMissing = 'Level "%s": declared sprite set "%s" not found';
+  SHintHoldUnknown = 'Level "%s": hintHoldWhileAlive names unknown monster "%s"';
   SAmbiguousSprites =
     'Level "%s": these sprite names live in more than one declared set.' +
     sLineBreak + 'Qualify them in the palette as set:name.' + sLineBreak +
@@ -171,6 +176,12 @@ type
   // gsIntro: the level's story text waits for a key.
   // gsEnding: the campaign-end screen - mouse-only exit (part 5.4).
   TGameState = (gsMenu, gsIntro, gsPlaying, gsEnding);
+
+  // The last hint and the fight it waits for (hintHoldWhileAlive)
+  THintHold = record
+    Screen: Integer;
+    MonsterIds: TArray<string>;
+  end;
 
 const
   // Screen-shake doses (2026 addition), in trauma shares - see
@@ -235,6 +246,7 @@ type
     FWindow: PSdlWindow;
     FFont: TMoonFont;
     FMessages: TMessageBoard;
+    FBriefing: THudBriefing;
     FShake: TScreenShake;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
@@ -244,6 +256,7 @@ type
     // Entity triggers fire once per game (tutorial hints must not nag);
     // indexed in step with FLevel.Entities.
     FTriggerFired: TArray<Boolean>;
+    FHintHold: THintHold;
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     FHenshin: THenshin; // the ceremony; reborn with the hero
     // The bonus slot: one reward at a time, spent by right click.
@@ -314,10 +327,12 @@ type
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
     procedure PreloadSounds;
+    procedure CheckHintHold(const AMonsterIds: TArray<string>);
+    function HintHeld: Boolean;
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
-    procedure DrawIntro;
+    procedure AdvanceBriefing;
     procedure LoadLevel(const AFileName: string);
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
@@ -363,7 +378,8 @@ begin
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
     FUiSet);
   FFont.Filtering := FontFiltering;
-  FMessages := TMessageBoard.Create(FFont, FrameWidth);
+  FMessages := TMessageBoard.Create(FFont, ARenderer, FrameWidth);
+  FBriefing := THudBriefing.Create(FFont, ARenderer, FrameWidth);
   FShake := TScreenShake.Create;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
@@ -383,6 +399,7 @@ begin
   FMarks.Free;
   FShake.Free;
   FMessages.Free;
+  FBriefing.Free;
   FFont.Free;
   FVitals.Free;
   FCharge.Free;
@@ -422,6 +439,8 @@ begin
   FLevel := TLevel.Create;
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
+  for var Entity in FLevel.Entities do
+    CheckHintHold(Entity.Triggers.HintHoldWhileAlive);
 
   // A declared set that is absent is a broken install, not a fallback
   // case - the fallback exists for names, not for whole sets.
@@ -485,12 +504,16 @@ begin
   FBonusActivateQueued := False;
   FTriggerFired := nil;
   SetLength(FTriggerFired, Length(FLevel.Entities));
+  FHintHold := Default(THintHold);
 
   FLevelLoaded := True;
   FMenu.HasActiveGame := True;
 
   if FLevel.IntroText.Current <> '' then
-    FState := gsIntro
+  begin
+    FBriefing.Start(Tr(SBriefingHeader), FLevel.IntroText.Current);
+    FState := gsIntro;
+  end
   else
     StartPlaying;
 end;
@@ -721,8 +744,8 @@ end;
 
 // Entity triggers of the CURRENT screen: location titles, captions and
 // tutorial hints. Each fires once per game - a hint that nags on every
-// backtrack stops being a hint. The 2008 '_string:' hints ran as the
-// marquee ('Бегущая строка' of moon.dpr 816) - reproduced here.
+// backtrack stops being a hint. The 2008 '_string:' hints ran as a
+// marquee; here they type out in the comm terminal.
 procedure TMoonGame.FireScreenTriggers;
 begin
   for var i := 0 to High(FLevel.Entities) do
@@ -748,7 +771,12 @@ begin
     FTriggerFired[i] := True;
     FMessages.ShowBig(Triggers.BigMessage.Current, BigMessageTicks);
     FMessages.AddTicker(Triggers.SmallMessage.Current, TickerNoticeTicks);
-    FMessages.StartMarquee(Triggers.HintText.Current);
+    FMessages.StartTerminal(Tr(STerminalHeader), Triggers.HintText.Current);
+    if Triggers.HintText.Current <> '' then
+    begin
+      FHintHold.Screen := FLevel.Entities[i].Screen;
+      FHintHold.MonsterIds := Triggers.HintHoldWhileAlive;
+    end;
     // The changeMusic field of level JSON waited since part 1 for a
     // player to exist - here it is (empty name is a no-op inside)
     if Triggers.ChangeMusic <> '' then
@@ -860,12 +888,33 @@ end;
 // not from disk. The roster assembles itself: hero one-shots + the
 // weapon map + every deathSounds entry of monsters.json - no second
 // hand-maintained list to drift out of sync.
+// A misspelled id would never match, and the hint would silently stop
+// waiting for its fight - refuse the level instead
+procedure TMoonGame.CheckHintHold(const AMonsterIds: TArray<string>);
+var
+  Def: TMonsterDef;
+begin
+  for var Id in AMonsterIds do
+    if not FMonsters.TryFind(Id, Def) then
+      raise ELevelError.CreateFmt(SHintHoldUnknown, [FLevel.Id, Id]);
+end;
+
+// Only on the hint's own screen: a hero who walks away from the fight
+// takes the reading time back with him
+function TMoonGame.HintHeld: Boolean;
+begin
+  Result := (FHintHold.MonsterIds <> nil) and
+    (FHero.Screen = FHintHold.Screen) and
+    FField.AnyAliveOnScreenOf(FHintHold.Screen, FHintHold.MonsterIds);
+end;
+
 procedure TMoonGame.PreloadSounds;
 begin
   FAudio.Load(PainSoundFile);
   FAudio.Load(PitSoundFile);
   FAudio.Load(BottleSoundFile); // the ceremony loads its own; the bonus's
   FAudio.Load(BonusSoundFile);
+  FAudio.Load(TerminalKeySoundFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
   for var Def in FMonsters.AllDefs do
@@ -1284,12 +1333,19 @@ begin
     // Only the sky moves; the world below is frozen. The story screen
     // keeps the same live sky - in 2008 it WAS the menu, text on top
     FMenu.Tick;
+    if FState = gsIntro then
+      FBriefing.Tick;
+    if (FState = gsIntro) and FBriefing.KeyStruck then
+      FAudio.Play(TerminalKeySoundFile);
     Exit;
   end;
   if FState = gsEnding then
     Exit; // the farewell screen is static; only the mouse works there
 
+  FMessages.HoldTerminal(HintHeld);
   FMessages.Tick;
+  if FMessages.TerminalKeyStruck then
+    FAudio.Play(TerminalKeySoundFile);
   FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
   FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
   FCharge.Tick(FScore, FKillStreak, FBonus, not FBonusLearned);
@@ -1375,7 +1431,7 @@ begin
         // 2008 typed the story right over the living menu sky - same
         // stars and moon, no logo, text on top
         FMenu.DrawSky(AAlpha);
-        DrawIntro;
+        FBriefing.Draw(Tr(SPressAnyKey));
       end;
     gsEnding:
       DrawEnding;
@@ -1410,15 +1466,13 @@ begin
   DrawAtlasOverlay;
 end;
 
-procedure TMoonGame.DrawIntro;
-const
-  TextLeft = 26;  // roughly centers the widest level1 intro line
-  TextTop = 60;
-  PromptY = 344;
+// The first key hurries the story out, the next one starts the level
+procedure TMoonGame.AdvanceBriefing;
 begin
-  FFont.DrawSmallBlock(FLevel.IntroText.Current, TextLeft, TextTop);
-  FFont.DrawSmall(Tr(SPressAnyKey),
-    (FrameWidth - FFont.SmallTextWidth(Tr(SPressAnyKey))) / 2, PromptY);
+  if FBriefing.Done then
+    StartPlaying
+  else
+    FBriefing.Finish;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1657,13 +1711,14 @@ begin
   end;
 
   // The story screen: Escape backs out to the menu, anything else
-  // starts the game (2008 had no way back - deviation logged)
+  // finishes the typing, then starts the game (2008 had no way back -
+  // deviation logged)
   if (FState = gsIntro) and (AAction = kaDown) then
   begin
     if AScancode = SdlScancodeEscape then
       OpenMenu
     else
-      StartPlaying;
+      AdvanceBriefing;
     Exit;
   end;
 
@@ -1712,7 +1767,7 @@ begin
   if FState = gsIntro then
   begin
     if ADown then
-      StartPlaying;
+      AdvanceBriefing;
     Exit; // the click that closed the story must not fire the weapon
   end;
 

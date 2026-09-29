@@ -1476,7 +1476,8 @@
       "y": 8,
       "triggers": {
         "hintText": "Помещения медицинских лабораторий - отличный способ поправить здоровье, но тут же вас подстерегает множество опасностей",
-        "hintTextEn": "Medical lab facilities are a great way to restore your health, but plenty of dangers lurk there as well"
+        "hintTextEn": "Medical lab facilities are a great way to restore your health, but plenty of dangers lurk there as well",
+        "hintHoldWhileAlive": ["tank"]
       }
     },
     {
@@ -1907,7 +1908,11 @@
       "screen": 16,
       "spriteList": "medic.mns",
       "x": 7,
-      "y": 10
+      "y": 10,
+      "triggers": {
+        "hintText": "TEK-R1 - робот, и запрограммирован для охраны туннелей, при этом обладает большой огневой мощью. Найдите самые безопасные места, где его пули можно будет легко перехватывать.",
+        "hintTextEn": "TEK-R1 is a robot programmed to guard the tunnels, and it packs serious firepower. Find the safest spots where its bullets can be easily intercepted."
+      }
     },
     {
       "monsterId": "medkit",
@@ -1946,11 +1951,7 @@
       "screen": 17,
       "spriteList": "medic.mns",
       "x": 15,
-      "y": 1,
-      "triggers": {
-        "hintText": "TEK-R1 - робот, и запрограммирован для охраны туннелей, при этом обладает большой огневой мощью. Найдите самые безопасные места, где его пули можно будет легко перехватывать.",
-        "hintTextEn": "TEK-R1 is a robot programmed to guard the tunnels, and it packs serious firepower. Find the safest spots where its bullets can be easily intercepted."
-      }
+      "y": 1
     }
   ],
   "introText": "  Связь с лунной научно-исследовательской базой ТЕК\nпрервалась. Одновременно замолкли все передатчики.\n\n  Через несколько суток был запущен космический челнок\nс несколькими учёными и лейтенантом подразделения \nвооружённых сил ТЕК\n\n  Его цель - выяснить причину обрыва связи, а, также\nвосстановить работу одного из передатчиков, чтобы \nпереслать всю информацию о проведённых исследованиях\nна Землю.\n\n  Для начала нужно пройти через весь транспортный узел\nкосмопорта до туннелей... Это - единственный путь к \nлабораториям и передатчикам\n",

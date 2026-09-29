@@ -29,6 +29,8 @@
   "bonusAwardFmt": "БОНУС: %s",
   "brokeThrough": "Вы прорвались! Вперёд!",
   "bonusHudHint": "Правая кнопка мыши для активации",
+  "terminalHeader": "СВЯЗЬ",
+  "briefingHeader": "ЖУРНАЛ МИССИИ",
 
   "mainTitle": "Главное меню",
   "newGame": "Новая игра",

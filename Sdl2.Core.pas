@@ -116,7 +116,7 @@ type
   PSdlRendererInfo = ^TSdlRendererInfo;
 
   // Float destination rectangle: sub-pixel positioning for smooth
-  // movers (the marquee). SDL scales through the logical-size transform
+  // movers (score popups). SDL scales through the logical-size transform
   // with float precision instead of snapping to logical pixels.
   TSdlFRect = record
     X, Y, W, H: Single;
