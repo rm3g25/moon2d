@@ -1,10 +1,16 @@
 ﻿{
-  Game.Config - game configuration loaded from config.json.
+  Game.Config - game configuration in two layers.
+
+  config.json sits next to the exe and ships with every release; the
+  game only reads it. settings.json lives in the user profile and holds
+  what the player chose in the game; it overrides config.json key by
+  key. A release unpacked over the old one keeps the player's choices,
+  and those choices never reach the repository or an archive.
 
   Replaces startcfg.txt (2008), a positional file where line 1 was width,
   line 2 was height, and reordering lines silently broke the game. Missing
-  file, missing keys or broken values fall back to defaults - the game
-  must always start.
+  file, missing keys or broken values fall back to the layer below - the
+  game must always start.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -38,19 +44,24 @@ type
   end;
 
 const
-  // Protocol ids for the "difficulty" key of config.json - machine
+  // Protocol ids for the "difficulty" key of the config files - machine
   // vocabulary, hence const and English (captions live in the menu)
   DifficultyIds: array [TDifficulty] of string = ('normal', 'hard', 'wild');
   AllDifficultyGrades: TDifficultyGrades =
     [Low(TDifficulty)..High(TDifficulty)];
-  // Protocol ids for the "language" key of config.json AND the names of
+  // Protocol ids for the "language" key of the config files AND the names of
   // the dictionary files (lang\en.json) - one vocabulary, two readers
   LanguageIds: array [TLanguage] of string = ('en', 'ru');
 
-// Reads AFileName; on any problem (absent file, broken JSON, unreadable
-// content, values of the wrong type) returns Defaults - configuration
-// is a preference, never a reason to crash.
-function LoadGameConfig(const AFileName: string): TGameConfig;
+// %APPDATA%\Moon2D\settings.json - the player's layer.
+function UserSettingsFileName: string;
+
+// Defaults, then AShippedFileName over them, then ASettingsFileName over
+// that; each file overrides only the keys it holds. A file with any
+// problem (absent, broken JSON, unreadable content, values of the wrong
+// type) is skipped whole and the layers below stay - configuration is a
+// preference, never a reason to crash.
+function LoadGameConfig(const AShippedFileName, ASettingsFileName: string): TGameConfig;
 
 // Writes the difficulty back into AFileName, keeping every other key.
 // The 2008 menu saved startcfg.txt on every difficulty click (1448) -
@@ -73,6 +84,9 @@ const
   GameSectionKey = 'game';
   DifficultyKey = 'difficulty';
   LanguageKey = 'language';
+
+  SettingsFolderName = 'Moon2D';
+  SettingsFileName = 'settings.json';
 
 class function TGameConfig.Defaults: TGameConfig;
 begin
@@ -129,9 +143,22 @@ begin
     RootValue.Free; // nil-safe; someone else's JSON is not our config
 end;
 
-function LoadGameConfig(const AFileName: string): TGameConfig;
+function UserSettingsFileName: string;
 begin
-  Result := TGameConfig.Defaults;
+  // GetHomePath is CSIDL_APPDATA on Windows: per user and writable
+  // without elevation, unlike a Program Files folder the game may be
+  // unpacked into
+  Result := TPath.Combine(TPath.Combine(TPath.GetHomePath,
+    SettingsFolderName), SettingsFileName);
+end;
+
+// Reads the keys AFileName holds over ABase; a key the file lacks keeps
+// the value ABase had. A layer applies whole or not at all, never as a
+// half-applied mixture.
+function OverlayConfigFile(const ABase: TGameConfig;
+  const AFileName: string): TGameConfig;
+begin
+  Result := ABase;
   try
     var Root := TryParseJsonObjectFile(AFileName);
     if Root = nil then
@@ -155,20 +182,29 @@ begin
       begin
         Result.TickRate := Game.GetValue<Integer>('tickRate',
           Result.TickRate);
-        Result.Difficulty :=
-          DifficultyFromId(Game.GetValue<string>(DifficultyKey, ''));
-        Result.Language :=
-          LanguageFromId(Game.GetValue<string>(LanguageKey, ''));
+        // The current id as the fallback: an absent key must keep the
+        // value of the layer below, not reset it
+        var DifficultyId := Game.GetValue<string>(DifficultyKey,
+          DifficultyIds[Result.Difficulty]);
+        Result.Difficulty := DifficultyFromId(DifficultyId);
+        var LanguageId := Game.GetValue<string>(LanguageKey,
+          LanguageIds[Result.Language]);
+        Result.Language := LanguageFromId(LanguageId);
       end;
     finally
       Root.Free;
     end;
   except
     // A locked file, garbage encoding or a value of the wrong type:
-    // the contract says defaults, not a crash - and a clean slate,
-    // not a half-applied mixture
-    Result := TGameConfig.Defaults;
+    // the contract says the layers below, not a crash
+    Result := ABase;
   end;
+end;
+
+function LoadGameConfig(const AShippedFileName, ASettingsFileName: string): TGameConfig;
+begin
+  Result := OverlayConfigFile(TGameConfig.Defaults, AShippedFileName);
+  Result := OverlayConfigFile(Result, ASettingsFileName);
 
   if Result.TickRate < 1 then
     Result.TickRate := TGameConfig.Defaults.TickRate;
@@ -177,35 +213,44 @@ begin
     Result.FpsCap := TGameConfig.Defaults.FpsCap;
 end;
 
-// The shared body of every "write one game key back" saver. Swallows
-// any failure silently: see the SaveGameDifficulty interface comment.
-procedure SaveGameKey(const AFileName, AKey, AValue: string);
+// The shared body of every "write one key" saver. Owns AValue on every
+// path, the early exits included. Swallows any failure silently: see
+// the SaveGameDifficulty interface comment.
+procedure SaveKey(const AFileName, ASection, AKey: string; AValue: TJSONValue);
 begin
   try
-    var Root := TryParseJsonObjectFile(AFileName);
-    if Root = nil then
-    begin
-      // nil means three things here - absent file, broken JSON,
-      // non-object root - and only the first is safe to act on. A
-      // file that exists but will not parse still holds the player's
-      // settings; overwriting it trades an unreadable config for an
-      // empty one. Losing the menu click is the cheaper failure.
-      if FileExists(AFileName) then
-        Exit;
-      Root := TJSONObject.Create; // genuinely absent - start fresh
-    end;
     try
-      var Game := Root.GetValue<TJSONObject>(GameSectionKey, nil);
-      if Game = nil then
+      var Root := TryParseJsonObjectFile(AFileName);
+      if Root = nil then
       begin
-        Game := TJSONObject.Create;
-        Root.AddPair(GameSectionKey, Game);
+        // nil means three things here - absent file, broken JSON,
+        // non-object root - and only the first is safe to act on. A
+        // file that exists but will not parse still holds the player's
+        // settings; overwriting it trades an unreadable config for an
+        // empty one. Losing the menu click is the cheaper failure.
+        if FileExists(AFileName) then
+          Exit;
+        Root := TJSONObject.Create; // genuinely absent - start fresh
       end;
-      Game.RemovePair(AKey).Free; // Free on a nil pair is a no-op
-      Game.AddPair(AKey, AValue);
-      TFile.WriteAllText(AFileName, Root.Format(2), TEncoding.UTF8);
+      try
+        var Section := Root.GetValue<TJSONObject>(ASection, nil);
+        if Section = nil then
+        begin
+          Section := TJSONObject.Create;
+          Root.AddPair(ASection, Section);
+        end;
+        Section.RemovePair(AKey).Free; // Free on a nil pair is a no-op
+        Section.AddPair(AKey, AValue);
+        AValue := nil; // Root owns it now and frees it below
+
+        // The first save of a fresh profile has no folder to write into
+        ForceDirectories(ExtractFileDir(AFileName));
+        TFile.WriteAllText(AFileName, Root.Format(2), TEncoding.UTF8);
+      finally
+        Root.Free;
+      end;
     finally
-      Root.Free;
+      AValue.Free; // nil once Root took it
     end;
   except
     // Deliberately silent: see the interface comment
@@ -214,12 +259,14 @@ end;
 
 procedure SaveGameDifficulty(const AFileName: string; AValue: TDifficulty);
 begin
-  SaveGameKey(AFileName, DifficultyKey, DifficultyIds[AValue]);
+  SaveKey(AFileName, GameSectionKey, DifficultyKey,
+    TJSONString.Create(DifficultyIds[AValue]));
 end;
 
 procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 begin
-  SaveGameKey(AFileName, LanguageKey, LanguageIds[AValue]);
+  SaveKey(AFileName, GameSectionKey, LanguageKey,
+    TJSONString.Create(LanguageIds[AValue]));
 end;
 
 end.

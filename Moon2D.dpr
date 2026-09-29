@@ -64,8 +64,8 @@ const
   // retired, not postponed.
   LevelFilePattern = 'level%d.json';
   MaxLevelSlots = 99;
-  // Read at startup and written back by the difficulty click - the 2008
-  // menu saved startcfg.txt the same way (1448)
+  // Shipped defaults, read only. The player's choices go to
+  // UserSettingsFileName, so this file stays as committed
   ConfigFileName = 'config.json';
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
   FontFileName = 'fonty.png';
@@ -645,7 +645,7 @@ begin
         // Takes effect where the field is reborn: level load or restart
         // (2008 applied per screen - see the menu hint deviation)
         FDifficulty := AResult.Difficulty;
-        SaveGameDifficulty(ConfigFileName, FDifficulty);
+        SaveGameDifficulty(UserSettingsFileName, FDifficulty);
       end;
     mcSetLanguage:
       begin
@@ -653,7 +653,7 @@ begin
         // captions through Tr and must read the new words. Menu and HUD
         // switch live; level texts follow on the next load (part 6.3).
         LoadLanguage(AResult.Language);
-        SaveGameLanguage(ConfigFileName, AResult.Language);
+        SaveGameLanguage(UserSettingsFileName, AResult.Language);
         FMenu.Language := AResult.Language;
       end;
     mcQuit:
@@ -1829,7 +1829,7 @@ begin
 
   EnsureImageLib;
 
-  var Config := LoadGameConfig(ConfigFileName);
+  var Config := LoadGameConfig(ConfigFileName, UserSettingsFileName);
   // The dictionary must stand before the first Tr() - the menu builds
   // its captions inside TMoonGame.Create. A missing or broken language
   // file dies here, in the startup message box, not mid-frame.

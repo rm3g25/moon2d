@@ -32,10 +32,6 @@ tools/TitleCard/cards/
 tools/TitleCard/*.ini
 bin/TitleCard.ini
 
-# ---- Local runtime configuration ----
-# Uncomment once the game ships config.default.json and writes config.json itself
-# config.json
-
 # ---- Scratch ----
 structure.txt
 tracked.txt
