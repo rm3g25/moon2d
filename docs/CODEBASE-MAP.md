@@ -7,7 +7,8 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`. Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.3`, patched through `v3.0.5`. Where the map and the code
+disagree, the code is right.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /

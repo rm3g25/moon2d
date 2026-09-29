@@ -10,13 +10,21 @@ files, and a task-routing table. Written for someone (human or LLM)
 arriving cold who needs to know which files a given task touches.
 
 - **Genre:** build artifact that happens to be convenient to keep in git.
-- **Updated:** once per milestone, by regenerating it from the source —
-  not by patching individual lines. Patching is how a map starts lying
-  quietly.
+- **Updated:** two ways, for two kinds of staleness.
+  - *Patched* by every change that moves what the map names - a unit, a
+    type, a public method or signature, a field it lists, a size that
+    jumps. The sections that change is about are rewritten in the docs
+    commit of its series, describing the code as it is now, not how it
+    got there. A patch that would touch most of the map is a
+    regeneration instead.
+  - *Regenerated* from the source once per release. Patches only reach
+    what their change knew about; the quiet drift in between - a size
+    creeping up, a neighbour renamed - is caught here.
 - **Authority:** none. If the map and the code disagree, the code is
-  right. The map carries a commit stamp so you can see how stale it is.
-- **Russian twin:** `CODEBASE-MAP-ru.md`, same content. Regenerate both
-  or neither.
+  right. The stamp at the top says both when it was last regenerated
+  and how far it has been patched since.
+- **Russian twin:** `CODEBASE-MAP-ru.md`, same content. Both change
+  together or neither does.
 
 ## PORTING-NOTES.md — a living journal
 
