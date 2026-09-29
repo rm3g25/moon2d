@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.9` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.10` (the folder layout came
 between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -21,24 +21,27 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   the editor that references only `Core/` fails to build the day that rule
   breaks.
 - `Game/` - the game itself: hero, monsters, bullets, sound, the loop host,
-  the bonus vocabulary, the henshin ceremony, the version.
+  the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
+  runs the level events.
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
 
 Game, Hud and Menu are peers above Core and may use each other. Level events
-driven from level JSON are expected to get their own folder (`Game/Events/`).
-Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
+driven from level JSON split by that rule: the model and parser
+(`Levels.Events`) sit in `Core/`, since the editor will write them; the
+runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
-`Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` -> `Levels.Defs` /
+`Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
+`Levels.Events` -> `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` -> `Hud.Marks` /
-`Game.Henshin` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
+`Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`).
 
@@ -213,7 +216,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~405 lines)
+### `Core/Levels.Defs.pas` (~445 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -223,11 +226,10 @@ Level data model + JSON parser. No game logic.
   `{"normal":..,"hard":..,"wild":..}`; `Uniform`, `ForGrade`.
 - **`TEntityTriggers`** (record) - `BigMessage`/`SmallMessage`/`HintText`
   (localized), `ChangeMusic`, heroX/heroY reposition (vertical transitions),
-  the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`),
-  `HintHoldWhileAlive` (monster ids; while one lives on the hint's screen and
-  the hero is there, the hint's reading time stands still).
+  the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`).
 - **`TEntityPlacement`** (record) - monsterId, screen (1-based), x/y (sprite
-  grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides, triggers.
+  grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides,
+  triggers, `Tag` (names the placement for the events' `allDead`; '' = none).
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
@@ -237,8 +239,33 @@ Level data model + JSON parser. No game logic.
   entities, id/title/assetsDir/**spriteSets**/music/introText, grid dims,
   screenCount. `SpriteSets` is the environment sets in resolution order - tiles
   only; screen backdrops follow the `<assetsDir>-backdrops` convention and
-  never appear there. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (last
-  change wins). `LoadFromFile`.
+  never appear there. `Events` - the level's events (`Levels.Events`), in
+  file order. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (last change
+  wins). `LoadFromFile`; private `CheckEvents` refuses an event off the
+  screen list or one waiting for a tag no placement carries (the latter
+  would fire at once - nobody alive to hold it).
+
+### `Core/Levels.Events.pas` (~140 lines)
+The `events` section of level JSON: model and parser, no game logic (the
+game runs them through `Events.Director`; the editor will write them).
+- **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`) - what the event
+  waits for. The hero must be on the event's screen for any of them;
+  enterScreen asks nothing more, allDead waits until no live body carries
+  the event's tag.
+- **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
+  `eaMusic`); **`TEventAction`** (record) - kind + localized `Text` (the
+  message kinds) or `FileName` (music).
+- **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
+  `DelayTicks` (counted after the condition holds, for any condition),
+  actions. JSON: `"when": "allDead", "tag": "labGuard", "delay": 33,
+  "then": [{"action": "hint", "text": "...", "textEn": "..."}]`.
+- `EventConditionIds` / `EventActionIds` - the JSON vocabulary as typed
+  constants. `ParseLevelEvents(root, levelId)`; an absent section is an
+  empty list, an unknown condition or action, a missing id, an allDead
+  without a tag or an event without actions raises `ELevelEventError`.
+- Extending: a condition is an enum member, a word in `EventConditionIds`
+  and a branch in the director's `ConditionHolds`; an action the same with
+  `EventActionIds` and `Play`.
 
 ### `Core/Monsters.Defs.pas` (~440 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
@@ -307,14 +334,14 @@ moves in comes from `Game.Space`.
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Game/Monsters.pas` (~890 lines)
+### `Game/Monsters.pas` (~905 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
   BossRage/LevelComplete/Died) - 'MessageToMain' of 2008, drained by the game
   loop every tick.
-- **`TMonster`** - position, screen, direction, lives (+`LivesAll`), anim
-  frame, step, fire timer, enrage flag, boss minion timer, a one-shot henshin
+- **`TMonster`** - position, screen, the placement's `Tag`, direction, lives
+  (+`LivesAll`), anim frame, step, fire timer, enrage flag, boss minion timer, a one-shot henshin
   flag, the event list. Its own collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
   `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying`, `PatrolStep`. Combat:
@@ -334,8 +361,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   multiplier applied to every monster born in this field. `Tick` (current
   screen), `SpawnFromSky` (boss minions at a random top cell),
   `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
-  `AnyAliveOnScreenOf(screen, ids)` (the same, only among the given monster
-  ids - the hint hold), `Draw`.
+  `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
+  screen - the events' allDead), `Draw`.
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -350,7 +377,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   steps down below it (`ShiftTicker`, 4 units a tick) and climbs back when the
   box is gone. The constructor takes the renderer for the terminal's brush.
   `BigMessageTicks=100`
-  (interface const) is the standard life of a headline. `ShowBig` takes an
+  and `TickerNoticeTicks=125` (interface consts) are the standard lives of a
+  headline and of a ticker notice. `ShowBig` takes an
   optional note - a small line under the headline, gone with it (the first
   bonus names the mouse button this way).
 
@@ -374,7 +402,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `KeyStruck`. Owned by `TMoonGame`; `AdvanceBriefing` there decides
   "finish typing" or "start the level".
 
-### `Hud/Hud.Terminal.pas` (~255 lines)
+### `Hud/Hud.Terminal.pas` (~245 lines)
 - **`THudTerminal`** - the station's comm channel: a framed box (x=6, y=40,
   360 wide) under the heart monitor. A long text is word-wrapped by glyph count
   (45 per line - the small font is monospaced), typed by its own `TTypewriter`,
@@ -385,10 +413,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   typed letter that is not a space - the terminal makes no sound itself).
   Header `> ` + `terminalHeader` from the lang files today; a named speaker
   later. Box and cursor through its own `THudBrush`, text through the font.
-  `Held` (set by the game every tick through `TMessageBoard.HoldTerminal`):
-  typing goes on, the reading time waits, the cursor blinks four times slower.
-  The game's side is `THintHold` + `HintHeld` in `Moon2D.dpr`; `LoadLevel`
-  refuses a level whose `hintHoldWhileAlive` names an unknown monster.
+  The terminal knows nothing of the fight: a hint that must wait for one is
+  a level event (`Levels.Events`) that starts it after the last body falls.
 
 ### `Game/Game.Bonus.pas` (~25 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
@@ -514,6 +540,23 @@ Reborn with the hero on every level load.
   constructor. `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion, and the dpr reads the name from here.
 
+### `Game/Events/Events.Director.pas` (~130 lines)
+Runs the level's events (`Levels.Events`) against the live game.
+**`TEventDirector`** takes the events, the message board and a
+`TChangeMusic` callback (`reference to procedure`; the game passes its
+`ChangeMusic` method, which also remembers the track for restarts). The
+monster field is reborn on every restart, so it arrives with every tick
+instead of being kept.
+- `Tick(screen, field)` - once per logic tick with the hero's screen: for
+  every unfired event of that screen, the condition is checked
+  (`ConditionHolds`); while it holds the delay counts down, a lapse starts
+  the count over; at zero the actions play once (`Play`: `ShowBig`,
+  `AddTicker`, `StartTerminal` with the terminal header, the music
+  callback). The game skips the tick over the hero's corpse.
+- `ReArm(screen)` - death re-enters the screen with its monsters reborn,
+  so its events wait for their moment again, as the entity triggers do.
+- Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
+
 ### `Core/Render.Glow.pas` (~165 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
@@ -635,7 +678,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1875 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1860 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -650,10 +693,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **`TMoonGame`** (extends `TGameApp`) - owns everything: registry, level, the
   level's sprite sets and both level caches, the ui and weapon sets, sprite and
   tile renderers, hero, monster field, both bursts, font, message board, the
-  screen shake, sound bank, menu, the ceremony (`THenshin`), the two corner
-  HUDs (`THudVitals`, `THudCharge`) and the health rows over the figures
-  (`THudMarks`) - the ceremony and the three HUD objects are reborn with
-  every level, so nothing carries over. Key state:
+  screen shake, sound bank, menu, the ceremony (`THenshin`), the event
+  director (`TEventDirector`), the two corner HUDs (`THudVitals`,
+  `THudCharge`) and the health rows over the figures (`THudMarks`) - the
+  ceremony, the director and the three HUD objects are reborn with every
+  level, so nothing carries over. Key state:
   game state + resume state, held-key flags (the 2008
   polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, the bonus slot
@@ -670,9 +714,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
     settings.json), `SetFullscreen` (the bare switch - the ending screen drops
     fullscreen for the browser through it, unremembered), `PreloadSounds`,
-    `CreateHud` (builds the three HUD objects afresh on every level load).
+    `CreateHud` (builds the three HUD objects afresh on every level load),
+    `ChangeMusic` (a trigger's or an event's track: played and remembered
+    for restarts; '' is a no-op).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
-    `FireScreenTriggers`, `TickGravelAttack`.
+    `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
+    (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
   - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
     `ResolveMonsterContact`, `RewardMonsterKill`, `HurtHero`,
     `DrainMonsterEvents` (also where explosions and boss blasts feed the
@@ -772,9 +819,11 @@ The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
-`overrides`, `triggers` - messages/hints/hintHoldWhileAlive/changeMusic/
-heroX-heroY/gravelBoss),
-`introText`/`introTextEn`.
+`overrides`, `triggers` - messages/hints/changeMusic/heroX-heroY/gravelBoss,
+optional `tag` for the events), `events` (each: `id`, `screen`, `when` =
+enterScreen | allDead + `tag`, optional `delay` in ticks, `then` = a list
+of `action` objects - bigMessage/smallMessage/hint with `text`/`textEn`,
+music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 5 backgrounds (the
   fifth is `_black` for the fully tiled lab screens 12-13); sets
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
@@ -825,6 +874,7 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Explosions / particles | Bullets.pas |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
+| A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
