@@ -123,6 +123,11 @@ type
   end;
   PSdlFRect = ^TSdlFRect;
 
+  TSdlFPoint = record
+    X, Y: Single;
+  end;
+  PSdlFPoint = ^TSdlFPoint;
+
   // SDL_version: the linked DLL's version - the one diagnostic that
   // settles SDL_Delay granularity questions (see the Timing section).
   TSdlVersion = record
@@ -324,6 +329,11 @@ function SDL_RenderCopyEx(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   const ASrcRect, ADstRect: PSdlRect; AAngle: Double;
   const ACenter: PSdlPoint; AFlip: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderCopyEx';
+// AAngle in degrees clockwise; ACenter nil = the middle of ADstRect
+function SDL_RenderCopyExF(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const ASrcRect: PSdlRect; const ADstRect: PSdlFRect; AAngle: Double;
+  const ACenter: PSdlFPoint; AFlip: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_RenderCopyExF';
 function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
   AW, AH: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderSetLogicalSize';

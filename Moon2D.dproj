@@ -182,6 +182,8 @@
         <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Objects.pas"/>
+        <DCCReference Include="Core\Render.Puff.pas"/>
+        <DCCReference Include="Core\Effects.Emitter.pas"/>
         <DCCReference Include="Core\Render.Dynamics.pas"/>
         <DCCReference Include="Core\Render.Shake.pas"/>
         <DCCReference Include="Game\Hero.pas"/>

@@ -138,8 +138,10 @@ type
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
     procedure CheckEvents;
+    procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckDynamics;
     procedure CheckDynamicParent(const ATag: string);
+    procedure CheckMonsterParent(const ATag: string);
   public
     destructor Destroy; override;
     procedure LoadFromFile(const AFileName: string);
@@ -175,8 +177,8 @@ type
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
     property Events: TArray<TLevelEvent> read FEvents;
-    // Owned by the level and kept through a restart: a death does not
-    // rewind the lamps
+    // Owned by the level and kept through a restart: a lamp keeps its
+    // rhythm; only what a re-armed event changed goes back
     property Dynamics: TDynamicObjects read FDynamics;
   end;
 
@@ -199,8 +201,14 @@ resourcestring
   SLevelObjectBadWidth = 'Level "%s": object "%s" is %d units wide';
   SLevelDynamicBadScreen = 'Level "%s": a dynamic object sits on screen '
     + '%d of %d';
+  SLevelEventTargetUnknown = 'Level "%s": event "%s" turns "%s", '
+    + 'which no dynamic object carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
-    + 'a tag no object carries';
+    + 'a tag no object and no entity carries';
+  SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by an object '
+    + 'and an entity - a dynamic object hung on it cannot tell which';
+  SLevelDynamicTwoMonsters = 'Level "%s": two monsters tagged "%s" live '
+    + 'on one difficulty - a dynamic object hung on it cannot tell which';
   SLevelDynamicTwoParents = 'Level "%s": two objects tagged "%s" stand '
     + 'on screen %d - a dynamic object hung on it cannot tell which';
 
@@ -336,10 +344,11 @@ begin
   ParseBackgrounds(ARoot.GetValue<TJSONArray>('backgrounds'));
   ParseObjects(ARoot.GetValue<TJSONArray>('objects', nil));
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
-  FEvents := ParseLevelEvents(ARoot, FId);
-  CheckEvents;
+  // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
   CheckDynamics;
+  FEvents := ParseLevelEvents(ARoot, FId);
+  CheckEvents;
 end;
 
 function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;
@@ -351,9 +360,10 @@ begin
   Result := False;
 end;
 
-// An event off the screen list never fires; one waiting for a tag no
-// entity carries fires at once, since nobody is alive to hold it. Both
-// are typos that must die at load, not mid-level.
+// An event off the screen list never fires; one watching a tag no
+// entity carries fires at once or never; one turning a tag no dynamic
+// object carries turns nothing. Typos all - they die at load, not
+// mid-level.
 procedure TLevel.CheckEvents;
 begin
   for var Event in FEvents do
@@ -361,16 +371,26 @@ begin
     if (Event.Screen < 1) or (Event.Screen > FScreenCount) then
       raise ELevelError.CreateFmt(SLevelEventBadScreen,
         [FId, Event.Id, Event.Screen, FScreenCount]);
-    if (Event.Condition = ecAllDead) and
+    if (Event.Condition in TaggedConditions) and
       not AnyPlacementTagged(FEntities, Event.Tag) then
       raise ELevelError.CreateFmt(SLevelEventTagUnknown,
         [FId, Event.Id, Event.Tag]);
+    CheckEventTargets(Event);
   end;
 end;
 
+procedure TLevel.CheckEventTargets(const AEvent: TLevelEvent);
+begin
+  for var Action in AEvent.Actions do
+    if (Action.Kind = eaIntensity) and
+      not FDynamics.AnyTagged(Action.Target) then
+      raise ELevelError.CreateFmt(SLevelEventTargetUnknown,
+        [FId, AEvent.Id, Action.Target]);
+end;
+
 // A nailed object off the screen list never shows; a parent tag no
-// object carries leaves its child nowhere. Typos both - they die at
-// load, as the events' do.
+// object and no monster carries leaves its child nowhere. Typos both -
+// they die at load, as the events' do.
 procedure TLevel.CheckDynamics;
 begin
   for var DynamicObject in FDynamics do
@@ -401,8 +421,29 @@ begin
     Found := True;
   end;
 
-  if not Found then
+  var OnEntity := AnyPlacementTagged(FEntities, ATag);
+  if Found and OnEntity then
+    raise ELevelError.CreateFmt(SLevelDynamicTwoKinds, [FId, ATag]);
+  if not (Found or OnEntity) then
     raise ELevelError.CreateFmt(SLevelDynamicNoParent, [FId, ATag]);
+  if OnEntity then
+    CheckMonsterParent(ATag);
+end;
+
+// Placements with one tag on disjoint grades are one monster per
+// difficulty; on a shared grade they live together, and a dynamic
+// object hung on the tag would follow whichever the field lists first
+procedure TLevel.CheckMonsterParent(const ATag: string);
+begin
+  var Seen: TDifficultyGrades := [];
+  for var Entity in FEntities do
+  begin
+    if Entity.Tag <> ATag then
+      Continue;
+    if Seen * Entity.Grades <> [] then
+      raise ELevelError.CreateFmt(SLevelDynamicTwoMonsters, [FId, ATag]);
+    Seen := Seen + Entity.Grades;
+  end;
 end;
 
 function TLevel.SolidAt(AScreen, AX, AY: Integer): Boolean;

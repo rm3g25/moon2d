@@ -25,14 +25,15 @@ type
     class function Neutral: TColorTint; static;
   end;
 
-// The "tint" of AObj; absent = neutral. AOwner names the picture in
-// errors.
-function ReadTint(AObj: TJSONObject; const AOwner: string): TColorTint;
+// The "tint" of AObj - or another key of the same shape; absent =
+// neutral. AOwner names the picture in errors.
+function ReadTint(AObj: TJSONObject; const AOwner: string;
+  const AKey: string = 'tint'): TColorTint;
 
 implementation
 
 resourcestring
-  SBadTint = 'Tint of "%s" takes three percentages, 0..100';
+  SBadTint = '"%s" of "%s" takes three percentages, 0..100';
 
 class function TColorTint.Neutral: TColorTint;
 begin
@@ -43,24 +44,25 @@ end;
 
 // A wrong shape raises: a picture that silently stays at full
 // brightness looks like a tint that was never tuned
-function ReadTint(AObj: TJSONObject; const AOwner: string): TColorTint;
+function ReadTint(AObj: TJSONObject; const AOwner: string;
+  const AKey: string): TColorTint;
 
   function Percent(AValue: TJSONValue): Byte;
   begin
     if not (AValue is TJSONNumber) then
-      raise ETintError.CreateFmt(SBadTint, [AOwner]);
+      raise ETintError.CreateFmt(SBadTint, [AKey, AOwner]);
     var Value := TJSONNumber(AValue).AsInt;
     if (Value < 0) or (Value > 100) then
-      raise ETintError.CreateFmt(SBadTint, [AOwner]);
+      raise ETintError.CreateFmt(SBadTint, [AKey, AOwner]);
     Result := Value;
   end;
 
 begin
-  var Raw := AObj.GetValue('tint');
+  var Raw := AObj.GetValue(AKey);
   if Raw = nil then
     Exit(TColorTint.Neutral);
   if not (Raw is TJSONArray) or (TJSONArray(Raw).Count <> 3) then
-    raise ETintError.CreateFmt(SBadTint, [AOwner]);
+    raise ETintError.CreateFmt(SBadTint, [AKey, AOwner]);
 
   var Channels := TJSONArray(Raw);
   Result.R := Percent(Channels.Items[0]);

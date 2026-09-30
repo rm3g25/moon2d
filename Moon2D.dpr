@@ -36,6 +36,8 @@ uses
   Levels.Events in 'Core\Levels.Events.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Objects in 'Core\Render.Objects.pas',
+  Render.Puff in 'Core\Render.Puff.pas',
+  Effects.Emitter in 'Core\Effects.Emitter.pas',
   Render.Dynamics in 'Core\Render.Dynamics.pas',
   Render.Shake in 'Core\Render.Shake.pas',
   Hero in 'Game\Hero.pas',
@@ -328,6 +330,8 @@ type
     procedure StartPlaying;
     procedure PreloadSounds;
     procedure ChangeMusic(const AFileName: string);
+    function LocateMonster(const ATag: string;
+      out AStand: TParentStand): Boolean;
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -487,7 +491,8 @@ begin
   if Length(FLevel.Objects) > 0 then
     FObjectCache.AttachSpriteSet(OpenLevelArtSet('objects'));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
-  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel);
+  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel,
+    LocateMonster);
 
   FHero := THero.Create(FRenderer, FLevel);
   FreeAndNil(FHenshin);
@@ -496,7 +501,8 @@ begin
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
   FreeAndNil(FDirector);
-  FDirector := TEventDirector.Create(FLevel.Events, FMessages, ChangeMusic);
+  FDirector := TEventDirector.Create(FLevel.Events, FMessages,
+    FLevel.Dynamics, ChangeMusic);
 
   FMonsterBullets.Clear;
   FMessages.Clear;
@@ -917,6 +923,24 @@ begin
     Exit;
   FCurrentMusic := AFileName;
   FAudio.PlayMusic(AFileName, mmLoop);
+end;
+
+// A dynamic object hung on a monster looks it up here every tick
+function TMoonGame.LocateMonster(const ATag: string;
+  out AStand: TParentStand): Boolean;
+begin
+  for var Monster in FField.Monsters do
+  begin
+    if Monster.Tag <> ATag then
+      Continue;
+    AStand.Screen := Monster.Screen;
+    // Where TMonster.Draw puts the sprite: the feet line is Y
+    AStand.X := Round(Monster.X);
+    AStand.Y := Round(Monster.Y) - SpriteSize;
+    AStand.Alive := Monster.Life = mlAlive;
+    Exit(True);
+  end;
+  Result := False;
 end;
 
 // Warm the sound cache at startup so the first shot reads from RAM,
@@ -1378,7 +1402,6 @@ begin
       Exit;
     end;
   end;
-  FDynamics.Tick;
   // The ceremony counts in the same breath as the 2008 timer did (450):
   // it keeps ticking even over the hero's corpse - restart resets it
   FHenshin.Tick;
@@ -1423,6 +1446,9 @@ begin
   // restart re-arms the screen anyway
   if not FHero.Dead then
     FDirector.Tick(FHero.Screen, FField);
+  // After the monsters have moved: smoke must leave a monster where this
+  // frame draws it, not a tick behind
+  FDynamics.Tick(FHero.Screen);
   if FHurtCooldown > 0 then
     Dec(FHurtCooldown);
   if FHero.Dead then
@@ -1466,10 +1492,11 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
-        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha);
+        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);
+        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
         FSprites.Origin := FShake.Offset(scHero);
         FHero.Draw(FSprites);
         FSprites.Origin := FShake.Offset(scWorld);

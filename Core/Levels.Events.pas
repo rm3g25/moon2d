@@ -20,15 +20,25 @@ type
   ELevelEventError = class(Exception);
 
   // What the event waits for. The hero must be on the event's screen
-  // for any of them; enterScreen asks nothing more.
-  TEventCondition = (ecEnterScreen, ecAllDead);
+  // for any of them; enterScreen asks nothing more. The rest watch the
+  // monsters carrying the tag: allDead - none of them alive; livesBelow
+  // - one alive with fewer lives than "lives"; enraged - one gone into
+  // its rage (the boss below its rage mark, a tank below its own).
+  TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
 
-  TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic);
+  TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
+    eaIntensity);
 
   TEventAction = record
     Kind: TEventActionKind;
     Text: TLocalizedText; // the message kinds; localized like the triggers
     FileName: string; // eaMusic
+    // eaIntensity: the dynamic objects tagged Target fade to Level
+    // (0..1) over Ticks. JSON: "target", "value" (a percentage),
+    // "ticks" (0 by default - at once).
+    Target: string;
+    Level: Single;
+    Ticks: Integer;
   end;
 
   // One event in level JSON:
@@ -36,6 +46,7 @@ type
   //     "id": "labHint",
   //     "screen": 12,
   //     "when": "allDead", "tag": "labGuard",
+  //     (or "when": "livesBelow", "tag": "boss", "lives": 150)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -45,7 +56,8 @@ type
     Id: string;
     Screen: Integer; // 1-based, as the level counts
     Condition: TEventCondition;
-    Tag: string; // ecAllDead: the placements that must fall
+    Tag: string; // the placements the monster conditions watch
+    Lives: Integer; // ecLivesBelow
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -53,9 +65,12 @@ type
 const
   // The JSON vocabulary of "when" and "action"
   EventConditionIds: array [TEventCondition] of string = (
-    'enterScreen', 'allDead');
+    'enterScreen', 'allDead', 'livesBelow', 'enraged');
   EventActionIds: array [TEventActionKind] of string = (
-    'bigMessage', 'smallMessage', 'hint', 'music');
+    'bigMessage', 'smallMessage', 'hint', 'music', 'intensity');
+
+  // The conditions that watch tagged placements
+  TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
 
 // Reads the "events" array of a level; an absent section is an empty
 // list. ALevelId names the level in errors.
@@ -70,7 +85,10 @@ uses
 resourcestring
   SEventNoId = 'Level "%s": event #%d has no id';
   SEventBadCondition = 'Level "%s": event "%s": unknown condition "%s"';
-  SEventNoTag = 'Level "%s": event "%s": allDead names no tag';
+  SEventNoTag = 'Level "%s": event "%s": %s names no tag';
+  SEventNoLives = 'Level "%s": event "%s": livesBelow needs "lives" above zero';
+  SEventNoTarget = 'Level "%s": event "%s": intensity names no target';
+  SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
 
@@ -93,6 +111,19 @@ begin
   raise ELevelEventError.CreateFmt(SEventBadAction, [ALevelId, AEventId, AId]);
 end;
 
+procedure ReadIntensity(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.Target := AObj.GetValue<string>('target', '');
+  if AAction.Target = '' then
+    raise ELevelEventError.CreateFmt(SEventNoTarget, [ALevelId, AEventId]);
+  var Percent := AObj.GetValue<Integer>('value', -1);
+  if (Percent < 0) or (Percent > 100) then
+    raise ELevelEventError.CreateFmt(SEventBadLevel, [ALevelId, AEventId]);
+  AAction.Level := Percent / 100;
+  AAction.Ticks := AObj.GetValue<Integer>('ticks', 0);
+end;
+
 function ReadAction(const AObj: TJSONObject;
   const ALevelId, AEventId: string): TEventAction;
 begin
@@ -101,6 +132,8 @@ begin
     ALevelId, AEventId);
   Result.Text := ReadLocalizedText(AObj, 'text');
   Result.FileName := AObj.GetValue<string>('file', '');
+  if Result.Kind = eaIntensity then
+    ReadIntensity(AObj, ALevelId, AEventId, Result);
 end;
 
 function ReadEvent(const AObj: TJSONObject; const ALevelId: string;
@@ -115,8 +148,12 @@ begin
   Result.Condition := ConditionOf(AObj.GetValue<string>('when', ''),
     ALevelId, Result.Id);
   Result.Tag := AObj.GetValue<string>('tag', '');
-  if (Result.Condition = ecAllDead) and (Result.Tag = '') then
-    raise ELevelEventError.CreateFmt(SEventNoTag, [ALevelId, Result.Id]);
+  if (Result.Condition in TaggedConditions) and (Result.Tag = '') then
+    raise ELevelEventError.CreateFmt(SEventNoTag,
+      [ALevelId, Result.Id, EventConditionIds[Result.Condition]]);
+  Result.Lives := AObj.GetValue<Integer>('lives', 0);
+  if (Result.Condition = ecLivesBelow) and (Result.Lives <= 0) then
+    raise ELevelEventError.CreateFmt(SEventNoLives, [ALevelId, Result.Id]);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);

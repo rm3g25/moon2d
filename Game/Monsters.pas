@@ -127,6 +127,7 @@ type
     property Life: TMonsterLife read FLife;
     property Lives: Integer read FLives;
     property LivesAll: Integer read FLivesAll;
+    property Enraged: Boolean read FEnraged;
     property Direction: Boolean read FDirection;
     property TicksSinceHit: Integer read FTicksSinceHit;
   end;
@@ -166,6 +167,9 @@ type
     // Any live body carrying the placement tag, on any screen - the
     // events' allDead condition asks here
     function AnyAliveTagged(const ATag: string): Boolean;
+    // The events' livesBelow and enraged conditions ask here
+    function AnyTaggedLivesBelow(const ATag: string; ALives: Integer): Boolean;
+    function AnyTaggedEnraged(const ATag: string): Boolean;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer);
 
     property Monsters: TObjectList<TMonster> read FMonsters;
@@ -850,6 +854,25 @@ function TMonsterField.AnyAliveTagged(const ATag: string): Boolean;
 begin
   for var Monster in FMonsters do
     if (Monster.Life = mlAlive) and (Monster.Tag = ATag) then
+      Exit(True);
+  Result := False;
+end;
+
+function TMonsterField.AnyTaggedLivesBelow(const ATag: string;
+  ALives: Integer): Boolean;
+begin
+  for var Monster in FMonsters do
+    if (Monster.Life = mlAlive) and (Monster.Tag = ATag) and
+      (Monster.Lives < ALives) then
+      Exit(True);
+  Result := False;
+end;
+
+function TMonsterField.AnyTaggedEnraged(const ATag: string): Boolean;
+begin
+  for var Monster in FMonsters do
+    if (Monster.Life = mlAlive) and Monster.Enraged and
+      (Monster.Tag = ATag) then
       Exit(True);
   Result := False;
 end;
