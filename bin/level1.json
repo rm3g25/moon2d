@@ -64,7 +64,8 @@
       "screen": 1,
       "x": 4,
       "y": 244,
-      "width": 300
+      "width": 300,
+      "tag": "ship"
     },
     {
       "sprite": "satellite",
@@ -76,7 +77,8 @@
         70,
         72,
         78
-      ]
+      ],
+      "tag": "satellite"
     },
     {
       "sprite": "satellite",
@@ -88,7 +90,8 @@
         70,
         72,
         78
-      ]
+      ],
+      "tag": "satellite"
     },
     {
       "sprite": "satellite",
@@ -100,7 +103,8 @@
         70,
         72,
         78
-      ]
+      ],
+      "tag": "satellite"
     },
     {
       "sprite": "satellite",
@@ -112,7 +116,44 @@
         70,
         72,
         78
-      ]
+      ],
+      "tag": "satellite"
+    }
+  ],
+  "dynamics": [
+    {
+      "kind": "beacon",
+      "parent": "ship",
+      "x": 16.1,
+      "y": 1.2,
+      "tint": [
+        25,
+        55,
+        100
+      ],
+      "blink": "double",
+      "frequency": 0.75,
+      "intensity": 100,
+      "size": 14,
+      "glint": 50
+    },
+    {
+      "kind": "beacon",
+      "parent": "satellite",
+      "x": 25.5,
+      "y": 1.4,
+      "tint": [
+        100,
+        18,
+        12
+      ],
+      "blink": "faulty",
+      "frequency": 0.6,
+      "intensity": 85,
+      "size": 10,
+      "glint": 0,
+      "rays": 36,
+      "rayIntensity": 70
     }
   ],
   "tilePalette": [

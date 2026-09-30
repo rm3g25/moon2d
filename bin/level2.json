@@ -70,7 +70,27 @@
         85,
         85,
         87
-      ]
+      ],
+      "tag": "satellite"
+    }
+  ],
+  "dynamics": [
+    {
+      "kind": "beacon",
+      "parent": "satellite",
+      "x": 25.5,
+      "y": 1.4,
+      "tint": [
+        100,
+        18,
+        12
+      ],
+      "blink": "dying",
+      "frequency": 14,
+      "intensity": 70,
+      "size": 10,
+      "rays": 24,
+      "rayIntensity": 60
     }
   ],
   "tilePalette": [
