@@ -28,15 +28,21 @@
   "backgrounds": [
     {
       "fromScreen": 1,
-      "image": "_scr0.png"
-    },
-    {
-      "fromScreen": 2,
-      "image": "_scr1.png"
+      "image": "_scr1.png",
+      "tint": [
+        50,
+        53,
+        60
+      ]
     },
     {
       "fromScreen": 8,
-      "image": "_scr2.png"
+      "image": "_scr2.png",
+      "tint": [
+        38,
+        41,
+        47
+      ]
     },
     {
       "fromScreen": 12,
@@ -44,7 +50,12 @@
     },
     {
       "fromScreen": 14,
-      "image": "_scr3.png"
+      "image": "_scr3.png",
+      "tint": [
+        32,
+        35,
+        41
+      ]
     }
   ],
   "tilePalette": [

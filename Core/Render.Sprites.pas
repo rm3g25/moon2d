@@ -58,6 +58,7 @@ type
     FTextures: TDictionary<string, PSdlTexture>;
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
+    FLinearFilter: Boolean;
     function FindSet(const AName: string): TSpriteSet;
     function NamedSet(const AId: string): TSpriteSet;
     function LoadTexture(const ASurface: PSdlSurface;
@@ -88,6 +89,10 @@ type
     // Color key applies to textures loaded AFTER the call; set it up first.
     procedure SetColorKey(AR, AG, AB: UInt8);
     procedure DisableColorKey;
+    // For art denser than the logical screen (HD backdrops): the global
+    // filter is nearest, and nearest downscaling turns detail into grain.
+    // Applies to textures loaded after the call, like the color key.
+    procedure EnableLinearFilter;
     function Count: Integer;
   end;
 
@@ -220,6 +225,11 @@ begin
   FUseColorKey := False;
 end;
 
+procedure TSpriteCache.EnableLinearFilter;
+begin
+  FLinearFilter := True;
+end;
+
 function TSpriteCache.Count: Integer;
 begin
   Result := FTextures.Count;
@@ -339,6 +349,8 @@ begin
     if Result = nil then
       raise ESpriteError.CreateFmt(STextureCreateFailed,
         [AName, SdlErrorText]);
+    if FLinearFilter then
+      SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
   finally
     SDL_FreeSurface(Surface);
   end;

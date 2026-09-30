@@ -466,6 +466,7 @@ begin
 
   FBackgroundCache := TSpriteCache.Create(FRenderer);
   FBackgroundCache.DisableColorKey;
+  FBackgroundCache.EnableLinearFilter;
   FBackgroundCache.AttachSpriteSet(FLevelSets.Last);
   FTiles := TTileScreenRenderer.Create(FSprites, FTileCache,
     FBackgroundCache, FLevel);

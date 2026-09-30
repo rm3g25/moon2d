@@ -87,9 +87,17 @@ type
     Tag: string;
   end;
 
+  // Per-channel multiplier in percent, applied when the backdrop is
+  // drawn; 100 leaves the picture as painted. JSON: "tint": [50, 53, 60].
+  TBackdropTint = record
+    R, G, B: Byte;
+    class function Neutral: TBackdropTint; static;
+  end;
+
   TBackgroundChange = record
     FromScreen: Integer;
     Image: string;
+    Tint: TBackdropTint;
   end;
 
   TLevel = class
@@ -122,8 +130,9 @@ type
     function TileAt(AScreen, AX, AY: Integer): Integer;
     // Collision layer: True = solid wall (the .msv first byte of a pair).
     function SolidAt(AScreen, AX, AY: Integer): Boolean;
-    // Background image active on a given screen (last change wins).
-    function BackgroundFor(AScreen: Integer): string;
+    // Backdrop active on a given screen (last change wins); Image = ''
+    // when the level defines none.
+    function BackgroundFor(AScreen: Integer): TBackgroundChange;
 
     property Id: string read FId;
     property Title: TLocalizedText read FTitle;
@@ -161,6 +170,14 @@ resourcestring
   SLevelEventBadScreen = 'Level "%s": event "%s" sits on screen %d of %d';
   SLevelEventTagUnknown = 'Level "%s": event "%s" waits for tag "%s", '
     + 'which no entity carries';
+  SLevelBadTint = 'Background "%s": tint takes three percentages, 0..100';
+
+class function TBackdropTint.Neutral: TBackdropTint;
+begin
+  Result.R := 100;
+  Result.G := 100;
+  Result.B := 100;
+end;
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -235,12 +252,12 @@ begin
   Result := FTiles[AScreen - 1][AY][AX];
 end;
 
-function TLevel.BackgroundFor(AScreen: Integer): string;
+function TLevel.BackgroundFor(AScreen: Integer): TBackgroundChange;
 begin
-  Result := '';
+  Result := Default(TBackgroundChange);
   for var Change in FBackgrounds do
     if Change.FromScreen <= AScreen then
-      Result := Change.Image;
+      Result := Change;
 end;
 
 procedure TLevel.LoadFromFile(const AFileName: string);
@@ -375,6 +392,34 @@ begin
   end;
 end;
 
+// Absent = neutral. A wrong shape raises: a backdrop that silently
+// stays at full brightness looks like a tint that was never tuned.
+function ReadBackdropTint(const AObj: TJSONObject;
+  const AImage: string): TBackdropTint;
+
+  function Percent(const AValue: TJSONValue): Byte;
+  begin
+    if not (AValue is TJSONNumber) then
+      raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+    var Value := TJSONNumber(AValue).AsInt;
+    if (Value < 0) or (Value > 100) then
+      raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+    Result := Value;
+  end;
+
+begin
+  var Raw := AObj.GetValue('tint');
+  if Raw = nil then
+    Exit(TBackdropTint.Neutral);
+  if not (Raw is TJSONArray) or (TJSONArray(Raw).Count <> 3) then
+    raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+
+  var Channels := TJSONArray(Raw);
+  Result.R := Percent(Channels.Items[0]);
+  Result.G := Percent(Channels.Items[1]);
+  Result.B := Percent(Channels.Items[2]);
+end;
+
 procedure TLevel.ParseBackgrounds(const AArr: TJSONArray);
 begin
   SetLength(FBackgrounds, AArr.Count);
@@ -383,6 +428,7 @@ begin
     var Obj := AArr.Items[i] as TJSONObject;
     FBackgrounds[i].FromScreen := Obj.GetValue<Integer>('fromScreen');
     FBackgrounds[i].Image := Obj.GetValue<string>('image');
+    FBackgrounds[i].Tint := ReadBackdropTint(Obj, FBackgrounds[i].Image);
   end;
 end;
 
