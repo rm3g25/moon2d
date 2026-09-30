@@ -70,9 +70,14 @@ rounding difference.
   monster sets, because then two lists would have to agree, and one day
   they would not.
 - **The hero is the default.** Loaded by the engine, named in no JSON.
-- **Levels declare environment only** — tiles, backgrounds, decorations:
+- **Levels declare environment only** - the tiles:
   `"spriteSets": ["moon-surface", "machinery"]`. Sets are searched in the
   order declared, first match wins.
+- **Backdrops and objects follow the level by convention**, one set per
+  `assetsDir` and kind: `level1-backdrops`, `level1-objects`. They are
+  never declared - the level has exactly one of each, so a list would
+  only be a second place to misspell the name. A level that places no
+  objects needs no objects set.
 
 A bare name that two declared sets both carry would resolve silently,
 and reordering the declaration would then change a picture without
