@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.14` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.15` (the folder layout came
 between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -182,7 +182,8 @@ mixer, missing art is fatal.
   lamp keeps its rhythm off screen) with the origin of its stand on the
   hero's screen, else its first; a lead stand on another screen is a jump
   (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
-  the ones on the screen in one layer (`dlBack` / `dlFront`).
+  the ones on the screen in one layer (`dlBack` / `dlFront`). `Canvas` - the
+  textures, lent to the monsters' wreck smoke.
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -344,7 +345,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~870 lines)
+### `Core/Levels.Dynamics.pas` (~930 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
@@ -362,7 +363,9 @@ here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
   calls the kind's protected abstract `Advance(motionX, motionY,
   parentAlive)`; `FadeTo(level, ticks)`, `Rewind` (virtual: back to the
   level file's intensity, origin forgotten), `ForgetOrigin` (the next tick
-  counts no motion). `Draw(canvas, originX, originY, alpha)` adds X/Y to
+  counts no motion), `Origin` (where the last tick counted from). Two
+  constructors: from JSON, or with the intensity given (for objects the
+  game makes itself). `Draw(canvas, originX, originY, alpha)` adds X/Y to
   the origin and calls the protected abstract `DrawAt`. The parent is
   coordinates only, VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
@@ -401,7 +404,11 @@ here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
   events turn the source off). No emission while the parent monster is
   dead or nowhere. `Rewind` also clears the swarm (a death restarts the
   world in full). Particles: `TParticleSwarm` of `Effects.Emitter`, drawn
-  through `DrawPuff`; units per second in JSON, per tick in the code.
+  through `DrawPuff`; units per second in JSON, per tick in the code. The
+  look is a **`TSmokeLook`** record in JSON units (`ReadSmokeLook` fills it
+  from the level file, `TakeLook` turns it into ticks); `CreateLook(
+  placement, look, intensity, seed)` makes a smoke from code - the wreck
+  smoke of the machines in `Monsters`.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
   list, the caller owns it); an unknown kind, layer, blink or flow, screen
   and parent together or neither, a number out of range raise
@@ -508,7 +515,7 @@ moves in comes from `Game.Space`.
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Game/Monsters.pas` (~930 lines)
+### `Game/Monsters.pas` (~1025 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
@@ -538,7 +545,17 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
-  `Draw`.
+  `Draw`, `DrawSmoke(canvas, screen, origin, alpha)`.
+- **Wreck smoke** (a 2026 addition, default behavior, no data): a machine -
+  `IsMachine`, explodes on death and is not static: the tank and the flying
+  platform; the mount and the barrel are not - owns a `TSmoke` made from the
+  `WreckSmoke` look (the boss's first smoke, straight up), unlit until
+  `HealthTier` reaches `htCritical` (the red third of the health row), then
+  60% within a second; no emission once dead. The point (`WreckSmokeX/Y`,
+  left-facing art) mirrors with `FacesRight`, the one home of the facing
+  rule, which `Draw` uses too. The smoke dies with the monster, so a
+  restart clears it. `TMonster` got its destructor (it frees the smoke and
+  the event list).
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -894,7 +911,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     still, objects + back dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the back dynamics draw
     right after the objects, behind tiles and hero - monsters, then the
-    front dynamics (the boss smoke), on the monsters' channel, the hero on
+    machines' wreck smoke, then the front dynamics (the boss smoke), on
+    the monsters' channel, the hero on
     his own, cursor and HUD still; `Update` ticks `FDynamics` after the
     monsters and the director, so a smoking monster's puffs leave from
     where this frame draws it), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
