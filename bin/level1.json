@@ -154,6 +154,158 @@
       "glint": 0,
       "rays": 36,
       "rayIntensity": 70
+    },
+    {
+      "kind": "smoke",
+      "parent": "satellite",
+      "x": 36.9,
+      "y": 31.2,
+      "tint": [
+        88,
+        92,
+        100
+      ],
+      "endTint": [
+        66,
+        70,
+        78
+      ],
+      "rate": 26,
+      "life": 2.2,
+      "size": 2.5,
+      "endSize": 24,
+      "opacity": 38,
+      "angle": -15,
+      "cone": 32,
+      "speed": 26,
+      "drag": 8,
+      "turbulence": 1,
+      "spin": 40,
+      "flow": "gusty",
+      "frequency": 0.8
+    },
+    {
+      "kind": "smoke",
+      "parent": "satellite",
+      "x": 34.8,
+      "y": 39.7,
+      "tint": [
+        88,
+        92,
+        100
+      ],
+      "endTint": [
+        66,
+        70,
+        78
+      ],
+      "rate": 12,
+      "life": 1.8,
+      "size": 2,
+      "endSize": 16,
+      "opacity": 28,
+      "angle": -50,
+      "cone": 35,
+      "speed": 18,
+      "drag": 8,
+      "turbulence": 1,
+      "spin": 40,
+      "flow": "gusty",
+      "frequency": 1.3
+    },
+    {
+      "kind": "smoke",
+      "parent": "satellite",
+      "x": 45.4,
+      "y": 7.8,
+      "tint": [
+        88,
+        92,
+        100
+      ],
+      "endTint": [
+        66,
+        70,
+        78
+      ],
+      "rate": 16,
+      "life": 1.4,
+      "size": 1.5,
+      "endSize": 12,
+      "opacity": 30,
+      "angle": 55,
+      "cone": 14,
+      "speed": 34,
+      "drag": 5,
+      "turbulence": 0.5,
+      "spin": 30,
+      "flow": "gusty",
+      "frequency": 2
+    },
+    {
+      "kind": "smoke",
+      "parent": "boss",
+      "x": 22,
+      "y": 8,
+      "tag": "bossSmoke",
+      "layer": "front",
+      "tint": [
+        58,
+        57,
+        56
+      ],
+      "endTint": [
+        72,
+        72,
+        74
+      ],
+      "intensity": 0,
+      "rate": 50,
+      "life": 1.0,
+      "size": 7,
+      "endSize": 26,
+      "opacity": 70,
+      "angle": 70,
+      "cone": 90,
+      "speed": 6,
+      "drag": 20,
+      "turbulence": 3,
+      "spin": 50,
+      "flow": "gusty",
+      "frequency": 1.5
+    },
+    {
+      "kind": "smoke",
+      "parent": "boss",
+      "x": 9,
+      "y": 21,
+      "tag": "bossBurn",
+      "layer": "front",
+      "tint": [
+        40,
+        37,
+        35
+      ],
+      "endTint": [
+        64,
+        64,
+        66
+      ],
+      "intensity": 0,
+      "rate": 60,
+      "life": 0.9,
+      "size": 6,
+      "endSize": 24,
+      "opacity": 80,
+      "angle": 160,
+      "cone": 70,
+      "speed": 8,
+      "drag": 20,
+      "turbulence": 3,
+      "spin": 60,
+      "flow": "gusty",
+      "frequency": 3,
+      "heat": 70
     }
   ],
   "tilePalette": [
@@ -2049,6 +2201,7 @@
       "spriteList": "boss1.mns",
       "x": 15,
       "y": 5,
+      "tag": "boss",
       "triggers": {
         "bigMessage": "Охранный робот TEK-R1",
         "bigMessageEn": "TEK-R1 security robot"
@@ -2074,6 +2227,55 @@
           "action": "hint",
           "text": "Помещения медицинских лабораторий - отличный способ поправить здоровье, но тут же вас подстерегает множество опасностей",
           "textEn": "Medical lab facilities are a great way to restore your health, but plenty of dangers lurk there as well"
+        }
+      ]
+    },
+    {
+      "id": "bossSmokes",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 150,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossSmoke",
+          "value": 60,
+          "ticks": 66
+        }
+      ]
+    },
+    {
+      "id": "bossRageClearsSmoke",
+      "screen": 17,
+      "when": "enraged",
+      "tag": "boss",
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossSmoke",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "bossBurns",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 30,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossSmoke",
+          "value": 100,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossBurn",
+          "value": 100,
+          "ticks": 33
         }
       ]
     }

@@ -91,6 +91,35 @@
       "size": 10,
       "rays": 24,
       "rayIntensity": 60
+    },
+    {
+      "kind": "smoke",
+      "parent": "satellite",
+      "x": 36.9,
+      "y": 31.2,
+      "tint": [
+        86,
+        88,
+        94
+      ],
+      "endTint": [
+        66,
+        68,
+        74
+      ],
+      "rate": 14,
+      "life": 1.8,
+      "size": 2,
+      "endSize": 16,
+      "opacity": 30,
+      "angle": -15,
+      "cone": 30,
+      "speed": 20,
+      "drag": 8,
+      "turbulence": 1,
+      "spin": 40,
+      "flow": "puffs",
+      "frequency": 0.45
     }
   ],
   "tilePalette": [
