@@ -68,6 +68,8 @@ type
     procedure Tick(AScreen: Integer);
     procedure Draw(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single;
       ALayer: TDynamicLayer);
+    // The textures, for smoke the game makes itself
+    property Canvas: TDynamicCanvas read FCanvas;
   end;
 
 implementation

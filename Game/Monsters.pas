@@ -24,6 +24,9 @@
   lives (turns the HERO into ice form), rage under 80 lives (speed x2,
   fire x3, music change, a 24x44 fragment wave), victory double-fan.
 
+  A machine - a monster that explodes and moves: the tank, the flying
+  platform - smokes once it is down to its last third (a 2026 addition).
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Monsters;
@@ -35,7 +38,7 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
-  Monsters.Defs, Bullets;
+  Levels.Dynamics, Monsters.Defs, Bullets;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling,
@@ -79,6 +82,8 @@ type
     FEvents: TList<TMonsterEvent>;
     FLevel: TLevel;
     FHeroX, FHeroY: Integer;
+    FSmoke: TSmoke; // machines only, nil for the rest
+    FWrecked: Boolean; // the smoke is lit
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -99,16 +104,22 @@ type
     procedure ProcessBossThresholds(const AEnemyBullets: TBurst);
     procedure BeginDying(const AEnemyBullets: TBurst);
     function ThirdMark(AThirds: Integer): Integer;
+    function FacesRight: Boolean;
+    procedure CreateWreckSmoke;
+    procedure TickSmoke;
   public
     constructor Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
       const ALevel: TLevel; const APlacement: TEntityPlacement;
       ALivesScale: Double);
+    destructor Destroy; override;
 
     // One logic tick (33 Hz - the REAL rate of the 2008 20 ms timer).
     // AHeroX/AHeroY feed the chasers and aimers; enemy bullets go into
     // ABullets (the shared monster burst).
     procedure Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
     procedure Draw(const ASprites: TSpriteRenderer);
+    procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
     // Applies knockback through the wall oracle; queues explosion fans
     // and events.
     procedure TakeDamage(AKnockDx, ALosses: Integer;
@@ -171,11 +182,17 @@ type
     function AnyTaggedLivesBelow(const ATag: string; ALives: Integer): Boolean;
     function AnyTaggedEnraged(const ATag: string): Boolean;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer);
+    // Over the monsters of the screen: the smoke of the wrecked machines
+    procedure DrawSmoke(const ACanvas: TDynamicCanvas; AScreen: Integer;
+      AOrigin: TSdlPoint; AAlpha: Single);
 
     property Monsters: TObjectList<TMonster> read FMonsters;
   end;
 
 implementation
+
+uses
+  Levels.Tint;
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -191,6 +208,27 @@ const
   BossRageLives = 80;      // the boss goes berserk below this
   EnragedMinionTicks = 100; // rage shortens the reinforcement interval
   NeverHit = -1;
+
+  // A wrecked machine smokes like the boss before his rage (bossSmoke of
+  // level 1 at 60%, but straight up - the point mirrors with the art):
+  // enough to notice, not enough to hide the fight
+  WreckSmoke: TSmokeLook = (Rate: 50; Life: 1.0; Size: 7; EndSize: 26;
+    Opacity: 0.7; Angle: 90; Cone: 90; Speed: 6; Drag: 0.2; Lift: 0;
+    Wind: 0; Turbulence: 3; Spin: 50; Flow: sfGusty; Frequency: 1.5;
+    Heat: 0; EndTint: (R: 72; G: 72; B: 74));
+  WreckSmokeTint: TColorTint = (R: 58; G: 57; B: 56);
+  WreckSmokeLevel = 0.6;
+  WreckSmokeRampTicks = 33;
+  // Where the smoke leaves the left-facing art: the tank's engine deck,
+  // the platform's wing root
+  WreckSmokeX = 22;
+  WreckSmokeY = 13;
+
+// Explodes and moves: a mount explodes too, but is part of the wall
+function IsMachine(const ADef: TMonsterDef): Boolean;
+begin
+  Result := ADef.ExplodesOnDeath and (ADef.Movement.Kind <> mkStatic);
+end;
 
 // ---------------------------------------------------------------------------
 // TMonster
@@ -252,6 +290,59 @@ begin
     FAction := maFlyDown;
     FBossMinionTimer := ADef.Boss.SpawnEveryTicks;
   end;
+
+  if IsMachine(ADef) then
+    CreateWreckSmoke;
+end;
+
+destructor TMonster.Destroy;
+begin
+  FSmoke.Free;
+  FEvents.Free;
+  inherited;
+end;
+
+// Unlit until the last third; seeded by the spawn point, so two machines
+// on one screen do not puff in step
+procedure TMonster.CreateWreckSmoke;
+begin
+  var WreckPlacement := Default(TDynamicPlacement);
+  WreckPlacement.Tint := WreckSmokeTint;
+  FSmoke := TSmoke.CreateLook(WreckPlacement, WreckSmoke, 0,
+    (Cardinal(Round(FX)) shl 16) xor Cardinal(Round(FY)));
+end;
+
+procedure TMonster.TickSmoke;
+begin
+  if FSmoke = nil then
+    Exit;
+  if not FWrecked and (HealthTier = htCritical) then
+  begin
+    FWrecked := True;
+    FSmoke.FadeTo(WreckSmokeLevel, WreckSmokeRampTicks);
+  end;
+
+  var PointX := WreckSmokeX;
+  if FacesRight then
+    PointX := SpriteSize - WreckSmokeX;
+  FSmoke.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckSmokeY,
+    FLife = mlAlive);
+end;
+
+procedure TMonster.DrawSmoke(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  if FSmoke <> nil then
+    FSmoke.Draw(ACanvas, FSmoke.Origin.X + AOrigin.X,
+      FSmoke.Origin.Y + AOrigin.Y, AAlpha);
+end;
+
+// 2008 art faces left; a monster standing still keeps its direction
+function TMonster.FacesRight: Boolean;
+begin
+  if FAction = maStand then
+    Exit(FDirection);
+  Result := FAction = maWalkRight;
 end;
 
 function TMonster.DrainEvent: TMonsterEvent;
@@ -667,6 +758,7 @@ begin
     maFlyDown, maFlyLeft, maFlyUp, maFlyRight:
       MoveFlying;
   end;
+  TickSmoke;
 end;
 
 // Tank rage: below the threshold a cluster5 shooter doubles speed and
@@ -778,8 +870,7 @@ begin
         else
           Frame := EnsureRange(RoundHalfUp(FCurrentSprite), 1, 8);
         end;
-        if FAction = maStand then
-          Mirrored := FDirection;
+        Mirrored := FacesRight;
         ASprites.Draw(FAnim.Alive[Frame - 1], Round(FX), DrawY, Mirrored);
       end;
 
@@ -891,6 +982,14 @@ begin
   for var Monster in FMonsters do
     if Monster.Screen = AScreen then
       Monster.Draw(ASprites);
+end;
+
+procedure TMonsterField.DrawSmoke(const ACanvas: TDynamicCanvas;
+  AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  for var Monster in FMonsters do
+    if Monster.Screen = AScreen then
+      Monster.DrawSmoke(ACanvas, AOrigin, AAlpha);
 end;
 
 destructor TMonsterField.Destroy;

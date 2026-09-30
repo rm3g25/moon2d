@@ -82,9 +82,12 @@ type
       AAlpha: Single); virtual; abstract;
     property Intensity: Single read FIntensity.Current;
   public
+    // AIntensity 0..1
+    constructor Create(const APlacement: TDynamicPlacement;
+      AIntensity: Single); overload;
     // JSON: "intensity", a percentage, 100 by default
     constructor Create(const APlacement: TDynamicPlacement;
-      AObj: TJSONObject; const AOwner: string);
+      AObj: TJSONObject; const AOwner: string); overload;
     // AOriginX/AOriginY - the corner the placement counts from, shake
     // left out. AParentAlive is False while a parent monster is dead or
     // nowhere to be found.
@@ -101,6 +104,8 @@ type
     procedure Draw(const ACanvas: TDynamicCanvas;
       AOriginX, AOriginY: Single; AAlpha: Single);
     property Placement: TDynamicPlacement read FPlacement;
+    // Where the last tick counted from, shake left out
+    property Origin: TSdlFPoint read FOrigin;
   end;
 
   TDynamicObjects = class(TObjectList<TDynamicObject>)
@@ -150,6 +155,16 @@ type
   // puffs - separate clouds, frequency a second
   TSmokeFlow = (sfSteady, sfGusty, sfPuffs);
 
+  // A smoke's look in the words of level JSON - seconds, units a
+  // second, degrees - with the percentages as shares, 0..1
+  TSmokeLook = record
+    Rate, Life, Size, EndSize, Opacity: Single;
+    Angle, Cone, Speed, Drag, Lift, Wind, Turbulence, Spin: Single;
+    Flow: TSmokeFlow;
+    Frequency, Heat: Single;
+    EndTint: TColorTint;
+  end;
+
   // Smoke, gas, steam: ragged puffs born at the point, thrown out along
   // the angle within the cone, growing and fading as they go. Once out,
   // a puff stays where it is on the screen - a moving parent leaves a
@@ -198,6 +213,7 @@ type
     procedure Stir;
     procedure DrawPuffOf(const ACanvas: TDynamicCanvas; AX, AY: Single;
       AAlpha: Single; const AParticle: TParticle);
+    procedure TakeLook(const ALook: TSmokeLook; ASeed: Cardinal);
   protected
     procedure Advance(AMotionX, AMotionY: Single;
       AParentAlive: Boolean); override;
@@ -206,6 +222,10 @@ type
   public
     constructor Create(const APlacement: TDynamicPlacement;
       AObj: TJSONObject; const AOwner: string);
+    // A smoke the game makes itself, not the level file. ASeed sets the
+    // puffs' dice: smokes seeded alike puff alike.
+    constructor CreateLook(const APlacement: TDynamicPlacement;
+      const ALook: TSmokeLook; AIntensity: Single; ASeed: Cardinal);
     destructor Destroy; override;
     // What was in the air goes too: the world restarts in full
     procedure Rewind; override;
@@ -423,13 +443,19 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TDynamicObject.Create(const APlacement: TDynamicPlacement;
-  AObj: TJSONObject; const AOwner: string);
+  AIntensity: Single);
 begin
   inherited Create;
   FPlacement := APlacement;
-  FIntensity.Initial := ReadShare(AObj, 'intensity', 100, AOwner);
-  FIntensity.Current := FIntensity.Initial;
-  FIntensity.Target := FIntensity.Initial;
+  FIntensity.Initial := AIntensity;
+  FIntensity.Current := AIntensity;
+  FIntensity.Target := AIntensity;
+end;
+
+constructor TDynamicObject.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  Create(APlacement, ReadShare(AObj, 'intensity', 100, AOwner));
 end;
 
 procedure TDynamicObject.Tick(AOriginX, AOriginY: Single;
@@ -613,39 +639,74 @@ begin
   Result := AFrom + (ATo - AFrom) * AAmount;
 end;
 
+// ATint is the placement's: the end tint follows it unless named
+function ReadSmokeLook(AObj: TJSONObject; const ATint: TColorTint;
+  const AOwner: string): TSmokeLook;
+begin
+  Result.Rate := ReadPositive(AObj, 'rate', DefaultRate, AOwner);
+  Result.Life := ReadPositive(AObj, 'life', DefaultLife, AOwner);
+  Result.Size := ReadPositive(AObj, 'size', DefaultSmokeSize, AOwner);
+  Result.EndSize := ReadReach(AObj, 'endSize', Result.Size * EndSizeFactor,
+    AOwner);
+  Result.Opacity := ReadShare(AObj, 'opacity', DefaultOpacity, AOwner);
+  Result.Angle := AObj.GetValue<Double>('angle', DefaultAngle);
+  Result.Cone := ReadReach(AObj, 'cone', DefaultCone, AOwner);
+  Result.Speed := ReadReach(AObj, 'speed', DefaultSpeed, AOwner);
+  Result.Drag := ReadShare(AObj, 'drag', DefaultDrag, AOwner);
+  Result.Lift := AObj.GetValue<Double>('lift', 0);
+  Result.Wind := AObj.GetValue<Double>('wind', 0);
+  Result.Turbulence := ReadReach(AObj, 'turbulence', DefaultTurbulence,
+    AOwner);
+  Result.Spin := ReadReach(AObj, 'spin', DefaultSpin, AOwner);
+  Result.Flow := TSmokeFlow(ReadWord(AObj, 'flow', SmokeFlowIds[sfSteady],
+    SmokeFlowIds, 'flow', AOwner));
+  Result.Frequency := ReadPositive(AObj, 'frequency', DefaultFrequency,
+    AOwner);
+  Result.Heat := ReadShare(AObj, 'heat', 0, AOwner);
+  if AObj.GetValue('endTint') = nil then
+    Result.EndTint := ATint
+  else
+    Result.EndTint := ReadTint(AObj, AOwner, 'endTint');
+end;
+
 constructor TSmoke.Create(const APlacement: TDynamicPlacement;
   AObj: TJSONObject; const AOwner: string);
 begin
   inherited Create(APlacement, AObj, AOwner);
-  FRate := ReadPositive(AObj, 'rate', DefaultRate, AOwner) /
-    LogicTicksPerSecond;
-  FLife := ReadPositive(AObj, 'life', DefaultLife, AOwner) *
-    LogicTicksPerSecond;
-  FSize := ReadPositive(AObj, 'size', DefaultSmokeSize, AOwner);
-  FEndSize := ReadReach(AObj, 'endSize', FSize * EndSizeFactor, AOwner);
-  FOpacity := ReadShare(AObj, 'opacity', DefaultOpacity, AOwner);
-  FAngle := DegToRad(AObj.GetValue<Double>('angle', DefaultAngle));
-  FCone := DegToRad(ReadReach(AObj, 'cone', DefaultCone, AOwner));
-  FSpeed := ReadReach(AObj, 'speed', DefaultSpeed, AOwner) /
-    LogicTicksPerSecond;
-  var Kept: Single := 1 - ReadShare(AObj, 'drag', DefaultDrag, AOwner);
-  FDrag := Power(Kept, TickExponent);
-  FLift := AObj.GetValue<Double>('lift', 0) / Sqr(LogicTicksPerSecond);
-  FWind := AObj.GetValue<Double>('wind', 0) / Sqr(LogicTicksPerSecond);
-  FTurbulence := ReadReach(AObj, 'turbulence', DefaultTurbulence, AOwner) /
-    LogicTicksPerSecond;
-  FSpin := ReadReach(AObj, 'spin', DefaultSpin, AOwner) / LogicTicksPerSecond;
-  FFlow := TSmokeFlow(ReadWord(AObj, 'flow', SmokeFlowIds[sfSteady],
-    SmokeFlowIds, 'flow', AOwner));
-  FFrequency := ReadPositive(AObj, 'frequency', DefaultFrequency, AOwner) /
-    LogicTicksPerSecond;
-  FHeat := ReadShare(AObj, 'heat', 0, AOwner);
-  if AObj.GetValue('endTint') = nil then
-    FEndTint := APlacement.Tint
-  else
-    FEndTint := ReadTint(AObj, AOwner, 'endTint');
+  TakeLook(ReadSmokeLook(AObj, APlacement.Tint, AOwner),
+    PlacementSeed(APlacement));
+end;
 
-  FSeed := PlacementSeed(APlacement);
+constructor TSmoke.CreateLook(const APlacement: TDynamicPlacement;
+  const ALook: TSmokeLook; AIntensity: Single; ASeed: Cardinal);
+begin
+  inherited Create(APlacement, AIntensity);
+  TakeLook(ALook, ASeed);
+end;
+
+// Seconds and shares in, ticks out
+procedure TSmoke.TakeLook(const ALook: TSmokeLook; ASeed: Cardinal);
+begin
+  FRate := ALook.Rate / LogicTicksPerSecond;
+  FLife := ALook.Life * LogicTicksPerSecond;
+  FSize := ALook.Size;
+  FEndSize := ALook.EndSize;
+  FOpacity := ALook.Opacity;
+  FAngle := DegToRad(ALook.Angle);
+  FCone := DegToRad(ALook.Cone);
+  FSpeed := ALook.Speed / LogicTicksPerSecond;
+  var Kept: Single := 1 - ALook.Drag;
+  FDrag := Power(Kept, TickExponent);
+  FLift := ALook.Lift / Sqr(LogicTicksPerSecond);
+  FWind := ALook.Wind / Sqr(LogicTicksPerSecond);
+  FTurbulence := ALook.Turbulence / LogicTicksPerSecond;
+  FSpin := ALook.Spin / LogicTicksPerSecond;
+  FFlow := ALook.Flow;
+  FFrequency := ALook.Frequency / LogicTicksPerSecond;
+  FHeat := ALook.Heat;
+  FEndTint := ALook.EndTint;
+
+  FSeed := ASeed;
   FRandom.Seed := FSeed or 1;
   FSwarm := TParticleSwarm.Create;
 end;

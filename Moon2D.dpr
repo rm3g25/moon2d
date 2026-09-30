@@ -1496,6 +1496,8 @@ begin
         FTiles.DrawTiles(FHero.Screen);
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);
+        FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
+          AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
         FSprites.Origin := FShake.Offset(scHero);
         FHero.Draw(FSprites);
