@@ -24,15 +24,39 @@
   "backgrounds": [
     {
       "fromScreen": 1,
-      "image": "screen3.png"
+      "image": "screen3.png",
+      "tint": [
+        45,
+        45,
+        47
+      ]
     },
     {
       "fromScreen": 2,
-      "image": "screen4.png"
+      "image": "screen4.png",
+      "tint": [
+        55,
+        55,
+        57
+      ]
     },
     {
       "fromScreen": 3,
-      "image": "screen5.png"
+      "image": "screen5.png",
+      "tint": [
+        45,
+        45,
+        45
+      ]
+    },
+    {
+      "fromScreen": 6,
+      "image": "screen5.png",
+      "tint": [
+        35,
+        35,
+        36
+      ]
     }
   ],
   "tilePalette": [
