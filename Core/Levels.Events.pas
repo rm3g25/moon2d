@@ -64,6 +64,9 @@ function ParseLevelEvents(const ARoot: TJSONObject;
 
 implementation
 
+uses
+  System.Generics.Collections;
+
 resourcestring
   SEventNoId = 'Level "%s": event #%d has no id';
   SEventBadCondition = 'Level "%s": event "%s": unknown condition "%s"';
