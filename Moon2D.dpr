@@ -33,6 +33,7 @@ uses
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
+  Render.Objects in 'Core\Render.Objects.pas',
   Render.Shake in 'Core\Render.Shake.pas',
   Hero in 'Game\Hero.pas',
   Bullets in 'Game\Bullets.pas',
@@ -200,7 +201,8 @@ type
     FLevel: TLevel;
     FTileCache: TSpriteCache;
     FBackgroundCache: TSpriteCache;
-    // The sets the current level declared, owned here; both level
+    FObjectCache: TSpriteCache;
+    // The sets the current level declared, owned here; the level
     // caches resolve through them and are freed before them.
     FLevelSets: TObjectList<TSpriteSet>;
     // Interface art - sky, moon, logo, flags, stars, font atlas - and
@@ -210,6 +212,7 @@ type
     FWeaponSet: TSpriteSet;
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
+    FObjects: TObjectScreenRenderer;
     FHero: THero;
     FState: TGameState;
     // Original input model: keyboard.pas kept a Key[] state array and the
@@ -326,6 +329,7 @@ type
     procedure ActivateQueuedBonus;
     procedure AdvanceBriefing;
     procedure LoadLevel(const AFileName: string);
+    function OpenLevelArtSet(const AKind: string): TSpriteSet;
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
     procedure ApplyMenuResult(const AResult: TMenuResult);
@@ -399,8 +403,10 @@ begin
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
+  FObjects.Free;
   FTiles.Free;
   FSprites.Free;
+  FObjectCache.Free;
   FBackgroundCache.Free;
   FTileCache.Free;
   FLevelSets.Free;
@@ -417,13 +423,17 @@ procedure TMoonGame.LoadLevel(const AFileName: string);
 begin
   FField.Free;
   FHero.Free;
+  FObjects.Free;
   FTiles.Free;
+  FObjectCache.Free;
   FBackgroundCache.Free;
   FTileCache.Free;
   FLevel.Free;
   FField := nil;
   FHero := nil;
+  FObjects := nil;
   FTiles := nil;
+  FObjectCache := nil;
   FBackgroundCache := nil;
   FTileCache := nil;
   FLevelSets.Clear; // caches are gone, the sets may follow
@@ -456,20 +466,21 @@ begin
     raise ELevelError.CreateFmt(SAmbiguousSprites,
       [FLevel.Id, string.Join(sLineBreak + '  ', Ambiguous)]);
 
-  // Screen backdrops follow the level by convention rather than by
-  // declaration: one set per assetsDir, named after it.
-  var Backdrops := SpriteSetsDir + FLevel.AssetsDir + '-backdrops.mset';
-  if not FileExists(Backdrops) then
-    raise ELevelError.CreateFmt(SSpriteSetMissing,
-      [FLevel.Id, FLevel.AssetsDir + '-backdrops']);
-  FLevelSets.Add(TSpriteSet.Create(Backdrops));
-
   FBackgroundCache := TSpriteCache.Create(FRenderer);
   FBackgroundCache.DisableColorKey;
   FBackgroundCache.EnableLinearFilter;
-  FBackgroundCache.AttachSpriteSet(FLevelSets.Last);
+  FBackgroundCache.AttachSpriteSet(OpenLevelArtSet('backdrops'));
   FTiles := TTileScreenRenderer.Create(FSprites, FTileCache,
     FBackgroundCache, FLevel);
+
+  FObjectCache := TSpriteCache.Create(FRenderer);
+  FObjectCache.DisableColorKey;
+  FObjectCache.EnableLinearFilter;
+  // A level of tiles alone ships no objects set
+  if Length(FLevel.Objects) > 0 then
+    FObjectCache.AttachSpriteSet(OpenLevelArtSet('objects'));
+  FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
+
   FHero := THero.Create(FRenderer, FLevel);
   FreeAndNil(FHenshin);
   FHenshin := THenshin.Create(FHero, FAudio, FMessages, FShake, CureHero);
@@ -508,6 +519,20 @@ begin
   end
   else
     StartPlaying;
+end;
+
+// Backdrops and objects follow the level by convention rather than by
+// declaration: one set per assetsDir and kind, named after both. The
+// set joins FLevelSets, which owns it.
+function TMoonGame.OpenLevelArtSet(const AKind: string): TSpriteSet;
+begin
+  var SetName := FLevel.AssetsDir + '-' + AKind;
+  var SetFile := SpriteSetsDir + SetName + '.mset';
+  if not FileExists(SetFile) then
+    raise ELevelError.CreateFmt(SSpriteSetMissing, [FLevel.Id, SetName]);
+
+  Result := TSpriteSet.Create(SetFile);
+  FLevelSets.Add(Result);
 end;
 
 // Opens AUrl in the default browser. Deliberately Windows-only, as is
@@ -1429,6 +1454,9 @@ begin
         FSprites.Origin := NoShake;
         FTiles.DrawBackground(FHero.Screen);
         FSprites.Origin := FShake.Offset(scWorld);
+        // Objects stand on the tiles, so they jolt with them - a still
+        // ship over a shaking floor would float
+        FObjects.Draw(FHero.Screen);
         FTiles.DrawTiles(FHero.Screen);
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);

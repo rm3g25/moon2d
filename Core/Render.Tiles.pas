@@ -6,7 +6,7 @@
   full-screen backdrop, grid tiles draw over it. Every tile cell shows
   the top-left 64x64 pixels of its art bitmap - the 2008 loader's crop
   (sttextures.pas), reproduced by DrawTile - scaled into a 32-unit cell.
-  Big art (the shuttle) lives in the background images, not in tiles.
+  Big art (the ship) is a level object (Render.Objects), not tiles.
 
   Uses two sprite caches with different roots: the tile palette stores
   paths relative to textures\ ("level1\doom1.bmp"), background images
@@ -62,11 +62,6 @@ begin
   FScreenHeight := ALevel.GridHeight * TileSize;
 end;
 
-function PercentToColorMod(APercent: Byte): UInt8;
-begin
-  Result := Round(APercent * 255 / 100);
-end;
-
 procedure TTileScreenRenderer.DrawBackground(AScreen: Integer);
 var
   Dest: TSdlRect;
@@ -78,8 +73,7 @@ begin
   var Texture := FBackgroundCache.Get(Backdrop.Image);
   // Set on every draw, not once at load: two changes may share one
   // picture under different tints
-  SDL_SetTextureColorMod(Texture, PercentToColorMod(Backdrop.Tint.R),
-    PercentToColorMod(Backdrop.Tint.G), PercentToColorMod(Backdrop.Tint.B));
+  TintTexture(Texture, Backdrop.Tint.R, Backdrop.Tint.G, Backdrop.Tint.B);
 
   Dest.X := 0;
   Dest.Y := 0;

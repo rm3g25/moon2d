@@ -118,6 +118,11 @@ function LoadImageSurface(const ASpriteSet: TSpriteSet;
 function LoadAnimSet(const ACache: TSpriteCache;
   const ASpriteSet: TSpriteSet): TAnimSet;
 
+// Multiplies the texture's colors per channel, in percent (100 = as
+// painted). The texture keeps it until the next call, so pictures shared
+// under different tints set it before every draw.
+procedure TintTexture(ATexture: PSdlTexture; ARed, AGreen, ABlue: Byte);
+
 type
   TSpriteRenderer = class
   private
@@ -385,6 +390,17 @@ begin
     Result.Alive[i] := ACache.Get(Alive[i]);
     Result.Death[i] := ACache.Get(Death[i]);
   end;
+end;
+
+function PercentToColorMod(APercent: Byte): UInt8;
+begin
+  Result := Round(APercent * 255 / 100);
+end;
+
+procedure TintTexture(ATexture: PSdlTexture; ARed, AGreen, ABlue: Byte);
+begin
+  SDL_SetTextureColorMod(ATexture, PercentToColorMod(ARed),
+    PercentToColorMod(AGreen), PercentToColorMod(ABlue));
 end;
 
 // ---------------------------------------------------------------------------

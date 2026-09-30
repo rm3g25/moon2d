@@ -3,7 +3,8 @@
   convert_level.py, which folds the 2008 six-file format into one).
 
   A level is: a tile grid (screens of 16x12 cells), a tile palette
-  (BMP names), background changes, music, and entity placements with
+  (BMP names), background changes, free-form objects over the backdrop
+  (art of any shape, no collision), music, and entity placements with
   optional per-placement overrides (speed, lives, shooting) and triggers
   (location titles, music changes) - faithfully carrying over the
   component system the 2008 .mon format invented by accident.
@@ -87,17 +88,31 @@ type
     Tag: string;
   end;
 
-  // Per-channel multiplier in percent, applied when the backdrop is
-  // drawn; 100 leaves the picture as painted. JSON: "tint": [50, 53, 60].
-  TBackdropTint = record
+  // Per-channel multiplier in percent, applied when the picture is
+  // drawn; 100 leaves it as painted. JSON: "tint": [50, 53, 60].
+  TColorTint = record
     R, G, B: Byte;
-    class function Neutral: TBackdropTint; static;
+    class function Neutral: TColorTint; static;
   end;
 
   TBackgroundChange = record
     FromScreen: Integer;
     Image: string;
-    Tint: TBackdropTint;
+    Tint: TColorTint;
+  end;
+
+  // Free-form art over the backdrop: a picture of any shape at any point
+  // of one screen. No collision - the grid alone decides where the hero
+  // stands, so a ship on the floor is scenery the floor tiles hold up.
+  TLevelObject = record
+    Sprite: string; // in <assetsDir>-objects.mset
+    Screen: Integer; // 1-based, as the placements count
+    // Top-left corner and width in screen units; the height follows the
+    // art's aspect, so a picture is never stretched
+    X: Integer;
+    Y: Integer;
+    Width: Integer;
+    Tint: TColorTint;
   end;
 
   TLevel = class
@@ -115,12 +130,14 @@ type
     FCollision: TArray<TArray<string>>;       // [screen][row], '1' = solid
     FTilePalette: TArray<string>;
     FBackgrounds: TArray<TBackgroundChange>;
+    FObjects: TArray<TLevelObject>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
     procedure ParseRoot(const ARoot: TJSONObject);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
+    procedure ParseObjects(const AArr: TJSONArray);
     procedure CheckEvents;
   public
     procedure LoadFromFile(const AFileName: string);
@@ -149,6 +166,9 @@ type
     property ScreenCount: Integer read FScreenCount;
     property TilePalette: TArray<string> read FTilePalette;
     property Backgrounds: TArray<TBackgroundChange> read FBackgrounds;
+    // Every screen's objects, in file order - later ones draw over
+    // earlier ones
+    property Objects: TArray<TLevelObject> read FObjects;
     property Entities: TArray<TEntityPlacement> read FEntities;
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
@@ -170,9 +190,11 @@ resourcestring
   SLevelEventBadScreen = 'Level "%s": event "%s" sits on screen %d of %d';
   SLevelEventTagUnknown = 'Level "%s": event "%s" waits for tag "%s", '
     + 'which no entity carries';
-  SLevelBadTint = 'Background "%s": tint takes three percentages, 0..100';
+  SLevelBadTint = 'Tint of "%s" takes three percentages, 0..100';
+  SLevelObjectBadScreen = 'Level "%s": object "%s" sits on screen %d of %d';
+  SLevelObjectBadWidth = 'Level "%s": object "%s" is %d units wide';
 
-class function TBackdropTint.Neutral: TBackdropTint;
+class function TColorTint.Neutral: TColorTint;
 begin
   Result.R := 100;
   Result.G := 100;
@@ -303,6 +325,7 @@ begin
 
   ParseTiles(ARoot.GetValue<TJSONObject>('tiles'));
   ParseBackgrounds(ARoot.GetValue<TJSONArray>('backgrounds'));
+  ParseObjects(ARoot.GetValue<TJSONArray>('objects', nil));
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
   FEvents := ParseLevelEvents(ARoot, FId);
   CheckEvents;
@@ -392,27 +415,27 @@ begin
   end;
 end;
 
-// Absent = neutral. A wrong shape raises: a backdrop that silently
+// Absent = neutral. A wrong shape raises: a picture that silently
 // stays at full brightness looks like a tint that was never tuned.
-function ReadBackdropTint(const AObj: TJSONObject;
-  const AImage: string): TBackdropTint;
+function ReadTint(const AObj: TJSONObject;
+  const AOwner: string): TColorTint;
 
   function Percent(const AValue: TJSONValue): Byte;
   begin
     if not (AValue is TJSONNumber) then
-      raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+      raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
     var Value := TJSONNumber(AValue).AsInt;
     if (Value < 0) or (Value > 100) then
-      raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+      raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
     Result := Value;
   end;
 
 begin
   var Raw := AObj.GetValue('tint');
   if Raw = nil then
-    Exit(TBackdropTint.Neutral);
+    Exit(TColorTint.Neutral);
   if not (Raw is TJSONArray) or (TJSONArray(Raw).Count <> 3) then
-    raise ELevelError.CreateFmt(SLevelBadTint, [AImage]);
+    raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
 
   var Channels := TJSONArray(Raw);
   Result.R := Percent(Channels.Items[0]);
@@ -428,7 +451,38 @@ begin
     var Obj := AArr.Items[i] as TJSONObject;
     FBackgrounds[i].FromScreen := Obj.GetValue<Integer>('fromScreen');
     FBackgrounds[i].Image := Obj.GetValue<string>('image');
-    FBackgrounds[i].Tint := ReadBackdropTint(Obj, FBackgrounds[i].Image);
+    FBackgrounds[i].Tint := ReadTint(Obj, FBackgrounds[i].Image);
+  end;
+end;
+
+// Absent section = a level of tiles alone. An object off the screen
+// list would never show and a width of zero would draw nothing - both
+// are typos, and they die at load.
+procedure TLevel.ParseObjects(const AArr: TJSONArray);
+begin
+  FObjects := [];
+  if AArr = nil then
+    Exit;
+
+  for var Item in AArr do
+  begin
+    var Obj := Item as TJSONObject;
+    var Placed: TLevelObject;
+    Placed.Sprite := Obj.GetValue<string>('sprite');
+    Placed.Screen := Obj.GetValue<Integer>('screen');
+    Placed.X := Obj.GetValue<Integer>('x');
+    Placed.Y := Obj.GetValue<Integer>('y');
+    Placed.Width := Obj.GetValue<Integer>('width');
+    Placed.Tint := ReadTint(Obj, Placed.Sprite);
+
+    if (Placed.Screen < 1) or (Placed.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelObjectBadScreen,
+        [FId, Placed.Sprite, Placed.Screen, FScreenCount]);
+    if Placed.Width <= 0 then
+      raise ELevelError.CreateFmt(SLevelObjectBadWidth,
+        [FId, Placed.Sprite, Placed.Width]);
+
+    FObjects := FObjects + [Placed];
   end;
 end;
 

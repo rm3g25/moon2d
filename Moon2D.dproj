@@ -179,6 +179,7 @@
         <DCCReference Include="Core\Levels.Defs.pas"/>
         <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Render.Tiles.pas"/>
+        <DCCReference Include="Core\Render.Objects.pas"/>
         <DCCReference Include="Core\Render.Shake.pas"/>
         <DCCReference Include="Game\Hero.pas"/>
         <DCCReference Include="Game\Bullets.pas"/>
