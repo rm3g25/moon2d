@@ -788,6 +788,18 @@ Renders arbitrary text in the game's bitmap font to PNG. Reuses `Sdl2.Core`,
 The one-shot BMP->PNG migration with the color-key rule baked in (pure black ->
 transparent). Kept for provenance; nothing calls it now.
 
+### `tools/Selene/` - Selene map painter (Python)
+Paints the living anti-moon for the menu globe from the menu's own `moonmap`;
+nothing in the game reads the result yet. numpy + scipy + pillow.
+- **`extract_moonmap.py`** - pulls `moonmap` out of `ui.mset`.
+- **`paint_selene.py`** - surface + water mask, and (`clouds`) the cloud layer;
+  seas from dark albedo, colour from a climate model, baked relief, rivers.
+  Seeded: the same input gives the same planet bit for bit.
+- **`preview_globe.py`** - renders the globe in "photo" light (glint, limb haze,
+  terminator, cloud shadows) as the reference for a future `Menu.Globe`.
+- **`selene_lib.py`** - sphere-sampled noise, wrap-aware filters, river tracer.
+- **`out/`** - the approved maps (2048x1024) and preview.
+
 ---
 
 ## Runtime data (`bin\`)
@@ -896,4 +908,5 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
 | Packing or inspecting sets | tools/SpritePack/* |
 | Trailer cards | tools/TitleCard/* |
+| Selene: the living moon's map for the menu | tools/Selene/* |
 | PNG loading / image DLL | Sdl2.Image.pas |
