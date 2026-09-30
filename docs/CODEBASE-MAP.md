@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.13` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.14` (the folder layout came
 between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -36,8 +36,9 @@ runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still ca
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Tint` / `Levels.Events` -> `Levels.Dynamics` (draws through
-`Render.Glow`) -> `Levels.Defs` /
+`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` ->
+`Levels.Dynamics` (draws through `Render.Glow` and `Render.Puff`) ->
+`Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
@@ -51,7 +52,7 @@ side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 
 ## Game units
 
-### `Core/Sdl2.Core.pas` (~365 lines)
+### `Core/Sdl2.Core.pas` (~395 lines)
 Hand-written SDL2 bindings. No classes - constants, records, `external`
 declarations against `SDL2.dll`.
 - **Constants**: init flags, window flags (incl. `SdlWindowHidden` for the
@@ -59,11 +60,12 @@ declarations against `SDL2.dll`.
   (`SdlHintRenderDriver`, `SdlHintRenderScaleQuality`), event type ids, flip
   flags, pixel format `SdlPixelFormatAbgr8888`, blend modes (`None`, `Blend`,
   `Add` - the last one is the HUD's glints), the scancodes the game uses.
-- **Records**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlRendererInfo`,
+- **Records**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlFPoint`,
+  `TSdlRendererInfo`,
   `TSdlVersion`, `TSdlSurface` (partial mirror - leading fields only),
   `TSdlKeysym`, `TSdlKeyboardEvent`, `TSdlMouseMotionEvent`,
   `TSdlMouseButtonEvent`, `TSdlEvent` (variant record, 56-byte padding arm).
-- **Imports**: window/renderer lifecycle, draw calls (`SDL_RenderCopy/F/Ex`,
+- **Imports**: window/renderer lifecycle, draw calls (`SDL_RenderCopy/F/Ex/ExF`,
   fill, clear, present), surfaces + color key + format conversion, textures
   (incl. target textures and `SDL_RenderReadPixels` - used by TitleCard),
   events, timing (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`),
@@ -163,19 +165,24 @@ mixer, missing art is fatal.
   (honest PNG alpha: black glass and shadows would vanish through a key),
   linear filter, fed from `<assetsDir>-objects.mset`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~135 lines)
+### `Core/Render.Dynamics.pas` (~215 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
-  (`Levels.Dynamics`) to the screen. Owns the three glow textures of the
-  `TDynamicCanvas` (point, flare, starburst - `Render.Glow`), made at level
-  load; the objects themselves are the level's. The constructor settles
-  where each object stands (`TStand`: object, screen, origin): a nailed one
-  on its screen at (0, 0), one under a parent on every screen the parent's
-  static object stands on, at that object's top-left. Resolved once -
-  static objects never move; a moving parent will turn the stand into a
-  per-draw query here, and nothing in `Levels.Dynamics` changes. `Tick`
-  ticks every object whatever the screen (a lamp keeps its rhythm off
-  screen); `Draw(screen, origin, alpha)` draws the ones on the screen.
-  Layer: the static objects' own - behind the tiles and the hero.
+  (`Levels.Dynamics`) to the screen. Owns the textures of the
+  `TDynamicCanvas` (point, flare, starburst glows - `Render.Glow`; the
+  smoke puffs - `Render.Puff`), made at level load; the objects themselves
+  are the level's. Per object a `TPlace`: its stands (screen + origin), a
+  monster flag, the parent's life, the lead screen. A nailed object stands
+  on its screen at (0, 0); one under a static object on every screen that
+  object stands on, at its top-left - settled once, static objects never
+  move. A tag no object carries is a monster's: that stand is looked up
+  every tick through **`TLocateMonster`** (`reference to function(tag, out
+  TParentStand)`: screen, sprite top-left, alive) - the field is reborn on
+  restart, so no reference is kept; a monster that is nowhere keeps its
+  last stand. `Tick(screen)` ticks every object whatever the screen (a
+  lamp keeps its rhythm off screen) with the origin of its stand on the
+  hero's screen, else its first; a lead stand on another screen is a jump
+  (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
+  the ones on the screen in one layer (`dlBack` / `dlFront`).
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -254,7 +261,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~565 lines)
+### `Core/Levels.Defs.pas` (~605 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -290,38 +297,79 @@ Level data model + JSON parser. No game logic.
   width of zero or less. `Events` - the level's events (`Levels.Events`), in
   file order. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
-  `LoadFromFile`; private `CheckEvents` refuses an event off the screen
-  list or one waiting for a tag no placement carries (the latter would fire
-  at once - nobody alive to hold it). `Dynamics` - the dynamic objects
-  (`Levels.Dynamics`), owned by the level (the only destructor here) and
-  kept through a restart - a death does not rewind the lamps; private
+  `LoadFromFile`; the dynamics are parsed before the events, since an event
+  may name a dynamic object's tag. Private `CheckEvents` refuses an event
+  off the screen list, one watching a tag no placement carries, and
+  (`CheckEventTargets`) an intensity action turning a tag no dynamic object
+  carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
+  the level (the only destructor here) and kept through a restart - a lamp
+  keeps its rhythm; only what a re-armed event changed goes back. Private
   `CheckDynamics` refuses a nailed object off the screen list, a parent tag
-  no static object carries, and two objects with one tag on one screen
-  (the child could not tell its parent).
+  neither an object nor an entity carries, a tag carried by both, two
+  objects with one tag on one screen, and (`CheckMonsterParent`) two
+  entities with one tag on a shared difficulty grade (the child could not
+  tell its parent).
+
+### `Core/Effects.Emitter.pas` (~105 lines)
+- **`TParticle`** (record) - place, speed (units per tick), angle and spin,
+  age and life (ticks), and three owner's fields: `Shape`, `Scale`,
+  `Weight`. `PParticle` - the owner stirs particles through it.
+- **`TParticleSwarm`** - particles in order of birth (drawn in order, the
+  newest on top), a growing array. `Add`, `Advance(drag, pullX, pullY)`
+  (move, keep the drag share of the speed, add the pull, age, drop the
+  expired - order kept), `ShiftFrame(dx, dy)` (the owner's frame moved;
+  what is in flight stays put on the screen), `Clear`, `Count`, default
+  `Particles[i]`. Knows nothing of looks. Users: the smoke; the menu embers
+  still carry their own loop.
+
+### `Core/Render.Puff.pas` (~230 lines)
+Smoke drawn instead of loaded. `CreatePuffTextures(renderer, side)` makes
+`PuffShapes` (4) ragged puffs at level load: a soft falloff eaten into by
+fractal value noise (`FractalNoise`, octaves of `ValueNoise` over a
+`TXorShift`-hashed lattice), the outline bent by the same noise, white
+pixels with a mottled brightness, the shape in alpha. **Alpha blended**,
+linear-filtered - smoke hides what is behind it, light (`Render.Glow`) only
+adds. `DrawPuff(renderer, texture, cx, cy, size, angle, color, level)` -
+centered, turned (`SDL_RenderCopyExF`), tint as color mod, density as alpha
+mod. `FreePuffTextures`. `EPuffError`.
 
 ### `Core/Levels.Tint.pas` (~70 lines)
 - **`TColorTint`** (record) - R/G/B multipliers in percent, applied when
   the picture is drawn; `Neutral` = 100/100/100 (as painted).
-- **`ReadTint(obj, owner)`** - reads `"tint": [r, g, b]`; absent = neutral,
+- **`ReadTint(obj, owner, key = 'tint')`** - reads `"tint": [r, g, b]` (or
+  another key of that shape - the smoke's `endTint`); absent = neutral,
   any other shape or a value outside 0..100 raises `ETintError` (a picture
   silently left at full brightness looks like a tint nobody tuned).
 - Its own unit because three readers share it - backdrops and static
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~410 lines)
+### `Core/Levels.Dynamics.pas` (~870 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
 - **`TDynamicPlacement`** (record) - what every kind shares: `Screen` or
-  `Parent` (exactly one - with a parent the parent decides the screens),
-  `X`/`Y` (screen units; from the parent's top-left under one), `Tint`.
-- **`TDynamicObject`** (abstract) - holds the placement; `Draw(canvas,
-  originX, originY, alpha)` adds X/Y to the origin and calls the kind's
-  protected abstract `DrawAt`; abstract `Tick`. The parent is coordinates
-  only, VCL-style: it owns nothing.
-- **`TDynamicCanvas`** (record) - renderer + the glow textures every kind
-  draws with; made and freed by `Render.Dynamics`.
+  `Parent` (exactly one - with a parent the parent decides the screens; the
+  parent is a static object's or a monster's tag), `X`/`Y` (screen units;
+  from the parent's top-left under one), `Tint`, `Tag` (the name events
+  turn it by), `Layer` (`TDynamicLayer`: `dlBack` - with the static
+  objects, behind the tiles; `dlFront` - over the monsters, under the
+  hero).
+- **`TDynamicObject`** (abstract) - holds the placement and the intensity
+  (`TIntensityFade`: initial, current, target, step; JSON `intensity`, a
+  percentage, 100 by default). `Tick(originX, originY, parentAlive)` works
+  out how far the origin moved since the last tick, steps the fade and
+  calls the kind's protected abstract `Advance(motionX, motionY,
+  parentAlive)`; `FadeTo(level, ticks)`, `Rewind` (virtual: back to the
+  level file's intensity, origin forgotten), `ForgetOrigin` (the next tick
+  counts no motion). `Draw(canvas, originX, originY, alpha)` adds X/Y to
+  the origin and calls the protected abstract `DrawAt`. The parent is
+  coordinates only, VCL-style: it owns nothing.
+- **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
+  level, ticks)`, `RewindTagged(tag)`, `AnyTagged(tag)`: what the events
+  and the level checks ask.
+- **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
+  textures every kind draws with; made and freed by `Render.Dynamics`.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -333,32 +381,62 @@ here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
   drop out; `dying` - every cycle a new dim level (5-40%); both roll through
   `SlotRoll` (own `TXorShift`, never `Random` - that one feeds the boss
   spawn table), a pure function of the slot number, so a frame drawn
-  between ticks never disagrees with them. The seed is the position, so
-  lamps at different points fail out of step.
+  between ticks never disagrees with them. The seed is the position
+  (`PlacementSeed`), so lamps at different points fail out of step.
+- **`TSmoke`** - smoke, gas, steam: puffs born at the point (spread around
+  it by `SpawnJitter` and, for a moving parent, along the stretch it
+  covered this tick - a trail, not beads), thrown along `angle` within
+  `cone`, growing from `size` to `endSize` (fast first), fading in over
+  `FadeInShare` and out along `FadeOutPower`, tinted `tint` -> `endTint`,
+  turning by a random `spin`. Once out, a puff stays put on the screen
+  (`ShiftFrame`) and is carried by `drag`, `lift`, `wind` and a swirl -
+  `Stir`, a stream-function flow of two drifting waves that grips a puff
+  harder as it ages (`TurbulenceGrip`), so a fresh jet flies straight and
+  old smoke curls. `flow` (`TSmokeFlow`): steady, gusty (rate modulated by
+  value noise over time, knots `frequency` apart, floor `GustFloor`), puffs
+  (separate clouds `frequency` a second). `heat` - a fresh puff mixes
+  toward `FireColor` and carries an additive glow for `HeatShare` of its
+  life. Intensity scales the rate and, as its square root, a puff's
+  density (fixed at birth, so smoke already out fades on its own when the
+  events turn the source off). No emission while the parent monster is
+  dead or nowhere. `Rewind` also clears the swarm (a death restarts the
+  world in full). Particles: `TParticleSwarm` of `Effects.Emitter`, drawn
+  through `DrawPuff`; units per second in JSON, per tick in the code.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
-  list, the caller owns it); an unknown kind or blink, screen and parent
-  together or neither, a number out of range raise `EDynamicError`.
+  list, the caller owns it); an unknown kind, layer, blink or flow, screen
+  and parent together or neither, a number out of range raise
+  `EDynamicError` (`ReadWord`, `ReadShare`, `ReadPositive`, `ReadReach`).
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~140 lines)
+### `Core/Levels.Events.pas` (~180 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
-- **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`) - what the event
-  waits for. The hero must be on the event's screen for any of them;
-  enterScreen asks nothing more, allDead waits until no live body carries
-  the event's tag.
+- **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
+  `ecEnraged`) - what the event waits for. The hero must be on the event's
+  screen for any of them; enterScreen asks nothing more; the rest
+  (`TaggedConditions`) watch the monsters carrying the tag: allDead - none
+  alive, livesBelow - one alive with fewer lives than `lives`, enraged -
+  one alive in its rage (the boss below its rage mark, a tank below its
+  own).
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
-  `eaMusic`); **`TEventAction`** (record) - kind + localized `Text` (the
-  message kinds) or `FileName` (music).
+  `eaMusic`, `eaIntensity`); **`TEventAction`** (record) - kind + localized
+  `Text` (the message kinds), `FileName` (music), or `Target` / `Level`
+  (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag fade
+  there; JSON `target`, `value` a percentage, `ticks` 0 = at once).
 - **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
-  `DelayTicks` (counted after the condition holds, for any condition),
-  actions. JSON: `"when": "allDead", "tag": "labGuard", "delay": 33,
-  "then": [{"action": "hint", "text": "...", "textEn": "..."}]`.
+  `Lives` (livesBelow), `DelayTicks` (counted after the condition holds,
+  for any condition), actions. JSON: `"when": "allDead", "tag":
+  "labGuard", "delay": 33, "then": [{"action": "hint", "text": "...",
+  "textEn": "..."}]`; `"when": "livesBelow", "tag": "boss", "lives": 150,
+  "then": [{"action": "intensity", "target": "bossSmoke", "value": 60,
+  "ticks": 66}]`.
 - `EventConditionIds` / `EventActionIds` - the JSON vocabulary as typed
   constants. `ParseLevelEvents(root, levelId)`; an absent section is an
-  empty list, an unknown condition or action, a missing id, an allDead
-  without a tag or an event without actions raises `ELevelEventError`.
+  empty list, an unknown condition or action, a missing id, a tagged
+  condition without a tag, livesBelow without lives above zero, intensity
+  without a target or with a value outside 0..100, or an event without
+  actions raises `ELevelEventError`.
 - Extending: a condition is an enum member, a word in `EventConditionIds`
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
@@ -430,14 +508,14 @@ moves in comes from `Game.Space`.
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Game/Monsters.pas` (~905 lines)
+### `Game/Monsters.pas` (~930 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
   BossRage/LevelComplete/Died) - 'MessageToMain' of 2008, drained by the game
   loop every tick.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, lives
-  (+`LivesAll`), anim frame, step, fire timer, enrage flag, boss minion timer, a one-shot henshin
+  (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list. Its own collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
   `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying`, `PatrolStep`. Combat:
@@ -458,7 +536,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   screen), `SpawnFromSky` (boss minions at a random top cell),
   `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
-  screen - the events' allDead), `Draw`.
+  screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
+  `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
+  `Draw`.
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -636,10 +716,10 @@ Reborn with the hero on every level load.
   constructor. `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion, and the dpr reads the name from here.
 
-### `Game/Events/Events.Director.pas` (~130 lines)
+### `Game/Events/Events.Director.pas` (~155 lines)
 Runs the level's events (`Levels.Events`) against the live game.
-**`TEventDirector`** takes the events, the message board and a
-`TChangeMusic` callback (`reference to procedure`; the game passes its
+**`TEventDirector`** takes the events, the message board, the level's
+dynamic objects and a `TChangeMusic` callback (`reference to procedure`; the game passes its
 `ChangeMusic` method, which also remembers the track for restarts). The
 monster field is reborn on every restart, so it arrives with every tick
 instead of being kept.
@@ -648,9 +728,12 @@ instead of being kept.
   (`ConditionHolds`); while it holds the delay counts down, a lapse starts
   the count over; at zero the actions play once (`Play`: `ShowBig`,
   `AddTicker`, `StartTerminal` with the terminal header, the music
-  callback). The game skips the tick over the hero's corpse.
+  callback, `FadeTagged` on the dynamics). The game skips the tick over
+  the hero's corpse.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
-  so its events wait for their moment again, as the entity triggers do.
+  so its events wait for their moment again, as the entity triggers do,
+  and the dynamic objects their intensity actions turned are rewound
+  (`RewindTargets` -> `RewindTagged`) - the boss smokes calm again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
 
 ### `Core/Render.Glow.pas` (~165 lines)
@@ -666,7 +749,8 @@ additive, linear-filtered, so one texture serves every tint and level.
   `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (centered
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
-- Users: the stars, the embers, the logo halo, the beacons. `EGlowError`.
+- Users: the stars, the embers, the logo halo, the beacons, the heat of a
+  smoke puff. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
@@ -776,7 +860,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1895 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1925 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -807,11 +891,13 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   difficulty.
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
-    still, objects + dynamic objects + tiles + bullets on the world channel -
-    objects stand on the tiles and jolt with them, the dynamic objects draw
-    right after the objects, behind tiles and hero - monsters and hero on
-    their own, cursor and HUD still; `Update` ticks `FDynamics` right after
-    the end-level switch), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
+    still, objects + back dynamics + tiles + bullets on the world channel -
+    objects stand on the tiles and jolt with them, the back dynamics draw
+    right after the objects, behind tiles and hero - monsters, then the
+    front dynamics (the boss smoke), on the monsters' channel, the hero on
+    his own, cursor and HUD still; `Update` ticks `FDynamics` after the
+    monsters and the director, so a smoking monster's puffs leave from
+    where this frame draws it), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
     convention of the backdrops and the objects in one place; the objects
     set is opened only by a level that places some), `StartPlaying`,
     `RestartLevel`,
@@ -821,7 +907,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     fullscreen for the browser through it, unremembered), `PreloadSounds`,
     `CreateHud` (builds the three HUD objects afresh on every level load),
     `ChangeMusic` (a trigger's or an event's track: played and remembered
-    for restarts; '' is a no-op).
+    for restarts; '' is a no-op), `LocateMonster` (the `TLocateMonster` of
+    `Render.Dynamics`: the first monster carrying the tag - screen, sprite
+    top-left as `TMonster.Draw` puts it, alive).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
@@ -936,17 +1024,20 @@ The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
-(beacon), `screen` or `parent` - a static object's tag -, `x`, `y`,
-optional `tint`, then the kind's own properties - see `Levels.Dynamics`),
+(beacon / smoke), `screen` or `parent` - a static object's or a monster's
+tag -, `x`, `y`, optional `tint`, `tag`, `layer`, `intensity`, then the
+kind's own properties - see `Levels.Dynamics`),
 `tilePalette`
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
 `overrides`, `triggers` - messages/hints/changeMusic/heroX-heroY/gravelBoss,
-optional `tag` for the events), `events` (each: `id`, `screen`, `when` =
-enterScreen | allDead + `tag`, optional `delay` in ticks, `then` = a list
-of `action` objects - bigMessage/smallMessage/hint with `text`/`textEn`,
-music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
+optional `tag` for the events and the dynamics), `events` (each: `id`,
+`screen`, `when` = enterScreen | allDead / enraged + `tag` | livesBelow +
+`tag` + `lives`, optional `delay` in ticks, `then` = a list of `action`
+objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
+`file`, intensity with `target`/`value`/`ticks`; the med lab hint is the
+first), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
   (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
   sunrise (14-17); sets
@@ -954,13 +1045,18 @@ music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
   cargo mine-interior`. Objects: the ship on screen 1 (in place of the 2008
   shuttle), the broken satellite in the sky of 14-17, tagged `ship` and
   `satellite`. Dynamics: a blue double-flash beacon on the ship's fin, a red
-  faulty one with starburst rays on the satellite's antenna.
+  faulty one with starburst rays on the satellite's antenna, three gusty
+  gas leaks venting from the satellite's breach and a broken ring joint
+  (vacuum: no lift, little drag), two smokes hung on the boss (tagged
+  `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0).
+  Events on screen 17: livesBelow 150 - bossSmoke to 60%; enraged -
+  bossSmoke off; livesBelow 30 - bossSmoke and bossBurn to 100%.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
   satellite on screen 1, lit a little brighter (day), tagged `satellite`;
-  its lamp is `dying` - a dim fast flutter, the battery running out. The
-  gravel trial and
+  its lamp is `dying` - a dim fast flutter, the battery running out, and
+  one leak is left, a puff now and then (`flow` puffs). The gravel trial and
   the boss live here, and it ends the original campaign.
 
 ### `sprites\*.mset` (34 sets)
