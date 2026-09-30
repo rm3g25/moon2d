@@ -122,6 +122,9 @@ function LoadAnimSet(const ACache: TSpriteCache;
 // painted). The texture keeps it until the next call, so pictures shared
 // under different tints set it before every draw.
 procedure TintTexture(ATexture: PSdlTexture; ARed, AGreen, ABlue: Byte);
+// One channel of a tint as the color mod SDL takes, for a caller that
+// passes the color on instead of setting it on a texture
+function PercentToColorMod(APercent: Byte): UInt8;
 
 type
   TSpriteRenderer = class

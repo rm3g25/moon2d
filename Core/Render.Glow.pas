@@ -8,7 +8,8 @@
   glows over each other brighter, never muddier, which is how light
   behaves and how a menu star, a spark and a halo all want to look.
 
-  The shapes here are analytic (a Gaussian point, a spiked flare); a
+  The shapes here are analytic (a Gaussian point, a spiked flare, the
+  long thin cross of a starburst); a
   shape computed elsewhere - a blurred logo, say - comes in as a
   surface through CreateGlowTexture and leaves with the same blend
   and filter settings.
@@ -26,7 +27,7 @@ uses
 type
   EGlowError = class(Exception);
 
-  TGlowShape = (gsPoint, gsFlare);
+  TGlowShape = (gsPoint, gsFlare, gsStarburst);
 
 // A square texture of ASide pixels with the shape in its alpha
 function CreateGlowShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
@@ -44,6 +45,9 @@ procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
 
 implementation
 
+uses
+  System.Math;
+
 resourcestring
   SGlowTextureFailed = 'Cannot create a glow texture: %s';
 
@@ -55,6 +59,8 @@ const
   FlareHaloLevel = 0.22;
   FlareSpikeWidth = 0.03;
   FlareSpikeLevel = 0.55;
+  // Thinner than a flare spike and slower to fade: a ray, not a spark
+  StarburstRayWidth = 0.012;
 
 function PointAlpha(ADX, ADY: Single): Single;
 begin
@@ -69,6 +75,20 @@ begin
     Exit(0);
   var Fade := Reach * Reach * Reach;
   Result := Exp(-Sqr(AAcross / FlareSpikeWidth)) * Fade;
+end;
+
+function StarburstRayAlpha(AAlong, AAcross: Single): Single;
+begin
+  var Reach: Single := 1 - Abs(AAlong);
+  if Reach <= 0 then
+    Exit(0);
+  Result := Exp(-Sqr(AAcross / StarburstRayWidth)) * Reach * Reach;
+end;
+
+// Up, down, left, right - the cross a star filter draws over a lamp
+function StarburstAlpha(ADX, ADY: Single): Single;
+begin
+  Result := Max(StarburstRayAlpha(ADX, ADY), StarburstRayAlpha(ADY, ADX));
 end;
 
 function FlareAlpha(ADX, ADY: Single): Single;
@@ -88,6 +108,8 @@ begin
   case AShape of
     gsPoint:
       Result := PointAlpha(ADX, ADY);
+    gsStarburst:
+      Result := StarburstAlpha(ADX, ADY);
   else
     Result := FlareAlpha(ADX, ADY);
   end;

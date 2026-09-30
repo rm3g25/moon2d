@@ -16,7 +16,7 @@ unit Render.Objects;
 interface
 
 uses
-  Sdl2.Core, Render.Sprites, Levels.Defs;
+  Sdl2.Core, Render.Sprites, Levels.Tint, Levels.Defs;
 
 type
   TObjectScreenRenderer = class

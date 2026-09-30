@@ -4,7 +4,8 @@
 
   A level is: a tile grid (screens of 16x12 cells), a tile palette
   (BMP names), background changes, free-form objects over the backdrop
-  (art of any shape, no collision), music, and entity placements with
+  (art of any shape, no collision), dynamic objects living beside them
+  (Levels.Dynamics), music, and entity placements with
   optional per-placement overrides (speed, lives, shooting) and triggers
   (location titles, music changes) - faithfully carrying over the
   component system the 2008 .mon format invented by accident.
@@ -19,7 +20,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
-  Localization, Levels.Events;
+  Localization, Levels.Events, Levels.Tint, Levels.Dynamics;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -88,13 +89,6 @@ type
     Tag: string;
   end;
 
-  // Per-channel multiplier in percent, applied when the picture is
-  // drawn; 100 leaves it as painted. JSON: "tint": [50, 53, 60].
-  TColorTint = record
-    R, G, B: Byte;
-    class function Neutral: TColorTint; static;
-  end;
-
   TBackgroundChange = record
     FromScreen: Integer;
     Image: string;
@@ -113,6 +107,10 @@ type
     Y: Integer;
     Width: Integer;
     Tint: TColorTint;
+    // Names the object for the dynamic objects hung on it: "tag": "ship";
+    // '' = none. One picture drawn on several screens carries the same
+    // tag on each.
+    Tag: string;
   end;
 
   TLevel = class
@@ -133,13 +131,17 @@ type
     FObjects: TArray<TLevelObject>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
+    FDynamics: TDynamicObjects;
     procedure ParseRoot(const ARoot: TJSONObject);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
     procedure CheckEvents;
+    procedure CheckDynamics;
+    procedure CheckDynamicParent(const ATag: string);
   public
+    destructor Destroy; override;
     procedure LoadFromFile(const AFileName: string);
 
     // Tile palette index at a cell; EmptyTile when nothing is there.
@@ -173,6 +175,9 @@ type
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
     property Events: TArray<TLevelEvent> read FEvents;
+    // Owned by the level and kept through a restart: a death does not
+    // rewind the lamps
+    property Dynamics: TDynamicObjects read FDynamics;
   end;
 
 implementation
@@ -190,16 +195,14 @@ resourcestring
   SLevelEventBadScreen = 'Level "%s": event "%s" sits on screen %d of %d';
   SLevelEventTagUnknown = 'Level "%s": event "%s" waits for tag "%s", '
     + 'which no entity carries';
-  SLevelBadTint = 'Tint of "%s" takes three percentages, 0..100';
   SLevelObjectBadScreen = 'Level "%s": object "%s" sits on screen %d of %d';
   SLevelObjectBadWidth = 'Level "%s": object "%s" is %d units wide';
-
-class function TColorTint.Neutral: TColorTint;
-begin
-  Result.R := 100;
-  Result.G := 100;
-  Result.B := 100;
-end;
+  SLevelDynamicBadScreen = 'Level "%s": a dynamic object sits on screen '
+    + '%d of %d';
+  SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
+    + 'a tag no object carries';
+  SLevelDynamicTwoParents = 'Level "%s": two objects tagged "%s" stand '
+    + 'on screen %d - a dynamic object hung on it cannot tell which';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -210,6 +213,12 @@ end;
 function TDifficultyValue.ForGrade(AGrade: TDifficulty): Integer;
 begin
   Result := Values[AGrade];
+end;
+
+destructor TLevel.Destroy;
+begin
+  FDynamics.Free;
+  inherited;
 end;
 
 // The single reader for per-difficulty numbers - every future field
@@ -329,6 +338,8 @@ begin
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
   FEvents := ParseLevelEvents(ARoot, FId);
   CheckEvents;
+  FDynamics := ParseDynamics(ARoot, FId);
+  CheckDynamics;
 end;
 
 function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;
@@ -355,6 +366,43 @@ begin
       raise ELevelError.CreateFmt(SLevelEventTagUnknown,
         [FId, Event.Id, Event.Tag]);
   end;
+end;
+
+// A nailed object off the screen list never shows; a parent tag no
+// object carries leaves its child nowhere. Typos both - they die at
+// load, as the events' do.
+procedure TLevel.CheckDynamics;
+begin
+  for var DynamicObject in FDynamics do
+  begin
+    var Placement := DynamicObject.Placement;
+    if Placement.Parent <> '' then
+      CheckDynamicParent(Placement.Parent)
+    else if (Placement.Screen < 1) or (Placement.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelDynamicBadScreen,
+        [FId, Placement.Screen, FScreenCount]);
+  end;
+end;
+
+procedure TLevel.CheckDynamicParent(const ATag: string);
+var
+  Carried: TArray<Boolean>; // per screen, 0-based
+begin
+  SetLength(Carried, FScreenCount);
+  var Found := False;
+  for var Placed in FObjects do
+  begin
+    if Placed.Tag <> ATag then
+      Continue;
+    if Carried[Placed.Screen - 1] then
+      raise ELevelError.CreateFmt(SLevelDynamicTwoParents,
+        [FId, ATag, Placed.Screen]);
+    Carried[Placed.Screen - 1] := True;
+    Found := True;
+  end;
+
+  if not Found then
+    raise ELevelError.CreateFmt(SLevelDynamicNoParent, [FId, ATag]);
 end;
 
 function TLevel.SolidAt(AScreen, AX, AY: Integer): Boolean;
@@ -415,34 +463,6 @@ begin
   end;
 end;
 
-// Absent = neutral. A wrong shape raises: a picture that silently
-// stays at full brightness looks like a tint that was never tuned.
-function ReadTint(const AObj: TJSONObject;
-  const AOwner: string): TColorTint;
-
-  function Percent(const AValue: TJSONValue): Byte;
-  begin
-    if not (AValue is TJSONNumber) then
-      raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
-    var Value := TJSONNumber(AValue).AsInt;
-    if (Value < 0) or (Value > 100) then
-      raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
-    Result := Value;
-  end;
-
-begin
-  var Raw := AObj.GetValue('tint');
-  if Raw = nil then
-    Exit(TColorTint.Neutral);
-  if not (Raw is TJSONArray) or (TJSONArray(Raw).Count <> 3) then
-    raise ELevelError.CreateFmt(SLevelBadTint, [AOwner]);
-
-  var Channels := TJSONArray(Raw);
-  Result.R := Percent(Channels.Items[0]);
-  Result.G := Percent(Channels.Items[1]);
-  Result.B := Percent(Channels.Items[2]);
-end;
-
 procedure TLevel.ParseBackgrounds(const AArr: TJSONArray);
 begin
   SetLength(FBackgrounds, AArr.Count);
@@ -474,6 +494,7 @@ begin
     Placed.Y := Obj.GetValue<Integer>('y');
     Placed.Width := Obj.GetValue<Integer>('width');
     Placed.Tint := ReadTint(Obj, Placed.Sprite);
+    Placed.Tag := Obj.GetValue<string>('tag', '');
 
     if (Placed.Screen < 1) or (Placed.Screen > FScreenCount) then
       raise ELevelError.CreateFmt(SLevelObjectBadScreen,

@@ -30,10 +30,13 @@ uses
   Game.Loop in 'Game\Game.Loop.pas',
   Monsters.Defs in 'Core\Monsters.Defs.pas',
   Render.Sprites in 'Core\Render.Sprites.pas',
+  Levels.Tint in 'Core\Levels.Tint.pas',
+  Levels.Dynamics in 'Core\Levels.Dynamics.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Objects in 'Core\Render.Objects.pas',
+  Render.Dynamics in 'Core\Render.Dynamics.pas',
   Render.Shake in 'Core\Render.Shake.pas',
   Hero in 'Game\Hero.pas',
   Bullets in 'Game\Bullets.pas',
@@ -213,6 +216,7 @@ type
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
     FObjects: TObjectScreenRenderer;
+    FDynamics: TDynamicScreenRenderer;
     FHero: THero;
     FState: TGameState;
     // Original input model: keyboard.pas kept a Key[] state array and the
@@ -403,6 +407,7 @@ begin
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
+  FDynamics.Free;
   FObjects.Free;
   FTiles.Free;
   FSprites.Free;
@@ -423,6 +428,7 @@ procedure TMoonGame.LoadLevel(const AFileName: string);
 begin
   FField.Free;
   FHero.Free;
+  FDynamics.Free;
   FObjects.Free;
   FTiles.Free;
   FObjectCache.Free;
@@ -431,6 +437,7 @@ begin
   FLevel.Free;
   FField := nil;
   FHero := nil;
+  FDynamics := nil;
   FObjects := nil;
   FTiles := nil;
   FObjectCache := nil;
@@ -480,6 +487,7 @@ begin
   if Length(FLevel.Objects) > 0 then
     FObjectCache.AttachSpriteSet(OpenLevelArtSet('objects'));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
+  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel);
 
   FHero := THero.Create(FRenderer, FLevel);
   FreeAndNil(FHenshin);
@@ -1370,6 +1378,7 @@ begin
       Exit;
     end;
   end;
+  FDynamics.Tick;
   // The ceremony counts in the same breath as the 2008 timer did (450):
   // it keeps ticking even over the hero's corpse - restart resets it
   FHenshin.Tick;
@@ -1457,6 +1466,7 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
+        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha);
         FTiles.DrawTiles(FHero.Screen);
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);
