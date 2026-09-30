@@ -93,7 +93,7 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Core/Render.Sprites.pas` (~465 lines)
+### `Core/Render.Sprites.pas` (~475 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
@@ -108,7 +108,11 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   palettes (`level1\doom1.png`) still resolve. `AmbiguousNames` reports bare
   names carried by more than one attached set - those would resolve by
   declaration order, which is exactly what the qualifier exists to avoid.
-  Optional color key (`SetColorKey`/`DisableColorKey`).
+  Optional color key (`SetColorKey`/`DisableColorKey`). `EnableLinearFilter`
+  gives the cache's textures the linear filter over the global nearest - for
+  art denser than the logical screen (the HD backdrops), where nearest
+  downscaling turns detail into grain. Both apply to textures loaded after
+  the call.
 - **`LoadImageSurface(spriteSet, name)`** (free function) - the one place that
   turns stored bytes into a surface. Returns `nil` for a nil set or an unknown
   name; the caller words the error, since only it knows what the picture was
@@ -130,14 +134,15 @@ SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
 runs at startup and raises plainly if the DLL is absent - unlike the optional
 mixer, missing art is fatal.
 
-### `Core/Render.Tiles.pas` (~95 lines)
+### `Core/Render.Tiles.pas` (~105 lines)
 - **`TTileScreenRenderer`** - draws one screen as two layers the caller
   orders: `DrawBackground` (the screen's backdrop sprite via
   `FBackgroundCache`), then `DrawTiles` (palette indices from `TLevel` via
   `FTileCache`). Separate calls, no combined one, so the backdrop can stand
   still while the tiles shake. Both caches are fed from `.mset` sets by the
-  composition root, and neither is owned here. The background/tiles split is
-  also the hook for the future "AI backgrounds as art layer" idea.
+  composition root, and neither is owned here. `DrawBackground` sets the
+  change's tint (`SDL_SetTextureColorMod`) on every draw, not once at load:
+  two changes may share one picture under different tints.
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -216,7 +221,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~445 lines)
+### `Core/Levels.Defs.pas` (~490 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -233,17 +238,23 @@ Level data model + JSON parser. No game logic.
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
-- **`TBackgroundChange`** (record) - fromScreen + image.
+- **`TBackdropTint`** (record) - R/G/B multipliers in percent, applied when
+  the backdrop is drawn; `Neutral` = 100/100/100 (the picture as painted).
+- **`TBackgroundChange`** (record) - fromScreen + image + tint. The free
+  `ReadBackdropTint` reads `"tint": [r, g, b]`; absent = neutral, any other
+  shape or a value outside 0..100 raises (a backdrop silently left at full
+  brightness looks like a tint nobody tuned).
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/music/introText, grid dims,
   screenCount. `SpriteSets` is the environment sets in resolution order - tiles
   only; screen backdrops follow the `<assetsDir>-backdrops` convention and
   never appear there. `Events` - the level's events (`Levels.Events`), in
-  file order. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (last change
-  wins). `LoadFromFile`; private `CheckEvents` refuses an event off the
-  screen list or one waiting for a tag no placement carries (the latter
-  would fire at once - nobody alive to hold it).
+  file order. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (the whole
+  change, last one wins; `Image = ''` when the level defines none).
+  `LoadFromFile`; private `CheckEvents` refuses an event off the screen
+  list or one waiting for a tag no placement carries (the latter would fire
+  at once - nobody alive to hold it).
 
 ### `Core/Levels.Events.pas` (~140 lines)
 The `events` section of level JSON: model and parser, no game logic (the
@@ -827,7 +838,9 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 ### `level1.json` (~49 KB) / `level2.json` (~19 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
-`music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid` (16x12), `backgrounds` (fromScreen + image), `tilePalette`
+`music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid`
+(16x12), `backgrounds` (fromScreen + image + optional `tint`, three
+percentages), `tilePalette`
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
@@ -836,11 +849,13 @@ optional `tag` for the events), `events` (each: `id`, `screen`, `when` =
 enterScreen | allDead + `tag`, optional `delay` in ticks, `then` = a list
 of `action` objects - bigMessage/smallMessage/hint with `text`/`textEn`,
 music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
-- level1: 17 screens, 145 entities, a 156-tile palette, 5 backgrounds (the
-  fifth is `_black` for the fully tiled lab screens 12-13); sets
+- level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
+  (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
+  sunrise (14-17); sets
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`.
-- level2: 9 screens, 38 entities, a 35-tile palette, 3 backgrounds; sets
+- level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
+  (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. The gravel trial and
   the boss live here, and it ends the original campaign.
 
@@ -856,7 +871,9 @@ music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
   `moon-surface`, `railway` - grouped by subject, not by level, because levels
   share tiles.
 - **Backdrops**: `level1-backdrops`, `level2-backdrops` - found by the
-  `<assetsDir>-backdrops` convention, never declared in `spriteSets`.
+  `<assetsDir>-backdrops` convention, never declared in `spriteSets`. HD
+  since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
+  linear-filtered and tinted per change; `_black` stays a 512x512 fill.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
   `font`/`fontx`/`fonty` atlases. Stars, halo and embers are generated.

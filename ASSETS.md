@@ -47,10 +47,14 @@ author; others were collected in 2008 from sources that were not written down.
 Short, heavily processed, and treated here as of unknown provenance. Not
 licensed for reuse.
 
+## Generated
+
 **Screen backgrounds** (`sprites/level1-backdrops.mset`,
-`sprites/level2-backdrops.mset`) — composited from stock photography that was
-free to use at the time. The specific sources were not recorded. Scheduled for
-replacement.
+`sprites/level2-backdrops.mset`) - since 3.0.11, generated with ChatGPT's
+image model from the author's prompts, then cropped, hazed and packed by the
+author; the brightness is set per level in code. They replaced the 2008
+backgrounds, which were composited from stock photography of unrecorded
+origin. `_black` is a plain fill.
 
 ## Third-party runtime libraries
 
