@@ -65,6 +65,54 @@
       "x": 4,
       "y": 244,
       "width": 300
+    },
+    {
+      "sprite": "satellite",
+      "screen": 14,
+      "x": 213,
+      "y": 39,
+      "width": 61,
+      "tint": [
+        70,
+        72,
+        78
+      ]
+    },
+    {
+      "sprite": "satellite",
+      "screen": 15,
+      "x": 213,
+      "y": 39,
+      "width": 61,
+      "tint": [
+        70,
+        72,
+        78
+      ]
+    },
+    {
+      "sprite": "satellite",
+      "screen": 16,
+      "x": 213,
+      "y": 39,
+      "width": 61,
+      "tint": [
+        70,
+        72,
+        78
+      ]
+    },
+    {
+      "sprite": "satellite",
+      "screen": 17,
+      "x": 213,
+      "y": 39,
+      "width": 61,
+      "tint": [
+        70,
+        72,
+        78
+      ]
     }
   ],
   "tilePalette": [

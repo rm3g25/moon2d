@@ -59,6 +59,20 @@
       ]
     }
   ],
+  "objects": [
+    {
+      "sprite": "satellite",
+      "screen": 1,
+      "x": 213,
+      "y": 39,
+      "width": 61,
+      "tint": [
+        85,
+        85,
+        87
+      ]
+    }
+  ],
   "tilePalette": [
     "level1\\doom1.png",
     "base1.png",
