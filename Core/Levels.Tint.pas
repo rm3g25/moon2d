@@ -32,6 +32,9 @@ function ReadTint(AObj: TJSONObject; const AOwner: string;
 
 implementation
 
+uses
+  System.Generics.Collections;
+
 resourcestring
   SBadTint = '"%s" of "%s" takes three percentages, 0..100';
 
