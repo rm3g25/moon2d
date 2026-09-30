@@ -40,3 +40,9 @@ tracked.txt
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ---- Selene: the extracted input and the review sheet ----
+# out/ keeps the approved maps and the globe; the rest regenerates.
+tools/Selene/moonmap.png
+tools/Selene/out/selene-sheet.png
+__pycache__/
