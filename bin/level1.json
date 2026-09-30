@@ -58,6 +58,15 @@
       ]
     }
   ],
+  "objects": [
+    {
+      "sprite": "ship",
+      "screen": 1,
+      "x": 4,
+      "y": 244,
+      "width": 300
+    }
+  ],
   "tilePalette": [
     "level1\\doom1.png",
     "level1\\lenta1.png",
