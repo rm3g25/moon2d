@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.12` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.13` (the folder layout came
 between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -36,11 +36,13 @@ runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still ca
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Events` -> `Levels.Defs` /
+`Levels.Tint` / `Levels.Events` -> `Levels.Dynamics` (draws through
+`Render.Glow`) -> `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
-`Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` -> `Hud.Marks` /
+`Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+`Render.Dynamics` -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`).
@@ -125,6 +127,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   in percent, 100 = as painted. The texture keeps it until the next call, so
   a picture shared under different tints is tinted before every draw. The
   backdrops and the level objects both tint through it.
+  **`PercentToColorMod(percent)`** - one channel of that conversion, public
+  for a caller that passes the color on instead of setting it on a texture
+  (the beacon's tint becomes the glow color through it).
 - **`TSpriteRenderer`** - draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid, the top-left 64x64 crop reproduced from
   `sttextures.pas`), `Draw` (free position, optional mirror), `DrawRect`,
@@ -157,6 +162,20 @@ mixer, missing art is fatal.
   walks the list. The cache comes from the composition root - no color key
   (honest PNG alpha: black glass and shadows would vanish through a key),
   linear filter, fed from `<assetsDir>-objects.mset`; not owned here.
+
+### `Core/Render.Dynamics.pas` (~135 lines)
+- **`TDynamicScreenRenderer`** - brings the level's dynamic objects
+  (`Levels.Dynamics`) to the screen. Owns the three glow textures of the
+  `TDynamicCanvas` (point, flare, starburst - `Render.Glow`), made at level
+  load; the objects themselves are the level's. The constructor settles
+  where each object stands (`TStand`: object, screen, origin): a nailed one
+  on its screen at (0, 0), one under a parent on every screen the parent's
+  static object stands on, at that object's top-left. Resolved once -
+  static objects never move; a moving parent will turn the stand into a
+  per-draw query here, and nothing in `Levels.Dynamics` changes. `Tick`
+  ticks every object whatever the screen (a lamp keeps its rhythm off
+  screen); `Draw(screen, origin, alpha)` draws the ones on the screen.
+  Layer: the static objects' own - behind the tiles and the hero.
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -235,7 +254,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~545 lines)
+### `Core/Levels.Defs.pas` (~565 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -252,18 +271,14 @@ Level data model + JSON parser. No game logic.
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
-- **`TColorTint`** (record) - R/G/B multipliers in percent, applied when
-  the picture is drawn; `Neutral` = 100/100/100 (as painted). Shared by the
-  backdrops and the objects.
-- **`TBackgroundChange`** (record) - fromScreen + image + tint. The free
-  `ReadTint` reads `"tint": [r, g, b]` for both; absent = neutral, any other
-  shape or a value outside 0..100 raises (a picture silently left at full
-  brightness looks like a tint nobody tuned).
+- **`TBackgroundChange`** (record) - fromScreen + image + tint
+  (`TColorTint` of `Levels.Tint`).
 - **`TLevelObject`** (record) - free-form art over the backdrop: sprite (in
   `<assetsDir>-objects.mset`), screen (1-based), x/y (top-left) and width in
-  screen units, tint. No height: it follows the art's aspect, so a picture
-  is never stretched. No collision - the grid alone decides where the hero
-  stands.
+  screen units, tint, `Tag` (names it for the dynamic objects hung on it;
+  one picture on several screens carries the same tag on each). No height:
+  it follows the art's aspect, so a picture is never stretched. No
+  collision - the grid alone decides where the hero stands.
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/music/introText, grid dims,
@@ -277,7 +292,54 @@ Level data model + JSON parser. No game logic.
   change, last one wins; `Image = ''` when the level defines none).
   `LoadFromFile`; private `CheckEvents` refuses an event off the screen
   list or one waiting for a tag no placement carries (the latter would fire
-  at once - nobody alive to hold it).
+  at once - nobody alive to hold it). `Dynamics` - the dynamic objects
+  (`Levels.Dynamics`), owned by the level (the only destructor here) and
+  kept through a restart - a death does not rewind the lamps; private
+  `CheckDynamics` refuses a nailed object off the screen list, a parent tag
+  no static object carries, and two objects with one tag on one screen
+  (the child could not tell its parent).
+
+### `Core/Levels.Tint.pas` (~70 lines)
+- **`TColorTint`** (record) - R/G/B multipliers in percent, applied when
+  the picture is drawn; `Neutral` = 100/100/100 (as painted).
+- **`ReadTint(obj, owner)`** - reads `"tint": [r, g, b]`; absent = neutral,
+  any other shape or a value outside 0..100 raises `ETintError` (a picture
+  silently left at full brightness looks like a tint nobody tuned).
+- Its own unit because three readers share it - backdrops and static
+  objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
+  `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
+
+### `Core/Levels.Dynamics.pas` (~410 lines)
+The `dynamics` section of level JSON: things placed like the static
+objects, but alive. **Every kind lives in this unit**: a new kind is a class
+here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
+- **`TDynamicPlacement`** (record) - what every kind shares: `Screen` or
+  `Parent` (exactly one - with a parent the parent decides the screens),
+  `X`/`Y` (screen units; from the parent's top-left under one), `Tint`.
+- **`TDynamicObject`** (abstract) - holds the placement; `Draw(canvas,
+  originX, originY, alpha)` adds X/Y to the origin and calls the kind's
+  protected abstract `DrawAt`; abstract `Tick`. The parent is coordinates
+  only, VCL-style: it owns nothing.
+- **`TDynamicCanvas`** (record) - renderer + the glow textures every kind
+  draws with; made and freed by `Render.Dynamics`.
+- **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
+  spill of light around (`SpillScale`), four-spike glint on the flash peak,
+  optional starburst rays that stretch with the flash (`RayRestReach`); the
+  glass keeps an ember between flashes (`EmberLevel`). JSON properties:
+  `blink` (`TBlinkPattern`: steady / pulse / flash / double / faulty /
+  dying; default flash), `frequency` (per second of game time), `intensity`,
+  `glint`, `rayIntensity` (percentages), `size` (halo across), `rays` (reach
+  of a ray, 0 = none). `faulty` - a cycle cut into slots that hold, sag or
+  drop out; `dying` - every cycle a new dim level (5-40%); both roll through
+  `SlotRoll` (own `TXorShift`, never `Random` - that one feeds the boss
+  spawn table), a pure function of the slot number, so a frame drawn
+  between ticks never disagrees with them. The seed is the position, so
+  lamps at different points fail out of step.
+- **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
+  list, the caller owns it); an unknown kind or blink, screen and parent
+  together or neither, a number out of range raise `EDynamicError`.
+- `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
+  33 ticks a second.
 
 ### `Core/Levels.Events.pas` (~140 lines)
 The `events` section of level JSON: model and parser, no game logic (the
@@ -594,15 +656,17 @@ instead of being kept.
 ### `Core/Render.Glow.pas` (~165 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
-- **`TGlowShape`** = (`gsPoint`, `gsFlare`) - a Gaussian point and a
-  four-spike flare, analytic (`PointSigma`, `Flare*` metrics in half-sides).
+- **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`) - a Gaussian
+  point, a four-spike flare and the long thin cross of a starburst (rays
+  thinner than a flare spike and slower to fade), analytic (`PointSigma`,
+  `Flare*`, `StarburstRayWidth` metrics in half-sides).
 - Free functions: `CreateGlowShape(renderer, shape, side)`,
   `CreateGlowTexture(renderer, surface)` (a shape computed elsewhere - the
   logo halo - arrives as a surface and leaves with the same settings),
   `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (centered
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
-- Users: the stars, the embers, the logo halo. `EGlowError`.
+- Users: the stars, the embers, the logo halo, the beacons. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
@@ -712,7 +776,7 @@ Host: window and renderer plus the fixed-timestep loop.
   worst-frame diagnostics, frame-budget wait for the no-vsync path.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1890 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1895 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -726,7 +790,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (extends `TGameApp`) - owns everything: registry, level, the
   level's sprite sets and its three caches (tiles, backdrops, objects), the ui
-  and weapon sets, the sprite, tile and object renderers, hero, monster
+  and weapon sets, the sprite, tile, object and dynamic-object renderers
+  (`FDynamics`, reborn with the level, freed before it), hero, monster
   field, both bursts, font, message board, the screen shake, sound bank,
   menu, the ceremony (`THenshin`), the event director (`TEventDirector`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
@@ -742,9 +807,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   difficulty.
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
-    still, objects + tiles + bullets on the world channel - objects stand on
-    the tiles and jolt with them - monsters and hero on their own, cursor and
-    HUD still), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
+    still, objects + dynamic objects + tiles + bullets on the world channel -
+    objects stand on the tiles and jolt with them, the dynamic objects draw
+    right after the objects, behind tiles and hero - monsters and hero on
+    their own, cursor and HUD still; `Update` ticks `FDynamics` right after
+    the end-level switch), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
     convention of the backdrops and the objects in one place; the objects
     set is opened only by a level that places some), `StartPlaying`,
     `RestartLevel`,
@@ -862,13 +929,16 @@ dangerous - inherited by monsters), `monsters` array. 15 ids: `gravel`,
 Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead.
 
-### `level1.json` (~49 KB) / `level2.json` (~19 KB)
+### `level1.json` (~50 KB) / `level2.json` (~20 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 `music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid`
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
-units, optional `tint`), `tilePalette`
+units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
+(beacon), `screen` or `parent` - a static object's tag -, `x`, `y`,
+optional `tint`, then the kind's own properties - see `Levels.Dynamics`),
+`tilePalette`
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
 `emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades,
@@ -882,11 +952,15 @@ music with `file`; the med lab hint is the first), `introText`/`introTextEn`.
   sunrise (14-17); sets
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`. Objects: the ship on screen 1 (in place of the 2008
-  shuttle), the broken satellite in the sky of 14-17.
+  shuttle), the broken satellite in the sky of 14-17, tagged `ship` and
+  `satellite`. Dynamics: a blue double-flash beacon on the ship's fin, a red
+  faulty one with starburst rays on the satellite's antenna.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
-  satellite on screen 1, lit a little brighter (day). The gravel trial and
+  satellite on screen 1, lit a little brighter (day), tagged `satellite`;
+  its lamp is `dying` - a dim fast flutter, the battery running out. The
+  gravel trial and
   the boss live here, and it ends the original campaign.
 
 ### `sprites\*.mset` (34 sets)
@@ -948,6 +1022,7 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
+| A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
 | Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
 | Story screen before a level / typing rhythm | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` in level JSON) |
