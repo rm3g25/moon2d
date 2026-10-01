@@ -8,7 +8,7 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 тайловая графика 64 px, фиксированный тик 33 Гц, уровни по экранам (без
 скролла).
 
-Перегенерировано на `v3.0.3`, поправлено по `v3.0.15` (раскладка по папкам
+Перегенерировано на `v3.0.3`, поправлено по `v3.0.18` (раскладка по папкам
 случилась между 3.0.8 и 3.0.9). Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -37,7 +37,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 Направление зависимостей (примерно снизу вверх):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` ->
+`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
+`Effects.Debris` (рисует через `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (рисует через `Render.Glow`,
 `Render.Puff` и `Render.Globe`) ->
 `Levels.Defs` /
@@ -45,7 +46,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
-`Render.Dynamics` -> `Hud.Marks` /
+`Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
+`Levels.Dynamics` и `Monsters.Defs`) -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. Небесная установка меню
 сбоку: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (с `Menu.Globe` - тонкой луной над `Render.Globe`).
@@ -345,6 +347,37 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `Particles[i]`. О виде ничего не знает. Пользуется дым; угли меню пока со
   своим циклом.
 
+### `Core/Effects.Debris.pas` (~610 строк)
+Что разбрасывает взрыв, только украшение - ранят вееры осколков 2008, этот
+юнит - нет. **`TDebrisField`** получает рендерер и **`TSolidProbe`**
+(`reference to function(x, y): Boolean`, экранные единицы - игра даёт
+`SolidUnderPoint`, так что юнит не знает уровня).
+- **`TDebrisLook`** (запись) - один взрыв: `Shards`, `ShardSpeed`,
+  `ShardSize`, `ShardCone` (ширина в градусах, по центру вверх),
+  `RestSeconds`, `Sparks`, `SparkSpeed`; каждый кусок бросает значение
+  между `MinShare` (0.35) от него и им самим.
+- Осколки: `TShardState` = (`ssFlying`, `ssSliding`, `ssResting`).
+  `FlyShard` двигает по одной оси за раз - стена разворачивает X
+  (`WallBounce`), потолок Y; пол уходит в `LandShard`, который половинит
+  шаг до линии пола и отскакивает (`FloorBounce` 0.35, `FloorGrip`) или,
+  медленнее `RestSpeed`, опускает осколок скользить (`SlideShard`,
+  `SlideGrip`; за краем пола снова летит) и лечь. Лежит `RestSeconds`,
+  потом тает за `FadeTicks`. Цвет - `HeatColor`: белый жар -> красный
+  уголёк -> голый металл за `CoolTicks`, пока горячий - гаснущее свечение
+  `gsPoint`. Гравитация `ShardGravity` = 0.3 - падение вееров 2008.
+  Осколок, родившийся в стене, выбрасывается.
+- Искры: штрихи вдоль скорости (свечение `gsPoint`, растянутое
+  `SDL_RenderCopyExF`, длиной в `StreakTicks` пути), от белого к красному
+  за жизнь 5..14 тиков, гаснут о первую твёрдую точку.
+- Формы: `ShardShapes` (4) рваных пластинки на 5..7 углов, согнутых один
+  раз (светлая и тёмная половины), сглаживание 2x2 (`PixelCover`); белые,
+  форма в альфе, альфа-смешение, линейный фильтр - генерятся в
+  конструкторе, как клубы дыма.
+- Потолки `MaxShards` 256, `MaxSparks` 512 - цепочка бочек вытесняет
+  старейших. Свой `TXorShift` ("Boom"), никогда `Random`. `Burst`, `Tick`,
+  `Draw(origin, alpha)` (чистая: позиция экстраполируется по скорости, как
+  у дыма), `Clear`. `EDebrisError`.
+
 ### `Core/Render.Puff.pas` (~230 строк)
 Дым, который рисуется, а не грузится. `CreatePuffTextures(renderer, side)`
 при загрузке уровня делает `PuffShapes` (4) рваных клубов: мягкий спад,
@@ -441,7 +474,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   коде - за тик. Вид дыма - запись **`TSmokeLook`** в единицах JSON
   (`ReadSmokeLook` заполняет её из файла уровня, `TakeLook` переводит в
   тики); `CreateLook(placement, look, intensity, seed)` делает дым из кода
-  - дым подбитых машин в `Monsters`.
+  - дым подбитых машин в `Monsters`, плюмы взрывов. `Exhausted` -
+  источник погас и последний клуб растаял (тогда плюм взрыва
+  освобождается).
 - **`TSkyGlobe`** (вид `globe`) - тело в небе, по умолчанию Земля над
   Луной (или мёртвая Земля Селены, Проксима c): `TGlobe` (`Render.Globe`), который
   делается в `Acquire` из арта объектов (`map`, по умолчанию `earth`,
@@ -513,7 +548,10 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 - **Перечисления**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss),
   `TMovementKind` (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly),
   `TAttackPattern` (apNone/StraightSingle/StraightCluster5/AimedSingle/
-  AimedDouble/RainVolley), `TPickupEffectKind` (peNone/Heal/GiveWeapon).
+  AimedDouble/RainVolley), `TPickupEffectKind` (peNone/Heal/GiveWeapon),
+  `TExplosionKind` (ekNone/Barrel/Machine/Boss - вид смерти, JSON
+  `explosion`, неизвестное слово - ошибка; от вееров `explodesOnDeath` не
+  зависит).
 - **Записи**: `TMovementDef` (вид+скорость); `TAttackDef` (паттерн, темп огня,
   скорость пули, параметры конкретного паттерна, `HasAttack`);
   `TPickupEffectDef` (peGiveWeapon перепаивает всё оружие: тип, перезарядка,
@@ -521,7 +559,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   (endsLevelOnDeath, темп/экран/таблица спавна, `RageMusic`, `PickSpawn` -
   взвешенный случайный выбор); `TMonsterDef` - полный лист: id, legacyName,
   displayName (локализованное), spriteList, category, dangerous,
-  affectedByGravity, explodesOnDeath, movement, attack, pickupEffect, lives,
+  affectedByGravity, explodesOnDeath, explosion, movement, attack, pickupEffect, lives,
   score, animFreq, deathText (локализованный), массив deathSounds, boss.
 - **`TMonsterRegistry`** (класс) - владеет всеми определениями;
   `LoadFromFile/String`, `Find`, `FindByLegacyName`, `TryFind`, `Count`,
@@ -772,6 +810,29 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   своих фигур - кисть рисует мимо `Origin` рендерера спрайтов, сдвиги
   передаются руками. Рисуется после пуль, до прицела и угловых HUD.
 
+### `Game/Game.Explosions.pas` (~290 строк)
+Единственный дом для "что-то взорвалось" - вид, не механика (вееры
+остаются у монстра и в dpr). **`TExplosions`** - один на игру (рендерер +
+щуп твёрдого), чистится на двери, смерти и загрузке уровня.
+- `Detonate(x, y, kind)` - x/y сердце взрыва в экранных единицах; `ekNone`
+  ничего не делает. На каждый вид - приватная типизированная константа
+  `TExplosionLook`: `TDebrisLook`, вспышка (`FlashSize`, `FlashTicks` -
+  два свечения `gsPoint`, растущее тёплое и белое ядро, гаснут
+  квадратично), плюм (`TSmokeLook` + `SmokeTint` - `TSmoke` из
+  `CreateLook` на полной интенсивности, гаснет до нуля за `SmokeTicks`:
+  выливается и редеет; освобождается, когда `Exhausted`) и
+  дохлопывания (число, вид, разброс, длительность - очередь отложенных
+  `Detonate`, `TickAftershocks`).
+- Размеры: `BarrelExplosion` (14 осколков, 40 искр, вспышка 96),
+  `MachineExplosion` (22, 60, 130 - танк, платформа, ярость босса),
+  `BossExplosion` (40, 120, 220 плюс пять бочечных хлопков в радиусе 24
+  за 50 тиков - обломки догорают).
+- `Tick` (дохлопывания, вспышки, обломки, плюмы), `DrawSmoke(canvas,
+  origin, alpha)` - плюмы, сразу после тайлов, за фигурами;
+  `Draw(canvas, origin, alpha)` - обломки и вспышки, поверх пуль. Оба на
+  канале тряски мира; текстуры - из `FDynamics.Canvas`. Свой `TXorShift`
+  для дохлопываний.
+
 ### `Game/Game.Henshin.pas` (~280 строк)
 Церемония трансформации одним автоматом, вынесенным из dpr (3.0.2): прелюдия
 3..2..1 (2026), пять сходящихся лечащих волн 2008, вспышка, костюм надевается -
@@ -825,7 +886,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (квадрат по
   центру), `DrawGlowRect(..., dest, tint, level)`. Оттенок = color mod,
   уровень = alpha mod.
-- Кто пользуется: звёзды, угли, ореол логотипа, маячки, жар клуба дыма.
+- Кто пользуется: звёзды, угли, ореол логотипа, маячки, жар клуба дыма,
+  вспышка взрыва, искры и горячие осколки.
   `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 строк)
@@ -979,7 +1041,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   (`FDynamics`, рождается с уровнем, освобождается до него), герой, поле
   монстров, оба
   всплеска пуль, шрифт, доска сообщений, тряска экрана, банк звуков, меню,
-  церемония (`THenshin`), директор событий (`TEventDirector`), два угловых
+  взрывы (`FExplosions`, один на весь запуск), церемония (`THenshin`), директор событий (`TEventDirector`), два угловых
   HUD (`THudVitals`, `THudCharge`) и ряды здоровья над фигурами
   (`THudMarks`) - церемония, директор и три объекта HUD рождаются заново с
   каждым уровнем, так что ничего не переносится.
@@ -998,7 +1060,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     динамика + тайлы + пули на канале мира -
     объекты стоят на тайлах и трясутся с ними, задняя динамика рисуется
     сразу после объектов, за тайлами и героем, - монстры, за ними дым
-    подбитых машин и передняя динамика (дым босса) на канале монстров, герой на своём, курсор и HUD
+    подбитых машин и передняя динамика (дым босса) на канале монстров -
+    плюмы взрывов до них, сразу после тайлов, обломки и вспышки взрывов
+    после пуль, - герой на своём, курсор и HUD
     стоят; `Update` тикает `FDynamics` после монстров и директора, чтобы
     клубы дымящего монстра выходили оттуда, где его рисует этот кадр),
     `LoadLevel` (кэш объектов: собственный набор объектов уровня, если он
@@ -1021,8 +1085,12 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     `FireScreenTriggers`, `TickGravelAttack`; события - у директора
     (`FDirector.Tick` после вердиктов тика, `ReArm` в `RestartLevel`).
   - Бой: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
-    `ResolveMonsterContact`, `RewardMonsterKill`, `HurtHero`,
-    `DrainMonsterEvents` (здесь же взрывы и удары босса доливают тряску),
+    `ResolveMonsterContact`, `RewardMonsterKill` (здесь же `Detonate`
+    вида `explosion` монстра в середине его спрайта, в тик убийства),
+    `HurtHero`, `DrainMonsterEvents` (здесь же взрывы и удары босса
+    доливают тряску; `meBossRage` взрывает на боссе взрыв размера машины),
+    `SolidUnderPoint` (щуп обломков: сетка коллизий экрана героя в честных
+    экранных единицах - без пулевого -1 ряда),
     `ProcessKillStreak`, `AwardStreakBonus`.
   - Бонусы: `CureHero` (+1 до 10 - он же колбэк лечения церемонии),
     `AwardRandomBonus` (заголовок несёт подсказку про мышь, пока не
@@ -1125,7 +1193,9 @@ dangerous - наследуются монстрами), массив `monsters`.
 `tank`, `mount`, `barrel`, `medkit`, `weaponShotgun`, `weaponGrenade`,
 `weapon3`, `weapon4`, `boss1`. Разбирается `TMonsterRegistry` в `TMonsterDef`
 (полный лист полей см. в Monsters.Defs выше). У девяти из пятнадцати нет
-`spriteList` - он приходит из расстановки в уровне.
+`spriteList` - он приходит из расстановки в уровне. `explosion` называет
+вид смерти: `barrel` (бочка), `machine` (танк, платформа), `boss`
+(`boss1`); у крепления нет - оно взрывается внутри стены.
 
 ### `level1.json` (~50 КБ) / `level2.json` (~20 КБ)
 Единый формат уровня, разбирается `TLevel`. Ключи: `version`, `id`,
@@ -1229,7 +1299,8 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Паттерны оружия / прицел | Hero.pas (+Bullets.pas) |
 | Поведение монстров / ИИ / босс | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | Новый монстр (только данные) | monsters.json + набор `.mset` (spriteList хранит написание `.mns`) |
-| Взрывы / частицы | Bullets.pas |
+| Механика взрыва: вееры осколков, которые ранят | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
+| Вид взрыва: вспышка, обломки, плюм; размеры; новый вид | Game.Explosions.pas (+Effects.Debris.pas - физика осколков, `explosion` в monsters.json, `TExplosionKind` в Monsters.Defs.pas) |
 | Церемония хеншина: отсчёт, волны, костюм надеть и снять | Game.Henshin.pas (+Bullets.pas - вееры и кольца) |
 | Контент уровня / триггеры / экраны | levelN.json + Levels.Defs.pas |
 | Событие уровня: когда срабатывает, что делает; новое условие или действие | `events` в levelN.json + Levels.Events.pas (модель) + Events.Director.pas (исполнитель) |

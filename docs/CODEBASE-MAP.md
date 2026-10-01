@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels.
 
-Regenerated at `v3.0.3`, patched through `v3.0.15` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.18` (the folder layout came
 between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -36,7 +36,8 @@ runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still ca
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` ->
+`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
+`Effects.Debris` (draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (draws through `Render.Glow`,
 `Render.Puff` and `Render.Globe`) ->
 `Levels.Defs` /
@@ -44,7 +45,8 @@ Dependency direction (roughly bottom-up):
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
-`Render.Dynamics` -> `Hud.Marks` /
+`Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
+`Levels.Dynamics` and `Monsters.Defs`) -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`, a thin moon over `Render.Globe`).
@@ -332,6 +334,37 @@ Level data model + JSON parser. No game logic.
   `Particles[i]`. Knows nothing of looks. Users: the smoke; the menu embers
   still carry their own loop.
 
+### `Core/Effects.Debris.pas` (~610 lines)
+What an explosion throws, decoration only - the 2008 fragment fans wound,
+this does not. **`TDebrisField`** takes the renderer and a
+**`TSolidProbe`** (`reference to function(x, y): Boolean`, screen units -
+the game passes `SolidUnderPoint`, so the unit knows no level).
+- **`TDebrisLook`** (record) - one blast's worth: `Shards`, `ShardSpeed`,
+  `ShardSize`, `ShardCone` (degrees wide, centered straight up),
+  `RestSeconds`, `Sparks`, `SparkSpeed`; every piece rolls between
+  `MinShare` (0.35) of a value and the value.
+- Shards: `TShardState` = (`ssFlying`, `ssSliding`, `ssResting`).
+  `FlyShard` moves one axis at a time - a wall turns X back (`WallBounce`),
+  a ceiling Y; a floor goes to `LandShard`, which halves the step to find
+  the floor line and bounces (`FloorBounce` 0.35, `FloorGrip`) or, slower
+  than `RestSpeed`, lets it down to skid (`SlideShard`, `SlideGrip`; off
+  the edge of a floor it flies again) and rest. A resting shard lies
+  `RestSeconds`, then fades over `FadeTicks`. Color by `HeatColor`: white
+  heat -> the ember's red -> bare metal over `CoolTicks`, with a fading
+  `gsPoint` glow while hot. Gravity `ShardGravity` = 0.3, the fall of the
+  2008 fans. A shard born inside a wall is dropped.
+- Sparks: streaks along the speed (the `gsPoint` glow stretched by
+  `SDL_RenderCopyExF`, `StreakTicks` of path long), white to red over a
+  life of 5..14 ticks, gone on the first solid point.
+- Shapes: `ShardShapes` (4) torn plates of 5..7 corners, folded once (a lit
+  and a shaded half), 2x2 supersampled (`PixelCover`); white, shape in
+  alpha, alpha blended, linear - generated in the constructor like the
+  puffs.
+- Caps `MaxShards` 256, `MaxSparks` 512 - a barrel chain evicts the oldest.
+  Own `TXorShift` ("Boom"), never `Random`. `Burst`, `Tick`,
+  `Draw(origin, alpha)` (pure: position extrapolated by speed, like the
+  smoke), `Clear`. `EDebrisError`.
+
 ### `Core/Render.Puff.pas` (~230 lines)
 Smoke drawn instead of loaded. `CreatePuffTextures(renderer, side)` makes
 `PuffShapes` (4) ragged puffs at level load: a soft falloff eaten into by
@@ -428,7 +461,9 @@ in `CreateDynamic`.
   look is a **`TSmokeLook`** record in JSON units (`ReadSmokeLook` fills it
   from the level file, `TakeLook` turns it into ticks); `CreateLook(
   placement, look, intensity, seed)` makes a smoke from code - the wreck
-  smoke of the machines in `Monsters`.
+  smoke of the machines in `Monsters`, the explosion plumes.
+  `Exhausted` - the source is off and the last puff is gone (an
+  explosion's plume is freed then).
 - **`TSkyGlobe`** (kind `globe`) - a body in the sky, the Earth over the
   Moon unless the level says otherwise (the dead Earth of Selene, Proxima
   c): a `TGlobe`
@@ -502,7 +537,9 @@ Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
   (apNone/StraightSingle/StraightCluster5/AimedSingle/AimedDouble/RainVolley),
-  `TPickupEffectKind` (peNone/Heal/GiveWeapon).
+  `TPickupEffectKind` (peNone/Heal/GiveWeapon), `TExplosionKind`
+  (ekNone/Barrel/Machine/Boss - the look of a death, JSON `explosion`, an
+  unknown word raises; independent of the fans of `explodesOnDeath`).
 - **Records**: `TMovementDef` (kind+speed); `TAttackDef` (pattern, fire cadence,
   bullet speed, pattern-specific params, `HasAttack`); `TPickupEffectDef`
   (peGiveWeapon rewires the whole weapon: type, cooldown, speed, gravity);
@@ -510,7 +547,7 @@ Monster definition model + registry (parses monsters.json). No behavior.
   cadence/screen/table, `RageMusic`, `PickSpawn` weighted random);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
-  movement, attack, pickupEffect, lives, score, animFreq, deathText
+  explosion, movement, attack, pickupEffect, lives, score, animFreq, deathText
   (localized), deathSounds array, boss.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
@@ -761,6 +798,29 @@ the dpr with the corner HUDs. **`THudMarks`**.
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
+### `Game/Game.Explosions.pas` (~290 lines)
+The one home of "something blew up" - the look, not the mechanics (the
+fans stay with the monster and the dpr). **`TExplosions`**, made once
+with the game (renderer + the solid probe), cleared on a door, a death
+and a level load.
+- `Detonate(x, y, kind)` - x/y the heart of the blast in screen units;
+  `ekNone` does nothing. Per kind a private typed constant
+  `TExplosionLook`: a `TDebrisLook`, the flash (`FlashSize`, `FlashTicks`
+  - two `gsPoint` glows, a swelling warm one and a white core, fading as a
+  square), the plume (`TSmokeLook` + `SmokeTint` - a `TSmoke` made by
+  `CreateLook` at full intensity and faded to zero over `SmokeTicks`, so it
+  pours and thins; freed once `Exhausted`), and aftershocks (count, kind,
+  spread, span - a queue of later `Detonate`s, `TickAftershocks`).
+- Sizes: `BarrelExplosion` (14 shards, 40 sparks, flash 96),
+  `MachineExplosion` (22, 60, 130 - the tank, the platform, the boss's
+  rage), `BossExplosion` (40, 120, 220, plus five barrel blasts within 24
+  units over 50 ticks - the wreck keeps popping).
+- `Tick` (aftershocks, flashes, debris, plumes), `DrawSmoke(canvas, origin,
+  alpha)` - the plumes, drawn right after the tiles, behind the figures;
+  `Draw(canvas, origin, alpha)` - debris and flashes, over the bullets.
+  Both on the world shake channel; the textures come from
+  `FDynamics.Canvas`. Own `TXorShift` for the aftershocks.
+
 ### `Game/Game.Henshin.pas` (~280 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
 the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
@@ -816,7 +876,7 @@ additive, linear-filtered, so one texture serves every tint and level.
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
 - Users: the stars, the embers, the logo halo, the beacons, the heat of a
-  smoke puff. `EGlowError`.
+  smoke puff, the explosion flash, the debris sparks and hot shards. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
@@ -964,7 +1024,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   and weapon sets, the sprite, tile, object and dynamic-object renderers
   (`FDynamics`, reborn with the level, freed before it), hero, monster
   field, both bursts, font, message board, the screen shake, sound bank,
-  menu, the ceremony (`THenshin`), the event director (`TEventDirector`),
+  menu, the explosions (`FExplosions`, one for the run), the ceremony
+  (`THenshin`), the event director (`TEventDirector`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
   the figures (`THudMarks`) - the ceremony, the director and the three HUD
   objects are reborn with every level, so nothing carries over. Key state:
@@ -983,7 +1044,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     objects stand on the tiles and jolt with them, the back dynamics draw
     right after the objects, behind tiles and hero - monsters, then the
     machines' wreck smoke, then the front dynamics (the boss smoke), on
-    the monsters' channel, the hero on
+    the monsters' channel - the explosion plumes before them, right after
+    the tiles, the explosion debris and flashes after the bullets - the
+    hero on
     his own, cursor and HUD still; `Update` ticks `FDynamics` after the
     monsters and the director, so a smoking monster's puffs leave from
     where this frame draws it), `LoadLevel` (the object cache: the
@@ -1006,9 +1069,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
   - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
-    `ResolveMonsterContact`, `RewardMonsterKill`, `HurtHero`,
-    `DrainMonsterEvents` (also where explosions and boss blasts feed the
-    shake), `ProcessKillStreak`, `AwardStreakBonus`.
+    `ResolveMonsterContact`, `RewardMonsterKill` (also `Detonate` of the
+    monster's `explosion` at the middle of its sprite, in the tick of the
+    kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
+    blasts feed the shake; `meBossRage` detonates a machine-size blast on
+    the boss), `SolidUnderPoint` (the debris probe: the collision grid of
+    the hero's screen in honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
@@ -1107,7 +1173,10 @@ dangerous - inherited by monsters), `monsters` array. 15 ids: `gravel`,
 `mount`, `barrel`, `medkit`, `weaponShotgun`, `weaponGrenade`, `weapon3`,
 `weapon4`, `boss1`. Parsed by `TMonsterRegistry` into `TMonsterDef` (see
 Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
-`spriteList` - theirs comes from the level placement instead.
+`spriteList` - theirs comes from the level placement instead. `explosion`
+names the look of a death: `barrel` (the barrel), `machine` (the tank, the
+platform), `boss` (`boss1`); the mount has none - it explodes inside the
+wall.
 
 ### `level1.json` (~50 KB) / `level2.json` (~20 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
@@ -1209,7 +1278,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
-| Explosions / particles | Bullets.pas |
+| Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
+| Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
