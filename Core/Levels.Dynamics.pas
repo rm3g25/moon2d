@@ -271,7 +271,8 @@ type
   // brightness a percentage of the standard exposure, past 100 allowed;
   // longitude the meridian facing the Moon, degrees east; tilt how far
   // the top of the axis leans left; map and night name pictures in the
-  // level's objects set, night optional (city lights); atmosphere a
+  // level's objects set, night optional (city lights), nightBrightness
+  // a percentage of the standard glow of its lights; atmosphere a
   // percentage, 0 for an airless world; surface "matte" (Earth-like)
   // or "regolith" (Moon-like). In the sky layer by default.
   // JSON:
@@ -279,7 +280,8 @@ type
   //    "size": 30, "tint": [78, 80, 86], "brightness": 100,
   //    "sun": -40, "altitude": 50, "azimuth": 0, "longitude": 45,
   //    "tilt": -20,
-  //    "map": "earth", "night": "earth-night", "atmosphere": 60,
+  //    "map": "earth", "night": "earth-night", "nightBrightness": 100,
+  //    "atmosphere": 60,
   //    "surface": "matte", "tag": "earth"}
   TSkyGlobe = class(TDynamicObject)
   private
@@ -454,7 +456,9 @@ const
     LimbFade: 0;
     Atmosphere: 0;
     AirColor: (0.32, 0.55, 1.0);
-    NightGain: 1.0);
+    // City lights are a few texels across on a sky-sized globe: they
+    // need more than the sunlit ground to read at all
+    NightGain: 2.5);
   // Below this the terminator moves less than a texel of a sky-sized
   // globe: the sun turns on, the light waits
   RelightStep = 0.05; // degrees
@@ -1058,6 +1062,8 @@ begin
     ReadPositive(AObj, 'brightness', DefaultBrightness, AOwner) / 100;
   FLook.Atmosphere := ReadShare(AObj, 'atmosphere', DefaultAtmosphere,
     AOwner);
+  FLook.NightGain := GlobeLook.NightGain *
+    ReadPositive(AObj, 'nightBrightness', DefaultBrightness, AOwner) / 100;
 end;
 
 destructor TSkyGlobe.Destroy;
