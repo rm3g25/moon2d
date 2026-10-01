@@ -29,6 +29,11 @@ type
 
   TPickupEffectKind = (peNone, peHeal, peGiveWeapon);
 
+  // How a death looks when it blows up - flash, debris, smoke - by size
+  // (Game.Explosions); ekNone = no look. The fragment fans of 2008 are
+  // ExplodesOnDeath and do not depend on it.
+  TExplosionKind = (ekNone, ekBarrel, ekMachine, ekBoss);
+
   TMovementDef = record
     Kind: TMovementKind;
     Speed: Integer;
@@ -81,6 +86,7 @@ type
     Dangerous: Boolean;
     AffectedByGravity: Boolean; // platforms, mounts and the boss ignore it
     ExplodesOnDeath: Boolean;   // barrel/tank/platform/mount fragment fans
+    Explosion: TExplosionKind;
     Movement: TMovementDef;
     Attack: TAttackDef;
     PickupEffect: TPickupEffectDef;
@@ -182,6 +188,15 @@ begin
   if AValue = 'giveWeapon' then Exit(peGiveWeapon);
   raise EMonsterDefError.CreateFmt(SBadEnumValue,
     [AMonsterId, 'pickupEffect.kind', AValue]);
+end;
+
+function ParseExplosionKind(const AValue, AMonsterId: string): TExplosionKind;
+begin
+  if AValue = 'barrel' then Exit(ekBarrel);
+  if AValue = 'machine' then Exit(ekMachine);
+  if AValue = 'boss' then Exit(ekBoss);
+  raise EMonsterDefError.CreateFmt(SBadEnumValue,
+    [AMonsterId, 'explosion', AValue]);
 end;
 
 // ---------------------------------------------------------------------------
@@ -311,6 +326,9 @@ begin
     True);
   Result.ExplodesOnDeath := AObj.GetValue<Boolean>('explodesOnDeath',
     False);
+  var ExplosionId := AObj.GetValue<string>('explosion', '');
+  if ExplosionId <> '' then
+    Result.Explosion := ParseExplosionKind(ExplosionId, Result.Id);
   Result.AnimFreq := AObj.GetValue<Double>('animFreq',
     DefaultFloat('animFreq', 0.25));
   Result.DeathText := ReadLocalizedText(AObj, 'deathText');

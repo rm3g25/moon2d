@@ -38,6 +38,7 @@ uses
   Render.Objects in 'Core\Render.Objects.pas',
   Render.Puff in 'Core\Render.Puff.pas',
   Effects.Emitter in 'Core\Effects.Emitter.pas',
+  Effects.Debris in 'Core\Effects.Debris.pas',
   Render.Dynamics in 'Core\Render.Dynamics.pas',
   Render.Shake in 'Core\Render.Shake.pas',
   Hero in 'Game\Hero.pas',
@@ -53,6 +54,7 @@ uses
   Game.Bonus in 'Game\Game.Bonus.pas',
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
+  Game.Explosions in 'Game\Game.Explosions.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -251,6 +253,7 @@ type
     FMessages: TMessageBoard;
     FBriefing: THudBriefing;
     FShake: TScreenShake;
+    FExplosions: TExplosions;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
     // the hero taking ANY damage; any hit resets the count to zero.
@@ -333,6 +336,7 @@ type
     procedure ChangeMusic(const AFileName: string);
     function LocateMonster(const ATag: string;
       out AStand: TParentStand): Boolean;
+    function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -387,6 +391,7 @@ begin
   FMessages := TMessageBoard.Create(FFont, ARenderer, FrameWidth);
   FBriefing := THudBriefing.Create(FFont, ARenderer, FrameWidth);
   FShake := TScreenShake.Create;
+  FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -404,6 +409,7 @@ begin
   FAudio.Free;
   FMarks.Free;
   FShake.Free;
+  FExplosions.Free;
   FMessages.Free;
   FBriefing.Free;
   FFont.Free;
@@ -500,6 +506,7 @@ begin
     FLevel.Dynamics, ChangeMusic);
 
   FMonsterBullets.Clear;
+  FExplosions.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
   FHurtCooldown := 0;
@@ -730,6 +737,7 @@ begin
   FCheckpointY := FHero.Y;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
+  FExplosions.Clear;
   FMessages.ClearPopups;
   FireScreenTriggers;
 end;
@@ -949,6 +957,17 @@ begin
   Result := False;
 end;
 
+// The solid layer the debris rings off: the collision grid of the
+// hero's screen, the point in screen units
+function TMoonGame.SolidUnderPoint(AX, AY: Single): Boolean;
+begin
+  // Trunc rounds toward zero: -0.5 would land in the first column
+  if (AX < 0) or (AY < 0) then
+    Exit(False);
+  Result := FLevel.SolidAt(FHero.Screen, Trunc(ScreenCols * AX / ScreenWidth),
+    Trunc(ScreenRows * AY / ScreenHeight));
+end;
+
 // Warm the sound cache at startup so the first shot reads from RAM,
 // not from disk. The roster assembles itself: hero one-shots + the
 // weapon map + every deathSounds entry of monsters.json - no second
@@ -1157,6 +1176,9 @@ begin
   ProcessKillStreak;
   if AMonster.Def.ExplodesOnDeath then
     FHero.Bullets.SpawnExplosionFan(AMonster.X, AMonster.Y);
+  // From the middle of the body: X is its left edge, Y the feet line
+  FExplosions.Detonate(AMonster.X + SpriteSize / 2,
+    AMonster.Y - SpriteSize / 2, AMonster.Def.Explosion);
 end;
 
 // The monster half: walls and the void as above, plus the hero's hide -
@@ -1217,6 +1239,7 @@ begin
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
+  FExplosions.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
@@ -1351,6 +1374,10 @@ begin
             // until the boss dies or the hero does
             FAudio.PlayMusic(Monster.Def.Boss.RageMusic, mmLoop);
             FShake.AddTrauma(BossBlastTrauma);
+            // The armor bursts as the rage wave leaves it: a wreck's
+            // blast, not the death's - the boss flies on
+            FExplosions.Detonate(Monster.X + SpriteSize / 2,
+              Monster.Y - SpriteSize / 2, ekMachine);
           end;
         meBossWantsMinion:
           // The weighted table of AddMonstOnBoss1 (medkit counted
@@ -1445,6 +1472,7 @@ begin
 
   FHero.Bullets.Update;
   FMonsterBullets.Update;
+  FExplosions.Tick;
   ResolveHeroBulletHits;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
@@ -1501,6 +1529,7 @@ begin
         FObjects.Draw(FHero.Screen);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
+        FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
@@ -1511,6 +1540,7 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;

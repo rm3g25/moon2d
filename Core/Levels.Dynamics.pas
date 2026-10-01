@@ -252,6 +252,8 @@ type
     destructor Destroy; override;
     // What was in the air goes too: the world restarts in full
     procedure Rewind; override;
+    // The source is off and the last puff is gone
+    function Exhausted: Boolean;
   end;
 
   // A body in the sky - the Earth over the Moon unless the level says
@@ -881,6 +883,11 @@ begin
   inherited;
   FSwarm.Clear;
   FOwed := 0;
+end;
+
+function TSmoke.Exhausted: Boolean;
+begin
+  Result := (Intensity <= 0) and (FSwarm.Count = 0);
 end;
 
 // The rate multiplier of this tick for the continuous flows: a gust is

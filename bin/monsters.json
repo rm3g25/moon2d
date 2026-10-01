@@ -161,7 +161,8 @@
         "platform.wav"
       ],
       "affectedByGravity": false,
-      "explodesOnDeath": true
+      "explodesOnDeath": true,
+      "explosion": "machine"
     },
     {
       "id": "tank",
@@ -191,7 +192,8 @@
         "bottle.wav",
         "platform.wav"
       ],
-      "explodesOnDeath": true
+      "explodesOnDeath": true,
+      "explosion": "machine"
     },
     {
       "id": "mount",
@@ -246,7 +248,8 @@
       "deathSounds": [
         "bottle.wav"
       ],
-      "explodesOnDeath": true
+      "explodesOnDeath": true,
+      "explosion": "barrel"
     },
     {
       "id": "medkit",
@@ -416,6 +419,7 @@
         "score": 10
       },
       "animFreq": 0.9,
+      "explosion": "boss",
       "spawnPos": {
         "spriteX": 15,
         "spriteY": 5
