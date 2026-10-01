@@ -81,6 +81,11 @@ type
     // not a problem; asking bare is, and qualifying the name fixes it.
     function AmbiguousNames(const AWanted: TArray<string>): TArray<string>;
 
+    // The attached set a sprite name resolves to, and the name as that
+    // set knows it - the same rules as Get: path and extension dropped,
+    // 'set:name' asks one set, a bare name the first set carrying it.
+    // Raises when no set does.
+    function SourceOf(const AName: string; out ABare: string): TSpriteSet;
     // Returns a cached texture, loading the image on first request.
     // Callers may keep passing 'level1\doom1.png': for the set lookup
     // the path and extension are dropped, because sets name sprites,
@@ -273,32 +278,39 @@ begin
   Result := nil;
 end;
 
-function TSpriteCache.Get(const AFileName: string): PSdlTexture;
+function TSpriteCache.SourceOf(const AName: string;
+  out ABare: string): TSpriteSet;
 begin
-  // Sets name sprites, not files, and the 2008 spellings survive in
-  // level palettes: 'level1\doom1.png' and 'doom1' are one sprite.
-  var Bare := ChangeFileExt(ExtractFileName(AFileName), '');
-  var Source: TSpriteSet;
-
   // 'common:pustota' - say which set and declaration order stops
   // mattering. Written where two declared sets share a sprite name.
-  var Split := Pos(SetQualifier, Bare);
-  if Split > 0 then
+  // Split before the path goes: on Windows ExtractFileName cuts at ':'
+  // too, as at a drive letter, and would drop the set.
+  var Split := Pos(SetQualifier, AName);
+  var SetId := Copy(AName, 1, Split - 1);
+  // Sets name sprites, not files, and the 2008 spellings survive in
+  // level palettes: 'level1\doom1.png' and 'doom1' are one sprite.
+  ABare := ChangeFileExt(ExtractFileName(Copy(AName, Split + 1,
+    Length(AName))), '');
+  if Split = 0 then
   begin
-    var SetId := Copy(Bare, 1, Split - 1);
-    Bare := Copy(Bare, Split + 1, Length(Bare));
-    Source := NamedSet(SetId);
-    if Source = nil then
-      raise ESpriteError.CreateFmt(SNoSuchSet, [SetId, AFileName]);
-    if not Source.Contains(Bare) then
-      raise ESpriteError.CreateFmt(SNoSuchSprite, [Bare, SetId]);
-  end
-  else
-  begin
-    Source := FindSet(Bare);
-    if Source = nil then
-      raise ESpriteError.CreateFmt(SNotInAnySet, [Bare]);
+    Result := FindSet(ABare);
+    if Result = nil then
+      raise ESpriteError.CreateFmt(SNotInAnySet, [ABare]);
+    Exit;
   end;
+
+  Result := NamedSet(SetId);
+  if Result = nil then
+    raise ESpriteError.CreateFmt(SNoSuchSet, [SetId, AName]);
+  if not Result.Contains(ABare) then
+    raise ESpriteError.CreateFmt(SNoSuchSprite, [ABare, SetId]);
+end;
+
+function TSpriteCache.Get(const AFileName: string): PSdlTexture;
+var
+  Bare: string;
+begin
+  var Source := SourceOf(AFileName, Bare);
 
   // The key carries the set: 'common:pustota' and
   // 'mine-interior:pustota' are two pictures and two slots.

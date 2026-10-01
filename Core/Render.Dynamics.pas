@@ -19,7 +19,7 @@ unit Render.Dynamics;
 interface
 
 uses
-  Sdl2.Core, Sprites.Sets, Levels.Defs, Levels.Dynamics;
+  Sdl2.Core, Render.Sprites, Levels.Defs, Levels.Dynamics;
 
 type
   // A monster's sprite this tick: its screen, its top-left corner, and
@@ -60,11 +60,10 @@ type
     procedure DrawPlace(const APlace: TPlace; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
   public
-    // The level owns the objects and must outlive this renderer. AArt -
-    // the level's objects set, nil when it ships none; the kinds that
-    // need it say so (TDynamicObjects.AnyNeedsArt).
+    // The level owns the objects and must outlive this renderer, and
+    // AArt - the cache of the level's object art - must too
     constructor Create(ARenderer: PSdlRenderer; ALevel: TLevel;
-      AArt: TSpriteSet; const ALocateMonster: TLocateMonster);
+      AArt: TSpriteCache; const ALocateMonster: TLocateMonster);
     destructor Destroy; override;
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
@@ -88,7 +87,7 @@ const
   PuffSide = 64;
 
 constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
-  ALevel: TLevel; AArt: TSpriteSet; const ALocateMonster: TLocateMonster);
+  ALevel: TLevel; AArt: TSpriteCache; const ALocateMonster: TLocateMonster);
 begin
   inherited Create;
   FLocateMonster := ALocateMonster;

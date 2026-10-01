@@ -29,7 +29,7 @@ interface
 
 uses
   System.SysUtils, System.JSON, System.Generics.Collections, Sdl2.Core,
-  Sprites.Sets, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
+  Render.Sprites, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
   Levels.Tint;
 
 type
@@ -43,7 +43,9 @@ type
     FlareGlow: PSdlTexture;
     StarburstGlow: PSdlTexture;
     Puffs: TPuffTextures;
-    Art: TSpriteSet; // the level's objects set; nil when it ships none
+    // The level's object art: its own set and the shared ones it
+    // declares; maps are named as the static objects name sprites
+    Art: TSpriteCache;
   end;
 
   // Sky: right over the backdrop, standing still while the world
@@ -113,8 +115,6 @@ type
     // is, freed before it is
     procedure Acquire(const ACanvas: TDynamicCanvas); virtual;
     procedure Release; virtual;
-    // True for a kind that draws art from the level's objects set
-    class function NeedsArt: Boolean; virtual;
     // AOriginX/AOriginY - the corner the placement counts from, shake
     // included. AAlpha is the timestep's, for motion between ticks.
     procedure Draw(const ACanvas: TDynamicCanvas;
@@ -137,7 +137,6 @@ type
     // AKind nil = any kind
     function AnyTagged(const ATag: string;
       AKind: TDynamicObjectClass = nil): Boolean;
-    function AnyNeedsArt: Boolean;
   end;
 
   TBlinkPattern = (bpSteady, bpPulse, bpFlash, bpDouble, bpFaulty, bpDying);
@@ -270,8 +269,9 @@ type
   // Size is the disc across in screen units, x and y its center;
   // brightness a percentage of the standard exposure, past 100 allowed;
   // longitude the meridian facing the Moon, degrees east; tilt how far
-  // the top of the axis leans left; map and night name pictures in the
-  // level's objects set, night optional (city lights), nightBrightness
+  // the top of the axis leans left; map and night name pictures of the
+  // level's object art ("sky:earth" names the set), night optional (city
+  // lights) and in the same set as the map, nightBrightness
   // a percentage of the standard glow of its lights; atmosphere a
   // percentage, 0 for an airless world; surface "matte" (Earth-like)
   // or "regolith" (Moon-like). In the sky layer by default.
@@ -307,7 +307,6 @@ type
     destructor Destroy; override;
     procedure Acquire(const ACanvas: TDynamicCanvas); override;
     procedure Release; override;
-    class function NeedsArt: Boolean; override;
     // Heads the sun for ADegrees over ATicks; 0 ticks = at once
     procedure TurnSun(ADegrees: Single; ATicks: Integer);
   end;
@@ -320,7 +319,7 @@ function ParseDynamics(ARoot: TJSONObject;
 implementation
 
 uses
-  System.Math, Render.Sprites, Render.Glow;
+  System.Math, Sprites.Sets, Render.Glow;
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe);
@@ -358,8 +357,8 @@ resourcestring
     + '0..90';
   SDynamicBadAzimuth = '%s: "azimuth" takes degrees right of straight '
     + 'ahead, -90..90';
-  SGlobeNoArt = 'A globe draws its maps from the level''s objects set, '
-    + 'and the level has none open';
+  SGlobeSplitMaps = 'Globe maps "%s" and "%s" live in different sets - '
+    + 'a globe reads both from one';
 
 const
   // Beacon light, in shares of the halo size
@@ -643,11 +642,6 @@ begin
   // Nothing acquired, nothing to release
 end;
 
-class function TDynamicObject.NeedsArt: Boolean;
-begin
-  Result := False;
-end;
-
 procedure TDynamicObject.Draw(const ACanvas: TDynamicCanvas;
   AOriginX, AOriginY: Single; AAlpha: Single);
 begin
@@ -695,14 +689,6 @@ begin
     if (AKind = nil) or (DynamicObject is AKind) then
       Exit(True);
   end;
-  Result := False;
-end;
-
-function TDynamicObjects.AnyNeedsArt: Boolean;
-begin
-  for var DynamicObject in Self do
-    if DynamicObject.NeedsArt then
-      Exit(True);
   Result := False;
 end;
 
@@ -1072,17 +1058,21 @@ begin
   inherited;
 end;
 
-class function TSkyGlobe.NeedsArt: Boolean;
-begin
-  Result := True;
-end;
-
 procedure TSkyGlobe.Acquire(const ACanvas: TDynamicCanvas);
+var
+  MapName, NightMapName: string;
 begin
-  if ACanvas.Art = nil then
-    raise EDynamicError.Create(SGlobeNoArt);
-  FGlobe := TGlobe.Create(ACanvas.Renderer, ACanvas.Art, FMapName,
-    FNightMapName, FLook);
+  var MapSet := ACanvas.Art.SourceOf(FMapName, MapName);
+  NightMapName := '';
+  if FNightMapName <> '' then
+  begin
+    var NightSet := ACanvas.Art.SourceOf(FNightMapName, NightMapName);
+    if NightSet <> MapSet then
+      raise EDynamicError.CreateFmt(SGlobeSplitMaps,
+        [FMapName, FNightMapName]);
+  end;
+  FGlobe := TGlobe.Create(ACanvas.Renderer, MapSet, MapName, NightMapName,
+    FLook);
   FGlobe.Face(FLongitude);
   Relight;
 end;

@@ -119,6 +119,7 @@ type
     FTitle: TLocalizedText;
     FAssetsDir: string;
     FSpriteSets: TArray<string>;
+    FObjectSets: TArray<string>;
     FMusic: string;
     FIntroText: TLocalizedText;
     FGridWidth: Integer;
@@ -165,6 +166,11 @@ type
     // set containing a name wins. Tiles only - screen backdrops follow
     // the <assetsDir>-backdrops convention and never appear here.
     property SpriteSets: TArray<string> read FSpriteSets;
+    // Shared object art the level uses besides its own
+    // <assetsDir>-objects set, searched after it in declaration order:
+    // the static objects and the dynamic objects' maps. JSON:
+    // "objectSets": ["sky"].
+    property ObjectSets: TArray<string> read FObjectSets;
     property Music: string read FMusic;
     // Story text shown before the level starts; '' = jump straight in.
     property IntroText: TLocalizedText read FIntroText;
@@ -322,17 +328,26 @@ begin
   end;
 end;
 
+// An absent list is an empty one
+function ReadSetNames(const ARoot: TJSONObject;
+  const AKey: string): TArray<string>;
+var
+  SetNames: TJSONArray;
+begin
+  Result := [];
+  if ARoot.TryGetValue<TJSONArray>(AKey, SetNames) then
+    for var Name in SetNames do
+      Result := Result + [Name.Value];
+end;
+
 procedure TLevel.ParseRoot(const ARoot: TJSONObject);
 begin
   FId := ARoot.GetValue<string>('id');
   FTitle := ReadLocalizedText(ARoot, 'title', FId);
   FAssetsDir := ARoot.GetValue<string>('assetsDir', '');
 
-  FSpriteSets := [];
-  var SetNames: TJSONArray;
-  if ARoot.TryGetValue<TJSONArray>('spriteSets', SetNames) then
-    for var Name in SetNames do
-      FSpriteSets := FSpriteSets + [Name.Value];
+  FSpriteSets := ReadSetNames(ARoot, 'spriteSets');
+  FObjectSets := ReadSetNames(ARoot, 'objectSets');
   FMusic := ARoot.GetValue<string>('music', '');
   FIntroText := ReadLocalizedText(ARoot, 'introText');
 

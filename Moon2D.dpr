@@ -338,6 +338,8 @@ type
     procedure ActivateQueuedBonus;
     procedure AdvanceBriefing;
     procedure LoadLevel(const AFileName: string);
+    function OpenSpriteSet(const ASetName: string): TSpriteSet;
+    function LevelArtSetFile(const AKind: string): string;
     function OpenLevelArtSet(const AKind: string): TSpriteSet;
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
@@ -454,20 +456,9 @@ begin
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
 
-  // A declared set that is absent is a broken install, not a fallback
-  // case - the fallback exists for names, not for whole sets.
-  for var SetName in FLevel.SpriteSets do
-  begin
-    var SetFile := SpriteSetsDir + SetName + '.mset';
-    if not FileExists(SetFile) then
-      raise ELevelError.CreateFmt(SSpriteSetMissing,
-        [FLevel.Id, SetName]);
-    FLevelSets.Add(TSpriteSet.Create(SetFile));
-  end;
-
   FTileCache := TSpriteCache.Create(FRenderer);
-  for var LevelSet in FLevelSets do
-    FTileCache.AttachSpriteSet(LevelSet);
+  for var SetName in FLevel.SpriteSets do
+    FTileCache.AttachSpriteSet(OpenSpriteSet(SetName));
 
   // Two declared sets sharing a sprite name still resolve - first wins -
   // but silently, so that reordering the declaration would change a
@@ -488,15 +479,14 @@ begin
   FObjectCache := TSpriteCache.Create(FRenderer);
   FObjectCache.DisableColorKey;
   FObjectCache.EnableLinearFilter;
-  // A level of tiles alone ships no objects set
-  var ObjectSet: TSpriteSet := nil;
-  if (Length(FLevel.Objects) > 0) or FLevel.Dynamics.AnyNeedsArt then
-  begin
-    ObjectSet := OpenLevelArtSet('objects');
-    FObjectCache.AttachSpriteSet(ObjectSet);
-  end;
+  // The level's own objects set comes first; a level whose art is all
+  // shared ships none
+  if FileExists(LevelArtSetFile('objects')) then
+    FObjectCache.AttachSpriteSet(OpenLevelArtSet('objects'));
+  for var SetName in FLevel.ObjectSets do
+    FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
-  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, ObjectSet,
+  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
     LocateMonster);
 
   FHero := THero.Create(FRenderer, FLevel);
@@ -540,18 +530,29 @@ begin
     StartPlaying;
 end;
 
-// Backdrops and objects follow the level by convention rather than by
-// declaration: one set per assetsDir and kind, named after both. The
-// set joins FLevelSets, which owns it.
-function TMoonGame.OpenLevelArtSet(const AKind: string): TSpriteSet;
+// A set the level names. An absent one is a broken install, not a
+// fallback case - the fallback exists for names, not for whole sets.
+// The set joins FLevelSets, which owns it.
+function TMoonGame.OpenSpriteSet(const ASetName: string): TSpriteSet;
 begin
-  var SetName := FLevel.AssetsDir + '-' + AKind;
-  var SetFile := SpriteSetsDir + SetName + '.mset';
+  var SetFile := SpriteSetsDir + ASetName + '.mset';
   if not FileExists(SetFile) then
-    raise ELevelError.CreateFmt(SSpriteSetMissing, [FLevel.Id, SetName]);
+    raise ELevelError.CreateFmt(SSpriteSetMissing, [FLevel.Id, ASetName]);
 
   Result := TSpriteSet.Create(SetFile);
   FLevelSets.Add(Result);
+end;
+
+// Backdrops and objects follow the level by convention rather than by
+// declaration: one set per assetsDir and kind, named after both
+function TMoonGame.LevelArtSetFile(const AKind: string): string;
+begin
+  Result := SpriteSetsDir + FLevel.AssetsDir + '-' + AKind + '.mset';
+end;
+
+function TMoonGame.OpenLevelArtSet(const AKind: string): TSpriteSet;
+begin
+  Result := OpenSpriteSet(FLevel.AssetsDir + '-' + AKind);
 end;
 
 // Opens AUrl in the default browser. Deliberately Windows-only, as is
