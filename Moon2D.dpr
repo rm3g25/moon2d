@@ -489,10 +489,14 @@ begin
   FObjectCache.DisableColorKey;
   FObjectCache.EnableLinearFilter;
   // A level of tiles alone ships no objects set
-  if Length(FLevel.Objects) > 0 then
-    FObjectCache.AttachSpriteSet(OpenLevelArtSet('objects'));
+  var ObjectSet: TSpriteSet := nil;
+  if (Length(FLevel.Objects) > 0) or FLevel.Dynamics.AnyNeedsArt then
+  begin
+    ObjectSet := OpenLevelArtSet('objects');
+    FObjectCache.AttachSpriteSet(ObjectSet);
+  end;
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
-  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel,
+  FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, ObjectSet,
     LocateMonster);
 
   FHero := THero.Create(FRenderer, FLevel);
@@ -1489,6 +1493,7 @@ begin
         // not void; cursor and HUD are glass over the world and stand too
         FSprites.Origin := NoShake;
         FTiles.DrawBackground(FHero.Screen);
+        FDynamics.Draw(FHero.Screen, NoShake, AAlpha, dlSky);
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float

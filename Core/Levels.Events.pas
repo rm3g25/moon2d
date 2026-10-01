@@ -27,7 +27,7 @@ type
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
-    eaIntensity);
+    eaIntensity, eaSun);
 
   TEventAction = record
     Kind: TEventActionKind;
@@ -36,8 +36,11 @@ type
     // eaIntensity: the dynamic objects tagged Target fade to Level
     // (0..1) over Ticks. JSON: "target", "value" (a percentage),
     // "ticks" (0 by default - at once).
+    // eaSun: the globes tagged Target turn their sun to Angle degrees
+    // over Ticks. JSON: "target", "value" (degrees), "ticks".
     Target: string;
     Level: Single;
+    Angle: Single;
     Ticks: Integer;
   end;
 
@@ -67,7 +70,7 @@ const
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged');
   EventActionIds: array [TEventActionKind] of string = (
-    'bigMessage', 'smallMessage', 'hint', 'music', 'intensity');
+    'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun');
 
   // The conditions that watch tagged placements
   TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
@@ -89,6 +92,8 @@ resourcestring
   SEventNoLives = 'Level "%s": event "%s": livesBelow needs "lives" above zero';
   SEventNoTarget = 'Level "%s": event "%s": intensity names no target';
   SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
+  SEventSunNoTarget = 'Level "%s": event "%s": sun names no target';
+  SEventSunNoAngle = 'Level "%s": event "%s": sun takes a "value" in degrees';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
 
@@ -124,6 +129,20 @@ begin
   AAction.Ticks := AObj.GetValue<Integer>('ticks', 0);
 end;
 
+procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+var
+  Angle: Double;
+begin
+  AAction.Target := AObj.GetValue<string>('target', '');
+  if AAction.Target = '' then
+    raise ELevelEventError.CreateFmt(SEventSunNoTarget, [ALevelId, AEventId]);
+  if not AObj.TryGetValue<Double>('value', Angle) then
+    raise ELevelEventError.CreateFmt(SEventSunNoAngle, [ALevelId, AEventId]);
+  AAction.Angle := Angle;
+  AAction.Ticks := AObj.GetValue<Integer>('ticks', 0);
+end;
+
 function ReadAction(const AObj: TJSONObject;
   const ALevelId, AEventId: string): TEventAction;
 begin
@@ -132,8 +151,12 @@ begin
     ALevelId, AEventId);
   Result.Text := ReadLocalizedText(AObj, 'text');
   Result.FileName := AObj.GetValue<string>('file', '');
-  if Result.Kind = eaIntensity then
-    ReadIntensity(AObj, ALevelId, AEventId, Result);
+  case Result.Kind of
+    eaIntensity:
+      ReadIntensity(AObj, ALevelId, AEventId, Result);
+    eaSun:
+      ReadSun(AObj, ALevelId, AEventId, Result);
+  end;
 end;
 
 function ReadEvent(const AObj: TJSONObject; const ALevelId: string;

@@ -124,6 +124,8 @@ begin
         FChangeMusic(Action.FileName);
       eaIntensity:
         FDynamics.FadeTagged(Action.Target, Action.Level, Action.Ticks);
+      eaSun:
+        FDynamics.TurnSunTagged(Action.Target, Action.Angle, Action.Ticks);
     end;
 end;
 

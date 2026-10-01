@@ -3,12 +3,13 @@
   to the screen: ticks them, knows where each one stands, draws the
   ones on the hero's screen, layer by layer.
 
-  Where an object stands: a nailed one on its screen; one under a
-  static object on every screen that object stands on, counted from its
-  top-left corner - settled once at level load, static objects never
-  move. One under a monster is looked up by tag every tick through the
-  game's callback: monsters move, die and are reborn with the field on
-  every restart, so no reference to one is kept.
+  Where an object stands: a nailed one on its screen, or on each of
+  its run of screens; one under a static object on every screen that
+  object stands on, counted from its top-left corner - settled once
+  at level load, static objects never move. One under a monster is
+  looked up by tag every tick through the game's callback: monsters
+  move, die and are reborn with the field on every restart, so no
+  reference to one is kept.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -18,7 +19,7 @@ unit Render.Dynamics;
 interface
 
 uses
-  Sdl2.Core, Levels.Defs, Levels.Dynamics;
+  Sdl2.Core, Sprites.Sets, Levels.Defs, Levels.Dynamics;
 
 type
   // A monster's sprite this tick: its screen, its top-left corner, and
@@ -59,9 +60,11 @@ type
     procedure DrawPlace(const APlace: TPlace; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
   public
-    // The level owns the objects and must outlive this renderer
+    // The level owns the objects and must outlive this renderer. AArt -
+    // the level's objects set, nil when it ships none; the kinds that
+    // need it say so (TDynamicObjects.AnyNeedsArt).
     constructor Create(ARenderer: PSdlRenderer; ALevel: TLevel;
-      const ALocateMonster: TLocateMonster);
+      AArt: TSpriteSet; const ALocateMonster: TLocateMonster);
     destructor Destroy; override;
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
@@ -85,11 +88,12 @@ const
   PuffSide = 64;
 
 constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
-  ALevel: TLevel; const ALocateMonster: TLocateMonster);
+  ALevel: TLevel; AArt: TSpriteSet; const ALocateMonster: TLocateMonster);
 begin
   inherited Create;
   FLocateMonster := ALocateMonster;
   FCanvas.Renderer := ARenderer;
+  FCanvas.Art := AArt;
   FCanvas.PointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
   FCanvas.FlareGlow := CreateGlowShape(ARenderer, gsFlare, FlareGlowSide);
   FCanvas.StarburstGlow := CreateGlowShape(ARenderer, gsStarburst,
@@ -97,11 +101,16 @@ begin
   FCanvas.Puffs := CreatePuffTextures(ARenderer, PuffSide);
 
   for var DynamicObject in ALevel.Dynamics do
+  begin
     FPlaces := FPlaces + [PlaceOf(DynamicObject, ALevel.Objects)];
+    DynamicObject.Acquire(FCanvas);
+  end;
 end;
 
 destructor TDynamicScreenRenderer.Destroy;
 begin
+  for var Place in FPlaces do
+    Place.DynamicObject.Release;
   FreePuffTextures(FCanvas.Puffs);
   if Assigned(FCanvas.StarburstGlow) then
     SDL_DestroyTexture(FCanvas.StarburstGlow);
@@ -123,11 +132,14 @@ begin
   var Placement := ADynamic.Placement;
   if Placement.Parent = '' then
   begin
-    var Nailed: TStand;
-    Nailed.Screen := Placement.Screen;
-    Nailed.OriginX := 0;
-    Nailed.OriginY := 0;
-    Result.Stands := [Nailed];
+    for var Screen := Placement.Screen to Placement.LastScreen do
+    begin
+      var Nailed: TStand;
+      Nailed.Screen := Screen;
+      Nailed.OriginX := 0;
+      Nailed.OriginY := 0;
+      Result.Stands := Result.Stands + [Nailed];
+    end;
     Exit;
   end;
 

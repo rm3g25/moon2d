@@ -7,7 +7,8 @@
   ancestor holds and reads what every kind shares - where it stands,
   its tint, its parent, its tag, its layer and its intensity; a kind
   adds its own properties, its tick and its drawing. A new kind is a
-  class here, a word in DynamicKindIds and a branch in CreateDynamic.
+  class here, a word in DynamicKindIds, its layer in DefaultLayers and
+  a branch in CreateDynamic.
 
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
@@ -15,9 +16,9 @@
   parent does. The parent is named by tag - a static object or a
   monster; finding it is the business of Render.Dynamics.
 
-  Intensity is the one property the level's events may change while it
-  runs: an event names the tag and the new level, and the object fades
-  there.
+  Intensity is the property the level's events change in every kind:
+  an event names the tag and the new level, and the object fades there.
+  The sun of a globe turns the same way.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -28,7 +29,8 @@ interface
 
 uses
   System.SysUtils, System.JSON, System.Generics.Collections, Sdl2.Core,
-  Render.Brush, Render.Puff, Effects.Emitter, Levels.Tint;
+  Sprites.Sets, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
+  Levels.Tint;
 
 type
   EDynamicError = class(Exception);
@@ -41,17 +43,21 @@ type
     FlareGlow: PSdlTexture;
     StarburstGlow: PSdlTexture;
     Puffs: TPuffTextures;
+    Art: TSpriteSet; // the level's objects set; nil when it ships none
   end;
 
-  // Back: with the static objects, behind the tiles. Front: over the
-  // monsters, under the hero.
-  TDynamicLayer = (dlBack, dlFront);
+  // Sky: right over the backdrop, standing still while the world
+  // shakes - the far things. Back: with the static objects, behind the
+  // tiles. Front: over the monsters, under the hero.
+  TDynamicLayer = (dlSky, dlBack, dlFront);
 
-  // Shared by every kind. JSON: "screen" or "parent" - one of the two -
-  // then "x", "y" and optional "tint", "tag" (the name events use) and
-  // "layer" ("back" or "front", back by default).
+  // Shared by every kind. JSON: one of "screen", "screens" ([first,
+  // last] - the same object on a run of screens) and "parent", then
+  // "x", "y" and optional "tint", "tag" (the name events use) and
+  // "layer" ("sky", "back" or "front"; each kind has its own default).
   TDynamicPlacement = record
     Screen: Integer; // 1-based; 0 under a parent, which decides it
+    LastScreen: Integer; // = Screen unless "screens" spans a run
     Parent: string; // a static object's or a monster's tag; '' = nailed
     X, Y: Single; // screen units; from the parent's top-left under one
     Tint: TColorTint;
@@ -59,19 +65,23 @@ type
     Layer: TDynamicLayer;
   end;
 
-  // Intensity 0..1 and where the events are taking it
-  TIntensityFade = record
+  // A value and where the events are taking it
+  TValueFade = record
     Initial: Single; // as the level file gave it
     Current: Single;
     Target: Single;
     Step: Single; // per tick, toward Target
+    // Stands at AValue and stays there
+    procedure Settle(AValue: Single);
+    // Heads for ATarget over ATicks; 0 ticks = at once
+    procedure HeadFor(ATarget: Single; ATicks: Integer);
     procedure Tick;
   end;
 
   TDynamicObject = class abstract
   private
     FPlacement: TDynamicPlacement;
-    FIntensity: TIntensityFade;
+    FIntensity: TValueFade; // 0..1
     FOrigin: TSdlFPoint;
     FOriginKnown: Boolean;
   protected
@@ -99,6 +109,12 @@ type
     procedure Rewind; virtual;
     // The origin jumps rather than moves: the next tick starts from it
     procedure ForgetOrigin;
+    // What a kind makes for itself to draw with: made once the canvas
+    // is, freed before it is
+    procedure Acquire(const ACanvas: TDynamicCanvas); virtual;
+    procedure Release; virtual;
+    // True for a kind that draws art from the level's objects set
+    class function NeedsArt: Boolean; virtual;
     // AOriginX/AOriginY - the corner the placement counts from, shake
     // included. AAlpha is the timestep's, for motion between ticks.
     procedure Draw(const ACanvas: TDynamicCanvas;
@@ -108,12 +124,20 @@ type
     property Origin: TSdlFPoint read FOrigin;
   end;
 
+  TDynamicObjectClass = class of TDynamicObject;
+
   TDynamicObjects = class(TObjectList<TDynamicObject>)
   public
     // Every object carrying ATag heads for ALevel (0..1) over ATicks
     procedure FadeTagged(const ATag: string; ALevel: Single; ATicks: Integer);
     procedure RewindTagged(const ATag: string);
-    function AnyTagged(const ATag: string): Boolean;
+    // Every globe carrying ATag turns its sun to ADegrees over ATicks
+    procedure TurnSunTagged(const ATag: string; ADegrees: Single;
+      ATicks: Integer);
+    // AKind nil = any kind
+    function AnyTagged(const ATag: string;
+      AKind: TDynamicObjectClass = nil): Boolean;
+    function AnyNeedsArt: Boolean;
   end;
 
   TBlinkPattern = (bpSteady, bpPulse, bpFlash, bpDouble, bpFaulty, bpDying);
@@ -231,6 +255,61 @@ type
     procedure Rewind; override;
   end;
 
+  // A body in the sky - the Earth over the Moon unless the level says
+  // otherwise (the dead Earth of Selene, Proxima c): a globe
+  // (Render.Globe) under a sun the level moves. The sun travels the arc of the sky over the
+  // screen: 0 on the left horizon, 90 overhead, 180 on the right
+  // horizon, below zero not yet risen. The globe hangs altitude degrees
+  // over the horizon, azimuth degrees right of straight ahead (at 90 it
+  // sits on the sun's arc - where an eclipse can happen). Phase and the
+  // lean of the terminator follow as in the real sky: a sun low on
+  // the left lights the left half, a sun not yet risen leaves more than
+  // half lit, a sun climbing toward the globe thins it to a crescent.
+  // Events turn the sun (the "sun" action), only onward: a turn back is
+  // ignored, so a death cannot undo the morning.
+  // Size is the disc across in screen units, x and y its center;
+  // brightness a percentage of the standard exposure, past 100 allowed;
+  // longitude the meridian facing the Moon, degrees east; tilt how far
+  // the top of the axis leans left; map and night name pictures in the
+  // level's objects set, night optional (city lights); atmosphere a
+  // percentage, 0 for an airless world; surface "matte" (Earth-like)
+  // or "regolith" (Moon-like). In the sky layer by default.
+  // JSON:
+  //   {"kind": "globe", "screens": [1, 11], "x": 392, "y": 82,
+  //    "size": 30, "tint": [78, 80, 86], "brightness": 100,
+  //    "sun": -40, "altitude": 50, "azimuth": 0, "longitude": 45,
+  //    "tilt": -20,
+  //    "map": "earth", "night": "earth-night", "atmosphere": 60,
+  //    "surface": "matte", "tag": "earth"}
+  TSkyGlobe = class(TDynamicObject)
+  private
+    FSize: Single;
+    FSun: TValueFade; // degrees
+    FLitSun: Single; // the sun the globe was last lit by
+    FAltitude: Single; // degrees
+    FAzimuth: Single; // degrees
+    FLongitude: Single;
+    FMapName: string;
+    FNightMapName: string;
+    FLook: TGlobeLook;
+    FGlobe: TGlobe;
+    procedure Relight;
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    destructor Destroy; override;
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+    class function NeedsArt: Boolean; override;
+    // Heads the sun for ADegrees over ATicks; 0 ticks = at once
+    procedure TurnSun(ADegrees: Single; ATicks: Integer);
+  end;
+
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
@@ -242,15 +321,19 @@ uses
   System.Math, Render.Sprites, Render.Glow;
 
 type
-  TDynamicKind = (dkBeacon, dkSmoke);
+  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe);
 
 const
-  // The JSON vocabulary of "kind", "layer", "blink" and "flow"
-  DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke');
-  DynamicLayerIds: array [TDynamicLayer] of string = ('back', 'front');
+  // The JSON vocabulary of "kind", "layer", "blink", "flow" and "surface"
+  DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
+    'globe');
+  DynamicLayerIds: array [TDynamicLayer] of string = ('sky', 'back', 'front');
+  DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
+    dlSky);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
+  GlobeSurfaceIds: array [TGlobeSurface] of string = ('regolith', 'matte');
 
   // Seconds and percentages in JSON, ticks and shares in the code; the
   // logic runs 33 ticks a second (tickRate of Game.Config)
@@ -259,13 +342,22 @@ const
 resourcestring
   SDynamicBadKind = 'Level "%s": dynamic object #%d: unknown kind "%s"';
   SDynamicKindUnbuilt = 'Dynamic kind "%s" has no constructor';
-  SDynamicNoPlace = 'Level "%s": %s names neither a screen nor a parent';
-  SDynamicTwoPlaces = 'Level "%s": %s names both a screen and a parent - '
-    + 'the parent decides the screen';
+  SDynamicNoPlace = 'Level "%s": %s names no screen, no screens and no '
+    + 'parent';
+  SDynamicTwoPlaces = 'Level "%s": %s names more than one of screen, '
+    + 'screens and parent - one of them decides where it stands';
+  SDynamicBadScreens = '%s: "screens" takes two screen numbers, the first '
+    + 'and the last';
   SDynamicBadWord = '%s: unknown %s "%s"';
   SDynamicBadNumber = '%s: "%s" must be above zero';
   SDynamicBadPercent = '%s: "%s" takes a percentage, 0..100';
   SDynamicBadReach = '%s: "%s" cannot be below zero';
+  SDynamicBadAltitude = '%s: "altitude" takes degrees over the horizon, '
+    + '0..90';
+  SDynamicBadAzimuth = '%s: "azimuth" takes degrees right of straight '
+    + 'ahead, -90..90';
+  SGlobeNoArt = 'A globe draws its maps from the level''s objects set, '
+    + 'and the level has none open';
 
 const
   // Beacon light, in shares of the halo size
@@ -348,6 +440,34 @@ const
   TickExponent: Single = 1 / LogicTicksPerSecond;
   DefaultSpin = 30;
 
+  // A globe looks like the Earth unless the level says otherwise: matte
+  // ground under air, the night side black but for a trace of
+  // moonlight. Surface, tilt, brightness and air come from the level.
+  GlobeLook: TGlobeLook = (
+    Side: 256;
+    Surface: gsMatte;
+    AxisRoll: 0;
+    AxisTip: 12.0;
+    Ambient: (0.006, 0.007, 0.010);
+    Tint: (1, 1, 1);
+    Exposure: 1.7;
+    LimbFade: 0;
+    Atmosphere: 0;
+    AirColor: (0.32, 0.55, 1.0);
+    NightGain: 1.0);
+  // Below this the terminator moves less than a texel of a sky-sized
+  // globe: the sun turns on, the light waits
+  RelightStep = 0.05; // degrees
+
+  DefaultGlobeSize = 30.0;
+  DefaultSun = 0; // on the horizon: a half-lit globe
+  DefaultAltitude = 45;
+  DefaultAzimuth = 0;
+  DefaultLongitude = 0;
+  DefaultGlobeMap = 'earth';
+  DefaultBrightness = 100;
+  DefaultAtmosphere = 60;
+
 function TintColor(const ATint: TColorTint): TRgb;
 begin
   Result.R := PercentToColorMod(ATint.R);
@@ -419,10 +539,28 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// TIntensityFade
+// TValueFade
 // ---------------------------------------------------------------------------
 
-procedure TIntensityFade.Tick;
+procedure TValueFade.Settle(AValue: Single);
+begin
+  Current := AValue;
+  Target := AValue;
+  Step := 0;
+end;
+
+procedure TValueFade.HeadFor(ATarget: Single; ATicks: Integer);
+begin
+  Target := ATarget;
+  if ATicks <= 0 then
+  begin
+    Current := ATarget;
+    Exit;
+  end;
+  Step := Abs(ATarget - Current) / ATicks;
+end;
+
+procedure TValueFade.Tick;
 begin
   if Current < Target then
   begin
@@ -448,8 +586,7 @@ begin
   inherited Create;
   FPlacement := APlacement;
   FIntensity.Initial := AIntensity;
-  FIntensity.Current := AIntensity;
-  FIntensity.Target := AIntensity;
+  FIntensity.Settle(AIntensity);
 end;
 
 constructor TDynamicObject.Create(const APlacement: TDynamicPlacement;
@@ -478,26 +615,33 @@ end;
 
 procedure TDynamicObject.FadeTo(ALevel: Single; ATicks: Integer);
 begin
-  FIntensity.Target := ALevel;
-  if ATicks <= 0 then
-  begin
-    FIntensity.Current := ALevel;
-    Exit;
-  end;
-  FIntensity.Step := Abs(ALevel - FIntensity.Current) / ATicks;
+  FIntensity.HeadFor(ALevel, ATicks);
 end;
 
 procedure TDynamicObject.Rewind;
 begin
-  FIntensity.Current := FIntensity.Initial;
-  FIntensity.Target := FIntensity.Initial;
-  FIntensity.Step := 0;
+  FIntensity.Settle(FIntensity.Initial);
   ForgetOrigin;
 end;
 
 procedure TDynamicObject.ForgetOrigin;
 begin
   FOriginKnown := False;
+end;
+
+procedure TDynamicObject.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  // Most kinds draw with the canvas alone
+end;
+
+procedure TDynamicObject.Release;
+begin
+  // Nothing acquired, nothing to release
+end;
+
+class function TDynamicObject.NeedsArt: Boolean;
+begin
+  Result := False;
 end;
 
 procedure TDynamicObject.Draw(const ACanvas: TDynamicCanvas;
@@ -525,10 +669,35 @@ begin
       DynamicObject.Rewind;
 end;
 
-function TDynamicObjects.AnyTagged(const ATag: string): Boolean;
+procedure TDynamicObjects.TurnSunTagged(const ATag: string;
+  ADegrees: Single; ATicks: Integer);
 begin
   for var DynamicObject in Self do
-    if DynamicObject.Placement.Tag = ATag then
+  begin
+    if DynamicObject.Placement.Tag <> ATag then
+      Continue;
+    if DynamicObject is TSkyGlobe then
+      TSkyGlobe(DynamicObject).TurnSun(ADegrees, ATicks);
+  end;
+end;
+
+function TDynamicObjects.AnyTagged(const ATag: string;
+  AKind: TDynamicObjectClass): Boolean;
+begin
+  for var DynamicObject in Self do
+  begin
+    if DynamicObject.Placement.Tag <> ATag then
+      Continue;
+    if (AKind = nil) or (DynamicObject is AKind) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+function TDynamicObjects.AnyNeedsArt: Boolean;
+begin
+  for var DynamicObject in Self do
+    if DynamicObject.NeedsArt then
       Exit(True);
   Result := False;
 end;
@@ -860,6 +1029,110 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TSkyGlobe
+// ---------------------------------------------------------------------------
+
+constructor TSkyGlobe.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FSize := ReadPositive(AObj, 'size', DefaultGlobeSize, AOwner);
+  var Sun: Single := AObj.GetValue<Double>('sun', DefaultSun);
+  FSun.Settle(Sun);
+  FLitSun := Sun;
+  FAltitude := AObj.GetValue<Double>('altitude', DefaultAltitude);
+  if (FAltitude < 0) or (FAltitude > 90) then
+    raise EDynamicError.CreateFmt(SDynamicBadAltitude, [AOwner]);
+  FAzimuth := AObj.GetValue<Double>('azimuth', DefaultAzimuth);
+  if (FAzimuth < -90) or (FAzimuth > 90) then
+    raise EDynamicError.CreateFmt(SDynamicBadAzimuth, [AOwner]);
+  FLongitude := AObj.GetValue<Double>('longitude', DefaultLongitude);
+  FMapName := AObj.GetValue<string>('map', DefaultGlobeMap);
+  FNightMapName := AObj.GetValue<string>('night', '');
+
+  FLook := GlobeLook;
+  FLook.Surface := TGlobeSurface(ReadWord(AObj, 'surface',
+    GlobeSurfaceIds[gsMatte], GlobeSurfaceIds, 'surface', AOwner));
+  FLook.AxisRoll := AObj.GetValue<Double>('tilt', 0);
+  FLook.Exposure := GlobeLook.Exposure *
+    ReadPositive(AObj, 'brightness', DefaultBrightness, AOwner) / 100;
+  FLook.Atmosphere := ReadShare(AObj, 'atmosphere', DefaultAtmosphere,
+    AOwner);
+end;
+
+destructor TSkyGlobe.Destroy;
+begin
+  FGlobe.Free;
+  inherited;
+end;
+
+class function TSkyGlobe.NeedsArt: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TSkyGlobe.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  if ACanvas.Art = nil then
+    raise EDynamicError.Create(SGlobeNoArt);
+  FGlobe := TGlobe.Create(ACanvas.Renderer, ACanvas.Art, FMapName,
+    FNightMapName, FLook);
+  FGlobe.Face(FLongitude);
+  Relight;
+end;
+
+procedure TSkyGlobe.Release;
+begin
+  FreeAndNil(FGlobe);
+end;
+
+// The sun crosses the sky one way, left to right. An event replayed
+// after a death - on its own screen or one the hero walked back to -
+// asks for a sun already on its way or past: it keeps its course.
+procedure TSkyGlobe.TurnSun(ADegrees: Single; ATicks: Integer);
+begin
+  if ADegrees <= FSun.Target then
+    Exit;
+  FSun.HeadFor(ADegrees, ATicks);
+end;
+
+procedure TSkyGlobe.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  FSun.Tick;
+  if Abs(FSun.Current - FLitSun) >= RelightStep then
+    Relight;
+end;
+
+// The sky as the screen shows it: x right, y up, w away from the
+// viewer. The sun stands on the arc over the screen, (-cos s, sin s, 0);
+// the globe at azimuth z and altitude a, (sin z cos a, sin a,
+// cos z cos a). Seen from the globe - x right, y up, z back toward the
+// viewer - that sun is (-cos s cos z, cos s sin z sin a + sin s cos a,
+// cos s sin z cos a - sin s sin a).
+procedure TSkyGlobe.Relight;
+begin
+  FLitSun := FSun.Current;
+  if FGlobe = nil then
+    Exit;
+  var Sun: Double := DegToRad(FLitSun);
+  var Altitude: Double := DegToRad(FAltitude);
+  var Azimuth: Double := DegToRad(FAzimuth);
+  var SunAlongBearing: Double := Cos(Sun) * Sin(Azimuth);
+  FGlobe.LightFrom(-Cos(Sun) * Cos(Azimuth),
+    SunAlongBearing * Sin(Altitude) + Sin(Sun) * Cos(Altitude),
+    SunAlongBearing * Cos(Altitude) - Sin(Sun) * Sin(Altitude));
+end;
+
+procedure TSkyGlobe.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  if FGlobe = nil then
+    Exit;
+  FGlobe.Draw(FGlobe.DestFor(AX, AY, FSize), TintColor(Placement.Tint),
+    Intensity);
+end;
+
+// ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
@@ -871,23 +1144,56 @@ begin
   raise EDynamicError.CreateFmt(SDynamicBadKind, [ALevelId, AIndex + 1, AId]);
 end;
 
-function ReadPlacement(AObj: TJSONObject;
-  const ALevelId, AOwner: string): TDynamicPlacement;
+function ScreenNumber(AValue: TJSONValue; const AOwner: string): Integer;
+begin
+  if not (AValue is TJSONNumber) then
+    raise EDynamicError.CreateFmt(SDynamicBadScreens, [AOwner]);
+  Result := TJSONNumber(AValue).AsInt;
+end;
+
+// "screens": [first, last]; False when the object names none
+function ReadScreens(AObj: TJSONObject; const AOwner: string;
+  out AFirst, ALast: Integer): Boolean;
+begin
+  AFirst := 0;
+  ALast := 0;
+  var Raw := AObj.GetValue('screens');
+  if Raw = nil then
+    Exit(False);
+  if not (Raw is TJSONArray) or (TJSONArray(Raw).Count <> 2) then
+    raise EDynamicError.CreateFmt(SDynamicBadScreens, [AOwner]);
+  AFirst := ScreenNumber(TJSONArray(Raw).Items[0], AOwner);
+  ALast := ScreenNumber(TJSONArray(Raw).Items[1], AOwner);
+  Result := True;
+end;
+
+function ReadPlacement(AObj: TJSONObject; const ALevelId, AOwner: string;
+  ADefaultLayer: TDynamicLayer): TDynamicPlacement;
+var
+  First, Last: Integer;
 begin
   Result := Default(TDynamicPlacement);
   Result.Parent := AObj.GetValue<string>('parent', '');
   var HasScreen := AObj.TryGetValue<Integer>('screen', Result.Screen);
-  if (Result.Parent = '') and not HasScreen then
+  var HasScreens := ReadScreens(AObj, AOwner, First, Last);
+  var Places := Ord(Result.Parent <> '') + Ord(HasScreen) + Ord(HasScreens);
+  if Places = 0 then
     raise EDynamicError.CreateFmt(SDynamicNoPlace, [ALevelId, AOwner]);
-  if (Result.Parent <> '') and HasScreen then
+  if Places > 1 then
     raise EDynamicError.CreateFmt(SDynamicTwoPlaces, [ALevelId, AOwner]);
+  Result.LastScreen := Result.Screen;
+  if HasScreens then
+  begin
+    Result.Screen := First;
+    Result.LastScreen := Last;
+  end;
 
   Result.X := AObj.GetValue<Double>('x');
   Result.Y := AObj.GetValue<Double>('y');
   Result.Tint := ReadTint(AObj, AOwner);
   Result.Tag := AObj.GetValue<string>('tag', '');
   Result.Layer := TDynamicLayer(ReadWord(AObj, 'layer',
-    DynamicLayerIds[dlBack], DynamicLayerIds, 'layer', AOwner));
+    DynamicLayerIds[ADefaultLayer], DynamicLayerIds, 'layer', AOwner));
 end;
 
 function CreateDynamic(AKind: TDynamicKind;
@@ -899,6 +1205,8 @@ begin
       Result := TBeacon.Create(APlacement, AObj, AOwner);
     dkSmoke:
       Result := TSmoke.Create(APlacement, AObj, AOwner);
+    dkGlobe:
+      Result := TSkyGlobe.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);
@@ -920,7 +1228,8 @@ begin
       var Kind := KindOf(Obj.GetValue<string>('kind', ''), ALevelId, i);
       // "beacon #2" - dynamic objects carry no id of their own
       var Owner := Format('%s #%d', [DynamicKindIds[Kind], i + 1]);
-      var Placement := ReadPlacement(Obj, ALevelId, Owner);
+      var Placement := ReadPlacement(Obj, ALevelId, Owner,
+        DefaultLayers[Kind]);
       Result.Add(CreateDynamic(Kind, Placement, Obj, Owner));
     end;
   except

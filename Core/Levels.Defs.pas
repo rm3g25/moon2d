@@ -139,7 +139,10 @@ type
     procedure ParseObjects(const AArr: TJSONArray);
     procedure CheckEvents;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
+    procedure CheckEventTarget(const AEventId: string;
+      const AAction: TEventAction);
     procedure CheckDynamics;
+    procedure CheckDynamicScreens(const APlacement: TDynamicPlacement);
     procedure CheckDynamicParent(const ATag: string);
     procedure CheckMonsterParent(const ATag: string);
   public
@@ -199,10 +202,12 @@ resourcestring
     + 'which no entity carries';
   SLevelObjectBadScreen = 'Level "%s": object "%s" sits on screen %d of %d';
   SLevelObjectBadWidth = 'Level "%s": object "%s" is %d units wide';
-  SLevelDynamicBadScreen = 'Level "%s": a dynamic object sits on screen '
-    + '%d of %d';
+  SLevelDynamicBadScreen = 'Level "%s": a dynamic object stands on screens '
+    + '%d..%d of %d';
   SLevelEventTargetUnknown = 'Level "%s": event "%s" turns "%s", '
     + 'which no dynamic object carries';
+  SLevelEventSunUnknown = 'Level "%s": event "%s" turns the sun of "%s", '
+    + 'which no globe carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
     + 'a tag no object and no entity carries';
   SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by an object '
@@ -382,10 +387,22 @@ end;
 procedure TLevel.CheckEventTargets(const AEvent: TLevelEvent);
 begin
   for var Action in AEvent.Actions do
-    if (Action.Kind = eaIntensity) and
-      not FDynamics.AnyTagged(Action.Target) then
-      raise ELevelError.CreateFmt(SLevelEventTargetUnknown,
-        [FId, AEvent.Id, Action.Target]);
+    CheckEventTarget(AEvent.Id, Action);
+end;
+
+procedure TLevel.CheckEventTarget(const AEventId: string;
+  const AAction: TEventAction);
+begin
+  case AAction.Kind of
+    eaIntensity:
+      if not FDynamics.AnyTagged(AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventTargetUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaSun:
+      if not FDynamics.AnyTagged(AAction.Target, TSkyGlobe) then
+        raise ELevelError.CreateFmt(SLevelEventSunUnknown,
+          [FId, AEventId, AAction.Target]);
+  end;
 end;
 
 // A nailed object off the screen list never shows; a parent tag no
@@ -398,10 +415,19 @@ begin
     var Placement := DynamicObject.Placement;
     if Placement.Parent <> '' then
       CheckDynamicParent(Placement.Parent)
-    else if (Placement.Screen < 1) or (Placement.Screen > FScreenCount) then
-      raise ELevelError.CreateFmt(SLevelDynamicBadScreen,
-        [FId, Placement.Screen, FScreenCount]);
+    else
+      CheckDynamicScreens(Placement);
   end;
+end;
+
+procedure TLevel.CheckDynamicScreens(const APlacement: TDynamicPlacement);
+begin
+  var Starts := (APlacement.Screen >= 1) and
+    (APlacement.Screen <= APlacement.LastScreen);
+  if Starts and (APlacement.LastScreen <= FScreenCount) then
+    Exit;
+  raise ELevelError.CreateFmt(SLevelDynamicBadScreen,
+    [FId, APlacement.Screen, APlacement.LastScreen, FScreenCount]);
 end;
 
 procedure TLevel.CheckDynamicParent(const ATag: string);
