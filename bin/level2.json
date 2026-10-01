@@ -11,6 +11,9 @@
     "common",
     "mine-interior"
   ],
+  "objectSets": [
+    "sky"
+  ],
   "music": "hallu.ogg",
   "legacyTrailing": [
     "4",
