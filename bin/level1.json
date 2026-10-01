@@ -122,6 +122,28 @@
   ],
   "dynamics": [
     {
+      "kind": "globe",
+      "screens": [
+        1,
+        11
+      ],
+      "x": 392,
+      "y": 82,
+      "size": 30,
+      "tint": [
+        78,
+        80,
+        86
+      ],
+      "sun": -40,
+      "altitude": 50,
+      "azimuth": 0,
+      "longitude": 45,
+      "tilt": -20,
+      "atmosphere": 60,
+      "tag": "earth"
+    },
+    {
       "kind": "beacon",
       "parent": "ship",
       "x": 16.1,
@@ -2216,6 +2238,32 @@
     }
   ],
   "events": [
+    {
+      "id": "dawnCreeps",
+      "screen": 1,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -14,
+          "ticks": 5940
+        }
+      ]
+    },
+    {
+      "id": "preDawn",
+      "screen": 8,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 0,
+          "ticks": 3960
+        }
+      ]
+    },
     {
       "id": "labHint",
       "screen": 12,
