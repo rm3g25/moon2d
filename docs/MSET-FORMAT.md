@@ -75,9 +75,15 @@ rounding difference.
   order declared, first match wins.
 - **Backdrops and objects follow the level by convention**, one set per
   `assetsDir` and kind: `level1-backdrops`, `level1-objects`. They are
-  never declared - the level has exactly one of each, so a list would
-  only be a second place to misspell the name. A level that places no
-  objects needs no objects set.
+  never declared - the level has at most one of each, so a list would
+  only be a second place to misspell the name. The objects set is
+  optional: a level whose object art is all shared ships none.
+- **Shared object art is declared**, like the tiles:
+  `"objectSets": ["sky"]`. Searched after the level's own objects set, in
+  the order declared. Art that more than one level shows (the Earth, the
+  satellite) lives there once instead of in every level's set; a set is
+  an index plus blobs read on demand, so a level pays only for the
+  pictures it draws.
 
 A bare name that two declared sets both carry would resolve silently,
 and reordering the declaration would then change a picture without

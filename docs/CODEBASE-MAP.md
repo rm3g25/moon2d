@@ -110,7 +110,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   bare name takes the first attached set that has it; **a name no attached set
   carries raises `ESpriteError`** - there is no folder fallback left. Path and
   extension are dropped when looking up, so the 2008 spellings in level
-  palettes (`level1\doom1.png`) still resolve. `AmbiguousNames` reports bare
+  palettes (`level1\doom1.png`) still resolve. `SourceOf(name, out bare)` -
+  the same resolution without a texture: the set and the name as it knows
+  it (the sky globe reads its maps through it). `AmbiguousNames` reports bare
   names carried by more than one attached set - those would resolve by
   declaration order, which is exactly what the qualifier exists to avoid.
   Optional color key (`SetColorKey`/`DisableColorKey`). `EnableLinearFilter`
@@ -164,14 +166,15 @@ mixer, missing art is fatal.
   level load, not on the screen that shows it; after that `Draw(screen)` only
   walks the list. The cache comes from the composition root - no color key
   (honest PNG alpha: black glass and shadows would vanish through a key),
-  linear filter, fed from `<assetsDir>-objects.mset`; not owned here.
+  linear filter, fed from the level's own `<assetsDir>-objects.mset` and the
+  shared sets of `objectSets`; not owned here.
 
 ### `Core/Render.Dynamics.pas` (~215 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst glows - `Render.Glow`; the
-  smoke puffs - `Render.Puff`) and lends it the level's objects set
-  (`Art`, nil when the level opens none), made at level load; the objects
+  smoke puffs - `Render.Puff`) and lends it the cache of the level's
+  object art (`Art`), made at level load; the objects
   themselves are the level's. After the canvas every object `Acquire`s
   what it draws with (a sky globe its `TGlobe`); the destructor `Release`s them
   before the canvas goes, so every SDL texture dies before the renderer. Per object a `TPlace`: its stands (screen + origin), a
@@ -293,7 +296,7 @@ Level data model + JSON parser. No game logic.
   collision - the grid alone decides where the hero stands.
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
-  entities, id/title/assetsDir/**spriteSets**/music/introText, grid dims,
+  entities, id/title/assetsDir/**spriteSets**/**objectSets**/music/introText, grid dims,
   screenCount. `SpriteSets` is the environment sets in resolution order - tiles
   only; screen backdrops follow the `<assetsDir>-backdrops` convention and
   never appear there. `Objects` - the free-form art, in file order (later
@@ -380,15 +383,15 @@ in `CreateDynamic`.
   game makes itself). `Draw(canvas, originX, originY, alpha)` adds X/Y to
   the origin and calls the protected abstract `DrawAt`. Virtual
   `Acquire(canvas)` / `Release` - what a kind makes for itself to draw with
-  (empty in the ancestor); virtual class `NeedsArt` - True for a kind that
-  draws from the level's objects set. The parent is coordinates only,
+  (empty in the ancestor). The parent is coordinates only,
   VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
   level, ticks)`, `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
-  ticks)`, `AnyTagged(tag, kind = nil)`, `AnyNeedsArt`: what the events,
-  the level checks and the level load ask.
+  ticks)`, `AnyTagged(tag, kind = nil)`: what the events and the level
+  checks ask.
 - **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
-  textures every kind draws with + `Art` (the level's objects set, or nil);
+  textures every kind draws with + `Art` (the cache of the level's object
+  art - its own set and the declared shared ones);
   made and freed by `Render.Dynamics`.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
@@ -429,8 +432,10 @@ in `CreateDynamic`.
 - **`TSkyGlobe`** (kind `globe`) - a body in the sky, the Earth over the
   Moon unless the level says otherwise (the dead Earth of Selene, Proxima
   c): a `TGlobe`
-  (`Render.Globe`) made in `Acquire` from the objects set (`map`, default
-  `earth`; optional `night` - city lights), freed in `Release`. The sun
+  (`Render.Globe`) made in `Acquire` from the object art (`map`, default
+  `earth`, resolved like an object's sprite - `sky:earth` names the set;
+  optional `night` - city lights, in the same set or `EDynamicError`),
+  freed in `Release`. The sun
   travels the arc over the screen - `sun` in degrees: 0 the left horizon,
   90 overhead, 180 the right horizon, below zero not yet risen; the Earth
   hangs at `altitude` over the horizon and `azimuth` right of straight
@@ -981,10 +986,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the monsters' channel, the hero on
     his own, cursor and HUD still; `Update` ticks `FDynamics` after the
     monsters and the director, so a smoking monster's puffs leave from
-    where this frame draws it), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
-    convention of the backdrops and the objects in one place; the objects
-    set is opened only by a level that places some or has a dynamic kind
-    that `NeedsArt`, and is handed to `Render.Dynamics`), `StartPlaying`,
+    where this frame draws it), `LoadLevel` (the object cache: the
+    level's own objects set if it ships one, then `objectSets`; handed to
+    `Render.Objects` and `Render.Dynamics`), `OpenSpriteSet` (a named set
+    into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
+    `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
+    backdrops and the objects in one place), `StartPlaying`,
     `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
@@ -1105,6 +1112,8 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 ### `level1.json` (~50 KB) / `level2.json` (~20 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
+**`objectSets`** (optional: shared object art searched after the level's own
+objects set, e.g. `["sky"]`),
 `music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid`
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
@@ -1148,7 +1157,7 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
   `moon-surface machinery facility common mine-interior`. Object: the
   satellite on screen 1, lit a little brighter (day), tagged `satellite`;
   the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
-  events; `earth` and `earth-night` copied into level2-objects.mset);
+  events); all its object art is shared - no level2-objects set;
   its lamp is `dying` - a dim fast flutter, the battery running out, and
   one leak is left, a puff now and then (`flow` puffs). The gravel trial and
   the boss live here, and it ends the original campaign.
@@ -1168,9 +1177,10 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
   `<assetsDir>-backdrops` convention, never declared in `spriteSets`. HD
   since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
-- **Objects**: `level1-objects` (`ship`, `satellite`), `level2-objects`
-  (`satellite`, the same picture) - the `<assetsDir>-objects` convention,
-  never declared in `spriteSets`. Drawn at backdrop density (1440 px per
+- **Objects**: `level1-objects` (`ship`) - the `<assetsDir>-objects`
+  convention, never declared, optional (level 2 ships none). Shared:
+  `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
+  `objectSets`. Drawn at backdrop density (1440 px per
   512 units), transparent pixels filled with the edge color so the linear
   filter leaves no dark fringe.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
@@ -1221,7 +1231,7 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
-| Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
+| Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
 | Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
