@@ -37,7 +37,8 @@ Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` ->
-`Levels.Dynamics` (draws through `Render.Glow` and `Render.Puff`) ->
+`Render.Globe` -> `Levels.Dynamics` (draws through `Render.Glow`,
+`Render.Puff` and `Render.Globe`) ->
 `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
@@ -46,7 +47,7 @@ Dependency direction (roughly bottom-up):
 `Render.Dynamics` -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
-`Menu.Logo` -> `Menu` (with `Menu.Globe`).
+`Menu.Logo` -> `Menu` (with `Menu.Globe`, a thin moon over `Render.Globe`).
 
 ---
 
@@ -169,10 +170,13 @@ mixer, missing art is fatal.
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst glows - `Render.Glow`; the
-  smoke puffs - `Render.Puff`), made at level load; the objects themselves
-  are the level's. Per object a `TPlace`: its stands (screen + origin), a
+  smoke puffs - `Render.Puff`) and lends it the level's objects set
+  (`Art`, nil when the level opens none), made at level load; the objects
+  themselves are the level's. After the canvas every object `Acquire`s
+  what it draws with (a sky globe its `TGlobe`); the destructor `Release`s them
+  before the canvas goes, so every SDL texture dies before the renderer. Per object a `TPlace`: its stands (screen + origin), a
   monster flag, the parent's life, the lead screen. A nailed object stands
-  on its screen at (0, 0); one under a static object on every screen that
+  at (0, 0) on its screen, or on each screen of its `screens` run; one under a static object on every screen that
   object stands on, at its top-left - settled once, static objects never
   move. A tag no object carries is a monster's: that stand is looked up
   every tick through **`TLocateMonster`** (`reference to function(tag, out
@@ -182,7 +186,7 @@ mixer, missing art is fatal.
   lamp keeps its rhythm off screen) with the origin of its stand on the
   hero's screen, else its first; a lead stand on another screen is a jump
   (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
-  the ones on the screen in one layer (`dlBack` / `dlFront`). `Canvas` - the
+  the ones on the screen in one layer (`dlSky` / `dlBack` / `dlFront`). `Canvas` - the
   textures, lent to the monsters' wreck smoke.
 
 ### `Core/Render.Shake.pas` (~110 lines)
@@ -301,11 +305,13 @@ Level data model + JSON parser. No game logic.
   `LoadFromFile`; the dynamics are parsed before the events, since an event
   may name a dynamic object's tag. Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
-  (`CheckEventTargets`) an intensity action turning a tag no dynamic object
+  (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
+  tag no dynamic object carries or a sun action turning a tag no globe
   carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
   the level (the only destructor here) and kept through a restart - a lamp
   keeps its rhythm; only what a re-armed event changed goes back. Private
-  `CheckDynamics` refuses a nailed object off the screen list, a parent tag
+  `CheckDynamics` refuses a nailed object off the screen list or a
+  `screens` run running backwards or past it (`CheckDynamicScreens`), a parent tag
   neither an object nor an entity carries, a tag carried by both, two
   objects with one tag on one screen, and (`CheckMonsterParent`) two
   entities with one tag on a shared difficulty grade (the child could not
@@ -345,20 +351,26 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~930 lines)
+### `Core/Levels.Dynamics.pas` (~1230 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
-here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
-- **`TDynamicPlacement`** (record) - what every kind shares: `Screen` or
-  `Parent` (exactly one - with a parent the parent decides the screens; the
-  parent is a static object's or a monster's tag), `X`/`Y` (screen units;
-  from the parent's top-left under one), `Tint`, `Tag` (the name events
-  turn it by), `Layer` (`TDynamicLayer`: `dlBack` - with the static
-  objects, behind the tiles; `dlFront` - over the monsters, under the
-  hero).
+here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
+in `CreateDynamic`.
+- **`TDynamicPlacement`** (record) - what every kind shares: `Screen`,
+  `screens` (JSON `[first, last]` - one object on a run of screens, read
+  into `Screen`..`LastScreen`) or `Parent` (exactly one - with a parent the
+  parent decides the screens; the parent is a static object's or a
+  monster's tag), `X`/`Y` (screen units; from the parent's top-left under
+  one), `Tint`, `Tag` (the name events turn it by), `Layer`
+  (`TDynamicLayer`: `dlSky` - right over the backdrop, still while the
+  world shakes, the far things; `dlBack` - with the static objects, behind
+  the tiles; `dlFront` - over the monsters, under the hero; the default is
+  the kind's).
+- **`TValueFade`** (record) - a value and where the events take it:
+  initial, current, target, step; `Settle`, `HeadFor(target, ticks)`,
+  `Tick`. The intensity of every object, the sun of a sky globe.
 - **`TDynamicObject`** (abstract) - holds the placement and the intensity
-  (`TIntensityFade`: initial, current, target, step; JSON `intensity`, a
-  percentage, 100 by default). `Tick(originX, originY, parentAlive)` works
+  (a `TValueFade`; JSON `intensity`, a percentage, 100 by default). `Tick(originX, originY, parentAlive)` works
   out how far the origin moved since the last tick, steps the fade and
   calls the kind's protected abstract `Advance(motionX, motionY,
   parentAlive)`; `FadeTo(level, ticks)`, `Rewind` (virtual: back to the
@@ -366,13 +378,18 @@ here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
   counts no motion), `Origin` (where the last tick counted from). Two
   constructors: from JSON, or with the intensity given (for objects the
   game makes itself). `Draw(canvas, originX, originY, alpha)` adds X/Y to
-  the origin and calls the protected abstract `DrawAt`. The parent is
-  coordinates only, VCL-style: it owns nothing.
+  the origin and calls the protected abstract `DrawAt`. Virtual
+  `Acquire(canvas)` / `Release` - what a kind makes for itself to draw with
+  (empty in the ancestor); virtual class `NeedsArt` - True for a kind that
+  draws from the level's objects set. The parent is coordinates only,
+  VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
-  level, ticks)`, `RewindTagged(tag)`, `AnyTagged(tag)`: what the events
-  and the level checks ask.
+  level, ticks)`, `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
+  ticks)`, `AnyTagged(tag, kind = nil)`, `AnyNeedsArt`: what the events,
+  the level checks and the level load ask.
 - **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
-  textures every kind draws with; made and freed by `Render.Dynamics`.
+  textures every kind draws with + `Art` (the level's objects set, or nil);
+  made and freed by `Render.Dynamics`.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -409,10 +426,33 @@ here, a word in `DynamicKindIds` and a branch in `CreateDynamic`.
   from the level file, `TakeLook` turns it into ticks); `CreateLook(
   placement, look, intensity, seed)` makes a smoke from code - the wreck
   smoke of the machines in `Monsters`.
+- **`TSkyGlobe`** (kind `globe`) - a body in the sky, the Earth over the
+  Moon unless the level says otherwise (the dead Earth of Selene, Proxima
+  c): a `TGlobe`
+  (`Render.Globe`) made in `Acquire` from the objects set (`map`, default
+  `earth`; optional `night` - city lights), freed in `Release`. The sun
+  travels the arc over the screen - `sun` in degrees: 0 the left horizon,
+  90 overhead, 180 the right horizon, below zero not yet risen; the Earth
+  hangs at `altitude` over the horizon and `azimuth` right of straight
+  ahead (at 90 it sits on the sun's arc - where an eclipse can happen).
+  `Relight` turns them into the sun vector of the Earth's own view, so
+  phase and the lean of the terminator come out as in the real sky: a sun
+  on the left horizon leaves a half lit on the left, one not yet risen
+  more than half, one climbing toward the Earth a crescent. The sun is a
+  `TValueFade` the `sun` event action turns (`TurnSun`) - only onward: a
+  turn back is ignored, so an event replayed after a death cannot undo the
+  morning. The globe is lit again once the sun moved `RelightStep` (0.05
+  degrees). Other JSON: `size` (the disc across, screen units; x, y its
+  center), `brightness` (a percentage of `GlobeLook.Exposure`, past 100
+  allowed), `longitude` (the meridian facing the Moon), `tilt` (the axis
+  top leaning left), `atmosphere` (a percentage, 0 = airless - the dead
+  Earth of Selene), `surface` (matte / regolith). Intensity is the globe's
+  alpha, tint its color mod. Sky layer by default.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
-  list, the caller owns it); an unknown kind, layer, blink or flow, screen
-  and parent together or neither, a number out of range raise
-  `EDynamicError` (`ReadWord`, `ReadShare`, `ReadPositive`, `ReadReach`).
+  list, the caller owns it); an unknown kind, layer, blink, flow or
+  surface, none or more than one of screen, screens and parent, a broken
+  `screens` pair, a number out of range raise `EDynamicError`
+  (`ReadWord`, `ReadShare`, `ReadPositive`, `ReadReach`, `ReadScreens`).
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
@@ -427,10 +467,12 @@ game runs them through `Events.Director`; the editor will write them).
   one alive in its rage (the boss below its rage mark, a tank below its
   own).
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
-  `eaMusic`, `eaIntensity`); **`TEventAction`** (record) - kind + localized
-  `Text` (the message kinds), `FileName` (music), or `Target` / `Level`
-  (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag fade
-  there; JSON `target`, `value` a percentage, `ticks` 0 = at once).
+  `eaMusic`, `eaIntensity`, `eaSun`); **`TEventAction`** (record) - kind +
+  localized `Text` (the message kinds), `FileName` (music), or `Target` /
+  `Level` (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag
+  fade there; JSON `target`, `value` a percentage, `ticks` 0 = at once),
+  or `Target` / `Angle` / `Ticks` (sun: the globes carrying the tag turn
+  their sun there; JSON `value` in degrees).
 - **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
   `Lives` (livesBelow), `DelayTicks` (counted after the condition holds,
   for any condition), actions. JSON: `"when": "allDead", "tag":
@@ -745,7 +787,7 @@ instead of being kept.
   (`ConditionHolds`); while it holds the delay counts down, a lapse starts
   the count over; at zero the actions play once (`Play`: `ShowBig`,
   `AddTicker`, `StartTerminal` with the terminal header, the music
-  callback, `FadeTagged` on the dynamics). The game skips the tick over
+  callback, `FadeTagged` / `TurnSunTagged` on the dynamics). The game skips the tick over
   the hero's corpse.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
   so its events wait for their moment again, as the entity triggers do,
@@ -783,21 +825,42 @@ The stars of the menu sky, generated, not loaded. **`TStarfield`**.
   by each star's share (the submenu dolly). Textures: an 8 px point and a
   48 px flare from `Render.Glow`.
 
-### `Menu/Menu.Globe.pas` (~400 lines)
-The moon of the menu as a spinning globe on the CPU. **`TMoonGlobe`** takes
-the ui set and the map name (`moonmap`, 2048x1024 equirectangular, must be a
-power-of-two width twice its height).
-- Startup: `LoadMap` -> `BuildPyramid` (four halved levels: the limb samples
-  a coarser level instead of skipping texels) -> `BuildTables` (every texel of
-  the 512-texel disc gets its map row, longitude as a 32-bit turn, detail
-  level, sunlight - Lommel-Seeliger with a `LimbFade`, earthshine on the
-  night side, a `TGlobePixel` each) -> `BuildCurves` (gain and tone tables,
-  `Exposure`, the cool 2008 tint, a soft `ToneKnee`).
-- Runtime: `Tick` adds `FSpinStep` (one turn in 2640 ticks = 80 s) and marks
-  dirty; `Draw(dest)` repaints the streaming texture once per tick and copies
-  it into the square. The axis leans (`AxisRollDegrees`, `AxisTipDegrees`) so
-  the spin reads as a globe, not a scrolling picture. Compiled `{$O+,R-,Q-}`
-  whatever the build: a 33 Hz walk over a quarter million texels.
+### `Core/Render.Globe.pas` (~650 lines)
+A body of the sky as a lit sphere on the CPU. **`TGlobe`** takes a sprite
+set, a map name (equirectangular, a power-of-two width twice its height),
+an optional night map of the same size and a **`TGlobeLook`** (texture side,
+surface, axis roll and tip, night ambient, tint, exposure, regolith limb
+fade, atmosphere 0..1, air color, night gain).
+- Startup: `LoadMap` -> `BuildPyramid` (`HalveLevel` three times: the limb
+  samples a coarser level instead of skipping texels) -> `BuildTables`
+  (`PlaceTexel`: every texel of the disc gets its map row, longitude as a
+  32-bit turn, detail level, coverage and a `TGlobeNormal` - normal, limb
+  weight, air depth; with air the disc shrinks to leave room for a halo of
+  `AirHaloShare` radii, whose texels are `AirOnly`) -> `BuildCurves` (gain
+  and tone tables, a soft `ToneKnee`). The globe is dark until lit.
+- `LightFrom(x, y, z)` - the sun in view space: every texel gets its
+  shade (`gsRegolith` - Lommel-Seeliger, bright to the limb, the Moon;
+  `gsMatte` - Lambert, the Earth), its night weight (the night map shows
+  from `NightOnset` past the terminator), and with air its haze (a veil on
+  the day side thickening at the limb, reaching `AirWrap` past the
+  terminator), the ground it hides (`Clear`) and the halo's density.
+- `Spin(units)`, `Face(longitude)`, `DestFor(cx, cy, diameter)` (the
+  square that puts the disc there, halo included), `Draw(dest, tint,
+  level)` - repaints the streaming texture only after a change
+  (`PaintRow` -> `PaintGround` / `PaintAir`, inline), tint = color mod,
+  level = alpha mod. `Confine` replaces Max/Min/EnsureRange on Doubles:
+  those have an overload per float type and an untyped literal next to a
+  Double can match two. Compiled `{$O+,R-,Q-}` whatever the build: a 33 Hz
+  walk over a quarter million texels. Users: `Menu.Globe` (the menu moon),
+  `TSkyGlobe` of `Levels.Dynamics`.
+
+### `Menu/Menu.Globe.pas` (~95 lines)
+The moon of the menu as a spinning `TGlobe`. **`TMoonGlobe`** takes the ui
+set and the map name (`moonmap`, 2048x1024) and owns the look as a typed
+constant `MoonLook` (512 texels, regolith, the axis leaning 18 and tipping
+12 degrees so the spin reads as a globe, earthshine on the night side, the
+cool 2008 tint, no air). The sun stands still, up and to the left; `Tick`
+spins one turn in 2640 ticks (80 s), `Draw(dest)` draws at full tint.
 
 ### `Menu/Menu.Logo.pas` (~285 lines)
 The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
@@ -908,7 +971,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   difficulty.
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
-    still, objects + back dynamics + tiles + bullets on the world channel -
+    still and the sky dynamics (the Earth) with it, objects + back
+    dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the back dynamics draw
     right after the objects, behind tiles and hero - monsters, then the
     machines' wreck smoke, then the front dynamics (the boss smoke), on
@@ -917,7 +981,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     monsters and the director, so a smoking monster's puffs leave from
     where this frame draws it), `LoadLevel`, `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset`
     convention of the backdrops and the objects in one place; the objects
-    set is opened only by a level that places some), `StartPlaying`,
+    set is opened only by a level that places some or has a dynamic kind
+    that `NeedsArt`, and is handed to `Render.Dynamics`), `StartPlaying`,
     `RestartLevel`,
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
@@ -1042,8 +1107,8 @@ The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
-(beacon / smoke), `screen` or `parent` - a static object's or a monster's
-tag -, `x`, `y`, optional `tint`, `tag`, `layer`, `intensity`, then the
+(beacon / smoke / globe), `screen`, `screens` [first, last] or `parent` -
+a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`, `layer`, `intensity`, then the
 kind's own properties - see `Levels.Dynamics`),
 `tilePalette`
 (sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
@@ -1054,20 +1119,25 @@ optional `tag` for the events and the dynamics), `events` (each: `id`,
 `screen`, `when` = enterScreen | allDead / enraged + `tag` | livesBelow +
 `tag` + `lives`, optional `delay` in ticks, `then` = a list of `action`
 objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
-`file`, intensity with `target`/`value`/`ticks`; the med lab hint is the
-first), `introText`/`introTextEn`.
+`file`, intensity with `target`/`value`/`ticks`, sun with
+`target`/`value` (degrees)/`ticks`; the med lab hint is the first), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
   (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
   sunrise (14-17); sets
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`. Objects: the ship on screen 1 (in place of the 2008
   shuttle), the broken satellite in the sky of 14-17, tagged `ship` and
-  `satellite`. Dynamics: a blue double-flash beacon on the ship's fin, a red
+  `satellite`. Dynamics: the Earth (a `globe`) in the sky of screens 1-11 (tagged
+  `earth`, at (392, 82), 30 across, Africa and Europe facing, sun starting
+  at -40 - three quarters lit on the left), a blue double-flash beacon on the ship's fin, a red
   faulty one with starburst rays on the satellite's antenna, three gusty
   gas leaks venting from the satellite's breach and a broken ring joint
   (vacuum: no lift, little drag), two smokes hung on the boss (tagged
   `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0).
-  Events on screen 17: livesBelow 150 - bossSmoke to 60%; enraged -
+  Events: the dawn - on entering screen 1 the sun climbs to -14 over three
+  minutes (`dawnCreeps`), on entering screen 8 to the horizon over two
+  (`preDawn`); the backdrops of 14-17 paint the sunrise itself. On screen
+  17: livesBelow 150 - bossSmoke to 60%; enraged -
   bossSmoke off; livesBelow 30 - bossSmoke and bossBurn to 100%.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
@@ -1134,6 +1204,8 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
+| A lit sphere: shading, terminator, atmosphere, night lights | Render.Globe.pas |
+| The Earth in a level's sky; its phase and the dawn | `dynamics` (`globe`) and `events` (`sun`) in levelN.json + Levels.Dynamics.pas (`TSkyGlobe`) + the `earth` map in `<assetsDir>-objects.mset` |
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
 | A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
