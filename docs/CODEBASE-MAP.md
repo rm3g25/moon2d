@@ -444,7 +444,9 @@ in `CreateDynamic`.
   morning. The globe is lit again once the sun moved `RelightStep` (0.05
   degrees). Other JSON: `size` (the disc across, screen units; x, y its
   center), `brightness` (a percentage of `GlobeLook.Exposure`, past 100
-  allowed), `longitude` (the meridian facing the Moon), `tilt` (the axis
+  allowed), `nightBrightness` (a percentage of `GlobeLook.NightGain`, 2.5 -
+  city lights are a few texels across and need more than sunlit ground),
+  `longitude` (the meridian facing the Moon), `tilt` (the axis
   top leaning left), `atmosphere` (a percentage, 0 = airless - the dead
   Earth of Selene), `surface` (matte / regolith). Intensity is the globe's
   alpha, tint its color mod. Sky layer by default.
@@ -1127,22 +1129,26 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`. Objects: the ship on screen 1 (in place of the 2008
   shuttle), the broken satellite in the sky of 14-17, tagged `ship` and
-  `satellite`. Dynamics: the Earth (a `globe`) in the sky of screens 1-11 (tagged
-  `earth`, at (392, 82), 30 across, Africa and Europe facing, sun starting
-  at -40 - three quarters lit on the left), a blue double-flash beacon on the ship's fin, a red
+  `satellite`. Dynamics: the Earth (a `globe`) in the sky of screens 1-17 - hidden by
+  the tiles of the lab screens 12-13 - (tagged
+  `earth`, at (392, 82), 38 across, Africa and Europe facing, night map
+  `earth-night`, sun starting at -40 - three quarters lit on the left), a blue double-flash beacon on the ship's fin, a red
   faulty one with starburst rays on the satellite's antenna, three gusty
   gas leaks venting from the satellite's breach and a broken ring joint
   (vacuum: no lift, little drag), two smokes hung on the boss (tagged
   `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0).
-  Events: the dawn - on entering screen 1 the sun climbs to -14 over three
-  minutes (`dawnCreeps`), on entering screen 8 to the horizon over two
-  (`preDawn`); the backdrops of 14-17 paint the sunrise itself. On screen
+  Events: the dawn, tied to the screens - on entering screen N
+  (`dawn1`..`dawn17`) the sun heads over 20 seconds to -40 + 100 * N / 17:
+  three quarters lit at the start, a half by screen 7, a crescent with
+  the night side lit by cities on the last screen; the backdrops of 14-17 paint the sunrise itself. On screen
   17: livesBelow 150 - bossSmoke to 60%; enraged -
   bossSmoke off; livesBelow 30 - bossSmoke and bossBurn to 100%.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
   satellite on screen 1, lit a little brighter (day), tagged `satellite`;
+  the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
+  events; `earth` and `earth-night` copied into level2-objects.mset);
   its lamp is `dying` - a dim fast flutter, the battery running out, and
   one leak is left, a puff now and then (`flow` puffs). The gravel trial and
   the boss live here, and it ends the original campaign.
