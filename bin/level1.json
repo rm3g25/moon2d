@@ -125,11 +125,11 @@
       "kind": "globe",
       "screens": [
         1,
-        11
+        17
       ],
       "x": 392,
       "y": 82,
-      "size": 30,
+      "size": 38,
       "tint": [
         78,
         80,
@@ -140,6 +140,8 @@
       "azimuth": 0,
       "longitude": 45,
       "tilt": -20,
+      "night": "earth-night",
+      "nightBrightness": 100,
       "atmosphere": 60,
       "tag": "earth"
     },
@@ -2239,28 +2241,223 @@
   ],
   "events": [
     {
-      "id": "dawnCreeps",
+      "id": "dawn1",
       "screen": 1,
       "when": "enterScreen",
       "then": [
         {
           "action": "sun",
           "target": "earth",
-          "value": -14,
-          "ticks": 5940
+          "value": -34,
+          "ticks": 660
         }
       ]
     },
     {
-      "id": "preDawn",
+      "id": "dawn2",
+      "screen": 2,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -28,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn3",
+      "screen": 3,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -22,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn4",
+      "screen": 4,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -16,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn5",
+      "screen": 5,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -11,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn6",
+      "screen": 6,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": -5,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn7",
+      "screen": 7,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 1,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn8",
       "screen": 8,
       "when": "enterScreen",
       "then": [
         {
           "action": "sun",
           "target": "earth",
-          "value": 0,
-          "ticks": 3960
+          "value": 7,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn9",
+      "screen": 9,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 13,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn10",
+      "screen": 10,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 19,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn11",
+      "screen": 11,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 25,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn12",
+      "screen": 12,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 31,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn13",
+      "screen": 13,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 36,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn14",
+      "screen": 14,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 42,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn15",
+      "screen": 15,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 48,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn16",
+      "screen": 16,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 54,
+          "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "dawn17",
+      "screen": 17,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "sun",
+          "target": "earth",
+          "value": 60,
+          "ticks": 660
         }
       ]
     },

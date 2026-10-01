@@ -76,6 +76,27 @@
   ],
   "dynamics": [
     {
+      "kind": "globe",
+      "screen": 1,
+      "x": 392,
+      "y": 82,
+      "size": 38,
+      "tint": [
+        78,
+        80,
+        86
+      ],
+      "sun": 70,
+      "altitude": 50,
+      "azimuth": 0,
+      "longitude": 45,
+      "tilt": -20,
+      "night": "earth-night",
+      "nightBrightness": 100,
+      "atmosphere": 60,
+      "tag": "earth"
+    },
+    {
       "kind": "beacon",
       "parent": "satellite",
       "x": 25.5,
