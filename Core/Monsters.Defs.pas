@@ -43,8 +43,8 @@ type
   // - ptLaps: nothing - the lap and no more.
   // - ptDives: now and then a dive through the arena, cell by cell,
   //   after the hero.
-  // - ptRams: a ram at the hero where he is in plain sight, a dive
-  //   where a wall hides him.
+  // - ptRams: a ram at where the hero stands, seen or not; a dive
+  //   where the dash has no runway.
   // - ptHunts: the same and no lap any more - one maneuver after
   //   another.
   TPilotTactics = (ptLaps, ptDives, ptRams, ptHunts);

@@ -70,13 +70,14 @@ type
     FLapRestTicks: Integer;
     // New tactics open with a maneuver at once
     FRestWaived: Boolean;
-    FSearchTicks: Integer; // of the lap, for a cell that sees the hero
+    FSearchTicks: Integer; // of the lap, for a cell with a runway
     FTargetCell: TCell;
     FTicksLeft: Integer; // of the state that counts them
     FReturnPath: TArray<TCell>;
     FReturnIndex: Integer;
     FPortsDue: Boolean;
     FAimPoint: TPlace; // the middle of the hero as the eye locked on
+    FDashFrom: TPlace; // the middle of the body as the dash set off
     FDashDirection: TPlace; // a unit vector
     FDashTouchedHero: Boolean;
     FLastCrash: TPilotCrash;
@@ -87,11 +88,11 @@ type
     function BodyBlocked(const AFeet: TPlace): Boolean;
     function Advance(var AFeet: TPlace; const ADirection: TPlace;
       AUnits: Integer): Boolean;
-    function Sees(const ACell: TCell; const APoint: TPlace): Boolean;
+    function HasRunway(const ACell: TCell; const APoint: TPlace): Boolean;
     procedure Fly(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure FlyLap(var AFeet: TPlace; AStep: Integer);
     function LapCellAhead(const AFeet: TPlace): TCell;
-    function SearchesForLine(const ACell: TCell;
+    function SearchesForRunway(const ACell: TCell;
       const ABrief: TPilotBrief): Boolean;
     procedure Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure BeginBrake(const ACell: TCell);
@@ -111,6 +112,7 @@ type
     procedure Dash(var AFeet: TPlace);
     function WallNormal(const AFeet: TPlace): TPlace;
     procedure HitWall(const AFeet: TPlace);
+    function DashCameToAim(const AFeet: TPlace): Boolean;
     procedure Stun(const AFeet: TPlace);
     function PathToLap(const AFrom: TCell): TArray<TCell>;
     procedure BeginReturn(const AFeet: TPlace);
@@ -194,10 +196,12 @@ const
   StunTicks = 50;
   // A wall grazed by less than this does not stop a body
   BodyInset = 2;
-  // A line is open when a dash comes this close to its point: bodies
-  // that near touch (the game's contact box is 16 units either way
-  // across), and the hero may stand closer to a wall than the body can
-  // fly
+  // A ram is flown where the dash has this much open flight before the
+  // first wall: room to be seen coming
+  MinRunway = 64;
+  // A dash has come to its point when it is this close: bodies that
+  // near touch (the game's contact box is 16 units either way across),
+  // and the hero may stand closer to a wall than the body can fly
   SightGap = 12;
   // From the middle of a body to the point of it that struck: a unit
   // short of the wall, where a spark is not born inside it
@@ -498,13 +502,14 @@ begin
   Result := True;
 end;
 
-// A dash from the cell would come to the point: the test is the dash
-// itself, flown ahead of time
-function TPilot.Sees(const ACell: TCell; const APoint: TPlace): Boolean;
+// A dash from the cell at the point would fly its runway, or come to the
+// point, before a wall stops it - whatever hides the point beyond. The
+// test is the dash itself, flown ahead of time.
+function TPilot.HasRunway(const ACell: TCell; const APoint: TPlace): Boolean;
 begin
   var Feet := FeetOf(ACell);
   var Way := WayTo(MiddleOf(Feet), APoint);
-  var Units: Integer := Trunc(LengthOf(Way)) - SightGap;
+  var Units: Integer := Min(MinRunway, Trunc(LengthOf(Way)) - SightGap);
   Result := Advance(Feet, UnitOf(Way), Units);
 end;
 
@@ -584,13 +589,13 @@ begin
     Result.Row := Lane;
 end;
 
-// A ram is worth pondering where the hero is in plain sight: the pilot
-// flies on until the cell ahead sees him, a lap at most
-function TPilot.SearchesForLine(const ACell: TCell;
+// A ram is worth pondering where a dash at the hero has its runway: the
+// pilot flies on until the cell ahead has one, a lap at most
+function TPilot.SearchesForRunway(const ACell: TCell;
   const ABrief: TPilotBrief): Boolean;
 begin
   Result := (FTactics = ptRams) and (FSearchTicks < LapTicks(ABrief.Step)) and
-    not Sees(ACell, MiddleOf(HeroFeet(ABrief)));
+    not HasRunway(ACell, MiddleOf(HeroFeet(ABrief)));
 end;
 
 procedure TPilot.Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
@@ -605,7 +610,7 @@ begin
   end;
 
   var Ahead := LapCellAhead(AFeet);
-  if SearchesForLine(Ahead, ABrief) then
+  if SearchesForRunway(Ahead, ABrief) then
   begin
     Inc(FSearchTicks);
     Exit;
@@ -644,12 +649,14 @@ begin
   PickManeuver(ABrief);
 end;
 
-// A ram needs the hero in plain sight; a wall in the way makes it a
-// dive. What was pondered is flown even if the tactics are laps again.
+// A ram is flown at where the hero stands, seen or not; with no runway
+// it is a dive. What was pondered is flown even if the tactics are laps
+// again.
 procedure TPilot.PickManeuver(const ABrief: TPilotBrief);
 begin
   var Hero := HeroFeet(ABrief);
-  if (FTactics in [ptRams, ptHunts]) and Sees(FTargetCell, MiddleOf(Hero)) then
+  var Rams := FTactics in [ptRams, ptHunts];
+  if Rams and HasRunway(FTargetCell, MiddleOf(Hero)) then
     BeginAim(MiddleOf(Hero))
   else
     BeginDive(CellAt(Hero));
@@ -751,7 +758,8 @@ end;
 
 procedure TPilot.BeginDash(const AFeet: TPlace);
 begin
-  FDashDirection := UnitOf(WayTo(MiddleOf(AFeet), FAimPoint));
+  FDashFrom := MiddleOf(AFeet);
+  FDashDirection := UnitOf(WayTo(FDashFrom, FAimPoint));
   FDashTouchedHero := False;
   FState := psDash;
 end;
@@ -810,12 +818,21 @@ begin
   FState := psStun;
 end;
 
+// A wall short of the point the eye had locked on stopped a dash nobody
+// had to dodge. In whole units, as HasRunway counts them.
+function TPilot.DashCameToAim(const AFeet: TPlace): Boolean;
+begin
+  var Flown := LengthOf(WayTo(FDashFrom, MiddleOf(AFeet)));
+  var Aimed := LengthOf(WayTo(FDashFrom, FAimPoint));
+  Result := Round(Flown) >= Trunc(Aimed) - SightGap;
+end;
+
 procedure TPilot.Stun(const AFeet: TPlace);
 begin
   // The tick after the crash: by now the game has reported every touch
   // of the dash, the last one too
   if FTicksLeft = StunTicks then
-    FOwesPrize := not FDashTouchedHero;
+    FOwesPrize := DashCameToAim(AFeet) and not FDashTouchedHero;
   Dec(FTicksLeft);
   if FTicksLeft = 0 then
     EndManeuver(AFeet);
