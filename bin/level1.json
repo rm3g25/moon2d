@@ -16,7 +16,8 @@
     "mine-interior"
   ],
   "objectSets": [
-    "sky"
+    "sky",
+    "level1-structures"
   ],
   "music": "moon_surface.ogg",
   "legacyTrailing": [
@@ -121,6 +122,118 @@
         78
       ],
       "tag": "satellite"
+    },
+    {
+      "sprite": "s01-floor",
+      "screen": 1,
+      "x": 0,
+      "y": 352,
+      "width": 512,
+      "tag": "s01-floor"
+    },
+    {
+      "sprite": "s01-depot",
+      "screen": 1,
+      "x": 352,
+      "y": 256,
+      "width": 160,
+      "tag": "s01-depot"
+    },
+    {
+      "sprite": "s01-crates",
+      "screen": 1,
+      "x": 320,
+      "y": 288,
+      "width": 32,
+      "tag": "s01-crates"
+    },
+    {
+      "sprite": "s02-hook-a",
+      "screen": 2,
+      "x": 256,
+      "y": 64,
+      "width": 32,
+      "tag": "s02-hook-a"
+    },
+    {
+      "sprite": "s02-hook-b",
+      "screen": 2,
+      "x": 288,
+      "y": 64,
+      "width": 32,
+      "tag": "s02-hook-b"
+    },
+    {
+      "sprite": "s02-crane",
+      "screen": 2,
+      "x": 256,
+      "y": 32,
+      "width": 128,
+      "tag": "s02-crane"
+    },
+    {
+      "sprite": "s02-deck",
+      "screen": 2,
+      "x": 320,
+      "y": 128,
+      "width": 192,
+      "tag": "s02-deck"
+    },
+    {
+      "sprite": "s02-pillar",
+      "screen": 2,
+      "x": 384,
+      "y": 192,
+      "width": 32,
+      "tag": "s02-pillar"
+    },
+    {
+      "sprite": "s02-rails",
+      "screen": 2,
+      "x": 304,
+      "y": 336,
+      "width": 208,
+      "tag": "s02-rails"
+    },
+    {
+      "sprite": "s02-depot",
+      "screen": 2,
+      "x": 0,
+      "y": 256,
+      "width": 96,
+      "tag": "s02-depot"
+    },
+    {
+      "sprite": "s02-crates",
+      "screen": 2,
+      "x": 96,
+      "y": 288,
+      "width": 96,
+      "tag": "s02-crates"
+    },
+    {
+      "sprite": "s02-truck",
+      "screen": 2,
+      "x": 192,
+      "y": 320,
+      "width": 96,
+      "tag": "s02-truck"
+    },
+    {
+      "sprite": "s02-floor-a",
+      "screen": 2,
+      "x": 0,
+      "y": 352,
+      "width": 192,
+      "tag": "s02-floor-a"
+    },
+    {
+      "sprite": "s02-floor-b",
+      "screen": 2,
+      "x": 192,
+      "y": 352,
+      "width": 320,
+      "tag": "s02-floor-b"
     }
   ],
   "dynamics": [
@@ -476,6 +589,456 @@
       "glint": 0,
       "rays": 24,
       "rayIntensity": 70
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 37.5,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 101.8,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 170.8,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 235.8,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 300.4,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 372.0,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-floor",
+      "x": 454.2,
+      "y": 12.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-depot",
+      "x": 47.1,
+      "y": 38.4,
+      "tint": [
+        76,
+        82,
+        100
+      ],
+      "blink": "steady",
+      "intensity": 25,
+      "size": 14
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-depot",
+      "x": 121.1,
+      "y": 38.4,
+      "tint": [
+        76,
+        82,
+        100
+      ],
+      "blink": "steady",
+      "intensity": 25,
+      "size": 14
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-crane",
+      "x": 44.4,
+      "y": 29.0,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 11
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-crane",
+      "x": 89.3,
+      "y": 29.0,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 11
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-deck",
+      "x": 44.1,
+      "y": 63.5,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 11
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-deck",
+      "x": 141.5,
+      "y": 63.5,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 11
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-a",
+      "x": 33.1,
+      "y": 13.3,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-a",
+      "x": 148.3,
+      "y": 13.3,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-b",
+      "x": 51.6,
+      "y": 16.8,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-b",
+      "x": 104.8,
+      "y": 16.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-b",
+      "x": 169.5,
+      "y": 16.8,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-floor-b",
+      "x": 266.2,
+      "y": 16.7,
+      "tint": [
+        100,
+        77,
+        45
+      ],
+      "blink": "steady",
+      "intensity": 45,
+      "size": 12
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 28.8,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 46.2,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 65.4,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 85.0,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 103.6,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 122.5,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 140.1,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 158.8,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 174.9,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-rails",
+      "x": 193.1,
+      "y": 14.1,
+      "tint": [
+        100,
+        88,
+        65
+      ],
+      "blink": "steady",
+      "intensity": 35,
+      "size": 5
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-depot",
+      "x": 29.8,
+      "y": 38.1,
+      "tint": [
+        76,
+        82,
+        100
+      ],
+      "blink": "steady",
+      "intensity": 25,
+      "size": 14
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-depot",
+      "x": 71.1,
+      "y": 38.1,
+      "tint": [
+        76,
+        82,
+        100
+      ],
+      "blink": "steady",
+      "intensity": 25,
+      "size": 14
+    },
+    {
+      "kind": "beacon",
+      "parent": "s02-crane",
+      "x": 0.5,
+      "y": 27.5,
+      "tint": [
+        100,
+        18,
+        12
+      ],
+      "blink": "flash",
+      "frequency": 0.7,
+      "intensity": 90,
+      "size": 9,
+      "glint": 45
     }
   ],
   "tilePalette": [
@@ -652,10 +1215,10 @@
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,0,0,0,126,127,128,129,130",
-          "0,0,0,0,0,0,0,0,0,0,65,134,135,136,137,138",
-          "0,0,0,0,0,0,0,0,0,0,65,142,144,145,146,147",
-          "150,150,150,150,150,150,150,150,150,150,150,150,150,150,150,150"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000000",
@@ -676,17 +1239,17 @@
         "screen": 2,
         "rows": [
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,156,150,150,150,0,0,0,0",
-          "0,0,0,0,0,0,0,0,154,154,32,32,0,0,0,0",
-          "0,0,0,0,0,0,0,0,154,154,31,31,0,0,0,0",
-          "0,0,0,0,0,0,0,0,154,154,152,152,152,152,152,152",
-          "0,0,0,0,0,0,0,0,153,154,150,150,150,150,150,150",
-          "0,0,0,0,0,0,0,0,0,154,33,33,32,33,33,33",
-          "0,0,0,0,0,0,0,0,0,154,0,0,31,0,0,0",
-          "131,132,133,0,0,0,0,0,0,153,0,0,31,0,0,0",
-          "139,140,141,65,0,0,0,0,0,0,0,0,31,0,0,0",
-          "147,148,149,65,151,65,28,29,30,0,27,27,34,27,27,27",
-          "150,150,150,150,150,150,124,105,105,105,105,105,105,105,105,105"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000000",
