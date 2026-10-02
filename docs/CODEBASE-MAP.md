@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.21` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.22` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -816,7 +816,7 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.Pilot.pas` (~910 lines)
+### `Game/Monsters.Pilot.pas` (~975 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
 where its body goes this tick and what it is up to. The monster keeps its
 place, its step and its guns; the pilot moves the place and answers the
@@ -841,8 +841,12 @@ game's. A 2026 addition all but the lap.
 - **`TPilot`** - `Create(level, screen, baseStep)`; `Tick(var x, y,
   brief)` moves the feet point; `SetTactics` (new tactics open with a
   maneuver at once - `FRestWaived`); `NoteHeroContact` (the game has seen
-  the body touch the hero); `Busy` (in a maneuver: the aimed gun holds, a
-  bullet's shove moves nothing); `Gaze` / `AimPoint`, `Charge` (0..1, for
+  the body touch the hero); `Busy` (in a maneuver: a bullet's shove moves
+  nothing); `GunHeld` (the monster's aimed gun is silent: in the pondering
+  the ports speak, in the aim, the dash and the stun the eye is off the
+  hero) and `GunClockRuns` (false on the ticks the slow clock of a
+  maneuver skips - every `ManeuverGunSlowdown` = 2nd tick counts);
+  `Gaze` / `AimPoint`, `Charge` (0..1, for
   the sensor), `SpinScale(lapScale)` (the braking, the pondering and the
   ram spin the disc up by `ManeuverSpinBoost`, a stun stops it, a dive
   spins as the lap does); one-tick pulses `PortsDue`,
@@ -855,33 +859,39 @@ game's. A 2026 addition all but the lap.
   `Brake` eases onto the cell (`BrakeShare`); `Ponder` stands
   `PonderTicks` = 50 and fires the ports on a beat (`PortVolleys` = 5,
   every `PortsEveryTicks`, the last as the maneuver leaves);
-  `PickManeuver` then chooses by the tactics.
-- **The dive** (`ptDives`; the other tactics too when the hero is hidden):
-  cell by cell through the arena at the step of the definition for
-  `DiveTicks` = 130, no gun. It sets off toward the hero (`BeginDive`),
+  `PickManeuver` then chooses by the tactics. A hunt alone does not
+  ponder: its `Brake` goes straight to `PickManeuver`.
+- **The dive** (`ptDives`; the other tactics too where a ram has no
+  runway): cell by cell through the arena at the monster's own step - the
+  rage doubles it - for `DiveTicks` = 130 (`HuntDiveTicks` = 65 in a hunt),
+  the aimed gun on its slow clock. It sets off toward the hero (`BeginDive`),
   and every turn after has a cause (`DiveHeading`): the
   hero's row or column crossed - onto it, toward him (`CrossesHeroLine`,
   `HeroSide`); a wall ahead - to his side, else the other, else back. Then
   `PathToLap` (breadth-first over open cells, shortest way to the lap),
   `FlyBack`, `JoinLap`.
-- **The ram** (`ptRams`, `ptHunts`): flown when the pondering ends with
-  the hero in plain sight (`Sees` - the dash itself, flown ahead of time
+- **The ram** (`ptRams`, `ptHunts`): flown at where the hero stands,
+  seen or not, as long as the dash has a runway (`HasRunway` - the dash
+  itself, flown ahead of time: `MinRunway` = 64 units of open flight, or
   to within `SightGap` of him); under `ptRams` the pilot on the lap first
-  looks for a cell that sees him, a lap at most (`SearchesForLine`).
-  Hidden hero - a dive instead. `Aim` holds the
+  looks for a cell with one, a lap at most (`SearchesForRunway`).
+  No runway - a dive instead. `Aim` holds the
   eye on the point `AimTicks` = 15 and flies the first stride in its last
   tick (a touch in that tick is the dash's), `Dash` flies there in a straight line
-  and on at `DashStepScale` = 3 base steps, unit by unit (`Advance`,
+  and on at `DashStepScale` = 4 base steps, unit by unit (`Advance`,
   `BodyBlocked` - the body's corners drawn in by `BodyInset`, the arena's
   bounds), into the first wall: `HitWall` (+`WallNormal`), `Stun` for
-  `StunTicks` = 50. The tick after the crash `OwesPrize` says whether the
-  dash never touched the hero. `ptHunts` never goes back to the lap
-  (`EndManeuver`): it ponders next where the maneuver ended.
+  `StunTicks` = 50. The tick after the crash `OwesPrize` says the dash
+  came to the point the eye had locked on (`DashCameToAim`) and never
+  touched the hero: a wall short of the point stopped a dash nobody had
+  to dodge. `ptHunts` never goes back to the lap (`EndManeuver`): the next
+  maneuver starts from the cell the last one ended at, a dive leg between
+  any two rams (`MayRam`).
 - **The arena**: the screen's cells that are not solid, rows
   `ArenaTopRow` (under the HUD) to `ArenaBottomRow` (above the bottom row
   of floor and pits) - `CellOpen`.
 
-### `Game/Monsters.pas` (~1320 lines)
+### `Game/Monsters.pas` (~1330 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -920,9 +930,12 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `SpinScale` has the last word), `DiscWear` (lives lost since birth over `WearFull` -
   `FLivesBorn`, because rage resets `LivesAll`) and `DiscCharge` (rises
   over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one;
-  in a maneuver the pilot's `Charge` instead). While the pilot is `Busy`
-  the aimed gun holds and its timer stays at zero - a whole interval
-  passes after a maneuver before it speaks.
+  where the pilot holds the gun - its `Charge` instead). The aimed gun
+  under a pilot: held (`PilotHoldsGun`), its timer stays at zero - a whole
+  interval passes after a hold before it speaks; in the rest of a maneuver
+  the timer counts only the ticks of the pilot's slow clock
+  (`GunClockRuns`), so the gun fires half as often. The interval and its
+  `=` test are the 2008 ones.
   Public: `Tick(heroX, heroY, bullets)`, `SetTactics` (a flying boss takes
   them up, the rest have no pilot), `NoteHeroContact`, `LastCrash` (asked
   on `meBossCrashed`),
