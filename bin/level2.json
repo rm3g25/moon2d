@@ -144,6 +144,41 @@
       "spin": 40,
       "flow": "puffs",
       "frequency": 0.45
+    },
+    {
+      "kind": "sparks",
+      "parent": "satellite",
+      "x": 33.5,
+      "y": 36,
+      "tint": [
+        100,
+        96,
+        86
+      ],
+      "midTint": [
+        100,
+        66,
+        27
+      ],
+      "endTint": [
+        69,
+        14,
+        6
+      ],
+      "intensity": 25,
+      "rate": 12,
+      "burst": 7,
+      "frequency": 0.5,
+      "life": 2.2,
+      "speed": 46,
+      "angle": -90,
+      "cone": 70,
+      "gravity": 42,
+      "drag": 50,
+      "size": 1.6,
+      "opacity": 85,
+      "flash": 35,
+      "fork": 18
     }
   ],
   "tilePalette": [

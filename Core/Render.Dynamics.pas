@@ -13,6 +13,11 @@
   pose of the last two ticks: an object that turns with it is drawn
   where its point has turned to, between the ticks as the disc is.
 
+  The solid layer comes from the game too, as a probe, and reaches the
+  objects with the canvas: what a kind throws may ring off the walls.
+  The probe answers for the hero's screen alone, so an object standing
+  on another one meets no walls rather than the wrong ones.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.Dynamics;
@@ -21,7 +26,7 @@ unit Render.Dynamics;
 interface
 
 uses
-  Sdl2.Core, Render.Sprites, Levels.Defs, Levels.Dynamics;
+  Sdl2.Core, Render.Sprites, Effects.Sparks, Levels.Defs, Levels.Dynamics;
 
 type
   // A spinning monster at one tick: its axis on the screen and its
@@ -53,6 +58,12 @@ type
   TLocateMonster = reference to function(const ATag: string;
     out AStand: TParentStand): Boolean;
 
+  // What the dynamic objects ask of the game they live in
+  TDynamicWorld = record
+    LocateMonster: TLocateMonster;
+    Solid: TSolidProbe; // of the hero's screen, in screen units
+  end;
+
   TDynamicScreenRenderer = class
   private type
     // A screen a dynamic object shows on, and the corner it counts from
@@ -74,6 +85,9 @@ type
     FCanvas: TDynamicCanvas;
     FPlaces: TArray<TPlace>;
     FLocateMonster: TLocateMonster;
+    FSolid: TSolidProbe;
+    FInView: Boolean; // the object being ticked stands on the hero's screen
+    function SolidInView(AX, AY: Single): Boolean;
     function PlaceOf(ADynamic: TDynamicObject;
       const AObjects: TArray<TLevelObject>): TPlace;
     procedure FollowMonster(var APlace: TPlace);
@@ -86,7 +100,7 @@ type
     // The level owns the objects and must outlive this renderer, and
     // AArt - the cache of the level's object art - must too
     constructor Create(ARenderer: PSdlRenderer; ALevel: TLevel;
-      AArt: TSpriteCache; const ALocateMonster: TLocateMonster);
+      AArt: TSpriteCache; const AWorld: TDynamicWorld);
     destructor Destroy; override;
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
@@ -112,19 +126,23 @@ const
   FlareGlowSide = 128;
   // A ray a hair wide needs pixels across it
   StarburstGlowSide = 256;
+  StreakGlowSide = 64;
   PuffSide = 64;
 
 constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
-  ALevel: TLevel; AArt: TSpriteCache; const ALocateMonster: TLocateMonster);
+  ALevel: TLevel; AArt: TSpriteCache; const AWorld: TDynamicWorld);
 begin
   inherited Create;
-  FLocateMonster := ALocateMonster;
+  FLocateMonster := AWorld.LocateMonster;
   FCanvas.Renderer := ARenderer;
   FCanvas.Art := AArt;
+  FSolid := AWorld.Solid;
+  FCanvas.Solid := SolidInView;
   FCanvas.PointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
   FCanvas.FlareGlow := CreateGlowShape(ARenderer, gsFlare, FlareGlowSide);
   FCanvas.StarburstGlow := CreateGlowShape(ARenderer, gsStarburst,
     StarburstGlowSide);
+  FCanvas.StreakGlow := CreateGlowShape(ARenderer, gsStreak, StreakGlowSide);
   FCanvas.Puffs := CreatePuffTextures(ARenderer, PuffSide);
 
   for var DynamicObject in ALevel.Dynamics do
@@ -139,6 +157,8 @@ begin
   for var Place in FPlaces do
     Place.DynamicObject.Release;
   FreePuffTextures(FCanvas.Puffs);
+  if Assigned(FCanvas.StreakGlow) then
+    SDL_DestroyTexture(FCanvas.StreakGlow);
   if Assigned(FCanvas.StarburstGlow) then
     SDL_DestroyTexture(FCanvas.StarburstGlow);
   if Assigned(FCanvas.FlareGlow) then
@@ -254,6 +274,11 @@ begin
     end;
 end;
 
+function TDynamicScreenRenderer.SolidInView(AX, AY: Single): Boolean;
+begin
+  Result := FInView and Assigned(FSolid) and FSolid(AX, AY);
+end;
+
 // Every object lives on, whatever screen the hero is on: coming back
 // finds a lamp mid-rhythm, not starting over
 procedure TDynamicScreenRenderer.Tick(AScreen: Integer);
@@ -268,6 +293,7 @@ begin
     if Lead.Screen <> FPlaces[i].LeadScreen then
       FPlaces[i].DynamicObject.ForgetOrigin;
     FPlaces[i].LeadScreen := Lead.Screen;
+    FInView := Lead.Screen = AScreen;
     var Origin := OriginOf(FPlaces[i], Lead, ThisTick);
     FPlaces[i].DynamicObject.Tick(Origin.X, Origin.Y, FPlaces[i].ParentAlive);
   end;

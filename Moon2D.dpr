@@ -499,8 +499,11 @@ begin
   for var SetName in FLevel.ObjectSets do
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
+  var World: TDynamicWorld;
+  World.LocateMonster := LocateMonster;
+  World.Solid := SolidUnderPoint;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
-    LocateMonster);
+    World);
 
   FHero := THero.Create(FRenderer, FLevel);
   FreeAndNil(FHenshin);
@@ -975,7 +978,7 @@ begin
   Result := False;
 end;
 
-// The solid layer the debris rings off: the collision grid of the
+// The solid layer debris and sparks ring off: the collision grid of the
 // hero's screen, the point in screen units
 function TMoonGame.SolidUnderPoint(AX, AY: Single): Boolean;
 begin

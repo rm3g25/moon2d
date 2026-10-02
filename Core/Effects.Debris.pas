@@ -265,14 +265,20 @@ end;
 // The sparks of a blast cool the way its shards start to
 function BlastSparkLook: TSparkLook;
 begin
+  Result := Default(TSparkLook);
   Result.Gravity := SparkGravity;
   Result.AirKeep := SparkAirKeep;
   Result.LifeMin := SparkLifeMin;
   Result.LifeMax := SparkLifeMax;
   Result.Width := StreakWidth;
+  Result.ThinShare := 1;
   Result.StreakTicks := StreakTicks;
-  Result.HotColor := HotColor;
-  Result.CoolColor := EmberColor;
+  Result.SpeedCurve := 1;
+  Result.Level := 1;
+  Result.Heat.Hot := HotColor;
+  Result.Heat.Warm := EmberColor;
+  Result.Heat.Cool := EmberColor;
+  Result.Heat.WarmAt := 1;
   Result.Wall := swDie;
 end;
 

@@ -30,7 +30,7 @@ interface
 uses
   System.SysUtils, System.JSON, System.Generics.Collections, Sdl2.Core,
   Render.Sprites, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
-  Levels.Tint;
+  Effects.Sparks, Levels.Tint;
 
 type
   EDynamicError = class(Exception);
@@ -42,7 +42,11 @@ type
     PointGlow: PSdlTexture;
     FlareGlow: PSdlTexture;
     StarburstGlow: PSdlTexture;
+    StreakGlow: PSdlTexture;
     Puffs: TPuffTextures;
+    // In screen units; an object away from the hero's screen meets no
+    // walls
+    Solid: TSolidProbe;
     // The level's object art: its own set and the shared ones it
     // declares; maps are named as the static objects name sprites
     Art: TSpriteCache;
@@ -259,6 +263,80 @@ type
     function Exhausted: Boolean;
   end;
 
+  // A spark source's look in the words of level JSON - seconds, units a
+  // second, degrees - with the percentages as shares, 0..1
+  TSparkSourceLook = record
+    Rate, Burst, Frequency: Single;
+    Life, Speed, Angle, Cone, Gravity, Drag, Size: Single;
+    Opacity, Flash, Fork: Single;
+    Wall: TSparkWall;
+    MidTint, EndTint: TColorTint;
+  end;
+
+  TArcClock = record
+    Gap: Single; // ticks between arcs, on average
+    WaitTicks: Integer; // to the next arc
+    TicksLeft: Integer; // of the arc under way
+    Pour: Single; // sparks per tick of it
+  end;
+
+  // Sparks from torn metal and bare wires (Effects.Sparks): a steady
+  // fall of them and, now and then, an arc - a handful at once under a
+  // cold flash of light. Once out, a spark stays where it is on the
+  // screen - a moving parent leaves a trail. The tint is the color of a
+  // fresh spark; it cools through midTint to endTint.
+  // Units: rate in sparks a second, burst in sparks an arc (0 = no
+  // arcs), frequency in arcs a second, their gaps uneven, life in
+  // seconds, speed in units a second - the fastest spark, most are
+  // slower - gravity in units a second per second, size the streak
+  // across in screen units. Angle is in degrees counterclockwise from
+  // the right (-90 = down), cone its full width. Drag (speed lost per
+  // second), opacity, flash (the light of an arc) and fork (the chance
+  // of a spark to split) are percentages. Collide is what the solid
+  // layer does to a spark: "none", "die" or "bounce" - bounce in the
+  // front layer by default, none behind it. Intensity scales the rate
+  // and, softer, how often and how hard it arcs.
+  // JSON:
+  //   {"kind": "sparks", "parent": "satellite", "x": 33.5, "y": 36,
+  //    "tint": [100, 96, 86], "midTint": [100, 66, 27],
+  //    "endTint": [69, 14, 6], "rate": 12, "burst": 7, "frequency": 0.5,
+  //    "life": 2.6, "speed": 46, "angle": -90, "cone": 70, "gravity": 42,
+  //    "drag": 50, "size": 1.6, "opacity": 90, "flash": 45, "fork": 18,
+  //    "collide": "none"}
+  TSparks = class(TDynamicObject)
+  private
+    FRate: Single; // sparks per tick at full intensity
+    FBurst: Single; // sparks in an arc of the usual size
+    FArc: TArcClock;
+    FSpray: TSparkSpray; // one spark
+    FSize: Single;
+    FFlashPeak: Single; // 0..1
+    FFlash: Single; // 0..1 of the peak: the light of the last arc
+    FField: TSparkField;
+    FSolid: TSolidProbe;
+    FPoint: TSdlFPoint; // where the sparks leave, in screen units
+    FRandom: TXorShift;
+    FOwed: Single; // sparks due but not yet born
+    function Blocked(AX, AY: Single): Boolean;
+    function FieldLook(const ALook: TSparkSourceLook): TSparkLook;
+    procedure TakeLook(const ALook: TSparkSourceLook; ASeed: Cardinal);
+    procedure Emit;
+    procedure StartArc;
+    procedure ThrowOne;
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    destructor Destroy; override;
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    // What was in the air goes too: the world restarts in full
+    procedure Rewind; override;
+  end;
+
   // A body in the sky - the Earth over the Moon unless the level says
   // otherwise (the dead Earth of Selene, Proxima c): a globe
   // (Render.Globe) under a sun the level moves. The sun travels the arc of the sky over the
@@ -327,19 +405,21 @@ uses
   System.Math, Sprites.Sets, Render.Glow;
 
 type
-  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe);
+  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks);
 
 const
-  // The JSON vocabulary of "kind", "layer", "blink", "flow" and "surface"
+  // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface"
+  // and "collide"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe');
+    'globe', 'sparks');
   DynamicLayerIds: array [TDynamicLayer] of string = ('sky', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky);
+    dlSky, dlBack);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
   GlobeSurfaceIds: array [TGlobeSurface] of string = ('regolith', 'matte');
+  SparkWallIds: array [TSparkWall] of string = ('none', 'die', 'bounce');
 
   // Seconds and percentages in JSON, ticks and shares in the code; the
   // logic runs 33 ticks a second (tickRate of Game.Config)
@@ -447,6 +527,49 @@ const
   // A share kept per second becomes a share kept per tick
   TickExponent: Single = 1 / LogicTicksPerSecond;
   DefaultSpin = 30;
+
+  SparkLifeJitter = 0.5; // of the life, either way
+  SlowSpeedShare = 0.2; // the slowest spark, of the fastest
+  SparkSpeedCurve = 2.0; // the fan of a grinder
+  SparkThinShare = 0.55;
+  SparkStreakTicks = 2.0;
+  SparkSpawnSpread = 1.0; // around the point, in streak widths
+  SparkWarmAt = 0.35;
+  // Steel off steel and stone
+  SparkBounce: TSparkBounce = (Keep: 0.42; Grip: 0.7; LifeLost: 0.35);
+  SparksCapacity = 256;
+  // The field rolls dice of its own, apart from the source's
+  FieldSeedSalt = $4669656C; // "Fiel"
+  // An arc pours for this long; its size and the wait for the next one
+  // roll around their means, a small arc likelier than a big one
+  ArcTicks = 3;
+  ArcSizeMin = 0.4;
+  ArcSizeSpread = 1.8;
+  ArcGapMin = 0.3;
+  ArcGapSpread = 1.4;
+  // A faint source arcs softer and rarer, but not that much softer
+  ArcSizeFloor = 0.4;
+  ArcRateFloor = 0.25;
+  ArcColor: TRgb = (R: 190; G: 215; B: 255); // colder than the sparks
+  FlashKeep = 0.62; // of the light, per tick
+  FlashScale = 8.0; // the light across, in streak widths
+  FlashCoreShare = 0.35;
+
+  // Steel by default: white heat, straw, cherry red
+  SteelWarmTint: TColorTint = (R: 100; G: 66; B: 27);
+  SteelCoolTint: TColorTint = (R: 69; G: 14; B: 6);
+  DefaultSparkRate = 12;
+  DefaultBurst = 8;
+  DefaultSparkLife = 1.0;
+  DefaultSparkSpeed = 90;
+  DefaultSparkAngle = -90;
+  DefaultSparkCone = 60;
+  DefaultSparkGravity = 120;
+  DefaultSparkDrag = 60;
+  DefaultSparkSize = 2.0;
+  DefaultSparkOpacity = 100;
+  DefaultFlash = 50;
+  DefaultFork = 20;
 
   // A globe looks like the Earth unless the level says otherwise: matte
   // ground under air, the night side black but for a trace of
@@ -1031,6 +1154,205 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TSparks
+// ---------------------------------------------------------------------------
+
+function ReadTintOrDefault(AObj: TJSONObject; const AKey: string;
+  const ADefault: TColorTint; const AOwner: string): TColorTint;
+begin
+  if AObj.GetValue(AKey) = nil then
+    Exit(ADefault);
+  Result := ReadTint(AObj, AOwner, AKey);
+end;
+
+function ReadSparkSourceLook(AObj: TJSONObject; ALayer: TDynamicLayer;
+  const AOwner: string): TSparkSourceLook;
+begin
+  Result.Rate := ReadReach(AObj, 'rate', DefaultSparkRate, AOwner);
+  Result.Burst := ReadReach(AObj, 'burst', DefaultBurst, AOwner);
+  Result.Frequency := ReadPositive(AObj, 'frequency', DefaultFrequency,
+    AOwner);
+  Result.Life := ReadPositive(AObj, 'life', DefaultSparkLife, AOwner);
+  Result.Speed := ReadReach(AObj, 'speed', DefaultSparkSpeed, AOwner);
+  Result.Angle := AObj.GetValue<Double>('angle', DefaultSparkAngle);
+  Result.Cone := ReadReach(AObj, 'cone', DefaultSparkCone, AOwner);
+  Result.Gravity := AObj.GetValue<Double>('gravity', DefaultSparkGravity);
+  Result.Drag := ReadShare(AObj, 'drag', DefaultSparkDrag, AOwner);
+  Result.Size := ReadPositive(AObj, 'size', DefaultSparkSize, AOwner);
+  Result.Opacity := ReadShare(AObj, 'opacity', DefaultSparkOpacity, AOwner);
+  Result.Flash := ReadShare(AObj, 'flash', DefaultFlash, AOwner);
+  Result.Fork := ReadShare(AObj, 'fork', DefaultFork, AOwner);
+
+  var LayerWall := swPass;
+  if ALayer = dlFront then
+    LayerWall := swBounce;
+  Result.Wall := TSparkWall(ReadWord(AObj, 'collide', SparkWallIds[LayerWall],
+    SparkWallIds, 'collide', AOwner));
+  Result.MidTint := ReadTintOrDefault(AObj, 'midTint', SteelWarmTint, AOwner);
+  Result.EndTint := ReadTintOrDefault(AObj, 'endTint', SteelCoolTint, AOwner);
+end;
+
+constructor TSparks.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  TakeLook(ReadSparkSourceLook(AObj, APlacement.Layer, AOwner),
+    PlacementSeed(APlacement));
+end;
+
+destructor TSparks.Destroy;
+begin
+  FField.Free;
+  inherited;
+end;
+
+// Seconds and shares in, ticks out
+function TSparks.FieldLook(const ALook: TSparkSourceLook): TSparkLook;
+begin
+  Result := Default(TSparkLook);
+  Result.Gravity := ALook.Gravity / Sqr(LogicTicksPerSecond);
+  var Kept: Single := 1 - ALook.Drag;
+  Result.AirKeep := Power(Kept, TickExponent);
+  var LifeTicks: Single := ALook.Life * LogicTicksPerSecond;
+  Result.LifeMin := LifeTicks * (1 - SparkLifeJitter);
+  Result.LifeMax := LifeTicks * (1 + SparkLifeJitter);
+  Result.Width := ALook.Size;
+  Result.ThinShare := SparkThinShare;
+  Result.StreakTicks := SparkStreakTicks;
+  Result.SpeedCurve := SparkSpeedCurve;
+  Result.Level := ALook.Opacity;
+  Result.Heat.Hot := TintColor(Placement.Tint);
+  Result.Heat.Warm := TintColor(ALook.MidTint);
+  Result.Heat.Cool := TintColor(ALook.EndTint);
+  Result.Heat.WarmAt := SparkWarmAt;
+  Result.Wall := ALook.Wall;
+  Result.Bounce := SparkBounce;
+  Result.ForkChance := ALook.Fork;
+end;
+
+procedure TSparks.TakeLook(const ALook: TSparkSourceLook; ASeed: Cardinal);
+begin
+  FRate := ALook.Rate / LogicTicksPerSecond;
+  FBurst := ALook.Burst;
+  FSize := ALook.Size;
+  FFlashPeak := ALook.Flash;
+
+  FSpray.Count := 1;
+  FSpray.Heading := ALook.Angle;
+  FSpray.Cone := ALook.Cone;
+  FSpray.FastSpeed := ALook.Speed / LogicTicksPerSecond;
+  FSpray.SlowSpeed := FSpray.FastSpeed * SlowSpeedShare;
+
+  FRandom.Seed := ASeed or 1;
+  FField := TSparkField.Create(FieldLook(ALook), Blocked, SparksCapacity,
+    ASeed xor FieldSeedSalt);
+  FArc.Gap := LogicTicksPerSecond / ALook.Frequency;
+  // Sources seeded apart arc apart
+  FArc.WaitTicks := Round(FArc.Gap * FRandom.NextUnit);
+end;
+
+procedure TSparks.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  FSolid := ACanvas.Solid;
+end;
+
+procedure TSparks.Rewind;
+begin
+  inherited;
+  FField.Clear;
+  FOwed := 0;
+  FArc.TicksLeft := 0;
+  FFlash := 0;
+end;
+
+// The field counts from the point the sparks leave, the probe from the
+// corner of the screen
+function TSparks.Blocked(AX, AY: Single): Boolean;
+begin
+  Result := Assigned(FSolid) and FSolid(FPoint.X + AX, FPoint.Y + AY);
+end;
+
+procedure TSparks.StartArc;
+begin
+  var SizeScale: Single := ArcSizeFloor + (1 - ArcSizeFloor) * Intensity;
+  var RateScale: Single := ArcRateFloor + (1 - ArcRateFloor) * Intensity;
+  var Luck := FRandom.NextUnit;
+  FArc.Pour := FBurst * SizeScale *
+    (ArcSizeMin + ArcSizeSpread * Luck * Luck) / ArcTicks;
+  FArc.TicksLeft := ArcTicks;
+  var Wait: Single := FArc.Gap *
+    (ArcGapMin + ArcGapSpread * FRandom.NextUnit) / RateScale;
+  FArc.WaitTicks := Max(ArcTicks, Round(Wait));
+end;
+
+procedure TSparks.ThrowOne;
+begin
+  var Reach: Single := FSize * SparkSpawnSpread;
+  var OffX: Single := (2 * FRandom.NextUnit - 1) * Reach;
+  var OffY: Single := (2 * FRandom.NextUnit - 1) * Reach;
+  FField.Spray(OffX, OffY, FSpray);
+end;
+
+procedure TSparks.Emit;
+begin
+  FOwed := FOwed + FRate * Intensity;
+
+  if FBurst > 0 then
+  begin
+    Dec(FArc.WaitTicks);
+    if FArc.WaitTicks <= 0 then
+      StartArc;
+  end;
+  if FArc.TicksLeft > 0 then
+  begin
+    Dec(FArc.TicksLeft);
+    FOwed := FOwed + FArc.Pour;
+    FFlash := 1;
+  end;
+
+  while FOwed >= 1 do
+  begin
+    ThrowOne;
+    FOwed := FOwed - 1;
+  end;
+end;
+
+procedure TSparks.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  FPoint.X := Origin.X + Placement.X;
+  FPoint.Y := Origin.Y + Placement.Y;
+  FField.ShiftFrame(AMotionX, AMotionY);
+  FFlash := FFlash * FlashKeep;
+  if AParentAlive and (Intensity > 0) then
+    Emit
+  else
+    // An arc cut short does not wait for the source to come back
+    FArc.TicksLeft := 0;
+  FField.Tick;
+end;
+
+procedure TSparks.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+var
+  DrawPoint: TSdlFPoint;
+begin
+  var Light: Single := FFlash * FFlashPeak;
+  if Light >= VisibleLevel then
+  begin
+    var Across: Single := FSize * FlashScale;
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Across, ArcColor,
+      Light);
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY,
+      Across * FlashCoreShare, White, Light);
+  end;
+
+  DrawPoint.X := AX;
+  DrawPoint.Y := AY;
+  FField.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow), DrawPoint,
+    AAlpha);
+end;
+
+// ---------------------------------------------------------------------------
 // TSkyGlobe
 // ---------------------------------------------------------------------------
 
@@ -1218,6 +1540,8 @@ begin
       Result := TSmoke.Create(APlacement, AObj, AOwner);
     dkGlobe:
       Result := TSkyGlobe.Create(APlacement, AObj, AOwner);
+    dkSparks:
+      Result := TSparks.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);
