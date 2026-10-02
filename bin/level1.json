@@ -369,6 +369,27 @@
       "heat": 70
     },
     {
+      "kind": "sparks",
+      "parent": "boss",
+      "x": 23,
+      "y": 21,
+      "tag": "bossSparks",
+      "layer": "front",
+      "intensity": 0,
+      "rate": 6,
+      "burst": 9,
+      "frequency": 1.2,
+      "life": 0.6,
+      "speed": 110,
+      "angle": -90,
+      "cone": 160,
+      "gravity": 200,
+      "drag": 85,
+      "size": 2.4,
+      "flash": 60,
+      "fork": 25
+    },
+    {
       "kind": "beacon",
       "parent": "boss",
       "turns": true,
@@ -2645,6 +2666,20 @@
       ]
     },
     {
+      "id": "bossRageSparks",
+      "screen": 17,
+      "when": "enraged",
+      "tag": "boss",
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossSparks",
+          "value": 50,
+          "ticks": 33
+        }
+      ]
+    },
+    {
       "id": "bossBurns",
       "screen": 17,
       "when": "livesBelow",
@@ -2660,6 +2695,12 @@
         {
           "action": "intensity",
           "target": "bossBurn",
+          "value": 100,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossSparks",
           "value": 100,
           "ticks": 33
         }

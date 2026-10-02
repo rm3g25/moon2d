@@ -982,11 +982,7 @@ end;
 // hero's screen, the point in screen units
 function TMoonGame.SolidUnderPoint(AX, AY: Single): Boolean;
 begin
-  // Trunc rounds toward zero: -0.5 would land in the first column
-  if (AX < 0) or (AY < 0) then
-    Exit(False);
-  Result := FLevel.SolidAt(FHero.Screen, Trunc(ScreenCols * AX / ScreenWidth),
-    Trunc(ScreenRows * AY / ScreenHeight));
+  Result := FLevel.SolidAtPoint(FHero.Screen, AX, AY);
 end;
 
 // bottle.wav is what a barrel dies with: the pops are barrel blasts
@@ -1564,6 +1560,8 @@ begin
         FSprites.Origin := FShake.Offset(scMonsters);
         FField.Draw(FSprites, FHero.Screen, AAlpha);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
+          AAlpha);
+        FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
         FSprites.Origin := FShake.Offset(scHero);

@@ -331,10 +331,17 @@ type
   public
     constructor Create(const APlacement: TDynamicPlacement;
       AObj: TJSONObject; const AOwner: string);
+    // Sparks the game makes itself, not the level file. ASeed sets their
+    // dice: sources seeded alike arc alike.
+    constructor CreateLook(const APlacement: TDynamicPlacement;
+      const ALook: TSparkSourceLook; AIntensity: Single; ASeed: Cardinal);
     destructor Destroy; override;
     procedure Acquire(const ACanvas: TDynamicCanvas); override;
     // What was in the air goes too: the world restarts in full
     procedure Rewind; override;
+    // For sparks the game makes: a level's take the solid layer from the
+    // canvas
+    procedure UseSolid(const ASolid: TSolidProbe);
   end;
 
   // A body in the sky - the Earth over the Moon unless the level says
@@ -1200,6 +1207,13 @@ begin
     PlacementSeed(APlacement));
 end;
 
+constructor TSparks.CreateLook(const APlacement: TDynamicPlacement;
+  const ALook: TSparkSourceLook; AIntensity: Single; ASeed: Cardinal);
+begin
+  inherited Create(APlacement, AIntensity);
+  TakeLook(ALook, ASeed);
+end;
+
 destructor TSparks.Destroy;
 begin
   FField.Free;
@@ -1254,6 +1268,11 @@ end;
 procedure TSparks.Acquire(const ACanvas: TDynamicCanvas);
 begin
   FSolid := ACanvas.Solid;
+end;
+
+procedure TSparks.UseSolid(const ASolid: TSolidProbe);
+begin
+  FSolid := ASolid;
 end;
 
 procedure TSparks.Rewind;

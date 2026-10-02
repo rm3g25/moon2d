@@ -25,7 +25,8 @@
   fire x3, music change, a 24x44 fragment wave), victory double-fan.
 
   A machine - a monster that explodes and moves: the tank, the flying
-  platform - smokes once it is down to its last third (a 2026 addition).
+  platform - smokes and sparks once it is down to its last third (a 2026
+  addition).
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -83,7 +84,8 @@ type
     FLevel: TLevel;
     FHeroX, FHeroY: Integer;
     FSmoke: TSmoke; // machines only, nil for the rest
-    FWrecked: Boolean; // the smoke is lit
+    FSparks: TSparks; // machines only, as the smoke
+    FWrecked: Boolean; // the smoke is lit, the sparks fly
     FDisc: TDisc; // a disc monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
     FFired: Boolean; // this tick
@@ -108,8 +110,13 @@ type
     procedure BeginDying(const AEnemyBullets: TBurst);
     function ThirdMark(AThirds: Integer): Integer;
     function FacesRight: Boolean;
+    function SpawnSeed: Cardinal;
     procedure CreateWreckSmoke;
+    procedure CreateWreckSparks;
+    function SolidUnderPoint(AX, AY: Single): Boolean;
+    procedure WreckIfCritical;
     procedure TickSmoke;
+    procedure TickSparks;
     procedure TickDisc;
     function DiscCenter: TSdlFPoint;
     function DiscWear: Single;
@@ -130,6 +137,8 @@ type
     // draws between ticks, the frames stay on them
     procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
+    procedure DrawSparks(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // Applies knockback through the wall oracle; queues explosion fans
     // and events.
@@ -200,6 +209,9 @@ type
     // Over the monsters of the screen: the smoke of the wrecked machines
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
+    // Over the smoke: their sparks
+    procedure DrawSparks(const ACanvas: TDynamicCanvas; AScreen: Integer;
+      AOrigin: TSdlPoint; AAlpha: Single);
 
     property Monsters: TObjectList<TMonster> read FMonsters;
   end;
@@ -207,7 +219,7 @@ type
 implementation
 
 uses
-  Levels.Tint;
+  Levels.Tint, Effects.Sparks;
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -238,6 +250,20 @@ const
   // the platform's wing root
   WreckSmokeX = 22;
   WreckSmokeY = 13;
+
+  // A wrecked machine shorts out: a crackle of sparks now and then, few
+  // between
+  WreckSparks: TSparkSourceLook = (Rate: 2; Burst: 5; Frequency: 0.7;
+    Life: 0.5; Speed: 80; Angle: -90; Cone: 140; Gravity: 200; Drag: 0.85;
+    Size: 2.2; Opacity: 1; Flash: 0.55; Fork: 0.25; Wall: swBounce;
+    MidTint: (R: 100; G: 66; B: 27); EndTint: (R: 69; G: 14; B: 6));
+  WreckSparksLevel = 1;
+  WreckSparksRampTicks = 0; // a short has no ramp
+  // Where the sparks leave the left-facing art: the tank's hull over
+  // the tracks, the underside of the platform's wing
+  WreckSparksX = 12;
+  WreckSparksY = 19;
+  WreckSparksSeedSalt = $57726B21; // "Wrk!"
 
 // Explodes and moves: a mount explodes too, but is part of the wall
 function IsMachine(const ADef: TMonsterDef): Boolean;
@@ -308,7 +334,10 @@ begin
   end;
 
   if IsMachine(ADef) then
+  begin
     CreateWreckSmoke;
+    CreateWreckSparks;
+  end;
   if ADiscArt <> nil then
     FDisc := TDisc.Create(ADef.Disc, ADiscArt, DiscCenter);
 end;
@@ -316,9 +345,15 @@ end;
 destructor TMonster.Destroy;
 begin
   FDisc.Free;
+  FSparks.Free;
   FSmoke.Free;
   FEvents.Free;
   inherited;
+end;
+
+function TMonster.SpawnSeed: Cardinal;
+begin
+  Result := (Cardinal(Round(FX)) shl 16) xor Cardinal(Round(FY));
 end;
 
 // Unlit until the last third; seeded by the spawn point, so two machines
@@ -327,24 +362,55 @@ procedure TMonster.CreateWreckSmoke;
 begin
   var WreckPlacement := Default(TDynamicPlacement);
   WreckPlacement.Tint := WreckSmokeTint;
-  FSmoke := TSmoke.CreateLook(WreckPlacement, WreckSmoke, 0,
-    (Cardinal(Round(FX)) shl 16) xor Cardinal(Round(FY)));
+  FSmoke := TSmoke.CreateLook(WreckPlacement, WreckSmoke, 0, SpawnSeed);
+end;
+
+// Unlit like the smoke, and seeded apart from it. The tint is the
+// color of a fresh spark: white heat.
+procedure TMonster.CreateWreckSparks;
+begin
+  var WreckPlacement := Default(TDynamicPlacement);
+  WreckPlacement.Tint := TColorTint.Neutral;
+  FSparks := TSparks.CreateLook(WreckPlacement, WreckSparks, 0,
+    SpawnSeed xor WreckSparksSeedSalt);
+  FSparks.UseSolid(SolidUnderPoint);
+end;
+
+function TMonster.SolidUnderPoint(AX, AY: Single): Boolean;
+begin
+  Result := FLevel.SolidAtPoint(FScreen, AX, AY);
+end;
+
+procedure TMonster.WreckIfCritical;
+begin
+  if FWrecked or (FSmoke = nil) or (HealthTier <> htCritical) then
+    Exit;
+  FWrecked := True;
+  FSmoke.FadeTo(WreckSmokeLevel, WreckSmokeRampTicks);
+  FSparks.FadeTo(WreckSparksLevel, WreckSparksRampTicks);
 end;
 
 procedure TMonster.TickSmoke;
 begin
   if FSmoke = nil then
     Exit;
-  if not FWrecked and (HealthTier = htCritical) then
-  begin
-    FWrecked := True;
-    FSmoke.FadeTo(WreckSmokeLevel, WreckSmokeRampTicks);
-  end;
 
   var PointX := WreckSmokeX;
   if FacesRight then
     PointX := SpriteSize - WreckSmokeX;
   FSmoke.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckSmokeY,
+    FLife = mlAlive);
+end;
+
+procedure TMonster.TickSparks;
+begin
+  if FSparks = nil then
+    Exit;
+
+  var PointX := WreckSparksX;
+  if FacesRight then
+    PointX := SpriteSize - WreckSparksX;
+  FSparks.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckSparksY,
     FLife = mlAlive);
 end;
 
@@ -354,6 +420,14 @@ begin
   if FSmoke <> nil then
     FSmoke.Draw(ACanvas, FSmoke.Origin.X + AOrigin.X,
       FSmoke.Origin.Y + AOrigin.Y, AAlpha);
+end;
+
+procedure TMonster.DrawSparks(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  if FSparks <> nil then
+    FSparks.Draw(ACanvas, FSparks.Origin.X + AOrigin.X,
+      FSparks.Origin.Y + AOrigin.Y, AAlpha);
 end;
 
 procedure TMonster.TickDisc;
@@ -834,7 +908,9 @@ begin
     maFlyDown, maFlyLeft, maFlyUp, maFlyRight:
       MoveFlying;
   end;
+  WreckIfCritical;
   TickSmoke;
+  TickSparks;
   TickDisc;
 end;
 
@@ -1074,6 +1150,14 @@ begin
   for var Monster in FMonsters do
     if Monster.Screen = AScreen then
       Monster.DrawSmoke(ACanvas, AOrigin, AAlpha);
+end;
+
+procedure TMonsterField.DrawSparks(const ACanvas: TDynamicCanvas;
+  AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  for var Monster in FMonsters do
+    if Monster.Screen = AScreen then
+      Monster.DrawSparks(ACanvas, AOrigin, AAlpha);
 end;
 
 destructor TMonsterField.Destroy;

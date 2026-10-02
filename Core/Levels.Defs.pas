@@ -155,6 +155,8 @@ type
     function TileAt(AScreen, AX, AY: Integer): Integer;
     // Collision layer: True = solid wall (the .msv first byte of a pair).
     function SolidAt(AScreen, AX, AY: Integer): Boolean;
+    // The same for a point of the screen, in screen units
+    function SolidAtPoint(AScreen: Integer; AX, AY: Single): Boolean;
     // Backdrop active on a given screen (last change wins); Image = ''
     // when the level defines none.
     function BackgroundFor(AScreen: Integer): TBackgroundChange;
@@ -192,6 +194,9 @@ type
   end;
 
 implementation
+
+uses
+  Game.Space;
 
 resourcestring
   SLevelFileNotFound = 'Level file not found: %s';
@@ -495,6 +500,15 @@ begin
     Exit(False); // off-grid is air, callers need not clamp
 
   Result := FCollision[AScreen - 1][AY][AX + 1] = '1'; // string is 1-based
+end;
+
+function TLevel.SolidAtPoint(AScreen: Integer; AX, AY: Single): Boolean;
+begin
+  // Trunc rounds toward zero: -0.5 would land in the first column
+  if (AX < 0) or (AY < 0) then
+    Exit(False);
+  Result := SolidAt(AScreen, Trunc(ScreenCols * AX / ScreenWidth),
+    Trunc(ScreenRows * AY / ScreenHeight));
 end;
 
 procedure TLevel.ParseTiles(const ATiles: TJSONObject);
