@@ -61,6 +61,11 @@ author; the brightness is set per level in code. They replaced the 2008
 backgrounds, which were composited from stock photography of unrecorded
 origin. `_black` is a plain fill.
 
+**Level objects** (`sprites/level1-objects.mset` - the ship;
+`sprites/sky.mset`, sprite `satellite`) - since 3.0.12, generated with
+ChatGPT's image model from the author's prompts, then cut out, scaled and
+packed by the author.
+
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
 generated with ChatGPT's image model to the author's direction (a clean and a
 battle-worn disc of the same geometry), then straightened, cut into layers

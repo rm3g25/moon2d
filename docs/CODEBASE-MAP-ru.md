@@ -292,7 +292,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   прогревал),
   `PlayMusic`/`StopMusic` (`music\`, OGG, мягко: отсутствующий трек пропускается
   молча), `ToggleMusicMuted`, `Enabled` (False, если DLL миксера нет - тогда все
-  вызовы становятся пустышками).
+  вызовы становятся пустышками). `MixChannels` = 32: звук, которому не
+  досталось свободного канала, молча пропадает, а одни только выстрелы
+  цепного ружья по 2.4 с держат шестнадцать.
 
 ### `Game/Game.Version.pas` (~20 строк)
 Одна константа, `GameVersion` - единственное место, где игра знает свою
@@ -954,10 +956,15 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   своих фигур - кисть рисует мимо `Origin` рендерера спрайтов, сдвиги
   передаются руками. Рисуется после пуль, до прицела и угловых HUD.
 
-### `Game/Game.Explosions.pas` (~290 строк)
+### `Game/Game.Explosions.pas` (~300 строк)
 Единственный дом для "что-то взорвалось" - вид, не механика (вееры
 остаются у монстра и в dpr). **`TExplosions`** - один на игру (рендерер +
-щуп твёрдого), чистится на двери, смерти и загрузке уровня.
+щуп твёрдого + эхо дохлопывания), чистится на двери, смерти и загрузке
+уровня.
+- **`TEchoAftershock`** (`reference to procedure`) - ответ игры на
+  дохлопывание, его звук и его толчок. Взрывы, которые игра запускает
+  сама, она сама и озвучивает; дохлопывания срабатывают здесь по своим
+  часам, поэтому каждое вызывает колбэк сразу после своего `Detonate`.
 - `Detonate(x, y, kind)` - x/y сердце взрыва в экранных единицах; `ekNone`
   ничего не делает. На каждый вид - приватная типизированная константа
   `TExplosionLook`: `TDebrisLook`, вспышка (`FlashSize`, `FlashTicks` -
@@ -995,8 +1002,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   тик/пули/радиус), `FlashTick=135`, `FinishTick=140`, жизни тикеров
   регенерации и перка, свои две дозы тряски (`WaveTrauma`, `FinishTrauma`),
   настройка отсчёта и имена своих звуков - грузятся строго в конструкторе.
-  `BottleSoundFile` публична: бочечный взрыв служит и взрывом бонуса, и dpr
-  берёт имя отсюда.
+  `BottleSoundFile` публична: бочечный взрыв служит и взрывом бонуса, и
+  хлопками обломков босса, и dpr берёт имя отсюда.
 
 ### `Game/Events/Events.Director.pas` (~155 строк)
 Исполняет события уровня (`Levels.Events`) на живой игре.
@@ -1178,7 +1185,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1980 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~1990 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
@@ -1189,10 +1196,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `GameOverDelayTicks`, `PitDepthY`), выбор шрифта (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   дополнительные сканкоды (дебажные - под DEBUGKEYS), дозы тряски экрана
-  (`ExploderTrauma`,
-  `BossBlastTrauma`, `BonusExplosionTrauma`, `BonusFireRainTrauma` - добавление
-  2026; дозы церемонии живут в `Game.Henshin`), строки макета финального
-  экрана.
+  (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
+  `BonusFireRainTrauma`, `AftershockTrauma` - добавление 2026; дозы
+  церемонии живут в `Game.Henshin`), строки макета финального экрана.
 - **Типы**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (наследует `TGameApp`) - держит реестр (владеет им
   `RunGame`) и владеет остальным: уровень, наборы
@@ -1255,6 +1261,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     `HurtHero`, `DrainMonsterEvents` (здесь же взрывы и удары босса
     доливают тряску; `meBossRage` взрывает на боссе взрыв размера машины и
     озвучивает его `RageBlastSoundFile` - машинным `platform.wav`),
+    `EchoAftershock` (`TEchoAftershock` из `Game.Explosions`: каждый хлопок
+    обломков босса играет `bottle.wav` и добавляет `AftershockTrauma`),
     `SolidUnderPoint` (щуп обломков: сетка коллизий экрана героя в честных
     экранных единицах - без пулевого -1 ряда),
     `ProcessKillStreak`, `AwardStreakBonus`.
@@ -1431,7 +1439,9 @@ music с `file`, intensity с `target`/`value`/`ticks`, sun с
   `bossBurn` с жаром, передний слой, интенсивность 0), четыре лампы на
   диске босса (`turns`, передний слой, в двух гнёздах арта обода: синяя
   пульсирующая пара `bossLamp` и красная вспыхивающая пара `bossLampRage`
-  с интенсивностью 0). События: рассвет -
+  с интенсивностью 0; ореол 10 поперёк и лучи старбёрста по 24 единицы - у
+  спутника 36, - выходящие за обод: на светлом диске голое свечение не
+  читается). События: рассвет -
   привязан к экранам: на входе в экран N (`dawn1`..`dawn17`) солнце за 20
   секунд идёт к -40 + 100 * N / 17: в начале освещены три четверти, к
   экрану 7 половина, на последнем экране серп, ночная сторона в огнях
@@ -1539,7 +1549,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Звук / музыка | Audio.pas (+константы звуков и `PreloadSounds` в Moon2D.dpr, звуки церемонии в Game.Henshin.pas, поля данных в JSON) |
 | Отрисовка тайлов и фонов | Render.Tiles.pas + Render.Sprites.pas |
 | Свободный арт поверх задника (корабль, спутник): место, размер, тинт | `objects` в levelN.json + `<assetsDir>-objects.mset` или общий набор из `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
-| Тряска экрана: дозы, что трясётся, что стоит | Moon2D.dpr (константы `*Trauma`, `Render`, `DrainMonsterEvents`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
+| Тряска экрана: дозы, что трясётся, что стоит | Moon2D.dpr (константы `*Trauma`, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
 | Имя спрайта разрешается не в ту картинку | Render.Sprites.pas (Get, AmbiguousNames) + порядок `spriteSets` уровня |
 | Монстр или герой грузит не те кадры из набора | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Наборы спрайтов / формат `.mset` | Sprites.Sets.pas + docs/MSET-FORMAT.md |

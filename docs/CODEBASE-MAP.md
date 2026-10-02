@@ -285,7 +285,9 @@ the sound bank.
   the dpr preloads, on first `Play` for a name it did not),
   `PlayMusic`/`StopMusic` (`music\`, OGG, lenient: a missing track skips
   silently), `ToggleMusicMuted`, `Enabled` (False when the mixer DLL is absent
-  -> every call becomes a no-op).
+  -> every call becomes a no-op). `MixChannels` = 32: a one-shot with no free
+  channel is dropped in silence, and the chain gun's 2.4 s shots alone hold
+  sixteen.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -949,11 +951,15 @@ the dpr with the corner HUDs. **`THudMarks`**.
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
-### `Game/Game.Explosions.pas` (~290 lines)
+### `Game/Game.Explosions.pas` (~300 lines)
 The one home of "something blew up" - the look, not the mechanics (the
 fans stay with the monster and the dpr). **`TExplosions`**, made once
-with the game (renderer + the solid probe), cleared on a door, a death
-and a level load.
+with the game (renderer + the solid probe + the aftershock echo), cleared
+on a door, a death and a level load.
+- **`TEchoAftershock`** (`reference to procedure`) - the game's answer to an
+  aftershock, its sound and its jolt. The game sounds the blasts it
+  detonates itself; the aftershocks go off here on their own clock, so
+  each one calls back right after its `Detonate`.
 - `Detonate(x, y, kind)` - x/y the heart of the blast in screen units;
   `ekNone` does nothing. Per kind a private typed constant
   `TExplosionLook`: a `TDebrisLook`, the flash (`FlashSize`, `FlashTicks` -
@@ -991,7 +997,8 @@ Reborn with the hero on every level load.
   ticker lives, its two shake doses (`WaveTrauma`, `FinishTrauma`), the
   countdown tuning, and its sound names - loaded strictly in the
   constructor. `BottleSoundFile` is public: the barrel burst doubles as the
-  bonus explosion, and the dpr reads the name from here.
+  bonus explosion and the pops of the boss's wreck, and the dpr reads the
+  name from here.
 
 ### `Game/Events/Events.Director.pas` (~155 lines)
 Runs the level's events (`Levels.Events`) against the live game.
@@ -1170,7 +1177,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1980 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1990 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -1181,10 +1188,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   `GameOverDelayTicks`, `PitDepthY`), the font choice (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   extra scancodes (the debug ones under DEBUGKEYS), the screen-shake doses
-  (`ExploderTrauma`,
-  `BossBlastTrauma`, `BonusExplosionTrauma`, `BonusFireRainTrauma` - a 2026
-  addition; the ceremony's own live in `Game.Henshin`), ending-screen layout
-  rows.
+  (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
+  `BonusFireRainTrauma`, `AftershockTrauma` - a 2026 addition; the
+  ceremony's own live in `Game.Henshin`), ending-screen layout rows.
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (extends `TGameApp`) - holds the registry (owned by
   `RunGame`) and owns the rest: level, the
@@ -1250,8 +1256,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
     the boss and sounds it with `RageBlastSoundFile` - a machine's
-    `platform.wav`), `SolidUnderPoint` (the debris probe: the collision grid of
-    the hero's screen in honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
+    `platform.wav`), `EchoAftershock` (the `TEchoAftershock` of
+    `Game.Explosions`: each pop of the boss's wreck plays `bottle.wav` and
+    adds `AftershockTrauma`), `SolidUnderPoint` (the debris probe: the
+    collision grid of the hero's screen in honest screen units - no bullet
+    -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
@@ -1421,7 +1430,9 @@ plainest example), `introText`/`introTextEn`.
   `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0),
   four lamps on the boss's disc (`turns`, front layer, in the two sockets
   of the ring art: a blue pulsing pair `bossLamp` and a red flashing pair
-  `bossLampRage` at intensity 0).
+  `bossLampRage` at intensity 0; halo 10 across with starburst rays of 24
+  units - the satellite's are 36 - that reach past the rim: on the light
+  disc a bare glow does not read).
   Events: the dawn, tied to the screens - on entering screen N
   (`dawn1`..`dawn17`) the sun heads over 20 seconds to -40 + 100 * N / 17:
   three quarters lit at the start, a half by screen 7, a crescent with
@@ -1529,7 +1540,7 @@ music loads leniently. Tracks named by code: `moon.ogg` (menu,
 | Sound / music | Audio.pas (+sound constants and `PreloadSounds` in Moon2D.dpr, the ceremony's in Game.Henshin.pas, data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
 | Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
-| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
+| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
