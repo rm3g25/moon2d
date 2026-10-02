@@ -91,6 +91,8 @@ const
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
+  // The boss's armor bursting into his rage: what a machine dies with
+  RageBlastSoundFile = 'platform.wav';
   TerminalKeySoundFile = 'terminal.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
@@ -990,6 +992,7 @@ begin
   FAudio.Load(PitSoundFile);
   FAudio.Load(BottleSoundFile); // the ceremony loads its own; the bonus's
   FAudio.Load(BonusSoundFile);
+  FAudio.Load(RageBlastSoundFile);
   FAudio.Load(TerminalKeySoundFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
@@ -1391,6 +1394,7 @@ begin
             // blast, not the death's - the boss flies on
             FExplosions.Detonate(Monster.X + SpriteSize / 2,
               Monster.Y - SpriteSize / 2, ekMachine);
+            FAudio.Play(RageBlastSoundFile);
           end;
         meBossWantsMinion:
           // The weighted table of AddMonstOnBoss1 (medkit counted
