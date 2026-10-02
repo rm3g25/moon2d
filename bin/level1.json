@@ -343,15 +343,17 @@
       "tag": "bossLamp",
       "layer": "front",
       "tint": [
-        25,
-        55,
+        10,
+        40,
         100
       ],
       "blink": "pulse",
       "frequency": 1.5,
       "intensity": 100,
-      "size": 7,
-      "glint": 30
+      "size": 10,
+      "glint": 0,
+      "rays": 24,
+      "rayIntensity": 70
     },
     {
       "kind": "beacon",
@@ -362,15 +364,17 @@
       "tag": "bossLamp",
       "layer": "front",
       "tint": [
-        25,
-        55,
+        10,
+        40,
         100
       ],
       "blink": "pulse",
       "frequency": 1.5,
       "intensity": 100,
-      "size": 7,
-      "glint": 30
+      "size": 10,
+      "glint": 0,
+      "rays": 24,
+      "rayIntensity": 70
     },
     {
       "kind": "beacon",
@@ -382,14 +386,16 @@
       "layer": "front",
       "tint": [
         100,
-        18,
-        12
+        10,
+        6
       ],
       "blink": "flash",
       "frequency": 3,
       "intensity": 0,
-      "size": 7,
-      "glint": 30
+      "size": 10,
+      "glint": 0,
+      "rays": 24,
+      "rayIntensity": 70
     },
     {
       "kind": "beacon",
@@ -401,14 +407,16 @@
       "layer": "front",
       "tint": [
         100,
-        18,
-        12
+        10,
+        6
       ],
       "blink": "flash",
       "frequency": 3,
       "intensity": 0,
-      "size": 7,
-      "glint": 30
+      "size": 10,
+      "glint": 0,
+      "rays": 24,
+      "rayIntensity": 70
     }
   ],
   "tilePalette": [
