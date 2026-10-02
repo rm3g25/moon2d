@@ -95,7 +95,7 @@ const
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
   // The boss's armor bursting into his rage: what a machine dies with
   RageBlastSoundFile = 'platform.wav';
-  // A bullet on armor: the pings take turns, a tracer leaves with a whine
+  // A bullet on armor: one of the pings, a tracer leaves with a whine
   ArmorHitSounds: array [0..2] of string =
     ('armor1.wav', 'armor2.wav', 'armor3.wav');
   RicochetSoundFile = 'ricochet.wav';
@@ -148,6 +148,8 @@ const
   // At most one ping in this many ticks: a fan of fragments landing at
   // once must not take every channel of the mixer
   ArmorSoundGapTicks = 4;
+  // The pings roll dice of their own: Random feeds the game
+  ArmorPingSeed = $50696E67; // "Ping"
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -224,6 +226,12 @@ const
   EndingClickRows = 2;     // click band height of a big line
 
 type
+  TArmorPings = record
+    WaitTicks: Integer; // until the next one may sound
+    Last: Integer; // index into ArmorHitSounds
+    Dice: TXorShift;
+  end;
+
   TMoonGame = class(TGameApp)
   private
     FMonsters: TMonsterRegistry;
@@ -276,8 +284,7 @@ type
     FShake: TScreenShake;
     FExplosions: TExplosions;
     FImpacts: TImpacts;
-    FArmorSoundWait: Integer; // ticks until the next ping may sound
-    FArmorSoundTurn: Integer; // which ping is next
+    FArmorPings: TArmorPings;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
     // the hero taking ANY damage; any hit resets the count to zero.
@@ -421,6 +428,7 @@ begin
   FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint,
     EchoAftershock);
   FImpacts := TImpacts.Create(SolidUnderPoint);
+  FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -1261,11 +1269,14 @@ begin
     FAudio.Play(RicochetSoundFile);
     Exit;
   end;
-  if FArmorSoundWait > 0 then
+  if FArmorPings.WaitTicks > 0 then
     Exit;
-  FAudio.Play(ArmorHitSounds[FArmorSoundTurn]);
-  FArmorSoundTurn := (FArmorSoundTurn + 1) mod Length(ArmorHitSounds);
-  FArmorSoundWait := ArmorSoundGapTicks;
+  // Any ping but the last one: in turn they play a tune
+  var Others := Length(ArmorHitSounds) - 1;
+  var Step := 1 + Trunc(FArmorPings.Dice.NextUnit * Others);
+  FArmorPings.Last := (FArmorPings.Last + Step) mod Length(ArmorHitSounds);
+  FAudio.Play(ArmorHitSounds[FArmorPings.Last]);
+  FArmorPings.WaitTicks := ArmorSoundGapTicks;
 end;
 
 // The kill aftermath: score, death ticker, '+N' popup, streak credit,
@@ -1583,8 +1594,8 @@ begin
   FMonsterBullets.Update;
   FExplosions.Tick;
   FImpacts.Tick;
-  if FArmorSoundWait > 0 then
-    Dec(FArmorSoundWait);
+  if FArmorPings.WaitTicks > 0 then
+    Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
