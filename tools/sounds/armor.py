@@ -1,6 +1,6 @@
 """Synthesises the sounds of a bullet on armor into bin/sounds: three
-pings (armor1..3.wav), played in turn, and the whine of a tracer flying
-off (ricochet.wav). 44.1 kHz, 16 bit, mono - as countdown.wav and
+pings (armor1..3.wav), picked at random, and the whine of a tracer
+flying off (ricochet.wav). 44.1 kHz, 16 bit, mono - as countdown.wav and
 terminal.wav.
 
 A ping is a struck steel plate: a click of noise, then a few partials at
@@ -34,7 +34,9 @@ TwinDetune = 1.006
 TwinLevel = 0.5
 ClickDecay = 0.0012
 ClickLevel = 0.8
-PingPitches = (1450.0, 1720.0, 2050.0) # Hz, one per file
+# Hz, one per file, all within a semitone: one plate struck three ways,
+# not three notes of a tune
+PingPitches = (1680.0, 1720.0, 1762.0)
 
 WhineFrom = 3300.0 # Hz
 WhineTo = 1150.0
