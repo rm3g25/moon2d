@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.20` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.21` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -23,7 +23,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   frame-vs-screen space. **Core never uses a unit outside Core** - a tool or
   the editor that references only `Core/` fails to build the day that rule
   breaks.
-- `Game/` - the game itself: hero, monsters and the boss's disc, bullets,
+- `Game/` - the game itself: hero, monsters, the boss's disc and its pilot,
+  bullets,
   explosions, bullet impacts, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
   runs the level events.
@@ -40,16 +41,18 @@ runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still ca
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
+`Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (over `Monsters.Defs`
+for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (its streak texture comes from the owner) ->
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
 kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
-`Levels.Defs` /
-`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
+`Levels.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
-`Monsters.Defs`, its sensor through `Render.Glow`) -> `Hero` /
+`Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Pilot` (the
+boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Game.Space` and the
+sizes of `Render.Sprites`) -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
@@ -336,7 +339,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~660 lines)
+### `Core/Levels.Defs.pas` (~665 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -382,8 +385,8 @@ Level data model + JSON parser. No game logic.
   may name a dynamic object's tag. Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
-  tag no dynamic object carries or a sun action turning a tag no globe
-  carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
+  tag no dynamic object carries, a sun action turning a tag no globe
+  carries or a tactics action naming a tag no placement carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
   the level (the only destructor here) and kept through a restart - a lamp
   keeps its rhythm; only what a re-armed event changed goes back. Private
   `CheckDynamics` refuses a nailed object off the screen list or a
@@ -645,7 +648,7 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~205 lines)
+### `Core/Levels.Events.pas` (~235 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
@@ -656,12 +659,16 @@ game runs them through `Events.Director`; the editor will write them).
   one alive in its rage (the boss below its rage mark, a tank below its
   own).
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
-  `eaMusic`, `eaIntensity`, `eaSun`); **`TEventAction`** (record) - kind +
+  `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`); **`TEventAction`**
+  (record) - kind +
   localized `Text` (the message kinds), `FileName` (music), or `Target` /
   `Level` (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag
   fade there; JSON `target`, `value` a percentage, `ticks` 0 = at once),
   or `Target` / `Angle` / `Ticks` (sun: the globes carrying the tag turn
-  their sun there; JSON `value` in degrees).
+  their sun there; JSON `value` in degrees), or `Target` / `Tactics`
+  (tactics: the monsters placed with the tag fly by them from now on, see
+  `Monsters.Pilot`; JSON `target`, `value` - a word of `EventTacticsIds`:
+  laps / dives / rams / hunts).
 - **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
   `Lives` (livesBelow), `DelayTicks` (counted after the condition holds,
   for any condition), actions. JSON: `"when": "allDead", "tag":
@@ -669,18 +676,19 @@ game runs them through `Events.Director`; the editor will write them).
   "textEn": "..."}]`; `"when": "livesBelow", "tag": "boss", "lives": 150,
   "then": [{"action": "intensity", "target": "bossSmoke", "value": 60,
   "ticks": 66}]`.
-- `EventConditionIds` / `EventActionIds` - the JSON vocabulary as typed
+- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` - the JSON
+  vocabulary as typed
   constants. `ParseLevelEvents(root, levelId)`; an absent section is an
   empty list, an unknown condition or action, a missing id, a tagged
   condition without a tag, livesBelow without lives above zero, intensity
   without a target or with a value outside 0..100, sun without a target or
-  without a `value`, or an event without
-  actions raises `ELevelEventError`.
+  without a `value`, tactics without a target or with an unknown word, or
+  an event without actions raises `ELevelEventError`.
 - Extending: a condition is an enum member, a word in `EventConditionIds`
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Monsters.Defs.pas` (~515 lines)
+### `Core/Monsters.Defs.pas` (~570 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
@@ -690,18 +698,25 @@ Monster definition model + registry (parses monsters.json). No behavior.
   unknown word raises; independent of the fans of `explodesOnDeath`),
   `TMonsterMaterial` (mtNone/Metal - JSON `material`, what a bullet does to
   the body: metal throws sparks, see `Game.Impacts`; an unknown word
-  raises).
+  raises), `TPilotTactics` (ptLaps/Dives/Rams/Hunts - what a flying boss
+  does besides his lap, see `Monsters.Pilot`; set by the level's events,
+  not by monsters.json).
 - **Records**: `TMovementDef` (kind+speed); `TAttackDef` (pattern, fire cadence,
   bullet speed, pattern-specific params, `HasAttack`); `TPickupEffectDef`
   (peGiveWeapon rewires the whole weapon: type, cooldown, speed, gravity);
   `TSpawnEntry` (monsterId+weight); `TBossDef` (endsLevelOnDeath, spawn
-  cadence/screen/table, `RageMusic`, `PickSpawn` weighted random);
+  cadence/screen/table, `RageMusic`, `DodgePrize` - JSON `dodgePrize`, the
+  monster id of what a hero who has dodged a ram is handed, '' = nothing -
+  `PickSpawn` weighted random);
   `TDiscDef` (JSON `disc` - the living monster is drawn as a spinning disc
   out of layers, see `Monsters.Disc`: `SetName` - the layers' set, `Side` -
   their square in screen units, `Muzzle` - how far from the axis an aimed
   shot leaves, 0 = where any monster's does, `Spin` - degrees a tick,
   counterclockwise, `IrisReach` - how far the eye slides toward the hero,
-  `WearFull` - the share of lives lost at which the worn look is complete;
+  `WearFull` - the share of lives lost at which the worn look is complete,
+  `PortAngles` - JSON `portAngles`, where the barrels of the art point on
+  the unturned rim, degrees counterclockwise from the right; a volley is
+  one bullet out of each, none by default;
   `Enabled`; a disc without a set or a positive side, with a muzzle outside
   0..side/2 or `wearFull` outside (0, 100] raises at load);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
@@ -710,7 +725,7 @@ Monster definition model + registry (parses monsters.json). No behavior.
   (localized), deathSounds array, boss, disc.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
-  warms its cache from here), spawn-table validation.
+  warms its cache from here), spawn-table and dodge-prize validation.
 
 ### `Game/Bullets.pas` (~310 lines)
 Projectiles + all the 2008 particle-hack spawners.
@@ -769,8 +784,10 @@ moves in comes from `Game.Space`.
 A monster drawn as a spinning disc out of layers instead of its `alive`
 frames - the level-1 boss, TEK-R1. Art and pose only: the disc knows nothing
 of the monster's logic, and the
-logic reads one thing of the disc - `FireAt` moves an aimed shot out to
-the rim by `Disc.Muzzle` (see `Monsters`). Not here: the death - a dying disc
+logic reads two things of the disc - `FireAt` moves an aimed shot out to
+the rim by `Disc.Muzzle`, and `FirePorts` takes the rim's angle
+(`Pose.Angle`) to find where the ports have turned to (see `Monsters`).
+Not here: the death - a dying disc
 monster plays
 the `death` frames of its own set, as every monster does.
 - **`TDiscArt`** - the layers of one disc set (`rim`, `rimDamaged`, `core`,
@@ -799,36 +816,116 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.pas` (~1205 lines)
+### `Game/Monsters.Pilot.pas` (~910 lines)
+The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
+where its body goes this tick and what it is up to. The monster keeps its
+place, its step and its guns; the pilot moves the place and answers the
+monster's questions. Not here: what a maneuver looks and sounds like - the
+disc, the bullets and the sparks of a crash are the monster's and the
+game's. A 2026 addition all but the lap.
+- **The lap** - the boss's rectangle as it was before the pilot, to the
+  number: `LapLeft` 32, `LapRight` 448, `LapTop` 96 (one cell under 2008's
+  64, clear of the HUD panels), `LapBottom` 320 by the feet point, every
+  side overshooting its mark by what the step leaves, no wall asked
+  (`FlyLap`, `PastLapMark`). After a maneuver it is flown the other way
+  round (`FClockwise`, the `*Turn` tables). Under `ptLaps` the pilot does
+  nothing else and the motion is the earlier one tick for tick.
+- **Types**: `THeading` (hdDown/Left/Up/Right), `TPilotState`
+  (psLap/Brake/Ponder/Dive/Aim/Dash/Stun/Return), `TPilotGaze`
+  (pgHero/AimPoint/Nowhere - what the eye is on), `TCell` (a cell of the
+  screen's grid, 0-based), `TPlace` (screen units: a point or a
+  direction), `TPilotCrash` (a dash stopped by a wall: the rim of the body
+  that struck, its speed, the way the wall faces), `TPilotBrief` (what the
+  monster tells its pilot every tick: its own step, the hero's feet point,
+  `BodyAlive`).
+- **`TPilot`** - `Create(level, screen, baseStep)`; `Tick(var x, y,
+  brief)` moves the feet point; `SetTactics` (new tactics open with a
+  maneuver at once - `FRestWaived`); `NoteHeroContact` (the game has seen
+  the body touch the hero); `Busy` (in a maneuver: the aimed gun holds, a
+  bullet's shove moves nothing); `Gaze` / `AimPoint`, `Charge` (0..1, for
+  the sensor), `SpinScale(lapScale)` (the braking, the pondering and the
+  ram spin the disc up by `ManeuverSpinBoost`, a stun stops it, a dive
+  spins as the lap does); one-tick pulses `PortsDue`,
+  `Crashed` (+`LastCrash`), `OwesPrize`.
+- **A maneuver** leaves the lap and comes back to it. Every one opens the
+  same way - the one tell to learn: `Cruise` counts the rest down
+  (`RollRestTicks`, `MinRestLaps`..`MaxRestLaps` at the step flown), then
+  `BeginBrake` onto the lap cell ahead (`LapCellAhead` - on the lane the
+  heading flies, whatever a shove or an overshoot did to the body);
+  `Brake` eases onto the cell (`BrakeShare`); `Ponder` stands
+  `PonderTicks` = 50 and fires the ports on a beat (`PortVolleys` = 5,
+  every `PortsEveryTicks`, the last as the maneuver leaves);
+  `PickManeuver` then chooses by the tactics.
+- **The dive** (`ptDives`; the other tactics too when the hero is hidden):
+  cell by cell through the arena at the step of the definition for
+  `DiveTicks` = 130, no gun. It sets off toward the hero (`BeginDive`),
+  and every turn after has a cause (`DiveHeading`): the
+  hero's row or column crossed - onto it, toward him (`CrossesHeroLine`,
+  `HeroSide`); a wall ahead - to his side, else the other, else back. Then
+  `PathToLap` (breadth-first over open cells, shortest way to the lap),
+  `FlyBack`, `JoinLap`.
+- **The ram** (`ptRams`, `ptHunts`): flown when the pondering ends with
+  the hero in plain sight (`Sees` - the dash itself, flown ahead of time
+  to within `SightGap` of him); under `ptRams` the pilot on the lap first
+  looks for a cell that sees him, a lap at most (`SearchesForLine`).
+  Hidden hero - a dive instead. `Aim` holds the
+  eye on the point `AimTicks` = 15 and flies the first stride in its last
+  tick (a touch in that tick is the dash's), `Dash` flies there in a straight line
+  and on at `DashStepScale` = 3 base steps, unit by unit (`Advance`,
+  `BodyBlocked` - the body's corners drawn in by `BodyInset`, the arena's
+  bounds), into the first wall: `HitWall` (+`WallNormal`), `Stun` for
+  `StunTicks` = 50. The tick after the crash `OwesPrize` says whether the
+  dash never touched the hero. `ptHunts` never goes back to the lap
+  (`EndManeuver`): it ponders next where the maneuver ended.
+- **The arena**: the screen's cells that are not solid, rows
+  `ArenaTopRow` (under the HUD) to `ArenaBottomRow` (above the bottom row
+  of floor and pits) - `CellOpen`.
+
+### `Game/Monsters.pas` (~1320 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
-- **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
+- **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
   crosshair's thirds), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
-  BossRage/LevelComplete/Died) - 'MessageToMain' of 2008, drained by the game
-  loop every tick.
+  BossRage/LevelComplete/Died/BossCrashed/BossOwesPrize) - 'MessageToMain'
+  of 2008, drained by the game loop every tick.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, lives
   (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
-  flag, the event list, and for a disc monster its `TDisc` (`Disc`, nil
-  for the rest). Its own collision oracles
+  flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
+  for the rest) and for an `mkBossFly` monster its `TPilot`. Its own
+  collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
-  `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying` (the boss's
-  rectangle: down to y 320, left to x 32, up to `BossFlyTopY` = 96 - one
-  cell under 2008's 64, clear of the HUD panels - right to x 448),
+  `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
+  `MoveFlying` hands `Monsters.Pilot` a `TPilotBrief` - the step, the
+  hero, whether the body lives - and the pilot moves X, Y; a crash and an
+  owed prize come back as `meBossCrashed` / `meBossOwesPrize`),
   `PatrolStep`. Combat:
   `FireAt` (patterns from `TAttackDef`; an aimed shot of a monster whose
   `Disc.Muzzle` is above zero leaves from the rim, `Muzzle` out from the
   middle toward the hero, instead of the 2008 point (X + 8, Y + 8) - the
   angle is still the verbatim one, from the monster's X, Y to the hero's,
   so the shot now runs through the middle of the hero's hitbox, not along
-  its left edge), `TakeDamage` (knockback through the
-  wall oracle + explosion fans + events), `EnrageTankIfLow`,
-  `ProcessBossThresholds`, `BeginDying`. The disc: `TickDisc` (last in
-  `Tick`) hands it `DiscCenter` (the middle of the sprite), the hero's
-  middle, the step over the definition's speed (rage doubles the step, so
-  the spin), `DiscWear` (lives lost since birth over `WearFull` -
+  its left edge), `FirePorts` (a volley when the pilot says `PortsDue`:
+  one bullet out of every angle of `Disc.PortAngles`, turned with the
+  rim, `Muzzle` from the axis, straight out; fired after `TickDisc`, so
+  the ports are where the frame shows them), `TakeDamage` (knockback
+  through the wall oracle - not while the pilot is `Busy`: the oracle asks
+  one row, and a body between two rows would be shoved into a wall -
+  + explosion fans + events), `EnrageTankIfLow`,
+  `ProcessBossThresholds`, `BeginDying`. The disc: `TickDisc` (late in
+  `Tick`: only the ports' volley comes after) hands it `DiscCenter` (the
+  middle of the sprite), `EyeTarget`
+  (the hero's middle; under the pilot's `Gaze` - the point a ram has
+  locked on, or the disc's own middle for a stunned eye), the step over
+  the definition's speed (rage doubles the step, so the spin; a pilot's
+  `SpinScale` has the last word), `DiscWear` (lives lost since birth over `WearFull` -
   `FLivesBorn`, because rage resets `LivesAll`) and `DiscCharge` (rises
-  over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one).
-  Public: `Tick(heroX, heroY, bullets)`,
+  over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one;
+  in a maneuver the pilot's `Charge` instead). While the pilot is `Busy`
+  the aimed gun holds and its timer stays at zero - a whole interval
+  passes after a maneuver before it speaks.
+  Public: `Tick(heroX, heroY, bullets)`, `SetTactics` (a flying boss takes
+  them up, the rest have no pilot), `NoteHeroContact`, `LastCrash` (asked
+  on `meBossCrashed`),
   `Draw(sprites, alpha)` (a living disc monster draws its disc between
   ticks; everything else - frames on the tick, alpha unused),
   `DrawSmoke(canvas, origin, alpha)`, `DrawSparks` (the same shape),
@@ -849,7 +946,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   on restart, so a difficulty change lands here. `Tick` (current
   screen), `SpawnFromSky(monsterId, screen)` (boss minions and the gravel
   trial's gravels, at a random column one row above the screen - the fall
-  is the entry),
+  is the entry), `SpawnOn(monsterId, screen, x, y)` (on the very place
+  of a body at the point: a prize put into the hero's hands, the contact
+  of the same tick collects it; both over the private `SpawnAt` in
+  placement cells), `SetTaggedTactics(tag, tactics)` (the events' tactics
+  action),
   `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
@@ -1126,19 +1227,20 @@ Reborn with the hero on every level load.
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
 
-### `Game/Events/Events.Director.pas` (~155 lines)
+### `Game/Events/Events.Director.pas` (~160 lines)
 Runs the level's events (`Levels.Events`) against the live game.
 **`TEventDirector`** takes the events, the message board, the level's
 dynamic objects and a `TChangeMusic` callback (`reference to procedure`; the game passes its
 `ChangeMusic` method, which also remembers the track for restarts). The
 monster field is reborn on every restart, so it arrives with every tick
-instead of being kept.
+instead of being kept: asked for the conditions, told the tactics.
 - `Tick(screen, field)` - once per logic tick with the hero's screen: for
   every unfired event of that screen, the condition is checked
   (`ConditionHolds`); while it holds the delay counts down, a lapse starts
   the count over; at zero the actions play once (`Play`: `ShowBig`,
   `AddTicker`, `StartTerminal` with the terminal header, the music
-  callback, `FadeTagged` / `TurnSunTagged` on the dynamics). The game skips the tick over
+  callback, `FadeTagged` / `TurnSunTagged` on the dynamics,
+  `SetTaggedTactics` on the field). The game skips the tick over
   the hero's corpse.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
   so its events wait for their moment again, as the entity triggers do,
@@ -1307,7 +1409,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2080 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2145 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -1319,7 +1421,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   extra scancodes (the debug ones under DEBUGKEYS), the screen-shake doses
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
-  `BonusFireRainTrauma`, `AftershockTrauma` - a 2026 addition; the
+  `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` - a 2026
+  addition; the
   ceremony's own live in `Game.Henshin`), ending-screen layout rows.
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (extends `TGameApp`) - holds the registry (owned by
@@ -1397,7 +1500,13 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
     the boss and sounds it with `RageBlastSoundFile` - a machine's
-    `platform.wav`), `EchoAftershock` (the `TEchoAftershock` of
+    `platform.wav`; `meBossCrashed` - the boss's ram ended in a wall:
+    `BossCrashTrauma`, `BossCrashSoundFile` (`crash.wav`) and
+    `ThrowCrashSparks` - fans of `Game.Impacts` sparks off the rim that
+    struck and along the wall; `meBossOwesPrize` - `PayDodgePrize` hands
+    a living hero the boss's `DodgePrize` with `SpawnOn`),
+    `ResolveMonsterContact` also reports every touch to the monster
+    (`NoteHeroContact` - the pilot's prize rule), `EchoAftershock` (the `TEchoAftershock` of
     `Game.Explosions`: each pop of the boss's wreck plays `bottle.wav` and
     adds `AftershockTrauma`), `SolidUnderPoint` (the probe of debris, impacts and
     dynamic objects: `TLevel.SolidAtPoint` for the hero's screen, honest
@@ -1498,6 +1607,12 @@ free bar; all within a semitone, one plate and not three notes) and the
 whine of a tracer (`ricochet.wav`). Seeded: the same
 files bit for bit. numpy.
 
+### `tools/sounds/crash.py`
+Synthesises the boss ramming a wall into `bin/sounds/crash.wav`: a thud
+sliding down in pitch, a crunch of noise with the treble taken off and the
+hull ringing after them, pushed into a soft clip. Borrows the bar ratios,
+`finish` and `save` from `armor.py` beside it. Seeded. numpy.
+
 ---
 
 ## Runtime data (`bin\`)
@@ -1527,9 +1642,11 @@ wall. `material`: `metal` on the platform, the tank, the mount, the barrel
 and `boss1` - a bullet throws sparks off them instead of bursting
 (`Game.Impacts`). `disc` (only `boss1`) draws the living monster as a spinning disc out
 of the layers of a set instead of its `alive` frames: `set`, `side`,
-`muzzle`, `spin`, `irisReach`, `wearFull` - see `TDiscDef`.
+`muzzle`, `spin`, `irisReach`, `wearFull`, `portAngles` (the six gun
+ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
+`boss` block names `dodgePrize`: `medkit`.
 
-### `level1.json` (~62 KB) / `level2.json` (~22 KB)
+### `level1.json` (~63 KB) / `level2.json` (~22 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -1603,7 +1720,10 @@ plainest example), `introText`/`introTextEn`.
   17: livesBelow 150 - bossSmoke to 60%; enraged -
   bossSmoke off, and (`bossRageLamps`) the blue lamps fade out, the red in,
   over 20 ticks, and (`bossRageSparks`) bossSparks light to 50%;
-  livesBelow 30 - bossSmoke, bossBurn and bossSparks to 100%.
+  livesBelow 30 - bossSmoke, bossBurn and bossSparks to 100%. The boss's
+  tactics ride the same three moments (`bossSmokeTactics`,
+  `bossRageTactics`, `bossBurnTactics`): dives while it smokes, rams in
+  its rage, hunts once it burns.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
@@ -1657,10 +1777,11 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (23 WAV) and `music/` (OGG)
+### `sounds/` (24 WAV) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
 music loads leniently. Four one-shots are synthesised by
-`tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`. Tracks named by code: `moon.ogg` (menu,
+`tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`; a fifth,
+`crash.wav`, by `tools/sounds/crash.py`. Tracks named by code: `moon.ogg` (menu,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
 `moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
@@ -1675,6 +1796,7 @@ music loads leniently. Four one-shots are synthesised by
 | Hero movement / collision / jump feel | Hero.pas |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
+| The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateMonster` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |

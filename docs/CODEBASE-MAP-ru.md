@@ -8,7 +8,7 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 тайловая графика 64 px, фиксированный тик 33 Гц, уровни по экранам (без
 скролла).
 
-Перегенерировано на `v3.0.3`, поправлено по `v3.0.20` (раскладка по папкам
+Перегенерировано на `v3.0.3`, поправлено по `v3.0.21` (раскладка по папкам
 случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
@@ -24,7 +24,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   пространство кадра и экрана. **Core не использует ни одного юнита вне
   Core** - инструмент или редактор, ссылающийся только на `Core/`, перестаёт
   собираться в тот же день, когда правило нарушено.
-- `Game/` - сама игра: герой, монстры и диск босса, пули, взрывы, попадания
+- `Game/` - сама игра: герой, монстры, диск босса и его пилот, пули, взрывы,
+  попадания
   по броне, звук, хост
   цикла, словарь бонуса,
   церемония хеншина, версия. `Game/Events/` исполняет события уровня.
@@ -42,16 +43,18 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 Направление зависимостей (примерно снизу вверх):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
+`Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (над `Monsters.Defs`
+ради тактики, которую ставит событие) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (текстуру штриха ему даёт владелец) ->
 `Effects.Debris` (над `Effects.Sparks`, рисует через `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (над `Effects.Sparks` ради вида
 искр; рисует через `Render.Glow`, `Render.Puff` и `Render.Globe`) ->
-`Levels.Defs` /
-`Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
+`Levels.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (диск босса: над `Render.Sprites` и
-`Monsters.Defs`, сенсор - через `Render.Glow`) -> `Hero` /
+`Monsters.Defs`, сенсор - через `Render.Glow`) / `Monsters.Pilot` (пилот
+босса: над `Levels.Defs`, `Monsters.Defs`, `Game.Space` и размерами из
+`Render.Sprites`) -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
 `Levels.Dynamics` и `Monsters.Defs`) / `Game.Impacts` (над
@@ -346,7 +349,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   lang\en.json / ru.json, сверяясь с полным реестром ключей), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~660 строк)
+### `Core/Levels.Defs.pas` (~665 строк)
 Модель данных уровня + JSON-парсер. Игровой логики нет.
 - **`EmptyTile = 0`** - значение сетки 0 это ничего; N >= 1 отображается в
   `TilePalette[N - 1]`.
@@ -395,8 +398,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   динамического объекта. Приватный `CheckEvents` отказывает событию вне
   списка экранов, событию, следящему за тегом, которого не носит ни одна
   расстановка, и (`CheckEventTargets` -> `CheckEventTarget`) действию
-  intensity с тегом, которого не носит ни один динамический объект, и
-  действию sun с тегом, которого не носит ни один глобус. `Dynamics` - динамические объекты
+  intensity с тегом, которого не носит ни один динамический объект,
+  действию sun с тегом, которого не носит ни один глобус, и действию
+  tactics с тегом, которого не носит ни одна расстановка. `Dynamics` - динамические объекты
   (`Levels.Dynamics`); ими владеет уровень (единственный деструктор тут), и
   они переживают рестарт - лампа держит ритм, откатывается только то, что
   поменяло перевзведённое событие. Приватный `CheckDynamics` отказывает
@@ -655,7 +659,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 - `LogicTicksPerSecond = 33` - частоты в секундах; логика идёт 33 тика в
   секунду.
 
-### `Core/Levels.Events.pas` (~205 строк)
+### `Core/Levels.Events.pas` (~235 строк)
 Секция `events` JSON уровня: модель и парсер, игровой логики нет (исполняет
 `Events.Director`, писать будет редактор).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
@@ -665,12 +669,16 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   осталось, livesBelow - у живого жизней меньше `lives`, enraged - живой в
   ярости (босс ниже своей отметки ярости, танк ниже своей).
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
-  `eaMusic`, `eaIntensity`, `eaSun`); **`TEventAction`** (запись) - вид +
+  `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`); **`TEventAction`**
+  (запись) - вид +
   локализованный `Text` (виды-сообщения), `FileName` (музыка) или `Target` /
   `Level` (0..1) / `Ticks` (intensity: динамические объекты с тегом плавно
   идут туда; JSON `target`, `value` - процент, `ticks` - 0 = сразу), или
   `Target` / `Angle` / `Ticks` (sun: глобусы с тегом поворачивают солнце
-  туда; JSON `value` в градусах).
+  туда; JSON `value` в градусах), или `Target` / `Tactics` (tactics:
+  монстры, расставленные с этим тегом, дальше летают по ней, см.
+  `Monsters.Pilot`; JSON `target`, `value` - слово из `EventTacticsIds`:
+  laps / dives / rams / hunts).
 - **`TLevelEvent`** (запись) - id, экран (с единицы), условие, тег, `Lives`
   (livesBelow), `DelayTicks` (отсчитывается после того, как условие
   выполнилось, при любом условии), действия. JSON: `"when": "allDead",
@@ -678,17 +686,19 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   "...", "textEn": "..."}]`; `"when": "livesBelow", "tag": "boss", "lives":
   150, "then": [{"action": "intensity", "target": "bossSmoke", "value": 60,
   "ticks": 66}]`.
-- `EventConditionIds` / `EventActionIds` - словарь JSON типизированными
+- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` - словарь JSON
+  типизированными
   константами. `ParseLevelEvents(root, levelId)`; отсутствующая секция -
   пустой список, неизвестное условие или действие, событие без id, условие
   с тегом без тега, livesBelow без lives выше нуля, intensity без target или
-  со value вне 0..100, sun без target или без `value`, событие без действий
-  поднимают `ELevelEventError`.
+  со value вне 0..100, sun без target или без `value`, tactics без target
+  или с неизвестным словом, событие без действий поднимают
+  `ELevelEventError`.
 - Расширение: условие - член перечисления, слово в `EventConditionIds` и
   ветка в `ConditionHolds` директора; действие - то же с `EventActionIds` и
   `Play`.
 
-### `Core/Monsters.Defs.pas` (~515 строк)
+### `Core/Monsters.Defs.pas` (~570 строк)
 Модель определений монстров + реестр (разбирает monsters.json). Поведения нет.
 - **Перечисления**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss),
   `TMovementKind` (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly),
@@ -698,19 +708,24 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `explosion`, неизвестное слово - ошибка; от вееров `explodesOnDeath` не
   зависит), `TMonsterMaterial` (mtNone/Metal - JSON `material`, что пуля
   делает с телом: металл сыплет искрами, см. `Game.Impacts`; неизвестное
-  слово - ошибка).
+  слово - ошибка), `TPilotTactics` (ptLaps/Dives/Rams/Hunts - что летающий
+  босс делает помимо круга, см. `Monsters.Pilot`; ставится событиями
+  уровня, не monsters.json).
 - **Записи**: `TMovementDef` (вид+скорость); `TAttackDef` (паттерн, темп огня,
   скорость пули, параметры конкретного паттерна, `HasAttack`);
   `TPickupEffectDef` (peGiveWeapon перепаивает всё оружие: тип, перезарядка,
   скорость, гравитация); `TSpawnEntry` (monsterId+вес); `TBossDef`
-  (endsLevelOnDeath, темп/экран/таблица спавна, `RageMusic`, `PickSpawn` -
-  взвешенный случайный выбор); `TDiscDef` (JSON `disc` - живой монстр
+  (endsLevelOnDeath, темп/экран/таблица спавна, `RageMusic`, `DodgePrize` -
+  JSON `dodgePrize`, id монстра, которого герой получает за увёрнутый таран,
+  '' = ничего, `PickSpawn` - взвешенный случайный выбор); `TDiscDef` (JSON `disc` - живой монстр
   рисуется вращающимся диском из слоёв, см. `Monsters.Disc`: `SetName` -
   набор слоёв, `Side` - их квадрат в единицах экрана, `Muzzle` - на каком
   расстоянии от оси вылетает прицельный выстрел, 0 = там же, где у любого
   монстра, `Spin` - градусы за тик, против часовой, `IrisReach` - насколько
   глаз съезжает к герою, `WearFull` - доля потерянных жизней, при которой
-  избитый вид полон; `Enabled`; диск без набора или положительной стороны,
+  избитый вид полон, `PortAngles` - JSON `portAngles`, куда смотрят стволы
+  арта на неповёрнутом ободе, градусы против часовой от правого края; залп
+  - по пуле из каждого, по умолчанию портов нет; `Enabled`; диск без набора или положительной стороны,
   с дулом вне 0..side/2 или `wearFull` вне (0, 100] - ошибка на загрузке);
   `TMonsterDef` - полный лист: id, legacyName,
   displayName (локализованное), spriteList, category, dangerous,
@@ -718,7 +733,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   score, animFreq, deathText (локализованный), массив deathSounds, boss, disc.
 - **`TMonsterRegistry`** (класс) - владеет всеми определениями;
   `LoadFromFile/String`, `Find`, `FindByLegacyName`, `TryFind`, `Count`,
-  `AllDefs` (отсюда банк звуков прогревает кэш), валидация таблиц спавна.
+  `AllDefs` (отсюда банк звуков прогревает кэш), валидация таблиц спавна и
+  приза за увёртку.
 
 ### `Game/Bullets.pas` (~310 строк)
 Снаряды + все спавнеры 2008 - хаки на частицах.
@@ -776,8 +792,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 Монстр, нарисованный вращающимся диском из слоёв вместо кадров `alive`, -
 босс первого уровня, TEK-R1. Только арт и поза: диск ничего не знает о логике
 монстра, а логика
-читает у диска одно - `FireAt` выносит прицельный выстрел на кромку по
-`Disc.Muzzle` (см. `Monsters`). Не здесь: смерть - умирающий монстр-диск
+читает у диска два - `FireAt` выносит прицельный выстрел на кромку по
+`Disc.Muzzle`, а `FirePorts` берёт угол обода (`Pose.Angle`), чтобы найти,
+куда повернулись порты (см. `Monsters`). Не здесь: смерть - умирающий монстр-диск
 играет кадры `death`
 собственного набора, как любой монстр.
 - **`TDiscArt`** - слои одного набора диска (`rim`, `rimDamaged`, `core`,
@@ -806,36 +823,114 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   что трясутся с каналом монстров; свечение прибавляет `Origin` рендерера
   само.
 
-### `Game/Monsters.pas` (~1205 строк)
+### `Game/Monsters.Pilot.pas` (~910 строк)
+Тот, кто ведёт монстра вида `mkBossFly` - босса первого уровня: куда его
+тело идёт в этот тик и чем оно занято. Место, шаг и пушки остаются у
+монстра; пилот двигает место и отвечает на вопросы монстра. Не здесь: как
+манёвр выглядит и звучит - диск, пули и искры удара принадлежат монстру и
+игре. Всё, кроме круга, - добавление 2026.
+- **Круг** - прямоугольник босса, каким он был до пилота, число в число:
+  `LapLeft` 32, `LapRight` 448, `LapTop` 96 (на клетку ниже 64 из 2008,
+  из-под плашек HUD), `LapBottom` 320 по точке ног, каждая сторона
+  проскакивает свою отметку на остаток шага, стен не спрашивает (`FlyLap`,
+  `PastLapMark`). После манёвра он летается в обратную сторону
+  (`FClockwise`, таблицы `*Turn`). При `ptLaps` пилот больше ничего не
+  делает, и движение совпадает с прежним тик в тик.
+- **Типы**: `THeading` (hdDown/Left/Up/Right), `TPilotState`
+  (psLap/Brake/Ponder/Dive/Aim/Dash/Stun/Return), `TPilotGaze`
+  (pgHero/AimPoint/Nowhere - на что смотрит глаз), `TCell` (клетка сетки
+  экрана, с нуля), `TPlace` (экранные единицы: точка или направление),
+  `TPilotCrash` (рывок, остановленный стеной: кромка тела, которой оно
+  ударило, скорость, куда смотрит стена), `TPilotBrief` (что монстр
+  сообщает пилоту каждый тик: свой шаг, точку ног героя, `BodyAlive`).
+- **`TPilot`** - `Create(level, screen, baseStep)`; `Tick(var x, y, brief)`
+  двигает точку ног; `SetTactics` (новая тактика открывается манёвром
+  сразу - `FRestWaived`); `NoteHeroContact` (игра увидела, что тело
+  коснулось героя); `Busy` (в манёвре: прицельная пушка молчит, толчок
+  пули ничего не двигает); `Gaze` / `AimPoint`, `Charge` (0..1, для
+  сенсора), `SpinScale(lapScale)` (торможение, раздумье и таран
+  раскручивают диск на `ManeuverSpinBoost`, оглушение останавливает, в
+  нырке он крутится как на круге); импульсы на один тик
+  `PortsDue`, `Crashed` (+`LastCrash`), `OwesPrize`.
+- **Манёвр** уходит с круга и возвращается на него. Каждый открывается
+  одинаково - один знак, который надо выучить: `Cruise` досчитывает отдых
+  (`RollRestTicks`, от `MinRestLaps` до `MaxRestLaps` кругов на текущем
+  шаге), затем `BeginBrake` на клетку круга впереди (`LapCellAhead` - на
+  полосе, по которой летит курс, что бы ни сделали с телом толчок или
+  проскок); `Brake` плавно садится на клетку (`BrakeShare`); `Ponder`
+  стоит `PonderTicks` = 50 и стреляет портами в ритм (`PortVolleys` = 5,
+  каждые `PortsEveryTicks`, последний залп - с уходом в манёвр); затем
+  `PickManeuver` выбирает по тактике.
+- **Нырок** (`ptDives`; при остальных тактиках - когда героя не видно): по
+  клеткам через арену шагом из определения, `DiveTicks` = 130, без
+  пушки. Начинается в сторону героя (`BeginDive`), у каждого поворота
+  дальше есть причина (`DiveHeading`): пересёк строку
+  или столбец героя - на неё, к нему (`CrossesHeroLine`, `HeroSide`);
+  стена впереди - в его сторону, иначе в другую, иначе назад. Потом
+  `PathToLap` (поиск в ширину по открытым клеткам, кратчайший путь к
+  кругу), `FlyBack`, `JoinLap`.
+- **Таран** (`ptRams`, `ptHunts`): летается, когда раздумье кончилось, а
+  герой на виду (`Sees` - сам рывок, пролётанный заранее до `SightGap` от
+  героя); при `ptRams` пилот на круге сначала ищет клетку, откуда героя
+  видно, не дольше круга (`SearchesForLine`). Героя не видно - нырок. `Aim` держит глаз на точке
+  `AimTicks` = 15 и в последний свой тик делает первый шаг рывка (касание
+  в этом тике - уже касание рывка), `Dash` летит туда по прямой и дальше, `DashStepScale` =
+  3 базовых шага, по единице (`Advance`, `BodyBlocked` - углы тела,
+  вдвинутые на `BodyInset`, и границы арены), до первой стены: `HitWall`
+  (+`WallNormal`), `Stun` на `StunTicks` = 50. В тик после удара
+  `OwesPrize` говорит, что рывок ни разу не коснулся героя. `ptHunts` на
+  круг не возвращается (`EndManeuver`): следующее раздумье - там, где
+  кончился манёвр.
+- **Арена**: не твёрдые клетки экрана, ряды от `ArenaTopRow` (под HUD) до
+  `ArenaBottomRow` (над нижним рядом пола и ям) - `CellOpen`.
+
+### `Game/Monsters.pas` (~1320 строк)
 Поведение монстров (управляется данными `TMonsterDef`) плюс поле, которое ими
 распоряжается.
-- **Перечисления**: `TMonsterAction` (стоит/идёт/падает/летит x4),
+- **Перечисления**: `TMonsterAction` (стоит/идёт/падает/летит),
   `TMonsterLife` (mlAlive/Dying/Dead), `TMonsterHealthTier`
   (htHale/Wounded/Critical - трети прицела), `TMonsterEvent`
-  (meNone/BossWantsMinion/Henshin/BossRage/LevelComplete/Died) -
-  'MessageToMain' из 2008, игровой цикл вычерпывает их каждый тик.
+  (meNone/BossWantsMinion/Henshin/BossRage/LevelComplete/Died/BossCrashed/
+  BossOwesPrize) - 'MessageToMain' из 2008, игровой цикл вычерпывает их
+  каждый тик.
 - **`TMonster`** - позиция, экран, `Tag` расстановки, направление, жизни
   (+`LivesAll`), кадр анимации, шаг, таймер огня, флаг ярости (`Enraged`), таймер миньонов босса, одноразовый
-  флаг хеншина, список событий, а у монстра-диска - его `TDisc` (`Disc`, у
-  остальных nil). Собственные оракулы коллизий (пары
+  флаг хеншина, список событий, у монстра-диска - его `TDisc` (`Disc`, у
+  остальных nil), у монстра `mkBossFly` - его `TPilot`. Собственные оракулы
+  коллизий (пары
   `CanGoLeftEdgeAware`/`WallOnly` = CanIGo*1/2 из 2008, `CanGoDown`), `ShoveX`.
-  Движение: `MoveWalking`/`Falling`/`Flying` (прямоугольник босса: вниз до
-  y 320, влево до x 32, вверх до `BossFlyTopY` = 96 - на клетку ниже 64 из
-  2008, из-под плашек HUD, - вправо до x 448), `PatrolStep`. Бой: `FireAt`
+  Движение: `MoveWalking`/`Falling`/`Flying` (босс: `MoveFlying` отдаёт
+  `Monsters.Pilot` запись `TPilotBrief` - шаг, героя, живо ли тело, - и
+  пилот двигает X, Y; удар и причитающийся приз возвращаются событиями
+  `meBossCrashed` / `meBossOwesPrize`), `PatrolStep`. Бой: `FireAt`
   (паттерны из `TAttackDef`; прицельный выстрел монстра, у которого
   `Disc.Muzzle` больше нуля, вылетает с кромки - на `Muzzle` от середины в
   сторону героя, а не из точки 2008 (X + 8, Y + 8); угол - прежний
   дословный, от X, Y монстра к X, Y героя, так что выстрел идёт через
-  середину хитбокса героя, а не по его левому краю), `TakeDamage`
-  (отбрасывание через оракул стены +
-  веера взрывов + события), `EnrageTankIfLow`, `ProcessBossThresholds`,
-  `BeginDying`. Диск: `TickDisc` (последним в `Tick`) отдаёт ему
-  `DiscCenter` (середина спрайта), середину героя, шаг, делённый на
-  скорость из определения (ярость удваивает шаг, значит и вращение),
+  середину хитбокса героя, а не по его левому краю), `FirePorts` (залп,
+  когда пилот говорит `PortsDue`: по пуле из каждого угла
+  `Disc.PortAngles`, повёрнутого вместе с ободом, на `Muzzle` от оси,
+  прямо наружу; стреляет после `TickDisc`, так что порты там, где их
+  покажет кадр), `TakeDamage` (отбрасывание через оракул стены - но не
+  пока пилот `Busy`: оракул спрашивает один ряд, и тело между двумя рядами
+  вдавило бы в стену, - + веера взрывов + события), `EnrageTankIfLow`,
+  `ProcessBossThresholds`,
+  `BeginDying`. Диск: `TickDisc` (под конец `Tick`: после него только
+  залп портов) отдаёт ему
+  `DiscCenter` (середина спрайта), `EyeTarget` (середина героя; при `Gaze`
+  пилота - точка, на которую захвачен таран, или середина самого диска у
+  оглушённого глаза), шаг, делённый на скорость из определения (ярость
+  удваивает шаг, значит и вращение; последнее слово - за `SpinScale`
+  пилота),
   `DiscWear` (потерянные с рождения жизни к `WearFull` - от `FLivesBorn`,
   потому что ярость сбрасывает `LivesAll`) и `DiscCharge` (растёт последние
-  `TelegraphTicks` = 10 тиков перед выстрелом, 1 в тик выстрела). Публично:
-  `Tick(heroX, heroY, bullets)`, `Draw(sprites, alpha)` (живой монстр-диск
+  `TelegraphTicks` = 10 тиков перед выстрелом, 1 в тик выстрела; в манёвре
+  вместо него - `Charge` пилота). Пока пилот `Busy`, прицельная пушка
+  молчит и её таймер стоит на нуле - после манёвра до первого выстрела
+  проходит целый интервал. Публично:
+  `Tick(heroX, heroY, bullets)`, `SetTactics` (летающий босс принимает
+  тактику, у остальных пилота нет), `NoteHeroContact`, `LastCrash`
+  (спрашивают по `meBossCrashed`), `Draw(sprites, alpha)` (живой монстр-диск
   рисует диск между тиками; все остальные - кадры по тику, alpha не
   используется), `DrawSmoke(canvas, origin, alpha)`, `DrawSparks` (той же
   формы), `DrainEvent`,
@@ -855,7 +950,11 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   сложности, - поле рождается заново на рестарте, так что смена сложности
   приходит сюда. `Tick` (текущий экран), `SpawnFromSky(monsterId, screen)`
   (миньоны босса и грейвелы испытания, в случайной колонке на ряд выше
-  экрана - падение и есть выход на сцену), `AnyAliveOnScreen` (ворота
+  экрана - падение и есть выход на сцену), `SpawnOn(monsterId, screen,
+  x, y)` (прямо на месте тела в этой точке: приз в руки герою, его
+  собирает контакт того же тика; оба - над приватным `SpawnAt` в клетках
+  расстановки), `SetTaggedTactics(tag,
+  tactics)` (действие tactics событий), `AnyAliveOnScreen` (ворота
   прорыва - пикапы считаются, дословно), `AnyAliveTagged(tag)` (живое тело с
   тегом расстановки на любом экране - allDead событий),
   `AnyTaggedLivesBelow(tag, lives)` и `AnyTaggedEnraged(tag)` (только живые -
@@ -1127,19 +1226,21 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `BottleSoundFile` публична: бочечный взрыв служит и взрывом бонуса, и
   хлопками обломков босса, и dpr берёт имя отсюда.
 
-### `Game/Events/Events.Director.pas` (~155 строк)
+### `Game/Events/Events.Director.pas` (~160 строк)
 Исполняет события уровня (`Levels.Events`) на живой игре.
 **`TEventDirector`** берёт события, доску сообщений, динамические объекты
 уровня и колбэк `TChangeMusic`
 (`reference to procedure`; игра передаёт свой метод `ChangeMusic`, который
 заодно запоминает трек для рестартов). Поле монстров рождается заново на
-каждом рестарте, поэтому приходит с каждым тиком, а не хранится.
+каждом рестарте, поэтому приходит с каждым тиком, а не хранится: у него
+спрашивают условия, ему говорят тактику.
 - `Tick(screen, field)` - раз в логический тик с экраном героя: для каждого
   несработавшего события этого экрана проверяется условие
   (`ConditionHolds`); пока оно держится, идёт отсчёт задержки, сбой условия
   начинает отсчёт заново; на нуле действия играют один раз (`Play`:
   `ShowBig`, `AddTicker`, `StartTerminal` с заголовком терминала, колбэк
-  музыки, `FadeTagged` / `TurnSunTagged` по динамике). Над трупом героя игра тик пропускает.
+  музыки, `FadeTagged` / `TurnSunTagged` по динамике, `SetTaggedTactics`
+  по полю). Над трупом героя игра тик пропускает.
 - `ReArm(screen)` - смерть возвращает на экран с возрождёнными монстрами,
   и его события снова ждут своего часа, как триггеры сущностей, а
   динамические объекты, которые крутили их действия intensity, откатываются
@@ -1311,7 +1412,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2080 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~2145 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
@@ -1323,7 +1424,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   дополнительные сканкоды (дебажные - под DEBUGKEYS), дозы тряски экрана
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
-  `BonusFireRainTrauma`, `AftershockTrauma` - добавление 2026; дозы
+  `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` -
+  добавление 2026; дозы
   церемонии живут в `Game.Henshin`), строки макета финального экрана.
 - **Типы**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (наследует `TGameApp`) - держит реестр (владеет им
@@ -1395,7 +1497,13 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     вида `explosion` монстра в середине его спрайта, в тик убийства),
     `HurtHero`, `DrainMonsterEvents` (здесь же взрывы и удары босса
     доливают тряску; `meBossRage` взрывает на боссе взрыв размера машины и
-    озвучивает его `RageBlastSoundFile` - машинным `platform.wav`),
+    озвучивает его `RageBlastSoundFile` - машинным `platform.wav`;
+    `meBossCrashed` - таран босса кончился стеной: `BossCrashTrauma`,
+    `BossCrashSoundFile` (`crash.wav`) и `ThrowCrashSparks` - веера искр
+    `Game.Impacts` от кромки, которой он ударил, и вдоль стены;
+    `meBossOwesPrize` - `PayDodgePrize` выдаёт живому герою `DodgePrize`
+    босса через `SpawnOn`), `ResolveMonsterContact` заодно сообщает монстру о
+    каждом касании (`NoteHeroContact` - правило приза у пилота),
     `EchoAftershock` (`TEchoAftershock` из `Game.Explosions`: каждый хлопок
     обломков босса играет `bottle.wav` и добавляет `AftershockTrauma`),
     `SolidUnderPoint` (щуп обломков, попаданий и динамических объектов:
@@ -1503,6 +1611,12 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 пределах полутона - одна пластина, а не три ноты) и визг трассера
 (`ricochet.wav`). С зерном: те же файлы бит в бит. numpy.
 
+### `tools/sounds/crash.py`
+Синтезирует удар босса о стену в `bin/sounds/crash.wav`: глухой удар со
+сползающей вниз высотой, хруст шума со срезанным верхом и звон корпуса
+после них, загнанные в мягкий клип. Берёт соотношения бруска, `finish` и
+`save` у `armor.py` рядом. С зерном. numpy.
+
 ---
 
 ## Данные времени выполнения (`bin\`)
@@ -1530,10 +1644,11 @@ dangerous - наследуются монстрами), массив `monsters`.
 `metal` у платформы, танка, крепления, бочки и `boss1` - пуля выбивает из
 них искры вместо разрыва (`Game.Impacts`). `disc` (только
 `boss1`) рисует живого монстра вращающимся диском из слоёв набора вместо
-кадров `alive`: `set`, `side`, `muzzle`, `spin`, `irisReach`, `wearFull` -
-см. `TDiscDef`.
+кадров `alive`: `set`, `side`, `muzzle`, `spin`, `irisReach`, `wearFull`,
+`portAngles` (шесть орудийных портов арта обода: 0, 51, 129, 180, 231,
+309) - см. `TDiscDef`. В его блоке `boss` назван `dodgePrize`: `medkit`.
 
-### `level1.json` (~62 КБ) / `level2.json` (~22 КБ)
+### `level1.json` (~63 КБ) / `level2.json` (~22 КБ)
 Единый формат уровня, разбирается `TLevel`. Ключи: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (наборы окружения в порядке разрешения),
 **`objectSets`** (необязательно: общий арт объектов, ищется после
@@ -1603,7 +1718,9 @@ music с `file`, intensity с `target`/`value`/`ticks`, sun с
   livesBelow 150 - bossSmoke до 60%; enraged - bossSmoke гаснет, и
   (`bossRageLamps`) синие лампы гаснут, красные разгораются за 20 тиков,
   и (`bossRageSparks`) bossSparks загораются на 50%;
-  livesBelow 30 - bossSmoke, bossBurn и bossSparks до 100%.
+  livesBelow 30 - bossSmoke, bossBurn и bossSparks до 100%. Тактика босса
+  ездит на тех же трёх моментах (`bossSmokeTactics`, `bossRageTactics`,
+  `bossBurnTactics`): dives, пока дымит, rams в ярости, hunts, когда горит.
 - level2: 9 экранов, 38 сущностей, палитра из 35 тайлов, 4 фона - день (1),
   край обрыва (2), скала (3-5), та же скала темнее (6-9); наборы
   `moon-surface machinery facility common mine-interior`. Объект: спутник на
@@ -1658,10 +1775,11 @@ music с `file`, intensity с `target`/`value`/`ticks`, sun с
 словарь меню. Контента уровней и монстров здесь НЕТ - он локализован на месте, в
 JSON уровней и монстров, по схеме "базовое поле + сосед `En`".
 
-### `sounds/` (23 WAV) и `music/` (OGG)
+### `sounds/` (24 WAV) и `music/` (OGG)
 Одиночные звуки прогреваются на старте и громко падают, если файла нет;
 музыка грузится мягко. Четыре звука синтезирует `tools/sounds/armor.py`:
-`armor1..3.wav` и `ricochet.wav`. Треки, названные кодом: `moon.ogg` (меню,
+`armor1..3.wav` и `ricochet.wav`; пятый, `crash.wav`, -
+`tools/sounds/crash.py`. Треки, названные кодом: `moon.ogg` (меню,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). Данными:
 `moon_surface.ogg` (уровень 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (`rageMusic` босса), `hallu.ogg` (уровень 2),
@@ -1676,6 +1794,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Движение героя / коллизии / ощущение прыжка | Hero.pas |
 | Паттерны оружия / прицел | Hero.pas (+Bullets.pas) |
 | Поведение монстров / ИИ / босс | Monsters.pas + Monsters.Defs.pas + monsters.json |
+| Полёт босса: круг, манёвры (раздумье, нырок, таран, оглушение), их числа | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; события `tactics` в level1.json; `portAngles` / `dodgePrize` в monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | Диск босса: слои, вращение, глаз, износ, выстрел с кромки | Monsters.Disc.pas + `disc` в monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
 | Лампы, едущие на диске босса | маячки с `turns` в level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateMonster` |
 | Новый монстр (только данные) | monsters.json + набор `.mset` (spriteList хранит написание `.mns`) |

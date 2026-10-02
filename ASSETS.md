@@ -77,6 +77,10 @@ there are still the 2008 ones.
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.
 
+**`bin/sounds/crash.wav`** - since 3.0.21, synthesised by
+`tools/sounds/crash.py`: a heavy disc stopped by a wall, from sine tones
+and noise alone.
+
 ## Third-party runtime libraries
 
 `SDL2.dll`, `SDL2_mixer.dll` and `SDL2_image.dll` are redistributed under the
