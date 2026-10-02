@@ -8,9 +8,10 @@
   leaves, no wall asked. A maneuver (a 2026 addition) leaves the lap and
   comes back to it, the other way round. Every maneuver opens the same
   way, so there is one tell to learn: the body brakes onto a cell and
-  ponders there. What follows is picked by the tactics the level's
-  events set (TPilotTactics). Off the lap the pilot minds the walls: the
-  level's grid, the body one cell big.
+  ponders there - a hunt alone has no time for it. What follows is
+  picked by the tactics the level's events set (TPilotTactics). Off the
+  lap the pilot minds the walls: the level's grid, the body one cell
+  big.
 
   Not here: what a maneuver looks and sounds like. The disc, the bullets
   and the sparks of a crash are the monster's and the game's.
@@ -81,6 +82,7 @@ type
     FDashFrom: TPlace; // the middle of the body as the dash set off
     FDashDirection: TPlace; // a unit vector
     FDashTouchedHero: Boolean;
+    FRammedLast: Boolean; // the maneuver before this one was a ram
     FLastCrash: TPilotCrash;
     FCrashed: Boolean;
     FOwesPrize: Boolean;
@@ -97,8 +99,9 @@ type
       const ABrief: TPilotBrief): Boolean;
     procedure Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure BeginBrake(const ACell: TCell);
-    procedure Brake(var AFeet: TPlace; AStep: Integer);
+    procedure Brake(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure Ponder(const ABrief: TPilotBrief);
+    function MayRam: Boolean;
     procedure PickManeuver(const ABrief: TPilotBrief);
     procedure EndManeuver(const AFeet: TPlace);
     procedure BeginDive(const AHero: TCell);
@@ -198,6 +201,7 @@ const
   ManeuverGunSlowdown = 2;
 
   DiveTicks = 130; // about four seconds
+  HuntDiveTicks = 65; // a hunt looks for a ram twice as often
 
   AimTicks = 15; // the eye stands on its point: time to leave the line
   DashStepScale = 4; // of the definition's step
@@ -562,7 +566,7 @@ begin
     psLap:
       Cruise(AFeet, ABrief);
     psBrake:
-      Brake(AFeet, ABrief.Step);
+      Brake(AFeet, ABrief);
     psPonder:
       Ponder(ABrief);
     psDive:
@@ -644,12 +648,18 @@ begin
   FState := psBrake;
 end;
 
-procedure TPilot.Brake(var AFeet: TPlace; AStep: Integer);
+procedure TPilot.Brake(var AFeet: TPlace; const ABrief: TPilotBrief);
 begin
   var Target := FeetOf(FTargetCell);
-  var Stride := BrakeStride(LengthOf(WayTo(AFeet, Target)), AStep);
+  var Stride := BrakeStride(LengthOf(WayTo(AFeet, Target)), ABrief.Step);
   if not Approach(AFeet, Target, Stride) then
     Exit;
+  // A hunt has no time to ponder: on the cell, the next maneuver at once
+  if FTactics = ptHunts then
+  begin
+    PickManeuver(ABrief);
+    Exit;
+  end;
   FTicksLeft := PonderTicks;
   FState := psPonder;
 end;
@@ -662,10 +672,21 @@ begin
     ((Elapsed - PortsLeadTicks) mod PortsEveryTicks = 0);
   if FTicksLeft > 0 then
     Exit;
-
-  // The maneuver now flown is the one new tactics were promised at once
-  FRestWaived := False;
   PickManeuver(ABrief);
+end;
+
+// A hunt never rams twice running: the dive between two rams keeps it
+// on the move
+function TPilot.MayRam: Boolean;
+begin
+  case FTactics of
+    ptRams:
+      Result := True;
+    ptHunts:
+      Result := not FRammedLast;
+  else
+    Result := False;
+  end;
 end;
 
 // A ram is flown at where the hero stands, seen or not; with no runway
@@ -673,16 +694,17 @@ end;
 // again.
 procedure TPilot.PickManeuver(const ABrief: TPilotBrief);
 begin
+  // The maneuver now flown is the one new tactics were promised at once
+  FRestWaived := False;
   var Hero := HeroFeet(ABrief);
-  var Rams := FTactics in [ptRams, ptHunts];
-  if Rams and HasRunway(FTargetCell, MiddleOf(Hero)) then
+  if MayRam and HasRunway(FTargetCell, MiddleOf(Hero)) then
     BeginAim(MiddleOf(Hero))
   else
     BeginDive(CellAt(Hero));
 end;
 
-// A hunt never goes back to the lap: it ponders next where the maneuver
-// has ended
+// A hunt never goes back to the lap: the next maneuver starts from the
+// cell this one has ended at
 procedure TPilot.EndManeuver(const AFeet: TPlace);
 begin
   if FTactics = ptHunts then
@@ -695,6 +717,9 @@ procedure TPilot.BeginDive(const AHero: TCell);
 begin
   FHeading := HeadingToward(FTargetCell, AHero);
   FTicksLeft := DiveTicks;
+  if FTactics = ptHunts then
+    FTicksLeft := HuntDiveTicks;
+  FRammedLast := False;
   FState := psDive;
 end;
 
@@ -761,6 +786,7 @@ procedure TPilot.BeginAim(const APoint: TPlace);
 begin
   FAimPoint := APoint;
   FTicksLeft := AimTicks;
+  FRammedLast := True;
   FState := psAim;
 end;
 
@@ -938,6 +964,7 @@ procedure TPilot.JoinLap(const ACell: TCell; AStep: Integer);
 begin
   FClockwise := not FClockwise;
   FHeading := LapHeadingAt(ACell, FClockwise);
+  FRammedLast := False;
   FState := psLap;
   FLapRestTicks := 0;
   if not FRestWaived then

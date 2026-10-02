@@ -45,8 +45,8 @@ type
   //   after the hero.
   // - ptRams: a ram at where the hero stands, seen or not; a dive
   //   where the dash has no runway.
-  // - ptHunts: the same and no lap any more - one maneuver after
-  //   another.
+  // - ptHunts: no lap and no pondering any more - dives and rams by
+  //   turns, one after another.
   TPilotTactics = (ptLaps, ptDives, ptRams, ptHunts);
 
   TMovementDef = record
