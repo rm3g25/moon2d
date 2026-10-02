@@ -274,6 +274,7 @@
       "parent": "satellite",
       "x": 33.5,
       "y": 36,
+      "tag": "satelliteSparks",
       "tint": [
         100,
         96,
@@ -289,9 +290,12 @@
         14,
         6
       ],
+      "intensity": 0,
       "rate": 12,
       "burst": 7,
       "frequency": 0.5,
+      "spell": 7,
+      "pause": 3,
       "life": 2.6,
       "speed": 46,
       "angle": -90,
@@ -2600,6 +2604,31 @@
           "target": "earth",
           "value": 60,
           "ticks": 660
+        }
+      ]
+    },
+    {
+      "id": "satelliteSparks16",
+      "screen": 16,
+      "when": "enterScreen",
+      "delay": 40,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "satelliteSparks",
+          "value": 45
+        }
+      ]
+    },
+    {
+      "id": "satelliteSparks17",
+      "screen": 17,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "intensity",
+          "target": "satelliteSparks",
+          "value": 100
         }
       ]
     },
