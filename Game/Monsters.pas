@@ -27,6 +27,10 @@
   platform - smokes and sparks once it is down to its last third (a 2026
   addition).
 
+  The boss flies by Monsters.Pilot: the lap and, by the tactics the
+  level's events set, the maneuvers off it (a 2026 addition). In a
+  maneuver the aimed gun holds; a pondering disc fires its ports instead.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Monsters;
@@ -99,6 +103,8 @@ type
     function CanGoDown: Boolean;
     procedure ShoveX(ADeltaX: Integer);
     procedure FireAt(const ABullets: TBurst);
+    procedure FirePorts(const ABullets: TBurst);
+    function PilotBusy: Boolean;
     procedure AdvanceFrame;
     procedure PatrolStep(ACanLeft, ACanRight: Boolean);
     procedure MoveWalking;
@@ -144,6 +150,8 @@ type
     procedure TakeDamage(AKnockDx, ALosses: Integer;
       const AEnemyBullets: TBurst);
     function DrainEvent: TMonsterEvent;
+    // A flying boss takes them up; the rest have no pilot to tell
+    procedure SetTactics(ATactics: TPilotTactics);
     function HealthTier: TMonsterHealthTier;
     // How full the current third is, 0..1
     function TierShare: Single;
@@ -203,6 +211,8 @@ type
     // The events' livesBelow and enraged conditions ask here
     function AnyTaggedLivesBelow(const ATag: string; ALives: Integer): Boolean;
     function AnyTaggedEnraged(const ATag: string): Boolean;
+    // The events' tactics action lands here
+    procedure SetTaggedTactics(const ATag: string; ATactics: TPilotTactics);
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer;
       AAlpha: Single);
     // Over the monsters of the screen: the smoke of the wrecked machines
@@ -330,7 +340,7 @@ begin
   if ADef.Movement.Kind = mkBossFly then
   begin
     FAction := maFlying;
-    FPilot := TPilot.Create;
+    FPilot := TPilot.Create(ALevel, APlacement.Screen, ADef.Movement.Speed);
     FBossMinionTimer := ADef.Boss.SpawnEveryTicks;
   end;
 
@@ -442,6 +452,8 @@ begin
   Drive.Hero.X := FHeroX + SpriteSize / 2;
   Drive.Hero.Y := FHeroY - SpriteSize / 2;
   Drive.SpinScale := FStep / Max(1, FDef.Movement.Speed);
+  if FPilot <> nil then
+    Drive.SpinScale := FPilot.SpinScale(Drive.SpinScale);
   Drive.Wear := DiscWear;
   Drive.Charge := DiscCharge;
   FDisc.Tick(Drive);
@@ -467,6 +479,8 @@ function TMonster.DiscCharge: Single;
 const
   TelegraphTicks = 10;
 begin
+  if PilotBusy then
+    Exit(FPilot.Charge);
   if FFired then
     Exit(1);
   if not FCanShoot then
@@ -711,6 +725,38 @@ begin
   end;
 end;
 
+// One bullet out of every port of the disc, straight along its barrel.
+// The ports have turned with the rim: SDL counts that angle clockwise,
+// the ports and the bullets count theirs counterclockwise.
+procedure TMonster.FirePorts(const ABullets: TBurst);
+begin
+  for var PortAngle in FDef.Disc.PortAngles do
+  begin
+    var Angle := PortAngle - FDisc.Pose.Angle;
+    // Whole turns off: a bullet's own trigonometry (degrees / 57) drifts
+    // with the size of the angle
+    Angle := Angle - 360 * Floor(Angle / 360);
+    var Radians := DegToRad(Angle);
+    // The middle of the disc in a bullet's units: its picture hangs a
+    // sprite above its Y
+    ABullets.NewBullet(FDef.Attack.BulletSpeed,
+      FX + SpriteSize / 2 + Cos(Radians) * FDef.Disc.Muzzle,
+      FY + SpriteSize / 2 - Sin(Radians) * FDef.Disc.Muzzle,
+      Round(Angle), 0, True);
+  end;
+end;
+
+function TMonster.PilotBusy: Boolean;
+begin
+  Result := (FPilot <> nil) and FPilot.Busy;
+end;
+
+procedure TMonster.SetTactics(ATactics: TPilotTactics);
+begin
+  if FPilot <> nil then
+    FPilot.SetTactics(ATactics);
+end;
+
 // Shared by MoveWalking and MoveFlying - the same frame clock
 procedure TMonster.AdvanceFrame;
 begin
@@ -823,9 +869,15 @@ begin
 end;
 
 procedure TMonster.MoveFlying;
+var
+  Brief: TPilotBrief;
 begin
   AdvanceFrame;
-  FPilot.Tick(FX, FY, FStep);
+  Brief.Step := FStep;
+  Brief.HeroX := FHeroX;
+  Brief.HeroY := FHeroY;
+  Brief.BodyAlive := FLife = mlAlive;
+  FPilot.Tick(FX, FY, Brief);
 end;
 
 procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
@@ -849,7 +901,10 @@ begin
   end;
 
   FFired := False;
-  if FCanShoot and (FLife = mlAlive) then
+  // After a maneuver the aimed gun takes a whole interval to speak again
+  if PilotBusy then
+    FTimeOfFire := 0
+  else if FCanShoot and (FLife = mlAlive) then
   begin
     Inc(FTimeOfFire);
     if FTimeOfFire = FFireEveryTicks then
@@ -885,6 +940,9 @@ begin
   TickSmoke;
   TickSparks;
   TickDisc;
+  // After the disc has turned: the ports are where the frame shows them
+  if (FPilot <> nil) and FPilot.PortsDue then
+    FirePorts(ABullets);
 end;
 
 // Tank rage: below the threshold a cluster5 shooter doubles speed and
@@ -971,7 +1029,11 @@ begin
   // Verbatim magnitude (dx/2), rerouted through the collision oracle:
   // the single pre-check of 2008 let fast bullets shove pickups and
   // monsters INTO walls (bugfix queue item 12)
-  ShoveX(Round(AKnockDx / 2));
+  // A boss in a maneuver holds its line: the wall oracle asks one row,
+  // and a body between two rows would be shoved into the other one's
+  // wall
+  if not PilotBusy then
+    ShoveX(Round(AKnockDx / 2));
 
   Dec(FLives, ALosses);
   if (FLives < 1) and (FLife = mlAlive) then
@@ -1099,6 +1161,14 @@ begin
       (Monster.Tag = ATag) then
       Exit(True);
   Result := False;
+end;
+
+procedure TMonsterField.SetTaggedTactics(const ATag: string;
+  ATactics: TPilotTactics);
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
+      Monster.SetTactics(ATactics);
 end;
 
 procedure TMonsterField.Tick(AScreen, AHeroX, AHeroY: Integer;

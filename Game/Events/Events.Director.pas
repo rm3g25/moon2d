@@ -7,7 +7,8 @@
   the level's dynamic objects - and asks the game for the one thing it
   does not own, the music, through a callback: the game remembers the
   track for restarts. The monster field is reborn on every restart, so
-  it arrives with every tick instead of being kept.
+  it arrives with every tick instead of being kept: asked for the
+  conditions, told the tactics.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -36,7 +37,7 @@ type
     procedure RewindTargets(const AEvent: TLevelEvent);
     function ConditionHolds(const AEvent: TLevelEvent;
       const AField: TMonsterField): Boolean;
-    procedure Play(const AEvent: TLevelEvent);
+    procedure Play(const AEvent: TLevelEvent; const AField: TMonsterField);
   public
     constructor Create(const AEvents: TArray<TLevelEvent>;
       const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
@@ -110,7 +111,8 @@ begin
   end;
 end;
 
-procedure TEventDirector.Play(const AEvent: TLevelEvent);
+procedure TEventDirector.Play(const AEvent: TLevelEvent;
+  const AField: TMonsterField);
 begin
   for var Action in AEvent.Actions do
     case Action.Kind of
@@ -126,6 +128,8 @@ begin
         FDynamics.FadeTagged(Action.Target, Action.Level, Action.Ticks);
       eaSun:
         FDynamics.TurnSunTagged(Action.Target, Action.Angle, Action.Ticks);
+      eaTactics:
+        AField.SetTaggedTactics(Action.Target, Action.Tactics);
     end;
 end;
 
@@ -149,7 +153,7 @@ begin
     end;
 
     FFired[i] := True;
-    Play(FEvents[i]);
+    Play(FEvents[i], AField);
   end;
 end;
 

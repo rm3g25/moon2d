@@ -14,7 +14,7 @@ unit Levels.Events;
 interface
 
 uses
-  System.SysUtils, System.JSON, Localization;
+  System.SysUtils, System.JSON, Localization, Monsters.Defs;
 
 type
   ELevelEventError = class(Exception);
@@ -27,7 +27,7 @@ type
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
-    eaIntensity, eaSun);
+    eaIntensity, eaSun, eaTactics);
 
   TEventAction = record
     Kind: TEventActionKind;
@@ -38,10 +38,14 @@ type
     // "ticks" (0 by default - at once).
     // eaSun: the globes tagged Target turn their sun to Angle degrees
     // over Ticks. JSON: "target", "value" (degrees), "ticks".
+    // eaTactics: the monsters placed with the tag Target fly by
+    // Tactics from now on (Monsters.Pilot). JSON: "target", "value" (a
+    // word of EventTacticsIds).
     Target: string;
     Level: Single;
     Angle: Single;
     Ticks: Integer;
+    Tactics: TPilotTactics;
   end;
 
   // One event in level JSON:
@@ -66,11 +70,14 @@ type
   end;
 
 const
-  // The JSON vocabulary of "when" and "action"
+  // The JSON vocabulary of "when", of "action" and of the "value" the
+  // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged');
   EventActionIds: array [TEventActionKind] of string = (
-    'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun');
+    'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
+    'tactics');
+  EventTacticsIds: array [TPilotTactics] of string = ('laps', 'dives');
 
   // The conditions that watch tagged placements
   TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
@@ -94,6 +101,8 @@ resourcestring
   SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
   SEventSunNoTarget = 'Level "%s": event "%s": sun names no target';
   SEventSunNoAngle = 'Level "%s": event "%s": sun takes a "value" in degrees';
+  SEventTacticsNoTarget = 'Level "%s": event "%s": tactics names no target';
+  SEventBadTactics = 'Level "%s": event "%s": unknown tactics "%s"';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
 
@@ -143,6 +152,25 @@ begin
   AAction.Ticks := AObj.GetValue<Integer>('ticks', 0);
 end;
 
+function TacticsOf(const AId, ALevelId, AEventId: string): TPilotTactics;
+begin
+  for var Tactics := Low(TPilotTactics) to High(TPilotTactics) do
+    if SameText(AId, EventTacticsIds[Tactics]) then
+      Exit(Tactics);
+  raise ELevelEventError.CreateFmt(SEventBadTactics, [ALevelId, AEventId, AId]);
+end;
+
+procedure ReadTactics(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.Target := AObj.GetValue<string>('target', '');
+  if AAction.Target = '' then
+    raise ELevelEventError.CreateFmt(SEventTacticsNoTarget,
+      [ALevelId, AEventId]);
+  AAction.Tactics := TacticsOf(AObj.GetValue<string>('value', ''), ALevelId,
+    AEventId);
+end;
+
 function ReadAction(const AObj: TJSONObject;
   const ALevelId, AEventId: string): TEventAction;
 begin
@@ -156,6 +184,8 @@ begin
       ReadIntensity(AObj, ALevelId, AEventId, Result);
     eaSun:
       ReadSun(AObj, ALevelId, AEventId, Result);
+    eaTactics:
+      ReadTactics(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

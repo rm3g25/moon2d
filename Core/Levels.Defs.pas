@@ -219,6 +219,8 @@ resourcestring
     + 'which no dynamic object carries';
   SLevelEventSunUnknown = 'Level "%s": event "%s" turns the sun of "%s", '
     + 'which no globe carries';
+  SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
+    + '"%s", which no entity carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
     + 'a tag no object and no entity carries';
   SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by an object '
@@ -421,6 +423,10 @@ begin
     eaSun:
       if not FDynamics.AnyTagged(AAction.Target, TSkyGlobe) then
         raise ELevelError.CreateFmt(SLevelEventSunUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaTactics:
+      if not AnyPlacementTagged(FEntities, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventTacticsUnknown,
           [FId, AEventId, AAction.Target]);
   end;
 end;

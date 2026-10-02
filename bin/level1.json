@@ -2662,6 +2662,20 @@
       ]
     },
     {
+      "id": "bossSmokeTactics",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 150,
+      "then": [
+        {
+          "action": "tactics",
+          "target": "boss",
+          "value": "dives"
+        }
+      ]
+    },
+    {
       "id": "bossRageClearsSmoke",
       "screen": 17,
       "when": "enraged",
@@ -2709,6 +2723,19 @@
       ]
     },
     {
+      "id": "bossRageTactics",
+      "screen": 17,
+      "when": "enraged",
+      "tag": "boss",
+      "then": [
+        {
+          "action": "tactics",
+          "target": "boss",
+          "value": "laps"
+        }
+      ]
+    },
+    {
       "id": "bossBurns",
       "screen": 17,
       "when": "livesBelow",
@@ -2732,6 +2759,20 @@
           "target": "bossSparks",
           "value": 100,
           "ticks": 33
+        }
+      ]
+    },
+    {
+      "id": "bossBurnTactics",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 30,
+      "then": [
+        {
+          "action": "tactics",
+          "target": "boss",
+          "value": "dives"
         }
       ]
     }

@@ -431,7 +431,15 @@
         "muzzle": 15,
         "spin": 9,
         "irisReach": 0.6,
-        "wearFull": 75
+        "wearFull": 75,
+        "portAngles": [
+          0,
+          51,
+          129,
+          180,
+          231,
+          309
+        ]
       },
       "spawnPos": {
         "spriteX": 15,

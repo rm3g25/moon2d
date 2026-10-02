@@ -38,6 +38,13 @@ type
   // sparks (Game.Impacts); mtNone = a bullet bursts on it as on a wall
   TMonsterMaterial = (mtNone, mtMetal);
 
+  // What a flying boss does besides his lap (Monsters.Pilot); the
+  // level's events switch it.
+  // - ptLaps: nothing - the lap and no more.
+  // - ptDives: now and then a dive through the arena, cell by cell,
+  //   after the hero.
+  TPilotTactics = (ptLaps, ptDives);
+
   TMovementDef = record
     Kind: TMovementKind;
     Speed: Integer;
@@ -85,7 +92,7 @@ type
   // instead of its 'alive' frames; the death frames stay. Rates are per
   // tick, as everywhere in monsters.json. JSON "disc":
   //   {"set": "boss1-disc", "side": 36, "muzzle": 15, "spin": 9,
-  //    "irisReach": 0.6, "wearFull": 75}
+  //    "irisReach": 0.6, "wearFull": 75, "portAngles": [0, 51, 129]}
   TDiscDef = record
     SetName: string; // '' = no disc
     Side: Double; // the layers' square, screen units
@@ -96,6 +103,10 @@ type
     IrisReach: Double; // how far the eye slides toward the hero, units
     // Share of the lives lost when the worn look is complete, 0..1
     WearFull: Double;
+    // Where the barrels of the art point on the unturned rim, degrees
+    // counterclockwise from the right: a volley is one bullet out of
+    // each, Muzzle from the axis. None by default.
+    PortAngles: TArray<Double>;
     function Enabled: Boolean;
   end;
 
@@ -165,6 +176,7 @@ resourcestring
   SEmptySpawnTable = 'PickSpawn called on an empty spawn table';
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
+  SBadPortAngles = 'Monster "%s": the portAngles of a disc are numbers';
 
 const
   // JSON protocol keys read in more than one place
@@ -267,6 +279,23 @@ begin
   Result := SetName <> '';
 end;
 
+function ParsePortAngles(const AObj: TJSONObject;
+  const AMonsterId: string): TArray<Double>;
+begin
+  Result := nil;
+  var AnglesArr := AObj.GetValue<TJSONArray>('portAngles', nil);
+  if AnglesArr = nil then
+    Exit;
+
+  SetLength(Result, AnglesArr.Count);
+  for var i := 0 to AnglesArr.Count - 1 do
+  begin
+    if not (AnglesArr.Items[i] is TJSONNumber) then
+      raise EMonsterDefError.CreateFmt(SBadPortAngles, [AMonsterId]);
+    Result[i] := TJSONNumber(AnglesArr.Items[i]).AsDouble;
+  end;
+end;
+
 // A broken disc must fail at load time, not draw a speck or a smear
 function ParseDisc(const AObj: TJSONObject; const AMonsterId: string): TDiscDef;
 begin
@@ -276,6 +305,7 @@ begin
   Result.Spin := AObj.GetValue<Double>('spin', 0);
   Result.IrisReach := AObj.GetValue<Double>('irisReach', 0);
   Result.WearFull := AObj.GetValue<Double>('wearFull', 100) / 100;
+  Result.PortAngles := ParsePortAngles(AObj, AMonsterId);
   if (Result.SetName = '') or (Result.Side <= 0) or
     (Result.Muzzle < 0) or (Result.Muzzle > Result.Side / 2) or
     (Result.WearFull <= 0) or (Result.WearFull > 1) then
