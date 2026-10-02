@@ -25,7 +25,8 @@
 
   A machine - a monster that explodes and moves: the tank, the flying
   platform - smokes and sparks once it is down to its last third (a 2026
-  addition).
+  addition). An explosive prop - the barrel - vents a wisp of smoke all
+  its life and a plume in that last third (a 2026 addition too).
 
   The boss flies by Monsters.Pilot: the lap and, by the tactics the
   level's events set, the maneuvers off it (a 2026 addition). In a
@@ -44,7 +45,8 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
-  Levels.Dynamics, Monsters.Defs, Monsters.Disc, Monsters.Pilot, Bullets;
+  Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Pilot,
+  Bullets;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
@@ -58,6 +60,17 @@ type
 
   // Thirds of full health, the crosshair's language
   TMonsterHealthTier = (htHale, htWounded, htCritical);
+
+  // A body's smoke: the look, the point where it leaves the left-facing
+  // art, how thick it stands before the last third and in it (0..1), and
+  // the ticks the change takes
+  TBodySmoke = record
+    Look: TSmokeLook;
+    Tint: TColorTint;
+    X, Y: Integer;
+    Level, CriticalLevel: Single;
+    RampTicks: Integer;
+  end;
 
   TMonster = class
   private
@@ -87,9 +100,10 @@ type
     FEvents: TList<TMonsterEvent>;
     FLevel: TLevel;
     FHeroX, FHeroY: Integer;
-    FSmoke: TSmoke; // machines only, nil for the rest
-    FSparks: TSparks; // machines only, as the smoke
-    FWrecked: Boolean; // the smoke is lit, the sparks fly
+    FSmoke: TSmoke; // machines and explosive props, nil for the rest
+    FBodySmoke: TBodySmoke; // what FSmoke was made by
+    FSparks: TSparks; // machines only, nil for the rest
+    FWrecked: Boolean; // the smoke stands at its critical level, the sparks fly
     FDisc: TDisc; // a disc monster only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
@@ -120,7 +134,7 @@ type
     function ThirdMark(AThirds: Integer): Integer;
     function FacesRight: Boolean;
     function SpawnSeed: Cardinal;
-    procedure CreateWreckSmoke;
+    procedure CreateSmoke(const ABodySmoke: TBodySmoke);
     procedure CreateWreckSparks;
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure WreckIfCritical;
@@ -231,9 +245,10 @@ type
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer;
       AAlpha: Single);
     // Over the monsters of the screen: the smoke of the wrecked machines
+    // and of the barrels
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
-    // Over the smoke: their sparks
+    // Over the smoke: the sparks of the machines
     procedure DrawSparks(const ACanvas: TDynamicCanvas; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
 
@@ -243,7 +258,7 @@ type
 implementation
 
 uses
-  Levels.Tint, Effects.Sparks;
+  Effects.Sparks;
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -260,20 +275,33 @@ const
   EnragedMinionTicks = 100; // rage shortens the reinforcement interval
   NeverHit = -1;
 
+  // Texture pixels, 2 a unit; a frame wider than this is HD art
+  Frame2008Side = 64;
+
   // A wrecked machine smokes like the boss before his rage (bossSmoke of
   // level 1 at 60%, but straight up - the point mirrors with the art):
-  // enough to notice, not enough to hide the fight
-  WreckSmoke: TSmokeLook = (Rate: 50; Life: 1.0; Size: 7; EndSize: 26;
-    Opacity: 0.7; Angle: 90; Cone: 90; Speed: 6; Drag: 0.2; Lift: 0;
-    Wind: 0; Turbulence: 3; Spin: 50; Flow: sfGusty; Frequency: 1.5;
-    Heat: 0; EndTint: (R: 72; G: 72; B: 74));
-  WreckSmokeTint: TColorTint = (R: 58; G: 57; B: 56);
-  WreckSmokeLevel = 0.6;
-  WreckSmokeRampTicks = 33;
-  // Where the smoke leaves the left-facing art: the tank's engine deck,
-  // the platform's wing root
-  WreckSmokeX = 22;
-  WreckSmokeY = 13;
+  // enough to notice, not enough to hide the fight. Unlit until the last
+  // third. The point: the tank's engine deck, the platform's wing root.
+  WreckSmoke: TBodySmoke = (
+    Look: (Rate: 50; Life: 1.0; Size: 7; EndSize: 26;
+      Opacity: 0.7; Angle: 90; Cone: 90; Speed: 6; Drag: 0.2; Lift: 0;
+      Wind: 0; Turbulence: 3; Spin: 50; Flow: sfGusty; Frequency: 1.5;
+      Heat: 0; EndTint: (R: 72; G: 72; B: 74));
+    Tint: (R: 58; G: 57; B: 56);
+    X: 22; Y: 13;
+    Level: 0; CriticalLevel: 0.6; RampTicks: 33);
+
+  // A barrel vents: a pale wisp all its life, a plume in the last third.
+  // Thin on purpose - barrels stand in rows. The point: the cap of the
+  // relief valve.
+  BarrelSmoke: TBodySmoke = (
+    Look: (Rate: 18; Life: 1.6; Size: 2.5; EndSize: 14;
+      Opacity: 0.45; Angle: 90; Cone: 30; Speed: 7; Drag: 0.2; Lift: 3;
+      Wind: 0; Turbulence: 2; Spin: 40; Flow: sfGusty; Frequency: 0.8;
+      Heat: 0; EndTint: (R: 60; G: 62; B: 68));
+    Tint: (R: 80; G: 82; B: 86);
+    X: 21; Y: 1;
+    Level: 0.4; CriticalLevel: 1; RampTicks: 16);
 
   // A wrecked machine shorts out: a crackle of sparks now and then, few
   // between
@@ -294,6 +322,12 @@ const
 function IsMachine(const ADef: TMonsterDef): Boolean;
 begin
   Result := ADef.ExplodesOnDeath and (ADef.Movement.Kind <> mkStatic);
+end;
+
+// Explodes and is no one's enemy: the barrel
+function IsExplosiveProp(const ADef: TMonsterDef): Boolean;
+begin
+  Result := ADef.ExplodesOnDeath and (ADef.Category = mcProp);
 end;
 
 // ---------------------------------------------------------------------------
@@ -361,9 +395,11 @@ begin
 
   if IsMachine(ADef) then
   begin
-    CreateWreckSmoke;
+    CreateSmoke(WreckSmoke);
     CreateWreckSparks;
-  end;
+  end
+  else if IsExplosiveProp(ADef) then
+    CreateSmoke(BarrelSmoke);
   if ADiscArt <> nil then
     FDisc := TDisc.Create(ADef.Disc, ADiscArt, DiscCenter);
 end;
@@ -383,13 +419,15 @@ begin
   Result := (Cardinal(Round(FX)) shl 16) xor Cardinal(Round(FY));
 end;
 
-// Unlit until the last third; seeded by the spawn point, so two machines
-// on one screen do not puff in step
-procedure TMonster.CreateWreckSmoke;
+// Seeded by the spawn point, so two bodies on one screen do not puff in
+// step
+procedure TMonster.CreateSmoke(const ABodySmoke: TBodySmoke);
 begin
-  var WreckPlacement := Default(TDynamicPlacement);
-  WreckPlacement.Tint := WreckSmokeTint;
-  FSmoke := TSmoke.CreateLook(WreckPlacement, WreckSmoke, 0, SpawnSeed);
+  FBodySmoke := ABodySmoke;
+  var SmokePlacement := Default(TDynamicPlacement);
+  SmokePlacement.Tint := ABodySmoke.Tint;
+  FSmoke := TSmoke.CreateLook(SmokePlacement, ABodySmoke.Look,
+    ABodySmoke.Level, SpawnSeed);
 end;
 
 // Unlit like the smoke, and seeded apart from it. The tint is the
@@ -413,8 +451,9 @@ begin
   if FWrecked or (FSmoke = nil) or (HealthTier <> htCritical) then
     Exit;
   FWrecked := True;
-  FSmoke.FadeTo(WreckSmokeLevel, WreckSmokeRampTicks);
-  FSparks.FadeTo(WreckSparksLevel, WreckSparksRampTicks);
+  FSmoke.FadeTo(FBodySmoke.CriticalLevel, FBodySmoke.RampTicks);
+  if FSparks <> nil then
+    FSparks.FadeTo(WreckSparksLevel, WreckSparksRampTicks);
 end;
 
 procedure TMonster.TickSmoke;
@@ -422,10 +461,10 @@ begin
   if FSmoke = nil then
     Exit;
 
-  var PointX := WreckSmokeX;
+  var PointX := FBodySmoke.X;
   if FacesRight then
-    PointX := SpriteSize - WreckSmokeX;
-  FSmoke.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckSmokeY,
+    PointX := SpriteSize - FBodySmoke.X;
+  FSmoke.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + FBodySmoke.Y,
     FLife = mlAlive);
 end;
 
@@ -1310,6 +1349,7 @@ begin
 
   var Cache := TSpriteCache.Create(FRenderer);
   Cache.AttachSpriteSet(SpriteSet);
+  Cache.ExpectDenseArtAbove(Frame2008Side);
   FSetCaches.Add(Cache);
 
   Result := LoadAnimSet(Cache, SpriteSet);

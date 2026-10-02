@@ -59,6 +59,7 @@ type
     FUseColorKey: Boolean;
     FKeyR, FKeyG, FKeyB: UInt8;
     FLinearFilter: Boolean;
+    FDenseAboveWidth: Integer; // 0 = no dense art in this cache
     function FindSet(const AName: string): TSpriteSet;
     function NamedSet(const AId: string): TSpriteSet;
     function LoadTexture(const ASurface: PSdlSurface;
@@ -98,6 +99,12 @@ type
     // filter is nearest, and nearest downscaling turns detail into grain.
     // Applies to textures loaded after the call, like the color key.
     procedure EnableLinearFilter;
+    // For a cache holding dense art beside the 2008 frames: a picture
+    // wider than AWidth pixels is loaded without the color key - dense
+    // art comes with its own alpha, and its blacks are paint - and with
+    // the linear filter. The narrower ones load as the cache is set.
+    // Applies to textures loaded after the call.
+    procedure ExpectDenseArtAbove(AWidth: Integer);
     function Count: Integer;
   end;
 
@@ -249,6 +256,11 @@ begin
   FLinearFilter := True;
 end;
 
+procedure TSpriteCache.ExpectDenseArtAbove(AWidth: Integer);
+begin
+  FDenseAboveWidth := AWidth;
+end;
+
 function TSpriteCache.Count: Integer;
 begin
   Result := FTextures.Count;
@@ -367,7 +379,8 @@ var
 begin
   Surface := ASurface;
   try
-    if FUseColorKey then
+    var Dense := (FDenseAboveWidth > 0) and (Surface.W > FDenseAboveWidth);
+    if FUseColorKey and not Dense then
       SDL_SetColorKey(Surface, 1,
         SDL_MapRGB(Surface.Format, FKeyR, FKeyG, FKeyB));
 
@@ -375,7 +388,7 @@ begin
     if Result = nil then
       raise ESpriteError.CreateFmt(STextureCreateFailed,
         [AName, SdlErrorText]);
-    if FLinearFilter then
+    if FLinearFilter or Dense then
       SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
   finally
     SDL_FreeSurface(Surface);
