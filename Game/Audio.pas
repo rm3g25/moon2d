@@ -112,8 +112,10 @@ const
   // Mixer buffer in sample frames: 1024 @ 44100 Hz = ~23 ms of latency.
   // A gunshot must not lag behind the muzzle flash.
   ChunkFrames = 1024;
-  // Henshin double-sting plus a chorus of dying gravels, with headroom
-  MixChannels = 16;
+  // The chain gun alone holds sixteen, at moments seventeen - a 2.4 s
+  // shot every 5 ticks - and a sound with no free channel is dropped in
+  // silence. The rest are the world's: blasts, deaths, the henshin sting
+  MixChannels = 32;
 begin
   inherited Create;
   FSoundsDir := IncludeTrailingPathDelimiter(ASoundsDir);
