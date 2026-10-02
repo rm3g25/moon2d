@@ -423,6 +423,7 @@
       "disc": {
         "set": "boss1-disc",
         "side": 36,
+        "muzzle": 15,
         "spin": 9,
         "irisReach": 0.6,
         "wearFull": 75

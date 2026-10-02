@@ -579,10 +579,18 @@ procedure TMonster.FireAt(const ABullets: TBurst);
       Angle := Angle + 180
     else
       Angle := -Angle + 180;
+
+    var MuzzleX: Double := FX + SpriteSize div 4;
+    var MuzzleY: Double := FY + SpriteSize div 4;
+    var MuzzleRadius := FDef.Disc.Muzzle;
+    if MuzzleRadius > 0 then
+    begin
+      MuzzleX := FX + SpriteSize / 2 - DeltaX / Distance * MuzzleRadius;
+      MuzzleY := FY + SpriteSize / 2 - DeltaY / Distance * MuzzleRadius;
+    end;
     for var i := 0 to ACount - 1 do
-      ABullets.NewBullet(FDef.Attack.BulletSpeed,
-        FX + SpriteSize div 4 + i * AOffsetX, FY + SpriteSize div 4,
-        Angle, 0, True);
+      ABullets.NewBullet(FDef.Attack.BulletSpeed, MuzzleX + i * AOffsetX,
+        MuzzleY, Angle, 0, True);
   end;
 
 begin

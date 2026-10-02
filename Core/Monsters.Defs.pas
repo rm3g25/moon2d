@@ -80,11 +80,14 @@ type
   // A monster drawn as a spinning disc out of layers (Monsters.Disc)
   // instead of its 'alive' frames; the death frames stay. Rates are per
   // tick, as everywhere in monsters.json. JSON "disc":
-  //   {"set": "boss1-disc", "side": 36, "spin": 9, "irisReach": 0.6,
-  //    "wearFull": 75}
+  //   {"set": "boss1-disc", "side": 36, "muzzle": 15, "spin": 9,
+  //    "irisReach": 0.6, "wearFull": 75}
   TDiscDef = record
     SetName: string; // '' = no disc
     Side: Double; // the layers' square, screen units
+    // How far from the axis the barrels of the art stand - where an
+    // aimed shot leaves; 0 keeps the shot where any monster's leaves
+    Muzzle: Double;
     Spin: Double; // degrees a tick, counterclockwise; doubles with the step
     IrisReach: Double; // how far the eye slides toward the hero, units
     // Share of the lives lost when the worn look is complete, 0..1
@@ -155,8 +158,8 @@ resourcestring
   SSpawnRefUnknown = 'Boss "%s": spawn table references unknown id "%s"';
   SBadSpawnWeight = 'Boss "%s": spawn weight for "%s" must be positive';
   SEmptySpawnTable = 'PickSpawn called on an empty spawn table';
-  SBadDisc = 'Monster "%s": a disc needs a set, a positive side and ' +
-    'wearFull above 0, up to 100';
+  SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
+    'muzzle from 0 to half the side and wearFull above 0, up to 100';
 
 const
   // JSON protocol keys read in more than one place
@@ -257,10 +260,12 @@ function ParseDisc(const AObj: TJSONObject; const AMonsterId: string): TDiscDef;
 begin
   Result.SetName := AObj.GetValue<string>('set', '');
   Result.Side := AObj.GetValue<Double>('side', 0);
+  Result.Muzzle := AObj.GetValue<Double>('muzzle', 0);
   Result.Spin := AObj.GetValue<Double>('spin', 0);
   Result.IrisReach := AObj.GetValue<Double>('irisReach', 0);
   Result.WearFull := AObj.GetValue<Double>('wearFull', 100) / 100;
   if (Result.SetName = '') or (Result.Side <= 0) or
+    (Result.Muzzle < 0) or (Result.Muzzle > Result.Side / 2) or
     (Result.WearFull <= 0) or (Result.WearFull > 1) then
     raise EMonsterDefError.CreateFmt(SBadDisc, [AMonsterId]);
 end;
