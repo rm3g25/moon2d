@@ -1540,7 +1540,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     caller needs an ifdef. Behind them: `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DumpLevelScreens` (P: the tiles of every screen of the level, each
-    alone on a chroma-green fill, one PNG per screen in
+    alone on a transparent ground, one PNG per screen in
     `dump\<level id>\` of the working folder (`bin`) - the source
     pictures for repainting the art outside the game; the count goes to
     the ticker, the folder to the caption; `SaveScreenPictures` draws

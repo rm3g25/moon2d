@@ -1874,9 +1874,8 @@ begin
     // switch back restores the frame's
     SDL_RenderSetLogicalSize(FRenderer, FLevel.GridWidth * TileSize,
       FLevel.GridHeight * TileSize);
-    // Not the sky color: a repaint is keyed out by this fill, and no
-    // tile is this green
-    SDL_SetRenderDrawColor(FRenderer, 0, 255, 0, 255);
+    // Alpha 0: the picture is empty wherever no tile stands
+    SDL_SetRenderDrawColor(FRenderer, 0, 0, 0, 0);
     FSprites.Origin := NoShake;
 
     for var Screen := 1 to FLevel.ScreenCount do
