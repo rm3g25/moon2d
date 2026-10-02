@@ -120,9 +120,8 @@ type
     procedure FlyBack(var AFeet: TPlace; AStep: Integer);
     procedure JoinLap(const ACell: TCell; AStep: Integer);
   public
-    // ABaseStep - the step of the monster's definition: a dive and a
-    // dash are flown by it whatever the rage has made of the monster's
-    // own
+    // ABaseStep - the step of the monster's definition: a dash is flown
+    // by it whatever the rage has made of the monster's own
     constructor Create(const ALevel: TLevel; AScreen, ABaseStep: Integer);
 
     // One logic tick. AX, AY - the feet point of the body.
@@ -201,7 +200,7 @@ const
   DiveTicks = 130; // about four seconds
 
   AimTicks = 15; // the eye stands on its point: time to leave the line
-  DashStepScale = 3; // of the definition's step
+  DashStepScale = 4; // of the definition's step
   StunTicks = 50;
   // A wall grazed by less than this does not stop a body
   BodyInset = 2;
@@ -744,7 +743,7 @@ procedure TPilot.Dive(var AFeet: TPlace; const ABrief: TPilotBrief);
 begin
   if FTicksLeft > 0 then
     Dec(FTicksLeft);
-  if not Approach(AFeet, FeetOf(FTargetCell), FBaseStep) then
+  if not Approach(AFeet, FeetOf(FTargetCell), ABrief.Step) then
     Exit;
 
   if FTicksLeft = 0 then
