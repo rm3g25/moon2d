@@ -76,6 +76,7 @@ type
     FReturnPath: TArray<TCell>;
     FReturnIndex: Integer;
     FPortsDue: Boolean;
+    FGunBeat: Integer; // of the slow clock: the gun's ticks on beat 0
     FAimPoint: TPlace; // the middle of the hero as the eye locked on
     FDashFrom: TPlace; // the middle of the body as the dash set off
     FDashDirection: TPlace; // a unit vector
@@ -130,6 +131,12 @@ type
     procedure NoteHeroContact;
     // In a maneuver
     function Busy: Boolean;
+    // The monster's aimed gun is silent: the ports speak, or the eye is
+    // off the hero
+    function GunHeld: Boolean;
+    // False on the ticks the slow clock of a maneuver skips: the aimed
+    // gun counts its interval by the rest
+    function GunClockRuns: Boolean;
     function Gaze: TPilotGaze;
     // 0..1, for the sensor of the disc
     function Charge: Single;
@@ -188,6 +195,8 @@ const
   PortsEveryTicks = 9;
   PortsLeadTicks = PonderTicks - (PortVolleys - 1) * PortsEveryTicks;
   ManeuverSpinBoost = 2.0;
+  // In a maneuver the aimed gun fires this many times rarer
+  ManeuverGunSlowdown = 2;
 
   DiveTicks = 130; // about four seconds
 
@@ -419,6 +428,16 @@ begin
   Result := FState <> psLap;
 end;
 
+function TPilot.GunHeld: Boolean;
+begin
+  Result := FState in [psPonder, psAim, psDash, psStun];
+end;
+
+function TPilot.GunClockRuns: Boolean;
+begin
+  Result := not Busy or (FGunBeat = 0);
+end;
+
 function TPilot.Gaze: TPilotGaze;
 begin
   case FState of
@@ -520,6 +539,7 @@ begin
   FPortsDue := False;
   FCrashed := False;
   FOwesPrize := False;
+  FGunBeat := (FGunBeat + 1) mod ManeuverGunSlowdown;
 
   Feet.X := AX;
   Feet.Y := AY;
