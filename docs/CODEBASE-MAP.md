@@ -87,7 +87,7 @@ declarations against `SDL2.dll`.
   fill, clear, present), surfaces + color key + format conversion, textures
   (incl. target textures, streaming `SDL_LockTexture`/`SDL_UnlockTexture` -
   the globe, per-texture `SDL_SetTextureScaleMode`, color and alpha mod, and
-  `SDL_RenderReadPixels` - used by TitleCard),
+  `SDL_RenderReadPixels` - used by TitleCard and the screen dump),
   events, `SDL_ShowCursor`, `SDL_GetRendererInfo`, `SDL_GetVersion`, timing
   (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`),
   `SDL_SetHint`, `SDL_RenderSetLogicalSize`, `SDL_RWFromMem`.
@@ -176,7 +176,8 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
 `IMG_Load_RW` replaced `SDL_LoadBMP_RW` at every load site. `EnsureImageLib`
 runs at startup and raises plainly if the DLL is absent - unlike the optional
-mixer, missing art is fatal.
+mixer, missing art is fatal. `IMG_SavePNG` is the one writer: the debug
+screen dump of the dpr.
 
 ### `Core/Render.Tiles.pas` (~100 lines)
 - **`TTileScreenRenderer`** - draws one screen as two layers the caller
@@ -1422,7 +1423,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2145 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2230 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -1537,9 +1538,18 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
     else. All four exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `NudgeCrosshair`,
-    `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`.
+    `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
+    `DumpLevelScreens` (P: the tiles of every screen of the level, each
+    alone on a chroma-green fill, one PNG per screen in
+    `dump\<level id>\` of the working folder (`bin`) - the source
+    pictures for repainting the art outside the game; the count goes to
+    the ticker, the folder to the caption; `SaveScreenPictures` draws
+    them past the window into a target texture of grid x `TileArtSize`
+    pixels, so the picture does not depend on the window).
 - **Free functions**: `OpenWebPage`, `BonusDisplayName`, bullet cell and
-  off-screen helpers, `ReadLevelTitle`, `DiscoverLevels`, `RunGame` (the actual
+  off-screen helpers, `SaveTargetAsPng` (under DEBUGKEYS: the current
+  render target into a PNG through `IMG_SavePNG`), `ReadLevelTitle`,
+  `DiscoverLevels`, `RunGame` (the actual
   main: config -> language -> level discovery -> registry -> host -> game).
 
 ---
@@ -1840,6 +1850,7 @@ music loads leniently. Four one-shots are synthesised by
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+sound constants and `PreloadSounds` in Moon2D.dpr, the ceremony's in Game.Henshin.pas, data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
+| Screen pictures for repainting the art (the P debug key) | Moon2D.dpr (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
 | Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
 | Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |

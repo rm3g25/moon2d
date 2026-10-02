@@ -91,7 +91,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   конвертация формата, текстуры (включая target-текстуры, потоковые
   `SDL_LockTexture`/`SDL_UnlockTexture` - глобус, `SDL_SetTextureScaleMode`
   на текстуру, color и alpha mod и
-  `SDL_RenderReadPixels` - используется в TitleCard), события,
+  `SDL_RenderReadPixels` - используется в TitleCard и в дампе экранов), события,
   `SDL_ShowCursor`, `SDL_GetRendererInfo`, `SDL_GetVersion`, тайминг
   (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`), `SDL_SetHint`,
   `SDL_RenderSetLogicalSize`, `SDL_RWFromMem`.
@@ -181,7 +181,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 Биндинги SDL2_image, delayed-импорты по образцу `Audio.pas`. `IMG_Load_RW`
 заменил `SDL_LoadBMP_RW` во всех точках загрузки. `EnsureImageLib` вызывается на
 старте и падает внятным сообщением, если DLL нет: в отличие от опционального
-миксера, отсутствие графики фатально.
+миксера, отсутствие графики фатально. `IMG_SavePNG` - единственная запись:
+отладочный дамп экранов в dpr.
 
 ### `Core/Render.Tiles.pas` (~100 строк)
 - **`TTileScreenRenderer`** - рисует один экран двумя слоями в порядке,
@@ -1427,7 +1428,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2145 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~2230 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
@@ -1539,9 +1540,17 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     клавиатура, и больше никаких. Все четыре существуют в любой сборке, их тела
     компилируются в ничто, поэтому ни одному вызывающему не нужен ifdef. За
     ними: `NudgeCrosshair`, `NudgeMinigunMuzzle`, `DebugBrowseScreen`,
-    `CycleFontFiltering`.
+    `CycleFontFiltering`, `DumpLevelScreens` (P: тайлы каждого экрана
+    уровня, одни, на зелёной заливке, по PNG на экран в
+    `dump\<id уровня>\` рабочей папки (`bin`) - исходные картинки для
+    перерисовки арта вне игры; счёт идёт в тикер, папка - в заголовок
+    окна; рисует их `SaveScreenPictures` мимо окна, в target-текстуру
+    размером сетка x `TileArtSize` пикселей, так что картинка не зависит
+    от окна).
 - **Свободные функции**: `OpenWebPage`, `BonusDisplayName`, хелперы клеток пуль
-  и выхода за экран, `ReadLevelTitle`, `DiscoverLevels`, `RunGame` (настоящий
+  и выхода за экран, `SaveTargetAsPng` (под DEBUGKEYS: текущая цель
+  рендера в PNG через `IMG_SavePNG`), `ReadLevelTitle`, `DiscoverLevels`,
+  `RunGame` (настоящий
   main: конфиг -> язык -> поиск уровней -> реестр -> хост -> игра).
 
 ---
@@ -1840,6 +1849,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Ритм кадров / окно / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Звук / музыка | Audio.pas (+константы звуков и `PreloadSounds` в Moon2D.dpr, звуки церемонии в Game.Henshin.pas, поля данных в JSON) |
 | Отрисовка тайлов и фонов | Render.Tiles.pas + Render.Sprites.pas |
+| Картинки экранов для перерисовки арта (отладочная клавиша P) | Moon2D.dpr (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
 | Свободный арт поверх задника (корабль, спутник): место, размер, тинт | `objects` в levelN.json + `<assetsDir>-objects.mset` или общий набор из `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
 | Тряска экрана: дозы, что трясётся, что стоит | Moon2D.dpr (константы `*Trauma`, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
 | Имя спрайта разрешается не в ту картинку | Render.Sprites.pas (Get, AmbiguousNames) + порядок `spriteSets` уровня |
