@@ -22,8 +22,8 @@ uses
 
 const
   // bottle.wav is the barrel burst that doubles as the henshin flash,
-  // the shatter of the suit and the bonus explosion - the game reads
-  // the name from here for the last one
+  // the shatter of the suit, the bonus explosion and the pops of a
+  // wreck - the game reads the name from here for its own blasts
   BottleSoundFile = 'bottle.wav';
 
 type

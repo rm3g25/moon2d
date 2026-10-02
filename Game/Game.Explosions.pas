@@ -5,7 +5,10 @@
   what each kind looks like lives here.
 
   The look only: the fragment fans of 2008 - the explosion's mechanics,
-  the bullets that wound - are spawned by the monster and the game.
+  the bullets that wound - are spawned by the monster and the game. The
+  sound and the jolt of a blast are the game's too: it knows when it
+  detonates one. The aftershocks of a big wreck go off here, on their own
+  clock, so each one calls back for its echo.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -19,6 +22,9 @@ uses
   Effects.Debris, Levels.Tint, Levels.Dynamics;
 
 type
+  // The game's answer to an aftershock: its sound, its jolt
+  TEchoAftershock = reference to procedure;
+
   TExplosions = class
   private type
     TFlash = record
@@ -53,6 +59,7 @@ type
     FFlashes: TList<TFlash>;
     FPlumes: TObjectList<TSmoke>;
     FAftershocks: TList<TAftershock>;
+    FEcho: TEchoAftershock;
     // Own stream, not Random: that one feeds the boss spawn table
     FRandom: TXorShift;
     procedure QueueAftershocks(AX, AY: Single; const ALook: TExplosionLook);
@@ -61,7 +68,8 @@ type
     procedure DrawFlash(const ACanvas: TDynamicCanvas; const AFlash: TFlash;
       AOrigin: TSdlPoint; AAlpha: Single);
   public
-    constructor Create(ARenderer: PSdlRenderer; const AProbe: TSolidProbe);
+    constructor Create(ARenderer: PSdlRenderer; const AProbe: TSolidProbe;
+      const AEcho: TEchoAftershock);
     destructor Destroy; override;
     // AX/AY - the heart of the blast, screen units; ekNone does nothing
     procedure Detonate(AX, AY: Single; AKind: TExplosionKind);
@@ -132,9 +140,10 @@ const
   FlashCoreShare = 0.4; // the white core across, in flash sizes
 
 constructor TExplosions.Create(ARenderer: PSdlRenderer;
-  const AProbe: TSolidProbe);
+  const AProbe: TSolidProbe; const AEcho: TEchoAftershock);
 begin
   inherited Create;
+  FEcho := AEcho;
   FFlashes := TList<TFlash>.Create;
   FPlumes := TObjectList<TSmoke>.Create(True);
   FAftershocks := TList<TAftershock>.Create;
@@ -218,6 +227,7 @@ begin
     end;
     FAftershocks.Delete(i);
     Detonate(Aftershock.X, Aftershock.Y, Aftershock.Kind);
+    FEcho;
   end;
 end;
 

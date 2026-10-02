@@ -197,6 +197,7 @@ const
   BossBlastTrauma = 1.0;      // rage wave and the death double fan
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
   BonusFireRainTrauma = 0.5;  // 768 embers hitting the sky at once
+  AftershockTrauma = 0.3; // each pop of the boss's wreck
 
   // Campaign-end screen layout, in Render.Font grid steps
   EndingTextColumn = 3;    // farewell prose column (small font)
@@ -340,6 +341,7 @@ type
     function LocateMonster(const ATag: string;
       out AStand: TParentStand): Boolean;
     function SolidUnderPoint(AX, AY: Single): Boolean;
+    procedure EchoAftershock;
     procedure CureHero;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -394,7 +396,8 @@ begin
   FMessages := TMessageBoard.Create(FFont, ARenderer, FrameWidth);
   FBriefing := THudBriefing.Create(FFont, ARenderer, FrameWidth);
   FShake := TScreenShake.Create;
-  FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint);
+  FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint,
+    EchoAftershock);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -982,6 +985,13 @@ begin
     Trunc(ScreenRows * AY / ScreenHeight));
 end;
 
+// bottle.wav is what a barrel dies with: the pops are barrel blasts
+procedure TMoonGame.EchoAftershock;
+begin
+  FAudio.Play(BottleSoundFile);
+  FShake.AddTrauma(AftershockTrauma);
+end;
+
 // Warm the sound cache at startup so the first shot reads from RAM,
 // not from disk. The roster assembles itself: hero one-shots + the
 // weapon map + every deathSounds entry of monsters.json - no second
@@ -990,7 +1000,7 @@ procedure TMoonGame.PreloadSounds;
 begin
   FAudio.Load(PainSoundFile);
   FAudio.Load(PitSoundFile);
-  FAudio.Load(BottleSoundFile); // the ceremony loads its own; the bonus's
+  FAudio.Load(BottleSoundFile); // the ceremony loads its own; the game's blasts
   FAudio.Load(BonusSoundFile);
   FAudio.Load(RageBlastSoundFile);
   FAudio.Load(TerminalKeySoundFile);
