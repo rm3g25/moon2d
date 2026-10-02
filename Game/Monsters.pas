@@ -737,7 +737,12 @@ procedure TMonster.FireAt(const ABullets: TBurst);
     var Distance := Round(Sqrt(DeltaX * DeltaX + DeltaY * DeltaY));
     if Distance = 0 then
       Exit;
-    var Angle := Round(57.296 * ArcCos(DeltaX / Distance));
+    // 2008 had whole coordinates, so |DeltaX| <= Distance held by itself.
+    // The pilot flies on fractions: a rounded-down Distance pushes the
+    // ratio past 1 and ArcCos answers NaN. On whole coordinates the
+    // clamp is a no-op, so the 2008 shooters aim exactly as before.
+    var Cosine := EnsureRange(DeltaX / Distance, -1.0, 1.0);
+    var Angle := Round(57.296 * ArcCos(Cosine));
     if FHeroY >= FY then
       Angle := Angle + 180
     else
