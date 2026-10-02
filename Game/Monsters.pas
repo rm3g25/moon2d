@@ -6,7 +6,7 @@
     Movement.Kind: mkPatrol (turns at walls AND ledges - CanIGoLeft1),
       mkPatrolNoEdgeCheck (walls only - CanIGoLeft2), mkChaseHero
       (Vinter follows the hero's X), mkStatic, mkBossFly (rectangle
-      flight: down until y>320, left until x<32, up until y<64,
+      flight: down until y>320, left until x<32, up until y<96,
       right until x>448).
 
     Attack.Pattern: apStraightSingle (+ the tank's 5-bullet cross),
@@ -677,6 +677,10 @@ begin
 end;
 
 procedure TMonster.MoveFlying;
+const
+  // The HUD panels reach y 36 and the boss rises over 32 above its Y:
+  // turning here keeps it in sight under them
+  BossFlyTopY = 96;
 begin
   AdvanceFrame;
   case FAction of
@@ -695,7 +699,7 @@ begin
     maFlyUp:
       begin
         FY := FY - FStep;
-        if FY < 64 then
+        if FY < BossFlyTopY then
           FAction := maFlyRight;
       end;
     maFlyRight:
