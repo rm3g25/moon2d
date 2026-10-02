@@ -19,7 +19,7 @@ that matters. The format is described in [`docs/MSET-FORMAT.md`](docs/MSET-FORMA
 
 | Set | What |
 |---|---|
-| `sprites/hero.mset` | Hero walk and death frames, health icon |
+| `sprites/hero.mset` | Hero walk and death frames |
 | `sprites/gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`, `medic`, `krep`, `platform`, `tank`, `boss1` | Every enemy, boss, pickup and prop |
 | `sprites/weapon.mset`, `weapon1`–`weapon4` | Weapon, bullet, crosshair and pickup sprites |
 | `sprites/brickwork`, `cargo`, `common`, `conveyor`, `facility`, `machinery`, `mine-interior`, `mine-structure`, `mine-walls`, `mining-rig`, `moon-surface`, `railway` | Every tile and decoration, grouped by theme rather than by level |
@@ -28,7 +28,7 @@ that matters. The format is described in [`docs/MSET-FORMAT.md`](docs/MSET-FORMA
 
 Free to reuse under the same terms as the code, with attribution.
 
-**`bin/music/` — original soundtrack.** Eleven tracks composed by the author
+**`bin/music/` - original soundtrack.** Ten tracks composed by the author
 using Suno for version 2.1.0, replacing the third-party music the 2008 build
 shipped with. In the repository since the tracks settled: 17 MB is a real cost
 in a repository this size, but a clone that plays with sound beats a clone that
@@ -41,6 +41,11 @@ transformed hero frames. Traced and heavily reworked from screenshots of a
 tokusatsu television series by a fifteen-year-old in 2008. Eight frames at
 sprite resolution, unrecognisable in motion, but the origin is what it is.
 Scheduled for replacement with original artwork. Not licensed for reuse.
+
+**`sprites/sky.mset`, sprites `earth` and `earth-night`** - the globe maps of
+the Earth in the level sky: NASA Blue Marble Next Generation and NASA Black
+Marble 2016, both public domain; clouded (the day map) and reduced to city
+lights (the night map) by the author.
 
 **`bin/sounds/`** — mixed. Some samples were recorded or synthesised by the
 author; others were collected in 2008 from sources that were not written down.
@@ -55,6 +60,13 @@ image model from the author's prompts, then cropped, hazed and packed by the
 author; the brightness is set per level in code. They replaced the 2008
 backgrounds, which were composited from stock photography of unrecorded
 origin. `_black` is a plain fill.
+
+**The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
+generated with ChatGPT's image model to the author's direction (a clean and a
+battle-worn disc of the same geometry), then straightened, cut into layers
+(ring, hub, iris), given a drawn gloss layer and packed. It replaced the eight
+spin frames of `boss1.mset`, which stay in the set unused; the death frames
+there are still the 2008 ones.
 
 ## Third-party runtime libraries
 

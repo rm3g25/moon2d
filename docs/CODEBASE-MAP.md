@@ -5,22 +5,26 @@ files to open without re-exploring the repository.
 
 Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
-fixed tick 33 Hz, screen-by-screen levels.
+fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.18` (the folder layout came
-between 3.0.8 and 3.0.9). Where the map and the code disagree, the code is right.
+Regenerated at `v3.0.3`, patched through `v3.0.19` (the folder layout came
+between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
 
 The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
-`Moon2D.inc` stay in the root, and every unit includes `{$I ..\Moon2D.inc}`.
+`Moon2D.inc` stay in the root, and every unit includes it (`{$I ..\Moon2D.inc}`;
+`{$I ..\..\Moon2D.inc}` from `Game/Events/`).
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
-  sets, rendering, the brush, the level/monster/config/language models, the
+  sets, rendering (the shake included), the brush, the effects (particle
+  swarm, debris), the level/monster/config/language models, the
   frame-vs-screen space. **Core never uses a unit outside Core** - a tool or
   the editor that references only `Core/` fails to build the day that rule
   breaks.
-- `Game/` - the game itself: hero, monsters, bullets, sound, the loop host,
+- `Game/` - the game itself: hero, monsters and the boss's disc, bullets,
+  explosions, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
   runs the level events.
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
@@ -34,7 +38,7 @@ runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still ca
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
-`Sdl2.Core` / `Sprites.Sets` -> `Render.*` / `Audio` / `Game.Config` /
+`Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
 `Effects.Debris` (draws through `Render.Glow`) ->
@@ -43,11 +47,14 @@ Dependency direction (roughly bottom-up):
 `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
-`Bullets` -> `Hero` /
+`Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
+`Monsters.Defs`, its sensor through `Render.Glow`) -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) -> `Hud.Marks` /
-`Game.Henshin` / `Events.Director` -> `Game.Loop` -> `Moon2D.dpr`. The menu sky rig on the
+`Game.Henshin` / `Events.Director` -> `Moon2D.dpr`, which also drives
+`Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
+game unit). The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`, a thin moon over `Render.Globe`).
 
@@ -62,7 +69,10 @@ declarations against `SDL2.dll`.
   offscreen tools), renderer flags, texture access (incl. `Target`), hints
   (`SdlHintRenderDriver`, `SdlHintRenderScaleQuality`), event type ids, flip
   flags, pixel format `SdlPixelFormatAbgr8888`, blend modes (`None`, `Blend`,
-  `Add` - the last one is the HUD's glints), the scancodes the game uses.
+  `Add` - the last one is the HUD's glints), scale modes
+  (`SdlScaleModeNearest`/`Linear` - per-texture filtering), the basic
+  scancodes (Return, Escape, Ctrl/Alt, Space, arrows; the letter, numpad and
+  debug keys are constants in the dpr).
 - **Records**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlFPoint`,
   `TSdlRendererInfo`,
   `TSdlVersion`, `TSdlSurface` (partial mirror - leading fields only),
@@ -70,8 +80,11 @@ declarations against `SDL2.dll`.
   `TSdlMouseButtonEvent`, `TSdlEvent` (variant record, 56-byte padding arm).
 - **Imports**: window/renderer lifecycle, draw calls (`SDL_RenderCopy/F/Ex/ExF`,
   fill, clear, present), surfaces + color key + format conversion, textures
-  (incl. target textures and `SDL_RenderReadPixels` - used by TitleCard),
-  events, timing (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`),
+  (incl. target textures, streaming `SDL_LockTexture`/`SDL_UnlockTexture` -
+  the globe, per-texture `SDL_SetTextureScaleMode`, color and alpha mod, and
+  `SDL_RenderReadPixels` - used by TitleCard),
+  events, `SDL_ShowCursor`, `SDL_GetRendererInfo`, `SDL_GetVersion`, timing
+  (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`),
   `SDL_SetHint`, `SDL_RenderSetLogicalSize`, `SDL_RWFromMem`.
 - **Helpers**: `SdlText(string)->UTF8String`, `SdlErrorText`.
 - Touch this file when: a new SDL function is needed, event handling, ABI
@@ -100,14 +113,15 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Core/Render.Sprites.pas` (~490 lines)
+### `Core/Render.Sprites.pas` (~530 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
   `FramesDeath=8`. The 32-vs-64 split is the coordinate-system discipline in
   code form.
 - **`TSpriteCache`** - dictionary `set:name -> PSdlTexture`, lazy load from the
-  sets attached via `AttachSpriteSet` (not owned - the opener frees them).
+  sets attached via `AttachSpriteSet` (not owned - the opener frees them);
+  `Get(name)` returns the texture, loading the image on first request.
   Resolution: a qualified name (`common:pustota`) goes to that set alone; a
   bare name takes the first attached set that has it; **a name no attached set
   carries raises `ESpriteError`** - there is no folder fallback left. Path and
@@ -117,7 +131,9 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   it (the sky globe reads its maps through it). `AmbiguousNames` reports bare
   names carried by more than one attached set - those would resolve by
   declaration order, which is exactly what the qualifier exists to avoid.
-  Optional color key (`SetColorKey`/`DisableColorKey`). `EnableLinearFilter`
+  Color key: black by default (`SetColorKey` changes the color,
+  `DisableColorKey` drops it - the backdrop, object and disc caches do).
+  `EnableLinearFilter`
   gives the cache's textures the linear filter over the global nearest - for
   art denser than the logical screen (the HD backdrops), where nearest
   downscaling turns detail into grain. Both apply to textures loaded after
@@ -140,9 +156,16 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **`TSpriteRenderer`** - draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid, the top-left 64x64 crop reproduced from
   `sttextures.pas`), `Draw` (free position, optional mirror), `DrawRect`,
-  `DrawRotated` (weapon arm). **`Origin`** (a `TSdlPoint`) shifts every one of
+  `DrawRotated` (weapon arm), `DrawTurned(texture, center, side, angle,
+  level = 1)` - a square of any size centered on a float point, turned
+  clockwise, at an opacity; float all the way (`SDL_RenderCopyExF`), so a
+  mover drawn between ticks does not snap to logical units - the boss's
+  disc draws its layers through it. It sets the texture's alpha mod on
+  every call. **`Origin`** (a `TSdlPoint`) shifts every one of
   them - the screen-shake hook; nothing here resets it, the caller sets it per
-  layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`.
+  layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`. The
+  constructor takes the logical size and sets it on the renderer
+  (`SDL_RenderSetLogicalSize` - the dpr passes the frame of `Game.Space`).
 
 ### `Core/Sdl2.Image.pas` (~70 lines)
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
@@ -168,10 +191,10 @@ mixer, missing art is fatal.
   level load, not on the screen that shows it; after that `Draw(screen)` only
   walks the list. The cache comes from the composition root - no color key
   (honest PNG alpha: black glass and shadows would vanish through a key),
-  linear filter, fed from the level's own `<assetsDir>-objects.mset` and the
-  shared sets of `objectSets`; not owned here.
+  linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
+  the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~215 lines)
+### `Core/Render.Dynamics.pas` (~300 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst glows - `Render.Glow`; the
@@ -185,14 +208,30 @@ mixer, missing art is fatal.
   object stands on, at its top-left - settled once, static objects never
   move. A tag no object carries is a monster's: that stand is looked up
   every tick through **`TLocateMonster`** (`reference to function(tag, out
-  TParentStand)`: screen, sprite top-left, alive) - the field is reborn on
+  TParentStand)`: screen, sprite top-left, alive; for a monster that spins
+  also `Spins` and a `TParentSpin` - its `TSpinPose` (the axis on the
+  screen, the angle in degrees clockwise) now and a tick ago, plus where the
+  axis sits from the sprite's top-left) - the field is reborn on
   restart, so no reference is kept; a monster that is nowhere keeps its
-  last stand. `Tick(screen)` ticks every object whatever the screen (a
+  last stand. **`OriginOf(place, stand, alpha)`** is the corner an object
+  counts from: the stand's, or - for a placement that `Turns` under a parent
+  that spins - wherever its point has turned to around the axis, alpha of
+  the way between the two poses: a lamp rides the boss's disc between ticks
+  exactly as the disc is drawn. `Tick(screen)` ticks every object whatever
+  the screen (a
   lamp keeps its rhythm off screen) with the origin of its stand on the
-  hero's screen, else its first; a lead stand on another screen is a jump
+  hero's screen, else its first (at the pose the tick has just reached,
+  `ThisTick`); a lead stand on another screen is a jump
   (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
-  the ones on the screen in one layer (`dlSky` / `dlBack` / `dlFront`). `Canvas` - the
-  textures, lent to the monsters' wreck smoke.
+  the ones on the screen in one layer (`dlSky` / `dlBack` / `dlFront`); a
+  place that `Turns` is not drawn once its parent is no longer alive (dying
+  included) - there is nothing left to turn with. **`Reseat`** - the monsters
+  were reborn (a
+  restart): every place that follows a monster finds its parent at once and
+  forgets its origin, so the frame before the next tick does not show it at
+  the old stand. `Canvas` - the
+  textures, lent to the monsters' wreck smoke and to the explosions
+  (`Game.Explosions`).
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -207,19 +246,32 @@ offset per layer. Draw-side only: the world's arithmetic never sees it.
   a nudge and a boss is the ceiling), `Offset(channel)`. Its own xorshift
   stream, not `Random`: that one feeds the boss spawn table. `NoShake` is the
   zero offset constant.
-- The doses live in the dpr (`*Trauma` constants), not here - what shakes how
-  much is game-flow policy; this unit is the mechanism.
+- The doses live with whoever shakes (`*Trauma` constants: the blasts and
+  bonuses in the dpr, the henshin rings and finish in `Game.Henshin`), not
+  here - what shakes how much is game-flow policy; this unit is the
+  mechanism.
 
 ### `Core/Render.Font.pas` (~405 lines)
-Bitmap font, 448 px atlas, 16x16 glyph grid (CP1251 layout).
+Bitmap font: a square atlas holding a 16x16 glyph grid (CP1251 layout). The
+2008 atlas is 448 px (28 px cells); a redrawn one may be any square whose
+side divides by 16 - the cell size is read from the image at load.
 - **Constants**: atlas geometry (`FontAtlasSize`, `FontGridCells`,
   `FontCellPx`) + verbatim-2008 glyph metrics derived from the original's NDC
   math (`LegacyColumnWidth`, `SmallGlyphWidth/Height`, `BigGlyphWidth/Height`,
   `BigAdvanceRatio=0.8` - 20% overlap, `BigGlyphAspect`).
 - **`TFontAtlasOrientation`** = (`faUpright`, `faRotatedCw`) - the atlas
   orientation fix.
-- **`TMoonFont`** - takes an optional `TSpriteSet` (attached, not owned) and
-  reads its atlas sprite out of it. `DrawSmall`, `DrawBig`, `DrawScaled`
+- **`TFontFiltering`** = (`ffLinear`, `ffNearest`, `ffLinearSmallOnly`) - how
+  a redrawn atlas is filtered, set through `TMoonFont.Filtering` (the dpr
+  picks `ffNearest`; N cycles it in a DEBUGKEYS build). A redrawn atlas
+  (cells larger than `FontCellPx`) is kept as two textures, nearest and
+  linear; the 2008 atlas has no linear copy and is always nearest.
+  `TTextSize` = (`tsSmall`, `tsLarge`) tells `ffLinearSmallOnly` which text
+  is which.
+- **`TMoonFont`** - takes a `TSpriteSet` (attached, not owned) and
+  reads its atlas sprite out of it; the parameter defaults to nil, but
+  without a set the load raises `EFontError` - there is no file fallback.
+  `DrawSmall`, `DrawBig`, `DrawScaled`
   (arbitrary glyph height - the countdown digits),
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
@@ -229,8 +281,9 @@ SDL2_mixer bindings (`delayed` imports - the game survives a missing DLL) plus
 the sound bank.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
 - **`TSoundBank`** - dictionary of WAV chunks + one music slot. `Load`/`Play`
-  (sounds\, strict: a bad name blows up at startup, not mid-boss),
-  `PlayMusic`/`StopMusic` (music\, OGG, lenient: a missing track skips
+  (`sounds\`, strict: a missing file raises `EAudioError` - at startup for what
+  the dpr preloads, on first `Play` for a name it did not),
+  `PlayMusic`/`StopMusic` (`music\`, OGG, lenient: a missing track skips
   silently), `ToggleMusicMuted`, `Enabled` (False when the mixer DLL is absent
   -> every call becomes a no-op).
 
@@ -264,14 +317,15 @@ no version resource, so nothing else has to agree with it.
 - **`TLocalizedText`** (record) - `Values[TLanguage]`, `Current`. Used for
   level and monster content (base JSON field = RU, `En` sibling = EN, an absent
   sibling falls back at parse time).
-- ~60 `S*` string-key constants (protocol ids into the lang dictionaries):
-  gameplay tickers, streak captions, henshin/bonus texts, ending screen, the
-  full menu vocabulary.
+- ~55 `S*` string-key constants (protocol ids into the lang dictionaries):
+  gameplay tickers, streak captions, henshin/bonus texts, the terminal and
+  briefing headers, ending screen, the full menu vocabulary with the credits
+  block.
 - Free functions: `LoadLanguage` (swaps the flat dictionary from
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~605 lines)
+### `Core/Levels.Defs.pas` (~645 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -284,14 +338,17 @@ Level data model + JSON parser. No game logic.
   the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`).
 - **`TEntityPlacement`** (record) - monsterId, screen (1-based), x/y (sprite
   grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides,
-  triggers, `Tag` (names the placement for the events' `allDead`; '' = none).
+  triggers, `Tag` (names the placement for the events' tagged conditions -
+  `allDead`, `livesBelow`, `enraged` - and for the dynamic objects hung on a
+  monster; '' = none).
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
 - **`TBackgroundChange`** (record) - fromScreen + image + tint
   (`TColorTint` of `Levels.Tint`).
 - **`TLevelObject`** (record) - free-form art over the backdrop: sprite (in
-  `<assetsDir>-objects.mset`), screen (1-based), x/y (top-left) and width in
+  `<assetsDir>-objects.mset` or a shared set of `objectSets`), screen
+  (1-based), x/y (top-left) and width in
   screen units, tint, `Tag` (names it for the dynamic objects hung on it;
   one picture on several screens carries the same tag on each). No height:
   it follows the art's aspect, so a picture is never stretched. No
@@ -387,7 +444,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~1230 lines)
+### `Core/Levels.Dynamics.pas` (~1250 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -401,7 +458,11 @@ in `CreateDynamic`.
   (`TDynamicLayer`: `dlSky` - right over the backdrop, still while the
   world shakes, the far things; `dlBack` - with the static objects, behind
   the tiles; `dlFront` - over the monsters, under the hero; the default is
-  the kind's).
+  the kind's), `Turns` (JSON `turns`: the point turns with a parent that
+  spins - a lamp on the boss's disc; without a parent it raises at load;
+  under a parent that does not spin the point stays where it is, but under
+  any monster a place that turns is no longer drawn once that monster is
+  dying, dead or gone).
 - **`TValueFade`** (record) - a value and where the events take it:
   initial, current, target, step; `Settle`, `HeadFor(target, ticks)`,
   `Tick`. The intensity of every object, the sun of a sky globe.
@@ -425,7 +486,8 @@ in `CreateDynamic`.
 - **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
   textures every kind draws with + `Art` (the cache of the level's object
   art - its own set and the declared shared ones);
-  made and freed by `Render.Dynamics`.
+  the textures are made and freed by `Render.Dynamics`, `Art` is handed to
+  it and outlives it.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -498,7 +560,7 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~180 lines)
+### `Core/Levels.Events.pas` (~205 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
@@ -526,13 +588,14 @@ game runs them through `Events.Director`; the editor will write them).
   constants. `ParseLevelEvents(root, levelId)`; an absent section is an
   empty list, an unknown condition or action, a missing id, a tagged
   condition without a tag, livesBelow without lives above zero, intensity
-  without a target or with a value outside 0..100, or an event without
+  without a target or with a value outside 0..100, sun without a target or
+  without a `value`, or an event without
   actions raises `ELevelEventError`.
 - Extending: a condition is an enum member, a word in `EventConditionIds`
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Monsters.Defs.pas` (~440 lines)
+### `Core/Monsters.Defs.pas` (~500 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
@@ -545,10 +608,18 @@ Monster definition model + registry (parses monsters.json). No behavior.
   (peGiveWeapon rewires the whole weapon: type, cooldown, speed, gravity);
   `TSpawnEntry` (monsterId+weight); `TBossDef` (endsLevelOnDeath, spawn
   cadence/screen/table, `RageMusic`, `PickSpawn` weighted random);
+  `TDiscDef` (JSON `disc` - the living monster is drawn as a spinning disc
+  out of layers, see `Monsters.Disc`: `SetName` - the layers' set, `Side` -
+  their square in screen units, `Muzzle` - how far from the axis an aimed
+  shot leaves, 0 = where any monster's does, `Spin` - degrees a tick,
+  counterclockwise, `IrisReach` - how far the eye slides toward the hero,
+  `WearFull` - the share of lives lost at which the worn look is complete;
+  `Enabled`; a disc without a set or a positive side, with a muzzle outside
+  0..side/2 or `wearFull` outside (0, 100] raises at load);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
   explosion, movement, attack, pickupEffect, lives, score, animFreq, deathText
-  (localized), deathSounds array, boss.
+  (localized), deathSounds array, boss, disc.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table validation.
@@ -556,7 +627,10 @@ Monster definition model + registry (parses monsters.json). No behavior.
 ### `Game/Bullets.pas` (~310 lines)
 Projectiles + all the 2008 particle-hack spawners.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
-  formula (the travel-test record: one template, five wearers).
+  formula (the travel-test record: one template, seven shapes - `DeathFan`
+  here, `RageWave` / `FastFragments` / `SlowFragments` in `Monsters`,
+  `FinishFan` / `ShatterFan` in `Game.Henshin`, `ExplosionFan` in
+  Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
 - **`TBullet`** - position, velocity, gravity ('dyy'), burst animation frame,
   `Contact` (participates in bullet-vs-bullet interception). `Move`,
@@ -565,8 +639,10 @@ Projectiles + all the 2008 particle-hack spawners.
   hero, 'bull' = monsters; flight frame + destruction frames 2..8).
   `NewBullet`, `Clear` (screen transitions wipe bullets), `Update`, `Draw`.
   Spawners, all verbatim 2008: `SpawnExplosionFan` (a 180-fragment barrel /
-  chain-reaction fan), `SpawnFan(shape)` (henshin finale / ice shatter / boss
-  victory), `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
+  chain-reaction fan), `SpawnFan(centerX, centerY, shape)` (henshin finale /
+  ice shatter / boss
+  rage wave / boss victory double fan / the explosion bonus),
+  `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
   the ring wounds the boss), `SpawnFireRain` (768 slow bullets on a 16-unit
   grid), `SpawnStaticAura` (motionless bullets = the 2008 shield hack, halved
   to 250 in 2.1.1).
@@ -601,21 +677,74 @@ moves in comes from `Game.Space`.
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
 
-### `Game/Monsters.pas` (~1025 lines)
+### `Game/Monsters.Disc.pas` (~250 lines)
+A monster drawn as a spinning disc out of layers instead of its `alive`
+frames - the level-1 boss, TEK-R1. Art and pose only: the disc knows nothing
+of the monster's logic, and the
+logic reads one thing of the disc - `FireAt` moves an aimed shot out to
+the rim by `Disc.Muzzle` (see `Monsters`). Not here: the death - a dying disc
+monster plays
+the `death` frames of its own set, as every monster does.
+- **`TDiscArt`** - the layers of one disc set (`rim`, `rimDamaged`, `core`,
+  `coreDamaged`, `iris`, `gloss`) through a set and a cache of its own: no
+  color key (soft painted edges), linear filter (drawn at every angle).
+  Also owns the sensor's glow texture (`Render.Glow`). The destructor
+  frees the cache before the set.
+- **`TDiscDrive`** (record) - what the monster tells its disc every tick:
+  `Center`, `Hero` (what the eye follows), `SpinScale` (1 at the base step),
+  `Wear` and `Charge` (0..1).
+- **`TDiscPose`** (record) - the disc at one tick: `Center`, `Angle`
+  (degrees clockwise), `Iris` (the eye's slide from the center), `Sensor`.
+- **`TDisc`** - keeps the pose of the last two ticks (`Pose`, `LastPose`)
+  and draws between them: the logic runs at 33 Hz, the screen as fast as it
+  can. The constructor places it (`ACenter`), since a screen may be drawn
+  before the disc is ever ticked. `Tick(drive)`: `TurnRim` eases the spin
+  rate toward `-Spin * SpinScale` (`SpinEase` - the disc spins up from a
+  standstill and into its rage in about a second) and keeps the two angles
+  unwrapped against each other; `FollowHero` eases the iris toward the
+  hero, `IrisReach` out (`IrisEase`, `IrisDeadZone`); the sensor takes the
+  charge and fades after a shot (`SensorFade`). `Draw(sprites, alpha)`, back
+  to front: the ring turned, its worn copy over it at `Wear`, the hub, its
+  worn copy, the iris shifted, the gloss (still - the light does not spin
+  with the metal), then the red sensor glow over the eye (`SensorRest*` ..
+  `SensorChargedSize`). The layers go through
+  `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
+  the glow adds the renderer's `Origin` itself.
+
+### `Game/Monsters.pas` (~1125 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
-  (mlAlive/Dying/Dead), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
+  (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
+  crosshair's thirds), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
   BossRage/LevelComplete/Died) - 'MessageToMain' of 2008, drained by the game
   loop every tick.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, lives
   (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
-  flag, the event list. Its own collision oracles
+  flag, the event list, and for a disc monster its `TDisc` (`Disc`, nil
+  for the rest). Its own collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
-  `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying`, `PatrolStep`. Combat:
-  `FireAt` (patterns from `TAttackDef`), `TakeDamage` (knockback through the
+  `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying` (the boss's
+  rectangle: down to y 320, left to x 32, up to `BossFlyTopY` = 96 - one
+  cell under 2008's 64, clear of the HUD panels - right to x 448),
+  `PatrolStep`. Combat:
+  `FireAt` (patterns from `TAttackDef`; an aimed shot of a monster whose
+  `Disc.Muzzle` is above zero leaves from the rim, `Muzzle` out from the
+  middle toward the hero, instead of the 2008 point (X + 8, Y + 8) - the
+  angle is still the verbatim one, from the monster's X, Y to the hero's,
+  so the shot now runs through the middle of the hero's hitbox, not along
+  its left edge), `TakeDamage` (knockback through the
   wall oracle + explosion fans + events), `EnrageTankIfLow`,
-  `ProcessBossThresholds`, `BeginDying`. Public: `Tick(heroX, heroY, bullets)`,
-  `Draw`, `DrainEvent`, `HealthTier` (the crosshair's thirds of `LivesAll` as
+  `ProcessBossThresholds`, `BeginDying`. The disc: `TickDisc` (last in
+  `Tick`) hands it `DiscCenter` (the middle of the sprite), the hero's
+  middle, the step over the definition's speed (rage doubles the step, so
+  the spin), `DiscWear` (lives lost since birth over `WearFull` -
+  `FLivesBorn`, because rage resets `LivesAll`) and `DiscCharge` (rises
+  over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one).
+  Public: `Tick(heroX, heroY, bullets)`,
+  `Draw(sprites, alpha)` (a living disc monster draws its disc between
+  ticks; everything else - frames on the tick, alpha unused),
+  `DrawSmoke(canvas, origin, alpha)`, `DrainEvent`, `HealthTier` (the
+  crosshair's thirds of `LivesAll` as
   `TMonsterHealthTier` - the one home of that rule, via `ThirdMark`),
   `TierShare` (how full the current third is, 0..1), `TicksSinceHit` /
   `HitWithin(ticks)` (-1 until the first hit; the health rows read it, so the
@@ -623,24 +752,33 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   the placement flag it waits for is not in the level format yet.
 - **`TMonsterField`** - owns `TObjectList<TMonster>`, the animset cache keyed
   by the placement's spriteList name, and one `TSpriteSet` plus one
-  `TSpriteCache` per monster (all owned here; `AnimFor` opens
+  `TSpriteCache` per sprite list (all owned here; `AnimFor` opens
   `sprites\<stem>.mset` on first use). `FLivesScale` is the difficulty
-  multiplier applied to every monster born in this field. `Tick` (current
-  screen), `SpawnFromSky` (boss minions at a random top cell),
+  multiplier applied to every monster born in this field. The constructor
+  (`renderer, registry, level, difficulty, livesScale`) skips every
+  placement whose `Grades` do not hold the difficulty - the field is reborn
+  on restart, so a difficulty change lands here. `Tick` (current
+  screen), `SpawnFromSky(monsterId, screen)` (boss minions and the gravel
+  trial's gravels, at a random column one row above the screen - the fall
+  is the entry),
   `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
-  `Draw`, `DrawSmoke(canvas, screen, origin, alpha)`.
+  `Draw(sprites, screen, alpha)`, `DrawSmoke(canvas, screen, origin, alpha)`.
+  `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
+  and owned here; the destructor frees the monsters before the art they
+  draw with.
 - **Wreck smoke** (a 2026 addition, default behavior, no data): a machine -
   `IsMachine`, explodes on death and is not static: the tank and the flying
   platform; the mount and the barrel are not - owns a `TSmoke` made from the
   `WreckSmoke` look (the boss's first smoke, straight up), unlit until
   `HealthTier` reaches `htCritical` (the red third of the health row), then
-  60% within a second; no emission once dead. The point (`WreckSmokeX/Y`,
+  60% within a second; no emission once the monster is no longer alive
+  (dying included). The point (`WreckSmokeX/Y`,
   left-facing art) mirrors with `FacesRight`, the one home of the facing
   rule, which `Draw` uses too. The smoke dies with the monster, so a
-  restart clears it. `TMonster` got its destructor (it frees the smoke and
+  restart clears it. `TMonster` got its destructor (it frees the disc, the smoke and
   the event list).
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
@@ -654,7 +792,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   over the wrong geometry), `Clear` (death silences the board, the terminal
   too). The ticker stacks from y=52; while the terminal box stands the stack
   steps down below it (`ShiftTicker`, 4 units a tick) and climbs back when the
-  box is gone. The constructor takes the renderer for the terminal's brush.
+  box is gone. The ticker holds five lines at most (`MaxTickerLines`; a
+  newcomer evicts the oldest) and a line fades over its last 33 ticks; a
+  popup lives 50 ticks, rising 0.5 a tick. The constructor takes the font,
+  the renderer (for the terminal's brush) and the frame width (the headline
+  centers on it).
   `BigMessageTicks=100`
   and `TickerNoticeTicks=125` (interface consts) are the standard lives of a
   headline and of a ticker notice. `ShowBig` takes an
@@ -714,16 +856,22 @@ diverging. Replaced `GameWidth`/`GameHeight` of `Hero` and the literal
 512/384 of `Monsters`, `Bullets` and the dpr (3.0.1).
 
 ### `Core/Render.Brush.pas` (~215 lines)
-The brush everything drawn with primitives shares: the HUD panels, the menu sky
-rig and `Render.Glow`. No sprite, no font atlas. (Was Hud.Draw until the menu
+The brush the primitive-drawn panels share - the HUD units and the menu's
+difficulty cells - plus the color and random vocabulary of the whole
+renderer: `TRgb`, `Mix` and `TXorShift` serve `Render.Glow`, `Render.Globe`,
+`Render.Puff`, `Effects.Debris`, `Levels.Dynamics`, `Game.Explosions`,
+`Monsters.Disc` and the menu sky rig. No sprite, no font atlas. (Was Hud.Draw
+until the menu
 started drawing with it; the class inside still carries the old name,
 `THudBrush`.)
 - **`TRgb`** (record); the palette as typed constants (`CalmColor` blue,
   `WaryColor` amber, `AlarmColor` red, `HaleColor` green, `BonusColor` lime +
   `BonusShade`, `CalmShade`, `PanelColor`, `White`); `Mix` (lerp);
   `HealthColor(health)` (red at 0-1, amber at 2, calm above).
-- **`TXorShift`** (record) - an own random stream for HUD flourishes; `Random`
-  feeds the boss spawn table and must not be touched by a spark.
+- **`TXorShift`** (record: `Seed`, `NextUnit` -> 0..1) - an own random
+  stream for HUD flourishes; the RTL `Random`
+  feeds the boss spawn table and must not be touched by a spark. The owner
+  sets a non-zero `Seed` - xorshift never leaves zero.
 - **`THudBrush`** - `Fill` (alpha blended rect in game units), `Glow`
   (additive), `Frame` (a one-unit outline from four rects), `DrawNumber` (3x5
   pixel digits; `NumberWidth` measures), the cells every health row is made
@@ -746,9 +894,11 @@ per logic tick, `Draw`.
   shape, tempo by health (62 bpm with bonus, 70 at 4-5, 92, 118, 152 at 1),
   flat at zero, noise for 10 ticks after a hit; a 4-sample wipe ahead of the
   sweep, the trace fades with age.
-- The readout: 3x5 digits, lime while a bonus is held, blinking at 1.
+- The readout: 3x5 digits, lime while health is above `HealthyHealth`,
+  blinking at 1.
 - Observes rather than listens: reacts to the difference between ticks
-  (lost cell flash, grown cell glow, cure sweep on the trace, red frame on a
+  (lost cell flash, grown cell glow, the trace flashing white with a beat at
+  once on a cure, red frame on a
   hit, white blink of the cells during the mercy window).
 
 ### `Hud/Hud.Charge.pas` (~460 lines)
@@ -757,7 +907,8 @@ heart monitor, widened on the left by the reward slot (150 units against the
 monitor's 118). **`THudCharge`** - `Tick(score, streak, bonus, novice)` once
 per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
 = no reward spent yet), `Draw`.
-- The readout (36 units, three digits, capped at 999), a bar filling toward
+- The readout (37 units - three digits plus two units of air a side - capped
+  at 999), a bar filling toward
   `BonusCost` with a tick every ten points (a stiff spring, so a kill jolts),
   and the kill streak as a row of ten cells (`StreakGoal`) - the ten kills
   without a scratch the game rewards but never showed.
@@ -805,8 +956,8 @@ with the game (renderer + the solid probe), cleared on a door, a death
 and a level load.
 - `Detonate(x, y, kind)` - x/y the heart of the blast in screen units;
   `ekNone` does nothing. Per kind a private typed constant
-  `TExplosionLook`: a `TDebrisLook`, the flash (`FlashSize`, `FlashTicks`
-  - two `gsPoint` glows, a swelling warm one and a white core, fading as a
+  `TExplosionLook`: a `TDebrisLook`, the flash (`FlashSize`, `FlashTicks` -
+  two `gsPoint` glows, a swelling warm one and a white core, fading as a
   square), the plume (`TSmokeLook` + `SmokeTint` - a `TSmoke` made by
   `CreateLook` at full intensity and faded to zero over `SmokeTicks`, so it
   pours and thins; freed once `Exhausted`), and aftershocks (count, kind,
@@ -859,10 +1010,10 @@ instead of being kept.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
   so its events wait for their moment again, as the entity triggers do,
   and the dynamic objects their intensity actions turned are rewound
-  (`RewindTargets` -> `RewindTagged`) - the boss smokes calm again.
+  (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
 
-### `Core/Render.Glow.pas` (~165 lines)
+### `Core/Render.Glow.pas` (~190 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
 - **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`) - a Gaussian
@@ -876,7 +1027,8 @@ additive, linear-filtered, so one texture serves every tint and level.
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
 - Users: the stars, the embers, the logo halo, the beacons, the heat of a
-  smoke puff, the explosion flash, the debris sparks and hot shards. `EGlowError`.
+  smoke puff, the explosion flash, the debris sparks and hot shards, the
+  sensor eye of the boss's disc. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
@@ -896,7 +1048,9 @@ The stars of the menu sky, generated, not loaded. **`TStarfield`**.
 A body of the sky as a lit sphere on the CPU. **`TGlobe`** takes a sprite
 set, a map name (equirectangular, a power-of-two width twice its height),
 an optional night map of the same size and a **`TGlobeLook`** (texture side,
-surface, axis roll and tip, night ambient, tint, exposure, regolith limb
+surface - **`TGlobeSurface`** = (`gsRegolith`, `gsMatte`); the `gs` prefix is
+shared with `TGlowShape` and the dpr's `TGameState` - axis roll and tip, night
+ambient, tint, exposure, regolith limb
 fade, atmosphere 0..1, air color, night gain).
 - Startup: `LoadMap` -> `BuildPyramid` (`HalveLevel` three times: the limb
   samples a coarser level instead of skipping texels) -> `BuildTables`
@@ -927,7 +1081,8 @@ set and the map name (`moonmap`, 2048x1024) and owns the look as a typed
 constant `MoonLook` (512 texels, regolith, the axis leaning 18 and tipping
 12 degrees so the spin reads as a globe, earthshine on the night side, the
 cool 2008 tint, no air). The sun stands still, up and to the left; `Tick`
-spins one turn in 2640 ticks (80 s), `Draw(dest)` draws at full tint.
+spins one turn in 2640 ticks (80 s), `Draw(dest)` draws untinted, at full
+level.
 
 ### `Menu/Menu.Logo.pas` (~285 lines)
 The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
@@ -975,7 +1130,9 @@ The main menu: the sky rig, the screens, the dolly between them.
   difficulty cells, an item list per screen, language flags (owned textures,
   240x160 drawn into 30x20 units; `FlagRect` is the draw AND hit-test
   geometry), a difficulty display copy. Takes the ui set and the weapon set
-  (attached, not owned).
+  (attached, not owned): both feed its own color-keyed `TSpriteCache` for
+  the cursor frames; the ui set alone serves the sky, the moon map, the logo
+  and the flags. `EMenuError`.
   - Layout constants: the 2008 NDC geometry frozen in units (`LogoLeft/Top/
     Width/Height`, `BigRowStep=12.5`, `ItemColumnX` = column 17, `TitleX/Y`
     on the flags' line, `LogoCaptionX/Y`, the difficulty cell metrics
@@ -1001,29 +1158,42 @@ The main menu: the sky rig, the screens, the dolly between them.
 Host: window and renderer plus the fixed-timestep loop.
 - **`TGameApp`** (abstract) - `Update(dt)` (fixed), `Render(renderer, alpha)`
   (alpha = the interpolation fraction), `HandleKey/MouseMove/MouseButton`,
-  `RequestQuit`.
-- **`TGameHost`** - creates the window and renderer (the D3D11 hint lives
-  here), `Run(app)`: event pump, fixed 33 Hz accumulator, fps title with
-  worst-frame diagnostics, frame-budget wait for the no-vsync path.
+  `RequestQuit` / `QuitRequested`.
+- **`TGameHost`** - `Create(config, title)`: declares per-monitor DPI
+  awareness before `SDL_Init`, creates the window and renderer (the D3D11
+  hint lives here), hides the OS cursor (the game draws its own) and stamps
+  the renderer backend and SDL version into the title once. Properties
+  `Renderer`, `Window`. `Run(app)`: event pump, fixed-step accumulator at
+  the config's `TickRate` (33 by default; a stalled frame is clamped to
+  `MaxFrameSeconds=0.25`), frame-budget wait for the no-vsync path. The
+  once-a-second fps title with worst-frame diagnostics is compiled only
+  under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1925 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~1980 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
   sounds (the bonus cost lives in `Game.Bonus`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
-  cadence, ticker durations, the screen-shake doses (`ExploderTrauma`,
+  cadence, ticker durations, damage bookkeeping (`HurtMercyTicks`,
+  `GameOverDelayTicks`, `PitDepthY`), the font choice (`FontFileName`,
+  `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
+  extra scancodes (the debug ones under DEBUGKEYS), the screen-shake doses
+  (`ExploderTrauma`,
   `BossBlastTrauma`, `BonusExplosionTrauma`, `BonusFireRainTrauma` - a 2026
   addition; the ceremony's own live in `Game.Henshin`), ending-screen layout
   rows.
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
-- **`TMoonGame`** (extends `TGameApp`) - owns everything: registry, level, the
+- **`TMoonGame`** (extends `TGameApp`) - holds the registry (owned by
+  `RunGame`) and owns the rest: level, the
   level's sprite sets and its three caches (tiles, backdrops, objects), the ui
   and weapon sets, the sprite, tile, object and dynamic-object renderers
-  (`FDynamics`, reborn with the level, freed before it), hero, monster
-  field, both bursts, font, message board, the screen shake, sound bank,
+  (`FDynamics`, reborn with the level, freed before it), hero (his burst is
+  his own, `THero.Bullets`), monster
+  field, the shared enemy burst (`FMonsterBullets`), font, message board,
+  the briefing (`THudBriefing`), the screen shake, sound bank,
   menu, the explosions (`FExplosions`, one for the run), the ceremony
   (`THenshin`), the event director (`TEventDirector`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
@@ -1042,10 +1212,14 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     still and the sky dynamics (the Earth) with it, objects + back
     dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the back dynamics draw
-    right after the objects, behind tiles and hero - monsters, then the
-    machines' wreck smoke, then the front dynamics (the boss smoke), on
+    right after the objects, behind tiles and hero - monsters (the field gets
+    the frame's alpha:
+    the boss's disc draws between ticks), then the
+    machines' wreck smoke, then the front dynamics (the boss smoke and
+    lamps), on
     the monsters' channel - the explosion plumes before them, right after
-    the tiles, the explosion debris and flashes after the bullets - the
+    the tiles, the explosion debris and flashes after the bullets, then the
+    health rows (`FMarks`, each on its figure's channel) - the
     hero on
     his own, cursor and HUD still; `Update` ticks `FDynamics` after the
     monsters and the director, so a smoking monster's puffs leave from
@@ -1055,7 +1229,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
-    `RestartLevel`,
+    `RestartLevel` (the field is reborn, then `FDynamics.Reseat` puts what
+    hangs on monsters onto the new ones),
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
     settings.json), `SetFullscreen` (the bare switch - the ending screen drops
@@ -1064,7 +1239,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ChangeMusic` (a trigger's or an event's track: played and remembered
     for restarts; '' is a no-op), `LocateMonster` (the `TLocateMonster` of
     `Render.Dynamics`: the first monster carrying the tag - screen, sprite
-    top-left as `TMonster.Draw` puts it, alive).
+    top-left as `TMonster.Draw` puts it, alive, and for a disc monster the
+    disc's last two poses with the axis in the middle of the sprite).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
@@ -1073,7 +1249,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     monster's `explosion` at the middle of its sprite, in the tick of the
     kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
-    the boss), `SolidUnderPoint` (the debris probe: the collision grid of
+    the boss and sounds it with `RageBlastSoundFile` - a machine's
+    `platform.wav`), `SolidUnderPoint` (the debris probe: the collision grid of
     the hero's screen in honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
@@ -1088,10 +1265,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
     else. All four exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `NudgeCrosshair`,
-    `NudgeMinigunMuzzle`, `DebugBrowseScreen`.
+    `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`.
 - **Free functions**: `OpenWebPage`, `BonusDisplayName`, bullet cell and
   off-screen helpers, `ReadLevelTitle`, `DiscoverLevels`, `RunGame` (the actual
-  main: config -> host -> registry -> game).
+  main: config -> language -> level discovery -> registry -> host -> game).
 
 ---
 
@@ -1102,9 +1279,15 @@ Builds and inspects `.mset` files. Wraps `Sprites.Sets` and nothing else.
 - **`SpritePackCli.dpr`** (~350 lines) - commands `pack` / `list` / `unpack`.
   `pack` takes every PNG in a folder in natural order (2 before 10); `--list`
   splits a 2008 sprite list into named sequences by its length (16 lines ->
-  alive+death, 24 -> walk+death+henshin, anything else -> one group). `unpack`
+  alive+death, 24 -> walk+death+henshin, anything else -> one group,
+  `frames`); `--id` names the set (default: the folder name). `unpack`
   writes the images plus `manifest.json`, so a set can always be taken apart.
-- The sets are edited with the CLI alone: `unpack`, change, `pack`. The
+- `unpack` then `pack` is not a round trip: `pack` ignores `manifest.json` -
+  sprites go back in natural order, descriptions come out empty, sequences
+  come only from `--list`. A set with descriptions or a hand-set order
+  (`boss1-disc`, `sky`, `level1-objects`, `level1-backdrops`, `ui`) needs
+  `TSpriteSetWriter` driven directly until SpritePack.exe exists; an animated
+  set needs its sprite list written out again for `--list`. The
   `pack-sets.ps1` script that built them from the loose 2008 art was a
   one-shot migration tool and is gone with the art (3.0.0; in git history).
 - A VCL half (`SpritePack.exe`, sprite and description editing) is planned; the
@@ -1112,7 +1295,8 @@ Builds and inspects `.mset` files. Wraps `Sprites.Sets` and nothing else.
 
 ### `tools/TitleCard/` - trailer text-card generator (VCL app)
 Renders arbitrary text in the game's bitmap font to PNG. Reuses `Sdl2.Core`,
-`Sprites.Sets` and `Render.Font` from `Core/` by relative path - it opens
+`Sdl2.Image`, `Sprites.Sets`, `Render.Sprites` and `Render.Font` from `Core/`
+by relative path - it opens
 `ui.mset` and asks for the `fonty` sprite, the same path the game takes.
 - **`TitleCard.dpr`** - VCL bootstrap.
 - **`TitleCard.Layout.pas`** (~355 lines) - pure layout math. Constants:
@@ -1128,16 +1312,21 @@ Renders arbitrary text in the game's bitmap font to PNG. Reuses `Sdl2.Core`,
   cbBlack).
 - **`TitleCard.Config.pas`** (~170 lines) - **`TTitleCardConfig`** record
   (sprite set path, font sprite name, render driver, geometry, scale steps,
-  batch pattern), ini load/save, `ResolveSpriteSet` (walks up to six folders
+  batch pattern, uniform batch scale), ini load/save, `ResolveSpriteSet`
+  (walks up to six folders
   looking for the set).
-- **`TitleCard.Main.pas`** (~425 lines) - **`TMainForm`** (VCL): memo plus
-  combos for aspect/scale/margins, live preview, single save and batch render.
+- **`TitleCard.Main.pas`** (~425 lines) - **`TMainForm`** (VCL): memo,
+  combos for aspect and scale, percent edits for margin / optical center /
+  line spacing, checkboxes for black background, emergency wrap and one
+  scale per batch, live preview, single save and batch render.
 - **`Image.Png.pas`** (~190 lines) - `SavePngRgba` free function, a hand-rolled
   PNG writer.
 
 ### `tools/bmp2png/convert.py`
-The one-shot BMP->PNG migration with the color-key rule baked in (pure black ->
-transparent). Kept for provenance; nothing calls it now.
+The one-shot BMP->PNG migration with the color-key rule baked in (pure black,
+plus thin near-black fringes and flat near-black fills at the border ->
+transparent; backdrops and the root atlases stay opaque). Kept for provenance;
+nothing calls it now.
 
 ### `tools/Selene/` - Selene map painter (Python)
 Paints the living anti-moon for the menu globe from the menu's own `moonmap`;
@@ -1147,7 +1336,8 @@ nothing in the game reads the result yet. numpy + scipy + pillow.
   seas from dark albedo, colour from a climate model, baked relief, rivers.
   Seeded: the same input gives the same planet bit for bit.
 - **`preview_globe.py`** - renders the globe in "photo" light (glint, limb haze,
-  terminator, cloud shadows) as the reference for a future `Menu.Globe`.
+  terminator, cloud shadows) as the reference for Selene in the menu
+  (per-pixel precompute, the way `Render.Globe` does its shade).
 - **`selene_lib.py`** - sphere-sampled noise, wrap-aware filters, river tracer.
 - **`out/`** - the approved maps (2048x1024) and preview.
 
@@ -1166,7 +1356,7 @@ anything written in by hand) and overrides config.json key by key. It lives
 outside the game folder: not in the repository, not in a release, kept when a
 new release is unpacked over the old one.
 
-### `monsters.json` (~11 KB)
+### `monsters.json` (~12 KB)
 Keys: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
 dangerous - inherited by monsters), `monsters` array. 15 ids: `gravel`,
 `gravelFemale`, `winter`, `zombieShooter`, `betoner`, `platform`, `tank`,
@@ -1176,9 +1366,11 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
 platform), `boss` (`boss1`); the mount has none - it explodes inside the
-wall.
+wall. `disc` (only `boss1`) draws the living monster as a spinning disc out
+of the layers of a set instead of its `alive` frames: `set`, `side`,
+`muzzle`, `spin`, `irisReach`, `wearFull` - see `TDiscDef`.
 
-### `level1.json` (~50 KB) / `level2.json` (~20 KB)
+### `level1.json` (~60 KB) / `level2.json` (~20 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -1188,19 +1380,31 @@ objects set, e.g. `["sky"]`),
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
 (beacon / smoke / globe), `screen`, `screens` [first, last] or `parent` -
-a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`, `layer`, `intensity`, then the
+a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
+`layer`, `intensity`, `turns`
+(under a spinning parent), then the
 kind's own properties - see `Levels.Dynamics`),
 `tilePalette`
-(sprite names; index N in tiles -> palette[N-1]), `tiles` (`encoding`,
-`emptyValue`, `screens` array of [row][col] grids), `entities` (placements:
-monsterId, screen, x, y, spriteList, optional `difficulty` grades,
-`overrides`, `triggers` - messages/hints/changeMusic/heroX-heroY/gravelBoss,
-optional `tag` for the events and the dynamics), `events` (each: `id`,
+(sprite names in their 2008 file spelling - `level1\doom1.png`, `base1.png` -
+or qualified `set:name` when two declared sets share a name; index N in
+tiles -> palette[N-1]), `tiles` (`encoding` "csv-rows" and `emptyValue` -
+informational, unread; `note`; `screens` - one object per screen: `screen`,
+`rows` (12 strings of 16 comma-separated palette indices) and `collision`
+(12 strings of 16 '0'/'1', 1 = solid - the grid `SolidAt` reads)),
+`entities` (placements:
+monsterId, screen, x, y, spriteList, optional `difficulty` grades (parsed,
+unused by both levels),
+`overrides` (direction / speed / lives / canShoot), `triggers` -
+messages/hints/changeMusic/heroX-heroY/gravelBoss (the wave quota per
+difficulty),
+optional `tag` for the events and the dynamics; `secret` on one level-1
+medkit is data nobody reads yet), `events` (each: `id`,
 `screen`, `when` = enterScreen | allDead / enraged + `tag` | livesBelow +
 `tag` + `lives`, optional `delay` in ticks, `then` = a list of `action`
 objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
 `file`, intensity with `target`/`value`/`ticks`, sun with
-`target`/`value` (degrees)/`ticks`; the med lab hint is the first), `introText`/`introTextEn`.
+`target`/`value` (degrees)/`ticks`; the med lab hint, `labHint`, is the
+plainest example), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
   (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
   sunrise (14-17); sets
@@ -1214,13 +1418,21 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
   faulty one with starburst rays on the satellite's antenna, three gusty
   gas leaks venting from the satellite's breach and a broken ring joint
   (vacuum: no lift, little drag), two smokes hung on the boss (tagged
-  `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0).
+  `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0),
+  four lamps on the boss's disc (`turns`, front layer, in the two sockets
+  of the ring art: a blue pulsing pair `bossLamp` and a red flashing pair
+  `bossLampRage` at intensity 0).
   Events: the dawn, tied to the screens - on entering screen N
   (`dawn1`..`dawn17`) the sun heads over 20 seconds to -40 + 100 * N / 17:
   three quarters lit at the start, a half by screen 7, a crescent with
-  the night side lit by cities on the last screen; the backdrops of 14-17 paint the sunrise itself. On screen
+  the night side lit by cities on the last screen; the backdrops of 14-17
+  paint the sunrise itself. On screen 12: `labHint` -
+  allDead on the four `labGuard` bodies (two tanks, a female gravel, a
+  betoner), 33 ticks later the med lab hint types out in the terminal.
+  On screen
   17: livesBelow 150 - bossSmoke to 60%; enraged -
-  bossSmoke off; livesBelow 30 - bossSmoke and bossBurn to 100%.
+  bossSmoke off, and (`bossRageLamps`) the blue lamps fade out, the red in,
+  over 20 ticks; livesBelow 30 - bossSmoke and bossBurn to 100%.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
@@ -1228,16 +1440,24 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
   the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
   events); all its object art is shared - no level2-objects set;
   its lamp is `dying` - a dim fast flutter, the battery running out, and
-  one leak is left, a puff now and then (`flow` puffs). The gravel trial and
-  the boss live here, and it ends the original campaign.
+  one leak is left, a puff now and then (`flow` puffs). The gravel trial
+  lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
+  difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
+  the original campaign.
 
-### `sprites\*.mset` (34 sets)
+### `sprites\*.mset` (35 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups).
 - **Entities**: `gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`,
   `medic`, `krep`, `platform`, `tank`, `boss1` - referenced by a placement's
   `spriteList`, still spelled `<stem>.mns`.
+- **Disc layers**: `boss1-disc` (`rim`, `rimDamaged`, `core`, `coreDamaged`,
+  `iris`, `gloss`; 144x144 each - 4 px per screen unit, a 36-unit square -
+  every layer centered on the rotation axis, transparent pixels filled
+  with the edge color) - named by `disc.set` in monsters.json, drawn by
+  `Monsters.Disc`. `boss1` keeps its eight `alive` frames only for the
+  `TAnimSet` contract; its `death` frames still play.
 - **Tile themes**: `brickwork`, `cargo`, `common`, `conveyor`, `facility`,
   `machinery`, `mine-interior`, `mine-structure`, `mine-walls`, `mining-rig`,
   `moon-surface`, `railway` - grouped by subject, not by level, because levels
@@ -1249,12 +1469,15 @@ objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
 - **Objects**: `level1-objects` (`ship`) - the `<assetsDir>-objects`
   convention, never declared, optional (level 2 ships none). Shared:
   `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
-  `objectSets`. Drawn at backdrop density (1440 px per
+  `objectSets`. The ship and the satellite are drawn at backdrop density
+  (1440 px per
   512 units), transparent pixels filled with the edge color so the linear
-  filter leaves no dark fringe.
+  filter leaves no dark fringe; `earth` and `earth-night` are 1024x512
+  equirectangular globe maps for `Render.Globe`.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
-  `font`/`fontx`/`fonty` atlases. Stars, halo and embers are generated.
+  `font`/`fontx`/`fonty` atlases plus `fonty-2008` (the original 448x448
+  atlas, kept, unreferenced). Stars, halo and embers are generated.
 
 ### `lang/en.json` / `lang/ru.json` (~2-3 KB)
 Flat key->string dictionaries for UI and gameplay text (every `S*` key of
@@ -1262,11 +1485,13 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (18 WAV) and `music/` (OGG)
-One-shots load strictly at startup; music loads leniently. Tracks referenced by
-data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
-`moon_surface2.ogg`, `boss1.ogg`, `hallu.ogg`, `under01.ogg`, `boss2.ogg`,
-`win.ogg`.
+### `sounds/` (19 WAV) and `music/` (OGG)
+One-shots are preloaded at startup and fail loudly when a file is missing;
+music loads leniently. Tracks named by code: `moon.ogg` (menu,
+`MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
+`moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
+`boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
+`under01.ogg`, `boss2.ogg`. Ten OGG files, all used.
 
 ---
 
@@ -1277,32 +1502,34 @@ data: `moon.ogg` (menu), `moon_surface.ogg`, `underground.ogg`,
 | Hero movement / collision / jump feel | Hero.pas |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
+| The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
+| Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateMonster` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
 | Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
-| Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr |
+| Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
-| Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) |
+| Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
 | Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | A lit sphere: shading, terminator, atmosphere, night lights | Render.Globe.pas |
-| The Earth in a level's sky; its phase and the dawn | `dynamics` (`globe`) and `events` (`sun`) in levelN.json + Levels.Dynamics.pas (`TSkyGlobe`) + the `earth` map in `<assetsDir>-objects.mset` |
+| The Earth in a level's sky; its phase and the dawn | `dynamics` (`globe`) and `events` (`sun`) in levelN.json + Levels.Dynamics.pas (`TSkyGlobe`) + the `earth` / `earth-night` maps in `sky.mset` (shared, declared in `objectSets`) + Render.Globe.pas |
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
 | A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
-| Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + lang JSONs |
+| Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
 | Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
 | Story screen before a level / typing rhythm | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` in level JSON) |
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
-| Sound / music | Audio.pas (+data fields in JSONs) |
+| Sound / music | Audio.pas (+sound constants and `PreloadSounds` in Moon2D.dpr, the ceremony's in Game.Henshin.pas, data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
 | Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
-| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`) + Render.Shake.pas |
+| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
