@@ -73,6 +73,12 @@ battle-worn disc of the same geometry), then straightened, cut into layers
 spin frames of `boss1.mset`, which stay in the set unused; the death frames
 there are still the 2008 ones.
 
+**The barrel** (`sprites/barrel.mset`, sprite `barrel`) - since 3.0.23,
+generated with ChatGPT's image model from the author's prompt, then cut out,
+scaled to 128x128 and packed. It replaced the four 2008 frames
+`boch1`-`boch4`, which stay in the set as the `alive-2008` sequence, unused;
+the death frames there are still the 2008 ones.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.

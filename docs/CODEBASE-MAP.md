@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.22` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.23` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -141,8 +141,13 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   `EnableLinearFilter`
   gives the cache's textures the linear filter over the global nearest - for
   art denser than the logical screen (the HD backdrops), where nearest
-  downscaling turns detail into grain. Both apply to textures loaded after
-  the call.
+  downscaling turns detail into grain. `ExpectDenseArtAbove(width)` is for a
+  cache that holds HD art beside the 2008 frames (the monster sets): a
+  picture wider than `width` pixels is loaded without the color key - dense
+  art comes with its own alpha, and the key would punch a hole in every
+  pure-black pixel of its paint - and with the linear filter; the narrower
+  ones load as the cache is set (for a monster set: keyed and nearest). All
+  three apply to textures loaded after the call.
 - **`LoadImageSurface(spriteSet, name)`** (free function) - the one place that
   turns stored bytes into a surface. Returns `nil` for a nil set or an unknown
   name; the caller words the error, since only it knows what the picture was
@@ -953,7 +958,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **`TMonsterField`** - owns `TObjectList<TMonster>`, the animset cache keyed
   by the placement's spriteList name, and one `TSpriteSet` plus one
   `TSpriteCache` per sprite list (all owned here; `AnimFor` opens
-  `sprites\<stem>.mset` on first use). `FLivesScale` is the difficulty
+  `sprites\<stem>.mset` on first use and has the cache expect dense art
+  above `Frame2008Side`, 64 px - the HD barrel lives beside its 2008
+  frames). `FLivesScale` is the difficulty
   multiplier applied to every monster born in this field. The constructor
   (`renderer, registry, level, difficulty, livesScale`) skips every
   placement whose `Grades` do not hold the difficulty - the field is reborn
@@ -974,17 +981,24 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
   and owned here; the destructor frees the monsters before the art they
   draw with.
-- **Wreck smoke** (a 2026 addition, default behavior, no data): a machine -
-  `IsMachine`, explodes on death and is not static: the tank and the flying
-  platform; the mount and the barrel are not - owns a `TSmoke` made from the
-  `WreckSmoke` look (the boss's first smoke, straight up), unlit until
+- **Body smoke** (a 2026 addition, default behavior, no data): `TBodySmoke`
+  is one body's smoke - the `TSmokeLook`, the tint, the point on the
+  left-facing art, the level before the last third and in it, the ramp in
+  ticks. Two wear it. A machine - `IsMachine`, explodes on death and is not
+  static: the tank and the flying platform; the mount is not - takes
+  `WreckSmoke` (the boss's first smoke, straight up): unlit until
   `HealthTier` reaches `htCritical` (the red third of the health row), then
-  60% within a second; no emission once the monster is no longer alive
-  (dying included). The point (`WreckSmokeX/Y`,
-  left-facing art) mirrors with `FacesRight`, the one home of the facing
-  rule, which `Draw` uses too. The smoke dies with the monster, so a
-  restart clears it. `TMonster` got its destructor (it frees the disc, the sparks, the smoke
-  and the event list).
+  60% within a second. An explosive prop - `IsExplosiveProp`, explodes on
+  death and is of the `prop` category: the barrel - takes `BarrelSmoke`: a
+  pale wisp off the relief valve at 40% from birth, the full plume within
+  half a second of `htCritical`. `CreateSmoke(bodySmoke)` makes the `TSmoke`
+  and keeps the record in `FBodySmoke`; `WreckIfCritical` and `TickSmoke`
+  read the level and the point from there. No emission once the monster is
+  no longer alive (dying included). The point mirrors with `FacesRight`,
+  the one home of the facing rule, which `Draw` uses too - a barrel shoved
+  nine units into a wall or over a ledge turns around, valve and all. The smoke dies
+  with the monster, so a restart clears it. `TMonster` got its destructor
+  (it frees the disc, the sparks, the smoke and the event list).
 - **Wreck sparks** (default behavior, no data): the same machines own a
   `TSparks` made from the `WreckSparks` look (a rare crackle: two sparks a
   second and an arc of about five every second and a half, ringing off
@@ -1766,7 +1780,11 @@ plainest example), `introText`/`introTextEn`.
   `weapon1`-`weapon4` (the pickups).
 - **Entities**: `gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`,
   `medic`, `krep`, `platform`, `tank`, `boss1` - referenced by a placement's
-  `spriteList`, still spelled `<stem>.mns`.
+  `spriteList`, still spelled `<stem>.mns`. All frames are 64x64, 2 px a
+  unit, but one: `barrel` carries the HD sprite `barrel` (128x128, 4 px a
+  unit; its `alive` is that one frame eight times over) beside the 2008
+  frames `boch1`-`boch4` (the `alive-2008` sequence, which nothing asks
+  for).
 - **Disc layers**: `boss1-disc` (`rim`, `rimDamaged`, `core`, `coreDamaged`,
   `iris`, `gloss`; 144x144 each - 4 px per screen unit, a 36-unit square -
   every layer centered on the rotation axis, transparent pixels filled
@@ -1829,6 +1847,8 @@ music loads leniently. Four one-shots are synthesised by
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
 | Sparks off armor under fire; which monsters are metal; the ping and the whine | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` in monsters.json (+tools/sounds/armor.py) |
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`) |
+| The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
+| HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
