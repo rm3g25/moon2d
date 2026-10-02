@@ -944,6 +944,7 @@ end;
 function TMoonGame.LocateMonster(const ATag: string;
   out AStand: TParentStand): Boolean;
 begin
+  AStand := Default(TParentStand);
   for var Monster in FField.Monsters do
   begin
     if Monster.Tag <> ATag then
@@ -953,6 +954,16 @@ begin
     AStand.X := Round(Monster.X);
     AStand.Y := Round(Monster.Y) - SpriteSize;
     AStand.Alive := Monster.Life = mlAlive;
+    AStand.Spins := Monster.Disc <> nil;
+    if AStand.Spins then
+    begin
+      AStand.Spin.Pose.Center := Monster.Disc.Pose.Center;
+      AStand.Spin.Pose.Angle := Monster.Disc.Pose.Angle;
+      AStand.Spin.LastPose.Center := Monster.Disc.LastPose.Center;
+      AStand.Spin.LastPose.Angle := Monster.Disc.LastPose.Angle;
+      AStand.Spin.Axis.X := SpriteSize / 2;
+      AStand.Spin.Axis.Y := SpriteSize / 2;
+    end;
     Exit(True);
   end;
   Result := False;
@@ -1238,6 +1249,7 @@ begin
   FField.Free;
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
+  FDynamics.Reseat;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;

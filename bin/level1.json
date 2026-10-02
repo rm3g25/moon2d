@@ -333,6 +333,82 @@
       "flow": "gusty",
       "frequency": 3,
       "heat": 70
+    },
+    {
+      "kind": "beacon",
+      "parent": "boss",
+      "turns": true,
+      "x": 15.95,
+      "y": 4.36,
+      "tag": "bossLamp",
+      "layer": "front",
+      "tint": [
+        25,
+        55,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 1.5,
+      "intensity": 100,
+      "size": 7,
+      "glint": 30
+    },
+    {
+      "kind": "beacon",
+      "parent": "boss",
+      "turns": true,
+      "x": 15.93,
+      "y": 27.06,
+      "tag": "bossLamp",
+      "layer": "front",
+      "tint": [
+        25,
+        55,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 1.5,
+      "intensity": 100,
+      "size": 7,
+      "glint": 30
+    },
+    {
+      "kind": "beacon",
+      "parent": "boss",
+      "turns": true,
+      "x": 15.95,
+      "y": 4.36,
+      "tag": "bossLampRage",
+      "layer": "front",
+      "tint": [
+        100,
+        18,
+        12
+      ],
+      "blink": "flash",
+      "frequency": 3,
+      "intensity": 0,
+      "size": 7,
+      "glint": 30
+    },
+    {
+      "kind": "beacon",
+      "parent": "boss",
+      "turns": true,
+      "x": 15.93,
+      "y": 27.06,
+      "tag": "bossLampRage",
+      "layer": "front",
+      "tint": [
+        100,
+        18,
+        12
+      ],
+      "blink": "flash",
+      "frequency": 3,
+      "intensity": 0,
+      "size": 7,
+      "glint": 30
     }
   ],
   "tilePalette": [
@@ -2503,6 +2579,26 @@
           "action": "intensity",
           "target": "bossSmoke",
           "value": 0
+        }
+      ]
+    },
+    {
+      "id": "bossRageLamps",
+      "screen": 17,
+      "when": "enraged",
+      "tag": "boss",
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossLamp",
+          "value": 0,
+          "ticks": 20
+        },
+        {
+          "action": "intensity",
+          "target": "bossLampRage",
+          "value": 100,
+          "ticks": 20
         }
       ]
     },

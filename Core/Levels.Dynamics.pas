@@ -55,8 +55,10 @@ type
 
   // Shared by every kind. JSON: one of "screen", "screens" ([first,
   // last] - the same object on a run of screens) and "parent", then
-  // "x", "y" and optional "tint", "tag" (the name events use) and
-  // "layer" ("sky", "back" or "front"; each kind has its own default).
+  // "x", "y" and optional "tint", "tag" (the name events use),
+  // "layer" ("sky", "back" or "front"; each kind has its own default)
+  // and "turns" (true: the point turns with a parent that spins - a
+  // lamp on the boss's disc).
   TDynamicPlacement = record
     Screen: Integer; // 1-based; 0 under a parent, which decides it
     LastScreen: Integer; // = Screen unless "screens" spans a run
@@ -65,6 +67,7 @@ type
     Tint: TColorTint;
     Tag: string;
     Layer: TDynamicLayer;
+    Turns: Boolean;
   end;
 
   // A value and where the events are taking it
@@ -349,6 +352,8 @@ resourcestring
     + 'parent';
   SDynamicTwoPlaces = 'Level "%s": %s names more than one of screen, '
     + 'screens and parent - one of them decides where it stands';
+  SDynamicTurnsNailed = 'Level "%s": %s turns, but has no parent to turn '
+    + 'with';
   SDynamicBadScreens = '%s: "screens" takes two screen numbers, the first '
     + 'and the last';
   SDynamicBadWord = '%s: unknown %s "%s"';
@@ -1197,6 +1202,9 @@ begin
   Result.Tag := AObj.GetValue<string>('tag', '');
   Result.Layer := TDynamicLayer(ReadWord(AObj, 'layer',
     DynamicLayerIds[ADefaultLayer], DynamicLayerIds, 'layer', AOwner));
+  Result.Turns := AObj.GetValue<Boolean>('turns', False);
+  if Result.Turns and (Result.Parent = '') then
+    raise EDynamicError.CreateFmt(SDynamicTurnsNailed, [ALevelId, AOwner]);
 end;
 
 function CreateDynamic(AKind: TDynamicKind;

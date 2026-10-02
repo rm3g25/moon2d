@@ -6,7 +6,8 @@
   The red sensor glows and swells before every shot.
 
   The disc keeps its pose of the last two ticks and draws between them:
-  the logic runs at 33 Hz, the screen as fast as it can.
+  the logic runs at 33 Hz, the screen as fast as it can. What hangs on
+  the disc (Render.Dynamics) asks for the same two poses and rides along.
 
   Not here: the death - a dying disc monster plays the death frames of
   its own set, as every monster does.

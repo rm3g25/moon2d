@@ -9,7 +9,9 @@
   at level load, static objects never move. One under a monster is
   looked up by tag every tick through the game's callback: monsters
   move, die and are reborn with the field on every restart, so no
-  reference to one is kept.
+  reference to one is kept. A monster that spins (a disc) also tells its
+  pose of the last two ticks: an object that turns with it is drawn
+  where its point has turned to, between the ticks as the disc is.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -22,12 +24,29 @@ uses
   Sdl2.Core, Render.Sprites, Levels.Defs, Levels.Dynamics;
 
 type
+  // A spinning monster at one tick: its axis on the screen and its
+  // angle, degrees clockwise
+  TSpinPose = record
+    Center: TSdlFPoint;
+    Angle: Single;
+  end;
+
+  // How a spinning monster stands now and a tick ago, and where its axis
+  // sits counted from the sprite's top-left corner
+  TParentSpin = record
+    Pose: TSpinPose;
+    LastPose: TSpinPose;
+    Axis: TSdlFPoint;
+  end;
+
   // A monster's sprite this tick: its screen, its top-left corner, and
-  // whether it still lives
+  // whether it still lives; Spin only when Spins
   TParentStand = record
     Screen: Integer;
     X, Y: Single;
     Alive: Boolean;
+    Spins: Boolean;
+    Spin: TParentSpin;
   end;
 
   // Finds the monster carrying ATag; False when there is none
@@ -40,6 +59,8 @@ type
     TStand = record
       Screen: Integer;
       OriginX, OriginY: Single;
+      Spins: Boolean;
+      Spin: TParentSpin;
     end;
 
     TPlace = record
@@ -57,6 +78,8 @@ type
       const AObjects: TArray<TLevelObject>): TPlace;
     procedure FollowMonster(var APlace: TPlace);
     function LeadStand(const APlace: TPlace; AScreen: Integer): TStand;
+    function OriginOf(const APlace: TPlace; const AStand: TStand;
+      AAlpha: Single): TSdlFPoint;
     procedure DrawPlace(const APlace: TPlace; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
   public
@@ -68,6 +91,9 @@ type
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
     procedure Tick(AScreen: Integer);
+    // The monsters were reborn (a restart): what hangs on them finds its
+    // parent at once, before the next frame shows it at the old stand
+    procedure Reseat;
     procedure Draw(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single;
       ALayer: TDynamicLayer);
     // The textures, for smoke the game makes itself
@@ -77,9 +103,11 @@ type
 implementation
 
 uses
-  Render.Glow, Render.Puff;
+  System.Math, Render.Glow, Render.Puff;
 
 const
+  // The pose a tick has just reached, as an alpha between two ticks
+  ThisTick = 1.0;
   PointGlowSide = 64;
   FlareGlowSide = 128;
   // A ray a hair wide needs pixels across it
@@ -133,7 +161,7 @@ begin
   begin
     for var Screen := Placement.Screen to Placement.LastScreen do
     begin
-      var Nailed: TStand;
+      var Nailed := Default(TStand);
       Nailed.Screen := Screen;
       Nailed.OriginX := 0;
       Nailed.OriginY := 0;
@@ -146,7 +174,7 @@ begin
   begin
     if Parent.Tag <> Placement.Parent then
       Continue;
-    var Carried: TStand;
+    var Carried := Default(TStand);
     Carried.Screen := Parent.Screen;
     Carried.OriginX := Parent.X;
     Carried.OriginY := Parent.Y;
@@ -175,7 +203,34 @@ begin
   APlace.Stands[0].Screen := Parent.Screen;
   APlace.Stands[0].OriginX := Parent.X;
   APlace.Stands[0].OriginY := Parent.Y;
+  APlace.Stands[0].Spins := Parent.Spins;
+  APlace.Stands[0].Spin := Parent.Spin;
   APlace.ParentAlive := Parent.Alive;
+end;
+
+// The corner the object counts from. One that turns with a spinning
+// parent counts from wherever its point has turned to, AAlpha of the way
+// between the ticks; the rest from the stand's corner.
+function TDynamicScreenRenderer.OriginOf(const APlace: TPlace;
+  const AStand: TStand; AAlpha: Single): TSdlFPoint;
+begin
+  Result.X := AStand.OriginX;
+  Result.Y := AStand.OriginY;
+  var Placement := APlace.DynamicObject.Placement;
+  var TurnsWithParent := Placement.Turns and AStand.Spins;
+  if not TurnsWithParent then
+    Exit;
+
+  var Last := AStand.Spin.LastPose;
+  var Next := AStand.Spin.Pose;
+  var Axis := AStand.Spin.Axis;
+  var Angle := DegToRad(Last.Angle + (Next.Angle - Last.Angle) * AAlpha);
+  var CenterX := Last.Center.X + (Next.Center.X - Last.Center.X) * AAlpha;
+  var CenterY := Last.Center.Y + (Next.Center.Y - Last.Center.Y) * AAlpha;
+  var ArmX := Placement.X - Axis.X;
+  var ArmY := Placement.Y - Axis.Y;
+  Result.X := CenterX + ArmX * Cos(Angle) - ArmY * Sin(Angle) - Placement.X;
+  Result.Y := CenterY + ArmX * Sin(Angle) + ArmY * Cos(Angle) - Placement.Y;
 end;
 
 function TDynamicScreenRenderer.LeadStand(const APlace: TPlace;
@@ -187,6 +242,16 @@ begin
   if Length(APlace.Stands) > 0 then
     Exit(APlace.Stands[0]);
   Result := Default(TStand);
+end;
+
+procedure TDynamicScreenRenderer.Reseat;
+begin
+  for var i := 0 to High(FPlaces) do
+    if FPlaces[i].FollowsMonster then
+    begin
+      FollowMonster(FPlaces[i]);
+      FPlaces[i].DynamicObject.ForgetOrigin;
+    end;
 end;
 
 // Every object lives on, whatever screen the hero is on: coming back
@@ -203,18 +268,25 @@ begin
     if Lead.Screen <> FPlaces[i].LeadScreen then
       FPlaces[i].DynamicObject.ForgetOrigin;
     FPlaces[i].LeadScreen := Lead.Screen;
-    FPlaces[i].DynamicObject.Tick(Lead.OriginX, Lead.OriginY,
-      FPlaces[i].ParentAlive);
+    var Origin := OriginOf(FPlaces[i], Lead, ThisTick);
+    FPlaces[i].DynamicObject.Tick(Origin.X, Origin.Y, FPlaces[i].ParentAlive);
   end;
 end;
 
+// What turns with a monster goes with it: there is nothing to turn
+// with once the parent is dead
 procedure TDynamicScreenRenderer.DrawPlace(const APlace: TPlace;
   AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
 begin
+  if APlace.DynamicObject.Placement.Turns and not APlace.ParentAlive then
+    Exit;
   for var Stand in APlace.Stands do
     if Stand.Screen = AScreen then
-      APlace.DynamicObject.Draw(FCanvas, Stand.OriginX + AOrigin.X,
-        Stand.OriginY + AOrigin.Y, AAlpha);
+    begin
+      var Origin := OriginOf(APlace, Stand, AAlpha);
+      APlace.DynamicObject.Draw(FCanvas, Origin.X + AOrigin.X,
+        Origin.Y + AOrigin.Y, AAlpha);
+    end;
 end;
 
 procedure TDynamicScreenRenderer.Draw(AScreen: Integer; AOrigin: TSdlPoint;
