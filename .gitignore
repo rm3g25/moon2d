@@ -32,6 +32,9 @@ tools/TitleCard/cards/
 tools/TitleCard/*.ini
 bin/TitleCard.ini
 
+# ---- Screen pictures the P debug key dumps for repainting ----
+bin/dump/
+
 # ---- Scratch ----
 structure.txt
 tracked.txt

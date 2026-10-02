@@ -37,6 +37,9 @@ procedure IMG_Quit; cdecl;
   external ImageLib name 'IMG_Quit' delayed;
 function IMG_Load_RW(ASrc: PSdlRWops; AFreeSrc: Integer): PSdlSurface;
   cdecl; external ImageLib name 'IMG_Load_RW' delayed;
+// 0 on success
+function IMG_SavePNG(ASurface: PSdlSurface; const AFile: PAnsiChar): Integer;
+  cdecl; external ImageLib name 'IMG_SavePNG' delayed;
 {$WARN SYMBOL_PLATFORM DEFAULT}
 
 // Call once at startup, before any asset loads. Raises EImageError with

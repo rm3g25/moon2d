@@ -175,6 +175,7 @@ const
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
+  ScancodeP = 19; // every screen's tiles as pictures, for repainting
   ScancodeT = 23; // tile inspector in the window title
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodePageUp = 75; // browse screens
@@ -358,6 +359,8 @@ type
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
     procedure DebugBrowseScreen(ADelta: Integer);
     procedure CycleFontFiltering;
+    function SaveScreenPictures(const ADir: string): Integer;
+    procedure DumpLevelScreens;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -1832,7 +1835,87 @@ begin
   SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(
     'font: ' + FilteringNames[FFont.Filtering])));
 end;
-{$ENDIF}
+
+// AWidth x AHeight must be the target's own size: nil reads all of it
+function SaveTargetAsPng(ARenderer: PSdlRenderer; AWidth, AHeight: Integer;
+  const AFileName: string): Boolean;
+begin
+  var Surface := SDL_CreateRGBSurfaceWithFormat(0, AWidth, AHeight, 32,
+    SdlPixelFormatAbgr8888);
+  if Surface = nil then
+    Exit(False);
+  try
+    if SDL_RenderReadPixels(ARenderer, nil, SdlPixelFormatAbgr8888,
+      Surface.Pixels, Surface.Pitch) <> 0 then
+      Exit(False);
+    Result := IMG_SavePNG(Surface, PAnsiChar(SdlText(AFileName))) = 0;
+  finally
+    SDL_FreeSurface(Surface);
+  end;
+end;
+
+// Offscreen, an art pixel to a picture pixel - the window's size stays
+// out of the picture. Returns how many screens reached a file.
+function TMoonGame.SaveScreenPictures(const ADir: string): Integer;
+const
+  ScreenFilePattern = 'screen%.2d.png';
+begin
+  Result := 0;
+  var PictureWidth := FLevel.GridWidth * TileArtSize;
+  var PictureHeight := FLevel.GridHeight * TileArtSize;
+  var Target := SDL_CreateTexture(FRenderer, SdlPixelFormatAbgr8888,
+    SdlTextureAccessTarget, PictureWidth, PictureHeight);
+  if Target = nil then
+    Exit;
+  try
+    if SDL_SetRenderTarget(FRenderer, Target) <> 0 then
+      Exit;
+    // A target switch resets the logical size to the texture's own; the
+    // switch back restores the frame's
+    SDL_RenderSetLogicalSize(FRenderer, FLevel.GridWidth * TileSize,
+      FLevel.GridHeight * TileSize);
+    // Not the sky color: a repaint is keyed out by this fill, and no
+    // tile is this green
+    SDL_SetRenderDrawColor(FRenderer, 0, 255, 0, 255);
+    FSprites.Origin := NoShake;
+
+    for var Screen := 1 to FLevel.ScreenCount do
+    begin
+      SDL_RenderClear(FRenderer);
+      FTiles.DrawTiles(Screen);
+
+      var FileName := TPath.Combine(ADir,
+        Format(ScreenFilePattern, [Screen]));
+      if SaveTargetAsPng(FRenderer, PictureWidth, PictureHeight,
+        FileName) then
+        Inc(Result);
+    end;
+  finally
+    SDL_SetRenderTarget(FRenderer, nil);
+    SDL_DestroyTexture(Target);
+  end;
+end;
+
+// P: the source pictures for repainting the level's art outside the game
+procedure TMoonGame.DumpLevelScreens;
+const
+  DumpDir = 'dump';
+begin
+  var Dir := TPath.GetFullPath(TPath.Combine(DumpDir, FLevel.Id));
+  ForceDirectories(Dir);
+
+  var SavedCount := SaveScreenPictures(Dir);
+  var Tally := Format('dumped %d of %d screens',
+    [SavedCount, FLevel.ScreenCount]);
+  // Fullscreen has no caption to read the report in
+  FMessages.AddTicker(Tally, TickerNoticeTicks);
+
+  var Report := Tally + ' to ' + Dir;
+  if SavedCount < FLevel.ScreenCount then
+    Report := Report + ': ' + SdlErrorText;
+  SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(Report)));
+end;
+{$ENDIF} // DEBUGKEYS
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
 function TMoonGame.HandleDebugMenuKey(AScancode: Integer): Boolean;
@@ -1874,6 +1957,8 @@ begin
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
       FAudio.ToggleMusicMuted;
+    ScancodeP:
+      DumpLevelScreens;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

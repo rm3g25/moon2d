@@ -15,8 +15,8 @@
 
 // DEBUGKEYS - the developer keyboard: PgUp/PgDn browse screens, T tile
 // inspector, F font atlas, N font filtering, G defensive aura, M music
-// mute, V/B trailer frames, numpad tuners for the minigun muzzle and the
-// crosshair.
+// mute, P screen pictures for repainting, V/B trailer frames, numpad
+// tuners for the minigun muzzle and the crosshair.
 //
 // Off since 2.1.1: releases were being built from the Debug
 // configuration and carried the whole keyboard into shipping archives.
