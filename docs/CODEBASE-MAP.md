@@ -599,7 +599,13 @@ in `CreateDynamic`.
   field's frame by `Blocked`. Intensity scales the rate and, softer, the
   size and the frequency of the arcs (`StartArc`); no emission while the
   parent monster is dead or nowhere, and an arc cut short does not resume.
-  `Rewind` also clears the field. The look is a **`TSparkSourceLook`**
+  A source with a `pause` rests: it pours for a `spell`, goes out for a
+  `pause` (seconds; each span rolls between half and one and a half of
+  its mean) and opens the next spell with an arc - a `TRestClock`,
+  ticked at the head of `Emit` (`TickRestClock`). Without a pause the
+  clock is never asked and the dice roll as they did.
+  `Rewind` also clears the field and puts the clock back on the edge of
+  a spell. The look is a **`TSparkSourceLook`**
   record in JSON units (`ReadSparkSourceLook` fills it, `TakeLook` takes
   it, `FieldLook` turns it into a `TSparkLook`); the arc's timers are a
   `TArcClock`. `CreateLook(placement, look, intensity, seed)` makes a
@@ -1382,8 +1388,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     burst at all - a strike for `FImpacts` built by the free `ArmorStrike`
     (honest screen units, the hitbox as a box, `HitInset`; `Rapid` asked of
     the monster before the damage lands, `RapidHitTicks`) and a sound from
-    `SoundArmorHit`: the whine of a tracer, else one of three pings in
-    turn, no more than one in `ArmorSoundGapTicks`),
+    `SoundArmorHit`: the whine of a tracer, else one of three pings at
+    random, never the same twice running (`TArmorPings`, dice of its
+    own), no more than one in `ArmorSoundGapTicks`),
     `ResolveMonsterBulletHits`,
     `ResolveMonsterContact`, `RewardMonsterKill` (also `Detonate` of the
     monster's `explosion` at the middle of its sprite, in the tick of the
@@ -1487,7 +1494,8 @@ nothing in the game reads the result yet. numpy + scipy + pillow.
 ### `tools/sounds/armor.py`
 Synthesises the sounds of a bullet on armor into `bin/sounds`: three pings
 (`armor1..3.wav` - a struck plate: a click of noise and the partials of a
-free bar) and the whine of a tracer (`ricochet.wav`). Seeded: the same
+free bar; all within a semitone, one plate and not three notes) and the
+whine of a tracer (`ricochet.wav`). Seeded: the same
 files bit for bit. numpy.
 
 ---
@@ -1570,7 +1578,9 @@ plainest example), `introText`/`introTextEn`.
   gas leaks venting from the satellite's breach and a broken ring joint
   (vacuum: no lift, little drag), a fall of sparks from the breach
   (`sparks`, back layer, no collision: slow, far, fading on the way down,
-  a small arc every couple of seconds), two smokes hung on the boss (tagged
+  a small arc every couple of seconds; tagged `satelliteSparks`,
+  intensity 0, spells of about 7 seconds with pauses of about 3), two
+  smokes hung on the boss (tagged
   `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0) and
   a spark source beside them (`bossSparks`, front layer, bouncing,
   intensity 0),
@@ -1586,6 +1596,9 @@ plainest example), `introText`/`introTextEn`.
   paint the sunrise itself. On screen 12: `labHint` -
   allDead on the four `labGuard` bodies (two tanks, a female gravel, a
   betoner), 33 ticks later the med lab hint types out in the terminal.
+  The satellite's sparks, staged by screen: smoke alone on 14-15, on
+  entering 16 (`satelliteSparks16`, 40 ticks later) to 45%, on entering
+  17 (`satelliteSparks17`) to 100%.
   On screen
   17: livesBelow 150 - bossSmoke to 60%; enraged -
   bossSmoke off, and (`bossRageLamps`) the blue lamps fade out, the red in,
