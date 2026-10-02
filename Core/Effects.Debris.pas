@@ -1,8 +1,8 @@
 ﻿{
   Effects.Debris - what an explosion throws: shards of metal that fly,
   ring off the walls, settle on the floor, cool from white heat to bare
-  metal and fade; and sparks - short hot streaks that die on the first
-  wall they meet.
+  metal and fade; and a burst of sparks (Effects.Sparks) that die on the
+  first wall they meet.
 
   The solid layer comes from the caller as a probe, so the unit knows no
   level. The shard shapes are generated at startup, like the smoke
@@ -19,16 +19,13 @@ unit Effects.Debris;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Render.Brush;
+  System.SysUtils, Sdl2.Core, Render.Brush, Effects.Sparks;
 
 const
   ShardShapes = 4;
 
 type
   EDebrisError = class(Exception);
-
-  // True when the point, in screen units, is inside a solid cell
-  TSolidProbe = reference to function(AX, AY: Single): Boolean;
 
   // One blast's worth of debris. Speeds in units per tick, sizes in
   // units across; every piece rolls between a share of the value and
@@ -58,12 +55,6 @@ type
       RestTicks: Integer;
       State: TShardState;
     end;
-
-    TSpark = record
-      X, Y: Single;
-      SpeedX, SpeedY: Single;
-      Age, Life: Integer;
-    end;
   private
     FRenderer: PSdlRenderer;
     FProbe: TSolidProbe;
@@ -71,25 +62,22 @@ type
     FGlow: PSdlTexture;
     FShards: TArray<TShard>;
     FShardCount: Integer;
-    FSparks: TArray<TSpark>;
-    FSparkCount: Integer;
+    FSparks: TSparkField;
     // Own stream, not Random: that one feeds the boss spawn table
     FRandom: TXorShift;
     function Roll(AFrom, ATo: Single): Single;
     procedure AddShard(const AShard: TShard);
-    procedure AddSpark(const ASpark: TSpark);
     procedure SpawnShard(AX, AY: Single; const ALook: TDebrisLook);
-    procedure SpawnSpark(AX, AY: Single; const ALook: TDebrisLook);
+    procedure SpawnSparks(AX, AY: Single; const ALook: TDebrisLook);
+    function StopsSpark(AX, AY: Single): Boolean;
     procedure MoveShard(var AShard: TShard);
     procedure FlyShard(var AShard: TShard);
     procedure LandShard(var AShard: TShard; AGroundY: Single);
     procedure SlideShard(var AShard: TShard);
-    procedure MoveSpark(var ASpark: TSpark);
     procedure DrawShard(const AShard: TShard; AOrigin: TSdlPoint;
       AAlpha: Single);
-    procedure DrawSpark(const ASpark: TSpark; AOrigin: TSdlPoint;
-      AAlpha: Single);
   public
+    // AProbe answers in screen units
     constructor Create(ARenderer: PSdlRenderer; const AProbe: TSolidProbe);
     destructor Destroy; override;
     // AX/AY - the heart of the blast, screen units
@@ -148,6 +136,8 @@ const
   // A spark draws as the path it covers in this many ticks
   StreakTicks = 1.6;
   StreakWidth = 3;
+  FullCircle = 360;
+  SparkSeed = $5370726B; // "Sprk"
 
   CoolTicks = 45; // white heat to bare metal
   HotShare = 0.25; // of the cooling: white heat to the ember's red
@@ -272,6 +262,20 @@ begin
   SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
 end;
 
+// The sparks of a blast cool the way its shards start to
+function BlastSparkLook: TSparkLook;
+begin
+  Result.Gravity := SparkGravity;
+  Result.AirKeep := SparkAirKeep;
+  Result.LifeMin := SparkLifeMin;
+  Result.LifeMax := SparkLifeMax;
+  Result.Width := StreakWidth;
+  Result.StreakTicks := StreakTicks;
+  Result.HotColor := HotColor;
+  Result.CoolColor := EmberColor;
+  Result.Wall := swDie;
+end;
+
 // White heat, the ember's red, bare metal - AShare 0..1 of the cooling
 function HeatColor(AShare: Single): TRgb;
 begin
@@ -293,7 +297,8 @@ begin
   FProbe := AProbe;
   FRandom.Seed := $426F6F6D; // "Boom"
   SetLength(FShards, MaxShards);
-  SetLength(FSparks, MaxSparks);
+  FSparks := TSparkField.Create(BlastSparkLook, StopsSpark, MaxSparks,
+    SparkSeed);
   for var i := 0 to ShardShapes - 1 do
     FShapes[i] := CreateShardTexture(ARenderer, i + 1);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
@@ -307,6 +312,7 @@ begin
       SDL_DestroyTexture(FShapes[i]);
   if Assigned(FGlow) then
     SDL_DestroyTexture(FGlow);
+  FSparks.Free;
   inherited;
 end;
 
@@ -325,18 +331,6 @@ begin
   end;
   FShards[FShardCount] := AShard;
   Inc(FShardCount);
-end;
-
-procedure TDebrisField.AddSpark(const ASpark: TSpark);
-begin
-  if FSparkCount = MaxSparks then
-  begin
-    for var i := 1 to FSparkCount - 1 do
-      FSparks[i - 1] := FSparks[i];
-    Dec(FSparkCount);
-  end;
-  FSparks[FSparkCount] := ASpark;
-  Inc(FSparkCount);
 end;
 
 procedure TDebrisField.SpawnShard(AX, AY: Single; const ALook: TDebrisLook);
@@ -365,28 +359,23 @@ begin
   AddShard(Shard);
 end;
 
-procedure TDebrisField.SpawnSpark(AX, AY: Single; const ALook: TDebrisLook);
+procedure TDebrisField.SpawnSparks(AX, AY: Single; const ALook: TDebrisLook);
 var
-  Spark: TSpark;
+  Spray: TSparkSpray;
 begin
-  Spark := Default(TSpark);
-  Spark.X := AX;
-  Spark.Y := AY;
-  var Degrees: Single := Roll(0, 360);
-  var Heading: Single := DegToRad(Degrees);
-  var Speed: Single := ALook.SparkSpeed * Roll(MinShare, 1);
-  Spark.SpeedX := Cos(Heading) * Speed;
-  Spark.SpeedY := -Sin(Heading) * Speed;
-  Spark.Life := Round(Roll(SparkLifeMin, SparkLifeMax));
-  AddSpark(Spark);
+  Spray.Count := ALook.Sparks;
+  Spray.Heading := 0;
+  Spray.Cone := FullCircle;
+  Spray.SlowSpeed := ALook.SparkSpeed * MinShare;
+  Spray.FastSpeed := ALook.SparkSpeed;
+  FSparks.Spray(AX, AY, Spray);
 end;
 
 procedure TDebrisField.Burst(AX, AY: Single; const ALook: TDebrisLook);
 begin
   for var i := 1 to ALook.Shards do
     SpawnShard(AX, AY, ALook);
-  for var i := 1 to ALook.Sparks do
-    SpawnSpark(AX, AY, ALook);
+  SpawnSparks(AX, AY, ALook);
 end;
 
 procedure TDebrisField.MoveShard(var AShard: TShard);
@@ -483,26 +472,15 @@ begin
   end;
 end;
 
-procedure TDebrisField.MoveSpark(var ASpark: TSpark);
-begin
-  Inc(ASpark.Age);
-  ASpark.SpeedX := ASpark.SpeedX * SparkAirKeep;
-  ASpark.SpeedY := ASpark.SpeedY * SparkAirKeep + SparkGravity;
-  var NextX := ASpark.X + ASpark.SpeedX;
-  var NextY := ASpark.Y + ASpark.SpeedY;
-  if FProbe(NextX, NextY) then
-  begin
-    ASpark.Age := ASpark.Life;
-    Exit;
-  end;
-  ASpark.X := NextX;
-  ASpark.Y := NextY;
-end;
-
 function OffScreen(AX, AY: Single): Boolean;
 begin
   Result := (AX < 0) or (AX > ScreenWidth) or (AY > ScreenHeight) or
     (AY < -ScreenHeight);
+end;
+
+function TDebrisField.StopsSpark(AX, AY: Single): Boolean;
+begin
+  Result := OffScreen(AX, AY) or FProbe(AX, AY);
 end;
 
 procedure TDebrisField.Tick;
@@ -519,17 +497,7 @@ begin
   end;
   FShardCount := Kept;
 
-  Kept := 0;
-  for var i := 0 to FSparkCount - 1 do
-  begin
-    var Spark := FSparks[i];
-    MoveSpark(Spark);
-    if (Spark.Age >= Spark.Life) or OffScreen(Spark.X, Spark.Y) then
-      Continue;
-    FSparks[Kept] := Spark;
-    Inc(Kept);
-  end;
-  FSparkCount := Kept;
+  FSparks.Tick;
 end;
 
 procedure TDebrisField.DrawShard(const AShard: TShard; AOrigin: TSdlPoint;
@@ -565,45 +533,22 @@ begin
       EmberGlowLevel * Sqr(1 - Cooling) * Fade);
 end;
 
-// A streak along the path of the last ticks: the head where the spark
-// is, the tail behind it
-procedure TDebrisField.DrawSpark(const ASpark: TSpark; AOrigin: TSdlPoint;
-  AAlpha: Single);
-var
-  Dest: TSdlFRect;
-begin
-  var Share: Single := (ASpark.Age + AAlpha) / ASpark.Life;
-  if Share > 1 then
-    Share := 1;
-  var Level: Single := 1 - Share * Share;
-  var HeadX: Single := AOrigin.X + ASpark.X + ASpark.SpeedX * AAlpha;
-  var HeadY: Single := AOrigin.Y + ASpark.Y + ASpark.SpeedY * AAlpha;
-  var Speed: Single := Sqrt(Sqr(ASpark.SpeedX) + Sqr(ASpark.SpeedY));
-  var StreakLength: Single := Speed * StreakTicks + StreakWidth;
-
-  Dest.X := HeadX - ASpark.SpeedX * StreakTicks / 2 - StreakLength / 2;
-  Dest.Y := HeadY - ASpark.SpeedY * StreakTicks / 2 - StreakWidth / 2;
-  Dest.W := StreakLength;
-  Dest.H := StreakWidth;
-  var Color := Mix(HotColor, EmberColor, Share);
-  SDL_SetTextureColorMod(FGlow, Color.R, Color.G, Color.B);
-  SDL_SetTextureAlphaMod(FGlow, Round(255 * Level));
-  SDL_RenderCopyExF(FRenderer, FGlow, nil, @Dest,
-    RadToDeg(ArcTan2(ASpark.SpeedY, ASpark.SpeedX)), nil, SdlFlipNone);
-end;
-
 procedure TDebrisField.Draw(AOrigin: TSdlPoint; AAlpha: Single);
+var
+  SparkOrigin: TSdlFPoint;
 begin
   for var i := 0 to FShardCount - 1 do
     DrawShard(FShards[i], AOrigin, AAlpha);
-  for var i := 0 to FSparkCount - 1 do
-    DrawSpark(FSparks[i], AOrigin, AAlpha);
+
+  SparkOrigin.X := AOrigin.X;
+  SparkOrigin.Y := AOrigin.Y;
+  FSparks.Draw(SparkBrush(FRenderer, FGlow), SparkOrigin, AAlpha);
 end;
 
 procedure TDebrisField.Clear;
 begin
   FShardCount := 0;
-  FSparkCount := 0;
+  FSparks.Clear;
 end;
 
 end.

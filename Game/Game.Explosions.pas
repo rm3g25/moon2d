@@ -19,7 +19,7 @@ interface
 
 uses
   System.Generics.Collections, Sdl2.Core, Render.Brush, Monsters.Defs,
-  Effects.Debris, Levels.Tint, Levels.Dynamics;
+  Effects.Sparks, Effects.Debris, Levels.Tint, Levels.Dynamics;
 
 type
   // The game's answer to an aftershock: its sound, its jolt

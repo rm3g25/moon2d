@@ -184,6 +184,7 @@
         <DCCReference Include="Core\Render.Objects.pas"/>
         <DCCReference Include="Core\Render.Puff.pas"/>
         <DCCReference Include="Core\Effects.Emitter.pas"/>
+        <DCCReference Include="Core\Effects.Sparks.pas"/>
         <DCCReference Include="Core\Effects.Debris.pas"/>
         <DCCReference Include="Core\Render.Dynamics.pas"/>
         <DCCReference Include="Core\Render.Shake.pas"/>

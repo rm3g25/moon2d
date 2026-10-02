@@ -38,6 +38,7 @@ uses
   Render.Objects in 'Core\Render.Objects.pas',
   Render.Puff in 'Core\Render.Puff.pas',
   Effects.Emitter in 'Core\Effects.Emitter.pas',
+  Effects.Sparks in 'Core\Effects.Sparks.pas',
   Effects.Debris in 'Core\Effects.Debris.pas',
   Render.Dynamics in 'Core\Render.Dynamics.pas',
   Render.Shake in 'Core\Render.Shake.pas',
