@@ -77,6 +77,21 @@ type
     function PickSpawn: string;
   end;
 
+  // A monster drawn as a spinning disc out of layers (Monsters.Disc)
+  // instead of its 'alive' frames; the death frames stay. Rates are per
+  // tick, as everywhere in monsters.json. JSON "disc":
+  //   {"set": "boss1-disc", "side": 36, "spin": 9, "irisReach": 0.6,
+  //    "wearFull": 75}
+  TDiscDef = record
+    SetName: string; // '' = no disc
+    Side: Double; // the layers' square, screen units
+    Spin: Double; // degrees a tick, counterclockwise; doubles with the step
+    IrisReach: Double; // how far the eye slides toward the hero, units
+    // Share of the lives lost when the worn look is complete, 0..1
+    WearFull: Double;
+    function Enabled: Boolean;
+  end;
+
   TMonsterDef = record
     Id: string;
     LegacyName: string;  // old level-file name; drop after level migration
@@ -99,6 +114,7 @@ type
     // the 2008 ladder of moon.dpr 903-925, verbatim
     DeathSounds: TArray<string>;
     Boss: TBossDef;
+    Disc: TDiscDef;
   end;
 
   // Owns all definitions. Create once at startup, free at shutdown.
@@ -139,6 +155,8 @@ resourcestring
   SSpawnRefUnknown = 'Boss "%s": spawn table references unknown id "%s"';
   SBadSpawnWeight = 'Boss "%s": spawn weight for "%s" must be positive';
   SEmptySpawnTable = 'PickSpawn called on an empty spawn table';
+  SBadDisc = 'Monster "%s": a disc needs a set, a positive side and ' +
+    'wearFull above 0, up to 100';
 
 const
   // JSON protocol keys read in more than one place
@@ -200,7 +218,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// TAttackDef / TBossDef
+// TAttackDef / TBossDef / TDiscDef
 // ---------------------------------------------------------------------------
 
 function TAttackDef.HasAttack: Boolean;
@@ -227,6 +245,24 @@ begin
 
   // Unreachable while weights are positive; keeps the compiler honest.
   Result := SpawnTable[High(SpawnTable)].MonsterId;
+end;
+
+function TDiscDef.Enabled: Boolean;
+begin
+  Result := SetName <> '';
+end;
+
+// A broken disc must fail at load time, not draw a speck or a smear
+function ParseDisc(const AObj: TJSONObject; const AMonsterId: string): TDiscDef;
+begin
+  Result.SetName := AObj.GetValue<string>('set', '');
+  Result.Side := AObj.GetValue<Double>('side', 0);
+  Result.Spin := AObj.GetValue<Double>('spin', 0);
+  Result.IrisReach := AObj.GetValue<Double>('irisReach', 0);
+  Result.WearFull := AObj.GetValue<Double>('wearFull', 100) / 100;
+  if (Result.SetName = '') or (Result.Side <= 0) or
+    (Result.WearFull <= 0) or (Result.WearFull > 1) then
+    raise EMonsterDefError.CreateFmt(SBadDisc, [AMonsterId]);
 end;
 
 // ---------------------------------------------------------------------------
@@ -402,6 +438,10 @@ begin
       Result.Boss.SpawnTable[i].Weight := Entry.GetValue<Integer>('weight', 1);
     end;
   end;
+
+  var Disc := AObj.GetValue<TJSONObject>('disc', nil);
+  if Assigned(Disc) then
+    Result.Disc := ParseDisc(Disc, Result.Id);
 end;
 
 // Spawn tables reference other monsters by id; a broken reference must fail

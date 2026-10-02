@@ -163,6 +163,12 @@ type
     // up; apply such offsets at the call site, not here.
     procedure DrawRotated(ATexture: PSdlTexture; ACenterX, ACenterY: Integer;
       AAngleDegrees: Double; AMirrored: Boolean = False);
+    // A square ASide units across centered on the point, turned
+    // AAngleDegrees clockwise, at ALevel opacity (0..1). Float all the
+    // way: a logical unit is several screen pixels, and a mover drawn
+    // between ticks must not snap to them.
+    procedure DrawTurned(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
+      ASide: Single; AAngleDegrees: Double; ALevel: Single = 1);
   end;
 
 implementation
@@ -502,6 +508,21 @@ begin
   // Center = nil rotates around Dest's middle - exactly what bullets need.
   SDL_RenderCopyEx(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
     FlipOf(AMirrored));
+end;
+
+procedure TSpriteRenderer.DrawTurned(ATexture: PSdlTexture;
+  const ACenter: TSdlFPoint; ASide: Single; AAngleDegrees: Double;
+  ALevel: Single);
+var
+  Dest: TSdlFRect;
+begin
+  Dest.X := ACenter.X - ASide / 2 + FOrigin.X;
+  Dest.Y := ACenter.Y - ASide / 2 + FOrigin.Y;
+  Dest.W := ASide;
+  Dest.H := ASide;
+  SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
+    SdlFlipNone);
 end;
 
 end.

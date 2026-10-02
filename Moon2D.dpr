@@ -44,6 +44,7 @@ uses
   Hero in 'Game\Hero.pas',
   Bullets in 'Game\Bullets.pas',
   Monsters in 'Game\Monsters.pas',
+  Monsters.Disc in 'Game\Monsters.Disc.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',
   Hud.Terminal in 'Hud\Hud.Terminal.pas',
@@ -1531,7 +1532,7 @@ begin
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FSprites.Origin := FShake.Offset(scMonsters);
-        FField.Draw(FSprites, FHero.Screen);
+        FField.Draw(FSprites, FHero.Screen, AAlpha);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);

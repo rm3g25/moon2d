@@ -420,6 +420,13 @@
       },
       "animFreq": 0.9,
       "explosion": "boss",
+      "disc": {
+        "set": "boss1-disc",
+        "side": 36,
+        "spin": 9,
+        "irisReach": 0.6,
+        "wearFull": 75
+      },
       "spawnPos": {
         "spriteX": 15,
         "spriteY": 5

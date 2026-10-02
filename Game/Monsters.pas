@@ -38,7 +38,7 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
-  Levels.Dynamics, Monsters.Defs, Bullets;
+  Levels.Dynamics, Monsters.Defs, Monsters.Disc, Bullets;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling,
@@ -84,6 +84,9 @@ type
     FHeroX, FHeroY: Integer;
     FSmoke: TSmoke; // machines only, nil for the rest
     FWrecked: Boolean; // the smoke is lit
+    FDisc: TDisc; // a disc monster only, nil for the rest
+    FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
+    FFired: Boolean; // this tick
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -107,17 +110,25 @@ type
     function FacesRight: Boolean;
     procedure CreateWreckSmoke;
     procedure TickSmoke;
+    procedure TickDisc;
+    function DiscCenter: TSdlFPoint;
+    function DiscWear: Single;
+    function DiscCharge: Single;
   public
+    // ADiscArt - the layers of a disc monster, nil for the rest; the
+    // caller keeps it alive longer than the monster
     constructor Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-      const ALevel: TLevel; const APlacement: TEntityPlacement;
-      ALivesScale: Double);
+      ADiscArt: TDiscArt; const ALevel: TLevel;
+      const APlacement: TEntityPlacement; ALivesScale: Double);
     destructor Destroy; override;
 
     // One logic tick (33 Hz - the REAL rate of the 2008 20 ms timer).
     // AHeroX/AHeroY feed the chasers and aimers; enemy bullets go into
     // ABullets (the shared monster burst).
     procedure Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
-    procedure Draw(const ASprites: TSpriteRenderer);
+    // AAlpha in [0..1): how far toward the next tick - only the disc
+    // draws between ticks, the frames stay on them
+    procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // Applies knockback through the wall oracle; queues explosion fans
@@ -141,6 +152,7 @@ type
     property Enraged: Boolean read FEnraged;
     property Direction: Boolean read FDirection;
     property TicksSinceHit: Integer read FTicksSinceHit;
+    property Disc: TDisc read FDisc;
   end;
 
   TMonsterField = class
@@ -150,6 +162,7 @@ type
     // One set and one cache per monster, both owned here.
     FSpriteSets: TObjectList<TSpriteSet>;
     FSetCaches: TObjectList<TSpriteCache>;
+    FDiscArts: TObjectDictionary<string, TDiscArt>; // set name -> layers
     FRenderer: PSdlRenderer;
     FRegistry: TMonsterRegistry;
     FLevel: TLevel;
@@ -158,6 +171,7 @@ type
     // sky-dropped - gets its lives scaled by it
     FLivesScale: Double;
     function AnimFor(const AMnsName: string): TAnimSet;
+    function DiscArtFor(const ADef: TMonsterDef): TDiscArt;
   public
     constructor Create(const ARenderer: PSdlRenderer;
       const ARegistry: TMonsterRegistry; const ALevel: TLevel;
@@ -181,7 +195,8 @@ type
     // The events' livesBelow and enraged conditions ask here
     function AnyTaggedLivesBelow(const ATag: string; ALives: Integer): Boolean;
     function AnyTaggedEnraged(const ATag: string): Boolean;
-    procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer);
+    procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer;
+      AAlpha: Single);
     // Over the monsters of the screen: the smoke of the wrecked machines
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AScreen: Integer;
       AOrigin: TSdlPoint; AAlpha: Single);
@@ -235,8 +250,8 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TMonster.Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-  const ALevel: TLevel; const APlacement: TEntityPlacement;
-  ALivesScale: Double);
+  ADiscArt: TDiscArt; const ALevel: TLevel;
+  const APlacement: TEntityPlacement; ALivesScale: Double);
 begin
   inherited Create;
   FDef := ADef;
@@ -259,6 +274,7 @@ begin
   // TODO: verify the rounding against monst.pas (tracked: PORTING-NOTES)
   FLives := RoundHalfUp(FLives * ALivesScale);
   FLivesAll := FLives;
+  FLivesBorn := FLives;
 
   FStep := ADef.Movement.Speed;
   if APlacement.Overrides.HasSpeed then
@@ -293,10 +309,13 @@ begin
 
   if IsMachine(ADef) then
     CreateWreckSmoke;
+  if ADiscArt <> nil then
+    FDisc := TDisc.Create(ADef.Disc, ADiscArt, DiscCenter);
 end;
 
 destructor TMonster.Destroy;
 begin
+  FDisc.Free;
   FSmoke.Free;
   FEvents.Free;
   inherited;
@@ -335,6 +354,49 @@ begin
   if FSmoke <> nil then
     FSmoke.Draw(ACanvas, FSmoke.Origin.X + AOrigin.X,
       FSmoke.Origin.Y + AOrigin.Y, AAlpha);
+end;
+
+procedure TMonster.TickDisc;
+var
+  Drive: TDiscDrive;
+begin
+  if FDisc = nil then
+    Exit;
+  Drive.Center := DiscCenter;
+  Drive.Hero.X := FHeroX + SpriteSize / 2;
+  Drive.Hero.Y := FHeroY - SpriteSize / 2;
+  Drive.SpinScale := FStep / Max(1, FDef.Movement.Speed);
+  Drive.Wear := DiscWear;
+  Drive.Charge := DiscCharge;
+  FDisc.Tick(Drive);
+end;
+
+// The middle of the sprite: Y is its feet line
+function TMonster.DiscCenter: TSdlFPoint;
+begin
+  Result.X := FX + SpriteSize / 2;
+  Result.Y := FY - SpriteSize / 2;
+end;
+
+function TMonster.DiscWear: Single;
+begin
+  if FLivesBorn <= 0 then
+    Exit(0);
+  Result := EnsureRange((1 - FLives / FLivesBorn) / FDef.Disc.WearFull,
+    0.0, 1.0);
+end;
+
+// 1 on the tick of a shot, rising toward it over the last TelegraphTicks
+function TMonster.DiscCharge: Single;
+const
+  TelegraphTicks = 10;
+begin
+  if FFired then
+    Exit(1);
+  if not FCanShoot then
+    Exit(0);
+  var TicksLeft := FFireEveryTicks - FTimeOfFire;
+  Result := EnsureRange(1 - TicksLeft / TelegraphTicks, 0.0, 1.0);
 end;
 
 // 2008 art faces left; a monster standing still keeps its direction
@@ -731,6 +793,7 @@ begin
     end;
   end;
 
+  FFired := False;
   if FCanShoot and (FLife = mlAlive) then
   begin
     Inc(FTimeOfFire);
@@ -738,6 +801,7 @@ begin
     begin
       FireAt(ABullets);
       FTimeOfFire := 0;
+      FFired := True;
     end;
   end;
 
@@ -763,6 +827,7 @@ begin
       MoveFlying;
   end;
   TickSmoke;
+  TickDisc;
 end;
 
 // Tank rage: below the threshold a cluster5 shooter doubles speed and
@@ -856,10 +921,16 @@ begin
     BeginDying(AEnemyBullets);
 end;
 
-procedure TMonster.Draw(const ASprites: TSpriteRenderer);
+procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
 begin
+  if (FDisc <> nil) and (FLife = mlAlive) then
+  begin
+    FDisc.Draw(ASprites, AAlpha);
+    Exit;
+  end;
+
   var DrawY := Round(FY) - SpriteSize;
   var Mirrored := FAction = maWalkRight; // 2008 art faces left
 
@@ -900,6 +971,7 @@ begin
   FAnimSets := TDictionary<string, TAnimSet>.Create;
   FSpriteSets := TObjectList<TSpriteSet>.Create(True);
   FSetCaches := TObjectList<TSpriteCache>.Create(True);
+  FDiscArts := TObjectDictionary<string, TDiscArt>.Create([doOwnsValues]);
   FRenderer := ARenderer;
   FRegistry := ARegistry;
   FLevel := ALevel;
@@ -914,7 +986,7 @@ begin
       Continue;
     var Def := ARegistry.Find(Placement.MonsterId);
     FMonsters.Add(TMonster.Create(Def, AnimFor(Placement.SpriteList),
-      ALevel, Placement, FLivesScale));
+      DiscArtFor(Def), ALevel, Placement, FLivesScale));
   end;
 end;
 
@@ -934,7 +1006,7 @@ begin
   // (the 2008 call took no multiplier) - scaled here for consistency.
   // TODO: verify against monst.pas (tracked: PORTING-NOTES)
   FMonsters.Add(TMonster.Create(Def, AnimFor(Def.SpriteList),
-    FLevel, Placement, FLivesScale));
+    DiscArtFor(Def), FLevel, Placement, FLivesScale));
 end;
 
 function TMonsterField.AnyAliveOnScreen(AScreen: Integer): Boolean;
@@ -981,11 +1053,11 @@ begin
 end;
 
 procedure TMonsterField.Draw(const ASprites: TSpriteRenderer;
-  AScreen: Integer);
+  AScreen: Integer; AAlpha: Single);
 begin
   for var Monster in FMonsters do
     if Monster.Screen = AScreen then
-      Monster.Draw(ASprites);
+      Monster.Draw(ASprites, AAlpha);
 end;
 
 procedure TMonsterField.DrawSmoke(const ACanvas: TDynamicCanvas;
@@ -998,7 +1070,9 @@ end;
 
 destructor TMonsterField.Destroy;
 begin
+  // Monsters before the disc art they draw with
   FMonsters.Free;
+  FDiscArts.Free;
   FAnimSets.Free;
   // Caches before sets: a cache holds no set resources at destroy time,
   // but the reading order of the living pair was cache -> set, and the
@@ -1026,6 +1100,16 @@ begin
 
   Result := LoadAnimSet(Cache, SpriteSet);
   FAnimSets.Add(AMnsName, Result);
+end;
+
+function TMonsterField.DiscArtFor(const ADef: TMonsterDef): TDiscArt;
+begin
+  if not ADef.Disc.Enabled then
+    Exit(nil);
+  if FDiscArts.TryGetValue(ADef.Disc.SetName, Result) then
+    Exit;
+  Result := TDiscArt.Create(FRenderer, ADef.Disc.SetName);
+  FDiscArts.Add(ADef.Disc.SetName, Result);
 end;
 
 end.

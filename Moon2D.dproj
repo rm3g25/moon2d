@@ -190,6 +190,7 @@
         <DCCReference Include="Game\Hero.pas"/>
         <DCCReference Include="Game\Bullets.pas"/>
         <DCCReference Include="Game\Monsters.pas"/>
+        <DCCReference Include="Game\Monsters.Disc.pas"/>
         <DCCReference Include="Core\Render.Font.pas"/>
         <DCCReference Include="Hud\Hud.Typewriter.pas"/>
         <DCCReference Include="Hud\Hud.Terminal.pas"/>
