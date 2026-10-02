@@ -267,6 +267,7 @@ type
   // second, degrees - with the percentages as shares, 0..1
   TSparkSourceLook = record
     Rate, Burst, Frequency: Single;
+    Spell, Pause: Single;
     Life, Speed, Angle, Cone, Gravity, Drag, Size: Single;
     Opacity, Flash, Fork: Single;
     Wall: TSparkWall;
@@ -278,6 +279,13 @@ type
     WaitTicks: Integer; // to the next arc
     TicksLeft: Integer; // of the arc under way
     Pour: Single; // sparks per tick of it
+  end;
+
+  // A source with a pause works in spells and is out between them
+  TRestClock = record
+    Spell, Pause: Single; // ticks, on average; no pause - no rest
+    TicksLeft: Integer; // of the spell or the pause under way
+    Awake: Boolean;
   end;
 
   // Sparks from torn metal and bare wires (Effects.Sparks): a steady
@@ -295,19 +303,22 @@ type
   // of a spark to split) are percentages. Collide is what the solid
   // layer does to a spark: "none", "die" or "bounce" - bounce in the
   // front layer by default, none behind it. Intensity scales the rate
-  // and, softer, how often and how hard it arcs.
+  // and, softer, how often and how hard it arcs. Spell and pause are in
+  // seconds, both rough: a source with a pause (0 = none) pours for a
+  // spell, goes out for a pause, and comes back with an arc.
   // JSON:
   //   {"kind": "sparks", "parent": "satellite", "x": 33.5, "y": 36,
   //    "tint": [100, 96, 86], "midTint": [100, 66, 27],
   //    "endTint": [69, 14, 6], "rate": 12, "burst": 7, "frequency": 0.5,
   //    "life": 2.6, "speed": 46, "angle": -90, "cone": 70, "gravity": 42,
   //    "drag": 50, "size": 1.6, "opacity": 90, "flash": 45, "fork": 18,
-  //    "collide": "none"}
+  //    "spell": 7, "pause": 3, "collide": "none"}
   TSparks = class(TDynamicObject)
   private
     FRate: Single; // sparks per tick at full intensity
     FBurst: Single; // sparks in an arc of the usual size
     FArc: TArcClock;
+    FRest: TRestClock;
     FSpray: TSparkSpray; // one spark
     FSize: Single;
     FFlashPeak: Single; // 0..1
@@ -321,6 +332,7 @@ type
     function FieldLook(const ALook: TSparkSourceLook): TSparkLook;
     procedure TakeLook(const ALook: TSparkSourceLook; ASeed: Cardinal);
     procedure Emit;
+    procedure TickRestClock;
     procedure StartArc;
     procedure ThrowOne;
   protected
@@ -558,6 +570,9 @@ const
   ArcSizeFloor = 0.4;
   ArcRateFloor = 0.25;
   ArcColor: TRgb = (R: 190; G: 215; B: 255); // colder than the sparks
+  // A spell and a pause roll around their means, evenly
+  RestSpanMin = 0.5;
+  RestSpanSpread = 1.0;
   FlashKeep = 0.62; // of the light, per tick
   FlashScale = 8.0; // the light across, in streak widths
   FlashCoreShare = 0.35;
@@ -577,6 +592,7 @@ const
   DefaultSparkOpacity = 100;
   DefaultFlash = 50;
   DefaultFork = 20;
+  DefaultSpell = 6;
 
   // A globe looks like the Earth unless the level says otherwise: matte
   // ground under air, the night side black but for a trace of
@@ -1179,6 +1195,8 @@ begin
   Result.Burst := ReadReach(AObj, 'burst', DefaultBurst, AOwner);
   Result.Frequency := ReadPositive(AObj, 'frequency', DefaultFrequency,
     AOwner);
+  Result.Spell := ReadPositive(AObj, 'spell', DefaultSpell, AOwner);
+  Result.Pause := ReadReach(AObj, 'pause', 0, AOwner);
   Result.Life := ReadPositive(AObj, 'life', DefaultSparkLife, AOwner);
   Result.Speed := ReadReach(AObj, 'speed', DefaultSparkSpeed, AOwner);
   Result.Angle := AObj.GetValue<Double>('angle', DefaultSparkAngle);
@@ -1263,6 +1281,8 @@ begin
   FArc.Gap := LogicTicksPerSecond / ALook.Frequency;
   // Sources seeded apart arc apart
   FArc.WaitTicks := Round(FArc.Gap * FRandom.NextUnit);
+  FRest.Spell := ALook.Spell * LogicTicksPerSecond;
+  FRest.Pause := ALook.Pause * LogicTicksPerSecond;
 end;
 
 procedure TSparks.Acquire(const ACanvas: TDynamicCanvas);
@@ -1281,6 +1301,8 @@ begin
   FField.Clear;
   FOwed := 0;
   FArc.TicksLeft := 0;
+  FRest.Awake := False;
+  FRest.TicksLeft := 0;
   FFlash := 0;
 end;
 
@@ -1304,6 +1326,26 @@ begin
   FArc.WaitTicks := Max(ArcTicks, Round(Wait));
 end;
 
+// The zeroed clock is on the edge of a spell: a fresh source, or one
+// rewound, opens with it
+procedure TSparks.TickRestClock;
+begin
+  Dec(FRest.TicksLeft);
+  if FRest.TicksLeft > 0 then
+    Exit;
+
+  FRest.Awake := not FRest.Awake;
+  var MeanTicks := FRest.Pause;
+  if FRest.Awake then
+  begin
+    MeanTicks := FRest.Spell;
+    FArc.WaitTicks := 0; // a spell opens with an arc
+  end;
+  var Span: Single := MeanTicks *
+    (RestSpanMin + RestSpanSpread * FRandom.NextUnit);
+  FRest.TicksLeft := Max(1, Round(Span));
+end;
+
 procedure TSparks.ThrowOne;
 begin
   var Reach: Single := FSize * SparkSpawnSpread;
@@ -1314,6 +1356,13 @@ end;
 
 procedure TSparks.Emit;
 begin
+  if FRest.Pause > 0 then
+  begin
+    TickRestClock;
+    if not FRest.Awake then
+      Exit;
+  end;
+
   FOwed := FOwed + FRate * Intensity;
 
   if FBurst > 0 then

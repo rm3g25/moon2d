@@ -254,6 +254,7 @@ const
   // A wrecked machine shorts out: a crackle of sparks now and then, few
   // between
   WreckSparks: TSparkSourceLook = (Rate: 2; Burst: 5; Frequency: 0.7;
+    Spell: 0; Pause: 0;
     Life: 0.5; Speed: 80; Angle: -90; Cone: 140; Gravity: 200; Drag: 0.85;
     Size: 2.2; Opacity: 1; Flash: 0.55; Fork: 0.25; Wall: swBounce;
     MidTint: (R: 100; G: 66; B: 27); EndTint: (R: 69; G: 14; B: 6));
