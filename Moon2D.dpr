@@ -57,6 +57,7 @@ uses
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
+  Game.Impacts in 'Game\Game.Impacts.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -94,6 +95,10 @@ const
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
   // The boss's armor bursting into his rage: what a machine dies with
   RageBlastSoundFile = 'platform.wav';
+  // A bullet on armor: the pings take turns, a tracer leaves with a whine
+  ArmorHitSounds: array [0..2] of string =
+    ('armor1.wav', 'armor2.wav', 'armor3.wav');
+  RicochetSoundFile = 'ricochet.wav';
   TerminalKeySoundFile = 'terminal.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
@@ -133,6 +138,17 @@ const
   HurtMercyTicks = 50;      // 'permission': mercy window after any hit
   GameOverDelayTicks = 125; // 'ToGameOverTime': d-frames before restart
   PitDepthY = 450;          // 'Падаем в лунку' below this Y
+
+  // A monster's hitbox for a bullet: its sprite less this much on
+  // either side
+  HitInset = 8;
+  // Armor struck again sooner than this answers thinner (Game.Impacts):
+  // the chain gun lands every 5 ticks, a pistol every 15
+  RapidHitTicks = 8;
+  // At most one ping in this many ticks: a fan of fragments landing at
+  // once must not take every channel of the mixer
+  ArmorSoundGapTicks = 4;
+
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
   // switch to faUpright - or point FontFileName at the other font file.
@@ -259,6 +275,9 @@ type
     FBriefing: THudBriefing;
     FShake: TScreenShake;
     FExplosions: TExplosions;
+    FImpacts: TImpacts;
+    FArmorSoundWait: Integer; // ticks until the next ping may sound
+    FArmorSoundTurn: Integer; // which ping is next
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
     // the hero taking ANY damage; any hit resets the count to zero.
@@ -307,6 +326,8 @@ type
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
     procedure ResolveMonsterContact;
+    procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
+    procedure SoundArmorHit(AThrewTracer: Boolean);
     procedure RewardMonsterKill(const AMonster: TMonster);
     procedure DrainMonsterEvents;
     procedure CreateHud;
@@ -399,6 +420,7 @@ begin
   FShake := TScreenShake.Create;
   FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint,
     EchoAftershock);
+  FImpacts := TImpacts.Create(SolidUnderPoint);
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
 
@@ -416,6 +438,7 @@ begin
   FAudio.Free;
   FMarks.Free;
   FShake.Free;
+  FImpacts.Free;
   FExplosions.Free;
   FMessages.Free;
   FBriefing.Free;
@@ -517,6 +540,7 @@ begin
 
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FImpacts.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
   FHurtCooldown := 0;
@@ -748,6 +772,7 @@ begin
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FImpacts.Clear;
   FMessages.ClearPopups;
   FireScreenTriggers;
 end;
@@ -1003,6 +1028,9 @@ begin
   FAudio.Load(BottleSoundFile); // the ceremony loads its own; the game's blasts
   FAudio.Load(BonusSoundFile);
   FAudio.Load(RageBlastSoundFile);
+  for var Name in ArmorHitSounds do
+    FAudio.Load(Name);
+  FAudio.Load(RicochetSoundFile);
   FAudio.Load(TerminalKeySoundFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
@@ -1171,20 +1199,73 @@ begin
     // half of the original double explosion).
     for var Monster in FField.Monsters do
       if (Monster.Screen = FHero.Screen) and (Monster.Life = mlAlive) and
-         (Own.X > Monster.X + 8) and
-         (Own.X < Monster.X - 8 + SpriteSize) and
+         (Own.X > Monster.X + HitInset) and
+         (Own.X < Monster.X - HitInset + SpriteSize) and
          // Verbatim 2008 hitbox: DOWNWARD from Y - bullets spawn at
          // heroY+8, below the feet line, and this is where they land
          (Own.Y > Monster.Y) and (Own.Y < Monster.Y + SpriteSize) then
       begin
         var Knock := Round(Own.DX / 2);
-        Own.StartBurst;
+        SpendBullet(Own, Monster);
         Monster.TakeDamage(Knock, 1, FMonsterBullets);
         if Monster.Life = mlDying then
           RewardMonsterKill(Monster);
         Break;
       end;
   end;
+end;
+
+// Where a bullet has struck a monster's armor, in honest screen units:
+// a bullet's picture hangs a sprite above its Y, and the hitbox it has
+// just entered rises with it
+function ArmorStrike(const ABullet: TBullet; const AMonster: TMonster): TStrike;
+var
+  Armor: TSdlFRect;
+begin
+  Result := Default(TStrike);
+  Result.X := ABullet.X;
+  Result.Y := ABullet.Y - SpriteSize;
+  Result.SpeedX := ABullet.DX;
+  Result.SpeedY := ABullet.DY;
+  Result.Rapid := AMonster.HitWithin(RapidHitTicks);
+
+  Armor.X := AMonster.X + HitInset;
+  Armor.Y := AMonster.Y - SpriteSize;
+  Armor.W := SpriteSize - 2 * HitInset;
+  Armor.H := SpriteSize;
+  TraceEntry(Result, Armor);
+  if AMonster.Disc <> nil then
+    FaceFromCenter(Result, AMonster.Disc.Pose.Center);
+end;
+
+// A bullet ends on a monster: in its own burst or, on armor, in sparks
+// with no burst at all. Called before the damage lands - the armor is
+// asked how long ago it was last hit.
+procedure TMoonGame.SpendBullet(const ABullet: TBullet;
+  const AMonster: TMonster);
+begin
+  if AMonster.Def.Material <> mtMetal then
+  begin
+    ABullet.StartBurst;
+    Exit;
+  end;
+  ABullet.Status := bsInactive;
+  var ThrewTracer := FImpacts.Land(ArmorStrike(ABullet, AMonster));
+  SoundArmorHit(ThrewTracer);
+end;
+
+procedure TMoonGame.SoundArmorHit(AThrewTracer: Boolean);
+begin
+  if AThrewTracer then
+  begin
+    FAudio.Play(RicochetSoundFile);
+    Exit;
+  end;
+  if FArmorSoundWait > 0 then
+    Exit;
+  FAudio.Play(ArmorHitSounds[FArmorSoundTurn]);
+  FArmorSoundTurn := (FArmorSoundTurn + 1) mod Length(ArmorHitSounds);
+  FArmorSoundWait := ArmorSoundGapTicks;
 end;
 
 // The kill aftermath: score, death ticker, '+N' popup, streak credit,
@@ -1266,6 +1347,7 @@ begin
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FImpacts.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
@@ -1500,6 +1582,9 @@ begin
   FHero.Bullets.Update;
   FMonsterBullets.Update;
   FExplosions.Tick;
+  FImpacts.Tick;
+  if FArmorSoundWait > 0 then
+    Dec(FArmorSoundWait);
   ResolveHeroBulletHits;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
@@ -1570,6 +1655,7 @@ begin
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;

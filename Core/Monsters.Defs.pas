@@ -34,6 +34,10 @@ type
   // ExplodesOnDeath and do not depend on it.
   TExplosionKind = (ekNone, ekBarrel, ekMachine, ekBoss);
 
+  // What the body is made of, by what a bullet does to it: metal throws
+  // sparks (Game.Impacts); mtNone = a bullet bursts on it as on a wall
+  TMonsterMaterial = (mtNone, mtMetal);
+
   TMovementDef = record
     Kind: TMovementKind;
     Speed: Integer;
@@ -105,6 +109,7 @@ type
     AffectedByGravity: Boolean; // platforms, mounts and the boss ignore it
     ExplodesOnDeath: Boolean;   // barrel/tank/platform/mount fragment fans
     Explosion: TExplosionKind;
+    Material: TMonsterMaterial;
     Movement: TMovementDef;
     Attack: TAttackDef;
     PickupEffect: TPickupEffectDef;
@@ -218,6 +223,13 @@ begin
   if AValue = 'boss' then Exit(ekBoss);
   raise EMonsterDefError.CreateFmt(SBadEnumValue,
     [AMonsterId, 'explosion', AValue]);
+end;
+
+function ParseMaterial(const AValue, AMonsterId: string): TMonsterMaterial;
+begin
+  if AValue = 'metal' then Exit(mtMetal);
+  raise EMonsterDefError.CreateFmt(SBadEnumValue,
+    [AMonsterId, 'material', AValue]);
 end;
 
 // ---------------------------------------------------------------------------
@@ -370,6 +382,9 @@ begin
   var ExplosionId := AObj.GetValue<string>('explosion', '');
   if ExplosionId <> '' then
     Result.Explosion := ParseExplosionKind(ExplosionId, Result.Id);
+  var MaterialId := AObj.GetValue<string>('material', '');
+  if MaterialId <> '' then
+    Result.Material := ParseMaterial(MaterialId, Result.Id);
   Result.AnimFreq := AObj.GetValue<Double>('animFreq',
     DefaultFloat('animFreq', 0.25));
   Result.DeathText := ReadLocalizedText(AObj, 'deathText');

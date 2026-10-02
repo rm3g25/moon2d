@@ -162,7 +162,8 @@
       ],
       "affectedByGravity": false,
       "explodesOnDeath": true,
-      "explosion": "machine"
+      "explosion": "machine",
+      "material": "metal"
     },
     {
       "id": "tank",
@@ -193,7 +194,8 @@
         "platform.wav"
       ],
       "explodesOnDeath": true,
-      "explosion": "machine"
+      "explosion": "machine",
+      "material": "metal"
     },
     {
       "id": "mount",
@@ -224,7 +226,8 @@
         "platform.wav"
       ],
       "affectedByGravity": false,
-      "explodesOnDeath": true
+      "explodesOnDeath": true,
+      "material": "metal"
     },
     {
       "id": "barrel",
@@ -249,7 +252,8 @@
         "bottle.wav"
       ],
       "explodesOnDeath": true,
-      "explosion": "barrel"
+      "explosion": "barrel",
+      "material": "metal"
     },
     {
       "id": "medkit",
@@ -420,6 +424,7 @@
       },
       "animFreq": 0.9,
       "explosion": "boss",
+      "material": "metal",
       "disc": {
         "set": "boss1-disc",
         "side": 36,
