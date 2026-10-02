@@ -43,7 +43,11 @@ type
   // - ptLaps: nothing - the lap and no more.
   // - ptDives: now and then a dive through the arena, cell by cell,
   //   after the hero.
-  TPilotTactics = (ptLaps, ptDives);
+  // - ptRams: a ram at the hero where he is in plain sight, a dive
+  //   where a wall hides him.
+  // - ptHunts: the same and no lap any more - one maneuver after
+  //   another.
+  TPilotTactics = (ptLaps, ptDives, ptRams, ptHunts);
 
   TMovementDef = record
     Kind: TMovementKind;
@@ -84,6 +88,9 @@ type
     // OGG in music\, loops from the rage threshold to the end of the
     // fight ('Сменить музыку' of 2008, moon.dpr 868-869); '' = none
     RageMusic: string;
+    // The monster id of what a hero gets for dodging a ram
+    // (Monsters.Pilot); '' = nothing
+    DodgePrize: string;
     // Random pick honoring weights. Raises if the table is empty.
     function PickSpawn: string;
   end;
@@ -145,6 +152,7 @@ type
     function ParseMonster(const AObj: TJSONObject;
       const ADefaults: TJSONObject): TMonsterDef;
     procedure ValidateSpawnTables;
+    procedure ValidateDodgePrizes;
   public
     constructor Create;
     destructor Destroy; override;
@@ -173,6 +181,7 @@ resourcestring
   SBadEnumValue = 'Monster "%s": unknown %s value "%s"';
   SSpawnRefUnknown = 'Boss "%s": spawn table references unknown id "%s"';
   SBadSpawnWeight = 'Boss "%s": spawn weight for "%s" must be positive';
+  SDodgePrizeUnknown = 'Boss "%s": dodgePrize references unknown id "%s"';
   SEmptySpawnTable = 'PickSpawn called on an empty spawn table';
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
@@ -350,6 +359,7 @@ begin
     Root.Free;
   end;
   ValidateSpawnTables;
+  ValidateDodgePrizes;
 end;
 
 procedure TMonsterRegistry.ParseRoot(const ARoot: TJSONObject);
@@ -475,6 +485,7 @@ begin
     Result.Boss.EndsLevelOnDeath :=
       Boss.GetValue<Boolean>('endsLevelOnDeath', False);
     Result.Boss.RageMusic := Boss.GetValue<string>('rageMusic', '');
+    Result.Boss.DodgePrize := Boss.GetValue<string>('dodgePrize', '');
     Result.Boss.SpawnEveryTicks := Boss.GetValue<Integer>('spawnEveryTicks');
     Result.Boss.SpawnScreen := Boss.GetValue<Integer>('spawnScreen', 0);
 
@@ -510,6 +521,18 @@ begin
         raise EMonsterDefError.CreateFmt(SBadSpawnWeight,
           [Pair.Key, Entry.MonsterId]);
     end;
+end;
+
+// As a spawn table's reference: fails at load time, not at the first
+// dodged ram
+procedure TMonsterRegistry.ValidateDodgePrizes;
+begin
+  for var Pair in FDefs do
+  begin
+    var Prize := Pair.Value.Boss.DodgePrize;
+    if (Prize <> '') and not FDefs.ContainsKey(Prize) then
+      raise EMonsterDefError.CreateFmt(SDodgePrizeUnknown, [Pair.Key, Prize]);
+  end;
 end;
 
 function TMonsterRegistry.Find(const AId: string): TMonsterDef;

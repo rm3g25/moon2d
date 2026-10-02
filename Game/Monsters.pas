@@ -30,6 +30,7 @@
   The boss flies by Monsters.Pilot: the lap and, by the tactics the
   level's events set, the maneuvers off it (a 2026 addition). In a
   maneuver the aimed gun holds; a pondering disc fires its ports instead.
+  A ram ended in a wall and the prize a dodged one owes go out as events.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -52,7 +53,7 @@ type
   // Requests a monster cannot fulfil itself ('MessageToMain' of 2008);
   // the game loop drains these each tick.
   TMonsterEvent = (meNone, meBossWantsMinion, meHenshin, meBossRage,
-    meLevelComplete, meDied);
+    meLevelComplete, meDied, meBossCrashed, meBossOwesPrize);
 
   // Thirds of full health, the crosshair's language
   TMonsterHealthTier = (htHale, htWounded, htCritical);
@@ -123,6 +124,7 @@ type
     procedure TickSmoke;
     procedure TickSparks;
     procedure TickDisc;
+    function EyeTarget: TSdlFPoint;
     function DiscCenter: TSdlFPoint;
     function DiscWear: Single;
     function DiscCharge: Single;
@@ -152,6 +154,10 @@ type
     function DrainEvent: TMonsterEvent;
     // A flying boss takes them up; the rest have no pilot to tell
     procedure SetTactics(ATactics: TPilotTactics);
+    // The game has seen this body touch the hero
+    procedure NoteHeroContact;
+    // Asked on meBossCrashed, which only a piloted monster sends
+    function LastCrash: TPilotCrash;
     function HealthTier: TMonsterHealthTier;
     // How full the current third is, 0..1
     function TierShare: Single;
@@ -186,6 +192,8 @@ type
     // 1092-1094): every monster born in this field - placed or
     // sky-dropped - gets its lives scaled by it
     FLivesScale: Double;
+    function SpawnAt(const AMonsterId: string;
+      AScreen, APlacementX, APlacementY: Integer): TMonster;
     function AnimFor(const AMnsName: string): TAnimSet;
     function DiscArtFor(const ADef: TMonsterDef): TDiscArt;
   public
@@ -199,6 +207,10 @@ type
     // AddMonstOnBoss1 verbatim: a random minion at cell (random(15)+1, 1)
     // - the top edge of the boss screen; gravity does the dramatic entry.
     procedure SpawnFromSky(const AMonsterId: string; AScreen: Integer);
+    // On the very place of a body at AX, AY: a prize put into the
+    // hero's hands - the contact of the same tick collects it
+    procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
+      AX, AY: Double);
     // 'ExistLive' of monst.pas as the breakthrough gate: ANY live body
     // on the screen counts, pickups included - the 2008 check did not
     // discriminate by category (or did - monst.pas knows; the verbatim
@@ -449,14 +461,33 @@ begin
   if FDisc = nil then
     Exit;
   Drive.Center := DiscCenter;
-  Drive.Hero.X := FHeroX + SpriteSize / 2;
-  Drive.Hero.Y := FHeroY - SpriteSize / 2;
+  Drive.Hero := EyeTarget;
   Drive.SpinScale := FStep / Max(1, FDef.Movement.Speed);
   if FPilot <> nil then
     Drive.SpinScale := FPilot.SpinScale(Drive.SpinScale);
   Drive.Wear := DiscWear;
   Drive.Charge := DiscCharge;
   FDisc.Tick(Drive);
+end;
+
+// The hero - or the point a ram has locked on; a stunned eye looks at
+// nothing and comes back to the middle
+function TMonster.EyeTarget: TSdlFPoint;
+begin
+  Result.X := FHeroX + SpriteSize / 2;
+  Result.Y := FHeroY - SpriteSize / 2;
+  if FPilot = nil then
+    Exit;
+
+  case FPilot.Gaze of
+    pgAimPoint:
+      begin
+        Result.X := FPilot.AimPoint.X;
+        Result.Y := FPilot.AimPoint.Y;
+      end;
+    pgNowhere:
+      Result := DiscCenter;
+  end;
 end;
 
 // The middle of the sprite: Y is its feet line
@@ -757,6 +788,17 @@ begin
     FPilot.SetTactics(ATactics);
 end;
 
+procedure TMonster.NoteHeroContact;
+begin
+  if FPilot <> nil then
+    FPilot.NoteHeroContact;
+end;
+
+function TMonster.LastCrash: TPilotCrash;
+begin
+  Result := FPilot.LastCrash;
+end;
+
 // Shared by MoveWalking and MoveFlying - the same frame clock
 procedure TMonster.AdvanceFrame;
 begin
@@ -878,6 +920,10 @@ begin
   Brief.HeroY := FHeroY;
   Brief.BodyAlive := FLife = mlAlive;
   FPilot.Tick(FX, FY, Brief);
+  if FPilot.Crashed then
+    FEvents.Add(meBossCrashed);
+  if FPilot.OwesPrize then
+    FEvents.Add(meBossOwesPrize);
 end;
 
 procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
@@ -1111,6 +1157,24 @@ end;
 
 procedure TMonsterField.SpawnFromSky(const AMonsterId: string;
   AScreen: Integer);
+begin
+  // Row 0 is fully above the visible screen: the entry IS the fall
+  SpawnAt(AMonsterId, AScreen, Random(15) + 1, 0);
+end;
+
+procedure TMonsterField.SpawnOn(const AMonsterId: string;
+  AScreen: Integer; AX, AY: Double);
+begin
+  // Born in a cell, as every monster is, then set on the point itself:
+  // a cell may lie half a body aside, out of the contact box
+  var Born := SpawnAt(AMonsterId, AScreen, 1, 1);
+  Born.FX := AX;
+  Born.FY := AY;
+end;
+
+// In the cells a level places its entities by
+function TMonsterField.SpawnAt(const AMonsterId: string;
+  AScreen, APlacementX, APlacementY: Integer): TMonster;
 var
   Placement: TEntityPlacement;
 begin
@@ -1118,14 +1182,15 @@ begin
   Placement := Default(TEntityPlacement);
   Placement.MonsterId := AMonsterId;
   Placement.Screen := AScreen;
-  Placement.X := Random(15) + 1;
-  Placement.Y := 0; // fully above the visible screen: the entry IS the fall
+  Placement.X := APlacementX;
+  Placement.Y := APlacementY;
   Placement.SpriteList := Def.SpriteList;
   // Whether AddMonstOnBoss1 scaled its minions is monst.pas knowledge
   // (the 2008 call took no multiplier) - scaled here for consistency.
   // TODO: verify against monst.pas (tracked: PORTING-NOTES)
-  FMonsters.Add(TMonster.Create(Def, AnimFor(Def.SpriteList),
-    DiscArtFor(Def), FLevel, Placement, FLivesScale));
+  Result := TMonster.Create(Def, AnimFor(Def.SpriteList), DiscArtFor(Def),
+    FLevel, Placement, FLivesScale);
+  FMonsters.Add(Result);
 end;
 
 function TMonsterField.AnyAliveOnScreen(AScreen: Integer): Boolean;

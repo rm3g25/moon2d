@@ -2731,7 +2731,7 @@
         {
           "action": "tactics",
           "target": "boss",
-          "value": "laps"
+          "value": "rams"
         }
       ]
     },
@@ -2772,7 +2772,7 @@
         {
           "action": "tactics",
           "target": "boss",
-          "value": "dives"
+          "value": "hunts"
         }
       ]
     }

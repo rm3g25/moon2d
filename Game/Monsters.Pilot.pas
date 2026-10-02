@@ -12,8 +12,8 @@
   events set (TPilotTactics). Off the lap the pilot minds the walls: the
   level's grid, the body one cell big.
 
-  Not here: what a maneuver looks like. The disc and the bullets are the
-  monster's.
+  Not here: what a maneuver looks and sounds like. The disc, the bullets
+  and the sparks of a crash are the monster's and the game's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -28,16 +28,27 @@ uses
 type
   THeading = (hdDown, hdLeft, hdUp, hdRight);
 
-  TPilotState = (psLap, psBrake, psPonder, psDive, psReturn);
+  TPilotState = (psLap, psBrake, psPonder, psDive, psAim, psDash, psStun,
+    psReturn);
+
+  TPilotGaze = (pgHero, pgAimPoint, pgNowhere);
 
   // 0-based
   TCell = record
     Col, Row: Integer;
   end;
 
-  // Screen units
+  // Screen units: a point, or a direction across the screen
   TPlace = record
     X, Y: Double;
+  end;
+
+  // Screen units and units per tick. The point is the rim of the body
+  // that struck; the normal is the way the wall faces, a unit vector.
+  TPilotCrash = record
+    X, Y: Single;
+    SpeedX, SpeedY: Single;
+    NormalX, NormalY: Single;
   end;
 
   // What the monster tells its pilot every tick
@@ -59,45 +70,77 @@ type
     FLapRestTicks: Integer;
     // New tactics open with a maneuver at once
     FRestWaived: Boolean;
+    FSearchTicks: Integer; // of the lap, for a cell that sees the hero
     FTargetCell: TCell;
     FTicksLeft: Integer; // of the state that counts them
     FReturnPath: TArray<TCell>;
     FReturnIndex: Integer;
     FPortsDue: Boolean;
+    FAimPoint: TPlace; // the middle of the hero as the eye locked on
+    FDashDirection: TPlace; // a unit vector
+    FDashTouchedHero: Boolean;
+    FLastCrash: TPilotCrash;
+    FCrashed: Boolean;
+    FOwesPrize: Boolean;
     function CellOpen(const ACell: TCell): Boolean;
     function CanGo(AHeading: THeading): Boolean;
+    function BodyBlocked(const AFeet: TPlace): Boolean;
+    function Advance(var AFeet: TPlace; const ADirection: TPlace;
+      AUnits: Integer): Boolean;
+    function Sees(const ACell: TCell; const APoint: TPlace): Boolean;
     procedure Fly(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure FlyLap(var AFeet: TPlace; AStep: Integer);
     function LapCellAhead(const AFeet: TPlace): TCell;
+    function SearchesForLine(const ACell: TCell;
+      const ABrief: TPilotBrief): Boolean;
     procedure Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
     procedure BeginBrake(const ACell: TCell);
     procedure Brake(var AFeet: TPlace; AStep: Integer);
     procedure Ponder(const ABrief: TPilotBrief);
+    procedure PickManeuver(const ABrief: TPilotBrief);
+    procedure EndManeuver(const AFeet: TPlace);
     procedure BeginDive(const AHero: TCell);
     function HeroSide(const AHero: TCell): THeading;
     function CrossesHeroLine(const AHero: TCell): Boolean;
     function DiveHeading(const AHero: TCell): THeading;
     procedure Dive(var AFeet: TPlace; const ABrief: TPilotBrief);
+    procedure BeginAim(const APoint: TPlace);
+    procedure Aim(var AFeet: TPlace);
+    procedure BeginDash(const AFeet: TPlace);
+    function DashStride: Integer;
+    procedure Dash(var AFeet: TPlace);
+    function WallNormal(const AFeet: TPlace): TPlace;
+    procedure HitWall(const AFeet: TPlace);
+    procedure Stun(const AFeet: TPlace);
     function PathToLap(const AFrom: TCell): TArray<TCell>;
     procedure BeginReturn(const AFeet: TPlace);
     procedure FlyBack(var AFeet: TPlace; AStep: Integer);
     procedure JoinLap(const ACell: TCell; AStep: Integer);
   public
-    // ABaseStep - the step of the monster's definition: a dive is flown
-    // by it whatever the rage has made of the monster's own
+    // ABaseStep - the step of the monster's definition: a dive and a
+    // dash are flown by it whatever the rage has made of the monster's
+    // own
     constructor Create(const ALevel: TLevel; AScreen, ABaseStep: Integer);
 
     // One logic tick. AX, AY - the feet point of the body.
     procedure Tick(var AX, AY: Double; const ABrief: TPilotBrief);
     procedure SetTactics(ATactics: TPilotTactics);
+    procedure NoteHeroContact;
     // In a maneuver
     function Busy: Boolean;
+    function Gaze: TPilotGaze;
     // 0..1, for the sensor of the disc
     function Charge: Single;
     // ALapScale - the spin scale of the disc on the lap
     function SpinScale(ALapScale: Single): Single;
     // One tick only
     property PortsDue: Boolean read FPortsDue;
+    property AimPoint: TPlace read FAimPoint;
+    // One tick only; LastCrash says how the dash ended
+    property Crashed: Boolean read FCrashed;
+    property LastCrash: TPilotCrash read FLastCrash;
+    // One tick only, the one after the crash
+    property OwesPrize: Boolean read FOwesPrize;
   end;
 
 implementation
@@ -122,9 +165,13 @@ const
   LapLength = 2 * (LapRight - LapLeft + LapBottom - LapTop);
 
   // Where a maneuver may take the body: the screen under the HUD and
-  // above its bottom row - that one is floor and pits, nobody to chase
+  // above its bottom row - that one is floor and pits, nobody to chase.
+  // In screen units: the top edge of a body in the top row, the feet
+  // line of one in the bottom row.
   ArenaTopRow = LapTopRow;
   ArenaBottomRow = ScreenRows - 2;
+  ArenaTop = ArenaTopRow * TileSize;
+  ArenaBottom = (ArenaBottomRow + 1) * TileSize;
 
   MinRestLaps = 1.0;
   MaxRestLaps = 2.0;
@@ -141,6 +188,22 @@ const
   ManeuverSpinBoost = 2.0;
 
   DiveTicks = 130; // about four seconds
+
+  AimTicks = 15; // the eye stands on its point: time to leave the line
+  DashStepScale = 3; // of the definition's step
+  StunTicks = 50;
+  // A wall grazed by less than this does not stop a body
+  BodyInset = 2;
+  // A line is open when a dash comes this close to its point: bodies
+  // that near touch (the game's contact box is 16 units either way
+  // across), and the hero may stand closer to a wall than the body can
+  // fly
+  SightGap = 12;
+  // From the middle of a body to the point of it that struck: a unit
+  // short of the wall, where a spark is not born inside it
+  StrikeReach = SpriteSize / 2 - BodyInset - 1;
+  // A way shorter than this has no direction
+  MinDirectionLength = 1.0;
 
   // Screen units and cells a heading moves by; Y runs down
   HeadingX: array [THeading] of Integer = (0, -1, 0, 1);
@@ -268,6 +331,18 @@ begin
   Result := Sqrt(Sqr(AWay.X) + Sqr(AWay.Y));
 end;
 
+// Straight down for a way too short to have a direction
+function UnitOf(const AWay: TPlace): TPlace;
+begin
+  Result.X := 0;
+  Result.Y := 1;
+  var Reach := LengthOf(AWay);
+  if Reach < MinDirectionLength then
+    Exit;
+  Result.X := AWay.X / Reach;
+  Result.Y := AWay.Y / Reach;
+end;
+
 // True once there
 function Approach(var AFeet: TPlace; const ATarget: TPlace;
   AStride: Double): Boolean;
@@ -330,23 +405,50 @@ begin
   FRestWaived := True;
 end;
 
+procedure TPilot.NoteHeroContact;
+begin
+  FDashTouchedHero := True;
+end;
+
 function TPilot.Busy: Boolean;
 begin
   Result := FState <> psLap;
 end;
 
+function TPilot.Gaze: TPilotGaze;
+begin
+  case FState of
+    psAim, psDash:
+      Result := pgAimPoint;
+    psStun:
+      Result := pgNowhere;
+  else
+    Result := pgHero;
+  end;
+end;
+
 function TPilot.Charge: Single;
 begin
-  Result := 0;
-  if FState = psPonder then
-    Result := 1 - FTicksLeft / PonderTicks;
+  case FState of
+    psPonder:
+      Result := 1 - FTicksLeft / PonderTicks;
+    psAim, psDash:
+      Result := 1;
+  else
+    Result := 0;
+  end;
 end;
 
 function TPilot.SpinScale(ALapScale: Single): Single;
 begin
-  Result := ALapScale;
-  if FState in [psBrake, psPonder] then
-    Result := ALapScale + ManeuverSpinBoost;
+  case FState of
+    psBrake, psPonder, psAim, psDash:
+      Result := ALapScale + ManeuverSpinBoost;
+    psStun:
+      Result := 0;
+  else
+    Result := ALapScale;
+  end;
 end;
 
 function TPilot.CellOpen(const ACell: TCell): Boolean;
@@ -361,11 +463,58 @@ begin
   Result := CellOpen(Neighbour(FTargetCell, AHeading));
 end;
 
+// A body at the point would stand in a wall or out of the arena
+function TPilot.BodyBlocked(const AFeet: TPlace): Boolean;
+begin
+  var OutOfArena := (AFeet.X < 0) or (AFeet.X + SpriteSize > ScreenWidth) or
+    (AFeet.Y - SpriteSize < ArenaTop) or (AFeet.Y > ArenaBottom);
+  if OutOfArena then
+    Exit(True);
+
+  var Left := AFeet.X + BodyInset;
+  var Right := AFeet.X + SpriteSize - BodyInset;
+  var Top := AFeet.Y - SpriteSize + BodyInset;
+  var Bottom := AFeet.Y - BodyInset;
+  Result := FLevel.SolidAtPoint(FScreen, Left, Top) or
+    FLevel.SolidAtPoint(FScreen, Right, Top) or
+    FLevel.SolidAtPoint(FScreen, Left, Bottom) or
+    FLevel.SolidAtPoint(FScreen, Right, Bottom);
+end;
+
+// Unit by unit, asking the walls at every one: the body stops where it
+// touches, not a stride short. False once a wall has stopped it.
+function TPilot.Advance(var AFeet: TPlace; const ADirection: TPlace;
+  AUnits: Integer): Boolean;
+begin
+  for var i := 1 to AUnits do
+  begin
+    var Onward := AFeet;
+    Onward.X := Onward.X + ADirection.X;
+    Onward.Y := Onward.Y + ADirection.Y;
+    if BodyBlocked(Onward) then
+      Exit(False);
+    AFeet := Onward;
+  end;
+  Result := True;
+end;
+
+// A dash from the cell would come to the point: the test is the dash
+// itself, flown ahead of time
+function TPilot.Sees(const ACell: TCell; const APoint: TPlace): Boolean;
+begin
+  var Feet := FeetOf(ACell);
+  var Way := WayTo(MiddleOf(Feet), APoint);
+  var Units: Integer := Trunc(LengthOf(Way)) - SightGap;
+  Result := Advance(Feet, UnitOf(Way), Units);
+end;
+
 procedure TPilot.Tick(var AX, AY: Double; const ABrief: TPilotBrief);
 var
   Feet: TPlace;
 begin
   FPortsDue := False;
+  FCrashed := False;
+  FOwesPrize := False;
 
   Feet.X := AX;
   Feet.Y := AY;
@@ -394,6 +543,12 @@ begin
       Ponder(ABrief);
     psDive:
       Dive(AFeet, ABrief);
+    psAim:
+      Aim(AFeet);
+    psDash:
+      Dash(AFeet);
+    psStun:
+      Stun(AFeet);
     psReturn:
       FlyBack(AFeet, ABrief.Step);
   end;
@@ -429,6 +584,15 @@ begin
     Result.Row := Lane;
 end;
 
+// A ram is worth pondering where the hero is in plain sight: the pilot
+// flies on until the cell ahead sees him, a lap at most
+function TPilot.SearchesForLine(const ACell: TCell;
+  const ABrief: TPilotBrief): Boolean;
+begin
+  Result := (FTactics = ptRams) and (FSearchTicks < LapTicks(ABrief.Step)) and
+    not Sees(ACell, MiddleOf(HeroFeet(ABrief)));
+end;
+
 procedure TPilot.Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
 begin
   FlyLap(AFeet, ABrief.Step);
@@ -440,11 +604,18 @@ begin
     Exit;
   end;
 
-  BeginBrake(LapCellAhead(AFeet));
+  var Ahead := LapCellAhead(AFeet);
+  if SearchesForLine(Ahead, ABrief) then
+  begin
+    Inc(FSearchTicks);
+    Exit;
+  end;
+  BeginBrake(Ahead);
 end;
 
 procedure TPilot.BeginBrake(const ACell: TCell);
 begin
+  FSearchTicks := 0;
   FTargetCell := ACell;
   FState := psBrake;
 end;
@@ -470,7 +641,28 @@ begin
 
   // The maneuver now flown is the one new tactics were promised at once
   FRestWaived := False;
-  BeginDive(CellAt(HeroFeet(ABrief)));
+  PickManeuver(ABrief);
+end;
+
+// A ram needs the hero in plain sight; a wall in the way makes it a
+// dive. What was pondered is flown even if the tactics are laps again.
+procedure TPilot.PickManeuver(const ABrief: TPilotBrief);
+begin
+  var Hero := HeroFeet(ABrief);
+  if (FTactics in [ptRams, ptHunts]) and Sees(FTargetCell, MiddleOf(Hero)) then
+    BeginAim(MiddleOf(Hero))
+  else
+    BeginDive(CellAt(Hero));
+end;
+
+// A hunt never goes back to the lap: it ponders next where the maneuver
+// has ended
+procedure TPilot.EndManeuver(const AFeet: TPlace);
+begin
+  if FTactics = ptHunts then
+    BeginBrake(CellAt(AFeet))
+  else
+    BeginReturn(AFeet);
 end;
 
 procedure TPilot.BeginDive(const AHero: TCell);
@@ -530,13 +722,103 @@ begin
 
   if FTicksLeft = 0 then
   begin
-    BeginReturn(AFeet);
+    EndManeuver(AFeet);
     Exit;
   end;
   FHeading := DiveHeading(CellAt(HeroFeet(ABrief)));
   // Walled in on all four sides, the dive stays where it is
   if CanGo(FHeading) then
     FTargetCell := Neighbour(FTargetCell, FHeading);
+end;
+
+procedure TPilot.BeginAim(const APoint: TPlace);
+begin
+  FAimPoint := APoint;
+  FTicksLeft := AimTicks;
+  FState := psAim;
+end;
+
+procedure TPilot.Aim(var AFeet: TPlace);
+begin
+  Dec(FTicksLeft);
+  if FTicksLeft > 0 then
+    Exit;
+  // The first stride in this very tick: its contact is then the dash's,
+  // not the standing body's
+  BeginDash(AFeet);
+  Dash(AFeet);
+end;
+
+procedure TPilot.BeginDash(const AFeet: TPlace);
+begin
+  FDashDirection := UnitOf(WayTo(MiddleOf(AFeet), FAimPoint));
+  FDashTouchedHero := False;
+  FState := psDash;
+end;
+
+function TPilot.DashStride: Integer;
+begin
+  Result := DashStepScale * FBaseStep;
+end;
+
+procedure TPilot.Dash(var AFeet: TPlace);
+begin
+  if not Advance(AFeet, FDashDirection, DashStride) then
+    HitWall(AFeet);
+end;
+
+// The way the wall faces: back along the one axis it stops the dash on,
+// straight back at the body where a corner is met head-on
+function TPilot.WallNormal(const AFeet: TPlace): TPlace;
+begin
+  var Sideways := AFeet;
+  Sideways.X := Sideways.X + FDashDirection.X;
+  var Upright := AFeet;
+  Upright.Y := Upright.Y + FDashDirection.Y;
+  var StopsAcross := BodyBlocked(Sideways);
+  var StopsDown := BodyBlocked(Upright);
+
+  Result.X := -FDashDirection.X;
+  Result.Y := -FDashDirection.Y;
+  if StopsAcross = StopsDown then
+    Exit;
+  if StopsAcross then
+  begin
+    Result.X := -Sign(FDashDirection.X);
+    Result.Y := 0;
+  end
+  else
+  begin
+    Result.X := 0;
+    Result.Y := -Sign(FDashDirection.Y);
+  end;
+end;
+
+procedure TPilot.HitWall(const AFeet: TPlace);
+begin
+  var Normal := WallNormal(AFeet);
+  var Middle := MiddleOf(AFeet);
+  FLastCrash.X := Middle.X - Normal.X * StrikeReach;
+  FLastCrash.Y := Middle.Y - Normal.Y * StrikeReach;
+  FLastCrash.SpeedX := FDashDirection.X * DashStride;
+  FLastCrash.SpeedY := FDashDirection.Y * DashStride;
+  FLastCrash.NormalX := Normal.X;
+  FLastCrash.NormalY := Normal.Y;
+  FCrashed := True;
+
+  FTicksLeft := StunTicks;
+  FState := psStun;
+end;
+
+procedure TPilot.Stun(const AFeet: TPlace);
+begin
+  // The tick after the crash: by now the game has reported every touch
+  // of the dash, the last one too
+  if FTicksLeft = StunTicks then
+    FOwesPrize := not FDashTouchedHero;
+  Dec(FTicksLeft);
+  if FTicksLeft = 0 then
+    EndManeuver(AFeet);
 end;
 
 // The shortest way over open cells to the lap, AFrom first. A body

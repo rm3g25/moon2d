@@ -449,6 +449,7 @@
       "boss": {
         "endsLevelOnDeath": true,
         "rageMusic": "boss1b.ogg",
+        "dodgePrize": "medkit",
         "spawnEveryTicks": 170,
         "spawnScreen": 17,
         "spawnTable": [

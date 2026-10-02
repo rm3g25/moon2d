@@ -96,6 +96,7 @@ const
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
   // The boss's armor bursting into his rage: what a machine dies with
   RageBlastSoundFile = 'platform.wav';
+  BossCrashSoundFile = 'crash.wav';
   // A bullet on armor: one of the pings, a tracer leaves with a whine
   ArmorHitSounds: array [0..2] of string =
     ('armor1.wav', 'armor2.wav', 'armor3.wav');
@@ -218,6 +219,7 @@ const
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
   BonusFireRainTrauma = 0.5;  // 768 embers hitting the sky at once
   AftershockTrauma = 0.3; // each pop of the boss's wreck
+  BossCrashTrauma = 0.6; // the boss's ram ending in a wall
 
   // Campaign-end screen layout, in Render.Font grid steps
   EndingTextColumn = 3;    // farewell prose column (small font)
@@ -336,6 +338,8 @@ type
     procedure ResolveMonsterContact;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
     procedure SoundArmorHit(AThrewTracer: Boolean);
+    procedure ThrowCrashSparks(const ACrash: TPilotCrash);
+    procedure PayDodgePrize(const ABoss: TMonster);
     procedure RewardMonsterKill(const AMonster: TMonster);
     procedure DrainMonsterEvents;
     procedure CreateHud;
@@ -1037,6 +1041,7 @@ begin
   FAudio.Load(BottleSoundFile); // the ceremony loads its own; the game's blasts
   FAudio.Load(BonusSoundFile);
   FAudio.Load(RageBlastSoundFile);
+  FAudio.Load(BossCrashSoundFile);
   for var Name in ArmorHitSounds do
     FAudio.Load(Name);
   FAudio.Load(RicochetSoundFile);
@@ -1444,6 +1449,7 @@ begin
     else
       if Monster.Def.Dangerous then
       begin
+        Monster.NoteHeroContact;
         if FHurtCooldown = 0 then
         begin
           FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
@@ -1460,6 +1466,48 @@ begin
       end;
     end;
   end;
+end;
+
+// A fan of sparks off the rim that struck, with its flash, and thinner
+// ones along the wall on either side. Those land as rapid hits - no
+// flash of their own, or the light piles up white.
+procedure TMoonGame.ThrowCrashSparks(const ACrash: TPilotCrash);
+const
+  FansPerSide = 3;
+  FanGap = 4; // units between two fans
+var
+  Strike: TStrike;
+begin
+  Strike := Default(TStrike);
+  Strike.X := ACrash.X;
+  Strike.Y := ACrash.Y;
+  Strike.SpeedX := ACrash.SpeedX;
+  Strike.SpeedY := ACrash.SpeedY;
+  Strike.NormalX := ACrash.NormalX;
+  Strike.NormalY := ACrash.NormalY;
+  FImpacts.Land(Strike);
+
+  Strike.Rapid := True;
+  for var i := -FansPerSide to FansPerSide do
+  begin
+    if i = 0 then
+      Continue;
+    // Along the wall: the normal turned a quarter
+    Strike.X := ACrash.X - ACrash.NormalY * i * FanGap;
+    Strike.Y := ACrash.Y + ACrash.NormalX * i * FanGap;
+    FImpacts.Land(Strike);
+  end;
+end;
+
+procedure TMoonGame.PayDodgePrize(const ABoss: TMonster);
+begin
+  // A dash through a corpse touches nobody, yet nothing was dodged
+  if FHero.Dead then
+    Exit;
+  var Prize := ABoss.Def.Boss.DodgePrize;
+  if Prize = '' then
+    Exit;
+  FField.SpawnOn(Prize, ABoss.Screen, FHero.X, FHero.Y);
 end;
 
 procedure TMoonGame.DrainMonsterEvents;
@@ -1505,6 +1553,14 @@ begin
           // twice) rains reinforcements - and mercy - from the sky
           FField.SpawnFromSky(Monster.Def.Boss.PickSpawn,
             Monster.Screen);
+        meBossCrashed:
+          begin
+            FShake.AddTrauma(BossCrashTrauma);
+            FAudio.Play(BossCrashSoundFile);
+            ThrowCrashSparks(Monster.LastCrash);
+          end;
+        meBossOwesPrize:
+          PayDodgePrize(Monster);
         meLevelComplete:
           begin
             // The suit comes off with a shatter, the victory track plays

@@ -77,7 +77,8 @@ const
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics');
-  EventTacticsIds: array [TPilotTactics] of string = ('laps', 'dives');
+  EventTacticsIds: array [TPilotTactics] of string = (
+    'laps', 'dives', 'rams', 'hunts');
 
   // The conditions that watch tagged placements
   TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
