@@ -46,6 +46,7 @@ uses
   Bullets in 'Game\Bullets.pas',
   Monsters in 'Game\Monsters.pas',
   Monsters.Disc in 'Game\Monsters.Disc.pas',
+  Monsters.Pilot in 'Game\Monsters.Pilot.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',
   Hud.Terminal in 'Hud\Hud.Terminal.pas',

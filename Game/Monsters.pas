@@ -5,9 +5,8 @@
 
     Movement.Kind: mkPatrol (turns at walls AND ledges - CanIGoLeft1),
       mkPatrolNoEdgeCheck (walls only - CanIGoLeft2), mkChaseHero
-      (Vinter follows the hero's X), mkStatic, mkBossFly (rectangle
-      flight: down until y>320, left until x<32, up until y<96,
-      right until x>448).
+      (Vinter follows the hero's X), mkStatic, mkBossFly (the lap of
+      Monsters.Pilot).
 
     Attack.Pattern: apStraightSingle (+ the tank's 5-bullet cross),
       apAimedSingle (boss arccos aim), apAimedDouble (+16 offset),
@@ -39,11 +38,10 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
-  Levels.Dynamics, Monsters.Defs, Monsters.Disc, Bullets;
+  Levels.Dynamics, Monsters.Defs, Monsters.Disc, Monsters.Pilot, Bullets;
 
 type
-  TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling,
-    maFlyDown, maFlyLeft, maFlyUp, maFlyRight);
+  TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
 
   TMonsterLife = (mlAlive, mlDying, mlDead);
 
@@ -87,6 +85,7 @@ type
     FSparks: TSparks; // machines only, as the smoke
     FWrecked: Boolean; // the smoke is lit, the sparks fly
     FDisc: TDisc; // a disc monster only, nil for the rest
+    FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
     FFired: Boolean; // this tick
 
@@ -330,7 +329,8 @@ begin
     FAction := maWalkLeft; // static types 'walk' with step 0, as in 2008
   if ADef.Movement.Kind = mkBossFly then
   begin
-    FAction := maFlyDown;
+    FAction := maFlying;
+    FPilot := TPilot.Create;
     FBossMinionTimer := ADef.Boss.SpawnEveryTicks;
   end;
 
@@ -345,6 +345,7 @@ end;
 
 destructor TMonster.Destroy;
 begin
+  FPilot.Free;
   FDisc.Free;
   FSparks.Free;
   FSmoke.Free;
@@ -822,38 +823,9 @@ begin
 end;
 
 procedure TMonster.MoveFlying;
-const
-  // The HUD panels reach y 36 and the boss rises over 32 above its Y:
-  // turning here keeps it in sight under them
-  BossFlyTopY = 96;
 begin
   AdvanceFrame;
-  case FAction of
-    maFlyDown:
-      begin
-        FY := FY + FStep;
-        if FY > 320 then
-          FAction := maFlyLeft;
-      end;
-    maFlyLeft:
-      begin
-        FX := FX - FStep;
-        if FX < 32 then
-          FAction := maFlyUp;
-      end;
-    maFlyUp:
-      begin
-        FY := FY - FStep;
-        if FY < BossFlyTopY then
-          FAction := maFlyRight;
-      end;
-    maFlyRight:
-      begin
-        FX := FX + FStep;
-        if FX > 448 then
-          FAction := maFlyDown;
-      end;
-  end;
+  FPilot.Tick(FX, FY, FStep);
 end;
 
 procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
@@ -906,7 +878,7 @@ begin
         MoveWalking;
     maFalling:
       MoveFalling;
-    maFlyDown, maFlyLeft, maFlyUp, maFlyRight:
+    maFlying:
       MoveFlying;
   end;
   WreckIfCritical;
