@@ -234,6 +234,142 @@
       "y": 352,
       "width": 320,
       "tag": "s02-floor-b"
+    },
+    {
+      "sprite": "s03-floor",
+      "screen": 3,
+      "x": 0,
+      "y": 336,
+      "width": 512,
+      "tag": "s03-floor"
+    },
+    {
+      "sprite": "s03-pillar",
+      "screen": 3,
+      "x": 64,
+      "y": 160,
+      "width": 32,
+      "tag": "s03-pillar"
+    },
+    {
+      "sprite": "s03-ledge",
+      "screen": 3,
+      "x": 0,
+      "y": 128,
+      "width": 192,
+      "tag": "s03-ledge"
+    },
+    {
+      "sprite": "s03-cab",
+      "screen": 3,
+      "x": 96,
+      "y": 48,
+      "width": 64,
+      "tag": "s03-cab"
+    },
+    {
+      "sprite": "s03-hook-a",
+      "screen": 3,
+      "x": 256,
+      "y": 96,
+      "width": 32,
+      "tag": "s03-hook-a"
+    },
+    {
+      "sprite": "s03-hook-b",
+      "screen": 3,
+      "x": 288,
+      "y": 96,
+      "width": 32,
+      "tag": "s03-hook-b"
+    },
+    {
+      "sprite": "s03-deck",
+      "screen": 3,
+      "x": 256,
+      "y": 48,
+      "width": 256,
+      "tag": "s03-deck"
+    },
+    {
+      "sprite": "s03-tank",
+      "screen": 3,
+      "x": 144,
+      "y": 272,
+      "width": 176,
+      "tag": "s03-tank"
+    },
+    {
+      "sprite": "s03-flatcar",
+      "screen": 3,
+      "x": 320,
+      "y": 304,
+      "width": 192,
+      "tag": "s03-flatcar"
+    },
+    {
+      "sprite": "s04-roof",
+      "screen": 4,
+      "x": 32,
+      "y": 0,
+      "width": 224,
+      "tag": "s04-roof"
+    },
+    {
+      "sprite": "s04-ledge",
+      "screen": 4,
+      "x": 0,
+      "y": 96,
+      "width": 64,
+      "tag": "s04-ledge"
+    },
+    {
+      "sprite": "s04-deck",
+      "screen": 4,
+      "x": 320,
+      "y": 96,
+      "width": 192,
+      "tag": "s04-deck"
+    },
+    {
+      "sprite": "s04-floor-a",
+      "screen": 4,
+      "x": 0,
+      "y": 336,
+      "width": 224,
+      "tag": "s04-floor-a"
+    },
+    {
+      "sprite": "s04-floor-b",
+      "screen": 4,
+      "x": 256,
+      "y": 336,
+      "width": 256,
+      "tag": "s04-floor-b"
+    },
+    {
+      "sprite": "s04-flatcar",
+      "screen": 4,
+      "x": 0,
+      "y": 304,
+      "width": 208,
+      "tag": "s04-flatcar"
+    },
+    {
+      "sprite": "s04-crates",
+      "screen": 4,
+      "x": 32,
+      "y": 256,
+      "width": 96,
+      "tag": "s04-crates"
+    },
+    {
+      "sprite": "s04-tanks",
+      "screen": 4,
+      "x": 256,
+      "y": 272,
+      "width": 256,
+      "tag": "s04-tanks"
     }
   ],
   "dynamics": [
@@ -592,437 +728,18 @@
     },
     {
       "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 37.5,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 101.8,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 170.8,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 235.8,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 300.4,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 372.0,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-floor",
-      "x": 454.2,
-      "y": 12.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
       "parent": "s01-depot",
       "x": 47.1,
       "y": 38.4,
       "tint": [
-        76,
-        82,
+        40,
+        60,
         100
       ],
-      "blink": "steady",
-      "intensity": 25,
-      "size": 14
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-depot",
-      "x": 121.1,
-      "y": 38.4,
-      "tint": [
-        76,
-        82,
-        100
-      ],
-      "blink": "steady",
-      "intensity": 25,
-      "size": 14
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-crane",
-      "x": 44.4,
-      "y": 29.0,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 11
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-crane",
-      "x": 89.3,
-      "y": 29.0,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 11
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-deck",
-      "x": 44.1,
-      "y": 63.5,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 11
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-deck",
-      "x": 141.5,
-      "y": 63.5,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 11
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-a",
-      "x": 33.1,
-      "y": 13.3,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-a",
-      "x": 148.3,
-      "y": 13.3,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-b",
-      "x": 51.6,
-      "y": 16.8,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-b",
-      "x": 104.8,
-      "y": 16.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-b",
-      "x": 169.5,
-      "y": 16.8,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-floor-b",
-      "x": 266.2,
-      "y": 16.7,
-      "tint": [
-        100,
-        77,
-        45
-      ],
-      "blink": "steady",
-      "intensity": 45,
-      "size": 12
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 28.8,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 46.2,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 65.4,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 85.0,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 103.6,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 122.5,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 140.1,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 158.8,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 174.9,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-rails",
-      "x": 193.1,
-      "y": 14.1,
-      "tint": [
-        100,
-        88,
-        65
-      ],
-      "blink": "steady",
-      "intensity": 35,
-      "size": 5
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-depot",
-      "x": 29.8,
-      "y": 38.1,
-      "tint": [
-        76,
-        82,
-        100
-      ],
-      "blink": "steady",
-      "intensity": 25,
-      "size": 14
-    },
-    {
-      "kind": "beacon",
-      "parent": "s02-depot",
-      "x": 71.1,
-      "y": 38.1,
-      "tint": [
-        76,
-        82,
-        100
-      ],
-      "blink": "steady",
-      "intensity": 25,
-      "size": 14
+      "blink": "faulty",
+      "frequency": 1.6,
+      "intensity": 80,
+      "size": 26
     },
     {
       "kind": "beacon",
@@ -1270,17 +987,17 @@
         "screen": 3,
         "rows": [
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,27,27,0,0,0,0,27,27,27,27,27,27,27",
-          "0,0,0,150,150,0,0,0,150,150,150,150,150,150,150,150",
-          "0,0,0,32,32,0,0,0,154,154,155,152,152,152,152,152",
-          "152,152,152,152,152,152,0,0,154,154,0,33,33,33,33,33",
-          "155,33,32,33,0,0,0,0,154,154,0,0,0,0,0,0",
-          "0,0,31,0,0,0,0,0,153,153,0,0,0,0,0,0",
-          "0,0,31,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,31,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,31,0,0,36,41,42,43,44,0,0,0,0,0,0",
-          "27,27,34,27,27,35,37,38,39,40,45,46,47,48,49,50",
-          "105,105,105,105,105,105,105,105,105,105,105,105,105,105,105,105"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000000",
@@ -1300,18 +1017,18 @@
       {
         "screen": 4,
         "rows": [
-          "0,156,152,152,152,152,152,152,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "152,152,0,0,0,0,0,0,0,0,152,152,152,152,152,152",
-          "0,0,0,0,0,0,0,0,0,0,152,152,152,152,152,152",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,65,65,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,65,65,65,0,0,0,0,36,41,42,43,44,36,41,42",
-          "45,46,47,48,49,50,27,0,35,37,38,39,40,35,37,38",
-          "105,105,105,105,105,105,125,0,15,16,12,13,14,15,16,12"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0111111100000000",
