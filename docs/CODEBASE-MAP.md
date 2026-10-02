@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.19` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.20` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -19,12 +19,12 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
   sets, rendering (the shake included), the brush, the effects (particle
-  swarm, debris), the level/monster/config/language models, the
+  swarm, sparks, debris), the level/monster/config/language models, the
   frame-vs-screen space. **Core never uses a unit outside Core** - a tool or
   the editor that references only `Core/` fails to build the day that rule
   breaks.
 - `Game/` - the game itself: hero, monsters and the boss's disc, bullets,
-  explosions, sound, the loop host,
+  explosions, bullet impacts, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
   runs the level events.
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
@@ -41,9 +41,10 @@ Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Levels.Tint` / `Levels.Events` / `Effects.Emitter` / `Render.Puff` /
-`Effects.Debris` (draws through `Render.Glow`) ->
-`Render.Globe` -> `Levels.Dynamics` (draws through `Render.Glow`,
-`Render.Puff` and `Render.Globe`) ->
+`Effects.Sparks` (its streak texture comes from the owner) ->
+`Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
+`Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
+kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
 `Levels.Defs` /
 `Monsters.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
@@ -51,7 +52,8 @@ Dependency direction (roughly bottom-up):
 `Monsters.Defs`, its sensor through `Render.Glow`) -> `Hero` /
 `Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
-`Levels.Dynamics` and `Monsters.Defs`) -> `Hud.Marks` /
+`Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
+`Effects.Sparks` and `Levels.Dynamics`) -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` -> `Moon2D.dpr`, which also drives
 `Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
 game unit). The menu sky rig on the
@@ -194,10 +196,10 @@ mixer, missing art is fatal.
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~300 lines)
+### `Core/Render.Dynamics.pas` (~325 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
-  `TDynamicCanvas` (point, flare, starburst glows - `Render.Glow`; the
+  `TDynamicCanvas` (point, flare, starburst and streak glows - `Render.Glow`; the
   smoke puffs - `Render.Puff`) and lends it the cache of the level's
   object art (`Art`), made at level load; the objects
   themselves are the level's. After the canvas every object `Acquire`s
@@ -230,8 +232,15 @@ mixer, missing art is fatal.
   restart): every place that follows a monster finds its parent at once and
   forgets its origin, so the frame before the next tick does not show it at
   the old stand. `Canvas` - the
-  textures, lent to the monsters' wreck smoke and to the explosions
-  (`Game.Explosions`).
+  textures, lent to the monsters' wreck smoke and sparks, to the
+  explosions (`Game.Explosions`) and the impacts (`Game.Impacts`).
+  The constructor takes a **`TDynamicWorld`** (record) - what the objects
+  ask of the game: `LocateMonster` and `Solid`, the game's `TSolidProbe`,
+  which answers for the hero's screen. The canvas hands the objects
+  `SolidInView` instead of it: the game's probe while the object being
+  ticked stands on the hero's screen (`FInView`, set per place in `Tick`),
+  no walls at all otherwise - an object on another screen must not ring
+  off the wrong grid.
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -327,7 +336,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~645 lines)
+### `Core/Levels.Defs.pas` (~660 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -364,7 +373,10 @@ Level data model + JSON parser. No game logic.
   draws over earlier); the private `ParseObjects` reads the optional
   `objects` section and refuses an object off the screen list or with a
   width of zero or less. `Events` - the level's events (`Levels.Events`), in
-  file order. Queries: `TileAt`, `SolidAt`, `BackgroundFor` (the whole
+  file order. Queries: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (the
+  same for a point in screen units - the one home of the units-to-cells
+  rule and its guard against negatives; the solid probes of the game and
+  of the monsters call it), `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
   `LoadFromFile`; the dynamics are parsed before the events, since an event
   may name a dynamic object's tag. Private `CheckEvents` refuses an event
@@ -393,11 +405,51 @@ Level data model + JSON parser. No game logic.
   `Particles[i]`. Knows nothing of looks. Users: the smoke; the menu embers
   still carry their own loop.
 
-### `Core/Effects.Debris.pas` (~610 lines)
+### `Core/Effects.Sparks.pas` (~385 lines)
+The base module of every spark in the game, decoration only. A
+**`TSparkField`** holds the sparks of one look and carries them to their
+end; who throws them, and when, is the owner's business. Owners: the blast
+(`Effects.Debris`), the spark sources of a level and of the game (`TSparks`
+in `Levels.Dynamics`), the hits on armor (`Game.Impacts`).
+- **`TSolidProbe`** (`reference to function(x, y): Boolean`) - the solid
+  layer as the owner sees it, in the field's own coordinates; the unit
+  knows no level.
+- **`TSparkLook`** (record; per tick, in ticks, in units) - `Gravity`,
+  `AirKeep`, `LifeMin..LifeMax`, `Width` and `ThinShare` (every spark rolls
+  its width), `StreakTicks`, `SpeedCurve` (1 = even speeds; above it most
+  sparks are slow and a few fast - the fan of a grinder), `Level`, `Heat`
+  (`TSparkHeat`: hot -> warm at `WarmAt` of the life -> cool), `Wall`
+  (`TSparkWall`: `swPass` / `swDie` / `swBounce`), `Bounce` (`TSparkBounce`:
+  `Keep` of the speed into the wall, `Grip` along a floor, `LifeLost` of
+  the life still ahead), `ForkChance`.
+- **`TSparkSpray`** (record) - one throw: `Count`, `Heading` (degrees
+  counterclockwise from the right), `Cone`, `SlowSpeed..FastSpeed`.
+- `Spray(x, y, spray)`, `ShiftFrame(dx, dy)` (the owner's frame moved; what
+  is in flight stays put on the screen), `Tick`, `Draw(brush, origin,
+  alpha)`, `Clear`. A field past its capacity drops its oldest sparks.
+- Flight (`MoveSpark`): drag, gravity, then by `Wall` - fly on, die on the
+  first solid point, or `Rebound`: one axis at a time, like the shards (a
+  wall turns X back, a floor or a ceiling Y); every bounce costs
+  (`PayForBounce`) a share of the life, and the spark is out on the bounce
+  past `MaxBounces` (3) or once slower than `MinBounceSpeed`.
+- Forks, the signature of steel: a spark whose life runs out, or that
+  survives a bounce, may (`ForkChance`, and only above `MinForkSpeed`)
+  throw 2-3 short sprigs within `SprigCone` of its heading. `TryFork` only
+  notes the spark while the field is being swept; `ThrowSprigs` runs after
+  the sweep. A sprig never forks.
+- Drawing (`DrawSpark`): a streak along the speed - the rectangle from the
+  tail to the head, `StreakTicks` of path long, turned by
+  `SDL_RenderCopyExF`; color by `HeatColor`, brightness `Level * (1 -
+  share^2)`, position extrapolated by speed. The texture comes with every
+  draw in a **`TSparkBrush`** (`SparkBrush(renderer, streak)`): the
+  `gsStreak` comet of `Render.Glow`, or a `gsPoint` blur (the blast).
+- Own `TXorShift`, never `Random`.
+
+### `Core/Effects.Debris.pas` (~560 lines)
 What an explosion throws, decoration only - the 2008 fragment fans wound,
 this does not. **`TDebrisField`** takes the renderer and a
-**`TSolidProbe`** (`reference to function(x, y): Boolean`, screen units -
-the game passes `SolidUnderPoint`, so the unit knows no level).
+**`TSolidProbe`** (of `Effects.Sparks`; in screen units here - the game
+passes `SolidUnderPoint`, so the unit knows no level).
 - **`TDebrisLook`** (record) - one blast's worth: `Shards`, `ShardSpeed`,
   `ShardSize`, `ShardCone` (degrees wide, centered straight up),
   `RestSeconds`, `Sparks`, `SparkSpeed`; every piece rolls between
@@ -412,9 +464,11 @@ the game passes `SolidUnderPoint`, so the unit knows no level).
   heat -> the ember's red -> bare metal over `CoolTicks`, with a fading
   `gsPoint` glow while hot. Gravity `ShardGravity` = 0.3, the fall of the
   2008 fans. A shard born inside a wall is dropped.
-- Sparks: streaks along the speed (the `gsPoint` glow stretched by
-  `SDL_RenderCopyExF`, `StreakTicks` of path long), white to red over a
-  life of 5..14 ticks, gone on the first solid point.
+- Sparks: a `TSparkField` of `Effects.Sparks` with `BlastSparkLook`
+  (`SpawnSparks` throws them every way at once) - streaks drawn with the
+  `gsPoint` glow, white to the ember's red over a life of 5..14 ticks,
+  gone on the first solid point or past the edge of the screen
+  (`StopsSpark`); no bounce, no forks.
 - Shapes: `ShardShapes` (4) torn plates of 5..7 corners, folded once (a lit
   and a shaded half), 2x2 supersampled (`PixelCover`); white, shape in
   alpha, alpha blended, linear - generated in the constructor like the
@@ -446,7 +500,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~1250 lines)
+### `Core/Levels.Dynamics.pas` (~1595 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -489,7 +543,9 @@ in `CreateDynamic`.
   textures every kind draws with + `Art` (the cache of the level's object
   art - its own set and the declared shared ones);
   the textures are made and freed by `Render.Dynamics`, `Art` is handed to
-  it and outlives it.
+  it and outlives it. `Solid` - the solid layer as a `TSolidProbe` in
+  screen units, for what a kind throws (`SolidInView` of
+  `Render.Dynamics`).
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -528,6 +584,27 @@ in `CreateDynamic`.
   smoke of the machines in `Monsters`, the explosion plumes.
   `Exhausted` - the source is off and the last puff is gone (an
   explosion's plume is freed then).
+- **`TSparks`** (kind `sparks`) - sparks from torn metal and bare wires: a
+  steady fall (`rate`) and, now and then, an arc - `burst` sparks at once,
+  `frequency` a second with uneven gaps, poured over `ArcTicks` under a
+  cold flash (`flash`, `ArcColor`) that fades by `FlashKeep`. The sparks
+  fly in a `TSparkField` of `Effects.Sparks`, counted from the point they
+  leave (`ShiftFrame` keeps them put under a moving parent): `angle`,
+  `cone`, `speed` (the fastest one; `SparkSpeedCurve` makes most slower),
+  `gravity`, `drag`, `life` (half as much either way), `size` (the streak
+  across), `opacity`, `fork`, and the colors `tint` (a fresh spark) ->
+  `midTint` -> `endTint`, steel by default. `collide` - `none` / `die` /
+  `bounce` (`TSparkWall`): bounce by default in the front layer, none
+  behind it; the probe is the canvas's (`Acquire`), shifted into the
+  field's frame by `Blocked`. Intensity scales the rate and, softer, the
+  size and the frequency of the arcs (`StartArc`); no emission while the
+  parent monster is dead or nowhere, and an arc cut short does not resume.
+  `Rewind` also clears the field. The look is a **`TSparkSourceLook`**
+  record in JSON units (`ReadSparkSourceLook` fills it, `TakeLook` takes
+  it, `FieldLook` turns it into a `TSparkLook`); the arc's timers are a
+  `TArcClock`. `CreateLook(placement, look, intensity, seed)` makes a
+  source from code - the wreck sparks of the machines in `Monsters`, which
+  hand over a probe of their own with `UseSolid`. Back layer by default.
 - **`TSkyGlobe`** (kind `globe`) - a body in the sky, the Earth over the
   Moon unless the level says otherwise (the dead Earth of Selene, Proxima
   c): a `TGlobe`
@@ -555,8 +632,8 @@ in `CreateDynamic`.
   Earth of Selene), `surface` (matte / regolith). Intensity is the globe's
   alpha, tint its color mod. Sky layer by default.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
-  list, the caller owns it); an unknown kind, layer, blink, flow or
-  surface, none or more than one of screen, screens and parent, a broken
+  list, the caller owns it); an unknown kind, layer, blink, flow,
+  surface or collide, none or more than one of screen, screens and parent, a broken
   `screens` pair, a number out of range raise `EDynamicError`
   (`ReadWord`, `ReadShare`, `ReadPositive`, `ReadReach`, `ReadScreens`).
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
@@ -597,14 +674,17 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Monsters.Defs.pas` (~500 lines)
+### `Core/Monsters.Defs.pas` (~515 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
   (apNone/StraightSingle/StraightCluster5/AimedSingle/AimedDouble/RainVolley),
   `TPickupEffectKind` (peNone/Heal/GiveWeapon), `TExplosionKind`
   (ekNone/Barrel/Machine/Boss - the look of a death, JSON `explosion`, an
-  unknown word raises; independent of the fans of `explodesOnDeath`).
+  unknown word raises; independent of the fans of `explodesOnDeath`),
+  `TMonsterMaterial` (mtNone/Metal - JSON `material`, what a bullet does to
+  the body: metal throws sparks, see `Game.Impacts`; an unknown word
+  raises).
 - **Records**: `TMovementDef` (kind+speed); `TAttackDef` (pattern, fire cadence,
   bullet speed, pattern-specific params, `HasAttack`); `TPickupEffectDef`
   (peGiveWeapon rewires the whole weapon: type, cooldown, speed, gravity);
@@ -620,7 +700,7 @@ Monster definition model + registry (parses monsters.json). No behavior.
   0..side/2 or `wearFull` outside (0, 100] raises at load);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
-  explosion, movement, attack, pickupEffect, lives, score, animFreq, deathText
+  explosion, material, movement, attack, pickupEffect, lives, score, animFreq, deathText
   (localized), deathSounds array, boss, disc.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
@@ -713,7 +793,7 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.pas` (~1125 lines)
+### `Game/Monsters.pas` (~1205 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/fly x4), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -745,7 +825,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   Public: `Tick(heroX, heroY, bullets)`,
   `Draw(sprites, alpha)` (a living disc monster draws its disc between
   ticks; everything else - frames on the tick, alpha unused),
-  `DrawSmoke(canvas, origin, alpha)`, `DrainEvent`, `HealthTier` (the
+  `DrawSmoke(canvas, origin, alpha)`, `DrawSparks` (the same shape),
+  `DrainEvent`, `HealthTier` (the
   crosshair's thirds of `LivesAll` as
   `TMonsterHealthTier` - the one home of that rule, via `ThirdMark`),
   `TierShare` (how full the current third is, 0..1), `TicksSinceHit` /
@@ -767,7 +848,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
-  `Draw(sprites, screen, alpha)`, `DrawSmoke(canvas, screen, origin, alpha)`.
+  `Draw(sprites, screen, alpha)`, `DrawSmoke(canvas, screen, origin, alpha)`,
+  `DrawSparks` (the same shape, over the smoke).
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
   and owned here; the destructor frees the monsters before the art they
   draw with.
@@ -780,8 +862,18 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   (dying included). The point (`WreckSmokeX/Y`,
   left-facing art) mirrors with `FacesRight`, the one home of the facing
   rule, which `Draw` uses too. The smoke dies with the monster, so a
-  restart clears it. `TMonster` got its destructor (it frees the disc, the smoke and
-  the event list).
+  restart clears it. `TMonster` got its destructor (it frees the disc, the sparks, the smoke
+  and the event list).
+- **Wreck sparks** (default behavior, no data): the same machines own a
+  `TSparks` made from the `WreckSparks` look (a rare crackle: two sparks a
+  second and an arc of about five every second and a half, ringing off
+  the floor), unlit until the same moment - `WreckIfCritical` is the one
+  trigger of the smoke and the sparks - then at full at once. The point
+  (`WreckSparksX/Y`) mirrors like the smoke's; the probe is the monster's
+  own screen (`SolidUnderPoint` over `TLevel.SolidAtPoint`); the seed is
+  `SpawnSeed` (the spawn point, the smoke's seed too) under a salt, so the
+  two do not roll alike. `TickSparks` after `TickSmoke`, `DrawSparks` over
+  the smoke.
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -861,8 +953,8 @@ diverging. Replaced `GameWidth`/`GameHeight` of `Hero` and the literal
 The brush the primitive-drawn panels share - the HUD units and the menu's
 difficulty cells - plus the color and random vocabulary of the whole
 renderer: `TRgb`, `Mix` and `TXorShift` serve `Render.Glow`, `Render.Globe`,
-`Render.Puff`, `Effects.Debris`, `Levels.Dynamics`, `Game.Explosions`,
-`Monsters.Disc` and the menu sky rig. No sprite, no font atlas. (Was Hud.Draw
+`Render.Puff`, `Effects.Sparks`, `Effects.Debris`, `Levels.Dynamics`,
+`Game.Explosions`, `Game.Impacts`, `Monsters.Disc` and the menu sky rig. No sprite, no font atlas. (Was Hud.Draw
 until the menu
 started drawing with it; the class inside still carries the old name,
 `THudBrush`.)
@@ -978,6 +1070,34 @@ on a door, a death and a level load.
   Both on the world shake channel; the textures come from
   `FDynamics.Canvas`. Own `TXorShift` for the aftershocks.
 
+### `Game/Game.Impacts.pas` (~350 lines)
+What a bullet throws off the armor it strikes - the look only; the wound,
+the knockback and the sound stay with the dpr. **`TImpacts`**, made once
+with the game (the solid probe), cleared on a door, a death and a level
+load.
+- **`TStrike`** (record) - a bullet meeting armor: the point, the bullet's
+  speed, the normal (the way the armor faces there), `Rapid` (the armor
+  was struck a moment ago).
+- `TraceEntry(strike, box)` - the bullet is already inside the hitbox:
+  moves the strike back along its path to the edge it came in through (no
+  further than one tick) and turns the normal the way that edge faces; a
+  bullet hanging still (the aura) gets the normal up.
+  `FaceFromCenter(strike, center)` - round armor: the normal from the
+  center through the point (the boss's disc).
+- `Land(strike)` - `GlanceOf` reflects the speed off the normal, as a
+  mirror does; `ThrowFan` sprays `FanSparks` (9, or `RapidFanSparks` 4)
+  within `FanCone` around a heading that leans `GlanceShare` from the
+  normal toward the glance (`HitSparkLook`: bounce, forks); `AddFlash` - a
+  3-tick flash, dimmer when rapid, and one a tick for the hits that crowd
+  one armor; `ThrowTracer` - with `TracerChance`, never when rapid or for a
+  bullet that hung still - one long fast streak along the glance
+  (`TracerSparkLook`: next to no gravity, a springy bounce). True when a
+  tracer flew - the game gives it its whine.
+- Two `TSparkField`s (`MaxSparks` 512, `MaxTracers` 16), `MaxFlashes` 16,
+  own `TXorShift`. `Tick`, `Draw(canvas, origin, alpha)` - over the
+  bullets, on the monsters' shake channel; the textures come from
+  `FDynamics.Canvas`.
+
 ### `Game/Game.Henshin.pas` (~280 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
 the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
@@ -1020,13 +1140,16 @@ instead of being kept.
   (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
 
-### `Core/Render.Glow.pas` (~190 lines)
+### `Core/Render.Glow.pas` (~210 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
-- **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`) - a Gaussian
-  point, a four-spike flare and the long thin cross of a starburst (rays
-  thinner than a flare spike and slower to fade), analytic (`PointSigma`,
-  `Flare*`, `StarburstRayWidth` metrics in half-sides).
+- **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`, `gsStreak`) - a
+  Gaussian point, a four-spike flare, the long thin cross of a starburst
+  (rays thinner than a flare spike and slower to fade) and the streak of a
+  spark (it lies along X: full at the hot end by the right edge, rounded
+  off over `StreakCapShare`, the tail thinning out to the left by
+  `StreakTailPower`), analytic (`PointSigma`, `Flare*`, `StarburstRayWidth`,
+  `Streak*` metrics in half-sides).
 - Free functions: `CreateGlowShape(renderer, shape, side)`,
   `CreateGlowTexture(renderer, surface)` (a shape computed elsewhere - the
   logo halo - arrives as a surface and leaves with the same settings),
@@ -1034,8 +1157,9 @@ additive, linear-filtered, so one texture serves every tint and level.
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
 - Users: the stars, the embers, the logo halo, the beacons, the heat of a
-  smoke puff, the explosion flash, the debris sparks and hot shards, the
-  sensor eye of the boss's disc. `EGlowError`.
+  smoke puff, the explosion flash, the sparks (`gsStreak`; the blast's with
+  `gsPoint`) and hot shards, the flash of a hit and of an arc, the sensor
+  eye of the boss's disc. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`**.
@@ -1177,7 +1301,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~1990 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2080 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -1200,7 +1324,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   his own, `THero.Bullets`), monster
   field, the shared enemy burst (`FMonsterBullets`), font, message board,
   the briefing (`THudBriefing`), the screen shake, sound bank,
-  menu, the explosions (`FExplosions`, one for the run), the ceremony
+  menu, the explosions and the impacts (`FExplosions`, `FImpacts`, one of
+  each for the run), the ceremony
   (`THenshin`), the event director (`TEventDirector`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
   the figures (`THudMarks`) - the ceremony, the director and the three HUD
@@ -1221,17 +1346,19 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     right after the objects, behind tiles and hero - monsters (the field gets
     the frame's alpha:
     the boss's disc draws between ticks), then the
-    machines' wreck smoke, then the front dynamics (the boss smoke and
+    machines' wreck smoke and sparks, then the front dynamics (the boss smoke and
     lamps), on
     the monsters' channel - the explosion plumes before them, right after
     the tiles, the explosion debris and flashes after the bullets, then the
+    impacts (on the monsters' channel - they sit on armor), then the
     health rows (`FMarks`, each on its figure's channel) - the
     hero on
     his own, cursor and HUD still; `Update` ticks `FDynamics` after the
     monsters and the director, so a smoking monster's puffs leave from
     where this frame draws it), `LoadLevel` (the object cache: the
     level's own objects set if it ships one, then `objectSets`; handed to
-    `Render.Objects` and `Render.Dynamics`), `OpenSpriteSet` (a named set
+    `Render.Objects` and `Render.Dynamics`; the dynamics also get a
+    `TDynamicWorld` - `LocateMonster` and `SolidUnderPoint`), `OpenSpriteSet` (a named set
     into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
@@ -1250,7 +1377,14 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
-  - Combat: `ResolveHeroBulletHits`, `ResolveMonsterBulletHits`,
+  - Combat: `ResolveHeroBulletHits` (the bullet ends in `SpendBullet`: in
+    its own burst or, on a monster whose `material` is metal, with no
+    burst at all - a strike for `FImpacts` built by the free `ArmorStrike`
+    (honest screen units, the hitbox as a box, `HitInset`; `Rapid` asked of
+    the monster before the damage lands, `RapidHitTicks`) and a sound from
+    `SoundArmorHit`: the whine of a tracer, else one of three pings in
+    turn, no more than one in `ArmorSoundGapTicks`),
+    `ResolveMonsterBulletHits`,
     `ResolveMonsterContact`, `RewardMonsterKill` (also `Detonate` of the
     monster's `explosion` at the middle of its sprite, in the tick of the
     kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
@@ -1258,9 +1392,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the boss and sounds it with `RageBlastSoundFile` - a machine's
     `platform.wav`), `EchoAftershock` (the `TEchoAftershock` of
     `Game.Explosions`: each pop of the boss's wreck plays `bottle.wav` and
-    adds `AftershockTrauma`), `SolidUnderPoint` (the debris probe: the
-    collision grid of the hero's screen in honest screen units - no bullet
-    -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
+    adds `AftershockTrauma`), `SolidUnderPoint` (the probe of debris, impacts and
+    dynamic objects: `TLevel.SolidAtPoint` for the hero's screen, honest
+    screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
@@ -1350,6 +1484,12 @@ nothing in the game reads the result yet. numpy + scipy + pillow.
 - **`selene_lib.py`** - sphere-sampled noise, wrap-aware filters, river tracer.
 - **`out/`** - the approved maps (2048x1024) and preview.
 
+### `tools/sounds/armor.py`
+Synthesises the sounds of a bullet on armor into `bin/sounds`: three pings
+(`armor1..3.wav` - a struck plate: a click of noise and the partials of a
+free bar) and the whine of a tracer (`ricochet.wav`). Seeded: the same
+files bit for bit. numpy.
+
 ---
 
 ## Runtime data (`bin\`)
@@ -1375,11 +1515,13 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
 platform), `boss` (`boss1`); the mount has none - it explodes inside the
-wall. `disc` (only `boss1`) draws the living monster as a spinning disc out
+wall. `material`: `metal` on the platform, the tank, the mount, the barrel
+and `boss1` - a bullet throws sparks off them instead of bursting
+(`Game.Impacts`). `disc` (only `boss1`) draws the living monster as a spinning disc out
 of the layers of a set instead of its `alive` frames: `set`, `side`,
 `muzzle`, `spin`, `irisReach`, `wearFull` - see `TDiscDef`.
 
-### `level1.json` (~60 KB) / `level2.json` (~20 KB)
+### `level1.json` (~62 KB) / `level2.json` (~22 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -1388,7 +1530,7 @@ objects set, e.g. `["sky"]`),
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
-(beacon / smoke / globe), `screen`, `screens` [first, last] or `parent` -
+(beacon / smoke / globe / sparks), `screen`, `screens` [first, last] or `parent` -
 a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
 `layer`, `intensity`, `turns`
 (under a spinning parent), then the
@@ -1426,8 +1568,12 @@ plainest example), `introText`/`introTextEn`.
   `earth-night`, sun starting at -40 - three quarters lit on the left), a blue double-flash beacon on the ship's fin, a red
   faulty one with starburst rays on the satellite's antenna, three gusty
   gas leaks venting from the satellite's breach and a broken ring joint
-  (vacuum: no lift, little drag), two smokes hung on the boss (tagged
-  `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0),
+  (vacuum: no lift, little drag), a fall of sparks from the breach
+  (`sparks`, back layer, no collision: slow, far, fading on the way down,
+  a small arc every couple of seconds), two smokes hung on the boss (tagged
+  `boss`; `bossSmoke`, `bossBurn` with heat, front layer, intensity 0) and
+  a spark source beside them (`bossSparks`, front layer, bouncing,
+  intensity 0),
   four lamps on the boss's disc (`turns`, front layer, in the two sockets
   of the ring art: a blue pulsing pair `bossLamp` and a red flashing pair
   `bossLampRage` at intensity 0; halo 10 across with starburst rays of 24
@@ -1443,7 +1589,8 @@ plainest example), `introText`/`introTextEn`.
   On screen
   17: livesBelow 150 - bossSmoke to 60%; enraged -
   bossSmoke off, and (`bossRageLamps`) the blue lamps fade out, the red in,
-  over 20 ticks; livesBelow 30 - bossSmoke and bossBurn to 100%.
+  over 20 ticks, and (`bossRageSparks`) bossSparks light to 50%;
+  livesBelow 30 - bossSmoke, bossBurn and bossSparks to 100%.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
@@ -1451,7 +1598,8 @@ plainest example), `introText`/`introTextEn`.
   the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
   events); all its object art is shared - no level2-objects set;
   its lamp is `dying` - a dim fast flutter, the battery running out, and
-  one leak is left, a puff now and then (`flow` puffs). The gravel trial
+  one leak is left, a puff now and then (`flow` puffs); the breach still
+  sparks, at intensity 25 - a spark now and then. The gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
@@ -1496,9 +1644,10 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (19 WAV) and `music/` (OGG)
+### `sounds/` (23 WAV) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
-music loads leniently. Tracks named by code: `moon.ogg` (menu,
+music loads leniently. Four one-shots are synthesised by
+`tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`. Tracks named by code: `moon.ogg` (menu,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
 `moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
@@ -1518,6 +1667,10 @@ music loads leniently. Tracks named by code: `moon.ogg` (menu,
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
 | Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
+| Sparks: how they fly, bounce, fork and draw | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
+| A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
+| Sparks off armor under fire; which monsters are metal; the ping and the whine | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` in monsters.json (+tools/sounds/armor.py) |
+| Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`) |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
