@@ -12,7 +12,8 @@
     "mine-interior"
   ],
   "objectSets": [
-    "sky"
+    "sky",
+    "level1-structures"
   ],
   "music": "hallu.ogg",
   "legacyTrailing": [
@@ -75,6 +76,166 @@
         87
       ],
       "tag": "satellite"
+    },
+    {
+      "sprite": "s17-crane",
+      "screen": 1,
+      "x": -32,
+      "y": 288,
+      "width": 192,
+      "tag": "s01-crane"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 0,
+      "y": 160,
+      "width": 32,
+      "tag": "s01-plat-01"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 192,
+      "y": 160,
+      "width": 32,
+      "tag": "s01-plat-02"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 32,
+      "y": 224,
+      "width": 32,
+      "tag": "s01-plat-03"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 160,
+      "y": 256,
+      "width": 32,
+      "tag": "s01-plat-04"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 192,
+      "y": 256,
+      "width": 32,
+      "tag": "s01-plat-05"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 384,
+      "y": 288,
+      "width": 32,
+      "tag": "s01-plat-06"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 416,
+      "y": 288,
+      "width": 32,
+      "tag": "s01-plat-07"
+    },
+    {
+      "sprite": "s16-platform-out",
+      "screen": 1,
+      "x": 448,
+      "y": 288,
+      "width": 32,
+      "tag": "s01-plat-08"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 480,
+      "y": 288,
+      "width": 32,
+      "tag": "s01-plat-09"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 0,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-10"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 32,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-11"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 64,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-12"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 96,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-13"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 128,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-14"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 224,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-15"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 256,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-16"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 288,
+      "y": 352,
+      "width": 32,
+      "tag": "s01-plat-17"
+    },
+    {
+      "sprite": "s14-growth",
+      "screen": 1,
+      "x": 0,
+      "y": 128,
+      "width": 32,
+      "tag": "s01-growth-a"
+    },
+    {
+      "sprite": "s14-growth",
+      "screen": 1,
+      "x": 160,
+      "y": 224,
+      "width": 32,
+      "tag": "s01-growth-b"
     }
   ],
   "dynamics": [
@@ -179,6 +340,347 @@
       "opacity": 85,
       "flash": 35,
       "fork": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-01",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.31,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-02",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.37,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-03",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.43,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-04",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.29,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-05",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.41,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-06",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.35,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-07",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.47,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-08",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "faulty",
+      "frequency": 0.9,
+      "intensity": 90,
+      "size": 14
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-09",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.39,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-10",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.45,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-11",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.27,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-12",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.34,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-13",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.42,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-14",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.3,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-15",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.38,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-16",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.46,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-plat-17",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        20,
+        78,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.32,
+      "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-crane",
+      "x": 102.3,
+      "y": 41.1,
+      "tint": [
+        70,
+        30,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.16,
+      "intensity": 35,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-crane",
+      "x": 183.2,
+      "y": 25.0,
+      "tint": [
+        70,
+        30,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.21,
+      "intensity": 30,
+      "size": 14
+    },
+    {
+      "kind": "sparks",
+      "parent": "s01-crane",
+      "x": 132.7,
+      "y": 31.7,
+      "tint": [
+        100,
+        92,
+        76
+      ],
+      "rate": 0,
+      "burst": 5,
+      "frequency": 0.7,
+      "spell": 2,
+      "pause": 8,
+      "life": 0.6,
+      "speed": 45,
+      "angle": -90,
+      "cone": 90,
+      "gravity": 220,
+      "drag": 40,
+      "size": 1.3,
+      "opacity": 85,
+      "flash": 35,
+      "fork": 15
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-growth-a",
+      "x": 16.0,
+      "y": 20.0,
+      "tint": [
+        70,
+        30,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.18,
+      "intensity": 30,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s01-growth-b",
+      "x": 16.0,
+      "y": 20.0,
+      "tint": [
+        70,
+        30,
+        100
+      ],
+      "blink": "pulse",
+      "frequency": 0.23,
+      "intensity": 30,
+      "size": 18
     }
   ],
   "tilePalette": [
@@ -230,14 +732,14 @@
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "4,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,4,0,0,0,8,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,0,0,0,0,4,4,16,4",
-          "0,0,5,6,7,0,0,0,0,0,0,0,0,0,0,0",
-          "4,4,4,4,4,0,0,4,4,4,0,0,0,0,0,0"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000000",
@@ -250,7 +752,7 @@
           "0100000000000000",
           "0000011000000000",
           "0000000000001111",
-          "0011100000000000",
+          "0001100000000000",
           "1111100111000000"
         ]
       },
