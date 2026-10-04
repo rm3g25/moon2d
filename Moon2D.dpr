@@ -49,6 +49,8 @@ uses
   Monsters in 'Game\Monsters.pas',
   Monsters.Disc in 'Game\Monsters.Disc.pas',
   Monsters.Pilot in 'Game\Monsters.Pilot.pas',
+  Pads.Formations in 'Game\Pads\Pads.Formations.pas',
+  Pads.Flights in 'Game\Pads\Pads.Flights.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',
@@ -180,6 +182,7 @@ const
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
+  ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodePageUp = 75; // browse screens
@@ -367,6 +370,8 @@ type
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
     procedure DumpLevelScreens;
+    procedure DebugRebuildPads;
+    function HeroRides(const APad: TPad): Boolean;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -487,6 +492,13 @@ begin
   inherited;
 end;
 
+// The dice of the pads' rebuilds, new for every try at a level. Not
+// Random: that one feeds the boss's spawn table.
+function RollDiceSeed: Cardinal;
+begin
+  Result := Cardinal(SDL_GetPerformanceCounter);
+end;
+
 // The 2008 StartLevel: tear down whatever level was running, build the
 // next one, reset every per-run counter. RestartLevel stays the light
 // version for death - it keeps the level, this one replaces it.
@@ -548,7 +560,8 @@ begin
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
   // Before the dynamics: their parents may be pads
-  FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel);
+  FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel, JumpReach,
+    RollDiceSeed);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -1397,7 +1410,7 @@ begin
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   // The pads first: Reseat finds the pad of a lamp where the level file
   // puts it
-  FPads.Rewind;
+  FPads.Rewind(RollDiceSeed);
   FDynamics.Reseat;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
@@ -1962,6 +1975,20 @@ begin
     Report := Report + ': ' + SdlErrorText;
   SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(Report)));
 end;
+
+// R: the pad group of the hero's screen flies to a new formation; the pad
+// under the hero stays in front. Once the last pad has landed.
+procedure TMoonGame.DebugRebuildPads;
+begin
+  for var Group in FLevel.PadGroups do
+    if Group.Screen = FHero.Screen then
+      FPads.RequestRebuild(Group.Tag, HeroRides);
+end;
+
+function TMoonGame.HeroRides(const APad: TPad): Boolean;
+begin
+  Result := APad = FHero.DeckUnderFeet;
+end;
 {$ENDIF} // DEBUGKEYS
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
@@ -2006,6 +2033,8 @@ begin
       FAudio.ToggleMusicMuted;
     ScancodeP:
       DumpLevelScreens;
+    ScancodeR:
+      DebugRebuildPads;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

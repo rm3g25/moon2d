@@ -1113,7 +1113,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-01"
+      "tag": "s17-plat-01",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1123,7 +1124,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-02"
+      "tag": "s17-plat-02",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1133,7 +1135,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-03"
+      "tag": "s17-plat-03",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1143,7 +1146,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-04"
+      "tag": "s17-plat-04",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform-out",
@@ -1153,7 +1157,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-05"
+      "tag": "s17-plat-05",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1163,7 +1168,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-06"
+      "tag": "s17-plat-06",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1173,7 +1179,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-07"
+      "tag": "s17-plat-07",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1183,7 +1190,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-08"
+      "tag": "s17-plat-08",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1193,7 +1201,8 @@
       "width": 32,
       "bullets": "block",
       "bob": 1,
-      "tag": "s17-plat-09"
+      "tag": "s17-plat-09",
+      "group": "arena17"
     },
     {
       "sprite": "s16-platform",
@@ -1204,6 +1213,16 @@
       "bullets": "block",
       "bob": 1,
       "tag": "s17-plat-10"
+    }
+  ],
+  "padGroups": [
+    {
+      "tag": "arena17",
+      "screen": 17,
+      "zone": [2, 4, 13, 8],
+      "pairs": 2,
+      "farFlight": 5,
+      "farShare": 5
     }
   ],
   "dynamics": [

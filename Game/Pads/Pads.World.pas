@@ -27,9 +27,21 @@
   the boss's lap - let it. Out in a few ticks, rocking, held while the
   boss lies stunned, home by the time he flies again. The riders go with
   it as with a path, and the room over the deck is kept clear of walls
-  for them. A pad on a path only rocks.
+  for them. A pad on a path only rocks, and so does every pad of a screen
+  whose group is being rebuilt.
 
-  The world is born with the level; a restart rewinds it.
+  A rebuild flies the pads of a group to a new formation inside its zone
+  (Pads.Formations throws and judges it, Pads.Flights plans the flights).
+  It is asked for and starts on the group's screen once no pad of the
+  group is knocked; the pads the caller says are loaded stay in front. A
+  pad flown into the depth behind the others is neither a floor nor a
+  body until it comes out on its cell: what stands on it falls. A flying
+  pad does not bob; it takes up the bob again on its cell, in step with
+  the ripple where it lands. Until the last pad lands, asking again does
+  nothing.
+
+  The world is born with the level; a restart rewinds it, the dice of the
+  rebuilds new for the new try.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -40,7 +52,8 @@ interface
 
 uses
   System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Levels.Pads, Levels.Defs;
+  Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
+  Pads.Formations, Pads.Flights;
 
 type
   // The point is shut to a knocked pad, besides the walls
@@ -78,8 +91,18 @@ type
     FLeft, FTop: Double;
     FPrevLeft, FPrevTop: Double;
     FSag, FSagSpeed: Double; // units down, units a tick
+    // The rebuild's flight, and its ticks since the start; NoFlight when
+    // the pad is not in one
+    FFlight: TPadFlight;
+    FFlightClock: Integer;
+    // The bob: the place across its ripple counts from, and how much of
+    // it a flight has left - 0 in the air, 1 on the cell
+    FBobX: Double;
+    FBobShare: Double;
     procedure BuildCycle;
     procedure PlaceOnPath;
+    procedure TickFlight;
+    procedure TickBob;
     procedure TickSag;
     procedure TickKnock;
     procedure KnockOffset(out AX, AY: Double);
@@ -103,6 +126,14 @@ type
     // its path ATicks later
     procedure Knock(ADX, ADY: Double; ATicks: Integer);
     function Travels: Boolean;
+    function Knocked: Boolean;
+    // The pad flies AFlight, its ticks counted from now
+    procedure Fly(const AFlight: TPadFlight);
+    function Flying: Boolean;
+    // In the depth behind the others: neither a floor nor a body
+    function Behind: Boolean;
+    // 0 in front .. 1 all the way into the depth, eased; AAlpha as Lift's
+    function Depth(AAlpha: Single): Double;
     // The body moved ADX, ADY from where it stands now would not cut into
     // AOther's; touching is no cut
     function ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
@@ -116,6 +147,11 @@ type
     property Screen: Integer read FPlacement.Screen;
     property Tag: string read FPlacement.Tag;
     property Bullets: TPadBullets read FPlacement.Bullets;
+    property Group: string read FPlacement.Group;
+    property Placement: TPadPlacement read FPlacement;
+    // Where the path or the flight puts the pad, the knock left out
+    property HomeLeft: Double read FPathLeft;
+    property HomeTop: Double read FPathTop;
     property Left: Double read FLeft;
     property Right: Double read GetRight;
     // The deck: the feet line of whatever stands on the pad
@@ -123,27 +159,57 @@ type
     property PrevTop: Double read FPrevTop;
   end;
 
+  // The pad carries a rider the rebuild must not take into the depth
+  TPadLoad = reference to function(const APad: TPad): Boolean;
+
+  TPadLayer = (plDeep, plFront);
+
   TPadWorld = class
   private
     FSprites: TSpriteRenderer;
     FLevel: TLevel;
     FPads: TObjectList<TPad>;
+    FReach: TJumpReach;
+    FDice: TXorShift;
+    // The group a rebuild is asked for, '' when none; and the one flying
+    FAskedGroup: string;
+    FAskedLoad: TPadLoad;
+    FFlyingGroup: string;
     function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
     function RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
       const AFence: TPadFence): Boolean;
     function RoomFor(const APad: TPad; ADX, ADY: Double;
       const AFence: TPadFence): Boolean;
+    function Rebuilding: Boolean;
+    function GroupFlying(const ATag: string): Boolean;
+    function FlyingOn(AScreen: Integer): Boolean;
+    function MembersOf(const ATag: string): TArray<TPad>;
+    function StillSpans(const AGroup: TPadGroup): TPadSpans;
+    procedure StartAskedRebuild(AScreen: Integer);
+    procedure StartRebuild(const AGroup: TPadGroup);
+    function TryPlanRebuild(const AGroup: TPadGroup;
+      const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
+    procedure DrawLayer(AScreen: Integer; AAlpha: Single; ALayer: TPadLayer);
   public
     // ACache is the level's object art; it and ALevel must outlive the
     // world. A picture the cache lacks raises here, at level load.
+    // AReach - how far the hero jumps, for the judge of a formation;
+    // ASeed - the dice of the rebuilds.
     constructor Create(const ASprites: TSpriteRenderer;
-      const ACache: TSpriteCache; const ALevel: TLevel);
+      const ACache: TSpriteCache; const ALevel: TLevel;
+      const AReach: TJumpReach; ASeed: Cardinal);
     destructor Destroy; override;
 
-    // Before the riders move: the pads of AScreen go on along their paths
+    // Before the riders move: a rebuild asked for may start, the pads of
+    // AScreen go on along their paths and flights
     procedure Tick(AScreen: Integer);
-    // Back to where the level file puts them
-    procedure Rewind;
+    // Back to where the level file puts them, no rebuild asked for or
+    // flying; ASeed - the dice of the new try
+    procedure Rewind(ASeed: Cardinal);
+    // The pads of the group tagged AGroup fly to a new formation, on its
+    // screen once none of them is knocked; a pad ALoad says is loaded
+    // stays in front. Nothing while a rebuild is asked for or flying.
+    procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad);
     // The deck the feet stand on: at AFeetY, spanning some of
     // ALeft..ARight. nil when there is none.
     function DeckUnder(AScreen: Integer; ALeft, ARight,
@@ -168,7 +234,8 @@ type
     function FindTagged(const ATag: string): TPad;
     // The boss's body struck: the pad it struck, if one, is knocked the
     // way the body went - a cell, or as far as the walls, AFence and the
-    // other pads let it
+    // other pads let it; on a screen whose group is being rebuilt it only
+    // rocks
     procedure Shove(AScreen: Integer; const ABlow: TPadBlow;
       const AFence: TPadFence);
     procedure Draw(AScreen: Integer; AAlpha: Single);
@@ -211,6 +278,20 @@ const
   // A knocked body is tried against the walls a hair inside its edges:
   // flush against a wall is not in it
   WallProbeInset = 0.01;
+  // Feet on the very edge of a deck stand on it: a fraction left by
+  // arithmetic - a rider carried a unit at a time - must not drop them
+  EdgeSlop = 0.001;
+  NoFlight = -1;
+  // A flying pad stills its bob over this many ticks and takes it up
+  // again over as many on its cell
+  BobFadeTicks = 10;
+  // A pad all the way into the depth: its size and its light
+  DeepScale = 0.85;
+  DeepTone = 0.6;
+  // A rebuild throws this many formations at most - screen 17 needs some
+  // 70 at the most, a dozen on average -, then falls back on the level
+  // file's own, which the level is laid out to pass the judge
+  MaxThrows = 500;
 
 // Eased in and out: the pad sets off and comes to a stop gently
 function Smoothstep(AShare: Double): Double;
@@ -282,6 +363,9 @@ begin
   FPrevTop := FTop;
   FSag := 0;
   FSagSpeed := 0;
+  FFlightClock := NoFlight;
+  FBobX := FPlacement.X;
+  FBobShare := 1;
 end;
 
 // A leg, then the pause at the stop it ends at, round the cycle
@@ -311,6 +395,29 @@ begin
     end;
     Dec(Time, FPauseTicks);
   end;
+end;
+
+// The bob's ripple goes with the pad: on its cell the pad sways in step
+// with the ripple where it has landed
+procedure TPad.TickFlight;
+begin
+  if not Flying then
+    Exit;
+  Inc(FFlightClock);
+  FFlight.Place(FFlightClock, FPathLeft, FPathTop);
+  FBobX := FPathLeft;
+  // A tick past the end: the last tick of coming out of the depth is
+  // still drawn between the ticks
+  if FFlightClock > FFlight.Done then
+    FFlightClock := NoFlight;
+end;
+
+procedure TPad.TickBob;
+begin
+  if Flying then
+    FBobShare := Max(0.0, FBobShare - 1 / BobFadeTicks)
+  else
+    FBobShare := Min(1.0, FBobShare + 1 / BobFadeTicks);
 end;
 
 procedure TPad.TickSag;
@@ -363,6 +470,8 @@ begin
     Exit;
   Inc(FClock);
   PlaceOnPath;
+  TickFlight;
+  TickBob;
   TickSag;
   TickKnock;
   var OffX, OffY: Double;
@@ -385,6 +494,34 @@ end;
 function TPad.Travels: Boolean;
 begin
   Result := Length(FStops) >= 2;
+end;
+
+function TPad.Knocked: Boolean;
+begin
+  Result := FKnockClock <> NoKnock;
+end;
+
+procedure TPad.Fly(const AFlight: TPadFlight);
+begin
+  FFlight := AFlight;
+  FFlightClock := 0;
+end;
+
+function TPad.Flying: Boolean;
+begin
+  Result := FFlightClock <> NoFlight;
+end;
+
+function TPad.Behind: Boolean;
+begin
+  Result := Flying and FFlight.Behind(FFlightClock);
+end;
+
+function TPad.Depth(AAlpha: Single): Double;
+begin
+  Result := 0;
+  if Flying then
+    Result := Smoothstep(FFlight.Depth(FFlightClock - 1 + AAlpha));
 end;
 
 // A damped rock from the blow on, drawn only
@@ -419,8 +556,9 @@ begin
   if FPlacement.Bob <= 0 then
     Exit;
   var Time := FClock - 1 + AAlpha;
-  var Phase := Time / BobPeriodTicks + FPlacement.X / ScreenWidth;
-  Result := Result + FPlacement.Bob * Sin(2 * Pi * Phase);
+  var Phase := Time / BobPeriodTicks + FBobX / ScreenWidth;
+  var Sway := FPlacement.Bob * Smoothstep(FBobShare);
+  Result := Result + Sway * Sin(2 * Pi * Phase);
 end;
 
 function TPad.GetRight: Double;
@@ -435,12 +573,13 @@ end;
 
 function TPad.DeckSpans(ALeft, ARight: Double): Boolean;
 begin
-  Result := (ALeft <= Right) and (ARight >= FLeft);
+  Result := (ALeft <= Right + EdgeSlop) and (ARight >= FLeft - EdgeSlop);
 end;
 
 function TPad.DeckSpannedBefore(ALeft, ARight: Double): Boolean;
 begin
-  Result := (ALeft <= FPrevLeft + FPlacement.Width) and (ARight >= FPrevLeft);
+  Result := (ALeft <= FPrevLeft + FPlacement.Width + EdgeSlop) and
+    (ARight >= FPrevLeft - EdgeSlop);
 end;
 
 function TPad.BodyHolds(AX, AY: Single): Boolean;
@@ -449,17 +588,21 @@ begin
     (AY < FTop + TileSize);
 end;
 
+// In the depth smaller about its middle, and darker
 procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := Round(FLeft);
+  var Sunk := Depth(AAlpha);
+  var Scale := 1 - (1 - DeepScale) * Sunk;
+  var Tone := 1 - (1 - DeepTone) * Sunk;
+  Dest.W := FPlacement.Width * Scale;
+  Dest.H := FPictureHeight * Scale;
+  Dest.X := Round(FLeft) + (FPlacement.Width - Dest.W) / 2;
   // As the riders are drawn, so the feet do not flicker into the deck
-  Dest.Y := Round(FTop) + Lift(AAlpha);
-  Dest.W := FPlacement.Width;
-  Dest.H := FPictureHeight;
-  TintTexture(FTexture, FPlacement.Tint.R, FPlacement.Tint.G,
-    FPlacement.Tint.B);
+  Dest.Y := Round(FTop) + Lift(AAlpha) + (FPictureHeight - Dest.H) / 2;
+  TintTexture(FTexture, Round(FPlacement.Tint.R * Tone),
+    Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
   ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha));
 end;
 
@@ -468,14 +611,17 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TPadWorld.Create(const ASprites: TSpriteRenderer;
-  const ACache: TSpriteCache; const ALevel: TLevel);
+  const ACache: TSpriteCache; const ALevel: TLevel;
+  const AReach: TJumpReach; ASeed: Cardinal);
 begin
   inherited Create;
   FSprites := ASprites;
   FLevel := ALevel;
+  FReach := AReach;
   FPads := TObjectList<TPad>.Create(True);
   for var Placement in ALevel.Pads do
     FPads.Add(TPad.Create(Placement, ACache.Get(Placement.Sprite)));
+  Rewind(ASeed);
 end;
 
 destructor TPadWorld.Destroy;
@@ -486,22 +632,30 @@ end;
 
 procedure TPadWorld.Tick(AScreen: Integer);
 begin
+  StartAskedRebuild(AScreen);
   for var Pad in FPads do
     Pad.Tick(Pad.Screen = AScreen);
+  if not GroupFlying(FFlyingGroup) then
+    FFlyingGroup := '';
 end;
 
-procedure TPadWorld.Rewind;
+procedure TPadWorld.Rewind(ASeed: Cardinal);
 begin
   for var Pad in FPads do
     Pad.Rewind;
+  FAskedGroup := '';
+  FAskedLoad := nil;
+  FFlyingGroup := '';
+  // An xorshift seeded with zero stays at zero
+  FDice.Seed := ASeed or 1;
 end;
 
 function TPadWorld.DeckUnder(AScreen: Integer; ALeft, ARight,
   AFeetY: Double): TPad;
 begin
   for var Pad in FPads do
-    if (Pad.Screen = AScreen) and (Abs(Pad.Top - AFeetY) < DeckSlop) and
-      Pad.DeckSpans(ALeft, ARight) then
+    if (Pad.Screen = AScreen) and not Pad.Behind and
+      (Abs(Pad.Top - AFeetY) < DeckSlop) and Pad.DeckSpans(ALeft, ARight) then
       Exit(Pad);
   Result := nil;
 end;
@@ -510,7 +664,8 @@ function TPadWorld.DeckCarrying(AScreen: Integer; ALeft, ARight,
   AFeetY: Double): TPad;
 begin
   for var Pad in FPads do
-    if (Pad.Screen = AScreen) and (Abs(Pad.PrevTop - AFeetY) < DeckSlop) and
+    if (Pad.Screen = AScreen) and not Pad.Behind and
+      (Abs(Pad.PrevTop - AFeetY) < DeckSlop) and
       Pad.DeckSpannedBefore(ALeft, ARight) then
       Exit(Pad);
   Result := nil;
@@ -524,7 +679,7 @@ begin
   begin
     var DroppedThrough := (AIgnored <> nil) and
       (Abs(Pad.Top - AIgnored.Top) < DeckSlop);
-    if DroppedThrough or (Pad.Screen <> AScreen) then
+    if DroppedThrough or (Pad.Screen <> AScreen) or Pad.Behind then
       Continue;
     var Crossed := (APrevY <= Pad.PrevTop) and (AFeetY >= Pad.Top);
     if not Crossed or not Pad.DeckSpans(ALeft, ARight) then
@@ -537,7 +692,7 @@ end;
 function TPadWorld.BodyAt(AScreen: Integer; AX, AY: Single): Boolean;
 begin
   for var Pad in FPads do
-    if (Pad.Screen = AScreen) and Pad.BodyHolds(AX, AY) then
+    if (Pad.Screen = AScreen) and not Pad.Behind and Pad.BodyHolds(AX, AY) then
       Exit(True);
   Result := False;
 end;
@@ -546,7 +701,7 @@ function TPadWorld.StopsBulletAt(AScreen: Integer; AX, AY: Single): Boolean;
 begin
   for var Pad in FPads do
     if (Pad.Screen = AScreen) and (Pad.Bullets = pbBlock) and
-      Pad.BodyHolds(AX, AY) then
+      not Pad.Behind and Pad.BodyHolds(AX, AY) then
       Exit(True);
   Result := False;
 end;
@@ -557,7 +712,7 @@ function TPadWorld.PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
 begin
   for var Pad in FPads do
   begin
-    if Pad.Screen <> AScreen then
+    if (Pad.Screen <> AScreen) or Pad.Behind then
       Continue;
     var Struck := Pad.BodyHolds(ABlow.Left, ABlow.Top) or
       Pad.BodyHolds(ABlow.Right, ABlow.Top) or
@@ -614,7 +769,7 @@ begin
 
   for var Other in FPads do
     if (Other <> APad) and (Other.Screen = APad.Screen) and
-      not APad.ClearOf(Other, ADX, ADY) then
+      not Other.Behind and not APad.ClearOf(Other, ADX, ADY) then
       Exit(False);
   Result := True;
 end;
@@ -622,14 +777,16 @@ end;
 // Unit by unit along the blow, a cell's worth at most, sliding along what
 // stops one way of it. A pad with no room at all still rocks, and so does
 // one on a path: its room is looked for where it stands, and the path
-// would take it on from there.
+// would take it on from there. So does a pad of the group being rebuilt:
+// knocked off its cell, it would cut into a pad landing next to it - and
+// so does any other pad of that screen, which a flight was planned past.
 procedure TPadWorld.Shove(AScreen: Integer; const ABlow: TPadBlow;
   const AFence: TPadFence);
 begin
   var Pad := PadStruck(AScreen, ABlow);
   if Pad = nil then
     Exit;
-  if Pad.Travels then
+  if Pad.Travels or FlyingOn(Pad.Screen) then
   begin
     Pad.Knock(0, 0, ABlow.Ticks);
     Exit;
@@ -662,11 +819,164 @@ begin
   Result := nil;
 end;
 
-procedure TPadWorld.Draw(AScreen: Integer; AAlpha: Single);
+// ---------------------------------------------------------------------------
+// The rebuild
+// ---------------------------------------------------------------------------
+
+function TPadWorld.Rebuilding: Boolean;
+begin
+  Result := (FAskedGroup <> '') or (FFlyingGroup <> '');
+end;
+
+function TPadWorld.GroupFlying(const ATag: string): Boolean;
+begin
+  for var Pad in MembersOf(ATag) do
+    if Pad.Flying then
+      Exit(True);
+  Result := False;
+end;
+
+// A group of the screen is being rebuilt
+function TPadWorld.FlyingOn(AScreen: Integer): Boolean;
+begin
+  for var Pad in MembersOf(FFlyingGroup) do
+    if Pad.Screen = AScreen then
+      Exit(True);
+  Result := False;
+end;
+
+// In file order; none for ''
+function TPadWorld.MembersOf(const ATag: string): TArray<TPad>;
+begin
+  Result := [];
+  if ATag = '' then
+    Exit;
+  for var Pad in FPads do
+    if Pad.Group = ATag then
+      Result := Result + [Pad];
+end;
+
+procedure TPadWorld.RequestRebuild(const AGroup: string;
+  const ALoad: TPadLoad);
+begin
+  if Rebuilding or (Length(MembersOf(AGroup)) = 0) then
+    Exit;
+  FAskedGroup := AGroup;
+  FAskedLoad := ALoad;
+end;
+
+// On the group's screen, once no pad of it is knocked - a knock is over
+// with the boss's stun, before he flies the lap again
+procedure TPadWorld.StartAskedRebuild(AScreen: Integer);
+begin
+  if FAskedGroup = '' then
+    Exit;
+  for var Pad in MembersOf(FAskedGroup) do
+    if (Pad.Screen <> AScreen) or Pad.Knocked then
+      Exit;
+  for var Group in FLevel.PadGroups do
+    if Group.Tag = FAskedGroup then
+      StartRebuild(Group);
+  FAskedGroup := '';
+  FAskedLoad := nil;
+end;
+
+procedure TPadWorld.StartRebuild(const AGroup: TPadGroup);
+var
+  Flights: TPadFlights;
+begin
+  var Members := MembersOf(AGroup.Tag);
+  if not TryPlanRebuild(AGroup, Members, Flights) then
+    Exit;
+  for var i := 0 to High(Members) do
+    Members[i].Fly(Flights[i]);
+  FFlyingGroup := AGroup.Tag;
+end;
+
+// The screen's pads outside the group, as ground to jump from
+function TPadWorld.StillSpans(const AGroup: TPadGroup): TPadSpans;
+begin
+  Result := [];
+  for var Pad in FPads do
+  begin
+    if (Pad.Screen <> AGroup.Screen) or (Pad.Group = AGroup.Tag) then
+      Continue;
+    var Span: TPadSpan;
+    Span.Left := Pad.Placement.X div TileSize;
+    Span.Right := (Pad.Placement.X + Pad.Placement.Width - 1) div TileSize;
+    Span.Row := Pad.Placement.Y div TileSize;
+    Result := Result + [Span];
+  end;
+end;
+
+function CellOfPlace(AX, AY: Double): TPadCell;
+begin
+  Result.Col := Round(AX / TileSize);
+  Result.Row := Round(AY / TileSize);
+end;
+
+// Formations thrown until one is judged, assigned and flown; past the
+// last throw the level file's formation, with the same rules for the
+// assignment and the flights. False - no rebuild this time.
+function TPadWorld.TryPlanRebuild(const AGroup: TPadGroup;
+  const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
+var
+  Start, FileCells, Cells, Target: TPadCells;
+  Loaded: TArray<Boolean>;
+  Release: TArray<Integer>;
+begin
+  SetLength(Start, Length(AMembers));
+  SetLength(FileCells, Length(AMembers));
+  SetLength(Loaded, Length(AMembers));
+  // Zeros: every pad free to set off at the start
+  SetLength(Release, Length(AMembers));
+  for var i := 0 to High(AMembers) do
+  begin
+    var Pad := AMembers[i];
+    Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
+    FileCells[i] := CellOfPlace(Pad.Placement.X, Pad.Placement.Y);
+    Loaded[i] := Assigned(FAskedLoad) and FAskedLoad(Pad);
+  end;
+
+  var Launch := LaunchSpans(FLevel, AGroup, StillSpans(AGroup));
+  for var Throw := 1 to MaxThrows do
+  begin
+    var Judged := TryThrowFormation(FDice, AGroup, Length(AMembers), Cells) and
+      JudgeFormation(Cells, AGroup, Launch, FReach);
+    var Flown := Judged and
+      TryAssignFormation(FDice, Start, Cells, AGroup, Target) and
+      TryPlanFlights(FDice, Start, Target, Loaded, Release, AFlights);
+    if Flown then
+      Exit(True);
+  end;
+  Result := TryAssignFormation(FDice, Start, FileCells, AGroup, Target) and
+    TryPlanFlights(FDice, Start, Target, Loaded, Release, AFlights);
+end;
+
+// ---------------------------------------------------------------------------
+// The picture
+// ---------------------------------------------------------------------------
+
+procedure TPadWorld.DrawLayer(AScreen: Integer; AAlpha: Single;
+  ALayer: TPadLayer);
 begin
   for var Pad in FPads do
-    if Pad.Screen = AScreen then
+  begin
+    if Pad.Screen <> AScreen then
+      Continue;
+    var Layer := plFront;
+    if Pad.Depth(AAlpha) > 0 then
+      Layer := plDeep;
+    if Layer = ALayer then
       Pad.Draw(FSprites, AAlpha);
+  end;
+end;
+
+// The pads in the depth first: the others pass in front of them
+procedure TPadWorld.Draw(AScreen: Integer; AAlpha: Single);
+begin
+  DrawLayer(AScreen, AAlpha, plDeep);
+  DrawLayer(AScreen, AAlpha, plFront);
 end;
 
 end.

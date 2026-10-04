@@ -12,6 +12,10 @@
   them - and may bob in the air. The path moves the pad itself; the bob
   is for the eye alone (Pads.World says why).
 
+  Pads of a group are rebuilt together: they fly off to a new formation
+  inside the group's zone, a cell each. The section padGroups names the
+  groups; a pad joins one by its group.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Pads;
@@ -58,6 +62,27 @@ type
     Bullets: TPadBullets;
     Path: TPadPath;
     Bob: Single; // how far the pad sways up and down, in units; 0 = still
+    // The pad group it is rebuilt with; '' = none
+    Group: string;
+  end;
+
+  // Cells of a screen, 0-based, the bounds included
+  TPadZone = record
+    Left, Top, Right, Bottom: Integer;
+  end;
+
+  // Pads rebuilt together: where they may stand and what a formation of
+  // them has to give
+  TPadGroup = record
+    Tag: string;
+    Screen: Integer; // 1-based
+    Zone: TPadZone;
+    // At least this many pairs side by side in a formation
+    Pairs: Integer;
+    // A flight this many cells long or longer is far; a rebuild flies at
+    // least FarShare pads far
+    FarFlight: Integer;
+    FarShare: Integer;
   end;
 
 const
@@ -70,6 +95,11 @@ const
 // zero raise.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
+// The section padGroups; absent = no groups. A zone that is not four
+// numbers, pairs or farShare below zero, a farFlight below one
+// raise.
+function ParsePadGroups(const ARoot: TJSONObject;
+  const ALevelId: string): TArray<TPadGroup>;
 
 implementation
 
@@ -83,6 +113,9 @@ resourcestring
   SPadNoStops = 'Level "%s": pad "%s" has a path without stops';
   SPadBadStop = 'Level "%s": pad "%s" has a stop that is not [x, y]';
   SPadBadNumber = 'Level "%s": pad "%s" takes %s %g';
+  SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
+    + '[left, top, right, bottom]';
+  SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
 
 function ReadBullets(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadBullets;
@@ -162,6 +195,7 @@ begin
     Pad.Bullets := ReadBullets(Obj, ALevelId, Pad.Sprite);
     Pad.Path := ReadPath(Obj, ALevelId, Pad.Sprite);
     Pad.Bob := Obj.GetValue<Double>('bob', 0);
+    Pad.Group := Obj.GetValue<string>('group', '');
 
     if Pad.Width <= 0 then
       raise EPadError.CreateFmt(SPadBadWidth, [ALevelId, Pad.Sprite, Pad.Width]);
@@ -170,6 +204,56 @@ begin
         [ALevelId, Pad.Sprite, 'bob', Pad.Bob]);
 
     Result := Result + [Pad];
+  end;
+end;
+
+// JSON: "zone": [left, top, right, bottom], in cells
+function ReadZone(const AObj: TJSONObject;
+  const ALevelId, ATag: string): TPadZone;
+begin
+  var ZoneArr := AObj.GetValue<TJSONArray>('zone', nil);
+  if (ZoneArr = nil) or (ZoneArr.Count <> 4) then
+    raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, ATag]);
+  for var Item in ZoneArr do
+    if not (Item is TJSONNumber) then
+      raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, ATag]);
+  Result.Left := TJSONNumber(ZoneArr.Items[0]).AsInt;
+  Result.Top := TJSONNumber(ZoneArr.Items[1]).AsInt;
+  Result.Right := TJSONNumber(ZoneArr.Items[2]).AsInt;
+  Result.Bottom := TJSONNumber(ZoneArr.Items[3]).AsInt;
+end;
+
+function ParsePadGroups(const ARoot: TJSONObject;
+  const ALevelId: string): TArray<TPadGroup>;
+var
+  Section: TJSONArray;
+begin
+  Result := [];
+  if not ARoot.TryGetValue<TJSONArray>('padGroups', Section) then
+    Exit;
+
+  for var Item in Section do
+  begin
+    var Obj := Item as TJSONObject;
+    var Group: TPadGroup;
+    Group.Tag := Obj.GetValue<string>('tag');
+    Group.Screen := Obj.GetValue<Integer>('screen');
+    Group.Zone := ReadZone(Obj, ALevelId, Group.Tag);
+    Group.Pairs := Obj.GetValue<Integer>('pairs', 0);
+    Group.FarFlight := Obj.GetValue<Integer>('farFlight', 1);
+    Group.FarShare := Obj.GetValue<Integer>('farShare', 0);
+
+    if Group.Pairs < 0 then
+      raise EPadError.CreateFmt(SPadGroupBadNumber,
+        [ALevelId, Group.Tag, 'pairs', Group.Pairs]);
+    if Group.FarFlight < 1 then
+      raise EPadError.CreateFmt(SPadGroupBadNumber,
+        [ALevelId, Group.Tag, 'farFlight', Group.FarFlight]);
+    if Group.FarShare < 0 then
+      raise EPadError.CreateFmt(SPadGroupBadNumber,
+        [ALevelId, Group.Tag, 'farShare', Group.FarShare]);
+
+    Result := Result + [Group];
   end;
 end;
 

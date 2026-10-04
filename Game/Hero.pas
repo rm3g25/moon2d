@@ -145,7 +145,6 @@ type
     procedure BeginJumpBoost;
     procedure StandAfterFall;
     // --- pads ---
-    function DeckUnderFeet: TPad;
     function LandOnDeck(APrevY: Double): Boolean;
     procedure DropThroughDeck;
     procedure RideDeck;
@@ -179,6 +178,8 @@ type
     // stops at the first wall - the hero cannot be shoved into geometry.
     procedure ShoveX(ADeltaX: Integer);
     procedure SetY(AY: Double);
+    // The deck under the hero's middle; nil when there is none
+    function DeckUnderFeet: TPad;
     // Units down the picture is drawn: the bob and the sag of the deck
     // underfoot, which the feet do not feel; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
@@ -207,6 +208,11 @@ type
     property Dead: Boolean read FDead;
     property HeroForm: THeroForm read FForm write FForm;
   end;
+
+// The most empty cells a jump of the hero crosses sideways to land on a
+// deck ARise rows up (down when below zero), a jump made without hunting
+// for the pixel; -1 when no jump makes it. From the arc of Tick itself.
+function JumpReach(ARise: Integer): Integer;
 
 implementation
 
@@ -244,6 +250,57 @@ const
   // Confirmed on screen: the sign must flip. Barrel offsets keep the
   // ORIGINAL angle sign - they are pixel-space math, untouched by this.
   AngleSign = -1;
+
+// One tick of the rise of 2008: up by the boost, the boost spent. False
+// once the arc has peaked: the rise hands over to the fall.
+function RiseStep(var AY, AAcceleration: Double): Boolean;
+begin
+  AY := AY - Round(AAcceleration);
+  Result := AAcceleration > 0;
+  if Result then
+    AAcceleration := AAcceleration - Step / JumpDel;
+end;
+
+// One tick of the fall of 2008
+procedure FallStep(var AY, AAcceleration: Double);
+begin
+  AY := AY + Round(AAcceleration);
+  AAcceleration := AAcceleration + Gravity;
+end;
+
+function JumpReach(ARise: Integer): Integer;
+const
+  // The middle of the hero a Bound inside the deck he leaves and the one
+  // he lands on, the peak of the arc a Bound over the deck
+  Margin = Bound;
+var
+  Y, Acceleration, Peak: Double;
+begin
+  var DeckY := -ARise * TileSize;
+  Y := 0;
+  Acceleration := Step * StartUscor;
+  Peak := 0;
+  var Rising := True;
+  var Ticks := 0;
+  while Y <= ScreenHeight do
+  begin
+    var PrevY := Y;
+    Inc(Ticks);
+    if Rising then
+      Rising := RiseStep(Y, Acceleration)
+    else
+      FallStep(Y, Acceleration);
+    Peak := Min(Peak, Y);
+    // As LandOnDeck: a fall whose feet came down onto the deck
+    var Lands := not Rising and (PrevY <= DeckY) and (Y >= DeckY);
+    if not Lands then
+      Continue;
+    if Peak > DeckY - Margin then
+      Exit(-1);
+    Exit(Trunc((Ticks * Step - 2 * Margin) / TileSize));
+  end;
+  Result := -1;
+end;
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -848,17 +905,13 @@ end;
 
 procedure THero.FallOneTick;
 begin
-  FY := FY + Round(FAcceleration);
-  FAcceleration := FAcceleration + Gravity;
+  FallStep(FY, FAcceleration);
 end;
 
 procedure THero.RiseOneTick(ANextFall: THeroAction);
 begin
-  FY := FY - Round(FAcceleration);
-  if FAcceleration > 0 then
-    FAcceleration := FAcceleration - Step / JumpDel
-  else
-    FAction := ANextFall; // the arc peaks: rise hands over to fall
+  if not RiseStep(FY, FAcceleration) then
+    FAction := ANextFall;
 end;
 
 procedure THero.BumpCeiling(ANextFall: THeroAction);

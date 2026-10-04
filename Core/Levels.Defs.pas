@@ -132,6 +132,7 @@ type
     FBackgrounds: TArray<TBackgroundChange>;
     FObjects: TArray<TLevelObject>;
     FPads: TArray<TPadPlacement>;
+    FPadGroups: TArray<TPadGroup>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
     FDynamics: TDynamicObjects;
@@ -141,6 +142,11 @@ type
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
     procedure CheckPads;
+    procedure CheckPadGroups;
+    procedure CheckPadGroup(const AGroup: TPadGroup);
+    procedure CheckPadGroupZone(const AGroup: TPadGroup);
+    function TryFindWall(AScreen: Integer; const AZone: TPadZone;
+      out ACol, ARow: Integer): Boolean;
     procedure CheckEvents;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
@@ -189,6 +195,8 @@ type
     property Objects: TArray<TLevelObject> read FObjects;
     // Platforms apart from the grid, in file order (Levels.Pads)
     property Pads: TArray<TPadPlacement> read FPads;
+    // Pads rebuilt together, in file order (Levels.Pads)
+    property PadGroups: TArray<TPadGroup> read FPadGroups;
     property Entities: TArray<TEntityPlacement> read FEntities;
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
@@ -201,7 +209,7 @@ type
 implementation
 
 uses
-  Game.Space;
+  System.Math, Render.Sprites, Game.Space;
 
 resourcestring
   SLevelFileNotFound = 'Level file not found: %s';
@@ -239,6 +247,25 @@ resourcestring
   SLevelPadTwoTags = 'Level "%s": two pads are tagged "%s"';
   SLevelPadStopOff = 'Level "%s": pad "%s" travels off its screen, to '
     + '(%g, %g)';
+  SLevelPadGroupBadScreen = 'Level "%s": pad group "%s" sits on screen %d '
+    + 'of %d';
+  SLevelPadGroupTwoTags = 'Level "%s": two pad groups are tagged "%s"';
+  SLevelPadGroupBadZone = 'Level "%s": pad group "%s" has a zone off its '
+    + 'screen or less than three cells either way';
+  SLevelPadGroupWall = 'Level "%s": pad group "%s" has a wall in its zone, '
+    + 'cell (%d, %d)';
+  SLevelPadGroupFarFlight = 'Level "%s": pad group "%s" flies %d cells far, '
+    + 'more than its zone holds';
+  SLevelPadGroupUnknown = 'Level "%s": pad "%s" joins group "%s", which '
+    + 'no pad group carries';
+  SLevelPadGroupBadCell = 'Level "%s": pad "%s" of group "%s" does not fill '
+    + 'one cell of the zone';
+  SLevelPadGroupPath = 'Level "%s": pad "%s" of group "%s" travels a path - '
+    + 'a rebuild flies it';
+  SLevelPadGroupStranger = 'Level "%s": pad "%s" stands in the zone of '
+    + 'group "%s" and is not of it';
+  SLevelPadGroupBadCount = 'Level "%s": pad group "%s" has %d pads, takes '
+    + '%d to %d';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -384,6 +411,8 @@ begin
   // Pads before the dynamics: a dynamic object may hang on one
   FPads := ParsePads(ARoot, FId);
   CheckPads;
+  FPadGroups := ParsePadGroups(ARoot, FId);
+  CheckPadGroups;
   // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
   CheckDynamics;
@@ -487,6 +516,128 @@ begin
       raise ELevelError.CreateFmt(SLevelPadStopOff,
         [FId, Pad.Sprite, Off.X, Off.Y]);
   end;
+end;
+
+function PadGroupsTagged(const AGroups: TArray<TPadGroup>;
+  const ATag: string): Integer;
+begin
+  Result := 0;
+  for var Group in AGroups do
+    if Group.Tag = ATag then
+      Inc(Result);
+end;
+
+// The pad's cell is a cell of the zone, the whole of it
+function FillsZoneCell(const APad: TPadPlacement;
+  const AZone: TPadZone): Boolean;
+begin
+  var OnCell := (APad.Width = TileSize) and (APad.X mod TileSize = 0) and
+    (APad.Y mod TileSize = 0);
+  var Col := APad.X div TileSize;
+  var Row := APad.Y div TileSize;
+  Result := OnCell and InRange(Col, AZone.Left, AZone.Right) and
+    InRange(Row, AZone.Top, AZone.Bottom);
+end;
+
+// The pad's body, a cell deep, cuts into the zone
+function CutsZone(const APad: TPadPlacement; const AZone: TPadZone): Boolean;
+begin
+  Result := (APad.X < (AZone.Right + 1) * TileSize) and
+    (APad.X + APad.Width > AZone.Left * TileSize) and
+    (APad.Y < (AZone.Bottom + 1) * TileSize) and
+    (APad.Y + TileSize > AZone.Top * TileSize);
+end;
+
+// A group's pads fly about its zone a cell each: a wall or another pad in
+// there would be flown into, a pad on a path would be torn off it
+procedure TLevel.CheckPadGroups;
+begin
+  for var Group in FPadGroups do
+    CheckPadGroup(Group);
+  for var Pad in FPads do
+    if (Pad.Group <> '') and (PadGroupsTagged(FPadGroups, Pad.Group) = 0) then
+      raise ELevelError.CreateFmt(SLevelPadGroupUnknown,
+        [FId, Pad.Sprite, Pad.Group]);
+end;
+
+function TLevel.TryFindWall(AScreen: Integer; const AZone: TPadZone;
+  out ACol, ARow: Integer): Boolean;
+begin
+  ACol := 0;
+  ARow := 0;
+  var Width := AZone.Right - AZone.Left + 1;
+  var Cells := Width * (AZone.Bottom - AZone.Top + 1);
+  for var i := 0 to Cells - 1 do
+  begin
+    ACol := AZone.Left + i mod Width;
+    ARow := AZone.Top + i div Width;
+    if SolidAt(AScreen, ACol, ARow) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// On its screen, three cells or more either way - every third of it
+// across and down must hold a pad -, clear of walls, roomy enough for the
+// group's far flights
+procedure TLevel.CheckPadGroupZone(const AGroup: TPadGroup);
+const
+  MinZoneCells = 3;
+var
+  WallCol, WallRow: Integer;
+begin
+  var Zone := AGroup.Zone;
+  var Width := Zone.Right - Zone.Left + 1;
+  var Height := Zone.Bottom - Zone.Top + 1;
+  var ZoneFits := (Zone.Left >= 0) and (Zone.Right < FGridWidth) and
+    (Zone.Top >= 0) and (Zone.Bottom < FGridHeight) and
+    (Width >= MinZoneCells) and (Height >= MinZoneCells);
+  if not ZoneFits then
+    raise ELevelError.CreateFmt(SLevelPadGroupBadZone, [FId, AGroup.Tag]);
+  if TryFindWall(AGroup.Screen, Zone, WallCol, WallRow) then
+    raise ELevelError.CreateFmt(SLevelPadGroupWall,
+      [FId, AGroup.Tag, WallCol, WallRow]);
+  var LongestFlight := (Width - 1) + (Height - 1);
+  if (AGroup.FarShare > 0) and (AGroup.FarFlight > LongestFlight) then
+    raise ELevelError.CreateFmt(SLevelPadGroupFarFlight,
+      [FId, AGroup.Tag, AGroup.FarFlight]);
+end;
+
+procedure TLevel.CheckPadGroup(const AGroup: TPadGroup);
+begin
+  if (AGroup.Screen < 1) or (AGroup.Screen > FScreenCount) then
+    raise ELevelError.CreateFmt(SLevelPadGroupBadScreen,
+      [FId, AGroup.Tag, AGroup.Screen, FScreenCount]);
+  if PadGroupsTagged(FPadGroups, AGroup.Tag) > 1 then
+    raise ELevelError.CreateFmt(SLevelPadGroupTwoTags, [FId, AGroup.Tag]);
+  CheckPadGroupZone(AGroup);
+
+  var Zone := AGroup.Zone;
+  var Members := 0;
+  for var Pad in FPads do
+  begin
+    var Member := Pad.Group = AGroup.Tag;
+    var Stranger := not Member and (Pad.Screen = AGroup.Screen) and
+      CutsZone(Pad, Zone);
+    if Stranger then
+      raise ELevelError.CreateFmt(SLevelPadGroupStranger,
+        [FId, Pad.Sprite, AGroup.Tag]);
+    if not Member then
+      Continue;
+    if (Pad.Screen <> AGroup.Screen) or not FillsZoneCell(Pad, Zone) then
+      raise ELevelError.CreateFmt(SLevelPadGroupBadCell,
+        [FId, Pad.Sprite, AGroup.Tag]);
+    if Pad.Path.Route <> prNone then
+      raise ELevelError.CreateFmt(SLevelPadGroupPath,
+        [FId, Pad.Sprite, AGroup.Tag]);
+    Inc(Members);
+  end;
+
+  var Fewest := Max(Max(1, 2 * AGroup.Pairs), AGroup.FarShare);
+  var Most := (Zone.Right - Zone.Left + 1) * (Zone.Bottom - Zone.Top + 1);
+  if (Members < Fewest) or (Members > Most) then
+    raise ELevelError.CreateFmt(SLevelPadGroupBadCount,
+      [FId, AGroup.Tag, Members, Fewest, Most]);
 end;
 
 // A nailed object off the screen list never shows; a parent tag no
