@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.27` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.28` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -53,7 +53,7 @@ for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) /
 `Levels.Pads` (over `Levels.Tint`) ->
 `Levels.Defs` / `Pads.World` (the pads in play: over `Levels.Pads`,
-`Render.Sprites`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
+`Levels.Defs`, `Render.Sprites`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
@@ -173,15 +173,16 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **`TSpriteRenderer`** - draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid, the top-left 64x64 crop reproduced from
   `sttextures.pas`), `Draw` (free position, optional mirror), `DrawRect`,
-  `DrawRectF` (the same in fractions of a unit - the pads' picture, which
-  sways smoothly), `DrawRotated` (weapon arm), `DrawTurned(texture,
+  `DrawRectF` (the same in fractions of a unit, turned by an angle round
+  its middle - the pads' picture, which sways and rocks smoothly), `DrawRotated` (weapon arm), `DrawTurned(texture,
   center, side, angle, level = 1)` - a square of any size centered on a
   float point, turned clockwise, at an opacity; float all the way, so a
   mover drawn between ticks does not snap to logical units - the boss's
   disc draws its layers through it. It sets the texture's alpha mod on
   every call. `Draw`, `DrawRotated` and `DrawTurned` all draw a float
   rectangle through `SDL_RenderCopyExF` (at whole units the picture is
-  what the integer call drew), `DrawRectF` through `SDL_RenderCopyF`;
+  what the integer call drew), and so does `DrawRectF` since 3.0.28
+  (`SDL_RenderCopyF` before);
   `DrawTile` and `DrawRect` stay integer (`SDL_RenderCopy`), `DrawCell`
   goes through `Draw`. **`Origin`** (a `TSdlPoint`) shifts every one of
   them - the screen-shake hook; nothing here resets it, the caller sets it per
@@ -875,7 +876,7 @@ Projectiles + all the 2008 particle-hack spawners.
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
 
-### `Game/Pads/Pads.World.pas` (~420 lines)
+### `Game/Pads/Pads.World.pas` (~670 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -891,8 +892,19 @@ file puts it on, where the 2008 wall probes, which count rows from the
 feet, read the right row. A path that climbs takes its riders between the
 rows: keep it clear of the grid's walls. The `Lift` is drawn in
 fractions of a unit and between ticks - a sway of a unit and a half in
-whole units would jerk from one to the next. Born with the level
-(`LoadLevel`); a restart rewinds it.
+whole units would jerk from one to the next. A blow - the boss's ram -
+knocks a pad off its place: a cell along the blow, or as far as the walls,
+the other pads and the caller's fence (the boss's lap) let it; out in a few
+ticks, rocking, held while the boss lies stunned, home by the time he flies
+again. The riders go with it as with a path; a pad on a path only rocks.
+Born with the level (`LoadLevel`); a restart rewinds it.
+- **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
+  shut to a knocked pad besides the walls (the game passes
+  `Monsters.Pilot.LapHolds`).
+- **`TPadBlow`** - a body that struck: `Left`, `Top`, `Right`, `Bottom` -
+  its corners a step on, where the walls stopped it (a pad holding one is
+  struck); `WayX`, `WayY` - the way it went, a unit vector; `Ticks` - how
+  long the struck pad stays out. `TPilotCrash.Blow` carries one.
 - **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
   the feet line of whatever stands on the pad), `PrevTop` (the deck a tick
   ago), `Screen`, `Tag`, `Bullets`.
@@ -908,8 +920,10 @@ whole units would jerk from one to the next. Born with the level
     pad has lived on the hero's screen), places the pad on the cycle
     (`PlaceOnPath`: a leg, then the pause at the stop it ends at; the leg
     eased by `Smoothstep` - the pad sets off and comes to a stop gently)
-    and steps the sag (`TickSag`). `Rewind` - the clock to 0, the pad on
-    the level file's place, no sag; the constructor ends with it.
+    and steps the sag (`TickSag`) and the knock (`TickKnock`); the path's
+    place (`FPathLeft`, `FPathTop`) plus the knock's offset is the pad's
+    place. `Rewind` - the clock to 0, the pad on the level file's place, no
+    sag, no knock; the constructor ends with it.
     `MotionX` - how far the pad went across this tick.
   - The deck and the body: `DeckSpans(left, right)` - the deck spans some
     of left..right, edges included (closed); `DeckSpannedBefore(left,
@@ -930,15 +944,27 @@ whole units would jerk from one to the next. Born with the level
     deepest), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
     brings it back, at rest closer than `SagRest` (0.05). The physics deck
     stays on the path: the feet never feel the `Lift`.
+  - The knock (3.0.28): `Knock(dx, dy, ticks)` - the pad goes dx, dy from
+    where it stands and is back on its path `ticks` later (no fewer than
+    out and home take). `KnockOffset` - off the path by `FKnockFrom*` at
+    the blow (a pad struck again before it is home) easing to `FKnockTo*`
+    over `KnockOutTicks` (6), held, eased home over the last
+    `KnockBackTicks` (12); `NoKnock` (-1) on the clock - none. `Tilt(alpha)`
+    - the rock, drawn only: `KnockTilt` (7 degrees) times a sine of one rock
+    in `KnockTiltPeriodTicks` (8), dying by `KnockTiltDecayTicks` (12),
+    between ticks. `Travels` - the pad has a path. `ClearOf(other, dx, dy)` -
+    the body moved dx, dy would not cut into the other's; touching is no
+    cut.
   - The picture: `Draw(sprites, alpha)` - its height from the art's
     aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
-    fractions of a unit (`DrawRectF`) - the riders are drawn with the same
+    fractions of a unit (`DrawRectF`), turned by `Tilt(alpha)` - the riders are drawn with the same
     `Lift` (through the renderer's `FineY`), so the feet do not flicker
     into the deck - with the pad's tint set before every draw
     (`TintTexture`), as a static object is.
-- **`TPadWorld`** - `Create(sprites, cache, placements)`: the cache is the
-  level's object art, the textures are its, and it must outlive the world;
-  a picture it lacks raises here, at level load. `Tick(screen)` - before
+- **`TPadWorld`** - `Create(sprites, cache, level)`: the cache is the
+  level's object art, the textures are its; it and the level (the
+  placements, and the grid a knock is tried against) must outlive the
+  world; a picture the cache lacks raises here, at level load. `Tick(screen)` - before
   the riders move: every pad's `Tick`, on view for the pads of that screen
   alone - a pad elsewhere keeps its `Prev*` caught up and goes nowhere.
   `Rewind` - every pad back to where the level file puts it.
@@ -960,8 +986,20 @@ whole units would jerk from one to the next. Born with the level
   x, y)` - the same for the `pbBlock` pads alone; `FindTagged(tag)` - nil
   when no pad carries the tag; `Draw(screen, alpha)` - the pads of that
   screen, the frame's alpha passed on to their `Lift`.
+  `Shove(screen, blow, fence)` - the boss's ram: `PadStruck` - the pad
+  holding a corner of the blow (what the pilot's walls found); none - no
+  knock. A pad on a path only rocks (`Knock(0, 0)`). Else unit by unit
+  along the way, `KnockReach` (a cell) at most: the whole step if
+  `RoomFor` lets it, else its X alone, else its Y alone (sliding along what
+  stops one way), else stop; the pad is knocked as far as it got - with no
+  room at all it still rocks. `RoomFor(pad, dx, dy, fence)` - the body
+  moved stays on the screen, its rows (`RowShut`, a hair -
+  `WallProbeInset` - inside the edges, points a cell apart across) out of
+  the grid's walls and the fence, the riders' room (a cell over the deck)
+  out of the walls - not the fence: the boss lies stunned while the pad is
+  out - and the body `ClearOf` every other pad of the screen.
 
-### `Game/Hero.pas` (~1335 lines)
+### `Game/Hero.pas` (~1350 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -986,8 +1024,9 @@ moves in comes from `Game.Space`.
     onto a deck does not fall. `RideDeck` at the head of `Tick`, right
     after `PrevY` is caught (the feet where the last tick left them): the
     deck the feet stood on a tick ago (`DeckCarrying`) takes them where it
-    went - across by its `MotionX` unless a wall blocks that side
-    (`WallBlocksLeft/Right`), up or down to its `Top` unless it rises and
+    went - across by its `MotionX` a unit at a time (`CarryX`, the wall -
+    `WallBlocksLeft/Right` - asked before every one: a knocked deck goes
+    several units a tick), up or down to its `Top` unless it rises and
     the head is blocked (`CanIGoUp`): then it rises through him - that
     deck becomes `FDropFrom` and he falls (`haFall`, acceleration 1). A
     deck a wall has pulled from under him (no `DeckUnderFeet` after the
@@ -1059,7 +1098,7 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.Pilot.pas` (~985 lines)
+### `Game/Monsters.Pilot.pas` (~1020 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
 where its body goes this tick and what it is up to. The monster keeps its
 place, its step and its guns; the pilot moves the place and answers the
@@ -1078,7 +1117,10 @@ game's. A 2026 addition all but the lap.
   (pgHero/AimPoint/Nowhere - what the eye is on), `TCell` (a cell of the
   screen's grid, 0-based), `TPlace` (screen units: a point or a
   direction), `TPilotCrash` (a dash stopped by a wall: the rim of the body
-  that struck, its speed, the way the wall faces), `TPilotBrief` (what the
+  that struck, its speed, the way the wall faces, and the `Blow` to a pad
+  - `BlowOf` the body a step on, the dash's direction and `StunTicks`),
+  `LapHolds(x, y)` (the point lies in a cell of the lap: the fence of a
+  knocked pad - he flies the lap without asking the walls), `TPilotBrief` (what the
   monster tells its pilot every tick: its own step, the hero's feet point,
   `BodyAlive`).
 - **`TPilot`** - `Create(level, pads, screen, baseStep)` (the pads must
@@ -1139,7 +1181,7 @@ game's. A 2026 addition all but the lap.
   corners, so a dive goes round a pad and a ram crashes into one as into
   a wall.
 
-### `Game/Monsters.pas` (~1465 lines)
+### `Game/Monsters.pas` (~1480 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -1165,8 +1207,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   stay the grid's alone. `RideDeck` at the start of `Tick` (not while
   flying or falling - a falling body lands by `MoveFalling` alone): the
   deck the body lay on a tick ago (`DeckCarrying` over the inset span)
-  puts the feet on its `Top` and takes the body across by its `MotionX`
-  while the wall oracle (`CanGoLeft/RightWallOnly`) lets it; a deck a
+  puts the feet on its `Top` and takes the body across by its `MotionX` a
+  unit at a time while the wall oracle (`CanGoLeft/RightWallOnly`) lets it
+  (`CarryX`); a deck a
   wall has pulled away leaves the body falling (`maFalling`) when no deck
   holds it (`StandsOnDeck`), the way down is open (`CanGoDown`) and
   gravity holds it - the dead and a gun that never walks too.
@@ -1824,7 +1867,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     struck and along the wall, seven a side two units apart
     (`FansPerSide`, `FanGap`; three four apart before 3.0.27), every fan
     heavier than a bullet's by the strike's `ExtraSparks` - 27 on the rim
-    (`RimExtraSparks`), 6 on each fan along the wall (`SideExtraSparks`);
+    (`RimExtraSparks`), 6 on each fan along the wall (`SideExtraSparks`) -
+    and `FPads.Shove` with the crash's `Blow` and `LapHolds` (3.0.28);
     `meBossOwesPrize` - `PayDodgePrize` hands
     a living hero the boss's `DodgePrize` with `SpawnOn`),
     `ResolveMonsterContact` also reports every touch to the monster
@@ -2185,7 +2229,7 @@ music loads leniently. Four one-shots are synthesised by
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
-| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
+| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
