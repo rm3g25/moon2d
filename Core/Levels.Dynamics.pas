@@ -424,10 +424,11 @@ type
     Drive: Single; // 0..1 of the full speed; 0 through a stall
   end;
 
-  // One rotor in three states of blur, and the guard over it
+  // One rotor in three states of blur, what stands behind it and what
+  // stands over it
   TFanArt = record
     Sharp, Smear, Disc: PSdlTexture;
-    Guard: PSdlTexture; // nil = none
+    Back, Guard: PSdlTexture; // nil = none
   end;
 
   // A ventilation fan: a rotor the code turns behind a guard that stands
@@ -435,29 +436,33 @@ type
   // blades. The rotor blurs with its speed - sharp, then smeared along
   // the turn, then a disc: sharp blades turning fast would strobe and
   // seem to crawl backward.
-  // Rotor and guard are the middles of picture names in the level's
-  // object art, every picture a square with the axis at its center:
-  // rotor "heavy" is rotor-heavy-N, rotor-heavy-smear-N and
-  // rotor-heavy-disc-N, guard "spider" is guard-spider-N, N a side of
-  // FanArtSides. A rotor is painted turning counterclockwise; a fan that
-  // turns clockwise mirrors it.
+  // Rotor, guard and back are the middles of picture names in the
+  // level's object art, every picture a square with the axis at its
+  // center: rotor "heavy" is rotor-heavy-N, rotor-heavy-smear-N and
+  // rotor-heavy-disc-N, guard "spider" is guard-spider-N, back "shaft"
+  // is back-shaft-N, N a side of FanArtSides. A rotor is painted turning
+  // counterclockwise; a fan that turns clockwise mirrors it. The back
+  // stands behind the rotor: a plate with an opening would show the
+  // backdrop through it.
   // Size is the square across in screen units, x and y its center; rpm
   // in turns a minute, counterclockwise above zero and clockwise below;
   // the tint multiplies the art; light is the glow of the shaft behind
-  // the blades, three percentages, absent = none; guard is optional.
+  // the blades, three percentages, absent = none; guard and back are
+  // optional.
   // Intensity is the share of the full speed, and the rotor follows it
   // with the inertia of a wheel. Fans at different points stand out of
   // step and turn a hair apart.
   // JSON:
-  //   {"kind": "fan", "parent": "s15-tower", "x": 32.4, "y": 78.6,
-  //    "size": 43.4, "tint": [88, 88, 90], "rotor": "heavy",
-  //    "guard": "spider", "rpm": 14, "run": "steady",
-  //    "light": [12, 17, 26]}
+  //   {"kind": "fan", "screen": 9, "x": 144, "y": 80, "size": 32,
+  //    "tint": [80, 80, 82], "rotor": "turbine", "guard": "bezel",
+  //    "back": "shaft", "rpm": 180, "run": "steady",
+  //    "light": [75, 10, 6]}
   TFan = class(TDynamicObject)
   private
     FSize: Single;
     FRotorName: string;
     FGuardName: string; // '' = no guard
+    FBackName: string; // '' = no back
     FClockwise: Boolean;
     FFullRate: Single; // degrees per tick at full intensity
     FRun: TMotorRun;
@@ -711,11 +716,12 @@ const
   // 512 screen units
   FanArtSides: array [0..3] of Integer = (64, 128, 256, 512);
   FanArtDensity = 1440 / 512;
-  // A rotor's and a guard's pictures: the name, then the side
+  // A fan's pictures: the name, then the side
   RotorSharpArt = 'rotor-%s-%d';
   RotorSmearArt = 'rotor-%s-smear-%d';
   RotorDiscArt = 'rotor-%s-disc-%d';
   GuardArt = 'guard-%s-%d';
+  BackArt = 'back-%s-%d';
 
   FullTurn = 360;
   // Turns a minute in JSON, degrees a tick in the code
@@ -723,7 +729,7 @@ const
   // The blur by speed, in turns a minute: sharp up to the first, fully
   // smeared at the second, a disc from the third. At 60 frames a second
   // five sharp blades seem to turn backward past 360 turns a minute,
-  // nine past 200: the disc is over them before that.
+  // eight past 225: the disc is over them before that.
   SharpUpToRpm = 40;
   SmearedAtRpm = 110;
   DiscFromRpm = 230;
@@ -1687,7 +1693,7 @@ end;
 procedure DrawFanLayer(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   const APose: TFanPose; ALevel: Single);
 begin
-  if ALevel < VisibleLevel then
+  if (ATexture = nil) or (ALevel < VisibleLevel) then
     Exit;
   // The pictures are shared: the next fan wears another tint
   TintTexture(ATexture, APose.Tint.R, APose.Tint.G, APose.Tint.B);
@@ -1705,6 +1711,7 @@ begin
   FSize := ReadPositive(AObj, 'size', DefaultFanSize, AOwner);
   FRotorName := AObj.GetValue<string>('rotor', DefaultFanRotor);
   FGuardName := AObj.GetValue<string>('guard', '');
+  FBackName := AObj.GetValue<string>('back', '');
   FRun := TMotorRun(ReadWord(AObj, 'run', MotorRunIds[mrSteady],
     MotorRunIds, 'run', AOwner));
   FLit := AObj.GetValue('light') <> nil;
@@ -1746,6 +1753,8 @@ begin
   FArt.Disc := ACanvas.Art.Get(Format(RotorDiscArt, [FRotorName, Side]));
   if FGuardName <> '' then
     FArt.Guard := ACanvas.Art.Get(Format(GuardArt, [FGuardName, Side]));
+  if FBackName <> '' then
+    FArt.Back := ACanvas.Art.Get(Format(BackArt, [FBackName, Side]));
 end;
 
 // The cache owns the textures
@@ -1804,40 +1813,40 @@ end;
 procedure TFan.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
   AAlpha: Single);
 var
-  Pose: TFanPose;
+  Standing, Turning: TFanPose;
 begin
+  Standing.Dest.X := AX - FSize / 2;
+  Standing.Dest.Y := AY - FSize / 2;
+  Standing.Dest.W := FSize;
+  Standing.Dest.H := FSize;
+  Standing.Tint := Placement.Tint;
+  Standing.Angle := Upright;
+  Standing.Flip := SdlFlipNone;
+
+  Turning := Standing;
+  var Angle := Lerp(FLastAngle, FAngle, AAlpha);
+  // The art turns counterclockwise, SDL clockwise
+  Turning.Angle := -Angle;
+  if FClockwise then
+  begin
+    Turning.Angle := Angle;
+    Turning.Flip := SdlFlipHorizontal;
+  end;
+
+  DrawFanLayer(ACanvas.Renderer, FArt.Back, Standing, FullLevel);
   if FLit then
     DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY,
       FSize * ShaftLightScale, FLight, FullLevel);
 
-  Pose.Dest.X := AX - FSize / 2;
-  Pose.Dest.Y := AY - FSize / 2;
-  Pose.Dest.W := FSize;
-  Pose.Dest.H := FSize;
-  Pose.Tint := Placement.Tint;
-  var Turned := Lerp(FLastAngle, FAngle, AAlpha);
-  // The art turns counterclockwise, SDL clockwise
-  Pose.Angle := -Turned;
-  Pose.Flip := SdlFlipNone;
-  if FClockwise then
-  begin
-    Pose.Angle := Turned;
-    Pose.Flip := SdlFlipHorizontal;
-  end;
-
   var Rpm: Single := FRate / RateOfRpm;
   var SharpShare: Single := 1 - Ramp(Rpm, SharpUpToRpm, SmearedAtRpm);
   var DiscShare := Ramp(Rpm, SmearedAtRpm, DiscFromRpm);
-  DrawFanLayer(ACanvas.Renderer, FArt.Disc, Pose, DiscShare);
-  DrawFanLayer(ACanvas.Renderer, FArt.Smear, Pose,
+  DrawFanLayer(ACanvas.Renderer, FArt.Disc, Turning, DiscShare);
+  DrawFanLayer(ACanvas.Renderer, FArt.Smear, Turning,
     1 - SharpShare - DiscShare);
-  DrawFanLayer(ACanvas.Renderer, FArt.Sharp, Pose, SharpShare);
+  DrawFanLayer(ACanvas.Renderer, FArt.Sharp, Turning, SharpShare);
 
-  if FArt.Guard = nil then
-    Exit;
-  Pose.Angle := Upright;
-  Pose.Flip := SdlFlipNone;
-  DrawFanLayer(ACanvas.Renderer, FArt.Guard, Pose, FullLevel);
+  DrawFanLayer(ACanvas.Renderer, FArt.Guard, Standing, FullLevel);
 end;
 
 // ---------------------------------------------------------------------------
