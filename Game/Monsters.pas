@@ -188,6 +188,11 @@ type
     procedure NoteHeroContact;
     // Asked on meBossCrashed, which only a piloted monster sends
     function LastCrash: TPilotCrash;
+    // The lap of a flying boss (Monsters.Pilot); the rest fly no lap:
+    // nothing to hold, never on one, none ahead
+    procedure HoldLap(AHold: Boolean);
+    function FliesLap: Boolean;
+    function LapAhead(ATicks: Integer): TArray<TLapStep>;
     function HealthTier: TMonsterHealthTier;
     // How full the current third is, 0..1
     function TierShare: Single;
@@ -260,6 +265,8 @@ type
     function AnyTaggedEnraged(const ATag: string): Boolean;
     // The events' tactics action lands here
     procedure SetTaggedTactics(const ATag: string; ATactics: TPilotTactics);
+    // The first live body carrying the placement tag; nil when none
+    function FirstAliveTagged(const ATag: string): TMonster;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer;
       AAlpha: Single);
     // Over the monsters of the screen: the smoke of the wrecked machines
@@ -945,6 +952,24 @@ begin
   Result := FPilot.LastCrash;
 end;
 
+procedure TMonster.HoldLap(AHold: Boolean);
+begin
+  if FPilot <> nil then
+    FPilot.HoldLap(AHold);
+end;
+
+function TMonster.FliesLap: Boolean;
+begin
+  Result := (FPilot <> nil) and FPilot.FliesLap;
+end;
+
+function TMonster.LapAhead(ATicks: Integer): TArray<TLapStep>;
+begin
+  Result := [];
+  if FPilot <> nil then
+    Result := FPilot.LapAhead(FX, FY, ATicks);
+end;
+
 // Shared by MoveWalking and MoveFlying - the same frame clock
 procedure TMonster.AdvanceFrame;
 begin
@@ -1383,6 +1408,14 @@ begin
       (Monster.Tag = ATag) then
       Exit(True);
   Result := False;
+end;
+
+function TMonsterField.FirstAliveTagged(const ATag: string): TMonster;
+begin
+  for var Monster in FMonsters do
+    if (Monster.Life = mlAlive) and (Monster.Tag = ATag) then
+      Exit(Monster);
+  Result := nil;
 end;
 
 procedure TMonsterField.SetTaggedTactics(const ATag: string;

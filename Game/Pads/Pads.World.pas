@@ -33,7 +33,8 @@
   A rebuild flies the pads of a group to a new formation inside its zone
   (Pads.Formations throws and judges it, Pads.Flights plans the flights).
   It is asked for and starts on the group's screen once no pad of the
-  group is knocked; the pads the caller says are loaded stay in front. A
+  group is knocked; the pads the caller says are loaded stay in front,
+  and every pad sets off no sooner than the caller lets it. A
   pad flown into the depth behind the others is neither a floor nor a
   body until it comes out on its cell: what stands on it falls. A flying
   pad does not bob; it takes up the bob again on its cell, in step with
@@ -162,6 +163,10 @@ type
   // The pad carries a rider the rebuild must not take into the depth
   TPadLoad = reference to function(const APad: TPad): Boolean;
 
+  // Ticks after the start of a rebuild before which the pad on ACell
+  // stays home
+  TPadRelease = reference to function(const ACell: TPadCell): Integer;
+
   TPadLayer = (plDeep, plFront);
 
   TPadWorld = class
@@ -174,13 +179,13 @@ type
     // The group a rebuild is asked for, '' when none; and the one flying
     FAskedGroup: string;
     FAskedLoad: TPadLoad;
+    FAskedRelease: TPadRelease;
     FFlyingGroup: string;
     function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
     function RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
       const AFence: TPadFence): Boolean;
     function RoomFor(const APad: TPad; ADX, ADY: Double;
       const AFence: TPadFence): Boolean;
-    function Rebuilding: Boolean;
     function GroupFlying(const ATag: string): Boolean;
     function FlyingOn(AScreen: Integer): Boolean;
     function MembersOf(const ATag: string): TArray<TPad>;
@@ -208,8 +213,14 @@ type
     procedure Rewind(ASeed: Cardinal);
     // The pads of the group tagged AGroup fly to a new formation, on its
     // screen once none of them is knocked; a pad ALoad says is loaded
-    // stays in front. Nothing while a rebuild is asked for or flying.
-    procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad);
+    // stays in front, a pad sets off no sooner than ARelease says - nil:
+    // all at the start. Nothing while a rebuild is asked for or flying.
+    procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad;
+      const ARelease: TPadRelease);
+    // A rebuild is asked for or flying
+    function Rebuilding: Boolean;
+    // A pad of the group tagged AGroup is knocked off its place
+    function GroupKnocked(const AGroup: string): Boolean;
     // The deck the feet stand on: at AFeetY, spanning some of
     // ALeft..ARight. nil when there is none.
     function DeckUnder(AScreen: Integer; ALeft, ARight,
@@ -645,6 +656,7 @@ begin
     Pad.Rewind;
   FAskedGroup := '';
   FAskedLoad := nil;
+  FAskedRelease := nil;
   FFlyingGroup := '';
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
@@ -836,6 +848,14 @@ begin
   Result := False;
 end;
 
+function TPadWorld.GroupKnocked(const AGroup: string): Boolean;
+begin
+  for var Pad in MembersOf(AGroup) do
+    if Pad.Knocked then
+      Exit(True);
+  Result := False;
+end;
+
 // A group of the screen is being rebuilt
 function TPadWorld.FlyingOn(AScreen: Integer): Boolean;
 begin
@@ -857,12 +877,13 @@ begin
 end;
 
 procedure TPadWorld.RequestRebuild(const AGroup: string;
-  const ALoad: TPadLoad);
+  const ALoad: TPadLoad; const ARelease: TPadRelease);
 begin
   if Rebuilding or (Length(MembersOf(AGroup)) = 0) then
     Exit;
   FAskedGroup := AGroup;
   FAskedLoad := ALoad;
+  FAskedRelease := ARelease;
 end;
 
 // On the group's screen, once no pad of it is knocked - a knock is over
@@ -879,6 +900,7 @@ begin
       StartRebuild(Group);
   FAskedGroup := '';
   FAskedLoad := nil;
+  FAskedRelease := nil;
 end;
 
 procedure TPadWorld.StartRebuild(const AGroup: TPadGroup);
@@ -928,7 +950,7 @@ begin
   SetLength(Start, Length(AMembers));
   SetLength(FileCells, Length(AMembers));
   SetLength(Loaded, Length(AMembers));
-  // Zeros: every pad free to set off at the start
+  // Zeros when nobody holds the pads back: all free at the start
   SetLength(Release, Length(AMembers));
   for var i := 0 to High(AMembers) do
   begin
@@ -936,6 +958,8 @@ begin
     Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
     FileCells[i] := CellOfPlace(Pad.Placement.X, Pad.Placement.Y);
     Loaded[i] := Assigned(FAskedLoad) and FAskedLoad(Pad);
+    if Assigned(FAskedRelease) then
+      Release[i] := FAskedRelease(Start[i]);
   end;
 
   var Launch := LaunchSpans(FLevel, AGroup, StillSpans(AGroup));

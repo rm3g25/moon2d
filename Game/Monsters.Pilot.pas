@@ -13,6 +13,12 @@
   lap the pilot minds the walls: the level's grid and the bodies of its
   pads (Pads.World), the body one cell big.
 
+  The lap may be held (Pads.Arena, while it rebuilds the pads): the body
+  ends the maneuver it is in, comes back to the lap - a hunt too - and
+  starts no other until it is let go. Let go, it rests on the lap anew,
+  but a hunt goes on hunting at once, and new tactics still open with
+  their maneuver.
+
   Not here: what a maneuver looks and sounds like. The disc, the bullets
   and the sparks of a crash are the monster's and the game's.
 
@@ -54,6 +60,13 @@ type
     Blow: TPadBlow;
   end;
 
+  // A tick of the lap ahead: the cell under the middle of the body and
+  // the way it flew there
+  TLapStep = record
+    Cell: TCell;
+    Heading: THeading;
+  end;
+
   // What the monster tells its pilot every tick
   TPilotBrief = record
     Step: Integer; // the monster's own: its rage doubles it
@@ -89,6 +102,8 @@ type
     FLastCrash: TPilotCrash;
     FCrashed: Boolean;
     FOwesPrize: Boolean;
+    FLapHeld: Boolean;
+    FLapStep: Integer; // the monster's step, as the last brief told it
     function Walled(AX, AY: Single): Boolean;
     function CellOpen(const ACell: TCell): Boolean;
     function CanGo(AHeading: THeading): Boolean;
@@ -137,6 +152,14 @@ type
     procedure Tick(var AX, AY: Double; const ABrief: TPilotBrief);
     procedure SetTactics(ATactics: TPilotTactics);
     procedure NoteHeroContact;
+    // The lap is held: back to it at the end of the maneuver, and no other
+    // from it; let go - a new rest on it, none for a hunt or when new
+    // tactics are owed at once
+    procedure HoldLap(AHold: Boolean);
+    function FliesLap: Boolean;
+    // ATicks of the lap flown on from the feet point AX, AY, where it
+    // would take the body: the pilot itself goes nowhere
+    function LapAhead(AX, AY: Double; ATicks: Integer): TArray<TLapStep>;
     // In a maneuver
     function Busy: Boolean;
     // The monster's aimed gun is silent: the ports speak, or the eye is
@@ -328,6 +351,20 @@ begin
   end;
 end;
 
+// A tick of the lap: on along the heading, which turns past its mark
+procedure FlyLapStep(var AFeet: TPlace; var AHeading: THeading;
+  AClockwise: Boolean; AStep: Integer);
+begin
+  AFeet.X := AFeet.X + HeadingX[AHeading] * AStep;
+  AFeet.Y := AFeet.Y + HeadingY[AHeading] * AStep;
+  if not PastLapMark(AHeading, AFeet) then
+    Exit;
+  if AClockwise then
+    AHeading := ClockwiseTurn[AHeading]
+  else
+    AHeading := CounterclockwiseTurn[AHeading];
+end;
+
 // A corner goes with the side that leaves it
 function LapHeadingAt(const ACell: TCell; AClockwise: Boolean): THeading;
 begin
@@ -443,6 +480,7 @@ begin
   FState := psLap;
   FHeading := hdDown;
   FClockwise := True;
+  FLapStep := ABaseStep;
 end;
 
 procedure TPilot.SetTactics(ATactics: TPilotTactics);
@@ -457,6 +495,24 @@ end;
 procedure TPilot.NoteHeroContact;
 begin
   FDashTouchedHero := True;
+end;
+
+procedure TPilot.HoldLap(AHold: Boolean);
+begin
+  if AHold = FLapHeld then
+    Exit;
+  FLapHeld := AHold;
+  if AHold then
+    Exit;
+  FLapRestTicks := 0;
+  var Rests := not FRestWaived and (FTactics <> ptHunts);
+  if Rests then
+    FLapRestTicks := RollRestTicks(FLapStep);
+end;
+
+function TPilot.FliesLap: Boolean;
+begin
+  Result := FState = psLap;
 end;
 
 function TPilot.Busy: Boolean;
@@ -582,6 +638,7 @@ begin
   FCrashed := False;
   FOwesPrize := False;
   FGunBeat := (FGunBeat + 1) mod ManeuverGunSlowdown;
+  FLapStep := ABrief.Step;
 
   Feet.X := AX;
   Feet.Y := AY;
@@ -623,14 +680,23 @@ end;
 
 procedure TPilot.FlyLap(var AFeet: TPlace; AStep: Integer);
 begin
-  AFeet.X := AFeet.X + HeadingX[FHeading] * AStep;
-  AFeet.Y := AFeet.Y + HeadingY[FHeading] * AStep;
-  if not PastLapMark(FHeading, AFeet) then
-    Exit;
-  if FClockwise then
-    FHeading := ClockwiseTurn[FHeading]
-  else
-    FHeading := CounterclockwiseTurn[FHeading];
+  FlyLapStep(AFeet, FHeading, FClockwise, AStep);
+end;
+
+function TPilot.LapAhead(AX, AY: Double; ATicks: Integer): TArray<TLapStep>;
+var
+  Feet: TPlace;
+begin
+  SetLength(Result, ATicks);
+  Feet.X := AX;
+  Feet.Y := AY;
+  var Heading := FHeading;
+  for var i := 0 to ATicks - 1 do
+  begin
+    Result[i].Heading := Heading;
+    FlyLapStep(Feet, Heading, FClockwise, FLapStep);
+    Result[i].Cell := CellAt(Feet);
+  end;
 end;
 
 // One cell on from where the body is, on the lane its heading flies. A
@@ -663,7 +729,7 @@ end;
 procedure TPilot.Cruise(var AFeet: TPlace; const ABrief: TPilotBrief);
 begin
   FlyLap(AFeet, ABrief.Step);
-  if FTactics = ptLaps then
+  if (FTactics = ptLaps) or FLapHeld then
     Exit;
   if FLapRestTicks > 0 then
   begin
@@ -742,11 +808,11 @@ begin
     BeginDive(CellAt(Hero));
 end;
 
-// A hunt never goes back to the lap: the next maneuver starts from the
-// cell this one has ended at
+// A hunt goes back to the lap only while it is held: else the next
+// maneuver starts from the cell this one has ended at
 procedure TPilot.EndManeuver(const AFeet: TPlace);
 begin
-  if FTactics = ptHunts then
+  if (FTactics = ptHunts) and not FLapHeld then
     BeginBrake(CellAt(AFeet))
   else
     BeginReturn(AFeet);

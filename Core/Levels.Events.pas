@@ -27,7 +27,7 @@ type
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
-    eaIntensity, eaSun, eaTactics);
+    eaIntensity, eaSun, eaTactics, eaRebuild);
 
   TEventAction = record
     Kind: TEventActionKind;
@@ -41,6 +41,9 @@ type
     // eaTactics: the monsters placed with the tag Target fly by
     // Tactics from now on (Monsters.Pilot). JSON: "target", "value" (a
     // word of EventTacticsIds).
+    // eaRebuild: the pad group tagged Target is rebuilt from now on,
+    // over and over, as its conductor flies (Pads.Arena). JSON:
+    // "target".
     Target: string;
     Level: Single;
     Angle: Single;
@@ -76,7 +79,7 @@ const
     'enterScreen', 'allDead', 'livesBelow', 'enraged');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
-    'tactics');
+    'tactics', 'rebuild');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
 
@@ -104,6 +107,7 @@ resourcestring
   SEventSunNoAngle = 'Level "%s": event "%s": sun takes a "value" in degrees';
   SEventTacticsNoTarget = 'Level "%s": event "%s": tactics names no target';
   SEventBadTactics = 'Level "%s": event "%s": unknown tactics "%s"';
+  SEventRebuildNoTarget = 'Level "%s": event "%s": rebuild names no target';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
 
@@ -172,6 +176,15 @@ begin
     AEventId);
 end;
 
+procedure ReadRebuild(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.Target := AObj.GetValue<string>('target', '');
+  if AAction.Target = '' then
+    raise ELevelEventError.CreateFmt(SEventRebuildNoTarget,
+      [ALevelId, AEventId]);
+end;
+
 function ReadAction(const AObj: TJSONObject;
   const ALevelId, AEventId: string): TEventAction;
 begin
@@ -187,6 +200,8 @@ begin
       ReadSun(AObj, ALevelId, AEventId, Result);
     eaTactics:
       ReadTactics(AObj, ALevelId, AEventId, Result);
+    eaRebuild:
+      ReadRebuild(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

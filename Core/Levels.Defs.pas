@@ -145,6 +145,7 @@ type
     procedure CheckPadGroups;
     procedure CheckPadGroup(const AGroup: TPadGroup);
     procedure CheckPadGroupZone(const AGroup: TPadGroup);
+    procedure CheckPadGroupLinks;
     function TryFindWall(AScreen: Integer; const AZone: TPadZone;
       out ACol, ARow: Integer): Boolean;
     procedure CheckEvents;
@@ -234,6 +235,12 @@ resourcestring
     + 'which no globe carries';
   SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
     + '"%s", which no entity carries';
+  SLevelEventRebuildUnknown = 'Level "%s": event "%s" rebuilds "%s", which '
+    + 'no pad group carries';
+  SLevelPadGroupNoConductor = 'Level "%s": pad group "%s" follows "%s", '
+    + 'which no entity on its screen carries';
+  SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
+    + 'dynamic object carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
     + 'a tag no object, no pad and no entity carries';
   SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by more than '
@@ -416,6 +423,7 @@ begin
   // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
   CheckDynamics;
+  CheckPadGroupLinks;
   FEvents := ParseLevelEvents(ARoot, FId);
   CheckEvents;
 end;
@@ -427,6 +435,15 @@ begin
     if Entity.Tag = ATag then
       Exit(True);
   Result := False;
+end;
+
+function PadGroupsTagged(const AGroups: TArray<TPadGroup>;
+  const ATag: string): Integer;
+begin
+  Result := 0;
+  for var Group in AGroups do
+    if Group.Tag = ATag then
+      Inc(Result);
 end;
 
 // An event off the screen list never fires; one watching a tag no
@@ -469,6 +486,10 @@ begin
     eaTactics:
       if not AnyPlacementTagged(FEntities, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventTacticsUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaRebuild:
+      if PadGroupsTagged(FPadGroups, AAction.Target) = 0 then
+        raise ELevelError.CreateFmt(SLevelEventRebuildUnknown,
           [FId, AEventId, AAction.Target]);
   end;
 end;
@@ -516,15 +537,6 @@ begin
       raise ELevelError.CreateFmt(SLevelPadStopOff,
         [FId, Pad.Sprite, Off.X, Off.Y]);
   end;
-end;
-
-function PadGroupsTagged(const AGroups: TArray<TPadGroup>;
-  const ATag: string): Integer;
-begin
-  Result := 0;
-  for var Group in AGroups do
-    if Group.Tag = ATag then
-      Inc(Result);
 end;
 
 // The pad's cell is a cell of the zone, the whole of it
@@ -601,6 +613,33 @@ begin
   if (AGroup.FarShare > 0) and (AGroup.FarFlight > LongestFlight) then
     raise ELevelError.CreateFmt(SLevelPadGroupFarFlight,
       [FId, AGroup.Tag, AGroup.FarFlight]);
+end;
+
+function AnyPlacementTaggedOn(const AEntities: TArray<TEntityPlacement>;
+  const ATag: string; AScreen: Integer): Boolean;
+begin
+  for var Entity in AEntities do
+    if (Entity.Tag = ATag) and (Entity.Screen = AScreen) then
+      Exit(True);
+  Result := False;
+end;
+
+// A conductor no entity of the group's screen carries leaves the group
+// never rebuilt - whether it flies a lap is the monster's definition,
+// which the level does not know; alarm lamps no dynamic object carries
+// leave the warning dark
+procedure TLevel.CheckPadGroupLinks;
+begin
+  for var Group in FPadGroups do
+  begin
+    if (Group.Conductor <> '') and
+      not AnyPlacementTaggedOn(FEntities, Group.Conductor, Group.Screen) then
+      raise ELevelError.CreateFmt(SLevelPadGroupNoConductor,
+        [FId, Group.Tag, Group.Conductor]);
+    if (Group.Alarm <> '') and not FDynamics.AnyTagged(Group.Alarm) then
+      raise ELevelError.CreateFmt(SLevelPadGroupNoAlarm,
+        [FId, Group.Tag, Group.Alarm]);
+  end;
 end;
 
 procedure TLevel.CheckPadGroup(const AGroup: TPadGroup);

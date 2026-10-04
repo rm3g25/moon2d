@@ -1222,7 +1222,10 @@
       "zone": [2, 4, 13, 8],
       "pairs": 2,
       "farFlight": 5,
-      "farShare": 5
+      "farShare": 5,
+      "conductor": "boss",
+      "every": 10,
+      "alarm": "arena17Alarm"
     }
   ],
   "dynamics": [
@@ -2598,6 +2601,150 @@
       "blink": "pulse",
       "frequency": 0.27,
       "intensity": 40,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-01",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-02",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-03",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-04",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-05",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-06",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-07",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-08",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
+      "size": 18
+    },
+    {
+      "kind": "beacon",
+      "parent": "s17-plat-09",
+      "tag": "arena17Alarm",
+      "x": 16.0,
+      "y": 25.0,
+      "tint": [
+        100,
+        14,
+        8
+      ],
+      "blink": "flash",
+      "frequency": 5,
+      "intensity": 0,
       "size": 18
     },
     {
@@ -4911,6 +5058,18 @@
           "action": "tactics",
           "target": "boss",
           "value": "rams"
+        }
+      ]
+    },
+    {
+      "id": "bossRageRebuilds",
+      "screen": 17,
+      "when": "enraged",
+      "tag": "boss",
+      "then": [
+        {
+          "action": "rebuild",
+          "target": "arena17"
         }
       ]
     },

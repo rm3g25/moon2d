@@ -197,6 +197,7 @@
         <DCCReference Include="Game\Pads\Pads.Formations.pas"/>
         <DCCReference Include="Game\Pads\Pads.Flights.pas"/>
         <DCCReference Include="Game\Pads\Pads.World.pas"/>
+        <DCCReference Include="Game\Pads\Pads.Arena.pas"/>
         <DCCReference Include="Core\Render.Font.pas"/>
         <DCCReference Include="Hud\Hud.Typewriter.pas"/>
         <DCCReference Include="Hud\Hud.Terminal.pas"/>

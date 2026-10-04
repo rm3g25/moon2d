@@ -52,6 +52,7 @@ uses
   Pads.Formations in 'Game\Pads\Pads.Formations.pas',
   Pads.Flights in 'Game\Pads\Pads.Flights.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
+  Pads.Arena in 'Game\Pads\Pads.Arena.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',
   Hud.Terminal in 'Hud\Hud.Terminal.pas',
@@ -308,6 +309,7 @@ type
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     FHenshin: THenshin; // the ceremony; reborn with the hero
     FDirector: TEventDirector; // the level's events; reborn with the level
+    FArena: TPadArena; // the rebuilds of the boss fight; reborn with the level
     // The bonus slot: one reward at a time, spent by right click.
     FBonus: TBonusKind;
     FBonusActivateQueued: Boolean; // right click lands between ticks
@@ -371,7 +373,6 @@ type
     function SaveScreenPictures(const ADir: string): Integer;
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
-    function HeroRides(const APad: TPad): Boolean;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -386,6 +387,7 @@ type
     procedure StartPlaying;
     procedure PreloadSounds;
     procedure ChangeMusic(const AFileName: string);
+    function HeroRides(const APad: TPad): Boolean;
     function LocateParent(const ATag: string;
       out AStand: TParentStand): Boolean;
     function SolidUnderPoint(AX, AY: Single): Boolean;
@@ -474,6 +476,7 @@ begin
   FCharge.Free;
   FHenshin.Free;
   FDirector.Free;
+  FArena.Free;
   FField.Free;
   FMonsterBullets.Free;
   FHero.Free;
@@ -574,9 +577,12 @@ begin
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
+  FreeAndNil(FArena);
+  FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
+    HeroRides);
   FreeAndNil(FDirector);
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
-    FLevel.Dynamics, ChangeMusic);
+    FLevel.Dynamics, ChangeMusic, FArena.Engage);
 
   FMonsterBullets.Clear;
   FExplosions.Clear;
@@ -1016,6 +1022,12 @@ begin
   FAudio.PlayMusic(AFileName, mmLoop);
 end;
 
+// The one rider a rebuild keeps out of the depth: monsters fall through
+function TMoonGame.HeroRides(const APad: TPad): Boolean;
+begin
+  Result := APad = FHero.DeckUnderFeet;
+end;
+
 // A dynamic object hung on a pad or a monster looks it up here every
 // tick. Levels.Defs has refused a tag both carry.
 function TMoonGame.LocateParent(const ATag: string;
@@ -1411,6 +1423,7 @@ begin
   // The pads first: Reseat finds the pad of a lamp where the level file
   // puts it
   FPads.Rewind(RollDiceSeed);
+  FArena.Reset;
   FDynamics.Reseat;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
@@ -1717,10 +1730,13 @@ begin
   ResolveHeroBulletHits;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
-  // The verdicts of the tick are in; the dead watch no events - the
-  // restart re-arms the screen anyway
+  // The verdicts of the tick are in; the dead watch no events and direct
+  // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
+  begin
     FDirector.Tick(FHero.Screen, FField);
+    FArena.Tick(FHero.Screen, FField);
+  end;
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind
   FDynamics.Tick(FHero.Screen);
@@ -1976,18 +1992,14 @@ begin
   SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(Report)));
 end;
 
-// R: the pad group of the hero's screen flies to a new formation; the pad
-// under the hero stays in front. Once the last pad has landed.
+// R: the pad group of the hero's screen flies to a new formation, every
+// pad at once; the pad under the hero stays in front. Once the last pad
+// has landed.
 procedure TMoonGame.DebugRebuildPads;
 begin
   for var Group in FLevel.PadGroups do
     if Group.Screen = FHero.Screen then
-      FPads.RequestRebuild(Group.Tag, HeroRides);
-end;
-
-function TMoonGame.HeroRides(const APad: TPad): Boolean;
-begin
-  Result := APad = FHero.DeckUnderFeet;
+      FPads.RequestRebuild(Group.Tag, HeroRides, nil);
 end;
 {$ENDIF} // DEBUGKEYS
 

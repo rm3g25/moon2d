@@ -14,7 +14,9 @@
 
   Pads of a group are rebuilt together: they fly off to a new formation
   inside the group's zone, a cell each. The section padGroups names the
-  groups; a pad joins one by its group.
+  groups; a pad joins one by its group. A group with a conductor - a
+  monster flying its lap - is rebuilt over and over once an event says
+  so, the pads setting off as the conductor flies past.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -83,6 +85,12 @@ type
     // least FarShare pads far
     FarFlight: Integer;
     FarShare: Integer;
+    // The tag of the monster the rebuilds follow, '' = none; the
+    // seconds between two rebuilds; the tag of the dynamic objects lit
+    // to warn of one, '' = none
+    Conductor: string;
+    Every: Single;
+    Alarm: string;
   end;
 
 const
@@ -96,8 +104,8 @@ const
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
-// numbers, pairs or farShare below zero, a farFlight below one
-// raise.
+// numbers, pairs or farShare below zero, a farFlight below one, a
+// conductor without every above zero raise.
 function ParsePadGroups(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadGroup>;
 
@@ -116,6 +124,8 @@ resourcestring
   SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
     + '[left, top, right, bottom]';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
+  SPadGroupBadEvery = 'Level "%s": pad group "%s" has a conductor and '
+    + 'takes every %g - seconds above zero';
 
 function ReadBullets(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadBullets;
@@ -242,6 +252,9 @@ begin
     Group.Pairs := Obj.GetValue<Integer>('pairs', 0);
     Group.FarFlight := Obj.GetValue<Integer>('farFlight', 1);
     Group.FarShare := Obj.GetValue<Integer>('farShare', 0);
+    Group.Conductor := Obj.GetValue<string>('conductor', '');
+    Group.Every := Obj.GetValue<Double>('every', 0);
+    Group.Alarm := Obj.GetValue<string>('alarm', '');
 
     if Group.Pairs < 0 then
       raise EPadError.CreateFmt(SPadGroupBadNumber,
@@ -252,6 +265,9 @@ begin
     if Group.FarShare < 0 then
       raise EPadError.CreateFmt(SPadGroupBadNumber,
         [ALevelId, Group.Tag, 'farShare', Group.FarShare]);
+    if (Group.Conductor <> '') and (Group.Every <= 0) then
+      raise EPadError.CreateFmt(SPadGroupBadEvery,
+        [ALevelId, Group.Tag, Group.Every]);
 
     Result := Result + [Group];
   end;
