@@ -1231,8 +1231,13 @@ begin
   if Distance = 0 then
     Exit;
 
+  // 2008 had whole coordinates, so |DeltaY| <= Distance held by itself.
+  // A deck between the rows leaves the feet on a fraction: a rounded-down
+  // Distance pushes the ratio past 1 and ArcSin answers NaN. On whole
+  // coordinates the clamp is a no-op, so the gun aims exactly as before.
+  var Sine := EnsureRange(DeltaY / Distance, -1.0, 1.0);
   // Verbatim: the sign flips follow the WALK direction, not the cursor.
-  FWeaponAngle := -Round(57.296 * ArcSin(DeltaY / Distance));
+  FWeaponAngle := -Round(57.296 * ArcSin(Sine));
   if not FDirection then
     FWeaponAngle := -FWeaponAngle;
   if FDirection and (DeltaX < 0) then
