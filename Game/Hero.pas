@@ -149,6 +149,7 @@ type
     function LandOnDeck(APrevY: Double): Boolean;
     procedure DropThroughDeck;
     procedure RideDeck;
+    procedure CarryX(AWay: Double);
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
       const APads: TPadWorld);
@@ -930,11 +931,7 @@ begin
   if Deck = nil then
     Exit;
 
-  var Way := Deck.MotionX;
-  var LeftFree := (Way < 0) and not WallBlocksLeft;
-  var RightFree := (Way > 0) and not WallBlocksRight;
-  if LeftFree or RightFree then
-    FX := FX + Way;
+  CarryX(Deck.MotionX);
 
   var Rising := Deck.Top < FY;
   if Rising and not CanIGoUp then
@@ -951,6 +948,23 @@ begin
   FCorpseSettled := False;
   if FAction = haStand then
     SettleOnGround;
+end;
+
+// A unit at a time, the wall asked before every one, as ShoveX: a knocked
+// deck goes several units a tick, more than one look ahead vouches for
+procedure THero.CarryX(AWay: Double);
+begin
+  var Rest := AWay;
+  while Rest <> 0 do
+  begin
+    var Step := EnsureRange(Rest, -1.0, 1.0);
+    if (Step < 0) and WallBlocksLeft then
+      Exit;
+    if (Step > 0) and WallBlocksRight then
+      Exit;
+    FX := FX + Step;
+    Rest := Rest - Step;
+  end;
 end;
 
 function THero.DeckLift(AAlpha: Single): Single;

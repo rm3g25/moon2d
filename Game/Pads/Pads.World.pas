@@ -22,6 +22,13 @@
   lamps hung on the pad read it. The riders are drawn with the Lift of
   their deck.
 
+  A blow - the boss's ram - knocks a pad off its place: a cell along the
+  blow, or as far as the walls, the other pads and the caller's fence -
+  the boss's lap - let it. Out in a few ticks, rocking, held while the
+  boss lies stunned, home by the time he flies again. The riders go with
+  it as with a path, and the room over the deck is kept clear of walls
+  for them. A pad on a path only rocks.
+
   The world is born with the level; a restart rewinds it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -33,9 +40,21 @@ interface
 
 uses
   System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Levels.Pads;
+  Sdl2.Core, Render.Sprites, Levels.Pads, Levels.Defs;
 
 type
+  // The point is shut to a knocked pad, besides the walls
+  TPadFence = reference to function(AX, AY: Single): Boolean;
+
+  // A body that struck: its corners a step on, where the walls stopped
+  // it - a pad holding one is struck; the way it went, a unit vector; the
+  // ticks the struck pad stays out
+  TPadBlow = record
+    Left, Top, Right, Bottom: Single;
+    WayX, WayY: Single;
+    Ticks: Integer;
+  end;
+
   TPad = class
   private
     FPlacement: TPadPlacement;
@@ -48,12 +67,23 @@ type
     FPauseTicks: Integer;
     FCycleTicks: Integer;
     FClock: Integer; // ticks this pad has lived on the hero's screen
+    FPathLeft, FPathTop: Double; // where the path puts the pad
+    // The knock: off the path by From at the blow - a pad struck again
+    // before it is home - and by To at its farthest; the ticks since the
+    // blow, NoKnock when there is none
+    FKnockFromX, FKnockFromY: Double;
+    FKnockToX, FKnockToY: Double;
+    FKnockClock: Integer;
+    FKnockTicks: Integer;
     FLeft, FTop: Double;
     FPrevLeft, FPrevTop: Double;
     FSag, FSagSpeed: Double; // units down, units a tick
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure TickSag;
+    procedure TickKnock;
+    procedure KnockOffset(out AX, AY: Double);
+    function Tilt(AAlpha: Single): Double;
     function GetRight: Double;
   public
     constructor Create(const APlacement: TPadPlacement; ATexture: PSdlTexture);
@@ -69,6 +99,13 @@ type
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back
     procedure Press(ASpeed: Double);
+    // A blow: the pad goes ADX, ADY from where it stands and is back on
+    // its path ATicks later
+    procedure Knock(ADX, ADY: Double; ATicks: Integer);
+    function Travels: Boolean;
+    // The body moved ADX, ADY from where it stands now would not cut into
+    // AOther's; touching is no cut
+    function ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
     // Units down from the deck the pad is drawn at: the sag of this tick
     // and the bob AAlpha of the way from the last tick to this one
     function Lift(AAlpha: Single): Double;
@@ -89,12 +126,18 @@ type
   TPadWorld = class
   private
     FSprites: TSpriteRenderer;
+    FLevel: TLevel;
     FPads: TObjectList<TPad>;
+    function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
+    function RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
+      const AFence: TPadFence): Boolean;
+    function RoomFor(const APad: TPad; ADX, ADY: Double;
+      const AFence: TPadFence): Boolean;
   public
-    // ACache is the level's object art and must outlive the world; a
-    // picture it lacks raises here, at level load
+    // ACache is the level's object art; it and ALevel must outlive the
+    // world. A picture the cache lacks raises here, at level load.
     constructor Create(const ASprites: TSpriteRenderer;
-      const ACache: TSpriteCache; const APlacements: TArray<TPadPlacement>);
+      const ACache: TSpriteCache; const ALevel: TLevel);
     destructor Destroy; override;
 
     // Before the riders move: the pads of AScreen go on along their paths
@@ -123,6 +166,11 @@ type
     function StopsBulletAt(AScreen: Integer; AX, AY: Single): Boolean;
     // nil when no pad carries the tag
     function FindTagged(const ATag: string): TPad;
+    // The boss's body struck: the pad it struck, if one, is knocked the
+    // way the body went - a cell, or as far as the walls, AFence and the
+    // other pads let it
+    procedure Shove(AScreen: Integer; const ABlow: TPadBlow;
+      const AFence: TPadFence);
     procedure Draw(AScreen: Integer; AAlpha: Single);
   end;
 
@@ -148,6 +196,21 @@ const
   SagStiffness = 0.18;
   SagDamping = 0.3;
   SagRest = 0.05; // closer than this, at rest
+  // The knock: a cell a blow; out in KnockOutTicks, home again over
+  // KnockBackTicks that end with the blow's ticks - the boss's stun: when
+  // he flies again, the arena is as he left it
+  NoKnock = -1;
+  KnockReach = TileSize;
+  KnockOutTicks = 6;
+  KnockBackTicks = 12;
+  // The pad rocks after the blow: the tilt in degrees at its widest, how
+  // fast it dies away and one rock in ticks
+  KnockTilt = 7.0;
+  KnockTiltDecayTicks = 12.0;
+  KnockTiltPeriodTicks = 8.0;
+  // A knocked body is tried against the walls a hair inside its edges:
+  // flush against a wall is not in it
+  WallProbeInset = 0.01;
 
 // Eased in and out: the pad sets off and comes to a stop gently
 function Smoothstep(AShare: Double): Double;
@@ -205,8 +268,16 @@ end;
 procedure TPad.Rewind;
 begin
   FClock := 0;
-  FLeft := FPlacement.X;
-  FTop := FPlacement.Y;
+  FPathLeft := FPlacement.X;
+  FPathTop := FPlacement.Y;
+  FKnockFromX := 0;
+  FKnockFromY := 0;
+  FKnockToX := 0;
+  FKnockToY := 0;
+  FKnockClock := NoKnock;
+  FKnockTicks := 0;
+  FLeft := FPathLeft;
+  FTop := FPathTop;
   FPrevLeft := FLeft;
   FPrevTop := FTop;
   FSag := 0;
@@ -227,15 +298,15 @@ begin
     if Time < FLegTicks[i] then
     begin
       var Share := Smoothstep(Time / FLegTicks[i]);
-      FLeft := From.X + (Next.X - From.X) * Share;
-      FTop := From.Y + (Next.Y - From.Y) * Share;
+      FPathLeft := From.X + (Next.X - From.X) * Share;
+      FPathTop := From.Y + (Next.Y - From.Y) * Share;
       Exit;
     end;
     Dec(Time, FLegTicks[i]);
     if Time < FPauseTicks then
     begin
-      FLeft := Next.X;
-      FTop := Next.Y;
+      FPathLeft := Next.X;
+      FPathTop := Next.Y;
       Exit;
     end;
     Dec(Time, FPauseTicks);
@@ -253,6 +324,37 @@ begin
   end;
 end;
 
+// How far off its path the pad is: eased out, held, eased home
+procedure TPad.KnockOffset(out AX, AY: Double);
+begin
+  AX := 0;
+  AY := 0;
+  if FKnockClock = NoKnock then
+    Exit;
+  if FKnockClock < KnockOutTicks then
+  begin
+    var OutShare := Smoothstep(FKnockClock / KnockOutTicks);
+    AX := FKnockFromX + (FKnockToX - FKnockFromX) * OutShare;
+    AY := FKnockFromY + (FKnockToY - FKnockFromY) * OutShare;
+    Exit;
+  end;
+  var BackFrom := FKnockTicks - KnockBackTicks;
+  var HeldShare: Double := 1;
+  if FKnockClock >= BackFrom then
+    HeldShare := 1 - Smoothstep((FKnockClock - BackFrom) / KnockBackTicks);
+  AX := FKnockToX * HeldShare;
+  AY := FKnockToY * HeldShare;
+end;
+
+procedure TPad.TickKnock;
+begin
+  if FKnockClock = NoKnock then
+    Exit;
+  Inc(FKnockClock);
+  if FKnockClock >= FKnockTicks then
+    FKnockClock := NoKnock;
+end;
+
 procedure TPad.Tick(AOnView: Boolean);
 begin
   FPrevLeft := FLeft;
@@ -262,6 +364,48 @@ begin
   Inc(FClock);
   PlaceOnPath;
   TickSag;
+  TickKnock;
+  var OffX, OffY: Double;
+  KnockOffset(OffX, OffY);
+  FLeft := FPathLeft + OffX;
+  FTop := FPathTop + OffY;
+end;
+
+procedure TPad.Knock(ADX, ADY: Double; ATicks: Integer);
+begin
+  FKnockFromX := FLeft - FPathLeft;
+  FKnockFromY := FTop - FPathTop;
+  FKnockToX := FKnockFromX + ADX;
+  FKnockToY := FKnockFromY + ADY;
+  FKnockClock := 0;
+  // Out and home, if nothing else
+  FKnockTicks := Max(ATicks, KnockOutTicks + KnockBackTicks);
+end;
+
+function TPad.Travels: Boolean;
+begin
+  Result := Length(FStops) >= 2;
+end;
+
+// A damped rock from the blow on, drawn only
+function TPad.Tilt(AAlpha: Single): Double;
+begin
+  if FKnockClock = NoKnock then
+    Exit(0);
+  var Time := FKnockClock - 1 + AAlpha;
+  if Time < 0 then
+    Exit(0);
+  Result := KnockTilt * Exp(-Time / KnockTiltDecayTicks) *
+    Sin(2 * Pi * Time / KnockTiltPeriodTicks);
+end;
+
+function TPad.ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
+begin
+  var MovedLeft := FLeft + ADX;
+  var MovedTop := FTop + ADY;
+  Result := (MovedLeft + FPlacement.Width <= AOther.Left) or
+    (AOther.Right <= MovedLeft) or (MovedTop + TileSize <= AOther.Top) or
+    (AOther.Top + TileSize <= MovedTop);
 end;
 
 procedure TPad.Press(ASpeed: Double);
@@ -316,7 +460,7 @@ begin
   Dest.H := FPictureHeight;
   TintTexture(FTexture, FPlacement.Tint.R, FPlacement.Tint.G,
     FPlacement.Tint.B);
-  ASprites.DrawRectF(FTexture, Dest);
+  ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha));
 end;
 
 // ---------------------------------------------------------------------------
@@ -324,12 +468,13 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TPadWorld.Create(const ASprites: TSpriteRenderer;
-  const ACache: TSpriteCache; const APlacements: TArray<TPadPlacement>);
+  const ACache: TSpriteCache; const ALevel: TLevel);
 begin
   inherited Create;
   FSprites := ASprites;
+  FLevel := ALevel;
   FPads := TObjectList<TPad>.Create(True);
-  for var Placement in APlacements do
+  for var Placement in ALevel.Pads do
     FPads.Add(TPad.Create(Placement, ACache.Get(Placement.Sprite)));
 end;
 
@@ -404,6 +549,109 @@ begin
       Pad.BodyHolds(AX, AY) then
       Exit(True);
   Result := False;
+end;
+
+// A pad holding a corner of the body a step on: what the pilot's walls
+// found there
+function TPadWorld.PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
+begin
+  for var Pad in FPads do
+  begin
+    if Pad.Screen <> AScreen then
+      Continue;
+    var Struck := Pad.BodyHolds(ABlow.Left, ABlow.Top) or
+      Pad.BodyHolds(ABlow.Right, ABlow.Top) or
+      Pad.BodyHolds(ABlow.Left, ABlow.Bottom) or
+      Pad.BodyHolds(ABlow.Right, ABlow.Bottom);
+    if Struck then
+      Exit(Pad);
+  end;
+  Result := nil;
+end;
+
+// Points a cell apart from ALeft to ARight at AY meet a wall, or the
+// fence if one is given: every cell the row crosses is asked
+function TPadWorld.RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
+  const AFence: TPadFence): Boolean;
+begin
+  for var i := 0 to Ceil((ARight - ALeft) / TileSize) do
+  begin
+    var X := Min(ALeft + i * TileSize, ARight);
+    if FLevel.SolidAtPoint(AScreen, X, AY) then
+      Exit(True);
+    if Assigned(AFence) and AFence(X, AY) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// The body moved ADX, ADY stays on the screen, out of the grid's walls
+// and the fence, clear of every other pad of its screen; the room of its
+// riders, a cell over the deck, stays out of the walls
+function TPadWorld.RoomFor(const APad: TPad; ADX, ADY: Double;
+  const AFence: TPadFence): Boolean;
+begin
+  var Left := APad.Left + ADX;
+  var Right := APad.Right + ADX;
+  var Deck := APad.Top + ADY;
+  var OnScreen := (Left >= 0) and (Right <= ScreenWidth) and (Deck >= 0) and
+    (Deck + TileSize <= ScreenHeight);
+  if not OnScreen then
+    Exit(False);
+
+  // A cell deep each, the riders' room and the body are asked by their top
+  // and bottom rows. The riders' room minds no fence: the lap is the
+  // boss's, and he lies stunned while the pad is out.
+  Left := Left + WallProbeInset;
+  Right := Right - WallProbeInset;
+  var Shut := RowShut(APad.Screen, Left, Right,
+    Deck - TileSize + WallProbeInset, nil) or
+    RowShut(APad.Screen, Left, Right, Deck - WallProbeInset, nil) or
+    RowShut(APad.Screen, Left, Right, Deck + WallProbeInset, AFence) or
+    RowShut(APad.Screen, Left, Right, Deck + TileSize - WallProbeInset, AFence);
+  if Shut then
+    Exit(False);
+
+  for var Other in FPads do
+    if (Other <> APad) and (Other.Screen = APad.Screen) and
+      not APad.ClearOf(Other, ADX, ADY) then
+      Exit(False);
+  Result := True;
+end;
+
+// Unit by unit along the blow, a cell's worth at most, sliding along what
+// stops one way of it. A pad with no room at all still rocks, and so does
+// one on a path: its room is looked for where it stands, and the path
+// would take it on from there.
+procedure TPadWorld.Shove(AScreen: Integer; const ABlow: TPadBlow;
+  const AFence: TPadFence);
+begin
+  var Pad := PadStruck(AScreen, ABlow);
+  if Pad = nil then
+    Exit;
+  if Pad.Travels then
+  begin
+    Pad.Knock(0, 0, ABlow.Ticks);
+    Exit;
+  end;
+
+  var WayX := ABlow.WayX;
+  var WayY := ABlow.WayY;
+  var KnockX: Double := 0;
+  var KnockY: Double := 0;
+  for var i := 1 to KnockReach do
+    if RoomFor(Pad, KnockX + WayX, KnockY + WayY, AFence) then
+    begin
+      KnockX := KnockX + WayX;
+      KnockY := KnockY + WayY;
+    end
+    else if RoomFor(Pad, KnockX + WayX, KnockY, AFence) then
+      KnockX := KnockX + WayX
+    else if RoomFor(Pad, KnockX, KnockY + WayY, AFence) then
+      KnockY := KnockY + WayY
+    else
+      Break;
+  Pad.Knock(KnockX, KnockY, ABlow.Ticks);
 end;
 
 function TPadWorld.FindTagged(const ATag: string): TPad;

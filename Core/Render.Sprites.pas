@@ -169,8 +169,10 @@ type
       AMirrored: Boolean = False);
     // Arbitrary destination rectangle (backgrounds, scaled effects).
     procedure DrawRect(ATexture: PSdlTexture; const ADest: TSdlRect);
-    // The same in fractions of a unit: a picture that sways smoothly
-    procedure DrawRectF(ATexture: PSdlTexture; const ADest: TSdlFRect);
+    // The same in fractions of a unit: a picture that sways smoothly;
+    // turned AAngleDegrees clockwise round its middle
+    procedure DrawRectF(ATexture: PSdlTexture; const ADest: TSdlFRect;
+      AAngleDegrees: Double = 0);
     // PutAngleSprite / PutMirrorAngleSprite: rotation around the sprite
     // center. Angle in degrees, clockwise, 0 = art's natural orientation.
     // The 2008 code drew bullets with a -90 offset because the art pointed
@@ -516,12 +518,13 @@ begin
 end;
 
 procedure TSpriteRenderer.DrawRectF(ATexture: PSdlTexture;
-  const ADest: TSdlFRect);
+  const ADest: TSdlFRect; AAngleDegrees: Double);
 begin
   var Dest := ADest;
   Dest.X := Dest.X + FOrigin.X;
   Dest.Y := Dest.Y + FOrigin.Y;
-  SDL_RenderCopyF(FRenderer, ATexture, nil, @Dest);
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
+    SdlFlipNone);
 end;
 
 procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;

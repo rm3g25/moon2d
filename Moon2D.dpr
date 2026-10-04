@@ -548,7 +548,7 @@ begin
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
   // Before the dynamics: their parents may be pads
-  FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel.Pads);
+  FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -1601,6 +1601,7 @@ begin
             FShake.AddTrauma(BossCrashTrauma);
             FAudio.Play(BossCrashSoundFile);
             ThrowCrashSparks(Monster.LastCrash);
+            FPads.Shove(Monster.Screen, Monster.LastCrash.Blow, LapHolds);
           end;
         meBossOwesPrize:
           PayDodgePrize(Monster);

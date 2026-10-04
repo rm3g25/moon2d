@@ -50,6 +50,8 @@ type
     X, Y: Single;
     SpeedX, SpeedY: Single;
     NormalX, NormalY: Single;
+    // The crash as a blow to a pad the body may have struck
+    Blow: TPadBlow;
   end;
 
   // What the monster tells its pilot every tick
@@ -157,6 +159,10 @@ type
     // One tick only, the one after the crash
     property OwesPrize: Boolean read FOwesPrize;
   end;
+
+// The point lies in a cell of the boss's lap. He flies the lap without
+// asking the walls: nothing may be knocked into it.
+function LapHolds(AX, AY: Single): Boolean;
 
 implementation
 
@@ -285,6 +291,27 @@ begin
   var OnEdge := (ACell.Col = LapLeftCol) or (ACell.Col = LapRightCol) or
     (ACell.Row = LapTopRow) or (ACell.Row = LapBottomRow);
   Result := Inside and OnEdge;
+end;
+
+// The body at AFeet by the corners BodyBlocked asks the walls about,
+// flying AWay: a pad holding a corner is knocked out for the stun
+function BlowOf(const AFeet, AWay: TPlace): TPadBlow;
+begin
+  Result.Left := AFeet.X + BodyInset;
+  Result.Right := AFeet.X + SpriteSize - BodyInset;
+  Result.Top := AFeet.Y - SpriteSize + BodyInset;
+  Result.Bottom := AFeet.Y - BodyInset;
+  Result.WayX := AWay.X;
+  Result.WayY := AWay.Y;
+  Result.Ticks := StunTicks;
+end;
+
+function LapHolds(AX, AY: Single): Boolean;
+begin
+  var Cell: TCell;
+  Cell.Col := Floor(AX / TileSize);
+  Cell.Row := Floor(AY / TileSize);
+  Result := OnLap(Cell);
 end;
 
 function PastLapMark(AHeading: THeading; const AFeet: TPlace): Boolean;
@@ -869,6 +896,11 @@ begin
   FLastCrash.SpeedY := FDashDirection.Y * DashStride;
   FLastCrash.NormalX := Normal.X;
   FLastCrash.NormalY := Normal.Y;
+  // The step the walls refused: what it would have cut into is struck
+  var Onward := AFeet;
+  Onward.X := Onward.X + FDashDirection.X;
+  Onward.Y := Onward.Y + FDashDirection.Y;
+  FLastCrash.Blow := BlowOf(Onward, FDashDirection);
   FCrashed := True;
 
   FTicksLeft := StunTicks;

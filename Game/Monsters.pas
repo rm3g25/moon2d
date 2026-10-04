@@ -124,6 +124,7 @@ type
     function FloorAhead(ACol: Integer; AX: Double): Boolean;
     function StandsOnDeck: Boolean;
     procedure RideDeck;
+    procedure CarryX(AWay: Double);
     function CanGoLeftEdgeAware: Boolean;   // CanIGoLeft1
     function CanGoRightEdgeAware: Boolean;  // CanIGoRight1
     function CanGoLeftWallOnly: Boolean;    // CanIGoLeft2
@@ -692,14 +693,27 @@ begin
     Exit;
 
   FY := Deck.Top;
-  var Way := Deck.MotionX;
-  var LeftFree := (Way < 0) and CanGoLeftWallOnly;
-  var RightFree := (Way > 0) and CanGoRightWallOnly;
-  if LeftFree or RightFree then
-    FX := FX + Way;
+  CarryX(Deck.MotionX);
 
   if not StandsOnDeck and CanGoDown and FDef.AffectedByGravity then
     FAction := maFalling;
+end;
+
+// A unit at a time, the wall asked before every one, as ShoveX: a knocked
+// deck goes several units a tick, more than one look ahead vouches for
+procedure TMonster.CarryX(AWay: Double);
+begin
+  var Rest := AWay;
+  while Rest <> 0 do
+  begin
+    var Step := EnsureRange(Rest, -1.0, 1.0);
+    if (Step < 0) and not CanGoLeftWallOnly then
+      Exit;
+    if (Step > 0) and not CanGoRightWallOnly then
+      Exit;
+    FX := FX + Step;
+    Rest := Rest - Step;
+  end;
 end;
 
 function TMonster.DeckLift(AAlpha: Single): Single;
