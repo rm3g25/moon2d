@@ -143,6 +143,7 @@ type
   private
     FRenderer: PSdlRenderer;
     FOrigin: TSdlPoint;
+    FFineY: Single;
   public
     constructor Create(const ARenderer: PSdlRenderer;
       ALogicalWidth, ALogicalHeight: Integer);
@@ -151,6 +152,10 @@ type
     // Layers that must stay put (backdrop, cursor, HUD) draw with it at
     // zero; the caller sets it per layer, nothing here resets it.
     property Origin: TSdlPoint read FOrigin write FOrigin;
+    // A fraction of a unit under Origin.Y for Draw, DrawRotated and
+    // DrawTurned: a body riding a swaying pad sways with it, not in whole
+    // units. The caller puts it back to zero.
+    property FineY: Single read FFineY write FFineY;
 
     // PutStaticSprite: draw at a sprite-grid cell, forced to 32x32.
     procedure DrawCell(ATexture: PSdlTexture; AGridX, AGridY: Integer);
@@ -164,6 +169,8 @@ type
       AMirrored: Boolean = False);
     // Arbitrary destination rectangle (backgrounds, scaled effects).
     procedure DrawRect(ATexture: PSdlTexture; const ADest: TSdlRect);
+    // The same in fractions of a unit: a picture that sways smoothly
+    procedure DrawRectF(ATexture: PSdlTexture; const ADest: TSdlFRect);
     // PutAngleSprite / PutMirrorAngleSprite: rotation around the sprite
     // center. Angle in degrees, clockwise, 0 = art's natural orientation.
     // The 2008 code drew bullets with a -90 offset because the art pointed
@@ -488,14 +495,14 @@ end;
 procedure TSpriteRenderer.Draw(ATexture: PSdlTexture; AX, AY: Integer;
   AMirrored: Boolean);
 var
-  Dest: TSdlRect;
+  Dest: TSdlFRect;
 begin
   Dest.X := AX + FOrigin.X;
-  Dest.Y := AY + FOrigin.Y;
+  Dest.Y := AY + FOrigin.Y + FFineY;
   Dest.W := SpriteSize;
   Dest.H := SpriteSize;
 
-  SDL_RenderCopyEx(FRenderer, ATexture, nil, @Dest, 0.0, nil,
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, 0.0, nil,
     FlipOf(AMirrored));
 end;
 
@@ -508,18 +515,27 @@ begin
   SDL_RenderCopy(FRenderer, ATexture, nil, @Dest);
 end;
 
+procedure TSpriteRenderer.DrawRectF(ATexture: PSdlTexture;
+  const ADest: TSdlFRect);
+begin
+  var Dest := ADest;
+  Dest.X := Dest.X + FOrigin.X;
+  Dest.Y := Dest.Y + FOrigin.Y;
+  SDL_RenderCopyF(FRenderer, ATexture, nil, @Dest);
+end;
+
 procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;
   ACenterX, ACenterY: Integer; AAngleDegrees: Double; AMirrored: Boolean);
 var
-  Dest: TSdlRect;
+  Dest: TSdlFRect;
 begin
   Dest.X := ACenterX - SpriteSize div 2 + FOrigin.X;
-  Dest.Y := ACenterY - SpriteSize div 2 + FOrigin.Y;
+  Dest.Y := ACenterY - SpriteSize div 2 + FOrigin.Y + FFineY;
   Dest.W := SpriteSize;
   Dest.H := SpriteSize;
 
   // Center = nil rotates around Dest's middle - exactly what bullets need.
-  SDL_RenderCopyEx(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
     FlipOf(AMirrored));
 end;
 
@@ -530,7 +546,7 @@ var
   Dest: TSdlFRect;
 begin
   Dest.X := ACenter.X - ASide / 2 + FOrigin.X;
-  Dest.Y := ACenter.Y - ASide / 2 + FOrigin.Y;
+  Dest.Y := ACenter.Y - ASide / 2 + FOrigin.Y + FFineY;
   Dest.W := ASide;
   Dest.H := ASide;
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));

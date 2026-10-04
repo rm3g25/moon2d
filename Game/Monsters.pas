@@ -191,8 +191,8 @@ type
     // How full the current third is, 0..1
     function TierShare: Single;
     // Units down the picture is drawn: the bob and the sag of the deck
-    // underfoot
-    function DeckLift: Integer;
+    // underfoot; AAlpha as the deck's Lift
+    function DeckLift(AAlpha: Single): Single;
     function HitWithin(ATicks: Integer): Boolean;
 
     property Def: TMonsterDef read FDef;
@@ -702,7 +702,7 @@ begin
     FAction := maFalling;
 end;
 
-function TMonster.DeckLift: Integer;
+function TMonster.DeckLift(AAlpha: Single): Single;
 begin
   if FAction = maFlying then
     Exit(0);
@@ -710,7 +710,7 @@ begin
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
   if Deck = nil then
     Exit(0);
-  Result := Round(Deck.Lift);
+  Result := Deck.Lift(AAlpha);
 end;
 
 function TMonster.CanGoLeftEdgeAware: Boolean;
@@ -1390,17 +1390,14 @@ end;
 procedure TMonsterField.Draw(const ASprites: TSpriteRenderer;
   AScreen: Integer; AAlpha: Single);
 begin
-  var Shaken := ASprites.Origin;
   for var Monster in FMonsters do
   begin
     if Monster.Screen <> AScreen then
       Continue;
-    var Lifted := Shaken;
-    Lifted.Y := Lifted.Y + Monster.DeckLift;
-    ASprites.Origin := Lifted;
+    ASprites.FineY := Monster.DeckLift(AAlpha);
     Monster.Draw(ASprites, AAlpha);
   end;
-  ASprites.Origin := Shaken;
+  ASprites.FineY := 0;
 end;
 
 procedure TMonsterField.DrawSmoke(const ACanvas: TDynamicCanvas;

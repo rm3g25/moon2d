@@ -16,7 +16,10 @@
   standing still keeps its deck on the line the level file puts it on,
   where the 2008 wall probes, which count rows from the feet, read the
   right row. A path that climbs takes its riders between the rows: keep
-  it clear of the grid's walls. The riders are drawn with the Lift of
+  it clear of the grid's walls. The Lift is drawn in fractions of a unit,
+  the bob between ticks too - a sway of a unit and a half in whole units
+  would jerk from one to the next. The sag stays on the tick, where the
+  lamps hung on the pad read it. The riders are drawn with the Lift of
   their deck.
 
   The world is born with the level; a restart rewinds it.
@@ -66,11 +69,12 @@ type
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back
     procedure Press(ASpeed: Double);
-    // Units down from the deck the pad is drawn at: the bob and the sag
-    function Lift: Double;
+    // Units down from the deck the pad is drawn at: the sag of this tick
+    // and the bob AAlpha of the way from the last tick to this one
+    function Lift(AAlpha: Single): Double;
     // How far the pad went across this tick
     function MotionX: Double;
-    procedure Draw(const ASprites: TSpriteRenderer);
+    procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 
     property Screen: Integer read FPlacement.Screen;
     property Tag: string read FPlacement.Tag;
@@ -119,7 +123,7 @@ type
     function StopsBulletAt(AScreen: Integer; AX, AY: Single): Boolean;
     // nil when no pad carries the tag
     function FindTagged(const ATag: string): TPad;
-    procedure Draw(AScreen: Integer);
+    procedure Draw(AScreen: Integer; AAlpha: Single);
   end;
 
 implementation
@@ -265,12 +269,13 @@ begin
   FSagSpeed := FSagSpeed + Min(ASpeed * SagGain, SagMaxKick);
 end;
 
-function TPad.Lift: Double;
+function TPad.Lift(AAlpha: Single): Double;
 begin
   Result := FSag;
   if FPlacement.Bob <= 0 then
     Exit;
-  var Phase := FClock / BobPeriodTicks + FPlacement.X / ScreenWidth;
+  var Time := FClock - 1 + AAlpha;
+  var Phase := Time / BobPeriodTicks + FPlacement.X / ScreenWidth;
   Result := Result + FPlacement.Bob * Sin(2 * Pi * Phase);
 end;
 
@@ -300,18 +305,18 @@ begin
     (AY < FTop + TileSize);
 end;
 
-procedure TPad.Draw(const ASprites: TSpriteRenderer);
+procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
-  Dest: TSdlRect;
+  Dest: TSdlFRect;
 begin
   Dest.X := Round(FLeft);
   // As the riders are drawn, so the feet do not flicker into the deck
-  Dest.Y := Round(FTop) + Round(Lift);
+  Dest.Y := Round(FTop) + Lift(AAlpha);
   Dest.W := FPlacement.Width;
   Dest.H := FPictureHeight;
   TintTexture(FTexture, FPlacement.Tint.R, FPlacement.Tint.G,
     FPlacement.Tint.B);
-  ASprites.DrawRect(FTexture, Dest);
+  ASprites.DrawRectF(FTexture, Dest);
 end;
 
 // ---------------------------------------------------------------------------
@@ -409,11 +414,11 @@ begin
   Result := nil;
 end;
 
-procedure TPadWorld.Draw(AScreen: Integer);
+procedure TPadWorld.Draw(AScreen: Integer; AAlpha: Single);
 begin
   for var Pad in FPads do
     if Pad.Screen = AScreen then
-      Pad.Draw(FSprites);
+      Pad.Draw(FSprites, AAlpha);
 end;
 
 end.

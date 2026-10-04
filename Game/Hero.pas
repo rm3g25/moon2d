@@ -179,8 +179,8 @@ type
     procedure ShoveX(ADeltaX: Integer);
     procedure SetY(AY: Double);
     // Units down the picture is drawn: the bob and the sag of the deck
-    // underfoot, which the feet do not feel
-    function DeckLift: Integer;
+    // underfoot, which the feet do not feel; AAlpha as the deck's Lift
+    function DeckLift(AAlpha: Single): Single;
     // DEBUGKEYS live tuner for the weapon-4 muzzle (NumPad, values in
     // the window caption - same workflow as the crosshair calibration)
     procedure NudgeMinigun(ADeltaX, ADeltaY, ADeltaLen: Integer);
@@ -953,12 +953,12 @@ begin
     SettleOnGround;
 end;
 
-function THero.DeckLift: Integer;
+function THero.DeckLift(AAlpha: Single): Single;
 begin
   var Deck := DeckUnderFeet;
   if Deck = nil then
     Exit(0);
-  Result := Round(Deck.Lift);
+  Result := Deck.Lift(AAlpha);
 end;
 
 // Down through the deck underfoot - from a stand or a walk, the way a

@@ -1014,7 +1014,7 @@ begin
   begin
     AStand.Screen := Pad.Screen;
     AStand.X := Pad.Left;
-    AStand.Y := Round(Pad.Top) + Round(Pad.Lift);
+    AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     AStand.Alive := True;
     Exit(True);
   end;
@@ -1026,7 +1026,7 @@ begin
     // Where TMonster.Draw puts the sprite: the feet line is Y, lifted by
     // the deck underfoot
     AStand.X := Round(Monster.X);
-    AStand.Y := Round(Monster.Y) - SpriteSize + Monster.DeckLift;
+    AStand.Y := Round(Monster.Y) - SpriteSize + Monster.DeckLift(1);
     AStand.Alive := Monster.Life = mlAlive;
     AStand.Spins := Monster.Disc <> nil;
     if AStand.Spins then
@@ -1754,7 +1754,7 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
-        FPads.Draw(FHero.Screen);
+        FPads.Draw(FHero.Screen, AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
@@ -1765,10 +1765,10 @@ begin
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
-        var HeroOrigin := FShake.Offset(scHero);
-        HeroOrigin.Y := HeroOrigin.Y + FHero.DeckLift;
-        FSprites.Origin := HeroOrigin;
+        FSprites.Origin := FShake.Offset(scHero);
+        FSprites.FineY := FHero.DeckLift(AAlpha);
         FHero.Draw(FSprites);
+        FSprites.FineY := 0;
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
