@@ -125,7 +125,7 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Core/Render.Sprites.pas` (~530 lines)
+### `Core/Render.Sprites.pas` (~555 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
@@ -173,14 +173,24 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **`TSpriteRenderer`** - draws in game units: `DrawCell` (sprite grid),
   `DrawTile` (tile grid, the top-left 64x64 crop reproduced from
   `sttextures.pas`), `Draw` (free position, optional mirror), `DrawRect`,
-  `DrawRotated` (weapon arm), `DrawTurned(texture, center, side, angle,
-  level = 1)` - a square of any size centered on a float point, turned
-  clockwise, at an opacity; float all the way (`SDL_RenderCopyExF`), so a
+  `DrawRectF` (the same in fractions of a unit - the pads' picture, which
+  sways smoothly), `DrawRotated` (weapon arm), `DrawTurned(texture,
+  center, side, angle, level = 1)` - a square of any size centered on a
+  float point, turned clockwise, at an opacity; float all the way, so a
   mover drawn between ticks does not snap to logical units - the boss's
   disc draws its layers through it. It sets the texture's alpha mod on
-  every call. **`Origin`** (a `TSdlPoint`) shifts every one of
+  every call. `Draw`, `DrawRotated` and `DrawTurned` all draw a float
+  rectangle through `SDL_RenderCopyExF` (at whole units the picture is
+  what the integer call drew), `DrawRectF` through `SDL_RenderCopyF`;
+  `DrawTile` and `DrawRect` stay integer (`SDL_RenderCopy`), `DrawCell`
+  goes through `Draw`. **`Origin`** (a `TSdlPoint`) shifts every one of
   them - the screen-shake hook; nothing here resets it, the caller sets it per
-  layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`. The
+  layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`.
+  **`FineY`** (a `Single`, 0 from birth) - a fraction of a unit under
+  `Origin.Y`, added by `Draw`, `DrawRotated` and `DrawTurned` alone (so by
+  `DrawCell` too): a body riding a swaying pad sways with it, not in whole
+  units. The caller sets it around one figure's draw and puts it back to 0;
+  nothing here resets it either. The
   constructor takes the logical size and sets it on the renderer
   (`SDL_RenderSetLogicalSize` - the dpr passes the frame of `Game.Space`).
 
@@ -879,7 +889,9 @@ monsters do. The bob and the sag under a landing are the pad's `Lift` -
 drawn, not felt: a pad standing still keeps its deck on the line the level
 file puts it on, where the 2008 wall probes, which count rows from the
 feet, read the right row. A path that climbs takes its riders between the
-rows: keep it clear of the grid's walls. Born with the level
+rows: keep it clear of the grid's walls. The `Lift` is drawn in
+fractions of a unit and between ticks - a sway of a unit and a half in
+whole units would jerk from one to the next. Born with the level
 (`LoadLevel`); a restart rewinds it.
 - **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
   the feet line of whatever stands on the pad), `PrevTop` (the deck a tick
@@ -905,20 +917,25 @@ rows: keep it clear of the grid's walls. Born with the level
     `BodyHolds(x, y)` - the point lies in the body, the deck's width across
     and one cell (`TileSize`) down from the deck, half-open (`Left` <= x <
     `Right`, `Top` <= y < `Top` + `TileSize`).
-  - `Lift` - units down from the deck the pad is drawn at: the bob
-    (`Bob` times a sine, one sway in `BobPeriodTicks` = 3 s, the phase
-    shifted by the placement's X across the screen - a row of pads
-    ripples) plus the sag. `Press(speed)` - something landed on the deck
+  - `Lift(alpha)` - units down from the deck the pad is drawn at, a
+    fraction (never rounded): the bob (`Bob` times a sine, one sway in
+    `BobPeriodTicks` = 3 s, taken at `FClock` - 1 + alpha - between the
+    ticks - the phase shifted by the placement's X across the screen - a
+    row of pads ripples) plus the sag of this tick (`FSag`, on the tick:
+    the lamps hung on the pad read it there). `Lift(1)` - the pad as this
+    tick leaves it.
+    `Press(speed)` - something landed on the deck
     at speed units a tick: the sag's speed takes speed * `SagGain` (0.6),
     no more than `SagMaxKick` (2.7 - about three units down at the
     deepest), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
     brings it back, at rest closer than `SagRest` (0.05). The physics deck
     stays on the path: the feet never feel the `Lift`.
-  - The picture: its height from the art's aspect, drawn at
-    (`Round(Left)`, `Round(Top)` + `Round(Lift)`) - as the riders are
-    drawn, so the feet do not flicker into the deck - with the pad's tint
-    set before every draw (`TintTexture`, `DrawRect`), as a static object
-    is.
+  - The picture: `Draw(sprites, alpha)` - its height from the art's
+    aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
+    fractions of a unit (`DrawRectF`) - the riders are drawn with the same
+    `Lift` (through the renderer's `FineY`), so the feet do not flicker
+    into the deck - with the pad's tint set before every draw
+    (`TintTexture`), as a static object is.
 - **`TPadWorld`** - `Create(sprites, cache, placements)`: the cache is the
   level's object art, the textures are its, and it must outlive the world;
   a picture it lacks raises here, at level load. `Tick(screen)` - before
@@ -941,7 +958,8 @@ rows: keep it clear of the grid's walls. Born with the level
   would land on the neighbour. `BodyAt(screen, x, y)` - a body at the point
   (what stops the boss, the sparks and the debris); `StopsBulletAt(screen,
   x, y)` - the same for the `pbBlock` pads alone; `FindTagged(tag)` - nil
-  when no pad carries the tag; `Draw(screen)`.
+  when no pad carries the tag; `Draw(screen, alpha)` - the pads of that
+  screen, the frame's alpha passed on to their `Lift`.
 
 ### `Game/Hero.pas` (~1335 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
@@ -991,9 +1009,10 @@ moves in comes from `Game.Space`.
     deck going down would catch up -, on the ground (a stand or a walk at
     the head of `Tick`) and in `Revive`. `SettleOnGround` stands him on a
     deck where he is (no snap to a cell line); the corpse settles on a
-    deck under it or lands on one it falls onto. `DeckLift` - the `Lift`
-    of the deck underfoot, rounded: the units down his picture is drawn,
-    which the feet do not feel.
+    deck under it or lands on one it falls onto. `DeckLift(alpha)` - the
+    `Lift(alpha)` of the deck underfoot, a fraction of a unit (0 with no
+    deck): the units down his picture is drawn, which the feet do not
+    feel.
   - Weapon: `FBullets: TBurst`, type 0..4 (pistol / shotgun x5 / grenade
     cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
@@ -1151,8 +1170,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   wall has pulled away leaves the body falling (`maFalling`) when no deck
   holds it (`StandsOnDeck`), the way down is open (`CanGoDown`) and
   gravity holds it - the dead and a gun that never walks too.
-  `DeckLift` - the `Lift` of the deck underfoot, rounded, 0 while flying:
-  the units down the picture is drawn. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
+  `DeckLift(alpha)` - the `Lift(alpha)` of the deck underfoot, a fraction
+  of a unit, 0 while flying or with no deck: the units down the picture is
+  drawn. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
   `MoveFlying` hands `Monsters.Pilot` a `TPilotBrief` - the step, the
   hero, whether the body lives - and the pilot moves X, Y; a crash and an
   owed prize come back as `meBossCrashed` / `meBossOwesPrize`),
@@ -1219,8 +1239,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
-  `Draw(sprites, screen, alpha)` (each monster with the sprites' `Origin`
-  lowered by its `DeckLift`, the origin put back after),
+  `Draw(sprites, screen, alpha)` (each monster with the sprites' `FineY`
+  set to its `DeckLift(alpha)` - `Origin` stays the monsters' shake -,
+  `FineY` put back to 0 after),
   `DrawSmoke(canvas, screen, origin, alpha)`, `DrawSparks` (the same
   shape, over the smoke).
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
@@ -1458,7 +1479,9 @@ with the game (the solid probe), cleared on a door, a death and a level
 load.
 - **`TStrike`** (record) - a bullet meeting armor: the point, the bullet's
   speed, the normal (the way the armor faces there), `Rapid` (the armor
-  was struck a moment ago).
+  was struck a moment ago), `ExtraSparks` (sparks on top of the fan - a
+  heavier blow throws more; 0 for a bullet - both builders in the dpr
+  start from `Default(TStrike)`).
 - `TraceEntry(strike, box)` - the bullet is already inside the hitbox:
   moves the strike back along its path to the edge it came in through (no
   further than one tick) and turns the normal the way that edge faces; a
@@ -1466,7 +1489,8 @@ load.
   `FaceFromCenter(strike, center)` - round armor: the normal from the
   center through the point (the boss's disc).
 - `Land(strike)` - `GlanceOf` reflects the speed off the normal, as a
-  mirror does; `ThrowFan` sprays `FanSparks` (9, or `RapidFanSparks` 4)
+  mirror does; `ThrowFan` sprays `FanSparks` (9, or `RapidFanSparks` 4) plus the
+  strike's `ExtraSparks`
   within `FanCone` around a heading that leans `GlanceShare` from the
   normal toward the glance (`HitSparkLook`: bounce, forks); `AddFlash` - a
   3-tick flash, dimmer when rapid, and one a tick for the hits that crowd
@@ -1729,7 +1753,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     still and the sky dynamics (the Earth) with it, objects + pads + back
     dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the pads draw right
-    after the objects, the back dynamics right after the pads, behind tiles
+    after the objects (with the frame's alpha - their sway between ticks),
+    the back dynamics right after the pads, behind tiles
     and hero - monsters (the field gets
     the frame's alpha:
     the boss's disc draws between ticks), then the
@@ -1740,8 +1765,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     impacts (on the monsters' channel - they sit on armor), then the
     health rows (`FMarks`, each on its figure's channel) - the
     hero on
-    his own - the origin's Y lowered by `FHero.DeckLift` -, cursor and HUD
-    still; `Update` ticks the pads right before the hero
+    his own, with `FineY` = `FHero.DeckLift(alpha)`, back to 0 right after
+    his draw -, cursor and HUD still; `Update` ticks the pads right before
+    the hero
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves), and `FDynamics` after the monsters
     and the director, so a smoking monster's puffs leave from where this
@@ -1766,9 +1792,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ChangeMusic` (a trigger's or an event's track: played and remembered
     for restarts; '' is a no-op), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
-    `Round(Top)` + `Round(Lift)` (where the pad is drawn), alive; else the
+    `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
+    a fraction, the stand's Y is a `Single`), alive; else the
     first monster carrying the tag - screen, sprite top-left as
-    `TMonster.Draw` puts it (Y lowered by `DeckLift`), alive, and for a disc monster the
+    `TMonster.Draw` puts it (Y lowered by `DeckLift(1)`), alive, and for a disc monster the
     disc's last two poses with the axis in the middle of the sprite;
     `Levels.Defs` has refused a tag both carry).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
@@ -1795,7 +1822,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `BossCrashTrauma`, `BossCrashSoundFile` (`crash.wav`) and
     `ThrowCrashSparks` - fans of `Game.Impacts` sparks off the rim that
     struck and along the wall, seven a side two units apart
-    (`FansPerSide`, `FanGap`; three four apart before 3.0.27); `meBossOwesPrize` - `PayDodgePrize` hands
+    (`FansPerSide`, `FanGap`; three four apart before 3.0.27), every fan
+    heavier than a bullet's by the strike's `ExtraSparks` - 27 on the rim
+    (`RimExtraSparks`), 6 on each fan along the wall (`SideExtraSparks`);
+    `meBossOwesPrize` - `PayDodgePrize` hands
     a living hero the boss's `DodgePrize` with `SpawnOn`),
     `ResolveMonsterContact` also reports every touch to the monster
     (`NoteHeroContact` - the pilot's prize rule), `EchoAftershock` (the `TEchoAftershock` of
