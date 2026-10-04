@@ -413,6 +413,79 @@ type
     procedure TurnSun(ADegrees: Single; ATicks: Integer);
   end;
 
+  // Steady - an even turn; dying - the motor catches and cuts out, so
+  // the rotor surges, drags to a stop and twitches
+  TMotorRun = (mrSteady, mrDying);
+
+  // A dying motor works in catches and stalls
+  TMotorClock = record
+    TicksLeft: Integer; // of the catch or the stall under way
+    Running: Boolean;
+    Drive: Single; // 0..1 of the full speed; 0 through a stall
+  end;
+
+  // One rotor in three states of blur, and the guard over it
+  TFanArt = record
+    Sharp, Smear, Disc: PSdlTexture;
+    Guard: PSdlTexture; // nil = none
+  end;
+
+  // A ventilation fan: a rotor the code turns behind a guard that stands
+  // still, so the light painted on the guard never spins with the
+  // blades. The rotor blurs with its speed - sharp, then smeared along
+  // the turn, then a disc: sharp blades turning fast would strobe and
+  // seem to crawl backward.
+  // Rotor and guard are the middles of picture names in the level's
+  // object art, every picture a square with the axis at its center:
+  // rotor "heavy" is rotor-heavy-N, rotor-heavy-smear-N and
+  // rotor-heavy-disc-N, guard "spider" is guard-spider-N, N a side of
+  // FanArtSides. A rotor is painted turning counterclockwise; a fan that
+  // turns clockwise mirrors it.
+  // Size is the square across in screen units, x and y its center; rpm
+  // in turns a minute, counterclockwise above zero and clockwise below;
+  // the tint multiplies the art; light is the glow of the shaft behind
+  // the blades, three percentages, absent = none; guard is optional.
+  // Intensity is the share of the full speed, and the rotor follows it
+  // with the inertia of a wheel. Fans at different points stand out of
+  // step and turn a hair apart.
+  // JSON:
+  //   {"kind": "fan", "parent": "s15-tower", "x": 32.4, "y": 78.6,
+  //    "size": 43.4, "tint": [88, 88, 90], "rotor": "heavy",
+  //    "guard": "spider", "rpm": 14, "run": "steady",
+  //    "light": [12, 17, 26]}
+  TFan = class(TDynamicObject)
+  private
+    FSize: Single;
+    FRotorName: string;
+    FGuardName: string; // '' = no guard
+    FClockwise: Boolean;
+    FFullRate: Single; // degrees per tick at full intensity
+    FRun: TMotorRun;
+    FLit: Boolean;
+    FLight: TRgb;
+    FSeed: Cardinal;
+    FRandom: TXorShift;
+    FMotor: TMotorClock;
+    FRate: Single; // degrees per tick
+    FAngle: Single; // degrees along the turn
+    FLastAngle: Single;
+    FArt: TFanArt;
+    procedure Start;
+    procedure TickMotor;
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+    // The rotor stands and turns as the level opened
+    procedure Rewind; override;
+  end;
+
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
@@ -424,21 +497,30 @@ uses
   System.Math, Sprites.Sets, Render.Glow;
 
 type
-  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks);
+  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan);
+
+  // Where and how a fan's layers land in one frame
+  TFanPose = record
+    Dest: TSdlFRect;
+    Angle: Double; // degrees clockwise, as SDL turns
+    Flip: Integer;
+    Tint: TColorTint;
+  end;
 
 const
-  // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface"
-  // and "collide"
+  // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
+  // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks');
+    'globe', 'sparks', 'fan');
   DynamicLayerIds: array [TDynamicLayer] of string = ('sky', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack);
+    dlSky, dlBack, dlBack);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
   GlobeSurfaceIds: array [TGlobeSurface] of string = ('regolith', 'matte');
   SparkWallIds: array [TSparkWall] of string = ('none', 'die', 'bounce');
+  MotorRunIds: array [TMotorRun] of string = ('steady', 'dying');
 
   // Seconds and percentages in JSON, ticks and shares in the code; the
   // logic runs 33 ticks a second (tickRate of Game.Config)
@@ -623,6 +705,56 @@ const
   DefaultGlobeMap = 'earth';
   DefaultBrightness = 100;
   DefaultAtmosphere = 60;
+
+  // Fan art comes in squares of these sides, in pixels; a fan takes the
+  // smallest that is still as dense as the HD backdrops - 1440 pixels on
+  // 512 screen units
+  FanArtSides: array [0..3] of Integer = (64, 128, 256, 512);
+  FanArtDensity = 1440 / 512;
+  // A rotor's and a guard's pictures: the name, then the side
+  RotorSharpArt = 'rotor-%s-%d';
+  RotorSmearArt = 'rotor-%s-smear-%d';
+  RotorDiscArt = 'rotor-%s-disc-%d';
+  GuardArt = 'guard-%s-%d';
+
+  FullTurn = 360;
+  // Turns a minute in JSON, degrees a tick in the code
+  RateOfRpm = FullTurn / (60 * LogicTicksPerSecond);
+  // The blur by speed, in turns a minute: sharp up to the first, fully
+  // smeared at the second, a disc from the third. At 60 frames a second
+  // five sharp blades seem to turn backward past 360 turns a minute,
+  // nine past 200: the disc is over them before that.
+  SharpUpToRpm = 40;
+  SmearedAtRpm = 110;
+  DiscFromRpm = 230;
+  // A tick closes this share of the gap to the wanted speed. A sound
+  // rotor coasts down far longer than it spins up; a dying one drags on
+  // its bearing and stops soon.
+  SpinUpEase = 0.05;
+  CoastEases: array [TMotorRun] of Single = (0.02, 0.07);
+  // Unpowered and slower than this, friction stops the rotor
+  StandstillRate = 0.05; // degrees per tick
+  // Fans turn this share apart in speed, either way
+  SpeedDetune = 0.04;
+  // The slots a fan rolls its standing angle and its detune in. Even
+  // both: SlotRoll sets the lowest bit, so slot 1 would roll as slot 0.
+  PhaseSlot = 0;
+  DetuneSlot = 2;
+  // A dying motor, in seconds; a catch is short far more often than
+  // long, and the weakest is CatchFloor of the full speed
+  CatchMin = 0.15;
+  CatchSpread = 2.6;
+  CatchFloor = 0.3;
+  StallMin = 0.4;
+  StallSpread = 2.4;
+  // The shaft's glow across, in fan sizes: spent before the guard's ring
+  ShaftLightScale = 1.25;
+  FullLevel = 1.0;
+  Upright = 0.0;
+
+  DefaultFanSize = 32.0;
+  DefaultFanRpm = 20;
+  DefaultFanRotor = 'heavy';
 
 function TintColor(const ATint: TColorTint): TRgb;
 begin
@@ -1531,6 +1663,184 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TFan
+// ---------------------------------------------------------------------------
+
+function FanArtSideFor(ASize: Single): Integer;
+begin
+  for var Side in FanArtSides do
+    if Side >= ASize * FanArtDensity then
+      Exit(Side);
+  Result := FanArtSides[High(FanArtSides)];
+end;
+
+// 0 up to AFrom, 1 from ATo, even between
+function Ramp(AValue, AFrom, ATo: Single): Single;
+begin
+  if AValue <= AFrom then
+    Exit(0);
+  if AValue >= ATo then
+    Exit(1);
+  Result := (AValue - AFrom) / (ATo - AFrom);
+end;
+
+procedure DrawFanLayer(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const APose: TFanPose; ALevel: Single);
+begin
+  if ALevel < VisibleLevel then
+    Exit;
+  // The pictures are shared: the next fan wears another tint
+  TintTexture(ATexture, APose.Tint.R, APose.Tint.G, APose.Tint.B);
+  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_RenderCopyExF(ARenderer, ATexture, nil, @APose.Dest, APose.Angle, nil,
+    APose.Flip);
+  // The static objects draw from the same cache and set no alpha
+  SDL_SetTextureAlphaMod(ATexture, 255);
+end;
+
+constructor TFan.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FSize := ReadPositive(AObj, 'size', DefaultFanSize, AOwner);
+  FRotorName := AObj.GetValue<string>('rotor', DefaultFanRotor);
+  FGuardName := AObj.GetValue<string>('guard', '');
+  FRun := TMotorRun(ReadWord(AObj, 'run', MotorRunIds[mrSteady],
+    MotorRunIds, 'run', AOwner));
+  FLit := AObj.GetValue('light') <> nil;
+  FLight := TintColor(ReadTint(AObj, AOwner, 'light'));
+
+  FSeed := PlacementSeed(APlacement);
+  var Rpm: Single := AObj.GetValue<Double>('rpm', DefaultFanRpm);
+  FClockwise := Rpm < 0;
+  var Detune: Single := 1 +
+    SpeedDetune * (2 * SlotRoll(DetuneSlot, FSeed) - 1);
+  FFullRate := Abs(Rpm) * RateOfRpm * Detune;
+  Start;
+end;
+
+// A steady fan is already at speed; a dying one stands, on the edge of
+// a catch
+procedure TFan.Start;
+begin
+  FRandom.Seed := FSeed or 1;
+  FMotor := Default(TMotorClock);
+  FAngle := FullTurn * SlotRoll(PhaseSlot, FSeed);
+  FLastAngle := FAngle;
+  FRate := 0;
+  if FRun = mrSteady then
+    FRate := FFullRate * Intensity;
+end;
+
+procedure TFan.Rewind;
+begin
+  inherited;
+  Start;
+end;
+
+procedure TFan.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  var Side := FanArtSideFor(FSize);
+  FArt.Sharp := ACanvas.Art.Get(Format(RotorSharpArt, [FRotorName, Side]));
+  FArt.Smear := ACanvas.Art.Get(Format(RotorSmearArt, [FRotorName, Side]));
+  FArt.Disc := ACanvas.Art.Get(Format(RotorDiscArt, [FRotorName, Side]));
+  if FGuardName <> '' then
+    FArt.Guard := ACanvas.Art.Get(Format(GuardArt, [FGuardName, Side]));
+end;
+
+// The cache owns the textures
+procedure TFan.Release;
+begin
+  FArt := Default(TFanArt);
+end;
+
+procedure TFan.TickMotor;
+begin
+  Dec(FMotor.TicksLeft);
+  if FMotor.TicksLeft > 0 then
+    Exit;
+
+  FMotor.Running := not FMotor.Running;
+  var Luck := FRandom.NextUnit;
+  var Seconds: Single := StallMin + StallSpread * Luck;
+  FMotor.Drive := 0;
+  if FMotor.Running then
+  begin
+    Seconds := CatchMin + CatchSpread * Luck * Luck;
+    FMotor.Drive := CatchFloor + (1 - CatchFloor) * FRandom.NextUnit;
+  end;
+  FMotor.TicksLeft := Max(1, Round(Seconds * LogicTicksPerSecond));
+end;
+
+procedure TFan.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  var Drive: Single := 1;
+  if FRun = mrDying then
+  begin
+    TickMotor;
+    Drive := FMotor.Drive;
+  end;
+  if not AParentAlive then
+    Drive := 0;
+
+  var Wanted: Single := FFullRate * Intensity * Drive;
+  var Ease: Single := CoastEases[FRun];
+  if Wanted > FRate then
+    Ease := SpinUpEase;
+  FRate := FRate + (Wanted - FRate) * Ease;
+  if (Wanted = 0) and (FRate < StandstillRate) then
+    FRate := 0;
+
+  FLastAngle := FAngle;
+  FAngle := FAngle + FRate;
+  if FAngle >= FullTurn then
+  begin
+    var WholeTurns: Single := FullTurn * Trunc(FAngle / FullTurn);
+    FAngle := FAngle - WholeTurns;
+    FLastAngle := FLastAngle - WholeTurns;
+  end;
+end;
+
+procedure TFan.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+var
+  Pose: TFanPose;
+begin
+  if FLit then
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY,
+      FSize * ShaftLightScale, FLight, FullLevel);
+
+  Pose.Dest.X := AX - FSize / 2;
+  Pose.Dest.Y := AY - FSize / 2;
+  Pose.Dest.W := FSize;
+  Pose.Dest.H := FSize;
+  Pose.Tint := Placement.Tint;
+  var Turned := Lerp(FLastAngle, FAngle, AAlpha);
+  // The art turns counterclockwise, SDL clockwise
+  Pose.Angle := -Turned;
+  Pose.Flip := SdlFlipNone;
+  if FClockwise then
+  begin
+    Pose.Angle := Turned;
+    Pose.Flip := SdlFlipHorizontal;
+  end;
+
+  var Rpm: Single := FRate / RateOfRpm;
+  var SharpShare: Single := 1 - Ramp(Rpm, SharpUpToRpm, SmearedAtRpm);
+  var DiscShare := Ramp(Rpm, SmearedAtRpm, DiscFromRpm);
+  DrawFanLayer(ACanvas.Renderer, FArt.Disc, Pose, DiscShare);
+  DrawFanLayer(ACanvas.Renderer, FArt.Smear, Pose,
+    1 - SharpShare - DiscShare);
+  DrawFanLayer(ACanvas.Renderer, FArt.Sharp, Pose, SharpShare);
+
+  if FArt.Guard = nil then
+    Exit;
+  Pose.Angle := Upright;
+  Pose.Flip := SdlFlipNone;
+  DrawFanLayer(ACanvas.Renderer, FArt.Guard, Pose, FullLevel);
+end;
+
+// ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
@@ -1610,6 +1920,8 @@ begin
       Result := TSkyGlobe.Create(APlacement, AObj, AOwner);
     dkSparks:
       Result := TSparks.Create(APlacement, AObj, AOwner);
+    dkFan:
+      Result := TFan.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

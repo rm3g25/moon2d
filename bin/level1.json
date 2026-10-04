@@ -18,7 +18,8 @@
   "objectSets": [
     "sky",
     "level1-structures",
-    "train"
+    "train",
+    "ventilation"
   ],
   "music": "moon_surface.ogg",
   "legacyTrailing": [
@@ -1942,6 +1943,46 @@
       "size": 24
     },
     {
+      "kind": "fan",
+      "parent": "s14-tower",
+      "x": 129.8,
+      "y": 78.6,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy",
+      "guard": "spider",
+      "rpm": 14,
+      "light": [
+        12,
+        17,
+        26
+      ]
+    },
+    {
+      "kind": "fan",
+      "parent": "s14-tower",
+      "x": 128.7,
+      "y": 177.4,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy",
+      "guard": "spider",
+      "rpm": 14,
+      "light": [
+        12,
+        17,
+        26
+      ]
+    },
+    {
       "kind": "smoke",
       "parent": "s15-tower",
       "x": 141.0,
@@ -2029,6 +2070,87 @@
       "frequency": 0.19,
       "intensity": 30,
       "size": 22
+    },
+    {
+      "kind": "fan",
+      "parent": "s15-tower",
+      "x": 32.4,
+      "y": 78.6,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy",
+      "guard": "spider",
+      "rpm": 14,
+      "light": [
+        12,
+        17,
+        26
+      ]
+    },
+    {
+      "kind": "fan",
+      "parent": "s15-tower",
+      "x": 96,
+      "y": 78.6,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy",
+      "guard": "spider",
+      "rpm": 14,
+      "light": [
+        12,
+        17,
+        26
+      ]
+    },
+    {
+      "kind": "fan",
+      "parent": "s15-tower",
+      "x": 32,
+      "y": 177.4,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy",
+      "guard": "spider",
+      "rpm": 14,
+      "light": [
+        12,
+        17,
+        26
+      ]
+    },
+    {
+      "kind": "fan",
+      "parent": "s15-tower",
+      "x": 95.8,
+      "y": 177.4,
+      "tint": [
+        88,
+        88,
+        90
+      ],
+      "size": 43.4,
+      "rotor": "heavy-torn",
+      "guard": "spider",
+      "rpm": 14,
+      "run": "dying",
+      "light": [
+        12,
+        17,
+        26
+      ]
     },
     {
       "kind": "beacon",
