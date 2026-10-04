@@ -947,6 +947,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-01"
     },
     {
@@ -956,6 +957,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-02"
     },
     {
@@ -965,6 +967,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-03"
     },
     {
@@ -974,6 +977,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-04"
     },
     {
@@ -983,7 +987,19 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "tag": "s16-plat-05"
+      "bob": 1.5,
+      "tag": "s16-plat-05",
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            64,
+            320
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
     },
     {
       "sprite": "s16-platform",
@@ -992,7 +1008,19 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "tag": "s16-plat-06"
+      "bob": 1.5,
+      "tag": "s16-plat-06",
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            96,
+            320
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
     },
     {
       "sprite": "s16-platform-out",
@@ -1001,7 +1029,19 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "tag": "s16-plat-07"
+      "bob": 1.5,
+      "tag": "s16-plat-07",
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            128,
+            320
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
     },
     {
       "sprite": "s16-platform",
@@ -1010,6 +1050,7 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-08"
     },
     {
@@ -1019,7 +1060,19 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "tag": "s16-plat-09"
+      "bob": 1.5,
+      "tag": "s16-plat-09",
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            416,
+            224
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
     },
     {
       "sprite": "s16-platform",
@@ -1028,7 +1081,19 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "tag": "s16-plat-10"
+      "bob": 1.5,
+      "tag": "s16-plat-10",
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            448,
+            224
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
     },
     {
       "sprite": "s16-platform",
@@ -1037,6 +1102,7 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
+      "bob": 1.5,
       "tag": "s16-plat-11"
     },
     {
@@ -1046,6 +1112,7 @@
       "y": 128,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-01"
     },
     {
@@ -1055,6 +1122,7 @@
       "y": 128,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-02"
     },
     {
@@ -1064,6 +1132,7 @@
       "y": 160,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-03"
     },
     {
@@ -1073,6 +1142,7 @@
       "y": 192,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-04"
     },
     {
@@ -1082,6 +1152,7 @@
       "y": 192,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-05"
     },
     {
@@ -1091,6 +1162,7 @@
       "y": 224,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-06"
     },
     {
@@ -1100,6 +1172,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-07"
     },
     {
@@ -1109,6 +1182,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-08"
     },
     {
@@ -1118,6 +1192,7 @@
       "y": 256,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-09"
     },
     {
@@ -1127,6 +1202,7 @@
       "y": 320,
       "width": 32,
       "bullets": "block",
+      "bob": 1,
       "tag": "s17-plat-10"
     }
   ],
