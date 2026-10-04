@@ -73,6 +73,9 @@ function ParsePads(const ARoot: TJSONObject;
 
 implementation
 
+uses
+  System.Generics.Collections;
+
 resourcestring
   SPadBadWidth = 'Level "%s": pad "%s" is %d units wide';
   SPadBadBullets = 'Level "%s": pad "%s" takes bullets "%s" - block or pass';
