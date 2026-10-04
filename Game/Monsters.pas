@@ -28,6 +28,11 @@
   addition). An explosive prop - the barrel - vents a wisp of smoke all
   its life and a plume in that last third (a 2026 addition too).
 
+  A pad (Levels.Pads, a 2026 addition) is floor the grid does not know:
+  the floor half of the edge-aware oracles and the pull of gravity also
+  ask for a deck under the feet, and a fall lands on a deck it came down
+  onto. A walker's walls stay the grid's alone.
+
   The boss flies by Monsters.Pilot: the lap and, by the tactics the
   level's events set, the maneuvers off it (a 2026 addition). In a
   maneuver the aimed gun fires rarer, and not at all where the disc
@@ -46,7 +51,7 @@ uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
   Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Pilot,
-  Bullets;
+  Bullets, Pads.World;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
@@ -99,6 +104,7 @@ type
     FSecret: Boolean;
     FEvents: TList<TMonsterEvent>;
     FLevel: TLevel;
+    FPads: TPadWorld;
     FHeroX, FHeroY: Integer;
     FSmoke: TSmoke; // machines and explosive props, nil for the rest
     FBodySmoke: TBodySmoke; // what FSmoke was made by
@@ -112,6 +118,10 @@ type
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
     function CellOfY(APixel: Integer): Integer;
+    // The floor under the feet in the cell ahead: the grid's, or a deck
+    // spanning AX, the inset edge the oracle looks at
+    function FloorAhead(ACol: Integer; AX: Double): Boolean;
+    function StandsOnDeck: Boolean;
     function CanGoLeftEdgeAware: Boolean;   // CanIGoLeft1
     function CanGoRightEdgeAware: Boolean;  // CanIGoRight1
     function CanGoLeftWallOnly: Boolean;    // CanIGoLeft2
@@ -147,9 +157,9 @@ type
     function DiscCharge: Single;
   public
     // ADiscArt - the layers of a disc monster, nil for the rest; the
-    // caller keeps it alive longer than the monster
+    // caller keeps it and APads alive longer than the monster
     constructor Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-      ADiscArt: TDiscArt; const ALevel: TLevel;
+      ADiscArt: TDiscArt; const ALevel: TLevel; const APads: TPadWorld;
       const APlacement: TEntityPlacement; ALivesScale: Double);
     destructor Destroy; override;
 
@@ -205,6 +215,7 @@ type
     FRenderer: PSdlRenderer;
     FRegistry: TMonsterRegistry;
     FLevel: TLevel;
+    FPads: TPadWorld;
     // The difficulty multiplier of FindMostersOnScreen (moon.dpr
     // 1092-1094): every monster born in this field - placed or
     // sky-dropped - gets its lives scaled by it
@@ -214,9 +225,10 @@ type
     function AnimFor(const AMnsName: string): TAnimSet;
     function DiscArtFor(const ADef: TMonsterDef): TDiscArt;
   public
+    // APads must outlive the field
     constructor Create(const ARenderer: PSdlRenderer;
       const ARegistry: TMonsterRegistry; const ALevel: TLevel;
-      ADifficulty: TDifficulty; ALivesScale: Double);
+      const APads: TPadWorld; ADifficulty: TDifficulty; ALivesScale: Double);
     destructor Destroy; override;
 
     procedure Tick(AScreen, AHeroX, AHeroY: Integer;
@@ -267,6 +279,10 @@ end;
 
 const
   MonsterBound = 8;
+  // The grid asks for the cell an inset edge of the body stands in; a
+  // deck is asked for the point half a unit inside that edge - on whole
+  // units the two answers agree at a deck's ends too
+  DeckEdgeInset = 0.5;
   SpriteResetThreshold = 8.7;
   // Patrol turns AT the right edge, not beyond it
   PatrolRightLimit = ScreenWidth - SpriteSize; // 480
@@ -335,13 +351,14 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TMonster.Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-  ADiscArt: TDiscArt; const ALevel: TLevel;
+  ADiscArt: TDiscArt; const ALevel: TLevel; const APads: TPadWorld;
   const APlacement: TEntityPlacement; ALivesScale: Double);
 begin
   inherited Create;
   FDef := ADef;
   FAnim := AAnim;
   FLevel := ALevel;
+  FPads := APads;
   FEvents := TList<TMonsterEvent>.Create;
 
   FScreen := APlacement.Screen;
@@ -389,7 +406,8 @@ begin
   if ADef.Movement.Kind = mkBossFly then
   begin
     FAction := maFlying;
-    FPilot := TPilot.Create(ALevel, APlacement.Screen, ADef.Movement.Speed);
+    FPilot := TPilot.Create(ALevel, APads, APlacement.Screen,
+      ADef.Movement.Speed);
     FBossMinionTimer := ADef.Boss.SpawnEveryTicks;
   end;
 
@@ -443,7 +461,8 @@ end;
 
 function TMonster.SolidUnderPoint(AX, AY: Single): Boolean;
 begin
-  Result := FLevel.SolidAtPoint(FScreen, AX, AY);
+  Result := FLevel.SolidAtPoint(FScreen, AX, AY) or
+    FPads.BodyAt(FScreen, AX, AY);
 end;
 
 procedure TMonster.WreckIfCritical;
@@ -640,6 +659,20 @@ begin
   Result := FLevel.SolidAt(FScreen, ACol - 1, ARow - 1);
 end;
 
+function TMonster.FloorAhead(ACol: Integer; AX: Double): Boolean;
+begin
+  Result := Solid(ACol, CellOfY(Round(FY))) or
+    (FPads.DeckUnder(FScreen, AX, AX, FY) <> nil);
+end;
+
+// Either inset edge of the body on a deck, as either one on the grid's
+// floor holds it
+function TMonster.StandsOnDeck: Boolean;
+begin
+  Result := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
+    FX + SpriteSize - MonsterBound - DeckEdgeInset, FY) <> nil;
+end;
+
 function TMonster.CanGoLeftEdgeAware: Boolean;
 begin
   // Wall ahead OR no floor ahead - both turn the patroller around
@@ -648,7 +681,7 @@ begin
     Exit(False);
   var AheadCol := CellOfX(Round(FX) + MonsterBound);
   if Solid(AheadCol, CellOfY(Round(FY)) - 1) or
-     not Solid(AheadCol, CellOfY(Round(FY))) then
+     not FloorAhead(AheadCol, Round(FX) + MonsterBound + DeckEdgeInset) then
     Result := False;
 end;
 
@@ -661,8 +694,9 @@ begin
   var AheadCol := CellOfX(Pixel);
   if Pixel mod SpriteSize <> 0 then
     Inc(AheadCol); // BelongToXSprite[2]
+  var EdgeX := Round(FX) + SpriteSize - MonsterBound - DeckEdgeInset;
   if Solid(AheadCol, CellOfY(Round(FY)) - 1) or
-     not Solid(AheadCol, CellOfY(Round(FY))) then
+     not FloorAhead(AheadCol, EdgeX) then
     Result := False;
 end;
 
@@ -934,8 +968,8 @@ begin
   end;
 
   // Verbatim: 'if canigodown and typ<>платформа and typ<>крепление' -
-  // now a data flag instead of type names.
-  if CanGoDown and FDef.AffectedByGravity then
+  // now a data flag instead of type names. A deck holds the feet too.
+  if CanGoDown and not StandsOnDeck and FDef.AffectedByGravity then
     FAction := maFalling;
 end;
 
@@ -947,13 +981,21 @@ const
 begin
   if CanGoDown or (FY > BelowFloorY) then
   begin
+    var PrevY := FY;
     FY := FY + Round(FAcceleration);
     FAcceleration := FAcceleration + (FStep + 1) / 20; // monster gravity
-    Exit;
+    // A deck the feet came down onto lands them as the grid's floor does
+    var Deck := FPads.DeckCrossed(FScreen, FX + MonsterBound + DeckEdgeInset,
+      FX + SpriteSize - MonsterBound - DeckEdgeInset, PrevY, FY, nil);
+    if Deck = nil then
+      Exit;
+    FY := Deck.Top;
+  end
+  else
+  begin
+    FY := FY + 16;
+    FY := (CellOfY(Round(FY)) - 1) * SpriteSize; // exact landing snap
   end;
-
-  FY := FY + 16;
-  FY := (CellOfY(Round(FY)) - 1) * SpriteSize; // exact landing snap
   FAcceleration := 0;
   if FDef.Movement.Kind = mkChaseHero then
   begin
@@ -1187,7 +1229,7 @@ end;
 
 constructor TMonsterField.Create(const ARenderer: PSdlRenderer;
   const ARegistry: TMonsterRegistry; const ALevel: TLevel;
-  ADifficulty: TDifficulty; ALivesScale: Double);
+  const APads: TPadWorld; ADifficulty: TDifficulty; ALivesScale: Double);
 begin
   inherited Create;
   FMonsters := TObjectList<TMonster>.Create(True);
@@ -1198,6 +1240,7 @@ begin
   FRenderer := ARenderer;
   FRegistry := ARegistry;
   FLevel := ALevel;
+  FPads := APads;
   FLivesScale := ALivesScale;
 
   for var Placement in ALevel.Entities do
@@ -1209,7 +1252,7 @@ begin
       Continue;
     var Def := ARegistry.Find(Placement.MonsterId);
     FMonsters.Add(TMonster.Create(Def, AnimFor(Placement.SpriteList),
-      DiscArtFor(Def), ALevel, Placement, FLivesScale));
+      DiscArtFor(Def), ALevel, APads, Placement, FLivesScale));
   end;
 end;
 
@@ -1247,7 +1290,7 @@ begin
   // (the 2008 call took no multiplier) - scaled here for consistency.
   // TODO: verify against monst.pas (tracked: PORTING-NOTES)
   Result := TMonster.Create(Def, AnimFor(Def.SpriteList), DiscArtFor(Def),
-    FLevel, Placement, FLivesScale);
+    FLevel, FPads, Placement, FLivesScale);
   FMonsters.Add(Result);
 end;
 

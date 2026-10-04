@@ -22,6 +22,12 @@
   every frame index, which is why the sequences concatenate rather than
   being asked for by name at the point of use).
 
+  Pads (Levels.Pads, a 2026 addition) are ground the grid does not know:
+  a deck holds the hero from above only. The 2008 oracles go on asking
+  the grid; the floor half of the ledge check also asks for a deck under
+  the hero's middle, a fall lands on a deck the feet came down onto, and
+  Down drops through the deck underfoot.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hero;
@@ -31,7 +37,8 @@ interface
 
 uses
   System.SysUtils, System.Math,
-  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Space, Levels.Defs, Bullets;
+  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Space, Levels.Defs, Bullets,
+  Pads.World;
 
 const
   HeroSize = 32;
@@ -41,7 +48,7 @@ type
     haJumpRight, haFall, haFallLeft, haFallRight);
 
   THeroCommand = (hcGoLeft, hcGoRight, hcStopLeft, hcStopRight,
-    hcJump, hcStopJump);
+    hcJump, hcStopJump, hcDrop);
 
   THeroForm = (hfNormal, hfIce);
 
@@ -52,6 +59,9 @@ type
   THero = class
   private
     FLevel: TLevel;
+    FPads: TPadWorld;
+    // The deck the feet are dropping through, until they are under it
+    FDropFrom: TPad;
     // Weapon-4 muzzle geometry (see the comment in Create); fields so
     // the DEBUGKEYS NumPad tuner can move them live
     FMinigunBaseX: Double;
@@ -131,8 +141,14 @@ type
     procedure RiseOneTick(ANextFall: THeroAction);
     procedure BumpCeiling(ANextFall: THeroAction);
     procedure BeginJumpBoost;
+    procedure StandAfterFall;
+    // --- pads ---
+    function DeckUnderFeet: TPad;
+    function LandOnDeck(APrevY: Double): Boolean;
+    procedure DropThroughDeck;
   public
-    constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel);
+    constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
+      const APads: TPadWorld);
     destructor Destroy; override;
 
     procedure Command(ACmd: THeroCommand);
@@ -268,10 +284,11 @@ begin
 end;
 
 constructor THero.Create(const ARenderer: PSdlRenderer;
-  const ALevel: TLevel);
+  const ALevel: TLevel; const APads: TPadWorld);
 begin
   inherited Create;
   FLevel := ALevel;
+  FPads := APads;
   FCache := TSpriteCache.Create(ARenderer);
   FWeaponCache := TSpriteCache.Create(ARenderer);
 
@@ -357,6 +374,7 @@ end;
 procedure THero.Revive;
 begin
   FDead := False;
+  FDropFrom := nil;
   FCorpseSettled := False;
   FDeathFrame := 9;
   FAction := haStand;
@@ -431,6 +449,13 @@ end;
 // (deviation 5 holds).
 procedure THero.SettleOnGround;
 begin
+  // A deck holds the feet where they are: the snap to a cell line is the
+  // grid's business
+  if DeckUnderFeet <> nil then
+  begin
+    FAction := haStand;
+    Exit;
+  end;
   if GroundUnderFeet or not CanIGoDown then
   begin
     LandExactly;
@@ -530,7 +555,7 @@ begin
   var NothingAhead := not Solid(LeftCell, CellOfY(Round(FY)));
   CellsOfX(Round(FX) - 2 * Bound, LeftCell, RightCell);
   var NothingBehind := not Solid(RightCell, CellOfY(Round(FY)));
-  if NothingAhead and NothingBehind and Result then
+  if NothingAhead and NothingBehind and (DeckUnderFeet = nil) and Result then
   begin
     FAction := haFallLeft;
     FAcceleration := 1;
@@ -554,7 +579,7 @@ begin
   var NothingAhead := not Solid(LeftCell, CellOfY(Round(FY)));
   CellsOfX(Round(FX) - 2 * Bound, LeftCell, RightCell);
   var NothingBehind := not Solid(RightCell, CellOfY(Round(FY)));
-  if NothingAhead and NothingBehind and Result then
+  if NothingAhead and NothingBehind and (DeckUnderFeet = nil) and Result then
   begin
     FAction := haFallRight;
     FAcceleration := 1;
@@ -653,6 +678,12 @@ procedure THero.Command(ACmd: THeroCommand);
 begin
   if FDead then
     Exit;
+
+  if ACmd = hcDrop then
+  begin
+    DropThroughDeck;
+    Exit;
+  end;
 
   if FAction = haStand then
   begin
@@ -836,8 +867,76 @@ begin
     FAcceleration := FAcceleration * IceJumpBoost;
 end;
 
-procedure THero.Tick;
+// The landing of a straight fall, after the feet are set: a side held
+// in the air takes over at once
+procedure THero.StandAfterFall;
 begin
+  FAction := haStand;
+  if FPending = psLeft then
+    FAction := haWalkLeft;
+  if FPending = psRight then
+    FAction := haWalkRight;
+  FPending := psNone;
+end;
+
+// ---------------------------------------------------------------------------
+// Pads - the hero stands on a deck by his middle, as on the grid
+// ---------------------------------------------------------------------------
+
+function THero.DeckUnderFeet: TPad;
+begin
+  var Middle := FX + HeroSize / 2;
+  Result := FPads.DeckUnder(FScreen, Middle, Middle, FY);
+end;
+
+// After a tick that brought the feet down: a deck they passed holds them
+// there. The deck dropped through is let by, and forgotten once the feet
+// are under it.
+function THero.LandOnDeck(APrevY: Double): Boolean;
+begin
+  if FY <= APrevY then
+    Exit(False);
+  var Middle := FX + HeroSize / 2;
+  var Deck := FPads.DeckCrossed(FScreen, Middle, Middle, APrevY, FY,
+    FDropFrom);
+  if (FDropFrom <> nil) and (FY > FDropFrom.Top) then
+    FDropFrom := nil;
+  if Deck = nil then
+    Exit(False);
+  FY := Deck.Top;
+  FAcceleration := 0;
+  Result := True;
+end;
+
+// Down through the deck underfoot - from a stand or a walk, the way a
+// ledge is walked off. The grid's floor lets nobody through.
+procedure THero.DropThroughDeck;
+begin
+  if not (FAction in [haStand, haWalkLeft, haWalkRight]) then
+    Exit;
+  var Deck := DeckUnderFeet;
+  if Deck = nil then
+    Exit;
+  FDropFrom := Deck;
+  case FAction of
+    haWalkLeft:
+      FAction := haFallLeft;
+    haWalkRight:
+      FAction := haFallRight;
+  else
+    FAction := haFall;
+  end;
+  FAcceleration := 1;
+end;
+
+procedure THero.Tick;
+var
+  PrevY: Double; // the feet before this tick moves them
+begin
+  PrevY := FY;
+  // On the ground the drop is over, whatever stopped it
+  if FAction in [haStand, haWalkLeft, haWalkRight] then
+    FDropFrom := nil;
   SetWeaponAngle;
   if FTimeOfFire < FFireCooldown then // TWeapon.Timer
     Inc(FTimeOfFire);
@@ -853,8 +952,13 @@ begin
     // checking it every tick made the corpse bounce. Settle once, done.
     if not FCorpseSettled then
     begin
-      if CanIGoDown then
-        FallOneTick
+      if DeckUnderFeet <> nil then
+        FCorpseSettled := True
+      else if CanIGoDown then
+      begin
+        FallOneTick;
+        FCorpseSettled := LandOnDeck(PrevY);
+      end
       else
       begin
         FY := (Trunc(FY) div HeroSize) * HeroSize;
@@ -886,12 +990,7 @@ begin
       else
       begin
         LandExactly;
-        FAction := haStand;
-        if FPending = psLeft then
-          FAction := haWalkLeft;
-        if FPending = psRight then
-          FAction := haWalkRight;
-        FPending := psNone;
+        StandAfterFall;
       end;
 
     haFallLeft:
@@ -968,6 +1067,17 @@ begin
       else
         BumpCeiling(haFallLeft);
   end;
+
+  // A fall that came down onto a deck lands there, as on the grid's floor
+  if LandOnDeck(PrevY) then
+    case FAction of
+      haFall:
+        StandAfterFall;
+      haFallLeft:
+        FAction := haWalkLeft;
+      haFallRight:
+        FAction := haWalkRight;
+    end;
 end;
 
 // ---------------------------------------------------------------------------

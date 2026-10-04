@@ -4,7 +4,8 @@
 
   A level is: a tile grid (screens of 16x12 cells), a tile palette
   (BMP names), background changes, free-form objects over the backdrop
-  (art of any shape, no collision), dynamic objects living beside them
+  (art of any shape, no collision), pads - platforms apart from the grid
+  (Levels.Pads) - and dynamic objects living beside them
   (Levels.Dynamics), music, and entity placements with
   optional per-placement overrides (speed, lives, shooting) and triggers
   (location titles, music changes) - faithfully carrying over the
@@ -20,7 +21,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
-  Localization, Levels.Events, Levels.Tint, Levels.Dynamics;
+  Localization, Levels.Events, Levels.Tint, Levels.Dynamics, Levels.Pads;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -130,6 +131,7 @@ type
     FTilePalette: TArray<string>;
     FBackgrounds: TArray<TBackgroundChange>;
     FObjects: TArray<TLevelObject>;
+    FPads: TArray<TPadPlacement>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
     FDynamics: TDynamicObjects;
@@ -138,6 +140,7 @@ type
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
+    procedure CheckPads;
     procedure CheckEvents;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
@@ -184,6 +187,8 @@ type
     // Every screen's objects, in file order - later ones draw over
     // earlier ones
     property Objects: TArray<TLevelObject> read FObjects;
+    // Platforms apart from the grid, in file order (Levels.Pads)
+    property Pads: TArray<TPadPlacement> read FPads;
     property Entities: TArray<TEntityPlacement> read FEntities;
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
@@ -222,13 +227,16 @@ resourcestring
   SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
     + '"%s", which no entity carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
-    + 'a tag no object and no entity carries';
-  SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by an object '
-    + 'and an entity - a dynamic object hung on it cannot tell which';
+    + 'a tag no object, no pad and no entity carries';
+  SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by more than '
+    + 'one of an object, a pad and an entity - a dynamic object hung on '
+    + 'it cannot tell which';
   SLevelDynamicTwoMonsters = 'Level "%s": two monsters tagged "%s" live '
     + 'on one difficulty - a dynamic object hung on it cannot tell which';
   SLevelDynamicTwoParents = 'Level "%s": two objects tagged "%s" stand '
     + 'on screen %d - a dynamic object hung on it cannot tell which';
+  SLevelPadBadScreen = 'Level "%s": pad "%s" sits on screen %d of %d';
+  SLevelPadTwoTags = 'Level "%s": two pads are tagged "%s"';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -371,6 +379,9 @@ begin
   ParseBackgrounds(ARoot.GetValue<TJSONArray>('backgrounds'));
   ParseObjects(ARoot.GetValue<TJSONArray>('objects', nil));
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
+  // Pads before the dynamics: a dynamic object may hang on one
+  FPads := ParsePads(ARoot, FId);
+  CheckPads;
   // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
   CheckDynamics;
@@ -431,9 +442,32 @@ begin
   end;
 end;
 
+function PadsTagged(const APads: TArray<TPadPlacement>;
+  const ATag: string): Integer;
+begin
+  Result := 0;
+  for var Pad in APads do
+    if Pad.Tag = ATag then
+      Inc(Result);
+end;
+
+// A pad off the screen list never shows; two pads with one tag leave a
+// dynamic object hung on it to the first of them
+procedure TLevel.CheckPads;
+begin
+  for var Pad in FPads do
+  begin
+    if (Pad.Screen < 1) or (Pad.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelPadBadScreen,
+        [FId, Pad.Sprite, Pad.Screen, FScreenCount]);
+    if (Pad.Tag <> '') and (PadsTagged(FPads, Pad.Tag) > 1) then
+      raise ELevelError.CreateFmt(SLevelPadTwoTags, [FId, Pad.Tag]);
+  end;
+end;
+
 // A nailed object off the screen list never shows; a parent tag no
-// object and no monster carries leaves its child nowhere. Typos both -
-// they die at load, as the events' do.
+// object, no pad and no monster carries leaves its child nowhere. Typos
+// both - they die at load, as the events' do.
 procedure TLevel.CheckDynamics;
 begin
   for var DynamicObject in FDynamics do
@@ -473,10 +507,12 @@ begin
     Found := True;
   end;
 
+  var OnPad := PadsTagged(FPads, ATag) > 0;
   var OnEntity := AnyPlacementTagged(FEntities, ATag);
-  if Found and OnEntity then
+  var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity);
+  if Kinds > 1 then
     raise ELevelError.CreateFmt(SLevelDynamicTwoKinds, [FId, ATag]);
-  if not (Found or OnEntity) then
+  if Kinds = 0 then
     raise ELevelError.CreateFmt(SLevelDynamicNoParent, [FId, ATag]);
   if OnEntity then
     CheckMonsterParent(ATag);

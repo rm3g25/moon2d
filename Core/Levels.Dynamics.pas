@@ -13,7 +13,7 @@
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
   from the parent's top-left corner and the object shows wherever the
-  parent does. The parent is named by tag - a static object or a
+  parent does. The parent is named by tag - a static object, a pad or a
   monster; finding it is the business of Render.Dynamics.
 
   Intensity is the property the level's events change in every kind:
@@ -66,7 +66,7 @@ type
   TDynamicPlacement = record
     Screen: Integer; // 1-based; 0 under a parent, which decides it
     LastScreen: Integer; // = Screen unless "screens" spans a run
-    Parent: string; // a static object's or a monster's tag; '' = nailed
+    Parent: string; // a static object's, a pad's or a monster's tag; '' = nailed
     X, Y: Single; // screen units; from the parent's top-left under one
     Tint: TColorTint;
     Tag: string;

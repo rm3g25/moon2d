@@ -4,8 +4,9 @@
   One process, one window, states instead of the 2008 launcher+game pair.
   The game boots into the menu (moon over a starfield, Menu), levels
   load from there; Escape returns to the menu, Alt/Ctrl+Enter toggles
-  fullscreen anywhere. In game: WASD/arrows move, Space/W jumps, the arm
-  tracks the mouse. PgUp/PgDn browse screens for debugging.
+  fullscreen anywhere. In game: WASD/arrows move, Space/W jumps, S/Down
+  drops through a pad, the arm tracks the mouse. PgUp/PgDn browse screens
+  for debugging.
 
   Logic runs in game units (SetMaxC of 2008, see Game.Space); the SDL
   logical size is the frame, so mouse events arrive already in game units.
@@ -34,6 +35,7 @@ uses
   Levels.Dynamics in 'Core\Levels.Dynamics.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
+  Levels.Pads in 'Core\Levels.Pads.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Objects in 'Core\Render.Objects.pas',
   Render.Puff in 'Core\Render.Puff.pas',
@@ -47,6 +49,7 @@ uses
   Monsters in 'Game\Monsters.pas',
   Monsters.Disc in 'Game\Monsters.Disc.pas',
   Monsters.Pilot in 'Game\Monsters.Pilot.pas',
+  Pads.World in 'Game\Pads\Pads.World.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',
   Hud.Terminal in 'Hud\Hud.Terminal.pas',
@@ -164,6 +167,7 @@ const
   // Scancodes beyond Sdl2.Core's basic set
   ScancodeA = 4;
   ScancodeD = 7;
+  ScancodeS = 22;
   ScancodeW = 26;
 
 {$IFDEF DEBUGKEYS}
@@ -255,13 +259,14 @@ type
     FTiles: TTileScreenRenderer;
     FObjects: TObjectScreenRenderer;
     FDynamics: TDynamicScreenRenderer;
+    FPads: TPadWorld;
     FHero: THero;
     FState: TGameState;
     // Original input model: keyboard.pas kept a Key[] state array and the
     // timer POLLED it - commands fired every tick while held. That is what
     // let the hero grab a ledge mid-jump: the held key kept knocking until
     // CanIFly* opened. Reproduced with these flags.
-    FHeldLeft, FHeldRight, FHeldJump, FHeldFire: Boolean;
+    FHeldLeft, FHeldRight, FHeldJump, FHeldDown, FHeldFire: Boolean;
     FMonsterBullets: TBurst; // the shared enemy burst
     FField: TMonsterField;
     FHeroHealth: Integer;
@@ -334,6 +339,7 @@ type
     procedure HandleScreenTransitions;
     procedure HandlePitFall;
     procedure ArriveOnScreen;
+    function BulletStruckWall(const ABullet: TBullet): Boolean;
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
     procedure ResolveMonsterContact;
@@ -468,6 +474,7 @@ begin
   FHero.Free;
   FDynamics.Free;
   FObjects.Free;
+  FPads.Free;
   FTiles.Free;
   FSprites.Free;
   FObjectCache.Free;
@@ -489,6 +496,7 @@ begin
   FHero.Free;
   FDynamics.Free;
   FObjects.Free;
+  FPads.Free;
   FTiles.Free;
   FObjectCache.Free;
   FBackgroundCache.Free;
@@ -498,6 +506,7 @@ begin
   FHero := nil;
   FDynamics := nil;
   FObjects := nil;
+  FPads := nil;
   FTiles := nil;
   FObjectCache := nil;
   FBackgroundCache := nil;
@@ -538,16 +547,18 @@ begin
   for var SetName in FLevel.ObjectSets do
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
+  // Before the dynamics: their parents may be pads
+  FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel.Pads);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
     World);
 
-  FHero := THero.Create(FRenderer, FLevel);
+  FHero := THero.Create(FRenderer, FLevel, FPads);
   FreeAndNil(FHenshin);
   FHenshin := THenshin.Create(FHero, FAudio, FMessages, FShake, CureHero);
-  FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
+  FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
   FreeAndNil(FDirector);
@@ -636,6 +647,7 @@ begin
   FHeldLeft := False;
   FHeldRight := False;
   FHeldJump := False;
+  FHeldDown := False;
   FHeldFire := False;
   // The current track keeps playing under the farewell - the 2008 exit
   // was silence via GameFree; a track feels kinder (tweak on review)
@@ -714,6 +726,7 @@ begin
   FHeldLeft := False;
   FHeldRight := False;
   FHeldJump := False;
+  FHeldDown := False;
   FHeldFire := False;
   FMenu.ShowMain;
   // Level music keeps playing under the menu - verbatim 2008 behavior
@@ -990,12 +1003,21 @@ begin
   FAudio.PlayMusic(AFileName, mmLoop);
 end;
 
-// A dynamic object hung on a moving parent - a monster - looks it up
-// here every tick
+// A dynamic object hung on a pad or a monster looks it up here every
+// tick. Levels.Defs has refused a tag both carry.
 function TMoonGame.LocateParent(const ATag: string;
   out AStand: TParentStand): Boolean;
 begin
   AStand := Default(TParentStand);
+  var Pad := FPads.FindTagged(ATag);
+  if Pad <> nil then
+  begin
+    AStand.Screen := Pad.Screen;
+    AStand.X := Pad.Left;
+    AStand.Y := Pad.Top;
+    AStand.Alive := True;
+    Exit(True);
+  end;
   for var Monster in FField.Monsters do
   begin
     if Monster.Tag <> ATag then
@@ -1021,10 +1043,11 @@ begin
 end;
 
 // The solid layer debris and sparks ring off: the collision grid of the
-// hero's screen, the point in screen units
+// hero's screen and the bodies of its pads, the point in screen units
 function TMoonGame.SolidUnderPoint(AX, AY: Single): Boolean;
 begin
-  Result := FLevel.SolidAtPoint(FHero.Screen, AX, AY);
+  Result := FLevel.SolidAtPoint(FHero.Screen, AX, AY) or
+    FPads.BodyAt(FHero.Screen, AX, AY);
 end;
 
 // bottle.wav is what a barrel dies with: the pops are barrel blasts
@@ -1177,6 +1200,17 @@ begin
     (ABullet.Y < -ScreenHeight / 2);
 end;
 
+// A wall of the grid or a pad that bursts bullets. A bullet's picture
+// hangs a sprite above its Y: the point it strikes with is up there.
+function TMoonGame.BulletStruckWall(const ABullet: TBullet): Boolean;
+begin
+  if ABullet.Y <= 0 then
+    Exit(False);
+  Result := FLevel.SolidAt(FHero.Screen, BulletCellCol(ABullet.X),
+    BulletCellRow(ABullet.Y)) or
+    FPads.StopsBulletAt(FHero.Screen, ABullet.X, ABullet.Y - SpriteSize);
+end;
+
 // Verbatim port of the hero half of the WindowProc bullet block: a
 // Contact bullet intercepts monster bullets mid-air, any bullet bursts
 // against a solid wall keeping 1/8 inertia, off-screen means gone.
@@ -1204,9 +1238,7 @@ begin
 
     if BulletOffScreen(Own) then
       Own.Status := bsInactive
-    else if (Own.Y > 0) and
-      FLevel.SolidAt(FHero.Screen,
-        BulletCellCol(Own.X), BulletCellRow(Own.Y)) then
+    else if BulletStruckWall(Own) then
       Own.StartBurstSliding;
 
     if Own.Status <> bsFlying then
@@ -1318,9 +1350,7 @@ begin
       Continue;
     if BulletOffScreen(Enemy) then
       Enemy.Status := bsInactive
-    else if (Enemy.Y > 0) and
-      FLevel.SolidAt(FHero.Screen,
-        BulletCellCol(Enemy.X), BulletCellRow(Enemy.Y)) then
+    else if BulletStruckWall(Enemy) then
       Enemy.StartBurstSliding
     else if (FHurtCooldown = 0) and not FHero.Dead and
       (Enemy.X > FHero.X + 8) and
@@ -1362,7 +1392,7 @@ begin
   // again. (2008 had no respawn - death led to the menu; the checkpoint
   // only served the pits. Our auto-restart deviation now reads it too.)
   FField.Free;
-  FField := TMonsterField.Create(FRenderer, FMonsters, FLevel,
+  FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   FDynamics.Reseat;
   FHero.Bullets.Clear;
@@ -1642,6 +1672,8 @@ begin
     FHero.Command(hcJump)
   else
     FHero.Command(hcStopJump);
+  if FHeldDown then
+    FHero.Command(hcDrop);
 
   FHero.Tick;
   if FHeldFire and FHero.Fire then
@@ -1711,6 +1743,7 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
+        FPads.Draw(FHero.Screen);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
@@ -2093,6 +2126,8 @@ begin
         FHeldRight := True;
       SdlScancodeSpace, ScancodeW, SdlScancodeUp:
         FHeldJump := True;
+      ScancodeS, SdlScancodeDown:
+        FHeldDown := True;
     end;
   end
   else
@@ -2103,6 +2138,8 @@ begin
         FHeldRight := False;
       SdlScancodeSpace, ScancodeW, SdlScancodeUp:
         FHeldJump := False;
+      ScancodeS, SdlScancodeDown:
+        FHeldDown := False;
     end;
 end;
 

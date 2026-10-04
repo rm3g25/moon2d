@@ -10,8 +10,8 @@
   way, so there is one tell to learn: the body brakes onto a cell and
   ponders there - a hunt alone has no time for it. What follows is
   picked by the tactics the level's events set (TPilotTactics). Off the
-  lap the pilot minds the walls: the level's grid, the body one cell
-  big.
+  lap the pilot minds the walls: the level's grid and the bodies of its
+  pads (Pads.World), the body one cell big.
 
   Not here: what a maneuver looks and sounds like. The disc, the bullets
   and the sparks of a crash are the monster's and the game's.
@@ -24,7 +24,7 @@ unit Monsters.Pilot;
 interface
 
 uses
-  Levels.Defs, Monsters.Defs;
+  Levels.Defs, Monsters.Defs, Pads.World;
 
 type
   THeading = (hdDown, hdLeft, hdUp, hdRight);
@@ -62,6 +62,7 @@ type
   TPilot = class
   private
     FLevel: TLevel;
+    FPads: TPadWorld;
     FScreen: Integer;
     FBaseStep: Integer;
     FTactics: TPilotTactics;
@@ -86,6 +87,7 @@ type
     FLastCrash: TPilotCrash;
     FCrashed: Boolean;
     FOwesPrize: Boolean;
+    function Walled(AX, AY: Single): Boolean;
     function CellOpen(const ACell: TCell): Boolean;
     function CanGo(AHeading: THeading): Boolean;
     function BodyBlocked(const AFeet: TPlace): Boolean;
@@ -124,8 +126,10 @@ type
     procedure JoinLap(const ACell: TCell; AStep: Integer);
   public
     // ABaseStep - the step of the monster's definition: a dash is flown
-    // by it whatever the rage has made of the monster's own
-    constructor Create(const ALevel: TLevel; AScreen, ABaseStep: Integer);
+    // by it whatever the rage has made of the monster's own. APads must
+    // outlive the pilot.
+    constructor Create(const ALevel: TLevel; const APads: TPadWorld;
+      AScreen, ABaseStep: Integer);
 
     // One logic tick. AX, AY - the feet point of the body.
     procedure Tick(var AX, AY: Double; const ABrief: TPilotBrief);
@@ -400,10 +404,12 @@ end;
 // TPilot
 // ---------------------------------------------------------------------------
 
-constructor TPilot.Create(const ALevel: TLevel; AScreen, ABaseStep: Integer);
+constructor TPilot.Create(const ALevel: TLevel; const APads: TPadWorld;
+  AScreen, ABaseStep: Integer);
 begin
   inherited Create;
   FLevel := ALevel;
+  FPads := APads;
   FScreen := AScreen;
   FBaseStep := ABaseStep;
   FTactics := ptLaps;
@@ -477,11 +483,19 @@ begin
   end;
 end;
 
+// A wall of the grid or the body of a pad at the point
+function TPilot.Walled(AX, AY: Single): Boolean;
+begin
+  Result := FLevel.SolidAtPoint(FScreen, AX, AY) or
+    FPads.BodyAt(FScreen, AX, AY);
+end;
+
 function TPilot.CellOpen(const ACell: TCell): Boolean;
 begin
   var InArena := (ACell.Col >= 0) and (ACell.Col < ScreenCols) and
     (ACell.Row >= ArenaTopRow) and (ACell.Row <= ArenaBottomRow);
-  Result := InArena and not FLevel.SolidAt(FScreen, ACell.Col, ACell.Row);
+  var Middle := MiddleOf(FeetOf(ACell));
+  Result := InArena and not Walled(Middle.X, Middle.Y);
 end;
 
 function TPilot.CanGo(AHeading: THeading): Boolean;
@@ -501,10 +515,8 @@ begin
   var Right := AFeet.X + SpriteSize - BodyInset;
   var Top := AFeet.Y - SpriteSize + BodyInset;
   var Bottom := AFeet.Y - BodyInset;
-  Result := FLevel.SolidAtPoint(FScreen, Left, Top) or
-    FLevel.SolidAtPoint(FScreen, Right, Top) or
-    FLevel.SolidAtPoint(FScreen, Left, Bottom) or
-    FLevel.SolidAtPoint(FScreen, Right, Bottom);
+  Result := Walled(Left, Top) or Walled(Right, Top) or
+    Walled(Left, Bottom) or Walled(Right, Bottom);
 end;
 
 // Unit by unit, asking the walls at every one: the body stops where it

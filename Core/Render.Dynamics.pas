@@ -6,10 +6,10 @@
   Where an object stands: a nailed one on its screen, or on each of
   its run of screens; one under a static object on every screen that
   object stands on, counted from its top-left corner - settled once
-  at level load, static objects never move. One under a parent that
-  moves - a monster - is looked up by tag every tick through the game's
-  callback: a monster moves, dies and is reborn with the field on every
-  restart, so no reference to one is kept. A monster that spins (a
+  at level load, static objects never move. One under a pad or a
+  monster is looked up by tag every tick through the game's callback: a
+  monster moves, dies and is reborn with the field on every restart, so
+  no reference to one is kept. A monster that spins (a
   disc) also tells its pose of the last two ticks: an object that turns
   with it is drawn where its point has turned to, between the ticks as
   the disc is.
@@ -45,8 +45,8 @@ type
     Axis: TSdlFPoint;
   end;
 
-  // A parent that moves, this tick: its screen, the top-left corner of
-  // its picture, and whether it still lives; Spin only when Spins
+  // A parent looked up this tick: its screen, the top-left corner of its
+  // picture, and whether it still lives; Spin only when Spins
   TParentStand = record
     Screen: Integer;
     X, Y: Single;
@@ -55,7 +55,7 @@ type
     Spin: TParentSpin;
   end;
 
-  // Finds the moving parent carrying ATag; False when there is none
+  // Finds the pad or the monster carrying ATag; False when there is none
   TLocateParent = reference to function(const ATag: string;
     out AStand: TParentStand): Boolean;
 
@@ -169,8 +169,8 @@ begin
   inherited;
 end;
 
-// Levels.Defs has already refused a parent tag that neither an object
-// nor an entity carries: a tag no object carries is a moving parent's
+// Levels.Defs has already refused a parent tag that no object, no pad and
+// no entity carries: a tag no object carries is a pad's or a monster's
 function TDynamicScreenRenderer.PlaceOf(ADynamic: TDynamicObject;
   const AObjects: TArray<TLevelObject>): TPlace;
 begin
