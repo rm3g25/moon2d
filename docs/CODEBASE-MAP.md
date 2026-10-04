@@ -1055,7 +1055,10 @@ moves in comes from `Game.Space`.
   - Weapon: `FBullets: TBurst`, type 0..4 (pistol / shotgun x5 / grenade
     cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
-    barrel, so the caller barks the sound), `SetWeaponAngle`, `DrawWeapon`,
+    barrel, so the caller barks the sound), `SetWeaponAngle` (verbatim, but
+    the sine goes into `ArcSin` clamped to -1..1: feet on a fraction - a
+    deck between the rows - round the distance down past the leg, and the
+    NaN ended in `EIntOverflow`; a no-op on whole coordinates), `DrawWeapon`,
     the crosshair (`DrawCrosshair` frames 1..4 = the smart cursor colors), the
     minigun muzzle live tuner (`NudgeMinigun`, DEBUGKEYS).
   - Lifecycle: `Command`, `Tick` (verbatim OurHero.Timer), `Draw`, `SetMouse`,
