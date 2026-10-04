@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.26` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.27` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -53,7 +53,7 @@ for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) /
 `Levels.Pads` (over `Levels.Tint`) ->
 `Levels.Defs` / `Pads.World` (the pads in play: over `Levels.Pads`,
-`Render.Sprites` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
+`Render.Sprites`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
@@ -354,7 +354,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~700 lines)
+### `Core/Levels.Defs.pas` (~725 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -393,9 +393,13 @@ Level data model + JSON parser. No game logic.
   `objects` section and refuses an object off the screen list or with a
   width of zero or less. `Pads` - the platforms apart from the grid
   (`Levels.Pads`), in file order; the private `CheckPads` refuses a pad off
-  the screen list (`SLevelPadBadScreen`) and two pads with one tag
+  the screen list (`SLevelPadBadScreen`), two pads with one tag
   (`SLevelPadTwoTags` - a dynamic object hung on it would go to the
-  first). `Events` - the level's events (`Levels.Events`), in
+  first) and a path with a stop that puts the pad past an edge of its
+  screen (`TryStopOffScreen` finds the first: X below zero or X + width
+  past `ScreenWidth`, Y below zero or past `ScreenHeight`;
+  `SLevelPadStopOff` - the pad would leave the hero's screen without its
+  riders). `Events` - the level's events (`Levels.Events`), in
   file order. Queries: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (the
   same for a point in screen units - the one home of the units-to-cells
   rule and its guard against negatives; the solid probes of the game and
@@ -754,26 +758,47 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~95 lines)
+### `Core/Levels.Pads.pas` (~175 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
 edge, carries what lands on it; from below and from the side anything
 passes through. Under the deck the pad has a body one cell deep: it stops
 the boss's flight, the sparks and the debris, and the bullets unless the
-pad lets them by. A 2026 addition.
+pad lets them by. A pad may travel a path - there and back along its
+stops, or round them - and may bob in the air: the path moves the pad
+itself, the bob is for the eye alone (`Pads.World` says why). A 2026
+addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
   units; the picture's height follows its aspect), `Tint`, `Tag` (names
-  the pad for the dynamic objects hung on it; '' = none), `Bullets`.
+  the pad for the dynamic objects hung on it; '' = none), `Bullets`,
+  `Path` (a `TPadPath`; `prNone` - the pad stands where it is placed),
+  `Bob` (how far the pad sways up and down, in units; 0 = still).
 - **`TPadBullets`** = (`pbBlock`, `pbPass`) - what the body does to a
   bullet: bursts it or lets it by. `PadBulletsIds` ('block'/'pass') - the
   JSON words.
+- **`TPadRoute`** = (`prNone`, `prPingPong`, `prLoop`) - how a pad goes
+  along its stops: not at all, there and back, or round. `PadRouteIds`
+  ('none'/'pingpong'/'loop') - the JSON words; a file may write only the
+  last two.
+- **`TPadStop`** (record) - `X`, `Y` (Single): the top-left corner of the
+  pad at a stop, in screen units. **`TPadPath`** (record) - `Route`,
+  `Stops` (the stops after the pad's own place, in order), `Speed` (units
+  a second, the mean over a leg), `Pause` (seconds the pad stands at
+  every stop).
 - **`ParsePads(root, levelId)`** - absent section = no pads; `bullets`
-  absent = block; a width of zero or less and a bullets word out of
-  `PadBulletsIds` raise `EPadError`. The screen range and a tag on two pads
-  are `Levels.Defs`' (`CheckPads`).
+  absent = block; `path` absent = no path (`ReadPath`), `bob` absent = 0.
+  The JSON: `"path": {"route", "stops": [[x, y], ...], "speed",
+  "pause"}` (`route` absent = pingpong, `pause` absent = 0) and `"bob"`.
+  `EPadError` is raised by a width of zero or less (`SPadBadWidth`), a
+  bullets word out of `PadBulletsIds` (`SPadBadBullets`), a route other
+  than pingpong or loop (`SPadBadRoute`), a path without stops
+  (`SPadNoStops`), a stop that is not a pair of numbers (`ReadStop`,
+  `SPadBadStop`), a speed of zero or less, a pause or a bob below zero
+  (`SPadBadNumber`). The screen range, a tag on two pads and a stop off
+  the screen are `Levels.Defs`' (`CheckPads`).
 
 ### `Core/Monsters.Defs.pas` (~570 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
@@ -840,32 +865,77 @@ Projectiles + all the 2008 particle-hack spawners.
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
 
-### `Game/Pads/Pads.World.pas` (~215 lines)
+### `Game/Pads/Pads.World.pas` (~420 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
-riders: the hero and the monsters ask it for the deck under their feet and
+riders: the hero and the monsters ask it for the deck under their feet,
+for the deck that stood under them a tick ago and carries them along, and
 for the deck their feet came down onto in a tick; the 2008 grid goes on
 answering everything else. On a screen without pads every answer is nil or
-False, so the old rules stand alone there. The pads stand still for now.
-Born with the level (`LoadLevel`), lives through a restart.
+False, so the old rules stand alone there. A pad travels its path eased
+in and out of every stop, and only the pads of the hero's screen go on: a
+screen left behind holds still with whatever lies on its pads, as its
+monsters do. The bob and the sag under a landing are the pad's `Lift` -
+drawn, not felt: a pad standing still keeps its deck on the line the level
+file puts it on, where the 2008 wall probes, which count rows from the
+feet, read the right row. A path that climbs takes its riders between the
+rows: keep it clear of the grid's walls. Born with the level
+(`LoadLevel`); a restart rewinds it.
 - **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
-  the feet line of whatever stands on the pad), `Screen`, `Tag`, `Bullets`.
-  `DeckSpans(left, right)` - the deck spans some of left..right, edges
-  included (closed); `BodyHolds(x, y)` - the point lies in the body, the
-  deck's width across and one cell (`TileSize`) down from the deck,
-  half-open (`Left` <= x < `Right`, `Top` <= y < `Top` + `TileSize`). The
-  picture: its height from the art's aspect, drawn at (`Left`, `Top`) with
-  the pad's tint set before every draw (`TintTexture`, `DrawRect`), as a
-  static object is.
+  the feet line of whatever stands on the pad), `PrevTop` (the deck a tick
+  ago), `Screen`, `Tag`, `Bullets`.
+  - The path: `BuildCycle` (in the constructor) makes it one cycle of
+    stops - the first is the level file's place, the path's stops follow;
+    pingpong comes back through the inner stops (each passed twice, the
+    two ends once), loop goes from the last stop back to the first. A
+    leg's ticks are its distance over `Speed` at 33 ticks a second
+    (`LogicTicksPerSecond`, local - the `tickRate` of `Game.Config`; one
+    tick at least), the pause at every stop `Pause` * 33 ticks.
+    `Tick(onView)` keeps the place a tick ago (`FPrevLeft`, `FPrevTop`)
+    first and, on the hero's screen only, advances `FClock` (the ticks the
+    pad has lived on the hero's screen), places the pad on the cycle
+    (`PlaceOnPath`: a leg, then the pause at the stop it ends at; the leg
+    eased by `Smoothstep` - the pad sets off and comes to a stop gently)
+    and steps the sag (`TickSag`). `Rewind` - the clock to 0, the pad on
+    the level file's place, no sag; the constructor ends with it.
+    `MotionX` - how far the pad went across this tick.
+  - The deck and the body: `DeckSpans(left, right)` - the deck spans some
+    of left..right, edges included (closed); `DeckSpannedBefore(left,
+    right)` - the same for the deck as it stood a tick ago;
+    `BodyHolds(x, y)` - the point lies in the body, the deck's width across
+    and one cell (`TileSize`) down from the deck, half-open (`Left` <= x <
+    `Right`, `Top` <= y < `Top` + `TileSize`).
+  - `Lift` - units down from the deck the pad is drawn at: the bob
+    (`Bob` times a sine, one sway in `BobPeriodTicks` = 3 s, the phase
+    shifted by the placement's X across the screen - a row of pads
+    ripples) plus the sag. `Press(speed)` - something landed on the deck
+    at speed units a tick: the sag's speed takes speed * `SagGain` (0.6),
+    no more than `SagMaxKick` (2.7 - about three units down at the
+    deepest), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
+    brings it back, at rest closer than `SagRest` (0.05). The physics deck
+    stays on the path: the feet never feel the `Lift`.
+  - The picture: its height from the art's aspect, drawn at
+    (`Round(Left)`, `Round(Top)` + `Round(Lift)`) - as the riders are
+    drawn, so the feet do not flicker into the deck - with the pad's tint
+    set before every draw (`TintTexture`, `DrawRect`), as a static object
+    is.
 - **`TPadWorld`** - `Create(sprites, cache, placements)`: the cache is the
   level's object art, the textures are its, and it must outlive the world;
-  a picture it lacks raises here, at level load. `DeckUnder(screen, left,
-  right, feetY)` - the deck the feet stand on: within `DeckSlop` (0.5) of
-  feetY and spanning some of left..right, nil when there is none (positions
-  are whole units, and a fraction left by arithmetic must not drop a
-  rider). `DeckCrossed(screen, left, right, prevY, feetY, ignored)` - the
-  deck the feet came down onto between two ticks (prevY <= `Top` <= feetY),
-  the highest one when they passed several; `ignored` (may be nil) is the
+  a picture it lacks raises here, at level load. `Tick(screen)` - before
+  the riders move: every pad's `Tick`, on view for the pads of that screen
+  alone - a pad elsewhere keeps its `Prev*` caught up and goes nowhere.
+  `Rewind` - every pad back to where the level file puts it.
+  `DeckUnder(screen, left, right, feetY)` - the deck the feet stand on:
+  within `DeckSlop` (0.5) of feetY and spanning some of left..right, nil
+  when there is none (a fraction left by arithmetic must not drop a
+  rider). `DeckCarrying(screen, left, right, feetY)` - the deck the feet
+  stood on a tick ago (`PrevTop` within the slop of feetY,
+  `DeckSpannedBefore`), which carries them this tick. `DeckCrossed(screen,
+  left, right, prevY, feetY, ignored)` - the deck the feet came down onto
+  between two ticks: the previous feet not below the deck as it stood
+  (prevY <= `PrevTop`) and the feet not above it now (feetY >= `Top`) - a
+  deck rising into still feet catches them too; the highest one when they
+  passed several; `ignored` (may be nil) is the
   deck the feet are dropping through, and every deck at its height (within
   the slop) is let by - else a drop on the seam of two pads side by side
   would land on the neighbour. `BodyAt(screen, x, y)` - a body at the point
@@ -873,7 +943,7 @@ Born with the level (`LoadLevel`), lives through a restart.
   x, y)` - the same for the `pbBlock` pads alone; `FindTagged(tag)` - nil
   when no pad carries the tag; `Draw(screen)`.
 
-### `Game/Hero.pas` (~1285 lines)
+### `Game/Hero.pas` (~1335 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -895,20 +965,35 @@ moves in comes from `Game.Space`.
     and the 2008 oracles go on asking the grid. `DeckUnderFeet` - the deck
     under his middle (`FX + HeroSize / 2`); the floor half of the ledge
     check in `CanIGoLeft/Right` also asks for one, so a walk off the grid
-    onto a deck does not fall. `LandOnDeck(prevY)` at the end of `Tick`,
-    after the verbatim state machine: a deck the feet came down onto this
-    tick (`DeckCrossed`) holds them at its `Top`, the acceleration zeroed,
-    and the fall states land there - `haFall` through `StandAfterFall` (the
-    landing of a straight fall, lifted out of the `haFall` branch: a side
+    onto a deck does not fall. `RideDeck` at the head of `Tick`, right
+    after `PrevY` is caught (the feet where the last tick left them): the
+    deck the feet stood on a tick ago (`DeckCarrying`) takes them where it
+    went - across by its `MotionX` unless a wall blocks that side
+    (`WallBlocksLeft/Right`), up or down to its `Top` unless it rises and
+    the head is blocked (`CanIGoUp`): then it rises through him - that
+    deck becomes `FDropFrom` and he falls (`haFall`, acceleration 1). A
+    deck a wall has pulled from under him (no `DeckUnderFeet` after the
+    ride) leaves him to the ground below: a standing hero through
+    `SettleOnGround`, the corpse unsettled (`FCorpseSettled` False) to fall
+    again. `LandOnDeck(prevY)` at the end of `Tick`, after the verbatim
+    state machine: a deck the feet came down onto this tick, or one that
+    rose into them (`DeckCrossed`), holds them at its `Top`, the
+    acceleration zeroed - no downward move is needed, but a rising jump
+    (`haJump*`) never lands; only the fall states press the deck (`Press`
+    with the acceleration - the sag). The fall states land there -
+    `haFall` through `StandAfterFall` (the landing of a straight fall, lifted out of the `haFall` branch: a side
     held in the air walks at once), `haFallLeft/Right` into a walk. `hcDrop`
     -> `DropThroughDeck`: from a stand or a walk on a deck, into the
     matching fall at acceleration 1, the way a ledge is walked off; the
     grid's floor lets nobody through. `FDropFrom` - the deck dropped
     through, let by for that one crossing (the `ignored` of `DeckCrossed`),
-    forgotten once the feet are under it, on the ground (a stand or a walk
-    at the head of `Tick`) and in `Revive`. `SettleOnGround` stands him on
-    a deck where he is (no snap to a cell line); the corpse settles on a
-    deck under it or lands on one it falls onto.
+    forgotten once the feet are a body (`HeroSize`) below its deck - a
+    deck going down would catch up -, on the ground (a stand or a walk at
+    the head of `Tick`) and in `Revive`. `SettleOnGround` stands him on a
+    deck where he is (no snap to a cell line); the corpse settles on a
+    deck under it or lands on one it falls onto. `DeckLift` - the `Lift`
+    of the deck underfoot, rounded: the units down his picture is drawn,
+    which the feet do not feel.
   - Weapon: `FBullets: TBurst`, type 0..4 (pistol / shotgun x5 / grenade
     cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
@@ -1035,7 +1120,7 @@ game's. A 2026 addition all but the lap.
   corners, so a dive goes round a pad and a ram crashes into one as into
   a wall.
 
-### `Game/Monsters.pas` (~1415 lines)
+### `Game/Monsters.pas` (~1465 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -1057,7 +1142,17 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   half a unit inside it, and on whole units the two answers agree at a
   deck's ends too. `MoveFalling` lands on a deck the feet came down onto
   (`DeckCrossed` over the inset span) at its `Top`, as on the grid's
-  floor. A walker's walls stay the grid's alone. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
+  floor, and presses it (`Press` with the acceleration). A walker's walls
+  stay the grid's alone. `RideDeck` at the start of `Tick` (not while
+  flying or falling - a falling body lands by `MoveFalling` alone): the
+  deck the body lay on a tick ago (`DeckCarrying` over the inset span)
+  puts the feet on its `Top` and takes the body across by its `MotionX`
+  while the wall oracle (`CanGoLeft/RightWallOnly`) lets it; a deck a
+  wall has pulled away leaves the body falling (`maFalling`) when no deck
+  holds it (`StandsOnDeck`), the way down is open (`CanGoDown`) and
+  gravity holds it - the dead and a gun that never walks too.
+  `DeckLift` - the `Lift` of the deck underfoot, rounded, 0 while flying:
+  the units down the picture is drawn. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
   `MoveFlying` hands `Monsters.Pilot` a `TPilotBrief` - the step, the
   hero, whether the body lives - and the pilot moves X, Y; a crash and an
   owed prize come back as `meBossCrashed` / `meBossOwesPrize`),
@@ -1124,8 +1219,10 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged),
-  `Draw(sprites, screen, alpha)`, `DrawSmoke(canvas, screen, origin, alpha)`,
-  `DrawSparks` (the same shape, over the smoke).
+  `Draw(sprites, screen, alpha)` (each monster with the sprites' `Origin`
+  lowered by its `DeckLift`, the origin put back after),
+  `DrawSmoke(canvas, screen, origin, alpha)`, `DrawSparks` (the same
+  shape, over the smoke).
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
   and owned here; the destructor frees the monsters before the art they
   draw with.
@@ -1643,9 +1740,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     impacts (on the monsters' channel - they sit on armor), then the
     health rows (`FMarks`, each on its figure's channel) - the
     hero on
-    his own, cursor and HUD still; `Update` ticks `FDynamics` after the
-    monsters and the director, so a smoking monster's puffs leave from
-    where this frame draws it), `LoadLevel` (the object cache: the
+    his own - the origin's Y lowered by `FHero.DeckLift` -, cursor and HUD
+    still; `Update` ticks the pads right before the hero
+    (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
+    their decks, then by themselves), and `FDynamics` after the monsters
+    and the director, so a smoking monster's puffs leave from where this
+    frame draws it), `LoadLevel` (the object cache: the
     level's own objects set if it ships one, then `objectSets`; handed to
     `Render.Objects`, `Pads.World` and `Render.Dynamics`; `FPads` is made
     after the objects renderer and before the dynamics - their parents may
@@ -1654,7 +1754,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
-    `RestartLevel` (the field is reborn over the same `FPads`, then
+    `RestartLevel` (the field is reborn over the same `FPads`,
+    `FPads.Rewind` puts the pads back where the level file has them -
+    first, so `Reseat` finds a lamp's pad there -, then
     `FDynamics.Reseat` puts what hangs on monsters onto the new ones),
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
@@ -1664,8 +1766,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ChangeMusic` (a trigger's or an event's track: played and remembered
     for restarts; '' is a no-op), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
-    `Top`, alive; else the first monster carrying the tag - screen, sprite
-    top-left as `TMonster.Draw` puts it, alive, and for a disc monster the
+    `Round(Top)` + `Round(Lift)` (where the pad is drawn), alive; else the
+    first monster carrying the tag - screen, sprite top-left as
+    `TMonster.Draw` puts it (Y lowered by `DeckLift`), alive, and for a disc monster the
     disc's last two poses with the axis in the middle of the sprite;
     `Levels.Defs` has refused a tag both carry).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
@@ -1691,7 +1794,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `platform.wav`; `meBossCrashed` - the boss's ram ended in a wall:
     `BossCrashTrauma`, `BossCrashSoundFile` (`crash.wav`) and
     `ThrowCrashSparks` - fans of `Game.Impacts` sparks off the rim that
-    struck and along the wall; `meBossOwesPrize` - `PayDodgePrize` hands
+    struck and along the wall, seven a side two units apart
+    (`FansPerSide`, `FanGap`; three four apart before 3.0.27); `meBossOwesPrize` - `PayDodgePrize` hands
     a living hero the boss's `DodgePrize` with `SpawnOn`),
     `ResolveMonsterContact` also reports every touch to the monster
     (`NoteHeroContact` - the pilot's prize rule), `EchoAftershock` (the `TEchoAftershock` of
@@ -1862,7 +1966,7 @@ of the layers of a set instead of its `alive` frames: `set`, `side`,
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
 `boss` block names `dodgePrize`: `medkit`.
 
-### `level1.json` (~97 KB) / `level2.json` (~22 KB)
+### `level1.json` (~98 KB) / `level2.json` (~22 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -1872,7 +1976,8 @@ objects set, e.g. `["sky"]`),
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
 x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
-`bullets` block / pass, block when absent - see `Levels.Pads`), `dynamics`
+`bullets` block / pass, block when absent, optional `path` - `route`,
+`stops`, `speed`, `pause` - and `bob` - see `Levels.Pads`), `dynamics`
 (optional: `kind`
 (beacon / smoke / globe / sparks / fan), `screen`, `screens` [first, last] or `parent` -
 a static object's, a pad's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
@@ -1909,7 +2014,13 @@ plainest example), `introText`/`introTextEn`.
   `satellite`. Pads: the 21 platforms of screens 16-17 (`s16-platform`,
   `s16-platform-out`; tagged `s16-plat-01`..`11` and `s17-plat-01`..`10`,
   bullets block) - static objects over solid cells before, the cells now
-  cleared from the grid; the lamps hung on them keep the same tags.
+  cleared from the grid; the lamps hung on them keep the same tags. Every
+  pad bobs: 1.5 on screen 16, 1 on screen 17. Two groups of screen 16
+  travel, pingpong at speed 30 with a pause of 1: the trio
+  `s16-plat-05`..`07` is a ferry - 64 units left, to x 64..128, docking
+  by the ledge of columns 0-1, and back (a cycle of about 6.2 s);
+  `s16-plat-09`/`10` a lift - 96 up to y 224 and back (about 8.4 s). The
+  medkits on 05, 07 and 10 ride along.
   Dynamics: the Earth (a `globe`) in the sky of screens 1-17 - hidden by
   the tiles of the lab screens 12-13 - (tagged
   `earth`, at (392, 82), 38 across, Africa and Europe facing, night map
@@ -2044,7 +2155,7 @@ music loads leniently. Four one-shots are synthesised by
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
-| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture) + Hero.pas (`DeckUnderFeet`, `LandOnDeck`, `DropThroughDeck`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `MoveFalling`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
+| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
