@@ -80,10 +80,13 @@ scaled to 128x128 and packed. It replaced the four 2008 frames
 the death frames there are still the 2008 ones.
 
 **The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
-ChatGPT's image model from the author's prompts (a rotor and its guard),
-then centered on the axis, blurred into the states a turning rotor passes
-through, given a torn variant and a cast shadow, scaled and packed by
-`tools/fans/build_fans.py`.
+ChatGPT's image model from the author's prompts (a heavy rotor and a round
+guard over it; since 3.0.25 a turbine rotor, a wall plate and a louver
+panel), then centered on the axis, blurred into the states a turning
+rotor passes through, given a torn variant, cast shadows and a painted
+shaft behind, scaled and packed by `tools/fans/build_fans.py`. On level 2
+they replaced the 2008 tiles `cooler1`-`cooler4` and `ventelat`, which
+stay in `machinery.mset` unplaced.
 
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine

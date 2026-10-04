@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.24` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.25` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -509,7 +509,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~1955 lines)
+### `Core/Levels.Dynamics.pas` (~1965 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -651,8 +651,11 @@ in `CreateDynamic`.
   spins with the blades. The pictures come from the object art by the
   middle of their names: `rotor` "heavy" is `rotor-heavy-N`,
   `rotor-heavy-smear-N` and `rotor-heavy-disc-N`, the optional `guard`
-  "spider" is `guard-spider-N` - every one a square with the axis at its
-  center. N is the side: `FanArtSideFor` takes the smallest of `FanArtSides`
+  "spider" is `guard-spider-N`, the optional `back` "shaft" is
+  `back-shaft-N` - every one a square with the axis at its center. The
+  back stands behind the rotor, under the light: a guard that is a plate
+  with an opening would show the backdrop through it. N is the side:
+  `FanArtSideFor` takes the smallest of `FanArtSides`
   (64 / 128 / 256 / 512) that is still as dense as the backdrops
   (`FanArtDensity`); a bare name only, no `set:` qualifier. `Acquire` asks
   the cache for them, so a picture the art lacks raises `ESpriteError` at
@@ -676,10 +679,13 @@ in `CreateDynamic`.
   seed, so slot 1 rolls as slot 0). Other JSON: `size` (the square across;
   x, y its center), `tint` (multiplies the art), `light` (the glow of the
   shaft behind the blades, three percentages, absent = none;
-  `ShaftLightScale` of the size across). Every layer goes through
-  `DrawFanLayer` with a `TFanPose` (dest, angle, flip, tint), which puts
-  the alpha mod back to opaque: the static objects draw from the same
-  cache and set no alpha. `Rewind` puts the rotor back as the level opened
+  `ShaftLightScale` of the size across). Every picture goes through
+  `DrawFanLayer` with a `TFanPose` (dest, angle, flip, tint) - two poses a
+  frame, one standing for the back and the guard, one turning for the
+  rotor - which skips a picture that is not there and puts the alpha mod
+  back to opaque: the static objects draw from the same cache and set no
+  alpha. Bottom to top: back, light, disc, smear, sharp, guard. `Rewind`
+  puts the rotor back as the level opened
   (`Start`: a steady fan at speed, a dying one standing on the edge of a
   catch). Back layer by default.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
@@ -1687,17 +1693,22 @@ hull ringing after them, pushed into a soft clip. Borrows the bar ratios,
 `finish` and `save` from `armor.py` beside it. Seeded. numpy.
 
 ### `tools/fans/build_fans.py`
-Builds `bin/sprites/ventilation.mset`, the art of `TFan`, from two
-generated pictures - a rotor seen from the front in flat light and the
-guard in front of it. `build` centers both on the axis in one square
-(the measured centers and radii are constants at the top), derives the
-smear and the disc from the rotor, tears a blade off for the torn
-variant, bakes the guard's cast shadow into the guard, shrinks every
-picture to 512 / 256 / 128 / 64 px in premultiplied alpha with the edge
-color bled outward, and packs the set. `measure` prints the centers and
-radii of a new pair. The same set byte for byte from the same sources
-and library versions; the sources are not in the repository. numpy,
-scipy, Pillow.
+Builds `bin/sprites/ventilation.mset`, the art of `TFan`, from generated
+pictures - rotors seen from the front in flat light, the guards in front
+of them and a louver panel - found in a sources folder under the names in
+`ROTORS`, `GUARDS` and `LOUVER_FILE`. `build` centers every picture on
+its axis in one square (the measured centers and radii are in those
+tables), mirrors a rotor generated leaning the wrong way, derives the
+smear and the disc from each rotor, tears a blade off for the torn
+variant, bakes a guard's cast shadow into the guard, cuts a plate around
+its opening, makes it solid outside the opening and gives it a seam
+along the border, paints the shaft back,
+shrinks every picture to 512 / 256 / 128 / 64 px in premultiplied alpha
+with the edge color bled outward, and packs the set. `measure` prints
+the axis, the reach and the lean of the blades of a new rotor, and the
+ring and the opening of a new guard. The same set byte for byte from the
+same sources and library versions; the sources are not in the
+repository. numpy, scipy, Pillow.
 
 ---
 
@@ -1821,7 +1832,14 @@ plainest example), `introText`/`introTextEn`.
   events); all its object art is shared - no level2-objects set;
   its lamp is `dying` - a dim fast flutter, the battery running out, and
   one leak is left, a puff now and then (`flow` puffs); the breach still
-  sparks, at intensity 25 - a spark now and then. The gravel trial
+  sparks, at intensity 25 - a spark now and then. Sixteen fans (`fan`:
+  the `turbine` rotor behind the `bezel` plate over the `shaft` back, one
+  cell each) stand where the 2008 tiles `cooler1`-`cooler4` and `ventelat`
+  stood - the cells are empty in the grid and solid as before, the names
+  stay in the palette: two at 150 turns a minute on the floor of screen 3
+  with a `louver-2x1` object between them, fourteen at 180 on the ducts
+  of screen 9 with the red of the old grille for a light, one of them
+  `dying`. The gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
@@ -1860,13 +1878,18 @@ plainest example), `introText`/`introTextEn`.
   filter leaves no dark fringe; `earth` and `earth-night` are 1024x512
   equirectangular globe maps for `Render.Globe`. Declared the same way:
   `level1-structures` and `train` (the art of the repainted level-1
-  screens) and `ventilation` - the fans of `TFan`: `rotor-heavy` and
-  `rotor-heavy-torn` (one blade torn off), each with its `-smear` and
-  `-disc`, and `guard-spider` (it carries its own cast shadow), every
-  picture at 512, 256, 128 and 64 px as `<picture>-<side>`. Squares
-  centered on the rotation axis: the guard ring reaches 95.5% of the
-  half-side on average and 96.5% at its widest, the blade tips 90.6%,
-  under the ring.
+  screens) and `ventilation`, declared by both levels - the fans of
+  `TFan`: the rotors `rotor-heavy` (five blades), `rotor-heavy-torn` (one
+  of them torn off) and `rotor-turbine` (eight), each with its `-smear`
+  and `-disc`; the guards `guard-spider` (a ring on four struts) and
+  `guard-bezel` (a square wall plate with a round opening), both carrying
+  their own cast shadow; the back `back-shaft`; every picture at 512,
+  256, 128 and 64 px as `<picture>-<side>`. Squares centered on the
+  rotation axis: the spider ring reaches 95.5% of the half-side on average
+  and 96.5% at its widest, the bezel plate fills the square like a tile,
+  and the blade tips of either rotor (90.6% and 88%) end under the ring
+  of either guard. Beside them `louver-2x1` (256x128) - a blind louver
+  panel for a static object, 64 by 32 units.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
   `font`/`fontx`/`fonty` atlases plus `fonty-2008` (the original 448x448
@@ -1905,7 +1928,7 @@ music loads leniently. Four one-shots are synthesised by
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | Sparks: how they fly, bounce, fork and draw | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
-| A fan in a level: size, speed, direction, blur, a dying motor; a new rotor or guard | `fan` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TFan` + `ventilation.mset` (declared in `objectSets`; tools/fans/build_fans.py makes the pictures) |
+| A fan in a level: size, speed, direction, blur, a dying motor; a new rotor, guard or back; a louver panel beside it | `fan` in the `dynamics` of levelN.json (the louver - in `objects`) + Levels.Dynamics.pas `TFan` + `ventilation.mset` (declared in `objectSets`; tools/fans/build_fans.py makes the pictures) |
 | Sparks off armor under fire; which monsters are metal; the ping and the whine | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` in monsters.json (+tools/sounds/armor.py) |
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
