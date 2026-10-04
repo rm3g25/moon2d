@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.25` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.26` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -15,7 +15,7 @@ between 3.0.8 and 3.0.9) and checked against the code section by section at
 
 The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 `Moon2D.inc` stay in the root, and every unit includes it (`{$I ..\Moon2D.inc}`;
-`{$I ..\..\Moon2D.inc}` from `Game/Events/`).
+`{$I ..\..\Moon2D.inc}` from `Game/Events/` and `Game/Pads/`).
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
   sets, rendering (the shake included), the brush, the effects (particle
@@ -27,7 +27,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   bullets,
   explosions, bullet impacts, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
-  runs the level events.
+  runs the level events; `Game/Pads/` holds the pads in play
+  (`Pads.World`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -35,7 +36,10 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 Game, Hud and Menu are peers above Core and may use each other. Level events
 driven from level JSON split by that rule: the model and parser
 (`Levels.Events`) sit in `Core/`, since the editor will write them; the
-runner (`Events.Director`) in `Game/Events/`. Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
+runner (`Events.Director`) in `Game/Events/`. The pads split the same way:
+the model and parser (`Levels.Pads`) sit in `Core/` beside `Levels.Events`,
+since the editor will write pads too; the pads in play (`Pads.World`) in
+`Game/Pads/`. Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
@@ -46,14 +50,17 @@ for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (its streak texture comes from the owner) ->
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
-kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
-`Levels.Defs` / `Hud.Vitals` / `Hud.Charge` / `Hud.Typewriter` ->
+kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) /
+`Levels.Pads` (over `Levels.Tint`) ->
+`Levels.Defs` / `Pads.World` (the pads in play: over `Levels.Pads`,
+`Render.Sprites` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
+`Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
 `Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Pilot` (the
-boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Game.Space` and the
-sizes of `Render.Sprites`) -> `Hero` /
-`Monsters` / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
+`Game.Space` and the sizes of `Render.Sprites`) -> `Hero` /
+`Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
 `Effects.Sparks` and `Levels.Dynamics`) -> `Hud.Marks` /
@@ -159,7 +166,7 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **`TintTexture(texture, r, g, b)`** (free function) - color mod per channel
   in percent, 100 = as painted. The texture keeps it until the next call, so
   a picture shared under different tints is tinted before every draw. The
-  backdrops and the level objects both tint through it.
+  backdrops, the level objects and the pads tint through it.
   **`PercentToColorMod(percent)`** - one channel of that conversion, public
   for a caller that passes the color on instead of setting it on a texture
   (the beacon's tint becomes the glow color through it).
@@ -213,17 +220,19 @@ screen dump of the dpr.
   object art (`Art`), made at level load; the objects
   themselves are the level's. After the canvas every object `Acquire`s
   what it draws with (a sky globe its `TGlobe`); the destructor `Release`s them
-  before the canvas goes, so every SDL texture dies before the renderer. Per object a `TPlace`: its stands (screen + origin), a
-  monster flag, the parent's life, the lead screen. A nailed object stands
+  before the canvas goes, so every SDL texture dies before the renderer. Per object a `TPlace`: its stands (screen + origin),
+  `FollowsParent` (a parent looked up by tag), the parent's life, the lead
+  screen. A nailed object stands
   at (0, 0) on its screen, or on each screen of its `screens` run; one under a static object on every screen that
   object stands on, at its top-left - settled once, static objects never
-  move. A tag no object carries is a monster's: that stand is looked up
-  every tick through **`TLocateMonster`** (`reference to function(tag, out
-  TParentStand)`: screen, sprite top-left, alive; for a monster that spins
+  move. A tag no object carries is a pad's or a monster's: that stand is
+  looked up every tick (`FollowParent`) through **`TLocateParent`**
+  (`reference to function(tag, out TParentStand)`: screen, the top-left of
+  the parent's picture, alive; for a monster that spins
   also `Spins` and a `TParentSpin` - its `TSpinPose` (the axis on the
   screen, the angle in degrees clockwise) now and a tick ago, plus where the
   axis sits from the sprite's top-left) - the field is reborn on
-  restart, so no reference is kept; a monster that is nowhere keeps its
+  restart, so no reference is kept; a parent that is nowhere keeps its
   last stand. **`OriginOf(place, stand, alpha)`** is the corner an object
   counts from: the stand's, or - for a placement that `Turns` under a parent
   that spins - wherever its point has turned to around the axis, alpha of
@@ -238,13 +247,13 @@ screen dump of the dpr.
   place that `Turns` is not drawn once its parent is no longer alive (dying
   included) - there is nothing left to turn with. **`Reseat`** - the monsters
   were reborn (a
-  restart): every place that follows a monster finds its parent at once and
+  restart): every place that follows a parent finds it at once and
   forgets its origin, so the frame before the next tick does not show it at
   the old stand. `Canvas` - the
   textures, lent to the monsters' wreck smoke and sparks, to the
   explosions (`Game.Explosions`) and the impacts (`Game.Impacts`).
   The constructor takes a **`TDynamicWorld`** (record) - what the objects
-  ask of the game: `LocateMonster` and `Solid`, the game's `TSolidProbe`,
+  ask of the game: `LocateParent` and `Solid`, the game's `TSolidProbe`,
   which answers for the hero's screen. The canvas hands the objects
   `SolidInView` instead of it: the game's probe while the object being
   ticked stands on the hero's screen (`FInView`, set per place in `Tick`),
@@ -345,7 +354,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~665 lines)
+### `Core/Levels.Defs.pas` (~700 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -372,7 +381,8 @@ Level data model + JSON parser. No game logic.
   screen units, tint, `Tag` (names it for the dynamic objects hung on it;
   one picture on several screens carries the same tag on each). No height:
   it follows the art's aspect, so a picture is never stretched. No
-  collision - the grid alone decides where the hero stands.
+  collision - the grid and the pads (`Levels.Pads`) decide where the hero
+  stands.
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/**objectSets**/music/introText, grid dims,
@@ -381,14 +391,19 @@ Level data model + JSON parser. No game logic.
   never appear there. `Objects` - the free-form art, in file order (later
   draws over earlier); the private `ParseObjects` reads the optional
   `objects` section and refuses an object off the screen list or with a
-  width of zero or less. `Events` - the level's events (`Levels.Events`), in
+  width of zero or less. `Pads` - the platforms apart from the grid
+  (`Levels.Pads`), in file order; the private `CheckPads` refuses a pad off
+  the screen list (`SLevelPadBadScreen`) and two pads with one tag
+  (`SLevelPadTwoTags` - a dynamic object hung on it would go to the
+  first). `Events` - the level's events (`Levels.Events`), in
   file order. Queries: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (the
   same for a point in screen units - the one home of the units-to-cells
   rule and its guard against negatives; the solid probes of the game and
   of the monsters call it), `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
-  `LoadFromFile`; the dynamics are parsed before the events, since an event
-  may name a dynamic object's tag. Private `CheckEvents` refuses an event
+  `LoadFromFile`; the pads are parsed before the dynamics, since a dynamic
+  object may hang on one, and the dynamics before the events, since an
+  event may name a dynamic object's tag. Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
   tag no dynamic object carries, a sun action turning a tag no globe
@@ -396,8 +411,10 @@ Level data model + JSON parser. No game logic.
   the level (the only destructor here) and kept through a restart - a lamp
   keeps its rhythm; only what a re-armed event changed goes back. Private
   `CheckDynamics` refuses a nailed object off the screen list or a
-  `screens` run running backwards or past it (`CheckDynamicScreens`), a parent tag
-  neither an object nor an entity carries, a tag carried by both, two
+  `screens` run running backwards or past it (`CheckDynamicScreens`), and
+  (`CheckDynamicParent`, which counts the kinds carrying the tag - an
+  object, a pad, an entity: exactly one) a parent tag no object, no pad and
+  no entity carries, a tag carried by more than one kind, two
   objects with one tag on one screen, and (`CheckMonsterParent`) two
   entities with one tag on a shared difficulty grade (the child could not
   tell its parent).
@@ -505,9 +522,10 @@ mod. `FreePuffTextures`. `EPuffError`.
   another key of that shape - the smoke's `endTint`); absent = neutral,
   any other shape or a value outside 0..100 raises `ETintError` (a picture
   silently left at full brightness looks like a tint nobody tuned).
-- Its own unit because three readers share it - backdrops and static
-  objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
-  `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
+- Its own unit because several readers share it - backdrops and static
+  objects (`Levels.Defs`), pads (`Levels.Pads`), dynamic objects
+  (`Levels.Dynamics`) - and `Levels.Defs` uses `Levels.Dynamics`, so the
+  tint could live in neither.
 
 ### `Core/Levels.Dynamics.pas` (~1965 lines)
 The `dynamics` section of level JSON: things placed like the static
@@ -517,8 +535,8 @@ in `CreateDynamic`.
 - **`TDynamicPlacement`** (record) - what every kind shares: `Screen`,
   `screens` (JSON `[first, last]` - one object on a run of screens, read
   into `Screen`..`LastScreen`) or `Parent` (exactly one - with a parent the
-  parent decides the screens; the parent is a static object's or a
-  monster's tag), `X`/`Y` (screen units; from the parent's top-left under
+  parent decides the screens; the parent is a static object's, a pad's
+  or a monster's tag), `X`/`Y` (screen units; from the parent's top-left under
   one), `Tint`, `Tag` (the name events turn it by), `Layer`
   (`TDynamicLayer`: `dlSky` - right over the backdrop, still while the
   world shakes, the far things; `dlBack` - with the static objects, behind
@@ -736,6 +754,27 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
+### `Core/Levels.Pads.pas` (~95 lines)
+The `pads` section of level JSON: platforms apart from the collision grid.
+Model and parser, no game logic (the game runs them in `Pads.World`; the
+editor will write them). A pad holds from above only: its deck, the top
+edge, carries what lands on it; from below and from the side anything
+passes through. Under the deck the pad has a body one cell deep: it stops
+the boss's flight, the sparks and the debris, and the bullets unless the
+pad lets them by. A 2026 addition.
+- **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
+  static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
+  screen units, as a static object's; Y is the deck), `Width` (screen
+  units; the picture's height follows its aspect), `Tint`, `Tag` (names
+  the pad for the dynamic objects hung on it; '' = none), `Bullets`.
+- **`TPadBullets`** = (`pbBlock`, `pbPass`) - what the body does to a
+  bullet: bursts it or lets it by. `PadBulletsIds` ('block'/'pass') - the
+  JSON words.
+- **`ParsePads(root, levelId)`** - absent section = no pads; `bullets`
+  absent = block; a width of zero or less and a bullets word out of
+  `PadBulletsIds` raise `EPadError`. The screen range and a tag on two pads
+  are `Levels.Defs`' (`CheckPads`).
+
 ### `Core/Monsters.Defs.pas` (~570 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
@@ -801,11 +840,44 @@ Projectiles + all the 2008 particle-hack spawners.
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
 
-### `Game/Hero.pas` (~1170 lines)
+### `Game/Pads/Pads.World.pas` (~215 lines)
+The level's pads (`Levels.Pads`) in play: where each one stands, what its
+deck carries, what its body stops, and its picture. The world keeps no
+riders: the hero and the monsters ask it for the deck under their feet and
+for the deck their feet came down onto in a tick; the 2008 grid goes on
+answering everything else. On a screen without pads every answer is nil or
+False, so the old rules stand alone there. The pads stand still for now.
+Born with the level (`LoadLevel`), lives through a restart.
+- **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
+  the feet line of whatever stands on the pad), `Screen`, `Tag`, `Bullets`.
+  `DeckSpans(left, right)` - the deck spans some of left..right, edges
+  included (closed); `BodyHolds(x, y)` - the point lies in the body, the
+  deck's width across and one cell (`TileSize`) down from the deck,
+  half-open (`Left` <= x < `Right`, `Top` <= y < `Top` + `TileSize`). The
+  picture: its height from the art's aspect, drawn at (`Left`, `Top`) with
+  the pad's tint set before every draw (`TintTexture`, `DrawRect`), as a
+  static object is.
+- **`TPadWorld`** - `Create(sprites, cache, placements)`: the cache is the
+  level's object art, the textures are its, and it must outlive the world;
+  a picture it lacks raises here, at level load. `DeckUnder(screen, left,
+  right, feetY)` - the deck the feet stand on: within `DeckSlop` (0.5) of
+  feetY and spanning some of left..right, nil when there is none (positions
+  are whole units, and a fraction left by arithmetic must not drop a
+  rider). `DeckCrossed(screen, left, right, prevY, feetY, ignored)` - the
+  deck the feet came down onto between two ticks (prevY <= `Top` <= feetY),
+  the highest one when they passed several; `ignored` (may be nil) is the
+  deck the feet are dropping through, and every deck at its height (within
+  the slop) is let by - else a drop on the seam of two pads side by side
+  would land on the neighbour. `BodyAt(screen, x, y)` - a body at the point
+  (what stops the boss, the sparks and the debris); `StopsBulletAt(screen,
+  x, y)` - the same for the `pbBlock` pads alone; `FindTagged(tag)` - nil
+  when no pad carries the tag; `Draw(screen)`.
+
+### `Game/Hero.pas` (~1285 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
-  (go/stop left/right, jump/stopJump), `THeroForm` (hfNormal/hfIce),
+  (go/stop left/right, jump/stopJump, drop), `THeroForm` (hfNormal/hfIce),
   `TPendingSide` ('ExtraInstruction' of 2008 - a queued side intent executed
   once the barrier clears).
 - **`THero`** -
@@ -818,6 +890,25 @@ moves in comes from `Game.Space`.
     32-unit span straddling two cells), `CanIGoLeft/Right/Up/Down`,
     `CanIFlyLeft/Right`, `WallBlocksLeft/Right` (side-effect-free probes for
     shoves), `GroundUnderFeet`, `LandExactly`, `SettleOnGround`.
+  - Pads (a 2026 addition; the constructor takes the pad world -
+    `Create(renderer, level, pads)`): a deck holds the hero from above only,
+    and the 2008 oracles go on asking the grid. `DeckUnderFeet` - the deck
+    under his middle (`FX + HeroSize / 2`); the floor half of the ledge
+    check in `CanIGoLeft/Right` also asks for one, so a walk off the grid
+    onto a deck does not fall. `LandOnDeck(prevY)` at the end of `Tick`,
+    after the verbatim state machine: a deck the feet came down onto this
+    tick (`DeckCrossed`) holds them at its `Top`, the acceleration zeroed,
+    and the fall states land there - `haFall` through `StandAfterFall` (the
+    landing of a straight fall, lifted out of the `haFall` branch: a side
+    held in the air walks at once), `haFallLeft/Right` into a walk. `hcDrop`
+    -> `DropThroughDeck`: from a stand or a walk on a deck, into the
+    matching fall at acceleration 1, the way a ledge is walked off; the
+    grid's floor lets nobody through. `FDropFrom` - the deck dropped
+    through, let by for that one crossing (the `ignored` of `DeckCrossed`),
+    forgotten once the feet are under it, on the ground (a stand or a walk
+    at the head of `Tick`) and in `Revive`. `SettleOnGround` stands him on
+    a deck where he is (no snap to a cell line); the corpse settles on a
+    deck under it or lands on one it falls onto.
   - Weapon: `FBullets: TBurst`, type 0..4 (pistol / shotgun x5 / grenade
     cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
@@ -864,7 +955,7 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.Pilot.pas` (~975 lines)
+### `Game/Monsters.Pilot.pas` (~985 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
 where its body goes this tick and what it is up to. The monster keeps its
 place, its step and its guns; the pilot moves the place and answers the
@@ -886,7 +977,8 @@ game's. A 2026 addition all but the lap.
   that struck, its speed, the way the wall faces), `TPilotBrief` (what the
   monster tells its pilot every tick: its own step, the hero's feet point,
   `BodyAlive`).
-- **`TPilot`** - `Create(level, screen, baseStep)`; `Tick(var x, y,
+- **`TPilot`** - `Create(level, pads, screen, baseStep)` (the pads must
+  outlive the pilot); `Tick(var x, y,
   brief)` moves the feet point; `SetTactics` (new tactics open with a
   maneuver at once - `FRestWaived`); `NoteHeroContact` (the game has seen
   the body touch the hero); `Busy` (in a maneuver: a bullet's shove moves
@@ -935,11 +1027,15 @@ game's. A 2026 addition all but the lap.
   to dodge. `ptHunts` never goes back to the lap (`EndManeuver`): the next
   maneuver starts from the cell the last one ended at, a dive leg between
   any two rams (`MayRam`).
-- **The arena**: the screen's cells that are not solid, rows
+- **The arena**: the screen's cells whose middle is not walled, rows
   `ArenaTopRow` (under the HUD) to `ArenaBottomRow` (above the bottom row
-  of floor and pits) - `CellOpen`.
+  of floor and pits) - `CellOpen`. Off the lap a wall is `Walled(x, y)`:
+  the grid (`SolidAtPoint`) or the body of a pad (`BodyAt`) - asked by
+  `CellOpen` at the cell's middle and by `BodyBlocked` at the body's
+  corners, so a dive goes round a pad and a ram crashes into one as into
+  a wall.
 
-### `Game/Monsters.pas` (~1330 lines)
+### `Game/Monsters.pas` (~1415 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -952,7 +1048,16 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   for the rest) and for an `mkBossFly` monster its `TPilot`. Its own
   collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
-  `ShoveX`. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
+  `ShoveX`. Pads (a 2026 addition; the constructor takes the pad world):
+  the floor half of the edge-aware oracles asks `FloorAhead` - the grid's
+  cell ahead or a deck spanning the inset edge the oracle looks at - and
+  the pull of gravity in `MoveWalking` holds off while `StandsOnDeck`
+  (either inset edge of the body on a deck); `DeckEdgeInset` = 0.5 - the
+  grid asks for the cell an inset edge stands in, a deck for the point
+  half a unit inside it, and on whole units the two answers agree at a
+  deck's ends too. `MoveFalling` lands on a deck the feet came down onto
+  (`DeckCrossed` over the inset span) at its `Top`, as on the grid's
+  floor. A walker's walls stay the grid's alone. Movement: `MoveWalking`/`Falling`/`Flying` (the boss:
   `MoveFlying` hands `Monsters.Pilot` a `TPilotBrief` - the step, the
   hero, whether the body lives - and the pilot moves X, Y; a crash and an
   owed prize come back as `meBossCrashed` / `meBossOwesPrize`),
@@ -1004,7 +1109,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   above `Frame2008Side`, 64 px - the HD barrel lives beside its 2008
   frames). `FLivesScale` is the difficulty
   multiplier applied to every monster born in this field. The constructor
-  (`renderer, registry, level, difficulty, livesScale`) skips every
+  (`renderer, registry, level, pads, difficulty, livesScale`; the pads must
+  outlive the field, every monster gets them) skips every
   placement whose `Grades` do not hold the difficulty - the field is reborn
   on restart, so a difficulty change lands here. `Tick` (current
   screen), `SpawnFromSky(monsterId, screen)` (boss minions and the gravel
@@ -1047,7 +1153,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   the floor), unlit until the same moment - `WreckIfCritical` is the one
   trigger of the smoke and the sparks - then at full at once. The point
   (`WreckSparksX/Y`) mirrors like the smoke's; the probe is the monster's
-  own screen (`SolidUnderPoint` over `TLevel.SolidAtPoint`); the seed is
+  own screen (`SolidUnderPoint`: `TLevel.SolidAtPoint` or a pad's body,
+  `BodyAt`); the seed is
   `SpawnSeed` (the spawn point, the smoke's seed too) under a salt, so the
   two do not roll alike. `TickSparks` after `TickSmoke`, `DrawSparks` over
   the smoke.
@@ -1479,7 +1586,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2230 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2270 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -1489,7 +1596,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   cadence, ticker durations, damage bookkeeping (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), the font choice (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
-  extra scancodes (the debug ones under DEBUGKEYS), the screen-shake doses
+  extra scancodes (`ScancodeS` - the drop - among them; the debug ones
+  under DEBUGKEYS), the screen-shake doses
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
   `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` - a 2026
   addition; the
@@ -1499,7 +1607,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   `RunGame`) and owns the rest: level, the
   level's sprite sets and its three caches (tiles, backdrops, objects), the ui
   and weapon sets, the sprite, tile, object and dynamic-object renderers
-  (`FDynamics`, reborn with the level, freed before it), hero (his burst is
+  (`FDynamics`, reborn with the level, freed before it), the pad world
+  (`FPads`, reborn with the level, freed before the object cache), hero (his burst is
   his own, `THero.Bullets`), monster
   field, the shared enemy burst (`FMonsterBullets`), font, message board,
   the briefing (`THudBriefing`), the screen shake, sound bank,
@@ -1510,7 +1619,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   the figures (`THudMarks`) - the ceremony, the director and the three HUD
   objects are reborn with every level, so nothing carries over. Key state:
   game state + resume state, held-key flags (the 2008
-  polled-keyboard model), health + hurt cooldown, game-over timer, checkpoint
+  polled-keyboard model; `FHeldDown` - S/Down - sends `hcDrop` every
+  tick, after the jump command), health + hurt cooldown, game-over timer, checkpoint
   X/Y, score + kill streak, per-entity trigger-fired flags, the bonus slot
   (+ its queued activation; `FBonusLearned` - the first reward spent - is the
   one thing that survives levels, so the HUD insists once per launch), the
@@ -1519,10 +1629,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   difficulty.
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
-    still and the sky dynamics (the Earth) with it, objects + back
+    still and the sky dynamics (the Earth) with it, objects + pads + back
     dynamics + tiles + bullets on the world channel -
-    objects stand on the tiles and jolt with them, the back dynamics draw
-    right after the objects, behind tiles and hero - monsters (the field gets
+    objects stand on the tiles and jolt with them, the pads draw right
+    after the objects, the back dynamics right after the pads, behind tiles
+    and hero - monsters (the field gets
     the frame's alpha:
     the boss's disc draws between ticks), then the
     machines' wreck smoke and sparks, then the front dynamics (the boss smoke and
@@ -1536,23 +1647,27 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     monsters and the director, so a smoking monster's puffs leave from
     where this frame draws it), `LoadLevel` (the object cache: the
     level's own objects set if it ships one, then `objectSets`; handed to
-    `Render.Objects` and `Render.Dynamics`; the dynamics also get a
-    `TDynamicWorld` - `LocateMonster` and `SolidUnderPoint`), `OpenSpriteSet` (a named set
+    `Render.Objects`, `Pads.World` and `Render.Dynamics`; `FPads` is made
+    after the objects renderer and before the dynamics - their parents may
+    be pads - and handed to the hero and the field; the dynamics also get a
+    `TDynamicWorld` - `LocateParent` and `SolidUnderPoint`), `OpenSpriteSet` (a named set
     into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
-    `RestartLevel` (the field is reborn, then `FDynamics.Reseat` puts what
-    hangs on monsters onto the new ones),
+    `RestartLevel` (the field is reborn over the same `FPads`, then
+    `FDynamics.Reseat` puts what hangs on monsters onto the new ones),
     `AdvanceToNextLevel`, `CurrentLevelIsLast`, `BeginEnding`, `OpenMenu`,
     `ApplyMenuResult`, `ToggleFullscreen` (the player's switch, remembered in
     settings.json), `SetFullscreen` (the bare switch - the ending screen drops
     fullscreen for the browser through it, unremembered), `PreloadSounds`,
     `CreateHud` (builds the three HUD objects afresh on every level load),
     `ChangeMusic` (a trigger's or an event's track: played and remembered
-    for restarts; '' is a no-op), `LocateMonster` (the `TLocateMonster` of
-    `Render.Dynamics`: the first monster carrying the tag - screen, sprite
+    for restarts; '' is a no-op), `LocateParent` (the `TLocateParent` of
+    `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
+    `Top`, alive; else the first monster carrying the tag - screen, sprite
     top-left as `TMonster.Draw` puts it, alive, and for a disc monster the
-    disc's last two poses with the axis in the middle of the sprite).
+    disc's last two poses with the axis in the middle of the sprite;
+    `Levels.Defs` has refused a tag both carry).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
@@ -1564,7 +1679,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `SoundArmorHit`: the whine of a tracer, else one of three pings at
     random, never the same twice running (`TArmorPings`, dice of its
     own), no more than one in `ArmorSoundGapTicks`),
-    `ResolveMonsterBulletHits`,
+    `ResolveMonsterBulletHits` (both burst a bullet on `BulletStruckWall`:
+    the grid's cell, as before, or `StopsBulletAt` of a pad at the bullet's
+    X and Y - `SpriteSize` - a bullet's picture hangs a sprite above its Y,
+    the point it strikes with is up there; nothing while Y <= 0),
     `ResolveMonsterContact`, `RewardMonsterKill` (also `Detonate` of the
     monster's `explosion` at the middle of its sprite, in the tick of the
     kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
@@ -1579,8 +1697,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     (`NoteHeroContact` - the pilot's prize rule), `EchoAftershock` (the `TEchoAftershock` of
     `Game.Explosions`: each pop of the boss's wreck plays `bottle.wav` and
     adds `AftershockTrauma`), `SolidUnderPoint` (the probe of debris, impacts and
-    dynamic objects: `TLevel.SolidAtPoint` for the hero's screen, honest
-    screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
+    dynamic objects: `TLevel.SolidAtPoint` or a pad's body (`BodyAt`) for
+    the hero's screen, honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
@@ -1589,7 +1707,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `Update`, drawn last in `Render`, reset in `RestartLevel`.
   - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
-    `HandleKey/MouseMove/MouseButton`.
+    `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
+    through a pad).
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
     else. All four exist in every build; their bodies compile away, so no
@@ -1743,7 +1862,7 @@ of the layers of a set instead of its `alive` frames: `set`, `side`,
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
 `boss` block names `dodgePrize`: `medkit`.
 
-### `level1.json` (~63 KB) / `level2.json` (~22 KB)
+### `level1.json` (~97 KB) / `level2.json` (~22 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -1751,9 +1870,12 @@ objects set, e.g. `["sky"]`),
 `music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid`
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
-units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
+units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
+x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
+`bullets` block / pass, block when absent - see `Levels.Pads`), `dynamics`
+(optional: `kind`
 (beacon / smoke / globe / sparks / fan), `screen`, `screens` [first, last] or `parent` -
-a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
+a static object's, a pad's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
 `layer`, `intensity`, `turns`
 (under a spinning parent), then the
 kind's own properties - see `Levels.Dynamics`),
@@ -1784,7 +1906,11 @@ plainest example), `introText`/`introTextEn`.
   `brickwork mine-structure facility conveyor mining-rig railway mine-walls
   cargo mine-interior`. Objects: the ship on screen 1 (in place of the 2008
   shuttle), the broken satellite in the sky of 14-17, tagged `ship` and
-  `satellite`. Dynamics: the Earth (a `globe`) in the sky of screens 1-17 - hidden by
+  `satellite`. Pads: the 21 platforms of screens 16-17 (`s16-platform`,
+  `s16-platform-out`; tagged `s16-plat-01`..`11` and `s17-plat-01`..`10`,
+  bullets block) - static objects over solid cells before, the cells now
+  cleared from the grid; the lamps hung on them keep the same tags.
+  Dynamics: the Earth (a `globe`) in the sky of screens 1-17 - hidden by
   the tiles of the lab screens 12-13 - (tagged
   `earth`, at (392, 82), 38 across, Africa and Europe facing, night map
   `earth-night`, sun starting at -40 - three quarters lit on the left), a blue double-flash beacon on the ship's fin, a red
@@ -1918,11 +2044,12 @@ music loads leniently. Four one-shots are synthesised by
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
+| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture) + Hero.pas (`DeckUnderFeet`, `LandOnDeck`, `DropThroughDeck`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `MoveFalling`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
-| Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateMonster` |
+| Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
 | Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
