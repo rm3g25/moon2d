@@ -1507,8 +1507,8 @@ end;
 // flash of their own, or the light piles up white.
 procedure TMoonGame.ThrowCrashSparks(const ACrash: TPilotCrash);
 const
-  FansPerSide = 3;
-  FanGap = 4; // units between two fans
+  FansPerSide = 7;
+  FanGap = 2; // units between two fans
 var
   Strike: TStrike;
 begin
