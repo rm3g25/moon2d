@@ -375,7 +375,7 @@ type
     procedure StartPlaying;
     procedure PreloadSounds;
     procedure ChangeMusic(const AFileName: string);
-    function LocateMonster(const ATag: string;
+    function LocateParent(const ATag: string;
       out AStand: TParentStand): Boolean;
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure EchoAftershock;
@@ -539,7 +539,7 @@ begin
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
   var World: TDynamicWorld;
-  World.LocateMonster := LocateMonster;
+  World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
     World);
@@ -990,8 +990,9 @@ begin
   FAudio.PlayMusic(AFileName, mmLoop);
 end;
 
-// A dynamic object hung on a monster looks it up here every tick
-function TMoonGame.LocateMonster(const ATag: string;
+// A dynamic object hung on a moving parent - a monster - looks it up
+// here every tick
+function TMoonGame.LocateParent(const ATag: string;
   out AStand: TParentStand): Boolean;
 begin
   AStand := Default(TParentStand);

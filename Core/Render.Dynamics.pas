@@ -6,12 +6,13 @@
   Where an object stands: a nailed one on its screen, or on each of
   its run of screens; one under a static object on every screen that
   object stands on, counted from its top-left corner - settled once
-  at level load, static objects never move. One under a monster is
-  looked up by tag every tick through the game's callback: monsters
-  move, die and are reborn with the field on every restart, so no
-  reference to one is kept. A monster that spins (a disc) also tells its
-  pose of the last two ticks: an object that turns with it is drawn
-  where its point has turned to, between the ticks as the disc is.
+  at level load, static objects never move. One under a parent that
+  moves - a monster - is looked up by tag every tick through the game's
+  callback: a monster moves, dies and is reborn with the field on every
+  restart, so no reference to one is kept. A monster that spins (a
+  disc) also tells its pose of the last two ticks: an object that turns
+  with it is drawn where its point has turned to, between the ticks as
+  the disc is.
 
   The solid layer comes from the game too, as a probe, and reaches the
   objects with the canvas: what a kind throws may ring off the walls.
@@ -44,8 +45,8 @@ type
     Axis: TSdlFPoint;
   end;
 
-  // A monster's sprite this tick: its screen, its top-left corner, and
-  // whether it still lives; Spin only when Spins
+  // A parent that moves, this tick: its screen, the top-left corner of
+  // its picture, and whether it still lives; Spin only when Spins
   TParentStand = record
     Screen: Integer;
     X, Y: Single;
@@ -54,13 +55,13 @@ type
     Spin: TParentSpin;
   end;
 
-  // Finds the monster carrying ATag; False when there is none
-  TLocateMonster = reference to function(const ATag: string;
+  // Finds the moving parent carrying ATag; False when there is none
+  TLocateParent = reference to function(const ATag: string;
     out AStand: TParentStand): Boolean;
 
   // What the dynamic objects ask of the game they live in
   TDynamicWorld = record
-    LocateMonster: TLocateMonster;
+    LocateParent: TLocateParent;
     Solid: TSolidProbe; // of the hero's screen, in screen units
   end;
 
@@ -77,20 +78,20 @@ type
     TPlace = record
       DynamicObject: TDynamicObject;
       Stands: TArray<TStand>;
-      FollowsMonster: Boolean;
+      FollowsParent: Boolean;
       ParentAlive: Boolean;
       LeadScreen: Integer; // the stand the last tick counted from
     end;
   private
     FCanvas: TDynamicCanvas;
     FPlaces: TArray<TPlace>;
-    FLocateMonster: TLocateMonster;
+    FLocateParent: TLocateParent;
     FSolid: TSolidProbe;
     FInView: Boolean; // the object being ticked stands on the hero's screen
     function SolidInView(AX, AY: Single): Boolean;
     function PlaceOf(ADynamic: TDynamicObject;
       const AObjects: TArray<TLevelObject>): TPlace;
-    procedure FollowMonster(var APlace: TPlace);
+    procedure FollowParent(var APlace: TPlace);
     function LeadStand(const APlace: TPlace; AScreen: Integer): TStand;
     function OriginOf(const APlace: TPlace; const AStand: TStand;
       AAlpha: Single): TSdlFPoint;
@@ -133,7 +134,7 @@ constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
   ALevel: TLevel; AArt: TSpriteCache; const AWorld: TDynamicWorld);
 begin
   inherited Create;
-  FLocateMonster := AWorld.LocateMonster;
+  FLocateParent := AWorld.LocateParent;
   FCanvas.Renderer := ARenderer;
   FCanvas.Art := AArt;
   FSolid := AWorld.Solid;
@@ -169,7 +170,7 @@ begin
 end;
 
 // Levels.Defs has already refused a parent tag that neither an object
-// nor an entity carries: a tag no object carries is a monster's
+// nor an entity carries: a tag no object carries is a moving parent's
 function TDynamicScreenRenderer.PlaceOf(ADynamic: TDynamicObject;
   const AObjects: TArray<TLevelObject>): TPlace;
 begin
@@ -203,18 +204,18 @@ begin
 
   if Length(Result.Stands) = 0 then
   begin
-    Result.FollowsMonster := True;
+    Result.FollowsParent := True;
     Result.ParentAlive := False;
   end;
 end;
 
-// A monster that is nowhere keeps its last stand: what is already in
+// A parent that is nowhere keeps its last stand: what is already in
 // the air fades where it was
-procedure TDynamicScreenRenderer.FollowMonster(var APlace: TPlace);
+procedure TDynamicScreenRenderer.FollowParent(var APlace: TPlace);
 var
   Parent: TParentStand;
 begin
-  if not FLocateMonster(APlace.DynamicObject.Placement.Parent, Parent) then
+  if not FLocateParent(APlace.DynamicObject.Placement.Parent, Parent) then
   begin
     APlace.ParentAlive := False;
     Exit;
@@ -267,9 +268,9 @@ end;
 procedure TDynamicScreenRenderer.Reseat;
 begin
   for var i := 0 to High(FPlaces) do
-    if FPlaces[i].FollowsMonster then
+    if FPlaces[i].FollowsParent then
     begin
-      FollowMonster(FPlaces[i]);
+      FollowParent(FPlaces[i]);
       FPlaces[i].DynamicObject.ForgetOrigin;
     end;
 end;
@@ -285,8 +286,8 @@ procedure TDynamicScreenRenderer.Tick(AScreen: Integer);
 begin
   for var i := 0 to High(FPlaces) do
   begin
-    if FPlaces[i].FollowsMonster then
-      FollowMonster(FPlaces[i]);
+    if FPlaces[i].FollowsParent then
+      FollowParent(FPlaces[i]);
     var Lead := LeadStand(FPlaces[i], AScreen);
     // A parent standing elsewhere on the next screen is a jump, not
     // a flight
