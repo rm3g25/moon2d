@@ -1508,11 +1508,14 @@ end;
 
 // A fan of sparks off the rim that struck, with its flash, and thinner
 // ones along the wall on either side. Those land as rapid hits - no
-// flash of their own, or the light piles up white.
+// flash of their own, or the light piles up white. A body flung at a
+// wall throws far more than a bullet: every fan gets extra sparks.
 procedure TMoonGame.ThrowCrashSparks(const ACrash: TPilotCrash);
 const
   FansPerSide = 7;
   FanGap = 2; // units between two fans
+  RimExtraSparks = 27;
+  SideExtraSparks = 6;
 var
   Strike: TStrike;
 begin
@@ -1523,9 +1526,11 @@ begin
   Strike.SpeedY := ACrash.SpeedY;
   Strike.NormalX := ACrash.NormalX;
   Strike.NormalY := ACrash.NormalY;
+  Strike.ExtraSparks := RimExtraSparks;
   FImpacts.Land(Strike);
 
   Strike.Rapid := True;
+  Strike.ExtraSparks := SideExtraSparks;
   for var i := -FansPerSide to FansPerSide do
   begin
     if i = 0 then

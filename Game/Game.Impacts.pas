@@ -27,6 +27,8 @@ type
     SpeedX, SpeedY: Single;
     NormalX, NormalY: Single;
     Rapid: Boolean; // the armor was struck a moment ago
+    // Sparks on top of a bullet's fan: a heavier blow throws more
+    ExtraSparks: Integer;
   end;
 
   TImpacts = class
@@ -238,6 +240,7 @@ begin
   Fan.Count := FanSparks;
   if AStrike.Rapid then
     Fan.Count := RapidFanSparks;
+  Inc(Fan.Count, AStrike.ExtraSparks);
   Fan.Heading := HeadingOf(
     AGlance.X * GlanceShare + AStrike.NormalX * (1 - GlanceShare),
     AGlance.Y * GlanceShare + AStrike.NormalY * (1 - GlanceShare));
