@@ -237,6 +237,8 @@ resourcestring
     + 'on screen %d - a dynamic object hung on it cannot tell which';
   SLevelPadBadScreen = 'Level "%s": pad "%s" sits on screen %d of %d';
   SLevelPadTwoTags = 'Level "%s": two pads are tagged "%s"';
+  SLevelPadStopOff = 'Level "%s": pad "%s" travels off its screen, to '
+    + '(%g, %g)';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -451,9 +453,28 @@ begin
       Inc(Result);
 end;
 
+// The first stop of the path that puts the pad past an edge of its
+// screen: the pad would leave the hero's screen without its riders.
+// False when there is none.
+function TryStopOffScreen(const APad: TPadPlacement;
+  out AStop: TPadStop): Boolean;
+begin
+  for var Stop in APad.Path.Stops do
+    if (Stop.X < 0) or (Stop.X + APad.Width > ScreenWidth) or
+      (Stop.Y < 0) or (Stop.Y > ScreenHeight) then
+    begin
+      AStop := Stop;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
 // A pad off the screen list never shows; two pads with one tag leave a
-// dynamic object hung on it to the first of them
+// dynamic object hung on it to the first of them; a pad that travels off
+// its screen leaves its riders in the air
 procedure TLevel.CheckPads;
+var
+  Off: TPadStop;
 begin
   for var Pad in FPads do
   begin
@@ -462,6 +483,9 @@ begin
         [FId, Pad.Sprite, Pad.Screen, FScreenCount]);
     if (Pad.Tag <> '') and (PadsTagged(FPads, Pad.Tag) > 1) then
       raise ELevelError.CreateFmt(SLevelPadTwoTags, [FId, Pad.Tag]);
+    if TryStopOffScreen(Pad, Off) then
+      raise ELevelError.CreateFmt(SLevelPadStopOff,
+        [FId, Pad.Sprite, Off.X, Off.Y]);
   end;
 end;
 

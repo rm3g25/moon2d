@@ -1014,7 +1014,7 @@ begin
   begin
     AStand.Screen := Pad.Screen;
     AStand.X := Pad.Left;
-    AStand.Y := Pad.Top;
+    AStand.Y := Round(Pad.Top) + Round(Pad.Lift);
     AStand.Alive := True;
     Exit(True);
   end;
@@ -1023,9 +1023,10 @@ begin
     if Monster.Tag <> ATag then
       Continue;
     AStand.Screen := Monster.Screen;
-    // Where TMonster.Draw puts the sprite: the feet line is Y
+    // Where TMonster.Draw puts the sprite: the feet line is Y, lifted by
+    // the deck underfoot
     AStand.X := Round(Monster.X);
-    AStand.Y := Round(Monster.Y) - SpriteSize;
+    AStand.Y := Round(Monster.Y) - SpriteSize + Monster.DeckLift;
     AStand.Alive := Monster.Life = mlAlive;
     AStand.Spins := Monster.Disc <> nil;
     if AStand.Spins then
@@ -1394,6 +1395,9 @@ begin
   FField.Free;
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
+  // The pads first: Reseat finds the pad of a lamp where the level file
+  // puts it
+  FPads.Rewind;
   FDynamics.Reseat;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
@@ -1675,6 +1679,8 @@ begin
   if FHeldDown then
     FHero.Command(hcDrop);
 
+  // The pads go first: their riders move with them, then by themselves
+  FPads.Tick(FHero.Screen);
   FHero.Tick;
   if FHeldFire and FHero.Fire then
     FAudio.Play(WeaponShotSounds[FHero.WeaponType]);
@@ -1754,7 +1760,9 @@ begin
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
-        FSprites.Origin := FShake.Offset(scHero);
+        var HeroOrigin := FShake.Offset(scHero);
+        HeroOrigin.Y := HeroOrigin.Y + FHero.DeckLift;
+        FSprites.Origin := HeroOrigin;
         FHero.Draw(FSprites);
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);

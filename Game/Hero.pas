@@ -26,7 +26,9 @@
   a deck holds the hero from above only. The 2008 oracles go on asking
   the grid; the floor half of the ledge check also asks for a deck under
   the hero's middle, a fall lands on a deck the feet came down onto, and
-  Down drops through the deck underfoot.
+  Down drops through the deck underfoot. A deck that travels takes the
+  feet along before the tick, and one rising into still feet picks them
+  up.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -146,6 +148,7 @@ type
     function DeckUnderFeet: TPad;
     function LandOnDeck(APrevY: Double): Boolean;
     procedure DropThroughDeck;
+    procedure RideDeck;
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
       const APads: TPadWorld);
@@ -175,6 +178,9 @@ type
     // stops at the first wall - the hero cannot be shoved into geometry.
     procedure ShoveX(ADeltaX: Integer);
     procedure SetY(AY: Double);
+    // Units down the picture is drawn: the bob and the sag of the deck
+    // underfoot, which the feet do not feel
+    function DeckLift: Integer;
     // DEBUGKEYS live tuner for the weapon-4 muzzle (NumPad, values in
     // the window caption - same workflow as the crosshair calibration)
     procedure NudgeMinigun(ADeltaX, ADeltaY, ADeltaLen: Integer);
@@ -889,23 +895,70 @@ begin
   Result := FPads.DeckUnder(FScreen, Middle, Middle, FY);
 end;
 
-// After a tick that brought the feet down: a deck they passed holds them
-// there. The deck dropped through is let by, and forgotten once the feet
-// are under it.
+// After the tick: a deck the feet came down onto, or one that rose into
+// them, holds them there; a falling body sinks it a little. A rising jump
+// lands nowhere. The deck dropped through is let by, and forgotten once
+// the feet are under it.
 function THero.LandOnDeck(APrevY: Double): Boolean;
 begin
-  if FY <= APrevY then
+  if FAction in [haJump, haJumpLeft, haJumpRight] then
     Exit(False);
   var Middle := FX + HeroSize / 2;
   var Deck := FPads.DeckCrossed(FScreen, Middle, Middle, APrevY, FY,
     FDropFrom);
-  if (FDropFrom <> nil) and (FY > FDropFrom.Top) then
+  // Under the body, not just the deck: a deck going down would catch up
+  if (FDropFrom <> nil) and (FY > FDropFrom.Top + HeroSize) then
     FDropFrom := nil;
   if Deck = nil then
     Exit(False);
+  if FAction in [haFall, haFallLeft, haFallRight] then
+    Deck.Press(FAcceleration);
   FY := Deck.Top;
   FAcceleration := 0;
   Result := True;
+end;
+
+// Before the tick: the deck the feet stood on a tick ago takes them where
+// it went - across while no wall stands in the way, up while the head is
+// clear. A deck that would crush the hero into the ceiling rises through
+// him instead, and he falls; one a wall has pulled from under him leaves
+// him to the ground below, the corpse too.
+procedure THero.RideDeck;
+begin
+  var Middle := FX + HeroSize / 2;
+  var Deck := FPads.DeckCarrying(FScreen, Middle, Middle, FY);
+  if Deck = nil then
+    Exit;
+
+  var Way := Deck.MotionX;
+  var LeftFree := (Way < 0) and not WallBlocksLeft;
+  var RightFree := (Way > 0) and not WallBlocksRight;
+  if LeftFree or RightFree then
+    FX := FX + Way;
+
+  var Rising := Deck.Top < FY;
+  if Rising and not CanIGoUp then
+  begin
+    FDropFrom := Deck;
+    FAction := haFall;
+    FAcceleration := 1;
+    Exit;
+  end;
+  FY := Deck.Top;
+
+  if DeckUnderFeet <> nil then
+    Exit;
+  FCorpseSettled := False;
+  if FAction = haStand then
+    SettleOnGround;
+end;
+
+function THero.DeckLift: Integer;
+begin
+  var Deck := DeckUnderFeet;
+  if Deck = nil then
+    Exit(0);
+  Result := Round(Deck.Lift);
 end;
 
 // Down through the deck underfoot - from a stand or a walk, the way a
@@ -931,9 +984,10 @@ end;
 
 procedure THero.Tick;
 var
-  PrevY: Double; // the feet before this tick moves them
+  PrevY: Double; // the feet where the last tick left them
 begin
   PrevY := FY;
+  RideDeck;
   // On the ground the drop is over, whatever stopped it
   if FAction in [haStand, haWalkLeft, haWalkRight] then
     FDropFrom := nil;

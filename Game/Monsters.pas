@@ -31,7 +31,8 @@
   A pad (Levels.Pads, a 2026 addition) is floor the grid does not know:
   the floor half of the edge-aware oracles and the pull of gravity also
   ask for a deck under the feet, and a fall lands on a deck it came down
-  onto. A walker's walls stay the grid's alone.
+  onto. A walker's walls stay the grid's alone. A deck that travels takes
+  whatever lies on it along - the dead too.
 
   The boss flies by Monsters.Pilot: the lap and, by the tactics the
   level's events set, the maneuvers off it (a 2026 addition). In a
@@ -122,6 +123,7 @@ type
     // spanning AX, the inset edge the oracle looks at
     function FloorAhead(ACol: Integer; AX: Double): Boolean;
     function StandsOnDeck: Boolean;
+    procedure RideDeck;
     function CanGoLeftEdgeAware: Boolean;   // CanIGoLeft1
     function CanGoRightEdgeAware: Boolean;  // CanIGoRight1
     function CanGoLeftWallOnly: Boolean;    // CanIGoLeft2
@@ -188,6 +190,9 @@ type
     function HealthTier: TMonsterHealthTier;
     // How full the current third is, 0..1
     function TierShare: Single;
+    // Units down the picture is drawn: the bob and the sag of the deck
+    // underfoot
+    function DeckLift: Integer;
     function HitWithin(ATicks: Integer): Boolean;
 
     property Def: TMonsterDef read FDef;
@@ -673,6 +678,41 @@ begin
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY) <> nil;
 end;
 
+// Before the tick: the deck the body lay on a tick ago takes it where it
+// went - across while no wall stands in the way. Pulled from under it by
+// a wall, the body falls, the dead and the gun that never walks too. A
+// falling body is not carried: it lands by MoveFalling alone.
+procedure TMonster.RideDeck;
+begin
+  if FAction in [maFlying, maFalling] then
+    Exit;
+  var Deck := FPads.DeckCarrying(FScreen, FX + MonsterBound + DeckEdgeInset,
+    FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
+  if Deck = nil then
+    Exit;
+
+  FY := Deck.Top;
+  var Way := Deck.MotionX;
+  var LeftFree := (Way < 0) and CanGoLeftWallOnly;
+  var RightFree := (Way > 0) and CanGoRightWallOnly;
+  if LeftFree or RightFree then
+    FX := FX + Way;
+
+  if not StandsOnDeck and CanGoDown and FDef.AffectedByGravity then
+    FAction := maFalling;
+end;
+
+function TMonster.DeckLift: Integer;
+begin
+  if FAction = maFlying then
+    Exit(0);
+  var Deck := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
+    FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
+  if Deck = nil then
+    Exit(0);
+  Result := Round(Deck.Lift);
+end;
+
 function TMonster.CanGoLeftEdgeAware: Boolean;
 begin
   // Wall ahead OR no floor ahead - both turn the patroller around
@@ -989,6 +1029,7 @@ begin
       FX + SpriteSize - MonsterBound - DeckEdgeInset, PrevY, FY, nil);
     if Deck = nil then
       Exit;
+    Deck.Press(FAcceleration);
     FY := Deck.Top;
   end
   else
@@ -1030,6 +1071,7 @@ procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
 begin
   FHeroX := AHeroX;
   FHeroY := AHeroY;
+  RideDeck;
   if FTicksSinceHit <> NeverHit then
     Inc(FTicksSinceHit);
 
@@ -1348,9 +1390,17 @@ end;
 procedure TMonsterField.Draw(const ASprites: TSpriteRenderer;
   AScreen: Integer; AAlpha: Single);
 begin
+  var Shaken := ASprites.Origin;
   for var Monster in FMonsters do
-    if Monster.Screen = AScreen then
-      Monster.Draw(ASprites, AAlpha);
+  begin
+    if Monster.Screen <> AScreen then
+      Continue;
+    var Lifted := Shaken;
+    Lifted.Y := Lifted.Y + Monster.DeckLift;
+    ASprites.Origin := Lifted;
+    Monster.Draw(ASprites, AAlpha);
+  end;
+  ASprites.Origin := Shaken;
 end;
 
 procedure TMonsterField.DrawSmoke(const ACanvas: TDynamicCanvas;
