@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.23` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.24` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -509,7 +509,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   objects (`Levels.Defs`), dynamic objects (`Levels.Dynamics`) - and
   `Levels.Defs` uses `Levels.Dynamics`, so the tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~1595 lines)
+### `Core/Levels.Dynamics.pas` (~1955 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -646,9 +646,45 @@ in `CreateDynamic`.
   top leaning left), `atmosphere` (a percentage, 0 = airless - the dead
   Earth of Selene), `surface` (matte / regolith). Intensity is the globe's
   alpha, tint its color mod. Sky layer by default.
+- **`TFan`** (kind `fan`) - a ventilation fan: a rotor the code turns
+  behind a guard that stands still, so the light painted on the guard never
+  spins with the blades. The pictures come from the object art by the
+  middle of their names: `rotor` "heavy" is `rotor-heavy-N`,
+  `rotor-heavy-smear-N` and `rotor-heavy-disc-N`, the optional `guard`
+  "spider" is `guard-spider-N` - every one a square with the axis at its
+  center. N is the side: `FanArtSideFor` takes the smallest of `FanArtSides`
+  (64 / 128 / 256 / 512) that is still as dense as the backdrops
+  (`FanArtDensity`); a bare name only, no `set:` qualifier. `Acquire` asks
+  the cache for them, so a picture the art lacks raises `ESpriteError` at
+  level load. `rpm` is turns a minute, counterclockwise above zero and
+  clockwise below: a rotor is painted turning counterclockwise, and a fan
+  that turns clockwise mirrors it. The rotor blurs with its speed
+  (`DrawAt`): sharp up to `SharpUpToRpm` (40), fully smeared at
+  `SmearedAtRpm` (110), a disc from `DiscFromRpm` (230), neighbors
+  crossfaded - at 60 frames a second sharp blades turning fast strobe and
+  seem to crawl backward. `Advance` eases the rate toward the full rate
+  times the intensity (`SpinUpEase`; `CoastEases` - a rotor coasts down
+  far longer than it spins up), so the intensity events spin a fan up and
+  down; a dead parent monster cuts the power; unpowered and under
+  `StandstillRate` the rotor stops. `run` (`TMotorRun`) is `steady` or
+  `dying`: a dying motor catches and stalls on a `TMotorClock`
+  (`TickMotor` - a catch is short far more often than long and pulls
+  `CatchFloor`..1 of the full speed; own `TXorShift`), and its rotor drags
+  to a stop sooner. Fans at different points stand at different angles
+  and turn up to `SpeedDetune` (4%) apart - `SlotRoll` over
+  `PlacementSeed`, in even slots (`SlotRoll` sets the lowest bit of the
+  seed, so slot 1 rolls as slot 0). Other JSON: `size` (the square across;
+  x, y its center), `tint` (multiplies the art), `light` (the glow of the
+  shaft behind the blades, three percentages, absent = none;
+  `ShaftLightScale` of the size across). Every layer goes through
+  `DrawFanLayer` with a `TFanPose` (dest, angle, flip, tint), which puts
+  the alpha mod back to opaque: the static objects draw from the same
+  cache and set no alpha. `Rewind` puts the rotor back as the level opened
+  (`Start`: a steady fan at speed, a dying one standing on the edge of a
+  catch). Back layer by default.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
   list, the caller owns it); an unknown kind, layer, blink, flow,
-  surface or collide, none or more than one of screen, screens and parent, a broken
+  surface, collide or run, none or more than one of screen, screens and parent, a broken
   `screens` pair, a number out of range raise `EDynamicError`
   (`ReadWord`, `ReadShare`, `ReadPositive`, `ReadReach`, `ReadScreens`).
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
@@ -1650,6 +1686,19 @@ sliding down in pitch, a crunch of noise with the treble taken off and the
 hull ringing after them, pushed into a soft clip. Borrows the bar ratios,
 `finish` and `save` from `armor.py` beside it. Seeded. numpy.
 
+### `tools/fans/build_fans.py`
+Builds `bin/sprites/ventilation.mset`, the art of `TFan`, from two
+generated pictures - a rotor seen from the front in flat light and the
+guard in front of it. `build` centers both on the axis in one square
+(the measured centers and radii are constants at the top), derives the
+smear and the disc from the rotor, tears a blade off for the torn
+variant, bakes the guard's cast shadow into the guard, shrinks every
+picture to 512 / 256 / 128 / 64 px in premultiplied alpha with the edge
+color bled outward, and packs the set. `measure` prints the centers and
+radii of a new pair. The same set byte for byte from the same sources
+and library versions; the sources are not in the repository. numpy,
+scipy, Pillow.
+
 ---
 
 ## Runtime data (`bin\`)
@@ -1692,7 +1741,7 @@ objects set, e.g. `["sky"]`),
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `dynamics` (optional: `kind`
-(beacon / smoke / globe / sparks), `screen`, `screens` [first, last] or `parent` -
+(beacon / smoke / globe / sparks / fan), `screen`, `screens` [first, last] or `parent` -
 a static object's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
 `layer`, `intensity`, `turns`
 (under a spinning parent), then the
@@ -1742,7 +1791,10 @@ plainest example), `introText`/`introTextEn`.
   of the ring art: a blue pulsing pair `bossLamp` and a red flashing pair
   `bossLampRage` at intensity 0; halo 10 across with starburst rays of 24
   units - the satellite's are 36 - that reach past the rim: on the light
-  disc a bare glow does not read).
+  disc a bare glow does not read), six fans (`fan`) in the bays of the
+  tower on screens 14-15, under `s14-tower` and `s15-tower`: 43.4 across,
+  14 turns a minute counterclockwise, a dim cold light in the shaft; the
+  bottom right one on screen 15 is `dying`, on the `heavy-torn` rotor.
   Events: the dawn, tied to the screens - on entering screen N
   (`dawn1`..`dawn17`) the sun heads over 20 seconds to -40 + 100 * N / 17:
   three quarters lit at the start, a half by screen 7, a crescent with
@@ -1774,7 +1826,7 @@ plainest example), `introText`/`introTextEn`.
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
 
-### `sprites\*.mset` (35 sets)
+### `sprites\*.mset` (38 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups).
@@ -1806,7 +1858,15 @@ plainest example), `introText`/`introTextEn`.
   (1440 px per
   512 units), transparent pixels filled with the edge color so the linear
   filter leaves no dark fringe; `earth` and `earth-night` are 1024x512
-  equirectangular globe maps for `Render.Globe`.
+  equirectangular globe maps for `Render.Globe`. Declared the same way:
+  `level1-structures` and `train` (the art of the repainted level-1
+  screens) and `ventilation` - the fans of `TFan`: `rotor-heavy` and
+  `rotor-heavy-torn` (one blade torn off), each with its `-smear` and
+  `-disc`, and `guard-spider` (it carries its own cast shadow), every
+  picture at 512, 256, 128 and 64 px as `<picture>-<side>`. Squares
+  centered on the rotation axis: the guard ring reaches 95.5% of the
+  half-side on average and 96.5% at its widest, the blade tips 90.6%,
+  under the ring.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
   `font`/`fontx`/`fonty` atlases plus `fonty-2008` (the original 448x448
@@ -1845,6 +1905,7 @@ music loads leniently. Four one-shots are synthesised by
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | Sparks: how they fly, bounce, fork and draw | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
+| A fan in a level: size, speed, direction, blur, a dying motor; a new rotor or guard | `fan` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TFan` + `ventilation.mset` (declared in `objectSets`; tools/fans/build_fans.py makes the pictures) |
 | Sparks off armor under fire; which monsters are metal; the ping and the whine | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` in monsters.json (+tools/sounds/armor.py) |
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |

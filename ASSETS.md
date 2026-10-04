@@ -79,6 +79,12 @@ scaled to 128x128 and packed. It replaced the four 2008 frames
 `boch1`-`boch4`, which stay in the set as the `alive-2008` sequence, unused;
 the death frames there are still the 2008 ones.
 
+**The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
+ChatGPT's image model from the author's prompts (a rotor and its guard),
+then centered on the axis, blurred into the states a turning rotor passes
+through, given a torn variant and a cast shadow, scaled and packed by
+`tools/fans/build_fans.py`.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.
