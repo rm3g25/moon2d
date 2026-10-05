@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.29` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.30` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -41,7 +41,9 @@ driven from level JSON split by that rule: the model and parser
 runner (`Events.Director`) in `Game/Events/`. The pads split the same way:
 the model and parser (`Levels.Pads`) sit in `Core/` beside `Levels.Events`,
 since the editor will write pads too; the pads in play (`Pads.World`) and
-their rebuilds in `Game/Pads/`. Two unit names in `Core/` still carry the `Game.` prefix (`Game.Config`,
+their rebuilds in `Game/Pads/`; what a pad wears, its rigs
+(`Levels.Rigs`), is a parser in `Core/` too. Two unit names in `Core/` still
+carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
@@ -53,7 +55,8 @@ for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
 kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) /
-`Levels.Pads` (over `Levels.Tint`) ->
+`Levels.Pads` (over `Levels.Tint`) -> `Levels.Rigs` (what the pads wear:
+over the two) ->
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) -> `Pads.World` (the pads in play:
@@ -81,7 +84,7 @@ side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 
 ## Game units
 
-### `Core/Sdl2.Core.pas` (~395 lines)
+### `Core/Sdl2.Core.pas` (~420 lines)
 Hand-written SDL2 bindings. No classes - constants, records, `external`
 declarations against `SDL2.dll`.
 - **Constants**: init flags, window flags (incl. `SdlWindowHidden` for the
@@ -93,14 +96,22 @@ declarations against `SDL2.dll`.
   scancodes (Return, Escape, Ctrl/Alt, Space, arrows; the letter, numpad and
   debug keys are constants in the dpr).
 - **Records**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlFPoint`,
+  `TSdlColor`, `TSdlVertex` (a corner of a triangle: where it lands, what
+  tints it, the point of the texture it shows, 0..1 across and down),
   `TSdlRendererInfo`,
   `TSdlVersion`, `TSdlSurface` (partial mirror - leading fields only),
   `TSdlKeysym`, `TSdlKeyboardEvent`, `TSdlMouseMotionEvent`,
   `TSdlMouseButtonEvent`, `TSdlEvent` (variant record, 56-byte padding arm).
 - **Imports**: window/renderer lifecycle, draw calls (`SDL_RenderCopy/F/Ex/ExF`,
+  `SDL_RenderGeometry` - triangles, the mesh of a haze: the vertices carry
+  the color and the alpha, the texture's color and alpha mod are ignored,
+  its blend mode is not; SDL 2.0.18+ -,
   fill, clear, present), surfaces + color key + format conversion, textures
   (incl. target textures, streaming `SDL_LockTexture`/`SDL_UnlockTexture` -
-  the globe, per-texture `SDL_SetTextureScaleMode`, color and alpha mod, and
+  the globe, per-texture `SDL_SetTextureScaleMode`, color and alpha mod, the
+  blend
+  mode set and read back (`SDL_SetTextureBlendMode`,
+  `SDL_GetTextureBlendMode`), and
   `SDL_RenderReadPixels` - used by TitleCard and the screen dump),
   events, `SDL_ShowCursor`, `SDL_GetRendererInfo`, `SDL_GetVersion`, timing
   (`SDL_GetPerformanceCounter/Frequency`, `SDL_Delay`),
@@ -209,7 +220,7 @@ runs at startup and raises plainly if the DLL is absent - unlike the optional
 mixer, missing art is fatal. `IMG_SavePNG` is the one writer: the debug
 screen dump of the dpr.
 
-### `Core/Render.Tiles.pas` (~100 lines)
+### `Core/Render.Tiles.pas` (~115 lines)
 - **`TTileScreenRenderer`** - draws one screen as two layers the caller
   orders: `DrawBackground` (the screen's backdrop sprite via
   `FBackgroundCache`), then `DrawTiles` (palette indices from `TLevel` via
@@ -217,7 +228,12 @@ screen dump of the dpr.
   still while the tiles shake. Both caches are fed from `.mset` sets by the
   composition root, and neither is owned here. `DrawBackground` sets the
   change's tint (`TintTexture`) on every draw, not once at load: two changes
-  may share one picture under different tints.
+  may share one picture under different tints. **`Backdrop(screen)`** - what
+  `DrawBackground` draws, as a `TBackdropView` of `Levels.Dynamics` (the
+  texture, its tint, the screen it is stretched over; texture nil - the
+  screen has none): the one answer to what stands behind a screen.
+  `DrawBackground` draws what it says, and the game hands it to the dynamic
+  objects - a haze bends the backdrop.
 
 ### `Core/Render.Objects.pas` (~80 lines)
 - **`TObjectScreenRenderer`** - draws a screen's level objects (free-form
@@ -230,7 +246,7 @@ screen dump of the dpr.
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~325 lines)
+### `Core/Render.Dynamics.pas` (~430 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst and streak glows - `Render.Glow`; the
@@ -255,15 +271,35 @@ screen dump of the dpr.
   counts from: the stand's, or - for a placement that `Turns` under a parent
   that spins - wherever its point has turned to around the axis, alpha of
   the way between the two poses: a lamp rides the boss's disc between ticks
-  exactly as the disc is drawn. `Tick(screen)` ticks every object whatever
+  exactly as the disc is drawn. Under a parent gone into the depth of its
+  screen - a pad in a rebuild - the corner brings the object's point in
+  toward the parent's pivot as far as the parent has shrunk: a lamp stays
+  on the same point of its pad's shrinking picture. The stand carries a
+  **`TParentDepth`** for it: `Sunk` / `LastSunk` (0 in front .. 1 all the
+  way in, at this tick and a tick ago - `SunkAt(alpha)` between them, so the
+  children go in as the parent's picture does), `Shrink` and `Dim` (the
+  shares of its size and of its light the parent has lost all the way in),
+  `Pivot` (the point it shrinks about, from its top-left corner); all zero -
+  a parent in front, and one that never leaves it. `Tick(screen)` ticks
+  every object whatever
   the screen (a
   lamp keeps its rhythm off screen) with the origin of its stand on the
   hero's screen, else its first (at the pose the tick has just reached,
   `ThisTick`); a lead stand on another screen is a jump
   (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
-  the ones on the screen in one layer (`dlSky` / `dlBack` / `dlFront`); a
+  the ones on the screen in one layer (`dlBackdrop` / `dlSky` / `dlBack` /
+  `dlFront`; before the backdrop layer it puts the screen's backdrop on the
+  canvas, asked of the game); a
   place that `Turns` is not drawn once its parent is no longer alive (dying
-  included) - there is nothing left to turn with. **`Reseat`** - the monsters
+  included) - there is nothing left to turn with. What hangs on a parent in
+  the depth leaves its layer: `Draw` passes it over and
+  **`DrawSunk(screen, origin, alpha)`** draws it, whatever its layer, for
+  the game to put behind what stands in front; the backdrop layer alone is
+  drawn whole - it is under everything as it is. Both go through
+  `DrawStands(place, view, sides)` (`TFrameView` - the screen, the shake, the
+  alpha; `TStandSides` - `ssFront` / `ssSunk`), which sets the canvas'
+  `Scale` and `Tone` for every stand it draws and puts them back to 1: the
+  game draws smoke of its own with the same canvas. **`Reseat`** - the monsters
   were reborn (a
   restart): every place that follows a parent finds it at once and
   forgets its origin, so the frame before the next tick does not show it at
@@ -271,7 +307,10 @@ screen dump of the dpr.
   textures, lent to the monsters' wreck smoke and sparks, to the
   explosions (`Game.Explosions`) and the impacts (`Game.Impacts`).
   The constructor takes a **`TDynamicWorld`** (record) - what the objects
-  ask of the game: `LocateParent` and `Solid`, the game's `TSolidProbe`,
+  ask of the game: `LocateParent`, `BackdropOf` (`TBackdropOf`,
+  `reference to function(screen): TBackdropView` - the backdrop drawn
+  behind a screen; the game gives the tile renderer's `Backdrop`) and
+  `Solid`, the game's `TSolidProbe`,
   which answers for the hero's screen. The canvas hands the objects
   `SolidInView` instead of it: the game's probe while the object being
   ticked stands on the hero's screen (`FInView`, set per place in `Tick`),
@@ -372,7 +411,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~915 lines)
+### `Core/Levels.Defs.pas` (~920 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -436,7 +475,10 @@ Level data model + JSON parser. No game logic.
   of the monsters call it), `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
   `LoadFromFile`; the pads are parsed before the dynamics, since a dynamic
-  object may hang on one, and the dynamics before the events, since an
+  object may hang on one; the rigs the pads wear are hung right after the
+  dynamics are parsed and before the checks (`WearRigs` of `Levels.Rigs`:
+  their parts are dynamic objects as the rest, and a group's alarm lamps
+  may be among them); and the dynamics before the events, since an
   event may name a dynamic object's tag. Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
@@ -562,7 +604,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   (`Levels.Dynamics`) - and `Levels.Defs` uses `Levels.Dynamics`, so the
   tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~1965 lines)
+### `Core/Levels.Dynamics.pas` (~2435 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -573,7 +615,8 @@ in `CreateDynamic`.
   parent decides the screens; the parent is a static object's, a pad's
   or a monster's tag), `X`/`Y` (screen units; from the parent's top-left under
   one), `Tint`, `Tag` (the name events turn it by), `Layer`
-  (`TDynamicLayer`: `dlSky` - right over the backdrop, still while the
+  (`TDynamicLayer`: `dlBackdrop` - the backdrop itself, bent, under
+  everything else: a haze's; `dlSky` - right over the backdrop, still while the
   world shakes, the far things; `dlBack` - with the static objects, behind
   the tiles; `dlFront` - over the monsters, under the hero; the default is
   the kind's), `Turns` (JSON `turns`: the point turns with a parent that
@@ -607,7 +650,13 @@ in `CreateDynamic`.
   the textures are made and freed by `Render.Dynamics`, `Art` is handed to
   it and outlives it. `Solid` - the solid layer as a `TSolidProbe` in
   screen units, for what a kind throws (`SolidInView` of
-  `Render.Dynamics`).
+  `Render.Dynamics`). `Backdrop` - a **`TBackdropView`** (the texture, its
+  tint, the screen units it is stretched over; texture nil - the screen has
+  none), set by the renderer before it draws the backdrop layer. `Scale` /
+  `Tone` - how much of its size and of its light the object being drawn
+  keeps: 1 in front, less under a parent gone into the depth of the screen;
+  the renderer sets them for every object, and the kinds that hang on pads
+  obey them - a beacon and a haze.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -619,8 +668,11 @@ in `CreateDynamic`.
   drop out; `dying` - every cycle a new dim level (5-40%); both roll through
   `SlotRoll` (own `TXorShift`, never `Random` - that one feeds the boss
   spawn table), a pure function of the slot number, so a frame drawn
-  between ticks never disagrees with them. The seed is the position
-  (`PlacementSeed`), so lamps at different points fail out of step.
+  between ticks never disagrees with them. The seed is the position, under
+  a parent mixed with the parent's tag (`PlacementSeed`, `TagSalt` - for
+  every kind), so lamps at different points, and the lamps of one rig on
+  different pads, fail out of step. In the depth (the canvas' `Scale` and
+  `Tone`) the lamp is smaller and dimmer, as its pad is.
 - **`TSmoke`** - smoke, gas, steam: puffs born at the point (spread around
   it by `SpawnJitter` and, for a moving parent, along the stretch it
   covered this tick - a trail, not beads), thrown along `angle` within
@@ -741,6 +793,45 @@ in `CreateDynamic`.
   puts the rotor back as the level opened
   (`Start`: a steady fan at speed, a dying one standing on the edge of a
   catch). Back layer by default.
+- **`THaze`** (kind `haze`) - heat haze: the backdrop seen through hot
+  gas. The picture behind a plume is drawn again on a mesh
+  (`SDL_RenderGeometry`; `BuildMesh` - `HazeColumns` (16) cells across,
+  however wide the plume is there, and cells `HazeRowLength` (2 units)
+  long) whose corners smooth noise pushes about: `RollPushes` - two layers
+  of noise (`HazeLayers`: large slow eddies and small fast ones, so no wave
+  shows) carried along the flow; `PlaceVertices` - every knot stays where
+  the plume puts it and shows the point of the backdrop its push has moved
+  there, hardest in the core and not at all on the rim (`Grip` is 0 on all
+  four rims: no seam by construction). A second, part-clear copy
+  (`THazeCopy` = `hcSharp` / `hcBlur`, `HazeBlurOpacity`), pushed a quarter
+  turn round, blurs the picture, and the vertex color shades the core. It
+  bends the backdrop alone: it lives on the layer `backdrop` (any other
+  raises, `SHazeLayer`) and draws nothing on a screen without a backdrop.
+  Hazes do not add up - where two overlap, the later in the file paints the
+  backdrop over the earlier one's. JSON: `angle` (degrees counterclockwise
+  from the right, 90 = up, the default), `length`, `mouth` and `width`
+  (across at the point and at the far end; the plume widens fast at the
+  point - `HazeFlare`), `shift` (the farthest a point of the backdrop is
+  moved across the flow), `grain` (the size of the larger eddies; under 1
+  raises - `MinHazeGrain`), `speed` (the flow, units a second), `shade` (a
+  percentage), `blur` (false leaves the second copy out); intensity scales
+  the shift and the shade. The noise: a lattice point rolls through
+  `LatticeRoll` - `Scramble` twice, a multiplication in Int64 by a factor
+  under 2^31, so the overflow check has nothing to catch (the xorshift of
+  `SlotRoll` leaves the neighbours of a lattice alike, and the noise shows
+  blocks); a frame rolls the lattice round the plume once for each layer
+  (**`TNoiseWindow`**: `Roll`, `NoiseAt`) - a knot reads four points and a
+  point is read by many knots; the window's edges are spelled as the knots'
+  own places, so a knot on the edge cannot round out of it. The rows of
+  the lattice repeat after `NoiseRows` (65536); the flow is counted within
+  them, in Double. In the depth (the canvas' `Scale` and `Tone`) the plume
+  is smaller about its point and weaker. Backdrop layer by default.
+- **`ParseDynamic(obj, levelId, where)`** - one object, written as an item
+  of the section is; `where` names it in errors after its kind ("#2" makes
+  "beacon #2"). The section and the rigs (`Levels.Rigs`) both read through
+  it. **`NameRoll(name)`** - 0..1 by a name, the 1 left out, the same at
+  every load (`TagSalt` - a name as a number - and `Scramble` twice): the
+  dice of a rig's spreads.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
   list, the caller owns it); an unknown kind, layer, blink, flow,
   surface, collide or run, none or more than one of screen, screens and parent, a broken
@@ -794,7 +885,7 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~275 lines)
+### `Core/Levels.Pads.pas` (~305 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -814,7 +905,9 @@ by its `group`). A 2026 addition.
   the pad for the dynamic objects hung on it; '' = none), `Bullets`,
   `Path` (a `TPadPath`; `prNone` - the pad stands where it is placed),
   `Bob` (how far the pad sways up and down, in units; 0 = still), `Group`
-  (the pad group it is rebuilt with; '' = none).
+  (the pad group it is rebuilt with; '' = none), `Rigs` (the rigs it wears,
+  by name, in the order they are hung - `Levels.Rigs` holds them and hangs
+  them).
 - **`TPadZone`** (record) - `Left`, `Top`, `Right`, `Bottom`: cells of a
   screen, 0-based, the bounds included. **`TPadGroup`** (record) - `Tag`,
   `Screen` (1-based), `Zone`, `Pairs` (at least this many pairs side by
@@ -848,15 +941,59 @@ by its `group`). A 2026 addition.
 - **`ParsePads(root, levelId)`** - absent section = no pads; `bullets`
   absent = block; `path` absent = no path (`ReadPath`), `bob` absent = 0.
   The JSON: `"path": {"route", "stops": [[x, y], ...], "speed",
-  "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"` and
-  `"group"`.
+  "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"`,
+  `"group"` and `"rig": ["pad", "arenaAlarm"]` (`ReadRigs`; absent = the
+  pad wears nothing).
   `EPadError` is raised by a width of zero or less (`SPadBadWidth`), a
   bullets word out of `PadBulletsIds` (`SPadBadBullets`), a route other
   than pingpong or loop (`SPadBadRoute`), a path without stops
   (`SPadNoStops`), a stop that is not a pair of numbers (`ReadStop`,
   `SPadBadStop`), a speed of zero or less, a pause or a bob below zero
-  (`SPadBadNumber`). The screen range, a tag on two pads and a stop off
+  (`SPadBadNumber`), a rig that is not a list of names (`SPadBadRig`). The
+  screen range, a tag on two pads and a stop off
   the screen are `Levels.Defs`' (`CheckPads`).
+
+### `Core/Levels.Rigs.pas` (~260 lines)
+The `rigs` section of level JSON: what the pads wear. A rig is a named list
+of dynamic objects (`Levels.Dynamics`) with no place of their own - a lamp,
+a jet, the haze under it. A pad names the rigs it wears
+(`TPadPlacement.Rigs`), and at load every part of them becomes a dynamic
+object hung on that pad: from there on it is one of the level's dynamic
+objects, no different from one written into `dynamics` with the pad for
+its parent. A 2026 addition.
+- **`WearRigs(root, levelId, pads, dynamics)`** - hangs on every pad the
+  parts of the rigs it wears: they join the list in the order of the pads,
+  then of a pad's rigs, then of a rig's parts - the drawing order within a
+  layer, and the order in which a haze paints over a haze. A rig no pad
+  wears is not read at all. `ERigError` is raised by a pad that wears a rig
+  and carries no tag (`SRigNoTag` - its parts hang on it by the tag), a rig
+  the section lacks (`SRigUnknown`), a rig that is not a list of objects
+  (`SRigNotList`), a part that names `parent`, `screen` or `screens`
+  (`SRigOwnPlace` - a part stands where its pad does), a spread that is not
+  two numbers in order (`SRigBadSpread`); whatever `Levels.Dynamics`
+  refuses in a part raises as it does there.
+- How a part is hung (`TRigFitter`: `Dress` a pad, `Hang` a rig, `Worn` a
+  part): the part is written out as an object of the dynamics section
+  would be for this pad - a fresh JSON object with the part's values
+  copied, every spread rolled and `"parent"` set to the pad's tag - and
+  read by `ParseDynamic`. A `TFitting` (the pad's tag, the rig, the part's
+  number) names the part in errors (`Where` gives "#2 of rig "pad" on pad
+  "s16-plat-01"", which `Levels.Dynamics` puts after the kind: "beacon #2
+  of rig ...") and names its rolls (`RollName` - spelled apart from
+  `Where`: reword an error and every lamp of the level would roll anew).
+- **A spread** - `{"spread": [from, to]}` in place of a number of the part
+  itself, not of one inside a list such as a tint: every pad that wears
+  the part rolls its own value between the two, the same at every load
+  (`NameRoll` of `Levels.Dynamics` over the pad's tag, the rig's name, the
+  part's number and the key - move a part within its rig and it rolls
+  anew). Both ends whole - a whole value, either end included
+  (`RolledNumber`): a percentage stays one, and `[1, 3]` gives 1, 2 or 3
+  alone. A fraction is spelled with a point whatever the locale of the
+  machine (`TFormatSettings.Invariant`): with a comma it would not read
+  back as a number.
+- JSON: `"rigs": {"pad": [{"kind": "beacon", "x": 16, "y": 25,
+  "frequency": {"spread": [0.27, 0.45]}}, {"kind": "haze", "x": 16,
+  "y": 27, "angle": 270}]}`; a pad: `"rig": ["pad"]`.
 
 ### `Core/Monsters.Defs.pas` (~570 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
@@ -992,7 +1129,7 @@ flies the pads along them. A 2026 addition.
   never goes deep; False when a pad fits nowhere, and the formation is
   thrown again.
 
-### `Game/Pads/Pads.World.pas` (~1075 lines)
+### `Game/Pads/Pads.World.pas` (~1085 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1034,8 +1171,11 @@ rebuilds new for the new try.
   `HeroRides`). **`TPadRelease`** - `reference to function(cell): Integer`:
   ticks after the start of a rebuild before which the pad on the cell
   stays home (`Pads.Arena` passes the wave behind the boss; nil - all at
-  once). **`TPadLayer`** = (`plDeep`, `plFront`) - the two passes of
-  `Draw`.
+  once). **`TPadLayer`** = (`plDeep`, `plFront`) - the pads gone into the
+  depth, at whatever depth, and the rest: the layer `Draw` takes.
+  `DeepScale` (0.85) and `DeepTone` (0.6) - a pad all the way into the
+  depth, its size and its light; open, for the game passes them on to what
+  hangs on the pad.
 - **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
   the feet line of whatever stands on the pad), `PrevTop` (the deck a tick
   ago), `Screen`, `Tag`, `Bullets`, `Group`, `Placement`, `HomeLeft` /
@@ -1111,7 +1251,9 @@ rebuilds new for the new try.
   - The picture: `Draw(sprites, alpha)` - its height from the art's
     aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
     fractions of a unit (`DrawRectF`), turned by `Tilt(alpha)`, in the
-    depth smaller about its middle (`DeepScale` 0.85) and darker
+    depth smaller about its middle (`Middle` - from the picture's top-left
+    corner, the one point `Draw` and the pad's rig shrink about;
+    `DeepScale` 0.85) and darker
     (`DeepTone` 0.6) by `Depth(alpha)` - the riders are drawn with the same
     `Lift` (through the renderer's `FineY`), so the feet do not flicker
     into the deck - with the pad's tint set before every draw
@@ -1148,10 +1290,10 @@ rebuilds new for the new try.
   would land on the neighbour. `BodyAt(screen, x, y)` - a body at the point
   (what stops the boss, the sparks and the debris); `StopsBulletAt(screen,
   x, y)` - the same for the `pbBlock` pads alone; `FindTagged(tag)` - nil
-  when no pad carries the tag; `Draw(screen, alpha)` - the pads of that
-  screen, the frame's alpha passed on to their `Lift`, in two passes
-  (`DrawLayer`): the pads in the depth first, the others pass in front of
-  them.
+  when no pad carries the tag; `Draw(screen, alpha, layer)` - the pads of
+  that screen in one layer, the frame's alpha passed on to their `Lift`:
+  the game draws the pads in the depth first, then what hangs on them,
+  then the pads in front, which pass before both.
   `Shove(screen, blow, fence)` - the boss's ram: `PadStruck` - the pad
   holding a corner of the blow (what the pilot's walls found); none - no
   knock. A pad on a path only rocks (`Knock(0, 0)`), and so does any pad
@@ -2002,7 +2144,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2335 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2355 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2048,10 +2190,14 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   difficulty.
   Method clusters:
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
-    still and the sky dynamics (the Earth) with it, objects + pads + back
+    still, the backdrop layer of the dynamics on the world channel - a
+    haze bends the still backdrop where its jolted pad is -, the sky
+    dynamics (the Earth) still again, objects + pads + back
     dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the pads draw right
-    after the objects (with the frame's alpha - their sway between ticks),
+    after the objects (with the frame's alpha - their sway between ticks):
+    the pads in the depth, what hangs on them (`FDynamics.DrawSunk`), then
+    the pads in front;
     the back dynamics right after the pads, behind tiles
     and hero - monsters (the field gets
     the frame's alpha:
@@ -2080,7 +2226,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     be pads -, with `JumpReach` of `Hero` and a seed of `RollDiceSeed`
     (the performance counter: the dice of the rebuilds are new on every
     try and are not `Random`), and handed to the hero and the field; the dynamics also get a
-    `TDynamicWorld` - `LocateParent` and `SolidUnderPoint`), `OpenSpriteSet` (a named set
+    `TDynamicWorld` - `LocateParent`, `SolidUnderPoint` and the tile
+    renderer's `Backdrop`), `OpenSpriteSet` (a named set
     into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
@@ -2100,7 +2247,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     through a pad that goes deep), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
     `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
-    a fraction, the stand's Y is a `Single`), alive; else the
+    a fraction, the stand's Y is a `Single`), alive, and how deep it
+    stands (`TParentDepth`: the pad's `Depth(1)` and `Depth(0)`,
+    1 - `DeepScale`, 1 - `DeepTone`, its `Middle`) - what hangs on a pad
+    goes into the depth as the pad's own picture does; else the
     first monster carrying the tag - screen, sprite top-left as
     `TMonster.Draw` puts it (Y lowered by `DeckLift(1)`), alive, and for a disc monster the
     disc's last two poses with the axis in the middle of the sprite;
@@ -2550,6 +2700,9 @@ music loads leniently. Four one-shots are synthesised by
 | The Earth in a level's sky; its phase and the dawn | `dynamics` (`globe`) and `events` (`sun`) in levelN.json + Levels.Dynamics.pas (`TSkyGlobe`) + the `earth` / `earth-night` maps in `sky.mset` (shared, declared in `objectSets`) + Render.Globe.pas |
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
+| Heat haze - under a jet, over a turbine: the plume, its strength, grain and flow | `haze` in `dynamics` or in a rig of levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (the backdrop layer, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
+| What the pads wear - lamps, hazes: one list for many pads, a number rolled pad by pad | `rigs` + `"rig"` on the pads in levelN.json + Levels.Rigs.pas + Levels.Pads.pas `ReadRigs` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
+| What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
 | A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
 | Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
