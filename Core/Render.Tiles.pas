@@ -20,7 +20,7 @@ unit Render.Tiles;
 interface
 
 uses
-  Render.Sprites, Levels.Defs;
+  Render.Sprites, Levels.Defs, Levels.Dynamics;
 
 type
   TTileScreenRenderer = class
@@ -43,6 +43,11 @@ type
     // backdrop can stand still while the tiles shake
     procedure DrawBackground(AScreen: Integer);
     procedure DrawTiles(AScreen: Integer);
+    // What DrawBackground draws: the picture, its tint and the screen
+    // it is stretched over. Texture nil - the screen has none. For
+    // whoever draws the backdrop again - a haze bends it
+    // (Levels.Dynamics).
+    function Backdrop(AScreen: Integer): TBackdropView;
   end;
 
 implementation
@@ -62,24 +67,35 @@ begin
   FScreenHeight := ALevel.GridHeight * TileSize;
 end;
 
+function TTileScreenRenderer.Backdrop(AScreen: Integer): TBackdropView;
+begin
+  Result := Default(TBackdropView);
+  var Change := FLevel.BackgroundFor(AScreen);
+  if Change.Image = '' then
+    Exit;
+  Result.Texture := FBackgroundCache.Get(Change.Image);
+  Result.Tint := Change.Tint;
+  Result.Width := FScreenWidth;
+  Result.Height := FScreenHeight;
+end;
+
 procedure TTileScreenRenderer.DrawBackground(AScreen: Integer);
 var
   Dest: TSdlRect;
 begin
-  var Backdrop := FLevel.BackgroundFor(AScreen);
-  if Backdrop.Image = '' then
+  var View := Backdrop(AScreen);
+  if View.Texture = nil then
     Exit; // no backdrop defined - night blue from the clear color shows
 
-  var Texture := FBackgroundCache.Get(Backdrop.Image);
   // Set on every draw, not once at load: two changes may share one
   // picture under different tints
-  TintTexture(Texture, Backdrop.Tint.R, Backdrop.Tint.G, Backdrop.Tint.B);
+  TintTexture(View.Texture, View.Tint.R, View.Tint.G, View.Tint.B);
 
   Dest.X := 0;
   Dest.Y := 0;
   Dest.W := FScreenWidth;
   Dest.H := FScreenHeight;
-  FSprites.DrawRect(Texture, Dest);
+  FSprites.DrawRect(View.Texture, Dest);
 end;
 
 procedure TTileScreenRenderer.DrawTiles(AScreen: Integer);

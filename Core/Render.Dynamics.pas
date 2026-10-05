@@ -20,7 +20,8 @@
   on another one meets no walls rather than the wrong ones.
 
   The backdrop of the screen reaches the objects of the backdrop layer
-  with the canvas as well: a kind that bends it draws it again.
+  with the canvas as well: a kind that bends it draws it again. Which
+  backdrop it is the game says (TDynamicWorld.BackdropOf).
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -62,10 +63,14 @@ type
   TLocateParent = reference to function(const ATag: string;
     out AStand: TParentStand): Boolean;
 
+  // The backdrop drawn behind AScreen
+  TBackdropOf = reference to function(AScreen: Integer): TBackdropView;
+
   // What the dynamic objects ask of the game they live in
   TDynamicWorld = record
     LocateParent: TLocateParent;
     Solid: TSolidProbe; // of the hero's screen, in screen units
+    BackdropOf: TBackdropOf;
   end;
 
   TDynamicScreenRenderer = class
@@ -87,14 +92,12 @@ type
     end;
   private
     FCanvas: TDynamicCanvas;
-    FLevel: TLevel;
-    FBackdrops: TSpriteCache;
     FPlaces: TArray<TPlace>;
     FLocateParent: TLocateParent;
     FSolid: TSolidProbe;
+    FBackdropOf: TBackdropOf;
     FInView: Boolean; // the object being ticked stands on the hero's screen
     function SolidInView(AX, AY: Single): Boolean;
-    function BackdropOf(AScreen: Integer): TBackdropView;
     function PlaceOf(ADynamic: TDynamicObject;
       const AObjects: TArray<TLevelObject>): TPlace;
     procedure FollowParent(var APlace: TPlace);
@@ -105,10 +108,9 @@ type
       AOrigin: TSdlPoint; AAlpha: Single);
   public
     // The level owns the objects and must outlive this renderer, and
-    // AArt and ABackdrops - the caches of the level's object art and of
-    // its backdrops - must too
+    // AArt - the cache of the level's object art - must too
     constructor Create(ARenderer: PSdlRenderer; ALevel: TLevel;
-      AArt, ABackdrops: TSpriteCache; const AWorld: TDynamicWorld);
+      AArt: TSpriteCache; const AWorld: TDynamicWorld);
     destructor Destroy; override;
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
@@ -138,13 +140,11 @@ const
   PuffSide = 64;
 
 constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
-  ALevel: TLevel; AArt, ABackdrops: TSpriteCache;
-  const AWorld: TDynamicWorld);
+  ALevel: TLevel; AArt: TSpriteCache; const AWorld: TDynamicWorld);
 begin
   inherited Create;
-  FLevel := ALevel;
-  FBackdrops := ABackdrops;
   FLocateParent := AWorld.LocateParent;
+  FBackdropOf := AWorld.BackdropOf;
   FCanvas.Renderer := ARenderer;
   FCanvas.Art := AArt;
   FSolid := AWorld.Solid;
@@ -326,25 +326,11 @@ begin
     end;
 end;
 
-// As Render.Tiles draws it: the picture of the last change, stretched
-// over the screen
-function TDynamicScreenRenderer.BackdropOf(AScreen: Integer): TBackdropView;
-begin
-  Result := Default(TBackdropView);
-  var Change := FLevel.BackgroundFor(AScreen);
-  if Change.Image = '' then
-    Exit;
-  Result.Texture := FBackdrops.Get(Change.Image);
-  Result.Tint := Change.Tint;
-  Result.Width := FLevel.GridWidth * TileSize;
-  Result.Height := FLevel.GridHeight * TileSize;
-end;
-
 procedure TDynamicScreenRenderer.Draw(AScreen: Integer; AOrigin: TSdlPoint;
   AAlpha: Single; ALayer: TDynamicLayer);
 begin
   if ALayer = dlBackdrop then
-    FCanvas.Backdrop := BackdropOf(AScreen);
+    FCanvas.Backdrop := FBackdropOf(AScreen);
   for var Place in FPlaces do
     if Place.DynamicObject.Placement.Layer = ALayer then
       DrawPlace(Place, AScreen, AOrigin, AAlpha);

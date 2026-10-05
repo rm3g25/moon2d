@@ -574,8 +574,9 @@ begin
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
+  World.BackdropOf := FTiles.Backdrop;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
-    FBackgroundCache, World);
+    World);
 
   FHero := THero.Create(FRenderer, FLevel, FPads);
   FreeAndNil(FHenshin);
