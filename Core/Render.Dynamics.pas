@@ -23,6 +23,13 @@
   with the canvas as well: a kind that bends it draws it again. Which
   backdrop it is the game says (TDynamicWorld.BackdropOf).
 
+  A parent may go into the depth of its screen - a pad in a rebuild
+  does. What hangs on it goes along: it draws in toward the parent's
+  middle and leaves its layer for a pass of its own, DrawSunk, which the
+  game puts behind whatever stands in front; a beacon and a haze are
+  drawn smaller and darker besides (the canvas' Scale and Tone). The
+  backdrop layer alone is drawn whole: it is under everything as it is.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.Dynamics;
@@ -49,6 +56,19 @@ type
     Axis: TSdlFPoint;
   end;
 
+  // A parent gone into the depth of its screen. Sunk: 0 in front .. 1
+  // all the way in, at this tick and a tick ago - between the ticks its
+  // children go in as its picture does. Shrink and Dim: the shares of
+  // its size and of its light it has lost all the way in. Pivot: the
+  // point it shrinks about, from its top-left corner. All zero - a
+  // parent in front, and one that never leaves it.
+  TParentDepth = record
+    Sunk, LastSunk: Single;
+    Shrink, Dim: Single;
+    Pivot: TSdlFPoint;
+    function SunkAt(AAlpha: Single): Single;
+  end;
+
   // A parent looked up this tick: its screen, the top-left corner of its
   // picture, and whether it still lives; Spin only when Spins
   TParentStand = record
@@ -57,6 +77,7 @@ type
     Alive: Boolean;
     Spins: Boolean;
     Spin: TParentSpin;
+    Depth: TParentDepth;
   end;
 
   // Finds the pad or the monster carrying ATag; False when there is none
@@ -81,6 +102,7 @@ type
       OriginX, OriginY: Single;
       Spins: Boolean;
       Spin: TParentSpin;
+      Depth: TParentDepth;
     end;
 
     TPlace = record
@@ -90,6 +112,19 @@ type
       ParentAlive: Boolean;
       LeadScreen: Integer; // the stand the last tick counted from
     end;
+
+    // A frame being drawn: the hero's screen, the shake and the
+    // timestep's alpha
+    TFrameView = record
+      Screen: Integer;
+      Origin: TSdlPoint;
+      Alpha: Single;
+    end;
+
+    // Which of an object's stands a pass draws: those in front, those in
+    // the depth
+    TStandSide = (ssFront, ssSunk);
+    TStandSides = set of TStandSide;
   private
     FCanvas: TDynamicCanvas;
     FPlaces: TArray<TPlace>;
@@ -104,8 +139,10 @@ type
     function LeadStand(const APlace: TPlace; AScreen: Integer): TStand;
     function OriginOf(const APlace: TPlace; const AStand: TStand;
       AAlpha: Single): TSdlFPoint;
-    procedure DrawPlace(const APlace: TPlace; AScreen: Integer;
-      AOrigin: TSdlPoint; AAlpha: Single);
+    function ViewOf(AScreen: Integer; AOrigin: TSdlPoint;
+      AAlpha: Single): TFrameView;
+    procedure DrawStands(const APlace: TPlace; const AView: TFrameView;
+      ASides: TStandSides);
   public
     // The level owns the objects and must outlive this renderer, and
     // AArt - the cache of the level's object art - must too
@@ -118,8 +155,13 @@ type
     // The monsters were reborn (a restart): what hangs on them finds its
     // parent at once, before the next frame shows it at the old stand
     procedure Reseat;
+    // The objects of ALayer, but for what hangs on a parent in the
+    // depth: DrawSunk draws that. The backdrop layer is drawn whole.
     procedure Draw(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single;
       ALayer: TDynamicLayer);
+    // What hangs on a parent in the depth, whatever its layer - the
+    // backdrop layer left out
+    procedure DrawSunk(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
     // The textures, for smoke the game makes itself
     property Canvas: TDynamicCanvas read FCanvas;
   end;
@@ -139,6 +181,11 @@ const
   StreakGlowSide = 64;
   PuffSide = 64;
 
+function TParentDepth.SunkAt(AAlpha: Single): Single;
+begin
+  Result := LastSunk + (Sunk - LastSunk) * AAlpha;
+end;
+
 constructor TDynamicScreenRenderer.Create(ARenderer: PSdlRenderer;
   ALevel: TLevel; AArt: TSpriteCache; const AWorld: TDynamicWorld);
 begin
@@ -147,6 +194,8 @@ begin
   FBackdropOf := AWorld.BackdropOf;
   FCanvas.Renderer := ARenderer;
   FCanvas.Art := AArt;
+  FCanvas.Scale := 1;
+  FCanvas.Tone := 1;
   FSolid := AWorld.Solid;
   FCanvas.Solid := SolidInView;
   FCanvas.PointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
@@ -236,18 +285,23 @@ begin
   APlace.Stands[0].OriginY := Parent.Y;
   APlace.Stands[0].Spins := Parent.Spins;
   APlace.Stands[0].Spin := Parent.Spin;
+  APlace.Stands[0].Depth := Parent.Depth;
   APlace.ParentAlive := Parent.Alive;
 end;
 
 // The corner the object counts from. One that turns with a spinning
 // parent counts from wherever its point has turned to, AAlpha of the way
-// between the ticks; the rest from the stand's corner.
+// between the ticks; the rest from the stand's corner - under a parent
+// in the depth from a corner that brings the object's point in toward
+// the parent's pivot as far as the parent has shrunk.
 function TDynamicScreenRenderer.OriginOf(const APlace: TPlace;
   const AStand: TStand; AAlpha: Single): TSdlFPoint;
 begin
-  Result.X := AStand.OriginX;
-  Result.Y := AStand.OriginY;
   var Placement := APlace.DynamicObject.Placement;
+  var Depth := AStand.Depth;
+  var Shrunk := Depth.Shrink * Depth.SunkAt(AAlpha);
+  Result.X := AStand.OriginX + (Depth.Pivot.X - Placement.X) * Shrunk;
+  Result.Y := AStand.OriginY + (Depth.Pivot.Y - Placement.Y) * Shrunk;
   var TurnsWithParent := Placement.Turns and AStand.Spins;
   if not TurnsWithParent then
     Exit;
@@ -310,30 +364,67 @@ begin
   end;
 end;
 
-// What turns with a monster goes with it: there is nothing to turn
-// with once the parent is dead
-procedure TDynamicScreenRenderer.DrawPlace(const APlace: TPlace;
-  AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
+function TDynamicScreenRenderer.ViewOf(AScreen: Integer; AOrigin: TSdlPoint;
+  AAlpha: Single): TFrameView;
 begin
+  Result.Screen := AScreen;
+  Result.Origin := AOrigin;
+  Result.Alpha := AAlpha;
+end;
+
+// The stands of the object on the view's screen that are on one of
+// ASides, each drawn as deep as its parent is: smaller and darker
+procedure TDynamicScreenRenderer.DrawStands(const APlace: TPlace;
+  const AView: TFrameView; ASides: TStandSides);
+begin
+  // What turns with a monster goes with it: there is nothing to turn
+  // with once the parent is dead
   if APlace.DynamicObject.Placement.Turns and not APlace.ParentAlive then
     Exit;
   for var Stand in APlace.Stands do
-    if Stand.Screen = AScreen then
-    begin
-      var Origin := OriginOf(APlace, Stand, AAlpha);
-      APlace.DynamicObject.Draw(FCanvas, Origin.X + AOrigin.X,
-        Origin.Y + AOrigin.Y, AAlpha);
-    end;
+  begin
+    if Stand.Screen <> AView.Screen then
+      Continue;
+    var Depth := Stand.Depth;
+    var Sunk := Depth.SunkAt(AView.Alpha);
+    var Side := ssFront;
+    if Sunk > 0 then
+      Side := ssSunk;
+    if not (Side in ASides) then
+      Continue;
+    var Origin := OriginOf(APlace, Stand, AView.Alpha);
+    FCanvas.Scale := 1 - Depth.Shrink * Sunk;
+    FCanvas.Tone := 1 - Depth.Dim * Sunk;
+    APlace.DynamicObject.Draw(FCanvas, Origin.X + AView.Origin.X,
+      Origin.Y + AView.Origin.Y, AView.Alpha);
+  end;
+  // The game draws smoke of its own with this canvas (Canvas): in front
+  FCanvas.Scale := 1;
+  FCanvas.Tone := 1;
 end;
 
 procedure TDynamicScreenRenderer.Draw(AScreen: Integer; AOrigin: TSdlPoint;
   AAlpha: Single; ALayer: TDynamicLayer);
 begin
+  var View := ViewOf(AScreen, AOrigin, AAlpha);
+  var Sides: TStandSides := [ssFront];
   if ALayer = dlBackdrop then
+  begin
     FCanvas.Backdrop := FBackdropOf(AScreen);
+    Sides := [ssFront, ssSunk];
+  end;
   for var Place in FPlaces do
     if Place.DynamicObject.Placement.Layer = ALayer then
-      DrawPlace(Place, AScreen, AOrigin, AAlpha);
+      DrawStands(Place, View, Sides);
+end;
+
+procedure TDynamicScreenRenderer.DrawSunk(AScreen: Integer;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var View := ViewOf(AScreen, AOrigin, AAlpha);
+  for var Place in FPlaces do
+    if Place.DynamicObject.Placement.Layer <> dlBackdrop then
+      DrawStands(Place, View, [ssSunk]);
 end;
 
 end.

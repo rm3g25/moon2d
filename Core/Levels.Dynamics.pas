@@ -64,6 +64,13 @@ type
     Art: TSpriteCache;
     // Set by the renderer before it draws the backdrop layer
     Backdrop: TBackdropView;
+    // How much of its size and of its light the object being drawn
+    // keeps: 1 in front, less under a parent gone into the depth of the
+    // screen - a pad in a rebuild. The renderer sets them for every
+    // object. The kinds that hang on pads obey them: a beacon and a
+    // haze.
+    Scale: Single;
+    Tone: Single;
   end;
 
   // Backdrop: the backdrop itself, bent - under everything else. Sky:
@@ -535,6 +542,8 @@ type
   // none.
   // Hazes do not add up: where two overlap, the later in the file paints
   // the backdrop over the earlier one's.
+  // In the depth (the canvas' Scale and Tone) the plume is smaller about
+  // its point and weaker.
   // JSON:
   //   {"kind": "haze", "parent": "s16-plat-01", "x": 16, "y": 27,
   //    "angle": 270, "length": 64, "mouth": 10, "width": 46,
@@ -560,7 +569,7 @@ type
     FVertices: TArray<TSdlVertex>;
     procedure BuildMesh;
     procedure RollPushes(ASeconds: Double);
-    procedure PlaceVertices(const ABackdrop: TBackdropView; AX, AY: Single;
+    procedure PlaceVertices(const ACanvas: TDynamicCanvas; AX, AY: Single;
       ACopy: THazeCopy);
   protected
     procedure Advance(AMotionX, AMotionY: Single;
@@ -1267,21 +1276,25 @@ begin
   var Flash := BlinkLevel(AAlpha);
   var Lit := EmberLevel + (1 - EmberLevel) * Flash;
   var Color := TintColor(Placement.Tint);
+  // In the depth the lamp is smaller and dimmer, as its pad is
+  var Size: Single := FSize * ACanvas.Scale;
+  var Light: Single := Intensity * ACanvas.Tone;
 
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, FSize * SpillScale,
-    Color, Intensity * SpillLevel * Flash);
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, FSize,
-    Color, Intensity * Lit);
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, FSize * CoreScale,
-    Mix(Color, White, CoreWhiteness), Intensity * Lit);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size * SpillScale,
+    Color, Light * SpillLevel * Flash);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size,
+    Color, Light * Lit);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size * CoreScale,
+    Mix(Color, White, CoreWhiteness), Light * Lit);
   if FGlint > 0 then
     DrawGlow(ACanvas.Renderer, ACanvas.FlareGlow, AX, AY,
-      FSize * GlintScale, Color, Intensity * FGlint * Flash * Flash * Flash);
+      Size * GlintScale, Color, Light * FGlint * Flash * Flash * Flash);
   if FRays > 0 then
   begin
-    var Reach := FRays * (RayRestReach + (1 - RayRestReach) * Flash);
+    var Reach := FRays * ACanvas.Scale *
+      (RayRestReach + (1 - RayRestReach) * Flash);
     DrawGlow(ACanvas.Renderer, ACanvas.StarburstGlow, AX, AY, 2 * Reach,
-      Color, Intensity * FRayIntensity * Flash);
+      Color, Light * FRayIntensity * Flash);
   end;
 end;
 
@@ -2227,11 +2240,14 @@ end;
 
 // Every knot where the plume puts it on the screen, showing the point of
 // the backdrop its push has moved there. The blur copy is pushed a
-// quarter turn round from the sharp one and is part clear.
-procedure THaze.PlaceVertices(const ABackdrop: TBackdropView; AX, AY: Single;
+// quarter turn round from the sharp one and is part clear. In the depth
+// the plume and its pushes are smaller by the canvas' Scale, the pushes
+// and the shade weaker by its Tone.
+procedure THaze.PlaceVertices(const ACanvas: TDynamicCanvas; AX, AY: Single;
   ACopy: THazeCopy);
 begin
-  var Tint := TintColor(ABackdrop.Tint);
+  var Backdrop := ACanvas.Backdrop;
+  var Tint := TintColor(Backdrop.Tint);
   var Alpha: UInt8 := 255;
   if ACopy = hcBlur then
     Alpha := Round(255 * HazeBlurOpacity);
@@ -2239,7 +2255,7 @@ begin
   for var i := 0 to High(FKnots) do
   begin
     var Knot := FKnots[i];
-    var Strength := Knot.Grip * Intensity;
+    var Strength := Knot.Grip * Intensity * ACanvas.Tone;
     var PushAcross := FPushes[i].X;
     var PushAlong := FPushes[i].Y;
     if ACopy = hcBlur then
@@ -2247,16 +2263,19 @@ begin
       PushAcross := FPushes[i].Y;
       PushAlong := -FPushes[i].X;
     end;
-    var Across := Knot.Across + PushAcross * FShift * Strength;
-    var Along := Knot.Along + PushAlong * FShift * HazeAlongShare * Strength;
+    var HomeAcross := Knot.Across * ACanvas.Scale;
+    var HomeAlong := Knot.Along * ACanvas.Scale;
+    var Across := HomeAcross + PushAcross * FShift * Strength * ACanvas.Scale;
+    var Along := HomeAlong +
+      PushAlong * FShift * HazeAlongShare * Strength * ACanvas.Scale;
 
     // Across runs a quarter turn from the flow: (Flow.Y, -Flow.X)
-    FVertices[i].Position.X := AX + FFlow.X * Knot.Along + FFlow.Y * Knot.Across;
-    FVertices[i].Position.Y := AY + FFlow.Y * Knot.Along - FFlow.X * Knot.Across;
+    FVertices[i].Position.X := AX + FFlow.X * HomeAlong + FFlow.Y * HomeAcross;
+    FVertices[i].Position.Y := AY + FFlow.Y * HomeAlong - FFlow.X * HomeAcross;
     var SeenX := AX + FFlow.X * Along + FFlow.Y * Across;
     var SeenY := AY + FFlow.Y * Along - FFlow.X * Across;
-    FVertices[i].TexCoord.X := EnsureRange(SeenX / ABackdrop.Width, 0.0, 1.0);
-    FVertices[i].TexCoord.Y := EnsureRange(SeenY / ABackdrop.Height, 0.0, 1.0);
+    FVertices[i].TexCoord.X := EnsureRange(SeenX / Backdrop.Width, 0.0, 1.0);
+    FVertices[i].TexCoord.Y := EnsureRange(SeenY / Backdrop.Height, 0.0, 1.0);
 
     var Light := 1 - FShade * Strength;
     FVertices[i].Color.R := Round(Tint.R * Light);
@@ -2281,12 +2300,12 @@ begin
   // is drawn with no blending at all
   SDL_GetTextureBlendMode(Backdrop.Texture, @BlendMode);
   SDL_SetTextureBlendMode(Backdrop.Texture, SdlBlendModeBlend);
-  PlaceVertices(Backdrop, AX, AY, hcSharp);
+  PlaceVertices(ACanvas, AX, AY, hcSharp);
   SDL_RenderGeometry(ACanvas.Renderer, Backdrop.Texture, @FVertices[0],
     Length(FVertices), @FIndices[0], Length(FIndices));
   if FBlurs then
   begin
-    PlaceVertices(Backdrop, AX, AY, hcBlur);
+    PlaceVertices(ACanvas, AX, AY, hcBlur);
     SDL_RenderGeometry(ACanvas.Renderer, Backdrop.Texture, @FVertices[0],
       Length(FVertices), @FIndices[0], Length(FIndices));
   end;

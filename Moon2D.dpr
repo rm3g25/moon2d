@@ -1048,6 +1048,13 @@ begin
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     AStand.Alive := True;
+    // Into the depth as the pad's own picture goes: the same depth at
+    // the two ticks, the same shrink and shade, about the same point
+    AStand.Depth.Sunk := Pad.Depth(1);
+    AStand.Depth.LastSunk := Pad.Depth(0);
+    AStand.Depth.Shrink := 1 - DeepScale;
+    AStand.Depth.Dim := 1 - DeepTone;
+    AStand.Depth.Pivot := Pad.Middle;
     Exit(True);
   end;
   for var Monster in FField.Monsters do
@@ -1804,7 +1811,11 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
-        FPads.Draw(FHero.Screen, AAlpha);
+        // The pads in the depth with what hangs on them, then the pads
+        // in front, which pass before both
+        FPads.Draw(FHero.Screen, AAlpha, plDeep);
+        FDynamics.DrawSunk(FHero.Screen, FSprites.Origin, AAlpha);
+        FPads.Draw(FHero.Screen, AAlpha, plFront);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);

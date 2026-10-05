@@ -38,9 +38,12 @@
   pad flown into the depth behind the others is neither a floor nor a
   body until it comes out on its cell: what stands on it falls. A flying
   pad does not bob; it takes up the bob again on its cell, in step with
-  the ripple where it lands. Until the last pad lands, asking again does
-  nothing. What a rebuild sounds like the world only tells - a corner
-  turned, a pair docked, a tick each - and the game voices.
+  the ripple where it lands. In the depth a pad is smaller and darker,
+  and so is what hangs on it: the game passes DeepScale, DeepTone and
+  the pad's Middle on to the dynamic objects, and draws the two layers
+  of pads apart, each with its own rig. Until the last pad lands, asking
+  again does nothing. What a rebuild sounds like the world only tells -
+  a corner turned, a pair docked, a tick each - and the game voices.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -56,6 +59,11 @@ uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
   Pads.Formations, Pads.Flights;
+
+const
+  // A pad all the way into the depth: its size and its light
+  DeepScale = 0.85;
+  DeepTone = 0.6;
 
 type
   // The point is shut to a knocked pad, besides the walls
@@ -143,6 +151,9 @@ type
     function Behind: Boolean;
     // 0 in front .. 1 all the way into the depth, eased; AAlpha as Lift's
     function Depth(AAlpha: Single): Double;
+    // The middle of the picture, from its top-left corner: the point the
+    // pad shrinks about in the depth
+    function Middle: TSdlFPoint;
     // The body moved ADX, ADY from where it stands now would not cut into
     // AOther's; touching is no cut
     function ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
@@ -179,6 +190,7 @@ type
   // stays home
   TPadRelease = reference to function(const ACell: TPadCell): Integer;
 
+  // The pads gone into the depth, at whatever depth, and the rest
   TPadLayer = (plDeep, plFront);
 
   TPadWorld = class
@@ -210,7 +222,6 @@ type
     procedure StartRebuild(const AGroup: TPadGroup);
     function TryPlanRebuild(const AGroup: TPadGroup;
       const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
-    procedure DrawLayer(AScreen: Integer; AAlpha: Single; ALayer: TPadLayer);
   public
     // ACache is the level's object art; it and ALevel must outlive the
     // world. A picture the cache lacks raises here, at level load.
@@ -269,7 +280,9 @@ type
     // rocks
     procedure Shove(AScreen: Integer; const ABlow: TPadBlow;
       const AFence: TPadFence);
-    procedure Draw(AScreen: Integer; AAlpha: Single);
+    // The pads of one layer. The game draws the deep ones first, then
+    // what hangs on them, then the ones in front, which pass before both.
+    procedure Draw(AScreen: Integer; AAlpha: Single; ALayer: TPadLayer);
   end;
 
 implementation
@@ -316,9 +329,6 @@ const
   // A flying pad stills its bob over this many ticks and takes it up
   // again over as many on its cell
   BobFadeTicks = 10;
-  // A pad all the way into the depth: its size and its light
-  DeepScale = 0.85;
-  DeepTone = 0.6;
   // A rebuild throws this many formations at most - screen 17 needs some
   // 70 at the most, a dozen on average -, then falls back on the level
   // file's own, which the level is laid out to pass the judge
@@ -642,6 +652,12 @@ begin
     (AY < FTop + TileSize);
 end;
 
+function TPad.Middle: TSdlFPoint;
+begin
+  Result.X := FPlacement.Width / 2;
+  Result.Y := FPictureHeight / 2;
+end;
+
 // In the depth smaller about its middle, and darker
 procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
@@ -650,11 +666,12 @@ begin
   var Sunk := Depth(AAlpha);
   var Scale := 1 - (1 - DeepScale) * Sunk;
   var Tone := 1 - (1 - DeepTone) * Sunk;
+  var Pivot := Middle;
   Dest.W := FPlacement.Width * Scale;
   Dest.H := FPictureHeight * Scale;
-  Dest.X := Round(FLeft) + (FPlacement.Width - Dest.W) / 2;
+  Dest.X := Round(FLeft) + Pivot.X * (1 - Scale);
   // As the riders are drawn, so the feet do not flicker into the deck
-  Dest.Y := Round(FTop) + Lift(AAlpha) + (FPictureHeight - Dest.H) / 2;
+  Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale);
   TintTexture(FTexture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
   ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha));
@@ -1050,7 +1067,7 @@ end;
 // The picture
 // ---------------------------------------------------------------------------
 
-procedure TPadWorld.DrawLayer(AScreen: Integer; AAlpha: Single;
+procedure TPadWorld.Draw(AScreen: Integer; AAlpha: Single;
   ALayer: TPadLayer);
 begin
   for var Pad in FPads do
@@ -1063,13 +1080,6 @@ begin
     if Layer = ALayer then
       Pad.Draw(FSprites, AAlpha);
   end;
-end;
-
-// The pads in the depth first: the others pass in front of them
-procedure TPadWorld.Draw(AScreen: Integer; AAlpha: Single);
-begin
-  DrawLayer(AScreen, AAlpha, plDeep);
-  DrawLayer(AScreen, AAlpha, plFront);
 end;
 
 end.
