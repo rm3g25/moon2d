@@ -93,7 +93,6 @@ type
     FReturnPath: TArray<TCell>;
     FReturnIndex: Integer;
     FPortsDue: Boolean;
-    FGunBeat: Integer; // of the slow clock: the gun's ticks on beat 0
     FAimPoint: TPlace; // the middle of the hero as the eye locked on
     FDashFrom: TPlace; // the middle of the body as the dash set off
     FDashDirection: TPlace; // a unit vector
@@ -162,12 +161,10 @@ type
     function LapAhead(AX, AY: Double; ATicks: Integer): TArray<TLapStep>;
     // In a maneuver
     function Busy: Boolean;
-    // The monster's aimed gun is silent: the ports speak, or the eye is
-    // off the hero
+    // The monster's aimed gun is silent: off the lap the maneuver is the
+    // threat, and a held lap is a breath while the arena is rebuilt. The
+    // gun speaks on a free lap alone.
     function GunHeld: Boolean;
-    // False on the ticks the slow clock of a maneuver skips: the aimed
-    // gun counts its interval by the rest
-    function GunClockRuns: Boolean;
     function Gaze: TPilotGaze;
     // 0..1, for the sensor of the disc
     function Charge: Single;
@@ -230,8 +227,6 @@ const
   PortsEveryTicks = 9;
   PortsLeadTicks = PonderTicks - (PortVolleys - 1) * PortsEveryTicks;
   ManeuverSpinBoost = 2.0;
-  // In a maneuver the aimed gun fires this many times rarer
-  ManeuverGunSlowdown = 2;
 
   DiveTicks = 130; // about four seconds
   HuntDiveTicks = 65; // a hunt looks for a ram twice as often
@@ -522,12 +517,7 @@ end;
 
 function TPilot.GunHeld: Boolean;
 begin
-  Result := FState in [psPonder, psAim, psDash, psStun];
-end;
-
-function TPilot.GunClockRuns: Boolean;
-begin
-  Result := not Busy or (FGunBeat = 0);
+  Result := Busy or FLapHeld;
 end;
 
 function TPilot.Gaze: TPilotGaze;
@@ -637,7 +627,6 @@ begin
   FPortsDue := False;
   FCrashed := False;
   FOwesPrize := False;
-  FGunBeat := (FGunBeat + 1) mod ManeuverGunSlowdown;
   FLapStep := ABrief.Step;
 
   Feet.X := AX;

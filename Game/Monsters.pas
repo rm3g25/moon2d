@@ -35,9 +35,9 @@
   whatever lies on it along - the dead too.
 
   The boss flies by Monsters.Pilot: the lap and, by the tactics the
-  level's events set, the maneuvers off it (a 2026 addition). In a
-  maneuver the aimed gun fires rarer, and not at all where the disc
-  ponders - it fires its ports instead - aims, dashes or lies stunned.
+  level's events set, the maneuvers off it (a 2026 addition). The aimed
+  gun fires on the lap alone, and not while the lap is held: in a
+  maneuver the disc fires its ports where it ponders, and nothing else.
   A ram ended in a wall and the prize a dodged one owes go out as events.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -135,7 +135,6 @@ type
     procedure FirePorts(const ABullets: TBurst);
     function PilotBusy: Boolean;
     function PilotHoldsGun: Boolean;
-    function GunClockRuns: Boolean;
     procedure AdvanceFrame;
     procedure PatrolStep(ACanLeft, ACanRight: Boolean);
     procedure MoveWalking;
@@ -929,12 +928,6 @@ begin
   Result := (FPilot <> nil) and FPilot.GunHeld;
 end;
 
-// A pilot in a maneuver runs the clock of the aimed gun slow
-function TMonster.GunClockRuns: Boolean;
-begin
-  Result := (FPilot = nil) or FPilot.GunClockRuns;
-end;
-
 procedure TMonster.SetTactics(ATactics: TPilotTactics);
 begin
   if FPilot <> nil then
@@ -1131,7 +1124,7 @@ begin
   // After a hold the aimed gun takes a whole interval to speak again
   if PilotHoldsGun then
     FTimeOfFire := 0
-  else if FCanShoot and (FLife = mlAlive) and GunClockRuns then
+  else if FCanShoot and (FLife = mlAlive) then
   begin
     Inc(FTimeOfFire);
     if FTimeOfFire = FFireEveryTicks then
