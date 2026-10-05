@@ -210,7 +210,7 @@ type
 implementation
 
 uses
-  System.Math, Render.Sprites, Game.Space;
+  System.Math, Render.Sprites, Game.Space, Levels.Rigs;
 
 resourcestring
   SLevelFileNotFound = 'Level file not found: %s';
@@ -422,6 +422,9 @@ begin
   CheckPadGroups;
   // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
+  // Before the checks: the parts of a rig are dynamic objects as the
+  // rest, and a group's alarm lamps may be among them
+  WearRigs(ARoot, FId, FPads, FDynamics);
   CheckDynamics;
   CheckPadGroupLinks;
   FEvents := ParseLevelEvents(ARoot, FId);

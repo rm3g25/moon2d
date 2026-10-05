@@ -16,6 +16,9 @@
   parent does. The parent is named by tag - a static object, a pad or a
   monster; finding it is the business of Render.Dynamics.
 
+  A rig a pad wears (Levels.Rigs) is made of the same objects:
+  ParseDynamic reads one wherever it is written.
+
   Intensity is the property the level's events change in every kind:
   an event names the tag and the new level, and the object fades there.
   The sun of a globe turns the same way.
@@ -573,6 +576,14 @@ type
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
   const ALevelId: string): TDynamicObjects;
+// Reads one object, written as an item of that array is. AWhere names
+// it in errors after its kind: "#2" makes "beacon #2". The caller owns
+// the result.
+function ParseDynamic(AObj: TJSONObject;
+  const ALevelId, AWhere: string): TDynamicObject;
+// 0..1 by a name, the 1 left out: the same at every load, another name -
+// another roll
+function NameRoll(const AName: string): Single;
 
 implementation
 
@@ -611,7 +622,7 @@ const
   LogicTicksPerSecond = 33;
 
 resourcestring
-  SDynamicBadKind = 'Level "%s": dynamic object #%d: unknown kind "%s"';
+  SDynamicBadKind = 'Level "%s": dynamic object %s: unknown kind "%s"';
   SDynamicKindUnbuilt = 'Dynamic kind "%s" has no constructor';
   SDynamicNoPlace = 'Level "%s": %s names no screen, no screens and no '
     + 'parent';
@@ -919,15 +930,7 @@ begin
   Result.B := PercentToColorMod(ATint.B);
 end;
 
-// Objects at different points go out of step: the seed is the position
-// in tenths of a unit, x in the high half
-function PlacementSeed(const APlacement: TDynamicPlacement): Cardinal;
-begin
-  Result := (Cardinal(Round(APlacement.X * SeedPrecision)) shl 16) xor
-    Cardinal(Round(APlacement.Y * SeedPrecision));
-end;
-
-// Objects alike in everything but their parent go out of step by its tag
+// A tag, or any other name, as a number
 function TagSalt(const ATag: string): Cardinal;
 const
   EmptyTagSalt = $9E3779B9;
@@ -944,6 +947,39 @@ begin
     Noise.NextUnit;
   end;
   Result := Noise.Seed;
+end;
+
+// Objects at different points go out of step: the seed is the position
+// in tenths of a unit, x in the high half. Under a parent its tag is
+// mixed in: one object hung at one point of two parents - a part of a
+// rig two pads wear - goes out of step as well.
+function PlacementSeed(const APlacement: TDynamicPlacement): Cardinal;
+begin
+  Result := (Cardinal(Round(APlacement.X * SeedPrecision)) shl 16) xor
+    Cardinal(Round(APlacement.Y * SeedPrecision));
+  if APlacement.Parent <> '' then
+    Result := Result xor TagSalt(APlacement.Parent);
+end;
+
+// Mixes the bits of AValue. The xorshift of SlotRoll is not enough where
+// numbers a bit apart must roll unlike: the neighbours of a lattice, the
+// names of two pads.
+function Scramble(AValue: Cardinal): Cardinal;
+const
+  // Odd, and under 2^31: the product stays inside an Int64 whatever is
+  // scrambled, so the overflow check has nothing to catch
+  ScrambleFactor = $45D9F3B;
+begin
+  var Folded: Cardinal := AValue xor (AValue shr HalfBits);
+  Result := Cardinal((Int64(Folded) * ScrambleFactor) and $FFFFFFFF);
+end;
+
+function NameRoll(const AName: string): Single;
+begin
+  // Twice, as a lattice point: LatticeRoll says why
+  var Mixed: Cardinal := Scramble(Scramble(TagSalt(AName)));
+  Mixed := Mixed xor (Mixed shr HalfBits);
+  Result := (Mixed and HalfMask) / (1 shl HalfBits);
 end;
 
 // 0..1 for a numbered slot of time. It follows from the number alone,
@@ -2022,18 +2058,6 @@ end;
 // THaze
 // ---------------------------------------------------------------------------
 
-// Mixes the bits of AValue. The xorshift of SlotRoll is not enough for a
-// lattice: with it the neighbours roll alike, and the noise shows blocks.
-function Scramble(AValue: Cardinal): Cardinal;
-const
-  // Odd, and under 2^31: the product stays inside an Int64 whatever is
-  // scrambled, so the overflow check has nothing to catch
-  ScrambleFactor = $45D9F3B;
-begin
-  var Folded: Cardinal := AValue xor (AValue shr HalfBits);
-  Result := Cardinal((Int64(Folded) * ScrambleFactor) and $FFFFFFFF);
-end;
-
 // It follows from the point alone, as SlotRoll from its slot
 function LatticeRoll(ACol, ARow: Integer; ASeed: Cardinal): TNoisePair;
 const
@@ -2111,8 +2135,7 @@ begin
   var Angle := DegToRad(AObj.GetValue<Double>('angle', DefaultHazeAngle));
   FFlow.X := Cos(Angle);
   FFlow.Y := -Sin(Angle);
-  // Every pad of a row carries its haze at the same point of itself
-  FSeed := PlacementSeed(APlacement) xor TagSalt(APlacement.Parent);
+  FSeed := PlacementSeed(APlacement);
   BuildMesh;
 end;
 
@@ -2274,12 +2297,12 @@ end;
 // Parsing
 // ---------------------------------------------------------------------------
 
-function KindOf(const AId, ALevelId: string; AIndex: Integer): TDynamicKind;
+function KindOf(const AId, ALevelId, AWhere: string): TDynamicKind;
 begin
   for var Kind := Low(TDynamicKind) to High(TDynamicKind) do
     if SameText(AId, DynamicKindIds[Kind]) then
       Exit(Kind);
-  raise EDynamicError.CreateFmt(SDynamicBadKind, [ALevelId, AIndex + 1, AId]);
+  raise EDynamicError.CreateFmt(SDynamicBadKind, [ALevelId, AWhere, AId]);
 end;
 
 function ScreenNumber(AValue: TJSONValue; const AOwner: string): Integer;
@@ -2360,6 +2383,16 @@ begin
   end;
 end;
 
+function ParseDynamic(AObj: TJSONObject;
+  const ALevelId, AWhere: string): TDynamicObject;
+begin
+  var Kind := KindOf(AObj.GetValue<string>('kind', ''), ALevelId, AWhere);
+  // "beacon #2" - dynamic objects carry no id of their own
+  var Owner := Format('%s %s', [DynamicKindIds[Kind], AWhere]);
+  var Placement := ReadPlacement(AObj, ALevelId, Owner, DefaultLayers[Kind]);
+  Result := CreateDynamic(Kind, Placement, AObj, Owner);
+end;
+
 function ParseDynamics(ARoot: TJSONObject;
   const ALevelId: string): TDynamicObjects;
 begin
@@ -2370,15 +2403,8 @@ begin
       Exit;
 
     for var i := 0 to DynamicsArr.Count - 1 do
-    begin
-      var Obj := DynamicsArr.Items[i] as TJSONObject;
-      var Kind := KindOf(Obj.GetValue<string>('kind', ''), ALevelId, i);
-      // "beacon #2" - dynamic objects carry no id of their own
-      var Owner := Format('%s #%d', [DynamicKindIds[Kind], i + 1]);
-      var Placement := ReadPlacement(Obj, ALevelId, Owner,
-        DefaultLayers[Kind]);
-      Result.Add(CreateDynamic(Kind, Placement, Obj, Owner));
-    end;
+      Result.Add(ParseDynamic(DynamicsArr.Items[i] as TJSONObject, ALevelId,
+        Format('#%d', [i + 1])));
   except
     Result.Free;
     raise;

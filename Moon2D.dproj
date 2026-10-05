@@ -181,6 +181,7 @@
         <DCCReference Include="Core\Levels.Defs.pas"/>
         <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Levels.Pads.pas"/>
+        <DCCReference Include="Core\Levels.Rigs.pas"/>
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Objects.pas"/>
         <DCCReference Include="Core\Render.Puff.pas"/>

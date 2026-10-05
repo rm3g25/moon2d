@@ -36,6 +36,7 @@ uses
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
   Levels.Pads in 'Core\Levels.Pads.pas',
+  Levels.Rigs in 'Core\Levels.Rigs.pas',
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Objects in 'Core\Render.Objects.pas',
   Render.Puff in 'Core\Render.Puff.pas',

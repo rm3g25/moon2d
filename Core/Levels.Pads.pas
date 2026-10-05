@@ -18,6 +18,10 @@
   monster flying its lap - is rebuilt over and over once an event says
   so, the pads setting off as the conductor flies past.
 
+  A pad may wear rigs - lamps, jets and the like, hung on it as dynamic
+  objects. It only names them here; Levels.Rigs holds them and hangs
+  them.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Pads;
@@ -66,6 +70,8 @@ type
     Bob: Single; // how far the pad sways up and down, in units; 0 = still
     // The pad group it is rebuilt with; '' = none
     Group: string;
+    // The rigs it wears, by name, in the order they are hung
+    Rigs: TArray<string>;
   end;
 
   // Cells of a screen, 0-based, the bounds included
@@ -100,7 +106,7 @@ const
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
 // without stops or with a speed of zero or less, a pause or a bob below
-// zero raise.
+// zero, a rig that is not a list of names raise.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
@@ -121,6 +127,8 @@ resourcestring
   SPadNoStops = 'Level "%s": pad "%s" has a path without stops';
   SPadBadStop = 'Level "%s": pad "%s" has a stop that is not [x, y]';
   SPadBadNumber = 'Level "%s": pad "%s" takes %s %g';
+  SPadBadRig = 'Level "%s": pad "%s" has a rig that is not a list of rig '
+    + 'names';
   SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
     + '[left, top, right, bottom]';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
@@ -182,6 +190,26 @@ begin
       [ALevelId, ASprite, 'pause', Result.Pause]);
 end;
 
+// JSON: "rig": ["pad", "arenaAlarm"]; absent = the pad wears nothing
+function ReadRigs(const AObj: TJSONObject;
+  const ALevelId, ASprite: string): TArray<string>;
+begin
+  Result := [];
+  var Raw := AObj.GetValue('rig');
+  if Raw = nil then
+    Exit;
+  if not (Raw is TJSONArray) then
+    raise EPadError.CreateFmt(SPadBadRig, [ALevelId, ASprite]);
+  for var Item in TJSONArray(Raw) do
+  begin
+    // System.JSON holds a number as a string of a kind
+    var IsName := (Item is TJSONString) and not (Item is TJSONNumber);
+    if not IsName then
+      raise EPadError.CreateFmt(SPadBadRig, [ALevelId, ASprite]);
+    Result := Result + [Item.Value];
+  end;
+end;
+
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 var
@@ -206,6 +234,7 @@ begin
     Pad.Path := ReadPath(Obj, ALevelId, Pad.Sprite);
     Pad.Bob := Obj.GetValue<Double>('bob', 0);
     Pad.Group := Obj.GetValue<string>('group', '');
+    Pad.Rigs := ReadRigs(Obj, ALevelId, Pad.Sprite);
 
     if Pad.Width <= 0 then
       raise EPadError.CreateFmt(SPadBadWidth, [ALevelId, Pad.Sprite, Pad.Width]);
