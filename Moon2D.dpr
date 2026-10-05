@@ -103,6 +103,11 @@ const
   // The boss's armor bursting into his rage: what a machine dies with
   RageBlastSoundFile = 'platform.wav';
   BossCrashSoundFile = 'crash.wav';
+  // An arena rebuild: the warning, a pad turning the corner of its
+  // flight, two pads docking side by side
+  PadHumSoundFile = 'padhum.wav';
+  PadClickSoundFile = 'padclick.wav';
+  PadClackSoundFile = 'padclack.wav';
   // A bullet on armor: one of the pings, a tracer leaves with a whine
   ArmorHitSounds: array [0..2] of string =
     ('armor1.wav', 'armor2.wav', 'armor3.wav');
@@ -1095,6 +1100,9 @@ begin
   FAudio.Load(BonusSoundFile);
   FAudio.Load(RageBlastSoundFile);
   FAudio.Load(BossCrashSoundFile);
+  FAudio.Load(PadHumSoundFile);
+  FAudio.Load(PadClickSoundFile);
+  FAudio.Load(PadClackSoundFile);
   for var Name in ArmorHitSounds do
     FAudio.Load(Name);
   FAudio.Load(RicochetSoundFile);
@@ -1713,6 +1721,10 @@ begin
 
   // The pads go first: their riders move with them, then by themselves
   FPads.Tick(FHero.Screen);
+  if FPads.CornerTurned then
+    FAudio.Play(PadClickSoundFile);
+  if FPads.PairDocked then
+    FAudio.Play(PadClackSoundFile);
   FHero.Tick;
   if FHeldFire and FHero.Fire then
     FAudio.Play(WeaponShotSounds[FHero.WeaponType]);
@@ -1736,6 +1748,8 @@ begin
   begin
     FDirector.Tick(FHero.Screen, FField);
     FArena.Tick(FHero.Screen, FField);
+    if FArena.Warned then
+      FAudio.Play(PadHumSoundFile);
   end;
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind

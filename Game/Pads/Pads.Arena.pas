@@ -7,7 +7,8 @@
   group's conductor - the monster its tag names - lives:
   - the lap is held: the conductor ends the maneuver it is in, comes back
     to its lap - a hunter flies a parade lap for it - and starts no other;
-  - once it flies the lap, the alarm lamps of the group warn for a moment;
+  - once it flies the lap, the alarm lamps of the group warn for a moment
+    (the game voices the warning: Warned);
   - the pads are rebuilt, each setting off as the conductor flies past
     it: over its column on a level side of the lap, past its row on an
     upright one. The lap is foreseen to the end (Monsters.Pilot), so the
@@ -44,6 +45,7 @@ type
     FGroup: TPadGroup; // the one engaged
     FPhase: TArenaPhase;
     FTicksLeft: Integer; // of the rest and of the warning
+    FWarned: Boolean;
     FLap: TArray<TLapStep>; // the conductor's lap from the rebuild's start
     function ReleaseOf(const ACell: TPadCell): Integer;
     procedure TickResting(const AConductor: TMonster);
@@ -67,6 +69,8 @@ type
     // A restart: asleep until the event engages it again, the alarm as
     // the level file has it
     procedure Reset;
+    // One tick only: the warning of a rebuild has begun
+    property Warned: Boolean read FWarned;
   end;
 
 implementation
@@ -117,6 +121,7 @@ begin
     FDynamics.RewindTagged(FGroup.Alarm);
   FPhase := arAsleep;
   FLap := nil;
+  FWarned := False;
 end;
 
 // The conductor is gone: no rebuild more, a flying one lands as planned
@@ -129,6 +134,7 @@ end;
 
 procedure TPadArena.Tick(AScreen: Integer; const AField: TMonsterField);
 begin
+  FWarned := False;
   if (FPhase = arAsleep) or (AScreen <> FGroup.Screen) then
     Exit;
   var Conductor := AField.FirstAliveTagged(FGroup.Conductor);
@@ -171,6 +177,7 @@ begin
   if FGroup.Alarm <> '' then
     FDynamics.FadeTagged(FGroup.Alarm, 1, AlarmFadeInTicks);
   FTicksLeft := WarningTicks;
+  FWarned := True;
   FPhase := arWarning;
 end;
 

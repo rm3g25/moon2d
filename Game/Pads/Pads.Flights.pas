@@ -49,6 +49,9 @@ type
     // Over: on the cell and, for a deep pad, out of the depth
     function Done: Integer;
     procedure Place(ATick: Integer; out AX, AY: Double);
+    // At this tick the pad comes onto the corner of its L; a flight of a
+    // single leg has none
+    function TurnsCorner(ATick: Integer): Boolean;
     // In the depth: neither a floor nor a body
     function Behind(ATick: Integer): Boolean;
     // 0 in front .. 1 all the way into the depth; ATime between ticks
@@ -177,6 +180,11 @@ begin
   end;
   AX := ToX;
   AY := ToY;
+end;
+
+function TPadFlight.TurnsCorner(ATick: Integer): Boolean;
+begin
+  Result := (CornerTicks > 0) and (ATick = Depart + FirstTicks);
 end;
 
 function TPadFlight.Behind(ATick: Integer): Boolean;

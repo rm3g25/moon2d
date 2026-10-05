@@ -96,6 +96,11 @@ of a ricochet, from noise and sine partials alone.
 `tools/sounds/crash.py`: a heavy disc stopped by a wall, from sine tones
 and noise alone.
 
+**`bin/sounds/padhum.wav`, `padclick.wav`, `padclack.wav`** - since 3.0.29,
+synthesised by `tools/sounds/pads.py`: the hum that warns of an arena
+rebuild, the click of a pad turning the corner of its flight and the clack
+of two pads docking, from sine tones and noise alone.
+
 ## Third-party runtime libraries
 
 `SDL2.dll`, `SDL2_mixer.dll` and `SDL2_image.dll` are redistributed under the

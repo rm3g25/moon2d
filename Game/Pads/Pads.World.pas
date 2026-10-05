@@ -39,7 +39,8 @@
   body until it comes out on its cell: what stands on it falls. A flying
   pad does not bob; it takes up the bob again on its cell, in step with
   the ripple where it lands. Until the last pad lands, asking again does
-  nothing.
+  nothing. What a rebuild sounds like the world only tells - a corner
+  turned, a pair docked, a tick each - and the game voices.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -100,6 +101,8 @@ type
     // it a flight has left - 0 in the air, 1 on the cell
     FBobX: Double;
     FBobShare: Double;
+    FTurnedCorner: Boolean;
+    FLanded: Boolean;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure TickFlight;
@@ -131,6 +134,11 @@ type
     // The pad flies AFlight, its ticks counted from now
     procedure Fly(const AFlight: TPadFlight);
     function Flying: Boolean;
+    // In no flight, or its flight is over
+    function Settled: Boolean;
+    // The two stand flush side by side where their paths or flights put
+    // them
+    function FlushWith(const AOther: TPad): Boolean;
     // In the depth behind the others: neither a floor nor a body
     function Behind: Boolean;
     // 0 in front .. 1 all the way into the depth, eased; AAlpha as Lift's
@@ -153,6 +161,10 @@ type
     // Where the path or the flight puts the pad, the knock left out
     property HomeLeft: Double read FPathLeft;
     property HomeTop: Double read FPathTop;
+    // One tick only: a flight in front came onto its corner; a flight
+    // ended on its cell
+    property TurnedCorner: Boolean read FTurnedCorner;
+    property Landed: Boolean read FLanded;
     property Left: Double read FLeft;
     property Right: Double read GetRight;
     // The deck: the feet line of whatever stands on the pad
@@ -181,6 +193,8 @@ type
     FAskedLoad: TPadLoad;
     FAskedRelease: TPadRelease;
     FFlyingGroup: string;
+    FCornerTurned: Boolean;
+    FPairDocked: Boolean;
     function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
     function RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
       const AFence: TPadFence): Boolean;
@@ -190,6 +204,8 @@ type
     function FlyingOn(AScreen: Integer): Boolean;
     function MembersOf(const ATag: string): TArray<TPad>;
     function StillSpans(const AGroup: TPadGroup): TPadSpans;
+    procedure HearFlights;
+    function DocksBeside(const APad: TPad): Boolean;
     procedure StartAskedRebuild(AScreen: Integer);
     procedure StartRebuild(const AGroup: TPadGroup);
     function TryPlanRebuild(const AGroup: TPadGroup;
@@ -221,6 +237,10 @@ type
     function Rebuilding: Boolean;
     // A pad of the group tagged AGroup is knocked off its place
     function GroupKnocked(const AGroup: string): Boolean;
+    // One tick only, for the game to voice: a pad in front turned the
+    // corner of its flight; a pad landed flush beside one on its cell
+    property CornerTurned: Boolean read FCornerTurned;
+    property PairDocked: Boolean read FPairDocked;
     // The deck the feet stand on: at AFeetY, spanning some of
     // ALeft..ARight. nil when there is none.
     function DeckUnder(AScreen: Integer; ALeft, ARight,
@@ -375,6 +395,8 @@ begin
   FSag := 0;
   FSagSpeed := 0;
   FFlightClock := NoFlight;
+  FTurnedCorner := False;
+  FLanded := False;
   FBobX := FPlacement.X;
   FBobShare := 1;
 end;
@@ -417,6 +439,9 @@ begin
   Inc(FFlightClock);
   FFlight.Place(FFlightClock, FPathLeft, FPathTop);
   FBobX := FPathLeft;
+  // In the depth a corner is turned out of earshot
+  FTurnedCorner := not FFlight.Deep and FFlight.TurnsCorner(FFlightClock);
+  FLanded := FFlightClock = FFlight.Done;
   // A tick past the end: the last tick of coming out of the depth is
   // still drawn between the ticks
   if FFlightClock > FFlight.Done then
@@ -477,6 +502,8 @@ procedure TPad.Tick(AOnView: Boolean);
 begin
   FPrevLeft := FLeft;
   FPrevTop := FTop;
+  FTurnedCorner := False;
+  FLanded := False;
   if not AOnView then
     Exit;
   Inc(FClock);
@@ -521,6 +548,22 @@ end;
 function TPad.Flying: Boolean;
 begin
   Result := FFlightClock <> NoFlight;
+end;
+
+function TPad.Settled: Boolean;
+begin
+  Result := not Flying or (FFlightClock >= FFlight.Done);
+end;
+
+function TPad.FlushWith(const AOther: TPad): Boolean;
+begin
+  var OnOneLine := Abs(FPathTop - AOther.FPathTop) < DeckSlop;
+  var MeetsOnLeft :=
+    Abs(AOther.FPathLeft + AOther.FPlacement.Width - FPathLeft) < DeckSlop;
+  var MeetsOnRight :=
+    Abs(FPathLeft + FPlacement.Width - AOther.FPathLeft) < DeckSlop;
+  var Meets := MeetsOnLeft or MeetsOnRight;
+  Result := OnOneLine and Meets;
 end;
 
 function TPad.Behind: Boolean;
@@ -646,8 +689,32 @@ begin
   StartAskedRebuild(AScreen);
   for var Pad in FPads do
     Pad.Tick(Pad.Screen = AScreen);
+  HearFlights;
   if not GroupFlying(FFlyingGroup) then
     FFlyingGroup := '';
+end;
+
+procedure TPadWorld.HearFlights;
+begin
+  FCornerTurned := False;
+  FPairDocked := False;
+  for var Pad in FPads do
+  begin
+    var Docked := Pad.Landed and DocksBeside(Pad);
+    FCornerTurned := FCornerTurned or Pad.TurnedCorner;
+    FPairDocked := FPairDocked or Docked;
+  end;
+end;
+
+// A pad of the screen, in no flight or done with it, stands flush beside
+// APad
+function TPadWorld.DocksBeside(const APad: TPad): Boolean;
+begin
+  for var Other in FPads do
+    if (Other <> APad) and (Other.Screen = APad.Screen) and Other.Settled and
+      APad.FlushWith(Other) then
+      Exit(True);
+  Result := False;
 end;
 
 procedure TPadWorld.Rewind(ASeed: Cardinal);
@@ -658,6 +725,8 @@ begin
   FAskedLoad := nil;
   FAskedRelease := nil;
   FFlyingGroup := '';
+  FCornerTurned := False;
+  FPairDocked := False;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
 end;
