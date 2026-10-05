@@ -574,7 +574,7 @@ begin
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
-    World);
+    FBackgroundCache, World);
 
   FHero := THero.Create(FRenderer, FLevel, FPads);
   FreeAndNil(FHenshin);
@@ -1793,6 +1793,10 @@ begin
         // not void; cursor and HUD are glass over the world and stand too
         FSprites.Origin := NoShake;
         FTiles.DrawBackground(FHero.Screen);
+        // The haze bends the still backdrop where its pad has been jolted
+        // to: placed with the world, it reads the backdrop as it stands
+        FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
+          dlBackdrop);
         FDynamics.Draw(FHero.Screen, NoShake, AAlpha, dlSky);
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still

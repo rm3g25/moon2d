@@ -35,6 +35,15 @@ uses
 type
   EDynamicError = class(Exception);
 
+  // The backdrop of the screen being drawn, for a kind that bends it:
+  // the picture, its tint and the screen units it is stretched over.
+  // Texture nil - the screen has none.
+  TBackdropView = record
+    Texture: PSdlTexture;
+    Tint: TColorTint;
+    Width, Height: Single;
+  end;
+
   // What every kind draws with; the renderer makes the textures at
   // level load and frees them with itself, before the level
   TDynamicCanvas = record
@@ -50,19 +59,22 @@ type
     // The level's object art: its own set and the shared ones it
     // declares; maps are named as the static objects name sprites
     Art: TSpriteCache;
+    // Set by the renderer before it draws the backdrop layer
+    Backdrop: TBackdropView;
   end;
 
-  // Sky: right over the backdrop, standing still while the world
-  // shakes - the far things. Back: with the static objects, behind the
-  // tiles. Front: over the monsters, under the hero.
-  TDynamicLayer = (dlSky, dlBack, dlFront);
+  // Backdrop: the backdrop itself, bent - under everything else. Sky:
+  // right over the backdrop, standing still while the world shakes - the
+  // far things. Back: with the static objects, behind the tiles. Front:
+  // over the monsters, under the hero.
+  TDynamicLayer = (dlBackdrop, dlSky, dlBack, dlFront);
 
   // Shared by every kind. JSON: one of "screen", "screens" ([first,
   // last] - the same object on a run of screens) and "parent", then
   // "x", "y" and optional "tint", "tag" (the name events use),
-  // "layer" ("sky", "back" or "front"; each kind has its own default)
-  // and "turns" (true: the point turns with a parent that spins - a
-  // lamp on the boss's disc).
+  // "layer" ("backdrop", "sky", "back" or "front"; each kind has its own
+  // default) and "turns" (true: the point turns with a parent that spins
+  // - a lamp on the boss's disc).
   TDynamicPlacement = record
     Screen: Integer; // 1-based; 0 under a parent, which decides it
     LastScreen: Integer; // = Screen unless "screens" spans a run
@@ -491,6 +503,72 @@ type
     procedure Rewind; override;
   end;
 
+  // A corner of a haze's mesh in the plume's own frame: units across
+  // from the axis and along the flow from the point, and how much of the
+  // haze it carries - 0 on the rim, up to 1 in the core
+  THazeKnot = record
+    Across, Along: Single;
+    Grip: Single;
+  end;
+
+  // The two pictures a haze lays one over the other
+  THazeCopy = (hcSharp, hcBlur);
+
+  // Heat haze: the backdrop seen through hot gas. The picture behind a
+  // plume is drawn again on a mesh whose corners noise pushes about, the
+  // noise carried along by the flow - two grains of it at two speeds, so
+  // no wave shows - hardest in the core of the plume, not at all on its
+  // rim. A second, part-clear copy pushed another way blurs it, and the
+  // core is a shade darker: hot gas does all three. It bends the
+  // backdrop alone and lives on the backdrop layer; with no backdrop on
+  // the screen it draws nothing.
+  // The plume leaves the point along angle (degrees counterclockwise
+  // from the right, 90 = up), length units long, mouth units across at
+  // the point and width at its far end. Shift is the farthest a point of
+  // the backdrop is moved across the flow, in screen units; grain the
+  // size of the larger eddies, speed the flow in units a second; shade a
+  // percentage; blur false leaves the second copy out. Intensity scales
+  // the shift and the shade. The tint is the backdrop's own: a haze has
+  // none.
+  // Hazes do not add up: where two overlap, the later in the file paints
+  // the backdrop over the earlier one's.
+  // JSON:
+  //   {"kind": "haze", "parent": "s16-plat-01", "x": 16, "y": 27,
+  //    "angle": 270, "length": 64, "mouth": 10, "width": 46,
+  //    "shift": 5, "grain": 7, "speed": 84, "shade": 18, "blur": true}
+  THaze = class(TDynamicObject)
+  private
+    FLength: Single;
+    FMouth: Single;
+    FWidth: Single;
+    FShift: Single;
+    FGrain: Single;
+    FSpeed: Single;
+    FShade: Single; // 0..1
+    FBlurs: Boolean;
+    FFlow: TSdlFPoint; // the way the plume goes on the screen, a unit vector
+    FSeed: Cardinal;
+    FTicks: Integer;
+    FKnots: TArray<THazeKnot>;
+    FReach: Single; // the farthest a knot stands from the axis
+    // The noise at every knot this frame: across and along, -1..1 each
+    FPushes: TArray<TSdlFPoint>;
+    FIndices: TArray<Integer>;
+    FVertices: TArray<TSdlVertex>;
+    procedure BuildMesh;
+    procedure RollPushes(ASeconds: Double);
+    procedure PlaceVertices(const ABackdrop: TBackdropView; AX, AY: Single;
+      ACopy: THazeCopy);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+  end;
+
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
@@ -502,7 +580,7 @@ uses
   System.Math, Sprites.Sets, Render.Glow;
 
 type
-  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan);
+  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -516,10 +594,11 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan');
-  DynamicLayerIds: array [TDynamicLayer] of string = ('sky', 'back', 'front');
+    'globe', 'sparks', 'fan', 'haze');
+  DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
+    'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack);
+    dlSky, dlBack, dlBack, dlBackdrop);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
@@ -552,6 +631,9 @@ resourcestring
     + 'ahead, -90..90';
   SGlobeSplitMaps = 'Globe maps "%s" and "%s" live in different sets - '
     + 'a globe reads both from one';
+  SHazeLayer = '%s: a haze bends the backdrop and lives on the layer '
+    + '"backdrop" alone';
+  SHazeGrain = '%s: the "grain" of a haze is 1 or more';
 
 const
   // Beacon light, in shares of the halo size
@@ -762,6 +844,74 @@ const
   DefaultFanRpm = 20;
   DefaultFanRotor = 'heavy';
 
+  // Haze. The mesh: this many cells across the plume, however wide it is
+  // there, and cells this long along it - shorter than the finer eddies
+  // of the default grain
+  HazeColumns = 16;
+  HazeRowLength = 2.0;
+  // The plume widens fast at the point and slower farther on: its width
+  // follows the way along it to this power. Typed: Power has three
+  // overloads.
+  HazeFlare: Single = 0.7;
+  // The haze sets in over this share of the length and thins out toward
+  // the far end along this curve
+  HazeOnsetShare = 0.08;
+  HazeFadePower: Single = 1.3;
+  // Along the flow the backdrop is moved this share of the shift across:
+  // gas shears sideways more than it stretches
+  HazeAlongShare = 0.6;
+  // The second copy, the blur, lies this thick over the first
+  HazeBlurOpacity = 0.5;
+  DefaultHazeAngle = 90;
+  DefaultHazeLength = 48.0;
+  DefaultHazeMouth = 8.0;
+  DefaultHazeWidth = 32.0;
+  DefaultHazeShift = 3.0;
+  DefaultHazeGrain = 7.0;
+  // Eddies under a unit are finer than the mesh shows, and the lattice a
+  // frame rolls grows as the square of the grain shrinks
+  MinHazeGrain = 1.0;
+  DefaultHazeSpeed = 60.0;
+  DefaultHazeShade = 12;
+
+type
+  // One of the noises a haze is pushed by: its eddies and its speed as
+  // shares of the haze's own grain and speed, its weight in the push,
+  // and a salt that sets its lattice apart from the other's
+  THazeLayer = record
+    GrainShare, SpeedShare, Weight: Single;
+    Salt: Cardinal;
+  end;
+
+  // The two values a lattice point of the noise holds, -1..1 each
+  TNoisePair = record
+    First, Second: Single;
+  end;
+
+const
+  // Large slow eddies and small fast ones: neither repeats in step with
+  // the other, so the eye finds no wave
+  HazeLayers: array [0..1] of THazeLayer = (
+    (GrainShare: 1.0; SpeedShare: 1.0; Weight: 0.62; Salt: $51A7E0D1),
+    (GrainShare: 0.43; SpeedShare: 1.5; Weight: 0.38; Salt: $C0A1E5CE));
+  // A lattice point is numbered by its column in the low half of a
+  // Cardinal and its row in the high one, so the rows repeat after
+  // NoiseRows: the flow is counted within them
+  HalfBits = 16;
+  HalfMask = (1 shl HalfBits) - 1;
+  NoiseRows = 1 shl HalfBits;
+
+type
+  // The lattice points one noise is read at in a frame, rolled once: a
+  // knot reads four of them, and a point is read by many knots
+  TNoiseWindow = record
+    FirstCol, FirstRow: Integer;
+    Cols: Integer;
+    Rolls: TArray<TNoisePair>;
+    procedure Roll(AReach, ANear, AFar: Double; ASeed: Cardinal);
+    function NoiseAt(AX, AY: Double): TNoisePair;
+  end;
+
 function TintColor(const ATint: TColorTint): TRgb;
 begin
   Result.R := PercentToColorMod(ATint.R);
@@ -775,6 +925,25 @@ function PlacementSeed(const APlacement: TDynamicPlacement): Cardinal;
 begin
   Result := (Cardinal(Round(APlacement.X * SeedPrecision)) shl 16) xor
     Cardinal(Round(APlacement.Y * SeedPrecision));
+end;
+
+// Objects alike in everything but their parent go out of step by its tag
+function TagSalt(const ATag: string): Cardinal;
+const
+  EmptyTagSalt = $9E3779B9;
+var
+  Noise: TXorShift;
+begin
+  Noise.Seed := EmptyTagSalt;
+  for var Letter in ATag do
+  begin
+    Noise.Seed := Noise.Seed xor Cardinal(Ord(Letter));
+    // An xorshift at zero stays at zero
+    if Noise.Seed = 0 then
+      Noise.Seed := EmptyTagSalt;
+    Noise.NextUnit;
+  end;
+  Result := Noise.Seed;
 end;
 
 // 0..1 for a numbered slot of time. It follows from the number alone,
@@ -1850,6 +2019,258 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// THaze
+// ---------------------------------------------------------------------------
+
+// Mixes the bits of AValue. The xorshift of SlotRoll is not enough for a
+// lattice: with it the neighbours roll alike, and the noise shows blocks.
+function Scramble(AValue: Cardinal): Cardinal;
+const
+  // Odd, and under 2^31: the product stays inside an Int64 whatever is
+  // scrambled, so the overflow check has nothing to catch
+  ScrambleFactor = $45D9F3B;
+begin
+  var Folded: Cardinal := AValue xor (AValue shr HalfBits);
+  Result := Cardinal((Int64(Folded) * ScrambleFactor) and $FFFFFFFF);
+end;
+
+// It follows from the point alone, as SlotRoll from its slot
+function LatticeRoll(ACol, ARow: Integer; ASeed: Cardinal): TNoisePair;
+const
+  HalfRange = 1 shl (HalfBits - 1); // a half of the number over it runs 0..2
+begin
+  var Point: Cardinal := (Cardinal(ACol) and HalfMask) or
+    (Cardinal(ARow) shl HalfBits);
+  // Twice: after one pass points a bit apart still roll alike
+  var Mixed: Cardinal := Scramble(Scramble(Point xor ASeed));
+  Mixed := Mixed xor (Mixed shr HalfBits);
+  Result.First := (Mixed and HalfMask) / HalfRange - 1;
+  Result.Second := (Mixed shr HalfBits) / HalfRange - 1;
+end;
+
+function MixPairs(const AFrom, ATo: TNoisePair; AAmount: Single): TNoisePair;
+begin
+  Result.First := Lerp(AFrom.First, ATo.First, AAmount);
+  Result.Second := Lerp(AFrom.Second, ATo.Second, AAmount);
+end;
+
+// Eased in and out between two lattice points: no crease on a lattice line
+function EaseShare(AShare: Single): Single;
+begin
+  Result := AShare * AShare * (3 - 2 * AShare);
+end;
+
+// The points of every cell that holds an x of -AReach..AReach and a y of
+// ANear..AFar, a cell being one unit a side
+procedure TNoiseWindow.Roll(AReach, ANear, AFar: Double; ASeed: Cardinal);
+begin
+  FirstCol := Floor(-AReach);
+  FirstRow := Floor(ANear);
+  // A cell has a lattice line on its far side as well
+  Cols := Floor(AReach) - FirstCol + 2;
+  var Rows := Floor(AFar) - FirstRow + 2;
+  SetLength(Rolls, Cols * Rows);
+  for var Row := 0 to Rows - 1 do
+    for var Col := 0 to Cols - 1 do
+      Rolls[Row * Cols + Col] := LatticeRoll(FirstCol + Col, FirstRow + Row,
+        ASeed);
+end;
+
+// Smooth noise at a point inside the cells rolled, two values at once
+function TNoiseWindow.NoiseAt(AX, AY: Double): TNoisePair;
+begin
+  var Col := Floor(AX);
+  var Row := Floor(AY);
+  var ShareX := EaseShare(AX - Col);
+  var ShareY := EaseShare(AY - Row);
+  var Above := (Row - FirstRow) * Cols + Col - FirstCol;
+  var Below := Above + Cols;
+  var Upper := MixPairs(Rolls[Above], Rolls[Above + 1], ShareX);
+  var Lower := MixPairs(Rolls[Below], Rolls[Below + 1], ShareX);
+  Result := MixPairs(Upper, Lower, ShareY);
+end;
+
+constructor THaze.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  // Over anything else it would paint the backdrop on top of it
+  if APlacement.Layer <> dlBackdrop then
+    raise EDynamicError.CreateFmt(SHazeLayer, [AOwner]);
+  FLength := ReadPositive(AObj, 'length', DefaultHazeLength, AOwner);
+  FMouth := ReadReach(AObj, 'mouth', DefaultHazeMouth, AOwner);
+  FWidth := ReadPositive(AObj, 'width', DefaultHazeWidth, AOwner);
+  FShift := ReadReach(AObj, 'shift', DefaultHazeShift, AOwner);
+  FGrain := AObj.GetValue<Double>('grain', DefaultHazeGrain);
+  if FGrain < MinHazeGrain then
+    raise EDynamicError.CreateFmt(SHazeGrain, [AOwner]);
+  FSpeed := ReadReach(AObj, 'speed', DefaultHazeSpeed, AOwner);
+  FShade := ReadShare(AObj, 'shade', DefaultHazeShade, AOwner);
+  FBlurs := AObj.GetValue<Boolean>('blur', True);
+  // Counterclockwise from the right, and the screen's Y runs down
+  var Angle := DegToRad(AObj.GetValue<Double>('angle', DefaultHazeAngle));
+  FFlow.X := Cos(Angle);
+  FFlow.Y := -Sin(Angle);
+  // Every pad of a row carries its haze at the same point of itself
+  FSeed := PlacementSeed(APlacement) xor TagSalt(APlacement.Parent);
+  BuildMesh;
+end;
+
+// Rows of knots across the plume, from the point to the far end; every
+// row spans the plume's width there, so no knot lies outside it
+procedure THaze.BuildMesh;
+begin
+  var Rows := Max(1, Ceil(FLength / HazeRowLength));
+  var KnotsInRow := HazeColumns + 1;
+  SetLength(FKnots, KnotsInRow * (Rows + 1));
+  SetLength(FPushes, Length(FKnots));
+  SetLength(FVertices, Length(FKnots));
+  for var Row := 0 to Rows do
+  begin
+    var Share: Single := Row / Rows;
+    var Rest: Single := 1 - Share;
+    var HalfWidth := (FMouth + (FWidth - FMouth) * Power(Share, HazeFlare)) / 2;
+    var AlongGrip := EnsureRange(Share / HazeOnsetShare, 0.0, 1.0) *
+      Power(Rest, HazeFadePower);
+    for var Col := 0 to HazeColumns do
+    begin
+      // -1 on one rim, 1 on the other
+      var Side: Single := Col / HazeColumns * 2 - 1;
+      var Index := Row * KnotsInRow + Col;
+      FKnots[Index].Across := Side * HalfWidth;
+      FKnots[Index].Along := Share * FLength;
+      FKnots[Index].Grip := EaseShare(1 - Abs(Side)) * AlongGrip;
+      FReach := Max(FReach, Abs(FKnots[Index].Across));
+    end;
+  end;
+
+  // Two triangles a cell
+  SetLength(FIndices, HazeColumns * Rows * 6);
+  var Next := 0;
+  for var Row := 0 to Rows - 1 do
+    for var Col := 0 to HazeColumns - 1 do
+    begin
+      var ThisRow := Row * KnotsInRow + Col;
+      var NextRow := ThisRow + KnotsInRow;
+      FIndices[Next] := ThisRow;
+      FIndices[Next + 1] := ThisRow + 1;
+      FIndices[Next + 2] := NextRow;
+      FIndices[Next + 3] := ThisRow + 1;
+      FIndices[Next + 4] := NextRow + 1;
+      FIndices[Next + 5] := NextRow;
+      Inc(Next, 6);
+    end;
+end;
+
+procedure THaze.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  Inc(FTicks);
+end;
+
+// The noise of every layer at every knot, carried along the flow: at
+// ASeconds a layer has run its speed times that, away from the point
+procedure THaze.RollPushes(ASeconds: Double);
+var
+  Window: TNoiseWindow;
+begin
+  for var i := 0 to High(FPushes) do
+  begin
+    FPushes[i].X := 0;
+    FPushes[i].Y := 0;
+  end;
+
+  // The rows of knots run from the point, so the last knot is the farthest
+  var Farthest := FKnots[High(FKnots)].Along;
+  for var Layer in HazeLayers do
+  begin
+    var Grain: Double := FGrain * Layer.GrainShare;
+    var Run := FSpeed * Layer.SpeedShare * ASeconds / Grain;
+    // Double all the way: hours of play run the flow far past what a
+    // Single tells apart
+    var Flowed: Double := Frac(Run / NoiseRows) * NoiseRows;
+    // The edges are spelled as the knots' own places below: a knot on
+    // the edge of the window must not round out of it
+    Window.Roll(FReach / Grain, -Flowed, Farthest / Grain - Flowed,
+      FSeed xor Layer.Salt);
+    for var i := 0 to High(FKnots) do
+    begin
+      var Noise := Window.NoiseAt(FKnots[i].Across / Grain,
+        FKnots[i].Along / Grain - Flowed);
+      FPushes[i].X := FPushes[i].X + Noise.First * Layer.Weight;
+      FPushes[i].Y := FPushes[i].Y + Noise.Second * Layer.Weight;
+    end;
+  end;
+end;
+
+// Every knot where the plume puts it on the screen, showing the point of
+// the backdrop its push has moved there. The blur copy is pushed a
+// quarter turn round from the sharp one and is part clear.
+procedure THaze.PlaceVertices(const ABackdrop: TBackdropView; AX, AY: Single;
+  ACopy: THazeCopy);
+begin
+  var Tint := TintColor(ABackdrop.Tint);
+  var Alpha: UInt8 := 255;
+  if ACopy = hcBlur then
+    Alpha := Round(255 * HazeBlurOpacity);
+
+  for var i := 0 to High(FKnots) do
+  begin
+    var Knot := FKnots[i];
+    var Strength := Knot.Grip * Intensity;
+    var PushAcross := FPushes[i].X;
+    var PushAlong := FPushes[i].Y;
+    if ACopy = hcBlur then
+    begin
+      PushAcross := FPushes[i].Y;
+      PushAlong := -FPushes[i].X;
+    end;
+    var Across := Knot.Across + PushAcross * FShift * Strength;
+    var Along := Knot.Along + PushAlong * FShift * HazeAlongShare * Strength;
+
+    // Across runs a quarter turn from the flow: (Flow.Y, -Flow.X)
+    FVertices[i].Position.X := AX + FFlow.X * Knot.Along + FFlow.Y * Knot.Across;
+    FVertices[i].Position.Y := AY + FFlow.Y * Knot.Along - FFlow.X * Knot.Across;
+    var SeenX := AX + FFlow.X * Along + FFlow.Y * Across;
+    var SeenY := AY + FFlow.Y * Along - FFlow.X * Across;
+    FVertices[i].TexCoord.X := EnsureRange(SeenX / ABackdrop.Width, 0.0, 1.0);
+    FVertices[i].TexCoord.Y := EnsureRange(SeenY / ABackdrop.Height, 0.0, 1.0);
+
+    var Light := 1 - FShade * Strength;
+    FVertices[i].Color.R := Round(Tint.R * Light);
+    FVertices[i].Color.G := Round(Tint.G * Light);
+    FVertices[i].Color.B := Round(Tint.B * Light);
+    FVertices[i].Color.A := Alpha;
+  end;
+end;
+
+procedure THaze.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+var
+  BlendMode: Integer;
+begin
+  var Backdrop := ACanvas.Backdrop;
+  if (Backdrop.Texture = nil) or (Intensity <= 0) then
+    Exit;
+
+  RollPushes((FTicks + AAlpha) / LogicTicksPerSecond);
+  BlendMode := SdlBlendModeNone;
+  // The blur copy is part clear, and a backdrop without an alpha channel
+  // is drawn with no blending at all
+  SDL_GetTextureBlendMode(Backdrop.Texture, @BlendMode);
+  SDL_SetTextureBlendMode(Backdrop.Texture, SdlBlendModeBlend);
+  PlaceVertices(Backdrop, AX, AY, hcSharp);
+  SDL_RenderGeometry(ACanvas.Renderer, Backdrop.Texture, @FVertices[0],
+    Length(FVertices), @FIndices[0], Length(FIndices));
+  if FBlurs then
+  begin
+    PlaceVertices(Backdrop, AX, AY, hcBlur);
+    SDL_RenderGeometry(ACanvas.Renderer, Backdrop.Texture, @FVertices[0],
+      Length(FVertices), @FIndices[0], Length(FIndices));
+  end;
+  SDL_SetTextureBlendMode(Backdrop.Texture, BlendMode);
+end;
+
+// ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
@@ -1931,6 +2352,8 @@ begin
       Result := TSparks.Create(APlacement, AObj, AOwner);
     dkFan:
       Result := TFan.Create(APlacement, AObj, AOwner);
+    dkHaze:
+      Result := THaze.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

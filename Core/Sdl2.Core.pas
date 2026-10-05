@@ -128,6 +128,20 @@ type
   end;
   PSdlFPoint = ^TSdlFPoint;
 
+  // SDL_Color
+  TSdlColor = record
+    R, G, B, A: UInt8;
+  end;
+
+  // SDL_Vertex: a corner of a triangle - where it lands, what tints it
+  // and the point of the texture it shows, 0..1 across and down
+  TSdlVertex = record
+    Position: TSdlFPoint;
+    Color: TSdlColor;
+    TexCoord: TSdlFPoint;
+  end;
+  PSdlVertex = ^TSdlVertex;
+
   // SDL_version: the linked DLL's version - the one diagnostic that
   // settles SDL_Delay granularity questions (see the Timing section).
   TSdlVersion = record
@@ -290,6 +304,9 @@ procedure SDL_UnlockSurface(ASurface: PSdlSurface); cdecl;
 function SDL_SetTextureBlendMode(ATexture: PSdlTexture;
   ABlendMode: Integer): Integer; cdecl;
   external SdlLib name 'SDL_SetTextureBlendMode';
+function SDL_GetTextureBlendMode(ATexture: PSdlTexture;
+  ABlendMode: PInteger): Integer; cdecl;
+  external SdlLib name 'SDL_GetTextureBlendMode';
 function SDL_SetTextureAlphaMod(ATexture: PSdlTexture;
   AAlpha: UInt8): Integer; cdecl;
   external SdlLib name 'SDL_SetTextureAlphaMod';
@@ -334,6 +351,14 @@ function SDL_RenderCopyExF(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   const ASrcRect: PSdlRect; const ADstRect: PSdlFRect; AAngle: Double;
   const ACenter: PSdlFPoint; AFlip: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderCopyExF';
+// Triangles: every three of AIndices name the corners of one among
+// AVertices; positions pass through the logical-size transform as a
+// copy's do. The vertices carry the color and the alpha - the texture's
+// color and alpha mod are ignored, its blend mode is not. SDL 2.0.18+.
+function SDL_RenderGeometry(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const AVertices: PSdlVertex; AVertexCount: Integer;
+  const AIndices: PInteger; AIndexCount: Integer): Integer; cdecl;
+  external SdlLib name 'SDL_RenderGeometry';
 function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
   AW, AH: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderSetLogicalSize';
