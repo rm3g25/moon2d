@@ -20,8 +20,12 @@
   exactly as shipped in the original.
 
   Boss extras carried over: minion requests on a timer, HENSHIN at 2/3
-  lives (turns the HERO into ice form), rage under 80 lives (speed x2,
-  fire x3, music change, a 24x44 fragment wave), victory double-fan.
+  lives (turns the HERO into ice form), rage (speed x2, music change, a
+  24x44 fragment wave), victory double-fan. The rage is longer and
+  calmer than in 2008: it starts under 120 lives on the normal grade,
+  not 80 on every grade - the mark grows with the difficulty as the
+  lives do - and the gun fires no faster in it (2008: three times as
+  fast).
 
   A machine - a monster that explodes and moves: the tank, the flying
   platform - smokes and sparks once it is down to its last third (a 2026
@@ -114,6 +118,7 @@ type
     FDisc: TDisc; // a disc monster only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
+    FRageLives: Integer; // a boss goes into its rage below this
     FFired: Boolean; // this tick
 
     function Solid(ACol, ARow: Integer): Boolean;
@@ -299,7 +304,15 @@ const
   // Patrol turns AT the right edge, not beyond it
   PatrolRightLimit = ScreenWidth - SpriteSize; // 480
   TankRageLives = 20;      // cluster5 shooters double up below this
-  BossRageLives = 80;      // the boss goes berserk below this
+  // The boss goes berserk below this many lives on the normal grade; the
+  // mark grows with the difficulty as the lives do. 2008 had 80 on every
+  // grade: the rage, the best of the fight, was its shortest part and
+  // the one part a harder grade did not lengthen.
+  BossRageLives = 120;
+  // The aimed gun fires this many times as often in the rage. 2008 had
+  // 3 - a shot every 6 ticks; here the rage presses with its rams and
+  // the rebuilt arena, and 1 keeps the gun as it was before the rage.
+  BossRageFireRate = 1;
   EnragedMinionTicks = 100; // rage shortens the reinforcement interval
   NeverHit = -1;
 
@@ -389,6 +402,7 @@ begin
   FLives := RoundHalfUp(FLives * ALivesScale);
   FLivesAll := FLives;
   FLivesBorn := FLives;
+  FRageLives := RoundHalfUp(BossRageLives * ALivesScale);
 
   FStep := ADef.Movement.Speed;
   if APlacement.Overrides.HasSpeed then
@@ -1197,14 +1211,14 @@ begin
     FEvents.Add(meHenshin);
   end;
 
-  if (FLives < BossRageLives) and not FEnraged then
+  if (FLives < FRageLives) and not FEnraged then
   begin
     FEnraged := True;
     // Verbatim '+20': the 'full' reference resets so the crosshair
     // thresholds track the rage phase, not the pre-rage health
     FLivesAll := FLives + 20;
     FStep := FStep * 2;
-    FFireEveryTicks := Max(1, FFireEveryTicks div 3);
+    FFireEveryTicks := Max(1, FFireEveryTicks div BossRageFireRate);
     FTimeOfFire := 1;
     FEvents.Add(meBossRage);
     AEnemyBullets.SpawnFan(FX, FY, RageWave);
@@ -1384,12 +1398,15 @@ begin
   Result := False;
 end;
 
+// The mark is told for the normal grade and grows with the difficulty,
+// as the lives it is compared with did at birth
 function TMonsterField.AnyTaggedLivesBelow(const ATag: string;
   ALives: Integer): Boolean;
 begin
+  var Mark := ALives * FLivesScale;
   for var Monster in FMonsters do
     if (Monster.Life = mlAlive) and (Monster.Tag = ATag) and
-      (Monster.Lives < ALives) then
+      (Monster.Lives < Mark) then
       Exit(True);
   Result := False;
 end;

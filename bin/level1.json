@@ -4977,7 +4977,7 @@
       "screen": 17,
       "when": "livesBelow",
       "tag": "boss",
-      "lives": 150,
+      "lives": 200,
       "then": [
         {
           "action": "intensity",
@@ -4992,7 +4992,7 @@
       "screen": 17,
       "when": "livesBelow",
       "tag": "boss",
-      "lives": 150,
+      "lives": 200,
       "then": [
         {
           "action": "tactics",
@@ -5078,7 +5078,7 @@
       "screen": 17,
       "when": "livesBelow",
       "tag": "boss",
-      "lives": 30,
+      "lives": 45,
       "then": [
         {
           "action": "intensity",
@@ -5105,7 +5105,7 @@
       "screen": 17,
       "when": "livesBelow",
       "tag": "boss",
-      "lives": 30,
+      "lives": 45,
       "then": [
         {
           "action": "tactics",

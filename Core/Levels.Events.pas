@@ -22,8 +22,10 @@ type
   // What the event waits for. The hero must be on the event's screen
   // for any of them; enterScreen asks nothing more. The rest watch the
   // monsters carrying the tag: allDead - none of them alive; livesBelow
-  // - one alive with fewer lives than "lives"; enraged - one gone into
-  // its rage (the boss below its rage mark, a tank below its own).
+  // - one alive with fewer lives than "lives", a mark told for the
+  // normal grade that grows with the difficulty as the lives do; enraged
+  // - one gone into its rage (the boss below its rage mark, a tank below
+  // its own).
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
