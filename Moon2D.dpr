@@ -363,6 +363,7 @@ type
     procedure ArriveOnScreen;
     procedure PinRespawnPoint;
     function BulletStruckWall(const ABullet: TBullet): Boolean;
+    function HeroBulletTarget(const ABullet: TBullet): TMonster;
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
     function EnemyBulletNear(AX, AY: Single): TBullet;
@@ -1346,6 +1347,34 @@ begin
     FPads.StopsBulletAt(FHero.Screen, ABullet.X, ABullet.Y - SpriteSize);
 end;
 
+// Verbatim 2008 hitbox: DOWNWARD from Y - bullets spawn at heroY+8,
+// below the feet line, and this is where they land
+function BulletInMonsterBox(const ABullet: TBullet;
+  const AMonster: TMonster): Boolean;
+begin
+  Result := (ABullet.X > AMonster.X + HitInset) and
+    (ABullet.X < AMonster.X - HitInset + SpriteSize) and
+    (ABullet.Y > AMonster.Y) and (ABullet.Y < AMonster.Y + SpriteSize);
+end;
+
+// The monster a hero's bullet lands on. Where boxes overlap, a dangerous
+// monster takes the bullet before a medkit or a barrel sharing its cell;
+// among equals the first in the list keeps it
+function TMoonGame.HeroBulletTarget(const ABullet: TBullet): TMonster;
+begin
+  Result := nil;
+  for var Monster in FField.Monsters do
+  begin
+    if (Monster.Screen <> FHero.Screen) or (Monster.Life <> mlAlive) or
+      not BulletInMonsterBox(ABullet, Monster) then
+      Continue;
+    if Monster.Def.Dangerous then
+      Exit(Monster);
+    if Result = nil then
+      Result := Monster;
+  end;
+end;
+
 // Verbatim port of the hero half of the WindowProc bullet block: a
 // Contact bullet intercepts monster bullets mid-air, any bullet bursts
 // against a solid wall keeping 1/8 inertia, off-screen means gone.
@@ -1379,24 +1408,17 @@ begin
     if Own.Status <> bsFlying then
       Continue;
 
-    // Hit a monster: verbatim bound-box of WindowProc, knockback dx/2,
-    // barrel-class deaths also fan into the HERO'S burst (the second
-    // half of the original double explosion).
-    for var Monster in FField.Monsters do
-      if (Monster.Screen = FHero.Screen) and (Monster.Life = mlAlive) and
-         (Own.X > Monster.X + HitInset) and
-         (Own.X < Monster.X - HitInset + SpriteSize) and
-         // Verbatim 2008 hitbox: DOWNWARD from Y - bullets spawn at
-         // heroY+8, below the feet line, and this is where they land
-         (Own.Y > Monster.Y) and (Own.Y < Monster.Y + SpriteSize) then
-      begin
-        var Knock := Round(Own.DX / 2);
-        SpendBullet(Own, Monster);
-        Monster.TakeDamage(Knock, 1, FMonsterBullets);
-        if Monster.Life = mlDying then
-          RewardMonsterKill(Monster);
-        Break;
-      end;
+    // Hit a monster: knockback dx/2, barrel-class deaths also fan into
+    // the HERO'S burst (the second half of the original double explosion).
+    var Target := HeroBulletTarget(Own);
+    if Target <> nil then
+    begin
+      var Knock := Round(Own.DX / 2);
+      SpendBullet(Own, Target);
+      Target.TakeDamage(Knock, 1, FMonsterBullets);
+      if Target.Life = mlDying then
+        RewardMonsterKill(Target);
+    end;
   end;
 end;
 
