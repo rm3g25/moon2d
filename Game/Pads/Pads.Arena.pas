@@ -7,7 +7,7 @@
   group's conductor - the monster its tag names - lives:
   - the lap is held: the conductor ends the maneuver it is in, comes back
     to its lap - a hunter flies a parade lap for it - and starts no other;
-  - once it flies the lap, the alarm lamps of the group warn for a moment
+  - once it flies the lap, the alarm lamps of the group warn for a second
     (the game voices the warning: Warned);
   - the pads are rebuilt, each setting off as the conductor flies past
     it: over its column on a level side of the lap, past its row on an
@@ -80,8 +80,11 @@ uses
 
 const
   LogicTicksPerSecond = 33; // tickRate of Game.Config
-  // The alarm lamps blink this long before the rebuild is asked for
-  WarningTicks = 13; // 0.4 s
+  // The alarm lamps blink this long before the rebuild is asked for: a
+  // second - long enough to read the lamps and pick a pad. The hum of the
+  // warning (tools/sounds/pads.py) is made for it: 1.2 s, its tail dying
+  // under the first flights.
+  WarningTicks = 33;
   AlarmFadeInTicks = 2;
   AlarmFadeOutTicks = 6;
   // The lap foreseen for the wave: a whole lap even at three units a

@@ -22,7 +22,9 @@ import numpy as np
 
 from armor import SampleRate, finish, save, strike
 
-HumSeconds = 0.6 # the warning lasts 0.4 s; the tail dies under the first flights
+# The warning lasts a second (WarningTicks of Pads.Arena); the tail dies
+# under the first flights
+HumSeconds = 1.2
 HumPeak = 0.5 # of full scale: under the crash, over a ping
 HumPitch = 82.0 # Hz
 HumBeat = 3.0 # Hz between the two low tones
