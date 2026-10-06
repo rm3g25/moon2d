@@ -66,6 +66,8 @@ uses
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
+  Orbs.Flock in 'Game\Orbs\Orbs.Flock.pas',
+  Orbs.Swirl in 'Game\Orbs\Orbs.Swirl.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -188,6 +190,7 @@ const
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
+  ScancodeO = 18; // a ring of orbs around the hero; again - all to dust
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
@@ -305,6 +308,7 @@ type
     FShake: TScreenShake;
     FExplosions: TExplosions;
     FImpacts: TImpacts;
+    FSwirl: TOrbSwirl; // the developer's ring of orbs
     FArmorPings: TArmorPings;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
@@ -458,6 +462,7 @@ begin
   FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint,
     EchoAftershock);
   FImpacts := TImpacts.Create(SolidUnderPoint);
+  FSwirl := TOrbSwirl.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
@@ -476,6 +481,7 @@ begin
   FAudio.Free;
   FMarks.Free;
   FShake.Free;
+  FSwirl.Free;
   FImpacts.Free;
   FExplosions.Free;
   FMessages.Free;
@@ -597,6 +603,7 @@ begin
   FMonsterBullets.Clear;
   FExplosions.Clear;
   FImpacts.Clear;
+  FSwirl.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
   FHurtCooldown := 0;
@@ -848,6 +855,7 @@ begin
   FMonsterBullets.Clear;
   FExplosions.Clear;
   FImpacts.Clear;
+  FSwirl.Clear;
   FMessages.ClearPopups;
   FireScreenTriggers;
   PinRespawnPoint;
@@ -1476,6 +1484,7 @@ begin
   FMonsterBullets.Clear;
   FExplosions.Clear;
   FImpacts.Clear;
+  FSwirl.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
@@ -1779,6 +1788,7 @@ begin
   FMonsterBullets.Update;
   FExplosions.Tick;
   FImpacts.Tick;
+  FSwirl.Tick;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -1866,6 +1876,7 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        FSwirl.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
@@ -2103,6 +2114,11 @@ begin
       // The roulette hands the aura out once in four rewards - too
       // rare to tune against. Straight onto the hero, slot untouched.
       FHero.Bullets.SpawnStaticAura(FHero.X, FHero.Y);
+    ScancodeO:
+      if FSwirl.Turning then
+        FSwirl.Scatter
+      else
+        FSwirl.Cast(FHero.X + HeroSize / 2, FHero.Y - HeroSize / 2);
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
