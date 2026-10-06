@@ -24,7 +24,7 @@ interface
 
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
-  Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Space;
+  Sdl2.Core, Render.Sprites, Sprites.Sets;
 
 type
   // The k/t fan formula of 2008 appears five times across the game with
@@ -103,16 +103,6 @@ type
     // fragments are honest hero bullets and CAN wound the boss.
     procedure SpawnConvergingRing(ACenterX, ACenterY: Double;
       ACount, ARadiusX: Integer);
-    // Bonus 'Огненный дождь' (moon.dpr 574-579): one slow bullet on
-    // every 16-unit grid node across the WHOLE screen (32x24 = 768),
-    // random heading, heavy gravity. Contact=True - the drizzle also
-    // shreds monster bullets mid-air.
-    procedure SpawnFireRain;
-    // Bonus 'Защитная аура' (moon.dpr 582-586): MOTIONLESS bullets
-    // (speed 0, gravity 0) packed around the hero - a standing cloud of
-    // live ammunition that wounds monsters on touch and intercepts
-    // their bullets. The 2008 shield hack at half strength.
-    procedure SpawnStaticAura(ACenterX, ACenterY: Double);
 
     property Bullets: TObjectList<TBullet> read FBullets;
   end;
@@ -281,31 +271,6 @@ begin
       ACenterX + Cos(k) * ARadiusX + Random(6),
       ACenterY + Sin(k) * RadiusY + Random(6),
       220 + Random(80), 1, True);
-end;
-
-procedure TBurst.SpawnFireRain;
-const
-  GridStep = 16; // 32 columns x 24 rows fill the 512x384 screen exactly
-begin
-  for var k := 1 to ScreenWidth div GridStep do
-    for var t := 1 to ScreenHeight div GridStep do
-      NewBullet(1, k * GridStep, t * GridStep, Random(360), 2, True);
-end;
-
-procedure TBurst.SpawnStaticAura(ACenterX, ACenterY: Double);
-const
-  // 2008 spawned 500 (moon.dpr 582-586): a free hit and a free
-  // interception each, enough to win a fight alone. Halved in 2.1.1.
-  AuraBulletCount = 250;
-begin
-  // Cos/Sin of an integer k again: points smeared into a fuzzy
-  // ellipse (32 wide, 38 tall) - the same starburst math as the henshin
-  // ring, only frozen in place
-  for var k := 1 to AuraBulletCount do
-    NewBullet(0,
-      ACenterX + Cos(k) * 32 + Random(6),
-      ACenterY + Sin(k) * 38 + Random(6),
-      0, 0, True);
 end;
 
 end.
