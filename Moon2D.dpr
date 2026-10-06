@@ -67,6 +67,7 @@ uses
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
   Orbs.Flock in 'Game\Orbs\Orbs.Flock.pas',
+  Orbs.Harvest in 'Game\Orbs\Orbs.Harvest.pas',
   Orbs.Aura in 'Game\Orbs\Orbs.Aura.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
@@ -412,6 +413,7 @@ type
     procedure EchoAftershock;
     procedure CureHero;
     function HeroCenter: TSdlFPoint;
+    function MatterAround: TMatter;
     procedure CastAura;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
@@ -1228,12 +1230,27 @@ begin
   Result.Y := FHero.Y - HeroSize / 2;
 end;
 
+// The matter an aura is drawn out of: the solid cells of the hero's
+// screen and the bodies of its pads
+function TMoonGame.MatterAround: TMatter;
+begin
+  for var Row := 0 to ScreenRows - 1 do
+    for var Col := 0 to ScreenCols - 1 do
+      Result.Cells[Row, Col] := FLevel.SolidAt(FHero.Screen, Col, Row);
+  Result.Bodies := FPads.Bodies(FHero.Screen);
+end;
+
 // The aura rings the living: called over the corpse, it is spent on
 // nothing
 procedure TMoonGame.CastAura;
 begin
-  if not FHero.Dead then
-    FAura.Cast(HeroCenter);
+  if FHero.Dead then
+    Exit;
+  FAura.Cast(HeroCenter, MatterAround);
+  // The orbs are still on their way out of the matter and the ring is
+  // no shield yet: the mercy of a hit covers the wait. A pit asks no
+  // mercy, as ever.
+  FHurtCooldown := HurtMercyTicks;
 end;
 
 procedure TMoonGame.ActivateQueuedBonus;
@@ -1506,12 +1523,13 @@ end;
 
 // An orb ends on what it meets, as a hero's bullet does: an enemy
 // bullet bursts, a dangerous monster loses a life. Not through
-// SpendBullet: armor answers an orb with no sparks and no ping.
+// SpendBullet: armor answers an orb with no sparks and no ping. An orb
+// not armed meets nothing.
 procedure TMoonGame.ResolveOrbHits(const AFlock: TOrbFlock);
 begin
   for var Orb in AFlock.Orbs do
   begin
-    if Orb.State <> osAlive then
+    if (Orb.State <> osAlive) or not Orb.Armed then
       Continue;
 
     var Enemy := EnemyBulletNear(Orb.X, Orb.Y);

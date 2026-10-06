@@ -7,7 +7,9 @@
   The flock keeps the orbs in the order their owner gave them and knows
   the two ways an orb ends: it implodes when its time is up and goes to
   dust when it strikes. Where an orb is the flock does not decide: the
-  owner moves every one of its orbs each tick by its own formula.
+  owner moves every one of its orbs each tick by its own formula. It
+  draws, too, the mark a face of matter keeps where an orb came out of
+  it.
 
   The look only: what an orb strikes, and what that costs, is the game's.
 
@@ -45,9 +47,10 @@ type
     FBreath: Single; // where in its breath the orb was born, 0..1
     FState: TOrbState;
     FImplodeAge: Integer;
+    FArmed: Boolean;
     procedure GrowOlder;
   public
-    // In screen units; at full size and light
+    // In screen units; at full size and light, armed
     constructor Create(AX, AY: Single);
     // Where the owner's formula puts the orb this tick
     procedure MoveTo(AX, AY: Single);
@@ -63,12 +66,16 @@ type
     property Level: Single read FLevel write FLevel;
     property Age: Integer read FAge; // ticks
     property State: TOrbState read FState;
+    // An orb not armed strikes nothing: the game passes it by. One still
+    // on its way out of matter.
+    property Armed: Boolean read FArmed write FArmed;
   end;
 
   TOrbFlock = class
   private
     FOrbs: TObjectList<TOrb>;
     FDust: TParticleSwarm;
+    FMarks: TParticleSwarm;
     FTint: TOrbTint;
     // Own stream, not Random: that one feeds the boss spawn table
     FRandom: TXorShift;
@@ -76,6 +83,8 @@ type
     procedure DrawOrb(const ACanvas: TDynamicCanvas; const AOrb: TOrb;
       AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawDust(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
+    procedure DrawMarks(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
   public
     constructor Create(const ATint: TOrbTint);
@@ -88,11 +97,16 @@ type
     procedure Implode(const AOrb: TOrb);
     // The orb has struck: gone at once, dust where it was
     procedure Spend(const AOrb: TOrb);
+    // Matter gives an orb up at the point of a face: a streak of light
+    // runs out along the face and fades. The normal - a unit out of the
+    // face, along one axis.
+    procedure MarkFace(AX, AY, ANormalX, ANormalY: Single);
     // First in the owner's tick, before it moves its orbs: an orb not
     // moved after this stands still
     procedure Tick;
     // The frame the flock flies in has become another, this far off - a
-    // door: orbs and dust are there at once, nothing is drawn flying
+    // door: orbs and dust are there at once, nothing is drawn flying. The
+    // marks stay behind with their faces.
     procedure Shift(AStepX, AStepY: Single);
     // AOrigin - the shake of the layer the orbs fly in
     procedure Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
@@ -141,6 +155,22 @@ const
   DustAcross = 3.2;
   DustLevel = 0.9;
 
+  MarkTicks = 12;
+  // The streak, in units: its length at first and what it grows by, and
+  // its width. The glow thins out toward its edges: what the eye takes
+  // for the streak is half of each.
+  MarkStreakLength = 20;
+  MarkStreakGrowth = 36;
+  MarkStreakWidth = 1.6;
+  MarkStreakLevel = 0.8;
+  // The breath of light over the point, units across at first
+  MarkPuffAcross = 8.7;
+  MarkPuffLevel = 0.5;
+  // TParticle.Shape of a mark: on a floor or a ceiling the streak runs
+  // across, on a wall up and down
+  LyingMark = 0;
+  StandingMark = 1;
+
   DiceSeed = $4F726273; // "Orbs"
 
 // ---------------------------------------------------------------------------
@@ -154,6 +184,7 @@ begin
   FY := AY;
   FSize := 1;
   FLevel := 1;
+  FArmed := True;
 end;
 
 procedure TOrb.MoveTo(AX, AY: Single);
@@ -193,12 +224,14 @@ begin
   inherited Create;
   FOrbs := TObjectList<TOrb>.Create(True);
   FDust := TParticleSwarm.Create;
+  FMarks := TParticleSwarm.Create;
   FTint := ATint;
   FRandom.Seed := DiceSeed;
 end;
 
 destructor TOrbFlock.Destroy;
 begin
+  FMarks.Free;
   FDust.Free;
   FOrbs.Free;
   inherited;
@@ -231,6 +264,21 @@ begin
   ThrowDust(AOrb.FX, AOrb.FY);
 end;
 
+procedure TOrbFlock.MarkFace(AX, AY, ANormalX, ANormalY: Single);
+var
+  Mark: TParticle;
+begin
+  Mark := Default(TParticle);
+  Mark.X := AX;
+  Mark.Y := AY;
+  Mark.Life := MarkTicks;
+  // A face runs across its normal
+  Mark.Shape := LyingMark;
+  if ANormalX <> 0 then
+    Mark.Shape := StandingMark;
+  FMarks.Add(Mark);
+end;
+
 procedure TOrbFlock.ThrowDust(AX, AY: Single);
 var
   Mote: TParticle;
@@ -260,6 +308,7 @@ begin
       FOrbs.Delete(i);
   end;
   FDust.Advance(DustSpeedKept, 0, 0);
+  FMarks.Advance(1, 0, 0);
 end;
 
 procedure TOrbFlock.Shift(AStepX, AStepY: Single);
@@ -271,6 +320,7 @@ begin
   end;
   // The swarm shifts its frame the other way: what flies stays put
   FDust.ShiftFrame(-AStepX, -AStepY);
+  FMarks.Clear;
 end;
 
 // 0 for an orb that is not imploding, up to 1 at its last moment
@@ -326,9 +376,41 @@ begin
   end;
 end;
 
+// The streak of a mark ASpent of the way through its life, 0..1
+function MarkStreak(const AMark: TParticle; AOrigin: TSdlPoint;
+  ASpent: Single): TSdlFRect;
+begin
+  Result.W := MarkStreakLength + MarkStreakGrowth * ASpent;
+  Result.H := MarkStreakWidth;
+  if AMark.Shape = StandingMark then
+  begin
+    Result.H := Result.W;
+    Result.W := MarkStreakWidth;
+  end;
+  Result.X := AOrigin.X + AMark.X - Result.W / 2;
+  Result.Y := AOrigin.Y + AMark.Y - Result.H / 2;
+end;
+
+procedure TOrbFlock.DrawMarks(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  for var i := 0 to FMarks.Count - 1 do
+  begin
+    var Mark := FMarks[i];
+    var Spent: Single := (Mark.Age + AAlpha) / Mark.Life;
+    var Fade: Single := 1 - Spent;
+    DrawGlowRect(ACanvas.Renderer, ACanvas.PointGlow,
+      MarkStreak(Mark^, AOrigin, Spent), FTint.Glow, MarkStreakLevel * Fade);
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AOrigin.X + Mark.X,
+      AOrigin.Y + Mark.Y, MarkPuffAcross * Fade, FTint.Glow,
+      MarkPuffLevel * Fade);
+  end;
+end;
+
 procedure TOrbFlock.Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
   AAlpha: Single);
 begin
+  DrawMarks(ACanvas, AOrigin, AAlpha);
   for var Orb in FOrbs do
     if Orb.FState <> osGone then
       DrawOrb(ACanvas, Orb, AOrigin, AAlpha);
@@ -339,6 +421,7 @@ procedure TOrbFlock.Clear;
 begin
   FOrbs.Clear;
   FDust.Clear;
+  FMarks.Clear;
 end;
 
 end.

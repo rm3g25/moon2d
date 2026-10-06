@@ -128,6 +128,8 @@ type
     function DeckSpannedBefore(ALeft, ARight: Double): Boolean;
     // The point lies in the body: the deck's width across, a cell down
     function BodyHolds(AX, AY: Single): Boolean;
+    // The body as a box, in screen units
+    function Body: TSdlFRect;
     // A step of the path; AOnView - the pad is on the hero's screen
     procedure Tick(AOnView: Boolean);
     procedure Rewind;
@@ -276,6 +278,9 @@ type
     function BodyAt(AScreen: Integer; AX, AY: Single): Boolean;
     // A body at the point that bursts bullets
     function StopsBulletAt(AScreen: Integer; AX, AY: Single): Boolean;
+    // The bodies of the screen's pads standing in front: the matter of
+    // the pads. A pad in the depth is none.
+    function Bodies(AScreen: Integer): TArray<TSdlFRect>;
     // nil when no pad carries the tag
     function FindTagged(const ATag: string): TPad;
     // The boss's body struck: the pad it struck, if one, is knocked the
@@ -664,6 +669,14 @@ begin
     (AY < FTop + TileSize);
 end;
 
+function TPad.Body: TSdlFRect;
+begin
+  Result.X := FLeft;
+  Result.Y := FTop;
+  Result.W := FPlacement.Width;
+  Result.H := TileSize;
+end;
+
 function TPad.Middle: TSdlFPoint;
 begin
   Result.X := FPlacement.Width / 2;
@@ -814,6 +827,14 @@ begin
       not Pad.Behind and Pad.BodyHolds(AX, AY) then
       Exit(True);
   Result := False;
+end;
+
+function TPadWorld.Bodies(AScreen: Integer): TArray<TSdlFRect>;
+begin
+  Result := nil;
+  for var Pad in FPads do
+    if (Pad.Screen = AScreen) and not Pad.Behind then
+      Result := Result + [Pad.Body];
 end;
 
 // A pad holding a corner of the body a step on: what the pilot's walls
