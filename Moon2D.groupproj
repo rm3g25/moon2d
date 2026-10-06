@@ -13,6 +13,9 @@
         <Projects Include="tools\TitleCard\TitleCard.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Tests\Moon2D.Tests.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -50,14 +53,23 @@
     <Target Name="TitleCard:Make">
         <MSBuild Projects="tools\TitleCard\TitleCard.dproj" Targets="Make"/>
     </Target>
+    <Target Name="Moon2D_Tests">
+        <MSBuild Projects="Tests\Moon2D.Tests.dproj"/>
+    </Target>
+    <Target Name="Moon2D_Tests:Clean">
+        <MSBuild Projects="Tests\Moon2D.Tests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Moon2D_Tests:Make">
+        <MSBuild Projects="Tests\Moon2D.Tests.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="Moon2D;SpritePackCli;TitleCard"/>
+        <CallTarget Targets="Moon2D;SpritePackCli;TitleCard;Moon2D_Tests"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="Moon2D:Clean;SpritePackCli:Clean;TitleCard:Clean"/>
+        <CallTarget Targets="Moon2D:Clean;SpritePackCli:Clean;TitleCard:Clean;Moon2D_Tests:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="Moon2D:Make;SpritePackCli:Make;TitleCard:Make"/>
+        <CallTarget Targets="Moon2D:Make;SpritePackCli:Make;TitleCard:Make;Moon2D_Tests:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

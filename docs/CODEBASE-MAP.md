@@ -36,6 +36,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
+- `Tests/` - the test suite, a console project of its own (see Tests
+  below). Its folders mirror the folders of what it tries; no game unit
+  uses anything from it.
 
 Game, Hud and Menu are peers above Core and may use each other. Level events
 driven from level JSON split by that rule: the model and parser
@@ -2753,6 +2756,28 @@ repository. numpy, scipy, Pillow.
 
 ---
 
+## Tests
+
+The concept, the rules and the tables of tests are in `docs/TESTING.md`.
+
+### `Tests/` - the test suite (console app, DUnitX)
+Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
+what it draws: no window, no SDL call. Game units come in through the
+project's search path (`..\Core`, `..\Game\Orbs`); the executable goes
+to `bin\`.
+- **`Moon2D.Tests.dpr`** (~45 lines) - the runner: every registered
+  fixture, a verbose console log, the exit code (0 - green). A test that
+  asserts nothing fails.
+- **`Orbs/Tests.Orbs.Flock.pas`** (~295 lines) - **`TOrbFlockTests`**:
+  the life of an orb in a flock through its public face - the order of
+  `Add` / `Insert`, aging, the three ends (`Implode`, `Spend`,
+  `Release`), what `Tick` drops, `Shift`, `Clear`. A fixture registers
+  itself in its unit's `initialization`.
+- **`run-tests.cmd`** (repository root) - builds the Debug configuration
+  and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
+
+---
+
 ## Runtime data (`bin\`)
 
 ### `config.json` (tiny)
@@ -3048,6 +3073,7 @@ music loads leniently. Four one-shots are synthesised by
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
 | Packing or inspecting sets | tools/SpritePack/* |
+| A test: where it lives, how it is run, what is left to the eye; a new test unit | Tests/* + run-tests.cmd + docs/TESTING.md |
 | Trailer cards | tools/TitleCard/* |
 | Selene: the living moon's map for the menu | tools/Selene/* |
 | PNG loading / image DLL | Sdl2.Image.pas |
