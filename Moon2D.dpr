@@ -158,6 +158,9 @@ const
   // A monster's hitbox for a bullet: its sprite less this much on
   // either side
   HitInset = 8;
+  // An orb takes an enemy bullet nearer than this on either axis: the
+  // reach a hero's bullet intercepts one at
+  OrbReach = 6;
   // Armor struck again sooner than this answers thinner (Game.Impacts):
   // the chain gun lands every 5 ticks, a pistol every 15
   RapidHitTicks = 8;
@@ -360,6 +363,9 @@ type
     function BulletStruckWall(const ABullet: TBullet): Boolean;
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
+    function EnemyBulletNear(AX, AY: Single): TBullet;
+    function DangerousMonsterAt(AX, AY: Single): TMonster;
+    procedure ResolveOrbHits(const AFlock: TOrbFlock);
     procedure ResolveMonsterContact;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
     procedure SoundArmorHit(AThrewTracer: Boolean);
@@ -1345,12 +1351,20 @@ begin
   end;
 end;
 
+// A monster's body in honest screen units: its sprite less HitInset on
+// either side, standing on the feet line Y
+function MonsterBody(const AMonster: TMonster): TSdlFRect;
+begin
+  Result.X := AMonster.X + HitInset;
+  Result.Y := AMonster.Y - SpriteSize;
+  Result.W := SpriteSize - 2 * HitInset;
+  Result.H := SpriteSize;
+end;
+
 // Where a bullet has struck a monster's armor, in honest screen units:
 // a bullet's picture hangs a sprite above its Y, and the hitbox it has
 // just entered rises with it
 function ArmorStrike(const ABullet: TBullet; const AMonster: TMonster): TStrike;
-var
-  Armor: TSdlFRect;
 begin
   Result := Default(TStrike);
   Result.X := ABullet.X;
@@ -1359,11 +1373,7 @@ begin
   Result.SpeedY := ABullet.DY;
   Result.Rapid := AMonster.HitWithin(RapidHitTicks);
 
-  Armor.X := AMonster.X + HitInset;
-  Armor.Y := AMonster.Y - SpriteSize;
-  Armor.W := SpriteSize - 2 * HitInset;
-  Armor.H := SpriteSize;
-  TraceEntry(Result, Armor);
+  TraceEntry(Result, MonsterBody(AMonster));
   if AMonster.Disc <> nil then
     FaceFromCenter(Result, AMonster.Disc.Pose.Center);
 end;
@@ -1442,6 +1452,64 @@ begin
       FAudio.Play(PainSoundFile);
       HurtHero;
     end;
+  end;
+end;
+
+function BoxHolds(const ABox: TSdlFRect; AX, AY: Single): Boolean;
+begin
+  Result := (AX > ABox.X) and (AX < ABox.X + ABox.W) and
+    (AY > ABox.Y) and (AY < ABox.Y + ABox.H);
+end;
+
+// The enemy bullet in flight within an orb's reach of the point, nil
+// when there is none. A bullet's picture hangs a sprite above its Y:
+// the point it is met at is up there.
+function TMoonGame.EnemyBulletNear(AX, AY: Single): TBullet;
+begin
+  for var Enemy in FMonsterBullets.Bullets do
+    if (Enemy.Status = bsFlying) and (Abs(Enemy.X - AX) < OrbReach) and
+      (Abs(Enemy.Y - SpriteSize - AY) < OrbReach) then
+      Exit(Enemy);
+  Result := nil;
+end;
+
+// The dangerous monster of the hero's screen whose body holds the
+// point, nil when none does. A medkit, a weapon, a barrel are not
+// dangerous: an orb passes through them unspent.
+function TMoonGame.DangerousMonsterAt(AX, AY: Single): TMonster;
+begin
+  for var Monster in FField.Monsters do
+    if (Monster.Screen = FHero.Screen) and (Monster.Life = mlAlive) and
+      Monster.Def.Dangerous and BoxHolds(MonsterBody(Monster), AX, AY) then
+      Exit(Monster);
+  Result := nil;
+end;
+
+// An orb ends on what it meets, as a hero's bullet does: an enemy
+// bullet bursts, a dangerous monster loses a life. Not through
+// SpendBullet: armor answers an orb with no sparks and no ping.
+procedure TMoonGame.ResolveOrbHits(const AFlock: TOrbFlock);
+begin
+  for var Orb in AFlock.Orbs do
+  begin
+    if Orb.State <> osAlive then
+      Continue;
+
+    var Enemy := EnemyBulletNear(Orb.X, Orb.Y);
+    if Enemy <> nil then
+    begin
+      Enemy.StartBurst;
+      AFlock.Spend(Orb);
+      Continue;
+    end;
+
+    var Monster := DangerousMonsterAt(Orb.X, Orb.Y);
+    if Monster = nil then
+      Continue;
+    AFlock.Spend(Orb);
+    Monster.TakeDamage(0, 1, FMonsterBullets);
+    if Monster.Life = mlDying then
+      RewardMonsterKill(Monster);
   end;
 end;
 
@@ -1792,6 +1860,8 @@ begin
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
+  // Before the monster half: an orb takes a bullet ahead of the hero
+  ResolveOrbHits(FSwirl.Flock);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
   // The verdicts of the tick are in; the dead watch no events and direct

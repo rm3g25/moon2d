@@ -1,8 +1,8 @@
 ﻿{
   Orbs.Swirl - a ring of orbs set turning around the spot it was called
   at, each gone when its time is up: the plainest thing a flock can be
-  told to do. The developer's stand for the look of an orb and for its
-  two ends; no reward of the game calls it.
+  told to do. The developer's stand for the look of an orb, for its two
+  ends and for what it strikes; no reward of the game calls it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -42,6 +42,8 @@ type
     procedure Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     procedure Clear;
+    // What the orbs strike is the game's to settle
+    property Flock: TOrbFlock read FFlock;
   end;
 
 implementation
