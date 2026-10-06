@@ -51,6 +51,10 @@ type
     constructor Create(AX, AY: Single);
     // Where the owner's formula puts the orb this tick
     procedure MoveTo(AX, AY: Single);
+    // The same for an orb that keeps beside a body drawn where the tick
+    // left it, the hero: the body's step of this tick is no part of what
+    // the orb is drawn on ahead by, or it would tremble against the body
+    procedure MoveBeside(AX, AY, ABodyStepX, ABodyStepY: Single);
 
     property X: Single read FX;
     property Y: Single read FY;
@@ -78,6 +82,8 @@ type
     destructor Destroy; override;
     // The flock owns the orb from here on
     procedure Add(const AOrb: TOrb);
+    // The same, into the owner's order: before the orb at AIndex
+    procedure Insert(AIndex: Integer; const AOrb: TOrb);
     // The orb's time is up: it draws into its point and is gone
     procedure Implode(const AOrb: TOrb);
     // The orb has struck: gone at once, dust where it was
@@ -85,6 +91,9 @@ type
     // First in the owner's tick, before it moves its orbs: an orb not
     // moved after this stands still
     procedure Tick;
+    // The frame the flock flies in has become another, this far off - a
+    // door: orbs and dust are there at once, nothing is drawn flying
+    procedure Shift(AStepX, AStepY: Single);
     // AOrigin - the shake of the layer the orbs fly in
     procedure Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -155,6 +164,13 @@ begin
   FY := AY;
 end;
 
+procedure TOrb.MoveBeside(AX, AY, ABodyStepX, ABodyStepY: Single);
+begin
+  MoveTo(AX, AY);
+  FStepX := FStepX - ABodyStepX;
+  FStepY := FStepY - ABodyStepY;
+end;
+
 procedure TOrb.GrowOlder;
 begin
   Inc(FAge);
@@ -190,8 +206,13 @@ end;
 
 procedure TOrbFlock.Add(const AOrb: TOrb);
 begin
+  Insert(FOrbs.Count, AOrb);
+end;
+
+procedure TOrbFlock.Insert(AIndex: Integer; const AOrb: TOrb);
+begin
   AOrb.FBreath := FRandom.NextUnit;
-  FOrbs.Add(AOrb);
+  FOrbs.Insert(AIndex, AOrb);
 end;
 
 procedure TOrbFlock.Implode(const AOrb: TOrb);
@@ -239,6 +260,17 @@ begin
       FOrbs.Delete(i);
   end;
   FDust.Advance(DustSpeedKept, 0, 0);
+end;
+
+procedure TOrbFlock.Shift(AStepX, AStepY: Single);
+begin
+  for var Orb in FOrbs do
+  begin
+    Orb.FX := Orb.FX + AStepX;
+    Orb.FY := Orb.FY + AStepY;
+  end;
+  // The swarm shifts its frame the other way: what flies stays put
+  FDust.ShiftFrame(-AStepX, -AStepY);
 end;
 
 // 0 for an orb that is not imploding, up to 1 at its last moment
