@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.32` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.33` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -31,8 +31,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Pads.World`), the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one
   (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock (`Orbs.Flock`),
-  the harvest of spots on the matter of a screen (`Orbs.Harvest`) and the
-  hero's aura over both (`Orbs.Aura`).
+  the harvest of spots on the matter of a screen (`Orbs.Harvest`), the
+  hero's aura over both (`Orbs.Aura`) and the fire rain (`Orbs.Rain`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -79,7 +79,8 @@ drawn through `Render.Glow`) / `Orbs.Harvest` (where an aura's orbs come
 from: over `Game.Space`, `Render.Brush` and `Sdl2.Core` alone - it knows
 neither the level nor the pads) -> `Hud.Marks` /
 `Game.Henshin` / `Events.Director` / `Orbs.Aura` (the hero's aura: over
-`Orbs.Flock` and `Orbs.Harvest`) / `Pads.Arena` (the director of the
+`Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
+same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
 `Monsters.Pilot`, `Levels.Pads` and `Levels.Dynamics`) -> `Moon2D.dpr`, which also drives
 `Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
@@ -1080,8 +1081,8 @@ Monster definition model + registry (parses monsters.json). No behavior.
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table and dodge-prize validation.
 
-### `Game/Bullets.pas` (~310 lines)
-Projectiles + all the 2008 particle-hack spawners.
+### `Game/Bullets.pas` (~275 lines)
+Projectiles + the 2008 particle-hack spawners that are left.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
   formula (the travel-test record: one template, seven shapes - `DeathFan`
   here, `RageWave` / `FastFragments` / `SlowFragments` in `Monsters`,
@@ -1100,10 +1101,9 @@ Projectiles + all the 2008 particle-hack spawners.
   ice shatter / boss
   rage wave / boss victory double fan / the explosion bonus),
   `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
-  the ring wounds the boss), `SpawnFireRain` (768 slow bullets on a 16-unit
-  grid), `SpawnStaticAura` (motionless bullets = the 2008 shield hack, halved
-  to 250 in 2.1.1; the game has not called it since 3.0.31 - the aura is
-  `Orbs.Aura` now - and it stays until the fire rain turns to orbs too).
+  the ring wounds the boss). The 2008 fire rain and shield aura are not
+  here: both are orbs now (`Orbs.Rain`, `Orbs.Aura`; the record of what
+  went is in PORTING-NOTES, the session of 3.0.33).
 - Known wart: `TBurst.Draw` advances burst animation frames - it mutates
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
@@ -2005,7 +2005,7 @@ load.
   bullets, on the monsters' shake channel; the textures come from
   `FDynamics.Canvas`.
 
-### `Game/Orbs/Orbs.Flock.pas` (~425 lines)
+### `Game/Orbs/Orbs.Flock.pas` (~435 lines)
 The orbs: small lights that fly by a formula, not by ballistics, and take
 no notice of matter - no wall stops one. The look and the life of an orb
 only: where it is, its owner decides tick by tick; what it strikes, and
@@ -2028,11 +2028,13 @@ what that costs, the game does (`ResolveOrbHits` in the dpr).
 - **`TOrbFlock`** - owns the orbs in the order their owner gave them
   (`Orbs`), the dust and the marks (a `TParticleSwarm` each) and a
   `TXorShift` of its own.
-  `Add`, `Insert(index, orb)` - into the owner's order; the two ends,
+  `Add`, `Insert(index, orb)` - into the owner's order; the three ends,
   `Implode` (the time is up: `ImplodeTicks` 9 of drawing into the point,
-  with a flash) and `Spend` (it has struck: gone at once, `DustMotes` 7) -
-  both only mark the orb and `Tick` drops the gone, so they may be called
-  inside a walk over `Orbs`. `Tick` comes first in the owner's tick (ages
+  with a flash), `Spend` (it has struck: gone at once, `DustMotes` 7) and
+  `Release` (the owner lets it go: gone at once, no flash, no dust - a
+  drop that fell off the screen or sank into a floor) - all three only
+  mark the orb and `Tick` drops the gone, so they may be called inside a
+  walk over `Orbs`. `Tick` comes first in the owner's tick (ages
   the orbs, zeroes their steps, drops the gone, flies the dust): an orb
   not moved after it stands still. `MarkFace(x, y, normalX, normalY)` -
   matter gives an orb up at the point of a face: a streak of light runs
@@ -2157,6 +2159,40 @@ nothing more.
     implodes, wherever the call has it. `Clear` - the flock and the
     memory of the path (`Forget`, which an empty ring also does every
     tick, so the next cast starts from a hero at rest). `Draw`.
+
+### `Game/Orbs/Orbs.Rain.pas` (~245 lines)
+The fire rain (3.0.33): a veil of orbs poured down the hero's screen. The
+choreographer of a flock, like the aura, but with no state carried from tick
+to tick: where a drop is, is a formula of the time since its birth. The
+formulas are the stand's (the artifact "Orbs Moon2D": the rain script, `pour`
+and the rain step). What a drop strikes is the game's to settle through
+`Flock` (`ResolveOrbHits` in the dpr), as for the aura.
+- **`TDropSeed`** (record) - what a drop is born of: `StartX`, `Birth` (the
+  rain's tick), `Sway` (where in its sway it begins, radians), `Floor` (where
+  the matter of its column takes it back). **`TRainDrop`** (`TOrb`) - a seed,
+  a stage (`rsFalling`, `rsSinking`) and the ticks sunk.
+- **`TOrbRain`** - owns a `TOrbFlock` (`Flock`), the seeds not yet born and
+  its own `TXorShift` (not `Random`: that one feeds the boss spawn table).
+  `Pour(matter)` - `WaveCount` 5 waves of `DropColumns` 32 seeds (a column
+  to `DropColumnWidth` 16 units, a drop off its middle by up to half of
+  `ColumnScatter` 6); a wave follows the one before by `WaveGapTicks` 13, a
+  seed is born up to `BirthSpreadTicks` 9 later. A second pour is added to
+  the one falling, no ceiling. The floor of a column is the top of the
+  matter that reaches the bottom row of the screen (`FloorOfColumn`; only
+  solid cells - a pad is no floor, drops fall through pads and roofs); over a
+  pit it is `NoFloor` and the drop leaves the screen.
+  `Tick` - the flock first, then the births (a drop is made at the place its
+  formula puts it at that very tick, or it would be drawn on ahead by the
+  whole way), then every drop: `x = StartX + SwayReach * sin(SwayPace * age +
+  Sway)`, `y = FallStartY + FallSpeed * age` (`PlaceAt`). Below the screen by
+  `LeaveMargin` 20 a drop is released; at its floor it lands (`Land`: it is
+  not armed any more, `MarkFace` leaves a streak on the face) and sinks
+  (`Sink`: `FloorSinkTicks` 6, fading and, by `FloorShrinkTicks` 9,
+  shrinking). `Collapse` - the hero's death: the seeds not yet born are
+  dropped, every orb implodes. `Draw`, `Clear` (the flock, the seeds and the
+  rain's clock).
+- A drop falls armed all the way: the game takes bullets and dangerous
+  monsters with it as with the aura's orbs. A barrel or a medkit is passed.
 
 ### `Game/Game.Henshin.pas` (~280 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
@@ -2370,7 +2406,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2505 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2525 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2386,7 +2422,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   extra scancodes (`ScancodeS` - the drop - among them; the debug ones
   under DEBUGKEYS), the screen-shake doses
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
-  `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` - a 2026
+  `AftershockTrauma`, `BossCrashTrauma` - a 2026
   addition; the
   ceremony's own live in `Game.Henshin`), ending-screen layout rows. The
   three developer-facing errors are resourcestrings in English, outside
@@ -2568,6 +2604,15 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     included (`FAura.Carry`) - `ArriveOnScreen` leaves it alone;
     `HurtHero` collapses it on the hero's death; `LoadLevel` and
     `RestartLevel` clear it.
+    The rain: `PourRain` (the fire rain reward - `bkFireRain` in
+    `ActivateQueuedBonus` - and the H debug key: `FRain.Pour` over
+    `MatterAround`; over the corpse it does nothing; no shake, no mercy
+    window). `Update` ticks it right after the aura (`FRain.Tick`) and
+    calls `ResolveOrbHits(FRain.Flock)` after the aura's - one verdict for
+    both flocks; `Render` draws it right after the aura (`FRain.Draw`).
+    `HurtHero` collapses it (`FRain.Collapse`); `LoadLevel`,
+    `RestartLevel` and `ArriveOnScreen` clear it - a door puts the rain
+    out, as it does bullets, while the aura goes through with the hero.
   - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
@@ -2576,7 +2621,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
     else. All four exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `CastAura` (G: the aura straight
-    onto the hero, the slot untouched), `NudgeCrosshair`,
+    onto the hero, the slot untouched), `PourRain` (H: the fire rain over
+    the hero's screen, the slot untouched), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave),
@@ -2972,7 +3018,8 @@ music loads leniently. Four one-shots are synthesised by
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
 | The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, the ring's ceiling, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
 | The call of the aura: where the orbs show through (faces of cells and pads, thin air), the wait over a face, the flight, when an orb is armed, the mercy window | Orbs.Harvest.pas (the spots) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`) |
-| An orb: its look, its two ends (implosion, dust), the mark on a face, how it is drawn between ticks; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
+| The fire rain of orbs: the waves, the formula of a drop, the floor of a column (matter, a pit), landing, a second pour, the hero's death | Orbs.Rain.pas (formulas and numbers) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/ORBS-PLAN.md |
+| An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
