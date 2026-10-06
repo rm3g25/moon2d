@@ -246,7 +246,7 @@ screen dump of the dpr.
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~430 lines)
+### `Core/Render.Dynamics.pas` (~435 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst and streak glows - `Render.Glow`; the
@@ -262,7 +262,9 @@ screen dump of the dpr.
   move. A tag no object carries is a pad's or a monster's: that stand is
   looked up every tick (`FollowParent`) through **`TLocateParent`**
   (`reference to function(tag, out TParentStand)`: screen, the top-left of
-  the parent's picture, alive; for a monster that spins
+  the parent's picture, alive, `Effort` - how hard it works, 0..1: a pad
+  flying or about to leave its place works at 1, and `Tick` passes it on
+  to the object before the tick (`FollowEffort`); for a monster that spins
   also `Spins` and a `TParentSpin` - its `TSpinPose` (the axis on the
   screen, the angle in degrees clockwise) now and a tick ago, plus where the
   axis sits from the sprite's top-left) - the field is reborn on
@@ -411,7 +413,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~920 lines)
+### `Core/Levels.Defs.pas` (~1040 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -494,7 +496,24 @@ Level data model + JSON parser. No game logic.
   no entity carries, a tag carried by more than one kind, two
   objects with one tag on one screen, and (`CheckMonsterParent`) two
   entities with one tag on a shared difficulty grade (the child could not
-  tell its parent).
+  tell its parent). **`TRespawnPoint`** (record: `Screen`, `X`, `Y`) and
+  `Respawns` - where a pit and death return the hero on a screen: a cell
+  counted as an entity's is - columns and rows from 1, the feet on the
+  bottom line of the row; put there, the hero drops to the floor below.
+  JSON: `"respawns": [{"screen": 17, "x": 4, "y": 11}]`, a screen each at
+  most (`ParseRespawns`, after the pads). `TryFindRespawn(screen, out
+  point)` - False when the level names none for the screen, and the game
+  keeps the way of 2008 there: back to where the hero came in. Private
+  `CheckRespawns` refuses a point off the screen list
+  (`SLevelRespawnBadScreen`), two on one screen (`SLevelRespawnTwice`), a
+  cell off the grid (`SLevelRespawnOffGrid`), one in a wall
+  (`SLevelRespawnInWall`) and one with no floor under it
+  (`SLevelRespawnOverPit`; `RespawnHasFloor` - a wall below in the column,
+  or under the cell's middle the deck of a pad that stands still, one with
+  no path and no group: a pad that travels or is rebuilt may not be there).
+  Coming through a door moves nobody to the point; a named deviation from
+  2008, whose checkpoint was the entry point and what a heroX / heroY
+  trigger wrote.
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -604,7 +623,7 @@ mod. `FreePuffTextures`. `EPuffError`.
   (`Levels.Dynamics`) - and `Levels.Defs` uses `Levels.Dynamics`, so the
   tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~2435 lines)
+### `Core/Levels.Dynamics.pas` (~2480 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -628,7 +647,14 @@ in `CreateDynamic`.
   initial, current, target, step; `Settle`, `HeadFor(target, ticks)`,
   `Tick`. The intensity of every object, the sun of a sky globe.
 - **`TDynamicObject`** (abstract) - holds the placement and the intensity
-  (a `TValueFade`; JSON `intensity`, a percentage, 100 by default). `Tick(originX, originY, parentAlive)` works
+  (a `TValueFade`; JSON `intensity`, a percentage, 100 by default) and the
+  surge (JSON `surge`, a percentage, 0 by default): how far a parent at
+  full effort lifts the intensity toward full - the protected `Intensity`
+  every kind reads is level + (1 - level) * surge * effort, never over 1.
+  **`FollowEffort(effort)`** - how hard the parent works now, 0..1, told by
+  the renderer before the tick; the object eases there and back over
+  `EffortEaseTicks` (6) - a jet spools up, it does not switch; an object
+  nobody tells stays at rest. `Tick(originX, originY, parentAlive)` works
   out how far the origin moved since the last tick, steps the fade and
   calls the kind's protected abstract `Advance(motionX, motionY,
   parentAlive)`; `FadeTo(level, ticks)`, `Rewind` (virtual: back to the
@@ -656,7 +682,7 @@ in `CreateDynamic`.
   `Tone` - how much of its size and of its light the object being drawn
   keeps: 1 in front, less under a parent gone into the depth of the screen;
   the renderer sets them for every object, and the kinds that hang on pads
-  obey them - a beacon and a haze.
+  obey them - a beacon, a haze and a smoke.
 - **`TBeacon`** - a signal lamp: hot core (tint mixed toward white), halo,
   spill of light around (`SpillScale`), four-spike glint on the flash peak,
   optional starburst rays that stretch with the flash (`RayRestReach`); the
@@ -685,8 +711,13 @@ in `CreateDynamic`.
   old smoke curls. `flow` (`TSmokeFlow`): steady, gusty (rate modulated by
   value noise over time, knots `frequency` apart, floor `GustFloor`), puffs
   (separate clouds `frequency` a second). `heat` - a fresh puff mixes
-  toward `FireColor` and carries an additive glow for `HeatShare` of its
-  life. Intensity scales the rate and, as its square root, a puff's
+  toward the heat color and carries an additive glow of it for
+  `HeatShare` of its life: `FireColor`, or JSON `heatTint` (three
+  percentages) when the level names one - the blue of a jet; the smokes
+  the game makes itself all burn with fire (the tint is read by the JSON
+  constructor, it is not of `TSmokeLook`). In the depth (the canvas'
+  `Scale` and `Tone`) the whole plume draws in toward its point, smaller
+  and dimmer. Intensity scales the rate and, as its square root, a puff's
   density (fixed at birth, so smoke already out fades on its own when the
   events turn the source off). No emission while the parent monster is
   dead or nowhere. `Rewind` also clears the swarm (a death restarts the
@@ -1129,7 +1160,7 @@ flies the pads along them. A 2026 addition.
   never goes deep; False when a pad fits nowhere, and the formation is
   thrown again.
 
-### `Game/Pads/Pads.World.pas` (~1085 lines)
+### `Game/Pads/Pads.World.pas` (~1095 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1241,7 +1272,10 @@ rebuilds new for the new try.
     `TickFlight` puts the path's place where the flight has it, moves the
     bob's `FBobX` along and ends the flight a tick past its `Done` - the
     last tick of coming out of the depth is still drawn between the
-    ticks. `Flying`; `Settled` - in no flight, or its flight is over;
+    ticks. `Flying`; `Thrusting` - the pad works its jets hard: from
+    `ThrustLeadTicks` (10) before it leaves its place in a flight until it
+    is on its cell - the moment before is the tell of the pad about to go;
+    `Settled` - in no flight, or its flight is over;
     `Behind` - in the depth, neither a floor nor a body; `Depth(alpha)` -
     0 in front .. 1 in the depth, eased; `FlushWith(other)` - the two
     stand flush side by side where their paths or flights put them. One
@@ -1346,7 +1380,10 @@ pads fly, and in step with whom. A 2026 addition (3.0.29).
   lap (`FliesLap`), no other rebuild - the debug key's - is in the air
   and no pad of the group is knocked, then fades the group's `Alarm`
   lamps in (`FadeTagged`, `AlarmFadeInTicks` 2). `arWarning` lasts
-  `WarningTicks` (13, 0.4 s; a rebuild of another's started meanwhile -
+  `WarningTicks` (33, a second - five flashes of the lamps, and the hum of
+  tools/sounds/pads.py is made for it: 1.2 s, its tail dying under the
+  first flights; a rebuild of another's started
+  meanwhile -
   back to holding), then foresees the lap (`LapAhead`, `LapAheadTicks` =
   15 s - a whole lap even at three units a tick), asks for the rebuild
   with `ReleaseOf` as the release and fades the lamps out. `arFlying`
@@ -2144,7 +2181,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2355 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2385 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2182,7 +2219,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   game state + resume state, held-key flags (the 2008
   polled-keyboard model; `FHeldDown` - S/Down - sends `hcDrop` every
   tick, after the jump command), health + hurt cooldown, game-over timer, checkpoint
-  X/Y, score + kill streak, per-entity trigger-fired flags, the bonus slot
+  X/Y (where pits and death return the hero on the current screen: the
+  level's respawn point of the screen when it names one, else - as in
+  2008 - the entry point and what a heroX / heroY trigger wrote), score +
+  kill streak, per-entity trigger-fired flags, the bonus slot
   (+ its queued activation; `FBonusLearned` - the first reward spent - is the
   one thing that survives levels, so the HUD insists once per launch), the
   gravel trial (attack flag, quota, wave timer, screen), the
@@ -2247,7 +2287,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     through a pad that goes deep), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
     `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
-    a fraction, the stand's Y is a `Single`), alive, and how deep it
+    a fraction, the stand's Y is a `Single`), alive, its effort (1 while
+    the pad is `Thrusting` - what hangs on it surges), and how deep it
     stands (`TParentDepth`: the pad's `Depth(1)` and `Depth(0)`,
     1 - `DeepScale`, 1 - `DeepTone`, its `Middle`) - what hangs on a pad
     goes into the depth as the pad's own picture does; else the
@@ -2256,6 +2297,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     disc's last two poses with the axis in the middle of the sprite;
     `Levels.Defs` has refused a tag both carry).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
+    `PinRespawnPoint` (the level's respawn point of the hero's screen
+    becomes the checkpoint - the cell taken to the hero's corner and feet
+    line as `THero.PlaceAtCell` does; called after `FireScreenTriggers` in
+    `ArriveOnScreen`, `StartPlaying` and `RestartLevel`, so the point has
+    the last word over the entry point and over the triggers; the hero
+    himself is not moved),
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
   - Combat: `ResolveHeroBulletHits` (the bullet ends in `SpendBullet`: in
@@ -2464,7 +2511,7 @@ of the layers of a set instead of its `alive` frames: `set`, `side`,
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
 `boss` block names `dodgePrize`: `medkit`.
 
-### `level1.json` (~98 KB) / `level2.json` (~22 KB)
+### `level1.json` (~97 KB) / `level2.json` (~36 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -2475,14 +2522,20 @@ percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
 x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
 `bullets` block / pass, block when absent, optional `path` - `route`,
-`stops`, `speed`, `pause` -, `bob` and `group` - see `Levels.Pads`),
+`stops`, `speed`, `pause` -, `bob`, `group` and `rig` - the rigs it wears;
+see `Levels.Pads`),
 `padGroups` (optional: `tag`, `screen`, `zone` [left, top, right, bottom]
 in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`
-and `alarm` - the pads rebuilt together, see `Levels.Pads`), `dynamics`
+and `alarm` - the pads rebuilt together, see `Levels.Pads`), `rigs`
+(optional: named lists of dynamic objects with no place of their own, a
+number of a part may be `{"spread": [from, to]}` - see `Levels.Rigs`),
+`respawns` (optional: `screen`, `x`, `y` - the cell a pit and death
+return the hero to, counted as an entity's - see `Levels.Defs`), `dynamics`
 (optional: `kind`
-(beacon / smoke / globe / sparks / fan), `screen`, `screens` [first, last] or `parent` -
+(beacon / smoke / globe / sparks / fan / haze), `screen`, `screens`
+[first, last] or `parent` -
 a static object's, a pad's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
-`layer`, `intensity`, `turns`
+`layer`, `intensity`, `surge`, `turns`
 (under a spinning parent), then the
 kind's own properties - see `Levels.Dynamics`),
 `tilePalette`
@@ -2693,7 +2746,8 @@ music loads leniently. Four one-shots are synthesised by
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
-| Screen transitions / checkpoints | Moon2D.dpr (HandleScreenTransitions, ArriveOnScreen) |
+| Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`) + `respawns` in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`) |
+| A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Thrusting`, `ThrustLeadTicks`) + Moon2D.dpr `LocateParent` |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | A lit sphere: shading, terminator, atmosphere, night lights | Render.Globe.pas |
@@ -2701,8 +2755,8 @@ music loads leniently. Four one-shots are synthesised by
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
 | Heat haze - under a jet, over a turbine: the plume, its strength, grain and flow | `haze` in `dynamics` or in a rig of levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (the backdrop layer, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
-| What the pads wear - lamps, hazes: one list for many pads, a number rolled pad by pad | `rigs` + `"rig"` on the pads in levelN.json + Levels.Rigs.pas + Levels.Pads.pas `ReadRigs` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
-| What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
+| What the pads wear - lamps, hazes, jets: one list for many pads, a number rolled pad by pad | `rigs` + `"rig"` on the pads in levelN.json + Levels.Rigs.pas + Levels.Pads.pas `ReadRigs` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
+| What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
 | A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
 | Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
