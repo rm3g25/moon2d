@@ -32,7 +32,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_ExeOutput>..\bin</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_UnitSearchPath>..\Core;..\Game\Orbs;$(DUnitX);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\Core;..\Game;..\Game\Orbs;..\Game\Pads;$(DUnitX);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -74,6 +74,8 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Tests.Rooms.pas"/>
+        <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Flock.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

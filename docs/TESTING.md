@@ -53,6 +53,9 @@ The code style of tests is CODESTYLE 16.
 Tests\
   Moon2D.Tests.dproj      console project, DUnitX; fourth in Moon2D.groupproj
   Moon2D.Tests.dpr        the runner: verbose log, exit code
+  Tests.Rooms.pas         a room of solid cells to stand monsters in
+  Monsters\
+    Tests.Monsters.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
 run-tests.cmd             build and run
@@ -65,7 +68,8 @@ run-tests.cmd             build and run
 - A fixture registers itself in its unit's `initialization`; the unit is
   listed in `Moon2D.Tests.dpr` and in `Moon2D.Tests.dproj`.
 - Game units reach the project through its search path (`..\Core`,
-  `..\Game\Orbs`); a new folder under test is added there.
+  `..\Game`, `..\Game\Orbs`, `..\Game\Pads`); a new folder under test
+  is added there.
 - The executable goes to `bin\`, beside `SDL2.dll`: the SDL bindings are
   static imports.
 - The project's Debug configuration checks ranges and overflow, as the
@@ -227,6 +231,78 @@ matter is a floor two cells thick; the hero's center is a cell above it.
 Left to the eye: the ceremony itself (the rise out of a face, the sway,
 the spiral of the flight), the squeeze of the tail into a drop, the
 thread of a leap in flight, a ring called after an empty one.
+
+## Monsters
+
+State: written, not yet run on a compiler. The first suite over
+`Monsters.pas`: the shove of a blow (`TakeDamage`) and what it must never
+do - leave a body in a wall or hanging in the air. The rest of `TMonster` (patrol turns,
+the chase, health tiers, events) is left to a later batch. The unit is
+tried by `Tests\Monsters\Tests.Monsters.pas`, fixture `TMonsterTests`;
+the search path of the project grows by `..\Game` and `..\Game\Pads`.
+
+Shared setup, `Tests\Tests.Rooms.pas` (the monsters of every later batch
+stand in it too):
+
+- `RoomFromRows` takes twelve strings of sixteen characters, `#` a solid
+  cell, `.` an open one, as `MatterFromRows` does, and builds: a
+  one-screen `TLevel` through a temporary JSON file (`id`, `grid` 16 by
+  12, an empty `tilePalette`, `backgrounds` and `entities`, one screen
+  whose `rows` are all zeros and whose `collision` is the strings); a
+  `TPadWorld` over it - the level has no pads, so the renderer and the
+  sprite cache are `nil` and no pad ever asks them, the jump reach is
+  `nil` too; a `TMonsterRegistry` loaded from `monsters.json` beside the
+  executable. The room owns all three.
+- `Room.Place(AMonsterId, ACol, ARow)` gives a `TMonster` on that cell,
+  counted from 1 as the level file counts, its feet on the bottom line of
+  the cell. No animation set (`Default(TAnimSet)`), no disc art, lives
+  scale 1.
+- The bursts are `nil`. A monster brought to zero lives fans bullets into
+  its burst, so no test here kills one: blows are struck with `ALosses` 0,
+  and the one test that spends a life spends a single one. `Tick` takes
+  the hero at (0, 0) and a `nil` burst: the subjects never shoot.
+- A body falls slowly: it needs about a hundred and twenty ticks to drop
+  the height of the screen, so a test that waits for a landing waits a
+  hundred and fifty.
+- The subjects are `medkit` (a static pickup) and `gravel` (a patrol
+  walker). Neither carries smoke, which is made only for machines and for
+  the barrel.
+- Rooms: "floor" is the last row solid; a body standing on it has its
+  feet at y = 352. "Wall right" adds a solid column 14 over the floor
+  (its face at x = 416), "wall left" a solid column 3 (its face at
+  x = 96). "Drop" is a wall column 10 over the floor with the body put
+  at column 9, row 2, in the air. "Ledge" is solid cells on row 9,
+  columns 4 to 6 (the top at y = 256), the body put on its right end.
+- A body is flush to a wall when the edge of its art - `X + 24` going
+  right, `X + 8` going left - lies within one unit of the wall's face and
+  not inside it. 8 is the margin of the art in the 32-unit sprite, a 2008
+  number the game keeps as its hit inset, not a figure under tuning.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestKnockMovesBodyAwayByHalfTheBlow` | floor, a medkit mid-screen: a blow of 8 to the right moves it 4 units right, a blow of -8 brings it back | the recoil is cut off or the statics are held fast |
+| `TestKnockMovesWalkerToo` | the same with a gravel: it moves by half the blow | the recoil is kept for some kinds of body only |
+| `TestKnockStopsFlushAgainstRightWall` | wall right, a medkit at column 8: fifty blows of 8 and the body is flush to the wall | the body ends inside the wall (the shove asks about the cell it stands in) or stops short of it |
+| `TestKnockStopsFlushAgainstLeftWall` | wall left, a blow of -8, the same | the same on the other side: the two sides have probes of their own |
+| `TestKnocksDoNotSinkBodyDeeper` | wall right: after fifty blows the place is X; two hundred and fifty blows on, it is still X | blows pile depth up in the wall |
+| `TestFallingBodyKnockedAlongWallStillLands` | drop: a tick to start the fall, then a blow of 8 and a tick, a hundred and fifty times: the body rests on the floor (y = 352) and is not inside the wall | a sliver of the art in the wall holds a falling body in the air |
+| `TestKnockOffLedgeDropsBodyToTheFloor` | ledge: a hundred and fifty blows of 8, each with a tick: the body ends on the floor (y = 352) beyond the ledge's right end | a shove stops at an edge with nothing under it; a medkit can no longer be knocked off a floor |
+| `TestKnockKeepsBodyOnTheScreen` | floor, three hundred blows of 8: X is 482 at most; three hundred of -8 on: X is 0 at least | nothing holds a body at the edge of the screen |
+| `TestHitCostsTheLosses` | a blow with `ALosses` 1: `Lives` is one lower than before | a blow stops counting, or counts twice |
+
+Left to the eye:
+
+- The mirroring of a body at rest. Its facing has no reader outside
+  `Draw`; what made it flicker - the body hung in the air - is test 6.
+- The boss in a maneuver is not shoved: a boss needs the textures of its
+  disc.
+- A blow that kills: the fans of fragments go into a `TBurst`, which
+  needs a renderer.
+- The barrel. It carries smoke; if the smoke builds without a window the
+  first run will show it, and a barrel joins tests 1, 3 and 6 as a second
+  subject.
+- The invisible wall of a level: a solid column no art draws is art
+  against collision, and the level file is judged by a live run.
 
 ## Outside the suite
 

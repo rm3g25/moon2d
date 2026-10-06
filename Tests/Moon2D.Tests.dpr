@@ -17,6 +17,8 @@ uses
   System.SysUtils,
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
+  Tests.Rooms in 'Tests.Rooms.pas',
+  Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas';
 
 procedure RunSuite;
