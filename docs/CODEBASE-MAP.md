@@ -7,7 +7,7 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.30` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.31` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -15,7 +15,7 @@ between 3.0.8 and 3.0.9) and checked against the code section by section at
 
 The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 `Moon2D.inc` stay in the root, and every unit includes it (`{$I ..\Moon2D.inc}`;
-`{$I ..\..\Moon2D.inc}` from `Game/Events/` and `Game/Pads/`).
+`{$I ..\..\Moon2D.inc}` from `Game/Events/`, `Game/Pads/` and `Game/Orbs/`).
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
   sets, rendering (the shake included), the brush, the effects (particle
@@ -30,7 +30,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one
-  (`Pads.Arena`).
+  (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock (`Orbs.Flock`)
+  and the hero's aura over it (`Orbs.Aura`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -71,8 +72,11 @@ boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 `Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
-`Effects.Sparks` and `Levels.Dynamics`) -> `Hud.Marks` /
-`Game.Henshin` / `Events.Director` / `Pads.Arena` (the director of the
+`Effects.Sparks` and `Levels.Dynamics`) / `Orbs.Flock` (the orbs: over
+`Effects.Emitter`, `Render.Brush` and the canvas of `Levels.Dynamics`,
+drawn through `Render.Glow`) -> `Hud.Marks` /
+`Game.Henshin` / `Events.Director` / `Orbs.Aura` (the hero's aura: over
+`Orbs.Flock`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
 `Monsters.Pilot`, `Levels.Pads` and `Levels.Dynamics`) -> `Moon2D.dpr`, which also drives
 `Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
@@ -1095,7 +1099,8 @@ Projectiles + all the 2008 particle-hack spawners.
   `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
   the ring wounds the boss), `SpawnFireRain` (768 slow bullets on a 16-unit
   grid), `SpawnStaticAura` (motionless bullets = the 2008 shield hack, halved
-  to 250 in 2.1.1).
+  to 250 in 2.1.1; the game has not called it since 3.0.31 - the aura is
+  `Orbs.Aura` now - and it stays until the fire rain turns to orbs too).
 - Known wart: `TBurst.Draw` advances burst animation frames - it mutates
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
@@ -1993,6 +1998,86 @@ load.
   bullets, on the monsters' shake channel; the textures come from
   `FDynamics.Canvas`.
 
+### `Game/Orbs/Orbs.Flock.pas` (~345 lines)
+The orbs: small lights that fly by a formula, not by ballistics, and take
+no notice of matter - no wall stops one. The look and the life of an orb
+only: where it is, its owner decides tick by tick; what it strikes, and
+what that costs, the game does (`ResolveOrbHits` in the dpr).
+- **`TOrbTint`** (record) - `Core` (the white-hot point) and `Glow`.
+  `IceOrbTint` is the one tint so far: the hero's element on levels 1-2.
+- **`TOrbState`** = (`osAlive`, `osImploding`, `osGone`).
+- **`TOrb`** (class) - `X`, `Y`, `Size` and `Level` (shares 0..1 of the full
+  size and light, written by the owner - an orb coming into being), `Age`
+  (ticks), `State`. `MoveTo(x, y)` - where the owner's formula puts the orb
+  this tick; the step piles up until the flock's next tick, and between
+  ticks the orb is drawn on ahead by it, as sparks and smoke are.
+  `MoveBeside(x, y, bodyStepX, bodyStepY)` - the same for an orb that keeps
+  beside a body drawn where the tick left it (the hero): the body's step
+  is taken out of what the orb is drawn ahead by, or the ring would
+  tremble against him. An owner declares a descendant with fields of its
+  own and casts to it in one place.
+- **`TOrbFlock`** - owns the orbs in the order their owner gave them
+  (`Orbs`), the dust (a `TParticleSwarm`) and a `TXorShift` of its own.
+  `Add`, `Insert(index, orb)` - into the owner's order; the two ends,
+  `Implode` (the time is up: `ImplodeTicks` 9 of drawing into the point,
+  with a flash) and `Spend` (it has struck: gone at once, `DustMotes` 7) -
+  both only mark the orb and `Tick` drops the gone, so they may be called
+  inside a walk over `Orbs`. `Tick` comes first in the owner's tick (ages
+  the orbs, zeroes their steps, drops the gone, flies the dust): an orb
+  not moved after it stands still. `Shift(stepX, stepY)` - a door: orbs
+  and dust are in the new frame at once and nothing is drawn flying.
+  `Draw(canvas, origin, alpha)` - three point glows an orb through
+  `Render.Glow` (the halo, breathing; the body; the core), then the dust;
+  `Clear`.
+- The sizes and the lights are constants at the top of `implementation`
+  (`HaloAcross`, `BodyAcross`, `CoreAcross`, the breath, the implosion,
+  the dust).
+
+### `Game/Orbs/Orbs.Aura.pas` (~465 lines)
+The hero's aura (3.0.31): a ring of orbs on an oval around his body - at
+even gaps, slowly flowing, following him on a leash. The formulas are the
+stand's (`aura-core.js` of the "Orbs Moon2D" artifact, mode `leash`); the
+numbers are constants at the top of `implementation`. Where the orbs are
+and when their time is up, nothing more.
+- **`TOvalTrack`** (record) - an oval walked by its length: `Lay(radiusX,
+  radiusY)` lays 256 chords, `PointAt(share)` is the point that share of
+  the lap along, from the oval's center - equal shares are equal stretches
+  of the line.
+- **`TAuraOrb`** (`TOrb`) - its life, its lag (ticks behind the hero the
+  center of its oval walks his path) and its aim of a tick ago.
+- **`TAura`** - owns its flock (`Flock`: the game settles the strikes
+  through it), the track (half-axes 28 and 35), the hero's path (his
+  center tick by tick, the last 128), his course (his speed, smoothed by a
+  fifth a tick) and the flow (a lap in 330 ticks).
+  - `Cast(center)` - 60 orbs (`OrbsPerCast`), each born on its seat and
+    coming into being over `AppearTicks` 10; its life is 20 s and up to 3
+    more, its own. Over a living ring the new orbs are woven in between
+    the old, which keep their order and spread evenly through the new
+    count (`TOrbFlock.Insert`). No ceiling: every cast adds 60.
+  - `Tick(center)` - `Flock.Tick`, then `Follow` (the hero's place into
+    the path, his step into the course, a leap noticed), then every orb
+    by `Lead`. Its seat is `flow + i / count` of the lap. `ShareBehind` -
+    0 at the ring's nose, 1 at its tail, by the angle between the seat
+    and the course; 0 all round while the hero stands. `SetLag` takes the
+    orb's lag toward `TailLagTicks` 14 times that share, no faster than
+    half a tick a tick. `AimOf` - the seat on an oval whose center is
+    where the hero was that lag ago (`PathPoint`), drawn in to
+    `LeashLength` 12 of him (`Leashed`) and narrowed the farther behind it
+    is (`SqueezeLength`). `Chase` - the orb takes the step its aim has
+    made, whole, and 22% of what is left, no faster than 14 units a tick,
+    by `MoveBeside` with the hero's step. An orb past its life implodes
+    and keeps its seat until it is gone. When the count changes - a loss,
+    a cast - the orbs forget their aims and slide to the new seats.
+  - A leap - the hero's step over `LeapStep` 24, the return from a pit:
+    the lags are set at once to `ThreadLagTicks` 26 times the share and
+    held for `ThreadTicks` 52, the leash off, the orbs moved by `MoveTo`:
+    the ring pays out as a thread, nose first.
+  - `Carry(stepX, stepY)` - a door: the flock (`Shift`), the path and the
+    aims move by the hero's step, and nobody flies. `Collapse` - the
+    hero's death: every orb implodes. `Clear` - the flock and the memory
+    of the path (`Forget`, which an empty ring also does every tick, so
+    the next cast starts from a hero at rest). `Draw`.
+
 ### `Game/Game.Henshin.pas` (~280 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
 the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
@@ -2205,7 +2290,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2475 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2490 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2215,7 +2300,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   per-difficulty hero health and monster-lives multipliers, gravel trial
   cadence and monster (`GravelMonsterId`), ticker durations, damage
   bookkeeping (`HurtMercyTicks`,
-  `GameOverDelayTicks`, `PitDepthY`), the font choice (`FontFileName`,
+  `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (how near an orb takes an
+  enemy bullet), the font choice (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   extra scancodes (`ScancodeS` - the drop - among them; the debug ones
   under DEBUGKEYS), the screen-shake doses
@@ -2236,7 +2322,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   field, the shared enemy burst (`FMonsterBullets`), font, message board,
   the briefing (`THudBriefing`), the screen shake, sound bank,
   menu, the explosions and the impacts (`FExplosions`, `FImpacts`, one of
-  each for the run), the ceremony
+  each for the run), the hero's aura (`FAura: TAura`, one for the run
+  too), the ceremony
   (`THenshin`), the event director (`TEventDirector`), the arena of the
   boss fight (`FArena: TPadArena`, made before the director, which gets
   its `Engage`),
@@ -2371,10 +2458,30 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the hero's screen, honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
-    reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use). The
+    reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use; the
+    aura reward goes to `CastAura`). The
     ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (countdown) and the gravel trigger (straight in), ticked in
     `Update`, drawn last in `Render`, reset in `RestartLevel`.
+  - Orbs: `CastAura` (the aura reward and the G debug key: `FAura.Cast`
+    around `HeroCenter`, the middle of the hero's body; over the corpse it
+    does nothing). `Update` ticks the aura right after the impacts
+    (`FAura.Tick(HeroCenter)`) and calls `ResolveOrbHits(FAura.Flock)`
+    between `ResolveHeroBulletHits` and `ResolveMonsterBulletHits`, so an
+    orb takes a bullet ahead of the hero. For every orb alive: an enemy
+    bullet in flight within `OrbReach` of it on both axes
+    (`EnemyBulletNear`; a bullet's point is at its Y - `SpriteSize`)
+    bursts and the orb is spent; else a living dangerous monster of the
+    hero's screen whose body holds the orb (`DangerousMonsterAt` over the
+    free `MonsterBody` - the box `ArmorStrike` takes too - and `BoxHolds`)
+    loses a life (`TakeDamage`, `RewardMonsterKill` on its death) and the
+    orb is spent. Not through `SpendBullet`: armor answers an orb with no
+    sparks and no ping. `Render` draws the aura after the bullets, on the
+    world channel. `HandleScreenTransitions` takes it through a door by
+    the hero's whole step, the teleport of a trigger of the new screen
+    included (`FAura.Carry`) - `ArriveOnScreen` leaves it alone;
+    `HurtHero` collapses it on the hero's death; `LoadLevel` and
+    `RestartLevel` clear it.
   - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
@@ -2382,7 +2489,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
     `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
     else. All four exist in every build; their bodies compile away, so no
-    caller needs an ifdef. Behind them: `NudgeCrosshair`,
+    caller needs an ifdef. Behind them: `CastAura` (G: the aura straight
+    onto the hero, the slot untouched), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave),
@@ -2394,7 +2502,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     them past the window into a target texture of grid x `TileArtSize`
     pixels, so the picture does not depend on the window).
 - **Free functions**: `OpenWebPage`, `BonusDisplayName`, bullet cell and
-  off-screen helpers, `SaveTargetAsPng` (under DEBUGKEYS: the current
+  off-screen helpers, `MonsterBody` and `BoxHolds` (a monster's body as a
+  box in honest screen units, and whether it holds a point),
+  `SaveTargetAsPng` (under DEBUGKEYS: the current
   render target into a PNG through `IMG_SavePNG`), `ReadLevelTitle`,
   `DiscoverLevels`, `RollDiceSeed`, `RunGame` (the actual
   main: config -> language -> level discovery -> registry -> host -> game).
@@ -2774,6 +2884,8 @@ music loads leniently. Four one-shots are synthesised by
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
+| The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
+| An orb: its look, its two ends (implosion, dust), how it is drawn between ticks; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
