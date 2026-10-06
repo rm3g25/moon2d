@@ -135,6 +135,7 @@ type
     function CanGoLeftWallOnly: Boolean;    // CanIGoLeft2
     function CanGoRightWallOnly: Boolean;   // CanIGoRight2
     function CanGoDown: Boolean;
+    function ShoveBlocked(AStep: Integer): Boolean;
     procedure ShoveX(ADeltaX: Integer);
     procedure FireAt(const ABullets: TBurst);
     procedure FirePorts(const ABullets: TBurst);
@@ -815,19 +816,41 @@ begin
   end;
 end;
 
+// The cell the art of the body would reach one unit on, in every row the
+// body stands in: a body that is falling is two rows tall
+function TMonster.ShoveBlocked(AStep: Integer): Boolean;
+begin
+  var EdgeX := Round(FX) + AStep;
+  if AStep < 0 then
+    Inc(EdgeX, MonsterBound)
+  else
+    Inc(EdgeX, SpriteSize - MonsterBound - 1);
+
+  var Col := CellOfX(EdgeX);
+  for var i := CellOfY(Round(FY) - SpriteSize) to CellOfY(Round(FY) - 1) do
+    if Solid(Col, i) then
+      Exit(True);
+  Result := False;
+end;
+
 procedure TMonster.ShoveX(ADeltaX: Integer);
 begin
   // An impulse (bullet knockback) may not go anywhere walking could not:
   // the wall-only oracles probe one cell ahead of the CURRENT position,
   // so a multi-unit jump after a single check can overshoot into a solid
-  // cell. Stepping unit by unit re-asks the oracle at every position and
-  // stops exactly where MoveWalking would.
+  // cell. Stepping unit by unit re-asks the oracle at every position.
+  // The oracles answer for the cell the body stands in, so a step can
+  // leave a sliver of the art in the wall, and a body falling past rests
+  // on that sliver in mid-air: ShoveBlocked asks about the cell the step
+  // lands in.
   var StepDir := Sign(ADeltaX);
   for var i := 1 to Abs(ADeltaX) do
   begin
     if (StepDir < 0) and not CanGoLeftWallOnly then
       Exit;
     if (StepDir > 0) and not CanGoRightWallOnly then
+      Exit;
+    if ShoveBlocked(StepDir) then
       Exit;
     FX := FX + StepDir;
   end;
