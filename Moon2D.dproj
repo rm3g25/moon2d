@@ -214,6 +214,7 @@
         <DCCReference Include="Game\Orbs\Orbs.Flock.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Harvest.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Aura.pas"/>
+        <DCCReference Include="Game\Orbs\Orbs.Rain.pas"/>
         <DCCReference Include="Game\Events\Events.Director.pas"/>
         <DCCReference Include="Hud\Hud.Charge.pas"/>
         <DCCReference Include="Hud\Hud.Marks.pas"/>

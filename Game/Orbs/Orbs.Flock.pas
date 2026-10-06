@@ -5,8 +5,9 @@
   color, breathing; it is drawn in code, there is no picture of it.
 
   The flock keeps the orbs in the order their owner gave them and knows
-  the two ways an orb ends: it implodes when its time is up and goes to
-  dust when it strikes. Where an orb is the flock does not decide: the
+  the three ways an orb ends: it implodes when its time is up, goes to
+  dust when it strikes and is simply released when it has nowhere left to
+  be. Where an orb is the flock does not decide: the
   owner moves every one of its orbs each tick by its own formula. It
   draws, too, the mark a face of matter keeps where an orb came out of
   it.
@@ -97,6 +98,8 @@ type
     procedure Implode(const AOrb: TOrb);
     // The orb has struck: gone at once, dust where it was
     procedure Spend(const AOrb: TOrb);
+    // The orb is no more and leaves nothing: gone at once, no dust
+    procedure Release(const AOrb: TOrb);
     // Matter gives an orb up at the point of a face: a streak of light
     // runs out along the face and fades. The normal - a unit out of the
     // face, along one axis.
@@ -262,6 +265,11 @@ begin
     Exit;
   AOrb.FState := osGone;
   ThrowDust(AOrb.FX, AOrb.FY);
+end;
+
+procedure TOrbFlock.Release(const AOrb: TOrb);
+begin
+  AOrb.FState := osGone;
 end;
 
 procedure TOrbFlock.MarkFace(AX, AY, ANormalX, ANormalY: Single);

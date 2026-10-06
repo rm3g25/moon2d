@@ -69,6 +69,7 @@ uses
   Orbs.Flock in 'Game\Orbs\Orbs.Flock.pas',
   Orbs.Harvest in 'Game\Orbs\Orbs.Harvest.pas',
   Orbs.Aura in 'Game\Orbs\Orbs.Aura.pas',
+  Orbs.Rain in 'Game\Orbs\Orbs.Rain.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -192,6 +193,7 @@ const
   ScancodeB = 5;  // trailer frame, bare sky (menu only)
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
+  ScancodeH = 11; // pour the fire rain over the hero's screen
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
@@ -238,7 +240,6 @@ const
   ExploderTrauma = 0.4;       // barrel, tank, mount, platform
   BossBlastTrauma = 1.0;      // rage wave and the death double fan
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
-  BonusFireRainTrauma = 0.5;  // 768 embers hitting the sky at once
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
 
@@ -312,6 +313,7 @@ type
     FExplosions: TExplosions;
     FImpacts: TImpacts;
     FAura: TAura; // the hero's ring of orbs
+    FRain: TOrbRain; // the fire rain of orbs
     FArmorPings: TArmorPings;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
@@ -415,6 +417,7 @@ type
     function HeroCenter: TSdlFPoint;
     function MatterAround: TMatter;
     procedure CastAura;
+    procedure PourRain;
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
     procedure AdvanceBriefing;
@@ -472,6 +475,7 @@ begin
     EchoAftershock);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FAura := TAura.Create(IceOrbTint);
+  FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
@@ -490,6 +494,7 @@ begin
   FAudio.Free;
   FMarks.Free;
   FShake.Free;
+  FRain.Free;
   FAura.Free;
   FImpacts.Free;
   FExplosions.Free;
@@ -613,6 +618,7 @@ begin
   FExplosions.Clear;
   FImpacts.Clear;
   FAura.Clear;
+  FRain.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
   FHurtCooldown := 0;
@@ -864,6 +870,7 @@ begin
   FMonsterBullets.Clear;
   FExplosions.Clear;
   FImpacts.Clear;
+  FRain.Clear;
   FMessages.ClearPopups;
   FireScreenTriggers;
   PinRespawnPoint;
@@ -1253,6 +1260,15 @@ begin
   FHurtCooldown := HurtMercyTicks;
 end;
 
+// The rain is the hero's to call, as the aura is: over a corpse it is
+// spent on nothing
+procedure TMoonGame.PourRain;
+begin
+  if FHero.Dead then
+    Exit;
+  FRain.Pour(MatterAround);
+end;
+
 procedure TMoonGame.ActivateQueuedBonus;
 const
   HealCharges = 5;
@@ -1270,10 +1286,7 @@ begin
       for var i := 1 to HealCharges do
         CureHero;
     bkFireRain:
-      begin
-        FHero.Bullets.SpawnFireRain;
-        FShake.AddTrauma(BonusFireRainTrauma);
-      end;
+      PourRain;
     bkAura:
       CastAura;
     bkExplosion:
@@ -1561,6 +1574,7 @@ begin
   begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
     FAura.Collapse;
+    FRain.Collapse;
     FGameOverTimer := GameOverDelayTicks;
     // Dying cancels the pending exit: the door reopens when the reborn
     // hero kills the reborn boss. (2008 raced its GameOver timer against
@@ -1591,6 +1605,7 @@ begin
   FExplosions.Clear;
   FImpacts.Clear;
   FAura.Clear;
+  FRain.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
@@ -1895,11 +1910,13 @@ begin
   FExplosions.Tick;
   FImpacts.Tick;
   FAura.Tick(HeroCenter);
+  FRain.Tick;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
   // Before the monster half: an orb takes a bullet ahead of the hero
   ResolveOrbHits(FAura.Flock);
+  ResolveOrbHits(FRain.Flock);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
   // The verdicts of the tick are in; the dead watch no events and direct
@@ -1985,6 +2002,7 @@ begin
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
         FAura.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FRain.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
@@ -2222,6 +2240,8 @@ begin
       // The roulette hands the aura out once in four rewards - too
       // rare to tune against. Straight onto the hero, slot untouched.
       CastAura;
+    ScancodeH:
+      PourRain;
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
