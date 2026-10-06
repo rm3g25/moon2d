@@ -26,9 +26,10 @@
   A parent may go into the depth of its screen - a pad in a rebuild
   does. What hangs on it goes along: it draws in toward the parent's
   middle and leaves its layer for a pass of its own, DrawSunk, which the
-  game puts behind whatever stands in front; a beacon and a haze are
-  drawn smaller and darker besides (the canvas' Scale and Tone). The
-  backdrop layer alone is drawn whole: it is under everything as it is.
+  game puts behind whatever stands in front; a beacon, a haze and a
+  smoke are drawn smaller and darker besides (the canvas' Scale and
+  Tone). The backdrop layer alone is drawn whole: it is under everything
+  as it is.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }

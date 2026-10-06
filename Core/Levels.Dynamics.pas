@@ -67,8 +67,8 @@ type
     // How much of its size and of its light the object being drawn
     // keeps: 1 in front, less under a parent gone into the depth of the
     // screen - a pad in a rebuild. The renderer sets them for every
-    // object. The kinds that hang on pads obey them: a beacon and a
-    // haze.
+    // object. The kinds that hang on pads obey them: a beacon, a haze
+    // and a smoke.
     Scale: Single;
     Tone: Single;
   end;
@@ -221,7 +221,10 @@ type
   // the angle within the cone, growing and fading as they go. Once out,
   // a puff stays where it is on the screen - a moving parent leaves a
   // trail. The tint is the color at birth, endTint at death. Heat makes
-  // a fresh puff glow with fire and cool to the tint.
+  // a fresh puff glow and cool to the tint: with fire, or with heatTint
+  // when the level names one - the blue of a jet. In the depth (the
+  // canvas' Scale and Tone) the whole plume draws in toward its point,
+  // smaller and dimmer.
   // Units: rate in puffs a second, life in seconds, size and endSize in
   // screen units across, speed in units a second, lift and wind in
   // units a second per second, spin in degrees a second, frequency in
@@ -237,7 +240,7 @@ type
   //    "life": 2.2, "size": 2.5, "endSize": 24, "opacity": 38,
   //    "angle": -15, "cone": 32, "speed": 26, "drag": 8, "lift": 0,
   //    "wind": 0, "turbulence": 1, "spin": 40, "flow": "gusty",
-  //    "frequency": 0.8, "heat": 0}
+  //    "frequency": 0.8, "heat": 0, "heatTint": [45, 75, 100]}
   TSmoke = class(TDynamicObject)
   private
     FRate: Single; // puffs per tick at full intensity
@@ -253,6 +256,7 @@ type
     FFlow: TSmokeFlow;
     FFrequency: Single; // per tick
     FHeat: Single; // 0..1
+    FHeatColor: TRgb;
     FEndTint: TColorTint;
     FSwarm: TParticleSwarm;
     FRandom: TXorShift;
@@ -1343,6 +1347,9 @@ begin
   inherited Create(APlacement, AObj, AOwner);
   TakeLook(ReadSmokeLook(AObj, APlacement.Tint, AOwner),
     PlacementSeed(APlacement));
+  // Not of the look: the smokes the game makes itself all burn with fire
+  if AObj.GetValue('heatTint') <> nil then
+    FHeatColor := TintColor(ReadTint(AObj, AOwner, 'heatTint'));
 end;
 
 constructor TSmoke.CreateLook(const APlacement: TDynamicPlacement;
@@ -1372,6 +1379,7 @@ begin
   FFlow := ALook.Flow;
   FFrequency := ALook.Frequency / LogicTicksPerSecond;
   FHeat := ALook.Heat;
+  FHeatColor := FireColor;
   FEndTint := ALook.EndTint;
 
   FSeed := ASeed;
@@ -1504,25 +1512,28 @@ begin
     FadeIn := 1;
   var Remaining: Single := 1 - Share;
   var Level: Single := FOpacity * AParticle.Weight * FadeIn *
-    Power(Remaining, FadeOutPower);
+    Power(Remaining, FadeOutPower) * ACanvas.Tone;
   if Level < VisibleLevel then
     Exit;
 
   var Growth := 1 - Sqr(1 - Share);
-  var Size := Lerp(FSize, FEndSize, Growth) * AParticle.Scale;
-  var CenterX := AX + AParticle.X + AParticle.SpeedX * AAlpha;
-  var CenterY := AY + AParticle.Y + AParticle.SpeedY * AAlpha;
+  var Size := Lerp(FSize, FEndSize, Growth) * AParticle.Scale * ACanvas.Scale;
+  // AX, AY is the point the smoke leaves: in the depth the plume draws
+  // in toward it
+  var CenterX := AX + (AParticle.X + AParticle.SpeedX * AAlpha) * ACanvas.Scale;
+  var CenterY := AY + (AParticle.Y + AParticle.SpeedY * AAlpha) * ACanvas.Scale;
   var Color := Mix(TintColor(Placement.Tint), TintColor(FEndTint), Share);
   var Glow: Single := 0;
   if Share < HeatShare then
     Glow := FHeat * (1 - Share / HeatShare);
 
   DrawPuff(ACanvas.Renderer, ACanvas.Puffs[AParticle.Shape], CenterX, CenterY,
-    Size, AParticle.Angle + AParticle.Spin * AAlpha, Mix(Color, FireColor, Glow),
-    Level);
+    Size, AParticle.Angle + AParticle.Spin * AAlpha,
+    Mix(Color, FHeatColor, Glow), Level);
   if Glow > 0 then
     DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY,
-      Size * HeatGlowScale, FireColor, Glow * HeatGlowLevel * AParticle.Weight);
+      Size * HeatGlowScale, FHeatColor,
+      Glow * HeatGlowLevel * AParticle.Weight * ACanvas.Tone);
 end;
 
 procedure TSmoke.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
