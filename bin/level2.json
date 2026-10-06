@@ -1739,6 +1739,17 @@
       }
     }
   ],
+  "respawns": [
+    {"screen": 1, "x": 1, "y": 11},
+    {"screen": 2, "x": 1, "y": 2},
+    {"screen": 3, "x": 1, "y": 3},
+    {"screen": 4, "x": 1, "y": 9},
+    {"screen": 5, "x": 1, "y": 8},
+    {"screen": 6, "x": 1, "y": 9},
+    {"screen": 7, "x": 8, "y": 3},
+    {"screen": 8, "x": 1, "y": 4},
+    {"screen": 9, "x": 2, "y": 11}
+  ],
   "introText": "Транспортный узел пройден.\nСвязи по-прежнему нет - молчат\nдаже аварийные маяки.\n\nДальше путь один: служебные\nтуннели под базой. Здесь стоит\nкислородный цех и другие узлы,\nпитающие терраформирование\nЛуны.\n\nАвтоматика работает. Свет\nгорит. Конвейеры движутся.\nТолько людей нет. Нигде.\n\nА порода в глубине туннелей\nкак будто шевелится...\n",
   "introTextEn": "The transport hub is behind\nyou. Still no signal - even\nthe emergency beacons have\ngone silent.\n\nOnly one way forward: the\nservice tunnels beneath the\nbase. They house the oxygen\nplant and the other systems\nfeeding the terraforming\nof the Moon.\n\nThe machines are running.\nThe lights are on. The\nconveyors keep moving.\nBut the people are gone.\nAll of them.\n\nAnd deep in the tunnels,\nthe rock itself seems\nto stir...\n"
 }

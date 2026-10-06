@@ -281,10 +281,12 @@ type
     FField: TMonsterField;
     FHeroHealth: Integer;
     FHurtCooldown: Integer;  // brief mercy window after a hit
-    // Checkpoint ('StartHeroX/Y' of 2008): the entry point of the
-    // CURRENT screen - updated on every screen transition and, later,
-    // by heroX/heroY triggers. Pits and death return here, which is
-    // guaranteed walkable: the hero has just stood there.
+    // Checkpoint ('StartHeroX/Y' of 2008): where pits and death return
+    // the hero on the CURRENT screen. The level's respawn point of the
+    // screen when it names one (PinRespawnPoint); else, as in 2008, the
+    // entry point - updated on every screen transition and, later, by
+    // heroX/heroY triggers. The entry point is no promise of a floor: a
+    // hero who came through the door falling comes back falling.
     FCheckpointX, FCheckpointY: Double;
     FGameOverTimer: Integer; // ticks left of the death pause
     FVitals: THudVitals; // the HUD is reborn with the level
@@ -350,6 +352,7 @@ type
     procedure HandleScreenTransitions;
     procedure HandlePitFall;
     procedure ArriveOnScreen;
+    procedure PinRespawnPoint;
     function BulletStruckWall(const ABullet: TBullet): Boolean;
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
@@ -815,8 +818,25 @@ begin
   FMarks := THudMarks.Create(FRenderer);
 end;
 
-// The hero has just landed on a new screen: pin the checkpoint (pits
-// and death return here), drop what never crosses a door - bullets
+// The level's respawn point of the hero's screen becomes the
+// checkpoint: it has the last word, over the entry point of 2008 and
+// over what a heroX / heroY trigger wrote. A screen without one keeps
+// those. The hero himself is not moved.
+procedure TMoonGame.PinRespawnPoint;
+var
+  Point: TRespawnPoint;
+begin
+  if not FLevel.TryFindRespawn(FHero.Screen, Point) then
+    Exit;
+  // A cell to the hero's corner and feet line, as THero.PlaceAtCell
+  // puts the start
+  FCheckpointX := (Point.X - 1) * TileSize;
+  FCheckpointY := Point.Y * TileSize;
+end;
+
+// The hero has just landed on a new screen: pin the checkpoint - the
+// landing spot or, when the level names one, the screen's respawn point;
+// pits and death return there -, drop what never crosses a door - bullets
 // (verbatim moon.dpr 1089-1090: no shooting backwards through it) and
 // the positional popups - then greet the arrival. Triggers fire even
 // for a debug browse ('no fire rain' of review round five).
@@ -830,6 +850,7 @@ begin
   FImpacts.Clear;
   FMessages.ClearPopups;
   FireScreenTriggers;
+  PinRespawnPoint;
 end;
 
 procedure TMoonGame.HandleScreenTransitions;
@@ -843,7 +864,7 @@ begin
     Exit;
 
   // Transition blocked while the gravel trial runs and for the dead;
-  // land at x=4, checkpoint there
+  // land at x=4 - ArriveOnScreen pins the checkpoint
   if not FGravelAttack and not FHero.Dead then
   begin
     if FHero.Screen < FLevel.ScreenCount then
@@ -871,7 +892,10 @@ begin
 end;
 
 // 'Падаем в лунку' verbatim: the pit returns the hero to the
-// screen's entry point and takes one life
+// checkpoint and takes one life. In 2008 the checkpoint was the screen's
+// entry point alone; a level's respawn point now comes first - a named
+// deviation: a hero who entered a screen falling into its pit fell
+// there again and again, to his death and after it.
 procedure TMoonGame.HandlePitFall;
 begin
   if (FHero.Y > PitDepthY) and not FHero.Dead then
@@ -1222,6 +1246,7 @@ begin
   FCurrentMusic := FLevel.Music;
   FAudio.PlayMusic(FCurrentMusic, mmLoop);
   FireScreenTriggers;
+  PinRespawnPoint;
 end;
 
 // Cell mapping of the 2008 bullet block: the wall grid of the screen,
@@ -1428,9 +1453,10 @@ end;
 
 procedure TMoonGame.RestartLevel;
 begin
-  // Death rewinds to the checkpoint: the entry point of the CURRENT
-  // screen, kept fresh by transitions and heroX/heroY triggers - dying
-  // on screen 9 no longer costs the whole level. The world around it
+  // Death rewinds to the checkpoint: the respawn point of the CURRENT
+  // screen or, without one, its entry point, kept fresh by transitions
+  // and heroX/heroY triggers - dying on screen 9 no longer costs the
+  // whole level. The world around it
   // restarts in full: monsters and all, barrels regrow, gravels rise
   // again. (2008 had no respawn - death led to the menu; the checkpoint
   // only served the pits. Our auto-restart deviation now reads it too.)
@@ -1473,7 +1499,8 @@ begin
   // them); a screen that HAS one replays it via the re-arm below.
   FAudio.PlayMusic(FCurrentMusic, mmLoop);
   // Death re-enters the screen: its one-shot triggers re-arm and fire
-  // again - teleports are idempotent (the checkpoint IS their target),
+  // again - teleports are idempotent while the level keeps the screen's
+  // respawn point on their target, as both levels do,
   // captions re-introduce the place, the gravel trial rises with the
   // barrels. In 2008 once-per-game came for free - doors open one way
   // and death led to the menu; here death stays on the screen, so the
@@ -1483,6 +1510,8 @@ begin
       FTriggerFired[i] := False;
   FDirector.ReArm(FHero.Screen);
   FireScreenTriggers;
+  // The triggers have just written the checkpoint again
+  PinRespawnPoint;
 end;
 
 procedure TMoonGame.ResolveMonsterContact;

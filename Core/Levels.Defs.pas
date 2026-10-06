@@ -6,7 +6,8 @@
   (BMP names), background changes, free-form objects over the backdrop
   (art of any shape, no collision), pads - platforms apart from the grid
   (Levels.Pads) - and dynamic objects living beside them
-  (Levels.Dynamics), music, and entity placements with
+  (Levels.Dynamics), the hero's respawn points, music, and entity
+  placements with
   optional per-placement overrides (speed, lives, shooting) and triggers
   (location titles, music changes) - faithfully carrying over the
   component system the 2008 .mon format invented by accident.
@@ -114,6 +115,18 @@ type
     Tag: string;
   end;
 
+  // Where a pit and death return the hero on a screen: a cell, counted
+  // as an entity's is - columns and rows from 1, the feet on the bottom
+  // line of the row; put there, the hero drops to the floor below.
+  // Coming through the door he is not moved to it: he walks in where he
+  // walks in, and the point waits for his fall or his death. A screen
+  // without one keeps the way of 2008 - back to where he came in.
+  // JSON: "respawns": [{"screen": 17, "x": 4, "y": 11}].
+  TRespawnPoint = record
+    Screen: Integer; // 1-based
+    X, Y: Integer;
+  end;
+
   TLevel = class
   private
     FId: string;
@@ -133,6 +146,7 @@ type
     FObjects: TArray<TLevelObject>;
     FPads: TArray<TPadPlacement>;
     FPadGroups: TArray<TPadGroup>;
+    FRespawns: TArray<TRespawnPoint>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
     FDynamics: TDynamicObjects;
@@ -141,6 +155,9 @@ type
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
+    procedure ParseRespawns(const AArr: TJSONArray);
+    procedure CheckRespawns;
+    function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
     procedure CheckPads;
     procedure CheckPadGroups;
     procedure CheckPadGroup(const AGroup: TPadGroup);
@@ -170,6 +187,9 @@ type
     // Backdrop active on a given screen (last change wins); Image = ''
     // when the level defines none.
     function BackgroundFor(AScreen: Integer): TBackgroundChange;
+    // The respawn point of a screen; False when the level names none
+    function TryFindRespawn(AScreen: Integer;
+      out APoint: TRespawnPoint): Boolean;
 
     property Id: string read FId;
     property Title: TLocalizedText read FTitle;
@@ -198,6 +218,8 @@ type
     property Pads: TArray<TPadPlacement> read FPads;
     // Pads rebuilt together, in file order (Levels.Pads)
     property PadGroups: TArray<TPadGroup> read FPadGroups;
+    // Where a pit and death return the hero, a screen each at most
+    property Respawns: TArray<TRespawnPoint> read FRespawns;
     property Entities: TArray<TEntityPlacement> read FEntities;
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
@@ -273,6 +295,15 @@ resourcestring
     + 'group "%s" and is not of it';
   SLevelPadGroupBadCount = 'Level "%s": pad group "%s" has %d pads, takes '
     + '%d to %d';
+  SLevelRespawnBadScreen = 'Level "%s": a respawn point sits on screen %d '
+    + 'of %d';
+  SLevelRespawnTwice = 'Level "%s": screen %d has two respawn points';
+  SLevelRespawnOffGrid = 'Level "%s": the respawn point of screen %d names '
+    + 'the cell (%d, %d), off the grid';
+  SLevelRespawnInWall = 'Level "%s": the respawn point of screen %d stands '
+    + 'in a wall';
+  SLevelRespawnOverPit = 'Level "%s": the respawn point of screen %d has no '
+    + 'floor under it - a wall, or the deck of a pad that stands still';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -420,6 +451,9 @@ begin
   CheckPads;
   FPadGroups := ParsePadGroups(ARoot, FId);
   CheckPadGroups;
+  // After the pads: a point may stand over the deck of one
+  ParseRespawns(ARoot.GetValue<TJSONArray>('respawns', nil));
+  CheckRespawns;
   // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
   // Before the checks: the parts of a rig are dynamic objects as the
@@ -494,6 +528,93 @@ begin
       if PadGroupsTagged(FPadGroups, AAction.Target) = 0 then
         raise ELevelError.CreateFmt(SLevelEventRebuildUnknown,
           [FId, AEventId, AAction.Target]);
+  end;
+end;
+
+function TLevel.TryFindRespawn(AScreen: Integer;
+  out APoint: TRespawnPoint): Boolean;
+begin
+  APoint := Default(TRespawnPoint);
+  for var Point in FRespawns do
+    if Point.Screen = AScreen then
+    begin
+      APoint := Point;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TLevel.ParseRespawns(const AArr: TJSONArray);
+begin
+  FRespawns := [];
+  if AArr = nil then
+    Exit;
+  for var Item in AArr do
+  begin
+    var Obj := Item as TJSONObject;
+    var Point: TRespawnPoint;
+    Point.Screen := Obj.GetValue<Integer>('screen');
+    Point.X := Obj.GetValue<Integer>('x');
+    Point.Y := Obj.GetValue<Integer>('y');
+    FRespawns := FRespawns + [Point];
+  end;
+end;
+
+function RespawnsOn(const APoints: TArray<TRespawnPoint>;
+  AScreen: Integer): Integer;
+begin
+  Result := 0;
+  for var Point in APoints do
+    if Point.Screen = AScreen then
+      Inc(Result);
+end;
+
+// A wall below the cell, or under its middle the deck of a pad that
+// stands still - one with no path and no group: the hero put on the
+// cell comes to rest. A pad that travels or is rebuilt may not be there
+// when he arrives. A wall is the surer floor of the two: the boss's ram
+// knocks even a still pad aside for a moment.
+function TLevel.RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
+begin
+  var Col := APoint.X - 1;
+  for var Row := APoint.Y to FGridHeight - 1 do
+    if SolidAt(APoint.Screen, Col, Row) then
+      Exit(True);
+
+  var Middle := Col * TileSize + TileSize div 2;
+  var FeetY := APoint.Y * TileSize;
+  for var Pad in FPads do
+  begin
+    var StandsStill := (Pad.Path.Route = prNone) and (Pad.Group = '');
+    var Under := (Pad.Screen = APoint.Screen) and (Pad.Y >= FeetY) and
+      InRange(Middle, Pad.X, Pad.X + Pad.Width);
+    if StandsStill and Under then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// A point off the screen list or off the grid, two on one screen, one
+// in a wall, one over a pit - the very loop a respawn point is there to
+// break: typos all, they die at load
+procedure TLevel.CheckRespawns;
+begin
+  for var Point in FRespawns do
+  begin
+    if (Point.Screen < 1) or (Point.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelRespawnBadScreen,
+        [FId, Point.Screen, FScreenCount]);
+    if RespawnsOn(FRespawns, Point.Screen) > 1 then
+      raise ELevelError.CreateFmt(SLevelRespawnTwice, [FId, Point.Screen]);
+    var OnGrid := InRange(Point.X, 1, FGridWidth) and
+      InRange(Point.Y, 1, FGridHeight);
+    if not OnGrid then
+      raise ELevelError.CreateFmt(SLevelRespawnOffGrid,
+        [FId, Point.Screen, Point.X, Point.Y]);
+    if SolidAt(Point.Screen, Point.X - 1, Point.Y - 1) then
+      raise ELevelError.CreateFmt(SLevelRespawnInWall, [FId, Point.Screen]);
+    if not RespawnHasFloor(Point) then
+      raise ELevelError.CreateFmt(SLevelRespawnOverPit, [FId, Point.Screen]);
   end;
 end;
 
