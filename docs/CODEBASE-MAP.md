@@ -136,7 +136,7 @@ the editor and the packer read the same syntax.
   not assign to another one).
 - **`TSpriteSet`** - read side. Opening parses the manifest only; image bytes
   arrive on demand via `ReadSprite(name)`. `Contains`, `SequenceFrames`;
-  properties `Id`, `Description`, `Entries`, `Sequences`.
+  properties `FileName`, `Id`, `Description`, `Entries`, `Sequences`.
 - **`TSpriteSetWriter`** - write side. `AddSprite`/`AddSpriteFile`,
   `AddSequence`, `SaveToFile`. Offsets are handed out at save time in add
   order; writing is deterministic, so an unchanged set rebuilds byte for byte.
@@ -172,12 +172,14 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   art comes with its own alpha, and the key would punch a hole in every
   pure-black pixel of its paint - and with the linear filter; the narrower
   ones load as the cache is set (for a monster set: keyed and nearest). All
-  three apply to textures loaded after the call.
+  three apply to textures loaded after the call. `Count` - the textures
+  loaded so far.
 - **`LoadImageSurface(spriteSet, name)`** (free function) - the one place that
   turns stored bytes into a surface. Returns `nil` for a nil set or an unknown
   name; the caller words the error, since only it knows what the picture was
   for.
-- **`TAnimSet`** (record) - `Alive[0..7]` + `Death[0..7]` texture arrays;
+- **`TAnimSet`** (record) - `Alive[0..7]` + `Death[0..7]` texture arrays
+  (`TFrameIndex` indexes both);
   `IsLoaded`. Built by **`LoadAnimSet(cache, spriteSet)`** from the manifest's
   `alive` and `death` sequences, each validated to exactly eight frames -
   `TAnimSet` is the 2008 contract and it is fixed-size.
@@ -344,7 +346,8 @@ side divides by 16 - the cell size is read from the image at load.
 - **Constants**: atlas geometry (`FontAtlasSize`, `FontGridCells`,
   `FontCellPx`) + verbatim-2008 glyph metrics derived from the original's NDC
   math (`LegacyColumnWidth`, `SmallGlyphWidth/Height`, `BigGlyphWidth/Height`,
-  `BigAdvanceRatio=0.8` - 20% overlap, `BigGlyphAspect`).
+  `SmallAdvance` / `SmallLineStep` - a glyph and a row; `BigAdvanceRatio=0.8` -
+  20% overlap, giving `BigAdvance`; `BigGlyphAspect`).
 - **`TFontAtlasOrientation`** = (`faUpright`, `faRotatedCw`) - the atlas
   orientation fix.
 - **`TFontFiltering`** = (`ffLinear`, `ffNearest`, `ffLinearSmallOnly`) - how
@@ -370,7 +373,8 @@ the sound bank.
   (`sounds\`, strict: a missing file raises `EAudioError` - at startup for what
   the dpr preloads, on first `Play` for a name it did not),
   `PlayMusic`/`StopMusic` (`music\`, OGG, lenient: a missing track skips
-  silently), `ToggleMusicMuted`, `Enabled` (False when the mixer DLL is absent
+  silently), `ToggleMusicMuted` (`MusicMuted` reads it back), `Enabled`
+  (False when the mixer DLL is absent
   -> every call becomes a no-op). `MixChannels` = 32: a one-shot with no free
   channel is dropped in silence, and the chain gun's 2.4 s shots alone hold
   sixteen.
@@ -602,7 +606,8 @@ passes `SolidUnderPoint`, so the unit knows no level).
 
 ### `Core/Render.Puff.pas` (~230 lines)
 Smoke drawn instead of loaded. `CreatePuffTextures(renderer, side)` makes
-`PuffShapes` (4) ragged puffs at level load: a soft falloff eaten into by
+`PuffShapes` (4) ragged puffs (`TPuffTextures`) at level load: a soft
+falloff eaten into by
 fractal value noise (`FractalNoise`, octaves of `ValueNoise` over a
 `TXorShift`-hashed lattice), the outline bent by the same noise, white
 pixels with a mottled brightness, the shape in alpha. **Alpha blended**,
@@ -611,7 +616,7 @@ adds. `DrawPuff(renderer, texture, cx, cy, size, angle, color, level)` -
 centered, turned (`SDL_RenderCopyExF`), tint as color mod, density as alpha
 mod. `FreePuffTextures`. `EPuffError`.
 
-### `Core/Levels.Tint.pas` (~70 lines)
+### `Core/Levels.Tint.pas` (~75 lines)
 - **`TColorTint`** (record) - R/G/B multipliers in percent, applied when
   the picture is drawn; `Neutral` = 100/100/100 (as painted).
 - **`ReadTint(obj, owner, key = 'tint')`** - reads `"tint": [r, g, b]` (or
@@ -668,7 +673,8 @@ in `CreateDynamic`.
   VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
   level, ticks)`, `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
-  ticks)`, `AnyTagged(tag, kind = nil)`: what the events and the level
+  ticks)`, `AnyTagged(tag, kind = nil)` (the kind is a
+  `TDynamicObjectClass`, nil = any): what the events and the level
   checks ask.
 - **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
   textures every kind draws with + `Art` (the cache of the level's object
@@ -798,7 +804,8 @@ in `CreateDynamic`.
   level load. `rpm` is turns a minute, counterclockwise above zero and
   clockwise below: a rotor is painted turning counterclockwise, and a fan
   that turns clockwise mirrors it. The rotor blurs with its speed
-  (`DrawAt`): sharp up to `SharpUpToRpm` (40), fully smeared at
+  (`DrawAt`; a `TFanArt` holds the five pictures): sharp up to
+  `SharpUpToRpm` (40), fully smeared at
   `SmearedAtRpm` (110), a disc from `DiscFromRpm` (230), neighbors
   crossfaded - at 60 frames a second sharp blades turning fast strobe and
   seem to crawl backward. `Advance` eases the rate toward the full rate
@@ -830,7 +837,8 @@ in `CreateDynamic`.
   however wide the plume is there, and cells `HazeRowLength` (2 units)
   long) whose corners smooth noise pushes about: `RollPushes` - two layers
   of noise (`HazeLayers`: large slow eddies and small fast ones, so no wave
-  shows) carried along the flow; `PlaceVertices` - every knot stays where
+  shows) carried along the flow; `PlaceVertices` - every knot
+  (`THazeKnot`: `Across`, `Along`, `Grip`) stays where
   the plume puts it and shows the point of the backdrop its push has moved
   there, hardest in the core and not at all on the rim (`Grip` is 0 on all
   four rims: no seam by construction). A second, part-clear copy
@@ -1073,7 +1081,8 @@ Projectiles + all the 2008 particle-hack spawners.
   `FinishFan` / `ShatterFan` in `Game.Henshin`, `ExplosionFan` in
   Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
-- **`TBullet`** - position, velocity, gravity ('dyy'), burst animation frame,
+- **`TBullet`** - position (`X`, `Y`), velocity (`DX`, `DY`, writable),
+  gravity ('dyy'), burst animation frame, `Status` (writable),
   `Contact` (participates in bullet-vs-bullet interception). `Move`,
   `StartBurst`, `StartBurstSliding` (a wall hit keeps 1/8 inertia).
 - **`TBurst`** - owns a bullet list, its sprite set and its cache ('bullet' =
@@ -1118,7 +1127,7 @@ the pads `Pads.World`'s. A 2026 addition.
   of the zone across and down holds a pad (`Spread`, `ThirdOf`) and the
   hero reaches every pad jump by jump from the launch spans
   (`AllReachable`: the reach table read once into `TReachTable`,
-  `Jumps(from, to)` by the rise between the rows and the gap across,
+  `Jumps(from, to, reach)` by the rise between the rows and the gap across,
   `GapAcross`).
 - `TryAssignFormation(random, start, cells, group, out target)` -
   `target[i]` is the cell the pad on `start[i]` flies to. Up to
@@ -1138,7 +1147,8 @@ flies the pads along them. A 2026 addition.
   the two legs' distances and ticks, `CornerTicks` (the pause on the
   corner, `CornerPauseTicks` = 3; 0 for a single leg), `Depart`, `Deep`
   (flown in the depth behind the others). `Arrive` - on the cell; `Done` -
-  for a deep pad `SinkTicks` (6) later, out of the depth. `Place(tick)`;
+  for a deep pad `SinkTicks` (6) later, out of the depth.
+  `Place(tick, out x, y)`;
   `TurnsCorner(tick)` - the tick the pad comes onto its corner;
   `Behind(tick)` - in the depth, neither a floor nor a body: a deep pad
   from tick 0 to `Done`; `Depth(time)` - 0 in front .. 1 in the depth:
@@ -1147,7 +1157,8 @@ flies the pads along them. A 2026 addition.
   (14 units a tick) at most and brakes at the same rate (`RampTime`,
   `LegTime`, `LegTicks` - its time rounded up to whole ticks, `LegCovered`
   - the distance covered a tick into it).
-- `TryPlanFlights(random, start, target, loaded, release, out flights)` -
+- `TryPlanFlights(random, start, target, loaded, release, out flights)`
+  (`TPadFlights`, a flight per pad) -
   the pads are planned one by one (`PlanOrder`, `PlansBefore`: the loaded
   first, then the longest flights, then the file order), each against the
   space the planned ones hold tick by tick (`Clash`: two bodies a cell
@@ -1330,7 +1341,8 @@ rebuilds new for the new try.
   then the pads in front, which pass before both.
   `Shove(screen, blow, fence)` - the boss's ram: `PadStruck` - the pad
   holding a corner of the blow (what the pilot's walls found); none - no
-  knock. A pad on a path only rocks (`Knock(0, 0)`), and so does any pad
+  knock. A pad on a path only rocks (`Knock(0, 0, ticks)`), and so does any
+  pad
   of a screen whose group is being rebuilt (`FlyingOn`): knocked off its
   cell, it would cut into a pad landing next to it. Else unit by unit
   along the way, `KnockReach` (a cell) at most: the whole step if
@@ -1447,18 +1459,22 @@ moves in comes from `Game.Space`.
     `Lift(alpha)` of the deck underfoot, a fraction of a unit (0 with no
     deck): the units down his picture is drawn, which the feet do not
     feel.
-  - Weapon: `FBullets: TBurst`, type 0..4 (pistol / shotgun x5 / grenade
+  - Weapon: `FBullets: TBurst` (public as `Bullets`), type 0..4
+    (`WeaponType`: pistol / shotgun x5 / grenade
     cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
     barrel, so the caller barks the sound), `SetWeaponAngle` (verbatim, but
     the sine goes into `ArcSin` clamped to -1..1: feet on a fraction - a
     deck between the rows - round the distance down past the leg, and the
     NaN ended in `EIntOverflow`; a no-op on whole coordinates), `DrawWeapon`,
-    the crosshair (`DrawCrosshair` frames 1..4 = the smart cursor colors), the
-    minigun muzzle live tuner (`NudgeMinigun`, DEBUGKEYS).
+    the crosshair (`DrawCrosshair` frames 1..4 = the smart cursor colors;
+    `CrossDX` / `CrossDY` - its calibration offset), the
+    minigun muzzle live tuner (`NudgeMinigun`, DEBUGKEYS; read back through
+    `MinigunBaseX`, `MinigunBaseY`, `MinigunMuzzleLen`).
   - Lifecycle: `Command`, `Tick` (verbatim OurHero.Timer), `Draw`, `SetMouse`,
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
-    walls), `ApplyWeaponPickup`, `Kill`, `Revive`.
+    walls), `ApplyWeaponPickup`, `Kill`, `Revive`; `Dead`, `HeroForm`
+    (writable - the ceremony sets it).
 - **The arc of a jump** (3.0.29): the two steps of the 2008 arc are the
   free `RiseStep(y, acceleration)` (False once the arc has peaked) and
   `FallStep` - `RiseOneTick` / `FallOneTick` of the tick call them, the
@@ -1609,8 +1625,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   crosshair's thirds), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
   BossRage/LevelComplete/Died/BossCrashed/BossOwesPrize) - 'MessageToMain'
   of 2008, drained by the game loop every tick.
-- **`TMonster`** - position, screen, the placement's `Tag`, direction, lives
-  (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
+- **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
+  lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
   for the rest) and for an `mkBossFly` monster its `TPilot`. Its own
   collision oracles
@@ -1777,7 +1793,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   sound): one letter a tick, a line break costs a tick, an empty line between
   paragraphs pauses 12 ticks. `Start(lines)` (trailing empty lines dropped),
   `Tick` (counts even when done - the blink runs on it), `Finish`, `Done`,
-  `Shown(row)` (the typed part of a line), `CursorRow`/`CursorColumn`,
+  `Shown(row)` (the typed part of a line), `Lines`, `CursorRow`/`CursorColumn`,
   `CharCount`, `KeyStruck` (every second typed letter that is not a space),
   `CursorVisible(TBlinkPace)` (`bpTyping` 8-tick half-period, `bpOnHold` 32).
   Shared by `Hud.Terminal` and `Hud.Briefing`.
@@ -1939,7 +1955,8 @@ on a door, a death and a level load.
   `MachineExplosion` (22, 60, 130 - the tank, the platform, the boss's
   rage), `BossExplosion` (40, 120, 220, plus five barrel blasts within 24
   units over 50 ticks - the wreck keeps popping).
-- `Tick` (aftershocks, flashes, debris, plumes), `DrawSmoke(canvas, origin,
+- `Tick` (aftershocks, flashes, debris, plumes), `Clear` (all four),
+  `DrawSmoke(canvas, origin,
   alpha)` - the plumes, drawn right after the tiles, behind the figures;
   `Draw(canvas, origin, alpha)` - debris and flashes, over the bullets.
   Both on the world shake channel; the textures come from
@@ -1972,7 +1989,7 @@ load.
   (`TracerSparkLook`: next to no gravity, a springy bounce). True when a
   tracer flew - the game gives it its whine.
 - Two `TSparkField`s (`MaxSparks` 512, `MaxTracers` 16), `MaxFlashes` 16,
-  own `TXorShift`. `Tick`, `Draw(canvas, origin, alpha)` - over the
+  own `TXorShift`. `Tick`, `Clear`, `Draw(canvas, origin, alpha)` - over the
   bullets, on the monsters' shake channel; the textures come from
   `FDynamics.Canvas`.
 
@@ -2042,7 +2059,8 @@ additive, linear-filtered, so one texture serves every tint and level.
   eye of the boss's disc. `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
-The stars of the menu sky, generated, not loaded. **`TStarfield`**.
+The stars of the menu sky, generated, not loaded. **`TStarfield`** of
+`TStar` records.
 - Three depth layers (`StarLayers`: density per 10000 square units, speed
   rightward, size and brightness spans, flare share, **`ZoomShare`** - the
   share of a frame zoom the layer answers with: 0.4 / 0.7 / 1.0). Star count
@@ -2062,12 +2080,16 @@ an optional night map of the same size and a **`TGlobeLook`** (texture side,
 surface - **`TGlobeSurface`** = (`gsRegolith`, `gsMatte`); the `gs` prefix is
 shared with `TGlowShape` and the dpr's `TGameState` - axis roll and tip, night
 ambient, tint, exposure, regolith limb
-fade, atmosphere 0..1, air color, night gain).
+fade, atmosphere 0..1, air color, night gain; the ambient, the tint and the
+air color are `TGlobeChannels` - red, green, blue).
 - Startup: `LoadMap` -> `BuildPyramid` (`HalveLevel` three times: the limb
-  samples a coarser level instead of skipping texels) -> `BuildTables`
+  samples a coarser level instead of skipping texels; a level is a
+  `TMapLevel`) -> `BuildTables`
   (`PlaceTexel`: every texel of the disc gets its map row, longitude as a
-  32-bit turn, detail level, coverage and a `TGlobeNormal` - normal, limb
-  weight, air depth; with air the disc shrinks to leave room for a halo of
+  32-bit turn, detail level and coverage (a `TGlobePixel`) and a
+  `TGlobeNormal` - normal, limb
+  weight, air depth; a `TRowSpan` keeps the columns of a texture row that
+  the table covers; with air the disc shrinks to leave room for a halo of
   `AirHaloShare` radii, whose texels are `AirOnly`) -> `BuildCurves` (gain
   and tone tables, a soft `ToneKnee`). The globe is dark until lit.
 - `LightFrom(x, y, z)` - the sun in view space: every texel gets its
@@ -2079,7 +2101,8 @@ fade, atmosphere 0..1, air color, night gain).
 - `Spin(units)`, `Face(longitude)`, `DestFor(cx, cy, diameter)` (the
   square that puts the disc there, halo included), `Draw(dest, tint,
   level)` - repaints the streaming texture only after a change
-  (`PaintRow` -> `PaintGround` / `PaintAir`, inline), tint = color mod,
+  (`PaintRow` along the row's `TRowSpan` -> `PaintGround` / `PaintAir`,
+  inline, a `TGlobeTexel` each), tint = color mod,
   level = alpha mod. `Confine` replaces Max/Min/EnsureRange on Doubles:
   those have an overload per float type and an untyped literal next to a
   Double can match two. Compiled `{$O+,R-,Q-}` whatever the build: a 33 Hz
@@ -2118,7 +2141,8 @@ with air beside it is a `TEmberSeed` with the alpha slope as its normal).
   `EmberDrag` slows it, it cools `EmberBirthColor` -> `EmberDeathColor` and
   fades over the last `EmberFadeShare` of a 70..140-tick life, then is
   reborn elsewhere. Ages staggered at start. Own `TXorShift`, seed "Fire".
-- Everything in letter texels; `Draw(dest, alpha, lettersW, lettersH)` scales
+- `Tick` flies them. Everything in letter texels;
+  `Draw(dest, alpha, lettersW, lettersH)` scales
   to the units of the rectangle, so the trailer's larger logo scales its
   sparks too. Drawn with the `gsPoint` glow.
 
@@ -2181,7 +2205,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2385 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2475 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2189,7 +2213,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   rebuild - `PadHumSoundFile`, `PadClickSoundFile`, `PadClackSoundFile`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
-  cadence, ticker durations, damage bookkeeping (`HurtMercyTicks`,
+  cadence and monster (`GravelMonsterId`), ticker durations, damage
+  bookkeeping (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), the font choice (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   extra scancodes (`ScancodeS` - the drop - among them; the debug ones
@@ -2197,7 +2222,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
   `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` - a 2026
   addition; the
-  ceremony's own live in `Game.Henshin`), ending-screen layout rows.
+  ceremony's own live in `Game.Henshin`), ending-screen layout rows. The
+  three developer-facing errors are resourcestrings in English, outside
+  the dictionaries (`SNoLevelsFound`, `SSpriteSetMissing`, `SAmbiguousSprites`).
 - **Types**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (extends `TGameApp`) - holds the registry (owned by
   `RunGame`) and owns the rest: level, the
@@ -2259,7 +2286,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     over the hero's corpse (`FArena.Tick`, then `padhum.wav` on
     `Warned`), and `FDynamics` after the monsters
     and the director, so a smoking monster's puffs leave from where this
-    frame draws it), `LoadLevel` (the object cache: the
+    frame draws it), `LoadLevel` (the tile cache refuses a palette name two
+    declared sets carry - `AmbiguousNames`, `SAmbiguousSprites`; the object
+    cache: the
     level's own objects set if it ships one, then `objectSets`; handed to
     `Render.Objects`, `Pads.World` and `Render.Dynamics`; `FPads` is made
     after the objects renderer and before the dynamics - their parents may
@@ -2268,7 +2297,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     try and are not `Random`), and handed to the hero and the field; the dynamics also get a
     `TDynamicWorld` - `LocateParent`, `SolidUnderPoint` and the tile
     renderer's `Backdrop`), `OpenSpriteSet` (a named set
-    into `FLevelSets`, a missing one raises), `LevelArtSetFile` /
+    into `FLevelSets`, a missing one raises `SSpriteSetMissing`),
+    `LevelArtSetFile` /
     `OpenLevelArtSet` (the `<assetsDir>-<kind>.mset` convention of the
     backdrops and the objects in one place), `StartPlaying`,
     `RestartLevel` (the field is reborn over the same `FPads`,
@@ -2312,7 +2342,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the monster before the damage lands, `RapidHitTicks`) and a sound from
     `SoundArmorHit`: the whine of a tracer, else one of three pings at
     random, never the same twice running (`TArmorPings`, dice of its
-    own), no more than one in `ArmorSoundGapTicks`),
+    own seeded with `ArmorPingSeed`), no more than one in
+    `ArmorSoundGapTicks`),
     `ResolveMonsterBulletHits` (both burst a bullet on `BulletStruckWall`:
     the grid's cell, as before, or `StopsBulletAt` of a pad at the bullet's
     X and Y - `SpriteSize` - a bullet's picture hangs a sprite above its Y,

@@ -138,7 +138,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   такому же).
 - **`TSpriteSet`** - чтение. При открытии разбирается только манифест, байты
   картинок приходят по требованию: `ReadSprite(name)`, `Contains`,
-  `SequenceFrames`; свойства `Id`, `Description`, `Entries`, `Sequences`.
+  `SequenceFrames`; свойства `FileName`, `Id`, `Description`, `Entries`,
+  `Sequences`.
 - **`TSpriteSetWriter`** - запись. `AddSprite`/`AddSpriteFile`, `AddSequence`,
   `SaveToFile`. Смещения раздаются при сохранении в порядке добавления; запись
   детерминированная, поэтому неизменившийся набор пересобирается байт в байт.
@@ -175,11 +176,13 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   каждом чисто чёрном пикселе его краски - и с линейным фильтром; те, что
   уже, грузятся так, как настроен кэш (в наборе монстра - с ключом и
   nearest). Все три действуют на текстуры, загруженные после вызова.
+  `Count` - сколько текстур уже загружено.
 - **`LoadImageSurface(spriteSet, name)`** (свободная функция) - единственное
   место, которое превращает хранимые байты в поверхность. Возвращает `nil` для
   пустого набора или неизвестного имени; формулирует ошибку вызывающий, потому
   что только он знает, для чего была картинка.
-- **`TAnimSet`** (запись) - массивы текстур `Alive[0..7]` и `Death[0..7]`;
+- **`TAnimSet`** (запись) - массивы текстур `Alive[0..7]` и `Death[0..7]`
+  (оба индексирует `TFrameIndex`);
   `IsLoaded`. Собирается **`LoadAnimSet(cache, spriteSet)`** из
   последовательностей `alive` и `death` манифеста, каждая проверяется на ровно
   восемь кадров - `TAnimSet` это контракт 2008 с фиксированными массивами.
@@ -352,7 +355,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 - **Константы**: геометрия атласа (`FontAtlasSize`, `FontGridCells`,
   `FontCellPx`) + дословные метрики глифов 2008, выведенные из NDC-математики
   оригинала (`LegacyColumnWidth`, `SmallGlyphWidth/Height`,
-  `BigGlyphWidth/Height`, `BigAdvanceRatio=0.8` - перекрытие 20%,
+  `BigGlyphWidth/Height`, `SmallAdvance` / `SmallLineStep` - глиф и строка;
+  `BigAdvanceRatio=0.8` - перекрытие 20%, отсюда `BigAdvance`;
   `BigGlyphAspect`).
 - **`TFontAtlasOrientation`** = (`faUpright`, `faRotatedCw`) - фикс ориентации
   атласа.
@@ -380,7 +384,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   для того, что dpr прогревает, на первом `Play` для имени, которого он не
   прогревал),
   `PlayMusic`/`StopMusic` (`music\`, OGG, мягко: отсутствующий трек пропускается
-  молча), `ToggleMusicMuted`, `Enabled` (False, если DLL миксера нет - тогда все
+  молча), `ToggleMusicMuted` (читается обратно через `MusicMuted`),
+  `Enabled` (False, если DLL миксера нет - тогда все
   вызовы становятся пустышками). `MixChannels` = 32: звук, которому не
   досталось свободного канала, молча пропадает, а одни только выстрелы
   цепного ружья по 2.4 с держат шестнадцать.
@@ -620,7 +625,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 
 ### `Core/Render.Puff.pas` (~230 строк)
 Дым, который рисуется, а не грузится. `CreatePuffTextures(renderer, side)`
-при загрузке уровня делает `PuffShapes` (4) рваных клубов: мягкий спад,
+при загрузке уровня делает `PuffShapes` (4) рваных клубов
+(`TPuffTextures`): мягкий спад,
 изъеденный фрактальным шумом значений (`FractalNoise`, октавы `ValueNoise`
 по решётке, хэшированной `TXorShift`), контур изогнут тем же шумом, пиксели
 белые с пятнистой яркостью, форма в альфе. **Альфа-блендинг**, линейный
@@ -629,7 +635,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тинт как color mod,
 плотность как alpha mod. `FreePuffTextures`. `EPuffError`.
 
-### `Core/Levels.Tint.pas` (~70 строк)
+### `Core/Levels.Tint.pas` (~75 строк)
 - **`TColorTint`** (запись) - множители R/G/B в процентах, применяются при
   отрисовке картинки; `Neutral` = 100/100/100 (как нарисована).
 - **`ReadTint(obj, owner, key = 'tint')`** - читает `"tint": [r, g, b]` (или
@@ -688,7 +694,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   система координат, как в VCL: он ничем не владеет.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) -
   `FadeTagged(tag, level, ticks)`, `RewindTagged(tag)`,
-  `TurnSunTagged(tag, degrees, ticks)`, `AnyTagged(tag, kind = nil)`: то,
+  `TurnSunTagged(tag, degrees, ticks)`, `AnyTagged(tag, kind = nil)` (вид -
+  это `TDynamicObjectClass`, nil = любой): то,
   что спрашивают события и проверки уровня.
 - **`TDynamicCanvas`** (запись) - рендерер + текстуры свечения и клубов,
   которыми рисует каждый вид, + `Art` (кэш арта объектов уровня - свой
@@ -814,7 +821,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `ESpriteError` на загрузке уровня. `rpm` - обороты в минуту, больше нуля
   против часовой, меньше нуля по часовой: ротор нарисован вращающимся
   против часовой, а вентилятор по часовой его зеркалит. Ротор размывается
-  по скорости (`DrawAt`): резкий до `SharpUpToRpm` (40), целиком смазанный
+  по скорости (`DrawAt`; пять картинок держит `TFanArt`): резкий до
+  `SharpUpToRpm` (40), целиком смазанный
   на `SmearedAtRpm` (110), диск с `DiscFromRpm` (230), соседние состояния
   перетекают - при 60 кадрах в секунду резкие быстрые лопасти стробят и
   будто ползут назад. `Advance` подтягивает скорость к полной, умноженной
@@ -846,6 +854,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   единицы)), углы которого гоняет гладкий шум: `RollPushes` - два слоя
   шума (`HazeLayers`: большие медленные вихри и маленькие быстрые, так что
   волны не видно), которые несёт поток; `PlaceVertices` - каждый узел
+  (`THazeKnot`: `Across`, `Along`, `Grip`)
   стоит там, куда его ставит плюм, и показывает ту точку задника, которую
   туда сдвинул его толчок, - сильнее всего в сердцевине и вовсе нет на
   кромке (`Grip` равен 0 на всех четырёх кромках: шва нет по построению).
@@ -1088,7 +1097,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `RageWave` / `FastFragments` / `SlowFragments` в `Monsters`, `FinishFan` /
   `ShatterFan` в `Game.Henshin`, `ExplosionFan` в Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
-- **`TBullet`** - позиция, скорость, гравитация ('dyy'), кадр анимации взрыва,
+- **`TBullet`** - позиция (`X`, `Y`), скорость (`DX`, `DY`, с записью),
+  гравитация ('dyy'), кадр анимации взрыва, `Status` (с записью),
   `Contact` (участвует в перехвате пуля-в-пулю). `Move`, `StartBurst`,
   `StartBurstSliding` (удар о стену сохраняет 1/8 инерции).
 - **`TBurst`** - владеет списком пуль, своим набором спрайтов и своим кэшем
@@ -1134,7 +1144,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   высоте есть платформа (`Spread`, `ThirdOf`) и герой добирается до
   каждой платформы прыжок за прыжком со стартовых площадок
   (`AllReachable`: таблица досягаемости читается один раз в
-  `TReachTable`, `Jumps(from, to)` - по подъёму между рядами и зазору
+  `TReachTable`, `Jumps(from, to, reach)` - по подъёму между рядами и зазору
   поперёк, `GapAcross`).
 - `TryAssignFormation(random, start, cells, group, out target)` -
   `target[i]` - клетка, в которую летит платформа с `start[i]`. Пробуется
@@ -1156,7 +1166,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `CornerPauseTicks` = 3; 0 для одного отрезка), `Depart`, `Deep`
   (перелёт идёт в глубине, за остальными). `Arrive` - на клетке; `Done` -
   у платформы, летящей в глубине, на `SinkTicks` (6) позже, по выходе из
-  глубины. `Place(tick)`; `TurnsCorner(tick)` - тик, в который платформа
+  глубины. `Place(tick, out x, y)`; `TurnsCorner(tick)` - тик, в который
+  платформа
   выходит на свой угол; `Behind(tick)` - в глубине, ни пол, ни тело:
   платформа, летящая в глубине, - с тика 0 до `Done`; `Depth(time)` - от
   0 спереди до 1 в глубине: погружение за первые `SinkTicks`, всплытие
@@ -1166,7 +1177,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   (`RampTime`, `LegTime`, `LegTicks` - его время, округлённое вверх до
   целых тиков, `LegCovered` - расстояние, пройденное к тику внутри
   отрезка).
-- `TryPlanFlights(random, start, target, loaded, release, out flights)` -
+- `TryPlanFlights(random, start, target, loaded, release, out flights)`
+  (`TPadFlights`, по перелёту на платформу) -
   платформы планируются по одной (`PlanOrder`, `PlansBefore`: сначала
   гружёные, потом самые длинные перелёты, потом порядок файла), каждая -
   против места, которое уже спланированные занимают тик за тиком
@@ -1356,7 +1368,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   платформы спереди, которые проходят перед теми и другими.
   `Shove(screen, blow, fence)` - таран босса: `PadStruck` - платформа, в
   которой лежит угол удара (то, что нашли стены пилота); нет такой - нет
-  сбоя. Платформа с путём только кренится (`Knock(0, 0)`), как и любая
+  сбоя. Платформа с путём только кренится (`Knock(0, 0, ticks)`), как и
+  любая
   платформа экрана, группа которого перестраивается (`FlyingOn`): сбитая
   со своей клетки, она врезалась бы в платформу, садящуюся рядом. Иначе по
   единице вдоль удара, не дальше `KnockReach` (клетка): целый шаг, если
@@ -1477,18 +1490,22 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     `Lift(alpha)` настила под ногами, в долях единицы (0, если настила
     нет): на сколько единиц ниже рисуется картинка героя, - ноги этого не
     чувствуют.
-  - Оружие: `FBullets: TBurst`, тип 0..4 (пистолет / дробовик x5 / гранатное
+  - Оружие: `FBullets: TBurst` (наружу - `Bullets`), тип 0..4
+    (`WeaponType`: пистолет / дробовик x5 / гранатное
     облако x22 / цепь x3 / миниган с чередующимися боковыми выстрелами),
     состояние перезарядки/скорости/гравитации, `Fire: Boolean` (True = выстрел
     действительно покинул ствол, и вызывающий даёт звук), `SetWeaponAngle`
     (дословно, но синус уходит в `ArcSin` зажатым в -1..1: ноги на дроби -
     настил между рядами - округляют расстояние ниже катета, и NaN кончался
     `EIntOverflow`; на целых координатах зажим ничего не меняет),
-    `DrawWeapon`, прицел (`DrawCrosshair`, кадры 1..4 - цвета умного курсора),
-    живой тюнер дула минигана (`NudgeMinigun`, DEBUGKEYS).
+    `DrawWeapon`, прицел (`DrawCrosshair`, кадры 1..4 - цвета умного курсора;
+    `CrossDX` / `CrossDY` - его калибровочное смещение),
+    живой тюнер дула минигана (`NudgeMinigun`, DEBUGKEYS; читается обратно
+    через `MinigunBaseX`, `MinigunBaseY`, `MinigunMuzzleLen`).
   - Жизненный цикл: `Command`, `Tick` (дословно OurHero.Timer), `Draw`,
     `SetMouse`, `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (по единице,
-    останавливается о стену), `ApplyWeaponPickup`, `Kill`, `Revive`.
+    останавливается о стену), `ApplyWeaponPickup`, `Kill`, `Revive`; `Dead`,
+    `HeroForm` (с записью - его выставляет церемония).
 - **Дуга прыжка** (3.0.29): два шага дуги 2008 - свободные
   `RiseStep(y, acceleration)` (False, как только дуга прошла вершину) и
   `FallStep` - их зовут `RiseOneTick` / `FallOneTick` тика, числа
@@ -1641,8 +1658,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   (meNone/BossWantsMinion/Henshin/BossRage/LevelComplete/Died/BossCrashed/
   BossOwesPrize) - 'MessageToMain' из 2008, игровой цикл вычерпывает их
   каждый тик.
-- **`TMonster`** - позиция, экран, `Tag` расстановки, направление, жизни
-  (+`LivesAll`), кадр анимации, шаг, таймер огня, флаг ярости (`Enraged`), таймер миньонов босса, одноразовый
+- **`TMonster`** - позиция, экран, `Tag` расстановки, направление, `Life`,
+  жизни (+`LivesAll`), кадр анимации, шаг, таймер огня, флаг ярости (`Enraged`), таймер миньонов босса, одноразовый
   флаг хеншина, список событий, у монстра-диска - его `TDisc` (`Disc`, у
   остальных nil), у монстра `mkBossFly` - его `TPilot`. Собственные оракулы
   коллизий (пары
@@ -1808,7 +1825,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   отрисовки, ни звука): буква за тик, перевод строки стоит тик, пустая строка
   между абзацами - пауза 12 тиков. `Start(lines)` (хвостовые пустые строки
   отбрасываются), `Tick` (считает и после конца - на нём мигание), `Finish`,
-  `Done`, `Shown(row)` (напечатанная часть строки), `CursorRow`/`CursorColumn`,
+  `Done`, `Shown(row)` (напечатанная часть строки), `Lines`,
+  `CursorRow`/`CursorColumn`,
   `CharCount`, `KeyStruck` (каждая вторая напечатанная буква, не пробел),
   `CursorVisible(TBlinkPace)` (`bpTyping` - полупериод 8 тиков, `bpOnHold` -
   32). Общий для `Hud.Terminal` и `Hud.Briefing`.
@@ -1969,7 +1987,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `MachineExplosion` (22, 60, 130 - танк, платформа, ярость босса),
   `BossExplosion` (40, 120, 220 плюс пять бочечных хлопков в радиусе 24
   за 50 тиков - обломки догорают).
-- `Tick` (дохлопывания, вспышки, обломки, плюмы), `DrawSmoke(canvas,
+- `Tick` (дохлопывания, вспышки, обломки, плюмы), `Clear` (все четыре),
+  `DrawSmoke(canvas,
   origin, alpha)` - плюмы, сразу после тайлов, за фигурами;
   `Draw(canvas, origin, alpha)` - обломки и вспышки, поверх пуль. Оба на
   канале тряски мира; текстуры - из `FDynamics.Canvas`. Свой `TXorShift`
@@ -2001,7 +2020,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   по рикошету (`TracerSparkLook`: почти без гравитации, упругий отскок).
   True, если улетел трассер, - игра даёт ему визг.
 - Два `TSparkField` (`MaxSparks` 512, `MaxTracers` 16), `MaxFlashes` 16,
-  свой `TXorShift`. `Tick`, `Draw(canvas, origin, alpha)` - поверх пуль, на
+  свой `TXorShift`. `Tick`, `Clear`, `Draw(canvas, origin, alpha)` - поверх
+  пуль, на
   канале тряски монстров; текстуры - из `FDynamics.Canvas`.
 
 ### `Game/Game.Henshin.pas` (~280 строк)
@@ -2070,7 +2090,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 строк)
-Звёзды неба меню, сгенерированные, не загруженные. **`TStarfield`**.
+Звёзды неба меню, сгенерированные, не загруженные. **`TStarfield`** из
+записей `TStar`.
 - Три слоя глубины (`StarLayers`: плотность на 10000 кв. юнитов, скорость
   вправо, диапазоны размера и яркости, доля флейров, **`ZoomShare`** - доля
   зума кадра, которой слой отвечает: 0.4 / 0.7 / 1.0). Число звёзд =
@@ -2092,12 +2113,16 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 (`gsRegolith`, `gsMatte`); префикс `gs` общий с `TGlowShape` и `TGameState`
 из dpr, - крен и наклон оси,
 ночной фон, тинт, экспозиция, затухание лимба реголита, атмосфера 0..1,
-цвет воздуха, яркость ночной карты).
+цвет воздуха, яркость ночной карты; ночной фон, тинт и цвет воздуха -
+`TGlobeChannels`: красный, зелёный, синий).
 - Старт: `LoadMap` -> `BuildPyramid` (трижды `HalveLevel`: лимб берёт
-  более грубый уровень вместо пропуска текселей) -> `BuildTables`
+  более грубый уровень вместо пропуска текселей; уровень - это
+  `TMapLevel`) -> `BuildTables`
   (`PlaceTexel`: каждый тексель диска получает строку карты, долготу как
-  32-битный оборот, уровень детализации, покрытие и `TGlobeNormal` -
-  нормаль, вес лимба, глубину воздуха; с воздухом диск уменьшается, оставляя
+  32-битный оборот, уровень детализации и покрытие (`TGlobePixel`) и
+  `TGlobeNormal` -
+  нормаль, вес лимба, глубину воздуха; `TRowSpan` хранит столбцы строки
+  текстуры, которые покрывает таблица; с воздухом диск уменьшается, оставляя
   место ореолу в `AirHaloShare` радиуса, его тексели - `AirOnly`) ->
   `BuildCurves` (таблицы усиления и тона, мягкое колено `ToneKnee`). Пока не
   освещён, глобус тёмный.
@@ -2109,8 +2134,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   земли она прячет (`Clear`) и плотность ореола.
 - `Spin(units)`, `Face(longitude)`, `DestFor(cx, cy, diameter)` (квадрат,
   который ставит туда диск вместе с ореолом), `Draw(dest, tint, level)` -
-  перерисовывает streaming-текстуру только после изменений (`PaintRow` ->
-  `PaintGround` / `PaintAir`, inline), tint - color mod, level - alpha mod.
+  перерисовывает streaming-текстуру только после изменений (`PaintRow` по
+  `TRowSpan` строки -> `PaintGround` / `PaintAir`, inline, по `TGlobeTexel`
+  на каждый), tint - color mod, level - alpha mod.
   `Confine` вместо Max/Min/EnsureRange на Double: у тех перегрузка на
   каждый вещественный тип, и нетипизированный литерал рядом с Double
   подходит к двум. Компилируется `{$O+,R-,Q-}` в любой конфигурации: обход
@@ -2149,7 +2175,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   тормозит, остывает `EmberBirthColor` -> `EmberDeathColor` и гаснет на
   последней `EmberFadeShare` жизни в 70..140 тиков, потом рождается в другом
   месте. Возрасты на старте разбросаны. Свой `TXorShift`, seed "Fire".
-- Всё в текселях букв; `Draw(dest, alpha, lettersW, lettersH)` масштабирует в
+- `Tick` двигает их. Всё в текселях букв;
+  `Draw(dest, alpha, lettersW, lettersH)` масштабирует в
   юниты прямоугольника, так что крупный логотип трейлера масштабирует и
   искры. Рисуется точкой `gsPoint`.
 
@@ -2213,7 +2240,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2385 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~2475 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
@@ -2222,7 +2249,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `PadClackSoundFile`),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   здоровье героя и множители жизней монстров по сложности, темп испытания
-  грейвелов, длительности тикера, учёт урона (`HurtMercyTicks`,
+  грейвелов и его монстр (`GravelMonsterId`), длительности тикера, учёт
+  урона (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), выбор шрифта (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   дополнительные сканкоды (среди них `ScancodeS` - спрыгнуть; дебажные -
@@ -2230,7 +2258,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
   `BonusFireRainTrauma`, `AftershockTrauma`, `BossCrashTrauma` -
   добавление 2026; дозы
-  церемонии живут в `Game.Henshin`), строки макета финального экрана.
+  церемонии живут в `Game.Henshin`), строки макета финального экрана. Три
+  ошибки для разработчика - resourcestring на английском, вне словарей
+  (`SNoLevelsFound`, `SSpriteSetMissing`, `SAmbiguousSprites`).
 - **Типы**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (наследует `TGameApp`) - держит реестр (владеет им
   `RunGame`) и владеет остальным: уровень, наборы
@@ -2288,7 +2318,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     `Warned`), а `FDynamics` - после монстров и
     директора, чтобы
     клубы дымящего монстра выходили оттуда, где его рисует этот кадр),
-    `LoadLevel` (кэш объектов: собственный набор объектов уровня, если он
+    `LoadLevel` (кэш тайлов отказывает имени палитры, которое несут два
+    объявленных набора, - `AmbiguousNames`, `SAmbiguousSprites`; кэш
+    объектов: собственный набор объектов уровня, если он
     есть, затем `objectSets`; отдаётся в `Render.Objects`, `Pads.World` и
     `Render.Dynamics`; `FPads` создаётся после рендерера объектов и до
     динамики - её родителями могут быть платформы, - с `JumpReach` из
@@ -2297,7 +2329,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     герою и полю; динамика получает ещё `TDynamicWorld` -
     `LocateParent`, `SolidUnderPoint` и `Backdrop` рендерера тайлов),
     `OpenSpriteSet` (названный набор в `FLevelSets`,
-    отсутствующий - ошибка), `LevelArtSetFile` / `OpenLevelArtSet`
+    отсутствующий - ошибка `SSpriteSetMissing`), `LevelArtSetFile` /
+    `OpenLevelArtSet`
     (соглашение `<assetsDir>-<вид>.mset` задников и объектов в одном месте),
     `StartPlaying`,
     `RestartLevel` (поле рождается заново над тем же `FPads`,
@@ -2343,7 +2376,8 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
     (честные экранные единицы, хитбокс коробкой, `HitInset`; `Rapid`
     спрашивается у монстра до урона, `RapidHitTicks`), и звуком из
     `SoundArmorHit`: визг трассера, иначе один из трёх звонов случайно, но
-    не тот же дважды подряд (`TArmorPings`, свои кости), не чаще одного
+    не тот же дважды подряд (`TArmorPings`, свои кости с зерном
+    `ArmorPingSeed`), не чаще одного
     за `ArmorSoundGapTicks`), `ResolveMonsterBulletHits` (оба разрывают
     пулю по `BulletStruckWall`: клетка сетки, как прежде, или
     `StopsBulletAt` платформы в точке X пули и Y - `SpriteSize` - картинка
@@ -2790,7 +2824,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Всё, что светится аддитивно | Render.Glow.pas |
 | Марево от жара - под струёй, над турбиной: плюм, его сила, зерно и поток | `haze` в `dynamics` или в обвесе в levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (слой задника, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
 | То, что носят платформы, - лампы, марева, струи: один список на много платформ, число, брошенное для каждой платформы своё | `rigs` + `"rig"` у платформ в levelN.json + Levels.Rigs.pas + Levels.Pads.pas `ReadRigs` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
-| То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, порядок в `Render`) |
+| То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, порядок в `Render`) |
 | Динамический объект (маячок, его мигание, лучи); новый вид; подвесить к статическому объекту | `dynamics` в levelN.json + Levels.Dynamics.pas (виды, парсер) + Render.Dynamics.pas (где стоит, слой) (+`tag` у `objects`) |
 | Отрисовка текста / новые подписи | Render.Font.pas + Hud.Messages.pas + ключ `S*` в Localization.pas + оба JSON языков |
 | Подсказки уровня / терминал связи | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня) |
