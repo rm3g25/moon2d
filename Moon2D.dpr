@@ -1072,6 +1072,10 @@ begin
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     AStand.Alive := True;
+    // A pad flying, or about to leave its place, works its jets hard:
+    // what hangs on it surges
+    if Pad.Thrusting then
+      AStand.Effort := 1;
     // Into the depth as the pad's own picture goes: the same depth at
     // the two ticks, the same shrink and shade, about the same point
     AStand.Depth.Sunk := Pad.Depth(1);

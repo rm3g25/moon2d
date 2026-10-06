@@ -144,6 +144,10 @@ type
     function Flying: Boolean;
     // In no flight, or its flight is over
     function Settled: Boolean;
+    // The pad works its jets hard: from a moment before it leaves its
+    // place in a flight until it is on its cell. The moment before is
+    // the tell of the pad about to go.
+    function Thrusting: Boolean;
     // The two stand flush side by side where their paths or flights put
     // them
     function FlushWith(const AOther: TPad): Boolean;
@@ -329,6 +333,8 @@ const
   // A flying pad stills its bob over this many ticks and takes it up
   // again over as many on its cell
   BobFadeTicks = 10;
+  // A pad's jets flare this many ticks before it leaves its place
+  ThrustLeadTicks = 10;
   // A rebuild throws this many formations at most - screen 17 needs some
   // 70 at the most, a dozen on average -, then falls back on the level
   // file's own, which the level is laid out to pass the judge
@@ -558,6 +564,12 @@ end;
 function TPad.Flying: Boolean;
 begin
   Result := FFlightClock <> NoFlight;
+end;
+
+function TPad.Thrusting: Boolean;
+begin
+  Result := Flying and (FFlightClock >= FFlight.Depart - ThrustLeadTicks) and
+    (FFlightClock <= FFlight.Arrive);
 end;
 
 function TPad.Settled: Boolean;

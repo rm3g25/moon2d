@@ -21,7 +21,10 @@
 
   Intensity is the property the level's events change in every kind:
   an event names the tag and the new level, and the object fades there.
-  The sun of a globe turns the same way.
+  The sun of a globe turns the same way. A parent that works hard - a
+  pad flying, or about to leave its place - lifts the intensity of what
+  hangs on it toward full, as far as the object's surge says: jets
+  flare.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -84,7 +87,8 @@ type
   // "x", "y" and optional "tint", "tag" (the name events use),
   // "layer" ("backdrop", "sky", "back" or "front"; each kind has its own
   // default) and "turns" (true: the point turns with a parent that spins
-  // - a lamp on the boss's disc).
+  // - a lamp on the boss's disc). Beside the placement every kind reads
+  // "intensity" and "surge", percentages (TDynamicObject).
   TDynamicPlacement = record
     Screen: Integer; // 1-based; 0 under a parent, which decides it
     LastScreen: Integer; // = Screen unless "screens" spans a run
@@ -113,22 +117,35 @@ type
   private
     FPlacement: TDynamicPlacement;
     FIntensity: TValueFade; // 0..1
+    // How far a parent at full effort lifts the intensity toward 1, 0..1;
+    // and the parent's effort as the object has come to feel it
+    FSurge: Single;
+    FEffort: TValueFade;
     FOrigin: TSdlFPoint;
     FOriginKnown: Boolean;
+    function GetIntensity: Single;
   protected
     // AMotionX/AMotionY - how far the origin moved since the last tick
     procedure Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
       virtual; abstract;
     procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
       AAlpha: Single); virtual; abstract;
-    property Intensity: Single read FIntensity.Current;
+    // What the level file and the events have set, lifted by the surge
+    // while the parent works
+    property Intensity: Single read GetIntensity;
   public
     // AIntensity 0..1
     constructor Create(const APlacement: TDynamicPlacement;
       AIntensity: Single); overload;
-    // JSON: "intensity", a percentage, 100 by default
+    // JSON: "intensity", a percentage, 100 by default; "surge", a
+    // percentage of the way from the intensity to full that a parent at
+    // full effort lifts the object, 0 by default
     constructor Create(const APlacement: TDynamicPlacement;
       AObj: TJSONObject; const AOwner: string); overload;
+    // How hard the parent works now, 0..1 - the game says when a pad
+    // does. Told before the tick; the object eases toward it over a few
+    // ticks. An object nobody tells stays at rest.
+    procedure FollowEffort(AEffort: Single);
     // AOriginX/AOriginY - the corner the placement counts from, shake
     // left out. AParentAlive is False while a parent monster is dead or
     // nowhere to be found.
@@ -633,6 +650,9 @@ const
   // Seconds and percentages in JSON, ticks and shares in the code; the
   // logic runs 33 ticks a second (tickRate of Game.Config)
   LogicTicksPerSecond = 33;
+  // An object comes to feel its parent's effort, and to forget it, over
+  // this many ticks: a jet spools up, it does not switch
+  EffortEaseTicks = 6;
 
 resourcestring
   SDynamicBadKind = 'Level "%s": dynamic object %s: unknown kind "%s"';
@@ -1105,6 +1125,19 @@ constructor TDynamicObject.Create(const APlacement: TDynamicPlacement;
   AObj: TJSONObject; const AOwner: string);
 begin
   Create(APlacement, ReadShare(AObj, 'intensity', 100, AOwner));
+  FSurge := ReadShare(AObj, 'surge', 0, AOwner);
+end;
+
+function TDynamicObject.GetIntensity: Single;
+begin
+  var Level := FIntensity.Current;
+  Result := Level + (1 - Level) * FSurge * FEffort.Current;
+end;
+
+procedure TDynamicObject.FollowEffort(AEffort: Single);
+begin
+  if AEffort <> FEffort.Target then
+    FEffort.HeadFor(AEffort, EffortEaseTicks);
 end;
 
 procedure TDynamicObject.Tick(AOriginX, AOriginY: Single;
@@ -1122,6 +1155,7 @@ begin
   FOriginKnown := True;
 
   FIntensity.Tick;
+  FEffort.Tick;
   Advance(MotionX, MotionY, AParentAlive);
 end;
 
@@ -1133,6 +1167,7 @@ end;
 procedure TDynamicObject.Rewind;
 begin
   FIntensity.Settle(FIntensity.Initial);
+  FEffort.Settle(0);
   ForgetOrigin;
 end;
 

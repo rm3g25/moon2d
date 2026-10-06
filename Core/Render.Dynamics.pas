@@ -71,11 +71,13 @@ type
   end;
 
   // A parent looked up this tick: its screen, the top-left corner of its
-  // picture, and whether it still lives; Spin only when Spins
+  // picture, whether it still lives and how hard it works, 0..1 - a pad
+  // flying, or about to leave its place, works at 1; Spin only when Spins
   TParentStand = record
     Screen: Integer;
     X, Y: Single;
     Alive: Boolean;
+    Effort: Single;
     Spins: Boolean;
     Spin: TParentSpin;
     Depth: TParentDepth;
@@ -111,6 +113,7 @@ type
       Stands: TArray<TStand>;
       FollowsParent: Boolean;
       ParentAlive: Boolean;
+      ParentEffort: Single;
       LeadScreen: Integer; // the stand the last tick counted from
     end;
 
@@ -278,6 +281,7 @@ begin
   if not FLocateParent(APlace.DynamicObject.Placement.Parent, Parent) then
   begin
     APlace.ParentAlive := False;
+    APlace.ParentEffort := 0;
     Exit;
   end;
   SetLength(APlace.Stands, 1);
@@ -288,6 +292,7 @@ begin
   APlace.Stands[0].Spin := Parent.Spin;
   APlace.Stands[0].Depth := Parent.Depth;
   APlace.ParentAlive := Parent.Alive;
+  APlace.ParentEffort := Parent.Effort;
 end;
 
 // The corner the object counts from. One that turns with a spinning
@@ -361,6 +366,7 @@ begin
     FPlaces[i].LeadScreen := Lead.Screen;
     FInView := Lead.Screen = AScreen;
     var Origin := OriginOf(FPlaces[i], Lead, ThisTick);
+    FPlaces[i].DynamicObject.FollowEffort(FPlaces[i].ParentEffort);
     FPlaces[i].DynamicObject.Tick(Origin.X, Origin.Y, FPlaces[i].ParentAlive);
   end;
 end;
