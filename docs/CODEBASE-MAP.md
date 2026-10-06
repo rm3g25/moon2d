@@ -2173,9 +2173,9 @@ and the rain step). What a drop strikes is the game's to settle through
   a stage (`rsFalling`, `rsSinking`) and the ticks sunk.
 - **`TOrbRain`** - owns a `TOrbFlock` (`Flock`), the seeds not yet born and
   its own `TXorShift` (not `Random`: that one feeds the boss spawn table).
-  `Pour(matter)` - `WaveCount` 5 waves of `DropColumns` 32 seeds (a column
+  `Pour(matter)` - `WaveCount` 15 waves of `DropColumns` 32 seeds (a column
   to `DropColumnWidth` 16 units, a drop off its middle by up to half of
-  `ColumnScatter` 6); a wave follows the one before by `WaveGapTicks` 13, a
+  `ColumnScatter` 6); a wave follows the one before by `WaveGapTicks` 4, a
   seed is born up to `BirthSpreadTicks` 9 later. A second pour is added to
   the one falling, no ceiling. The floor of a column is the top of the
   matter that reaches the bottom row of the screen (`FloorOfColumn`; only

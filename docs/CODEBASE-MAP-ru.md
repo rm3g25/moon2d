@@ -2194,9 +2194,9 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   зерно, стадия (`rsFalling`, `rsSinking`) и сколько тиков тонет.
 - **`TOrbRain`** - владеет `TOrbFlock` (`Flock`), ещё не рождёнными зёрнами
   и своим `TXorShift` (не `Random`: тот кормит таблицу появлений босса).
-  `Pour(matter)` - `WaveCount` 5 волн по `DropColumns` 32 зерна (столбец на
+  `Pour(matter)` - `WaveCount` 15 волн по `DropColumns` 32 зерна (столбец на
   `DropColumnWidth` 16 единиц, капля отступает от его середины до половины
-  `ColumnScatter` 6); волна идёт за прошлой через `WaveGapTicks` 13, зерно
+  `ColumnScatter` 6); волна идёт за прошлой через `WaveGapTicks` 4, зерно
   рождается до `BirthSpreadTicks` 9 тиков позже. Второй вызов добавляется
   к идущему дождю, потолка нет. Пол столбца - верх материи, доходящей до
   нижнего ряда экрана (`FloorOfColumn`; только твёрдые клетки - платформа

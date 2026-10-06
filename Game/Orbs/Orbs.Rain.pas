@@ -76,13 +76,15 @@ uses
 
 const
   // A drop to every DropColumnWidth units of the screen's width, in
-  // WaveCount waves
-  WaveCount = 5;
+  // WaveCount waves. The stand's veil has five; in play five could not kill
+  // a monster of ten lives (a body is one column wide), so there are three
+  // times as many, close enough that the rain lasts as long as before.
+  WaveCount = 15;
   DropColumnWidth = 16;
   DropColumns = ScreenWidth div DropColumnWidth;
   // A wave follows the one before it by this many ticks; each drop of it
   // is born up to BirthSpreadTicks later
-  WaveGapTicks = 13;
+  WaveGapTicks = 4;
   BirthSpreadTicks = 9;
   // A drop stands off the middle of its column by up to half of this
   ColumnScatter = 6;
