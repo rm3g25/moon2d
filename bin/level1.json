@@ -1273,6 +1273,28 @@
         "grain": 7,
         "speed": 84,
         "shade": 18
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.36,
+        "size": 6,
+        "endSize": 11,
+        "opacity": 80,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 50,
+        "surge": 100
       }
     ],
     "padBroken": [
@@ -1298,6 +1320,29 @@
         "grain": 7,
         "speed": 84,
         "shade": 18
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [50, 46, 42],
+        "endTint": [28, 28, 30],
+        "rate": 60,
+        "life": 0.7,
+        "size": 5,
+        "endSize": 18,
+        "opacity": 65,
+        "angle": 270,
+        "cone": 40,
+        "speed": 55,
+        "drag": 65,
+        "turbulence": 0,
+        "spin": 0,
+        "flow": "puffs",
+        "frequency": {"spread": [2.2, 3.1]},
+        "heat": 90,
+        "intensity": 80,
+        "surge": 100
       }
     ],
     "arenaAlarm": [
