@@ -4,10 +4,9 @@
   explosion. A monster names its kind in monsters.json ("explosion");
   what each kind looks like lives here.
 
-  The look only: the fragment fans of 2008 - the explosion's mechanics,
-  the bullets that wound - are spawned by the monster and the game. The
-  sound and the jolt of a blast are the game's too: it knows when it
-  detonates one. The aftershocks of a big wreck go off here, on their own
+  The look only: what an explosion does - the wave that wounds - is
+  Game.Blasts. The sound and the jolt of a blast are the game's: it
+  knows when it detonates one. The aftershocks of a big wreck go off here, on their own
   clock, so each one calls back for its echo.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).

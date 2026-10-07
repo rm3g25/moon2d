@@ -30,8 +30,8 @@ type
   TPickupEffectKind = (peNone, peHeal, peGiveWeapon);
 
   // How a death looks when it blows up - flash, debris, smoke - by size
-  // (Game.Explosions); ekNone = no look. The fragment fans of 2008 are
-  // ExplodesOnDeath and do not depend on it.
+  // (Game.Explosions); ekNone = no look. What the death does to the
+  // bodies around is TBlastDef and does not depend on it.
   TExplosionKind = (ekNone, ekBarrel, ekMachine, ekBoss);
 
   // What the body is made of, by what a bullet does to it: metal throws
@@ -141,6 +141,17 @@ type
     function Enabled: Boolean;
   end;
 
+  // What a monster's death does to the bodies around it: a wave out of
+  // its middle that goes Radius units and takes Lives lives at the heart,
+  // fewer with the distance (Game.Blasts). JSON "blast":
+  //   {"radius": 80, "lives": 100}
+  // Absent for a monster that dies quietly.
+  TBlastDef = record
+    Radius: Double;
+    Lives: Integer;
+    function Enabled: Boolean;
+  end;
+
   // The most lives a monster may lose in any run of Ticks ticks, however
   // many bullets land in it. JSON "damageCap" in "stats":
   //   {"lives": 30, "ticks": 33}
@@ -159,7 +170,7 @@ type
     Category: TMonsterCategory;
     Dangerous: Boolean;
     AffectedByGravity: Boolean; // platforms, mounts and the boss ignore it
-    ExplodesOnDeath: Boolean;   // barrel/tank/platform/mount fragment fans
+    Blast: TBlastDef; // the barrel, the tank, the platform, the mount
     Explosion: TExplosionKind;
     Material: TMonsterMaterial;
     Movement: TMovementDef;
@@ -222,6 +233,7 @@ resourcestring
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
   SBadDamageCap = 'Monster "%s": a damageCap needs positive lives and ticks';
+  SBadBlast = 'Monster "%s": a blast needs a positive radius and lives';
   SBadPortAngles = 'Monster "%s": the portAngles of a disc are numbers';
   SBadHull = 'Monster "%s": a hull needs a set, a positive width and height ' +
     'and wearFull above 0, up to 100';
@@ -340,6 +352,11 @@ begin
   Result := (Lives > 0) and (Ticks > 0);
 end;
 
+function TBlastDef.Enabled: Boolean;
+begin
+  Result := (Radius > 0) and (Lives > 0);
+end;
+
 function ParsePortAngles(const AObj: TJSONObject;
   const AMonsterId: string): TArray<Double>;
 begin
@@ -407,6 +424,16 @@ begin
   Result.Eye := ParseHullPoint(AObj, 'eye', AMonsterId);
   Result.Smoke := ParseHullPoint(AObj, 'smoke', AMonsterId);
   Result.Sparks := ParseHullPoint(AObj, 'sparks', AMonsterId);
+end;
+
+// A blast that reaches nothing must fail at load time, not die quietly
+function ParseBlast(const AObj: TJSONObject;
+  const AMonsterId: string): TBlastDef;
+begin
+  Result.Radius := AObj.GetValue<Double>('radius', 0);
+  Result.Lives := AObj.GetValue<Integer>('lives', 0);
+  if not Result.Enabled then
+    raise EMonsterDefError.CreateFmt(SBadBlast, [AMonsterId]);
 end;
 
 // A cap that caps nothing must fail at load time, not pass for a safeguard
@@ -515,8 +542,9 @@ begin
     DefaultBool('dangerous', True));
   Result.AffectedByGravity := AObj.GetValue<Boolean>('affectedByGravity',
     True);
-  Result.ExplodesOnDeath := AObj.GetValue<Boolean>('explodesOnDeath',
-    False);
+  var Blast := AObj.GetValue<TJSONObject>('blast', nil);
+  if Assigned(Blast) then
+    Result.Blast := ParseBlast(Blast, Result.Id);
   var ExplosionId := AObj.GetValue<string>('explosion', '');
   if ExplosionId <> '' then
     Result.Explosion := ParseExplosionKind(ExplosionId, Result.Id);

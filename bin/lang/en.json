@@ -11,6 +11,7 @@
   "endingMenu": "Main menu",
   "hitByBullet": "You were hit by a bullet",
   "hurtByMonster": "You were wounded by a monster",
+  "hurtByBlast": "You were caught in a blast",
   "streakBigTen": "Great game +10",
   "streakSmallTen": "10 monsters slain without a single scratch. 10 point bonus",
   "streakBigInvincible": "Invincible +25",

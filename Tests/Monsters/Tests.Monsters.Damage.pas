@@ -3,9 +3,9 @@
   lets a blow's lives through while the last second holds less than the
   cap, and the boss that wears it.
 
-  The window is tried alone, with the blows of the hero's guns and of a
-  barrel's fan as numbers, so the cap's size is held to what it was set
-  for: no gun of the hero is ever throttled, a fan is. The boss is tried
+  The window is tried alone, with the blows of the hero's guns as
+  numbers, so the cap's size is held to what it was set for: no gun of
+  the hero is ever throttled, a bigger blow is cut. The boss is tried
   on one tick: the lives a hundred blows take, and the shove of a blow
   that took none.
 
@@ -48,8 +48,6 @@ type
     procedure TestChainGunIsNeverThrottled;
     [Test]
     procedure TestGrenadeVolleyIsNeverThrottled;
-    [Test]
-    procedure TestBarrelFanIsCutToTheCap;
   end;
 
   [TestFixture]
@@ -84,8 +82,6 @@ const
   ChainEveryTicks = 5;
   GrenadePellets = 22;
   GrenadeEveryTicks = 40;
-  // A barrel blown beside the boss lands this many fragments
-  BarrelFragments = 100;
   // The seconds a gun fires for in the tests below
   Seconds = 10;
   // A blow of this size moves a body half of it
@@ -192,15 +188,6 @@ procedure TDamageWindowTests.TestGrenadeVolleyIsNeverThrottled;
 begin
   Assert.AreEqual(0,
     HitsCut(GrenadeEveryTicks, GrenadePellets, CapTicks * Seconds));
-end;
-
-procedure TDamageWindowTests.TestBarrelFanIsCutToTheCap;
-begin
-  var Landed := 0;
-  for var i := 1 to BarrelFragments do
-    Inc(Landed, FWindow.Admit(1));
-
-  Assert.AreEqual(CapLives, Landed);
 end;
 
 procedure TCappedBossTests.Setup;

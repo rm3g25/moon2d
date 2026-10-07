@@ -14,10 +14,10 @@
 
   Deaths: a dying monster keeps sliding at Shag/3 and plays frames
   9..16 (CurrentSprite + 8*DeathType); a dead one lies as frame 16.
-  Barrels, tanks, platforms and mounts explode TWICE - a 10x18
-  fragment fan into the enemy burst (Damage) and another into the
-  hero's burst (main loop) - 360 fragments, both friendly and hostile,
-  exactly as shipped in the original.
+  Barrels, tanks, platforms and mounts blow up: the game sends a wave
+  out of the dead body that wounds monsters and the hero alike
+  (Game.Blasts, the "blast" of monsters.json). 2008 fanned 360 bullets
+  instead, half of them the hero's and half hostile.
 
   Boss extras carried over: minion requests on a timer, HENSHIN at 2/3
   lives (turns the HERO into ice form), rage (speed x2, music change, a
@@ -28,9 +28,8 @@
   fast).
 
   The boss's damage is capped (Monsters.Damage): in any second it loses
-  no more lives than the cap says, so a barrel blown at its side - a
-  fan of a hundred fragments - cannot skip a stage of the fight. The
-  capped fragments still shove it.
+  no more lives than the cap says, so a barrel blown at its side cannot
+  skip a stage of the fight. A capped blow still shoves it.
 
   A machine - a monster that explodes and moves: the tank, the flying
   platform - smokes and sparks once it is down to its last third, and
@@ -200,7 +199,7 @@ type
       AAlpha: Single);
     procedure DrawSparks(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
-    // Applies knockback through the wall oracle; queues explosion fans
+    // Applies knockback through the wall oracle; queues the boss's fans
     // and events. A damage cap limits the lives a blow takes and nothing
     // else: a blow over the cap still shoves the body and trips the
     // thresholds.
@@ -398,13 +397,13 @@ const
 // Explodes and moves: a mount explodes too, but is part of the wall
 function IsMachine(const ADef: TMonsterDef): Boolean;
 begin
-  Result := ADef.ExplodesOnDeath and (ADef.Movement.Kind <> mkStatic);
+  Result := ADef.Blast.Enabled and (ADef.Movement.Kind <> mkStatic);
 end;
 
 // Explodes and is no one's enemy: the barrel
 function IsExplosiveProp(const ADef: TMonsterDef): Boolean;
 begin
-  Result := ADef.ExplodesOnDeath and (ADef.Category = mcProp);
+  Result := ADef.Blast.Enabled and (ADef.Category = mcProp);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1376,9 +1375,7 @@ begin
   begin
     AEnemyBullets.SpawnFan(FX, FY, FastFragments);
     AEnemyBullets.SpawnFan(FX, FY, SlowFragments);
-  end
-  else if FDef.ExplodesOnDeath then
-    AEnemyBullets.SpawnExplosionFan(FX, FY);
+  end;
 end;
 
 procedure TMonster.TakeDamage(AKnockDx, ALosses: Integer;

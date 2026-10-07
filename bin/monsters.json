@@ -161,7 +161,10 @@
         "platform.wav"
       ],
       "affectedByGravity": false,
-      "explodesOnDeath": true,
+      "blast": {
+        "radius": 80,
+        "lives": 100
+      },
       "explosion": "machine",
       "material": "metal",
       "hull": {
@@ -211,7 +214,10 @@
         "bottle.wav",
         "platform.wav"
       ],
-      "explodesOnDeath": true,
+      "blast": {
+        "radius": 80,
+        "lives": 100
+      },
       "explosion": "machine",
       "material": "metal"
     },
@@ -244,7 +250,10 @@
         "platform.wav"
       ],
       "affectedByGravity": false,
-      "explodesOnDeath": true,
+      "blast": {
+        "radius": 80,
+        "lives": 100
+      },
       "material": "metal"
     },
     {
@@ -269,7 +278,10 @@
       "deathSounds": [
         "bottle.wav"
       ],
-      "explodesOnDeath": true,
+      "blast": {
+        "radius": 80,
+        "lives": 100
+      },
       "explosion": "barrel",
       "material": "metal"
     },

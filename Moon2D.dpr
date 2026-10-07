@@ -68,6 +68,7 @@ uses
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
+  Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
   Orbs.Flock in 'Game\Orbs\Orbs.Flock.pas',
   Orbs.Harvest in 'Game\Orbs\Orbs.Harvest.pas',
@@ -315,6 +316,7 @@ type
     FBriefing: THudBriefing;
     FShake: TScreenShake;
     FExplosions: TExplosions;
+    FBlasts: TObjectList<TBlast>; // the waves of the explosions in flight
     FImpacts: TImpacts;
     FAura: TAura; // the hero's ring of orbs
     FRain: TOrbRain; // the fire rain of orbs
@@ -373,6 +375,10 @@ type
     function EnemyBulletNear(AX, AY: Single): TBullet;
     function DangerousMonsterAt(AX, AY: Single): TMonster;
     procedure ResolveOrbHits(const AFlock: TOrbFlock);
+    function BlastStoppedAt(AX, AY: Single): Boolean;
+    procedure StrikeMonsters(const ABlast: TBlast);
+    procedure StrikeHero(const ABlast: TBlast);
+    procedure ResolveBlasts;
     procedure ResolveMonsterContact;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
     procedure SoundArmorHit(AThrewTracer: Boolean);
@@ -479,6 +485,7 @@ begin
   FShake := TScreenShake.Create;
   FExplosions := TExplosions.Create(ARenderer, SolidUnderPoint,
     EchoAftershock);
+  FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FAura := TAura.Create(IceOrbTint);
   FRain := TOrbRain.Create(IceOrbTint);
@@ -503,6 +510,7 @@ begin
   FRain.Free;
   FAura.Free;
   FImpacts.Free;
+  FBlasts.Free;
   FExplosions.Free;
   FMessages.Free;
   FBriefing.Free;
@@ -625,6 +633,7 @@ begin
 
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FBlasts.Clear;
   FImpacts.Clear;
   FAura.Clear;
   FRain.Clear;
@@ -878,6 +887,7 @@ begin
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FBlasts.Clear;
   FImpacts.Clear;
   FRain.Clear;
   FMessages.ClearPopups;
@@ -1416,8 +1426,8 @@ begin
     if Own.Status <> bsFlying then
       Continue;
 
-    // Hit a monster: knockback dx/2, barrel-class deaths also fan into
-    // the HERO'S burst (the second half of the original double explosion).
+    // Hit a monster: knockback dx/2; a death that blows up sends its
+    // wave out of RewardMonsterKill
     var Target := HeroBulletTarget(Own);
     if Target <> nil then
     begin
@@ -1491,7 +1501,7 @@ begin
 end;
 
 // The kill aftermath: score, death ticker, '+N' popup, streak credit,
-// the explosion fan of exploders. AMonster has just flipped to dying.
+// the blast of exploders. AMonster has just flipped to dying.
 procedure TMoonGame.RewardMonsterKill(const AMonster: TMonster);
 begin
   Inc(FScore, AMonster.Def.Score);
@@ -1502,11 +1512,13 @@ begin
   FMessages.AddScorePopup('+' + IntToStr(AMonster.Def.Score),
     AMonster.X, AMonster.Y - SpriteSize);
   ProcessKillStreak;
-  if AMonster.Def.ExplodesOnDeath then
-    FHero.Bullets.SpawnExplosionFan(AMonster.X, AMonster.Y);
   // From the middle of the body: X is its left edge, Y the feet line
-  FExplosions.Detonate(AMonster.X + SpriteSize / 2,
-    AMonster.Y - SpriteSize / 2, AMonster.Def.Explosion);
+  var Heart: TSdlFPoint;
+  Heart.X := AMonster.X + SpriteSize / 2;
+  Heart.Y := AMonster.Y - SpriteSize / 2;
+  if AMonster.Def.Blast.Enabled then
+    FBlasts.Add(TBlast.Create(Heart, AMonster.Def.Blast));
+  FExplosions.Detonate(Heart.X, Heart.Y, AMonster.Def.Explosion);
 end;
 
 // The monster half: walls and the void as above, plus the hero's hide -
@@ -1593,6 +1605,75 @@ begin
   end;
 end;
 
+// The hero's body in honest screen units, as MonsterBody: the box a
+// monster's bullet lands in
+function HeroBody(const AHero: THero): TSdlFRect;
+begin
+  Result.X := AHero.X + HitInset;
+  Result.Y := AHero.Y - SpriteSize;
+  Result.W := SpriteSize - 2 * HitInset;
+  Result.H := SpriteSize;
+end;
+
+// What shelters from a blast is what stops a bullet: a wall of the grid
+// or a pad that bursts bullets
+function TMoonGame.BlastStoppedAt(AX, AY: Single): Boolean;
+begin
+  Result := FLevel.SolidAtPoint(FHero.Screen, AX, AY) or
+    FPads.StopsBulletAt(FHero.Screen, AX, AY);
+end;
+
+// A blast is no one's side: an enemy, a barrel, a medkit - whatever
+// stands in the wave loses lives. A barrel it kills blows up in its turn.
+procedure TMoonGame.StrikeMonsters(const ABlast: TBlast);
+begin
+  for var Monster in FField.Monsters do
+  begin
+    if (Monster.Screen <> FHero.Screen) or (Monster.Life <> mlAlive) then
+      Continue;
+    var Body := MonsterBody(Monster);
+    var Near := NearestPoint(Body, ABlast.Heart);
+    if not ABlast.Strikes(Monster, Near, BlastStoppedAt) then
+      Continue;
+
+    Monster.TakeDamage(ABlast.Knock(Near, Body.X + Body.W / 2),
+      ABlast.Lives(Near, DifficultyMonsterLives[FDifficulty]),
+      FMonsterBullets);
+    if Monster.Life = mlDying then
+      RewardMonsterKill(Monster);
+  end;
+end;
+
+procedure TMoonGame.StrikeHero(const ABlast: TBlast);
+begin
+  if FHero.Dead then
+    Exit;
+  var Near := NearestPoint(HeroBody(FHero), ABlast.Heart);
+  if not ABlast.Strikes(FHero, Near, BlastStoppedAt) then
+    Exit;
+  // The mercy window holds against a wave as it does against a bullet
+  if FHurtCooldown > 0 then
+    Exit;
+  FMessages.AddTicker(Tr(SHurtByBlast), TickerNoticeTicks);
+  FAudio.Play(PainSoundFile);
+  HurtHero;
+end;
+
+// A blast born while the waves are walked - a barrel one of them has
+// killed - goes to the end of the list and waits for the next tick
+procedure TMoonGame.ResolveBlasts;
+begin
+  for var i := FBlasts.Count - 1 downto 0 do
+  begin
+    var Blast := FBlasts[i];
+    Blast.Spread;
+    StrikeMonsters(Blast);
+    StrikeHero(Blast);
+    if Blast.Spent then
+      FBlasts.Delete(i);
+  end;
+end;
+
 procedure TMoonGame.HurtHero;
 begin
   if FHero.Dead then
@@ -1633,6 +1714,7 @@ begin
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;
+  FBlasts.Clear;
   FImpacts.Clear;
   FAura.Clear;
   FRain.Clear;
@@ -1807,7 +1889,7 @@ begin
               FAudio.Play(Name);
             if Monster.Def.Boss.EndsLevelOnDeath then
               FShake.AddTrauma(BossBlastTrauma)
-            else if Monster.Def.ExplodesOnDeath then
+            else if Monster.Def.Blast.Enabled then
               FShake.AddTrauma(ExploderTrauma);
           end;
         meHenshin:
@@ -1947,6 +2029,7 @@ begin
   // Before the monster half: an orb takes a bullet ahead of the hero
   ResolveOrbHits(FAura.Flock);
   ResolveOrbHits(FRain.Flock);
+  ResolveBlasts;
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
   // The verdicts of the tick are in; the dead watch no events and direct

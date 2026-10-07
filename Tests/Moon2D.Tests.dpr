@@ -19,6 +19,7 @@ uses
   DUnitX.Loggers.Console,
   Tests.Rooms in 'Tests.Rooms.pas',
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
+  Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',
   Tests.Monsters.Damage in 'Monsters\Tests.Monsters.Damage.pas',

@@ -9,7 +9,7 @@
   puffs: torn bits of sheet metal, white with the light in them, the
   shape in alpha - the heat arrives at draw time as a color mod.
 
-  Pure decoration: debris wounds nobody, the 2008 fragment fans do.
+  Pure decoration: debris wounds nobody, the blast does (Game.Blasts).
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }

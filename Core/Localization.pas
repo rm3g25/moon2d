@@ -61,6 +61,7 @@ const
   SEndingMenu = 'endingMenu';
   SHitByBullet = 'hitByBullet';
   SHurtByMonster = 'hurtByMonster';
+  SHurtByBlast = 'hurtByBlast';
   SStreakBigTen = 'streakBigTen';
   SStreakSmallTen = 'streakSmallTen';
   SStreakBigInvincible = 'streakBigInvincible';
@@ -173,6 +174,7 @@ const
   AllTextKeys: TArray<string> = [
     SFellIntoPit, SEndingLine1, SEndingLine2, SEndingLine3, SEndingLine4,
     SEndingLine5, SEndingAuthor, SEndingMenu, SHitByBullet, SHurtByMonster,
+    SHurtByBlast,
     SStreakBigTen, SStreakSmallTen, SStreakBigInvincible,
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,
     SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,

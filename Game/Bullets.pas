@@ -87,14 +87,11 @@ type
     procedure Update;
     procedure Draw(const ASprites: TSpriteRenderer);
 
-    // The 2008 explosion fan verbatim: 180 fragments (10 x 18), heavy
-    // gravity, spread by the k/t formula of moon.dpr. Fragments carry
-    // Contact=False and land in WHICHEVER burst this is called on -
-    // for barrels that is the hero's burst, hence chain reactions.
-    procedure SpawnExplosionFan(ACenterX, ACenterY: Double);
-    // The same k/t formula with the shape as a parameter - the henshin
-    // finale, the ice-form shatter and the boss victory fans are all
-    // this one template wearing different numbers.
+    // The k/t fan formula of moon.dpr with the shape as a parameter - the
+    // henshin finale, the ice-form shatter, the bonus explosion and the
+    // boss's fans are all this one template wearing different numbers.
+    // Fragments carry Contact=False and land in WHICHEVER burst this is
+    // called on.
     procedure SpawnFan(ACenterX, ACenterY: Double; const AShape: TFanShape);
     // The healing ring of the transformation (moon.dpr 453-497):
     // Cos/Sin of an INTEGER k is not a circle, it is the 2008 starburst
@@ -235,13 +232,6 @@ begin
         end;
     end;
   end;
-end;
-
-procedure TBurst.SpawnExplosionFan(ACenterX, ACenterY: Double);
-const
-  DeathFan: TFanShape = (Rows: 10; Cols: 18; BaseSpeed: 3; SpeedSpread: 2);
-begin
-  SpawnFan(ACenterX, ACenterY, DeathFan);
 end;
 
 procedure TBurst.SpawnFan(ACenterX, ACenterY: Double;

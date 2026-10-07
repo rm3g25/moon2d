@@ -11,6 +11,7 @@
   "endingMenu": "Главное меню",
   "hitByBullet": "Вас задело пулей",
   "hurtByMonster": "Вы ранены монстром",
+  "hurtByBlast": "Вас задело взрывом",
   "streakBigTen": "Отличная игра +10",
   "streakSmallTen": "10 монстров убито без единого ранения героя. Бонус 10 очков",
   "streakBigInvincible": "Неуязвимый +25",
