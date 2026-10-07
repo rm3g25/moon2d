@@ -79,14 +79,17 @@ their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
 generated with ChatGPT's image model to the author's direction (a clean and a
 battle-worn disc of the same geometry), then straightened, cut into layers
 (ring, hub, iris), given a drawn gloss layer and packed. It replaced the eight
-spin frames of `boss1.mset`, which stay in the set unused; the death frames
-there are still the 2008 ones.
+spin frames of `boss1.mset`, which stay in the set unused. The 2008 death
+frames there - the painted explosion cloud - are out of play since 3.0.42:
+they stay in the set as the `death-2008` sequence.
 
 **The barrel** (`sprites/barrel.mset`, sprite `barrel`) - since 3.0.23,
 generated with ChatGPT's image model from the author's prompt, then cut out,
 scaled to 128x128 and packed. It replaced the four 2008 frames
-`boch1`-`boch4`, which stay in the set as the `alive-2008` sequence, unused;
-the death frames there are still the 2008 ones.
+`boch1`-`boch4`, which stay in the set as the `alive-2008` sequence, unused.
+The 2008 death frames - the painted explosion cloud, the same in the sets
+of the barrel, the tank, the platform, the mount and the boss - are out of
+play since 3.0.42: they stay in each set as the `death-2008` sequence.
 
 **The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
 ChatGPT's image model from the author's prompts (a heavy rotor and a round
@@ -102,7 +105,8 @@ generated with ChatGPT's image model to the author's direction (a clean and
 a battle-worn hull of the same geometry), then cut out by one shared frame,
 scaled to 240x122 (6 px per screen unit), given a bled edge and packed. The
 hull replaced the three flight frames `plat1`-`plat3` of the platform, which
-stay in `platform.mset`; the death frames there are still the 2008 ones.
+stay in `platform.mset`; the 2008 death frames there are out of play since
+3.0.42, as the barrel's.
 
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
