@@ -88,6 +88,11 @@ shaft behind, scaled and packed by `tools/fans/build_fans.py`. On level 2
 they replaced the 2008 tiles `cooler1`-`cooler4` and `ventelat`, which
 stay in `machinery.mset` unplaced.
 
+**The TeK platform's hull** (`sprites/platform-hull.mset`) - generated with
+ChatGPT's image model to the author's direction (a clean and a battle-worn
+hull of the same geometry), then cut out by one shared frame, scaled to
+240x122 (6 px per screen unit), given a bled edge and packed.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.
