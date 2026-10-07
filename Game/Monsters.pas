@@ -153,6 +153,7 @@ type
     procedure BeginDying(const AEnemyBullets: TBurst);
     function ThirdMark(AThirds: Integer): Integer;
     function FacesRight: Boolean;
+    function BodyPoint(AArtX, AArtY: Integer): TSdlFPoint;
     function SpawnSeed: Cardinal;
     procedure CreateSmoke(const ABodySmoke: TBodySmoke);
     procedure CreateWreckSparks;
@@ -530,11 +531,8 @@ begin
   if FSmoke = nil then
     Exit;
 
-  var PointX := FBodySmoke.X;
-  if FacesRight then
-    PointX := SpriteSize - FBodySmoke.X;
-  FSmoke.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + FBodySmoke.Y,
-    FLife = mlAlive);
+  var Spot := BodyPoint(FBodySmoke.X, FBodySmoke.Y);
+  FSmoke.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
 procedure TMonster.TickSparks;
@@ -542,11 +540,8 @@ begin
   if FSparks = nil then
     Exit;
 
-  var PointX := WreckSparksX;
-  if FacesRight then
-    PointX := SpriteSize - WreckSparksX;
-  FSparks.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckSparksY,
-    FLife = mlAlive);
+  var Spot := BodyPoint(WreckSparksX, WreckSparksY);
+  FSparks.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
 procedure TMonster.TickShort;
@@ -560,11 +555,8 @@ begin
     FShort.FadeTo(ShortLevel, 0);
   end;
 
-  var PointX := WreckShortX;
-  if FacesRight then
-    PointX := SpriteSize - WreckShortX;
-  FShort.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckShortY,
-    FLife = mlAlive);
+  var Spot := BodyPoint(WreckShortX, WreckShortY);
+  FShort.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
 procedure TMonster.DrawSmoke(const ACanvas: TDynamicCanvas;
@@ -658,6 +650,16 @@ begin
   if FAction = maStand then
     Exit(FDirection);
   Result := FAction = maWalkRight;
+end;
+
+// A point of the left-facing art on the screen: it mirrors with the body
+function TMonster.BodyPoint(AArtX, AArtY: Integer): TSdlFPoint;
+begin
+  var PointX := AArtX;
+  if FacesRight then
+    PointX := SpriteSize - AArtX;
+  Result.X := Round(FX) + PointX;
+  Result.Y := Round(FY) - SpriteSize + AArtY;
 end;
 
 function TMonster.DrainEvent: TMonsterEvent;
