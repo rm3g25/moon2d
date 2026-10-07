@@ -167,6 +167,9 @@ const
   // An orb takes an enemy bullet nearer than this on either axis: the
   // reach a hero's bullet intercepts one at
   OrbReach = 6;
+  // A live shard wounds once it is lower than this under the heart of
+  // its blast: below the feet line of the body that blew up
+  ShardWoundsBelow = SpriteSize / 2;
   // Armor struck again sooner than this answers thinner (Game.Impacts):
   // the chain gun lands every 5 ticks, a pistol every 15
   RapidHitTicks = 8;
@@ -379,6 +382,7 @@ type
     procedure StrikeMonsters(const ABlast: TBlast);
     procedure StrikeHero(const ABlast: TBlast);
     procedure ResolveBlasts;
+    function ShardStruck(const AShard: TLiveShard): Boolean;
     procedure ResolveMonsterContact;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
     procedure SoundArmorHit(AThrewTracer: Boolean);
@@ -1518,7 +1522,10 @@ begin
   Heart.Y := AMonster.Y - SpriteSize / 2;
   if AMonster.Def.Blast.Enabled then
     FBlasts.Add(TBlast.Create(Heart, AMonster.Def.Blast));
-  FExplosions.Detonate(Heart.X, Heart.Y, AMonster.Def.Explosion);
+  // As the wave's lives: a shard keeps its worth on every grade
+  var ShardLives: Integer := Round(AMonster.Def.Blast.ShardLives *
+    DifficultyMonsterLives[FDifficulty]);
+  FExplosions.Detonate(Heart.X, Heart.Y, AMonster.Def.Explosion, ShardLives);
 end;
 
 // The monster half: walls and the void as above, plus the hero's hide -
@@ -1672,6 +1679,39 @@ begin
     if Blast.Spent then
       FBlasts.Delete(i);
   end;
+end;
+
+// A live shard wounds the body it falls on - an enemy, a barrel, the
+// hero - but only below the feet of the body it flew out of: on that
+// body's own floor the wave has had its say, and a shard there is
+// decoration. A body it kills may blow up and throw shards of its own.
+function TMoonGame.ShardStruck(const AShard: TLiveShard): Boolean;
+begin
+  Result := False;
+  if AShard.Drop <= ShardWoundsBelow then
+    Exit;
+
+  for var Monster in FField.Monsters do
+  begin
+    if (Monster.Screen <> FHero.Screen) or (Monster.Life <> mlAlive) or
+      not BoxHolds(MonsterBody(Monster), AShard.X, AShard.Y) then
+      Continue;
+    Monster.TakeDamage(Round(AShard.SpeedX / 2), AShard.Lives,
+      FMonsterBullets);
+    if Monster.Life = mlDying then
+      RewardMonsterKill(Monster);
+    Exit(True);
+  end;
+
+  if FHero.Dead or not BoxHolds(HeroBody(FHero), AShard.X, AShard.Y) then
+    Exit;
+  Result := True;
+  // The mercy window holds against a shard as it does against a bullet
+  if FHurtCooldown > 0 then
+    Exit;
+  FMessages.AddTicker(Tr(SHurtByBlast), TickerNoticeTicks);
+  FAudio.Play(PainSoundFile);
+  HurtHero;
 end;
 
 procedure TMoonGame.HurtHero;
@@ -2030,6 +2070,7 @@ begin
   ResolveOrbHits(FAura.Flock);
   ResolveOrbHits(FRain.Flock);
   ResolveBlasts;
+  FExplosions.StrikeShards(ShardStruck);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
   // The verdicts of the tick are in; the dead watch no events and direct

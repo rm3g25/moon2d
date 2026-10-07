@@ -163,7 +163,8 @@
       "affectedByGravity": false,
       "blast": {
         "radius": 80,
-        "lives": 100
+        "lives": 100,
+        "shardLives": 6
       },
       "explosion": "machine",
       "material": "metal",
@@ -216,7 +217,8 @@
       ],
       "blast": {
         "radius": 80,
-        "lives": 100
+        "lives": 100,
+        "shardLives": 6
       },
       "explosion": "machine",
       "material": "metal"
@@ -252,7 +254,8 @@
       "affectedByGravity": false,
       "blast": {
         "radius": 80,
-        "lives": 100
+        "lives": 100,
+        "shardLives": 6
       },
       "material": "metal"
     },
@@ -280,7 +283,8 @@
       ],
       "blast": {
         "radius": 80,
-        "lives": 100
+        "lives": 100,
+        "shardLives": 6
       },
       "explosion": "barrel",
       "material": "metal"

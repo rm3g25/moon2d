@@ -143,12 +143,14 @@ type
 
   // What a monster's death does to the bodies around it: a wave out of
   // its middle that goes Radius units and takes Lives lives at the heart,
-  // fewer with the distance (Game.Blasts). JSON "blast":
-  //   {"radius": 80, "lives": 100}
+  // fewer with the distance (Game.Blasts); and what a shard of its debris
+  // takes off a body it falls on, 0 - nothing. JSON "blast":
+  //   {"radius": 80, "lives": 100, "shardLives": 6}
   // Absent for a monster that dies quietly.
   TBlastDef = record
     Radius: Double;
     Lives: Integer;
+    ShardLives: Integer;
     function Enabled: Boolean;
   end;
 
@@ -233,7 +235,8 @@ resourcestring
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
   SBadDamageCap = 'Monster "%s": a damageCap needs positive lives and ticks';
-  SBadBlast = 'Monster "%s": a blast needs a positive radius and lives';
+  SBadBlast = 'Monster "%s": a blast needs a positive radius and lives, ' +
+    'and shardLives of 0 or more';
   SBadPortAngles = 'Monster "%s": the portAngles of a disc are numbers';
   SBadHull = 'Monster "%s": a hull needs a set, a positive width and height ' +
     'and wearFull above 0, up to 100';
@@ -432,7 +435,8 @@ function ParseBlast(const AObj: TJSONObject;
 begin
   Result.Radius := AObj.GetValue<Double>('radius', 0);
   Result.Lives := AObj.GetValue<Integer>('lives', 0);
-  if not Result.Enabled then
+  Result.ShardLives := AObj.GetValue<Integer>('shardLives', 0);
+  if not Result.Enabled or (Result.ShardLives < 0) then
     raise EMonsterDefError.CreateFmt(SBadBlast, [AMonsterId]);
 end;
 

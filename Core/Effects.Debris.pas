@@ -9,7 +9,11 @@
   puffs: torn bits of sheet metal, white with the light in them, the
   shape in alpha - the heat arrives at draw time as a color mod.
 
-  Pure decoration: debris wounds nobody, the blast does (Game.Blasts).
+  A shard may be born live: it carries the lives it takes off a body
+  until it strikes one or touches a floor. The field only carries the
+  number and shows its live shards to the caller (Strike); whom a shard
+  strikes and what that costs is the caller's to say. Born with no
+  lives, debris is pure decoration.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -40,6 +44,18 @@ type
     SparkSpeed: Single;
   end;
 
+  // A shard in flight that can still wound
+  TLiveShard = record
+    Id: Cardinal; // names the shard to the field
+    X, Y: Single; // screen units
+    SpeedX: Single; // units per tick
+    Drop: Single; // units below the heart of its blast; negative above it
+    Lives: Integer;
+  end;
+
+  // The caller's verdict on a live shard: True - it struck a body
+  TShardStrike = reference to function(const AShard: TLiveShard): Boolean;
+
   TDebrisField = class
   private type
     // Sliding - down on the floor for good, still skidding
@@ -54,6 +70,9 @@ type
       Age, Life: Integer; // ticks
       RestTicks: Integer;
       State: TShardState;
+      Id: Cardinal;
+      HeartY: Single; // of the blast it flew out of
+      Lives: Integer; // what it takes off a body; 0 - it wounds no more
     end;
   private
     FRenderer: PSdlRenderer;
@@ -62,12 +81,16 @@ type
     FGlow: PSdlTexture;
     FShards: TArray<TShard>;
     FShardCount: Integer;
+    FLastId: Cardinal;
     FSparks: TSparkField;
     // Own stream, not Random: that one feeds the boss spawn table
     FRandom: TXorShift;
     function Roll(AFrom, ATo: Single): Single;
     procedure AddShard(const AShard: TShard);
-    procedure SpawnShard(AX, AY: Single; const ALook: TDebrisLook);
+    procedure SpawnShard(AX, AY: Single; const ALook: TDebrisLook;
+      ALives: Integer);
+    function LiveShards: TArray<TLiveShard>;
+    procedure Blunt(AId: Cardinal);
     procedure SpawnSparks(AX, AY: Single; const ALook: TDebrisLook);
     function StopsSpark(AX, AY: Single): Boolean;
     procedure MoveShard(var AShard: TShard);
@@ -80,8 +103,13 @@ type
     // AProbe answers in screen units
     constructor Create(ARenderer: PSdlRenderer; const AProbe: TSolidProbe);
     destructor Destroy; override;
-    // AX/AY - the heart of the blast, screen units
-    procedure Burst(AX, AY: Single; const ALook: TDebrisLook);
+    // AX/AY - the heart of the blast, screen units; AShardLives - what
+    // each shard takes off a body it strikes, 0 for decoration
+    procedure Burst(AX, AY: Single; const ALook: TDebrisLook;
+      AShardLives: Integer);
+    // Shows the caller every live shard, once a tick. The caller may
+    // burst more debris from inside: a body a shard kills blows up
+    procedure Strike(const AStrike: TShardStrike);
     procedure Tick;
     // AOrigin - the shake of the world, which the debris rides
     procedure Draw(AOrigin: TSdlPoint; AAlpha: Single);
@@ -339,7 +367,8 @@ begin
   Inc(FShardCount);
 end;
 
-procedure TDebrisField.SpawnShard(AX, AY: Single; const ALook: TDebrisLook);
+procedure TDebrisField.SpawnShard(AX, AY: Single; const ALook: TDebrisLook;
+  ALives: Integer);
 var
   Shard: TShard;
 begin
@@ -362,6 +391,10 @@ begin
   Shard.Life := MaxFlightTicks;
   Shard.RestTicks := Round(ALook.RestSeconds * LogicTicksPerSecond *
     Roll(MinShare, 1));
+  Inc(FLastId);
+  Shard.Id := FLastId;
+  Shard.HeartY := AY;
+  Shard.Lives := ALives;
   AddShard(Shard);
 end;
 
@@ -377,11 +410,48 @@ begin
   FSparks.Spray(AX, AY, Spray);
 end;
 
-procedure TDebrisField.Burst(AX, AY: Single; const ALook: TDebrisLook);
+procedure TDebrisField.Burst(AX, AY: Single; const ALook: TDebrisLook;
+  AShardLives: Integer);
 begin
   for var i := 1 to ALook.Shards do
-    SpawnShard(AX, AY, ALook);
+    SpawnShard(AX, AY, ALook, AShardLives);
   SpawnSparks(AX, AY, ALook);
+end;
+
+function TDebrisField.LiveShards: TArray<TLiveShard>;
+var
+  Live: TLiveShard;
+begin
+  Result := nil;
+  for var i := 0 to FShardCount - 1 do
+  begin
+    if (FShards[i].State <> ssFlying) or (FShards[i].Lives = 0) then
+      Continue;
+    Live.Id := FShards[i].Id;
+    Live.X := FShards[i].X;
+    Live.Y := FShards[i].Y;
+    Live.SpeedX := FShards[i].SpeedX;
+    Live.Drop := FShards[i].Y - FShards[i].HeartY;
+    Live.Lives := FShards[i].Lives;
+    Result := Result + [Live];
+  end;
+end;
+
+procedure TDebrisField.Blunt(AId: Cardinal);
+begin
+  for var i := 0 to FShardCount - 1 do
+    if FShards[i].Id = AId then
+      FShards[i].Lives := 0;
+end;
+
+procedure TDebrisField.Strike(const AStrike: TShardStrike);
+begin
+  // The live shards are listed first, and a struck one is found again
+  // by its Id: a burst from inside the call adds shards and, over
+  // MaxShards, moves the old ones down the array
+  for var Live in LiveShards do
+    if AStrike(Live) then
+      Blunt(Live.Id);
 end;
 
 procedure TDebrisField.MoveShard(var AShard: TShard);
@@ -425,6 +495,8 @@ end;
 // AGroundY; halving the step finds the line without knowing the grid
 procedure TDebrisField.LandShard(var AShard: TShard; AGroundY: Single);
 begin
+  // The floor takes the edge off: what bounces and skids wounds nobody
+  AShard.Lives := 0;
   var Air := AShard.Y;
   var Ground := AGroundY;
   for var i := 1 to FloorSearchSteps do
