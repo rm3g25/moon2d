@@ -197,6 +197,7 @@
         <DCCReference Include="Game\Monsters.Disc.pas"/>
         <DCCReference Include="Game\Monsters.Hull.pas"/>
         <DCCReference Include="Game\Monsters.Pilot.pas"/>
+        <DCCReference Include="Game\Monsters.Damage.pas"/>
         <DCCReference Include="Game\Pads\Pads.Formations.pas"/>
         <DCCReference Include="Game\Pads\Pads.Flights.pas"/>
         <DCCReference Include="Game\Pads\Pads.World.pas"/>

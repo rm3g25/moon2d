@@ -78,6 +78,7 @@
         <DCCReference Include="Effects\Tests.Effects.Lightning.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Bodies.pas"/>
+        <DCCReference Include="Monsters\Tests.Monsters.Damage.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Flock.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

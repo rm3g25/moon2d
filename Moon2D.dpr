@@ -52,6 +52,7 @@ uses
   Monsters.Disc in 'Game\Monsters.Disc.pas',
   Monsters.Hull in 'Game\Monsters.Hull.pas',
   Monsters.Pilot in 'Game\Monsters.Pilot.pas',
+  Monsters.Damage in 'Game\Monsters.Damage.pas',
   Pads.Formations in 'Game\Pads\Pads.Formations.pas',
   Pads.Flights in 'Game\Pads\Pads.Flights.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',

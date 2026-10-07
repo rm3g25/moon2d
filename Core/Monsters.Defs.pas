@@ -141,6 +141,16 @@ type
     function Enabled: Boolean;
   end;
 
+  // The most lives a monster may lose in any run of Ticks ticks, however
+  // many bullets land in it. JSON "damageCap" in "stats":
+  //   {"lives": 30, "ticks": 33}
+  // Absent for a monster with no cap: it loses every life that lands.
+  TDamageCap = record
+    Lives: Integer;
+    Ticks: Integer;
+    function Enabled: Boolean;
+  end;
+
   TMonsterDef = record
     Id: string;
     LegacyName: string;  // old level-file name; drop after level migration
@@ -157,6 +167,7 @@ type
     PickupEffect: TPickupEffectDef;
     Lives: Integer;
     Score: Integer;
+    DamageCap: TDamageCap;
     AnimFreq: Double;
     DeathText: TLocalizedText;
     // WAV names in sounds\, all played together on death: most monsters
@@ -210,6 +221,7 @@ resourcestring
   SEmptySpawnTable = 'PickSpawn called on an empty spawn table';
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
+  SBadDamageCap = 'Monster "%s": a damageCap needs positive lives and ticks';
   SBadPortAngles = 'Monster "%s": the portAngles of a disc are numbers';
   SBadHull = 'Monster "%s": a hull needs a set, a positive width and height ' +
     'and wearFull above 0, up to 100';
@@ -323,6 +335,11 @@ begin
   Result := SetName <> '';
 end;
 
+function TDamageCap.Enabled: Boolean;
+begin
+  Result := (Lives > 0) and (Ticks > 0);
+end;
+
 function ParsePortAngles(const AObj: TJSONObject;
   const AMonsterId: string): TArray<Double>;
 begin
@@ -390,6 +407,16 @@ begin
   Result.Eye := ParseHullPoint(AObj, 'eye', AMonsterId);
   Result.Smoke := ParseHullPoint(AObj, 'smoke', AMonsterId);
   Result.Sparks := ParseHullPoint(AObj, 'sparks', AMonsterId);
+end;
+
+// A cap that caps nothing must fail at load time, not pass for a safeguard
+function ParseDamageCap(const AObj: TJSONObject;
+  const AMonsterId: string): TDamageCap;
+begin
+  Result.Lives := AObj.GetValue<Integer>('lives', 0);
+  Result.Ticks := AObj.GetValue<Integer>('ticks', 0);
+  if not Result.Enabled then
+    raise EMonsterDefError.CreateFmt(SBadDamageCap, [AMonsterId]);
 end;
 
 // ---------------------------------------------------------------------------
@@ -503,6 +530,9 @@ begin
   var Stats := AObj.GetValue<TJSONObject>('stats');
   Result.Lives := Stats.GetValue<Integer>('lives');
   Result.Score := Stats.GetValue<Integer>('score', 1);
+  var Cap := Stats.GetValue<TJSONObject>('damageCap', nil);
+  if Assigned(Cap) then
+    Result.DamageCap := ParseDamageCap(Cap, Result.Id);
 
   var Movement := AObj.GetValue<TJSONObject>('movement');
   Result.Movement.Kind := ParseMovementKind(

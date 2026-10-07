@@ -27,6 +27,11 @@
   lives do - and the gun fires no faster in it (2008: three times as
   fast).
 
+  The boss's damage is capped (Monsters.Damage): in any second it loses
+  no more lives than the cap says, so a barrel blown at its side - a
+  fan of a hundred fragments - cannot skip a stage of the fight. The
+  capped fragments still shove it.
+
   A machine - a monster that explodes and moves: the tank, the flying
   platform - smokes and sparks once it is down to its last third, and
   shorts out in bolts that come harder with every life it loses (a 2026
@@ -57,7 +62,7 @@ uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
   Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Hull,
-  Monsters.Pilot, Bullets, Pads.World;
+  Monsters.Pilot, Monsters.Damage, Bullets, Pads.World;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
@@ -119,6 +124,7 @@ type
     FWrecked: Boolean; // the smoke stands at its critical level, sparks fly, bolts strike
     FDisc: TDisc; // a disc monster only, nil for the rest
     FHull: THull; // a hull monster only, nil for the rest
+    FDamageWindow: TDamageWindow; // a monster with a damage cap only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
     FRageLives: Integer; // a boss goes into its rage below this
@@ -195,7 +201,9 @@ type
     procedure DrawSparks(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // Applies knockback through the wall oracle; queues explosion fans
-    // and events.
+    // and events. A damage cap limits the lives a blow takes and nothing
+    // else: a blow over the cap still shoves the body and trips the
+    // thresholds.
     procedure TakeDamage(AKnockDx, ALosses: Integer;
       const AEnemyBullets: TBurst);
     function DrainEvent: TMonsterEvent;
@@ -478,10 +486,13 @@ begin
     FDisc := TDisc.Create(ADef.Disc, ADiscArt, ArtCenter);
   if AHullArt <> nil then
     FHull := THull.Create(ADef.Hull, AHullArt);
+  if ADef.DamageCap.Enabled then
+    FDamageWindow := TDamageWindow.Create(ADef.DamageCap);
 end;
 
 destructor TMonster.Destroy;
 begin
+  FDamageWindow.Free;
   FPilot.Free;
   FHull.Free;
   FDisc.Free;
@@ -1230,6 +1241,8 @@ begin
   RideDeck;
   if FTicksSinceHit <> NeverHit then
     Inc(FTicksSinceHit);
+  if FDamageWindow <> nil then
+    FDamageWindow.Advance;
 
   if FDef.Category = mcBoss then
   begin
@@ -1384,7 +1397,10 @@ begin
   if not PilotBusy then
     ShoveX(Round(AKnockDx / 2));
 
-  Dec(FLives, ALosses);
+  var Landed := ALosses;
+  if FDamageWindow <> nil then
+    Landed := FDamageWindow.Admit(ALosses);
+  Dec(FLives, Landed);
   if (FLives < 1) and (FLife = mlAlive) then
     BeginDying(AEnemyBullets);
 end;

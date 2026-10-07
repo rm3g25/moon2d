@@ -438,7 +438,11 @@
       },
       "stats": {
         "lives": 400,
-        "score": 10
+        "score": 10,
+        "damageCap": {
+          "lives": 30,
+          "ticks": 33
+        }
       },
       "animFreq": 0.9,
       "explosion": "boss",

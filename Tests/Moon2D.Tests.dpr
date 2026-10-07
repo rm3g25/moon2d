@@ -21,6 +21,7 @@ uses
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',
+  Tests.Monsters.Damage in 'Monsters\Tests.Monsters.Damage.pas',
   Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas';
 
 procedure RunSuite;
