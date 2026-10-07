@@ -1544,6 +1544,38 @@
       "fork": 18
     },
     {
+      "kind": "lightning",
+      "parent": "satellite",
+      "x": 34,
+      "y": 35,
+      "tag": "satelliteSparks",
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 0,
+      "reach": 22,
+      "spread": [
+        4,
+        5
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 0.8,
+      "jag": 24,
+      "fork": 10,
+      "frequency": 1.6,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1.5,
+      "pause": 4,
+      "flash": 40,
+      "jolt": 0
+    },
+    {
       "kind": "smoke",
       "parent": "boss",
       "x": 22,
@@ -1816,6 +1848,36 @@
       "fork": 15
     },
     {
+      "kind": "lightning",
+      "parent": "s10-house-b",
+      "x": 42.0,
+      "y": 194.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 60,
+      "spread": [
+        14,
+        20
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.2,
+      "jag": 24,
+      "fork": 12,
+      "frequency": 1.6,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1.5,
+      "pause": 3.5,
+      "flash": 45,
+      "jolt": 0
+    },
+    {
       "kind": "sparks",
       "parent": "s11-house-a",
       "x": 116.0,
@@ -1840,6 +1902,36 @@
       "opacity": 90,
       "flash": 45,
       "fork": 15
+    },
+    {
+      "kind": "lightning",
+      "parent": "s11-house-a",
+      "x": 116.0,
+      "y": 56.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 36,
+      "spread": [
+        6,
+        8
+      ],
+      "angle": 180,
+      "cone": 240,
+      "collide": "none",
+      "size": 1.0,
+      "jag": 24,
+      "fork": 12,
+      "frequency": 1.6,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1.5,
+      "pause": 4.5,
+      "flash": 45,
+      "jolt": 0
     },
     {
       "kind": "beacon",
@@ -1882,6 +1974,36 @@
       "flash": 40,
       "fork": 15,
       "collide": "bounce"
+    },
+    {
+      "kind": "lightning",
+      "parent": "s11-house-a",
+      "x": 147.0,
+      "y": 176.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 26,
+      "spread": [
+        6,
+        3
+      ],
+      "angle": 200,
+      "cone": 180,
+      "collide": "none",
+      "size": 0.9,
+      "jag": 24,
+      "fork": 8,
+      "frequency": 1.8,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1,
+      "pause": 3,
+      "flash": 40,
+      "jolt": 0
     },
     {
       "kind": "beacon",
@@ -2147,6 +2269,36 @@
       "opacity": 85,
       "flash": 35,
       "fork": 15
+    },
+    {
+      "kind": "lightning",
+      "parent": "s14-conveyor",
+      "x": 86.0,
+      "y": 32.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 28,
+      "spread": [
+        5,
+        9
+      ],
+      "angle": -115,
+      "cone": 90,
+      "collide": "none",
+      "size": 1.0,
+      "jag": 24,
+      "fork": 10,
+      "frequency": 1.4,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1,
+      "pause": 6,
+      "flash": 40,
+      "jolt": 0
     },
     {
       "kind": "beacon",
@@ -2474,6 +2626,36 @@
       "opacity": 85,
       "flash": 35,
       "fork": 15
+    },
+    {
+      "kind": "lightning",
+      "parent": "s17-crane",
+      "x": 142.0,
+      "y": 36.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 28,
+      "spread": [
+        9,
+        5
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.0,
+      "jag": 24,
+      "fork": 12,
+      "frequency": 1.4,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1,
+      "pause": 7,
+      "flash": 40,
+      "jolt": 0
     }
   ],
   "tilePalette": [

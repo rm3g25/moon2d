@@ -183,6 +183,7 @@ const
   // A ray a hair wide needs pixels across it
   StarburstGlowSide = 256;
   StreakGlowSide = 64;
+  BeamGlowSide = 64;
   PuffSide = 64;
 
 function TParentDepth.SunkAt(AAlpha: Single): Single;
@@ -207,6 +208,7 @@ begin
   FCanvas.StarburstGlow := CreateGlowShape(ARenderer, gsStarburst,
     StarburstGlowSide);
   FCanvas.StreakGlow := CreateGlowShape(ARenderer, gsStreak, StreakGlowSide);
+  FCanvas.BeamGlow := CreateGlowShape(ARenderer, gsBeam, BeamGlowSide);
   FCanvas.Puffs := CreatePuffTextures(ARenderer, PuffSide);
 
   for var DynamicObject in ALevel.Dynamics do
@@ -221,6 +223,8 @@ begin
   for var Place in FPlaces do
     Place.DynamicObject.Release;
   FreePuffTextures(FCanvas.Puffs);
+  if Assigned(FCanvas.BeamGlow) then
+    SDL_DestroyTexture(FCanvas.BeamGlow);
   if Assigned(FCanvas.StreakGlow) then
     SDL_DestroyTexture(FCanvas.StreakGlow);
   if Assigned(FCanvas.StarburstGlow) then

@@ -36,7 +36,7 @@ interface
 uses
   System.SysUtils, System.JSON, System.Generics.Collections, Sdl2.Core,
   Render.Sprites, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
-  Effects.Sparks, Levels.Tint;
+  Effects.Sparks, Effects.Lightning, Levels.Tint;
 
 type
   EDynamicError = class(Exception);
@@ -58,6 +58,7 @@ type
     FlareGlow: PSdlTexture;
     StarburstGlow: PSdlTexture;
     StreakGlow: PSdlTexture;
+    BeamGlow: PSdlTexture;
     Puffs: TPuffTextures;
     // In screen units; an object away from the hero's screen meets no
     // walls
@@ -324,11 +325,15 @@ type
     Pour: Single; // sparks per tick of it
   end;
 
-  // A source with a pause works in spells and is out between them
+  // A source with a pause works in spells and is out between them. The
+  // zeroed clock is on the edge of a spell: a fresh source, or one
+  // rewound, opens with it.
   TRestClock = record
     Spell, Pause: Single; // ticks, on average; no pause - no rest
     TicksLeft: Integer; // of the spell or the pause under way
     Awake: Boolean;
+    // One tick; True on the tick a spell opens. ADice is the owner's.
+    function Tick(var ADice: TXorShift): Boolean;
   end;
 
   // Sparks from torn metal and bare wires (Effects.Sparks): a steady
@@ -375,7 +380,6 @@ type
     function FieldLook(const ALook: TSparkSourceLook): TSparkLook;
     procedure TakeLook(const ALook: TSparkSourceLook; ASeed: Cardinal);
     procedure Emit;
-    procedure TickRestClock;
     procedure StartArc;
     procedure ThrowOne;
   protected
@@ -396,6 +400,93 @@ type
     procedure Rewind; override;
     // For sparks the game makes: a level's take the solid layer from the
     // canvas
+    procedure UseSolid(const ASolid: TSolidProbe);
+  end;
+
+  // What a bolt does at its far end: none - it spans the two points; strike
+  // - it looks for matter along its way
+  TLightningCollide = (lcNone, lcStrike);
+
+  // A lightning source's look in the words of level JSON - seconds, units,
+  // degrees - with the percentages as shares, 0..1
+  TLightningLook = record
+    Reach: Single;
+    Spread: TSdlFPoint; // half-sizes of the box the root rolls in
+    Angle, Cone: Single;
+    Collide: TLightningCollide;
+    Size, Jag, Fork: Single;
+    Frequency: Single;
+    Strokes: Integer;
+    Life, Leader: Single;
+    Spell, Pause: Single;
+    Flash, Jolt: Single;
+    Tint: TColorTint;
+  end;
+
+  // Lightning (Effects.Lightning): now and then a crooked bolt of light
+  // strikes within reach of the point, throws branches and fades - a short
+  // in a panel, a wire gone live. Pure decoration: a bolt wounds nobody.
+  // The root rolls in a box around the point, the bolt leaves it along the
+  // angle within the cone, and is 55-100% of reach long. Collide "none"
+  // spans the two points and lights both; "strike" marches along the way
+  // through the solid layer and ends where it finds matter, with a flash
+  // and a light over the whole room, or, finding none, goes out as a short
+  // streamer - strike in the front layer by default, none behind it. The
+  // tint is the color of the halo: the core is always white.
+  // Units: reach, spread (half-sizes, x and y) and size (the channel's
+  // width, 1 = the standard) in screen units, frequency in bolts a second,
+  // their gaps uneven, life (the glow of a stroke) and leader (the dim
+  // feeler before the first stroke, 0 = none) in seconds, spell and pause
+  // as for sparks. Angle is in degrees counterclockwise from the right
+  // (-90 = down), cone its full width. Jag (the crookedness, a share of the
+  // bolt's length), fork (the chance of a branch), flash (the light) and
+  // jolt (the shake of the screen a stroke gives) are percentages. Strokes
+  // is how many times one bolt strikes along the same channel. Intensity
+  // scales the frequency, the length, the width and the strokes; at zero
+  // the source is silent.
+  // JSON:
+  //   {"kind": "lightning", "parent": "s10-house-b", "x": 42, "y": 194,
+  //    "tint": [66, 74, 100], "reach": 30, "spread": [9, 14],
+  //    "angle": 90, "cone": 360, "collide": "none", "size": 0.8,
+  //    "jag": 24, "fork": 12, "frequency": 1.6, "strokes": 2,
+  //    "life": 0.1, "leader": 0, "spell": 1.5, "pause": 3.5,
+  //    "flash": 45, "jolt": 0}
+  TLightning = class(TDynamicObject)
+  private
+    FLook: TLightningLook;
+    FBolt: TBoltLook; // as the source shoots at full intensity
+    FField: TBoltField;
+    FRest: TRestClock;
+    FSolid: TSolidProbe;
+    FPoint: TSdlFPoint; // where the field's zero stands, in screen units
+    FRandom: TXorShift;
+    FGap: Single; // ticks between bolts, on average
+    FWait: Single; // of the full intensity's ticks, to the next bolt
+    function Blocked(AX, AY: Single): Boolean;
+    function FindMatter(AX, AY, AHeadX, AHeadY, AReach: Single;
+      out ADistance: Single): Boolean;
+    function BoltLook: TBoltLook;
+    procedure TakeLook(const ALook: TLightningLook; ASeed: Cardinal);
+    procedure Emit;
+    procedure Discharge;
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    // Lightning the game makes itself, not the level file. ASeed sets the
+    // dice: sources seeded alike strike alike.
+    constructor CreateLook(const APlacement: TDynamicPlacement;
+      const ALook: TLightningLook; AIntensity: Single; ASeed: Cardinal);
+    destructor Destroy; override;
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    // What was in the air goes too: the world restarts in full
+    procedure Rewind; override;
+    // For lightning the game makes: a level's takes the solid layer from
+    // the canvas
     procedure UseSolid(const ASolid: TSolidProbe);
   end;
 
@@ -621,7 +712,8 @@ uses
   System.Math, Sprites.Sets, Render.Glow;
 
 type
-  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze);
+  TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
+    dkLightning);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -635,16 +727,18 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan', 'haze');
+    'globe', 'sparks', 'fan', 'haze', 'lightning');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack, dlBackdrop);
+    dlSky, dlBack, dlBack, dlBackdrop, dlBack);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
   GlobeSurfaceIds: array [TGlobeSurface] of string = ('regolith', 'matte');
   SparkWallIds: array [TSparkWall] of string = ('none', 'die', 'bounce');
+  LightningCollideIds: array [TLightningCollide] of string = ('none',
+    'strike');
   MotorRunIds: array [TMotorRun] of string = ('steady', 'dying');
 
   // Seconds and percentages in JSON, ticks and shares in the code; the
@@ -678,6 +772,9 @@ resourcestring
   SHazeLayer = '%s: a haze bends the backdrop and lives on the layer '
     + '"backdrop" alone';
   SHazeGrain = '%s: the "grain" of a haze is 1 or more';
+  SLightningBadSpread = '%s: "spread" takes two half-sizes, x and y, in '
+    + 'units, neither below zero';
+  SLightningBadStrokes = '%s: "strokes" takes a whole number, 1..%d';
 
 const
   // Beacon light, in shares of the halo size
@@ -806,6 +903,39 @@ const
   DefaultFlash = 50;
   DefaultFork = 20;
   DefaultSpell = 6;
+
+  // Lightning. A bolt is BoltLengthMin of the reach long at the least and
+  // BoltLengthMin + BoltLengthSpread at the most; the wait for the next one
+  // rolls around its mean, evenly
+  BoltLengthMin = 0.55;
+  BoltLengthSpread = 0.45;
+  BoltGapMin = 0.3;
+  BoltGapSpread = 1.4;
+  // What a faint source keeps of its reach, width and strokes
+  FaintReachShare = 0.5;
+  FaintWidthShare = 0.7;
+  FaintStrokeShare = 0.5;
+  // A strike looks for matter along its way this many units at a time
+  MarchStep = 2;
+  // A bolt that finds none is a streamer this share of the reach long
+  StreamerShare = 0.45;
+  BoltCapacity = 8;
+  BoltSeedSalt = $4C746E67; // "Ltng"
+  // Cold blue-violet, the natural color of a discharge
+  LightningTint: TColorTint = (R: 66; G: 74; B: 100);
+
+  DefaultReach = 30;
+  DefaultSpreadX = 9;
+  DefaultSpreadY = 14;
+  DefaultBoltAngle = 90;
+  DefaultBoltCone = 360;
+  DefaultBoltSize = 0.8;
+  DefaultJag = 24;
+  DefaultBoltFork = 12;
+  DefaultBoltFrequency = 1.6;
+  DefaultStrokes = 2;
+  DefaultBoltLife = 0.1;
+  DefaultBoltFlash = 45;
 
   // A globe looks like the Earth unless the level says otherwise: matte
   // ground under air, the night side black but for a trace of
@@ -1106,6 +1236,25 @@ begin
     if Current < Target then
       Current := Target;
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// TRestClock
+// ---------------------------------------------------------------------------
+
+function TRestClock.Tick(var ADice: TXorShift): Boolean;
+begin
+  Dec(TicksLeft);
+  if TicksLeft > 0 then
+    Exit(False);
+
+  Awake := not Awake;
+  var MeanTicks := Pause;
+  if Awake then
+    MeanTicks := Spell;
+  var Span: Single := MeanTicks * (RestSpanMin + RestSpanSpread * ADice.NextUnit);
+  TicksLeft := Max(1, Round(Span));
+  Result := Awake;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1728,26 +1877,6 @@ begin
   FArc.WaitTicks := Max(ArcTicks, Round(Wait));
 end;
 
-// The zeroed clock is on the edge of a spell: a fresh source, or one
-// rewound, opens with it
-procedure TSparks.TickRestClock;
-begin
-  Dec(FRest.TicksLeft);
-  if FRest.TicksLeft > 0 then
-    Exit;
-
-  FRest.Awake := not FRest.Awake;
-  var MeanTicks := FRest.Pause;
-  if FRest.Awake then
-  begin
-    MeanTicks := FRest.Spell;
-    FArc.WaitTicks := 0; // a spell opens with an arc
-  end;
-  var Span: Single := MeanTicks *
-    (RestSpanMin + RestSpanSpread * FRandom.NextUnit);
-  FRest.TicksLeft := Max(1, Round(Span));
-end;
-
 procedure TSparks.ThrowOne;
 begin
   var Reach: Single := FSize * SparkSpawnSpread;
@@ -1760,7 +1889,9 @@ procedure TSparks.Emit;
 begin
   if FRest.Pause > 0 then
   begin
-    TickRestClock;
+    // A spell opens with an arc
+    if FRest.Tick(FRandom) then
+      FArc.WaitTicks := 0;
     if not FRest.Awake then
       Exit;
   end;
@@ -1820,6 +1951,234 @@ begin
   DrawPoint.Y := AY;
   FField.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow), DrawPoint,
     AAlpha);
+end;
+
+// ---------------------------------------------------------------------------
+// TLightning
+// ---------------------------------------------------------------------------
+
+function ReadSpread(AObj: TJSONObject; const AOwner: string): TSdlFPoint;
+begin
+  Result.X := DefaultSpreadX;
+  Result.Y := DefaultSpreadY;
+  var Raw := AObj.GetValue('spread');
+  if Raw = nil then
+    Exit;
+
+  var Valid := (Raw is TJSONArray) and (TJSONArray(Raw).Count = 2);
+  if Valid then
+    Valid := (TJSONArray(Raw).Items[0] is TJSONNumber) and
+      (TJSONArray(Raw).Items[1] is TJSONNumber);
+  if Valid then
+  begin
+    Result.X := TJSONNumber(TJSONArray(Raw).Items[0]).AsDouble;
+    Result.Y := TJSONNumber(TJSONArray(Raw).Items[1]).AsDouble;
+    Valid := (Result.X >= 0) and (Result.Y >= 0);
+  end;
+  if not Valid then
+    raise EDynamicError.CreateFmt(SLightningBadSpread, [AOwner]);
+end;
+
+function ReadLightningLook(AObj: TJSONObject; ALayer: TDynamicLayer;
+  const AOwner: string): TLightningLook;
+begin
+  Result.Reach := ReadPositive(AObj, 'reach', DefaultReach, AOwner);
+  Result.Spread := ReadSpread(AObj, AOwner);
+  Result.Angle := AObj.GetValue<Double>('angle', DefaultBoltAngle);
+  Result.Cone := ReadReach(AObj, 'cone', DefaultBoltCone, AOwner);
+
+  var LayerCollide := lcNone;
+  if ALayer = dlFront then
+    LayerCollide := lcStrike;
+  Result.Collide := TLightningCollide(ReadWord(AObj, 'collide',
+    LightningCollideIds[LayerCollide], LightningCollideIds, 'collide',
+    AOwner));
+
+  Result.Size := ReadPositive(AObj, 'size', DefaultBoltSize, AOwner);
+  Result.Jag := ReadShare(AObj, 'jag', DefaultJag, AOwner);
+  Result.Fork := ReadShare(AObj, 'fork', DefaultBoltFork, AOwner);
+  Result.Frequency := ReadPositive(AObj, 'frequency', DefaultBoltFrequency,
+    AOwner);
+  Result.Strokes := AObj.GetValue<Integer>('strokes', DefaultStrokes);
+  if (Result.Strokes < 1) or (Result.Strokes > MaxBoltStrokes) then
+    raise EDynamicError.CreateFmt(SLightningBadStrokes,
+      [AOwner, MaxBoltStrokes]);
+  Result.Life := ReadPositive(AObj, 'life', DefaultBoltLife, AOwner);
+  Result.Leader := ReadReach(AObj, 'leader', 0, AOwner);
+  Result.Spell := ReadPositive(AObj, 'spell', DefaultSpell, AOwner);
+  Result.Pause := ReadReach(AObj, 'pause', 0, AOwner);
+  Result.Flash := ReadShare(AObj, 'flash', DefaultBoltFlash, AOwner);
+  Result.Jolt := ReadShare(AObj, 'jolt', 0, AOwner);
+  Result.Tint := ReadTintOrDefault(AObj, 'tint', LightningTint, AOwner);
+end;
+
+constructor TLightning.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  TakeLook(ReadLightningLook(AObj, APlacement.Layer, AOwner),
+    PlacementSeed(APlacement));
+end;
+
+constructor TLightning.CreateLook(const APlacement: TDynamicPlacement;
+  const ALook: TLightningLook; AIntensity: Single; ASeed: Cardinal);
+begin
+  inherited Create(APlacement, AIntensity);
+  TakeLook(ALook, ASeed);
+end;
+
+destructor TLightning.Destroy;
+begin
+  FField.Free;
+  inherited;
+end;
+
+procedure TLightning.TakeLook(const ALook: TLightningLook; ASeed: Cardinal);
+begin
+  FLook := ALook;
+  FBolt.Width := ALook.Size;
+  FBolt.Jag := ALook.Jag;
+  FBolt.ForkChance := ALook.Fork;
+  FBolt.Flash := ALook.Flash;
+  FBolt.Jolt := ALook.Jolt;
+  FBolt.LifeTicks := Max(1, Round(ALook.Life * LogicTicksPerSecond));
+  FBolt.LeaderTicks := Round(ALook.Leader * LogicTicksPerSecond);
+  FBolt.Strokes := ALook.Strokes;
+  FBolt.Tint := TintColor(ALook.Tint);
+
+  FRandom.Seed := ASeed or 1;
+  FField := TBoltField.Create(BoltCapacity, ASeed xor BoltSeedSalt);
+  FGap := LogicTicksPerSecond / ALook.Frequency;
+  // Sources seeded apart strike apart
+  FWait := FGap * FRandom.NextUnit;
+  FRest.Spell := ALook.Spell * LogicTicksPerSecond;
+  FRest.Pause := ALook.Pause * LogicTicksPerSecond;
+end;
+
+procedure TLightning.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  FSolid := ACanvas.Solid;
+end;
+
+procedure TLightning.UseSolid(const ASolid: TSolidProbe);
+begin
+  FSolid := ASolid;
+end;
+
+procedure TLightning.Rewind;
+begin
+  inherited;
+  FField.Clear;
+  FRest.Awake := False;
+  FRest.TicksLeft := 0;
+end;
+
+// The field counts from the point the bolts leave, the probe from the
+// corner of the screen
+function TLightning.Blocked(AX, AY: Single): Boolean;
+begin
+  Result := Assigned(FSolid) and FSolid(FPoint.X + AX, FPoint.Y + AY);
+end;
+
+// Marches from (AX, AY) of the field along the unit vector (AHeadX,
+// AHeadY) and says whether matter stands within AReach, and how far. Where
+// it does not, ADistance is the whole of AReach, give or take a step.
+function TLightning.FindMatter(AX, AY, AHeadX, AHeadY, AReach: Single;
+  out ADistance: Single): Boolean;
+begin
+  ADistance := 0;
+  for var Step := 1 to Trunc(AReach / MarchStep) do
+  begin
+    ADistance := Step * MarchStep;
+    if Blocked(AX + AHeadX * ADistance, AY + AHeadY * ADistance) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// The bolt as the intensity of the moment makes it
+function TLightning.BoltLook: TBoltLook;
+begin
+  Result := FBolt;
+  Result.Width := FBolt.Width *
+    (FaintWidthShare + (1 - FaintWidthShare) * Intensity);
+  var StrokeScale: Single :=
+    FaintStrokeShare + (1 - FaintStrokeShare) * Intensity;
+  Result.Strokes := Max(1, Round(FBolt.Strokes * StrokeScale));
+end;
+
+procedure TLightning.Discharge;
+var
+  Shot: TBoltShot;
+begin
+  Shot.RootX := (2 * FRandom.NextUnit - 1) * FLook.Spread.X;
+  Shot.RootY := (2 * FRandom.NextUnit - 1) * FLook.Spread.Y;
+  var Degrees: Single := FLook.Angle + (FRandom.NextUnit - 0.5) * FLook.Cone;
+  var Heading: Single := DegToRad(Degrees);
+  var HeadX: Single := Cos(Heading);
+  var HeadY: Single := -Sin(Heading);
+  var Reach: Single := FLook.Reach *
+    (FaintReachShare + (1 - FaintReachShare) * Intensity) *
+    (BoltLengthMin + BoltLengthSpread * FRandom.NextUnit);
+
+  Shot.Ending := beBridge;
+  var Span: Single := Reach;
+  if FLook.Collide = lcStrike then
+  begin
+    Shot.Ending := beStrike;
+    if not FindMatter(Shot.RootX, Shot.RootY, HeadX, HeadY, Reach, Span) then
+    begin
+      Shot.Ending := beStreamer;
+      Span := Reach * StreamerShare;
+    end;
+  end;
+  Shot.EndX := Shot.RootX + HeadX * Span;
+  Shot.EndY := Shot.RootY + HeadY * Span;
+  Shot.Seed := FRandom.Seed;
+  FField.Shoot(Shot, BoltLook);
+end;
+
+procedure TLightning.Emit;
+begin
+  if FRest.Pause > 0 then
+  begin
+    // A spell opens with a bolt
+    if FRest.Tick(FRandom) then
+      FWait := 0;
+    if not FRest.Awake then
+      Exit;
+  end;
+
+  // The wait counts in ticks of full intensity: a source fading in or out
+  // speeds up and slows down with it
+  FWait := FWait - Intensity;
+  if FWait > 0 then
+    Exit;
+  Discharge;
+  FWait := FGap * (BoltGapMin + BoltGapSpread * FRandom.NextUnit);
+end;
+
+procedure TLightning.Advance(AMotionX, AMotionY: Single;
+  AParentAlive: Boolean);
+begin
+  FPoint.X := Origin.X + Placement.X;
+  FPoint.Y := Origin.Y + Placement.Y;
+  FField.ShiftFrame(AMotionX, AMotionY);
+  // Before the new bolt: it is drawn in its first tick, bloom and all
+  FField.Tick;
+  if AParentAlive and (Intensity > 0) then
+    Emit;
+end;
+
+procedure TLightning.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+var
+  DrawPoint: TSdlFPoint;
+begin
+  DrawPoint.X := AX;
+  DrawPoint.Y := AY;
+  FField.Draw(BoltBrush(ACanvas.Renderer, ACanvas.BeamGlow,
+    ACanvas.PointGlow), DrawPoint, AAlpha);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2442,6 +2801,8 @@ begin
       Result := TFan.Create(APlacement, AObj, AOwner);
     dkHaze:
       Result := THaze.Create(APlacement, AObj, AOwner);
+    dkLightning:
+      Result := TLightning.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

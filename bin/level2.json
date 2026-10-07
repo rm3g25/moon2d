@@ -355,6 +355,37 @@
       "fork": 18
     },
     {
+      "kind": "lightning",
+      "parent": "satellite",
+      "x": 34,
+      "y": 35,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 50,
+      "reach": 22,
+      "spread": [
+        4,
+        5
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 0.8,
+      "jag": 24,
+      "fork": 10,
+      "frequency": 1.6,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1.5,
+      "pause": 4,
+      "flash": 40,
+      "jolt": 0
+    },
+    {
       "kind": "beacon",
       "parent": "s01-plat-01",
       "x": 16.0,
@@ -664,6 +695,36 @@
       "opacity": 85,
       "flash": 35,
       "fork": 15
+    },
+    {
+      "kind": "lightning",
+      "parent": "s01-crane",
+      "x": 142.0,
+      "y": 36.0,
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "reach": 28,
+      "spread": [
+        9,
+        5
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.0,
+      "jag": 24,
+      "fork": 12,
+      "frequency": 1.4,
+      "strokes": 2,
+      "life": 0.1,
+      "leader": 0,
+      "spell": 1,
+      "pause": 7,
+      "flash": 40,
+      "jolt": 0
     },
     {
       "kind": "beacon",

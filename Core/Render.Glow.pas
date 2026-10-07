@@ -9,10 +9,10 @@
   behaves and how a menu star, a spark and a halo all want to look.
 
   The shapes here are analytic (a Gaussian point, a spiked flare, the
-  long thin cross of a starburst, the streak of a spark); a
-  shape computed elsewhere - a blurred logo, say - comes in as a
-  surface through CreateGlowTexture and leaves with the same blend
-  and filter settings.
+  long thin cross of a starburst, the streak of a spark, the band a
+  bolt of lightning is drawn on); a shape computed elsewhere - a
+  blurred logo, say - comes in as a surface through CreateGlowTexture
+  and leaves with the same blend and filter settings.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -28,8 +28,10 @@ type
   EGlowError = class(Exception);
 
   // gsStreak lies along X: the hot end at the right edge, the tail
-  // thinning out to the left
-  TGlowShape = (gsPoint, gsFlare, gsStarburst, gsStreak);
+  // thinning out to the left. gsBeam is a Gaussian across Y and flat
+  // along X: a strip of triangles laid along a path shows its middle
+  // bright and its edges clear.
+  TGlowShape = (gsPoint, gsFlare, gsStarburst, gsStreak, gsBeam);
 
 // A square texture of ASide pixels with the shape in its alpha
 function CreateGlowShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
@@ -64,6 +66,8 @@ const
   // Thinner than a flare spike and slower to fade: a ray, not a spark
   StarburstRayWidth = 0.012;
   StreakSigma = 0.45;
+  // Small enough that the band is clear at its edges
+  BeamSigma = 0.4;
   // Typed: Power has three overloads
   StreakTailPower: Single = 1.5;
   // The hot end rounds off over this share of the length, so a streak
@@ -112,6 +116,11 @@ begin
     Exp(-Sqr(ADY / StreakSigma));
 end;
 
+function BeamAlpha(ADY: Single): Single;
+begin
+  Result := Exp(-Sqr(ADY / BeamSigma));
+end;
+
 function FlareAlpha(ADX, ADY: Single): Single;
 begin
   var Radius: Single := Sqrt(ADX * ADX + ADY * ADY);
@@ -133,6 +142,8 @@ begin
       Result := StarburstAlpha(ADX, ADY);
     gsStreak:
       Result := StreakAlpha(ADX, ADY);
+    gsBeam:
+      Result := BeamAlpha(ADY);
   else
     Result := FlareAlpha(ADX, ADY);
   end;
