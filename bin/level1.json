@@ -1662,6 +1662,138 @@
       "fork": 25
     },
     {
+      "kind": "lightning",
+      "parent": "boss",
+      "x": 16,
+      "y": 16,
+      "tag": "bossCrackle",
+      "layer": "front",
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 0,
+      "reach": 20,
+      "spread": [
+        13,
+        13
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.0,
+      "jag": 26,
+      "fork": 18,
+      "frequency": 2.2,
+      "strokes": 2,
+      "life": 0.11,
+      "leader": 0,
+      "spell": 2,
+      "pause": 2.5,
+      "flash": 55,
+      "jolt": 0
+    },
+    {
+      "kind": "lightning",
+      "parent": "boss",
+      "x": 16,
+      "y": 16,
+      "tag": "bossShort",
+      "layer": "front",
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 0,
+      "reach": 34,
+      "spread": [
+        13,
+        13
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.3,
+      "jag": 26,
+      "fork": 25,
+      "frequency": 12,
+      "strokes": 2,
+      "life": 0.12,
+      "leader": 0,
+      "spell": 1,
+      "pause": 0,
+      "flash": 60,
+      "jolt": 0
+    },
+    {
+      "kind": "lightning",
+      "parent": "boss",
+      "x": 16,
+      "y": 16,
+      "tag": "bossBreak",
+      "layer": "front",
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 0,
+      "reach": 84,
+      "spread": [
+        12,
+        12
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "none",
+      "size": 1.7,
+      "jag": 32,
+      "fork": 40,
+      "frequency": 3.5,
+      "strokes": 3,
+      "life": 0.14,
+      "leader": 0,
+      "spell": 1,
+      "pause": 0,
+      "flash": 80,
+      "jolt": 0
+    },
+    {
+      "kind": "lightning",
+      "parent": "boss",
+      "x": 16,
+      "y": 16,
+      "tag": "bossStrike",
+      "layer": "front",
+      "tint": [
+        66,
+        74,
+        100
+      ],
+      "intensity": 0,
+      "reach": 230,
+      "spread": [
+        8,
+        8
+      ],
+      "angle": 90,
+      "cone": 360,
+      "collide": "strike",
+      "size": 2.4,
+      "jag": 20,
+      "fork": 45,
+      "frequency": 2,
+      "strokes": 3,
+      "life": 0.18,
+      "leader": 0.06,
+      "spell": 1,
+      "pause": 0,
+      "flash": 100,
+      "jolt": 14
+    },
+    {
       "kind": "beacon",
       "parent": "boss",
       "turns": true,
@@ -4857,6 +4989,12 @@
           "target": "bossSmoke",
           "value": 60,
           "ticks": 66
+        },
+        {
+          "action": "intensity",
+          "target": "bossCrackle",
+          "value": 26,
+          "ticks": 66
         }
       ]
     },
@@ -4884,6 +5022,12 @@
           "action": "intensity",
           "target": "bossSmoke",
           "value": 0
+        },
+        {
+          "action": "intensity",
+          "target": "bossCrackle",
+          "value": 0,
+          "ticks": 33
         }
       ]
     },
@@ -4947,6 +5091,42 @@
       ]
     },
     {
+      "id": "bossRageSmokes",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 100,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossSmoke",
+          "value": 60,
+          "ticks": 66
+        },
+        {
+          "action": "intensity",
+          "target": "bossCrackle",
+          "value": 30,
+          "ticks": 66
+        }
+      ]
+    },
+    {
+      "id": "bossRageCrackles",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 75,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossCrackle",
+          "value": 75,
+          "ticks": 33
+        }
+      ]
+    },
+    {
       "id": "bossBurns",
       "screen": 17,
       "when": "livesBelow",
@@ -4970,6 +5150,24 @@
           "target": "bossSparks",
           "value": 100,
           "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossCrackle",
+          "value": 0,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossShort",
+          "value": 38,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossBreak",
+          "value": 15,
+          "ticks": 33
         }
       ]
     },
@@ -4984,6 +5182,60 @@
           "action": "tactics",
           "target": "boss",
           "value": "hunts"
+        }
+      ]
+    },
+    {
+      "id": "bossStorms",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 25,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossShort",
+          "value": 53,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossBreak",
+          "value": 45,
+          "ticks": 33
+        },
+        {
+          "action": "intensity",
+          "target": "bossStrike",
+          "value": 19,
+          "ticks": 33
+        }
+      ]
+    },
+    {
+      "id": "bossTearsApart",
+      "screen": 17,
+      "when": "livesBelow",
+      "tag": "boss",
+      "lives": 9,
+      "then": [
+        {
+          "action": "intensity",
+          "target": "bossShort",
+          "value": 75,
+          "ticks": 20
+        },
+        {
+          "action": "intensity",
+          "target": "bossBreak",
+          "value": 75,
+          "ticks": 20
+        },
+        {
+          "action": "intensity",
+          "target": "bossStrike",
+          "value": 75,
+          "ticks": 20
         }
       ]
     }

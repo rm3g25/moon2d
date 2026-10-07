@@ -1954,6 +1954,7 @@ begin
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind
   FDynamics.Tick(FHero.Screen);
+  FShake.AddTrauma(FDynamics.TakeJolt);
   if FHurtCooldown > 0 then
     Dec(FHurtCooldown);
   if FHero.Dead then

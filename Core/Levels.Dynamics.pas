@@ -153,6 +153,9 @@ type
     procedure Tick(AOriginX, AOriginY: Single; AParentAlive: Boolean);
     // Heads for ALevel (0..1) over ATicks; 0 ticks = at once
     procedure FadeTo(ALevel: Single; ATicks: Integer);
+    // The shake this tick's strokes give the screen, as a share of the room
+    // its trauma has left; asking empties it. Only lightning shakes.
+    function TakeJolt: Single; virtual;
     // Back to the intensity of the level file, at once; the next tick
     // starts from wherever the origin is then
     procedure Rewind; virtual;
@@ -488,6 +491,7 @@ type
     // For lightning the game makes: a level's takes the solid layer from
     // the canvas
     procedure UseSolid(const ASolid: TSolidProbe);
+    function TakeJolt: Single; override;
   end;
 
   // A body in the sky - the Earth over the Moon unless the level says
@@ -1313,6 +1317,11 @@ begin
   FIntensity.HeadFor(ALevel, ATicks);
 end;
 
+function TDynamicObject.TakeJolt: Single;
+begin
+  Result := 0;
+end;
+
 procedure TDynamicObject.Rewind;
 begin
   FIntensity.Settle(FIntensity.Initial);
@@ -2063,6 +2072,11 @@ end;
 procedure TLightning.UseSolid(const ASolid: TSolidProbe);
 begin
   FSolid := ASolid;
+end;
+
+function TLightning.TakeJolt: Single;
+begin
+  Result := FField.TakeJolt;
 end;
 
 procedure TLightning.Rewind;

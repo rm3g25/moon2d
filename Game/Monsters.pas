@@ -28,7 +28,8 @@
   fast).
 
   A machine - a monster that explodes and moves: the tank, the flying
-  platform - smokes and sparks once it is down to its last third (a 2026
+  platform - smokes and sparks once it is down to its last third, and
+  shorts out in bolts that come harder with every life it loses (a 2026
   addition). An explosive prop - the barrel - vents a wisp of smoke all
   its life and a plume in that last third (a 2026 addition too).
 
@@ -114,7 +115,8 @@ type
     FSmoke: TSmoke; // machines and explosive props, nil for the rest
     FBodySmoke: TBodySmoke; // what FSmoke was made by
     FSparks: TSparks; // machines only, nil for the rest
-    FWrecked: Boolean; // the smoke stands at its critical level, the sparks fly
+    FShort: TLightning; // machines only, nil for the rest
+    FWrecked: Boolean; // the smoke stands at its critical level, sparks fly, bolts strike
     FDisc: TDisc; // a disc monster only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
@@ -154,10 +156,12 @@ type
     function SpawnSeed: Cardinal;
     procedure CreateSmoke(const ABodySmoke: TBodySmoke);
     procedure CreateWreckSparks;
+    procedure CreateWreckShort;
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure WreckIfCritical;
     procedure TickSmoke;
     procedure TickSparks;
+    procedure TickShort;
     procedure TickDisc;
     function EyeTarget: TSdlFPoint;
     function DiscCenter: TSdlFPoint;
@@ -360,6 +364,16 @@ const
   WreckSparksY = 19;
   WreckSparksSeedSalt = $57726B21; // "Wrk!"
 
+  WreckShort: TLightningLook = (Reach: 16; Spread: (X: 11; Y: 7); Angle: 90;
+    Cone: 360; Collide: lcNone; Size: 1; Jag: 0.26; Fork: 0.18; Frequency: 2.2;
+    Strokes: 2; Life: 0.11; Leader: 0; Spell: 0; Pause: 0; Flash: 0.55;
+    Jolt: 0; Tint: (R: 66; G: 74; B: 100));
+  WreckShortFloor = 0.35;
+  WreckShortSpan = 0.65;
+  WreckShortX = 12;
+  WreckShortY = 19;
+  WreckShortSeedSalt = $57726B53; // "WrkS"
+
 // Explodes and moves: a mount explodes too, but is part of the wall
 function IsMachine(const ADef: TMonsterDef): Boolean;
 begin
@@ -442,6 +456,7 @@ begin
   begin
     CreateSmoke(WreckSmoke);
     CreateWreckSparks;
+    CreateWreckShort;
   end
   else if IsExplosiveProp(ADef) then
     CreateSmoke(BarrelSmoke);
@@ -453,6 +468,7 @@ destructor TMonster.Destroy;
 begin
   FPilot.Free;
   FDisc.Free;
+  FShort.Free;
   FSparks.Free;
   FSmoke.Free;
   FEvents.Free;
@@ -484,6 +500,13 @@ begin
   FSparks := TSparks.CreateLook(WreckPlacement, WreckSparks, 0,
     SpawnSeed xor WreckSparksSeedSalt);
   FSparks.UseSolid(SolidUnderPoint);
+end;
+
+procedure TMonster.CreateWreckShort;
+begin
+  FShort := TLightning.CreateLook(Default(TDynamicPlacement), WreckShort, 0,
+    SpawnSeed xor WreckShortSeedSalt);
+  FShort.UseSolid(SolidUnderPoint);
 end;
 
 function TMonster.SolidUnderPoint(AX, AY: Single): Boolean;
@@ -526,6 +549,24 @@ begin
     FLife = mlAlive);
 end;
 
+procedure TMonster.TickShort;
+begin
+  if FShort = nil then
+    Exit;
+
+  if FWrecked then
+  begin
+    var ShortLevel: Single := WreckShortFloor + WreckShortSpan * (1 - TierShare);
+    FShort.FadeTo(ShortLevel, 0);
+  end;
+
+  var PointX := WreckShortX;
+  if FacesRight then
+    PointX := SpriteSize - WreckShortX;
+  FShort.Tick(Round(FX) + PointX, Round(FY) - SpriteSize + WreckShortY,
+    FLife = mlAlive);
+end;
+
 procedure TMonster.DrawSmoke(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; AAlpha: Single);
 begin
@@ -540,6 +581,9 @@ begin
   if FSparks <> nil then
     FSparks.Draw(ACanvas, FSparks.Origin.X + AOrigin.X,
       FSparks.Origin.Y + AOrigin.Y, AAlpha);
+  if FShort <> nil then
+    FShort.Draw(ACanvas, FShort.Origin.X + AOrigin.X,
+      FShort.Origin.Y + AOrigin.Y, AAlpha);
 end;
 
 procedure TMonster.TickDisc;
@@ -1196,6 +1240,7 @@ begin
   WreckIfCritical;
   TickSmoke;
   TickSparks;
+  TickShort;
   TickDisc;
   // After the disc has turned: the ports are where the frame shows them
   if (FPilot <> nil) and FPilot.PortsDue then

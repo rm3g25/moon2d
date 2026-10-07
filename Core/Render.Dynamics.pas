@@ -136,6 +136,7 @@ type
     FSolid: TSolidProbe;
     FBackdropOf: TBackdropOf;
     FInView: Boolean; // the object being ticked stands on the hero's screen
+    FJolt: Single; // what the hero's screen has been shaken by, unasked
     function SolidInView(AX, AY: Single): Boolean;
     function PlaceOf(ADynamic: TDynamicObject;
       const AObjects: TArray<TLevelObject>): TPlace;
@@ -156,6 +157,9 @@ type
     // AScreen is the hero's: an object standing on several screens
     // counts from its stand there
     procedure Tick(AScreen: Integer);
+    // The shake the strokes of the hero's screen have given since the last
+    // asking, as a share of the room the trauma has left
+    function TakeJolt: Single;
     // The monsters were reborn (a restart): what hangs on them finds its
     // parent at once, before the next frame shows it at the old stand
     procedure Reseat;
@@ -372,7 +376,17 @@ begin
     var Origin := OriginOf(FPlaces[i], Lead, ThisTick);
     FPlaces[i].DynamicObject.FollowEffort(FPlaces[i].ParentEffort);
     FPlaces[i].DynamicObject.Tick(Origin.X, Origin.Y, FPlaces[i].ParentAlive);
+    // A bolt on a screen the hero is not on shakes nothing
+    var Jolt: Single := FPlaces[i].DynamicObject.TakeJolt;
+    if FInView then
+      FJolt := FJolt + Jolt;
   end;
+end;
+
+function TDynamicScreenRenderer.TakeJolt: Single;
+begin
+  Result := FJolt;
+  FJolt := 0;
 end;
 
 function TDynamicScreenRenderer.ViewOf(AScreen: Integer; AOrigin: TSdlPoint;
