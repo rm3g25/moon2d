@@ -56,8 +56,8 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
-  Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Pilot,
-  Bullets, Pads.World;
+  Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Hull,
+  Monsters.Pilot, Bullets, Pads.World;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
@@ -118,6 +118,7 @@ type
     FShort: TLightning; // machines only, nil for the rest
     FWrecked: Boolean; // the smoke stands at its critical level, sparks fly, bolts strike
     FDisc: TDisc; // a disc monster only, nil for the rest
+    FHull: THull; // a hull monster only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
     FRageLives: Integer; // a boss goes into its rage below this
@@ -153,7 +154,8 @@ type
     procedure BeginDying(const AEnemyBullets: TBurst);
     function ThirdMark(AThirds: Integer): Integer;
     function FacesRight: Boolean;
-    function BodyPoint(AArtX, AArtY: Integer): TSdlFPoint;
+    function BodyPoint(AArtX, AArtY: Integer;
+      const AHullPoint: THullPoint): TSdlFPoint;
     function SpawnSeed: Cardinal;
     procedure CreateSmoke(const ABodySmoke: TBodySmoke);
     procedure CreateWreckSparks;
@@ -164,24 +166,28 @@ type
     procedure TickSparks;
     procedure TickShort;
     procedure TickDisc;
+    procedure TickHull;
     function EyeTarget: TSdlFPoint;
-    function DiscCenter: TSdlFPoint;
-    function DiscWear: Single;
-    function DiscCharge: Single;
+    function ArtCenter: TSdlFPoint;
+    function HullCenter: TSdlFPoint;
+    function Wear(AWearFull: Double): Single;
+    function ShotCharge: Single;
   public
-    // ADiscArt - the layers of a disc monster, nil for the rest; the
-    // caller keeps it and APads alive longer than the monster
+    // ADiscArt, AHullArt - the layers of a disc or a hull monster, nil for
+    // the rest; the caller keeps them and APads alive longer than the
+    // monster
     constructor Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-      ADiscArt: TDiscArt; const ALevel: TLevel; const APads: TPadWorld;
-      const APlacement: TEntityPlacement; ALivesScale: Double);
+      ADiscArt: TDiscArt; AHullArt: THullArt; const ALevel: TLevel;
+      const APads: TPadWorld; const APlacement: TEntityPlacement;
+      ALivesScale: Double);
     destructor Destroy; override;
 
     // One logic tick (33 Hz - the REAL rate of the 2008 20 ms timer).
     // AHeroX/AHeroY feed the chasers and aimers; enemy bullets go into
     // ABullets (the shared monster burst).
     procedure Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
-    // AAlpha in [0..1): how far toward the next tick - only the disc
-    // draws between ticks, the frames stay on them
+    // AAlpha in [0..1): how far toward the next tick - only the disc and
+    // the eye of a hull draw between ticks, the frames stay on them
     procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -233,6 +239,7 @@ type
     FSpriteSets: TObjectList<TSpriteSet>;
     FSetCaches: TObjectList<TSpriteCache>;
     FDiscArts: TObjectDictionary<string, TDiscArt>; // set name -> layers
+    FHullArts: TObjectDictionary<string, THullArt>; // set name -> layers
     FRenderer: PSdlRenderer;
     FRegistry: TMonsterRegistry;
     FLevel: TLevel;
@@ -245,6 +252,7 @@ type
       AScreen, APlacementX, APlacementY: Integer): TMonster;
     function AnimFor(const AMnsName: string): TAnimSet;
     function DiscArtFor(const ADef: TMonsterDef): TDiscArt;
+    function HullArtFor(const ADef: TMonsterDef): THullArt;
   public
     // APads must outlive the field
     constructor Create(const ARenderer: PSdlRenderer;
@@ -328,7 +336,7 @@ const
   // A wrecked machine smokes like the boss before his rage (bossSmoke of
   // level 1 at 60%, but straight up - the point mirrors with the art):
   // enough to notice, not enough to hide the fight. Unlit until the last
-  // third. The point: the tank's engine deck, the platform's wing root.
+  // third. The point: the tank's engine deck; a hull brings its own.
   WreckSmoke: TBodySmoke = (
     Look: (Rate: 50; Life: 1.0; Size: 7; EndSize: 26;
       Opacity: 0.7; Angle: 90; Cone: 90; Speed: 6; Drag: 0.2; Lift: 0;
@@ -360,7 +368,7 @@ const
   WreckSparksLevel = 1;
   WreckSparksRampTicks = 0; // a short has no ramp
   // Where the sparks leave the left-facing art: the tank's hull over
-  // the tracks, the underside of the platform's wing
+  // the tracks
   WreckSparksX = 12;
   WreckSparksY = 19;
   WreckSparksSeedSalt = $57726B21; // "Wrk!"
@@ -392,8 +400,9 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TMonster.Create(const ADef: TMonsterDef; const AAnim: TAnimSet;
-  ADiscArt: TDiscArt; const ALevel: TLevel; const APads: TPadWorld;
-  const APlacement: TEntityPlacement; ALivesScale: Double);
+  ADiscArt: TDiscArt; AHullArt: THullArt; const ALevel: TLevel;
+  const APads: TPadWorld; const APlacement: TEntityPlacement;
+  ALivesScale: Double);
 begin
   inherited Create;
   FDef := ADef;
@@ -462,12 +471,15 @@ begin
   else if IsExplosiveProp(ADef) then
     CreateSmoke(BarrelSmoke);
   if ADiscArt <> nil then
-    FDisc := TDisc.Create(ADef.Disc, ADiscArt, DiscCenter);
+    FDisc := TDisc.Create(ADef.Disc, ADiscArt, ArtCenter);
+  if AHullArt <> nil then
+    FHull := THull.Create(ADef.Hull, AHullArt);
 end;
 
 destructor TMonster.Destroy;
 begin
   FPilot.Free;
+  FHull.Free;
   FDisc.Free;
   FShort.Free;
   FSparks.Free;
@@ -531,7 +543,7 @@ begin
   if FSmoke = nil then
     Exit;
 
-  var Spot := BodyPoint(FBodySmoke.X, FBodySmoke.Y);
+  var Spot := BodyPoint(FBodySmoke.X, FBodySmoke.Y, FDef.Hull.Smoke);
   FSmoke.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
@@ -540,7 +552,7 @@ begin
   if FSparks = nil then
     Exit;
 
-  var Spot := BodyPoint(WreckSparksX, WreckSparksY);
+  var Spot := BodyPoint(WreckSparksX, WreckSparksY, FDef.Hull.Sparks);
   FSparks.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
@@ -555,7 +567,7 @@ begin
     FShort.FadeTo(ShortLevel, 0);
   end;
 
-  var Spot := BodyPoint(WreckShortX, WreckShortY);
+  var Spot := BodyPoint(WreckShortX, WreckShortY, FDef.Hull.Sparks);
   FShort.Tick(Spot.X, Spot.Y, FLife = mlAlive);
 end;
 
@@ -584,14 +596,21 @@ var
 begin
   if FDisc = nil then
     Exit;
-  Drive.Center := DiscCenter;
+  Drive.Center := ArtCenter;
   Drive.Hero := EyeTarget;
   Drive.SpinScale := FStep / Max(1, FDef.Movement.Speed);
   if FPilot <> nil then
     Drive.SpinScale := FPilot.SpinScale(Drive.SpinScale);
-  Drive.Wear := DiscWear;
-  Drive.Charge := DiscCharge;
+  Drive.Wear := Wear(FDef.Disc.WearFull);
+  Drive.Charge := ShotCharge;
   FDisc.Tick(Drive);
+end;
+
+procedure TMonster.TickHull;
+begin
+  if FHull = nil then
+    Exit;
+  FHull.Tick(Wear(FDef.Hull.WearFull), ShotCharge);
 end;
 
 // The hero - or the point a ram has locked on; a stunned eye looks at
@@ -610,27 +629,35 @@ begin
         Result.Y := FPilot.AimPoint.Y;
       end;
     pgNowhere:
-      Result := DiscCenter;
+      Result := ArtCenter;
   end;
 end;
 
 // The middle of the sprite: Y is its feet line
-function TMonster.DiscCenter: TSdlFPoint;
+function TMonster.ArtCenter: TSdlFPoint;
 begin
   Result.X := FX + SpriteSize / 2;
   Result.Y := FY - SpriteSize / 2;
 end;
 
-function TMonster.DiscWear: Single;
+// On whole units, as a frame stands: the picture, the hitbox and the smoke
+// stay glued
+function TMonster.HullCenter: TSdlFPoint;
+begin
+  Result := ArtCenter;
+  Result.X := Round(Result.X);
+  Result.Y := Round(Result.Y);
+end;
+
+function TMonster.Wear(AWearFull: Double): Single;
 begin
   if FLivesBorn <= 0 then
     Exit(0);
-  Result := EnsureRange((1 - FLives / FLivesBorn) / FDef.Disc.WearFull,
-    0.0, 1.0);
+  Result := EnsureRange((1 - FLives / FLivesBorn) / AWearFull, 0.0, 1.0);
 end;
 
 // 1 on the tick of a shot, rising toward it over the last TelegraphTicks
-function TMonster.DiscCharge: Single;
+function TMonster.ShotCharge: Single;
 const
   TelegraphTicks = 10;
 begin
@@ -652,9 +679,14 @@ begin
   Result := FAction = maWalkRight;
 end;
 
-// A point of the left-facing art on the screen: it mirrors with the body
-function TMonster.BodyPoint(AArtX, AArtY: Integer): TSdlFPoint;
+// A point of the left-facing art on the screen: it mirrors with the body.
+// A hull never mirrors and has points of its own.
+function TMonster.BodyPoint(AArtX, AArtY: Integer;
+  const AHullPoint: THullPoint): TSdlFPoint;
 begin
+  if FHull <> nil then
+    Exit(FHull.Spot(HullCenter, AHullPoint));
+
   var PointX := AArtX;
   if FacesRight then
     PointX := SpriteSize - AArtX;
@@ -1244,6 +1276,7 @@ begin
   TickSparks;
   TickShort;
   TickDisc;
+  TickHull;
   // After the disc has turned: the ports are where the frame shows them
   if (FPilot <> nil) and FPilot.PortsDue then
     FirePorts(ABullets);
@@ -1353,6 +1386,11 @@ begin
     FDisc.Draw(ASprites, AAlpha);
     Exit;
   end;
+  if (FHull <> nil) and (FLife = mlAlive) then
+  begin
+    FHull.Draw(ASprites, HullCenter, AAlpha);
+    Exit;
+  end;
 
   var DrawY := Round(FY) - SpriteSize;
   var Mirrored := FAction = maWalkRight; // 2008 art faces left
@@ -1395,6 +1433,7 @@ begin
   FSpriteSets := TObjectList<TSpriteSet>.Create(True);
   FSetCaches := TObjectList<TSpriteCache>.Create(True);
   FDiscArts := TObjectDictionary<string, TDiscArt>.Create([doOwnsValues]);
+  FHullArts := TObjectDictionary<string, THullArt>.Create([doOwnsValues]);
   FRenderer := ARenderer;
   FRegistry := ARegistry;
   FLevel := ALevel;
@@ -1410,7 +1449,8 @@ begin
       Continue;
     var Def := ARegistry.Find(Placement.MonsterId);
     FMonsters.Add(TMonster.Create(Def, AnimFor(Placement.SpriteList),
-      DiscArtFor(Def), ALevel, APads, Placement, FLivesScale));
+      DiscArtFor(Def), HullArtFor(Def), ALevel, APads, Placement,
+      FLivesScale));
   end;
 end;
 
@@ -1448,7 +1488,7 @@ begin
   // (the 2008 call took no multiplier) - scaled here for consistency.
   // TODO: verify against monst.pas (tracked: PORTING-NOTES)
   Result := TMonster.Create(Def, AnimFor(Def.SpriteList), DiscArtFor(Def),
-    FLevel, FPads, Placement, FLivesScale);
+    HullArtFor(Def), FLevel, FPads, Placement, FLivesScale);
   FMonsters.Add(Result);
 end;
 
@@ -1545,8 +1585,9 @@ end;
 
 destructor TMonsterField.Destroy;
 begin
-  // Monsters before the disc art they draw with
+  // Monsters before the disc and hull art they draw with
   FMonsters.Free;
+  FHullArts.Free;
   FDiscArts.Free;
   FAnimSets.Free;
   // Caches before sets: a cache holds no set resources at destroy time,
@@ -1586,6 +1627,16 @@ begin
     Exit;
   Result := TDiscArt.Create(FRenderer, ADef.Disc.SetName);
   FDiscArts.Add(ADef.Disc.SetName, Result);
+end;
+
+function TMonsterField.HullArtFor(const ADef: TMonsterDef): THullArt;
+begin
+  if not ADef.Hull.Enabled then
+    Exit(nil);
+  if FHullArts.TryGetValue(ADef.Hull.SetName, Result) then
+    Exit;
+  Result := THullArt.Create(FRenderer, ADef.Hull.SetName);
+  FHullArts.Add(ADef.Hull.SetName, Result);
 end;
 
 end.

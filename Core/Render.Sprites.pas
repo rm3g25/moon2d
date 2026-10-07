@@ -152,9 +152,9 @@ type
     // Layers that must stay put (backdrop, cursor, HUD) draw with it at
     // zero; the caller sets it per layer, nothing here resets it.
     property Origin: TSdlPoint read FOrigin write FOrigin;
-    // A fraction of a unit under Origin.Y for Draw, DrawRotated and
-    // DrawTurned: a body riding a swaying pad sways with it, not in whole
-    // units. The caller puts it back to zero.
+    // A fraction of a unit under Origin.Y for Draw, DrawRotated,
+    // DrawTurned and DrawSized: a body riding a swaying pad sways with it,
+    // not in whole units. The caller puts it back to zero.
     property FineY: Single read FFineY write FFineY;
 
     // PutStaticSprite: draw at a sprite-grid cell, forced to 32x32.
@@ -185,6 +185,10 @@ type
     // between ticks must not snap to them.
     procedure DrawTurned(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       ASide: Single; AAngleDegrees: Double; ALevel: Single = 1);
+    // A rectangle AWidth by AHeight units centered on the point, unturned,
+    // at ALevel opacity (0..1). Float all the way, as DrawTurned.
+    procedure DrawSized(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
+      AWidth, AHeight: Single; ALevel: Single = 1);
   end;
 
 implementation
@@ -555,6 +559,19 @@ begin
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
   SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
     SdlFlipNone);
+end;
+
+procedure TSpriteRenderer.DrawSized(ATexture: PSdlTexture;
+  const ACenter: TSdlFPoint; AWidth, AHeight: Single; ALevel: Single);
+var
+  Dest: TSdlFRect;
+begin
+  Dest.X := ACenter.X - AWidth / 2 + FOrigin.X;
+  Dest.Y := ACenter.Y - AHeight / 2 + FOrigin.Y + FFineY;
+  Dest.W := AWidth;
+  Dest.H := AHeight;
+  SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, 0.0, nil, SdlFlipNone);
 end;
 
 end.

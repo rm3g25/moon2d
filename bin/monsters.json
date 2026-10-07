@@ -163,7 +163,25 @@
       "affectedByGravity": false,
       "explodesOnDeath": true,
       "explosion": "machine",
-      "material": "metal"
+      "material": "metal",
+      "hull": {
+        "set": "platform-hull",
+        "width": 40,
+        "height": 20.33,
+        "wearFull": 80,
+        "eye": [
+          20,
+          4.9
+        ],
+        "smoke": [
+          9.5,
+          8.1
+        ],
+        "sparks": [
+          29.2,
+          8.7
+        ]
+      }
     },
     {
       "id": "tank",

@@ -148,7 +148,7 @@ begin
   Placement.Y := ARow;
 
   Result := TMonster.Create(FRegistry.Find(AMonsterId), Default(TAnimSet),
-    nil, FLevel, FPads, Placement, 1.0);
+    nil, nil, FLevel, FPads, Placement, 1.0);
   FMonsters.Add(Result);
 end;
 

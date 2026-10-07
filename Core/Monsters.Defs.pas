@@ -117,6 +117,30 @@ type
     function Enabled: Boolean;
   end;
 
+  // A point of a hull's art: screen units from the top-left corner of the
+  // hull
+  THullPoint = record
+    X, Y: Double;
+  end;
+
+  // A monster drawn as a hull out of two layers (Monsters.Hull) instead of
+  // its 'alive' frames; the death frames stay. JSON "hull":
+  //   {"set": "platform-hull", "width": 40, "height": 20.33, "wearFull": 80,
+  //    "eye": [20, 4.9], "smoke": [9.5, 8.1], "sparks": [29.2, 8.7]}
+  THullDef = record
+    SetName: string; // '' = no hull
+    // The hull's size on the screen, units; it stands in the middle of the
+    // monster's cell
+    Width, Height: Double;
+    // Share of the lives lost when the worn look is complete, 0..1
+    WearFull: Double;
+    // The middle of the lens
+    Eye: THullPoint;
+    // Where a wrecked body smokes, and where it sparks and shorts out
+    Smoke, Sparks: THullPoint;
+    function Enabled: Boolean;
+  end;
+
   TMonsterDef = record
     Id: string;
     LegacyName: string;  // old level-file name; drop after level migration
@@ -141,6 +165,7 @@ type
     DeathSounds: TArray<string>;
     Boss: TBossDef;
     Disc: TDiscDef;
+    Hull: THullDef;
   end;
 
   // Owns all definitions. Create once at startup, free at shutdown.
@@ -186,6 +211,11 @@ resourcestring
   SBadDisc = 'Monster "%s": a disc needs a set, a positive side, a ' +
     'muzzle from 0 to half the side and wearFull above 0, up to 100';
   SBadPortAngles = 'Monster "%s": the portAngles of a disc are numbers';
+  SBadHull = 'Monster "%s": a hull needs a set, a positive width and height ' +
+    'and wearFull above 0, up to 100';
+  SBadHullPoint = 'Monster "%s": the "%s" of a hull is a point of two numbers';
+  SDiscAndHull = 'Monster "%s": a monster is drawn as a disc or as a hull, ' +
+    'not both';
 
 const
   // JSON protocol keys read in more than one place
@@ -254,7 +284,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// TAttackDef / TBossDef / TDiscDef
+// TAttackDef / TBossDef / TDiscDef / THullDef
 // ---------------------------------------------------------------------------
 
 function TAttackDef.HasAttack: Boolean;
@@ -284,6 +314,11 @@ begin
 end;
 
 function TDiscDef.Enabled: Boolean;
+begin
+  Result := SetName <> '';
+end;
+
+function THullDef.Enabled: Boolean;
 begin
   Result := SetName <> '';
 end;
@@ -319,6 +354,42 @@ begin
     (Result.Muzzle < 0) or (Result.Muzzle > Result.Side / 2) or
     (Result.WearFull <= 0) or (Result.WearFull > 1) then
     raise EMonsterDefError.CreateFmt(SBadDisc, [AMonsterId]);
+end;
+
+function IsNumberPair(const AValue: TJSONArray): Boolean;
+begin
+  Result := (AValue <> nil) and (AValue.Count = 2) and
+    (AValue.Items[0] is TJSONNumber) and (AValue.Items[1] is TJSONNumber);
+end;
+
+function IsBrokenHull(const AHull: THullDef): Boolean;
+begin
+  Result := (AHull.SetName = '') or (AHull.Width <= 0) or (AHull.Height <= 0) or
+    (AHull.WearFull <= 0) or (AHull.WearFull > 1);
+end;
+
+function ParseHullPoint(const AObj: TJSONObject;
+  const AKey, AMonsterId: string): THullPoint;
+begin
+  var PairArr := AObj.GetValue<TJSONArray>(AKey, nil);
+  if not IsNumberPair(PairArr) then
+    raise EMonsterDefError.CreateFmt(SBadHullPoint, [AMonsterId, AKey]);
+  Result.X := TJSONNumber(PairArr.Items[0]).AsDouble;
+  Result.Y := TJSONNumber(PairArr.Items[1]).AsDouble;
+end;
+
+// A broken hull must fail at load time, not draw a speck or a smear
+function ParseHull(const AObj: TJSONObject; const AMonsterId: string): THullDef;
+begin
+  Result.SetName := AObj.GetValue<string>('set', '');
+  Result.Width := AObj.GetValue<Double>('width', 0);
+  Result.Height := AObj.GetValue<Double>('height', 0);
+  Result.WearFull := AObj.GetValue<Double>('wearFull', 100) / 100;
+  if IsBrokenHull(Result) then
+    raise EMonsterDefError.CreateFmt(SBadHull, [AMonsterId]);
+  Result.Eye := ParseHullPoint(AObj, 'eye', AMonsterId);
+  Result.Smoke := ParseHullPoint(AObj, 'smoke', AMonsterId);
+  Result.Sparks := ParseHullPoint(AObj, 'sparks', AMonsterId);
 end;
 
 // ---------------------------------------------------------------------------
@@ -503,6 +574,12 @@ begin
   var Disc := AObj.GetValue<TJSONObject>('disc', nil);
   if Assigned(Disc) then
     Result.Disc := ParseDisc(Disc, Result.Id);
+
+  var Hull := AObj.GetValue<TJSONObject>('hull', nil);
+  if Assigned(Hull) then
+    Result.Hull := ParseHull(Hull, Result.Id);
+  if Result.Disc.Enabled and Result.Hull.Enabled then
+    raise EMonsterDefError.CreateFmt(SDiscAndHull, [Result.Id]);
 end;
 
 // Spawn tables reference other monsters by id; a broken reference must fail
