@@ -66,6 +66,15 @@ origin. `_black` is a plain fill.
 ChatGPT's image model from the author's prompts, then cut out, scaled and
 packed by the author.
 
+**The level-2 objects** (`sprites/level2-objects.mset`) - generated with
+ChatGPT's image model from the author's prompts over a blockout drawn from
+the level's collision grid. `tunnel-gate`: the frame that closed its mouth
+cut away, scaled to 6 px per screen unit. `s03-room`: kept as generated,
+not resampled - its three fan wells painted black, rows repeated above two
+floors to bring them to the grid, its two doorways carried to the edges of
+the screen. They replaced the 2008 tiles of those screens, which stay in
+their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
+
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
 generated with ChatGPT's image model to the author's direction (a clean and a
 battle-worn disc of the same geometry), then straightened, cut into layers

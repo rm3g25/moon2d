@@ -10,7 +10,7 @@ fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
 hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
-`v3.0.40` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.40`, for the repaint of level 2's screens 1-3 after it (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -3146,8 +3146,7 @@ plainest example), `introText`/`introTextEn`.
   `moon-surface machinery facility common mine-interior`. Object: the
   satellite on screen 1, lit a little brighter (day), tagged `satellite`;
   the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
-  events); all its object art is shared - no level2-objects set;
-  its lamp is `dying` - a dim fast flutter, the battery running out, and
+  events); the satellite's lamp is `dying` - a dim fast flutter, the battery running out, and
   one leak is left, a puff now and then (`flow` puffs); the breach still
   sparks, at intensity 25 - a spark now and then. Sixteen fans (`fan`:
   the `turbine` rotor behind the `bezel` plate over the `shaft` back, one
@@ -3158,12 +3157,26 @@ plainest example), `introText`/`introTextEn`.
   of screen 9 with the red of the old grille for a light, one of them
   `dying`. The one TeK platform, on screen 6, is tagged `s06-tek-01` and
   wears the rig `tekPlatform` - the numbers of level 1, written again in
-  this file's `rigs`. The gravel trial
+  this file's `rigs`. Screens 1-3 are repainted (`docs/REPAINT.md`).
+  Screen 1 is the arena of level 1's screen 17 moved six cells left:
+  its floor and crane as objects, twelve pads in the rigs `pad` and
+  `padBroken` (written again in this file's `rigs`), one of them a
+  ferry between x 288 and 352 at 30 units a second. Screen 2 is a pit:
+  two still pads at the entry, three on paths of their own - sideways,
+  up and down, and a diagonal that stops flush with the tunnel floor -
+  and the object `tunnel-gate` at the far side; the gravel that carries
+  the screen's title stands in the gate. Screen 3 is one object,
+  `s03-room`, its tiles dark and its matter as it was, with three
+  `heavy` fans behind `spider` guards hung on it: one of 100 units in
+  the hall at 22 turns a minute, two of 53 turning against each other
+  at 64 in the sealed chamber under the corridor. `tunnel-gate` and
+  `s03-room` are the level's own art, the set `level2-objects`. The
+  gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
 
-### `sprites\*.mset` (39 sets)
+### `sprites\*.mset` (40 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups).
@@ -3193,8 +3206,10 @@ plainest example), `introText`/`introTextEn`.
   `<assetsDir>-backdrops` convention, never declared in `spriteSets`. HD
   since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
-- **Objects**: `level1-objects` (`ship`) - the `<assetsDir>-objects`
-  convention, never declared, optional (level 2 ships none). Shared:
+- **Objects**: `level1-objects` (`ship`) and `level2-objects`
+  (`tunnel-gate`, 6 px a unit; `s03-room`, a whole screen at backdrop
+  density) - the `<assetsDir>-objects` convention, never declared,
+  optional. Shared:
   `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
   `objectSets`. The ship and the satellite are drawn at backdrop density
   (1440 px per
@@ -3292,6 +3307,7 @@ music loads leniently. Four one-shots are synthesised by
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+sound constants and `PreloadSounds` in Moon2D.dpr, the ceremony's in Game.Henshin.pas, data fields in JSONs) |
 | Tile/background rendering | Render.Tiles.pas + Render.Sprites.pas |
+| Repainting a 2008 screen: what becomes a pad, an object, a fan; the blockout and the prompt; seating a picture on the grid; what may be done to a generated picture | docs/REPAINT.md + levelN.json (`objects`, `pads`, `dynamics`, `tiles`) + `<assetsDir>-objects.mset` |
 | Screen pictures for repainting the art (the P debug key) | Moon2D.dpr (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
 | Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
 | Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
