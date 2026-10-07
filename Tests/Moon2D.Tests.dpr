@@ -18,6 +18,7 @@ uses
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
   Tests.Rooms in 'Tests.Rooms.pas',
+  Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas';
 

@@ -75,6 +75,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Tests.Rooms.pas"/>
+        <DCCReference Include="Effects\Tests.Effects.Lightning.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Flock.pas"/>
         <BuildConfiguration Include="Base">

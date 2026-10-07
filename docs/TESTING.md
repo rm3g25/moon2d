@@ -54,6 +54,8 @@ Tests\
   Moon2D.Tests.dproj      console project, DUnitX; fourth in Moon2D.groupproj
   Moon2D.Tests.dpr        the runner: verbose log, exit code
   Tests.Rooms.pas         a room of solid cells to stand monsters in
+  Effects\
+    Tests.Effects.Lightning.pas
   Monsters\
     Tests.Monsters.pas
   Orbs\
@@ -303,6 +305,80 @@ Left to the eye:
   subject.
 - The invisible wall of a level: a solid column no art draws is art
   against collision, and the level file is judged by a live run.
+
+## Effects.Lightning
+
+State: written, 31 tests, green on the first run. The unit is tried by
+`Tests\Effects\Tests.Effects.Lightning.pas`, in two fixtures:
+`TBoltShapeTests` for `BuildBoltShape` (a free function; the shape is a
+record, and all of it is seen) and `TBoltFieldTests` for `TBoltField`, its
+public part: `Shoot`, `Tick`, `TakeJolt`, `Clear`, `Count`. `Draw` is never
+called and SDL is never touched; the unit sits in `Core\`, already on the
+search path.
+
+A field keeps its bolts to itself, so a test reads it through two doors:
+`Count` (is the bolt still there) and `TakeJolt`. A stroke gives its jolt on
+the tick it begins and no two strokes begin on one tick, so the ticks that
+give a jolt are the ticks of the strokes. Tick 0 is the moment right after
+`Shoot`, tick N the moment after the N-th `Tick`. A test that counts strokes
+shoots a look with a jolt above zero, or it would see none.
+
+The numbers spelled are the ones the design has decided: the pieces of a
+channel (4 for a bolt of 10 units, 128 for 380 and for any longer), the
+tries at a branch (one, and one more for every 36 units, five at most), the
+branch's width 0.55, light 0.6, lean 18 to 44 degrees, length 30 to 70% of
+what is left of its parent but not under 3 units, its place 12 to 75% along,
+a depth of two, strokes 1 to 8, the wait between strokes 1 to 4 ticks, their
+strength 0.6 to 0.95 of the first. The numbers of a look in a level (the
+reach, the size, the frequency) are never spelled.
+
+The shapes are built over thirty seeds, fork chance 1 where branches are
+the subject. The unit sets the low bit of every seed it takes, so the seeds a
+test sets against each other are odd and far apart: 2 and 3 are one seed.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSameSeedsGiveSameShape` | two builds with the same arguments and seeds give the same limbs and the same offsets | the build reaches for `Random` or for something that is not in its arguments |
+| `TestOtherSeedsGiveOtherShape` | another coarse seed gives another shape, and so does another fine seed | a seed is dropped or fixed |
+| `TestTrunkComesFirstAtFullStrength` | limb 0 hangs on nothing, is as long as asked, at width 1 and light 1; it tapers when asked and not otherwise | the trunk is born with a parent or a share of its own, or its taper ignores the argument |
+| `TestLongerBoltIsCutIntoMorePiecesWithinLimits` | a trunk of 1 unit is 2 pieces, of 10 units 4, of 380 units 128, of 5000 units still 128 | the length of a piece changes, or the floor or the ceiling of the generations is lost |
+| `TestEveryLimbIsPinnedAtBothEnds` | of every limb of a long forked bolt, the first and the last offset are zero | a generation writes over an end: the channel no longer reaches its root or its tip |
+| `TestChannelStaysNearItsAxis` | no offset of a limb is wider than twice the jag times that limb's own length | the shift stops halving from generation to generation, or is taken from the trunk's length |
+| `TestNoForkChanceGivesJustTheTrunk` | at fork chance 0 the shape is one limb | a branch is born without its roll passing |
+| `TestSureForkGivesAsManyBranchesAsTriesAllow` | at fork chance 1 the trunk carries 1 branch at 10 units, 3 at 80, 5 at 380 | the tries are counted another way, or the ceiling of five is lost |
+| `TestBranchesComeAfterTheirParents` | every limb after the first hangs on one earlier in the list | a branch is put before its parent: the drawing places limbs in list order and would find the parent not yet placed |
+| `TestBranchesOfBranchesAreOneDeepNoMore` | over many bolts, the deepest limb is a branch of a branch, and none is deeper | branches of branches are lost, or nothing stops the depth |
+| `TestBranchIsNarrowerDimmerAndTapers` | a branch is 0.55 of its parent in width and 0.6 in light, and tapers even when the trunk does not | a share changes, or a branch is born blunt |
+| `TestBranchesLeanBothWaysWithinTheirBand` | every branch leans 18 to 44 degrees off its parent, and over many bolts to both sides | the lean loses its sign, or the band moves |
+| `TestBranchLengthIsAShareOfWhatIsLeftOfItsParent` | a branch longer than the shortest is 30 to 70% of what is left of its parent past its base | the share is taken from the whole parent, or the band moves |
+| `TestNoBranchIsShorterThanThreeUnits` | on a short bolt, where the share would give less, no branch is under 3 units | the shortest length is lost: slivers of branches |
+| `TestBranchLeavesItsParentBetweenItsEnds` | a branch leaves neither at the parent's root nor at its tip, and 12 to 75% along it (to within half a piece) | a branch leaves at an end, or the band moves |
+| `TestOtherFineSeedKeepsBranchesAndBigPicture` | a bolt of 100 units built with one coarse seed and two fine: the same limbs, the same offsets at the root, the quarters and the tip of the trunk, and a channel that is not the same | the fine seed reaches a decision about branches or a coarse generation: a second stroke would jump instead of shiver |
+| `TestBoltLivesExactlyItsLifeInTicks` | a bolt shot with a life of 5 is in the field at once, still there after 4 ticks, gone after the 5th | a bolt is lit a tick too long or too short, or joins the field a tick late |
+| `TestLeaderHoldsBackTheFirstStroke` | with a leader of 4 ticks, the one stroke's jolt comes on tick 4 and not before | the leader is ignored, or the first stroke begins with it |
+| `TestBoltOutlivesItsLeader` | a bolt with a leader of 4 and a life of 3 is in the field through the leader and gone after the 7th tick | the life is counted from the shot, not from the first stroke |
+| `TestBoltLivesItsLifePastTheLastStroke` | a bolt of 8 strokes and a life of 4 is still there 3 ticks after its last stroke begins, and gone on the 4th | the life is counted from the first stroke: the bolt goes while its last strokes are still due |
+| `TestStrokesCountIsWhatTheLookAsks` | a look asking 1, 2 and 5 strokes gives 1, 2 and 5 jolts over the bolt's life | a stroke is lost, or struck twice |
+| `TestStrokesAreHeldToOneThroughEight` | 0 asked gives 1 stroke, 20 asked gives 8 | the clamp moves, or a bolt of none is born |
+| `TestRestrokesComeOneToFourTicksApart` | over thirty fields, the waits between strokes are 1 tick at the least and 4 at the most, and both are met | the band of the wait changes; a wait of 0 would put two strokes on one tick |
+| `TestRestrokesAreWeakerThanTheFirst` | the first stroke gives the look's jolt whole, every later one 0.6 to 0.95 of it | later strokes are as strong as the first, or fainter than the band |
+| `TestTakeJoltGivesTheLooksJoltOnceAndEmpties` | after one shot with a jolt of 0.14 the ask gives 0.14 and the next ask gives 0 | the ask does not empty the jolt, or the first stroke is scaled by something besides its look |
+| `TestJoltsOfTwoShotsAddUp` | two shots before one ask: the ask gives the sum | a second shot's jolt writes over the first |
+| `TestLaterStrokesPileUpUntilAsked` | a bolt of 3 strokes, 60 ticks, nobody asks, a jolt of 1: the ask gives the first whole and two weaker ones, 2.2 to 2.9 | a jolt is lost when its bolt is dropped, or kept only for the tick it came |
+| `TestSameSeedsGiveSameStrokes` | two fields of one seed give the same jolts tick by tick; a field of another seed does not | the field reaches for `Random`, or ignores its seed |
+| `TestFullFieldDropsItsOldest` | a field of 3 with one long-lived bolt and three short ones: 3 in the field, and none once the short ones' life is spent | the newest is refused instead of the oldest dropped, or the count runs past the capacity |
+| `TestTickDropsOnlyTheSpent` | bolts of life 2, 6 and 2: one is left after 2 ticks, it stays through the 5th and goes on the 6th | the tick shifts the kept bolts wrong when it drops the spent |
+| `TestClearEmptiesTheFieldAndItsPendingJolt` | after `Clear`: no bolts, no jolt, and none comes back with the tick | `Clear` forgets a bolt or the jolt: a restart of the world shakes the screen |
+
+Left to the eye: everything `Draw` makes - the three passes, the bloom of
+the first tick, the fade, the lights at the ends, the glow of the room, the
+leader growing along the trunk, and whether the channel reads as lightning
+at all. `ShiftFrame`: it moves the end of a bolt that struck a wall, and
+that end is seen only in the drawing. The clamp of a life under 1: a field
+shows no difference without a `Draw`, which divides by it. The half chance
+of a branch of a branch: it is a share of tries, not a thing a single seed
+holds. `TLightning` (when it shoots, where it ends) is a game unit with its
+own door, `TakeJolt`, and is not tried here.
 
 ## Outside the suite
 
