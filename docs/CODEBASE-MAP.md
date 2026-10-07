@@ -11,7 +11,8 @@ Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
 hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
-wave at `v3.0.41` and the emptied death frames at `v3.0.42` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
+at `v3.0.43` and the live shards at `v3.0.44` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -612,8 +613,14 @@ in `Levels.Dynamics`), the hits on armor (`Game.Impacts`).
 - Own `TXorShift`, never `Random`.
 
 ### `Core/Effects.Debris.pas` (~560 lines)
-What an explosion throws, decoration only - the blast wounds
-(`Game.Blasts`), this does not. **`TDebrisField`** takes the renderer and a
+What an explosion throws. Decoration, unless a burst is born live
+(3.0.44): then each shard carries the lives it takes off a body until it
+strikes one or touches a floor - `LandShard` blunts it. The field only
+carries the number and shows its live shards to the caller: `Strike(verdict)`
+lists them first (`TLiveShard`: `Id`, `X`, `Y`, `SpeedX`, `Drop` - units
+below the heart of its blast, `Lives`) and blunts by `Id` the ones the
+verdict (`TShardStrike`) says struck, so the caller may burst more debris
+from inside the call. Whom a shard strikes is the caller's to say. **`TDebrisField`** takes the renderer and a
 **`TSolidProbe`** (of `Effects.Sparks`; in screen units here - the game
 passes `SolidUnderPoint`, so the unit knows no level).
 - **`TDebrisLook`** (record) - one blast's worth: `Shards`, `ShardSpeed`,
@@ -1145,8 +1152,10 @@ Monster definition model + registry (parses monsters.json). No behavior.
   numbers, raises at load - and so does a monster with a disc and a hull);
   `TBlastDef` (JSON `blast` - what the monster's death does to the bodies
   around it, see `Game.Blasts`: `Radius` - how far the wave goes, units,
-  `Lives` - what it takes at the heart, `Enabled`; a blast without a
-  positive radius and lives raises at load; absent - the monster dies
+  `Lives` - what it takes at the heart, `ShardLives` (3.0.44) - what a
+  shard of the debris takes off a body it falls on, 0 by default,
+  `Enabled`; a blast without a positive radius and lives, or with negative
+  `shardLives`, raises at load; absent - the monster dies
   quietly. It replaced the `explodesOnDeath` flag in 3.0.41);
   `TDamageCap` (JSON `damageCap` in `stats` - the most lives a monster may
   lose in any run of `Ticks` ticks, see `Monsters.Damage`: `Lives`, `Ticks`,
@@ -2153,22 +2162,35 @@ on a door, a death and a level load.
   aftershock, its sound and its jolt. The game sounds the blasts it
   detonates itself; the aftershocks go off here on their own clock, so
   each one calls back right after its `Detonate`.
-- `Detonate(x, y, kind)` - x/y the heart of the blast in screen units;
-  `ekNone` does nothing. Per kind a private typed constant
+- `Detonate(x, y, kind, shardLives = 0)` - x/y the heart of the blast in
+  screen units; `ekNone` does nothing; `shardLives` above zero bursts the
+  debris live, and `StrikeShards(verdict)` hands the game the live shards
+  once a tick (`TDebrisField.Strike`). Per kind a private typed constant
   `TExplosionLook`: a `TDebrisLook`, the flash (`FlashSize`, `FlashTicks` -
   two `gsPoint` glows, a swelling warm one and a white core, fading as a
-  square), the plume (`TSmokeLook` + `SmokeTint` - a `TSmoke` made by
-  `CreateLook` at full intensity and faded to zero over `SmokeTicks`, so it
-  pours and thins; freed once `Exhausted`), and aftershocks (count, kind,
-  spread, span - a queue of later `Detonate`s, `TickAftershocks`).
-- Sizes: `BarrelExplosion` (14 shards, 40 sparks, flash 96),
-  `MachineExplosion` (22, 60, 130 - the tank, the platform, the boss's
-  rage), `BossExplosion` (40, 120, 220, plus five barrel blasts within 24
-  units over 50 ticks - the wreck keeps popping).
-- `Tick` (aftershocks, flashes, debris, plumes), `Clear` (all four),
+  square), two clouds, each a `TCloudLook` - `Puffs` (a `TSmokeLook`),
+  `Tint`, `Ticks`: `Pour` makes a `TSmoke` by `CreateLook` at full
+  intensity and fades it to zero over `Ticks`, so it pours and thins, and
+  it is freed once `Exhausted` - and aftershocks (count, kind, spread,
+  span - a queue of later `Detonate`s, `TickAftershocks`). The clouds:
+  `Fire` (3.0.43), the fireball - hot puffs thrown all round the heart,
+  heat 1, orange cooling to a dark red, dense and short-lived, so that
+  something burns for half a second where the body stood; and `Smoke`,
+  the grey plume. The two roll different dice from one point
+  (`FireSeedSalt`).
+- Sizes: `BarrelExplosion` (18 shards, 64 sparks, flash 96 for 7 ticks,
+  about 25 puffs of fire some 60 units across), `MachineExplosion` (28,
+  90, 130 for 8, about 39 puffs - the tank, the platform, the boss's
+  rage), `BossExplosion` (48, 160, 220 for 11, about 75 puffs, plus five
+  barrel blasts within 24 units over 50 ticks - the wreck keeps popping).
+  The fireball stays inside the flash: 3.0.43 made the blasts denser,
+  not bigger.
+- `Tick` (aftershocks, flashes, debris, both clouds - `TickClouds`),
+  `Clear` (all five),
   `DrawSmoke(canvas, origin,
   alpha)` - the plumes, drawn right after the tiles, behind the figures;
-  `Draw(canvas, origin, alpha)` - debris and flashes, over the bullets.
+  `Draw(canvas, origin, alpha)` - the fireballs, then debris and flashes,
+  over the bullets.
   Both on the world shake channel; the textures come from
   `FDynamics.Canvas`. Own `TXorShift` for the aftershocks.
 
@@ -2785,10 +2807,19 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     is the shelter, what stops a bullet: the grid's cell or
     `StopsBulletAt` of a pad; a spent blast is dropped; a blast born in
     the walk - a barrel a wave has killed - waits for the next tick;
-    `FBlasts` is cleared with the explosions),
+    `FBlasts` is cleared with the explosions), then
+    `FExplosions.StrikeShards(ShardStruck)` (3.0.44): a live shard lower
+    than `ShardWoundsBelow` (half a sprite) under the heart of its blast -
+    below the feet of the body that blew up - wounds the body it is in,
+    a monster of any kind by `MonsterBody` (`TakeDamage` with half the
+    shard's speed as the knock, `RewardMonsterKill` on a death) or the
+    hero by `HeroBody` (one health, the mercy window holds); on the
+    blast's own floor a shard is decoration,
     `ResolveMonsterContact`, `RewardMonsterKill` (also the `TBlast` of a
     monster with a `blast` and `Detonate` of the monster's `explosion`,
-    both at the middle of its sprite, in the tick of the kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
+    both at the middle of its sprite, in the tick of the kill; the debris
+    is detonated live with the blast's `ShardLives` scaled by
+    `DifficultyMonsterLives`), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
     the boss and sounds it with `RageBlastSoundFile` - a machine's
     `platform.wav`; `meBossCrashed` - the boss's ram ended in a wall:
@@ -3048,8 +3079,8 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
 platform), `boss` (`boss1`); the mount has none - it explodes inside the
 wall. `blast` (the barrel, the tank, the platform, the mount) is what the
-death does to the bodies around: `radius` 80, `lives` 100 on all four -
-see `TBlastDef`. `material`: `metal` on the platform, the tank, the mount, the barrel
+death does to the bodies around: `radius` 80, `lives` 100 and `shardLives`
+6 on all four - see `TBlastDef`. `material`: `metal` on the platform, the tank, the mount, the barrel
 and `boss1` - a bullet throws sparks off them instead of bursting
 (`Game.Impacts`). `disc` (only `boss1`) draws the living monster as a spinning disc out
 of the layers of a set instead of its `alive` frames: `set`, `side`,
@@ -3327,7 +3358,7 @@ music loads leniently. Four one-shots are synthesised by
 | The platform's lamps and the haze under its nozzles; what goes out when a monster dies | the rig `tekPlatform` + `"tag"` and `"rig"` on the platforms in levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` of `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
-| Explosion mechanics: the wave that wounds, its speed, falloff, shove and shelter; who a blast strikes | Game.Blasts.pas + Moon2D.dpr (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` in monsters.json (`TBlastDef` in Monsters.Defs.pas) |
+| Explosion mechanics: the wave that wounds, its speed, falloff, shove and shelter; who a blast strikes; the shards that wound what stands below (Effects.Debris.pas `Strike`, Moon2D.dpr `ShardStruck`) | Game.Blasts.pas + Moon2D.dpr (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` in monsters.json (`TBlastDef` in Monsters.Defs.pas) |
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | Sparks: how they fly, bounce, fork and draw | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
