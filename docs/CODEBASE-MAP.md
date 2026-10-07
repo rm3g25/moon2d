@@ -8,7 +8,7 @@ Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
 Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
-hull at `v3.0.36` (the folder layout came
+hull at `v3.0.36` and its rig at `v3.0.37` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -47,7 +47,7 @@ driven from level JSON split by that rule: the model and parser
 runner (`Events.Director`) in `Game/Events/`. The pads split the same way:
 the model and parser (`Levels.Pads`) sit in `Core/` beside `Levels.Events`,
 since the editor will write pads too; the pads in play (`Pads.World`) and
-their rebuilds in `Game/Pads/`; what a pad wears, its rigs
+their rebuilds in `Game/Pads/`; what a pad or a monster wears, its rigs
 (`Levels.Rigs`), is a parser in `Core/` too. Two unit names in `Core/` still
 carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
@@ -60,9 +60,10 @@ for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (its streak texture comes from the owner) ->
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
-kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) /
-`Levels.Pads` (over `Levels.Tint`) -> `Levels.Rigs` (what the pads wear:
-over the two) ->
+kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
+`Levels.Rigs` (what the pads and the monsters wear: over
+`Levels.Dynamics`) -> `Levels.Pads` (over `Levels.Tint`, and over
+`Levels.Rigs` for the names of the rigs a pad wears) ->
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) -> `Pads.World` (the pads in play:
@@ -263,7 +264,7 @@ screen dump of the dpr.
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~435 lines)
+### `Core/Render.Dynamics.pas` (~460 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst and streak glows - `Render.Glow`; the
@@ -318,7 +319,11 @@ screen dump of the dpr.
   `DrawStands(place, view, sides)` (`TFrameView` - the screen, the shake, the
   alpha; `TStandSides` - `ssFront` / `ssSunk`), which sets the canvas'
   `Scale` and `Tone` for every stand it draws and puts them back to 1: the
-  game draws smoke of its own with the same canvas. **`Reseat`** - the monsters
+  game draws smoke of its own with the same canvas. Under a parent that is
+  dead or gone it draws neither a placement that `Turns` nor a kind that
+  `GoesOutWithParent` - by the place's own `ParentAlive`, which `Reseat`
+  refreshes at once, so after a restart the lamps are back in the first
+  frame. **`Reseat`** - the monsters
   were reborn (a
   restart): every place that follows a parent finds it at once and
   forgets its origin, so the frame before the next tick does not show it at
@@ -432,7 +437,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1040 lines)
+### `Core/Levels.Defs.pas` (~1080 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -447,7 +452,10 @@ Level data model + JSON parser. No game logic.
   grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides,
   triggers, `Tag` (names the placement for the events' tagged conditions -
   `allDead`, `livesBelow`, `enraged` - and for the dynamic objects hung on a
-  monster; '' = none).
+  monster; '' = none), `Rigs` (the rigs it wears, by name, in the order
+  they are hung - JSON `"rig": ["tekPlatform"]`, read by `ReadRigNames` of
+  `Levels.Rigs`; their parts hang on the monster by its tag, counted from
+  the top-left corner of its cell).
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
@@ -496,10 +504,16 @@ Level data model + JSON parser. No game logic.
   of the monsters call it), `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
   `LoadFromFile`; the pads are parsed before the dynamics, since a dynamic
-  object may hang on one; the rigs the pads wear are hung right after the
-  dynamics are parsed and before the checks (`WearRigs` of `Levels.Rigs`:
-  their parts are dynamic objects as the rest, and a group's alarm lamps
-  may be among them); and the dynamics before the events, since an
+  object may hang on one; the rigs the pads and the monsters wear are hung
+  right after the dynamics are parsed and before the checks (`WearRigs` of
+  `Levels.Rigs` over the wearers `RigWearersOf` lists - the pads first,
+  then the placements, each in file order, so the parts of the pads keep
+  their places in the list; `PadWearer` and `EntityWearer` make them,
+  named for the errors by `PadRigName` of `Levels.Pads` and by
+  `EntityRigName` - a placement by its tag or, without one, by what
+  stands where: their parts are dynamic objects as the rest, and a
+  group's alarm lamps may be among them); and the dynamics before the
+  events, since an
   event may name a dynamic object's tag. Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
@@ -684,7 +698,11 @@ in `CreateDynamic`.
   game makes itself). `Draw(canvas, originX, originY, alpha)` adds X/Y to
   the origin and calls the protected abstract `DrawAt`. Virtual
   `Acquire(canvas)` / `Release` - what a kind makes for itself to draw with
-  (empty in the ancestor). The parent is coordinates only,
+  (empty in the ancestor). Virtual `GoesOutWithParent` - True for a kind
+  that leaves nothing in the air, a beacon and a haze (False in the
+  ancestor): `Render.Dynamics` does not draw such an object while its
+  parent monster is dead or gone, so the lamps and the haze of a dead
+  monster go out with it. The parent is coordinates only,
   VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
   level, ticks)`, `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
@@ -719,7 +737,8 @@ in `CreateDynamic`.
   a parent mixed with the parent's tag (`PlacementSeed`, `TagSalt` - for
   every kind), so lamps at different points, and the lamps of one rig on
   different pads, fail out of step. In the depth (the canvas' `Scale` and
-  `Tone`) the lamp is smaller and dimmer, as its pad is.
+  `Tone`) the lamp is smaller and dimmer, as its pad is. Under a parent
+  that is dead or gone it is not drawn (`GoesOutWithParent`).
 - **`TSmoke`** - smoke, gas, steam: puffs born at the point (spread around
   it by `SpawnJitter` and, for a moving parent, along the stretch it
   covered this tick - a trail, not beads), thrown along `angle` within
@@ -879,7 +898,8 @@ in `CreateDynamic`.
   own places, so a knot on the edge cannot round out of it. The rows of
   the lattice repeat after `NoiseRows` (65536); the flow is counted within
   them, in Double. In the depth (the canvas' `Scale` and `Tone`) the plume
-  is smaller about its point and weaker. Backdrop layer by default.
+  is smaller about its point and weaker. Under a parent that is dead or
+  gone it is not drawn (`GoesOutWithParent`). Backdrop layer by default.
 - **`ParseDynamic(obj, levelId, where)`** - one object, written as an item
   of the section is; `where` names it in errors after its kind ("#2" makes
   "beacon #2"). The section and the rigs (`Levels.Rigs`) both read through
@@ -939,7 +959,7 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~305 lines)
+### `Core/Levels.Pads.pas` (~295 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -996,58 +1016,76 @@ by its `group`). A 2026 addition.
   absent = block; `path` absent = no path (`ReadPath`), `bob` absent = 0.
   The JSON: `"path": {"route", "stops": [[x, y], ...], "speed",
   "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"`,
-  `"group"` and `"rig": ["pad", "arenaAlarm"]` (`ReadRigs`; absent = the
-  pad wears nothing).
+  `"group"` and `"rig": ["pad", "arenaAlarm"]` (`ReadRigNames` of
+  `Levels.Rigs`; absent = the pad wears nothing). **`PadRigName(pad)`** -
+  the pad as the errors of its rigs call it: `pad "<tag>"`, without a tag
+  `pad "<sprite>"`, the only name it has then.
   `EPadError` is raised by a width of zero or less (`SPadBadWidth`), a
   bullets word out of `PadBulletsIds` (`SPadBadBullets`), a route other
   than pingpong or loop (`SPadBadRoute`), a path without stops
   (`SPadNoStops`), a stop that is not a pair of numbers (`ReadStop`,
   `SPadBadStop`), a speed of zero or less, a pause or a bob below zero
-  (`SPadBadNumber`), a rig that is not a list of names (`SPadBadRig`). The
+  (`SPadBadNumber`); a rig that is not a list of names raises `ERigError`,
+  in `Levels.Rigs`. The
   screen range, a tag on two pads and a stop off
   the screen are `Levels.Defs`' (`CheckPads`).
 
-### `Core/Levels.Rigs.pas` (~260 lines)
-The `rigs` section of level JSON: what the pads wear. A rig is a named list
-of dynamic objects (`Levels.Dynamics`) with no place of their own - a lamp,
-a jet, the haze under it. A pad names the rigs it wears
-(`TPadPlacement.Rigs`), and at load every part of them becomes a dynamic
-object hung on that pad: from there on it is one of the level's dynamic
-objects, no different from one written into `dynamics` with the pad for
-its parent. A 2026 addition.
-- **`WearRigs(root, levelId, pads, dynamics)`** - hangs on every pad the
-  parts of the rigs it wears: they join the list in the order of the pads,
-  then of a pad's rigs, then of a rig's parts - the drawing order within a
-  layer, and the order in which a haze paints over a haze. A rig no pad
-  wears is not read at all. `ERigError` is raised by a pad that wears a rig
-  and carries no tag (`SRigNoTag` - its parts hang on it by the tag), a rig
-  the section lacks (`SRigUnknown`), a rig that is not a list of objects
+### `Core/Levels.Rigs.pas` (~320 lines)
+The `rigs` section of level JSON: what the pads and the monsters wear. A
+rig is a named list of dynamic objects (`Levels.Dynamics`) with no place of
+their own - a lamp, a jet, the haze under it. A wearer - a pad
+(`TPadPlacement.Rigs`) or a monster's placement (`TEntityPlacement.Rigs`) -
+names the rigs it wears, and at load every part of them becomes a dynamic
+object hung on that wearer: from there on it is one of the level's dynamic
+objects, no different from one written into `dynamics` with the wearer for
+its parent. A part counts from its parent's top-left corner: a pad's, or
+that of a monster's cell. The unit knows neither a pad nor a placement:
+`Levels.Pads` and `Levels.Defs` stand over it. A 2026 addition.
+- **`TRigWearer`** (record) - who wears: `Tag` (the parts hang on it by the
+  tag), `Name` (as the errors call it: `pad "s16-plat-01"`, `entity
+  "s07-tek-01"` - `PadRigName`, `EntityRigName`), `Rigs` (by name, in the order
+  they are hung).
+- **`ReadRigNames(obj, levelId, wearer)`** - the `"rig"` list of a wearer,
+  absent = it wears nothing; the one reader for the pads and the
+  placements. A rig that is not a list of names raises (`SRigBadNames`).
+- **`WearRigs(root, levelId, wearers, dynamics)`** - hangs on every wearer
+  the parts of the rigs it wears: they join the list in the order of the
+  wearers, then of a wearer's rigs, then of a rig's parts - the drawing
+  order within a layer, and the order in which a haze paints over a haze.
+  A rig nobody wears is not read at all. `ERigError` is raised by a wearer
+  of a rig that carries no tag (`SRigNoTag` - its parts hang on it by the
+  tag), two wearers of rigs under one tag (`SRigSharedTag` - placements of
+  one monster on two difficulties: a part finds its parent by the tag
+  alone, so the one that lives would carry the parts of both), a rig the
+  section lacks (`SRigUnknown`), a rig that is not a list of objects
   (`SRigNotList`), a part that names `parent`, `screen` or `screens`
-  (`SRigOwnPlace` - a part stands where its pad does), a spread that is not
-  two numbers in order (`SRigBadSpread`); whatever `Levels.Dynamics`
+  (`SRigOwnPlace` - a part stands where its wearer does), a spread that is
+  not two numbers in order (`SRigBadSpread`); whatever `Levels.Dynamics`
   refuses in a part raises as it does there.
-- How a part is hung (`TRigFitter`: `Dress` a pad, `Hang` a rig, `Worn` a
-  part): the part is written out as an object of the dynamics section
-  would be for this pad - a fresh JSON object with the part's values
-  copied, every spread rolled and `"parent"` set to the pad's tag - and
-  read by `ParseDynamic`. A `TFitting` (the pad's tag, the rig, the part's
+- How a part is hung (`TRigFitter`: `Dress` a wearer, `Hang` a rig, `Worn`
+  a part): the part is written out as an object of the dynamics section
+  would be for this wearer - a fresh JSON object with the part's values
+  copied, every spread rolled and `"parent"` set to the wearer's tag - and
+  read by `ParseDynamic`. A `TFitting` (the wearer, the rig, the part's
   number) names the part in errors (`Where` gives "#2 of rig "pad" on pad
   "s16-plat-01"", which `Levels.Dynamics` puts after the kind: "beacon #2
   of rig ...") and names its rolls (`RollName` - spelled apart from
   `Where`: reword an error and every lamp of the level would roll anew).
 - **A spread** - `{"spread": [from, to]}` in place of a number of the part
-  itself, not of one inside a list such as a tint: every pad that wears
-  the part rolls its own value between the two, the same at every load
-  (`NameRoll` of `Levels.Dynamics` over the pad's tag, the rig's name, the
-  part's number and the key - move a part within its rig and it rolls
-  anew). Both ends whole - a whole value, either end included
-  (`RolledNumber`): a percentage stays one, and `[1, 3]` gives 1, 2 or 3
-  alone. A fraction is spelled with a point whatever the locale of the
-  machine (`TFormatSettings.Invariant`): with a comma it would not read
-  back as a number.
+  itself, not of one inside a list such as a tint: every wearer of the
+  part rolls its own value between the two, the same at every load
+  (`NameRoll` of `Levels.Dynamics` over the wearer's tag, the rig's name,
+  the part's number and the key - move a part within its rig and it rolls
+  anew; two lamps of one rig are two parts, and each rolls its own). Both
+  ends whole - a whole value, either end included (`RolledNumber`): a
+  percentage stays one, and `[1, 3]` gives 1, 2 or 3 alone. A fraction is
+  spelled with a point whatever the locale of the machine
+  (`TFormatSettings.Invariant`): with a comma it would not read back as a
+  number.
 - JSON: `"rigs": {"pad": [{"kind": "beacon", "x": 16, "y": 25,
   "frequency": {"spread": [0.27, 0.45]}}, {"kind": "haze", "x": 16,
-  "y": 27, "angle": 270}]}`; a pad: `"rig": ["pad"]`.
+  "y": 27, "angle": 270}]}`; a pad: `"rig": ["pad"]`; a monster:
+  `"tag": "s07-tek-01", "rig": ["tekPlatform"]`.
 
 ### `Core/Monsters.Defs.pas` (~570 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
@@ -2897,7 +2935,8 @@ unused by both levels),
 `overrides` (direction / speed / lives / canShoot), `triggers` -
 messages/hints/changeMusic/heroX-heroY/gravelBoss (the wave quota per
 difficulty),
-optional `tag` for the events and the dynamics; `secret` on one level-1
+optional `tag` for the events and the dynamics, optional `rig` - the rigs
+the monster wears, which takes the tag (see `Levels.Rigs`); `secret` on one level-1
 medkit is data nobody reads yet), `events` (each: `id`,
 `screen`, `when` = enterScreen | allDead / enraged + `tag` | livesBelow +
 `tag` + `lives`, optional `delay` in ticks, `then` = a list of `action`
@@ -2951,6 +2990,14 @@ plainest example), `introText`/`introTextEn`.
   tower on screens 14-15, under `s14-tower` and `s15-tower`: 43.4 across,
   14 turns a minute counterclockwise, a dim cold light in the shaft; the
   bottom right one on screen 15 is `dying`, on the `heavy-torn` rotor.
+  The thirteen TeK platforms - one on screen 7, one on 8, two on 10, four
+  on 11, five on 13 - are tagged `s07-tek-01`..`s13-tek-05` (the screen,
+  then the number on it) and wear the rig `tekPlatform`: two blue pulsing
+  lamps on the hull (front layer, halo 5 across, intensity 70, 0.8-1.2
+  blinks a second, each lamp its own roll) and a haze under each nozzle
+  plate (downward, 28 long, 4 across widening to 14). The points count
+  from the top-left corner of the cell: a point of the hull moved by
+  (-4, 5.83).
   Events: the dawn, tied to the screens - on entering screen N
   (`dawn1`..`dawn17`) the sun heads over 20 seconds to -40 + 100 * N / 17:
   three quarters lit at the start, a half by screen 7, a crescent with
@@ -2987,7 +3034,9 @@ plainest example), `introText`/`introTextEn`.
   stay in the palette: two at 150 turns a minute on the floor of screen 3
   with a `louver-2x1` object between them, fourteen at 180 on the ducts
   of screen 9 with the red of the old grille for a light, one of them
-  `dying`. The gravel trial
+  `dying`. The one TeK platform, on screen 6, is tagged `s06-tek-01` and
+  wears the rig `tekPlatform` - the numbers of level 1, written again in
+  this file's `rigs`. The gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
@@ -3080,6 +3129,7 @@ music loads leniently. Four one-shots are synthesised by
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
 | The platform's hull: layers, wear, eye, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset` (+Monsters.pas `TickHull`, `HullCenter`, `BodyPoint`; Render.Sprites.pas `DrawSized`) |
+| The platform's lamps and the haze under its nozzles; what goes out when a monster dies | the rig `tekPlatform` + `"tag"` and `"rig"` on the platforms in levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` of `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
 | Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
@@ -3111,7 +3161,7 @@ music loads leniently. Four one-shots are synthesised by
 | Logo halo and embers; a redrawn logo | Menu.Logo.pas + Menu.Embers.pas (+ the `logo` sprite in ui.mset) |
 | Anything that glows additively | Render.Glow.pas |
 | Heat haze - under a jet, over a turbine: the plume, its strength, grain and flow | `haze` in `dynamics` or in a rig of levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (the backdrop layer, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
-| What the pads wear - lamps, hazes, jets: one list for many pads, a number rolled pad by pad | `rigs` + `"rig"` on the pads in levelN.json + Levels.Rigs.pas + Levels.Pads.pas `ReadRigs` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
+| What the pads and the monsters wear - lamps, hazes, jets: one list for many wearers, a number rolled wearer by wearer | `rigs` + `"rig"` on the pads and the entities in levelN.json + Levels.Rigs.pas (`WearRigs`, `ReadRigNames`, `TRigWearer`) + Levels.Defs.pas `RigWearersOf` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
 | What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
 | A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
