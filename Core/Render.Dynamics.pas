@@ -403,8 +403,11 @@ procedure TDynamicScreenRenderer.DrawStands(const APlace: TPlace;
   const AView: TFrameView; ASides: TStandSides);
 begin
   // What turns with a monster goes with it: there is nothing to turn
-  // with once the parent is dead
-  if APlace.DynamicObject.Placement.Turns and not APlace.ParentAlive then
+  // with once the parent is dead. So does a kind that leaves nothing in
+  // the air.
+  var GoesWithParent := APlace.DynamicObject.Placement.Turns or
+    APlace.DynamicObject.GoesOutWithParent;
+  if GoesWithParent and not APlace.ParentAlive then
     Exit;
   for var Stand in APlace.Stands do
   begin

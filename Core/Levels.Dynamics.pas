@@ -16,6 +16,10 @@
   parent does. The parent is named by tag - a static object, a pad or a
   monster; finding it is the business of Render.Dynamics.
 
+  A parent monster that dies puts out what hangs on it: a beacon and a
+  haze are gone at once, a source stops and what it has in the air
+  fades where it is.
+
   A rig a pad wears (Levels.Rigs) is made of the same objects:
   ParseDynamic reads one wherever it is written.
 
@@ -156,6 +160,9 @@ type
     // The shake this tick's strokes give the screen, as a share of the room
     // its trauma has left; asking empties it. Only lightning shakes.
     function TakeJolt: Single; virtual;
+    // A kind that leaves nothing in the air: the renderer does not draw
+    // it while its parent monster is dead or gone. A beacon, a haze.
+    function GoesOutWithParent: Boolean; virtual;
     // Back to the intensity of the level file, at once; the next tick
     // starts from wherever the origin is then
     procedure Rewind; virtual;
@@ -222,6 +229,7 @@ type
   public
     constructor Create(const APlacement: TDynamicPlacement;
       AObj: TJSONObject; const AOwner: string);
+    function GoesOutWithParent: Boolean; override;
   end;
 
   // Steady - an even stream; gusty - the stream swells and sags;
@@ -695,6 +703,7 @@ type
   public
     constructor Create(const APlacement: TDynamicPlacement;
       AObj: TJSONObject; const AOwner: string);
+    function GoesOutWithParent: Boolean; override;
   end;
 
 // Reads the "dynamics" array of a level; an absent section is an empty
@@ -1322,6 +1331,11 @@ begin
   Result := 0;
 end;
 
+function TDynamicObject.GoesOutWithParent: Boolean;
+begin
+  Result := False;
+end;
+
 procedure TDynamicObject.Rewind;
 begin
   FIntensity.Settle(FIntensity.Initial);
@@ -1433,6 +1447,11 @@ begin
   FRayIntensity := ReadShare(AObj, 'rayIntensity', DefaultRayIntensity,
     AOwner);
   FSeed := PlacementSeed(APlacement);
+end;
+
+function TBeacon.GoesOutWithParent: Boolean;
+begin
+  Result := True;
 end;
 
 procedure TBeacon.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
@@ -2615,6 +2634,11 @@ begin
       FIndices[Next + 5] := NextRow;
       Inc(Next, 6);
     end;
+end;
+
+function THaze.GoesOutWithParent: Boolean;
+begin
+  Result := True;
 end;
 
 procedure THaze.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
