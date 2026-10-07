@@ -74,25 +74,6 @@ const
   // The most blows any test below strikes before it looks
   Plenty = 50;
 
-// A room of twelve rows: the last is the floor. AWallCol (from 1, 0 = none)
-// is a solid column over it; ALedgeRow (from 1, 0 = none) is solid between
-// the columns AFrom and ATo.
-function RoomRowsOf(AWallCol, ALedgeRow, AFrom, ATo: Integer): TArray<string>;
-begin
-  SetLength(Result, RoomRows);
-  for var i := 0 to RoomRows - 1 do
-  begin
-    Result[i] := StringOfChar('.', RoomCols);
-    if i = RoomRows - 1 then
-      Result[i] := StringOfChar('#', RoomCols)
-    else if AWallCol > 0 then
-      Result[i][AWallCol] := '#';
-  end;
-  if ALedgeRow > 0 then
-    for var Col := AFrom to ATo do
-      Result[ALedgeRow - 1][Col] := '#';
-end;
-
 // Round gives an Int64, and AreEqual takes two of one type: the places
 // of a body are read as Integer
 function PlaceX(const AMonster: TMonster): Integer;

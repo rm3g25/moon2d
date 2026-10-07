@@ -58,6 +58,7 @@ Tests\
     Tests.Effects.Lightning.pas
   Monsters\
     Tests.Monsters.pas
+    Tests.Monsters.Bodies.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
 run-tests.cmd             build and run
@@ -238,9 +239,10 @@ thread of a leap in flight, a ring called after an empty one.
 
 State: written, not yet run on a compiler. The first suite over
 `Monsters.pas`: the shove of a blow (`TakeDamage`) and what it must never
-do - leave a body in a wall or hanging in the air. The rest of `TMonster` (patrol turns,
-the chase, health tiers, events) is left to a later batch. The unit is
-tried by `Tests\Monsters\Tests.Monsters.pas`, fixture `TMonsterTests`;
+do - leave a body in a wall or hanging in the air. The floor, the corpse
+and the patrol are tried in `Monsters.Bodies` below; the rest of
+`TMonster` (the chase, health tiers, the events but one) is left to a
+later batch. The unit is tried by `Tests\Monsters\Tests.Monsters.pas`, fixture `TMonsterTests`;
 the search path of the project grows by `..\Game` and `..\Game\Pads`.
 
 Shared setup, `Tests\Tests.Rooms.pas` (the monsters of every later batch
@@ -259,10 +261,12 @@ stand in it too):
   counted from 1 as the level file counts, its feet on the bottom line of
   the cell. No animation set (`Default(TAnimSet)`), no disc art, lives
   scale 1.
-- The bursts are `nil`. A monster brought to zero lives fans bullets into
-  its burst, so no test here kills one: blows are struck with `ALosses` 0,
-  and the one test that spends a life spends a single one. `Tick` takes
-  the hero at (0, 0) and a `nil` burst: the subjects never shoot.
+- The bursts are `nil`. A body that explodes, brought to zero lives, fans
+  bullets into its burst, so none is killed in this suite: the blows of
+  this batch are struck with `ALosses` 0, and the one test that spends a
+  life spends a single one. A gravel has no fan and does die into a `nil`
+  burst: `Monsters.Bodies` kills it. `Tick` takes the hero at (0, 0) and a
+  `nil` burst: the subjects never shoot.
 - A body falls slowly: it needs about a hundred and twenty ticks to drop
   the height of the screen, so a test that waits for a landing waits a
   hundred and fifty.
@@ -298,13 +302,94 @@ Left to the eye:
   `Draw`; what made it flicker - the body hung in the air - is test 6.
 - The boss in a maneuver is not shoved: a boss needs the textures of its
   disc.
-- A blow that kills: the fans of fragments go into a `TBurst`, which
-  needs a renderer.
+- A blow that kills a body that explodes: the fans of fragments go into
+  a `TBurst`, which needs a renderer.
 - The barrel. It carries smoke; if the smoke builds without a window the
   first run will show it, and a barrel joins tests 1, 3 and 6 as a second
   subject.
 - The invisible wall of a level: a solid column no art draws is art
   against collision, and the level file is judged by a live run.
+
+## Monsters.Bodies
+
+State: written, 11 tests, not yet run on a compiler. The expectations were
+checked on a Python port of the monster's floor physics (the oracles, the
+patrol, the fall, the death) with the corpse rule switched on and off: with
+it off, test 6 is red. The unit is tried by
+`Tests\Monsters\Tests.Monsters.Bodies.pas`, fixture `TMonsterBodyTests`.
+
+Shared setup: `Tests.Rooms`, as above. `RoomRowsOf` (the rows of a room
+with a wall column and a ledge) lives there now, for both monster units;
+the corridor - the floor and two solid columns, 5 and 12, their faces at
+x = 160 and x = 352 - is built from it in the unit. The subjects are the
+`gravel` (a patrol walker that turns at a ledge's end) and the
+`gravelFemale` (walls only). Neither explodes, so both die into a `nil`
+burst. A body is laid dead by one blow for all its lives and a hundred
+ticks at most.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestLethalHitStartsDyingAndTellsTheGameOnce` | floor, a gravel struck for all its lives: `mlDying`; `DrainEvent` gives `meDied`, then `meNone` | a death is not told, or told twice |
+| `TestHitThatLeavesLivesKillsNobody` | a blow that leaves one life: alive, no event | the line of death moves by one |
+| `TestDyingBodyBecomesACorpseThatLiesStill` | floor: the body is dead within a hundred ticks; a hundred and fifty on, it is dead, in the same place, on the floor | a corpse goes on patrolling, or sinks |
+| `TestCorpseIsNotKilledAgain` | a corpse struck twice more: still dead, no second `meDied` | a dead body can die again: the score and the fragments twice |
+| `TestCorpseOnALedgeStaysOnIt` | ledge, a corpse mid-ledge: a hundred and fifty ticks on it is on the ledge (y = 256) | the fall rule fires for a corpse that has the grid under it |
+| `TestCorpseKnockedOffALedgeFallsToTheFloor` | ledge: a corpse on the right end, ten blows of 8, a hundred and fifty ticks: on the floor (y = 352), still dead | a corpse is never asked for a floor: it hangs where the blows left it - the bug of the corpse on a pad that flew away, reached without a pad |
+| `TestBodyKilledInTheAirLandsAndLiesStill` | floor, a gravel in the air: a tick to start the fall, a lethal blow, a hundred and fifty ticks: on the floor, dead, X as it fell | a dying body's fall is cut short, or a corpse slides on landing |
+| `TestPatrolTurnsBackAtTheEndOfALedge` | ledge, a gravel mid-ledge: nine hundred ticks, every one of them on the ledge (y = 256); the body has been on both sides of its start | the edge-aware oracle lets it walk off, or it stops at the first turn |
+| `TestPatrolTurnsBackAtWalls` | corridor: nine hundred ticks, the art never more than two units into a wall; the body has gone both ways | a walker passes through a wall, or sticks to one. Two units, not none: the probes of 2008 let the art in by one before they turn it |
+| `TestWalkerWithNoEdgeCheckWalksOffALedge` | ledge, a gravel female: three hundred ticks on, it is on the floor | the edge check is put on every walker |
+| `TestWalkerDroppedAboveALedgeLandsOnIt` | ledge, a gravel dropped above it: after a hundred and fifty ticks it is on the ledge (y = 256), not on the floor | a fall goes by a ledge to the floor |
+
+Left to the eye:
+
+- The corpse of the boss. It flies and ignores gravity: it hangs where it
+  died by design (`Monsters.Pilot`), and it needs the textures of its disc.
+- A body that ignores gravity (the platform, the mount) hanging in the air.
+  Both carry a gun that fires into the `nil` burst on its interval, and
+  both carry smoke or art the room does not build.
+- A corpse over a pit. The fall out of the world below the floor line is
+  the 2008 behaviour, and no test pins it.
+
+## Monsters.Pads
+
+State: designed, not written - blocked. `TPadWorld.Create` asks the
+level's sprite cache for the texture of every pad (`ACache.Get`), and a
+texture needs a renderer: the level of `Tests.Rooms` has no pads for
+exactly that reason. Three ways out, one to be chosen before the unit is
+written:
+
+- A one-line change of game code: `TPadWorld.Create` takes a `nil` texture
+  when it is given no cache (a pad then draws nothing, which is all a test
+  asks of it). The rule of the suite is that game code is not changed for
+  a test's sake: this would be the one exception.
+- A software renderer in `Tests.Rooms` (`SDL_CreateSoftwareRenderer` over
+  a surface, no window) and a small `.mset` with one picture, attached to
+  a real `TSpriteCache`. No game code changes, but the suite then touches
+  SDL, which its rules forbid ("No window").
+- The pads are left to the eye.
+
+If the unit is written, the level JSON of a room gains a `pads` section
+(`sprite`, `screen`, `x`, `y`, `width`, the deck is the `y`) and a
+`padGroups` section; the pads are reached through `FindTagged` and moved by
+`TPadWorld.Tick(AScreen)` once a tick before the monsters, as the game does.
+The first guess at the tests:
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBodyStandsOnAPadInTheAir` | a pad over open cells, a gravel put on its deck: a hundred ticks on it is still on the deck's line | a deck is no floor for the feet |
+| `TestPatrolTurnsBackAtTheEndsOfAPad` | the same, nine hundred ticks: on the deck throughout, and on both sides of its start | the edge-aware oracle asks the grid alone |
+| `TestPadOnAPathCarriesItsRider` | a pad on a ping-pong path, a medkit on it: over a whole cycle the rider is on the deck and goes where the pad goes | the ride is lost, or the rider is left behind |
+| `TestCorpseRidesAPad` | the same with a corpse | the dead are not carried |
+| `TestBodyDroppedOnAPadLandsOnIt` | a gravel dropped above a pad: it lands on the deck, not on the floor | a fall goes through a deck |
+| `TestCorpseFallsWhenItsPadFliesIntoTheDepth` | a corpse on a pad of a group, a rebuild asked for: once the pad sets off, the corpse is on the floor and not in the air | the bug: a corpse is held only by the deck that carried it, and a pad in the depth carries nobody |
+| `TestWalkerFallsWhenItsPadFliesIntoTheDepth` | the same with a living gravel | a living body is left hanging |
+| `TestCorpseLandsOnThePadBelow` | a corpse falls from a pad onto another under it | a corpse falls through a deck |
+
+Open: the judge of a rebuild asks for the jump reach, which a room does not
+have (`nil`); a restore asks for nothing, but needs a pad off its place in
+the level file. How the test gets one there without the judge is to be
+found when the unit is written.
 
 ## Effects.Lightning
 
