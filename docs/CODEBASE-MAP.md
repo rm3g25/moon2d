@@ -7,7 +7,8 @@ Repo: `https://github.com/rm3g25/moon2d/`, Delphi 10.3+ (inline var) + SDL2,
 Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
-Regenerated at `v3.0.3`, patched through `v3.0.33` (the folder layout came
+Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
+hull at `v3.0.36` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -70,7 +71,8 @@ over the two, `Levels.Pads`, `Levels.Defs`, `Render.Sprites`,
 `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
-`Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Pilot` (the
+`Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Hull` (the
+platform's hull: the same, its eye through `Render.Glow`) / `Monsters.Pilot` (the
 boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 `Game.Space` and the sizes of `Render.Sprites`) -> `Hero` /
 `Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
@@ -209,8 +211,10 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   center, side, angle, level = 1)` - a square of any size centered on a
   float point, turned clockwise, at an opacity; float all the way, so a
   mover drawn between ticks does not snap to logical units - the boss's
-  disc draws its layers through it. It sets the texture's alpha mod on
-  every call. `Draw`, `DrawRotated` and `DrawTurned` all draw a float
+  disc draws its layers through it. `DrawSized(texture, center, width,
+  height, level = 1)` - the same for a rectangle, unturned: the platform's
+  hull. It sets the texture's alpha mod on
+  every call. `Draw`, `DrawRotated`, `DrawTurned` and `DrawSized` all draw a float
   rectangle through `SDL_RenderCopyExF` (at whole units the picture is
   what the integer call drew), and so does `DrawRectF` since 3.0.28
   (`SDL_RenderCopyF` before);
@@ -219,7 +223,7 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   them - the screen-shake hook; nothing here resets it, the caller sets it per
   layer and draws the still layers (backdrop, cursor, HUD) at `NoShake`.
   **`FineY`** (a `Single`, 0 from birth) - a fraction of a unit under
-  `Origin.Y`, added by `Draw`, `DrawRotated` and `DrawTurned` alone (so by
+  `Origin.Y`, added by `Draw`, `DrawRotated`, `DrawTurned` and `DrawSized` alone (so by
   `DrawCell` too): a body riding a swaying pad sways with it, not in whole
   units. The caller sets it around one figure's draw and puts it back to 0;
   nothing here resets it either. The
@@ -1076,10 +1080,19 @@ Monster definition model + registry (parses monsters.json). No behavior.
   one bullet out of each, none by default;
   `Enabled`; a disc without a set or a positive side, with a muzzle outside
   0..side/2 or `wearFull` outside (0, 100] raises at load);
+  `THullDef` (JSON `hull` - the living monster is drawn as a hull out of
+  two layers, see `Monsters.Hull`: `SetName` - the layers' set, `Width`,
+  `Height` - the hull's size in screen units, standing in the middle of
+  the monster's cell, `WearFull` - as the disc's, `Eye`, `Smoke`,
+  `Sparks` - `THullPoint`s, screen units from the hull's top-left corner:
+  the middle of the lens, where a wrecked body smokes, where it sparks
+  and shorts out; `Enabled`; a hull without a set, a positive width and
+  height or with `wearFull` outside (0, 100], or a point that is not two
+  numbers, raises at load - and so does a monster with a disc and a hull);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
   explosion, material, movement, attack, pickupEffect, lives, score, animFreq, deathText
-  (localized), deathSounds array, boss, disc.
+  (localized), deathSounds array, boss, disc, hull.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table and dodge-prize validation.
@@ -1539,6 +1552,29 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
+### `Game/Monsters.Hull.pas` (~160 lines)
+A monster drawn as a hull out of two layers instead of its `alive` frames -
+the TeK platform. The disc's twin without the turning and the iris: art and
+pose only, the hull knows nothing of the monster's logic. Not here: the
+death - a dying hull monster plays the `death` frames of its own set, as
+every monster does.
+- **`THullArt`** - the layers of one hull set (`hull`, `hullDamaged`) through
+  a set and a cache of its own: no color key (soft painted edges), linear
+  filter (drawn at a size of its own). Also owns the eye's glow texture
+  (`Render.Glow`). The destructor frees the cache before the set.
+- **`THull`** - `Tick(wear, charge)` (both 0..1): the wear is kept, the eye
+  takes the charge and fades by `EyeFade` a tick after a shot.
+  `Draw(sprites, center, alpha)`: the whole hull and, over it, the worn copy
+  at the wear as its opacity (both through `TSpriteRenderer.DrawSized`, so
+  they shake with the monsters' channel and ride a pad by `FineY`), then the
+  red eye glow (`EyeRest*` .. `EyeCharged*`) at the `eye` point, between the
+  two ticks of the eye - only the eye draws between ticks, the hull stands
+  on whole units like a frame and is never mirrored: the art is symmetric,
+  and the torn panel of the worn layer would jump from side to side at every
+  turn. `Spot(center, point)` - where a point of the art falls on the
+  screen, the hull standing at `center`: the eye, and for the monster the
+  smoke, the sparks and the short of a wreck.
+
 ### `Game/Monsters.Pilot.pas` (~1075 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
 where its body goes this tick and what it is up to. The monster keeps its
@@ -1643,7 +1679,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
   lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
-  for the rest) and for an `mkBossFly` monster its `TPilot`. Its own
+  for the rest), for a hull monster its `THull` (`FHull`, nil for the
+  rest) and for an `mkBossFly` monster its `TPilot`. Its own
   collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
   `ShoveX`. Pads (a 2026 addition; the constructor takes the pad world):
@@ -1685,15 +1722,20 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   one row, and a body between two rows would be shoved into a wall -
   + explosion fans + events), `EnrageTankIfLow`,
   `ProcessBossThresholds`, `BeginDying`. The disc: `TickDisc` (late in
-  `Tick`: only the ports' volley comes after) hands it `DiscCenter` (the
+  `Tick`: only the ports' volley comes after) hands it `ArtCenter` (the
   middle of the sprite), `EyeTarget`
   (the hero's middle; under the pilot's `Gaze` - the point a ram has
   locked on, or the disc's own middle for a stunned eye), the step over
   the definition's speed (rage doubles the step, so the spin; a pilot's
-  `SpinScale` has the last word), `DiscWear` (lives lost since birth over `WearFull` -
-  `FLivesBorn`, because rage resets `LivesAll`) and `DiscCharge` (rises
+  `SpinScale` has the last word), `Wear(WearFull)` (lives lost since birth over `WearFull` -
+  `FLivesBorn`, because rage resets `LivesAll`; the hull's too) and `ShotCharge` (rises
   over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one;
-  where the pilot holds the gun - its `Charge` instead). The aimed gun
+  where the pilot holds the gun - its `Charge` instead). The hull:
+  `TickHull` right after `TickDisc` hands `THull.Tick` the same `Wear`
+  (over the hull's `WearFull`) and `ShotCharge`; `Draw` stands the hull at
+  `HullCenter` - the middle of the sprite on whole units, as a frame
+  stands, so the picture, the hitbox and the smoke stay glued - while the
+  monster lives; a dying one plays its `death` frames. The aimed gun
   under a pilot: held (`PilotHoldsGun` - in every maneuver and while the
   lap is held), its timer stays at zero - a whole interval passes after a
   hold before it speaks; on a free lap the interval and its `=` test are
@@ -1749,8 +1791,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `DrawSmoke(canvas, screen, origin, alpha)`, `DrawSparks` (the same
   shape, over the smoke).
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
-  and owned here; the destructor frees the monsters before the art they
-  draw with.
+  and owned here, `HullArtFor(def)` - the same for the `THullArt` of a hull
+  set; the destructor frees the monsters before the art they draw with.
 - **Body smoke** (a 2026 addition, default behavior, no data): `TBodySmoke`
   is one body's smoke - the `TSmokeLook`, the tint, the point on the
   left-facing art, the level before the last third and in it, the ramp in
@@ -1764,17 +1806,20 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   half a second of `htCritical`. `CreateSmoke(bodySmoke)` makes the `TSmoke`
   and keeps the record in `FBodySmoke`; `WreckIfCritical` and `TickSmoke`
   read the level and the point from there. No emission once the monster is
-  no longer alive (dying included). The point mirrors with `FacesRight`,
+  no longer alive (dying included). The point goes through `BodyPoint` and mirrors with `FacesRight`,
   the one home of the facing rule, which `Draw` uses too - a barrel shoved
-  nine units into a wall or over a ledge turns around, valve and all. The smoke dies
+  nine units into a wall or over a ledge turns around, valve and all. A hull
+  never turns: its point is the hull's own `Smoke`, put on the screen by
+  `THull.Spot` over `HullCenter`, and stays put. The smoke dies
   with the monster, so a restart clears it. `TMonster` got its destructor
-  (it frees the disc, the sparks, the smoke and the event list).
+  (it frees the hull, the disc, the sparks, the smoke and the event list).
 - **Wreck sparks** (default behavior, no data): the same machines own a
   `TSparks` made from the `WreckSparks` look (a rare crackle: two sparks a
   second and an arc of about five every second and a half, ringing off
   the floor), unlit until the same moment - `WreckIfCritical` is the one
   trigger of the smoke and the sparks - then at full at once. The point
-  (`WreckSparksX/Y`) mirrors like the smoke's; the probe is the monster's
+  (`WreckSparksX/Y`) mirrors like the smoke's - a hull's `Sparks` stands for
+  it and for the short's, unmirrored; the probe is the monster's
   own screen (`SolidUnderPoint`: `TLevel.SolidAtPoint` or a pad's body,
   `BodyAt`); the seed is
   `SpawnSeed` (the spawn point, the smoke's seed too) under a salt, so the
@@ -1860,7 +1905,7 @@ The brush the primitive-drawn panels share - the HUD units and the menu's
 difficulty cells - plus the color and random vocabulary of the whole
 renderer: `TRgb`, `Mix` and `TXorShift` serve `Render.Glow`, `Render.Globe`,
 `Render.Puff`, `Effects.Sparks`, `Effects.Debris`, `Levels.Dynamics`,
-`Game.Explosions`, `Game.Impacts`, `Monsters.Disc` and the menu sky rig. No sprite, no font atlas. (Was Hud.Draw
+`Game.Explosions`, `Game.Impacts`, `Monsters.Disc`, `Monsters.Hull` and the menu sky rig. No sprite, no font atlas. (Was Hud.Draw
 until the menu
 started drawing with it; the class inside still carries the old name,
 `THudBrush`.)
@@ -2807,7 +2852,10 @@ and `boss1` - a bullet throws sparks off them instead of bursting
 of the layers of a set instead of its `alive` frames: `set`, `side`,
 `muzzle`, `spin`, `irisReach`, `wearFull`, `portAngles` (the six gun
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
-`boss` block names `dodgePrize`: `medkit`.
+`boss` block names `dodgePrize`: `medkit`. `hull` (only `platform`) draws
+the living monster as a hull out of two layers of a set: `set`
+(`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the points
+`eye`, `smoke`, `sparks` - see `THullDef`.
 
 ### `level1.json` (~97 KB) / `level2.json` (~36 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
@@ -2944,7 +2992,7 @@ plainest example), `introText`/`introTextEn`.
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
 
-### `sprites\*.mset` (38 sets)
+### `sprites\*.mset` (39 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups).
@@ -2961,6 +3009,11 @@ plainest example), `introText`/`introTextEn`.
   with the edge color) - named by `disc.set` in monsters.json, drawn by
   `Monsters.Disc`. `boss1` keeps its eight `alive` frames only for the
   `TAnimSet` contract; its `death` frames still play.
+- **Hull layers**: `platform-hull` (`hull`, `hullDamaged`; 240x122 each - 6 px
+  per screen unit, a 40 x 20.33 unit hull - transparent pixels filled with
+  the edge color) - named by `hull.set` in monsters.json, drawn by
+  `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` for
+  the `TAnimSet` contract; its `death` frames still play.
 - **Tile themes**: `brickwork`, `cargo`, `common`, `conveyor`, `facility`,
   `machinery`, `mine-interior`, `mine-structure`, `mine-walls`, `mining-rig`,
   `moon-surface`, `railway` - grouped by subject, not by level, because levels
@@ -3026,6 +3079,7 @@ music loads leniently. Four one-shots are synthesised by
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
+| The platform's hull: layers, wear, eye, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset` (+Monsters.pas `TickHull`, `HullCenter`, `BodyPoint`; Render.Sprites.pas `DrawSized`) |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
 | Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
@@ -3034,7 +3088,7 @@ music loads leniently. Four one-shots are synthesised by
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
 | A fan in a level: size, speed, direction, blur, a dying motor; a new rotor, guard or back; a louver panel beside it | `fan` in the `dynamics` of levelN.json (the louver - in `objects`) + Levels.Dynamics.pas `TFan` + `ventilation.mset` (declared in `objectSets`; tools/fans/build_fans.py makes the pictures) |
 | Sparks off armor under fire; which monsters are metal; the ping and the whine | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` in monsters.json (+tools/sounds/armor.py) |
-| Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`) |
+| Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; a hull's points: `hull` in monsters.json) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
