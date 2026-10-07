@@ -89,6 +89,10 @@ type
     // Names the placement for the level's events ("allDead" waits for
     // every body carrying the tag). JSON: "tag": "labGuard"; '' = none.
     Tag: string;
+    // The rigs it wears, by name, in the order they are hung
+    // (Levels.Rigs): their parts hang on the monster by its tag, counted
+    // from the top-left corner of its cell. JSON: "rig": ["tekPlatform"].
+    Rigs: TArray<string>;
   end;
 
   TBackgroundChange = record
@@ -422,6 +426,42 @@ begin
       Result := Result + [Name.Value];
 end;
 
+function PadWearer(const APad: TPadPlacement): TRigWearer;
+begin
+  Result.Tag := APad.Tag;
+  Result.Name := PadRigName(APad);
+  Result.Rigs := APad.Rigs;
+end;
+
+// A placement as the errors of its rigs call it: by the tag, without one
+// by what stands where
+function EntityRigName(const AEntity: TEntityPlacement): string;
+begin
+  if AEntity.Tag <> '' then
+    Exit(Format('entity "%s"', [AEntity.Tag]));
+  Result := Format('entity "%s" on screen %d, cell (%d, %d)',
+    [AEntity.MonsterId, AEntity.Screen, AEntity.X, AEntity.Y]);
+end;
+
+function EntityWearer(const AEntity: TEntityPlacement): TRigWearer;
+begin
+  Result.Tag := AEntity.Tag;
+  Result.Name := EntityRigName(AEntity);
+  Result.Rigs := AEntity.Rigs;
+end;
+
+// The pads first, then the placements, each in file order. A haze paints
+// over the ones hung before it: the order is the order they are drawn in.
+function RigWearersOf(const APads: TArray<TPadPlacement>;
+  const AEntities: TArray<TEntityPlacement>): TArray<TRigWearer>;
+begin
+  Result := [];
+  for var Pad in APads do
+    Result := Result + [PadWearer(Pad)];
+  for var Entity in AEntities do
+    Result := Result + [EntityWearer(Entity)];
+end;
+
 procedure TLevel.ParseRoot(const ARoot: TJSONObject);
 begin
   FId := ARoot.GetValue<string>('id');
@@ -458,7 +498,7 @@ begin
   FDynamics := ParseDynamics(ARoot, FId);
   // Before the checks: the parts of a rig are dynamic objects as the
   // rest, and a group's alarm lamps may be among them
-  WearRigs(ARoot, FId, FPads, FDynamics);
+  WearRigs(ARoot, FId, RigWearersOf(FPads, FEntities), FDynamics);
   CheckDynamics;
   CheckPadGroupLinks;
   FEvents := ParseLevelEvents(ARoot, FId);
@@ -1034,6 +1074,7 @@ begin
     ReadOverrides(Obj, FEntities[i].Overrides);
     ReadTriggers(Obj, FEntities[i].Triggers);
     FEntities[i].Tag := Obj.GetValue<string>('tag', '');
+    FEntities[i].Rigs := ReadRigNames(Obj, FId, EntityRigName(FEntities[i]));
   end;
 end;
 

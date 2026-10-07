@@ -114,11 +114,14 @@ function ParsePads(const ARoot: TJSONObject;
 // conductor without every above zero raise.
 function ParsePadGroups(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadGroup>;
+// A pad as the errors of its rigs call it: by the tag, without one by
+// the sprite - the only name it has then
+function PadRigName(const APad: TPadPlacement): string;
 
 implementation
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections, Levels.Rigs;
 
 resourcestring
   SPadBadWidth = 'Level "%s": pad "%s" is %d units wide';
@@ -127,8 +130,6 @@ resourcestring
   SPadNoStops = 'Level "%s": pad "%s" has a path without stops';
   SPadBadStop = 'Level "%s": pad "%s" has a stop that is not [x, y]';
   SPadBadNumber = 'Level "%s": pad "%s" takes %s %g';
-  SPadBadRig = 'Level "%s": pad "%s" has a rig that is not a list of rig '
-    + 'names';
   SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
     + '[left, top, right, bottom]';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
@@ -190,24 +191,12 @@ begin
       [ALevelId, ASprite, 'pause', Result.Pause]);
 end;
 
-// JSON: "rig": ["pad", "arenaAlarm"]; absent = the pad wears nothing
-function ReadRigs(const AObj: TJSONObject;
-  const ALevelId, ASprite: string): TArray<string>;
+function PadRigName(const APad: TPadPlacement): string;
 begin
-  Result := [];
-  var Raw := AObj.GetValue('rig');
-  if Raw = nil then
-    Exit;
-  if not (Raw is TJSONArray) then
-    raise EPadError.CreateFmt(SPadBadRig, [ALevelId, ASprite]);
-  for var Item in TJSONArray(Raw) do
-  begin
-    // System.JSON holds a number as a string of a kind
-    var IsName := (Item is TJSONString) and not (Item is TJSONNumber);
-    if not IsName then
-      raise EPadError.CreateFmt(SPadBadRig, [ALevelId, ASprite]);
-    Result := Result + [Item.Value];
-  end;
+  var Shown := APad.Sprite;
+  if APad.Tag <> '' then
+    Shown := APad.Tag;
+  Result := Format('pad "%s"', [Shown]);
 end;
 
 function ParsePads(const ARoot: TJSONObject;
@@ -234,7 +223,7 @@ begin
     Pad.Path := ReadPath(Obj, ALevelId, Pad.Sprite);
     Pad.Bob := Obj.GetValue<Double>('bob', 0);
     Pad.Group := Obj.GetValue<string>('group', '');
-    Pad.Rigs := ReadRigs(Obj, ALevelId, Pad.Sprite);
+    Pad.Rigs := ReadRigNames(Obj, ALevelId, PadRigName(Pad));
 
     if Pad.Width <= 0 then
       raise EPadError.CreateFmt(SPadBadWidth, [ALevelId, Pad.Sprite, Pad.Width]);
