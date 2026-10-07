@@ -59,6 +59,7 @@ Tests\
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
+    Tests.Monsters.Damage.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
 run-tests.cmd             build and run
@@ -390,6 +391,44 @@ Open: the judge of a rebuild asks for the jump reach, which a room does not
 have (`nil`); a restore asks for nothing, but needs a pad off its place in
 the level file. How the test gets one there without the judge is to be
 found when the unit is written.
+
+## Monsters.Damage
+
+State: written, 10 tests, not yet run on a compiler. The expectations were
+checked on a Python mirror of the window. The unit is tried by
+`Tests\Monsters\Tests.Monsters.Damage.pas`, in two fixtures:
+`TDamageWindowTests` (the window alone, no room) and `TCappedBossTests`
+(`boss1` in a room).
+
+The window's cap is the one `boss1` carries, 30 lives in 33 ticks, so the
+tests also hold the number to what it was set for: the hero's best guns
+go through it untouched, a barrel's fan does not. The guns are numbers
+here - 3 bullets every 5 ticks (the chain gun), 22 pellets every 40 (the
+grenade volley) - not shots through the game.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBlowsOverTheCapAreCutAtTheCap` | one blow of a hundred: 30 count, the next blow none | the cap is not applied to a single big blow |
+| `TestSingleHitsLandUpToTheCapThenNone` | a hundred hits of one: 30 land | the count is kept per blow, not per life |
+| `TestHitsLeaveTheWindowWhenItsTickIsOver` | 30 land on tick 0; on tick 32 none more; on tick 33 all 30 again | the window is a tick too long or too short, or never slides |
+| `TestNoRunOfTicksTakesMoreThanTheCap` | five lives asked every tick for ten seconds: every run of 33 ticks takes 30 at most | a fixed window that lets 60 through across its edge |
+| `TestSteadyFireIsLetThroughAtTheCapRate` | the same ten seconds: 300 in all | the cap is stingier than its word |
+| `TestChainGunIsNeverThrottled` | 3 every 5 ticks for ten seconds: none cut | the cap is set under the chain gun (20 a second) |
+| `TestGrenadeVolleyIsNeverThrottled` | 22 every 40 ticks for ten seconds: none cut | the cap is set under a point-blank volley |
+| `TestBarrelFanIsCutToTheCap` | a hundred fragments of one life: 30 land | the cap lets a barrel through |
+| `TestHundredBlowsOnOneTickTakeNoMoreThanTheCap` | `boss1` struck a hundred times for one life on one tick: it has lost the cap and is alive | the boss is not given a window, or `TakeDamage` goes round it |
+| `TestBlowOverTheCapStillShovesTheBoss` | the cap spent, a blow of 8: no life lost, X moved by 4 | a capped blow stops shoving - the boss would stand still under a barrage |
+
+Left to the eye:
+
+- A barrel blown beside the boss in the game: the fan's real hits and
+  how the cap reads on the screen. The 90-145 hits of the design numbers
+  come from a model with no walls and a still boss.
+- The ticking: the boss in a room does not tick here (it flies, and its
+  disc needs textures). The slide of the window is tried on the window.
+
+Open: the shove test leans on a fresh `boss1` not being busy with a
+maneuver and on its row being open; the first run shows it.
 
 ## Effects.Lightning
 

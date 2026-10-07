@@ -9,8 +9,8 @@ fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
 Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
 hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
-`v3.0.38` and its restore at `v3.0.39` (the folder layout came
-between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
+`v3.0.40` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -77,7 +77,8 @@ over the two, `Levels.Pads`, `Levels.Defs`, `Render.Sprites`,
 `Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Hull` (the
 platform's hull: the same, its eye through `Render.Glow`) / `Monsters.Pilot` (the
 boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
-`Game.Space` and the sizes of `Render.Sprites`) -> `Hero` /
+`Game.Space` and the sizes of `Render.Sprites`) / `Monsters.Damage` (the
+window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
 `Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
@@ -1139,9 +1140,12 @@ Monster definition model + registry (parses monsters.json). No behavior.
   and shorts out; `Enabled`; a hull without a set, a positive width and
   height or with `wearFull` outside (0, 100], or a point that is not two
   numbers, raises at load - and so does a monster with a disc and a hull);
+  `TDamageCap` (JSON `damageCap` in `stats` - the most lives a monster may
+  lose in any run of `Ticks` ticks, see `Monsters.Damage`: `Lives`, `Ticks`,
+  `Enabled`; a cap without positive lives and ticks raises at load);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
-  explosion, material, movement, attack, pickupEffect, lives, score, animFreq, deathText
+  explosion, material, movement, attack, pickupEffect, lives, score, damageCap, animFreq, deathText
   (localized), deathSounds array, boss, disc, hull.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
@@ -1787,6 +1791,20 @@ game's. A 2026 addition all but the lap.
   corners, so a dive goes round a pad and a ram crashes into one as into
   a wall.
 
+### `Game/Monsters.Damage.pas` (~65 lines)
+The window of a monster's damage cap (`TDamageCap`, JSON `stats.damageCap`):
+how many lives the monster may still lose. It only counts; what a blow does
+besides taking lives is the monster's.
+- **`TDamageWindow`** - `Create(cap)` keeps the cap and a ring of `Ticks`
+  slots, one per tick, each holding the lives landed on that tick. `Advance`
+  (once a tick, from `TMonster.Tick`) steps to the next slot and forgets
+  what it held: the tick that has left the window. `Admit(losses)` gives how
+  many of the losses count - the cap less the sum of the window, never below
+  zero, never above the losses - and writes them into the current slot. What
+  is over the cap is lost, not held over for a later tick. So any `Ticks`
+  ticks in a row take at most `Lives` lives, and a gun that fires less than
+  that is never touched.
+
 ### `Game/Monsters.pas` (~1650 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
@@ -1838,7 +1856,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   the ports are where the frame shows them), `TakeDamage` (knockback
   through the wall oracle - not while the pilot is `Busy`: the oracle asks
   one row, and a body between two rows would be shoved into a wall -
-  + explosion fans + events), `EnrageTankIfLow`,
+  + explosion fans + events; the lives that land go through the monster's
+  `FDamageWindow` - `Admit` in `TakeDamage`, `Advance` in `Tick`, nil for a
+  monster with no `damageCap` - so a blow over the cap still shoves the
+  body and trips the thresholds, only its lives do not count),
+  `EnrageTankIfLow`,
   `ProcessBossThresholds`, `BeginDying`. The disc: `TickDisc` (late in
   `Tick`: only the ports' volley comes after) hands it `ArtCenter` (the
   middle of the sprite), `EyeTarget`
@@ -2942,6 +2964,12 @@ to `bin\`.
   `Add` / `Insert`, aging, the three ends (`Implode`, `Spend`,
   `Release`), what `Tick` drops, `Shift`, `Clear`. A fixture registers
   itself in its unit's `initialization`.
+- **`Monsters/Tests.Monsters.Damage.pas`** (~245 lines) -
+  **`TDamageWindowTests`**: the window alone - the cut at the cap, the slide
+  of the window, no run of `Ticks` ticks over the cap, the hero's chain gun
+  and grenade volley never cut, a barrel's fan cut; **`TCappedBossTests`**:
+  `boss1` on one tick takes no more than the cap, and a blow over it still
+  shoves him.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -2979,7 +3007,10 @@ ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
 `boss` block names `dodgePrize`: `medkit`. `hull` (only `platform`) draws
 the living monster as a hull out of two layers of a set: `set`
 (`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the points
-`eye`, `smoke`, `sparks` - see `THullDef`.
+`eye`, `smoke`, `sparks` - see `THullDef`. `stats.damageCap` (only `boss1`)
+limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
+`TDamageCap`. The cap does not grow with the difficulty, as the lives do:
+the hero's guns do not either.
 
 ### `level1.json` (~97 KB) / `level2.json` (~36 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
