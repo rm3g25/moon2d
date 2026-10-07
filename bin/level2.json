@@ -79,148 +79,20 @@
       "tag": "satellite"
     },
     {
+      "sprite": "s17-floor",
+      "screen": 1,
+      "x": -128,
+      "y": 352,
+      "width": 288,
+      "tag": "s01-floor"
+    },
+    {
       "sprite": "s17-crane",
       "screen": 1,
       "x": -32,
       "y": 288,
       "width": 192,
       "tag": "s01-crane"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 0,
-      "y": 160,
-      "width": 32,
-      "tag": "s01-plat-01"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 192,
-      "y": 160,
-      "width": 32,
-      "tag": "s01-plat-02"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 32,
-      "y": 224,
-      "width": 32,
-      "tag": "s01-plat-03"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 160,
-      "y": 256,
-      "width": 32,
-      "tag": "s01-plat-04"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 192,
-      "y": 256,
-      "width": 32,
-      "tag": "s01-plat-05"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 384,
-      "y": 288,
-      "width": 32,
-      "tag": "s01-plat-06"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 416,
-      "y": 288,
-      "width": 32,
-      "tag": "s01-plat-07"
-    },
-    {
-      "sprite": "s16-platform-out",
-      "screen": 1,
-      "x": 448,
-      "y": 288,
-      "width": 32,
-      "tag": "s01-plat-08"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 480,
-      "y": 288,
-      "width": 32,
-      "tag": "s01-plat-09"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 0,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-10"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 32,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-11"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 64,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-12"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 96,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-13"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 128,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-14"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 224,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-15"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 256,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-16"
-    },
-    {
-      "sprite": "s16-platform",
-      "screen": 1,
-      "x": 288,
-      "y": 352,
-      "width": 32,
-      "tag": "s01-plat-17"
     },
     {
       "sprite": "s14-growth",
@@ -239,6 +111,14 @@
       "tag": "s01-growth-b"
     },
     {
+      "sprite": "tunnel-gate",
+      "screen": 2,
+      "x": 416,
+      "y": 276,
+      "width": 113,
+      "tag": "s02-gate"
+    },
+    {
       "sprite": "louver-2x1",
       "screen": 3,
       "x": 256,
@@ -251,7 +131,335 @@
       ]
     }
   ],
+  "pads": [
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 0,
+      "y": 160,
+      "width": 32,
+      "bullets": "block",
+      "bob": 0,
+      "tag": "s01-plat-01",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 192,
+      "y": 160,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-02",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 32,
+      "y": 224,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-03",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 160,
+      "y": 256,
+      "width": 32,
+      "bullets": "block",
+      "bob": 0,
+      "tag": "s01-plat-04",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 192,
+      "y": 256,
+      "width": 32,
+      "bullets": "block",
+      "bob": 0,
+      "tag": "s01-plat-05",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 384,
+      "y": 288,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-06",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 416,
+      "y": 288,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-07",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform-out",
+      "screen": 1,
+      "x": 448,
+      "y": 288,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-08",
+      "rig": ["padBroken"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 480,
+      "y": 288,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-09",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 224,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-10",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 256,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s01-plat-11",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 1,
+      "x": 288,
+      "y": 320,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1.5,
+      "tag": "s01-plat-12",
+      "rig": ["pad"],
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            352,
+            320
+          ]
+        ],
+        "speed": 30,
+        "pause": 1
+      }
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 2,
+      "x": 96,
+      "y": 160,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1.5,
+      "tag": "s02-plat-01",
+      "rig": ["pad"],
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            144,
+            160
+          ]
+        ],
+        "speed": 36,
+        "pause": 0.5
+      }
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 2,
+      "x": 224,
+      "y": 96,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1.5,
+      "tag": "s02-plat-02",
+      "rig": ["pad"],
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            224,
+            288
+          ]
+        ],
+        "speed": 30,
+        "pause": 1.0
+      }
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 2,
+      "x": 288,
+      "y": 256,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1.5,
+      "tag": "s02-plat-03",
+      "rig": ["pad"],
+      "path": {
+        "route": "pingpong",
+        "stops": [
+          [
+            384,
+            352
+          ]
+        ],
+        "speed": 26,
+        "pause": 1.5
+      }
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 2,
+      "x": 0,
+      "y": 64,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s02-plat-04",
+      "rig": ["pad"]
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 2,
+      "x": 32,
+      "y": 64,
+      "width": 32,
+      "bullets": "block",
+      "bob": 1,
+      "tag": "s02-plat-05",
+      "rig": ["pad"]
+    }
+  ],
   "rigs": {
+    "pad": [
+      {
+        "kind": "beacon",
+        "x": 16,
+        "y": 25,
+        "tint": [20, 78, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.27, 0.45]},
+        "intensity": 40,
+        "size": 18
+      },
+      {
+        "kind": "haze",
+        "x": 16,
+        "y": 27,
+        "angle": 270,
+        "length": 64,
+        "mouth": 10,
+        "width": 46,
+        "shift": 5,
+        "grain": 7,
+        "speed": 84,
+        "shade": 18
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.36,
+        "size": 6,
+        "endSize": 11,
+        "opacity": 80,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 50,
+        "surge": 100
+      }
+    ],
+    "padBroken": [
+      {
+        "kind": "beacon",
+        "x": 16,
+        "y": 25,
+        "tint": [20, 78, 100],
+        "blink": "faulty",
+        "frequency": {"spread": [0.9, 1.1]},
+        "intensity": 90,
+        "size": 14
+      },
+      {
+        "kind": "haze",
+        "x": 16,
+        "y": 27,
+        "angle": 270,
+        "length": 64,
+        "mouth": 10,
+        "width": 46,
+        "shift": 5,
+        "grain": 7,
+        "speed": 84,
+        "shade": 18
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [50, 46, 42],
+        "endTint": [28, 28, 30],
+        "rate": 60,
+        "life": 0.7,
+        "size": 5,
+        "endSize": 18,
+        "opacity": 65,
+        "angle": 270,
+        "cone": 40,
+        "speed": 55,
+        "drag": 65,
+        "turbulence": 0,
+        "spin": 0,
+        "flow": "puffs",
+        "frequency": {"spread": [2.2, 3.1]},
+        "heat": 90,
+        "intensity": 80,
+        "surge": 100
+      }
+    ],
     "tekPlatform": [
       {
         "kind": "beacon",
@@ -436,261 +644,6 @@
       "pause": 4,
       "flash": 40,
       "jolt": 0
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-01",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.31,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-02",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.37,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-03",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.43,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-04",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.29,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-05",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.41,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-06",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.35,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-07",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.47,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-08",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "faulty",
-      "frequency": 0.9,
-      "intensity": 90,
-      "size": 14
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-09",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.39,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-10",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.45,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-11",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.27,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-12",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.34,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-13",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.42,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-14",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.3,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-15",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.38,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-16",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.46,
-      "intensity": 40,
-      "size": 18
-    },
-    {
-      "kind": "beacon",
-      "parent": "s01-plat-17",
-      "x": 16.0,
-      "y": 25.0,
-      "tint": [
-        20,
-        78,
-        100
-      ],
-      "blink": "pulse",
-      "frequency": 0.32,
-      "intensity": 40,
-      "size": 18
     },
     {
       "kind": "beacon",
@@ -1200,13 +1153,13 @@
           "0000000000000000",
           "0000000000000000",
           "0000000000000000",
-          "1000001000000000",
           "0000000000000000",
-          "0100000000000000",
-          "0000011000000000",
-          "0000000000001111",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
           "0001100000000000",
-          "1111100111000000"
+          "1111100000000000"
         ]
       },
       {
@@ -1214,21 +1167,21 @@
         "rows": [
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,0,0,0,0,0,0,0,0,0,0,0,9,9,9",
-          "0,0,16,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "0,0,4,4,4,4,4,4,4,4,4,4,4,9,9,9"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000001",
           "0000000000000001",
-          "1100000000000001",
+          "0000000000000001",
           "0000000000000001",
           "0000000000000001",
           "0000000000000001",
@@ -1236,8 +1189,8 @@
           "0000000000000001",
           "0000000000000001",
           "0000000000000111",
-          "0010000000000000",
-          "0011111111111111"
+          "0000000000000000",
+          "0000000000000111"
         ]
       },
       {
@@ -1471,8 +1424,8 @@
       "monsterId": "gravel",
       "screen": 2,
       "spriteList": "gravel.mns",
-      "x": 12,
-      "y": 9,
+      "x": 14,
+      "y": 11,
       "overrides": {
         "direction": 1,
         "speed": 1
