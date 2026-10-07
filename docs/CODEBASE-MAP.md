@@ -11,7 +11,7 @@ Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
 hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
-wave at `v3.0.41` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+wave at `v3.0.41` and the emptied death frames at `v3.0.42` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -3243,12 +3243,19 @@ plainest example), `introText`/`introTextEn`.
   every layer centered on the rotation axis, transparent pixels filled
   with the edge color) - named by `disc.set` in monsters.json, drawn by
   `Monsters.Disc`. `boss1` keeps its eight `alive` frames only for the
-  `TAnimSet` contract; its `death` frames still play.
+  `TAnimSet` contract.
 - **Hull layers**: `platform-hull` (`hull`, `hullDamaged`; 240x122 each - 6 px
   per screen unit, a 40 x 20.33 unit hull - transparent pixels filled with
   the edge color) - named by `hull.set` in monsters.json, drawn by
   `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` for
-  the `TAnimSet` contract; its `death` frames still play.
+  the `TAnimSet` contract.
+- **Death frames of what blows up** (3.0.42): in `barrel`, `tank`,
+  `platform`, `krep` and `boss1` the `death` sequence is the empty frame
+  `e8` eight times - the body vanishes in the tick it dies, and what the
+  death looks like is `Game.Explosions` alone. The painted cloud of 2008,
+  `e1`-`e7`, stays in each set as the `death-2008` sequence, unused, until
+  frames of metal falling apart take the `death` name. No code knows of
+  it: `TMonster.Draw` plays `death` as for any monster.
 - **Tile themes**: `brickwork`, `cargo`, `common`, `conveyor`, `facility`,
   `machinery`, `mine-interior`, `mine-structure`, `mine-walls`, `mining-rig`,
   `moon-surface`, `railway` - grouped by subject, not by level, because levels
