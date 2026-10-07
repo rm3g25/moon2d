@@ -251,6 +251,58 @@
       ]
     }
   ],
+  "rigs": {
+    "tekPlatform": [
+      {
+        "kind": "beacon",
+        "x": 1.8,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "beacon",
+        "x": 30.2,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "haze",
+        "x": 1.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
+      },
+      {
+        "kind": "haze",
+        "x": 31.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
+      }
+    ]
+  },
   "dynamics": [
     {
       "kind": "globe",
@@ -1632,7 +1684,9 @@
       "screen": 6,
       "spriteList": "platform.mns",
       "x": 7,
-      "y": 5
+      "y": 5,
+      "tag": "s06-tek-01",
+      "rig": ["tekPlatform"]
     },
     {
       "monsterId": "weapon4",

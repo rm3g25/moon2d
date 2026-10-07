@@ -1357,6 +1357,56 @@
         "intensity": 0,
         "size": 18
       }
+    ],
+    "tekPlatform": [
+      {
+        "kind": "beacon",
+        "x": 1.8,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "beacon",
+        "x": 30.2,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "haze",
+        "x": 1.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
+      },
+      {
+        "kind": "haze",
+        "x": 31.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
+      }
     ]
   },
   "dynamics": [
@@ -3838,6 +3888,8 @@
       "spriteList": "platform.mns",
       "x": 2,
       "y": 3,
+      "tag": "s07-tek-01",
+      "rig": ["tekPlatform"],
       "triggers": {
         "bigMessage": "жилой миникомплекс",
         "bigMessageEn": "residential mini-complex"
@@ -3890,7 +3942,9 @@
       "screen": 8,
       "spriteList": "platform.mns",
       "x": 14,
-      "y": 7
+      "y": 7,
+      "tag": "s08-tek-01",
+      "rig": ["tekPlatform"]
     },
     {
       "monsterId": "zombieShooter",
@@ -3963,7 +4017,9 @@
       "screen": 10,
       "spriteList": "platform.mns",
       "x": 7,
-      "y": 6
+      "y": 6,
+      "tag": "s10-tek-01",
+      "rig": ["tekPlatform"]
     },
     {
       "monsterId": "platform",
@@ -3971,6 +4027,8 @@
       "spriteList": "platform.mns",
       "x": 2,
       "y": 2,
+      "tag": "s10-tek-02",
+      "rig": ["tekPlatform"],
       "overrides": {
         "canShoot": false
       }
@@ -4058,6 +4116,8 @@
       "spriteList": "platform.mns",
       "x": 2,
       "y": 1,
+      "tag": "s11-tek-01",
+      "rig": ["tekPlatform"],
       "overrides": {
         "canShoot": false
       }
@@ -4068,6 +4128,8 @@
       "spriteList": "platform.mns",
       "x": 10,
       "y": 5,
+      "tag": "s11-tek-02",
+      "rig": ["tekPlatform"],
       "overrides": {
         "canShoot": false
       }
@@ -4078,6 +4140,8 @@
       "spriteList": "platform.mns",
       "x": 6,
       "y": 6,
+      "tag": "s11-tek-03",
+      "rig": ["tekPlatform"],
       "overrides": {
         "canShoot": false
       }
@@ -4088,6 +4152,8 @@
       "spriteList": "platform.mns",
       "x": 7,
       "y": 7,
+      "tag": "s11-tek-04",
+      "rig": ["tekPlatform"],
       "overrides": {
         "canShoot": false
       }
@@ -4277,6 +4343,8 @@
       "spriteList": "platform.mns",
       "x": 3,
       "y": 11,
+      "tag": "s13-tek-01",
+      "rig": ["tekPlatform"],
       "overrides": {
         "speed": 0,
         "lives": 17
@@ -4288,6 +4356,8 @@
       "spriteList": "platform.mns",
       "x": 3,
       "y": 10,
+      "tag": "s13-tek-02",
+      "rig": ["tekPlatform"],
       "overrides": {
         "speed": 0,
         "lives": 17
@@ -4299,6 +4369,8 @@
       "spriteList": "platform.mns",
       "x": 11,
       "y": 4,
+      "tag": "s13-tek-03",
+      "rig": ["tekPlatform"],
       "overrides": {
         "speed": 0,
         "lives": 17
@@ -4310,6 +4382,8 @@
       "spriteList": "platform.mns",
       "x": 13,
       "y": 4,
+      "tag": "s13-tek-04",
+      "rig": ["tekPlatform"],
       "overrides": {
         "speed": 0,
         "lives": 17
@@ -4321,6 +4395,8 @@
       "spriteList": "platform.mns",
       "x": 13,
       "y": 8,
+      "tag": "s13-tek-05",
+      "rig": ["tekPlatform"],
       "overrides": {
         "speed": 1,
         "lives": 6
