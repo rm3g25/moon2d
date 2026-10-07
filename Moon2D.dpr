@@ -2225,7 +2225,7 @@ procedure TMoonGame.DebugRebuildPads;
 begin
   for var Group in FLevel.PadGroups do
     if Group.Screen = FHero.Screen then
-      FPads.RequestRebuild(Group.Tag, HeroRides, nil);
+      FPads.RequestRebuild(Group.Tag, HeroRides, nil, nil);
 end;
 {$ENDIF} // DEBUGKEYS
 

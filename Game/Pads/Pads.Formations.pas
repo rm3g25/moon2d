@@ -82,11 +82,11 @@ uses
 const
   // A throw that cannot place its cells gives up: a zone too tight for
   // the group must not hang the game. On screen 17 a throw places its
-  // nine cells in about eight tries; seven are the least - two pairs and
-  // five single pads.
+  // ten cells in about nine tries; eight are the least - two pairs and
+  // six single pads.
   ThrowTriesPerCell = 100;
   // Assignments tried, and how many of those that hold are compared. On
-  // screen 17 about half of them hold: the 64 come within some 130
+  // screen 17 about six in ten hold: the 64 come within some 110
   // tries, the rest is room for a tighter zone.
   AssignTries = 512;
   AssignKept = 64;

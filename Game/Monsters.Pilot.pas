@@ -60,9 +60,10 @@ type
     Blow: TPadBlow;
   end;
 
-  // A tick of the lap ahead: the cell under the middle of the body and
-  // the way it flew there
+  // A tick of the lap ahead: the feet point of the body, the cell under
+  // its middle and the way it flew there
   TLapStep = record
+    Feet: TPlace;
     Cell: TCell;
     Heading: THeading;
   end;
@@ -684,6 +685,7 @@ begin
   begin
     Result[i].Heading := Heading;
     FlyLapStep(Feet, Heading, FClockwise, FLapStep);
+    Result[i].Feet := Feet;
     Result[i].Cell := CellAt(Feet);
   end;
 end;

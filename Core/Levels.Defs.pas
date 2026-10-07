@@ -166,6 +166,7 @@ type
     procedure CheckPadGroups;
     procedure CheckPadGroup(const AGroup: TPadGroup);
     procedure CheckPadGroupZone(const AGroup: TPadGroup);
+    function StandsGrounded(const APad: TPadPlacement): Boolean;
     procedure CheckPadGroupLinks;
     function TryFindWall(AScreen: Integer; const AZone: TPadZone;
       out ACol, ARow: Integer): Boolean;
@@ -292,7 +293,9 @@ resourcestring
   SLevelPadGroupUnknown = 'Level "%s": pad "%s" joins group "%s", which '
     + 'no pad group carries';
   SLevelPadGroupBadCell = 'Level "%s": pad "%s" of group "%s" does not fill '
-    + 'one cell of the zone';
+    + 'one cell of its screen';
+  SLevelPadGroupGrounded = 'Level "%s": pad "%s" of group "%s" stands '
+    + 'outside the zone in a wall or flush on one - no flight takes it off';
   SLevelPadGroupPath = 'Level "%s": pad "%s" of group "%s" travels a path - '
     + 'a rebuild flies it';
   SLevelPadGroupStranger = 'Level "%s": pad "%s" stands in the zone of '
@@ -703,16 +706,13 @@ begin
   end;
 end;
 
-// The pad's cell is a cell of the zone, the whole of it
-function FillsZoneCell(const APad: TPadPlacement;
-  const AZone: TPadZone): Boolean;
+// The pad's cell is a cell of its screen, the whole of it
+function FillsCell(const APad: TPadPlacement): Boolean;
 begin
   var OnCell := (APad.Width = TileSize) and (APad.X mod TileSize = 0) and
     (APad.Y mod TileSize = 0);
-  var Col := APad.X div TileSize;
-  var Row := APad.Y div TileSize;
-  Result := OnCell and InRange(Col, AZone.Left, AZone.Right) and
-    InRange(Row, AZone.Top, AZone.Bottom);
+  Result := OnCell and InRange(APad.X, 0, ScreenWidth - TileSize) and
+    InRange(APad.Y, 0, ScreenHeight - TileSize);
 end;
 
 // The pad's body, a cell deep, cuts into the zone
@@ -725,7 +725,9 @@ begin
 end;
 
 // A group's pads fly about its zone a cell each: a wall or another pad in
-// there would be flown into, a pad on a path would be torn off it
+// there would be flown into, a pad on a path would be torn off it. A pad
+// of the group may stand outside the zone and fly in with the first
+// rebuild - unless it stands in a wall or on one, where no flight starts.
 procedure TLevel.CheckPadGroups;
 begin
   for var Group in FPadGroups do
@@ -806,6 +808,15 @@ begin
   end;
 end;
 
+// A pad a cell big in a wall, or flush on one
+function TLevel.StandsGrounded(const APad: TPadPlacement): Boolean;
+begin
+  var Col := APad.X div TileSize;
+  var Row := APad.Y div TileSize;
+  Result := SolidAt(APad.Screen, Col, Row) or
+    SolidAt(APad.Screen, Col, Row + 1);
+end;
+
 procedure TLevel.CheckPadGroup(const AGroup: TPadGroup);
 begin
   if (AGroup.Screen < 1) or (AGroup.Screen > FScreenCount) then
@@ -827,8 +838,11 @@ begin
         [FId, Pad.Sprite, AGroup.Tag]);
     if not Member then
       Continue;
-    if (Pad.Screen <> AGroup.Screen) or not FillsZoneCell(Pad, Zone) then
+    if (Pad.Screen <> AGroup.Screen) or not FillsCell(Pad) then
       raise ELevelError.CreateFmt(SLevelPadGroupBadCell,
+        [FId, Pad.Sprite, AGroup.Tag]);
+    if not CutsZone(Pad, Zone) and StandsGrounded(Pad) then
+      raise ELevelError.CreateFmt(SLevelPadGroupGrounded,
         [FId, Pad.Sprite, AGroup.Tag]);
     if Pad.Path.Route <> prNone then
       raise ELevelError.CreateFmt(SLevelPadGroupPath,

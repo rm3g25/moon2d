@@ -14,7 +14,8 @@
     upright one. The lap is foreseen to the end (Monsters.Pilot), so the
     whole wave is planned at the start. A pad going deep sinks at once,
     as in every rebuild (Pads.Flights), and flies in the depth in its
-    turn;
+    turn. A pad the level file puts outside the zone crosses the lap to
+    fly in: in front it crosses well clear of the conductor;
   - the last pad down, the lap is let go, and the next rebuild comes the
     group's every seconds later.
   The first rebuild comes at once.
@@ -48,6 +49,7 @@ type
     FWarned: Boolean;
     FLap: TArray<TLapStep>; // the conductor's lap from the rebuild's start
     function ReleaseOf(const ACell: TPadCell): Integer;
+    function LapBars(ATick: Integer; AX, AY: Double): Boolean;
     procedure TickResting(const AConductor: TMonster);
     procedure TickHolding(const AConductor: TMonster);
     procedure TickWarning(const AConductor: TMonster);
@@ -76,7 +78,7 @@ type
 implementation
 
 uses
-  System.Math;
+  System.Math, Render.Sprites;
 
 const
   LogicTicksPerSecond = 33; // tickRate of Game.Config
@@ -91,6 +93,11 @@ const
   // tick, the step of the level-1 boss before its rage - every column
   // and row of the lap is flown past within it
   LapAheadTicks = 15 * LogicTicksPerSecond;
+  // The lap is foreseen, not flown yet, and the hero's bullets shove the
+  // conductor along it: a pad crossing the lap keeps this many ticks of
+  // the lap either way, and this many units, clear of the body
+  LapSlackTicks = 20;
+  LapClearance = 16;
 
 constructor TPadArena.Create(const APads: TPadWorld;
   const ADynamics: TDynamicObjects; const AGroups: TArray<TPadGroup>;
@@ -197,7 +204,7 @@ begin
   if FTicksLeft > 0 then
     Exit;
   FLap := AConductor.LapAhead(LapAheadTicks);
-  FPads.RequestRebuild(FGroup.Tag, FLoad, ReleaseOf);
+  FPads.RequestRebuild(FGroup.Tag, FLoad, ReleaseOf, LapBars);
   if FGroup.Alarm <> '' then
     FDynamics.FadeTagged(FGroup.Alarm, 0, AlarmFadeOutTicks);
   FPhase := arFlying;
@@ -226,6 +233,24 @@ begin
       Exit(i + 1);
   end;
   Result := 0;
+end;
+
+// The conductor's body comes too near a pad's with its top-left corner at
+// AX, AY. The pads move before the monsters: a tick of the rebuild is the
+// step of the lap before it.
+function TPadArena.LapBars(ATick: Integer; AX, AY: Double): Boolean;
+begin
+  var Reach := TileSize + LapClearance;
+  var First := Max(0, ATick - 1 - LapSlackTicks);
+  var Last := Min(High(FLap), ATick - 1 + LapSlackTicks);
+  for var i := First to Last do
+  begin
+    var BodyLeft := FLap[i].Feet.X;
+    var BodyTop := FLap[i].Feet.Y - SpriteSize;
+    if (Abs(BodyLeft - AX) < Reach) and (Abs(BodyTop - AY) < Reach) then
+      Exit(True);
+  end;
+  Result := False;
 end;
 
 end.

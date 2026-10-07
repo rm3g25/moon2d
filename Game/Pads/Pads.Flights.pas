@@ -21,6 +21,11 @@
   before its flight sets off: whether it was loaded was asked at that
   tick, so no rider is ever taken into the depth.
 
+  The pads are not all a flight minds. The caller may bar a place at a
+  tick (TFlightBar): a barred flight looks for its way as one that cuts
+  into a pad does. A loaded pad, with the front alone to look in, may
+  wait longer for it.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Pads.Flights;
@@ -60,13 +65,27 @@ type
 
   TPadFlights = TArray<TPadFlight>;
 
-// AStart[i] to ATarget[i] for every pad; ALoaded - a rider stands on the
-// pad; ARelease - ticks after the start before which the pad stays home.
+  // The body of a pad, its top-left corner at AX, AY, has no place there
+  // at the tick. ADeep - the pad is in the depth: what stands in front
+  // alone is not in its way.
+  TFlightBar = reference to function(ATick: Integer; AX, AY: Double;
+    ADeep: Boolean): Boolean;
+
+  // A rebuild as its plan is asked for; the arrays go pad by pad
+  TFlightBrief = record
+    Start, Target: TPadCells;
+    // A rider stands on the pad
+    Loaded: TArray<Boolean>;
+    // Ticks after the start before which the pad stays home
+    Release: TArray<Integer>;
+    // nil: the pads alone are in one another's way
+    Bar: TFlightBar;
+  end;
+
 // False when a pad fits nowhere: a loaded one in front, another in front
 // or in the depth.
-function TryPlanFlights(var ARandom: TXorShift;
-  const AStart, ATarget: TPadCells; const ALoaded: TArray<Boolean>;
-  const ARelease: TArray<Integer>; out AFlights: TPadFlights): Boolean;
+function TryPlanFlights(var ARandom: TXorShift; const ABrief: TFlightBrief;
+  out AFlights: TPadFlights): Boolean;
 
 implementation
 
@@ -86,6 +105,9 @@ const
   // step by step
   MaxHoldTicks = 33; // about a second
   HoldStepTicks = 3;
+  // A loaded pad waits this many times longer: nothing but a bar stops
+  // it, and a bar - the conductor passing - clears within a few seconds
+  LoadedHoldScale = 3;
   // A leg's time a hair over a whole tick from arithmetic is that tick
   TimeSlack = 1e-9;
   // Bodies side by side touch: arithmetic leaving them a hair closer
@@ -207,6 +229,22 @@ end;
 // The plan
 // ---------------------------------------------------------------------------
 
+type
+  // One pad's flight as the plan looks for it
+  TFlightAsk = record
+    From, Target: TPadCell;
+    Release: Integer;
+    Loaded: Boolean;
+    // The order of the legs tried first
+    AcrossFirst: Boolean;
+  end;
+
+  // What a flight still to be planned has to fit
+  TPlanSoFar = record
+    Bar: TFlightBar;
+    Flights: TPadFlights;
+  end;
+
 function BuildFlight(const AFrom, ATo: TPadCell; AAcrossFirst: Boolean;
   ADepart: Integer; ADeep: Boolean): TPadFlight;
 begin
@@ -260,45 +298,69 @@ begin
   Result := False;
 end;
 
-function Fits(const AFlight: TPadFlight; const APlanned: TPadFlights): Boolean;
+// Barred at a tick of it, from the one it sets off at: before that the
+// pad stands where the level file or the last rebuild put it
+function Barred(const AFlight: TPadFlight; const ABar: TFlightBar): Boolean;
+var
+  X, Y: Double;
 begin
-  for var Other in APlanned do
-    if Clash(AFlight, Other) then
-      Exit(False);
-  Result := True;
-end;
-
-// In front: the legs either way round, the start held back step by step
-function TryFront(const AFrom, ATo: TPadCell; AAcrossFirst: Boolean;
-  ARelease: Integer; const APlanned: TPadFlights;
-  out AFlight: TPadFlight): Boolean;
-begin
-  for var Step := 0 to MaxHoldTicks div HoldStepTicks do
+  if not Assigned(ABar) then
+    Exit(False);
+  for var Tick := AFlight.Depart to AFlight.Done do
   begin
-    var Depart := ARelease + Step * HoldStepTicks;
-    AFlight := BuildFlight(AFrom, ATo, AAcrossFirst, Depart, False);
-    if Fits(AFlight, APlanned) then
-      Exit(True);
-    AFlight := BuildFlight(AFrom, ATo, not AAcrossFirst, Depart, False);
-    if Fits(AFlight, APlanned) then
+    AFlight.Place(Tick, X, Y);
+    if ABar(Tick, X, Y, not HoldsSpace(AFlight, Tick)) then
       Exit(True);
   end;
   Result := False;
 end;
 
-// In the depth: it sinks at the start and sets off once it is down there;
-// what it must fit is its coming out on the cell
-function TryDeep(const AFrom, ATo: TPadCell; AAcrossFirst: Boolean;
-  ARelease: Integer; const APlanned: TPadFlights;
+function Fits(const AFlight: TPadFlight; const APlan: TPlanSoFar): Boolean;
+begin
+  for var Other in APlan.Flights do
+    if Clash(AFlight, Other) then
+      Exit(False);
+  Result := not Barred(AFlight, APlan.Bar);
+end;
+
+// The legs in the order asked for or, when that does not fit, the other
+// way round
+function TryLegs(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
+  ADepart: Integer; ADeep: Boolean; out AFlight: TPadFlight): Boolean;
+begin
+  AFlight := BuildFlight(AAsk.From, AAsk.Target, AAsk.AcrossFirst, ADepart,
+    ADeep);
+  if Fits(AFlight, APlan) then
+    Exit(True);
+  AFlight := BuildFlight(AAsk.From, AAsk.Target, not AAsk.AcrossFirst,
+    ADepart, ADeep);
+  Result := Fits(AFlight, APlan);
+end;
+
+// In front: the start held back step by step
+function TryFront(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
   out AFlight: TPadFlight): Boolean;
 begin
-  for var Step := 0 to MaxHoldTicks div HoldStepTicks do
-  begin
-    var Depart := Max(ARelease, SinkTicks) + Step * HoldStepTicks;
-    AFlight := BuildFlight(AFrom, ATo, AAcrossFirst, Depart, True);
-    if Fits(AFlight, APlanned) then
+  var MostHold := MaxHoldTicks;
+  if AAsk.Loaded then
+    MostHold := LoadedHoldScale * MaxHoldTicks;
+  for var Step := 0 to MostHold div HoldStepTicks do
+    if TryLegs(AAsk, APlan, AAsk.Release + Step * HoldStepTicks, False,
+      AFlight) then
       Exit(True);
-  end;
+  Result := False;
+end;
+
+// In the depth: it sinks at the start and sets off once it is down there.
+// Of the pads it must fit only its coming out on the cell, so the order
+// of its legs is the bar's to tell apart.
+function TryDeep(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
+  out AFlight: TPadFlight): Boolean;
+begin
+  var Soonest := Max(AAsk.Release, SinkTicks);
+  for var Step := 0 to MaxHoldTicks div HoldStepTicks do
+    if TryLegs(AAsk, APlan, Soonest + Step * HoldStepTicks, True, AFlight) then
+      Exit(True);
   Result := False;
 end;
 
@@ -333,25 +395,30 @@ begin
   end;
 end;
 
-function TryPlanFlights(var ARandom: TXorShift;
-  const AStart, ATarget: TPadCells; const ALoaded: TArray<Boolean>;
-  const ARelease: TArray<Integer>; out AFlights: TPadFlights): Boolean;
+function TryPlanFlights(var ARandom: TXorShift; const ABrief: TFlightBrief;
+  out AFlights: TPadFlights): Boolean;
+var
+  Plan: TPlanSoFar;
+  Ask: TFlightAsk;
 begin
-  SetLength(AFlights, Length(AStart));
-  var Planned: TPadFlights := [];
-  for var PadIndex in PlanOrder(AStart, ATarget, ALoaded) do
+  SetLength(AFlights, Length(ABrief.Start));
+  Plan.Bar := ABrief.Bar;
+  Plan.Flights := [];
+  for var PadIndex in PlanOrder(ABrief.Start, ABrief.Target, ABrief.Loaded) do
   begin
-    var AcrossFirst := Roll(ARandom, 2) = 0;
+    Ask.From := ABrief.Start[PadIndex];
+    Ask.Target := ABrief.Target[PadIndex];
+    Ask.Release := ABrief.Release[PadIndex];
+    Ask.Loaded := ABrief.Loaded[PadIndex];
+    Ask.AcrossFirst := Roll(ARandom, 2) = 0;
     var Flight: TPadFlight;
-    var Fitted := TryFront(AStart[PadIndex], ATarget[PadIndex], AcrossFirst,
-      ARelease[PadIndex], Planned, Flight);
-    if not Fitted and not ALoaded[PadIndex] then
-      Fitted := TryDeep(AStart[PadIndex], ATarget[PadIndex], AcrossFirst,
-        ARelease[PadIndex], Planned, Flight);
+    var Fitted := TryFront(Ask, Plan, Flight);
+    if not Fitted and not Ask.Loaded then
+      Fitted := TryDeep(Ask, Plan, Flight);
     if not Fitted then
       Exit(False);
     AFlights[PadIndex] := Flight;
-    Planned := Planned + [Flight];
+    Plan.Flights := Plan.Flights + [Flight];
   end;
   Result := True;
 end;

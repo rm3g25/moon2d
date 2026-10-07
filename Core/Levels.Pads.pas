@@ -14,7 +14,8 @@
 
   Pads of a group are rebuilt together: they fly off to a new formation
   inside the group's zone, a cell each. The section padGroups names the
-  groups; a pad joins one by its group. A group with a conductor - a
+  groups; a pad joins one by its group. It may stand outside the zone in
+  the level file: the first rebuild flies it in. A group with a conductor - a
   monster flying its lap - is rebuilt over and over once an event says
   so, the pads setting off as the conductor flies past.
 

@@ -34,7 +34,10 @@
   (Pads.Formations throws and judges it, Pads.Flights plans the flights).
   It is asked for and starts on the group's screen once no pad of the
   group is knocked; the pads the caller says are loaded stay in front,
-  and every pad sets off no sooner than the caller lets it. A
+  and every pad sets off no sooner than the caller lets it. A pad of the
+  group the level file puts outside the zone flies in with the first
+  rebuild. Out there a flight minds more than the pads: the walls, the
+  ground it would skim, and what the caller says flies there. A
   pad flown into the depth behind the others is neither a floor nor a
   body until it comes out on its cell: what stands on it falls. A flying
   pad does not bob; it takes up the bob again on its cell, in step with
@@ -196,6 +199,18 @@ type
   // stays home
   TPadRelease = reference to function(const ACell: TPadCell): Integer;
 
+  // Something of the caller's would cut into a pad's body, its top-left
+  // corner at AX, AY, at the tick of a rebuild
+  TPadTraffic = reference to function(ATick: Integer; AX, AY: Double): Boolean;
+
+  // A rebuild as it is asked for, until it starts
+  TRebuildAsk = record
+    Group: string; // '' when none is asked for
+    Load: TPadLoad;
+    Release: TPadRelease;
+    Traffic: TPadTraffic;
+  end;
+
   // The pads gone into the depth, at whatever depth, and the rest
   TPadLayer = (plDeep, plFront);
 
@@ -206,11 +221,8 @@ type
     FPads: TObjectList<TPad>;
     FReach: TJumpReach;
     FDice: TXorShift;
-    // The group a rebuild is asked for, '' when none; and the one flying
-    FAskedGroup: string;
-    FAskedLoad: TPadLoad;
-    FAskedRelease: TPadRelease;
-    FFlyingGroup: string;
+    FAsked: TRebuildAsk;
+    FFlyingGroup: string; // the group being rebuilt, '' when none
     FCornerTurned: Boolean;
     FPairDocked: Boolean;
     function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
@@ -218,6 +230,8 @@ type
       const AFence: TPadFence): Boolean;
     function RoomFor(const APad: TPad; ADX, ADY: Double;
       const AFence: TPadFence): Boolean;
+    function GroundShut(AScreen: Integer; AX, AY: Double): Boolean;
+    function FlightBarOf(const AGroup: TPadGroup): TFlightBar;
     function GroupFlying(const ATag: string): Boolean;
     function FlyingOn(AScreen: Integer): Boolean;
     function MembersOf(const ATag: string): TArray<TPad>;
@@ -247,9 +261,11 @@ type
     // The pads of the group tagged AGroup fly to a new formation, on its
     // screen once none of them is knocked; a pad ALoad says is loaded
     // stays in front, a pad sets off no sooner than ARelease says - nil:
-    // all at the start. Nothing while a rebuild is asked for or flying.
+    // all at the start; out of the zone a pad in front keeps clear of
+    // ATraffic - nil: of the walls alone. Nothing while a rebuild is asked
+    // for or flying.
     procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad;
-      const ARelease: TPadRelease);
+      const ARelease: TPadRelease; const ATraffic: TPadTraffic);
     // A rebuild is asked for or flying
     function Rebuilding: Boolean;
     // A pad of the group tagged AGroup is knocked off its place
@@ -341,8 +357,8 @@ const
   // A pad's jets flare this many ticks before it leaves its place
   ThrustLeadTicks = 10;
   // A rebuild throws this many formations at most - screen 17 needs some
-  // 70 at the most, a dozen on average -, then falls back on the level
-  // file's own, which the level is laid out to pass the judge
+  // two hundred at the most, a score on average -, then falls back on the
+  // level file's own, if that lies in the zone
   MaxThrows = 500;
 
 // Eased in and out: the pad sets off and comes to a stop gently
@@ -763,9 +779,7 @@ procedure TPadWorld.Rewind(ASeed: Cardinal);
 begin
   for var Pad in FPads do
     Pad.Rewind;
-  FAskedGroup := '';
-  FAskedLoad := nil;
-  FAskedRelease := nil;
+  FAsked := Default(TRebuildAsk);
   FFlyingGroup := '';
   FCornerTurned := False;
   FPairDocked := False;
@@ -956,7 +970,7 @@ end;
 
 function TPadWorld.Rebuilding: Boolean;
 begin
-  Result := (FAskedGroup <> '') or (FFlyingGroup <> '');
+  Result := (FAsked.Group <> '') or (FFlyingGroup <> '');
 end;
 
 function TPadWorld.GroupFlying(const ATag: string): Boolean;
@@ -996,30 +1010,30 @@ begin
 end;
 
 procedure TPadWorld.RequestRebuild(const AGroup: string;
-  const ALoad: TPadLoad; const ARelease: TPadRelease);
+  const ALoad: TPadLoad; const ARelease: TPadRelease;
+  const ATraffic: TPadTraffic);
 begin
   if Rebuilding or (Length(MembersOf(AGroup)) = 0) then
     Exit;
-  FAskedGroup := AGroup;
-  FAskedLoad := ALoad;
-  FAskedRelease := ARelease;
+  FAsked.Group := AGroup;
+  FAsked.Load := ALoad;
+  FAsked.Release := ARelease;
+  FAsked.Traffic := ATraffic;
 end;
 
 // On the group's screen, once no pad of it is knocked - a knock is over
 // with the boss's stun, before he flies the lap again
 procedure TPadWorld.StartAskedRebuild(AScreen: Integer);
 begin
-  if FAskedGroup = '' then
+  if FAsked.Group = '' then
     Exit;
-  for var Pad in MembersOf(FAskedGroup) do
+  for var Pad in MembersOf(FAsked.Group) do
     if (Pad.Screen <> AScreen) or Pad.Knocked then
       Exit;
   for var Group in FLevel.PadGroups do
-    if Group.Tag = FAskedGroup then
+    if Group.Tag = FAsked.Group then
       StartRebuild(Group);
-  FAskedGroup := '';
-  FAskedLoad := nil;
-  FAskedRelease := nil;
+  FAsked := Default(TRebuildAsk);
 end;
 
 procedure TPadWorld.StartRebuild(const AGroup: TPadGroup);
@@ -1056,30 +1070,82 @@ begin
   Result.Row := Round(AY / TileSize);
 end;
 
+// The body of a pad with its top-left corner at AX, AY lies in the zone
+function InsideZone(const AZone: TPadZone; AX, AY: Double): Boolean;
+begin
+  Result := (AX >= AZone.Left * TileSize) and (AX <= AZone.Right * TileSize) and
+    (AY >= AZone.Top * TileSize) and (AY <= AZone.Bottom * TileSize);
+end;
+
+function CellsInZone(const ACells: TPadCells; const AZone: TPadZone): Boolean;
+begin
+  for var Cell in ACells do
+  begin
+    var Inside := InRange(Cell.Col, AZone.Left, AZone.Right) and
+      InRange(Cell.Row, AZone.Top, AZone.Bottom);
+    if not Inside then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// The body of a pad with its top-left corner at AX, AY cuts into a wall
+// or lies flush on one: a pad skimming the ground would sweep through
+// whoever stands there
+function TPadWorld.GroundShut(AScreen: Integer; AX, AY: Double): Boolean;
+begin
+  var Left := AX + WallProbeInset;
+  var Right := AX + TileSize - WallProbeInset;
+  Result := RowShut(AScreen, Left, Right, AY + WallProbeInset, nil) or
+    RowShut(AScreen, Left, Right, AY + TileSize - WallProbeInset, nil) or
+    RowShut(AScreen, Left, Right, AY + TileSize + WallProbeInset, nil);
+end;
+
+// What bars a flight of the group besides its pads. In the zone nothing
+// does - the level keeps it clear. Out of it the ground bars every
+// flight, and the traffic the rebuild was asked to mind the ones in
+// front: in the depth a pad passes behind it.
+function TPadWorld.FlightBarOf(const AGroup: TPadGroup): TFlightBar;
+begin
+  var Screen := AGroup.Screen;
+  var Zone := AGroup.Zone;
+  var Traffic: TPadTraffic := FAsked.Traffic;
+  Result :=
+    function(ATick: Integer; AX, AY: Double; ADeep: Boolean): Boolean
+    begin
+      if InsideZone(Zone, AX, AY) then
+        Exit(False);
+      if GroundShut(Screen, AX, AY) then
+        Exit(True);
+      Result := not ADeep and Assigned(Traffic) and Traffic(ATick, AX, AY);
+    end;
+end;
+
 // Formations thrown until one is judged, assigned and flown; past the
-// last throw the level file's formation, with the same rules for the
-// assignment and the flights. False - no rebuild this time.
+// last throw the level file's formation - when the file keeps the whole
+// group in the zone -, with the same rules for the assignment and the
+// flights. False - no rebuild this time.
 function TPadWorld.TryPlanRebuild(const AGroup: TPadGroup;
   const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
 var
-  Start, FileCells, Cells, Target: TPadCells;
-  Loaded: TArray<Boolean>;
-  Release: TArray<Integer>;
+  Brief: TFlightBrief;
+  FileCells, Cells: TPadCells;
 begin
-  SetLength(Start, Length(AMembers));
+  SetLength(Brief.Start, Length(AMembers));
   SetLength(FileCells, Length(AMembers));
-  SetLength(Loaded, Length(AMembers));
+  SetLength(Brief.Loaded, Length(AMembers));
   // Zeros when nobody holds the pads back: all free at the start
-  SetLength(Release, Length(AMembers));
+  SetLength(Brief.Release, Length(AMembers));
   for var i := 0 to High(AMembers) do
   begin
     var Pad := AMembers[i];
-    Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
+    Brief.Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
     FileCells[i] := CellOfPlace(Pad.Placement.X, Pad.Placement.Y);
-    Loaded[i] := Assigned(FAskedLoad) and FAskedLoad(Pad);
-    if Assigned(FAskedRelease) then
-      Release[i] := FAskedRelease(Start[i]);
+    Brief.Loaded[i] := Assigned(FAsked.Load) and FAsked.Load(Pad);
+    if Assigned(FAsked.Release) then
+      Brief.Release[i] := FAsked.Release(Brief.Start[i]);
   end;
+  Brief.Bar := FlightBarOf(AGroup);
 
   var Launch := LaunchSpans(FLevel, AGroup, StillSpans(AGroup));
   for var Throw := 1 to MaxThrows do
@@ -1087,13 +1153,14 @@ begin
     var Judged := TryThrowFormation(FDice, AGroup, Length(AMembers), Cells) and
       JudgeFormation(Cells, AGroup, Launch, FReach);
     var Flown := Judged and
-      TryAssignFormation(FDice, Start, Cells, AGroup, Target) and
-      TryPlanFlights(FDice, Start, Target, Loaded, Release, AFlights);
+      TryAssignFormation(FDice, Brief.Start, Cells, AGroup, Brief.Target) and
+      TryPlanFlights(FDice, Brief, AFlights);
     if Flown then
       Exit(True);
   end;
-  Result := TryAssignFormation(FDice, Start, FileCells, AGroup, Target) and
-    TryPlanFlights(FDice, Start, Target, Loaded, Release, AFlights);
+  Result := CellsInZone(FileCells, AGroup.Zone) and
+    TryAssignFormation(FDice, Brief.Start, FileCells, AGroup, Brief.Target) and
+    TryPlanFlights(FDice, Brief, AFlights);
 end;
 
 // ---------------------------------------------------------------------------

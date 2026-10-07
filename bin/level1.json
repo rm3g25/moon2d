@@ -1233,7 +1233,8 @@
       "bullets": "block",
       "bob": 1,
       "tag": "s17-plat-10",
-      "rig": ["pad"]
+      "rig": ["pad", "arenaAlarm"],
+      "group": "arena17"
     }
   ],
   "padGroups": [
