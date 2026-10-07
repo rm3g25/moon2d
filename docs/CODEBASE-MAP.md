@@ -8,7 +8,8 @@ Win32. Logic space 512x384 game units (16x12 cells of 32), tile art 64 px,
 fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 
 Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
-hull at `v3.0.36` and its rig at `v3.0.37` (the folder layout came
+hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
+`v3.0.38` and its restore at `v3.0.39` (the folder layout came
 between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -30,10 +31,11 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the rebuild of a pad group (`Pads.Formations`,
-  `Pads.Flights`) and the director of the boss fight over one
-  (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock (`Orbs.Flock`),
-  the harvest of spots on the matter of a screen (`Orbs.Harvest`), the
-  hero's aura over both (`Orbs.Aura`) and the fire rain (`Orbs.Rain`).
+  `Pads.Flights`) and the director of the boss fight over one and of the
+  restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
+  (`Orbs.Flock`), the harvest of spots on the matter of a screen
+  (`Orbs.Harvest`), the hero's aura over both (`Orbs.Aura`) and the fire
+  rain (`Orbs.Rain`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -88,7 +90,7 @@ neither the level nor the pads) -> `Hud.Marks` /
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
-`Monsters.Pilot`, `Levels.Pads` and `Levels.Dynamics`) -> `Moon2D.dpr`, which also drives
+`Monsters.Pilot`, `Levels.Pads`, `Levels.Dynamics` and `Render.Sprites`) -> `Moon2D.dpr`, which also drives
 `Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
 game unit). The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
@@ -437,7 +439,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1080 lines)
+### `Core/Levels.Defs.pas` (~1100 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -490,8 +492,12 @@ Level data model + JSON parser. No game logic.
   group off the screen list, two groups with one tag, a zone off the
   screen, under three cells either way, with a wall in it (`TryFindWall`)
   or too small for the group's `farFlight` (`CheckPadGroupZone`); a pad
-  of the group that does not fill one cell of the zone (`FillsZoneCell`:
-  a cell wide, on the grid's lines) or travels a path; a pad of the
+  of the group that does not fill one cell of its screen (`FillsCell`:
+  a cell wide, on the grid's lines, on the screen - a cell of the zone no longer, 3.0.38:
+  the pad may stand outside and fly in with the first rebuild) or travels
+  a path; a pad of the group outside the zone that stands in a wall or
+  flush on one (`StandsGrounded`, `SLevelPadGroupGrounded`: no flight
+  takes it off); a pad of the
   screen that cuts into the zone and is not of the group (`CutsZone`);
   fewer pads than the pairs and the far flights take, or more than the
   zone has cells; and a pad naming a group nobody carries. After the
@@ -519,7 +525,8 @@ Level data model + JSON parser. No game logic.
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
   tag no dynamic object carries, a sun action turning a tag no globe
   carries, a tactics action naming a tag no placement carries or a
-  rebuild action naming a tag no pad group carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
+  rebuild or a restore action (3.0.39: `SLevelEventRestoreUnknown`)
+  naming a tag no pad group carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
   the level (the only destructor here) and kept through a restart - a lamp
   keeps its rhythm; only what a re-armed event changed goes back. Private
   `CheckDynamics` refuses a nailed object off the screen list or a
@@ -914,7 +921,7 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~250 lines)
+### `Core/Levels.Events.pas` (~255 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
@@ -927,7 +934,8 @@ game runs them through `Events.Director`; the editor will write them).
   one alive in its rage (the boss below its rage mark, a tank below its
   own).
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
-  `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`, `eaRebuild`); **`TEventAction`**
+  `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`, `eaRebuild`, `eaRestore`
+  (3.0.39)); **`TEventAction`**
   (record) - kind +
   localized `Text` (the message kinds), `FileName` (music), or `Target` /
   `Level` (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag
@@ -938,7 +946,9 @@ game runs them through `Events.Director`; the editor will write them).
   `Monsters.Pilot`; JSON `target`, `value` - a word of `EventTacticsIds`:
   laps / dives / rams / hunts), or `Target` alone (rebuild: the pad group
   carrying the tag is rebuilt from now on, over and over, as its
-  conductor flies - `Pads.Arena`; JSON `target`).
+  conductor flies - `Pads.Arena`; JSON `target`; restore (3.0.39): the
+  same group is rebuilt no more and its pads fly back to where the level
+  file puts them; JSON `target`, the word `restore`).
 - **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
   `Lives` (livesBelow), `DelayTicks` (counted after the condition holds,
   for any condition), actions. JSON: `"when": "allDead", "tag":
@@ -953,7 +963,8 @@ game runs them through `Events.Director`; the editor will write them).
   condition without a tag, livesBelow without lives above zero, intensity
   without a target or with a value outside 0..100, sun without a target or
   without a `value`, tactics without a target or with an unknown word,
-  rebuild without a target, or an event without actions raises
+  rebuild or restore without a target (`ReadGroupTarget`,
+  `SEventGroupNoTarget`), or an event without actions raises
   `ELevelEventError`.
 - Extending: a condition is an enum member, a word in `EventConditionIds`
   and a branch in the director's `ConditionHolds`; an action the same with
@@ -971,7 +982,8 @@ stops, or round them - and may bob in the air: the path moves the pad
 itself, the bob is for the eye alone (`Pads.World` says why). Pads of a
 group are rebuilt together: they fly to a new formation inside the
 group's zone, a cell each (`padGroups` names the groups, a pad joins one
-by its `group`). A 2026 addition.
+by its `group`); a pad the file puts outside the zone flies in with the
+first rebuild (3.0.38). A 2026 addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
@@ -1200,40 +1212,61 @@ the pads `Pads.World`'s. A 2026 addition.
   flights are the longest wins (`SortedFlights`, `ShortestLonger`).
   `FlightCells(from, to)` - the cells of an L: across plus down.
 
-### `Game/Pads/Pads.Flights.pas` (~360 lines)
+### `Game/Pads/Pads.Flights.pas` (~470 lines)
 The flights of a rebuild: every pad from its cell to the cell the
 assignment gave it, and when it sets off. Pure functions; `Pads.World`
 flies the pads along them. A 2026 addition.
 - **`TPadFlight`** (record; ticks count from the start of the rebuild,
   places are the pad's top-left corner) - an L: `From*`, `Corner*`, `To*`,
   the two legs' distances and ticks, `CornerTicks` (the pause on the
-  corner, `CornerPauseTicks` = 3; 0 for a single leg), `Depart`, `Deep`
-  (flown in the depth behind the others). `Arrive` - on the cell; `Done` -
-  for a deep pad `SinkTicks` (6) later, out of the depth.
+  corner, the pace's `CornerPauseTicks`; 0 for a single leg), `Depart`,
+  `Deep` (flown in the depth behind the others), `Pace` (3.0.39: the
+  `TFlightPace` it is flown at). `Arrive` - on the cell; `Done` - for a
+  deep pad the pace's `SinkTicks` later, out of the depth. `Idle` (3.0.39)
+  - the pad stays on its cell, in front: nothing to fly.
   `Place(tick, out x, y)`;
   `TurnsCorner(tick)` - the tick the pad comes onto its corner;
   `Behind(tick)` - in the depth, neither a floor nor a body: a deep pad
   from tick 0 to `Done`; `Depth(time)` - 0 in front .. 1 in the depth:
-  sinking over the first `SinkTicks`, rising over the last.
-- A leg speeds up at `Acceleration` (2 units a tick a tick) to `TopSpeed`
-  (14 units a tick) at most and brakes at the same rate (`RampTime`,
-  `LegTime`, `LegTicks` - its time rounded up to whole ticks, `LegCovered`
-  - the distance covered a tick into it).
-- `TryPlanFlights(random, start, target, loaded, release, out flights)`
-  (`TPadFlights`, a flight per pad) -
+  sinking over the first `SinkTicks` of the pace, rising over the last.
+- **`TFlightPace`** (3.0.39; record) - how briskly a plan is flown:
+  `TopSpeed` (units a tick), `Acceleration` (units a tick a tick),
+  `CornerPauseTicks`, `SinkTicks`, `MaxHoldTicks`, `HoldStepTicks`. The
+  constants `BriskPace` (14, 2, 3, 6, 33, 3: a rebuild in a fight, about
+  a second and a half on screen 17) and `CalmPace` (4, 0.25, 10, 14, 198,
+  6: the way home after it, five to eight seconds, a wait of up to six).
+- A leg speeds up at the pace's `Acceleration` to its `TopSpeed` at most
+  and brakes at the same rate (`RampTime`, `LegTime`, `LegTicks` - its
+  time rounded up to whole ticks, `LegCovered` - the distance covered a
+  tick into it; each takes the pace).
+- **`TFlightBar`** (3.0.38) - `reference to function(tick, x, y, deep):
+  Boolean`: a place barred to a pad's body, its top-left corner at x, y,
+  at a tick; `ADeep` - the pad is in the depth, what stands in front
+  alone is not in its way. **`TFlightBrief`** (record; replaces the loose
+  arrays of 3.0.37) - `Start`, `Target` (`TPadCells`, pad by pad),
+  `Loaded` (a rider stands on the pad), `Release` (ticks before which the
+  pad stays home), `Pace` (3.0.39), `Bar` (nil: the pads alone are in one
+  another's way).
+- `TryPlanFlights(random, brief, out flights)` (`TPadFlights`, a flight
+  per pad) -
   the pads are planned one by one (`PlanOrder`, `PlansBefore`: the loaded
-  first, then the longest flights, then the file order), each against the
-  space the planned ones hold tick by tick (`Clash`: two bodies a cell
-  big cut into one another, touching - `TouchSlack` - is no cut;
-  `HoldsSpace`: a deep pad holds its cell only from `Arrive`). In front
-  (`TryFront`): the legs either way round - which way first is rolled -,
-  the start held back from `release[i]` in steps of `HoldStepTicks` (3) up
-  to `MaxHoldTicks` (33). Else deep (`TryDeep`): sunk at the very start,
-  off no sooner than `SinkTicks`. A loaded pad - the hero stands on it -
-  never goes deep; False when a pad fits nowhere, and the formation is
-  thrown again.
+  first, then - 3.0.39 - the pads that stay on their cells, the rest fly
+  round them, then the longest flights, then the file order), each
+  against the space the planned ones hold tick by tick (`Clash`: two
+  bodies a cell big cut into one another, touching - `TouchSlack` - is no
+  cut; `HoldsSpace`: a deep pad holds its cell only from `Arrive`) and
+  against the bar (`Barred`: the bar asked at every tick from `Depart` to
+  `Done`; `Fits` - no clash and not barred). `TryLegs`: the legs in the
+  order rolled, else the other way round - in front and, since 3.0.38, in
+  the depth too. In front (`TryFront`): the start held back from
+  `release[i]` in steps of the pace's `HoldStepTicks` up to its
+  `MaxHoldTicks`; a loaded pad may hold `LoadedHoldScale` (3) times
+  longer. Else deep (`TryDeep`): sunk at the very start, off no sooner
+  than `SinkTicks`. A loaded pad - the hero stands on it - never goes
+  deep; False when a pad fits nowhere, and the caller throws the
+  formation again or asks again.
 
-### `Game/Pads/Pads.World.pas` (~1120 lines)
+### `Game/Pads/Pads.World.pas` (~1255 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1260,7 +1293,12 @@ and so does every pad of a screen whose group is being rebuilt. A rebuild
 of the group is knocked. A pad flown in the depth is neither a floor nor
 a body until it comes out on its cell - what stands on it falls. A flying
 pad stills its bob and takes it up again on its cell, in step with the
-ripple there.
+ripple there. A pad of the group the level file puts outside the zone
+flies in with the first rebuild (3.0.38); out there a flight minds more
+than the pads: the walls, the ground it would skim and what the caller
+says flies there (`TPadTraffic`). A restore (3.0.39) is a rebuild flown
+the other way: every pad of the group back to its place in the level
+file, calmly (`CalmPace`), thrown and judged by nobody.
 Born with the level (`LoadLevel`); a restart rewinds it, the dice of the
 rebuilds new for the new try.
 - **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
@@ -1275,7 +1313,13 @@ rebuilds new for the new try.
   `HeroRides`). **`TPadRelease`** - `reference to function(cell): Integer`:
   ticks after the start of a rebuild before which the pad on the cell
   stays home (`Pads.Arena` passes the wave behind the boss; nil - all at
-  once). **`TPadLayer`** = (`plDeep`, `plFront`) - the pads gone into the
+  once). **`TPadTraffic`** (3.0.38) - `reference to function(tick, x,
+  y): Boolean`: something of the caller's would cut into a pad's body, its
+  top-left corner at x, y, at that tick of a rebuild (the game's arena
+  passes `LapBars`; nil - the walls alone). **`TRebuildAsk`** (record, the
+  field `FAsked`) - the asked rebuild as one: `Group` ('' - none), `Load`,
+  `Release`, `Traffic` and `Restore` (back to the file's places).
+  **`TPadLayer`** = (`plDeep`, `plFront`) - the pads gone into the
   depth, at whatever depth, and the rest: the layer `Draw` takes.
   `DeepScale` (0.85) and `DeepTone` (0.6) - a pad all the way into the
   depth, its size and its light; open, for the game passes them on to what
@@ -1420,28 +1464,43 @@ rebuilds new for the new try.
   the grid's walls and the fence, the riders' room (a cell over the deck)
   out of the walls - not the fence: the boss lies stunned while the pad is
   out - and the body `ClearOf` every other pad of the screen.
-  The rebuild (3.0.29): `RequestRebuild(group, load, release)` - the pads
+  The rebuild (3.0.29): `RequestRebuild(group, load, release, traffic)`
+  (`traffic` since 3.0.38; the debug key passes nil) - the pads
   of the group fly to a new formation; nothing while one is asked for or
-  flying (`Rebuilding`) or for a group without pads. `StartAskedRebuild`
+  flying (`Rebuilding`) or for a group without pads (`TakeAsk`, the door
+  of the restore too). `StartAskedRebuild`
   starts it on the group's screen once none of its pads is knocked
   (`GroupKnocked` - the same question for a caller: the arena asks it
-  before it warns); `StartRebuild` -> `TryPlanRebuild`: the start cells
-  (`CellOfPlace` of every pad's home), who is loaded (`load`) and the
-  release ticks (`release`; zeros without one), then up to `MaxThrows`
-  (500) formations thrown, judged, assigned and planned
-  (`TryThrowFormation`, `JudgeFormation` against `LaunchSpans` with the
+  before it warns); `StartRebuild` -> `TryPlanRebuild`: `BriefOf` makes
+  the `TFlightBrief` - the start cells (`CellOfPlace` of every pad's
+  home), who is loaded (`load`), the release ticks (`release`; zeros
+  without one) and the bar (`FlightBarOf`: inside the zone, `InsideZone`,
+  nothing bars; outside it the ground does every flight - `GroundShut`,
+  the body in a wall or flush on one - and the caller's `traffic` the
+  flights in front, a pad in the depth passes behind it) -, then up to
+  `MaxThrows` (500) formations thrown, judged, assigned and planned at
+  `BriskPace` (`TryThrowFormation`, `JudgeFormation` against `LaunchSpans` with the
   screen's other pads as `StillSpans`, `TryAssignFormation`,
-  `TryPlanFlights`); past the last throw the level file's own formation,
-  which the level is laid out to pass the judge; no plan at all - no
-  rebuild this time. `MembersOf(tag)` - the group's pads in file order;
+  `TryPlanFlights`); past the last throw the level file's own formation
+  (`FileCellsOf`), not judged - only when the file keeps the whole group
+  in the zone (`CellsInZone`; not so on screen 17); no plan at all - no
+  rebuild this time. `StartRebuild` flies no `Idle` flight: a pad that
+  stays on its cell bobs on. The restore (3.0.39):
+  `RequestRestore(group, load, release)` - the same ask with `Restore`
+  set; `TryPlanRestore` plans every pad to its own place of the level
+  file at `CalmPace` - no dice, no judge - and flies nothing when a
+  pad finds no way: the caller asks again.
+  `GroupRestored(group)` - every pad stands on its file place and none
+  flies. `MembersOf(tag)` - the group's pads in file order;
   `GroupFlying`. `HearFlights` gathers what the tick sounded like, for
   the game to voice, one tick only: `CornerTurned` - a pad in front
   turned the corner of its flight; `PairDocked` - a pad landed flush
   beside one that is `Settled` (`DocksBeside`).
 
-### `Game/Pads/Pads.Arena.pas` (~230 lines)
+### `Game/Pads/Pads.Arena.pas` (~350 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
-pads fly, and in step with whom. A 2026 addition (3.0.29).
+pads fly, and in step with whom; since 3.0.39 also the calm flight home
+after it. A 2026 addition (3.0.29).
 - **`TPadArena`** - `Create(pads, dynamics, groups, load)`: the pad world
   and the level's dynamic objects must outlive it; `load` is the
   `TPadLoad` of the rebuilds. `Engage(group)` - the events' `rebuild`
@@ -1451,9 +1510,12 @@ pads fly, and in step with whom. A 2026 addition (3.0.29).
   it is reborn on a restart; `Reset` - a restart: asleep until the event
   engages it again, the alarm as the level file has it. `Warned` - one
   tick only: the warning of a rebuild has begun (the game hums).
+  `Restore(group)` (3.0.39) - the events' `restore` action: the group is
+  rebuilt no more (`FallAsleep`: the lamps out), whether it was engaged
+  or not, and its pads fly home (`arRestoring`).
 - **`TArenaPhase`** = (`arAsleep`, `arResting`, `arHolding`, `arWarning`,
-  `arFlying`). `arResting` counts the group's `Every` seconds (the first
-  rebuild comes at once), then holds the conductor's lap
+  `arFlying`, `arRestoring`). `arResting` counts the group's `Every`
+  seconds (the first rebuild comes at once), then holds the conductor's lap
   (`TMonster.HoldLap`). `arHolding` waits until the conductor flies the
   lap (`FliesLap`), no other rebuild - the debug key's - is in the air
   and no pad of the group is knocked, then fades the group's `Alarm`
@@ -1464,9 +1526,26 @@ pads fly, and in step with whom. A 2026 addition (3.0.29).
   meanwhile -
   back to holding), then foresees the lap (`LapAhead`, `LapAheadTicks` =
   15 s - a whole lap even at three units a tick), asks for the rebuild
-  with `ReleaseOf` as the release and fades the lamps out. `arFlying`
+  with `ReleaseOf` as the release and `LapBars` as the traffic and fades
+  the lamps out. `arFlying`
   waits for the last pad, lets the lap go and rests again. The conductor
   dead - `FallAsleep`: no rebuild more, a flying one lands as planned.
+  `arRestoring` (3.0.39; `TickRestoring`, run before the conductor is
+  looked for): `LetLapGo` (a conductor alive has its lap back), then it
+  waits for a flying rebuild and for knocked pads, goes to sleep once
+  `GroupRestored`, else asks `RequestRestore` with `RippleOf` as the
+  release, and again every `RestoreRetryTicks` (15) - a loaded pad may
+  find no way at first.
+- `RippleCell` / `RippleOf(cell)` (3.0.39) - the wave of a restore: it
+  spreads from the cell under the middle of the conductor's body, dead or
+  alive (`TMonsterField.FirstTagged`; the middle of the zone without
+  one), a pad setting off `RippleTicksPerCell` (4) ticks per cell of
+  distance later.
+- `LapBars(tick, x, y)` (3.0.38) - the traffic of a rebuild: the
+  conductor's body on the foreseen lap (`TLapStep.Feet`), within
+  `LapSlackTicks` (20) ticks either way of the tick, too near the pad's
+  body (`LapClearance` = 16 units); the pads move before the
+  monsters, so a tick of the rebuild is the step of the lap before it.
 - `ReleaseOf(cell)` - the first tick the foreseen lap flies past the
   cell: over its column on a level side of the lap, past its row on an
   upright one; 0 for a cell it never passes. A pad going deep sinks at
@@ -1636,8 +1715,9 @@ game's. A 2026 addition all but the lap.
   `FLapStep`) - none for a hunt or when new tactics are owed at once
   (`FRestWaived`). `FliesLap` - the state is the lap. `LapAhead(x, y,
   ticks)` - the lap flown on from the feet point for that many ticks, as
-  `TLapStep`s (`Cell` under the middle of the body, `Heading` it flew
-  there by): the pilot itself goes nowhere.
+  `TLapStep`s (`Feet` - the feet point of the body, since 3.0.38; `Cell`
+  under the middle of the body, `Heading` it flew there by): the pilot
+  itself goes nowhere.
 - **Types**: `THeading` (hdDown/Left/Up/Right), `TPilotState`
   (psLap/Brake/Ponder/Dive/Aim/Dash/Stun/Return), `TPilotGaze`
   (pgHero/AimPoint/Nowhere - what the eye is on), `TCell` (a cell of the
@@ -1707,7 +1787,7 @@ game's. A 2026 addition all but the lap.
   corners, so a dive goes round a pad and a ram crashes into one as into
   a wall.
 
-### `Game/Monsters.pas` (~1520 lines)
+### `Game/Monsters.pas` (~1650 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -1822,7 +1902,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   livesBelow mark is told for the normal grade and compared times
   `FLivesScale`, so a boss's marks keep their order on every grade),
   `FirstAliveTagged(tag)` (the first live body carrying the tag, nil when
-  none - the arena's conductor),
+  none - the arena's conductor), `FirstTagged(tag)` (the same, dead or
+  alive - 3.0.39, the arena's ripple of a restore),
   `Draw(sprites, screen, alpha)` (each monster with the sprites' `FineY`
   set to its `DeckLift(alpha)` - `Origin` stays the monsters' shake -,
   `FineY` put back to 0 after),
@@ -2302,12 +2383,13 @@ Reborn with the hero on every level load.
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
 
-### `Game/Events/Events.Director.pas` (~165 lines)
+### `Game/Events/Events.Director.pas` (~175 lines)
 Runs the level's events (`Levels.Events`) against the live game.
 **`TEventDirector`** takes the events, the message board, the level's
 dynamic objects and two callbacks (`reference to procedure`): `TChangeMusic` (the game passes its
 `ChangeMusic` method, which also remembers the track for restarts) and
-`TEngageArena` (the game passes `TPadArena.Engage`). The
+`TArenaCues` (3.0.39; a record of two `TArenaCue`s: the game passes
+`TPadArena.Engage` and `TPadArena.Restore`). The
 monster field is reborn on every restart, so it arrives with every tick
 instead of being kept: asked for the conditions, told the tactics.
 - `Tick(screen, field)` - once per logic tick with the hero's screen: for
@@ -2316,7 +2398,8 @@ instead of being kept: asked for the conditions, told the tactics.
   the count over; at zero the actions play once (`Play`: `ShowBig`,
   `AddTicker`, `StartTerminal` with the terminal header, the music
   callback, `FadeTagged` / `TurnSunTagged` on the dynamics,
-  `SetTaggedTactics` on the field, the arena callback for `rebuild`). The game skips the tick over
+  `SetTaggedTactics` on the field, the arena cues for `rebuild` and
+  `restore`). The game skips the tick over
   the hero's corpse.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
   so its events wait for their moment again, as the entity triggers do,
@@ -2492,7 +2575,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2525 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2565 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2528,7 +2611,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   too), the ceremony
   (`THenshin`), the event director (`TEventDirector`), the arena of the
   boss fight (`FArena: TPadArena`, made before the director, which gets
-  its `Engage`),
+  its `Engage` and `Restore` as the `TArenaCues` built in `LoadLevel`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
   the figures (`THudMarks`) - the ceremony, the director and the three HUD
   objects are reborn with every level, as the arena is, so nothing carries over. Key state:
@@ -2711,7 +2794,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the hero's screen, the slot untouched), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
-    once, every pad free to set off - no lap held, no warning, no wave),
+    once, every pad free to set off - no lap held, no warning, no wave, no
+    traffic: nil), `DebugRestorePads` (Y, `ScancodeY`, 3.0.39: the same
+    group flies back to the level file's places at once, calmly, no
+    ripple),
     `DumpLevelScreens` (P: the tiles of every screen of the level, each
     alone on a transparent ground, one PNG per screen in
     `dump\<level id>\` of the working folder (`bin`) - the source
@@ -2943,7 +3029,7 @@ medkit is data nobody reads yet), `events` (each: `id`,
 objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
 `file`, intensity with `target`/`value`/`ticks`, sun with
 `target`/`value` (degrees)/`ticks`, tactics with `target`/`value`, rebuild
-with `target`; the med lab hint, `labHint`, is the
+and restore with `target`; the med lab hint, `labHint`, is the
 plainest example), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
   (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
@@ -2955,11 +3041,13 @@ plainest example), `introText`/`introTextEn`.
   `s16-platform-out`; tagged `s16-plat-01`..`11` and `s17-plat-01`..`10`,
   bullets block) - static objects over solid cells before, the cells now
   cleared from the grid; the lamps hung on them keep the same tags. Every
-  pad bobs: 1.5 on screen 16, 1 on screen 17. The nine inner pads of
-  screen 17 (`s17-plat-01`..`09`) are the pad group `arena17`: zone
+  pad bobs: 1.5 on screen 16, 1 on screen 17. The ten pads of
+  screen 17 (`s17-plat-01`..`10`) are the pad group `arena17`: zone
   columns 2-13, rows 4-8, two pairs, five flights of five cells or more,
   conductor `boss`, every 10 seconds, alarm `arena17Alarm`; the bottom
-  pad in column 0 stays. Two sets of screen 16
+  pad in column 0 (`s17-plat-10`, row 10, outside the zone) flies in with
+  the first rebuild (3.0.38) - no pad of the screen stands still. Two
+  sets of screen 16
   travel, pingpong at speed 30 with a pause of 1: the trio
   `s16-plat-05`..`07` is a ferry - 64 units left, to x 64..128, docking
   by the ledge of columns 0-1, and back (a cycle of about 6.2 s);
@@ -2983,7 +3071,7 @@ plainest example), `introText`/`introTextEn`.
   of the ring art: a blue pulsing pair `bossLamp` and a red flashing pair
   `bossLampRage` at intensity 0; halo 10 across with starburst rays of 24
   units - the satellite's are 36 - that reach past the rim: on the light
-  disc a bare glow does not read), nine red alarm lamps `arena17Alarm`
+  disc a bare glow does not read), ten red alarm lamps `arena17Alarm`
   (a second beacon on each pad of the group, over the blue one: flash,
   5 a second, intensity 0 - the arena lights them to warn of a rebuild),
   six fans (`fan`) in the bays of the
@@ -3016,7 +3104,10 @@ plainest example), `introText`/`introTextEn`.
   tactics ride the same three moments (`bossSmokeTactics`,
   `bossRageTactics`, `bossBurnTactics`): dives while it smokes, rams in
   its rage, hunts once it burns; in the rage the arena is rebuilt too
-  (`bossRageRebuilds`: rebuild `arena17`). The marks are those of the
+  (`bossRageRebuilds`: rebuild `arena17`), and once the boss is dead the
+  pads fly back to the level file's places (3.0.39,
+  `bossDeadArenaRestores`: allDead of `boss`, 100 ticks later, restore
+  `arena17`). The marks are those of the
   normal grade (400 lives: dives under 200, the rage under 120, hunts
   under 45) and grow with the difficulty - by 1.5 on hard, 2 on wild.
 - level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
@@ -3122,7 +3213,7 @@ music loads leniently. Four one-shots are synthesised by
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
-| The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another, the depth, the wave behind the boss, the warning, how often, the sounds | `padGroups` + the `rebuild` event + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, speeds, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `TryPlanRebuild`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
+| The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
