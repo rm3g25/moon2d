@@ -11,7 +11,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 Перегенерировано на `v3.0.3`, поправлено по `v3.0.33` и по корпусу платформы
 на `v3.0.36` и по её обвесу на `v3.0.37`, по платформам арены на
 `v3.0.38` и её восстановлению на `v3.0.39`, по потолку урона босса на
-`v3.0.40`, по перерисовке экранов 1-3 второго уровня после неё (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
+`v3.0.40`, по перерисовке экранов 1-3 второго уровня после неё, по
+взрывной волне на `v3.0.41` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -82,7 +83,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 монстра: над `Monsters.Defs`) -> `Hero` /
 `Monsters` (оба тоже над `Pads.World`) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
-`Levels.Dynamics` и `Monsters.Defs`) / `Game.Impacts` (над
+`Levels.Dynamics` и `Monsters.Defs`) / `Game.Blasts` (волна взрыва: над
+`Monsters.Defs`, `Effects.Sparks` ради типа щупа и `Sdl2.Core`) /
+`Game.Impacts` (над
 `Effects.Sparks` и `Levels.Dynamics`) / `Orbs.Flock` (орбы: над
 `Effects.Emitter`, `Render.Brush` и канвой из `Levels.Dynamics`, рисует
 через `Render.Glow`) / `Orbs.Harvest` (откуда берутся орбы ауры: только
@@ -628,8 +631,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 - Свой `TXorShift`, никогда `Random`.
 
 ### `Core/Effects.Debris.pas` (~560 строк)
-Что разбрасывает взрыв, только украшение - ранят вееры осколков 2008, этот
-юнит - нет. **`TDebrisField`** получает рендерер и **`TSolidProbe`**
+Что разбрасывает взрыв, только украшение - ранит волна (`Game.Blasts`),
+этот юнит - нет. **`TDebrisField`** получает рендерер и **`TSolidProbe`**
 (из `Effects.Sparks`; здесь в экранных единицах - игра даёт
 `SolidUnderPoint`, так что юнит не знает уровня).
 - **`TDebrisLook`** (запись) - один взрыв: `Shards`, `ShardSpeed`,
@@ -1123,7 +1126,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   `TAttackPattern` (apNone/StraightSingle/StraightCluster5/AimedSingle/
   AimedDouble/RainVolley), `TPickupEffectKind` (peNone/Heal/GiveWeapon),
   `TExplosionKind` (ekNone/Barrel/Machine/Boss - вид смерти, JSON
-  `explosion`, неизвестное слово - ошибка; от вееров `explodesOnDeath` не
+  `explosion`, неизвестное слово - ошибка; от `blast` не
   зависит), `TMonsterMaterial` (mtNone/Metal - JSON `material`, что пуля
   делает с телом: металл сыплет искрами, см. `Game.Impacts`; неизвестное
   слово - ошибка), `TPilotTactics` (ptLaps/Dives/Rams/Hunts - что летающий
@@ -1153,13 +1156,18 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   подбитое тело, откуда оно искрит и замыкает; `Enabled`; корпус без
   набора, положительных ширины и высоты или с `wearFull` вне (0, 100],
   а также точка не из двух чисел - ошибка на загрузке, как и монстр сразу
-  с диском и корпусом); `TDamageCap` (JSON `damageCap` в `stats` - сколько
+  с диском и корпусом); `TBlastDef` (JSON `blast` - что смерть монстра
+  делает с телами вокруг, см. `Game.Blasts`: `Radius` - как далеко идёт
+  волна, единицы, `Lives` - сколько она отнимает в сердце, `Enabled`; взрыв
+  без положительных радиуса и жизней - ошибка на загрузке; нет поля -
+  монстр умирает тихо. В 3.0.41 заменил флаг `explodesOnDeath`);
+  `TDamageCap` (JSON `damageCap` в `stats` - сколько
   жизней монстр может потерять за любые `Ticks` тиков подряд, см.
   `Monsters.Damage`: `Lives`, `Ticks`, `Enabled`; потолок без положительных
   жизней и тиков - ошибка на загрузке);
   `TMonsterDef` - полный лист: id, legacyName,
   displayName (локализованное), spriteList, category, dangerous,
-  affectedByGravity, explodesOnDeath, explosion, material, movement, attack, pickupEffect, lives,
+  affectedByGravity, blast, explosion, material, movement, attack, pickupEffect, lives,
   score, damageCap, animFreq, deathText (локализованный), массив deathSounds, boss, disc, hull.
 - **`TMonsterRegistry`** (класс) - владеет всеми определениями;
   `LoadFromFile/String`, `Find`, `FindByLegacyName`, `TryFind`, `Count`,
@@ -1169,7 +1177,7 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 ### `Game/Bullets.pas` (~275 строк)
 Снаряды + оставшиеся спавнеры 2008 - хаки на частицах.
 - **`TFanShape`** (запись) - rows/cols/baseSpeed/speedSpread формулы веера k/t
-  (тот самый travel-тест: один шаблон, семь форм - `DeathFan` здесь,
+  (тот самый travel-тест: один шаблон, шесть форм -
   `RageWave` / `FastFragments` / `SlowFragments` в `Monsters`, `FinishFan` /
   `ShatterFan` в `Game.Henshin`, `ExplosionFan` в Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
@@ -1180,12 +1188,13 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
 - **`TBurst`** - владеет списком пуль, своим набором спрайтов и своим кэшем
   ('bullet' - герой, 'bull' - монстры; кадр полёта + кадры разрушения 2..8).
   `NewBullet`, `Clear` (переходы между экранами стирают пули), `Update`, `Draw`.
-  Спавнеры, все дословно из 2008: `SpawnExplosionFan` (веер из 180 осколков для
-  бочек и цепных реакций), `SpawnFan(centerX, centerY, shape)` (финал хеншина
+  Спавнеры, все дословно из 2008: `SpawnFan(centerX, centerY, shape)` (финал хеншина
   / осыпание ледяной
   формы / волна ярости босса / двойной веер победы над боссом / бонус-взрыв),
   `SpawnConvergingRing` (лечащие волны хеншина;
-  Contact=True, поэтому кольцо ранит босса). Огненного дождя и щитовой ауры
+  Contact=True, поэтому кольцо ранит босса). Веера из 180 осколков
+  умирающей бочки или машины здесь нет с 3.0.41: взрыв ранит волной
+  (`Game.Blasts`). Огненного дождя и щитовой ауры
   2008 здесь больше нет: оба - орбы (`Orbs.Rain`, `Orbs.Aura`); запись о
   том, что ушло, - в PORTING-NOTES, сессия 3.0.33.
 - Известная бородавка: `TBurst.Draw` продвигает кадры взрывов, то есть меняет
@@ -1883,7 +1892,7 @@ TeK. Близнец диска без вращения и ириса: тольк
   прямо наружу; стреляет после `TickDisc`, так что порты там, где их
   покажет кадр), `TakeDamage` (отбрасывание через оракул стены - но не
   пока пилот `Busy`: оракул спрашивает один ряд, и тело между двумя рядами
-  вдавило бы в стену, - + веера взрывов + события; упавшие жизни идут
+  вдавило бы в стену, - + веера босса + события; упавшие жизни идут
   через `FDamageWindow` монстра - `Admit` в `TakeDamage`, `Advance` в
   `Tick`, у монстра без `damageCap` его нет, - так что удар сверх потолка
   всё равно толкает тело и задевает пороги, не засчитываются только его
@@ -1966,7 +1975,7 @@ TeK. Близнец диска без вращения и ириса: тольк
 - **Дым тела** (добавление 2026, поведение по умолчанию, без данных):
   `TBodySmoke` - дым одного тела: `TSmokeLook`, тинт, точка на арте,
   смотрящем влево, уровень до последней трети и в ней, разгон в тиках.
-  Носителей два. Машина - `IsMachine`, взрывается при смерти и не статична:
+  Носителей два. Машина - `IsMachine`, имеет `blast` и не статична:
   танк и летающая платформа; крепление - нет - берёт `WreckSmoke` (первый
   дым босса, прямо вверх): не горит, пока `HealthTier` не дойдёт до
   `htCritical` (красная треть ряда здоровья), потом 60% за секунду.
@@ -2163,8 +2172,8 @@ TeK. Близнец диска без вращения и ириса: тольк
   передаются руками. Рисуется после пуль, до прицела и угловых HUD.
 
 ### `Game/Game.Explosions.pas` (~300 строк)
-Единственный дом для "что-то взорвалось" - вид, не механика (вееры
-остаются у монстра и в dpr). **`TExplosions`** - один на игру (рендерер +
+Единственный дом для "что-то взорвалось" - вид, не механика (волна,
+которая ранит, - `Game.Blasts`). **`TExplosions`** - один на игру (рендерер +
 щуп твёрдого + эхо дохлопывания), чистится на двери, смерти и загрузке
 уровня.
 - **`TEchoAftershock`** (`reference to procedure`) - ответ игры на
@@ -2190,6 +2199,29 @@ TeK. Близнец диска без вращения и ириса: тольк
   `Draw(canvas, origin, alpha)` - обломки и вспышки, поверх пуль. Оба на
   канале тряски мира; текстуры - из `FDynamics.Canvas`. Свой `TXorShift`
   для дохлопываний.
+
+### `Game/Game.Blasts.pas` (~150 строк)
+Что взрыв делает, как `Game.Explosions` - как он выглядит: волна из сердца
+взорвавшегося тела, которая ранит всё, до чего дошла. Юнит не знает ни
+монстра, ни героя - игра показывает ему тела объектами и точками и сама
+раздаёт жизни и толчок (`ResolveBlasts` в dpr). Механика 2026: в 2008
+ранил веер из 180 пуль.
+- **`TBlast`** - `Create(heart, def)` (`TBlastDef` из `Monsters.Defs`).
+  `Spread` - тик волны, `WaveSpeed` (8) единиц; `Spent` - волна прошла
+  свой радиус. `Strikes(body, near, solid)` - True один раз на тело: волна
+  дошла до `near`, ближайшей к сердцу точки тела, и между ними нет
+  твёрдого (`SightClear`); тело запоминается (`FStruck`), так что тело,
+  сдвинутое толчком, второй раз не бьётся, а укрытое сейчас ещё может
+  попасть под волну, если выйдет из-за укрытия, пока она жива.
+  `Share(point)` - что осталось от взрыва в точке: 1 в сердце, 0 на
+  радиусе, падает по прямой. `Lives(point, scale)` - жизни из описания на
+  долю и на масштаб жизней монстров по сложности, не меньше одной.
+  `Knock(point, middleX)` - толчок как отдача пули: `HeartKnock` (32) на
+  долю, со знаком от сердца - по тому, где лежит середина тела.
+- `NearestPoint(body, from)` - ближайшая к точке точка прямоугольника.
+  `SightClear(from, to, solid)` - спрашивает щуп каждые `SightStep` (4)
+  единицы от `from` до `to`, не включая его: тело стоит вплотную к
+  материи, и собственный край не должен его прятать.
 
 ### `Game/Game.Impacts.pas` (~350 строк)
 Что пуля выбивает из брони, в которую попала, - только вид; рана, отброс и
@@ -2762,8 +2794,20 @@ TeK. Близнец диска без вращения и ириса: тольк
     `StopsBulletAt` платформы в точке X пули и Y - `SpriteSize` - картинка
     пули висит на спрайт выше её Y, и бьёт она точкой там; при Y <= 0 -
     ничего),
-    `ResolveMonsterContact`, `RewardMonsterKill` (здесь же `Detonate`
-    вида `explosion` монстра в середине его спрайта, в тик убийства),
+    `ResolveBlasts` (после орбов, до пуль монстров: каждый `TBlast` из
+    `FBlasts` делает тик волны, затем `StrikeMonsters` - каждое живое тело
+    экрана героя, враг, бочка или подбор, по его `MonsterBody`:
+    `TakeDamage` с толчком и жизнями взрыва, жизни - в масштабе
+    `DifficultyMonsterLives`, на смерть - `RewardMonsterKill`, - и
+    `StrikeHero` - `HeroBody`; одно здоровье и тикер `hurtByBlast`, если
+    не идёт окно пощады; укрытие - `BlastStoppedAt`, то же, что
+    останавливает пулю: клетка сетки или `StopsBulletAt` платформы;
+    отработавший взрыв выбрасывается; взрыв, родившийся в обходе, - бочка,
+    убитая волной, - ждёт следующего тика; `FBlasts` чистится вместе со
+    взрывами),
+    `ResolveMonsterContact`, `RewardMonsterKill` (здесь же `TBlast`
+    монстра с `blast` и `Detonate` вида `explosion` монстра, оба в
+    середине его спрайта, в тик убийства),
     `HurtHero`, `DrainMonsterEvents` (здесь же взрывы и удары босса
     доливают тряску; `meBossRage` взрывает на боссе взрыв размера машины и
     озвучивает его `RageBlastSoundFile` - машинным `platform.wav`;
@@ -2985,10 +3029,15 @@ numpy, scipy, Pillow.
   старение, три конца (`Implode`, `Spend`, `Release`), что выбрасывает
   `Tick`, `Shift`, `Clear`. Фикстура регистрирует себя в `initialization`
   своего юнита.
-- **`Monsters/Tests.Monsters.Damage.pas`** (~245 строк) -
+- **`Game/Tests.Game.Blasts.pas`** (~270 строк) - **`TBlastTests`**: волна
+  `Game.Blasts` - ближнее тело раньше дальнего, тело бьётся один раз, за
+  радиусом - никого, укрытие стеной, жизни и толчок по расстоянию и
+  сложности, и бочка из monsters.json против стрелка с 50 жизнями со
+  второго уровня.
+- **`Monsters/Tests.Monsters.Damage.pas`** (~235 строк) -
   **`TDamageWindowTests`**: окно само по себе - срез на потолке, скольжение
   окна, ни один отрезок из `Ticks` тиков не берёт больше потолка, цепной
-  ствол и залп гранатомёта героя не режутся, веер бочки режется;
+  ствол и залп гранатомёта героя не режутся;
   **`TCappedBossTests`**: `boss1` за один тик теряет не больше потолка, а
   удар сверх него всё равно толкает его.
 - **`run-tests.cmd`** (корень репозитория) - собирает конфигурацию Debug
@@ -3018,7 +3067,9 @@ dangerous - наследуются монстрами), массив `monsters`.
 (полный лист полей см. в Monsters.Defs выше). У девяти из пятнадцати нет
 `spriteList` - он приходит из расстановки в уровне. `explosion` называет
 вид смерти: `barrel` (бочка), `machine` (танк, платформа), `boss`
-(`boss1`); у крепления нет - оно взрывается внутри стены. `material`:
+(`boss1`); у крепления нет - оно взрывается внутри стены. `blast` (бочка,
+танк, платформа, крепление) - что смерть делает с телами вокруг: `radius`
+80, `lives` 100 у всех четырёх - см. `TBlastDef`. `material`:
 `metal` у платформы, танка, крепления, бочки и `boss1` - пуля выбивает из
 них искры вместо разрыва (`Game.Impacts`). `disc` (только
 `boss1`) рисует живого монстра вращающимся диском из слоёв набора вместо
@@ -3286,7 +3337,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Лампы летающей платформы и марево под её соплами; что гаснет, когда монстр убит | обвес `tekPlatform` + `"tag"` и `"rig"` у летающих платформ в levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` у `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Лампы, едущие на диске босса | маячки с `turns` в level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | Новый монстр (только данные) | monsters.json + набор `.mset` (spriteList хранит написание `.mns`) |
-| Механика взрыва: вееры осколков, которые ранят | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
+| Механика взрыва: волна, которая ранит, её скорость, спад, толчок и укрытие; кого бьёт взрыв | Game.Blasts.pas + Moon2D.dpr (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` в monsters.json (`TBlastDef` в Monsters.Defs.pas) |
 | Вид взрыва: вспышка, обломки, плюм; размеры; новый вид | Game.Explosions.pas (+Effects.Debris.pas - физика осколков, `explosion` в monsters.json, `TExplosionKind` в Monsters.Defs.pas) |
 | Искры: как летят, отскакивают, ветвятся и рисуются | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | Источник искр в уровне (спутник, босс) | `sparks` в `dynamics` levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |

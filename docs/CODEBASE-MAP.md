@@ -10,7 +10,8 @@ fixed tick 33 Hz, screen-by-screen levels (no scrolling).
 Regenerated at `v3.0.3`, patched through `v3.0.33` and for the platform's
 hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
-`v3.0.40`, for the repaint of level 2's screens 1-3 after it (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
+wave at `v3.0.41` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -81,7 +82,9 @@ boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
 `Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
-`Levels.Dynamics` and `Monsters.Defs`) / `Game.Impacts` (over
+`Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
+explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
+`Sdl2.Core`) / `Game.Impacts` (over
 `Effects.Sparks` and `Levels.Dynamics`) / `Orbs.Flock` (the orbs: over
 `Effects.Emitter`, `Render.Brush` and the canvas of `Levels.Dynamics`,
 drawn through `Render.Glow`) / `Orbs.Harvest` (where an aura's orbs come
@@ -609,8 +612,8 @@ in `Levels.Dynamics`), the hits on armor (`Game.Impacts`).
 - Own `TXorShift`, never `Random`.
 
 ### `Core/Effects.Debris.pas` (~560 lines)
-What an explosion throws, decoration only - the 2008 fragment fans wound,
-this does not. **`TDebrisField`** takes the renderer and a
+What an explosion throws, decoration only - the blast wounds
+(`Game.Blasts`), this does not. **`TDebrisField`** takes the renderer and a
 **`TSolidProbe`** (of `Effects.Sparks`; in screen units here - the game
 passes `SolidUnderPoint`, so the unit knows no level).
 - **`TDebrisLook`** (record) - one blast's worth: `Shards`, `ShardSpeed`,
@@ -1107,7 +1110,7 @@ Monster definition model + registry (parses monsters.json). No behavior.
   (apNone/StraightSingle/StraightCluster5/AimedSingle/AimedDouble/RainVolley),
   `TPickupEffectKind` (peNone/Heal/GiveWeapon), `TExplosionKind`
   (ekNone/Barrel/Machine/Boss - the look of a death, JSON `explosion`, an
-  unknown word raises; independent of the fans of `explodesOnDeath`),
+  unknown word raises; independent of the `blast`),
   `TMonsterMaterial` (mtNone/Metal - JSON `material`, what a bullet does to
   the body: metal throws sparks, see `Game.Impacts`; an unknown word
   raises), `TPilotTactics` (ptLaps/Dives/Rams/Hunts - what a flying boss
@@ -1140,11 +1143,16 @@ Monster definition model + registry (parses monsters.json). No behavior.
   and shorts out; `Enabled`; a hull without a set, a positive width and
   height or with `wearFull` outside (0, 100], or a point that is not two
   numbers, raises at load - and so does a monster with a disc and a hull);
+  `TBlastDef` (JSON `blast` - what the monster's death does to the bodies
+  around it, see `Game.Blasts`: `Radius` - how far the wave goes, units,
+  `Lives` - what it takes at the heart, `Enabled`; a blast without a
+  positive radius and lives raises at load; absent - the monster dies
+  quietly. It replaced the `explodesOnDeath` flag in 3.0.41);
   `TDamageCap` (JSON `damageCap` in `stats` - the most lives a monster may
   lose in any run of `Ticks` ticks, see `Monsters.Damage`: `Lives`, `Ticks`,
   `Enabled`; a cap without positive lives and ticks raises at load);
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
-  spriteList, category, dangerous, affectedByGravity, explodesOnDeath,
+  spriteList, category, dangerous, affectedByGravity, blast,
   explosion, material, movement, attack, pickupEffect, lives, score, damageCap, animFreq, deathText
   (localized), deathSounds array, boss, disc, hull.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
@@ -1154,8 +1162,8 @@ Monster definition model + registry (parses monsters.json). No behavior.
 ### `Game/Bullets.pas` (~275 lines)
 Projectiles + the 2008 particle-hack spawners that are left.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
-  formula (the travel-test record: one template, seven shapes - `DeathFan`
-  here, `RageWave` / `FastFragments` / `SlowFragments` in `Monsters`,
+  formula (the travel-test record: one template, six shapes -
+  `RageWave` / `FastFragments` / `SlowFragments` in `Monsters`,
   `FinishFan` / `ShatterFan` in `Game.Henshin`, `ExplosionFan` in
   Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
@@ -1166,12 +1174,13 @@ Projectiles + the 2008 particle-hack spawners that are left.
 - **`TBurst`** - owns a bullet list, its sprite set and its cache ('bullet' =
   hero, 'bull' = monsters; flight frame + destruction frames 2..8).
   `NewBullet`, `Clear` (screen transitions wipe bullets), `Update`, `Draw`.
-  Spawners, all verbatim 2008: `SpawnExplosionFan` (a 180-fragment barrel /
-  chain-reaction fan), `SpawnFan(centerX, centerY, shape)` (henshin finale /
+  Spawners, all verbatim 2008: `SpawnFan(centerX, centerY, shape)` (henshin finale /
   ice shatter / boss
   rage wave / boss victory double fan / the explosion bonus),
   `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
-  the ring wounds the boss). The 2008 fire rain and shield aura are not
+  the ring wounds the boss). The 180-fragment fan of a dying barrel or
+  machine is not here since 3.0.41: an explosion wounds by its wave
+  (`Game.Blasts`). The 2008 fire rain and shield aura are not
   here: both are orbs now (`Orbs.Rain`, `Orbs.Aura`; the record of what
   went is in PORTING-NOTES, the session of 3.0.33).
 - Known wart: `TBurst.Draw` advances burst animation frames - it mutates
@@ -1856,7 +1865,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   the ports are where the frame shows them), `TakeDamage` (knockback
   through the wall oracle - not while the pilot is `Busy`: the oracle asks
   one row, and a body between two rows would be shoved into a wall -
-  + explosion fans + events; the lives that land go through the monster's
+  + the boss's fans + events; the lives that land go through the monster's
   `FDamageWindow` - `Admit` in `TakeDamage`, `Advance` in `Tick`, nil for a
   monster with no `damageCap` - so a blow over the cap still shoves the
   body and trips the thresholds, only its lives do not count),
@@ -1937,7 +1946,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Body smoke** (a 2026 addition, default behavior, no data): `TBodySmoke`
   is one body's smoke - the `TSmokeLook`, the tint, the point on the
   left-facing art, the level before the last third and in it, the ramp in
-  ticks. Two wear it. A machine - `IsMachine`, explodes on death and is not
+  ticks. Two wear it. A machine - `IsMachine`, has a `blast` and is not
   static: the tank and the flying platform; the mount is not - takes
   `WreckSmoke` (the boss's first smoke, straight up): unlit until
   `HealthTier` reaches `htCritical` (the red third of the health row), then
@@ -2137,7 +2146,7 @@ the dpr with the corner HUDs. **`THudMarks`**.
 
 ### `Game/Game.Explosions.pas` (~300 lines)
 The one home of "something blew up" - the look, not the mechanics (the
-fans stay with the monster and the dpr). **`TExplosions`**, made once
+wave that wounds is `Game.Blasts`). **`TExplosions`**, made once
 with the game (renderer + the solid probe + the aftershock echo), cleared
 on a door, a death and a level load.
 - **`TEchoAftershock`** (`reference to procedure`) - the game's answer to an
@@ -2162,6 +2171,30 @@ on a door, a death and a level load.
   `Draw(canvas, origin, alpha)` - debris and flashes, over the bullets.
   Both on the world shake channel; the textures come from
   `FDynamics.Canvas`. Own `TXorShift` for the aftershocks.
+
+### `Game/Game.Blasts.pas` (~150 lines)
+What an explosion does, as `Game.Explosions` is what it looks like: a wave
+out of the heart of a blown-up body that wounds what it reaches. The unit
+knows neither a monster nor the hero - the game shows it bodies as objects
+and points and hands out the lives and the shove itself (`ResolveBlasts`
+in the dpr). A 2026 mechanic: 2008 wounded with a fan of 180 bullets.
+- **`TBlast`** - `Create(heart, def)` (`TBlastDef` of `Monsters.Defs`).
+  `Spread` - a tick of the wave, `WaveSpeed` (8) units; `Spent` - the wave
+  has gone its radius. `Strikes(body, near, solid)` - True once for a body:
+  the wave has reached `near`, the point of the body nearest to the heart,
+  and nothing solid stands between (`SightClear`); the body is remembered
+  (`FStruck`), so a body the shove has moved is not struck again, and a
+  body sheltered now may still be struck if it steps out while the wave
+  lives. `Share(point)` - what is left of the blast there, 1 at the heart,
+  0 at the radius, falling in a straight line. `Lives(point, scale)` - the
+  def's lives by the share and by the difficulty's scale of the monsters'
+  lives, at least one. `Knock(point, middleX)` - the shove as a bullet's
+  knock, `HeartKnock` (32) by the share, signed away from the heart by
+  where the body's middle lies.
+- `NearestPoint(body, from)` - the point of a rectangle nearest to a
+  point. `SightClear(from, to, solid)` - asks the probe every `SightStep`
+  (4) units from `from` up to, not at, `to`: a body stands flush against
+  matter, and its own edge must not hide it.
 
 ### `Game/Game.Impacts.pas` (~350 lines)
 What a bullet throws off the armor it strikes - the look only; the wound,
@@ -2742,9 +2775,20 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the grid's cell, as before, or `StopsBulletAt` of a pad at the bullet's
     X and Y - `SpriteSize` - a bullet's picture hangs a sprite above its Y,
     the point it strikes with is up there; nothing while Y <= 0),
-    `ResolveMonsterContact`, `RewardMonsterKill` (also `Detonate` of the
-    monster's `explosion` at the middle of its sprite, in the tick of the
-    kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
+    `ResolveBlasts` (after the orbs, before the monsters' bullets: every
+    `TBlast` of `FBlasts` spreads a tick, then `StrikeMonsters` - every
+    living body of the hero's screen, enemy, barrel or pickup, by its
+    `MonsterBody`: `TakeDamage` with the blast's knock and lives, the
+    lives scaled by `DifficultyMonsterLives`, `RewardMonsterKill` on a
+    death - and `StrikeHero` - `HeroBody`; one health and the
+    `hurtByBlast` ticker unless the mercy window is on; `BlastStoppedAt`
+    is the shelter, what stops a bullet: the grid's cell or
+    `StopsBulletAt` of a pad; a spent blast is dropped; a blast born in
+    the walk - a barrel a wave has killed - waits for the next tick;
+    `FBlasts` is cleared with the explosions),
+    `ResolveMonsterContact`, `RewardMonsterKill` (also the `TBlast` of a
+    monster with a `blast` and `Detonate` of the monster's `explosion`,
+    both at the middle of its sprite, in the tick of the kill), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
     the boss and sounds it with `RageBlastSoundFile` - a machine's
     `platform.wav`; `meBossCrashed` - the boss's ram ended in a wall:
@@ -2964,10 +3008,15 @@ to `bin\`.
   `Add` / `Insert`, aging, the three ends (`Implode`, `Spend`,
   `Release`), what `Tick` drops, `Shift`, `Clear`. A fixture registers
   itself in its unit's `initialization`.
-- **`Monsters/Tests.Monsters.Damage.pas`** (~245 lines) -
+- **`Game/Tests.Game.Blasts.pas`** (~270 lines) - **`TBlastTests`**: the
+  wave of `Game.Blasts` - a near body before a far one, a body struck
+  once, none beyond the radius, a wall's shelter, the lives and the knock
+  by the distance and the grade, and the barrel of monsters.json against
+  the 50-life gunner of level 2.
+- **`Monsters/Tests.Monsters.Damage.pas`** (~235 lines) -
   **`TDamageWindowTests`**: the window alone - the cut at the cap, the slide
   of the window, no run of `Ticks` ticks over the cap, the hero's chain gun
-  and grenade volley never cut, a barrel's fan cut; **`TCappedBossTests`**:
+  and grenade volley never cut; **`TCappedBossTests`**:
   `boss1` on one tick takes no more than the cap, and a blow over it still
   shoves him.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
@@ -2998,7 +3047,9 @@ Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
 platform), `boss` (`boss1`); the mount has none - it explodes inside the
-wall. `material`: `metal` on the platform, the tank, the mount, the barrel
+wall. `blast` (the barrel, the tank, the platform, the mount) is what the
+death does to the bodies around: `radius` 80, `lives` 100 on all four -
+see `TBlastDef`. `material`: `metal` on the platform, the tank, the mount, the barrel
 and `boss1` - a bullet throws sparks off them instead of bursting
 (`Game.Impacts`). `disc` (only `boss1`) draws the living monster as a spinning disc out
 of the layers of a set instead of its `alive` frames: `set`, `side`,
@@ -3269,7 +3320,7 @@ music loads leniently. Four one-shots are synthesised by
 | The platform's lamps and the haze under its nozzles; what goes out when a monster dies | the rig `tekPlatform` + `"tag"` and `"rig"` on the platforms in levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` of `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
-| Explosion mechanics: the fragment fans that wound | Bullets.pas (+Monsters.pas `BeginDying`, Moon2D.dpr `RewardMonsterKill`) |
+| Explosion mechanics: the wave that wounds, its speed, falloff, shove and shelter; who a blast strikes | Game.Blasts.pas + Moon2D.dpr (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` in monsters.json (`TBlastDef` in Monsters.Defs.pas) |
 | Explosion look: flash, debris, plume; sizes; a new kind | Game.Explosions.pas (+Effects.Debris.pas for shard physics, `explosion` in monsters.json, `TExplosionKind` in Monsters.Defs.pas) |
 | Sparks: how they fly, bounce, fork and draw | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | A spark source in a level (the satellite, the boss) | `sparks` in the `dynamics` of levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |

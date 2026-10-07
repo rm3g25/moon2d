@@ -56,6 +56,8 @@ Tests\
   Tests.Rooms.pas         a room of solid cells to stand monsters in
   Effects\
     Tests.Effects.Lightning.pas
+  Game\
+    Tests.Game.Blasts.pas
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
@@ -394,7 +396,7 @@ found when the unit is written.
 
 ## Monsters.Damage
 
-State: written, 10 tests, not yet run on a compiler. The expectations were
+State: written, 9 tests, not yet run on a compiler. The expectations were
 checked on a Python mirror of the window. The unit is tried by
 `Tests\Monsters\Tests.Monsters.Damage.pas`, in two fixtures:
 `TDamageWindowTests` (the window alone, no room) and `TCappedBossTests`
@@ -402,7 +404,7 @@ checked on a Python mirror of the window. The unit is tried by
 
 The window's cap is the one `boss1` carries, 30 lives in 33 ticks, so the
 tests also hold the number to what it was set for: the hero's best guns
-go through it untouched, a barrel's fan does not. The guns are numbers
+go through it untouched, a bigger blow does not. The guns are numbers
 here - 3 bullets every 5 ticks (the chain gun), 22 pellets every 40 (the
 grenade volley) - not shots through the game.
 
@@ -415,20 +417,55 @@ grenade volley) - not shots through the game.
 | `TestSteadyFireIsLetThroughAtTheCapRate` | the same ten seconds: 300 in all | the cap is stingier than its word |
 | `TestChainGunIsNeverThrottled` | 3 every 5 ticks for ten seconds: none cut | the cap is set under the chain gun (20 a second) |
 | `TestGrenadeVolleyIsNeverThrottled` | 22 every 40 ticks for ten seconds: none cut | the cap is set under a point-blank volley |
-| `TestBarrelFanIsCutToTheCap` | a hundred fragments of one life: 30 land | the cap lets a barrel through |
 | `TestHundredBlowsOnOneTickTakeNoMoreThanTheCap` | `boss1` struck a hundred times for one life on one tick: it has lost the cap and is alive | the boss is not given a window, or `TakeDamage` goes round it |
 | `TestBlowOverTheCapStillShovesTheBoss` | the cap spent, a blow of 8: no life lost, X moved by 4 | a capped blow stops shoving - the boss would stand still under a barrage |
 
 Left to the eye:
 
-- A barrel blown beside the boss in the game: the fan's real hits and
-  how the cap reads on the screen. The 90-145 hits of the design numbers
-  come from a model with no walls and a still boss.
+- A barrel blown beside the boss in the game: how the cap reads on the
+  screen. Since 3.0.41 the barrel lands one blow of its blast, not a
+  hundred fragments; the cap cuts it the same.
 - The ticking: the boss in a room does not tick here (it flies, and its
   disc needs textures). The slide of the window is tried on the window.
 
 Open: the shove test leans on a fresh `boss1` not being busy with a
 maneuver and on its row being open; the first run shows it.
+
+## Game.Blasts
+
+State: written, 11 tests, not yet run on a compiler. The expectations were
+checked on a Python mirror of the wave. The unit is tried by
+`Tests\Game\Tests.Game.Blasts.pas`, fixture `TBlastTests`.
+
+The blast is the barrel's in numbers - 100 lives over 80 units, the wave
+8 units a tick - with its heart at the origin. Bodies are points on the X
+axis and plain objects to tell them apart; walls are functions of a
+point. No room and no monster: the unit knows neither. The last test
+reads the real barrel from `monsters.json` beside the executable.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestWaveReachesANearBodyBeforeAFarOne` | a body 24 units off is struck on tick 3, one 56 off on tick 7 | the blast strikes everything at once, or the wave's speed moves |
+| `TestBodyIsStruckOnce` | ten ticks over a body 24 units off: one strike | a body is wounded on every tick the wave lives |
+| `TestBodyBeyondTheRadiusIsNeverStruck` | a body 81 units off, twelve ticks: no strike | the wave outruns its radius |
+| `TestWallSheltersTheBodyBehindIt` | a wall from 40 to 48: the body at 24 is struck, the one at 56 is not | a blast goes through walls, or a wall shelters what stands before it |
+| `TestSightDoesNotAskTheFarEnd` | matter from 56 on: the sight to 56 is clear, to 64 is not | a body flush against a wall is hidden by the wall it leans on |
+| `TestBlastIsSpentWhenTheWaveHasGoneItsRadius` | nine ticks: not spent; the tenth: spent | a blast is dropped a tick early, or never |
+| `TestLivesFallWithTheDistance` | 100 at the heart, 70 at 24 units, 30 at 56 units up, 1 at the radius | the falloff bends, or forgets the vertical |
+| `TestLivesGrowWithTheGrade` | 24 units off: 105 on x1.5, 140 on x2 | a barrel loses its worth on a harder grade |
+| `TestKnockShovesAwayFromTheHeart` | 24 units off: 22 for a body to the right, -22 to the left, 0 over the heart | a blast pulls bodies in, or shoves all one way |
+| `TestNearestPointLiesOnTheBody` | a 16 by 32 body: its left edge from the left, its corner from below right, the point itself from inside | the distance is taken to a body's corner or middle |
+| `TestBarrelKillsFiftyLivesNextDoorOnEveryGrade` | the barrel of `monsters.json`, a body in the next cell: at least 50, 75 and 100 lives on the three grades | the barrel's numbers are tuned below the gunner of level 2, screen 4 |
+
+Left to the eye:
+
+- Who the game strikes and with what: `ResolveBlasts`, `StrikeMonsters`
+  and `StrikeHero` live in the dpr, out of the suite's reach. A barrel
+  among monsters, a chain of barrels, the hero in the wave and in the
+  mercy window, a pad as a shelter - by a live run.
+- The feel: the wave's speed against the picture of `Game.Explosions`,
+  the shove of a body, the radius against the hero's habit of standing
+  close.
 
 ## Effects.Lightning
 
