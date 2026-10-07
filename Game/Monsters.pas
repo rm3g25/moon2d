@@ -131,6 +131,7 @@ type
     // spanning AX, the inset edge the oracle looks at
     function FloorAhead(ACol: Integer; AX: Double): Boolean;
     function StandsOnDeck: Boolean;
+    procedure FallIfUnsupported;
     procedure RideDeck;
     procedure CarryX(AWay: Double);
     function CanGoLeftEdgeAware: Boolean;   // CanIGoLeft1
@@ -781,6 +782,14 @@ begin
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY) <> nil;
 end;
 
+// Verbatim: 'if canigodown and typ<>платформа and typ<>крепление' -
+// now a data flag instead of type names. A deck holds the feet too.
+procedure TMonster.FallIfUnsupported;
+begin
+  if CanGoDown and not StandsOnDeck and FDef.AffectedByGravity then
+    FAction := maFalling;
+end;
+
 // Before the tick: the deck the body lay on a tick ago takes it where it
 // went - across while no wall stands in the way. Pulled from under it by
 // a wall, the body falls, the dead and the gun that never walks too. A
@@ -1157,10 +1166,7 @@ begin
       end;
   end;
 
-  // Verbatim: 'if canigodown and typ<>платформа and typ<>крепление' -
-  // now a data flag instead of type names. A deck holds the feet too.
-  if CanGoDown and not StandsOnDeck and FDef.AffectedByGravity then
-    FAction := maFalling;
+  FallIfUnsupported;
 end;
 
 procedure TMonster.MoveFalling;
@@ -1268,7 +1274,10 @@ begin
   case FAction of
     maWalkLeft, maWalkRight, maStand:
       if FLife <> mlDead then
-        MoveWalking;
+        MoveWalking
+      else
+        // A corpse does not walk, but a deck that left it must not leave it hanging
+        FallIfUnsupported;
     maFalling:
       MoveFalling;
     maFlying:
