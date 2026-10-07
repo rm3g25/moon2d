@@ -6,10 +6,10 @@
   The director acts on the stage it is given - the message board and
   the level's dynamic objects - and asks the game for the two things it
   does not own through callbacks: the music, whose track the game
-  remembers for restarts, and the arena that rebuilds a pad group. The
-  monster field is reborn on every restart, so it arrives with every
-  tick instead of being kept: asked for the conditions, told the
-  tactics.
+  remembers for restarts, and the arena that rebuilds a pad group and
+  restores it. The monster field is reborn on every restart, so it
+  arrives with every tick instead of being kept: asked for the
+  conditions, told the tactics.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -25,8 +25,13 @@ type
   // Plays a track and remembers it as the level's current one. A
   // method of the game passed directly, no wrapper.
   TChangeMusic = reference to procedure(const AFileName: string);
-  // The pad group tagged AGroup is rebuilt from now on (Pads.Arena)
-  TEngageArena = reference to procedure(const AGroup: string);
+  // A word to the arena about the pad group tagged AGroup (Pads.Arena)
+  TArenaCue = reference to procedure(const AGroup: string);
+
+  TArenaCues = record
+    Engage: TArenaCue; // the group is rebuilt from now on
+    Restore: TArenaCue; // no more: its pads fly back to their places
+  end;
 
   TEventDirector = class
   private
@@ -34,7 +39,7 @@ type
     FMessages: TMessageBoard;
     FDynamics: TDynamicObjects;
     FChangeMusic: TChangeMusic;
-    FEngageArena: TEngageArena;
+    FArena: TArenaCues;
     FFired: TArray<Boolean>; // in step with FEvents
     FTicksLeft: TArray<Integer>; // of the delay, once the condition holds
     procedure Arm(AIndex: Integer);
@@ -45,7 +50,7 @@ type
   public
     constructor Create(const AEvents: TArray<TLevelEvent>;
       const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
-      const AChangeMusic: TChangeMusic; const AEngageArena: TEngageArena);
+      const AChangeMusic: TChangeMusic; const AArena: TArenaCues);
 
     // One logic tick with the hero on AScreen
     procedure Tick(AScreen: Integer; const AField: TMonsterField);
@@ -62,14 +67,14 @@ uses
 
 constructor TEventDirector.Create(const AEvents: TArray<TLevelEvent>;
   const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
-  const AChangeMusic: TChangeMusic; const AEngageArena: TEngageArena);
+  const AChangeMusic: TChangeMusic; const AArena: TArenaCues);
 begin
   inherited Create;
   FEvents := AEvents;
   FMessages := AMessages;
   FDynamics := ADynamics;
   FChangeMusic := AChangeMusic;
-  FEngageArena := AEngageArena;
+  FArena := AArena;
   SetLength(FFired, Length(FEvents));
   SetLength(FTicksLeft, Length(FEvents));
   for var i := 0 to High(FEvents) do
@@ -136,7 +141,9 @@ begin
       eaTactics:
         AField.SetTaggedTactics(Action.Target, Action.Tactics);
       eaRebuild:
-        FEngageArena(Action.Target);
+        FArena.Engage(Action.Target);
+      eaRestore:
+        FArena.Restore(Action.Target);
     end;
 end;
 

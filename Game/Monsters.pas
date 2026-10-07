@@ -285,6 +285,9 @@ type
     procedure SetTaggedTactics(const ATag: string; ATactics: TPilotTactics);
     // The first live body carrying the placement tag; nil when none
     function FirstAliveTagged(const ATag: string): TMonster;
+    // The first body carrying the placement tag, dead or alive; nil when
+    // none
+    function FirstTagged(const ATag: string): TMonster;
     procedure Draw(const ASprites: TSpriteRenderer; AScreen: Integer;
       AAlpha: Single);
     // Over the monsters of the screen: the smoke of the wrecked machines
@@ -1534,6 +1537,14 @@ function TMonsterField.FirstAliveTagged(const ATag: string): TMonster;
 begin
   for var Monster in FMonsters do
     if (Monster.Life = mlAlive) and (Monster.Tag = ATag) then
+      Exit(Monster);
+  Result := nil;
+end;
+
+function TMonsterField.FirstTagged(const ATag: string): TMonster;
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
       Exit(Monster);
   Result := nil;
 end;

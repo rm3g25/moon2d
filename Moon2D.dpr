@@ -202,6 +202,7 @@ const
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
   ScancodeV = 25; // trailer frame, centered logo (menu only)
+  ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
   ScancodeKp1 = 89;
@@ -397,6 +398,7 @@ type
     function SaveScreenPictures(const ADir: string): Integer;
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
+    procedure DebugRestorePads;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -614,8 +616,11 @@ begin
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
     HeroRides);
   FreeAndNil(FDirector);
+  var Cues: TArenaCues;
+  Cues.Engage := FArena.Engage;
+  Cues.Restore := FArena.Restore;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
-    FLevel.Dynamics, ChangeMusic, FArena.Engage);
+    FLevel.Dynamics, ChangeMusic, Cues);
 
   FMonsterBullets.Clear;
   FExplosions.Clear;
@@ -2227,6 +2232,15 @@ begin
     if Group.Screen = FHero.Screen then
       FPads.RequestRebuild(Group.Tag, HeroRides, nil, nil);
 end;
+
+// Y: the pad group of the hero's screen flies back to where the level
+// file puts it, every pad at once
+procedure TMoonGame.DebugRestorePads;
+begin
+  for var Group in FLevel.PadGroups do
+    if Group.Screen = FHero.Screen then
+      FPads.RequestRestore(Group.Tag, HeroRides, nil);
+end;
 {$ENDIF} // DEBUGKEYS
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
@@ -2275,6 +2289,8 @@ begin
       DumpLevelScreens;
     ScancodeR:
       DebugRebuildPads;
+    ScancodeY:
+      DebugRestorePads;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

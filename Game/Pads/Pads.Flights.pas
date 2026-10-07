@@ -4,18 +4,20 @@
   sets off. Pure functions; Pads.World flies the pads along them.
 
   A flight has two legs, across and down in either order - an L - and a
-  pause on its corner. A leg sets off, throws the pad at up to TopSpeed
-  and brakes it onto the cell.
+  pause on its corner. A leg sets off, throws the pad at up to the top
+  speed of its pace and brakes it onto the cell. The pace is the whole
+  plan's (TFlightPace): brisk in a fight, calm on the way home after it.
 
   Pads in front do not fly through one another: the plan takes the space
-  every pad holds tick by tick, the loaded pads first, then the longest
-  flights. A pad that would cut into one already planned tries its legs
-  the other way round, then waits at home a little longer, up to about a
-  second. When nothing fits, it goes deep: into the depth behind the
-  others, where it is neither a floor nor a body, and comes out on its
-  cell. Pads in the depth may pass through one another. A loaded pad -
-  the hero stands on it - never goes deep: when it fits nowhere, the plan
-  fails and the formation is thrown again.
+  every pad holds tick by tick, the loaded pads first, then the pads that
+  stay on their cells, then the longest flights. A pad that would cut
+  into one already planned tries its legs the other way round, then waits
+  at home a little longer, as long as its pace lets it. When nothing
+  fits, it goes deep: into the depth behind the others, where it is
+  neither a floor nor a body, and comes out on its cell. Pads in the
+  depth may pass through one another. A loaded pad - the hero stands on
+  it - never goes deep: when it fits nowhere, the plan fails and the
+  caller throws another formation or asks again.
 
   A pad going deep leaves the front at the very start of the rebuild,
   before its flight sets off: whether it was loaded was asked at that
@@ -37,9 +39,23 @@ uses
   Render.Brush, Pads.Formations;
 
 type
+  // How briskly a plan is flown
+  TFlightPace = record
+    TopSpeed: Double; // units a tick
+    // Units a tick a tick: a leg speeds up and brakes at the same rate
+    Acceleration: Double;
+    CornerPauseTicks: Integer;
+    SinkTicks: Integer; // into the depth, and out of it as long
+    // A pad that fits nowhere waits at home this much longer at most,
+    // step by step; a loaded one longer still
+    MaxHoldTicks: Integer;
+    HoldStepTicks: Integer;
+  end;
+
   // Ticks count from the start of the rebuild; places are the pad's
   // top-left corner, in screen units
   TPadFlight = record
+    Pace: TFlightPace;
     FromX, FromY: Double;
     CornerX, CornerY: Double;
     ToX, ToY: Double;
@@ -61,6 +77,8 @@ type
     function Behind(ATick: Integer): Boolean;
     // 0 in front .. 1 all the way into the depth; ATime between ticks
     function Depth(ATime: Single): Single;
+    // The pad stays on its cell, in front: nothing to fly
+    function Idle: Boolean;
   end;
 
   TPadFlights = TArray<TPadFlight>;
@@ -78,9 +96,22 @@ type
     Loaded: TArray<Boolean>;
     // Ticks after the start before which the pad stays home
     Release: TArray<Integer>;
+    Pace: TFlightPace;
     // nil: the pads alone are in one another's way
     Bar: TFlightBar;
   end;
+
+const
+  // The choreography, to be tuned on screen.
+  // A rebuild in a fight is a throw: screen 17 takes about a second and
+  // a half, a pad waits for its way a second.
+  BriskPace: TFlightPace = (TopSpeed: 14.0; Acceleration: 2.0;
+    CornerPauseTicks: 3; SinkTicks: 6; MaxHoldTicks: 33; HoldStepTicks: 3);
+  // The way home after it: screen 17 takes five to eight seconds. The
+  // wait is long - six seconds: no other formation can be thrown, so a
+  // pad waits out whoever still stands on its cell.
+  CalmPace: TFlightPace = (TopSpeed: 4.0; Acceleration: 0.25;
+    CornerPauseTicks: 10; SinkTicks: 14; MaxHoldTicks: 198; HoldStepTicks: 6);
 
 // False when a pad fits nowhere: a loaded one in front, another in front
 // or in the depth.
@@ -93,18 +124,6 @@ uses
   System.Math, Render.Sprites;
 
 const
-  // The choreography of the plan, to be tuned on screen: the throw, the
-  // rate a leg speeds up and brakes at - a rebuild of screen 17 takes
-  // about one and a half seconds with it - and the pause on the corner
-  TopSpeed = 14.0; // units a tick
-  Acceleration = 2.0; // units a tick a tick
-  CornerPauseTicks = 3;
-  // Into the depth and out of it
-  SinkTicks = 6;
-  // A pad that fits nowhere waits at home this much longer at most,
-  // step by step
-  MaxHoldTicks = 33; // about a second
-  HoldStepTicks = 3;
   // A loaded pad waits this many times longer: nothing but a bar stops
   // it, and a bar - the conductor passing - clears within a few seconds
   LoadedHoldScale = 3;
@@ -118,42 +137,45 @@ const
 // A leg: up to speed, on at it, braking - the same rate both ways
 // ---------------------------------------------------------------------------
 
-// The time a leg speeds up for: to TopSpeed, or less on a leg too short
-// to reach it before it must brake
-function RampTime(ADistance: Double): Double;
+// The time a leg speeds up for: to the top speed, or less on a leg too
+// short to reach it before it must brake
+function RampTime(const APace: TFlightPace; ADistance: Double): Double;
 begin
-  Result := Min(TopSpeed / Acceleration, Sqrt(ADistance / Acceleration));
+  Result := Min(APace.TopSpeed / APace.Acceleration,
+    Sqrt(ADistance / APace.Acceleration));
 end;
 
-function LegTime(ADistance: Double): Double;
+function LegTime(const APace: TFlightPace; ADistance: Double): Double;
 begin
-  var Ramp := RampTime(ADistance);
-  var RampDistance := Acceleration * Ramp * Ramp;
-  Result := 2 * Ramp + (ADistance - RampDistance) / (Acceleration * Ramp);
+  var Ramp := RampTime(APace, ADistance);
+  var RampDistance := APace.Acceleration * Ramp * Ramp;
+  Result := 2 * Ramp + (ADistance - RampDistance) / (APace.Acceleration * Ramp);
 end;
 
-function LegTicks(ADistance: Double): Integer;
+function LegTicks(const APace: TFlightPace; ADistance: Double): Integer;
 begin
   Result := 0;
   if ADistance > 0 then
-    Result := Ceil(LegTime(ADistance) - TimeSlack);
+    Result := Ceil(LegTime(APace, ADistance) - TimeSlack);
 end;
 
 // The distance covered ATick into a leg flown in ATicks: the leg's own
 // time stretched over its whole ticks
-function LegCovered(ADistance: Double; ATick, ATicks: Integer): Double;
+function LegCovered(const APace: TFlightPace; ADistance: Double;
+  ATick, ATicks: Integer): Double;
 begin
   if ATick >= ATicks then
     Exit(ADistance);
-  var Total := LegTime(ADistance);
+  var Rate := APace.Acceleration;
+  var Total := LegTime(APace, ADistance);
   var Time := ATick * Total / ATicks;
-  var Ramp := RampTime(ADistance);
+  var Ramp := RampTime(APace, ADistance);
   if Time <= Ramp then
-    Exit(Acceleration * Time * Time / 2);
+    Exit(Rate * Time * Time / 2);
   if Time <= Total - Ramp then
-    Exit(Acceleration * Ramp * Ramp / 2 + Acceleration * Ramp * (Time - Ramp));
+    Exit(Rate * Ramp * Ramp / 2 + Rate * Ramp * (Time - Ramp));
   var Rest := Total - Time;
-  Result := ADistance - Acceleration * Rest * Rest / 2;
+  Result := ADistance - Rate * Rest * Rest / 2;
 end;
 
 // ---------------------------------------------------------------------------
@@ -169,7 +191,7 @@ function TPadFlight.Done: Integer;
 begin
   Result := Arrive;
   if Deep then
-    Inc(Result, SinkTicks);
+    Inc(Result, Pace.SinkTicks);
 end;
 
 procedure TPadFlight.Place(ATick: Integer; out AX, AY: Double);
@@ -181,7 +203,8 @@ begin
     Exit;
   if Time < FirstTicks then
   begin
-    var Share := LegCovered(FirstDistance, Time, FirstTicks) / FirstDistance;
+    var Share := LegCovered(Pace, FirstDistance, Time, FirstTicks) /
+      FirstDistance;
     AX := FromX + (CornerX - FromX) * Share;
     AY := FromY + (CornerY - FromY) * Share;
     Exit;
@@ -195,7 +218,8 @@ begin
   Dec(Time, CornerTicks);
   if Time < SecondTicks then
   begin
-    var Share := LegCovered(SecondDistance, Time, SecondTicks) / SecondDistance;
+    var Share := LegCovered(Pace, SecondDistance, Time, SecondTicks) /
+      SecondDistance;
     AX := CornerX + (ToX - CornerX) * Share;
     AY := CornerY + (ToY - CornerY) * Share;
     Exit;
@@ -218,11 +242,16 @@ function TPadFlight.Depth(ATime: Single): Single;
 begin
   if not Deep then
     Exit(0);
-  if ATime < SinkTicks then
-    Exit(EnsureRange(ATime / SinkTicks, 0.0, 1.0));
+  if ATime < Pace.SinkTicks then
+    Exit(EnsureRange(ATime / Pace.SinkTicks, 0.0, 1.0));
   if ATime < Arrive then
     Exit(1);
-  Result := EnsureRange((Done - ATime) / SinkTicks, 0.0, 1.0);
+  Result := EnsureRange((Done - ATime) / Pace.SinkTicks, 0.0, 1.0);
+end;
+
+function TPadFlight.Idle: Boolean;
+begin
+  Result := not Deep and (FirstDistance = 0) and (SecondDistance = 0);
 end;
 
 // ---------------------------------------------------------------------------
@@ -239,15 +268,20 @@ type
     AcrossFirst: Boolean;
   end;
 
-  // What a flight still to be planned has to fit
+  // What a flight still to be planned has to fit, and the pace it is
+  // flown at
   TPlanSoFar = record
+    Pace: TFlightPace;
     Bar: TFlightBar;
     Flights: TPadFlights;
   end;
 
+// A flight in front, setting off at once: when it sets off and whether
+// it goes deep are the plan's to say
 function BuildFlight(const AFrom, ATo: TPadCell; AAcrossFirst: Boolean;
-  ADepart: Integer; ADeep: Boolean): TPadFlight;
+  const APace: TFlightPace): TPadFlight;
 begin
+  Result.Pace := APace;
   Result.FromX := AFrom.Col * TileSize;
   Result.FromY := AFrom.Row * TileSize;
   Result.ToX := ATo.Col * TileSize;
@@ -263,13 +297,13 @@ begin
     Abs(Result.CornerY - Result.FromY);
   Result.SecondDistance := Abs(Result.ToX - Result.CornerX) +
     Abs(Result.ToY - Result.CornerY);
-  Result.FirstTicks := LegTicks(Result.FirstDistance);
-  Result.SecondTicks := LegTicks(Result.SecondDistance);
+  Result.FirstTicks := LegTicks(APace, Result.FirstDistance);
+  Result.SecondTicks := LegTicks(APace, Result.SecondDistance);
   Result.CornerTicks := 0;
   if (Result.FirstDistance > 0) and (Result.SecondDistance > 0) then
-    Result.CornerTicks := CornerPauseTicks;
-  Result.Depart := ADepart;
-  Result.Deep := ADeep;
+    Result.CornerTicks := APace.CornerPauseTicks;
+  Result.Depart := 0;
+  Result.Deep := False;
 end;
 
 // The space the pad holds at the tick, for the plan. A deep pad holds its
@@ -328,24 +362,28 @@ end;
 function TryLegs(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
   ADepart: Integer; ADeep: Boolean; out AFlight: TPadFlight): Boolean;
 begin
-  AFlight := BuildFlight(AAsk.From, AAsk.Target, AAsk.AcrossFirst, ADepart,
-    ADeep);
-  if Fits(AFlight, APlan) then
-    Exit(True);
-  AFlight := BuildFlight(AAsk.From, AAsk.Target, not AAsk.AcrossFirst,
-    ADepart, ADeep);
-  Result := Fits(AFlight, APlan);
+  for var Swapped := False to True do
+  begin
+    AFlight := BuildFlight(AAsk.From, AAsk.Target,
+      AAsk.AcrossFirst xor Swapped, APlan.Pace);
+    AFlight.Depart := ADepart;
+    AFlight.Deep := ADeep;
+    if Fits(AFlight, APlan) then
+      Exit(True);
+  end;
+  Result := False;
 end;
 
 // In front: the start held back step by step
 function TryFront(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
   out AFlight: TPadFlight): Boolean;
 begin
-  var MostHold := MaxHoldTicks;
+  var Pace := APlan.Pace;
+  var MostHold := Pace.MaxHoldTicks;
   if AAsk.Loaded then
-    MostHold := LoadedHoldScale * MaxHoldTicks;
-  for var Step := 0 to MostHold div HoldStepTicks do
-    if TryLegs(AAsk, APlan, AAsk.Release + Step * HoldStepTicks, False,
+    MostHold := LoadedHoldScale * Pace.MaxHoldTicks;
+  for var Step := 0 to MostHold div Pace.HoldStepTicks do
+    if TryLegs(AAsk, APlan, AAsk.Release + Step * Pace.HoldStepTicks, False,
       AFlight) then
       Exit(True);
   Result := False;
@@ -357,14 +395,17 @@ end;
 function TryDeep(const AAsk: TFlightAsk; const APlan: TPlanSoFar;
   out AFlight: TPadFlight): Boolean;
 begin
-  var Soonest := Max(AAsk.Release, SinkTicks);
-  for var Step := 0 to MaxHoldTicks div HoldStepTicks do
-    if TryLegs(AAsk, APlan, Soonest + Step * HoldStepTicks, True, AFlight) then
+  var Pace := APlan.Pace;
+  var Soonest := Max(AAsk.Release, Pace.SinkTicks);
+  for var Step := 0 to Pace.MaxHoldTicks div Pace.HoldStepTicks do
+    if TryLegs(AAsk, APlan, Soonest + Step * Pace.HoldStepTicks, True,
+      AFlight) then
       Exit(True);
   Result := False;
 end;
 
-// The loaded pads first - only the front is theirs -, then the longest
+// The loaded pads first - only the front is theirs -, then the pads that
+// stay on their cells - the rest fly round them -, then the longest
 // flights, then the file order
 function PlansBefore(APad, AOther: Integer; const AStart, ATarget: TPadCells;
   const ALoaded: TArray<Boolean>): Boolean;
@@ -373,6 +414,10 @@ begin
     Exit(ALoaded[APad]);
   var Flown := FlightCells(AStart[APad], ATarget[APad]);
   var OtherFlown := FlightCells(AStart[AOther], ATarget[AOther]);
+  var Stays := Flown = 0;
+  var OtherStays := OtherFlown = 0;
+  if Stays <> OtherStays then
+    Exit(Stays);
   if Flown <> OtherFlown then
     Exit(Flown > OtherFlown);
   Result := APad < AOther;
@@ -402,6 +447,7 @@ var
   Ask: TFlightAsk;
 begin
   SetLength(AFlights, Length(ABrief.Start));
+  Plan.Pace := ABrief.Pace;
   Plan.Bar := ABrief.Bar;
   Plan.Flights := [];
   for var PadIndex in PlanOrder(ABrief.Start, ABrief.Target, ABrief.Loaded) do

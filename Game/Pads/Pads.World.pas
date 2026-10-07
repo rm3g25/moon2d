@@ -48,6 +48,11 @@
   again does nothing. What a rebuild sounds like the world only tells -
   a corner turned, a pair docked, a tick each - and the game voices.
 
+  A restore is a rebuild flown the other way: every pad of the group
+  back to the place the level file gives it, at the calm pace of
+  Pads.Flights. Nothing is thrown or judged; a pad on its place already
+  stays there, and the rest fly round it.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -209,6 +214,8 @@ type
     Load: TPadLoad;
     Release: TPadRelease;
     Traffic: TPadTraffic;
+    // Back to the level file's places, not to a new formation
+    Restore: Boolean;
   end;
 
   // The pads gone into the depth, at whatever depth, and the rest
@@ -232,6 +239,11 @@ type
       const AFence: TPadFence): Boolean;
     function GroundShut(AScreen: Integer; AX, AY: Double): Boolean;
     function FlightBarOf(const AGroup: TPadGroup): TFlightBar;
+    procedure TakeAsk(const AAsk: TRebuildAsk);
+    function BriefOf(const AGroup: TPadGroup;
+      const AMembers: TArray<TPad>): TFlightBrief;
+    function TryPlanRestore(const AGroup: TPadGroup;
+      const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
     function GroupFlying(const ATag: string): Boolean;
     function FlyingOn(AScreen: Integer): Boolean;
     function MembersOf(const ATag: string): TArray<TPad>;
@@ -266,8 +278,17 @@ type
     // for or flying.
     procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad;
       const ARelease: TPadRelease; const ATraffic: TPadTraffic);
-    // A rebuild is asked for or flying
+    // The pads of the group tagged AGroup fly back to where the level
+    // file puts them, each to its own place, calmly; asked for and
+    // started as a rebuild is, ALoad and ARelease as a rebuild's. A plan
+    // that finds a pad no way flies nothing: ask again.
+    procedure RequestRestore(const AGroup: string; const ALoad: TPadLoad;
+      const ARelease: TPadRelease);
+    // A rebuild or a restore is asked for or flying
     function Rebuilding: Boolean;
+    // Every pad of the group tagged AGroup stands where the level file
+    // puts it
+    function GroupRestored(const AGroup: string): Boolean;
     // A pad of the group tagged AGroup is knocked off its place
     function GroupKnocked(const AGroup: string): Boolean;
     // One tick only, for the game to voice: a pad in front turned the
@@ -1009,16 +1030,38 @@ begin
       Result := Result + [Pad];
 end;
 
+procedure TPadWorld.TakeAsk(const AAsk: TRebuildAsk);
+begin
+  if Rebuilding or (Length(MembersOf(AAsk.Group)) = 0) then
+    Exit;
+  FAsked := AAsk;
+end;
+
 procedure TPadWorld.RequestRebuild(const AGroup: string;
   const ALoad: TPadLoad; const ARelease: TPadRelease;
   const ATraffic: TPadTraffic);
+var
+  Ask: TRebuildAsk;
 begin
-  if Rebuilding or (Length(MembersOf(AGroup)) = 0) then
-    Exit;
-  FAsked.Group := AGroup;
-  FAsked.Load := ALoad;
-  FAsked.Release := ARelease;
-  FAsked.Traffic := ATraffic;
+  Ask := Default(TRebuildAsk);
+  Ask.Group := AGroup;
+  Ask.Load := ALoad;
+  Ask.Release := ARelease;
+  Ask.Traffic := ATraffic;
+  TakeAsk(Ask);
+end;
+
+procedure TPadWorld.RequestRestore(const AGroup: string;
+  const ALoad: TPadLoad; const ARelease: TPadRelease);
+var
+  Ask: TRebuildAsk;
+begin
+  Ask := Default(TRebuildAsk);
+  Ask.Group := AGroup;
+  Ask.Load := ALoad;
+  Ask.Release := ARelease;
+  Ask.Restore := True;
+  TakeAsk(Ask);
 end;
 
 // On the group's screen, once no pad of it is knocked - a knock is over
@@ -1039,12 +1082,20 @@ end;
 procedure TPadWorld.StartRebuild(const AGroup: TPadGroup);
 var
   Flights: TPadFlights;
+  Planned: Boolean;
 begin
   var Members := MembersOf(AGroup.Tag);
-  if not TryPlanRebuild(AGroup, Members, Flights) then
+  if FAsked.Restore then
+    Planned := TryPlanRestore(AGroup, Members, Flights)
+  else
+    Planned := TryPlanRebuild(AGroup, Members, Flights);
+  if not Planned then
     Exit;
+  // A pad that stays on its cell is in no flight: it bobs on, its jets
+  // idle
   for var i := 0 to High(Members) do
-    Members[i].Fly(Flights[i]);
+    if not Flights[i].Idle then
+      Members[i].Fly(Flights[i]);
   FFlyingGroup := AGroup.Tag;
 end;
 
@@ -1121,6 +1172,45 @@ begin
     end;
 end;
 
+function FileCellsOf(const AMembers: TArray<TPad>): TPadCells;
+begin
+  SetLength(Result, Length(AMembers));
+  for var i := 0 to High(AMembers) do
+    Result[i] := CellOfPlace(AMembers[i].Placement.X, AMembers[i].Placement.Y);
+end;
+
+function TPadWorld.GroupRestored(const AGroup: string): Boolean;
+begin
+  for var Pad in MembersOf(AGroup) do
+  begin
+    var OnPlace := (Pad.HomeLeft = Pad.Placement.X) and
+      (Pad.HomeTop = Pad.Placement.Y);
+    if Pad.Flying or not OnPlace then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// What the asked rebuild tells a plan of the group's pads as they stand:
+// all but where they fly to and how briskly
+function TPadWorld.BriefOf(const AGroup: TPadGroup;
+  const AMembers: TArray<TPad>): TFlightBrief;
+begin
+  SetLength(Result.Start, Length(AMembers));
+  SetLength(Result.Loaded, Length(AMembers));
+  // Zeros when nobody holds the pads back: all free at the start
+  SetLength(Result.Release, Length(AMembers));
+  for var i := 0 to High(AMembers) do
+  begin
+    var Pad := AMembers[i];
+    Result.Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
+    Result.Loaded[i] := Assigned(FAsked.Load) and FAsked.Load(Pad);
+    if Assigned(FAsked.Release) then
+      Result.Release[i] := FAsked.Release(Result.Start[i]);
+  end;
+  Result.Bar := FlightBarOf(AGroup);
+end;
+
 // Formations thrown until one is judged, assigned and flown; past the
 // last throw the level file's formation - when the file keeps the whole
 // group in the zone -, with the same rules for the assignment and the
@@ -1128,25 +1218,10 @@ end;
 function TPadWorld.TryPlanRebuild(const AGroup: TPadGroup;
   const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
 var
-  Brief: TFlightBrief;
-  FileCells, Cells: TPadCells;
+  Cells: TPadCells;
 begin
-  SetLength(Brief.Start, Length(AMembers));
-  SetLength(FileCells, Length(AMembers));
-  SetLength(Brief.Loaded, Length(AMembers));
-  // Zeros when nobody holds the pads back: all free at the start
-  SetLength(Brief.Release, Length(AMembers));
-  for var i := 0 to High(AMembers) do
-  begin
-    var Pad := AMembers[i];
-    Brief.Start[i] := CellOfPlace(Pad.HomeLeft, Pad.HomeTop);
-    FileCells[i] := CellOfPlace(Pad.Placement.X, Pad.Placement.Y);
-    Brief.Loaded[i] := Assigned(FAsked.Load) and FAsked.Load(Pad);
-    if Assigned(FAsked.Release) then
-      Brief.Release[i] := FAsked.Release(Brief.Start[i]);
-  end;
-  Brief.Bar := FlightBarOf(AGroup);
-
+  var Brief := BriefOf(AGroup, AMembers);
+  Brief.Pace := BriskPace;
   var Launch := LaunchSpans(FLevel, AGroup, StillSpans(AGroup));
   for var Throw := 1 to MaxThrows do
   begin
@@ -1158,9 +1233,21 @@ begin
     if Flown then
       Exit(True);
   end;
+  var FileCells := FileCellsOf(AMembers);
   Result := CellsInZone(FileCells, AGroup.Zone) and
     TryAssignFormation(FDice, Brief.Start, FileCells, AGroup, Brief.Target) and
     TryPlanFlights(FDice, Brief, AFlights);
+end;
+
+// Every pad to its own place of the level file. False - nothing flies
+// this time: a pad found no way.
+function TPadWorld.TryPlanRestore(const AGroup: TPadGroup;
+  const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
+begin
+  var Brief := BriefOf(AGroup, AMembers);
+  Brief.Target := FileCellsOf(AMembers);
+  Brief.Pace := CalmPace;
+  Result := TryPlanFlights(FDice, Brief, AFlights);
 end;
 
 // ---------------------------------------------------------------------------

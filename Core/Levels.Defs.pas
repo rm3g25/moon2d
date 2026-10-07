@@ -264,6 +264,8 @@ resourcestring
     + '"%s", which no entity carries';
   SLevelEventRebuildUnknown = 'Level "%s": event "%s" rebuilds "%s", which '
     + 'no pad group carries';
+  SLevelEventRestoreUnknown = 'Level "%s": event "%s" restores "%s", which '
+    + 'no pad group carries';
   SLevelPadGroupNoConductor = 'Level "%s": pad group "%s" follows "%s", '
     + 'which no entity on its screen carries';
   SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
@@ -570,6 +572,10 @@ begin
     eaRebuild:
       if PadGroupsTagged(FPadGroups, AAction.Target) = 0 then
         raise ELevelError.CreateFmt(SLevelEventRebuildUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaRestore:
+      if PadGroupsTagged(FPadGroups, AAction.Target) = 0 then
+        raise ELevelError.CreateFmt(SLevelEventRestoreUnknown,
           [FId, AEventId, AAction.Target]);
   end;
 end;
