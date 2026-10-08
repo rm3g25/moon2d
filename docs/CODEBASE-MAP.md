@@ -12,7 +12,8 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
-at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45` and the plunging pad at `v3.0.46` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46` and the hero's
+shroud at `v3.0.47` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -30,7 +31,7 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 - `Game/` - the game itself: hero, monsters, the boss's disc and its pilot,
   bullets,
   explosions, bullet impacts, sound, the loop host,
-  the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
+  the bonus vocabulary, the henshin ceremony, the hero's shroud, the version. `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
   (`Pads.Plunge`), the rebuild of a pad group (`Pads.Formations`,
@@ -94,7 +95,10 @@ explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
 drawn through `Render.Glow`) / `Orbs.Harvest` (where an aura's orbs come
 from: over `Game.Space`, `Render.Brush` and `Sdl2.Core` alone - it knows
 neither the level nor the pads) -> `Hud.Marks` /
-`Game.Henshin` / `Events.Director` / `Orbs.Aura` (the hero's aura: over
+`Game.Shroud` (the hero's shroud: over `Hero`, `Effects.Emitter`,
+`Effects.Sparks` for the probe type and the canvas of `Levels.Dynamics`;
+it draws through `Render.Glow` and `Render.Puff`) /
+`Game.Henshin` (over `Game.Shroud` too) / `Events.Director` / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
@@ -661,7 +665,7 @@ passes `SolidUnderPoint`, so the unit knows no level).
   `Draw(origin, alpha)` (pure: position extrapolated by speed, like the
   smoke), `Clear`. `EDebrisError`.
 
-### `Core/Render.Puff.pas` (~230 lines)
+### `Core/Render.Puff.pas` (~240 lines)
 Smoke drawn instead of loaded. `CreatePuffTextures(renderer, side)` makes
 `PuffShapes` (4) ragged puffs (`TPuffTextures`) at level load: a soft
 falloff eaten into by
@@ -671,7 +675,9 @@ pixels with a mottled brightness, the shape in alpha. **Alpha blended**,
 linear-filtered - smoke hides what is behind it, light (`Render.Glow`) only
 adds. `DrawPuff(renderer, texture, cx, cy, size, angle, color, level)` -
 centered, turned (`SDL_RenderCopyExF`), tint as color mod, density as alpha
-mod. `FreePuffTextures`. `EPuffError`.
+mod. `DrawPuffRect(renderer, texture, dest, color, level)` (3.0.47) - the
+puff stretched into a rectangle, unturned: a band of the hero's shroud is
+wider than it is tall. `FreePuffTextures`. `EPuffError`.
 
 ### `Core/Levels.Tint.pas` (~75 lines)
 - **`TColorTint`** (record) - R/G/B multipliers in percent, applied when
@@ -1700,7 +1706,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1410 lines)
+### `Game/Hero.pas` (~1440 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -1708,9 +1714,11 @@ moves in comes from `Game.Space`.
   `TPendingSide` ('ExtraInstruction' of 2008 - a queued side intent executed
   once the barrier clears).
 - **`THero`** -
-  - Art: `hero.mset` (24 frames as the `walk`, `death` and `henshin` sequences)
-    plus the weapon set, both owned; `OpenFrames` pulls named sequences out of
-    a set.
+  - Art: `hero.mset` (24 frames as the `walk`, `death` and `henshin` sequences,
+    named by `HeroFrameSequences`) plus the weapon set, both owned;
+    `OpenFrames` pulls named sequences out of a set; `SkinSet` (public) hands
+    the hero's set to whoever builds something out of his frames - the
+    shroud's masks and halos.
   - State: FX/FY (Y = the FEET line), screen, action, direction, walk frame,
     acceleration, form, death fields (frame 9->16, corpse settling).
   - Collision oracles (verbatim 2008): `Solid`, `CellOfX/Y`, `CellsOfX/Y` (a
@@ -1767,6 +1775,14 @@ moves in comes from `Game.Space`.
     `CrossDX` / `CrossDY` - its calibration offset), the
     minigun muzzle live tuner (`NudgeMinigun`, DEBUGKEYS; read back through
     `MinigunBaseX`, `MinigunBaseY`, `MinigunMuzzleLen`).
+  - Drawing (3.0.47): **`THeroPose`** (record: `Frame` 1..24, `Texture`,
+    `Left`, `Top` in screen units, `Mirrored`) is what `Draw` puts on the
+    screen this tick; `Pose` is the one place that picks the frame (the
+    verbatim `OurHero.Put` selection - death frame, walk cycle, ice skin at
+    +16), and `Draw` is `Pose` plus `DrawArm`. `DrawArm` (public) is the
+    weapon arm alone, no body: while the shroud puts the body together out
+    of strips the game calls it instead of `Draw`. `Pose` has no side effects,
+    so the shroud takes the very frame the hero is drawn with.
   - Lifecycle: `Command`, `Tick` (verbatim OurHero.Timer), `Draw`, `SetMouse`,
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
     walls), `ApplyWeaponPickup`, `Kill`, `Revive`; `Dead`, `HeroForm`
@@ -2600,11 +2616,78 @@ and the rain step). What a drop strikes is the game's to settle through
 - A drop falls armed all the way: the game takes bullets and dangerous
   monsters with it as with the aura's orbs. A barrel or a medkit is passed.
 
-### `Game/Game.Henshin.pas` (~280 lines)
+### `Game/Game.Shroud.pas` (~1015 lines)
+The hero's shroud (3.0.47): smoke and light that gather round him when he
+appears and when he changes his suit. A picture over the hero's frame that
+lives on its own clock and dies out: bands of smoke and light cross the
+body, the body may be put together out of strips, a halo flares round it and
+motes drift off. It never takes the controls from the hero and knows nothing
+of how he looks - sizes and shapes come from his 24 frames, so a redrawn hero
+brings his own shroud. The plan, the numbers and the rules for whoever
+writes it: `docs/SHROUD-PLAN.md`.
+- **`TShroudLook`** (record, one per scene; ticks, screen units and shares):
+  `Life`, `Bands`, `WidthFrom`/`WidthTo`, `Travel` (down the body over a
+  band's life, up below zero), `Order` (`TShroudOrder` = `soTogether`,
+  `soTopDown`, `soBottomUp`), `Stagger`, `Smoke`, `Light`, `Reveal` (the body
+  is put together out of `ShroudStrips`=16 strips), `Shift`, `Flash` (the
+  halo's peak, above 1 drawn twice) at `FlashAt`, `Motes`, `Lift` (a mote's
+  pull, up below zero), `Tint`. What differs between the scenes is numbers
+  only, typed constants in the unit: `PitLook` (back from a pit, 14 ticks),
+  `EntryLook` (the first screen of a level, 40), `ReviveLook` (alive after a
+  death, 24; the three are light smoke, `Tint` 236/240/255 - the body comes
+  together), `IceOnLook` (the ice suit on, 130; frost runs down), `HeatOnLook`
+  (110, sparks off a burning suit - nothing starts it yet), `IceOffLook` (the
+  suit shatters, 18). The game says which one to start and when.
+- **`THeroShroud`** counts and touches no SDL: the clock, the bands
+  (`TShroudBand`: `At`, `Side`, `Puff`, `Wide`, `InFront`, `Fallen`), the
+  strips, the motes (`TParticleSwarm`), the mist. Own `TXorShift` dice from
+  the seed it is given, never `Random`. The probe (`TSolidProbe`, screen
+  units) is the game's `SolidUnderPoint`. `Tick(pose, seeds)` runs, in this
+  order: the clock (age + 1, the end at `Life`), the mist, and while active
+  the bands' fall and the birth of motes, then the flight and the settling of
+  motes. Reads for the painter: `Time(alpha)`, `PartTime`, `Glow`,
+  `StripShift`, `Look`, `Bands`, `Motes`, `Mist`; `Active`; `Assembling`
+  (the body is being put together: the game leaves him undrawn).
+  - `Start(look)` begins a scene; it erases neither motes nor mist. `Clear`
+    erases everything (death, a restart); `LeaveMotes` is a door - what has
+    left the hero (the motes and the mist) stays behind, the light goes with
+    him.
+  - Motes are born at the opaque points of the frame (alpha >= `SeedAlpha`
+    128, mirrored with the hero) at a rate of `Motes` x the halo's level; a
+    sinking mote (`Lift` above zero) is settled out of matter by the probe.
+    A mote already in flight when a new `Start` comes takes the new look's
+    `Lift` and is drawn in its `Tint` (open: docs/SHROUD-PLAN.md).
+  - Mist: a band that reaches the feet line (`HeroSize - 1`; only a look with
+    `Travel` above zero gets there - `IceOnLook`) leaves the hero, is marked
+    `Fallen` and is copied into `Mist` as a **`TShroudCloud`** (its look, the
+    band, the age, the place `X`, `Y` - the middle of the band on its row).
+    The mist stands on the screen, lives by its own look's clock (a new
+    `Start` does not hurry it), and sinks `MistSink`=1.2 units a tick until
+    the probe says "inside" matter; with no probe it stands.
+- **`TShroudPainter`** draws, and makes at load what the drawing needs from the
+  hero's 24 frames (`TShroudFrameArt`: the seed points, a white mask with the
+  frame's alpha, a halo - the alpha blurred by `BlurImage` - and the margins
+  it reaches past the frame). `SeedsOf(frame)` hands the points to the shroud.
+  Three calls bracket the hero's draw: `DrawUnder` (behind him: the mist
+  behind, the far bands, the halo), `DrawBody` (on him: the strips while he
+  is put together, the light on the body, through the mask), `DrawOver` (over
+  him: the near bands, the mist before him, the motes). A band and a piece of
+  mist share `DrawCloud`: smoke is `DrawPuffRect` of `Render.Puff` (alpha
+  blended), light is `DrawGlowRect` over `gsPoint` of `Render.Glow` (additive).
+  The painter restores the texture's alpha mod and blend mode after it
+  paints with a hero texture. The hero's channel of the shake and the deck's
+  lift go in as arguments; the mist takes the shake only, since it stands on
+  the screen, and is drawn even after the shroud has ended.
+- Tests: `Tests/Game/Tests.Game.Shroud.pas` - the counting class alone (the
+  painter draws, so it is judged by eye): see Tests below.
+
+### `Game/Game.Henshin.pas` (~290 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
 the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
 flash, the suit going on - and the suit coming off. **`THenshin`** takes the
-stage it acts on (hero, sound bank, message board, shake meter) plus a
+stage it acts on - **`THenshinStage`**, a record of the hero, the sound bank,
+the message board, the shake meter and (3.0.47) the shroud, so the constructor
+stays at two parameters - plus a
 `TCureHero` callback (`reference to procedure`) for the one thing it does not
 own, the hero's health; the game passes its `CureHero` method directly.
 Reborn with the hero on every level load.
@@ -2618,7 +2701,9 @@ Reborn with the hero on every level load.
   tick/bullets/radius), `FlashTick=135`, `FinishTick=140`, the regen and perk
   ticker lives, its two shake doses (`WaveTrauma`, `FinishTrauma`), the
   countdown tuning, and its sound names - loaded strictly in the
-  constructor. `BottleSoundFile` is public: the barrel burst doubles as the
+  constructor. The suit's light is the shroud's: `Finish` starts `IceOnLook`,
+  `RemoveIceForm` starts `IceOffLook`; `Reset` leaves the shroud as it is
+  (the dpr clears it). `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
 
@@ -2646,7 +2731,7 @@ instead of being kept: asked for the conditions, told the tactics.
   (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
 
-### `Core/Render.Glow.pas` (~210 lines)
+### `Core/Render.Glow.pas` (~315 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
 - **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`, `gsStreak`) - a
@@ -2662,10 +2747,17 @@ additive, linear-filtered, so one texture serves every tint and level.
   `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (centered
   square), `DrawGlowRect(..., dest, tint, level)`. Tint = color mod, level =
   alpha mod.
+- A glow out of an image of levels (lifted out of `Menu.Logo` at 3.0.47,
+  since the shroud's halos are made the same way): `BlurImage(image, w, h,
+  radius, passes)` - box blurs on an array of `Single`, the outside counts
+  as dark, three passes make a near-Gaussian bloom; `CreateGlowFromImage(
+  renderer, image, w, h)` - the levels scaled to a peak of one, white with
+  the levels in alpha, through `CreateGlowTexture`.
 - Users: the stars, the embers, the logo halo, the beacons, the heat of a
   smoke puff, the explosion flash, the sparks (`gsStreak`; the blast's with
   `gsPoint`) and hot shards, the flash of a hit and of an arc, the sensor
-  eye of the boss's disc. `EGlowError`.
+  eye of the boss's disc, the halos and the light of the hero's shroud.
+  `EGlowError`.
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`** of
@@ -2727,13 +2819,14 @@ cool 2008 tint, no air). The sun stands still, up and to the left; `Tick`
 spins one turn in 2640 ticks (80 s), `Draw(dest)` draws untinted, at full
 level.
 
-### `Menu/Menu.Logo.pas` (~285 lines)
+### `Menu/Menu.Logo.pas` (~220 lines)
 The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
 (2:1, letters alone on transparent) and builds everything else from it, so a
 redrawn logo brings its own glow.
 - Halo: the letters' alpha shrunk 4x into an apron-padded image, three box
-  blurs (`HaloBlurRadius=5`, `HaloBlurPasses=3`), normalized to a peak of one,
-  handed to `CreateGlowTexture`; tinted with `InkTint` (the mean ink color
+  blurs (`HaloBlurRadius=5`, `HaloBlurPasses=3`: `BlurImage` of `Render.Glow`),
+  normalized to a peak of one and made a texture (`CreateGlowFromImage`
+  of `Render.Glow`, lifted out of this unit at 3.0.47); tinted with `InkTint` (the mean ink color
   at full brightness); breathes on a 16 s sine (`HaloBaseLevel=0.55`,
   `HaloSwing=0.2`).
 - Owns a `TEmbers`. `Tick`, `Draw(dest, alpha)` - halo under, letters, embers
@@ -2814,7 +2907,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2565 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2725 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2887,8 +2980,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     impacts (on the monsters' channel - they sit on armor), then the
     health rows (`FMarks`, each on its figure's channel) - the
     hero on
-    his own, with `FineY` = `FHero.DeckLift(alpha)`, back to 0 right after
-    his draw -, cursor and HUD still; `Update` ticks the pads right before
+    his own, with `FineY` = `FHero.DeckLift(alpha)`: the shroud under him
+    (`FShroudPainter.DrawUnder`), him (`FHero.Draw`, skipped while
+    `FShroud.Assembling`), the light on his body (`DrawBody`), his arm alone
+    while he is put together (`FHero.DrawArm`), then `FineY` back to 0 and
+    the shroud over him (`DrawOver`) -, cursor and HUD still; `Update` ticks the pads right before
     the hero
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves; right after the pads' tick it voices
@@ -3042,6 +3138,19 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `HurtHero` collapses it (`FRain.Collapse`); `LoadLevel`,
     `RestartLevel` and `ArriveOnScreen` clear it - a door puts the rain
     out, as it does bullets, while the aura goes through with the hero.
+  - Shroud (3.0.47): `FShroud` (`THeroShroud`; the probe is
+    `SolidUnderPoint`, the dice seed `RollDiceSeed`) and `FShroudPainter` are
+    reborn in `LoadLevel` with the hero, before the ceremony, which gets the
+    shroud in its `THenshinStage` and starts the ice looks itself. Starts
+    here: `HandlePitFall` - `PitLook`, after the hero is put back (`SetY`)
+    and before `HurtHero`; `StartPlaying` - `EntryLook`; `RestartLevel` -
+    `Clear`, then `ReviveLook` once the hero is revived and put down.
+    `HurtHero` clears it on the hero's death; `ArriveOnScreen` calls
+    `LeaveMotes` - a door leaves the motes and the mist behind. `Update`
+    ticks it right after the aura: one `FHero.Pose` read gives both the
+    pose and the frame whose seeds the painter hands over (`SeedsOf`). The
+    destructor frees the ceremony, the painter and the shroud before the
+    hero.
   - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
@@ -3230,6 +3339,16 @@ to `bin\`.
   and grenade volley never cut; **`TCappedBossTests`**:
   `boss1` on one tick takes no more than the cap, and a blow over it still
   shoves him.
+- **`Game/Tests.Game.Shroud.pas`** (~1230 lines) - **`THeroShroudTests`**
+  (38 tests): the counting half of `Game.Shroud`, no SDL - a new shroud is
+  still and dark, `Start` and the restart on the run, `Clear` and
+  `LeaveMotes` against `Start`, the glow's peak, the own clock of a part of
+  the body in each order, the strips' sides and their stop at home, the motes
+  (born at the seeds only, mirrored, none without seeds, dying out, the
+  sinking ones out of matter), the mist (one cloud per band of `IceOnLook`,
+  born on the feet line, standing where the hero fell, sinking, settling,
+  with no probe, dying by its own look's age) and the dice (the same seed
+  - the same run).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -3571,6 +3690,7 @@ music loads leniently. Four one-shots are synthesised by
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
 | The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
+| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Tests.Game.Shroud.pas (+docs/SHROUD-PLAN.md) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
