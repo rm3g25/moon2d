@@ -12,7 +12,7 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
-at `v3.0.43`, the live shards at `v3.0.44` and the tank's hull at `v3.0.45` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45` and the plunging pad at `v3.0.46` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -32,7 +32,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   explosions, bullet impacts, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the version. `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
-  (`Pads.World`), the rebuild of a pad group (`Pads.Formations`,
+  (`Pads.World`), the cycle of a pad that plunges under the hero
+  (`Pads.Plunge`), the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one and of the
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
   (`Orbs.Flock`), the harvest of spots on the matter of a screen
@@ -70,8 +71,10 @@ kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
 `Levels.Rigs` for the names of the rigs a pad wears) ->
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
-`Pads.Flights` (over `Pads.Formations`) -> `Pads.World` (the pads in play:
-over the two, `Levels.Pads`, `Levels.Defs`, `Render.Sprites`,
+`Pads.Flights` (over `Pads.Formations`) / `Pads.Plunge` (the cycle of a
+plunging pad: over `Levels.Pads` and `Render.Brush` alone) -> `Pads.World`
+(the pads in play: over the three, `Levels.Pads`, `Levels.Defs`,
+`Render.Sprites`,
 `Render.Brush`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
@@ -288,7 +291,8 @@ screen dump of the dpr.
   looked up every tick (`FollowParent`) through **`TLocateParent`**
   (`reference to function(tag, out TParentStand)`: screen, the top-left of
   the parent's picture, alive, `Effort` - how hard it works, 0..1: a pad
-  flying or about to leave its place works at 1, and `Tick` passes it on
+  flying or about to leave its place works at 1, a pad that plunges in
+  fits (3.0.46, `TPad.Effort`), and `Tick` passes it on
   to the object before the tick (`FollowEffort`); for a monster that spins
   also `Spins` and a `TParentSpin` - its `TSpinPose` (the axis on the
   screen, the angle in degrees clockwise) now and a tick ago, plus where the
@@ -444,7 +448,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1100 lines)
+### `Core/Levels.Defs.pas` (~1135 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -492,7 +496,12 @@ Level data model + JSON parser. No game logic.
   screen (`TryStopOffScreen` finds the first: X below zero or X + width
   past `ScreenWidth`, Y below zero or past `ScreenHeight`;
   `SLevelPadStopOff` - the pad would leave the hero's screen without its
-  riders). `PadGroups` - the pads rebuilt together (`Levels.Pads`), in
+  riders); and, for a pad that plunges (3.0.46, `CheckPadPlunge`), a path
+  or a group (`SLevelPadPlungeMoves` - it stands on its place) and a wall
+  in the cells under it down to the bottom of the grid, its own included
+  (`ShaftUnder` makes the zone, `TryFindWall` looks;
+  `SLevelPadPlungeWall` - it falls straight out of its screen, through
+  anything, its riders with it). `PadGroups` - the pads rebuilt together (`Levels.Pads`), in
   file order. The private `CheckPadGroups` -> `CheckPadGroup` refuses a
   group off the screen list, two groups with one tag, a zone off the
   screen, under three cells either way, with a wall in it (`TryFindWall`)
@@ -555,7 +564,8 @@ Level data model + JSON parser. No game logic.
   (`SLevelRespawnInWall`) and one with no floor under it
   (`SLevelRespawnOverPit`; `RespawnHasFloor` - a wall below in the column,
   or under the cell's middle the deck of a pad that stands still, one with
-  no path and no group: a pad that travels or is rebuilt may not be there).
+  no path, no group and no plunge: a pad that travels, is rebuilt or
+  plunges may not be there).
   Coming through a door moves nobody to the point; a named deviation from
   2008, whose checkpoint was the entry point and what a heroX / heroY
   trigger wrote.
@@ -981,7 +991,7 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~295 lines)
+### `Core/Levels.Pads.pas` (~345 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -994,17 +1004,29 @@ itself, the bob is for the eye alone (`Pads.World` says why). Pads of a
 group are rebuilt together: they fly to a new formation inside the
 group's zone, a cell each (`padGroups` names the groups, a pad joins one
 by its `group`); a pad the file puts outside the zone flies in with the
-first rebuild (3.0.38). A 2026 addition.
+first rebuild (3.0.38). A pad may plunge (3.0.46): it holds until the hero
+stands on it, then gives way, falls out of the screen and climbs back to
+its place - a failing pad, and it looks it (`Pads.Plunge` counts the
+cycle); it stands on its place, with no path and in no group. A 2026
+addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
   units; the picture's height follows its aspect), `Tint`, `Tag` (names
   the pad for the dynamic objects hung on it; '' = none), `Bullets`,
   `Path` (a `TPadPath`; `prNone` - the pad stands where it is placed),
-  `Bob` (how far the pad sways up and down, in units; 0 = still), `Group`
+  `Bob` (how far the pad sways up and down, in units; 0 = still),
+  `Plunge` (a `TPadPlunge`; `Plunges` False - the pad holds whatever
+  stands on it), `Group`
   (the pad group it is rebuilt with; '' = none), `Rigs` (the rigs it wears,
   by name, in the order they are hung - `Levels.Rigs` holds them and hangs
   them).
+- **`TPadPlunge`** (record, 3.0.46) - a pad that gives way under the
+  hero: `Plunges`, `Delay` (seconds it holds after he stands on it),
+  `Rest` (seconds it lies under the screen), `Rise` (units a second it
+  climbs home at - the mean of an uneven climb). `DefaultPlungeDelay`
+  (0.5), `DefaultPlungeRest` (0.5), `DefaultPlungeRise` (64) - what a
+  plunge takes for a number it leaves out.
 - **`TPadZone`** (record) - `Left`, `Top`, `Right`, `Bottom`: cells of a
   screen, 0-based, the bounds included. **`TPadGroup`** (record) - `Tag`,
   `Screen` (1-based), `Zone`, `Pairs` (at least this many pairs side by
@@ -1039,6 +1061,8 @@ first rebuild (3.0.38). A 2026 addition.
   absent = block; `path` absent = no path (`ReadPath`), `bob` absent = 0.
   The JSON: `"path": {"route", "stops": [[x, y], ...], "speed",
   "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"`,
+  `"plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}` (`ReadPlunge`;
+  absent = the pad holds, a number left out takes its default),
   `"group"` and `"rig": ["pad", "arenaAlarm"]` (`ReadRigNames` of
   `Levels.Rigs`; absent = the pad wears nothing). **`PadRigName(pad)`** -
   the pad as the errors of its rigs call it: `pad "<tag>"`, without a tag
@@ -1047,11 +1071,13 @@ first rebuild (3.0.38). A 2026 addition.
   bullets word out of `PadBulletsIds` (`SPadBadBullets`), a route other
   than pingpong or loop (`SPadBadRoute`), a path without stops
   (`SPadNoStops`), a stop that is not a pair of numbers (`ReadStop`,
-  `SPadBadStop`), a speed of zero or less, a pause or a bob below zero
+  `SPadBadStop`), a speed of zero or less, a pause or a bob below zero,
+  a plunge with a delay or a rest below zero or a rise of zero or less
   (`SPadBadNumber`); a rig that is not a list of names raises `ERigError`,
   in `Levels.Rigs`. The
-  screen range, a tag on two pads and a stop off
-  the screen are `Levels.Defs`' (`CheckPads`).
+  screen range, a tag on two pads, a stop off
+  the screen and what a plunge needs of the level - no path, no group, a
+  clear shaft - are `Levels.Defs`' (`CheckPads`).
 
 ### `Core/Levels.Rigs.pas` (~320 lines)
 The `rigs` section of level JSON: what the pads and the monsters wear. A
@@ -1298,7 +1324,71 @@ flies the pads along them. A 2026 addition.
   deep; False when a pad fits nowhere, and the caller throws the
   formation again or asks again.
 
-### `Game/Pads/Pads.World.pas` (~1255 lines)
+### `Game/Pads/Pads.Plunge.pas` (~305 lines)
+The cycle of a pad that plunges under the hero (`Levels.Pads`, `plunge`;
+3.0.46): it holds until he stands on it, gives for the delay, falls out
+of the screen, lies below for the rest and climbs home, to hold again.
+Once it gives, stepping off does not save it. The pad is failing and
+shows it all the way round: it twitches, and its jets work unevenly - in
+fits while it holds, flat out and choking while it gives, dead in the
+fall, by lunges on the climb, which goes as unevenly as they do. The
+cycle only counts: how far below its place the pad is, how far a twitch
+dips and leans its picture, how hard its jets work. `Pads.World` moves
+the pad and draws it; the game passes the effort on to what hangs on the
+pad. No SDL and no level in it - a record a test drives alone. The dice
+are the cycle's own (`TXorShift`), seeded by the pad: two plunging pads
+twitch out of step, and every try at a level twitches alike. A 2026
+addition.
+- **`TPlungePhase`** = (`ppHolding` - on its place, the hero not on it
+  yet; `ppGiving` - he has stood on it, the delay runs; `ppFalling`;
+  `ppFallen` - at rest under the screen; `ppClimbing` - on the way home).
+- **`TTwitchSpring`** (record) - `Value`, `Speed`: a value on a damped
+  spring; `Kick(speed)` sets it swinging about zero, `Tick` steps it - the
+  spring of a pad's sag under a landing, so the two read as one machine
+  (`SpringStiffness` 0.18, `SpringDamping` 0.3, at rest closer than
+  `SpringRest` 0.05). **`TTickSpan`** (record) - `Least`, `Most`: ticks
+  from one throw of the dice to the next, either end included.
+- **`TPlungeCycle`** (record; its state is private, the face below is all
+  a caller has) -
+  - `Rewind(plunge, reach, seed)` - on its place, holding: the delay and
+    the rest in ticks (seconds * 33, `LogicTicksPerSecond`, local), the
+    rise in units a tick at an even gait, `reach` - how far below its
+    place the pad falls, the dice `seed or 1`. A pad that does not plunge
+    (`Plunges` False) never leaves this state: its `Tick` and `Tread` do
+    nothing, its `Effort`, `Dip`, `Lean` and `Below` stay zero.
+  - `Tread` - the hero stands on the pad this tick: holding, it starts to
+    give; in any other phase nothing.
+  - `Tick` - a tick of the phase, the power first (the climb of this tick
+    goes by it): giving, the fall starts once the delay is out; falling
+    (`Fall`), the speed gains `FallGravity` (0.5 units a tick) every tick
+    up to `FallTopSpeed` (12) until the pad is `reach` below its place;
+    fallen, the climb starts once the rest is out; climbing (`Climb`), the
+    pad comes up by the rise times a gait from `ClimbGaitLeast` (0.3) to
+    `ClimbGaitMost` (1.7) by the jets' power - from a crawl to a lunge,
+    the pad's own pace on average - and holds again at zero. `Enter`
+    starts a phase: its ticks from zero, and both dice thrown anew on the
+    next tick - the pad lurches the moment the hero is on it.
+  - The twitch (`TickTwitch`), for the picture alone: `Dip` - units down,
+    `Lean` - degrees. The springs swing on in every phase; the kicks stop
+    with the jets, in the fall and under the screen. A kick comes every
+    `CalmTwitchSpan` (6..30 ticks), giving every `GivingTwitchSpan`
+    (2..5) and `GivingTwitchGain` (1.3) times harder: the dip always down
+    - the pad sinks a little and catches itself - by up to `DipKick`
+    (1.8 units a tick), the lean either way by up to `LeanKick` (2.2
+    degrees a tick), neither softer than `KickFloor` (0.5) of that
+    (`RollKick`). On the bench: some two units and three degrees at the
+    widest while it holds, six and eight while it gives.
+  - The jets (`TickPower`, `Effort`): a power 0..1 is thrown every
+    `CalmPowerSpan` (3..9 ticks; giving `GivingPowerSpan`, 2..4) - held
+    long enough for what hangs on the pad to follow (`EffortEaseTicks` of
+    `Levels.Dynamics`). `Effort`, 0..1: holding - `IdleEffortMost` (0.6)
+    times the power squared, low with a flare now and then; giving - 1,
+    and 0 for the throws under `GivingChoke` (0.3), flat out and cutting
+    out; falling and fallen - 0; climbing - from `ClimbEffortLeast` (0.4)
+    to 1 by the power.
+  - `Phase`; `Below` - units below its place.
+
+### `Game/Pads/Pads.World.pas` (~1315 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1330,7 +1420,14 @@ flies in with the first rebuild (3.0.38); out there a flight minds more
 than the pads: the walls, the ground it would skim and what the caller
 says flies there (`TPadTraffic`). A restore (3.0.39) is a rebuild flown
 the other way: every pad of the group back to its place in the level
-file, calmly (`CalmPace`), thrown and judged by nobody.
+file, calmly (`CalmPace`), thrown and judged by nobody. A pad that
+plunges (3.0.46; `Pads.Plunge` counts its cycle) is told when the hero
+stands on it - the one thing a rider tells a pad. It falls under him as a
+path would take it: the deck goes, the rider with it, out of the screen
+and past the line where the game takes a faller out of the pit; no wall
+stops it - the level keeps the shaft under it clear. It climbs back as a
+floor and carries up whoever lands on it; its twitch is drawn with the
+sag, not felt.
 Born with the level (`LoadLevel`); a restart rewinds it, the dice of the
 rebuilds new for the new try.
 - **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
@@ -1376,8 +1473,11 @@ rebuilds new for the new try.
     flies its flight when in one (`TickFlight`), fades the bob
     (`TickBob`) and steps the sag (`TickSag`) and the knock (`TickKnock`);
     the path's or the flight's place (`FPathLeft`, `FPathTop`) plus the
-    knock's offset is the pad's place. `Rewind` - the clock to 0, the pad
-    on the level file's place, no sag, no knock, no flight; the
+    knock's offset - and, down, how far its plunge has the pad below
+    (`FPlunge.Tick` after the knock, `Below`) - is the pad's place.
+    `Rewind` - the clock to 0, the pad
+    on the level file's place, no sag, no knock, no flight, its plunge
+    holding; the
     constructor ends with it.
     `MotionX` - how far the pad went across this tick.
   - The deck and the body: `DeckSpans(left, right)` - the deck spans some
@@ -1397,7 +1497,8 @@ rebuilds new for the new try.
     placement's X, after a flight the cell the pad landed on - a row of
     pads ripples -, the sway scaled by `FBobShare`, which a flight fades
     to 0 over `BobFadeTicks` (10) and the cell brings back) plus the sag
-    of this tick (`FSag`, on the tick:
+    of this tick and the twitch of a pad that plunges (`FSag`,
+    `FPlunge.Dip`, on the tick:
     the lamps hung on the pad read it there). `Lift(1)` - the pad as this
     tick leaves it.
     `Press(speed)` - something landed on the deck
@@ -1417,6 +1518,21 @@ rebuilds new for the new try.
     between ticks. `Travels` - the pad has a path. `ClearOf(other, dx, dy)` -
     the body moved dx, dy would not cut into the other's; touching is no
     cut. `Knocked` - off its place by a blow.
+  - The plunge (3.0.46): `FPlunge` - the pad's `TPlungeCycle`
+    (`Pads.Plunge`), idle for a pad whose placement does not plunge.
+    `Rewind` rewinds it with the placement's `Plunge`, the reach -
+    `ScreenHeight` + `PlungeDepth` less the placement's Y: the pad comes
+    to rest `PlungeDepth` (3 cells) under the screen, past the line where
+    the game takes a faller out of the pit (`PitDepthY` of the dpr, 66
+    units under it), so a hero riding it down is in the pit before it
+    stops - and the seed `PlungeSeed` (the placement's X, screen and Y).
+    `Tread` - the hero stands on the deck this tick
+    (`THero.LandOnDeck`); the pad starts to give way. `Effort` - how hard
+    the pad works its jets, 0..1: 1 while `Thrusting`, else what the
+    cycle says - 0 for a pad that does not plunge; the game hands it to
+    what hangs on the pad. The riders go down and up with the deck as
+    with a path; a ram would knock the pad as it knocks any pad without
+    a path.
   - The flight (3.0.29): `Fly(flight)` - the pad flies a `TPadFlight`,
     its ticks counted from now (`FFlightClock`; `NoFlight` = -1 - none).
     `TickFlight` puts the path's place where the flight has it, moves the
@@ -1434,7 +1550,8 @@ rebuilds new for the new try.
     ended on its cell).
   - The picture: `Draw(sprites, alpha)` - its height from the art's
     aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
-    fractions of a unit (`DrawRectF`), turned by `Tilt(alpha)`, in the
+    fractions of a unit (`DrawRectF`), turned by `Tilt(alpha)` plus the
+    lean of a plunging pad's twitch (`FPlunge.Lean`), in the
     depth smaller about its middle (`Middle` - from the picture's top-left
     corner, the one point `Draw` and the pad's rig shrink about;
     `DeepScale` 0.85) and darker
@@ -1619,7 +1736,9 @@ moves in comes from `Game.Space`.
     again. `LandOnDeck(prevY)` at the end of `Tick`, after the verbatim
     state machine: a deck the feet came down onto this tick, or one that
     rose into them (`DeckCrossed`), holds them at its `Top`, the
-    acceleration zeroed - no downward move is needed, but a rising jump
+    acceleration zeroed, and is told so (`Tread`, 3.0.46 - every tick it
+    holds them, a stand and a walk included: a pad that plunges starts to
+    give way) - no downward move is needed, but a rising jump
     (`haJump*`) never lands; only the fall states press the deck (`Press`
     with the acceleration - the sag). The fall states land there -
     `haFall` through `StandAfterFall` (the landing of a straight fall, lifted out of the `haFall` branch: a side
@@ -2809,8 +2928,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     through a pad that goes deep), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
     `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
-    a fraction, the stand's Y is a `Single`), alive, its effort (1 while
-    the pad is `Thrusting` - what hangs on it surges), and how deep it
+    a fraction, the stand's Y is a `Single`), alive, its effort
+    (`TPad.Effort`: 1 while the pad is `Thrusting`, in fits when it is a
+    pad that plunges - what hangs on it surges), and how deep it
     stands (`TParentDepth`: the pad's `Depth(1)` and `Depth(0)`,
     1 - `DeepScale`, 1 - `DeepTone`, its `Middle`) - what hangs on a pad
     goes into the depth as the pad's own picture does; else the
@@ -3157,7 +3277,7 @@ limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
 
-### `level1.json` (~97 KB) / `level2.json` (~36 KB)
+### `level1.json` (~97 KB) / `level2.json` (~41 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -3168,7 +3288,8 @@ percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
 x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
 `bullets` block / pass, block when absent, optional `path` - `route`,
-`stops`, `speed`, `pause` -, `bob`, `group` and `rig` - the rigs it wears;
+`stops`, `speed`, `pause` -, `bob`, `plunge` - `delay`, `rest`, `rise` -,
+`group` and `rig` - the rigs it wears;
 see `Levels.Pads`),
 `padGroups` (optional: `tag`, `screen`, `zone` [left, top, right, bottom]
 in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`
@@ -3317,9 +3438,17 @@ plainest example), `introText`/`introTextEn`.
   at 64 in the sealed chamber under the corridor. Screen 4 is
   `s04-room`, a corridor over a cargo shaft: the pit is three cells
   where 2008 had two (under that ceiling a jump carries the hero 72
-  units), the ferry `s04-plat-01` runs between x 224 and 288, and the
+  units), the one pad `s04-plat-01` stands in the middle of it (x 256)
+  and plunges under the hero (3.0.46: `plunge` with delay 0.5, rest 0.5,
+  rise 64; a ferry between x 224 and 288 before), and the
   two crates, a cell to the right of where they stood, are the object
-  `s04-tek-crates` over their solid cells. `tunnel-gate`, `s03-room`,
+  `s04-tek-crates` over their solid cells. The pad is the picture
+  `s16-platform-out` in the rig `padFailing`: the haze of the rig `pad`
+  and, lifted by the pad's effort (`surge` 100), a red `flash` beacon
+  that is dark at rest (intensity 0) - the tell of the pad that falls,
+  which `padBroken` has not -, the blue jet of `pad` at intensity 15, the
+  dark puffs of `padBroken` at 60 and sparks from its side, which pass
+  through its own body (`collide` none). `tunnel-gate`, `s03-room`,
   `s04-room` and `s04-tek-crates` are the level's own art, the set
   `level2-objects`. The
   gravel trial
@@ -3421,6 +3550,7 @@ music loads leniently. Four one-shots are synthesised by
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
+| A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/PADS-PLAN.md, stage 8) |
 | The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
@@ -3452,7 +3582,7 @@ music loads leniently. Four one-shots are synthesised by
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
 | Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`) + `respawns` in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`) |
-| A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Thrusting`, `ThrustLeadTicks`) + Moon2D.dpr `LocateParent` |
+| A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Moon2D.dpr `LocateParent` |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | A lit sphere: shading, terminator, atmosphere, night lights | Render.Globe.pas |
