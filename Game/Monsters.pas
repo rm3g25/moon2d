@@ -123,6 +123,8 @@ type
     FWrecked: Boolean; // the smoke stands at its critical level, sparks fly, bolts strike
     FDisc: TDisc; // a disc monster only, nil for the rest
     FHull: THull; // a hull monster only, nil for the rest
+    FHullX: Double; // where the hull stood when its wheels last turned
+    FCarriedX: Double; // this tick, by a deck
     FDamageWindow: TDamageWindow; // a monster with a damage cap only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
@@ -175,7 +177,7 @@ type
     procedure TickHull;
     function EyeTarget: TSdlFPoint;
     function ArtCenter: TSdlFPoint;
-    function HullCenter: TSdlFPoint;
+    function HullStand: THullStand;
     function Wear(AWearFull: Double): Single;
     function ShotCharge: Single;
   public
@@ -192,8 +194,9 @@ type
     // AHeroX/AHeroY feed the chasers and aimers; enemy bullets go into
     // ABullets (the shared monster burst).
     procedure Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
-    // AAlpha in [0..1): how far toward the next tick - only the disc and
-    // the eye of a hull draw between ticks, the frames stay on them
+    // AAlpha in [0..1): how far toward the next tick - only the disc, and
+    // the eye and the wheels of a hull, draw between ticks, the frames stay
+    // on them
     procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -347,7 +350,8 @@ const
   // A wrecked machine smokes like the boss before his rage (bossSmoke of
   // level 1 at 60%, but straight up - the point mirrors with the art):
   // enough to notice, not enough to hide the fight. Unlit until the last
-  // third. The point: the tank's engine deck; a hull brings its own.
+  // third. The point is for a machine drawn by its frames - the engine
+  // deck of the tank's; a hull brings its own.
   WreckSmoke: TBodySmoke = (
     Look: (Rate: 50; Life: 1.0; Size: 7; EndSize: 26;
       Opacity: 0.7; Angle: 90; Cone: 90; Speed: 6; Drag: 0.2; Lift: 0;
@@ -378,8 +382,8 @@ const
     MidTint: (R: 100; G: 66; B: 27); EndTint: (R: 69; G: 14; B: 6));
   WreckSparksLevel = 1;
   WreckSparksRampTicks = 0; // a short has no ramp
-  // Where the sparks leave the left-facing art: the tank's hull over
-  // the tracks
+  // Where the sparks leave the left-facing art of a machine drawn by its
+  // frames: the hull over the tracks of the tank's
   WreckSparksX = 12;
   WreckSparksY = 19;
   WreckSparksSeedSalt = $57726B21; // "Wrk!"
@@ -484,7 +488,10 @@ begin
   if ADiscArt <> nil then
     FDisc := TDisc.Create(ADef.Disc, ADiscArt, ArtCenter);
   if AHullArt <> nil then
+  begin
     FHull := THull.Create(ADef.Hull, AHullArt);
+    FHullX := FX;
+  end;
   if ADef.DamageCap.Enabled then
     FDamageWindow := TDamageWindow.Create(ADef.DamageCap);
 end;
@@ -620,11 +627,15 @@ begin
   FDisc.Tick(Drive);
 end;
 
+// A step and a shove roll the body on its wheels; a deck carries it with
+// the wheels at rest
 procedure TMonster.TickHull;
 begin
   if FHull = nil then
     Exit;
-  FHull.Tick(Wear(FDef.Hull.WearFull), ShotCharge);
+  var Rolled := FX - FHullX - FCarriedX;
+  FHullX := FX;
+  FHull.Tick(Wear(FDef.Hull.WearFull), ShotCharge, Rolled);
 end;
 
 // The hero - or the point a ram has locked on; a stunned eye looks at
@@ -655,12 +666,16 @@ begin
 end;
 
 // On whole units, as a frame stands: the picture, the hitbox and the smoke
-// stay glued
-function TMonster.HullCenter: TSdlFPoint;
+// stay glued. A hull that flies hangs in the middle of the sprite; one
+// that gravity pulls stands on the feet line, whatever its height.
+function TMonster.HullStand: THullStand;
 begin
-  Result := ArtCenter;
-  Result.X := Round(Result.X);
-  Result.Y := Round(Result.Y);
+  Result.Center := ArtCenter;
+  Result.Center.X := Round(Result.Center.X);
+  Result.Center.Y := Round(Result.Center.Y);
+  if FDef.AffectedByGravity then
+    Result.Center.Y := Round(FY) - FDef.Hull.Height / 2;
+  Result.Mirrored := FDef.Hull.Mirrors and FacesRight;
 end;
 
 function TMonster.Wear(AWearFull: Double): Single;
@@ -694,12 +709,12 @@ begin
 end;
 
 // A point of the left-facing art on the screen: it mirrors with the body.
-// A hull never mirrors and has points of its own.
+// A hull has points of its own and mirrors them only if it mirrors itself.
 function TMonster.BodyPoint(AArtX, AArtY: Integer;
   const AHullPoint: THullPoint): TSdlFPoint;
 begin
   if FHull <> nil then
-    Exit(FHull.Spot(HullCenter, AHullPoint));
+    Exit(FHull.Spot(HullStand, AHullPoint));
 
   var PointX := AArtX;
   if FacesRight then
@@ -1237,7 +1252,9 @@ procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
 begin
   FHeroX := AHeroX;
   FHeroY := AHeroY;
+  var BeforeRide := FX;
   RideDeck;
+  FCarriedX := FX - BeforeRide;
   if FTicksSinceHit <> NeverHit then
     Inc(FTicksSinceHit);
   if FDamageWindow <> nil then
@@ -1413,7 +1430,7 @@ begin
   end;
   if (FHull <> nil) and (FLife = mlAlive) then
   begin
-    FHull.Draw(ASprites, HullCenter, AAlpha);
+    FHull.Draw(ASprites, HullStand, AAlpha);
     Exit;
   end;
 
@@ -1668,7 +1685,7 @@ begin
     Exit(nil);
   if FHullArts.TryGetValue(ADef.Hull.SetName, Result) then
     Exit;
-  Result := THullArt.Create(FRenderer, ADef.Hull.SetName);
+  Result := THullArt.Create(FRenderer, ADef.Hull);
   FHullArts.Add(ADef.Hull.SetName, Result);
 end;
 

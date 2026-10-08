@@ -123,21 +123,35 @@ type
     X, Y: Double;
   end;
 
-  // A monster drawn as a hull out of two layers (Monsters.Hull) instead of
-  // its 'alive' frames; the death frames stay. JSON "hull":
+  // The wheels a hull stands on (Monsters.Hull): one picture, the 'wheel'
+  // of the hull's set, drawn at every axle and turned by the way the body
+  // rolls. JSON "wheels":
+  //   {"side": 16, "radius": 7.76, "axles": [[11.56, 23.24], [29.06, 23.24]]}
+  TWheelsDef = record
+    Side: Double; // the picture's square, screen units
+    Radius: Double; // from the axle to the floor, units
+    Axles: TArray<THullPoint>; // none = no wheels
+    function Enabled: Boolean;
+  end;
+
+  // A monster drawn as a hull out of layers (Monsters.Hull) instead of its
+  // 'alive' frames; the death frames stay. JSON "hull":
   //   {"set": "platform-hull", "width": 40, "height": 20.33, "wearFull": 80,
   //    "eye": [20, 4.9], "smoke": [9.5, 8.1], "sparks": [29.2, 8.7]}
+  // and for one that drives: "mirrors": true, "wheels": {...}
   THullDef = record
     SetName: string; // '' = no hull
-    // The hull's size on the screen, units; it stands in the middle of the
-    // monster's cell
-    Width, Height: Double;
+    Width, Height: Double; // the hull's size on the screen, units
     // Share of the lives lost when the worn look is complete, 0..1
     WearFull: Double;
     // The middle of the lens
     Eye: THullPoint;
     // Where a wrecked body smokes, and where it sparks and shorts out
     Smoke, Sparks: THullPoint;
+    // The art faces left and is mirrored whole while the monster heads
+    // right; False = drawn as painted whichever way it heads
+    Mirrors: Boolean;
+    Wheels: TWheelsDef;
     function Enabled: Boolean;
   end;
 
@@ -241,6 +255,9 @@ resourcestring
   SBadHull = 'Monster "%s": a hull needs a set, a positive width and height ' +
     'and wearFull above 0, up to 100';
   SBadHullPoint = 'Monster "%s": the "%s" of a hull is a point of two numbers';
+  SBadWheels = 'Monster "%s": the wheels of a hull need a positive side and ' +
+    'radius and at least one axle';
+  SBadAxle = 'Monster "%s": an axle of a hull is a point of two numbers';
   SDiscAndHull = 'Monster "%s": a monster is drawn as a disc or as a hull, ' +
     'not both';
 
@@ -311,7 +328,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// TAttackDef / TBossDef / TDiscDef / THullDef
+// TAttackDef / TBossDef / TDiscDef / TWheelsDef / THullDef
 // ---------------------------------------------------------------------------
 
 function TAttackDef.HasAttack: Boolean;
@@ -343,6 +360,11 @@ end;
 function TDiscDef.Enabled: Boolean;
 begin
   Result := SetName <> '';
+end;
+
+function TWheelsDef.Enabled: Boolean;
+begin
+  Result := Length(Axles) > 0;
 end;
 
 function THullDef.Enabled: Boolean;
@@ -405,14 +427,42 @@ begin
     (AHull.WearFull <= 0) or (AHull.WearFull > 1);
 end;
 
+function PointOfPair(const APair: TJSONArray): THullPoint;
+begin
+  Result.X := TJSONNumber(APair.Items[0]).AsDouble;
+  Result.Y := TJSONNumber(APair.Items[1]).AsDouble;
+end;
+
 function ParseHullPoint(const AObj: TJSONObject;
   const AKey, AMonsterId: string): THullPoint;
 begin
   var PairArr := AObj.GetValue<TJSONArray>(AKey, nil);
   if not IsNumberPair(PairArr) then
     raise EMonsterDefError.CreateFmt(SBadHullPoint, [AMonsterId, AKey]);
-  Result.X := TJSONNumber(PairArr.Items[0]).AsDouble;
-  Result.Y := TJSONNumber(PairArr.Items[1]).AsDouble;
+  Result := PointOfPair(PairArr);
+end;
+
+// Wheels that would not show, or would never turn, must fail at load time
+function ParseWheels(const AObj: TJSONObject;
+  const AMonsterId: string): TWheelsDef;
+begin
+  Result.Side := AObj.GetValue<Double>('side', 0);
+  Result.Radius := AObj.GetValue<Double>('radius', 0);
+  var AxlesArr := AObj.GetValue<TJSONArray>('axles', nil);
+  if (Result.Side <= 0) or (Result.Radius <= 0) or (AxlesArr = nil) or
+    (AxlesArr.Count = 0) then
+    raise EMonsterDefError.CreateFmt(SBadWheels, [AMonsterId]);
+
+  SetLength(Result.Axles, AxlesArr.Count);
+  for var i := 0 to AxlesArr.Count - 1 do
+  begin
+    var PairArr: TJSONArray := nil;
+    if AxlesArr.Items[i] is TJSONArray then
+      PairArr := TJSONArray(AxlesArr.Items[i]);
+    if not IsNumberPair(PairArr) then
+      raise EMonsterDefError.CreateFmt(SBadAxle, [AMonsterId]);
+    Result.Axles[i] := PointOfPair(PairArr);
+  end;
 end;
 
 // A broken hull must fail at load time, not draw a speck or a smear
@@ -427,6 +477,11 @@ begin
   Result.Eye := ParseHullPoint(AObj, 'eye', AMonsterId);
   Result.Smoke := ParseHullPoint(AObj, 'smoke', AMonsterId);
   Result.Sparks := ParseHullPoint(AObj, 'sparks', AMonsterId);
+  Result.Mirrors := AObj.GetValue<Boolean>('mirrors', False);
+  Result.Wheels := Default(TWheelsDef);
+  var Wheels := AObj.GetValue<TJSONObject>('wheels', nil);
+  if Assigned(Wheels) then
+    Result.Wheels := ParseWheels(Wheels, AMonsterId);
 end;
 
 // A blast that reaches nothing must fail at load time, not die quietly

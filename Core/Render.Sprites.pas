@@ -186,9 +186,11 @@ type
     procedure DrawTurned(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       ASide: Single; AAngleDegrees: Double; ALevel: Single = 1);
     // A rectangle AWidth by AHeight units centered on the point, unturned,
-    // at ALevel opacity (0..1). Float all the way, as DrawTurned.
+    // at ALevel opacity (0..1), mirrored left to right on demand. Float
+    // all the way, as DrawTurned.
     procedure DrawSized(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
-      AWidth, AHeight: Single; ALevel: Single = 1);
+      AWidth, AHeight: Single; ALevel: Single = 1;
+      AMirrored: Boolean = False);
   end;
 
 implementation
@@ -562,7 +564,8 @@ begin
 end;
 
 procedure TSpriteRenderer.DrawSized(ATexture: PSdlTexture;
-  const ACenter: TSdlFPoint; AWidth, AHeight: Single; ALevel: Single);
+  const ACenter: TSdlFPoint; AWidth, AHeight: Single; ALevel: Single;
+  AMirrored: Boolean);
 var
   Dest: TSdlFRect;
 begin
@@ -571,7 +574,8 @@ begin
   Dest.W := AWidth;
   Dest.H := AHeight;
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
-  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, 0.0, nil, SdlFlipNone);
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, 0.0, nil,
+    FlipOf(AMirrored));
 end;
 
 end.

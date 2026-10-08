@@ -221,7 +221,40 @@
         "shardLives": 6
       },
       "explosion": "machine",
-      "material": "metal"
+      "material": "metal",
+      "hull": {
+        "set": "tank-hull",
+        "width": 38,
+        "height": 31,
+        "wearFull": 80,
+        "mirrors": true,
+        "eye": [
+          24.8,
+          5.8
+        ],
+        "smoke": [
+          32.5,
+          4.5
+        ],
+        "sparks": [
+          31.5,
+          6.5
+        ],
+        "wheels": {
+          "side": 16,
+          "radius": 7.76,
+          "axles": [
+            [
+              11.56,
+              23.24
+            ],
+            [
+              29.06,
+              23.24
+            ]
+          ]
+        }
+      }
     },
     {
       "id": "mount",
