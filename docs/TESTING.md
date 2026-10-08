@@ -53,17 +53,22 @@ The code style of tests is CODESTYLE 16.
 Tests\
   Moon2D.Tests.dproj      console project, DUnitX; fourth in Moon2D.groupproj
   Moon2D.Tests.dpr        the runner: verbose log, exit code
-  Tests.Rooms.pas         a room of solid cells to stand monsters in
+  Tests.Rooms.pas         a room of solid cells to stand monsters in, and the
+                          level of one for the load tests (LevelFromRows)
   Effects\
     Tests.Effects.Lightning.pas
   Game\
     Tests.Game.Blasts.pas
+  Levels\
+    Tests.Levels.Pads.pas
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
     Tests.Monsters.Damage.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
+  Pads\
+    Tests.Pads.Plunge.pas
 run-tests.cmd             build and run
 ```
 
@@ -609,10 +614,11 @@ the line of the pit, y = 450.
 
 ## Pads.Plunge
 
-State: designed, not written. Needs no stage: `TPlungeCycle` is a record
-that counts. The expectations were checked on a Python port of the cycle.
-The unit is tried by `Tests\Pads\Tests.Pads.Plunge.pas`, fixture
-`TPlungeCycleTests`; `..\Game\Pads` is on the search path already.
+State: written, 14 tests, green on the first run. Needs no stage:
+`TPlungeCycle` is a record that counts. The expectations were checked on
+a Python port of the cycle. The unit is tried by
+`Tests\Pads\Tests.Pads.Plunge.pas`, fixture `TPlungeCycleTests`;
+`..\Game\Pads` is on the search path already.
 
 Shared in the unit: `CycleOf(ADelay, ARest, ARise)` - a cycle rewound with
 a `TPadPlunge` that plunges, a reach of 200 and seed 7. Unless a test says
@@ -642,8 +648,8 @@ reads the effort, and a rig is drawn.
 
 ## Levels.Pads
 
-State: designed, not written. Needs no stage. The unit is tried by
-`Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
+State: written, not yet run on a compiler. Needs no stage. The unit is
+tried by `Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
 `TLevel.LoadFromFile`: the parser (`Levels.Pads`) and the checks at load
 (`Levels.Defs`) are one door from outside - a level that loads, its
 `Pads` to read, or an exception: `EPadError` from the parser,
@@ -658,6 +664,13 @@ The room is "open" unless a wall is named.
 
 Only the pads and the respawn points are tried here. The checks of a pad
 group belong to the arena, tried by nobody yet.
+
+The tests of a plunge and of a respawn stand in "gap", as in `Pads.World`:
+a pad that plunges needs an open shaft under it. A pad group takes 5 to 60
+pads, so a plunging pad in a group comes with four mates inside the zone;
+in a group of one the level raises for its size, and the test could not
+tell that from the plunge. Each such test loads the same pads without the
+plunge first.
 
 | Test | Holds | Turns red when |
 |---|---|---|
