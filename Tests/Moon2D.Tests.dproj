@@ -77,6 +77,7 @@
         <DCCReference Include="Tests.Rooms.pas"/>
         <DCCReference Include="Effects\Tests.Effects.Lightning.pas"/>
         <DCCReference Include="Game\Tests.Game.Blasts.pas"/>
+        <DCCReference Include="Game\Tests.Game.Shroud.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Bodies.pas"/>

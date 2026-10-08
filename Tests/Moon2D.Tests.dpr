@@ -20,6 +20,7 @@ uses
   Tests.Rooms in 'Tests.Rooms.pas',
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
+  Tests.Game.Shroud in 'Game\Tests.Game.Shroud.pas',
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',

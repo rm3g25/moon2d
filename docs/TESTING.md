@@ -59,6 +59,7 @@ Tests\
     Tests.Effects.Lightning.pas
   Game\
     Tests.Game.Blasts.pas
+    Tests.Game.Shroud.pas
   Levels\
     Tests.Levels.Pads.pas
   Monsters\
@@ -110,6 +111,13 @@ a console: started from the IDE, its window closes with the last line.
   freed, so orbs are not told apart by pointer across a tick in which
   some were dropped. A newcomer has `Age = 0` on the tick it appears:
   count births by that.
+- **Mist and bands are the shroud's own arrays.** `THeroShroud.Mist` and
+  `Bands` hand out the array the shroud works in, and a tick writes into
+  it in place: a test that keeps `Before := Shroud.Mist` and compares it
+  with the array after the tick compares the array with itself. What is
+  to be compared across a tick is copied first (`Copy(Shroud.Mist, 0,
+  Length(Shroud.Mist))`). A mote is a pointer into its swarm; it is read
+  at once (`Swarm[i]^`) and never kept over a tick.
 - **The runner fails a test that asserts nothing.**
 
 ## The conveyor
@@ -120,8 +128,10 @@ a console: started from the IDE, its window closes with the last line.
    eye".
 2. **Write.** The writing model gets this file, CODESTYLE 16, the
    `interface` sections of the unit under test and of the units its
-   signatures name, and `Tests.Orbs.Flock.pas` as the sample. It does
-   not get the `implementation` section.
+   signatures name, and `Tests.Orbs.Flock.pas` as the sample. It works
+   from the table. Where it has read the `implementation` all the same,
+   the table is what a test answers to: a test that restates a formula
+   instead of a behavior is sent back at review.
 3. **Run.** `run-tests.cmd` on the developer's machine: there is no
    Delphi compiler where the models work. The log goes back as it is.
 4. **Settle the red.** Compile errors are fixed in the test. A red test
@@ -472,6 +482,90 @@ Left to the eye:
 - The feel: the wave's speed against the picture of `Game.Explosions`,
   the shove of a body, the radius against the hero's habit of standing
   close.
+
+## Game.Shroud
+
+State: written, 38 tests, green on the first run (151 in the whole suite).
+The expectations were checked on a Python mirror of the shroud's clock,
+bands, motes and mist (single-precision floats for the sinking motes). The
+mirror and the unit were made in a session that had read the implementation,
+so the table is what the tests answer to. The unit is tried by
+`Tests\Game\Tests.Game.Shroud.pas`, fixture `THeroShroudTests`.
+
+Only `THeroShroud` is tried: it counts and touches no SDL. The hero comes
+into the test unit as one record, `THeroPose`, built by hand with no
+texture (frame 1, a corner, `Mirrored`); the hero himself is never made.
+The matter is a function of a point: everywhere open, everywhere solid,
+solid from a line down, and no probe at all is a case of its own. The dice
+are seeded; "over the seeds" is seeds 1 to 20.
+
+Shared in the unit: the standing pose has its corner at (100, 50); two
+seeds in the frame at (4, 6) and (28, 26), and two on the feet row for the
+motes that sink. The feet row is row 31 of a frame of 32 units: where a
+band leaves the body. A few looks of the tests' own (a halo that sheds
+four motes a tick, forty narrow bands, strips shifted by 20) stand beside
+the looks of the game; the tests read `Life` and `Bands` of the game's
+looks from the records and do not spell them.
+
+Numbers spelled, as decided: a glow under two hundredths of its flash at
+the end of every look; the mirror turns a point in the frame about its
+middle (x to 32 - x). Not spelled: `MistSink` (the tests say "one even
+step, down, under four units"), the speed, life and size of a mote, the
+sizes and levels of anything drawn.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNewShroudIsStillAndDark` | a new shroud is not running and puts no body together; its glow is 0; ten ticks start nothing and leave no motes, mist or bands | a default of `Create` makes the shroud run or leaves something in it |
+| `TestStartSetsShroudGoingForItsLife` | `Start`: running; still running a tick before `Life`; over at `Life` | the life is a tick too long or too short |
+| `TestAssemblingNeedsRevealAndRunning` | `Assembling` only while running and only for a look with `Reveal`; true of the looks of an appearance (pit, entry, revive), false of the looks of a suit (ice on, ice off, heat) | the body is left undrawn after the shroud is over, or a suit hides the hero |
+| `TestStartOnTheRunBeginsTheClockAgain` | six ticks in, `Start` with another look: time 0, the new look, over at its own life and not before | a restart keeps the age or the old look |
+| `TestTimeIsTheShareOfLifeGone` | 0 at the start, 0.4 after four ticks of ten, the step between two ticks lies between them, 1 once the shroud is over | the step between ticks is lost, or a finished shroud is not at its end |
+| `TestClearStopsAndTakesMotesAndMist` | after `Clear`: not running, no motes, no mist, and ticks bring none back | a restart leaves light and frost over a corpse |
+| `TestLeaveMotesTakesMotesAndMistAndKeepsRunning` | after `LeaveMotes`: no motes, no mist; still running, the clock untouched | a door puts the hero's light out, or leaves his motes and frost with him |
+| `TestStartDoesNotEraseMotesOrMist` | `Start` on the run: as many motes and as much mist as before; a tick on, the mist stands where it stood and the motes fly on | a new shroud cuts off what the old one left in the air |
+| `TestGlowRisesToFlashAtItsPeakAndFalls` | peak at half: 0 at the start, growing to the flash at the peak, falling after it | the peak is off its place, or the halo does not fall |
+| `TestGlowWithPeakAtStartOnlyFalls` | peak at 0: the halo starts at the flash and only falls | the glow of a suit grows first |
+| `TestGlowIsNearlyOutAtTheEnd` | over every look of the game: at the end the glow is under two hundredths of its flash | a look keeps a smoulder after its life |
+| `TestLookWithNoFlashHasNoGlow` | flash 0: no glow at the start, at the peak, at the end | the halo is divided by a flash that is not there |
+| `TestPartTimeTogetherIsOneTimeForTheWholeBody` | together: head, middle and feet have one time at every moment, and it does pass | the order is not read from the look |
+| `TestPartTimeTopDownLetsTheHeadLead` | top down: the head is never behind the feet and is ahead of them at some moment | the order is turned upside down |
+| `TestPartTimeBottomUpLetsTheFeetLead` | the same the other way | the same |
+| `TestPartTimeStartsAtZeroAndEndsAtOne` | over the three orders and five places, stagger 0.7: 0 at the start, 1 at the end, never turning back | a part of the body is not done when the shroud is over |
+| `TestStripShiftIsZeroOnceTheBodyIsHome` | at the end every strip is home | a strip is left aside |
+| `TestNeighbouringStripsStartOnOppositeSides` | at the start no two neighbours are shifted the same way | all strips fly in from one side |
+| `TestStripShiftIsZeroWhenTheLookShiftsNothing` | shift 0: every strip at every moment is at 0 | the shift is not read from the look |
+| `TestZeroSeedStillRollsTheStrips` | a zero seed: the strips start at different distances | a zero seed freezes the xorshift stream and every strip starts alike |
+| `TestStartPlacesBandsInTheirSlotsOnAlternateSides` | five bands: each in its own fifth of the body, none fallen; neighbours on opposite sides and in opposite layers; a look with no bands has none | a band leaves its slot, or the sides and layers do not alternate |
+| `TestMotesAreBornAtTheSeedsOnly` | over many seeds, one tick: every mote is within a unit of a point of the list, and both points get motes | motes are born anywhere in the frame |
+| `TestMirroredPoseBornOnTheReflectedSide` | a point near the left edge: a mote is born near it; the same shroud with the pose mirrored, near its reflection in the frame | the mirror is not applied to the points |
+| `TestNoMotesWithoutSeedsOrFlashOrMotes` | a look that sheds motes does so; with an empty list, with 0 motes, with no flash, none | a mote is born with nothing to be born at |
+| `TestMotesDieOutAfterTheShroudIsOver` | the shroud over with motes in the air: no new one is born, and the swarm is empty within two seconds | a shroud that is over goes on shedding, or a mote never dies |
+| `TestSinkingMotesStayOutOfMatter` | over the seeds, motes born on the feet row sink onto a floor: after every tick none lies deeper than half a tenth of a unit in matter, and some came down to the floor | frost goes through a floor |
+| `TestLooksThatDoNotSinkLeaveNoMist` | over the seeds, a whole run of each look that does not sink down the body (pit, entry, revive, ice off, heat): no mist | a smoke that rises settles on the hero's feet |
+| `TestBandAtTheFeetStaysOnTheBodyWhenTravelIsNotDown` | forty bands with travel 0 and -5: no mist; the same bands with travel 30: mist | the check of the travel is lost |
+| `TestIceOnLeavesOneCloudPerBandOverItsLife` | over the seeds, a tick before the end of ice on: as many clouds as bands, every band fallen, every one with a cloud of its place and side; at the end the shroud and its mist are gone | a band is lost or falls twice, or the mist outlives its look |
+| `TestRestartedIceOnDropsItsMistAgain` | ice on, three quarters in, ice on again: a tick before the end of the second the clouds are the new ones, as many as bands, every band fallen | a restart keeps the bands that have fallen |
+| `TestMistIsBornOnTheFeetLineAtTheHerosMiddle` | the first cloud, with the hero at another place: at the middle of his frame, on the feet row, carrying the look it fell from | a cloud is born off the feet or off the hero |
+| `TestMistStandsWhereTheHeroFellNotWhereHeGoes` | the hero walks on while the ice is on: every cloud stands at the middle where the hero was on the tick it fell, on the feet row | the mist is carried on after the hero |
+| `TestMistSinksEvenlyWhereThereIsNoMatter` | with open air: every cloud sinks by one and the same step on every tick, down, by less than four units, and none is above the feet row | the mist hangs, jerks or climbs |
+| `TestMistSettlesOntoAFloorAndStops` | a floor under the feet: all the mist lies within one step of its top, and stands there | mist goes through a floor or stops short of it |
+| `TestMistWithNoProbeStands` | no probe: the mist stays on the feet row | a shroud with nothing to ask falls over |
+| `TestMistDiesByTheAgeOfItsOwnLook` | a cloud, then a shorter look started: the cloud outlives the new look and is gone when the life of its own look is spent | a cloud is cut by the look that replaced its own, or kept past its own |
+| `TestSameSeedGivesTheSameRun` | two shrouds of one seed through a hundred ticks of ice on: the same bands, motes and mist at every tick | the shroud reaches for `Random` |
+| `TestOtherSeedGivesAnotherRun` | a shroud of another seed does not keep step with it | the seed is ignored |
+
+Left to the eye:
+
+- Everything `TShroudPainter` draws: the bands, the strips, the halo, the
+  colours, the layers of the arm and of the mist, the seams between strips.
+  `SeedsOf` needs a renderer.
+- `Band.Puff` and `Band.Wide`: only the painter reads them.
+- The pace of the mist: only that it sinks evenly and settles is tried.
+
+Open: motes already in flight take the pull of the look that replaces
+their own (`FlyMotes`) and are drawn in its tint (`DrawMotes`). Neither is
+tried or decided: a live run says whether frost on a floor turning white
+when a respawn comes in the middle of the ice glow is seen at all.
 
 ## Effects.Lightning
 
