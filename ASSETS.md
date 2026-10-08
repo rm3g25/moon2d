@@ -72,7 +72,10 @@ the level's collision grid. `tunnel-gate`: the frame that closed its mouth
 cut away, scaled to 6 px per screen unit. `s03-room`: kept as generated,
 not resampled - its three fan wells painted black, rows repeated above two
 floors to bring them to the grid, its two doorways carried to the edges of
-the screen. They replaced the 2008 tiles of those screens, which stay in
+the screen. `s04-room`: kept as generated, not resampled - 41 columns
+taken out of its shaft, moved as a whole, its two openings carried to the
+edges. `s04-tek-crates`: cut to its ink, scaled to 6 px per screen unit.
+They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,

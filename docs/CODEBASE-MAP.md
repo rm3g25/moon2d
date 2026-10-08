@@ -3302,7 +3302,7 @@ plainest example), `introText`/`introTextEn`.
   of screen 9 with the red of the old grille for a light, one of them
   `dying`. The one TeK platform, on screen 6, is tagged `s06-tek-01` and
   wears the rig `tekPlatform` - the numbers of level 1, written again in
-  this file's `rigs`. Screens 1-3 are repainted (`docs/REPAINT.md`).
+  this file's `rigs`. Screens 1-4 are repainted (`docs/REPAINT.md`).
   Screen 1 is the arena of level 1's screen 17 moved six cells left:
   its floor and crane as objects, twelve pads in the rigs `pad` and
   `padBroken` (written again in this file's `rigs`), one of them a
@@ -3314,8 +3314,14 @@ plainest example), `introText`/`introTextEn`.
   `s03-room`, its tiles dark and its matter as it was, with three
   `heavy` fans behind `spider` guards hung on it: one of 100 units in
   the hall at 22 turns a minute, two of 53 turning against each other
-  at 64 in the sealed chamber under the corridor. `tunnel-gate` and
-  `s03-room` are the level's own art, the set `level2-objects`. The
+  at 64 in the sealed chamber under the corridor. Screen 4 is
+  `s04-room`, a corridor over a cargo shaft: the pit is three cells
+  where 2008 had two (under that ceiling a jump carries the hero 72
+  units), the ferry `s04-plat-01` runs between x 224 and 288, and the
+  two crates, a cell to the right of where they stood, are the object
+  `s04-tek-crates` over their solid cells. `tunnel-gate`, `s03-room`,
+  `s04-room` and `s04-tek-crates` are the level's own art, the set
+  `level2-objects`. The
   gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
@@ -3363,8 +3369,8 @@ plainest example), `introText`/`introTextEn`.
   since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
 - **Objects**: `level1-objects` (`ship`) and `level2-objects`
-  (`tunnel-gate`, 6 px a unit; `s03-room`, a whole screen at backdrop
-  density) - the `<assetsDir>-objects` convention, never declared,
+  (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s03-room` and
+  `s04-room`, whole screens at backdrop density) - the `<assetsDir>-objects` convention, never declared,
   optional. Shared:
   `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
   `objectSets`. The ship and the satellite are drawn at backdrop density

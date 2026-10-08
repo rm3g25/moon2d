@@ -22,6 +22,7 @@ The palette is never trimmed: every index after a removed name would
 shift.
 
 Level 1 is repainted whole (screens 1-17, set `level1-structures`).
+Level 2: screens 1-4 so far (set `level2-objects`).
 Levels 1-2 stay 4:3.
 
 ## The order of work on a screen
@@ -79,6 +80,12 @@ rigs are written again in each level file's `rigs`.
   the function for a check, do not copy the table.
 - A crossing must hold at every phase of the pads, and what the crossing
   guards must be out of reach without them: check both.
+- `JumpReach` knows nothing of ceilings. In a corridor three rows high
+  the hero's head stops the rise and the jump is cut short: his middle
+  travels 72 units floor to floor, 56 onto a deck a row up, 54 down
+  from one; the ice form's boost makes it shorter, not longer. A pit of
+  two cells there is jumped, a pit of three is not. For a pit under a
+  ceiling run the arc of `Tick` with `BumpCeiling`, not the table.
 - A passage one cell high cannot be jumped into. A pad that delivers the
   hero to one stops flush with its floor and waits there.
 - A respawn point needs a floor: a wall below, or a pad with no path and
@@ -107,6 +114,22 @@ the generator**: it paints what it sees, blades included.
 
 Nothing in the blockout may cross a floor. Two pipes drawn through a
 corridor floor came back as a gap in the floor with a door in it.
+
+## The seam between two screens
+
+The game flips screens, it does not scroll: two screens are never seen
+together. A seam has to read as a continuation - the same things at
+about the same heights - and no more. What must be exact is the floor
+line and the height of the doorway, and those the grid gives.
+
+- Measure the neighbour's edge in its seated picture (level 2 screen 3,
+  right edge: duct 105-143 units, ceiling slab 161-192, cables at 210,
+  floor line 288) and put the same things at the same heights into the
+  blockout.
+- Send the generator a strip of that edge as a reference of its own,
+  beside the blockout, and say the edge continues it line for line.
+- Ten units of difference in a duct's thickness came back and are not
+  seen across a flip.
 
 ## The prompt
 
@@ -166,6 +189,12 @@ than a bent one. The hero stands by the cell under his middle, so a wall
 face a few units off is not seen. What lies by a whole cell is fixed in
 `collision`, not in the picture.
 
+**The generator does not hold a width.** Asked for a pit of four cells,
+it gave three and a half in one generation and seven in two more. Take
+the generation whose proportions are nearest to the old screen and move
+the matter to it: a pit, a pair of crates, a monster are a few
+characters in `collision` and `entities`.
+
 What may be done to an accepted picture, and nothing else:
 
 - moved as a whole by whole pixels, the part past the screen cut off;
@@ -177,6 +206,13 @@ What may be done to an accepted picture, and nothing else:
   as a palindrome of the rows right above (726, 725 .. 707, 708 .. 726,
   727): every row stays beside its neighbour, nothing is stretched. Over
   a dozen units of it is a reason to generate again.
+- a band of whole columns taken out, from top to bottom, where all it
+  crosses runs straight across or straight down (a duct, a slab, the
+  back wall of a shaft): the place is the one where the column before
+  the band differs least from the column after it, and the join is
+  looked at. 41 columns left the shaft of level 2 screen 4 to make its
+  pit 96 units. What stands on the band's line elsewhere (a junction
+  box, a lamp, an emblem) rules the place out.
 
 Whatever was done goes into the sprite's description in the set.
 
@@ -188,6 +224,10 @@ Whatever was done goes into the sprite's description in the set.
 - A room is a canvas of 4:3 at 0, 0, width 512 - 1448x1086 as the
   generator gives it is fine, backdrop density. A small object is kept
   at 6 px a unit.
+- A prop asked for as squares comes back as it likes: the crates of
+  level 2 screen 4 are 1.16 wide to 1 tall. Scale it whole and split
+  the lie between its top and its sides (70 units over two cells: 3 a
+  side, 2 on top), feet on the floor line.
 - Feet stand on a floor's top line. That line is the one to get right;
   ceilings and wall faces forgive a few units.
 - Objects are drawn in file order: the room goes before what stands on
@@ -264,6 +304,7 @@ Data only, so no version in the subject. The subjects so far:
 
 - `Put the level 2 screen 1-2 platforms on pads`
 - `Stand level 2 screen 3 on a repainted room`
+- `Stand level 2 screen 4 on a repainted room`
 
 The docs follow in a commit of their own: the session in
 `PORTING-NOTES.md`, both maps, and a line in `ASSETS.md` for every
