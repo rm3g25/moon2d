@@ -19,6 +19,11 @@
   monster flying its lap - is rebuilt over and over once an event says
   so, the pads setting off as the conductor flies past.
 
+  A pad may plunge: it holds until the hero stands on it, then gives way,
+  falls out of the screen and climbs back to its place (Pads.Plunge
+  counts the cycle). It is a failing pad and looks it; it stands on its
+  place, with no path and in no group.
+
   A pad may wear rigs - lamps, jets and the like, hung on it as dynamic
   objects. It only names them here; Levels.Rigs holds them and hangs
   them.
@@ -55,6 +60,17 @@ type
     Pause: Single; // seconds the pad stands at every stop
   end;
 
+  // A pad that gives way under the hero: it holds for Delay seconds
+  // after he stands on it, falls out of the screen, lies below for Rest
+  // seconds and climbs home at Rise units a second, the mean of an
+  // uneven climb
+  TPadPlunge = record
+    Plunges: Boolean; // False - the pad holds whatever stands on it
+    Delay: Single;
+    Rest: Single;
+    Rise: Single;
+  end;
+
   TPadPlacement = record
     Sprite: string; // in the level's object art, as a static object's
     Screen: Integer; // 1-based
@@ -69,6 +85,7 @@ type
     Bullets: TPadBullets;
     Path: TPadPath;
     Bob: Single; // how far the pad sways up and down, in units; 0 = still
+    Plunge: TPadPlunge;
     // The pad group it is rebuilt with; '' = none
     Group: string;
     // The rigs it wears, by name, in the order they are hung
@@ -107,7 +124,8 @@ const
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
 // without stops or with a speed of zero or less, a pause or a bob below
-// zero, a rig that is not a list of names raise.
+// zero, a plunge with a delay or a rest below zero or a rise of zero or
+// less, a rig that is not a list of names raise.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
@@ -136,6 +154,13 @@ resourcestring
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
   SPadGroupBadEvery = 'Level "%s": pad group "%s" has a conductor and '
     + 'takes every %g - seconds above zero';
+
+const
+  // What a plunge takes for a number it leaves out: seconds, seconds and
+  // units a second
+  DefaultPlungeDelay = 0.5;
+  DefaultPlungeRest = 0.5;
+  DefaultPlungeRise = 64;
 
 function ReadBullets(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadBullets;
@@ -192,6 +217,31 @@ begin
       [ALevelId, ASprite, 'pause', Result.Pause]);
 end;
 
+// JSON: "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}; absent = the
+// pad holds whatever stands on it
+function ReadPlunge(const AObj: TJSONObject;
+  const ALevelId, ASprite: string): TPadPlunge;
+begin
+  Result := Default(TPadPlunge);
+  var PlungeObj := AObj.GetValue<TJSONObject>('plunge', nil);
+  if PlungeObj = nil then
+    Exit;
+
+  Result.Plunges := True;
+  Result.Delay := PlungeObj.GetValue<Double>('delay', DefaultPlungeDelay);
+  if Result.Delay < 0 then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'delay', Result.Delay]);
+  Result.Rest := PlungeObj.GetValue<Double>('rest', DefaultPlungeRest);
+  if Result.Rest < 0 then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'rest', Result.Rest]);
+  Result.Rise := PlungeObj.GetValue<Double>('rise', DefaultPlungeRise);
+  if Result.Rise <= 0 then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'rise', Result.Rise]);
+end;
+
 function PadRigName(const APad: TPadPlacement): string;
 begin
   var Shown := APad.Sprite;
@@ -223,6 +273,7 @@ begin
     Pad.Bullets := ReadBullets(Obj, ALevelId, Pad.Sprite);
     Pad.Path := ReadPath(Obj, ALevelId, Pad.Sprite);
     Pad.Bob := Obj.GetValue<Double>('bob', 0);
+    Pad.Plunge := ReadPlunge(Obj, ALevelId, Pad.Sprite);
     Pad.Group := Obj.GetValue<string>('group', '');
     Pad.Rigs := ReadRigNames(Obj, ALevelId, PadRigName(Pad));
 

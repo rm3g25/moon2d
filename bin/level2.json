@@ -372,26 +372,16 @@
       "rig": ["pad"]
     },
     {
-      "sprite": "s16-platform",
+      "sprite": "s16-platform-out",
       "screen": 4,
-      "x": 224,
+      "x": 256,
       "y": 288,
       "width": 32,
       "bullets": "block",
-      "bob": 1.5,
+      "bob": 1,
       "tag": "s04-plat-01",
-      "rig": ["pad"],
-      "path": {
-        "route": "pingpong",
-        "stops": [
-          [
-            288,
-            288
-          ]
-        ],
-        "speed": 30,
-        "pause": 1.5
-      }
+      "rig": ["padFailing"],
+      "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}
     }
   ],
   "rigs": {
@@ -487,6 +477,101 @@
         "frequency": {"spread": [2.2, 3.1]},
         "heat": 90,
         "intensity": 80,
+        "surge": 100
+      }
+    ],
+    "padFailing": [
+      {
+        "kind": "beacon",
+        "x": 16,
+        "y": 25,
+        "tint": [100, 14, 8],
+        "blink": "flash",
+        "frequency": 6,
+        "intensity": 0,
+        "surge": 100,
+        "size": 20
+      },
+      {
+        "kind": "haze",
+        "x": 16,
+        "y": 27,
+        "angle": 270,
+        "length": 64,
+        "mouth": 10,
+        "width": 46,
+        "shift": 5,
+        "grain": 7,
+        "speed": 84,
+        "shade": 18
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.36,
+        "size": 6,
+        "endSize": 11,
+        "opacity": 80,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 15,
+        "surge": 100
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 30,
+        "tint": [50, 46, 42],
+        "endTint": [28, 28, 30],
+        "rate": 60,
+        "life": 0.7,
+        "size": 5,
+        "endSize": 18,
+        "opacity": 65,
+        "angle": 270,
+        "cone": 40,
+        "speed": 55,
+        "drag": 65,
+        "turbulence": 0,
+        "spin": 0,
+        "flow": "puffs",
+        "frequency": {"spread": [2.2, 3.1]},
+        "heat": 90,
+        "intensity": 60,
+        "surge": 100
+      },
+      {
+        "kind": "sparks",
+        "x": 6,
+        "y": 15,
+        "tint": [88, 94, 100],
+        "rate": 0,
+        "burst": 4,
+        "frequency": 0.6,
+        "spell": 2,
+        "pause": 5,
+        "life": 0.5,
+        "speed": 45,
+        "angle": -90,
+        "cone": 120,
+        "gravity": 220,
+        "drag": 40,
+        "size": 1.2,
+        "opacity": 85,
+        "flash": 30,
+        "fork": 15,
+        "collide": "none",
+        "intensity": 60,
         "surge": 100
       }
     ],

@@ -53,6 +53,14 @@
   Pads.Flights. Nothing is thrown or judged; a pad on its place already
   stays there, and the rest fly round it.
 
+  A pad that plunges (Pads.Plunge counts its cycle) is told when the
+  hero stands on it - the one thing a rider tells a pad. It falls under
+  him as a path would take it: the deck goes, the rider with it, out of
+  the screen and past the line where the game takes a faller out of the
+  pit. No wall stops it - the level keeps the shaft under it clear. It
+  climbs back as a floor, and carries up whoever lands on it. Its twitch
+  is drawn with the sag, not felt.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -66,7 +74,7 @@ interface
 uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
-  Pads.Formations, Pads.Flights;
+  Pads.Formations, Pads.Flights, Pads.Plunge;
 
 const
   // A pad all the way into the depth: its size and its light
@@ -119,6 +127,7 @@ type
     FBobShare: Double;
     FTurnedCorner: Boolean;
     FLanded: Boolean;
+    FPlunge: TPlungeCycle;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure TickFlight;
@@ -144,6 +153,9 @@ type
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back
     procedure Press(ASpeed: Double);
+    // The hero stands on the deck this tick: a pad that plunges starts
+    // to give way
+    procedure Tread;
     // A blow: the pad goes ADX, ADY from where it stands and is back on
     // its path ATicks later
     procedure Knock(ADX, ADY: Double; ATicks: Integer);
@@ -158,6 +170,9 @@ type
     // place in a flight until it is on its cell. The moment before is
     // the tell of the pad about to go.
     function Thrusting: Boolean;
+    // How hard the pad works its jets, 0..1: flat out while Thrusting; a
+    // pad that plunges, as its cycle says; else at rest
+    function Effort: Single;
     // The two stand flush side by side where their paths or flights put
     // them
     function FlushWith(const AOther: TPad): Boolean;
@@ -171,8 +186,9 @@ type
     // The body moved ADX, ADY from where it stands now would not cut into
     // AOther's; touching is no cut
     function ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
-    // Units down from the deck the pad is drawn at: the sag of this tick
-    // and the bob AAlpha of the way from the last tick to this one
+    // Units down from the deck the pad is drawn at: the sag and the
+    // twitch of this tick and the bob AAlpha of the way from the last
+    // tick to this one
     function Lift(AAlpha: Single): Double;
     // How far the pad went across this tick
     function MotionX: Double;
@@ -377,6 +393,10 @@ const
   BobFadeTicks = 10;
   // A pad's jets flare this many ticks before it leaves its place
   ThrustLeadTicks = 10;
+  // A plunged pad comes to rest this far under the screen: past the line
+  // where the game takes a faller out of the pit, 66 units under it, so a
+  // hero riding the pad down is in the pit before it stops
+  PlungeDepth = 3 * TileSize;
   // A rebuild throws this many formations at most - screen 17 needs some
   // two hundred at the most, a score on average -, then falls back on the
   // level file's own, if that lies in the zone
@@ -435,6 +455,14 @@ begin
   end;
 end;
 
+// The dice of a plunging pad go by where it stands: two of them twitch
+// out of step
+function PlungeSeed(const APlacement: TPadPlacement): Cardinal;
+begin
+  Result := (Cardinal(APlacement.X) shl 16) xor
+    (Cardinal(APlacement.Screen) shl 8) xor Cardinal(APlacement.Y);
+end;
+
 procedure TPad.Rewind;
 begin
   FClock := 0;
@@ -457,6 +485,8 @@ begin
   FLanded := False;
   FBobX := FPlacement.X;
   FBobShare := 1;
+  FPlunge.Rewind(FPlacement.Plunge,
+    ScreenHeight + PlungeDepth - FPlacement.Y, PlungeSeed(FPlacement));
 end;
 
 // A leg, then the pause at the stop it ends at, round the cycle
@@ -570,10 +600,11 @@ begin
   TickBob;
   TickSag;
   TickKnock;
+  FPlunge.Tick;
   var OffX, OffY: Double;
   KnockOffset(OffX, OffY);
   FLeft := FPathLeft + OffX;
-  FTop := FPathTop + OffY;
+  FTop := FPathTop + OffY + FPlunge.Below;
 end;
 
 procedure TPad.Knock(ADX, ADY: Double; ATicks: Integer);
@@ -612,6 +643,13 @@ function TPad.Thrusting: Boolean;
 begin
   Result := Flying and (FFlightClock >= FFlight.Depart - ThrustLeadTicks) and
     (FFlightClock <= FFlight.Arrive);
+end;
+
+function TPad.Effort: Single;
+begin
+  if Thrusting then
+    Exit(1);
+  Result := FPlunge.Effort;
 end;
 
 function TPad.Settled: Boolean;
@@ -668,9 +706,14 @@ begin
   FSagSpeed := FSagSpeed + Min(ASpeed * SagGain, SagMaxKick);
 end;
 
+procedure TPad.Tread;
+begin
+  FPlunge.Tread;
+end;
+
 function TPad.Lift(AAlpha: Single): Double;
 begin
-  Result := FSag;
+  Result := FSag + FPlunge.Dip;
   if FPlacement.Bob <= 0 then
     Exit;
   var Time := FClock - 1 + AAlpha;
@@ -736,7 +779,7 @@ begin
   Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale);
   TintTexture(FTexture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
-  ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha));
+  ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha) + FPlunge.Lean);
 end;
 
 // ---------------------------------------------------------------------------

@@ -950,9 +950,10 @@ begin
 end;
 
 // After the tick: a deck the feet came down onto, or one that rose into
-// them, holds them there; a falling body sinks it a little. A rising jump
-// lands nowhere. The deck dropped through is let by, and forgotten once
-// the feet are under it.
+// them, holds them there and is told so - a pad that plunges starts to
+// give way; a falling body sinks it a little. A rising jump lands
+// nowhere. The deck dropped through is let by, and forgotten once the
+// feet are under it.
 function THero.LandOnDeck(APrevY: Double): Boolean;
 begin
   if FAction in [haJump, haJumpLeft, haJumpRight] then
@@ -967,6 +968,7 @@ begin
     Exit(False);
   if FAction in [haFall, haFallLeft, haFallRight] then
     Deck.Press(FAcceleration);
+  Deck.Tread;
   FY := Deck.Top;
   FAcceleration := 0;
   Result := True;

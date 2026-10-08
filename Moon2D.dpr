@@ -55,6 +55,7 @@ uses
   Monsters.Damage in 'Game\Monsters.Damage.pas',
   Pads.Formations in 'Game\Pads\Pads.Formations.pas',
   Pads.Flights in 'Game\Pads\Pads.Flights.pas',
+  Pads.Plunge in 'Game\Pads\Pads.Plunge.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
   Pads.Arena in 'Game\Pads\Pads.Arena.pas',
   Render.Font in 'Core\Render.Font.pas',
@@ -1123,10 +1124,9 @@ begin
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     AStand.Alive := True;
-    // A pad flying, or about to leave its place, works its jets hard:
-    // what hangs on it surges
-    if Pad.Thrusting then
-      AStand.Effort := 1;
+    // A pad working its jets lifts what hangs on it: flat out in a
+    // flight and just before one, in fits when it is a pad that plunges
+    AStand.Effort := Pad.Effort;
     // Into the depth as the pad's own picture goes: the same depth at
     // the two ticks, the same shrink and shade, about the same point
     AStand.Depth.Sunk := Pad.Depth(1);
