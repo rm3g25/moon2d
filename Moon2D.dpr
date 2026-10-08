@@ -2175,13 +2175,15 @@ begin
         var HeroShake := FShake.Offset(scHero);
         var HeroLift := FHero.DeckLift(AAlpha);
         FShroudPainter.DrawUnder(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
+        FSprites.Origin := HeroShake;
+        FSprites.FineY := HeroLift;
         if not FShroud.Assembling then
-        begin
-          FSprites.Origin := HeroShake;
-          FSprites.FineY := HeroLift;
           FHero.Draw(FSprites);
-          FSprites.FineY := 0;
-        end;
+        FShroudPainter.DrawBody(HeroShake, HeroLift, AAlpha);
+        // The strips make the body, the arm stays his own
+        if FShroud.Assembling then
+          FHero.DrawArm(FSprites);
+        FSprites.FineY := 0;
         FShroudPainter.DrawOver(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);

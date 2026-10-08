@@ -176,6 +176,8 @@ type
     // weapon sound then; held triggers on cooldown fire nothing
     function Fire: Boolean;
     procedure Draw(const ASprites: TSpriteRenderer);
+    // The arm and the gun alone, for a body that is drawn some other way
+    procedure DrawArm(const ASprites: TSpriteRenderer);
     // AFrame 1..4: normal / green (healthy target) / yellow / red -
     // the smart cursor of 2008 (VidKursora thresholds 2/3 and 1/3).
     procedure DrawCrosshair(const ASprites: TSpriteRenderer;
@@ -1367,6 +1369,11 @@ procedure THero.Draw(const ASprites: TSpriteRenderer);
 begin
   var Shown := Pose;
   ASprites.Draw(Shown.Texture, Shown.Left, Shown.Top, Shown.Mirrored);
+  DrawArm(ASprites);
+end;
+
+procedure THero.DrawArm(const ASprites: TSpriteRenderer);
+begin
   if not FDead then
     DrawWeapon(ASprites, FacingMouseRight);
 end;

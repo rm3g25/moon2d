@@ -5,13 +5,14 @@
   A shroud is a picture over the hero's frame that lives on its own
   clock and dies out: bands of smoke and light cross the body, the body
   may be put together out of strips, a halo flares round it and motes
-  drift off. What differs between the scenes is numbers only - a
-  TShroudLook; the game says which one to start and when. The shroud
-  never takes the controls from the hero.
+  drift off. A band that slides past the feet leaves the hero and lives
+  on as mist where it fell. What differs between the scenes is numbers
+  only - a TShroudLook; the game says which one to start and when. The
+  shroud never takes the controls from the hero.
 
   Two classes, two reasons to change:
-  - THeroShroud counts: the clock, the bands, the strips, the motes. It
-    touches no SDL and owns no resources.
+  - THeroShroud counts: the clock, the bands, the strips, the motes, the
+    mist. It touches no SDL and owns no resources.
   - TShroudPainter draws, and keeps what is made of the hero's art at
     load: the masks, the halos and the points a mote is born at.
 
@@ -62,6 +63,15 @@ type
     Puff: Integer; // which of the canvas' puffs
     Wide: Single; // its own share of the look's width
     InFront: Boolean; // over the hero, else behind him
+    Fallen: Boolean; // gone past the feet: it lives on as mist
+  end;
+
+  // A band at a place on the screen, under the look it was born with
+  TShroudCloud = record
+    Look: TShroudLook;
+    Band: TShroudBand;
+    Age: Integer; // ticks of the look's life gone, as a band's clock
+    X, Y: Single; // where the band stands: its middle, on its row
   end;
 
   // Opaque points of one frame, in units from the picture's corner as painted
@@ -78,6 +88,7 @@ type
     FStripSides: array [0..ShroudStrips - 1] of Single;
     FMotes: TParticleSwarm;
     FMoteDebt: Single;
+    FMist: TArray<TShroudCloud>;
     function GetAssembling: Boolean;
     procedure RollBands;
     procedure RollStrips;
@@ -85,13 +96,17 @@ type
     procedure BirthMote(const APose: THeroPose; const ASeed: TSdlFPoint);
     procedure FlyMotes;
     procedure SettleMotes;
+    procedure FallBands(const APose: THeroPose);
+    procedure DropMist(const APose: THeroPose; const ABand: TShroudBand);
+    procedure FlyMist;
   public
     // ASolid answers in screen units
     constructor Create(const ASolid: TSolidProbe; ASeed: Cardinal);
     destructor Destroy; override;
     procedure Start(const ALook: TShroudLook);
     procedure Tick(const APose: THeroPose; const ASeeds: TSeedList);
-    // A door: what is in flight stays behind, the light goes with the hero
+    // A door: what has left the hero - the motes and the mist - stays
+    // behind, the light goes with him
     procedure LeaveMotes;
     procedure Clear;
     // The share of life gone, 0..1; AAlpha - the step between two ticks
@@ -107,6 +122,7 @@ type
     property Look: TShroudLook read FLook;
     property Bands: TArray<TShroudBand> read FBands;
     property Motes: TParticleSwarm read FMotes;
+    property Mist: TArray<TShroudCloud> read FMist;
   end;
 
   // What is made of one hero frame at load
@@ -138,6 +154,10 @@ type
       AInFront: Boolean);
     procedure DrawBand(const ACanvas: TDynamicCanvas; const AView: TShroudView;
       const ABand: TShroudBand);
+    procedure DrawCloud(const ACanvas: TDynamicCanvas;
+      const ACloud: TShroudCloud; ATime: Single);
+    procedure DrawMist(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single; AInFront: Boolean);
     procedure DrawHalo(const ACanvas: TDynamicCanvas; const AView: TShroudView);
     procedure DrawStrips(const AView: TShroudView);
     procedure DrawBodyLight(const AView: TShroudView);
@@ -148,11 +168,12 @@ type
       const AShroud: THeroShroud);
     destructor Destroy; override;
     function SeedsOf(AFrame: Integer): TSeedList;
-    // Behind the hero: the far bands, the halo
+    // Behind the hero: the mist, the far bands, the halo
     procedure DrawUnder(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       ALift, AAlpha: Single);
-    // Over him: the strips while he is assembled, the light on the body,
-    // the near bands, the motes
+    // On him: the strips while he is assembled, the light on the body
+    procedure DrawBody(AOrigin: TSdlPoint; ALift, AAlpha: Single);
+    // Over him: the near bands, the mist, the motes
     procedure DrawOver(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       ALift, AAlpha: Single);
   end;
@@ -238,6 +259,9 @@ const
   MoteCoreSize = 0.8;
   MoteCoreWhite = 0.8;
 
+  // Mist falls to the ground, units a tick
+  MistSink = 1.2;
+
   // Bands
   BandSlide = 0.25;
   BandsFloor = 3;
@@ -314,6 +338,23 @@ function Ease(AShare: Single): Single;
 begin
   var Rest: Single := 1 - AShare;
   Result := 1 - Rest * Rest * Rest;
+end;
+
+function PartOf(const ALook: TShroudLook; ATime, AAt: Single): Single;
+begin
+  var Queue: Single := 0;
+  case ALook.Order of
+    soTopDown: Queue := AAt;
+    soBottomUp: Queue := 1 - AAt;
+  end;
+  Result := Limit((ATime - Queue * ALook.Stagger) / (1 - ALook.Stagger), 0, 1);
+end;
+
+// Units below the top of the frame, before the feet stop it
+function BandRow(const ALook: TShroudLook; const ABand: TShroudBand;
+  APart: Single): Single;
+begin
+  Result := ABand.At * HeroSize + ALook.Travel * Ease(APart);
 end;
 
 function StripAt(AStrip: Integer): Single;
@@ -520,6 +561,7 @@ begin
     Band.Puff := i mod PuffShapes;
     Band.Wide := BandWideBase + BandWideSpread * FDice.NextUnit;
     Band.InFront := not Odd(i);
+    Band.Fallen := False;
     FBands[i] := Band;
   end;
 end;
@@ -544,20 +586,26 @@ begin
     if FAge >= FLook.Life then
       FActive := False;
   end;
+  FlyMist;
   if FActive then
+  begin
+    FallBands(APose);
     BirthMotes(APose, ASeeds);
+  end;
   FlyMotes;
 end;
 
 procedure THeroShroud.LeaveMotes;
 begin
   FMotes.Clear;
+  FMist := nil;
 end;
 
 procedure THeroShroud.Clear;
 begin
   FActive := False;
   FMotes.Clear;
+  FMist := nil;
 end;
 
 function THeroShroud.Time(AAlpha: Single): Single;
@@ -569,12 +617,7 @@ end;
 
 function THeroShroud.PartTime(ATime, AAt: Single): Single;
 begin
-  var Queue: Single := 0;
-  case FLook.Order of
-    soTopDown: Queue := AAt;
-    soBottomUp: Queue := 1 - AAt;
-  end;
-  Result := Limit((ATime - Queue * FLook.Stagger) / (1 - FLook.Stagger), 0, 1);
+  Result := PartOf(FLook, ATime, AAt);
 end;
 
 function THeroShroud.Glow(ATime: Single): Single;
@@ -630,6 +673,58 @@ begin
   FMotes.Advance(MoteDrag, 0, FLook.Lift * MotePull);
   if (FLook.Lift > 0) and Assigned(FSolid) then
     SettleMotes;
+end;
+
+// A band that sinks onto the feet line comes off the body: from there on
+// it stands where the hero stood, and is no longer his
+procedure THeroShroud.FallBands(const APose: THeroPose);
+begin
+  if FLook.Travel <= 0 then
+    Exit;
+  var TickTime := Time(0);
+  for var i := 0 to High(FBands) do
+  begin
+    if FBands[i].Fallen then
+      Continue;
+    var Part := PartTime(TickTime, FBands[i].At);
+    if (Part <= 0) or (Part >= 1) then
+      Continue;
+    if BandRow(FLook, FBands[i], Part) < HeroSize - 1 then
+      Continue;
+    FBands[i].Fallen := True;
+    DropMist(APose, FBands[i]);
+  end;
+end;
+
+procedure THeroShroud.DropMist(const APose: THeroPose;
+  const ABand: TShroudBand);
+begin
+  var Cloud: TShroudCloud;
+  Cloud.Look := FLook;
+  Cloud.Band := ABand;
+  Cloud.Age := FAge;
+  Cloud.X := APose.Left + HeroSize / 2;
+  Cloud.Y := APose.Top + HeroSize - 1;
+  FMist := FMist + [Cloud];
+end;
+
+// The mist ages by the clock of the look it fell from, and settles until
+// it lies in matter
+procedure THeroShroud.FlyMist;
+begin
+  var Kept := 0;
+  for var i := 0 to High(FMist) do
+  begin
+    var Cloud := FMist[i];
+    Inc(Cloud.Age);
+    if Cloud.Age >= Cloud.Look.Life then
+      Continue;
+    if Assigned(FSolid) and not FSolid(Cloud.X, Cloud.Y) then
+      Cloud.Y := Cloud.Y + MistSink;
+    FMist[Kept] := Cloud;
+    Inc(Kept);
+  end;
+  SetLength(FMist, Kept);
 end;
 
 // A sinking mote that has gone into matter steps back the way it came, loses
@@ -726,6 +821,7 @@ end;
 procedure TShroudPainter.DrawUnder(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; ALift, AAlpha: Single);
 begin
+  DrawMist(ACanvas, AOrigin, AAlpha, False);
   if not FShroud.Active then
     Exit;
   var View := ViewOf(AOrigin, ALift, AAlpha);
@@ -733,17 +829,22 @@ begin
   DrawHalo(ACanvas, View);
 end;
 
+procedure TShroudPainter.DrawBody(AOrigin: TSdlPoint; ALift, AAlpha: Single);
+begin
+  if not FShroud.Active then
+    Exit;
+  var View := ViewOf(AOrigin, ALift, AAlpha);
+  if FShroud.Assembling then
+    DrawStrips(View);
+  DrawBodyLight(View);
+end;
+
 procedure TShroudPainter.DrawOver(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; ALift, AAlpha: Single);
 begin
   if FShroud.Active then
-  begin
-    var View := ViewOf(AOrigin, ALift, AAlpha);
-    if FShroud.Assembling then
-      DrawStrips(View);
-    DrawBodyLight(View);
-    DrawBands(ACanvas, View, True);
-  end;
+    DrawBands(ACanvas, ViewOf(AOrigin, ALift, AAlpha), True);
+  DrawMist(ACanvas, AOrigin, AAlpha, True);
   DrawMotes(ACanvas, AOrigin, AAlpha);
 end;
 
@@ -751,7 +852,7 @@ procedure TShroudPainter.DrawBands(const ACanvas: TDynamicCanvas;
   const AView: TShroudView; AInFront: Boolean);
 begin
   for var Band in FShroud.Bands do
-    if Band.InFront = AInFront then
+    if (Band.InFront = AInFront) and not Band.Fallen then
       DrawBand(ACanvas, AView, Band);
 end;
 
@@ -763,30 +864,59 @@ begin
   if (Part <= 0) or (Part >= 1) then
     Exit;
 
-  var Eased := Ease(Part);
-  var Wide := Lerp(Look.WidthFrom, Look.WidthTo, Eased) * ABand.Wide;
+  var Cloud: TShroudCloud;
+  Cloud.Look := Look;
+  Cloud.Band := ABand;
+  Cloud.X := AView.Left + HeroSize / 2;
+  Cloud.Y := AView.Top + AtMost(BandRow(Look, ABand, Part), HeroSize - 1);
+  DrawCloud(ACanvas, Cloud, AView.Time);
+end;
+
+procedure TShroudPainter.DrawCloud(const ACanvas: TDynamicCanvas;
+  const ACloud: TShroudCloud; ATime: Single);
+begin
+  var Look := ACloud.Look;
+  var Band := ACloud.Band;
+  var Part := PartOf(Look, ATime, Band.At);
+  if (Part <= 0) or (Part >= 1) then
+    Exit;
+
+  var Wide := Lerp(Look.WidthFrom, Look.WidthTo, Ease(Part)) * Band.Wide;
   var Slide: Single := 0;
   if Look.WidthFrom > Look.WidthTo then
-    Slide := ABand.Side * (Wide - Look.WidthTo) * BandSlide;
-  var MidX: Single := AView.Left + HeroSize / 2 + Slide;
-  var Row := AtMost(AView.Top + ABand.At * HeroSize + Look.Travel * Eased,
-    AView.Top + HeroSize - 1);
+    Slide := Band.Side * (Wide - Look.WidthTo) * BandSlide;
+  var MidX: Single := ACloud.X + Slide;
   var Thickness: Single := AtLeast(
     HeroSize / Max(Look.Bands, BandsFloor) * BandThickness,
     BandThicknessFloor) * (1 + BandSwell * Part);
   var Wave: Single := Sin(Pi * Part);
 
-  var SmokeRect := CenteredRect(MidX, Row - SmokeRise * Part, SmokeWide * Wide,
-    Thickness * (SmokeThick + SmokeGrow * Part));
+  var SmokeRect := CenteredRect(MidX, ACloud.Y - SmokeRise * Part,
+    SmokeWide * Wide, Thickness * (SmokeThick + SmokeGrow * Part));
   var SmokeLevel := Power(Wave, SmokeWavePower) * Look.Smoke * SmokeDensity;
-  DrawPuffRect(ACanvas.Renderer, ACanvas.Puffs[ABand.Puff], SmokeRect,
+  DrawPuffRect(ACanvas.Renderer, ACanvas.Puffs[Band.Puff], SmokeRect,
     Look.Tint, Limit(SmokeLevel, 0, 1));
 
-  var LightRect := CenteredRect(MidX, Row, LightWide * Wide,
+  var LightRect := CenteredRect(MidX, ACloud.Y, LightWide * Wide,
     LightThick * Thickness);
   var LightLevel := Power(Wave, LightWavePower) * Look.Light;
   DrawGlowRect(ACanvas.Renderer, ACanvas.PointGlow, LightRect,
     Mix(Look.Tint, White, LightWhite), Limit(LightLevel, 0, 1));
+end;
+
+// Mist stands on the screen, not on the hero: only the shake moves it
+procedure TShroudPainter.DrawMist(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single; AInFront: Boolean);
+begin
+  for var Cloud in FShroud.Mist do
+  begin
+    if Cloud.Band.InFront <> AInFront then
+      Continue;
+    var Placed := Cloud;
+    Placed.X := Cloud.X + AOrigin.X;
+    Placed.Y := Cloud.Y + AOrigin.Y;
+    DrawCloud(ACanvas, Placed, Limit((Cloud.Age + AAlpha) / Cloud.Look.Life, 0, 1));
+  end;
 end;
 
 procedure TShroudPainter.DrawHalo(const ACanvas: TDynamicCanvas;
