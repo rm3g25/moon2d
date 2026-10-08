@@ -68,6 +68,7 @@ uses
   Game.Bonus in 'Game\Game.Bonus.pas',
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
+  Game.Shroud in 'Game\Game.Shroud.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
@@ -335,6 +336,8 @@ type
     FTriggerFired: TArray<Boolean>;
     FAudio: TSoundBank; // silent when SDL2_mixer.dll is absent
     FHenshin: THenshin; // the ceremony; reborn with the hero
+    FShroud: THeroShroud; // the hero's smoke and light; reborn with the hero
+    FShroudPainter: TShroudPainter;
     FDirector: TEventDirector; // the level's events; reborn with the level
     FArena: TPadArena; // the rebuilds of the boss fight; reborn with the level
     // The bonus slot: one reward at a time, spent by right click.
@@ -523,6 +526,8 @@ begin
   FVitals.Free;
   FCharge.Free;
   FHenshin.Free;
+  FShroudPainter.Free;
+  FShroud.Free;
   FDirector.Free;
   FArena.Free;
   FField.Free;
@@ -621,8 +626,18 @@ begin
     World);
 
   FHero := THero.Create(FRenderer, FLevel, FPads);
+  FreeAndNil(FShroudPainter);
+  FreeAndNil(FShroud);
+  FShroud := THeroShroud.Create(SolidUnderPoint, RollDiceSeed);
+  FShroudPainter := TShroudPainter.Create(FRenderer, FHero, FShroud);
   FreeAndNil(FHenshin);
-  FHenshin := THenshin.Create(FHero, FAudio, FMessages, FShake, CureHero);
+  var Stage: THenshinStage;
+  Stage.Hero := FHero;
+  Stage.Audio := FAudio;
+  Stage.Messages := FMessages;
+  Stage.Shake := FShake;
+  Stage.Shroud := FShroud;
+  FHenshin := THenshin.Create(Stage, CureHero);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
@@ -895,6 +910,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FRain.Clear;
+  FShroud.LeaveMotes;
   FMessages.ClearPopups;
   FireScreenTriggers;
   PinRespawnPoint;
@@ -954,6 +970,7 @@ begin
   begin
     FHero.SetScreenX(FCheckpointX);
     FHero.SetY(FCheckpointY);
+    FShroud.Start(PitLook);
     FMessages.AddTicker(Tr(SFellIntoPit), TickerPitTicks);
     FAudio.Play(PitSoundFile); // the pit plays down.wav, not pain (780)
     HurtHero;
@@ -1335,6 +1352,7 @@ begin
   // Remembered as the restart track until a changeMusic trigger takes over
   FCurrentMusic := FLevel.Music;
   FAudio.PlayMusic(FCurrentMusic, mmLoop);
+  FShroud.Start(EntryLook);
   FireScreenTriggers;
   PinRespawnPoint;
 end;
@@ -1725,6 +1743,7 @@ begin
   begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
     FAura.Collapse;
+    FShroud.Clear;
     FRain.Collapse;
     FGameOverTimer := GameOverDelayTicks;
     // Dying cancels the pending exit: the door reopens when the reborn
@@ -1761,6 +1780,8 @@ begin
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
+  FShroud.Clear;
+  FShroud.Start(ReviveLook);
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
   FHurtCooldown := 0;
   // See the LoadLevel comment: 2008 never cleared this flag, here it
@@ -2062,6 +2083,8 @@ begin
   FExplosions.Tick;
   FImpacts.Tick;
   FAura.Tick(HeroCenter);
+  var HeroPose := FHero.Pose;
+  FShroud.Tick(HeroPose, FShroudPainter.SeedsOf(HeroPose.Frame));
   FRain.Tick;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
@@ -2149,10 +2172,17 @@ begin
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
-        FSprites.Origin := FShake.Offset(scHero);
-        FSprites.FineY := FHero.DeckLift(AAlpha);
-        FHero.Draw(FSprites);
-        FSprites.FineY := 0;
+        var HeroShake := FShake.Offset(scHero);
+        var HeroLift := FHero.DeckLift(AAlpha);
+        FShroudPainter.DrawUnder(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
+        if not FShroud.Assembling then
+        begin
+          FSprites.Origin := HeroShake;
+          FSprites.FineY := HeroLift;
+          FHero.Draw(FSprites);
+          FSprites.FineY := 0;
+        end;
+        FShroudPainter.DrawOver(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);

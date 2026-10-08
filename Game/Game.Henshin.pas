@@ -18,7 +18,7 @@ unit Game.Henshin;
 interface
 
 uses
-  Hero, Audio, Hud.Messages, Render.Shake, Render.Font;
+  Hero, Audio, Hud.Messages, Render.Shake, Render.Font, Game.Shroud;
 
 const
   // bottle.wav is the barrel burst that doubles as the henshin flash,
@@ -31,12 +31,22 @@ type
   // heal once). A method of the game passed directly, no wrapper.
   TCureHero = reference to procedure;
 
+  // What the ceremony acts on
+  THenshinStage = record
+    Hero: THero;
+    Audio: TSoundBank;
+    Messages: TMessageBoard;
+    Shake: TScreenShake;
+    Shroud: THeroShroud;
+  end;
+
   THenshin = class
   private
     FHero: THero;
     FAudio: TSoundBank;
     FMessages: TMessageBoard;
     FShake: TScreenShake;
+    FShroud: THeroShroud;
     FCure: TCureHero;
     // The cinematic: a tick counter walks the wave schedule while the
     // game keeps running
@@ -51,9 +61,7 @@ type
     procedure TickCinematic;
     procedure Finish;
   public
-    constructor Create(const AHero: THero; const AAudio: TSoundBank;
-      const AMessages: TMessageBoard; const AShake: TScreenShake;
-      const ACure: TCureHero);
+    constructor Create(const AStage: THenshinStage; const ACure: TCureHero);
 
     // The prelude, then the cinematic from AHenshinAtTick
     procedure StartCountdown(AHenshinAtTick: Integer);
@@ -122,15 +130,15 @@ const
   CountdownMaxGlyphHeight = 132.0;  // size at the moment it dies
   CountdownCenterY = 168.0;         // above true center: clears hero/HUD
 
-constructor THenshin.Create(const AHero: THero; const AAudio: TSoundBank;
-  const AMessages: TMessageBoard; const AShake: TScreenShake;
+constructor THenshin.Create(const AStage: THenshinStage;
   const ACure: TCureHero);
 begin
   inherited Create;
-  FHero := AHero;
-  FAudio := AAudio;
-  FMessages := AMessages;
-  FShake := AShake;
+  FHero := AStage.Hero;
+  FAudio := AStage.Audio;
+  FMessages := AStage.Messages;
+  FShake := AStage.Shake;
+  FShroud := AStage.Shroud;
   FCure := ACure;
   // Strict loads: a bad name blows up here, not mid-boss
   FAudio.Load(HenshinSoundFile);
@@ -255,6 +263,7 @@ begin
   FMessages.AddTicker(Tr(SIceFormPerk), PerkTicks);
   FCure;
   FHero.HeroForm := hfIce;
+  FShroud.Start(IceOnLook);
   FAudio.Play(BottleSoundFile);
   FHero.Bullets.SpawnFan(FHero.X, FHero.Y, FinishFan);
   FShake.AddTrauma(FinishTrauma);
@@ -273,6 +282,7 @@ begin
   // own - the victory music covers the moment (2008 played nothing here)
   FHero.HeroForm := hfNormal;
   FHero.Bullets.SpawnFan(FHero.X, FHero.Y, ShatterFan);
+  FShroud.Start(IceOffLook);
 end;
 
 end.

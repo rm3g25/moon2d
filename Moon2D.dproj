@@ -213,6 +213,7 @@
         <DCCReference Include="Game\Game.Bonus.pas"/>
         <DCCReference Include="Core\Game.Space.pas"/>
         <DCCReference Include="Game\Game.Henshin.pas"/>
+        <DCCReference Include="Game\Game.Shroud.pas"/>
         <DCCReference Include="Game\Game.Explosions.pas"/>
         <DCCReference Include="Game\Game.Blasts.pas"/>
         <DCCReference Include="Game\Game.Impacts.pas"/>

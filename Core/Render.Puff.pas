@@ -36,6 +36,9 @@ procedure FreePuffTextures(var ATextures: TPuffTextures);
 // degrees; ALevel is its density, 0..1
 procedure DrawPuff(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   ACenterX, ACenterY, ASize, AAngle: Single; AColor: TRgb; ALevel: Single);
+// The puff stretched into ADest, unturned
+procedure DrawPuffRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const ADest: TSdlFRect; AColor: TRgb; ALevel: Single);
 
 implementation
 
@@ -225,6 +228,14 @@ begin
   SDL_SetTextureColorMod(ATexture, AColor.R, AColor.G, AColor.B);
   SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
   SDL_RenderCopyExF(ARenderer, ATexture, nil, @Dest, AAngle, nil, SdlFlipNone);
+end;
+
+procedure DrawPuffRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  const ADest: TSdlFRect; AColor: TRgb; ALevel: Single);
+begin
+  SDL_SetTextureColorMod(ATexture, AColor.R, AColor.G, AColor.B);
+  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_RenderCopyF(ARenderer, ATexture, nil, @ADest);
 end;
 
 end.

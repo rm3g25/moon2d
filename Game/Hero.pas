@@ -44,8 +44,18 @@ uses
 
 const
   HeroSize = 32;
+  // The hero's 1..24: walk, then death, then the transformed frames
+  HeroFrameSequences: array [0..2] of string = ('walk', 'death', 'henshin');
 
 type
+  // What Draw puts on the screen this tick
+  THeroPose = record
+    Frame: Integer; // 1..24
+    Texture: PSdlTexture;
+    Left, Top: Integer; // the picture's corner, screen units
+    Mirrored: Boolean;
+  end;
+
   THeroAction = (haStand, haWalkLeft, haWalkRight, haJump, haJumpLeft,
     haJumpRight, haFall, haFallLeft, haFallRight);
 
@@ -183,6 +193,7 @@ type
     // Units down the picture is drawn: the bob and the sag of the deck
     // underfoot, which the feet do not feel; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
+    function Pose: THeroPose;
     // DEBUGKEYS live tuner for the weapon-4 muzzle (NumPad, values in
     // the window caption - same workflow as the crosshair calibration)
     procedure NudgeMinigun(ADeltaX, ADeltaY, ADeltaLen: Integer);
@@ -207,6 +218,7 @@ type
     property WeaponType: Integer read FWeaponType;
     property Dead: Boolean read FDead;
     property HeroForm: THeroForm read FForm write FForm;
+    property SkinSet: TSpriteSet read FSkinSet;
   end;
 
 // The most empty cells a jump of the hero crosses sideways to land on a
@@ -381,7 +393,7 @@ begin
   // The hero's 1..24 is walk, then death, then the transformed frames -
   // named here rather than counted, as the 2008 list required.
   StoreFrames(FFrames, OpenFrames(FCache, FSkinSet, 'hero',
-    ['walk', 'death', 'henshin'], Length(FFrames)));
+    HeroFrameSequences, Length(FFrames)));
   StoreFrames(FWeaponFrames, OpenFrames(FWeaponCache, FWeaponSet, 'weapon',
     ['frames'], Length(FWeaponFrames)));
 end;
@@ -1305,20 +1317,23 @@ end;
 // Drawing - verbatim OurHero.Put frame selection
 // ---------------------------------------------------------------------------
 
-procedure THero.Draw(const ASprites: TSpriteRenderer);
+function THero.Pose: THeroPose;
 var
   Frame: Integer;
   FacingRight: Boolean;
 begin
-  FacingRight := FacingMouseRight;
+  Result.Left := Round(FX);
+  Result.Top := Round(FY - HeroSize + Removal);
 
   if FDead then
   begin
-    ASprites.Draw(FFrames[Min(Round(FDeathFrame), 16)],
-      Round(FX), Round(FY - HeroSize + Removal), not FDeathFacingRight);
+    Result.Frame := Min(Round(FDeathFrame), 16);
+    Result.Texture := FFrames[Result.Frame];
+    Result.Mirrored := not FDeathFacingRight;
     Exit;
   end;
 
+  FacingRight := FacingMouseRight;
   case FAction of
     haStand:
       Frame := 1;
@@ -1343,10 +1358,17 @@ begin
   if FForm = hfIce then
     Frame := Frame + 16; // the ice skin lives at frames 17..24
 
-  ASprites.Draw(FFrames[Frame], Round(FX), Round(FY - HeroSize + Removal),
-    not FacingRight);
+  Result.Frame := Frame;
+  Result.Texture := FFrames[Frame];
+  Result.Mirrored := not FacingRight;
+end;
 
-  DrawWeapon(ASprites, FacingRight);
+procedure THero.Draw(const ASprites: TSpriteRenderer);
+begin
+  var Shown := Pose;
+  ASprites.Draw(Shown.Texture, Shown.Left, Shown.Top, Shown.Mirrored);
+  if not FDead then
+    DrawWeapon(ASprites, FacingMouseRight);
 end;
 
 // Verbatim geometry of weapon.pas TWeapon.Put, collapsed from its four
