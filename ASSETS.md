@@ -108,14 +108,15 @@ hull replaced the three flight frames `plat1`-`plat3` of the platform, which
 stay in `platform.mset`; the 2008 death frames there are out of play since
 3.0.42, as the barrel's.
 
-**The TeK tank's hull** (`sprites/tank-hull.mset`) - generated with ChatGPT's
-image model to the author's direction (the tank whole, the same tank
+**The TeK tank's hull** (`sprites/tank-hull.mset`) - since 3.0.45, generated
+with ChatGPT's image model to the author's direction (the tank whole, the same tank
 battle-worn, one wheel in flat light), then cut into layers and packed by
 `tools/tank/build_tank.py`: the wheels cut out of both hulls by the frame of
 the whole one, the dark of the wheel wells and the fenders' shade on the
 wheels painted in, the wheel's hub moved onto the tyre's axis, all scaled to
 6 px per screen unit - 228x186 the hull, 96x96 the wheel - and given a bled
-edge.
+edge. The hull replaced the three drive frames `tank1`-`tank3` of the tank,
+which stay in `tank.mset`.
 
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine

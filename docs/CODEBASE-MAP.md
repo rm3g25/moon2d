@@ -12,7 +12,7 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
-at `v3.0.43` and the live shards at `v3.0.44` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+at `v3.0.43`, the live shards at `v3.0.44` and the tank's hull at `v3.0.45` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -77,7 +77,7 @@ over the two, `Levels.Pads`, `Levels.Defs`, `Render.Sprites`,
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
 `Monsters.Defs`, its sensor through `Render.Glow`) / `Monsters.Hull` (the
-platform's hull: the same, its eye through `Render.Glow`) / `Monsters.Pilot` (the
+hulls of the platform and the tank: the same, the eye through `Render.Glow`) / `Monsters.Pilot` (the
 boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 `Game.Space` and the sizes of `Render.Sprites`) / `Monsters.Damage` (the
 window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
@@ -220,8 +220,8 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   float point, turned clockwise, at an opacity; float all the way, so a
   mover drawn between ticks does not snap to logical units - the boss's
   disc draws its layers through it. `DrawSized(texture, center, width,
-  height, level = 1)` - the same for a rectangle, unturned: the platform's
-  hull. It sets the texture's alpha mod on
+  height, level = 1, mirrored = False)` - the same for a rectangle,
+  unturned, mirrored left to right on demand: the layers of a hull. It sets the texture's alpha mod on
   every call. `Draw`, `DrawRotated`, `DrawTurned` and `DrawSized` all draw a float
   rectangle through `SDL_RenderCopyExF` (at whole units the picture is
   what the integer call drew), and so does `DrawRectF` since 3.0.28
@@ -1142,12 +1142,19 @@ Monster definition model + registry (parses monsters.json). No behavior.
   `Enabled`; a disc without a set or a positive side, with a muzzle outside
   0..side/2 or `wearFull` outside (0, 100] raises at load);
   `THullDef` (JSON `hull` - the living monster is drawn as a hull out of
-  two layers, see `Monsters.Hull`: `SetName` - the layers' set, `Width`,
-  `Height` - the hull's size in screen units, standing in the middle of
-  the monster's cell, `WearFull` - as the disc's, `Eye`, `Smoke`,
+  layers, see `Monsters.Hull`: `SetName` - the layers' set, `Width`,
+  `Height` - the hull's size in screen units, `WearFull` - as the disc's,
+  `Eye`, `Smoke`,
   `Sparks` - `THullPoint`s, screen units from the hull's top-left corner:
   the middle of the lens, where a wrecked body smokes, where it sparks
-  and shorts out; `Enabled`; a hull without a set, a positive width and
+  and shorts out; `Mirrors` (JSON `mirrors`, false by default) - the art
+  faces left and is mirrored whole while the monster heads right;
+  `Wheels` - a `TWheelsDef` (JSON `wheels`, none by default: `Side` - the
+  square of the set's `wheel` picture, `Radius` - from the axle to the
+  floor, `Axles` - `THullPoint`s; `Enabled` = it has an axle; wheels
+  without a positive side and radius or without an axle, or an axle that
+  is not two numbers, raise at load); `Enabled`; a hull without a set, a
+  positive width and
   height or with `wearFull` outside (0, 100], or a point that is not two
   numbers, raises at load - and so does a monster with a disc and a hull);
   `TBlastDef` (JSON `blast` - what the monster's death does to the bodies
@@ -1691,27 +1698,48 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.Hull.pas` (~160 lines)
-A monster drawn as a hull out of two layers instead of its `alive` frames -
-the TeK platform. The disc's twin without the turning and the iris: art and
-pose only, the hull knows nothing of the monster's logic. Not here: the
+### `Game/Monsters.Hull.pas` (~230 lines)
+A monster drawn as a hull out of layers instead of its `alive` frames -
+the TeK platform, the TeK tank (3.0.45). The disc's twin without the iris:
+art and pose only, the hull knows nothing of the monster's logic. Not here:
+where the hull stands - the monster says (`TMonster.HullStand`); the
 death - a dying hull monster plays the `death` frames of its own set, as
 every monster does.
-- **`THullArt`** - the layers of one hull set (`hull`, `hullDamaged`) through
+- **`THullArt`** - the layers of one hull set (`hull`, `hullDamaged`, and
+  for a hull on wheels `chassis` and `wheel`) through
   a set and a cache of its own: no color key (soft painted edges), linear
-  filter (drawn at a size of its own). Also owns the eye's glow texture
+  filter (drawn at a size of its own). `Create(renderer, def)` takes the
+  hull's definition: the set's name and whether to ask the set for the
+  wheel layers. Also owns the eye's glow texture
   (`Render.Glow`). The destructor frees the cache before the set.
-- **`THull`** - `Tick(wear, charge)` (both 0..1): the wear is kept, the eye
-  takes the charge and fades by `EyeFade` a tick after a shot.
-  `Draw(sprites, center, alpha)`: the whole hull and, over it, the worn copy
-  at the wear as its opacity (both through `TSpriteRenderer.DrawSized`, so
+- **`THullStand`** - where a hull stands and which way it heads: `Center`
+  (the middle of the hull, screen units) and `Mirrored` (the left-facing
+  art heads right).
+- **`THull`** - `Tick(wear, charge, rolled)`: the wear is kept, the eye
+  takes the charge and fades by `EyeFade` a tick after a shot, and a hull
+  on wheels turns them (`TurnWheels`) by `rolled` - the units the body has
+  rolled along the floor since the last tick, to the right above zero - over
+  the wheel's `Radius`: clockwise for a roll to the right, wrapped past
+  `WrapDegrees` with the last angle moved along.
+  `Draw(sprites, stand, alpha)`: for a hull on wheels first `chassis` - the
+  dark of the wheel wells - and the `wheel` picture at every axle, turned
+  to the angle between its two ticks (`DrawWheels`, through `DrawTurned`);
+  then the whole hull and, over it, the worn copy
+  at the wear as its opacity (all through `TSpriteRenderer.DrawSized`,
+  mirrored by the stand, so
   they shake with the monsters' channel and ride a pad by `FineY`), then the
   red eye glow (`EyeRest*` .. `EyeCharged*`) at the `eye` point, between the
-  two ticks of the eye - only the eye draws between ticks, the hull stands
-  on whole units like a frame and is never mirrored: the art is symmetric,
+  two ticks of the eye - only the eye and the wheels draw between ticks, the
+  hull stands on whole units like a frame. The hull hides the top of a
+  wheel behind its fenders and carries their shade in the wheel cuts, so
+  the shade stands still while the wheel turns. A wheel is not mirrored
+  with the hull: it is painted in flat light, and a mirror would only jerk
+  the mark on its hub at every turn of the body. The platform is never
+  mirrored: its art is symmetric,
   and the torn panel of the worn layer would jump from side to side at every
-  turn. `Spot(center, point)` - where a point of the art falls on the
-  screen, the hull standing at `center`: the eye, and for the monster the
+  turn. `Spot(stand, point)` - where a point of the art falls on the
+  screen, mirrored across the hull with the stand: the eye, the axles, and
+  for the monster the
   smoke, the sparks and the short of a wreck.
 
 ### `Game/Monsters.Pilot.pas` (~1075 lines)
@@ -1890,9 +1918,16 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one;
   where the pilot holds the gun - its `Charge` instead). The hull:
   `TickHull` right after `TickDisc` hands `THull.Tick` the same `Wear`
-  (over the hull's `WearFull`) and `ShotCharge`; `Draw` stands the hull at
-  `HullCenter` - the middle of the sprite on whole units, as a frame
-  stands, so the picture, the hitbox and the smoke stay glued - while the
+  (over the hull's `WearFull`), `ShotCharge` and how far the body has
+  rolled since the last tick: its travel in X since `FHullX` less what a
+  deck carried it this tick (`FCarriedX`, measured around `RideDeck`) - a
+  step and a shove turn the wheels, a ride on a pad does not. `Draw` stands
+  the hull at
+  `HullStand` - on whole units, as a frame
+  stands, so the picture, the hitbox and the smoke stay glued: the middle
+  of the sprite for a hull that flies, the feet line under the bottom edge
+  for one that gravity pulls (`AffectedByGravity`), whatever its height;
+  mirrored when the hull `Mirrors` and the body `FacesRight` - while the
   monster lives; a dying one plays its `death` frames. The aimed gun
   under a pilot: held (`PilotHoldsGun` - in every maneuver and while the
   lap is held), its timer stays at zero - a whole interval passes after a
@@ -1967,9 +2002,10 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   read the level and the point from there. No emission once the monster is
   no longer alive (dying included). The point goes through `BodyPoint` and mirrors with `FacesRight`,
   the one home of the facing rule, which `Draw` uses too - a barrel shoved
-  nine units into a wall or over a ledge turns around, valve and all. A hull
-  never turns: its point is the hull's own `Smoke`, put on the screen by
-  `THull.Spot` over `HullCenter`, and stays put. The smoke dies
+  nine units into a wall or over a ledge turns around, valve and all. A hull's
+  point is the hull's own `Smoke`, put on the screen by
+  `THull.Spot` over `HullStand`: it turns round with a hull that mirrors
+  and stays put on one that does not. The smoke dies
   with the monster, so a restart clears it. `TMonster` got its destructor
   (it frees the hull, the disc, the sparks, the smoke and the event list).
 - **Wreck sparks** (default behavior, no data): the same machines own a
@@ -1978,7 +2014,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   the floor), unlit until the same moment - `WreckIfCritical` is the one
   trigger of the smoke and the sparks - then at full at once. The point
   (`WreckSparksX/Y`) mirrors like the smoke's - a hull's `Sparks` stands for
-  it and for the short's, unmirrored; the probe is the monster's
+  it and for the short's, mirrored only with the hull; the probe is the monster's
   own screen (`SolidUnderPoint`: `TLevel.SolidAtPoint` or a pad's body,
   `BodyAt`); the seed is
   `SpawnSeed` (the spawn point, the smoke's seed too) under a salt, so the
@@ -3020,6 +3056,23 @@ ring and the opening of a new guard. The same set byte for byte from the
 same sources and library versions; the sources are not in the
 repository. numpy, scipy, Pillow.
 
+### `tools/tank/build_tank.py`
+Builds `bin/sprites/tank-hull.mset`, the art of the tank's hull
+(`Monsters.Hull`), from three generated pictures - the tank whole, the
+same tank battle-worn, one wheel seen from the front in flat light -
+found in a sources folder under the names in `WHOLE_FILE`, `DAMAGED_FILE`
+and `WHEEL_FILE`. `build` cuts the worn tank by the frame of the whole
+one, cuts the painted tyres out of both (ellipses - a painted tyre is
+pressed against the ground - and everything below the belly), paints the
+dark of the wheel wells (`chassis`) and the fenders' shade in the cuts of
+the whole hull, moves the wheel's hub onto the tyre's axis, shrinks all
+of it to `DENSITY` (6 px a screen unit: just past what a 4K screen
+shows) in premultiplied alpha with the edge color bled outward, and
+packs the set; it prints the points of the art in screen units. The
+measured boxes, axles and radii are constants at the top; a denser
+screen is `DENSITY` and a rebuild. The sources are not in the
+repository. numpy, scipy, Pillow.
+
 ---
 
 ## Tests
@@ -3086,10 +3139,12 @@ and `boss1` - a bullet throws sparks off them instead of bursting
 of the layers of a set instead of its `alive` frames: `set`, `side`,
 `muzzle`, `spin`, `irisReach`, `wearFull`, `portAngles` (the six gun
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
-`boss` block names `dodgePrize`: `medkit`. `hull` (only `platform`) draws
-the living monster as a hull out of two layers of a set: `set`
-(`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the points
-`eye`, `smoke`, `sparks` - see `THullDef`. `stats.damageCap` (only `boss1`)
+`boss` block names `dodgePrize`: `medkit`. `hull` (`platform` and `tank`) draws
+the living monster as a hull out of the layers of a set: the platform's -
+`set` (`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the
+points `eye`, `smoke`, `sparks`; the tank's (3.0.45) - `set` (`tank-hull`),
+`width` 38, `height` 31, `wearFull` 80, the same points, `mirrors`: true
+and `wheels` (`side` 16, `radius` 7.76, two `axles`) - see `THullDef`. `stats.damageCap` (only `boss1`)
 limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
@@ -3277,8 +3332,12 @@ plainest example), `introText`/`introTextEn`.
   `TAnimSet` contract.
 - **Hull layers**: `platform-hull` (`hull`, `hullDamaged`; 240x122 each - 6 px
   per screen unit, a 40 x 20.33 unit hull - transparent pixels filled with
-  the edge color) - named by `hull.set` in monsters.json, drawn by
-  `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` for
+  the edge color) and `tank-hull` (3.0.45: `chassis`, `hull`, `hullDamaged`,
+  228x186 each - a 38 x 31 unit hull, the wheels cut out of both hulls -
+  and `wheel`, 96x96, 16 units; the same density and edge fill; built by
+  `tools/tank/build_tank.py`) - named by `hull.set` in monsters.json, drawn by
+  `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` and
+  `tank` its drive frames `tank1`-`tank3` for
   the `TAnimSet` contract.
 - **Death frames of what blows up** (3.0.42): in `barrel`, `tank`,
   `platform`, `krep` and `boss1` the `death` sequence is the empty frame
@@ -3354,7 +3413,7 @@ music loads leniently. Four one-shots are synthesised by
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
-| The platform's hull: layers, wear, eye, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset` (+Monsters.pas `TickHull`, `HullCenter`, `BodyPoint`; Render.Sprites.pas `DrawSized`) |
+| The hulls of the platform and the tank: layers, wear, eye, wheels, mirroring, where a hull stands, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`; Render.Sprites.pas `DrawSized`; tools/tank/build_tank.py makes the tank's set) |
 | The platform's lamps and the haze under its nozzles; what goes out when a monster dies | the rig `tekPlatform` + `"tag"` and `"rig"` on the platforms in levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` of `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
