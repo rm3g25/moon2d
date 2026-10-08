@@ -20,10 +20,12 @@ uses
   Tests.Rooms in 'Tests.Rooms.pas',
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
+  Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',
   Tests.Monsters.Damage in 'Monsters\Tests.Monsters.Damage.pas',
-  Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas';
+  Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas',
+  Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas';
 
 procedure RunSuite;
 begin

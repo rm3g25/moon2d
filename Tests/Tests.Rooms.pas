@@ -13,6 +13,10 @@
   made to die (its death fans bullets into a burst, and a burst needs a
   renderer); a gravel carries none and can die into a nil one.
 
+  LevelFromRows is the same level with more in its root - the pads and
+  the respawn points of a test - and with nothing around it: no pad
+  world, no registry. It is for what the level's own load says.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Rooms;
@@ -48,6 +52,13 @@ type
   end;
 
 function RoomFromRows(const ARows: array of string): TRoom;
+
+// The level of a room with more members in its root. ASections is JSON
+// members as they stand in a file, '"pads":[...],"respawns":[...]'; ''
+// adds none. A level the load turns down raises what LoadFromFile raises,
+// and nothing is left behind. The caller frees the level.
+function LevelFromRows(const ARows: array of string;
+  const ASections: string): TLevel;
 
 // A room of twelve rows: the last is the floor. AWallCol (from 1, 0 = none)
 // is a solid column over it; ALedgeRow (from 1, 0 = none) is solid between
@@ -96,6 +107,41 @@ begin
   end;
 end;
 
+function BuildLevel(const ARows: array of string;
+  const ASections: string): TLevel;
+begin
+  if Length(ARows) <> RoomRows then
+    raise Exception.CreateFmt('A room is %d rows, not %d',
+      [RoomRows, Length(ARows)]);
+  for var Row in ARows do
+    if Length(Row) <> RoomCols then
+      raise Exception.CreateFmt('A room row is %d cells, not %d: "%s"',
+        [RoomCols, Length(Row), Row]);
+
+  var Members := '';
+  if ASections <> '' then
+    Members := ASections + ',';
+  var Json := '{"id":"room","grid":{"width":16,"height":12},'
+    + '"tilePalette":[],"backgrounds":[],"entities":[],' + Members
+    + '"tiles":{"screens":[{"screen":1,"rows":[' + TileRowsJson
+    + '],"collision":[' + CollisionJson(ARows) + ']}]}}';
+
+  var FileName := TPath.Combine(TPath.GetTempPath,
+    'moon2d-room-' + TGUID.NewGuid.ToString + '.json');
+  TFile.WriteAllText(FileName, Json, TEncoding.ASCII);
+
+  Result := TLevel.Create;
+  var IsLoaded := False;
+  try
+    Result.LoadFromFile(FileName);
+    IsLoaded := True;
+  finally
+    TFile.Delete(FileName);
+    if not IsLoaded then
+      FreeAndNil(Result);
+  end;
+end;
+
 constructor TRoom.Create(const ARows: array of string);
 begin
   inherited Create;
@@ -121,28 +167,7 @@ end;
 
 procedure TRoom.LoadLevel(const ARows: array of string);
 begin
-  if Length(ARows) <> RoomRows then
-    raise Exception.CreateFmt('A room is %d rows, not %d',
-      [RoomRows, Length(ARows)]);
-  for var Row in ARows do
-    if Length(Row) <> RoomCols then
-      raise Exception.CreateFmt('A room row is %d cells, not %d: "%s"',
-        [RoomCols, Length(Row), Row]);
-
-  var Json := '{"id":"room","grid":{"width":16,"height":12},'
-    + '"tilePalette":[],"backgrounds":[],"entities":[],'
-    + '"tiles":{"screens":[{"screen":1,"rows":[' + TileRowsJson
-    + '],"collision":[' + CollisionJson(ARows) + ']}]}}';
-
-  var FileName := TPath.Combine(TPath.GetTempPath,
-    'moon2d-room-' + TGUID.NewGuid.ToString + '.json');
-  TFile.WriteAllText(FileName, Json, TEncoding.ASCII);
-  try
-    FLevel := TLevel.Create;
-    FLevel.LoadFromFile(FileName);
-  finally
-    TFile.Delete(FileName);
-  end;
+  FLevel := BuildLevel(ARows, '');
 end;
 
 function TRoom.Place(const AMonsterId: string; ACol, ARow: Integer): TMonster;
@@ -161,6 +186,12 @@ end;
 function RoomFromRows(const ARows: array of string): TRoom;
 begin
   Result := TRoom.Create(ARows);
+end;
+
+function LevelFromRows(const ARows: array of string;
+  const ASections: string): TLevel;
+begin
+  Result := BuildLevel(ARows, ASections);
 end;
 
 function RoomRowsOf(AWallCol, ALedgeRow, AFrom, ATo: Integer): TArray<string>;
