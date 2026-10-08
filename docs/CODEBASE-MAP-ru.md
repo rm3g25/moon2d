@@ -1170,7 +1170,10 @@ level)` - по центру, с поворотом (`SDL_RenderCopyExF`), тин
   нет: `Side` - квадрат картинки `wheel` из набора, `Radius` - от оси до
   пола, `Axles` - `THullPoint`; `Enabled` = есть хоть одна ось; колёса без
   положительных стороны и радиуса или без осей, а также ось не из двух
-  чисел - ошибка на загрузке); `Enabled`; корпус без
+  чисел - ошибка на загрузке); `HasMuzzle`, `Muzzle` (JSON `muzzle`, по
+  умолчанию нет) - срез ствола, из которого выходит прямой
+  выстрел; дуло у монстра, который прямо не стреляет, - ошибка на
+  загрузке; `Enabled`; корпус без
   набора, положительных ширины и высоты или с `wearFull` вне (0, 100],
   а также точка не из двух чисел - ошибка на загрузке, как и монстр сразу
   с диском и корпусом); `TBlastDef` (JSON `blast` - что смерть монстра
@@ -1925,7 +1928,12 @@ TeK, танк TeK (3.0.45). Близнец диска без ириса: тол�
   `Disc.Muzzle` больше нуля, вылетает с кромки - на `Muzzle` от середины в
   сторону героя, а не из точки 2008 (X + 8, Y + 8); угол - прежний
   дословный, от X, Y монстра к X, Y героя, так что выстрел идёт через
-  середину хитбокса героя, а не по его левому краю), `FirePorts` (залп,
+  середину хитбокса героя, а не по его левому краю; прямой выстрел
+  монстра, у корпуса которого есть `HasMuzzle`, выходит из этой точки
+  арта - на экран её ставит `THull.Spot` над `HullStand`, так что она
+  разворачивается вместе с корпусом, - сдвинутой на спрайт вниз, в
+  единицы пули, а не из четверти клетки 2008; залп из пяти держит свой
+  крест вокруг неё), `FirePorts` (залп,
   когда пилот говорит `PortsDue`: по пуле из каждого угла
   `Disc.PortAngles`, повёрнутого вместе с ободом, на `Muzzle` от оси,
   прямо наружу; стреляет после `TickDisc`, так что порты там, где их
@@ -3161,8 +3169,8 @@ dangerous - наследуются монстрами), массив `monsters`.
 набора: у платформы - `set` (`platform-hull`), `width` 40, `height` 20.33,
 `wearFull` 80 и точки `eye`, `smoke`, `sparks`; у танка (3.0.45) - `set`
 (`tank-hull`), `width` 38, `height` 31, `wearFull` 80, те же точки,
-`mirrors`: true и `wheels` (`side` 16, `radius` 7.76, две оси в `axles`) -
-см. `THullDef`. `stats.damageCap`
+`mirrors`: true, `wheels` (`side` 16, `radius` 7.76, две оси в `axles`) и
+`muzzle` (5.5, 5.4 - срез среднего ствола) - см. `THullDef`. `stats.damageCap`
 (только `boss1`) ограничивает, сколько жизней он может потерять: `lives`
 30 за любые `ticks` 33, то есть за секунду - см. `TDamageCap`. С
 сложностью потолок не растёт, как растут жизни: стволы героя тоже не
@@ -3429,7 +3437,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Поведение монстров / ИИ / босс | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | Полёт босса: круг, манёвры (раздумье, нырок, таран, оглушение), их числа | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; события `tactics` в level1.json; `portAngles` / `dodgePrize` в monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | Диск босса: слои, вращение, глаз, износ, выстрел с кромки | Monsters.Disc.pas + `disc` в monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
-| Корпуса платформы и танка: слои, износ, глаз, колёса, отражение, где корпус стоит, точки подбитой машины | Monsters.Hull.pas + `hull` в monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`; Render.Sprites.pas `DrawSized`; набор танка собирает tools/tank/build_tank.py) |
+| Корпуса платформы и танка: слои, износ, глаз, колёса, отражение, где корпус стоит, откуда выходит прямой выстрел, точки подбитой машины | Monsters.Hull.pas + `hull` в monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`, `FireAt`; Render.Sprites.pas `DrawSized`; набор танка собирает tools/tank/build_tank.py) |
 | Лампы летающей платформы и марево под её соплами; что гаснет, когда монстр убит | обвес `tekPlatform` + `"tag"` и `"rig"` у летающих платформ в levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` у `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Лампы, едущие на диске босса | маячки с `turns` в level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | Новый монстр (только данные) | monsters.json + набор `.mset` (spriteList хранит написание `.mns`) |

@@ -1153,7 +1153,10 @@ Monster definition model + registry (parses monsters.json). No behavior.
   square of the set's `wheel` picture, `Radius` - from the axle to the
   floor, `Axles` - `THullPoint`s; `Enabled` = it has an axle; wheels
   without a positive side and radius or without an axle, or an axle that
-  is not two numbers, raise at load); `Enabled`; a hull without a set, a
+  is not two numbers, raise at load); `HasMuzzle`, `Muzzle` (JSON
+  `muzzle`, none by default) - the cut of the barrel a straight
+  shot leaves; a muzzle on a monster that fires no straight shot raises at
+  load; `Enabled`; a hull without a set, a
   positive width and
   height or with `wearFull` outside (0, 100], or a point that is not two
   numbers, raises at load - and so does a monster with a disc and a hull);
@@ -1896,7 +1899,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   middle toward the hero, instead of the 2008 point (X + 8, Y + 8) - the
   angle is still the verbatim one, from the monster's X, Y to the hero's,
   so the shot now runs through the middle of the hero's hitbox, not along
-  its left edge), `FirePorts` (a volley when the pilot says `PortsDue`:
+  its left edge; a straight shot of a monster whose hull `HasMuzzle`
+  leaves from that point of the art, put on the screen by `THull.Spot`
+  over `HullStand` - so it turns round with the hull - and moved a sprite
+  down into a bullet's units, instead of the 2008 quarter of the cell;
+  the cluster of five keeps its cross about it), `FirePorts` (a volley when the pilot says `PortsDue`:
   one bullet out of every angle of `Disc.PortAngles`, turned with the
   rim, `Muzzle` from the axis, straight out; fired after `TickDisc`, so
   the ports are where the frame shows them), `TakeDamage` (knockback
@@ -3143,8 +3150,9 @@ ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
 the living monster as a hull out of the layers of a set: the platform's -
 `set` (`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the
 points `eye`, `smoke`, `sparks`; the tank's (3.0.45) - `set` (`tank-hull`),
-`width` 38, `height` 31, `wearFull` 80, the same points, `mirrors`: true
-and `wheels` (`side` 16, `radius` 7.76, two `axles`) - see `THullDef`. `stats.damageCap` (only `boss1`)
+`width` 38, `height` 31, `wearFull` 80, the same points, `mirrors`: true,
+`wheels` (`side` 16, `radius` 7.76, two `axles`) and `muzzle` (5.5, 5.4 -
+the cut of the middle barrel) - see `THullDef`. `stats.damageCap` (only `boss1`)
 limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
@@ -3413,7 +3421,7 @@ music loads leniently. Four one-shots are synthesised by
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
 | The boss's flight: the lap, the maneuvers (ponder, dive, ram, stun), their numbers | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; the `tactics` events of level1.json; `portAngles` / `dodgePrize` in monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | The boss's disc: layers, spin, eye, wear, the shot from the rim | Monsters.Disc.pas + `disc` in monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
-| The hulls of the platform and the tank: layers, wear, eye, wheels, mirroring, where a hull stands, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`; Render.Sprites.pas `DrawSized`; tools/tank/build_tank.py makes the tank's set) |
+| The hulls of the platform and the tank: layers, wear, eye, wheels, mirroring, where a hull stands, where its straight shot leaves, the wreck points | Monsters.Hull.pas + `hull` in monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`, `FireAt`; Render.Sprites.pas `DrawSized`; tools/tank/build_tank.py makes the tank's set) |
 | The platform's lamps and the haze under its nozzles; what goes out when a monster dies | the rig `tekPlatform` + `"tag"` and `"rig"` on the platforms in levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` of `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
 | Lamps riding the boss's disc | `turns` beacons in level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
 | New monster (data only) | monsters.json + a `.mset` set (spriteList keeps the `.mns` spelling) |
