@@ -1031,6 +1031,13 @@ begin
           BaseX := FX + SpriteSize / 4;
         end;
         var BaseY := FY + SpriteSize / 4;
+        if FDef.Hull.HasMuzzle then
+        begin
+          var Muzzle := FHull.Spot(HullStand, FDef.Hull.Muzzle);
+          BaseX := Muzzle.X;
+          // In a bullet's units: its picture hangs a sprite above its Y
+          BaseY := Muzzle.Y + SpriteSize;
+        end;
         ABullets.NewBullet(FDef.Attack.BulletSpeed, BaseX, BaseY,
           Angle, 0, True);
         if FDef.Attack.Pattern = apStraightCluster5 then

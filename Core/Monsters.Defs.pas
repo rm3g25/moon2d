@@ -138,7 +138,8 @@ type
   // 'alive' frames; the death frames stay. JSON "hull":
   //   {"set": "platform-hull", "width": 40, "height": 20.33, "wearFull": 80,
   //    "eye": [20, 4.9], "smoke": [9.5, 8.1], "sparks": [29.2, 8.7]}
-  // and for one that drives: "mirrors": true, "wheels": {...}
+  // and for one that drives: "mirrors": true, "muzzle": [5.5, 5.4],
+  // "wheels": {...}
   THullDef = record
     SetName: string; // '' = no hull
     Width, Height: Double; // the hull's size on the screen, units
@@ -151,6 +152,10 @@ type
     // The art faces left and is mirrored whole while the monster heads
     // right; False = drawn as painted whichever way it heads
     Mirrors: Boolean;
+    // The cut of the barrel a straight shot leaves; without one the shot
+    // leaves where any monster's does
+    HasMuzzle: Boolean;
+    Muzzle: THullPoint;
     Wheels: TWheelsDef;
     function Enabled: Boolean;
   end;
@@ -260,6 +265,8 @@ resourcestring
   SBadAxle = 'Monster "%s": an axle of a hull is a point of two numbers';
   SDiscAndHull = 'Monster "%s": a monster is drawn as a disc or as a hull, ' +
     'not both';
+  SMuzzleOfNoStraightShot = 'Monster "%s": the muzzle of a hull is for a ' +
+    'straight shot, and the monster fires none';
 
 const
   // JSON protocol keys read in more than one place
@@ -478,6 +485,10 @@ begin
   Result.Smoke := ParseHullPoint(AObj, 'smoke', AMonsterId);
   Result.Sparks := ParseHullPoint(AObj, 'sparks', AMonsterId);
   Result.Mirrors := AObj.GetValue<Boolean>('mirrors', False);
+  Result.Muzzle := Default(THullPoint);
+  Result.HasMuzzle := AObj.GetValue('muzzle') <> nil;
+  if Result.HasMuzzle then
+    Result.Muzzle := ParseHullPoint(AObj, 'muzzle', AMonsterId);
   Result.Wheels := Default(TWheelsDef);
   var Wheels := AObj.GetValue<TJSONObject>('wheels', nil);
   if Assigned(Wheels) then
@@ -697,6 +708,10 @@ begin
     Result.Hull := ParseHull(Hull, Result.Id);
   if Result.Disc.Enabled and Result.Hull.Enabled then
     raise EMonsterDefError.CreateFmt(SDiscAndHull, [Result.Id]);
+  var FiresStraight := Result.Attack.Pattern in
+    [apStraightSingle, apStraightCluster5];
+  if Result.Hull.HasMuzzle and not FiresStraight then
+    raise EMonsterDefError.CreateFmt(SMuzzleOfNoStraightShot, [Result.Id]);
 end;
 
 // Spawn tables reference other monsters by id; a broken reference must fail
