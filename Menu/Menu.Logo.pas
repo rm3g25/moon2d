@@ -52,7 +52,6 @@ uses
 
 resourcestring
   SLogoLoadFailed = 'Cannot load the logo "%s": %s';
-  SLogoSurfaceFailed = 'Cannot build the logo halo: %s';
 
 type
   PPixelBytes = ^TPixelBytes;
@@ -73,43 +72,6 @@ const
   HaloBaseLevel = 0.55;
   HaloSwing = 0.2;
   HaloBreathTicks = 528;
-
-// One box blur along a line of the image: AStart is the first texel,
-// AStep the distance to the next (1 along a row, the width down a
-// column). Outside the line counts as dark.
-procedure BlurLine(var AImage: TArray<Single>; AStart, AStep, ACount,
-  ARadius: Integer);
-var
-  Line: TArray<Single>;
-begin
-  SetLength(Line, ACount);
-  for var i := 0 to ACount - 1 do
-    Line[i] := AImage[AStart + i * AStep];
-
-  var Window := 2 * ARadius + 1;
-  var Sum: Single := 0;
-  for var i := 0 to Min(ARadius - 1, ACount - 1) do
-    Sum := Sum + Line[i];
-  for var i := 0 to ACount - 1 do
-  begin
-    var Entering := i + ARadius;
-    if Entering < ACount then
-      Sum := Sum + Line[Entering];
-    var Leaving := i - ARadius - 1;
-    if Leaving >= 0 then
-      Sum := Sum - Line[Leaving];
-    AImage[AStart + i * AStep] := Sum / Window;
-  end;
-end;
-
-procedure BoxBlur(var AImage: TArray<Single>; AWidth, AHeight,
-  ARadius: Integer);
-begin
-  for var Row := 0 to AHeight - 1 do
-    BlurLine(AImage, Row * AWidth, 1, AWidth, ARadius);
-  for var Col := 0 to AWidth - 1 do
-    BlurLine(AImage, Col, AWidth, AHeight, ARadius);
-end;
 
 // The letters' hue at full brightness: the mean color of the ink,
 // scaled so its strongest channel is 255
@@ -197,8 +159,8 @@ begin
   inherited;
 end;
 
-// Alpha shrunk by HaloScale into the middle of an apron-padded image,
-// blurred, normalized to a peak of one, then handed to Render.Glow
+// Alpha shrunk by HaloScale into the middle of an apron-padded image;
+// Render.Glow blurs it and makes the glow texture
 procedure TMenuLogo.BuildHalo(ASurface: PSdlSurface);
 var
   Image: TArray<Single>;
@@ -220,39 +182,8 @@ begin
     end;
   end;
 
-  for var Pass := 1 to HaloBlurPasses do
-    BoxBlur(Image, Width, Height, HaloBlurRadius);
-
-  var Peak: Single := 0;
-  for var Value in Image do
-    if Value > Peak then
-      Peak := Value;
-  if Peak <= 0 then
-    Peak := 1;
-
-  var Halo := SDL_CreateRGBSurfaceWithFormat(0, Width, Height, 32,
-    SdlPixelFormatAbgr8888);
-  if Halo = nil then
-    raise ELogoError.CreateFmt(SLogoSurfaceFailed, [SdlErrorText]);
-  try
-    SDL_LockSurface(Halo);
-    for var Row := 0 to Height - 1 do
-    begin
-      var Pixel := PPixelBytes(PByte(Halo.Pixels) + Row * Halo.Pitch);
-      for var Col := 0 to Width - 1 do
-      begin
-        Pixel[0] := 255;
-        Pixel[1] := 255;
-        Pixel[2] := 255;
-        Pixel[3] := Round(255 * Image[Row * Width + Col] / Peak);
-        Inc(Pixel);
-      end;
-    end;
-    SDL_UnlockSurface(Halo);
-    FHalo := CreateGlowTexture(FRenderer, Halo);
-  finally
-    SDL_FreeSurface(Halo);
-  end;
+  BlurImage(Image, Width, Height, HaloBlurRadius, HaloBlurPasses);
+  FHalo := CreateGlowFromImage(FRenderer, Image, Width, Height);
 end;
 
 procedure TMenuLogo.Tick;

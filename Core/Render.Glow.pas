@@ -41,6 +41,14 @@ function CreateGlowShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
 // the caller's to free.
 function CreateGlowTexture(ARenderer: PSdlRenderer;
   ASurface: PSdlSurface): PSdlTexture;
+// APasses box blurs of ARadius: three make a near-Gaussian bloom.
+// Outside the image counts as dark.
+procedure BlurImage(var AImage: TArray<Single>; AWidth, AHeight, ARadius,
+  APasses: Integer);
+// A glow out of an image of levels: scaled so its peak is one, white
+// with the levels in alpha
+function CreateGlowFromImage(ARenderer: PSdlRenderer;
+  const AImage: TArray<Single>; AWidth, AHeight: Integer): PSdlTexture;
 // The texture centered on the point, ASize units on a side
 procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   ACenterX, ACenterY, ASize: Single; ATint: TRgb; ALevel: Single);
@@ -198,6 +206,88 @@ begin
   // The game renders nearest-neighbor; a glow must not turn into a
   // square when it is scaled up to the window
   SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
+end;
+
+// One box blur along a line of the image: AStart is the first texel,
+// AStep the distance to the next (1 along a row, the width down a
+// column). Outside the line counts as dark.
+procedure BlurLine(var AImage: TArray<Single>; AStart, AStep, ACount,
+  ARadius: Integer);
+var
+  Line: TArray<Single>;
+begin
+  SetLength(Line, ACount);
+  for var i := 0 to ACount - 1 do
+    Line[i] := AImage[AStart + i * AStep];
+
+  var Window := 2 * ARadius + 1;
+  var Sum: Single := 0;
+  for var i := 0 to Min(ARadius - 1, ACount - 1) do
+    Sum := Sum + Line[i];
+  for var i := 0 to ACount - 1 do
+  begin
+    var Entering := i + ARadius;
+    if Entering < ACount then
+      Sum := Sum + Line[Entering];
+    var Leaving := i - ARadius - 1;
+    if Leaving >= 0 then
+      Sum := Sum - Line[Leaving];
+    AImage[AStart + i * AStep] := Sum / Window;
+  end;
+end;
+
+procedure BoxBlur(var AImage: TArray<Single>; AWidth, AHeight,
+  ARadius: Integer);
+begin
+  for var Row := 0 to AHeight - 1 do
+    BlurLine(AImage, Row * AWidth, 1, AWidth, ARadius);
+  for var Col := 0 to AWidth - 1 do
+    BlurLine(AImage, Col, AWidth, AHeight, ARadius);
+end;
+
+procedure BlurImage(var AImage: TArray<Single>; AWidth, AHeight, ARadius,
+  APasses: Integer);
+begin
+  for var i := 1 to APasses do
+    BoxBlur(AImage, AWidth, AHeight, ARadius);
+end;
+
+function CreateGlowFromImage(ARenderer: PSdlRenderer;
+  const AImage: TArray<Single>; AWidth, AHeight: Integer): PSdlTexture;
+type
+  PPixelBytes = ^TPixelBytes;
+  TPixelBytes = array [0..3] of Byte; // R,G,B,A of SdlPixelFormatAbgr8888
+begin
+  var Peak: Single := 0;
+  for var Value in AImage do
+    if Value > Peak then
+      Peak := Value;
+  if Peak <= 0 then
+    Peak := 1;
+
+  var Surface := SDL_CreateRGBSurfaceWithFormat(0, AWidth, AHeight, 32,
+    SdlPixelFormatAbgr8888);
+  if Surface = nil then
+    raise EGlowError.CreateFmt(SGlowTextureFailed, [SdlErrorText]);
+  try
+    SDL_LockSurface(Surface);
+    for var Row := 0 to AHeight - 1 do
+    begin
+      var Pixel := PPixelBytes(PByte(Surface.Pixels) + Row * Surface.Pitch);
+      for var Col := 0 to AWidth - 1 do
+      begin
+        Pixel[0] := 255;
+        Pixel[1] := 255;
+        Pixel[2] := 255;
+        Pixel[3] := Round(255 * AImage[Row * AWidth + Col] / Peak);
+        Inc(Pixel);
+      end;
+    end;
+    SDL_UnlockSurface(Surface);
+    Result := CreateGlowTexture(ARenderer, Surface);
+  finally
+    SDL_FreeSurface(Surface);
+  end;
 end;
 
 procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
