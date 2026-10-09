@@ -253,6 +253,8 @@ type
     property Direction: Boolean read FDirection;
     property TicksSinceHit: Integer read FTicksSinceHit;
     property Disc: TDisc read FDisc;
+    // A sentry with no hero to watch, as of the last tick
+    property Asleep: Boolean read FAsleep;
   end;
 
   TMonsterField = class

@@ -79,6 +79,8 @@ type
     property Awake: Boolean read FAwake write FAwake;
     // Asleep and dark at once, without the ramp down
     procedure Doze;
+    // 0 dark to 1 smoldering: how far the eye has come up
+    property Wake: Single read FWake;
     // AWear, ACharge: 0..1 - how battered, how close the next shot is.
     // ARolled - units the body has rolled along the floor since the last
     // tick, to the right above zero.
