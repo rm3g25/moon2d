@@ -141,6 +141,7 @@ type
     FSpriteSets: TArray<string>;
     FObjectSets: TArray<string>;
     FMusic: string;
+    FHenshinPattern: string;
     FIntroText: TLocalizedText;
     FGridWidth: Integer;
     FGridHeight: Integer;
@@ -212,6 +213,9 @@ type
     // "objectSets": ["sky"].
     property ObjectSets: TArray<string> read FObjectSets;
     property Music: string read FMusic;
+    // The word of the pattern the orbs of the henshin build on this
+    // level; '' = the game's default one. JSON: "henshinPattern".
+    property HenshinPattern: string read FHenshinPattern;
     // Story text shown before the level starts; '' = jump straight in.
     property IntroText: TLocalizedText read FIntroText;
     property GridWidth: Integer read FGridWidth;
@@ -483,6 +487,7 @@ begin
   FSpriteSets := ReadSetNames(ARoot, 'spriteSets');
   FObjectSets := ReadSetNames(ARoot, 'objectSets');
   FMusic := ARoot.GetValue<string>('music', '');
+  FHenshinPattern := ARoot.GetValue<string>('henshinPattern', '');
   FIntroText := ReadLocalizedText(ARoot, 'introText');
 
   var Grid := ARoot.GetValue<TJSONObject>('grid');

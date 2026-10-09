@@ -88,18 +88,11 @@ type
     procedure Draw(const ASprites: TSpriteRenderer);
 
     // The k/t fan formula of moon.dpr with the shape as a parameter - the
-    // henshin finale, the ice-form shatter, the bonus explosion and the
-    // boss's fans are all this one template wearing different numbers.
+    // ice-form shatter, the bonus explosion and the boss's fans are all
+    // this one template wearing different numbers.
     // Fragments carry Contact=False and land in WHICHEVER burst this is
     // called on.
     procedure SpawnFan(ACenterX, ACenterY: Double; const AShape: TFanShape);
-    // The healing ring of the transformation (moon.dpr 453-497):
-    // Cos/Sin of an INTEGER k is not a circle, it is the 2008 starburst
-    // scatter - kept verbatim. X radius comes from the wave and shrinks
-    // as the ice closes in; the Y sweep is fixed. Contact=True: ring
-    // fragments are honest hero bullets and CAN wound the boss.
-    procedure SpawnConvergingRing(ACenterX, ACenterY: Double;
-      ACount, ARadiusX: Integer);
 
     property Bullets: TObjectList<TBullet> read FBullets;
   end;
@@ -248,19 +241,6 @@ begin
         108 + k - Round(t * 2 * ((18 + k) / k)),
         30 - Round(k / 4),
         False);
-end;
-
-procedure TBurst.SpawnConvergingRing(ACenterX, ACenterY: Double;
-  ACount, ARadiusX: Integer);
-const
-  RadiusY = 30; // vertical sweep never shrinks - only the ring tightens
-begin
-  // Speed 6, upward arc 220..300, near-flat gravity 1 - verbatim 458
-  for var k := 1 to ACount do
-    NewBullet(6,
-      ACenterX + Cos(k) * ARadiusX + Random(6),
-      ACenterY + Sin(k) * RadiusY + Random(6),
-      220 + Random(80), 1, True);
 end;
 
 end.

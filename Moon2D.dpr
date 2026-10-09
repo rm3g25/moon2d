@@ -208,7 +208,7 @@ const
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
-  ScancodeJ = 13; // the rite of orbs on the hero, no ceremony behind it
+  ScancodeJ = 13; // the henshin at once: no boss, no countdown
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
@@ -422,7 +422,6 @@ type
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
     procedure DebugRestorePads;
-    procedure DebugStartRite;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -443,6 +442,8 @@ type
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure EchoAftershock;
     procedure CureHero;
+    procedure GrantMercy(ATicks: Integer);
+    procedure BeginRite;
     function HeroCenter: TSdlFPoint;
     function MatterAround: TMatter;
     procedure CastAura;
@@ -595,7 +596,11 @@ begin
   FLevel := TLevel.Create;
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
-  FPattern := FindPattern(DefaultPatternName);
+  // A name the game does not know raises here, not mid-boss
+  var PatternName := FLevel.HenshinPattern;
+  if PatternName = '' then
+    PatternName := DefaultPatternName;
+  FPattern := FindPattern(PatternName);
 
   FTileCache := TSpriteCache.Create(FRenderer);
   for var SetName in FLevel.SpriteSets do
@@ -649,7 +654,12 @@ begin
   Stage.Messages := FMessages;
   Stage.Shake := FShake;
   Stage.Shroud := FShroud;
-  FHenshin := THenshin.Create(Stage, CureHero);
+  Stage.Rite := FRite;
+  var Calls: THenshinCalls;
+  Calls.Cure := CureHero;
+  Calls.GrantMercy := GrantMercy;
+  Calls.BeginRite := BeginRite;
+  FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
   CreateHud;
@@ -949,12 +959,15 @@ begin
       var LeftY := FHero.Y;
       FHero.Screen := FHero.Screen + 1;
       FHero.SetScreenX(4);
-      ArriveOnScreen;
-      // The aura and the rite cross with him, by the door's step and that
-      // of a trigger of the new screen: a leap would fly the orbs after
-      // him
-      FAura.Carry(FHero.X - LeftX, FHero.Y - LeftY);
+      // The rite crosses by the door's step before the new screen is
+      // greeted: a trigger there may begin a rite of its own, and that
+      // one has crossed nothing. A trigger that moves the hero is a leap
+      // to the rite, and it knows leaps.
       FRite.Carry(FHero.X - LeftX, FHero.Y - LeftY);
+      ArriveOnScreen;
+      // The aura crosses with him, by the door's step and that of a
+      // trigger of the new screen: a leap would fly the orbs after him
+      FAura.Carry(FHero.X - LeftX, FHero.Y - LeftY);
       Exit;
     end;
     if CurrentLevelIsLast then
@@ -1045,10 +1058,9 @@ begin
       FCheckpointY := FHero.Y;
     end;
     // 'Атака грейвелов' (955-971): one message armed BOTH the gravel
-    // rain and the transformation - 'Henshin := 1; HenshinTime := 30'
-    // fired the ceremony INSTANTLY, mid-sequence (tick-20 wave skipped).
-    // Verbatim: no countdown here - the bullet rain must open the scene
-    // (first ring 10 ticks in); the 3..2..1 prelude stays boss-only.
+    // rain and the transformation, and the ceremony fired INSTANTLY.
+    // Verbatim: no countdown here - the first wave of orbs must open the
+    // scene; the 3..2..1 prelude stays boss-only.
     if Triggers.HasGravelBoss then
     begin
       FGravelAttack := True;
@@ -1057,7 +1069,7 @@ begin
       FGravelLeft := Triggers.GravelQuota.ForGrade(FDifficulty);
       FToNextGravel := GravelFirstWaveTicks;
       FGravelScreen := FHero.Screen;
-      FHenshin.Start(30);
+      FHenshin.Start;
     end;
   end;
 end;
@@ -1235,11 +1247,11 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// HENSHIN - the transformation cinematic, verbatim moon.dpr 450-513.
-// Five converging rings heal the hero one heart at a time, then the flash:
-// the ice form goes on with a double fan. The world does NOT pause - the
-// boss keeps shooting through the ceremony, and the ring fragments are
-// honest hero bullets that can wound him back. That is the 2008 deal.
+// HENSHIN - what the ceremony (Game.Henshin) asks the game for: a point of
+// health, a stretch of mercy, the rite of orbs about the hero. The world
+// does NOT pause, as it did not in 2008: the boss keeps shooting through
+// the ceremony, and an orb on its way to the hero wounds what it flies
+// into.
 // ---------------------------------------------------------------------------
 
 // Original cured up to 15; we agreed on a modest 10
@@ -1249,6 +1261,23 @@ const
 begin
   if FHeroHealth < MaxHealth then
     Inc(FHeroHealth);
+end;
+
+// The hero is spared for ATicks, as after a hit; a pit asks no mercy, as
+// ever. A mercy never cuts a longer one short.
+procedure TMoonGame.GrantMercy(ATicks: Integer);
+begin
+  if ATicks > FHurtCooldown then
+    FHurtCooldown := ATicks;
+end;
+
+// The rite is the living hero's: called over the corpse, it is spent on
+// nothing
+procedure TMoonGame.BeginRite;
+begin
+  if FHero.Dead then
+    Exit;
+  FRite.Start(FPattern, IceRiteScore, HeroCenter, MatterAround);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1312,7 +1341,7 @@ begin
   // The orbs are still on their way out of the matter and the ring is
   // no shield yet: the mercy of a hit covers the wait. A pit asks no
   // mercy, as ever.
-  FHurtCooldown := HurtMercyTicks;
+  GrantMercy(HurtMercyTicks);
 end;
 
 // The rain is the hero's to call, as the aura is: over a corpse it is
@@ -1765,7 +1794,7 @@ begin
     Exit;
   FKillStreak := 0; // 2008 reset it at every damage site (752/781/985)
   Dec(FHeroHealth);
-  FHurtCooldown := HurtMercyTicks;
+  GrantMercy(HurtMercyTicks);
   if FHeroHealth <= 0 then
   begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
@@ -1984,9 +2013,9 @@ begin
           end;
         meHenshin:
           // The boss dropped below 2/3 - three seconds of countdown,
-          // then the cinematic; the ice form arrives 140 ticks of
-          // waves after that
-          FHenshin.StartCountdown(0);
+          // then the ceremony; the ice form arrives when the rite of
+          // orbs is through
+          FHenshin.StartCountdown;
         meBossRage:
           begin
             // 'Сменить музыку' of 2008 (868-869): the rage track loops
@@ -2064,10 +2093,6 @@ begin
       Exit;
     end;
   end;
-  // The ceremony counts in the same breath as the 2008 timer did (450):
-  // it keeps ticking even over the hero's corpse - restart resets it
-  FHenshin.Tick;
-
   // Enough points on the meter and an empty slot: the roulette spins (531)
   if (FScore >= BonusCost) and (FBonus = bkNone) then
     AwardRandomBonus;
@@ -2113,6 +2138,8 @@ begin
   FImpacts.Tick;
   FAura.Tick(HeroCenter);
   FRite.Tick(HeroCenter);
+  // After the rite: what it tells this tick, the ceremony hears this tick
+  FHenshin.Tick;
   var HeroPose := FHero.Pose;
   FShroud.Tick(HeroPose, FShroudPainter.SeedsOf(HeroPose.Frame));
   FRain.Tick;
@@ -2431,15 +2458,6 @@ begin
     if Group.Screen = FHero.Screen then
       FPads.RequestRestore(Group.Tag, HeroRides, nil);
 end;
-
-// J: the rite begins about the hero with no ceremony behind it; over a
-// corpse it is spent on nothing
-procedure TMoonGame.DebugStartRite;
-begin
-  if FHero.Dead then
-    Exit;
-  FRite.Start(FPattern, IceRiteScore, HeroCenter, MatterAround);
-end;
 {$ENDIF} // DEBUGKEYS
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
@@ -2481,7 +2499,9 @@ begin
     ScancodeH:
       PourRain;
     ScancodeJ:
-      DebugStartRite;
+      // The boss gives the ceremony once a fight, at two thirds of his
+      // lives - too far to tune against
+      FHenshin.Start;
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
