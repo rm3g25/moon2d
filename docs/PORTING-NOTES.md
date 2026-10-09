@@ -7444,3 +7444,47 @@ Give the TeK mount a phase offset and a sentry; Update the docs for the
 mount's rhythm and sentry. Тег v3.0.48 - на коммит доков этапа 2.
 
 ---
+
+## Сессия: тесты крепления, 3.0.48 (2026-10-09)
+
+Тесты к этапу 2 крепления, по конвейеру `docs/TESTING.md`, отдельной
+командой. 23 теста в четырёх новых модулях; не собраны и не запущены.
+
+### Решения
+- Два свойства только на чтение: `TMonster.Asleep` и `THull.Wake`. Сон
+  часового и подъём линзы снаружи иначе не видны (поля закрыты), а залп
+  требует `TBurst` с рендерером. Это исключение из правила "чёрный ящик",
+  оно записано в самом `TESTING.md`. Поля остаются закрытыми, ничего
+  не пишется.
+- `Room.Place(APlacement)`: перегрузка для размещения с заполненными
+  `overrides` (комната ставит экран). `LevelFromRows` принимает секцию
+  `"entities"` и тогда не пишет свою пустую.
+- `reach` и подъём линзы в тестах не названы числами: оба подбираются вживую.
+  Тесты держат форму: край полосы, обе стороны, на единицу дальше; подъём
+  идёт ступенями и кончается за секунду.
+- Залпы, их тики (23/68/113 и 45/90/135), линза в `Draw` и стены между
+  креплением и героем оставлены глазу.
+
+### Как вышло
+- `Tests.Monsters.Mount` (`TMountTests`, 11): часовой и `fireOffset` на
+  монстре.
+- `Tests.Monsters.Hull` (`THullTests`, 4): `Doze`, `Awake`, рампа `Wake`.
+- `Tests.Monsters.Defs` (`TMonsterDefsTests`, 5): слово `sentry` в
+  определениях.
+- `Tests.Levels.Entities` (`TLevelEntitiesTests`, 3): слова `overrides`
+  размещения, в том числе `fireOffset`.
+- `Tests.Rooms`, `Moon2D.Tests.dpr`, `Moon2D.Tests.dproj`, `docs/TESTING.md`.
+
+### Проверка без компилятора
+- Полоса, подъём линзы и диапазон смещения пересчитаны в питоне на тех же
+  числах, что и тесты.
+- Файлы проверены на BOM и CRLF до и после правки, добавленные строки
+  .pas - ASCII.
+- Первый прогон может показать: искры и молния крепления в комнате без
+  окна (рвётся весь `TMountTests` разом); подпись `Assert.WillNotRaise`.
+
+### Коммиты
+Open read-only observers of the sentry and the lens; Test the mount's
+rhythm and sentry; Update the testing doc for the mount.
+
+---

@@ -25,7 +25,9 @@ into older code until there is a reason to.
 - **Black box.** A test sees the `interface` section of a unit and
   nothing else. Game code is not changed for a test's sake: nothing
   moves into `interface`, no field is opened. What a test cannot see, it
-  does not try.
+  does not try. One exception is decided, not a habit: a read-only
+  property that shows a state the game keeps anyway (`TMonster.Asleep`,
+  `THull.Wake`). It writes nothing, and no field is opened.
 - **Behavior, not formula.** A test says what must hold ("the hero is
   inside the ring"), not how the code counts it. A test that repeats the
   formula can only agree with the formula.
@@ -61,11 +63,15 @@ Tests\
     Tests.Game.Blasts.pas
     Tests.Game.Shroud.pas
   Levels\
+    Tests.Levels.Entities.pas
     Tests.Levels.Pads.pas
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
     Tests.Monsters.Damage.pas
+    Tests.Monsters.Defs.pas
+    Tests.Monsters.Hull.pas
+    Tests.Monsters.Mount.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
   Pads\
@@ -278,7 +284,8 @@ stand in it too):
 - `Room.Place(AMonsterId, ACol, ARow)` gives a `TMonster` on that cell,
   counted from 1 as the level file counts, its feet on the bottom line of
   the cell. No animation set (`Default(TAnimSet)`), no disc art, lives
-  scale 1.
+  scale 1. `Room.Place(APlacement)` is the same for a placement with its
+  overrides filled in; the room sets the screen.
 - The bursts are `nil`. A body that explodes, brought to zero lives, fans
   bullets into its burst, so none is killed in this suite: the blows of
   this batch are struck with `ALosses` 0, and the one test that spends a
@@ -446,6 +453,105 @@ Left to the eye:
 
 Open: the shove test leans on a fresh `boss1` not being busy with a
 maneuver and on its row being open; the first run shows it.
+
+## Monsters.Mount
+
+State: written, 11 tests, not yet run on a compiler. The expectations were
+checked on a Python port of the strip and of the offset's range. The unit
+is tried by `Tests\Monsters\Tests.Monsters.Mount.pas`, fixture
+`TMountTests`: the TeK mount in an open room, the hero two numbers handed
+to `Tick`.
+
+Two things are tried: the fire offset of a placement (the tick a mount
+starts counting from) and the sentry (a mount asleep until the hero stands
+in the strip under it). The way in is `Room.Place(APlacement)` with the
+overrides filled in, and `TMonster.Asleep`, a read-only property of the
+state the monster keeps anyway.
+
+The mount stands at column 8, row 3 (the middle of its cell is x = 240, its
+feet line y = 96); the hero is on the floor (feet at y = 352), his left
+edge as far from the mount's own as the test says. Equal X is a hero
+centred under the mount. The reach of the strip is read from the mount's
+definition, not spelled: it is tuned by eye, and the tests hold its shape
+(an edge, both sides, one unit beyond), not its width.
+
+A mount fires when its count reaches its interval, and the room has no
+burst to take the volley (a burst needs a renderer): no test here ticks a
+mount for more than a few ticks.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestMountIsBornAsleep` | a fresh mount, no tick: `Asleep` | the sentry is born awake: it would fire a volley at an empty screen on the first tick |
+| `TestHeroUnderTheMountWakesIt` | the hero right under it, one tick: awake | the strip is never found, the mount sleeps for ever |
+| `TestHeroFarToEitherSideLeavesItAsleep` | the hero three reaches off to the right, then to the left: asleep both times | the sideways distance is not asked |
+| `TestStripEdgeIsInAndOneUnitBeyondIsOut` | the hero at exactly one reach off the middle: awake; one unit beyond: asleep; on both sides | the strip is measured from the hero's edge and not from his middle, is lopsided, or its edge is left out |
+| `TestHeroLevelWithTheMountIsNotInTheStrip` | the hero's feet on the mount's feet line: asleep; one unit lower: awake | "below" turns into "level or below": the mount fires at a hero its bullets fall past |
+| `TestHeroAboveTheMountIsNotInTheStrip` | the hero in line with it and 64 units above: asleep | the mount shoots up through the ceiling it hangs from |
+| `TestMountFollowsTheHeroInAndOut` | under it (awake), away (asleep), under it again (awake) | the sleep sticks once woken, or the wake once slept |
+| `TestMountThatCannotShootStaysAsleep` | `canShoot` false, the hero under it for three ticks: asleep | a mute mount lights its eye and watches |
+| `TestBodiesWithoutASentryNeverSleep` | a medkit and a gravel, the hero far off: not asleep before the first tick nor after three | the sleep leaks to bodies with no sentry word |
+| `TestFireOffsetFromZeroToBelowTheIntervalLoads` | offsets 0 and interval minus 1 place a mount | the high end is cut one tick short |
+| `TestFireOffsetOutsideTheIntervalRaises` | -1, the interval and the interval plus 1 raise `ELevelError` | an offset past the interval loads: the first volley would come at once or never |
+
+Left to the eye:
+
+- The volleys: the first one 23 ticks after the hero comes under the
+  lower mount of screen 6 and 45 after the upper one; the gap of 22 and
+  23 ticks between the pair ("boom - boom"); a hero who leaves and comes
+  back starting a full count again. The Python port of the count gave
+  23, 68, 113 and 45, 90, 135.
+- The lens rising over the ramp as the hero steps in, and going dark as
+  he steps out.
+- The strip does not look at walls: a hero behind a slab in the strip
+  wakes the mount and the volley goes into the slab.
+- The mount builds sparks and a bolt of lightning at its birth (it can
+  short out); if they need a window the first run shows it, and the
+  whole fixture goes red at once.
+
+## Monsters.Hull
+
+State: written, 4 tests, not yet run on a compiler. The expectations were
+checked on a Python port of the ramp. The unit is tried by
+`Tests\Monsters\Tests.Monsters.Hull.pas`, fixture `THullTests`: the hull
+of the mount (its definition is read from `monsters.json`) made with no
+art. A tick of a hull moves numbers and never touches a picture; `Draw`
+is not called.
+
+The ramp is tuned by eye (8 ticks as written), so no test spells it: a
+test asks that the eye is on its way after one tick and all the way within
+a second (33 ticks), never moving back on the way. `THull.Wake` is the
+read-only property the tests look through: 0 the eye dark, 1 the eye
+smoldering at its rest level.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestHullIsBornAwakeAndLit` | a new hull: `Awake`, `Wake` 1, and 1 still after a second of ticks | a hull is born dark: every tank and platform would start with a dead eye |
+| `TestDozedHullIsDarkAndStaysDark` | after `Doze`: not `Awake`, `Wake` 0 at once, and 0 after a second | the dozing hull is lit for a moment (a flash at birth), or wakes by itself |
+| `TestWakingHullComesUpByDegrees` | dozed, then `Awake`: one tick puts `Wake` strictly between 0 and 1; over a second it never falls and ends at 1 | the eye jumps to full in a tick, or never gets there, or stutters |
+| `TestHullPutToSleepGoesDarkByDegrees` | awake, then not: one tick puts `Wake` strictly between 0 and 1; over a second it never rises and ends at 0 | the eye cuts out at a stroke when the hero leaves, or never goes out |
+
+Left to the eye: how the glow looks at each step (`Draw`), and that the
+resting eye is a smolder and not a flame.
+
+## Monsters.Defs
+
+State: written, 5 tests, not yet run on a compiler. The unit is tried by
+`Tests\Monsters\Tests.Monsters.Defs.pas`, fixture `TMonsterDefsTests`,
+through `TMonsterRegistry`: the real `monsters.json` beside the executable
+for what the game's definitions say, and a one-monster file of the test's
+own (`post`, a static `rainVolley`) for what the sentry word of an attack
+makes of its input.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestMountIsASentryWithAReach` | the mount of `monsters.json`: `Sentry.Enabled` and a `Reach` above 0 | the word is dropped from the file or misspelled: the mount is blind again |
+| `TestOtherAttackersAreNoSentries` | gravel, platform, tank and zombie shooter are no sentries | the sentry becomes a default of every attack |
+| `TestSentryReadsItsReach` | `{"reach":30}`: enabled, reach 30 | the reach is read from another word, or lost |
+| `TestAttackWithoutSentryIsNoSentry` | an attack with no sentry word: not enabled | a missing word counts as a sentry |
+| `TestSentryWithNoReachRaises` | reach 0, reach -5 and `{}` each raise `EMonsterDefError` | a sentry of no width loads: it would never wake, and no one would see why |
+
+Left to the eye: nothing here is drawn. The number in `monsters.json`
+(48 at the first go) is tuned in a live run.
 
 ## Game.Blasts
 
@@ -784,6 +890,27 @@ plunge first.
 
 Left to the eye: nothing here is drawn. The checks of the groups, of the
 rigs a pad wears and of the events that rebuild are not tried.
+
+## Levels.Entities
+
+State: written, 3 tests, not yet run on a compiler. Needs no stage. The
+unit is tried by `Tests\Levels\Tests.Levels.Entities.pas`, fixture
+`TLevelEntitiesTests`, through `TLevel.LoadFromFile`: the `overrides`
+object of a placement and what each word of it makes in `TEntityOverrides`.
+
+Shared setup: `LevelFromRows` takes an `"entities"` member in its sections
+and then does not write the empty one of its own (a root with two would
+leave the first to win). A placement of a test is one mount on screen 1,
+column 12, row 3.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFireOffsetIsReadAsWritten` | `"fireOffset": 22`: `HasFireOffset` and 22 | the word is read from another key, or the flag is not raised |
+| `TestFireOffsetLeftOutIsNotSet` | overrides with only `direction`, and a placement with no overrides: `HasFireOffset` false | a missing word counts as offset 0 and the pair of mounts fires in step again |
+| `TestOverridesLandEachInItsOwnField` | direction, speed, lives, canShoot false and fireOffset together: each in its own field | two words are swapped on the way in |
+
+Left to the eye: what the monster makes of the offset (above, in
+`Monsters.Mount`); the other members of a placement are not tried.
 
 ## Pads.World
 

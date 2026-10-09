@@ -1868,7 +1868,8 @@ every monster does.
   `Awake` (born True) and `Doze` put the eye to sleep: `FWake` climbs or
   falls by 1 / `WakeTicks` a tick, and the eye's rest glow (`EyeRestLevel`) is
   scaled by it between two ticks - a sleeping hull's eye is dark, though a
-  charge still lights it; `Doze` drops it to dark at once.
+  charge still lights it; `Doze` drops it to dark at once. `Wake` is `FWake`,
+  read-only: 0 dark to 1 lit.
   `Draw(sprites, stand, alpha)`: for a hull on wheels first `chassis` - the
   dark of the wheel wells - and the `wheel` picture at every axle, turned
   to the angle between its two ticks (`DrawWheels`, through `DrawTurned`);
@@ -2180,6 +2181,7 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   screen tick, so the strip is read there alone. Level 2's three mounts all
   watch (`reach` 48 - three cells), and the second of screen 6 starts at 22:
   with the hero in both strips it fires on tick 23 and the first on tick 45.
+  `Asleep` is `FAsleep`, read-only.
 - **Wreck sparks** (default behavior, no data): the bodies `ShortsOut`
   names - a machine, and a body that has a `blast` and a hull, which makes
   the mount one though it is no machine - own a `TSparks` made from the
