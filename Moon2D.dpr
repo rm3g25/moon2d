@@ -166,6 +166,9 @@ const
   // A monster's hitbox for a bullet: its sprite less this much on
   // either side
   HitInset = 8;
+  // A blast throws a pickup this many knocks, where it shoves a heavier
+  // body half of one: off a ledge from the next cell
+  PickupThrow = 2.5;
   // An orb takes an enemy bullet nearer than this on either axis: the
   // reach a hero's bullet intercepts one at
   OrbReach = 6;
@@ -1650,18 +1653,30 @@ end;
 
 // A blast is no one's side: an enemy, a barrel, a medkit - whatever
 // stands in the wave loses lives. A barrel it kills blows up in its turn.
+// A pickup is light: the wave throws it instead of shoving it, and a
+// pickup in the air is out of a wave's reach - the next blast of a chain
+// neither throws it back nor wears it down.
 procedure TMoonGame.StrikeMonsters(const ABlast: TBlast);
 begin
   for var Monster in FField.Monsters do
   begin
     if (Monster.Screen <> FHero.Screen) or (Monster.Life <> mlAlive) then
       Continue;
+    var IsPickup := Monster.Def.Category = mcPickup;
+    if IsPickup and Monster.InFlight then
+      Continue;
     var Body := MonsterBody(Monster);
     var Near := NearestPoint(Body, ABlast.Heart);
     if not ABlast.Strikes(Monster, Near, BlastStoppedAt) then
       Continue;
 
-    Monster.TakeDamage(ABlast.Knock(Near, Body.X + Body.W / 2),
+    var Knock := ABlast.Knock(Near, Body.X + Body.W / 2);
+    if IsPickup then
+    begin
+      Monster.Throw(Round(Knock * PickupThrow));
+      Knock := 0;
+    end;
+    Monster.TakeDamage(Knock,
       ABlast.Lives(Near, DifficultyMonsterLives[FDifficulty]),
       FMonsterBullets);
     if Monster.Life = mlDying then
