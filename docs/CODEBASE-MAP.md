@@ -1187,8 +1187,8 @@ Monster definition model + registry (parses monsters.json). No behavior.
   without a positive side and radius or without an axle, or an axle that
   is not two numbers, raise at load); `HasMuzzle`, `Muzzle` (JSON
   `muzzle`, none by default) - the cut of the barrel a straight
-  shot leaves; a muzzle on a monster that fires no straight shot raises at
-  load; `Enabled`; a hull without a set, a
+  shot leaves, or the middle of the ports a volley leaves; a muzzle on a
+  monster that fires neither raises at load; `Enabled`; a hull without a set, a
   positive width and
   height or with `wearFull` outside (0, 100], or a point that is not two
   numbers, raises at load - and so does a monster with a disc and a hull);
@@ -1838,7 +1838,8 @@ the `death` frames of its own set, as every monster does.
 
 ### `Game/Monsters.Hull.pas` (~230 lines)
 A monster drawn as a hull out of layers instead of its `alive` frames -
-the TeK platform, the TeK tank (3.0.45). The disc's twin without the iris:
+the TeK platform, the TeK tank (3.0.45), the TeK mount (3.0.48). The disc's
+twin without the iris:
 art and pose only, the hull knows nothing of the monster's logic. Not here:
 where the hull stands - the monster says (`TMonster.HullStand`); the
 death - a dying hull monster plays the `death` frames of its own set, as
@@ -1872,8 +1873,8 @@ every monster does.
   wheel behind its fenders and carries their shade in the wheel cuts, so
   the shade stands still while the wheel turns. A wheel is not mirrored
   with the hull: it is painted in flat light, and a mirror would only jerk
-  the mark on its hub at every turn of the body. The platform is never
-  mirrored: its art is symmetric,
+  the mark on its hub at every turn of the body. The platform and the mount
+  are never mirrored: their art is symmetric,
   and the torn panel of the worn layer would jump from side to side at every
   turn. `Spot(stand, point)` - where a point of the art falls on the
   screen, mirrored across the hull with the stand: the eye, the axles, and
@@ -2038,7 +2039,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   leaves from that point of the art, put on the screen by `THull.Spot`
   over `HullStand` - so it turns round with the hull - and moved a sprite
   down into a bullet's units, instead of the 2008 quarter of the cell;
-  the cluster of five keeps its cross about it), `FirePorts` (a volley when the pilot says `PortsDue`:
+  the cluster of five keeps its cross about it; the rain volley of a
+  monster whose hull `HasMuzzle` is a row about that same point - the
+  first bullet `(VolleyCount - 1) / 2` steps of `volleySpacingX` to its
+  left, the same step on from there - and without a hull it is the 2008
+  row; `MuzzleSpot` is the one home of the point for both), `FirePorts` (a volley when the pilot says `PortsDue`:
   one bullet out of every angle of `Disc.PortAngles`, turned with the
   rim, `Muzzle` from the axis, straight out; fired after `TickDisc`, so
   the ports are where the frame shows them), `TakeDamage` (knockback
@@ -2150,11 +2155,15 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   and stays put on one that does not. The smoke dies
   with the monster, so a restart clears it. `TMonster` got its destructor
   (it frees the hull, the disc, the sparks, the smoke and the event list).
-- **Wreck sparks** (default behavior, no data): the same machines own a
-  `TSparks` made from the `WreckSparks` look (a rare crackle: two sparks a
-  second and an arc of about five every second and a half, ringing off
-  the floor), unlit until the same moment - `WreckIfCritical` is the one
-  trigger of the smoke and the sparks - then at full at once. The point
+- **Wreck sparks** (default behavior, no data): the bodies `ShortsOut`
+  names - a machine, and a body that has a `blast` and a hull, which makes
+  the mount one though it is no machine - own a `TSparks` made from the
+  `WreckSparks` look (a rare crackle: two sparks a second and an arc of
+  about five every second and a half, ringing off the floor) and a
+  `TLightning` for the short, unlit until the same moment -
+  `WreckIfCritical` is the one trigger, and it asks nothing of the smoke:
+  the red third sets `FWrecked`, and the smoke and the sparks each light
+  up if the body has them (the mount has no smoke) - then at full at once. The point
   (`WreckSparksX/Y`) mirrors like the smoke's - a hull's `Sparks` stands for
   it and for the short's, mirrored only with the hull; the probe is the monster's
   own screen (`SolidUnderPoint`: `TLevel.SolidAtPoint` or a pad's body,
@@ -3385,13 +3394,17 @@ and `boss1` - a bullet throws sparks off them instead of bursting
 of the layers of a set instead of its `alive` frames: `set`, `side`,
 `muzzle`, `spin`, `irisReach`, `wearFull`, `portAngles` (the six gun
 ports of the ring art: 0, 51, 129, 180, 231, 309) - see `TDiscDef`. Its
-`boss` block names `dodgePrize`: `medkit`. `hull` (`platform` and `tank`) draws
+`boss` block names `dodgePrize`: `medkit`. `hull` (`platform`, `tank` and `mount`) draws
 the living monster as a hull out of the layers of a set: the platform's -
 `set` (`platform-hull`), `width` 40, `height` 20.33, `wearFull` 80, and the
 points `eye`, `smoke`, `sparks`; the tank's (3.0.45) - `set` (`tank-hull`),
 `width` 38, `height` 31, `wearFull` 80, the same points, `mirrors`: true,
 `wheels` (`side` 16, `radius` 7.76, two `axles`) and `muzzle` (5.5, 5.4 -
-the cut of the middle barrel) - see `THullDef`. `stats.damageCap` (only `boss1`)
+the cut of the middle barrel); the mount's (3.0.48) - `set` (`mount-hull`),
+`width` 36.5, `height` 32, `wearFull` 80, the same points (its `smoke` is read
+and unused: the mount does not smoke) and `muzzle` (18.2, 30.2 - the middle of
+the row of ports; the volley's row is centered on it) - see `THullDef`.
+`stats.damageCap` (only `boss1`)
 limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
