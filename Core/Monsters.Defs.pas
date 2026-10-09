@@ -152,8 +152,9 @@ type
     // The art faces left and is mirrored whole while the monster heads
     // right; False = drawn as painted whichever way it heads
     Mirrors: Boolean;
-    // The cut of the barrel a straight shot leaves; without one the shot
-    // leaves where any monster's does
+    // The cut of the barrel a straight shot leaves, or the middle of the
+    // ports a volley leaves; without one the shot leaves where any
+    // monster's does
     HasMuzzle: Boolean;
     Muzzle: THullPoint;
     Wheels: TWheelsDef;
@@ -265,8 +266,8 @@ resourcestring
   SBadAxle = 'Monster "%s": an axle of a hull is a point of two numbers';
   SDiscAndHull = 'Monster "%s": a monster is drawn as a disc or as a hull, ' +
     'not both';
-  SMuzzleOfNoStraightShot = 'Monster "%s": the muzzle of a hull is for a ' +
-    'straight shot, and the monster fires none';
+  SMuzzleOfWrongPattern = 'Monster "%s": the muzzle of a hull is for a ' +
+    'straight shot or a volley, and the monster fires neither';
 
 const
   // JSON protocol keys read in more than one place
@@ -708,10 +709,10 @@ begin
     Result.Hull := ParseHull(Hull, Result.Id);
   if Result.Disc.Enabled and Result.Hull.Enabled then
     raise EMonsterDefError.CreateFmt(SDiscAndHull, [Result.Id]);
-  var FiresStraight := Result.Attack.Pattern in
-    [apStraightSingle, apStraightCluster5];
-  if Result.Hull.HasMuzzle and not FiresStraight then
-    raise EMonsterDefError.CreateFmt(SMuzzleOfNoStraightShot, [Result.Id]);
+  var FiresFromMuzzle := Result.Attack.Pattern in
+    [apStraightSingle, apStraightCluster5, apRainVolley];
+  if Result.Hull.HasMuzzle and not FiresFromMuzzle then
+    raise EMonsterDefError.CreateFmt(SMuzzleOfWrongPattern, [Result.Id]);
 end;
 
 // Spawn tables reference other monsters by id; a broken reference must fail

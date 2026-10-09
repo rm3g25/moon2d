@@ -10,7 +10,8 @@
 
     Attack.Pattern: apStraightSingle (+ the tank's 5-bullet cross),
       apAimedSingle (boss arccos aim), apAimedDouble (+16 offset),
-      apRainVolley (7 bullets straight down, 4 units apart).
+      apRainVolley (7 bullets straight down, 4 units apart, a row about
+      the muzzle of a hull).
 
   Deaths: a dying monster keeps sliding at Shag/3 and plays frames
   9..16 (CurrentSprite + 8*DeathType); a dead one lies as frame 16.
@@ -34,7 +35,9 @@
   A machine - a monster that explodes and moves: the tank, the flying
   platform - smokes and sparks once it is down to its last third, and
   shorts out in bolts that come harder with every life it loses (a 2026
-  addition). An explosive prop - the barrel - vents a wisp of smoke all
+  addition). The mount explodes and has a hull but does not move: it
+  sparks and shorts out in that last third too, and does not smoke. An
+  explosive prop - the barrel - vents a wisp of smoke all
   its life and a plume in that last third (a 2026 addition too).
 
   A pad (Levels.Pads, a 2026 addition) is floor the grid does not know:
@@ -148,6 +151,7 @@ type
     function CanGoDown: Boolean;
     function ShoveBlocked(AStep: Integer): Boolean;
     procedure ShoveX(ADeltaX: Integer);
+    function MuzzleSpot: TSdlFPoint;
     procedure FireAt(const ABullets: TBurst);
     procedure FirePorts(const ABullets: TBurst);
     function PilotBusy: Boolean;
@@ -410,6 +414,14 @@ begin
   Result := ADef.Blast.Enabled and (ADef.Category = mcProp);
 end;
 
+// A machine, or a hull that explodes: the mount is no machine, but its hull
+// has a torn plate to spark from
+function ShortsOut(const ADef: TMonsterDef): Boolean;
+begin
+  var IsHullThatExplodes := ADef.Blast.Enabled and ADef.Hull.Enabled;
+  Result := IsMachine(ADef) or IsHullThatExplodes;
+end;
+
 // ---------------------------------------------------------------------------
 // TMonster
 // ---------------------------------------------------------------------------
@@ -478,13 +490,14 @@ begin
   end;
 
   if IsMachine(ADef) then
-  begin
-    CreateSmoke(WreckSmoke);
-    CreateWreckSparks;
-    CreateWreckShort;
-  end
+    CreateSmoke(WreckSmoke)
   else if IsExplosiveProp(ADef) then
     CreateSmoke(BarrelSmoke);
+  if ShortsOut(ADef) then
+  begin
+    CreateWreckSparks;
+    CreateWreckShort;
+  end;
   if ADiscArt <> nil then
     FDisc := TDisc.Create(ADef.Disc, ADiscArt, ArtCenter);
   if AHullArt <> nil then
@@ -551,10 +564,11 @@ end;
 
 procedure TMonster.WreckIfCritical;
 begin
-  if FWrecked or (FSmoke = nil) or (HealthTier <> htCritical) then
+  if FWrecked or (HealthTier <> htCritical) then
     Exit;
   FWrecked := True;
-  FSmoke.FadeTo(FBodySmoke.CriticalLevel, FBodySmoke.RampTicks);
+  if FSmoke <> nil then
+    FSmoke.FadeTo(FBodySmoke.CriticalLevel, FBodySmoke.RampTicks);
   if FSparks <> nil then
     FSparks.FadeTo(WreckSparksLevel, WreckSparksRampTicks);
 end;
@@ -973,6 +987,14 @@ end;
 
 // --- behavior ---------------------------------------------------------------
 
+// The muzzle of the hull in a bullet's units: its picture hangs a sprite
+// above its Y
+function TMonster.MuzzleSpot: TSdlFPoint;
+begin
+  Result := FHull.Spot(HullStand, FDef.Hull.Muzzle);
+  Result.Y := Result.Y + SpriteSize;
+end;
+
 procedure TMonster.FireAt(const ABullets: TBurst);
 
   procedure AimedShot(ACount: Integer; AOffsetX: Integer);
@@ -1016,10 +1038,21 @@ begin
       AimedShot(2, FDef.Attack.SecondBulletOffsetX);
 
     apRainVolley:
-      for var i := 0 to FDef.Attack.VolleyCount - 1 do
-        ABullets.NewBullet(FDef.Attack.BulletSpeed,
-          FX + SpriteSize div 4 - 4 + i * FDef.Attack.VolleySpacingX,
-          FY + SpriteSize div 4, FDef.Attack.AngleDeg, 0, True);
+      begin
+        var FirstX: Double := FX + SpriteSize div 4 - 4;
+        var RowY: Double := FY + SpriteSize div 4;
+        if FDef.Hull.HasMuzzle then
+        begin
+          var Muzzle := MuzzleSpot;
+          FirstX := Muzzle.X -
+            (FDef.Attack.VolleyCount - 1) * FDef.Attack.VolleySpacingX / 2;
+          RowY := Muzzle.Y;
+        end;
+        for var i := 0 to FDef.Attack.VolleyCount - 1 do
+          ABullets.NewBullet(FDef.Attack.BulletSpeed,
+            FirstX + i * FDef.Attack.VolleySpacingX, RowY,
+            FDef.Attack.AngleDeg, 0, True);
+      end;
 
     apStraightSingle, apStraightCluster5:
       begin
@@ -1033,10 +1066,9 @@ begin
         var BaseY := FY + SpriteSize / 4;
         if FDef.Hull.HasMuzzle then
         begin
-          var Muzzle := FHull.Spot(HullStand, FDef.Hull.Muzzle);
+          var Muzzle := MuzzleSpot;
           BaseX := Muzzle.X;
-          // In a bullet's units: its picture hangs a sprite above its Y
-          BaseY := Muzzle.Y + SpriteSize;
+          BaseY := Muzzle.Y;
         end;
         ABullets.NewBullet(FDef.Attack.BulletSpeed, BaseX, BaseY,
           Angle, 0, True);

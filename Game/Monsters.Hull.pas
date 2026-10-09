@@ -1,18 +1,18 @@
 ﻿{
   Monsters.Hull - a monster drawn as a hull out of layers: the TeK
-  platform, the TeK tank. A whole hull, and a worn copy of it over it that
-  shows through as the lives run out. The red eye in the sensor housing
-  glows and swells before every shot.
+  platform, the TeK tank, the TeK mount. A whole hull, and a worn copy of
+  it over it that shows through as the lives run out. The red eye in the
+  sensor housing glows and swells before every shot.
 
   A hull that drives stands on wheels: one picture at every axle, turned
   by the way the body has rolled, in front of the dark of the wheel wells
   and behind the hull, whose fenders shade it.
 
   The hull stands on whole units like a frame; only the eye and the wheels
-  draw between ticks. The platform is never mirrored: its art is
-  symmetric, and the torn panel of the worn layer would jump from side to
-  side at every turn. The tank faces left and is mirrored whole while it
-  heads right.
+  draw between ticks. The platform and the mount are never mirrored: their
+  art is symmetric, and the torn panel of the worn layer would jump from
+  side to side at every turn. The tank faces left and is mirrored whole
+  while it heads right.
 
   Not here: where the hull stands - the monster says; the death - a dying
   hull monster plays the death frames of its own set, as every monster

@@ -294,7 +294,29 @@
         "lives": 100,
         "shardLives": 6
       },
-      "material": "metal"
+      "material": "metal",
+      "hull": {
+        "set": "mount-hull",
+        "width": 36.5,
+        "height": 32,
+        "wearFull": 80,
+        "eye": [
+          18.1,
+          16.6
+        ],
+        "smoke": [
+          8.1,
+          18.0
+        ],
+        "sparks": [
+          28.3,
+          18.4
+        ],
+        "muzzle": [
+          18.2,
+          30.2
+        ]
+      }
     },
     {
       "id": "barrel",
