@@ -457,7 +457,9 @@ Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
 - **`TEntityOverrides`** (record) - optional per-placement direction, speed,
-  lives, canShoot (Has* flag + value pairs).
+  lives, canShoot, fireOffset (Has* flag + value pairs; `fireOffset` - the
+  tick of its fire count a monster starts from, held against the monster's own
+  interval by `TMonster.FireStartOf`).
 - **`TDifficultyValue`** (record) - one int per grade; JSON = a number or
   `{"normal":..,"hard":..,"wild":..}`; `Uniform`, `ForGrade`.
 - **`TEntityTriggers`** (record) - `BigMessage`/`SmallMessage`/`HintText`
@@ -1156,7 +1158,10 @@ Monster definition model + registry (parses monsters.json). No behavior.
   does besides his lap, see `Monsters.Pilot`; set by the level's events,
   not by monsters.json).
 - **Records**: `TMovementDef` (kind+speed); `TAttackDef` (pattern, fire cadence,
-  bullet speed, pattern-specific params, `HasAttack`); `TPickupEffectDef`
+  bullet speed, pattern-specific params, `Sentry`, `HasAttack`);
+  `TSentryDef` (JSON `attack.sentry`: `Reach` - the units either way of the
+  monster's middle that the strip it watches reaches; `ParseSentry` refuses a
+  reach of 0 or less, `SBadSentry`); `TPickupEffectDef`
   (peGiveWeapon rewires the whole weapon: type, cooldown, speed, gravity);
   `TSpawnEntry` (monsterId+weight); `TBossDef` (endsLevelOnDeath, spawn
   cadence/screen/table, `RageMusic`, `DodgePrize` - JSON `dodgePrize`, the
@@ -1860,6 +1865,10 @@ every monster does.
   rolled along the floor since the last tick, to the right above zero - over
   the wheel's `Radius`: clockwise for a roll to the right, wrapped past
   `WrapDegrees` with the last angle moved along.
+  `Awake` (born True) and `Doze` put the eye to sleep: `FWake` climbs or
+  falls by 1 / `WakeTicks` a tick, and the eye's rest glow (`EyeRestLevel`) is
+  scaled by it between two ticks - a sleeping hull's eye is dark, though a
+  charge still lights it; `Doze` drops it to dark at once.
   `Draw(sprites, stand, alpha)`: for a hull on wheels first `chassis` - the
   dark of the wheel wells - and the `wheel` picture at every axle, turned
   to the angle between its two ticks (`DrawWheels`, through `DrawTurned`);
@@ -2063,7 +2072,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `SpinScale` has the last word), `Wear(WearFull)` (lives lost since birth over `WearFull` -
   `FLivesBorn`, because rage resets `LivesAll`; the hull's too) and `ShotCharge` (rises
   over the last `TelegraphTicks` = 10 before a shot, 1 on the tick of one;
-  where the pilot holds the gun - its `Charge` instead). The hull:
+  where the pilot holds the gun - its `Charge` instead; 0 while a sentry
+  sleeps). The hull:
   `TickHull` right after `TickDisc` hands `THull.Tick` the same `Wear`
   (over the hull's `WearFull`), `ShotCharge` and how far the body has
   rolled since the last tick: its travel in X since `FHullX` less what a
@@ -2155,6 +2165,21 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   and stays put on one that does not. The smoke dies
   with the monster, so a restart clears it. `TMonster` got its destructor
   (it frees the hull, the disc, the sparks, the smoke and the event list).
+- **Fire start and sentry** (3.0.48): `FFireStart` is where the fire count
+  begins - the placement's `fireOffset`, 0 without one - and `FTimeOfFire` is
+  born at it. `FireStartOf` holds the offset against the interval and raises
+  `ELevelError` (`SFireOffsetOutOfRange`) below 0 or from the interval up. A
+  sentry (`Attack.Sentry`) is born asleep (`FAsleep`; its hull `Doze`s), and
+  every tick `SentrySleeps` asks whether it still must be: not while it is
+  alive, armed (`FCanShoot`) and `HeroInSentryStrip` - the hero's middle
+  (`FHeroX + 16`) within `Reach` of the monster's middle (`ArtCenter.X`) and
+  the hero's feet line lower than the monster's. A sleeper holds the count at
+  `FFireStart` rather than freezing it, so a hero who leaves and returns
+  meets the whole interval again; its `ShotCharge` is 0, and `TickHull`
+  hands the hull `Awake := not FAsleep`. Only the monsters of the hero's
+  screen tick, so the strip is read there alone. Level 2's three mounts all
+  watch (`reach` 48 - three cells), and the second of screen 6 starts at 22:
+  with the hero in both strips it fires on tick 23 and the first on tick 45.
 - **Wreck sparks** (default behavior, no data): the bodies `ShortsOut`
   names - a machine, and a body that has a `blast` and a hull, which makes
   the mount one though it is no machine - own a `TSparks` made from the
@@ -3403,7 +3428,8 @@ points `eye`, `smoke`, `sparks`; the tank's (3.0.45) - `set` (`tank-hull`),
 the cut of the middle barrel); the mount's (3.0.48) - `set` (`mount-hull`),
 `width` 36.5, `height` 32, `wearFull` 80, the same points (its `smoke` is read
 and unused: the mount does not smoke) and `muzzle` (18.2, 30.2 - the middle of
-the row of ports; the volley's row is centered on it) - see `THullDef`.
+the row of ports; the volley's row is centered on it) - see `THullDef`. Its
+`attack` also carries `sentry`: `reach` 48 - see `TSentryDef`.
 `stats.damageCap` (only `boss1`)
 limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
@@ -3447,7 +3473,7 @@ informational, unread; `note`; `screens` - one object per screen: `screen`,
 `entities` (placements:
 monsterId, screen, x, y, spriteList, optional `difficulty` grades (parsed,
 unused by both levels),
-`overrides` (direction / speed / lives / canShoot), `triggers` -
+`overrides` (direction / speed / lives / canShoot / fireOffset), `triggers` -
 messages/hints/changeMusic/heroX-heroY/gravelBoss (the wave quota per
 difficulty),
 optional `tag` for the events and the dynamics, optional `rig` - the rigs
