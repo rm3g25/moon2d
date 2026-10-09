@@ -13,6 +13,10 @@
       apRainVolley (7 bullets straight down, 4 units apart, a row about
       the muzzle of a hull).
 
+  A sentry (Attack.Sentry, a 2026 addition) sleeps until the hero stands in
+  the strip under it: its fire count is held at the start and the eye of
+  its hull goes dark.
+
   Deaths: a dying monster keeps sliding at Shag/3 and plays frames
   9..16 (CurrentSprite + 8*DeathType); a dead one lies as frame 16.
   Barrels, tanks, platforms and mounts blow up: the game sends a wave
@@ -106,6 +110,7 @@ type
     FStep: Integer;          // 'Shag', with placement override applied
     FAcceleration: Double;
     FTimeOfFire: Integer;
+    FFireStart: Integer;
     FCanShoot: Boolean;
     FEnraged: Boolean;       // 'BeforeSpeedUp'
     // meHenshin is a one-shot; the event list drains every tick, so it
@@ -133,6 +138,7 @@ type
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
     FRageLives: Integer; // a boss goes into its rage below this
     FFired: Boolean; // this tick
+    FAsleep: Boolean; // a sentry with no hero to watch
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -184,6 +190,9 @@ type
     function HullStand: THullStand;
     function Wear(AWearFull: Double): Single;
     function ShotCharge: Single;
+    function FireStartOf(const APlacement: TEntityPlacement): Integer;
+    function HeroInSentryStrip: Boolean;
+    function SentrySleeps: Boolean;
   public
     // ADiscArt, AHullArt - the layers of a disc or a hull monster, nil for
     // the rest; the caller keeps them and APads alive longer than the
@@ -320,6 +329,10 @@ implementation
 
 uses
   Effects.Sparks;
+
+resourcestring
+  SFireOffsetOutOfRange = 'Level "%s", screen %d, cell %d,%d: fireOffset %d ' +
+    'must be from 0 to below the interval of %d ticks';
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -469,6 +482,9 @@ begin
   if APlacement.Overrides.HasCanShoot then
     FCanShoot := FCanShoot and APlacement.Overrides.CanShoot;
   FFireEveryTicks := ADef.Attack.FireEveryTicks;
+  FFireStart := FireStartOf(APlacement);
+  FTimeOfFire := FFireStart;
+  FAsleep := ADef.Attack.Sentry.Enabled;
 
   FSecret := False; // placement 'secret' flag arrives via level JSON later
   FTicksSinceHit := NeverHit;
@@ -504,6 +520,8 @@ begin
   begin
     FHull := THull.Create(ADef.Hull, AHullArt);
     FHullX := FX;
+    if FAsleep then
+      FHull.Doze;
   end;
   if ADef.DamageCap.Enabled then
     FDamageWindow := TDamageWindow.Create(ADef.DamageCap);
@@ -520,6 +538,21 @@ begin
   FSmoke.Free;
   FEvents.Free;
   inherited;
+end;
+
+// The offset is held against the monster's own interval, which a level does
+// not know
+function TMonster.FireStartOf(const APlacement: TEntityPlacement): Integer;
+begin
+  Result := 0;
+  if not APlacement.Overrides.HasFireOffset then
+    Exit;
+
+  var Offset := APlacement.Overrides.FireOffset;
+  if (Offset < 0) or (Offset >= FFireEveryTicks) then
+    raise ELevelError.CreateFmt(SFireOffsetOutOfRange, [FLevel.Id,
+      APlacement.Screen, APlacement.X, APlacement.Y, Offset, FFireEveryTicks]);
+  Result := Offset;
 end;
 
 function TMonster.SpawnSeed: Cardinal;
@@ -649,6 +682,7 @@ begin
     Exit;
   var Rolled := FX - FHullX - FCarriedX;
   FHullX := FX;
+  FHull.Awake := not FAsleep;
   FHull.Tick(Wear(FDef.Hull.WearFull), ShotCharge, Rolled);
 end;
 
@@ -699,6 +733,23 @@ begin
   Result := EnsureRange((1 - FLives / FLivesBorn) / AWearFull, 0.0, 1.0);
 end;
 
+function TMonster.HeroInSentryStrip: Boolean;
+begin
+  var Across := Abs(FHeroX + SpriteSize / 2 - ArtCenter.X);
+  var IsBelow := FHeroY > FY;
+  Result := IsBelow and (Across <= FDef.Attack.Sentry.Reach);
+end;
+
+function TMonster.SentrySleeps: Boolean;
+begin
+  if not FDef.Attack.Sentry.Enabled then
+    Exit(False);
+
+  var IsArmed := FCanShoot and (FLife = mlAlive);
+  var Watches := IsArmed and HeroInSentryStrip;
+  Result := not Watches;
+end;
+
 // 1 on the tick of a shot, rising toward it over the last TelegraphTicks
 function TMonster.ShotCharge: Single;
 const
@@ -706,6 +757,8 @@ const
 begin
   if FFired then
     Exit(1);
+  if FAsleep then
+    Exit(0);
   if PilotHoldsGun then
     Exit(FPilot.Charge);
   if not FCanShoot then
@@ -1313,9 +1366,12 @@ begin
   end;
 
   FFired := False;
+  FAsleep := SentrySleeps;
   // After a hold the aimed gun takes a whole interval to speak again
   if PilotHoldsGun then
     FTimeOfFire := 0
+  else if FAsleep then
+    FTimeOfFire := FFireStart
   else if FCanShoot and (FLife = mlAlive) then
   begin
     Inc(FTimeOfFire);

@@ -54,6 +54,13 @@ type
     Speed: Integer;
   end;
 
+  // A monster that sleeps until the hero stands under it: the strip it
+  // watches reaches Reach units either way of its middle
+  TSentryDef = record
+    Enabled: Boolean;
+    Reach: Integer;
+  end;
+
   TAttackDef = record
     Pattern: TAttackPattern;
     FireEveryTicks: Integer;
@@ -63,6 +70,7 @@ type
     VolleyCount: Integer;         // apRainVolley only
     VolleySpacingX: Integer;      // apRainVolley only
     AngleDeg: Integer;            // apRainVolley only
+    Sentry: TSentryDef;
     function HasAttack: Boolean;
   end;
 
@@ -268,6 +276,7 @@ resourcestring
     'not both';
   SMuzzleOfWrongPattern = 'Monster "%s": the muzzle of a hull is for a ' +
     'straight shot or a volley, and the monster fires neither';
+  SBadSentry = 'Monster "%s": a sentry needs a reach above 0';
 
 const
   // JSON protocol keys read in more than one place
@@ -507,6 +516,16 @@ begin
     raise EMonsterDefError.CreateFmt(SBadBlast, [AMonsterId]);
 end;
 
+// A sentry that watches nothing must fail at load time, not sleep for good
+function ParseSentry(const AObj: TJSONObject;
+  const AMonsterId: string): TSentryDef;
+begin
+  Result.Enabled := True;
+  Result.Reach := AObj.GetValue<Integer>('reach', 0);
+  if Result.Reach <= 0 then
+    raise EMonsterDefError.CreateFmt(SBadSentry, [AMonsterId]);
+end;
+
 // A cap that caps nothing must fail at load time, not pass for a safeguard
 function ParseDamageCap(const AObj: TJSONObject;
   const AMonsterId: string): TDamageCap;
@@ -652,6 +671,9 @@ begin
     Result.Attack.VolleySpacingX :=
       Attack.GetValue<Integer>('volleySpacingX', 0);
     Result.Attack.AngleDeg := Attack.GetValue<Integer>('angleDeg', 0);
+    var Sentry := Attack.GetValue<TJSONObject>('sentry', nil);
+    if Assigned(Sentry) then
+      Result.Attack.Sentry := ParseSentry(Sentry, Result.Id);
   end;
 
   var Pickup := AObj.GetValue<TJSONObject>('pickupEffect', nil);

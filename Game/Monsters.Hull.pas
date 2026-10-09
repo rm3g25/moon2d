@@ -2,7 +2,8 @@
   Monsters.Hull - a monster drawn as a hull out of layers: the TeK
   platform, the TeK tank, the TeK mount. A whole hull, and a worn copy of
   it over it that shows through as the lives run out. The red eye in the
-  sensor housing glows and swells before every shot.
+  sensor housing glows and swells before every shot, and goes dark while
+  the monster says the hull sleeps.
 
   A hull that drives stands on wheels: one picture at every axle, turned
   by the way the body has rolled, in front of the dark of the wheel wells
@@ -64,12 +65,20 @@ type
     FLastEye: Single;
     FTurn: Single; // the wheels, degrees clockwise
     FLastTurn: Single;
+    FAwake: Boolean;
+    FWake: Single; // 0..1, how far the eye has come up from dark
+    FLastWake: Single;
     procedure TurnWheels(ARolled: Single);
     procedure DrawWheels(const ASprites: TSpriteRenderer;
       const AStand: THullStand; AAlpha: Single);
   public
     // AArt belongs to the caller and must outlive the hull
     constructor Create(const ADef: THullDef; AArt: THullArt);
+    // A sleeping hull rests with its eye dark; an awake one with the eye
+    // smoldering, which it comes up to over WakeTicks. Born awake.
+    property Awake: Boolean read FAwake write FAwake;
+    // Asleep and dark at once, without the ramp down
+    procedure Doze;
     // AWear, ACharge: 0..1 - how battered, how close the next shot is.
     // ARolled - units the body has rolled along the floor since the last
     // tick, to the right above zero.
@@ -93,6 +102,7 @@ const
   EyeFade = 0.85;
   EyeRestLevel = 0.3;
   EyeRestSize = 4.0;
+  WakeTicks = 8;
   EyeChargedSize = 9.0;
   EyeColor: TRgb = (R: 255; G: 36; B: 20);
   EyeGlowSide = 64;
@@ -145,6 +155,16 @@ begin
   inherited Create;
   FDef := ADef;
   FArt := AArt;
+  FAwake := True;
+  FWake := 1;
+  FLastWake := 1;
+end;
+
+procedure THull.Doze;
+begin
+  FAwake := False;
+  FWake := 0;
+  FLastWake := 0;
 end;
 
 procedure THull.Tick(AWear, ACharge, ARolled: Single);
@@ -155,6 +175,12 @@ begin
   FEye := ACharge;
   if FLastEye * EyeFade > FEye then
     FEye := FLastEye * EyeFade;
+
+  FLastWake := FWake;
+  var WakeStep: Single := 1 / WakeTicks;
+  if not FAwake then
+    WakeStep := -WakeStep;
+  FWake := EnsureRange(FWake + WakeStep, 0.0, 1.0);
 
   if FDef.Wheels.Enabled then
     TurnWheels(ARolled);
@@ -218,10 +244,11 @@ begin
 
   var Eye := Spot(AStand, FDef.Eye);
   var EyeLevel := Lerp(FLastEye, FEye, AAlpha);
+  var RestLevel := EyeRestLevel * Lerp(FLastWake, FWake, AAlpha);
   DrawGlow(FArt.FRenderer, FArt.FEyeGlow, Eye.X + ASprites.Origin.X,
     Eye.Y + ASprites.Origin.Y + ASprites.FineY,
     Lerp(EyeRestSize, EyeChargedSize, EyeLevel), EyeColor,
-    Lerp(EyeRestLevel, 1, EyeLevel));
+    Lerp(RestLevel, 1, EyeLevel));
 end;
 
 end.

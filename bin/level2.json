@@ -1910,7 +1910,8 @@
       "x": 12,
       "y": 3,
       "overrides": {
-        "direction": 1
+        "direction": 1,
+        "fireOffset": 22
       }
     },
     {

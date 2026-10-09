@@ -39,6 +39,8 @@ type
     Lives: Integer;
     HasCanShoot: Boolean;
     CanShoot: Boolean;
+    HasFireOffset: Boolean;
+    FireOffset: Integer;
   end;
 
   // A level number that may differ per difficulty grade. In JSON either
@@ -1090,6 +1092,7 @@ begin
   AOut.HasSpeed := Ov.TryGetValue<Integer>('speed', AOut.Speed);
   AOut.HasLives := Ov.TryGetValue<Integer>('lives', AOut.Lives);
   AOut.HasCanShoot := Ov.TryGetValue<Boolean>('canShoot', AOut.CanShoot);
+  AOut.HasFireOffset := Ov.TryGetValue<Integer>('fireOffset', AOut.FireOffset);
 end;
 
 procedure ReadTriggers(const AObj: TJSONObject; var AOut: TEntityTriggers);

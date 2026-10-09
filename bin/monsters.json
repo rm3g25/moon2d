@@ -276,7 +276,10 @@
         "bulletSpeed": 12,
         "volleyCount": 7,
         "volleySpacingX": 4,
-        "angleDeg": 270
+        "angleDeg": 270,
+        "sentry": {
+          "reach": 48
+        }
       },
       "stats": {
         "lives": 15,
