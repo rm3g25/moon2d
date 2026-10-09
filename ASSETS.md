@@ -121,6 +121,13 @@ wheels painted in, the wheel's hub moved onto the tyre's axis, all scaled to
 edge. The hull replaced the three drive frames `tank1`-`tank3` of the tank,
 which stay in `tank.mset`.
 
+**The TeK mount's hull** (`sprites/mount-hull.mset`) - generated with ChatGPT's image
+model to the author's direction (the ceiling pod whole, the same pod battle-worn),
+then cut by one shared frame, scaled to 219x192 (6 px per screen unit), given a bled
+edge and packed by `tools/mount/build_mount.py`; the worn pod is cut by the
+silhouette of the whole one. It is for the ceiling mount of level 2, which still
+draws its 2008 frame from `krep.mset`; the frame stays in that set.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.
