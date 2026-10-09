@@ -1,13 +1,15 @@
 ﻿{
-  Orbs.Harvest - where the orbs of an aura come from: the matter around
-  the hero. Matter is the solid cells of his screen and the bodies of the
-  pads standing on it; an orb shows through on a face of it that looks
-  into the open.
+  Orbs.Harvest - where orbs come from: the matter around the hero. Matter
+  is the solid cells of his screen and the bodies of the pads standing on
+  it; an orb shows through on a face of it that looks into the open.
 
-  One function and no state: the matter of a screen, the hero's center
-  and a count in, that many spots out. The dice are the caller's, so the
-  same matter and the same dice give the same spots - it can be tried on
-  a bench with no game behind it.
+  Two functions and no state: the matter of a screen, the hero's center
+  and a count in, spots out. HarvestSpots gives that many spots, the
+  nearer first. HarvestAround gives them in waves, each wave from all
+  sides of the hero, the first off the nearest faces and the last off the
+  farthest. The dice are the caller's, so the same matter and the same
+  dice give the same spots - it can be tried on a bench with no game
+  behind it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -47,6 +49,12 @@ type
 function HarvestSpots(const AMatter: TMatter; ACenter: TSdlFPoint;
   ACount: Integer; var ADice: TXorShift): TArray<TFaceSpot>;
 
+// APerWave spots for each of AWaves waves, from all sides of ACenter:
+// the first wave off the nearest faces, the last off the farthest.
+// Within a wave the spots go by their turn about the center.
+function HarvestAround(const AMatter: TMatter; ACenter: TSdlFPoint;
+  APerWave, AWaves: Integer; var ADice: TXorShift): TArray<TArray<TFaceSpot>>;
+
 implementation
 
 uses
@@ -67,6 +75,17 @@ const
   // A spot in thin air stands this far from the center
   AirNearest = 50;
   AirFarthest = 90;
+
+  // HarvestAround sorts a spot as up to this share farther than it is,
+  // and puts a spot of thin air this far from the center
+  AroundScatter = 0.3;
+  AroundAirNearest = 70;
+  AroundAirFarthest = 110;
+  // A spot nearer the center than this is passed by
+  NearestAway = 34;
+  // The turns about the center are cut into this many equal sectors
+  SectorCount = 12;
+  NoLimit = MaxInt;
 
   // The normal of a face: Y grows downward
   LooksUp = -1;
@@ -89,9 +108,21 @@ type
     Farness: Single; // what the spots are sorted by
   end;
 
+  // The spots of the faces, the nearer first, and which of them a wave
+  // has taken
+  TStock = record
+    Spots: TArray<TRankedSpot>;
+    Taken: TArray<Boolean>;
+  end;
+
 function NearerFirst(const ALeft, ARight: TRankedSpot): Integer;
 begin
   Result := CompareValue(ALeft.Farness, ARight.Farness);
+end;
+
+function ByTurn(const ALeft, ARight: TFaceSpot): Integer;
+begin
+  Result := CompareValue(ALeft.Turn, ARight.Turn);
 end;
 
 function OnScreen(AX, AY: Single): Boolean;
@@ -156,24 +187,51 @@ begin
   Result.Y := AFace.StartY + AFace.AlongY * AAlong + AFace.NormalY * AOut;
 end;
 
-function HarvestSpots(const AMatter: TMatter; ACenter: TSdlFPoint;
-  ACount: Integer; var ADice: TXorShift): TArray<TFaceSpot>;
+// The spot at APlace, with where it lies from ACenter
+function SpotAt(ACenter, APlace: TSdlFPoint;
+  ANormalX, ANormalY: Single): TFaceSpot;
+begin
+  Result.X := APlace.X;
+  Result.Y := APlace.Y;
+  Result.NormalX := ANormalX;
+  Result.NormalY := ANormalY;
+  Result.Away := Hypot(APlace.X - ACenter.X, APlace.Y - ACenter.Y);
+  Result.Turn := ArcTan2(APlace.Y - ACenter.Y, APlace.X - ACenter.X);
+end;
+
+// The spot, sorted as up to AScatter of its distance farther than it is
+function RankSpot(const ASpot: TFaceSpot; AScatter: Double;
+  var ADice: TXorShift): TRankedSpot;
+begin
+  Result.Spot := ASpot;
+  Result.Farness := ASpot.Away * (1 + ADice.NextUnit * AScatter);
+end;
+
+// A spot in thin air, ANearest to AFarthest units from ACenter, in any
+// direction
+function AirSpot(ACenter: TSdlFPoint; ANearest, AFarthest: Integer;
+  var ADice: TXorShift): TFaceSpot;
+var
+  Place: TSdlFPoint;
+begin
+  var Turn: Single := ADice.NextUnit * 2 * Pi;
+  var Away: Single := ANearest + ADice.NextUnit * (AFarthest - ANearest);
+  Place.X := ACenter.X + Cos(Turn) * Away;
+  Place.Y := ACenter.Y + Sin(Turn) * Away;
+  Result := SpotAt(ACenter, Place, 0, 0);
+end;
+
+// A spot from every stretch of every open face of AMatter, a cell or a
+// body, ranked by AScatter; not sorted
+function GleanFaces(const AMatter: TMatter; ACenter: TSdlFPoint;
+  AScatter: Double; var ADice: TXorShift): TArray<TRankedSpot>;
 var
   Found: TList<TRankedSpot>;
 
   procedure Keep(APlace: TSdlFPoint; ANormalX, ANormalY: Single);
-  var
-    Ranked: TRankedSpot;
   begin
-    Ranked.Spot.X := APlace.X;
-    Ranked.Spot.Y := APlace.Y;
-    Ranked.Spot.NormalX := ANormalX;
-    Ranked.Spot.NormalY := ANormalY;
-    Ranked.Spot.Away := Hypot(APlace.X - ACenter.X, APlace.Y - ACenter.Y);
-    Ranked.Spot.Turn := ArcTan2(APlace.Y - ACenter.Y, APlace.X - ACenter.X);
-    Ranked.Farness := Ranked.Spot.Away *
-      (1 + ADice.NextUnit * NearnessScatter);
-    Found.Add(Ranked);
+    Found.Add(RankSpot(SpotAt(ACenter, APlace, ANormalX, ANormalY),
+      AScatter, ADice));
   end;
 
   // A spot from every stretch of the face that looks into the open
@@ -199,18 +257,6 @@ var
     Glean(StandingFace(ABox.X + ABox.W, ABox.Y, ABox.H, LooksRight));
   end;
 
-  procedure KeepAirSpot;
-  var
-    Place: TSdlFPoint;
-  begin
-    var Turn: Single := ADice.NextUnit * 2 * Pi;
-    var Away: Single := AirNearest +
-      ADice.NextUnit * (AirFarthest - AirNearest);
-    Place.X := ACenter.X + Cos(Turn) * Away;
-    Place.Y := ACenter.Y + Sin(Turn) * Away;
-    Keep(Place, 0, 0);
-  end;
-
 begin
   Found := TList<TRankedSpot>.Create;
   try
@@ -223,18 +269,112 @@ begin
       end;
     for var Body in AMatter.Bodies do
       GleanBox(Body);
-    Found.Sort(TComparer<TRankedSpot>.Construct(NearerFirst));
-
-    // After the sort: thin air is the last to be drawn on
-    while Found.Count < ACount do
-      KeepAirSpot;
-
-    SetLength(Result, ACount);
-    for var i := 0 to ACount - 1 do
-      Result[i] := Found[i].Spot;
+    Result := Found.ToArray;
   finally
     Found.Free;
   end;
+end;
+
+function HarvestSpots(const AMatter: TMatter; ACenter: TSdlFPoint;
+  ACount: Integer; var ADice: TXorShift): TArray<TFaceSpot>;
+begin
+  var Ranked: TArray<TRankedSpot> :=
+    GleanFaces(AMatter, ACenter, NearnessScatter, ADice);
+  TArray.Sort<TRankedSpot>(Ranked, TComparer<TRankedSpot>.Construct(NearerFirst));
+
+  // After the sort: thin air is the last to be drawn on
+  var Faces := Length(Ranked);
+  SetLength(Ranked, Max(Faces, ACount));
+  for var i := Faces to High(Ranked) do
+    Ranked[i] := RankSpot(AirSpot(ACenter, AirNearest, AirFarthest, ADice),
+      NearnessScatter, ADice);
+
+  SetLength(Result, ACount);
+  for var i := 0 to ACount - 1 do
+    Result[i] := Ranked[i].Spot;
+end;
+
+// The spots of ASpots that lie farther from the center than the nearest
+// a spot may be
+function PastNearest(const ASpots: TArray<TRankedSpot>): TArray<TRankedSpot>;
+begin
+  SetLength(Result, Length(ASpots));
+  var Kept := 0;
+  for var Ranked in ASpots do
+    if Ranked.Spot.Away >= NearestAway then
+    begin
+      Result[Kept] := Ranked;
+      Inc(Kept);
+    end;
+  SetLength(Result, Kept);
+end;
+
+// The sector of a turn about the center, 0..SectorCount - 1
+function SectorOf(ATurn: Single): Integer;
+begin
+  var Sector: Integer := Trunc((ATurn + Pi) * SectorCount / (2 * Pi));
+  Result := EnsureRange(Sector, 0, SectorCount - 1);
+end;
+
+// Takes free spots, the nearer first, into APicks as their places among
+// the spots of AStock, until APicks holds AMost of them; of one sector
+// no more than ASectorLimit in this call
+procedure TakeNearestFree(var AStock: TStock; ASectorLimit, AMost: Integer;
+  APicks: TList<Integer>);
+begin
+  var Counts: TArray<Integer>;
+  SetLength(Counts, SectorCount);
+  for var i := 0 to High(AStock.Spots) do
+  begin
+    if APicks.Count >= AMost then
+      Break;
+    if AStock.Taken[i] then
+      Continue;
+    var Sector := SectorOf(AStock.Spots[i].Spot.Turn);
+    if Counts[Sector] >= ASectorLimit then
+      Continue;
+    Inc(Counts[Sector]);
+    AStock.Taken[i] := True;
+    APicks.Add(i);
+  end;
+end;
+
+// One wave: from every sector the nearest free spots, the same number of
+// each; then, if the sectors gave short, the nearest free of the rest;
+// then, if the matter gave short, thin air. The spots go by their turn.
+function ReapWave(var AStock: TStock; ACenter: TSdlFPoint; APerWave: Integer;
+  var ADice: TXorShift): TArray<TFaceSpot>;
+begin
+  var Picks := TList<Integer>.Create;
+  try
+    var PerSector := (APerWave + SectorCount - 1) div SectorCount;
+    TakeNearestFree(AStock, PerSector, APerWave, Picks);
+    TakeNearestFree(AStock, NoLimit, APerWave, Picks);
+
+    SetLength(Result, APerWave);
+    for var i := 0 to Picks.Count - 1 do
+      Result[i] := AStock.Spots[Picks[i]].Spot;
+    for var i := Picks.Count to APerWave - 1 do
+      Result[i] := AirSpot(ACenter, AroundAirNearest, AroundAirFarthest, ADice);
+  finally
+    Picks.Free;
+  end;
+  TArray.Sort<TFaceSpot>(Result, TComparer<TFaceSpot>.Construct(ByTurn));
+end;
+
+function HarvestAround(const AMatter: TMatter; ACenter: TSdlFPoint;
+  APerWave, AWaves: Integer; var ADice: TXorShift): TArray<TArray<TFaceSpot>>;
+var
+  Stock: TStock;
+begin
+  Stock.Spots := PastNearest(GleanFaces(AMatter, ACenter, AroundScatter, ADice));
+  TArray.Sort<TRankedSpot>(Stock.Spots,
+    TComparer<TRankedSpot>.Construct(NearerFirst));
+  SetLength(Stock.Taken, Length(Stock.Spots));
+
+  SetLength(Result, AWaves);
+  for var i := 0 to AWaves - 1 do
+    Result[i] := ReapWave(Stock, ACenter, APerWave, ADice);
 end;
 
 end.

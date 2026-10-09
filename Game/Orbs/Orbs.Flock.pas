@@ -12,6 +12,11 @@
   draws, too, the mark a face of matter keeps where an orb came out of
   it.
 
+  An orb has a depth, and the flock draws in two layers about the hero:
+  the marks and the orbs of a depth below zero go behind him, the rest of
+  the orbs and the dust go in front. An owner that knows no depth draws
+  both layers in one call.
+
   The look only: what an orb strikes, and what that costs, is the game's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -36,6 +41,9 @@ type
   // tick.
   TOrbState = (osAlive, osImploding, osGone);
 
+  // The two passes of a flock's drawing about the hero
+  TOrbLayer = (olBehind, olInFront);
+
   TOrb = class
   private
     FX, FY: Single;
@@ -44,6 +52,7 @@ type
     FStepX, FStepY: Single;
     FSize: Single;
     FLevel: Single;
+    FDepth: Single;
     FAge: Integer;
     FBreath: Single; // where in its breath the orb was born, 0..1
     FState: TOrbState;
@@ -51,7 +60,7 @@ type
     FArmed: Boolean;
     procedure GrowOlder;
   public
-    // In screen units; at full size and light, armed
+    // In screen units; at full size and light, armed, in front of the hero
     constructor Create(AX, AY: Single);
     // Where the owner's formula puts the orb this tick
     procedure MoveTo(AX, AY: Single);
@@ -65,6 +74,9 @@ type
     // Shares of the full size and light, 0..1: an orb coming into being
     property Size: Single read FSize write FSize;
     property Level: Single read FLevel write FLevel;
+    // Below zero the orb is drawn behind the hero. The flock only picks
+    // the layer by it: the owner sets Size and Level to suit the depth.
+    property Depth: Single read FDepth write FDepth;
     property Age: Integer read FAge; // ticks
     property State: TOrbState read FState;
     // An orb not armed strikes nothing: the game passes it by. One still
@@ -111,9 +123,15 @@ type
     // door: orbs and dust are there at once, nothing is drawn flying. The
     // marks stay behind with their faces.
     procedure Shift(AStepX, AStepY: Single);
-    // AOrigin - the shake of the layer the orbs fly in
+    // AOrigin - the shake of the layer the orbs fly in. Both layers, the
+    // one behind and then the one in front: for an owner whose orbs have
+    // no depth.
     procedure Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
+    // One of the two passes about the hero: the marks and the orbs behind
+    // him, or the rest of the orbs and the dust
+    procedure DrawLayer(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single; ALayer: TOrbLayer);
     procedure Clear;
     // The imploding and the gone among them, until Tick drops the gone
     property Orbs: TObjectList<TOrb> read FOrbs;
@@ -415,14 +433,30 @@ begin
   end;
 end;
 
+function LayerOf(const AOrb: TOrb): TOrbLayer;
+begin
+  Result := olInFront;
+  if AOrb.FDepth < 0 then
+    Result := olBehind;
+end;
+
+procedure TOrbFlock.DrawLayer(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single; ALayer: TOrbLayer);
+begin
+  if ALayer = olBehind then
+    DrawMarks(ACanvas, AOrigin, AAlpha);
+  for var Orb in FOrbs do
+    if (Orb.FState <> osGone) and (LayerOf(Orb) = ALayer) then
+      DrawOrb(ACanvas, Orb, AOrigin, AAlpha);
+  if ALayer = olInFront then
+    DrawDust(ACanvas, AOrigin, AAlpha);
+end;
+
 procedure TOrbFlock.Draw(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
   AAlpha: Single);
 begin
-  DrawMarks(ACanvas, AOrigin, AAlpha);
-  for var Orb in FOrbs do
-    if Orb.FState <> osGone then
-      DrawOrb(ACanvas, Orb, AOrigin, AAlpha);
-  DrawDust(ACanvas, AOrigin, AAlpha);
+  DrawLayer(ACanvas, AOrigin, AAlpha, olBehind);
+  DrawLayer(ACanvas, AOrigin, AAlpha, olInFront);
 end;
 
 procedure TOrbFlock.Clear;
