@@ -133,6 +133,7 @@ type
     FHull: THull; // a hull monster only, nil for the rest
     FHullX: Double; // where the hull stood when its wheels last turned
     FCarriedX: Double; // this tick, by a deck
+    FThrown: Integer; // units a throw has still to carry the body, signed
     FDamageWindow: TDamageWindow; // a monster with a damage cap only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
     FLivesBorn: Integer; // the disc's wear counts from here; rage resets FLivesAll
@@ -157,6 +158,7 @@ type
     function CanGoDown: Boolean;
     function ShoveBlocked(AStep: Integer): Boolean;
     procedure ShoveX(ADeltaX: Integer);
+    procedure SlideThrown;
     function MuzzleSpot: TSdlFPoint;
     procedure FireAt(const ABullets: TBurst);
     procedure FirePorts(const ABullets: TBurst);
@@ -240,6 +242,11 @@ type
     // underfoot; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
     function HitWithin(ATicks: Integer): Boolean;
+    // A throw along X: the body goes ThrowStep units a tick until the way
+    // is spent or a wall stands in it. A throw on top of a throw adds up.
+    procedure Throw(ADeltaX: Integer);
+    // Thrown and not yet at rest, or falling
+    function InFlight: Boolean;
 
     property Def: TMonsterDef read FDef;
     property X: Double read FX;
@@ -347,6 +354,7 @@ const
   // deck is asked for the point half a unit inside that edge - on whole
   // units the two answers agree at a deck's ends too
   DeckEdgeInset = 0.5;
+  ThrowStep = 12; // units a tick: a thrown body goes as fast as a bullet
   SpriteResetThreshold = 8.7;
   // Patrol turns AT the right edge, not beyond it
   PatrolRightLimit = ScreenWidth - SpriteSize; // 480
@@ -887,10 +895,12 @@ end;
 // Before the tick: the deck the body lay on a tick ago takes it where it
 // went - across while no wall stands in the way. Pulled from under it by
 // a wall, the body falls, the dead and the gun that never walks too. A
-// falling body is not carried: it lands by MoveFalling alone.
+// falling body is not carried: it lands by MoveFalling alone. Nor is a
+// body gravity does not pull: level with a deck, it hangs in the air
+// over it and does not lie on it.
 procedure TMonster.RideDeck;
 begin
-  if FAction in [maFlying, maFalling] then
+  if (FAction in [maFlying, maFalling]) or not FDef.AffectedByGravity then
     Exit;
   var Deck := FPads.DeckCarrying(FScreen, FX + MonsterBound + DeckEdgeInset,
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
@@ -923,7 +933,7 @@ end;
 
 function TMonster.DeckLift(AAlpha: Single): Single;
 begin
-  if FAction = maFlying then
+  if (FAction = maFlying) or not FDef.AffectedByGravity then
     Exit(0);
   var Deck := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
@@ -1038,6 +1048,32 @@ begin
       Exit;
     FX := FX + StepDir;
   end;
+end;
+
+procedure TMonster.Throw(ADeltaX: Integer);
+begin
+  Inc(FThrown, ADeltaX);
+end;
+
+function TMonster.InFlight: Boolean;
+begin
+  Result := (FThrown <> 0) or (FAction = maFalling);
+end;
+
+// A tick of the throw, through ShoveX: the wall is asked before every
+// unit. A wall on the way ends the throw - the rest of it is not kept
+// for the body to slide off later.
+procedure TMonster.SlideThrown;
+begin
+  if FThrown = 0 then
+    Exit;
+  var Step := EnsureRange(FThrown, -ThrowStep, ThrowStep);
+  var Before := FX;
+  ShoveX(Step);
+  if FX - Before = Step then
+    Dec(FThrown, Step)
+  else
+    FThrown := 0;
 end;
 
 // --- behavior ---------------------------------------------------------------
@@ -1349,6 +1385,7 @@ begin
   var BeforeRide := FX;
   RideDeck;
   FCarriedX := FX - BeforeRide;
+  SlideThrown;
   if FTicksSinceHit <> NeverHit then
     Inc(FTicksSinceHit);
   if FDamageWindow <> nil then
