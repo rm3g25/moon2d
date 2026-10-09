@@ -76,6 +76,8 @@ uses
   Orbs.Harvest in 'Game\Orbs\Orbs.Harvest.pas',
   Orbs.Aura in 'Game\Orbs\Orbs.Aura.pas',
   Orbs.Rain in 'Game\Orbs\Orbs.Rain.pas',
+  Orbs.Patterns in 'Game\Orbs\Orbs.Patterns.pas',
+  Orbs.Rite in 'Game\Orbs\Orbs.Rite.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -206,6 +208,7 @@ const
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
+  ScancodeJ = 13; // the rite of orbs on the hero, no ceremony behind it
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
@@ -327,6 +330,8 @@ type
     FBlasts: TObjectList<TBlast>; // the waves of the explosions in flight
     FImpacts: TImpacts;
     FAura: TAura; // the hero's ring of orbs
+    FRite: TOrbRite; // the orbs of the henshin
+    FPattern: TOrbPattern; // the figure the rite builds
     FRain: TOrbRain; // the fire rain of orbs
     FArmorPings: TArmorPings;
     FScore: Integer;
@@ -417,6 +422,7 @@ type
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
     procedure DebugRestorePads;
+    procedure DebugStartRite;
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -499,6 +505,7 @@ begin
   FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FAura := TAura.Create(IceOrbTint);
+  FRite := TOrbRite.Create(IceOrbTint);
   FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
@@ -519,6 +526,7 @@ begin
   FMarks.Free;
   FShake.Free;
   FRain.Free;
+  FRite.Free;
   FAura.Free;
   FImpacts.Free;
   FBlasts.Free;
@@ -587,6 +595,7 @@ begin
   FLevel := TLevel.Create;
   FLevel.LoadFromFile(AFileName);
   FLevelFile := AFileName; // AdvanceToNextLevel keys off this
+  FPattern := FindPattern(DefaultPatternName);
 
   FTileCache := TSpriteCache.Create(FRenderer);
   for var SetName in FLevel.SpriteSets do
@@ -659,6 +668,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FAura.Clear;
+  FRite.Clear;
   FRain.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
@@ -940,9 +950,11 @@ begin
       FHero.Screen := FHero.Screen + 1;
       FHero.SetScreenX(4);
       ArriveOnScreen;
-      // The aura crosses with him, by the door's step and that of a
-      // trigger of the new screen: a leap would fly the orbs after him
+      // The aura and the rite cross with him, by the door's step and that
+      // of a trigger of the new screen: a leap would fly the orbs after
+      // him
       FAura.Carry(FHero.X - LeftX, FHero.Y - LeftY);
+      FRite.Carry(FHero.X - LeftX, FHero.Y - LeftY);
       Exit;
     end;
     if CurrentLevelIsLast then
@@ -1758,6 +1770,7 @@ begin
   begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
     FAura.Collapse;
+    FRite.Collapse;
     FShroud.Clear;
     FRain.Collapse;
     FGameOverTimer := GameOverDelayTicks;
@@ -1791,6 +1804,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FAura.Clear;
+  FRite.Clear;
   FRain.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
@@ -2098,6 +2112,7 @@ begin
   FExplosions.Tick;
   FImpacts.Tick;
   FAura.Tick(HeroCenter);
+  FRite.Tick(HeroCenter);
   var HeroPose := FHero.Pose;
   FShroud.Tick(HeroPose, FShroudPainter.SeedsOf(HeroPose.Frame));
   FRain.Tick;
@@ -2106,6 +2121,7 @@ begin
   ResolveHeroBulletHits;
   // Before the monster half: an orb takes a bullet ahead of the hero
   ResolveOrbHits(FAura.Flock);
+  ResolveOrbHits(FRite.Flock);
   ResolveOrbHits(FRain.Flock);
   ResolveBlasts;
   FExplosions.StrikeShards(ShardStruck);
@@ -2187,6 +2203,7 @@ begin
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
+        FRite.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);
         var HeroLift := FHero.DeckLift(AAlpha);
         FShroudPainter.DrawUnder(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
@@ -2204,6 +2221,7 @@ begin
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
         FAura.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FRite.DrawInFront(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRain.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
@@ -2413,6 +2431,15 @@ begin
     if Group.Screen = FHero.Screen then
       FPads.RequestRestore(Group.Tag, HeroRides, nil);
 end;
+
+// J: the rite begins about the hero with no ceremony behind it; over a
+// corpse it is spent on nothing
+procedure TMoonGame.DebugStartRite;
+begin
+  if FHero.Dead then
+    Exit;
+  FRite.Start(FPattern, IceRiteScore, HeroCenter, MatterAround);
+end;
 {$ENDIF} // DEBUGKEYS
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
@@ -2453,6 +2480,8 @@ begin
       CastAura;
     ScancodeH:
       PourRain;
+    ScancodeJ:
+      DebugStartRite;
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
