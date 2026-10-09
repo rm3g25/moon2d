@@ -105,8 +105,9 @@ type
     FStage: TRiteStage;
     // The rite's own tick: 0 at the first Tick after Start
     FAge: Integer;
-    // The pattern's own clock, ticks
+    // The pattern's own clock, ticks, and where it stood a tick ago
     FFlow: Single;
+    FFlowBefore: Single;
     // 0..1, at its top as the flow stands still
     FFlash: Single;
     FSpots: TRiteSpots;
@@ -126,6 +127,7 @@ type
     function FlashAt(ATick: Integer): Single;
     function FlightOf(AAway: Single): Single;
     function SeatFor(AWave, ANumber: Integer): TPatternSeat;
+    function SeatLeapt(const AOrb: TRiteOrb): Boolean;
     function BirthAt(AWave, ANumber, ABorn: Integer): TRiteBirth;
     function StandInFor(const ASpent: TRiteOrb): TRiteBirth;
     function NewOrb(const ABirth: TRiteBirth): TRiteOrb;
@@ -233,6 +235,10 @@ const
   HurryLimitTicks = 20;
   HurriedTakeoffTicks = 10;
   CondenseTicks = 8;
+
+  // A seat that keeps to its figure goes no farther than this in a tick;
+  // farther, and it has run off the end of the figure and begun it anew
+  SeatLeap = 24;
 
   // The flow quickens through the hover by this much
   HoverQuickening = 0.8;
@@ -375,6 +381,14 @@ end;
 function TOrbRite.SeatFor(AWave, ANumber: Integer): TPatternSeat;
 begin
   Result := FPattern.Seat(AWave, ANumber, FPattern.PerWave, FFlow);
+end;
+
+function TOrbRite.SeatLeapt(const AOrb: TRiteOrb): Boolean;
+begin
+  var Seat := SeatFor(AOrb.FWave, AOrb.FNumber);
+  var Before := FPattern.Seat(AOrb.FWave, AOrb.FNumber, FPattern.PerWave,
+    FFlowBefore);
+  Result := Hypot(Seat.X - Before.X, Seat.Y - Before.Y) > SeatLeap;
 end;
 
 // The orb of the spot, born ABorn ticks into the rite, as a wave's orb
@@ -760,6 +774,12 @@ begin
     roCollapsing:
       Converge(AOrb, AHeroStep);
   end;
+
+  // An orb goes after its seat; behind a seat that has leapt it is not
+  // drawn flying, it is there at once
+  if (AOrb.FStage in [roFlying, roSeated, roCondensing]) and
+    SeatLeapt(AOrb) then
+    AOrb.Arrive;
 end;
 
 procedure TOrbRite.Tick(ACenter: TSdlFPoint);
@@ -775,6 +795,7 @@ begin
   var HeroStep := Follow(ACenter);
   RunSchedule;
   BeBorn;
+  FFlowBefore := FFlow;
   FFlow := FFlow + FlowStep;
   FFlash := FlashAt(FAge);
 
@@ -837,6 +858,7 @@ begin
   FStage := rsIdle;
   FAge := 0;
   FFlow := 0;
+  FFlowBefore := 0;
   FFlash := 0;
   FLeapt := False;
 end;

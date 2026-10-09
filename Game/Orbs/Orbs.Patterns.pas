@@ -6,8 +6,10 @@
 
   A seat is in the hero's own frame - units right and down from the
   middle of his body - and says how far in front of him or behind him it
-  lies and how brightly it burns. The level file names the pattern by its
-  word; the names are in a table at the bottom of the unit.
+  lies and how brightly it burns. A seat may run off the end of its
+  figure and begin it anew, a leap in one tick: its light is out at both
+  ends. The level file names the pattern by its word; the names are in a
+  table at the bottom of the unit.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -50,6 +52,9 @@ type
 function FindPattern(const AName: string): TOrbPattern;
 
 implementation
+
+uses
+  System.Math;
 
 resourcestring
   SUnknownPattern = 'Unknown orb pattern "%s"';
@@ -163,8 +168,68 @@ begin
 end;
 
 const
-  Patterns: array [0..0] of TOrbPattern = (
-    (Name: 'snowflake'; PerWave: 24; Seat: SnowflakeSeat));
+  // The vortex stands on the hero's feet line, this far under the middle
+  // of his body, and rises this far, to over his head
+  VortexFootY = 16;
+  VortexRise = 62;
+  // Narrow at the feet, wide at the top: the radius at the foot and what
+  // the climb adds to it, quicker at first
+  VortexFootRadius = 12;
+  VortexFlare = 22;
+  VortexFlarePower: Single = 0.8;
+  // An orb climbs its arm in this many ticks, and the arm winds this
+  // many laps on the way; the whole column turns against the winding
+  VortexClimbTicks = 64;
+  VortexLaps = 1.6;
+  VortexSpinPace = 0.085; // radians a tick
+  // The rings of the column are seen a little from above: the near side
+  // of a ring hangs lower by this share of its radius
+  ColumnTilt = 0.26;
+  // An orb's light comes up over this share of its arm as it sets out
+  // and dies over as much as it arrives
+  ArmFade = 0.12;
+
+// 0..1 in, 0..1 out, slow at both ends; past either end it stays there
+function Smoothed(AShare: Single): Single;
+begin
+  if AShare <= 0 then
+    Exit(0);
+  if AShare >= 1 then
+    Exit(1);
+  Result := AShare * AShare * (3 - 2 * AShare);
+end;
+
+// A seat on a ring about the hero's upright, ATurn round it; the ring
+// lies ARow units under the middle of his body. Its near half is in front
+// of him, its far half behind.
+function ColumnSeat(ATurn, ARow, ARadius, ALevel: Single): TPatternSeat;
+begin
+  Result.Depth := Sin(ATurn);
+  Result.X := ARadius * Cos(ATurn);
+  Result.Y := ARow + Result.Depth * ARadius * ColumnTilt;
+  Result.Level := ALevel;
+end;
+
+// A funnel of three arms, one to a wave. An orb climbs its arm from the
+// feet to over the head and is at the feet again
+function VortexSeat(AWave, AIndex, APerWave: Integer;
+  AFlow: Single): TPatternSeat;
+begin
+  var Climbed: Single := Frac(AIndex / APerWave + AFlow / VortexClimbTicks);
+  var Turn: Single := AWave * 2 * Pi / PatternWaves +
+    VortexLaps * 2 * Pi * Climbed - AFlow * VortexSpinPace;
+  var Radius: Single := VortexFootRadius +
+    VortexFlare * Power(Climbed, VortexFlarePower);
+  var Light: Single := Smoothed(Climbed / ArmFade) *
+    Smoothed((1 - Climbed) / ArmFade);
+  Result := ColumnSeat(Turn, VortexFootY - Climbed * VortexRise, Radius,
+    Light);
+end;
+
+const
+  Patterns: array [0..1] of TOrbPattern = (
+    (Name: 'snowflake'; PerWave: 24; Seat: SnowflakeSeat),
+    (Name: 'vortex'; PerWave: 24; Seat: VortexSeat));
 
 function FindPattern(const AName: string): TOrbPattern;
 begin

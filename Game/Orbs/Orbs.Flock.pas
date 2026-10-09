@@ -68,6 +68,9 @@ type
     // left it, the hero: the body's step of this tick is no part of what
     // the orb is drawn on ahead by, or it would tremble against the body
     procedure MoveBeside(AX, AY, ABodyStepX, ABodyStepY: Single);
+    // The orb is at once where this tick has put it: nothing of the move
+    // is drawn on ahead. For a leap, which is no flight.
+    procedure Arrive;
 
     property X: Single read FX;
     property Y: Single read FY;
@@ -221,6 +224,12 @@ begin
   MoveTo(AX, AY);
   FStepX := FStepX - ABodyStepX;
   FStepY := FStepY - ABodyStepY;
+end;
+
+procedure TOrb.Arrive;
+begin
+  FStepX := 0;
+  FStepY := 0;
 end;
 
 procedure TOrb.GrowOlder;
