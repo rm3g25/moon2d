@@ -4,8 +4,9 @@
   sides: they show through on a face, hang over it, fly to their seats in
   a pattern about him (Orbs.Patterns) and sit there. The pattern hangs in
   the air for a while, quickens, stands still and flashes, and then every
-  orb draws into him, each in its own time. The hero keeps his controls
-  throughout; the pattern stands in his frame, with no leash.
+  orb draws into him, each in its own time and at its own point of his
+  body. The hero keeps his controls throughout; the pattern stands in his
+  frame, with no leash.
 
   An orb is armed only in flight, from its face to its seat: what it
   strikes then is the game's to settle, through the flock. A seated orb is
@@ -51,6 +52,11 @@ type
   TRiteOrbStage = (roEmerging, roHovering, roFlying, roSeated, roCondensing,
     roCollapsing);
 
+  // The points of the hero's body as it stands on the screen, in screen
+  // units
+  TBodyPoints = TArray<TSdlFPoint>;
+  TBodyProbe = reference to function: TBodyPoints;
+
   TRiteOrb = class(TOrb)
   private
     FWave: Integer;
@@ -71,6 +77,7 @@ type
     FWait: Single;
     FLength: Single;
     FSide: Single; // 1 or -1
+    FEntry: TSdlFPoint; // where it goes into him, from his center
   end;
 
   // An orb the rite has called and does not yet see born
@@ -92,6 +99,7 @@ type
   TOrbRite = class
   private
     FFlock: TOrbFlock;
+    FBodyOf: TBodyProbe;
     FPattern: TOrbPattern;
     FScore: TRiteScore;
     FStage: TRiteStage;
@@ -122,6 +130,7 @@ type
     function StandInFor(const ASpent: TRiteOrb): TRiteBirth;
     function NewOrb(const ABirth: TRiteBirth): TRiteOrb;
     function Follow(ACenter: TSdlFPoint): TSdlFPoint;
+    function EntryIn(const ABody: TBodyPoints): TSdlFPoint;
     procedure CallWave(AWave: Integer);
     procedure ReplaceSpent;
     procedure BeBorn;
@@ -142,7 +151,9 @@ type
     procedure Condense(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
     procedure Converge(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
   public
-    constructor Create(const ATint: TOrbTint);
+    // ABody is asked once a rite, as the orbs begin to draw in; with
+    // none every orb goes in at the chest
+    constructor Create(const ATint: TOrbTint; const ABody: TBodyProbe);
     destructor Destroy; override;
     // The rite begins about the hero's center, on the matter of his
     // screen. One already going is dropped.
@@ -241,11 +252,12 @@ const
   DepthLightFar = 0.72;
   DepthLightStep = 0.14;
 
-  // The orbs draw into the chest of the hero, this far from the middle
-  // of his body. Each waits up to WaitShare of the drawing in, then takes
-  // LengthBase of it and up to LengthSpread more, winding up to WindTurn
-  // radians on the way.
+  // A body that gives no points is entered at the chest, this far from
+  // its middle
   ChestY = -2;
+  // An orb waits up to WaitShare of the drawing in, then takes LengthBase
+  // of it and up to LengthSpread more, winding up to WindTurn radians on
+  // the way
   WaitShare = 0.45;
   LengthBase = 0.35;
   LengthSpread = 0.2;
@@ -291,10 +303,11 @@ end;
 // TOrbRite
 // ---------------------------------------------------------------------------
 
-constructor TOrbRite.Create(const ATint: TOrbTint);
+constructor TOrbRite.Create(const ATint: TOrbTint; const ABody: TBodyProbe);
 begin
   inherited Create;
   FFlock := TOrbFlock.Create(ATint);
+  FBodyOf := ABody;
   FBirths := TList<TRiteBirth>.Create;
   FEvents := TList<TRiteEvent>.Create;
   FRandom.Seed := DiceSeed;
@@ -535,22 +548,40 @@ begin
   FEvents.Add(rePaused);
 end;
 
+// A point of the body the dice pick, from the hero's center
+function TOrbRite.EntryIn(const ABody: TBodyPoints): TSdlFPoint;
+begin
+  Result.X := 0;
+  Result.Y := ChestY;
+  if Length(ABody) = 0 then
+    Exit;
+  var Pick := Trunc(FRandom.NextUnit * Length(ABody));
+  Result.X := ABody[Pick].X - FHeroCenter.X;
+  Result.Y := ABody[Pick].Y - FHeroCenter.Y;
+end;
+
+// The body is taken as it stands now: the points stay where they are
+// from the hero's center, whatever he does while the orbs draw in
 procedure TOrbRite.BeginCollapsing;
 begin
   FStage := rsCollapsing;
   FBirths.Clear;
+  var Body: TBodyPoints := nil;
+  if Assigned(FBodyOf) then
+    Body := FBodyOf();
   for var i := 0 to FFlock.Orbs.Count - 1 do
   begin
     var Orb := RiteOrb(i);
     Orb.FStage := roCollapsing;
     Orb.FStageAge := 0;
     Orb.Armed := False;
+    Orb.FEntry := EntryIn(Body);
   end;
   FEvents.Add(reCollapsing);
 end;
 
-// The last orb has gone in; one the arithmetic left a hair short of it
-// goes with the rest
+// Every orb is in the body by now, or a hair short of it: all of them
+// go at once
 procedure TOrbRite.Finish;
 begin
   for var Orb in FFlock.Orbs do
@@ -689,25 +720,23 @@ begin
     Land(AOrb);
 end;
 
-// From its seat into the chest of the hero, winding as it goes, slowly
-// at first and then all at once; it goes in without dust
+// From its seat into the hero, to its own point of his body, winding as
+// it goes, slowly at first and then all at once. One that has gone in
+// stays there, at its smallest and brightest: the body fills with lights,
+// orb by orb, until the rite is through.
 procedure TOrbRite.Converge(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
 begin
-  var Entered: Single := (FAge - CollapseAt - AOrb.FWait) / AOrb.FLength;
-  if Entered >= 1 then
-  begin
-    FFlock.Release(AOrb);
-    Exit;
-  end;
+  var Entered := UpToOne((FAge - CollapseAt - AOrb.FWait) / AOrb.FLength);
   if Entered < 0 then
     Entered := 0;
 
   var Seat := SeatFor(AOrb.FWave, AOrb.FNumber);
   var Pull: Single := Entered * Entered * Entered;
-  var Wound := Rotated(Seat.X, Seat.Y - ChestY,
+  var Entry := AOrb.FEntry;
+  var Wound := Rotated(Seat.X - Entry.X, Seat.Y - Entry.Y,
     WindTurn * Sqr(Entered) * AOrb.FSide);
-  AOrb.MoveBeside(FHeroCenter.X + Wound.X * (1 - Pull),
-    FHeroCenter.Y + ChestY + Wound.Y * (1 - Pull), AHeroStep.X, AHeroStep.Y);
+  AOrb.MoveBeside(FHeroCenter.X + Entry.X + Wound.X * (1 - Pull),
+    FHeroCenter.Y + Entry.Y + Wound.Y * (1 - Pull), AHeroStep.X, AHeroStep.Y);
 
   AOrb.Depth := Seat.Depth * (1 - Pull);
   Shine(AOrb, 1 - ShrinkShare * Entered,

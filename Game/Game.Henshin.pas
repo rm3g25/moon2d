@@ -6,8 +6,9 @@
 
   The rite leads the orbs and tells what has come to pass; the ceremony
   listens and does the game's side of it: the shout, a point of health
-  as each wave sits, the mercy from the pause on, the suit as the last
-  orb goes in. It has no clock of its own.
+  as each wave sits, the mercy from the pause on, the light that fills
+  the body as the orbs go in, the suit as the last of them does. It has
+  no clock of its own.
 
   The ceremony acts on the stage it is given - the hero, the sound bank,
   the message board, the shake meter, the shroud, the rite - and asks
@@ -98,7 +99,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Bullets, Localization, Game.Space;
+  System.SysUtils, System.Math, Bullets, Localization, Game.Space;
 
 const
   HenshinSoundFile = 'evolution.wav'; // the transformation sting (878/966)
@@ -223,6 +224,21 @@ begin
   HearRite;
 end;
 
+// The body fills with light as the orbs go in: the look of the suit with
+// no frost and no motes, its light climbing all through the rite's
+// collapse. It tops out a tick past the collapse, so the suit's look
+// takes the light over at its top, with no dip between.
+function ChargeLook: TShroudLook;
+const
+  TopAt = 0.9; // the share of the look's life its top falls on
+begin
+  Result := IceOnLook;
+  Result.Bands := 0;
+  Result.Motes := 0;
+  Result.FlashAt := TopAt;
+  Result.Life := Ceil((IceRiteScore.CollapseTicks + 1) / TopAt);
+end;
+
 procedure THenshin.HearRite;
 begin
   var Event := FRite.DrainEvent;
@@ -238,6 +254,8 @@ begin
         // To the suit: while the orbs hover and while they draw in
         FCalls.GrantMercy(IceRiteScore.HoverTicks +
           IceRiteScore.CollapseTicks);
+      reCollapsing:
+        FShroud.Start(ChargeLook);
       reFinished:
         Finish;
     end;

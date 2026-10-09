@@ -445,6 +445,7 @@ type
     procedure GrantMercy(ATicks: Integer);
     procedure BeginRite;
     function HeroCenter: TSdlFPoint;
+    function HeroBodyPoints: TBodyPoints;
     function MatterAround: TMatter;
     procedure CastAura;
     procedure PourRain;
@@ -506,7 +507,7 @@ begin
   FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FAura := TAura.Create(IceOrbTint);
-  FRite := TOrbRite.Create(IceOrbTint);
+  FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
   FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
@@ -1319,6 +1320,23 @@ function TMoonGame.HeroCenter: TSdlFPoint;
 begin
   Result.X := FHero.X + HeroSize / 2;
   Result.Y := FHero.Y - HeroSize / 2;
+end;
+
+// The opaque points of the frame the hero is in, where they stand on the
+// screen: the orbs of the rite go into him at these
+function TMoonGame.HeroBodyPoints: TBodyPoints;
+begin
+  var Pose := FHero.Pose;
+  var Seeds := FShroudPainter.SeedsOf(Pose.Frame);
+  SetLength(Result, Length(Seeds));
+  for var i := 0 to High(Seeds) do
+  begin
+    var SeedX := Seeds[i].X;
+    if Pose.Mirrored then
+      SeedX := HeroSize - SeedX;
+    Result[i].X := Pose.Left + SeedX;
+    Result[i].Y := Pose.Top + Seeds[i].Y;
+  end;
 end;
 
 // The matter an aura is drawn out of: the solid cells of the hero's
