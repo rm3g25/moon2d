@@ -78,10 +78,14 @@
         <DCCReference Include="Effects\Tests.Effects.Lightning.pas"/>
         <DCCReference Include="Game\Tests.Game.Blasts.pas"/>
         <DCCReference Include="Game\Tests.Game.Shroud.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Entities.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Bodies.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Damage.pas"/>
+        <DCCReference Include="Monsters\Tests.Monsters.Defs.pas"/>
+        <DCCReference Include="Monsters\Tests.Monsters.Hull.pas"/>
+        <DCCReference Include="Monsters\Tests.Monsters.Mount.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Flock.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Plunge.pas"/>
         <BuildConfiguration Include="Base">

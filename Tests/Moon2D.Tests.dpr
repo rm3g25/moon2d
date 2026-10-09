@@ -21,10 +21,14 @@ uses
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
   Tests.Game.Shroud in 'Game\Tests.Game.Shroud.pas',
+  Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',
   Tests.Monsters.Damage in 'Monsters\Tests.Monsters.Damage.pas',
+  Tests.Monsters.Defs in 'Monsters\Tests.Monsters.Defs.pas',
+  Tests.Monsters.Hull in 'Monsters\Tests.Monsters.Hull.pas',
+  Tests.Monsters.Mount in 'Monsters\Tests.Monsters.Mount.pas',
   Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas';
 

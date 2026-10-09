@@ -49,13 +49,18 @@ type
     // A monster on the cell (counted from 1, as the level file counts)
     // with its feet on the bottom line of it. The room owns it.
     function Place(const AMonsterId: string; ACol, ARow: Integer): TMonster;
+      overload;
+    // The same for a placement with more said: its overrides. The room
+    // fills in the screen (the room has one).
+    function Place(const APlacement: TEntityPlacement): TMonster; overload;
   end;
 
 function RoomFromRows(const ARows: array of string): TRoom;
 
 // The level of a room with more members in its root. ASections is JSON
 // members as they stand in a file, '"pads":[...],"respawns":[...]'; ''
-// adds none. A level the load turns down raises what LoadFromFile raises,
+// adds none; a section of "entities" stands in place of the empty one.
+// A level the load turns down raises what LoadFromFile raises,
 // and nothing is left behind. The caller frees the level.
 function LevelFromRows(const ARows: array of string;
   const ASections: string): TLevel;
@@ -121,8 +126,11 @@ begin
   var Members := '';
   if ASections <> '' then
     Members := ASections + ',';
+  var Entities := '"entities":[],';
+  if ASections.Contains('"entities"') then
+    Entities := '';
   var Json := '{"id":"room","grid":{"width":16,"height":12},'
-    + '"tilePalette":[],"backgrounds":[],"entities":[],' + Members
+    + '"tilePalette":[],"backgrounds":[],' + Entities + Members
     + '"tiles":{"screens":[{"screen":1,"rows":[' + TileRowsJson
     + '],"collision":[' + CollisionJson(ARows) + ']}]}}';
 
@@ -174,12 +182,18 @@ function TRoom.Place(const AMonsterId: string; ACol, ARow: Integer): TMonster;
 begin
   var Placement := Default(TEntityPlacement);
   Placement.MonsterId := AMonsterId;
-  Placement.Screen := 1;
   Placement.X := ACol;
   Placement.Y := ARow;
+  Result := Place(Placement);
+end;
 
-  Result := TMonster.Create(FRegistry.Find(AMonsterId), Default(TAnimSet),
-    nil, nil, FLevel, FPads, Placement, 1.0);
+function TRoom.Place(const APlacement: TEntityPlacement): TMonster;
+begin
+  var Placement := APlacement;
+  Placement.Screen := 1;
+
+  Result := TMonster.Create(FRegistry.Find(Placement.MonsterId),
+    Default(TAnimSet), nil, nil, FLevel, FPads, Placement, 1.0);
   FMonsters.Add(Result);
 end;
 
