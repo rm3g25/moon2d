@@ -30,9 +30,10 @@ type
   TPickupEffectKind = (peNone, peHeal, peGiveWeapon);
 
   // How a death looks when it blows up - flash, debris, smoke - by size
-  // (Game.Explosions); ekNone = no look. What the death does to the
-  // bodies around is TBlastDef and does not depend on it.
-  TExplosionKind = (ekNone, ekBarrel, ekMachine, ekBoss);
+  // (Game.Explosions); ekNone = no look. ekMount is the barrel's size
+  // thrown downward, out of the niche a ceiling mount hangs in. What the
+  // death does to the bodies around is TBlastDef and does not depend on it.
+  TExplosionKind = (ekNone, ekBarrel, ekMachine, ekBoss, ekMount);
 
   // What the body is made of, by what a bullet does to it: metal throws
   // sparks (Game.Impacts); mtNone = a bullet bursts on it as on a wall
@@ -333,6 +334,7 @@ begin
   if AValue = 'barrel' then Exit(ekBarrel);
   if AValue = 'machine' then Exit(ekMachine);
   if AValue = 'boss' then Exit(ekBoss);
+  if AValue = 'mount' then Exit(ekMount);
   raise EMonsterDefError.CreateFmt(SBadEnumValue,
     [AMonsterId, 'explosion', AValue]);
 end;

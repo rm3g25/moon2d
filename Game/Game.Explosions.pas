@@ -111,8 +111,9 @@ uses
 
 const
   BarrelExplosion: TExplosions.TExplosionLook = (
-    Debris: (Shards: 18; ShardSpeed: 7; ShardSize: 6; ShardCone: 150;
-      RestSeconds: 4; Sparks: 64; SparkSpeed: 10);
+    Debris: (Shards: 18; ShardSpeed: 7; ShardSize: 6; Heading: 90;
+      ShardCone: 150; RestSeconds: 4; Sparks: 64; SparkSpeed: 10;
+      SparkCone: 360);
     FlashSize: 96;
     FlashTicks: 7;
     Fire: (
@@ -132,10 +133,36 @@ const
     Aftershocks: 0; AftershockKind: ekNone; AftershockSpread: 0;
     AftershockTicks: 0);
 
+  // The ceiling mount hangs in a niche one cell wide: the barrel's size,
+  // thrown down through the open mouth instead of up into the plate
+  MountExplosion: TExplosions.TExplosionLook = (
+    Debris: (Shards: 18; ShardSpeed: 7; ShardSize: 6; Heading: 270;
+      ShardCone: 80; RestSeconds: 4; Sparks: 64; SparkSpeed: 10;
+      SparkCone: 120);
+    FlashSize: 96;
+    FlashTicks: 7;
+    Fire: (
+      Puffs: (Rate: 330; Life: 0.55; Size: 9; EndSize: 26; Opacity: 0.9;
+        Angle: 270; Cone: 140; Speed: 55; Drag: 0.9; Lift: 30; Wind: 0;
+        Turbulence: 6; Spin: 120; Flow: sfSteady; Frequency: 1; Heat: 1;
+        EndTint: (R: 28; G: 10; B: 6));
+      Tint: (R: 100; G: 62; B: 24);
+      Ticks: 6);
+    Smoke: (
+      Puffs: (Rate: 95; Life: 1.4; Size: 10; EndSize: 34; Opacity: 0.7;
+        Angle: 270; Cone: 120; Speed: 30; Drag: 0.6; Lift: 8; Wind: 0;
+        Turbulence: 4; Spin: 60; Flow: sfSteady; Frequency: 1; Heat: 0.7;
+        EndTint: (R: 70; G: 70; B: 72));
+      Tint: (R: 52; G: 50; B: 48);
+      Ticks: 28);
+    Aftershocks: 0; AftershockKind: ekNone; AftershockSpread: 0;
+    AftershockTicks: 0);
+
   // The tank, the flying platform: a heavier body, more metal to throw
   MachineExplosion: TExplosions.TExplosionLook = (
-    Debris: (Shards: 28; ShardSpeed: 8; ShardSize: 7; ShardCone: 160;
-      RestSeconds: 5; Sparks: 90; SparkSpeed: 11);
+    Debris: (Shards: 28; ShardSpeed: 8; ShardSize: 7; Heading: 90;
+      ShardCone: 160; RestSeconds: 5; Sparks: 90; SparkSpeed: 11;
+      SparkCone: 360);
     FlashSize: 130;
     FlashTicks: 8;
     Fire: (
@@ -158,8 +185,9 @@ const
   // The boss goes with a blast that fills the screen, then the wreck
   // pops for a second and a half
   BossExplosion: TExplosions.TExplosionLook = (
-    Debris: (Shards: 48; ShardSpeed: 10; ShardSize: 9; ShardCone: 180;
-      RestSeconds: 7; Sparks: 160; SparkSpeed: 13);
+    Debris: (Shards: 48; ShardSpeed: 10; ShardSize: 9; Heading: 90;
+      ShardCone: 180; RestSeconds: 7; Sparks: 160; SparkSpeed: 13;
+      SparkCone: 360);
     FlashSize: 220;
     FlashTicks: 11;
     Fire: (
@@ -220,6 +248,8 @@ begin
       Blast(AX, AY, MachineExplosion, AShardLives);
     ekBoss:
       Blast(AX, AY, BossExplosion, AShardLives);
+    ekMount:
+      Blast(AX, AY, MountExplosion, AShardLives);
   end;
 end;
 

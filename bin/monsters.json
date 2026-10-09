@@ -297,6 +297,7 @@
         "lives": 100,
         "shardLives": 6
       },
+      "explosion": "mount",
       "material": "metal",
       "hull": {
         "set": "mount-hull",

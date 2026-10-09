@@ -38,10 +38,14 @@ type
     Shards: Integer;
     ShardSpeed: Single;
     ShardSize: Single;
-    ShardCone: Single; // degrees wide, centered straight up
+    // Degrees counterclockwise from the right, 90 = up: where the shards
+    // and the sparks are thrown
+    Heading: Single;
+    ShardCone: Single; // degrees wide, centered on the heading
     RestSeconds: Single; // on the floor, before the fade
     Sparks: Integer;
     SparkSpeed: Single;
+    SparkCone: Single; // degrees wide, centered on the heading
   end;
 
   // A shard in flight that can still wound
@@ -164,7 +168,6 @@ const
   // A spark draws as the path it covers in this many ticks
   StreakTicks = 1.6;
   StreakWidth = 3;
-  FullCircle = 360;
   SparkSeed = $5370726B; // "Sprk"
 
   CoolTicks = 45; // white heat to bare metal
@@ -378,7 +381,8 @@ begin
   // Born inside a wall it could never leave
   if FProbe(Shard.X, Shard.Y) then
     Exit;
-  var Degrees: Single := 90 + (FRandom.NextUnit - 0.5) * ALook.ShardCone;
+  var Degrees: Single := ALook.Heading +
+    (FRandom.NextUnit - 0.5) * ALook.ShardCone;
   var Heading: Single := DegToRad(Degrees);
   var Speed: Single := ALook.ShardSpeed * Roll(MinShare, 1);
   // Counterclockwise on paper, and the screen's Y runs down
@@ -403,8 +407,8 @@ var
   Spray: TSparkSpray;
 begin
   Spray.Count := ALook.Sparks;
-  Spray.Heading := 0;
-  Spray.Cone := FullCircle;
+  Spray.Heading := ALook.Heading;
+  Spray.Cone := ALook.SparkCone;
   Spray.SlowSpeed := ALook.SparkSpeed * MinShare;
   Spray.FastSpeed := ALook.SparkSpeed;
   FSparks.Spray(AX, AY, Spray);
