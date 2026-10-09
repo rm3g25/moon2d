@@ -662,9 +662,11 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 (из `Effects.Sparks`; здесь в экранных единицах - игра даёт
 `SolidUnderPoint`, так что юнит не знает уровня).
 - **`TDebrisLook`** (запись) - один взрыв: `Shards`, `ShardSpeed`,
-  `ShardSize`, `ShardCone` (ширина в градусах, по центру вверх),
-  `RestSeconds`, `Sparks`, `SparkSpeed`; каждый кусок бросает значение
-  между `MinShare` (0.35) от него и им самим.
+  `ShardSize`, `Heading` (градусы против часовой от правой оси, 90 -
+  вверх: куда летят осколки и искры), `ShardCone` (ширина в градусах, по
+  центру курса), `RestSeconds`, `Sparks`, `SparkSpeed`, `SparkCone` (то же
+  для искр, 360 - во все стороны); каждый кусок бросает значение между
+  `MinShare` (0.35) от него и им самим.
 - Осколки: `TShardState` = (`ssFlying`, `ssSliding`, `ssResting`).
   `FlyShard` двигает по одной оси за раз - стена разворачивает X
   (`WallBounce`), потолок Y; пол уходит в `LandShard`, который половинит
@@ -676,7 +678,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `gsPoint`. Гравитация `ShardGravity` = 0.3 - падение вееров 2008.
   Осколок, родившийся в стене, выбрасывается.
 - Искры: `TSparkField` из `Effects.Sparks` с видом `BlastSparkLook`
-  (`SpawnSparks` бросает их во все стороны разом) - штрихи рисуются
+  (`SpawnSparks` бросает их по `Heading` вида в пределах `SparkCone`:
+  кругом у бочки, машины и босса) - штрихи рисуются
   свечением `gsPoint`, от белого к красному угольку за жизнь 5..14 тиков,
   гаснут о первую твёрдую точку или за краем экрана (`StopsSpark`); без
   отскока и без вилок.
@@ -1170,7 +1173,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   `TMovementKind` (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly),
   `TAttackPattern` (apNone/StraightSingle/StraightCluster5/AimedSingle/
   AimedDouble/RainVolley), `TPickupEffectKind` (peNone/Heal/GiveWeapon),
-  `TExplosionKind` (ekNone/Barrel/Machine/Boss - вид смерти, JSON
+  `TExplosionKind` (ekNone/Barrel/Machine/Boss/Mount - вид смерти, JSON
   `explosion`, неизвестное слово - ошибка; от `blast` не
   зависит), `TMonsterMaterial` (mtNone/Metal - JSON `material`, что пуля
   делает с телом: металл сыплет искрами, см. `Game.Impacts`; неизвестное
@@ -2430,7 +2433,10 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `MachineExplosion` (28, 90, 130 на 8, около 39 клубов - танк,
   платформа, ярость босса), `BossExplosion` (48, 160, 220 на 11, около 75
   клубов плюс пять бочечных хлопков в радиусе 24 за 50 тиков - обломки
-  догорают). Огненный шар остаётся внутри вспышки: в 3.0.43 взрывы стали
+  догорают), `MountExplosion` (3.0.48: размер бочки, брошенный вниз -
+  `Heading` 270, осколки конусом 80, искры 120, огонь 140, дым 120 - у
+  крепления, которое висит в нише шириной в клетку и швыряло бы всё вверх
+  в плиту). Огненный шар остаётся внутри вспышки: в 3.0.43 взрывы стали
   гуще, а не больше.
 - `Tick` (дохлопывания, вспышки, обломки, оба облака - `TickClouds`),
   `Clear` (все пять),
@@ -3427,7 +3433,7 @@ dangerous - наследуются монстрами), массив `monsters`.
 (полный лист полей см. в Monsters.Defs выше). У девяти из пятнадцати нет
 `spriteList` - он приходит из расстановки в уровне. `explosion` называет
 вид смерти: `barrel` (бочка), `machine` (танк, платформа), `boss`
-(`boss1`); у крепления нет - оно взрывается внутри стены. `blast` (бочка,
+(`boss1`), `mount` (крепление, 3.0.48). `blast` (бочка,
 танк, платформа, крепление) - что смерть делает с телами вокруг: `radius`
 80, `lives` 100 и `shardLives` 6 у всех четырёх - см. `TBlastDef`. `material`:
 `metal` у платформы, танка, крепления, бочки и `boss1` - пуля выбивает из

@@ -640,9 +640,11 @@ from inside the call. Whom a shard strikes is the caller's to say. **`TDebrisFie
 **`TSolidProbe`** (of `Effects.Sparks`; in screen units here - the game
 passes `SolidUnderPoint`, so the unit knows no level).
 - **`TDebrisLook`** (record) - one blast's worth: `Shards`, `ShardSpeed`,
-  `ShardSize`, `ShardCone` (degrees wide, centered straight up),
-  `RestSeconds`, `Sparks`, `SparkSpeed`; every piece rolls between
-  `MinShare` (0.35) of a value and the value.
+  `ShardSize`, `Heading` (degrees counterclockwise from the right, 90 =
+  up: where the shards and the sparks are thrown), `ShardCone` (degrees
+  wide, centered on the heading), `RestSeconds`, `Sparks`, `SparkSpeed`,
+  `SparkCone` (the same for the sparks, 360 = every way); every piece
+  rolls between `MinShare` (0.35) of a value and the value.
 - Shards: `TShardState` = (`ssFlying`, `ssSliding`, `ssResting`).
   `FlyShard` moves one axis at a time - a wall turns X back (`WallBounce`),
   a ceiling Y; a floor goes to `LandShard`, which halves the step to find
@@ -654,7 +656,9 @@ passes `SolidUnderPoint`, so the unit knows no level).
   `gsPoint` glow while hot. Gravity `ShardGravity` = 0.3, the fall of the
   2008 fans. A shard born inside a wall is dropped.
 - Sparks: a `TSparkField` of `Effects.Sparks` with `BlastSparkLook`
-  (`SpawnSparks` throws them every way at once) - streaks drawn with the
+  (`SpawnSparks` throws them along the look's `Heading` within
+  `SparkCone`: all round for the barrel, the machine and the boss) -
+  streaks drawn with the
   `gsPoint` glow, white to the ember's red over a life of 5..14 ticks,
   gone on the first solid point or past the edge of the screen
   (`StopsSpark`); no bounce, no forks.
@@ -1150,8 +1154,8 @@ Monster definition model + registry (parses monsters.json). No behavior.
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
   (apNone/StraightSingle/StraightCluster5/AimedSingle/AimedDouble/RainVolley),
   `TPickupEffectKind` (peNone/Heal/GiveWeapon), `TExplosionKind`
-  (ekNone/Barrel/Machine/Boss - the look of a death, JSON `explosion`, an
-  unknown word raises; independent of the `blast`),
+  (ekNone/Barrel/Machine/Boss/Mount - the look of a death, JSON `explosion`,
+  an unknown word raises; independent of the `blast`),
   `TMonsterMaterial` (mtNone/Metal - JSON `material`, what a bullet does to
   the body: metal throws sparks, see `Game.Impacts`; an unknown word
   raises), `TPilotTactics` (ptLaps/Dives/Rams/Hunts - what a flying boss
@@ -2396,7 +2400,11 @@ on a door, a death and a level load.
   about 25 puffs of fire some 60 units across), `MachineExplosion` (28,
   90, 130 for 8, about 39 puffs - the tank, the platform, the boss's
   rage), `BossExplosion` (48, 160, 220 for 11, about 75 puffs, plus five
-  barrel blasts within 24 units over 50 ticks - the wreck keeps popping).
+  barrel blasts within 24 units over 50 ticks - the wreck keeps popping),
+  `MountExplosion` (3.0.48: the barrel's size thrown down - `Heading` 270,
+  shards in a cone of 80, sparks of 120, fire of 140, smoke of 120 - for
+  the mount, which hangs in a niche one cell wide and would throw
+  everything up into the plate).
   The fireball stays inside the flash: 3.0.43 made the blasts denser,
   not bigger.
 - `Tick` (aftershocks, flashes, debris, both clouds - `TickClouds`),
@@ -3412,8 +3420,7 @@ dangerous - inherited by monsters), `monsters` array. 15 ids: `gravel`,
 Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
-platform), `boss` (`boss1`); the mount has none - it explodes inside the
-wall. `blast` (the barrel, the tank, the platform, the mount) is what the
+platform), `boss` (`boss1`), `mount` (the mount, 3.0.48). `blast` (the barrel, the tank, the platform, the mount) is what the
 death does to the bodies around: `radius` 80, `lives` 100 and `shardLives`
 6 on all four - see `TBlastDef`. `material`: `metal` on the platform, the tank, the mount, the barrel
 and `boss1` - a bullet throws sparks off them instead of bursting
