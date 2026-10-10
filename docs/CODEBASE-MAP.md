@@ -1229,7 +1229,9 @@ Projectiles + the 2008 particle-hack spawners that are left.
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
 - **`TBullet`** - position (`X`, `Y`), velocity (`DX`, `DY`, writable),
   gravity ('dyy'), burst animation frame, `Status` (writable),
-  `Contact` (participates in bullet-vs-bullet interception). `Move`,
+  `Contact` (participates in bullet-vs-bullet interception), `Last` (where
+  it stood before its last `Move`: what it hits lies on the stretch
+  between). `Move`,
   `StartBurst`, `StartBurstSliding` (a wall hit keeps 1/8 inertia).
 - **`TBurst`** - owns a bullet list, its sprite set and its cache ('bullet' =
   hero, 'bull' = monsters; flight frame + destruction frames 2..8).
@@ -2112,7 +2114,12 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `TMonsterHealthTier` - the one home of that rule, via `ThirdMark`),
   `TierShare` (how full the current third is, 0..1), `TicksSinceHit` /
   `HitWithin(ticks)` (-1 until the first hit; the health rows read it, so the
-  HUD keeps no memory of the field). `FSecret` is declared and always False -
+  HUD keeps no memory of the field). `HitBox` - where a shot lands on the
+  body, in screen units, the one box bullets, blasts, orbs and shards all
+  read: a hull's `width` x `height` plus `HullHitMargin` (2) on every side
+  around its `HullStand` center, a disc's `side` square around the art
+  center, for the rest the 2008 column (the sprite less `MonsterBound` on
+  either side). `FSecret` is declared and always False -
   the placement flag it waits for is not in the level format yet.
 - **`TMonsterField`** - owns `TObjectList<TMonster>`, the animset cache keyed
   by the placement's spriteList name, and one `TSpriteSet` plus one
@@ -2456,6 +2463,13 @@ load.
   bullet hanging still (the aura) gets the normal up.
   `FaceFromCenter(strike, center)` - round armor: the normal from the
   center through the point (the boss's disc).
+- `TStretch` (record: `Start`, `Finish`, `PointAt(share)`) - the straight
+  stretch a bullet flew in one tick. `StretchEntry(stretch, box, share)` -
+  where along it the stretch first meets the box, 0 at its start, 1 at its
+  end (0 when it starts inside); False when none of it lies in the box.
+  A bullet is a point only at the two ends of its tick, and between them it
+  can cross a corner both ends miss (`TShareSpan`, private: the stretch
+  clipped by the two pairs of edges in turn).
 - `Land(strike)` - `GlanceOf` reflects the speed off the normal, as a
   mirror does; `ThrowFan` sprays `FanSparks` (9, or `RapidFanSparks` 4) plus the
   strike's `ExtraSparks`
@@ -3087,10 +3101,15 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     himself is not moved),
     `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
-  - Combat: `ResolveHeroBulletHits` (the bullet ends in `SpendBullet`: in
+  - Combat: `ResolveHeroBulletHits` (a bullet lands on the monster whose
+    `HitBox` the stretch of its last tick meets: `HeroBulletTarget` over
+    `BulletInMonsterBox`, `BulletStretch` and `StretchEntry`, the stretch
+    lifted by `SpriteSize` as a bullet's picture hangs above its Y; the
+    bullet ends in `SpendBullet`: in
     its own burst or, on a monster whose `material` is metal, with no
     burst at all - a strike for `FImpacts` built by the free `ArmorStrike`
-    (honest screen units, the hitbox as a box, `HitInset`; `Rapid` asked of
+    (honest screen units, at the point where the stretch first met the
+    hitbox; `Rapid` asked of
     the monster before the damage lands, `RapidHitTicks`) and a sound from
     `SoundArmorHit`: the whine of a tracer, else one of three pings at
     random, never the same twice running (`TArmorPings`, dice of its
@@ -3103,7 +3122,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ResolveBlasts` (after the orbs, before the monsters' bullets: every
     `TBlast` of `FBlasts` spreads a tick, then `StrikeMonsters` - every
     living body of the hero's screen, enemy, barrel or pickup, by its
-    `MonsterBody`: `TakeDamage` with the blast's knock and lives, the
+    `HitBox`: `TakeDamage` with the blast's knock and lives, the
     lives scaled by `DifficultyMonsterLives`, `RewardMonsterKill` on a
     death - and `StrikeHero` - `HeroBody`; one health and the
     `hurtByBlast` ticker unless the mercy window is on; `BlastStoppedAt`
@@ -3114,7 +3133,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `FExplosions.StrikeShards(ShardStruck)` (3.0.44): a live shard lower
     than `ShardWoundsBelow` (half a sprite) under the heart of its blast -
     below the feet of the body that blew up - wounds the body it is in,
-    a monster of any kind by `MonsterBody` (`TakeDamage` with half the
+    a monster of any kind by `HitBox` (`TakeDamage` with half the
     shard's speed as the knock, `RewardMonsterKill` on a death) or the
     hero by `HeroBody` (one health, the mercy window holds); on the
     blast's own floor a shard is decoration,
@@ -3164,7 +3183,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     (`EnemyBulletNear`; a bullet's point is at its Y - `SpriteSize`)
     bursts and the orb is spent; else a living dangerous monster of the
     hero's screen whose body holds the orb (`DangerousMonsterAt` over the
-    free `MonsterBody` - the box `ArmorStrike` takes too - and `BoxHolds`)
+    monster's `HitBox` - the box `ArmorStrike` takes too - and `BoxHolds`)
     loses a life (`TakeDamage`, `RewardMonsterKill` on its death) and the
     orb is spent. Not through `SpendBullet`: armor answers an orb with no
     sparks and no ping. `Render` draws the aura after the bullets, on the
@@ -3219,8 +3238,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     them past the window into a target texture of grid x `TileArtSize`
     pixels, so the picture does not depend on the window).
 - **Free functions**: `OpenWebPage`, `BonusDisplayName`, bullet cell and
-  off-screen helpers, `MonsterBody` and `BoxHolds` (a monster's body as a
-  box in honest screen units, and whether it holds a point),
+  off-screen helpers, `BulletStretch` (a bullet's last tick of flight in
+  honest screen units) and `BoxHolds` (whether a box holds a point),
   `SaveTargetAsPng` (under DEBUGKEYS: the current
   render target into a PNG through `IMG_SavePNG`), `ReadLevelTitle`,
   `DiscoverLevels`, `RollDiceSeed`, `RunGame` (the actual
