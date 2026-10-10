@@ -64,6 +64,21 @@ type
     procedure Clear;
   end;
 
+  // The straight stretch a bullet flew in one tick
+  TStretch = record
+    Start, Finish: TSdlFPoint;
+    // AShare: 0 at the start, 1 at the finish
+    function PointAt(AShare: Single): TSdlFPoint;
+  end;
+
+// Where a stretch of flight first meets a box, as a share of the stretch:
+// 0 at its start, 1 at its finish; a stretch that starts inside the box
+// meets it at 0. A bullet is a point only at the two ends of its tick, and
+// between them it can cross a corner both ends miss. False when no part of
+// the stretch lies in the box; the share is 0 then.
+function StretchEntry(const AStretch: TStretch; const ABox: TSdlFRect;
+  out AShare: Single): Boolean;
+
 // The bullet is inside the box it struck: moves the strike back along
 // the bullet's path to the edge it came in through and turns the normal
 // the way that edge faces
@@ -137,6 +152,48 @@ const
 
   // Shorter than this a vector has no direction
   MinDirection = 0.001;
+
+type
+  // The part of a stretch that is still in the running, as shares of it
+  TShareSpan = record
+    Enter, Leave: Single;
+    // Keeps what lies between two edges along one axis, False when none of
+    // the span is left
+    function Within(AFrom, ATo, ALow, AHigh: Single): Boolean;
+  end;
+
+function TStretch.PointAt(AShare: Single): TSdlFPoint;
+begin
+  Result.X := Start.X + (Finish.X - Start.X) * AShare;
+  Result.Y := Start.Y + (Finish.Y - Start.Y) * AShare;
+end;
+
+function TShareSpan.Within(AFrom, ATo, ALow, AHigh: Single): Boolean;
+begin
+  var Delta: Single := ATo - AFrom;
+  if Delta = 0 then
+    Exit((AFrom > ALow) and (AFrom < AHigh));
+
+  var AtLow: Single := (ALow - AFrom) / Delta;
+  var AtHigh: Single := (AHigh - AFrom) / Delta;
+  Enter := Max(Enter, Min(AtLow, AtHigh));
+  Leave := Min(Leave, Max(AtLow, AtHigh));
+  Result := Enter <= Leave;
+end;
+
+function StretchEntry(const AStretch: TStretch; const ABox: TSdlFRect;
+  out AShare: Single): Boolean;
+begin
+  var Span: TShareSpan;
+  Span.Enter := 0;
+  Span.Leave := 1;
+  Result := Span.Within(AStretch.Start.X, AStretch.Finish.X, ABox.X,
+    ABox.X + ABox.W) and Span.Within(AStretch.Start.Y, AStretch.Finish.Y,
+    ABox.Y, ABox.Y + ABox.H);
+  AShare := 0;
+  if Result then
+    AShare := Span.Enter;
+end;
 
 procedure TraceEntry(var AStrike: TStrike; const ABox: TSdlFRect);
 const

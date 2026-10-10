@@ -247,6 +247,9 @@ type
     procedure Throw(ADeltaX: Integer);
     // Thrown and not yet at rest, or falling
     function InFlight: Boolean;
+    // Where a shot lands on the body, in screen units: a hull or a disc as
+    // drawn and a little more, the column of the 2008 sprite for the rest
+    function HitBox: TSdlFRect;
 
     property Def: TMonsterDef read FDef;
     property X: Double read FX;
@@ -350,6 +353,9 @@ end;
 
 const
   MonsterBound = 8;
+  // A hull is hit this far past its edge: the reach of a bullet's own
+  // picture, and about the step a monster takes between two ticks
+  HullHitMargin = 2;
   // The grid asks for the cell an inset edge of the body stands in; a
   // deck is asked for the point half a unit inside that edge - on whole
   // units the two answers agree at a deck's ends too
@@ -734,6 +740,28 @@ begin
   if FDef.AffectedByGravity then
     Result.Center.Y := Round(FY) - FDef.Hull.Height / 2;
   Result.Mirrored := FDef.Hull.Mirrors and FacesRight;
+end;
+
+function BoxAround(const ACenter: TSdlFPoint; AWidth, AHeight: Double): TSdlFRect;
+begin
+  Result.X := ACenter.X - AWidth / 2;
+  Result.Y := ACenter.Y - AHeight / 2;
+  Result.W := AWidth;
+  Result.H := AHeight;
+end;
+
+function TMonster.HitBox: TSdlFRect;
+begin
+  if FDisc <> nil then
+    Exit(BoxAround(ArtCenter, FDef.Disc.Side, FDef.Disc.Side));
+  if FHull <> nil then
+    Exit(BoxAround(HullStand.Center, FDef.Hull.Width + 2 * HullHitMargin,
+      FDef.Hull.Height + 2 * HullHitMargin));
+
+  Result.X := FX + MonsterBound;
+  Result.Y := FY - SpriteSize;
+  Result.W := SpriteSize - 2 * MonsterBound;
+  Result.H := SpriteSize;
 end;
 
 function TMonster.Wear(AWearFull: Double): Single;

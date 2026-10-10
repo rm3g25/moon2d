@@ -165,8 +165,8 @@ const
   GameOverDelayTicks = 125; // 'ToGameOverTime': d-frames before restart
   PitDepthY = 450;          // 'Падаем в лунку' below this Y
 
-  // A monster's hitbox for a bullet: its sprite less this much on
-  // either side
+  // The hero's hitbox for a bullet: his sprite less this much on either
+  // side
   HitInset = 8;
   // A blast throws a pickup this many knocks, where it shoves a heavier
   // body half of one: off a ledge from the next cell
@@ -1462,14 +1462,22 @@ begin
     FPads.StopsBulletAt(FHero.Screen, ABullet.X, ABullet.Y - SpriteSize);
 end;
 
-// Verbatim 2008 hitbox: DOWNWARD from Y - bullets spawn at heroY+8,
-// below the feet line, and this is where they land
+// The stretch a bullet flew in its last tick, in honest screen units: a
+// bullet's picture hangs a sprite above its Y, and the stretch rises with it
+function BulletStretch(const ABullet: TBullet): TStretch;
+begin
+  Result.Start.X := ABullet.Last.X;
+  Result.Start.Y := ABullet.Last.Y - SpriteSize;
+  Result.Finish.X := ABullet.X;
+  Result.Finish.Y := ABullet.Y - SpriteSize;
+end;
+
+// Did the bullet meet the monster's body on its way this tick
 function BulletInMonsterBox(const ABullet: TBullet;
   const AMonster: TMonster): Boolean;
 begin
-  Result := (ABullet.X > AMonster.X + HitInset) and
-    (ABullet.X < AMonster.X - HitInset + SpriteSize) and
-    (ABullet.Y > AMonster.Y) and (ABullet.Y < AMonster.Y + SpriteSize);
+  var Share: Single;
+  Result := StretchEntry(BulletStretch(ABullet), AMonster.HitBox, Share);
 end;
 
 // The monster a hero's bullet lands on. Where boxes overlap, a dangerous
@@ -1537,29 +1545,24 @@ begin
   end;
 end;
 
-// A monster's body in honest screen units: its sprite less HitInset on
-// either side, standing on the feet line Y
-function MonsterBody(const AMonster: TMonster): TSdlFRect;
-begin
-  Result.X := AMonster.X + HitInset;
-  Result.Y := AMonster.Y - SpriteSize;
-  Result.W := SpriteSize - 2 * HitInset;
-  Result.H := SpriteSize;
-end;
-
 // Where a bullet has struck a monster's armor, in honest screen units:
-// a bullet's picture hangs a sprite above its Y, and the hitbox it has
-// just entered rises with it
+// the point of its last tick's flight where it first met the hitbox
 function ArmorStrike(const ABullet: TBullet; const AMonster: TMonster): TStrike;
 begin
+  var Body := AMonster.HitBox;
+  var Stretch := BulletStretch(ABullet);
+  var Share: Single;
+  StretchEntry(Stretch, Body, Share);
+  var Entry := Stretch.PointAt(Share);
+
   Result := Default(TStrike);
-  Result.X := ABullet.X;
-  Result.Y := ABullet.Y - SpriteSize;
+  Result.X := Entry.X;
+  Result.Y := Entry.Y;
   Result.SpeedX := ABullet.DX;
   Result.SpeedY := ABullet.DY;
   Result.Rapid := AMonster.HitWithin(RapidHitTicks);
 
-  TraceEntry(Result, MonsterBody(AMonster));
+  TraceEntry(Result, Body);
   if AMonster.Disc <> nil then
     FaceFromCenter(Result, AMonster.Disc.Pose.Center);
 end;
@@ -1671,7 +1674,7 @@ function TMoonGame.DangerousMonsterAt(AX, AY: Single): TMonster;
 begin
   for var Monster in FField.Monsters do
     if (Monster.Screen = FHero.Screen) and (Monster.Life = mlAlive) and
-      Monster.Def.Dangerous and BoxHolds(MonsterBody(Monster), AX, AY) then
+      Monster.Def.Dangerous and BoxHolds(Monster.HitBox, AX, AY) then
       Exit(Monster);
   Result := nil;
 end;
@@ -1705,7 +1708,7 @@ begin
   end;
 end;
 
-// The hero's body in honest screen units, as MonsterBody: the box a
+// The hero's body in honest screen units, as a monster's HitBox: the box a
 // monster's bullet lands in
 function HeroBody(const AHero: THero): TSdlFRect;
 begin
@@ -1737,7 +1740,7 @@ begin
     var IsPickup := Monster.Def.Category = mcPickup;
     if IsPickup and Monster.InFlight then
       Continue;
-    var Body := MonsterBody(Monster);
+    var Body := Monster.HitBox;
     var Near := NearestPoint(Body, ABlast.Heart);
     if not ABlast.Strikes(Monster, Near, BlastStoppedAt) then
       Continue;
@@ -1799,7 +1802,7 @@ begin
   for var Monster in FField.Monsters do
   begin
     if (Monster.Screen <> FHero.Screen) or (Monster.Life <> mlAlive) or
-      not BoxHolds(MonsterBody(Monster), AShard.X, AShard.Y) then
+      not BoxHolds(Monster.HitBox, AShard.X, AShard.Y) then
       Continue;
     Monster.TakeDamage(Round(AShard.SpeedX / 2), AShard.Lives,
       FMonsterBullets);

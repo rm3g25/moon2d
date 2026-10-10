@@ -42,6 +42,7 @@ type
   TBullet = class
   private
     FX, FY: Double;
+    FLast: TSdlFPoint; // where it stood before its last move
     FDX, FDY: Double;
     FGravity: Double;      // 'dyy': DY += FGravity/100 per tick
     FStatus: TBulletStatus;
@@ -58,6 +59,8 @@ type
 
     property X: Double read FX;
     property Y: Double read FY;
+    // Where it stood a tick ago: what it struck lies somewhere along the way
+    property Last: TSdlFPoint read FLast;
     property DX: Double read FDX write FDX;
     property DY: Double read FDY write FDY;
     property Status: TBulletStatus read FStatus write FStatus;
@@ -113,6 +116,8 @@ begin
   inherited Create;
   FX := AX;
   FY := AY;
+  FLast.X := AX;
+  FLast.Y := AY;
   FStatus := bsFlying;
   FBurstFrame := 1;
   FContact := AContact;
@@ -127,6 +132,8 @@ begin
   if FStatus <> bsFlying then
     Exit;
 
+  FLast.X := FX;
+  FLast.Y := FY;
   FX := FX + FDX;
   FY := FY + FDY;
   FDY := FDY + FGravity / 100;
