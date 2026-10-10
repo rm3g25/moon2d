@@ -1766,16 +1766,23 @@ begin
       Monster.Tick(AHeroX, AHeroY, ABullets);
 end;
 
+// A medkit or a weapon that is still there: drawn over the corpses
+function IsLoot(const AMonster: TMonster): Boolean;
+begin
+  Result := (AMonster.Def.Category = mcPickup) and (AMonster.Life = mlAlive);
+end;
+
 procedure TMonsterField.Draw(const ASprites: TSpriteRenderer;
   AScreen: Integer; AAlpha: Single);
 begin
-  for var Monster in FMonsters do
-  begin
-    if Monster.Screen <> AScreen then
-      Continue;
-    ASprites.FineY := Monster.DeckLift(AAlpha);
-    Monster.Draw(ASprites, AAlpha);
-  end;
+  for var LootPass in [False, True] do
+    for var Monster in FMonsters do
+    begin
+      if (Monster.Screen <> AScreen) or (IsLoot(Monster) <> LootPass) then
+        Continue;
+      ASprites.FineY := Monster.DeckLift(AAlpha);
+      Monster.Draw(ASprites, AAlpha);
+    end;
   ASprites.FineY := 0;
 end;
 

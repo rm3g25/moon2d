@@ -2150,7 +2150,8 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   alive - 3.0.39, the arena's ripple of a restore),
   `Draw(sprites, screen, alpha)` (each monster with the sprites' `FineY`
   set to its `DeckLift(alpha)` - `Origin` stays the monsters' shake -,
-  `FineY` put back to 0 after),
+  `FineY` put back to 0 after; two passes, so a medkit or a weapon still
+  there is drawn over the corpses),
   `DrawSmoke(canvas, screen, origin, alpha)`, `DrawSparks` (the same
   shape, over the smoke).
   `DiscArtFor(def)` - one `TDiscArt` per disc set name, opened on first use
