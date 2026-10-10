@@ -161,8 +161,7 @@ a console: started from the IDE, its window closes with the last line.
 
 ## Orbs.Flock
 
-State: written, 17 tests; the last two, of the depth and of `Arrive`, not
-yet run on a compiler.
+State: written, 17 tests, green.
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -193,7 +192,7 @@ ticks: `MoveBeside` and `Arrive` change no place a test can read.
 ## Orbs.Harvest
 
 State: `HarvestSpots` - designed, not written. `HarvestAround` - written,
-11 tests, not yet run on a compiler; its table is the second below. The
+11 tests, green on the first run; its table is the second below. The
 unit is tried by `Tests\Orbs\Tests.Orbs.Harvest.pas`, fixture
 `TOrbHarvestTests`; the tests of `HarvestSpots` join it when they are
 written.
@@ -314,7 +313,7 @@ thread of a leap in flight, a ring called after an empty one.
 
 ## Orbs.Patterns
 
-State: written, 11 tests, not yet run on a compiler. The expectations were
+State: written, 11 tests, green on the first run. The expectations were
 checked on a Python mirror of the two figures. The unit is tried by
 `Tests\Orbs\Tests.Orbs.Patterns.pas`, fixture `TOrbPatternsTests`.
 
@@ -351,11 +350,11 @@ runs along the snowflake; the tilt of the vortex's rings.
 
 ## Orbs.Rite
 
-State: written, 41 tests, not yet run on a compiler. The expectations were
-checked on a Python mirror of the rite with its flock, harvest and
-patterns: every test is green on the mirror with the game's dice, green
-over sixty other seeds of the dice, and red with the rule it guards taken
-out of the mirror. The mirror and the unit were made in a session that
+State: written, 41 tests, green on the first run (239 in the whole
+suite). The expectations were checked on a Python mirror of the rite with
+its flock, harvest and patterns: every test is green on the mirror with
+the game's dice, green over sixty other seeds of the dice, and red with
+the rule it guards taken out of the mirror. The mirror and the unit were made in a session that
 had read the implementation, so the table is what the tests answer to.
 The unit is tried by `Tests\Orbs\Tests.Orbs.Rite.pas`, fixture
 `TOrbRiteTests`.
@@ -460,7 +459,7 @@ Left to the eye:
 
 ## Monsters
 
-State: written, not yet run on a compiler. The first suite over
+State: written, green (239 in the suite). The first suite over
 `Monsters.pas`: the shove of a blow (`TakeDamage`) and what it must never
 do - leave a body in a wall or hanging in the air. The floor, the corpse
 and the patrol are tried in `Monsters.Bodies` below; the rest of
@@ -536,7 +535,7 @@ Left to the eye:
 
 ## Monsters.Bodies
 
-State: written, 11 tests, not yet run on a compiler. The expectations were
+State: written, 11 tests, green (239 in the suite). The expectations were
 checked on a Python port of the monster's floor physics (the oracles, the
 patrol, the fall, the death) with the corpse rule switched on and off: with
 it off, test 6 is red. The unit is tried by
@@ -618,7 +617,7 @@ game has: there the judge has ground to jump from, and its jump reach is
 
 ## Monsters.Damage
 
-State: written, 9 tests, not yet run on a compiler. The expectations were
+State: written, 9 tests, green (239 in the suite). The expectations were
 checked on a Python mirror of the window. The unit is tried by
 `Tests\Monsters\Tests.Monsters.Damage.pas`, in two fixtures:
 `TDamageWindowTests` (the window alone, no room) and `TCappedBossTests`
@@ -655,7 +654,7 @@ maneuver and on its row being open; the first run shows it.
 
 ## Monsters.Mount
 
-State: written, 11 tests, not yet run on a compiler. The expectations were
+State: written, 11 tests, green (239 in the suite). The expectations were
 checked on a Python port of the strip and of the offset's range. The unit
 is tried by `Tests\Monsters\Tests.Monsters.Mount.pas`, fixture
 `TMountTests`: the TeK mount in an open room, the hero two numbers handed
@@ -709,7 +708,7 @@ Left to the eye:
 
 ## Monsters.Hull
 
-State: written, 4 tests, not yet run on a compiler. The expectations were
+State: written, 4 tests, green (239 in the suite). The expectations were
 checked on a Python port of the ramp. The unit is tried by
 `Tests\Monsters\Tests.Monsters.Hull.pas`, fixture `THullTests`: the hull
 of the mount (its definition is read from `monsters.json`) made with no
@@ -734,7 +733,7 @@ resting eye is a smolder and not a flame.
 
 ## Monsters.Defs
 
-State: written, 5 tests, not yet run on a compiler. The unit is tried by
+State: written, 5 tests, green (239 in the suite). The unit is tried by
 `Tests\Monsters\Tests.Monsters.Defs.pas`, fixture `TMonsterDefsTests`,
 through `TMonsterRegistry`: the real `monsters.json` beside the executable
 for what the game's definitions say, and a one-monster file of the test's
@@ -754,7 +753,7 @@ Left to the eye: nothing here is drawn. The number in `monsters.json`
 
 ## Game.Blasts
 
-State: written, 11 tests, not yet run on a compiler. The expectations were
+State: written, 11 tests, green (239 in the suite). The expectations were
 checked on a Python mirror of the wave. The unit is tried by
 `Tests\Game\Tests.Game.Blasts.pas`, fixture `TBlastTests`.
 
@@ -1047,7 +1046,7 @@ reads the effort, and a rig is drawn.
 
 ## Levels.Pads
 
-State: written, not yet run on a compiler. Needs no stage. The unit is
+State: written, green (239 in the suite). Needs no stage. The unit is
 tried by `Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
 `TLevel.LoadFromFile`: the parser (`Levels.Pads`) and the checks at load
 (`Levels.Defs`) are one door from outside - a level that loads, its
@@ -1092,7 +1091,7 @@ rigs a pad wears and of the events that rebuild are not tried.
 
 ## Levels.Entities
 
-State: written, 3 tests, not yet run on a compiler. Needs no stage. The
+State: written, 3 tests, green (239 in the suite). Needs no stage. The
 unit is tried by `Tests\Levels\Tests.Levels.Entities.pas`, fixture
 `TLevelEntitiesTests`, through `TLevel.LoadFromFile`: the `overrides`
 object of a placement and what each word of it makes in `TEntityOverrides`.

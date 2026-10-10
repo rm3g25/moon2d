@@ -12,8 +12,8 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.38` and its restore at `v3.0.39`, for the boss's damage cap at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
-at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46` and the hero's
-shroud at `v3.0.47` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
+shroud at `v3.0.47` and the henshin on orbs at `v3.0.49` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -38,8 +38,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   `Pads.Flights`) and the director of the boss fight over one and of the
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
   (`Orbs.Flock`), the harvest of spots on the matter of a screen
-  (`Orbs.Harvest`), the hero's aura over both (`Orbs.Aura`) and the fire
-  rain (`Orbs.Rain`).
+  (`Orbs.Harvest`), the hero's aura over both (`Orbs.Aura`), the fire
+  rain (`Orbs.Rain`), the patterns of the henshin (`Orbs.Patterns`) and
+  the rite that builds them about the hero (`Orbs.Rite`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -92,13 +93,17 @@ explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
 `Sdl2.Core`) / `Game.Impacts` (over
 `Effects.Sparks` and `Levels.Dynamics`) / `Orbs.Flock` (the orbs: over
 `Effects.Emitter`, `Render.Brush` and the canvas of `Levels.Dynamics`,
-drawn through `Render.Glow`) / `Orbs.Harvest` (where an aura's orbs come
+drawn through `Render.Glow`) / `Orbs.Harvest` (where the orbs of the aura
+and of the rite come
 from: over `Game.Space`, `Render.Brush` and `Sdl2.Core` alone - it knows
-neither the level nor the pads) -> `Hud.Marks` /
+neither the level nor the pads) / `Orbs.Patterns` (the figures of the
+henshin: over no unit of the game) -> `Hud.Marks` /
 `Game.Shroud` (the hero's shroud: over `Hero`, `Effects.Emitter`,
 `Effects.Sparks` for the probe type and the canvas of `Levels.Dynamics`;
 it draws through `Render.Glow` and `Render.Puff`) /
-`Game.Henshin` (over `Game.Shroud` too) / `Events.Director` / `Orbs.Aura` (the hero's aura: over
+`Orbs.Rite` (the rite of the henshin: over `Orbs.Flock`, `Orbs.Harvest`
+and `Orbs.Patterns`, `Render.Brush` and the canvas of `Levels.Dynamics`) /
+`Game.Henshin` (over `Game.Shroud` and `Orbs.Rite` too) / `Events.Director` / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
@@ -370,7 +375,7 @@ offset per layer. Draw-side only: the world's arithmetic never sees it.
   stream, not `Random`: that one feeds the boss spawn table. `NoShake` is the
   zero offset constant.
 - The doses live with whoever shakes (`*Trauma` constants: the blasts and
-  bonuses in the dpr, the henshin rings and finish in `Game.Henshin`), not
+  bonuses in the dpr, the suit going on in `Game.Henshin`), not
   here - what shakes how much is game-flow policy; this unit is the
   mechanism.
 
@@ -452,7 +457,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1135 lines)
+### `Core/Levels.Defs.pas` (~1140 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -489,7 +494,11 @@ Level data model + JSON parser. No game logic.
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
   collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/**objectSets**/music/introText, grid dims,
-  screenCount. `SpriteSets` is the environment sets in resolution order - tiles
+  screenCount. `HenshinPattern` (3.0.49) - the word `henshinPattern` of the
+  file's root: the pattern the orbs of the henshin build on this level; ''
+  when the file has none. `Core` knows no game unit, so the default and the
+  refusal of an unknown word are the game's (`LoadLevel` in the dpr).
+  `SpriteSets` is the environment sets in resolution order - tiles
   only; screen backdrops follow the `<assetsDir>-backdrops` convention and
   never appear there. `Objects` - the free-form art, in file order (later
   draws over earlier); the private `ParseObjects` reads the optional
@@ -1219,13 +1228,12 @@ Monster definition model + registry (parses monsters.json). No behavior.
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table and dodge-prize validation.
 
-### `Game/Bullets.pas` (~275 lines)
-Projectiles + the 2008 particle-hack spawners that are left.
+### `Game/Bullets.pas` (~255 lines)
+Projectiles + the one 2008 particle-hack spawner that is left.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
-  formula (the travel-test record: one template, six shapes -
+  formula (the travel-test record: one template, four shapes -
   `RageWave` / `FastFragments` / `SlowFragments` in `Monsters`,
-  `FinishFan` / `ShatterFan` in `Game.Henshin`, `ExplosionFan` in
-  Moon2D.dpr).
+  `ExplosionFan` in Moon2D.dpr).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
 - **`TBullet`** - position (`X`, `Y`), velocity (`DX`, `DY`, writable),
   gravity ('dyy'), burst animation frame, `Status` (writable),
@@ -1236,11 +1244,13 @@ Projectiles + the 2008 particle-hack spawners that are left.
 - **`TBurst`** - owns a bullet list, its sprite set and its cache ('bullet' =
   hero, 'bull' = monsters; flight frame + destruction frames 2..8).
   `NewBullet`, `Clear` (screen transitions wipe bullets), `Update`, `Draw`.
-  Spawners, all verbatim 2008: `SpawnFan(centerX, centerY, shape)` (henshin finale /
-  ice shatter / boss
-  rage wave / boss victory double fan / the explosion bonus),
-  `SpawnConvergingRing` (the henshin healing waves; Contact=True, so
-  the ring wounds the boss). The 180-fragment fan of a dying barrel or
+  The spawner, verbatim 2008: `SpawnFan(centerX, centerY, shape)` (boss
+  rage wave / boss victory double fan / the explosion bonus). The
+  henshin's own are gone since 3.0.49 - the converging rings
+  (`SpawnConvergingRing`) and its two fans (`FinishFan`, `ShatterFan`):
+  the ceremony is a rite of orbs now (`Orbs.Rite`; the record of what
+  went is in PORTING-NOTES, the session of 3.0.49). The 180-fragment fan
+  of a dying barrel or
   machine is not here since 3.0.41: an explosion wounds by its wave
   (`Game.Blasts`). The 2008 fire rain and shield aura are not
   here: both are orbs now (`Orbs.Rain`, `Orbs.Aura`; the record of what
@@ -2486,7 +2496,7 @@ load.
   bullets, on the monsters' shake channel; the textures come from
   `FDynamics.Canvas`.
 
-### `Game/Orbs/Orbs.Flock.pas` (~435 lines)
+### `Game/Orbs/Orbs.Flock.pas` (~480 lines)
 The orbs: small lights that fly by a formula, not by ballistics, and take
 no notice of matter - no wall stops one. The look and the life of an orb
 only: where it is, its owner decides tick by tick; what it strikes, and
@@ -2494,15 +2504,22 @@ what that costs, the game does (`ResolveOrbHits` in the dpr).
 - **`TOrbTint`** (record) - `Core` (the white-hot point) and `Glow`.
   `IceOrbTint` is the one tint so far: the hero's element on levels 1-2.
 - **`TOrbState`** = (`osAlive`, `osImploding`, `osGone`).
+- **`TOrbLayer`** = (`olBehind`, `olInFront`) (3.0.49) - the two passes of
+  a flock's drawing about the hero.
 - **`TOrb`** (class) - `X`, `Y`, `Size` and `Level` (shares 0..1 of the full
-  size and light, written by the owner - an orb coming into being), `Age`
+  size and light, written by the owner - an orb coming into being), `Depth`
+  (3.0.49; written by the owner, 0 from birth: below zero the orb is drawn
+  behind the hero - the flock only picks the layer by it, the owner sets
+  `Size` and `Level` to suit the depth), `Age`
   (ticks), `State`. `MoveTo(x, y)` - where the owner's formula puts the orb
   this tick; the step piles up until the flock's next tick, and between
   ticks the orb is drawn on ahead by it, as sparks and smoke are.
   `MoveBeside(x, y, bodyStepX, bodyStepY)` - the same for an orb that keeps
   beside a body drawn where the tick left it (the hero): the body's step
   is taken out of what the orb is drawn ahead by, or the ring would
-  tremble against him. `Armed` (True from birth, written by the owner):
+  tremble against him. `Arrive` (3.0.49) - the orb is at once where this
+  tick has put it: nothing of the move is drawn on ahead - for a leap,
+  which is no flight. `Armed` (True from birth, written by the owner):
   an orb not armed strikes nothing - the game passes it by; one still on
   its way out of matter. An owner declares a descendant with fields of
   its own and casts to it in one place.
@@ -2523,17 +2540,25 @@ what that costs, the game does (`ResolveOrbHits` in the dpr).
   with a breath of light over the point; both are the point glow, the
   streak stretched. `Shift(stepX, stepY)` - a door: orbs and dust are in
   the new frame at once and nothing is drawn flying; the marks stay
-  behind with their faces. `Draw(canvas, origin, alpha)` - the marks,
-  then three point glows an orb through `Render.Glow` (the halo,
-  breathing; the body; the core), then the dust; `Clear`.
+  behind with their faces. `DrawLayer(canvas, origin, alpha, layer)`
+  (3.0.49) - one of the two passes about the hero: `olBehind` is the
+  marks and the orbs of a depth below zero, `olInFront` the rest of the
+  orbs and the dust; an orb is three point glows through `Render.Glow`
+  (the halo, breathing; the body; the core). `Draw(canvas, origin,
+  alpha)` - both layers in one call, the one behind and then the one in
+  front: for an owner whose orbs have no depth (the aura, the rain), in
+  the order it always had - the marks, the orbs, the dust. `Clear`.
 - The sizes and the lights are constants at the top of `implementation`
   (`HaloAcross`, `BodyAcross`, `CoreAcross`, the breath, the implosion,
   the dust, the mark).
 
-### `Game/Orbs/Orbs.Harvest.pas` (~240 lines)
-Where the orbs of an aura come from (3.0.32): the matter around the hero.
-One function and no state, over `Game.Space` and the dice alone - it can
-be tried with no game behind it.
+### `Game/Orbs/Orbs.Harvest.pas` (~380 lines)
+Where the orbs come from (3.0.32): the matter around the hero. Two
+functions and no state, over `Game.Space` and the dice alone - they can
+be tried with no game behind them: `HarvestSpots` for the aura and
+(3.0.49) `HarvestAround` for the rite of the henshin. Both glean the
+faces by the one private walk (`GleanFaces`, with `SpotAt`, `RankSpot`
+and `AirSpot`).
 - **`TMatter`** (record) - the matter of one screen: `Cells`
   (`TSolidCells`, the solid cells by row and column) and `Bodies` (the
   bodies of the pads standing in front, `TPadWorld.Bodies`). The game
@@ -2554,6 +2579,22 @@ be tried with no game behind it.
   (`NearnessScatter`): the nearer first, but not by the ruler. The whole
   screen is in reach. What the matter is short of stands in thin air 50
   to 90 units from the center, after the rest.
+- **`HarvestAround(matter, center, perWave, waves, dice)`** (3.0.49) -
+  `perWave` spots for each of `waves` waves
+  (`TArray<TArray<TFaceSpot>>`), every wave from all sides of the center:
+  the first off the nearest faces, the last off the farthest. The faces
+  are gleaned as for `HarvestSpots`, each spot counted as up to 30%
+  farther than it is (`AroundScatter`); a spot nearer the center than 34
+  units (`NearestAway`) is passed by. The turns about the center are cut
+  into 12 equal sectors (`SectorCount`). A wave (`ReapWave`) walks the
+  free spots, the nearer first, and takes of one sector no more than
+  `perWave` / 12, rounded up; if the sectors gave short, the nearest free
+  of the rest, with no limit; if the matter gave short, thin air 70 to
+  110 units from the center, in any direction. What a wave has taken is
+  marked in the private `TStock`, so no spot is given twice and what one
+  wave passed over is free for the next. Within a wave the spots go by
+  their turn about the center: the index in the wave's array is the
+  orb's number in the wave.
 
 ### `Game/Orbs/Orbs.Aura.pas` (~755 lines)
 The hero's aura (3.0.31; drawn out of the matter around since 3.0.32): a
@@ -2675,6 +2716,189 @@ and the rain step). What a drop strikes is the game's to settle through
 - A drop falls armed all the way: the game takes bullets and dangerous
   monsters with it as with the aura's orbs. A barrel or a medkit is passed.
 
+### `Game/Orbs/Orbs.Patterns.pas` (~240 lines)
+The patterns the rite of orbs builds about the hero (3.0.49): a seat for
+every orb of every wave at any moment of the pattern's own clock. A
+pattern is a function and a name, with no state; it knows nothing of how
+the orbs come to their seats or what the seats are for. Over no unit of
+the game. The formulas and the numbers are the stand's
+(`docs/HENSHIN-PLAN.md`); the numbers are constants in `implementation`.
+- **`TPatternSeat`** (record) - a seat in the hero's own frame: `X`, `Y`
+  (units right and down from the middle of his body), `Depth` (from -1
+  behind him to 1 in front) and `Level` (its light, 0..1).
+- **`TPatternSeatFunc`** = `function(wave, index, perWave, flow):
+  TPatternSeat` - `wave` 0..`PatternWaves` - 1 (`PatternWaves` = 3: every
+  pattern is built in three waves), `index` 0..`perWave` - 1, `flow` - the
+  pattern's own clock in ticks, which the rite runs.
+- **`TOrbPattern`** (record) - `Name` (the word of a level file),
+  `PerWave`, `Seat`. **`FindPattern(name)`** - the pattern of the name out
+  of the table at the bottom of the unit (`Patterns`, a typed constant:
+  `snowflake` and `vortex`, 24 a wave each); an unknown name raises
+  `EOrbPatternError`. `DefaultPatternName` = `'snowflake'`. A new pattern
+  is a seat function and a line in the table.
+- The snowflake (`SnowflakeSeat`), about a heart 2 units above the middle
+  of the body (`HeartY`): six rays that turn once round in 420 ticks
+  (`SpinTicks`). Wave 0 - the rays (`RaySeat`: the first orb 14 units
+  out, the wave spread over 24), behind the hero; wave 1 - their tips and
+  the twigs off them, alternately along a ray (`BranchSeat`: the tips go
+  on from 38 units, the twigs branch off at 32, 7 units a twig, to one
+  side and then the other), behind him too (depth -0.5); wave 2 - a
+  hexagon of radius 22 in front of him (depth 1) with its corners on the
+  rays, whose orbs walk its sides against the turn of the rays, a lap in
+  210 ticks (`HexSeat`). The light of the rays and twigs runs along them
+  in a wave (`Lit`: 0.8, give or take 0.2); the hexagon burns at 1.
+- The vortex (`VortexSeat`): a funnel of three arms, one to a wave,
+  narrow at the feet (radius 12, 16 units under the middle of the body)
+  and wide over the head (22 units wider, 62 units up). An orb climbs
+  its arm in 64 ticks (`VortexClimbTicks`), winding 1.6 laps on the way,
+  and the whole column turns against the winding (`VortexSpinPace`). A
+  seat is put on its ring by `ColumnSeat`: the depth is the sine of its
+  turn, so an orb is behind the hero for half a lap and in front of him
+  for the other half, and the ring is seen a little from above
+  (`ColumnTilt`). At the top of its arm a seat is at the feet again - a
+  leap in one tick; its light is out at both ends of the arm (`ArmFade`,
+  through `Smoothed`), so the leap itself is not seen, and the rite puts
+  the orb there with nothing drawn on ahead (`SeatLeapt` in `Orbs.Rite`).
+- Tests: `Tests/Orbs/Tests.Orbs.Patterns.pas` - see Tests below; whether
+  a figure is beautiful is for the eye.
+
+### `Game/Orbs/Orbs.Rite.pas` (~1005 lines)
+The rite of orbs (3.0.49): the choreographer of the henshin, in place of
+the rings and fans of 2008. Three waves of orbs are drawn out of the
+matter around the hero, each from all sides; they show through on a
+face, hang over it, fly to their seats in a pattern about him
+(`Orbs.Patterns`) and sit there; the pattern hovers, quickens, stands
+still and flashes, and then every orb draws into him, each in its own
+time and at its own point of his body. The same class takes the suit
+off: the orbs come out of the body into a ring that shields him a while.
+Where the orbs are and when they come and go, nothing more: what an orb
+strikes is the game's to settle through `Flock` (`ResolveOrbHits` in the
+dpr), what it all means for the hero - the cure, the mercy, the suit -
+is the listener's (`Game.Henshin`). The hero keeps his controls
+throughout; the pattern stands in his frame, with no leash. Built as the
+aura is: a flock of its own, a descendant of `TOrb`, its own `TXorShift`
+(not `Random`: that one feeds the boss spawn table), the numbers
+constants at the top of `implementation`. The rite knows no pattern and
+no score of its own: both are handed to `Start`. The design, the numbers
+and the record stage by stage: `docs/HENSHIN-PLAN.md`.
+- **`TRiteScore`** (record, ticks) - the numbers of a rite: `WaveGap`
+  (between the calls of the waves), `WaveSpan` (from a wave's call to its
+  last seat), `HoverTicks`, `FreezeTicks` (the last of the hover),
+  `CollapseTicks`, `StandIns` (armed stand-ins for the whole rite), and
+  for the suit shed `ShedOrbs`, `ShedTicks`, `ShedSpread`.
+  **`IceRiteScore`** = 22, 56, 32, 9, 22, 24 and 72, 100, 33: the waves
+  are called at ticks 0, 22 and 44 and seated by 56, 78 and 100; the
+  pause is at 100, the freeze from 123, the collapse at 132, the suit at
+  154 (`PauseAt`, `CollapseAt`, `FinishAt`).
+- **`TRiteStage`** = (`rsIdle`, `rsGathering`, `rsHovering`,
+  `rsCollapsing`, `rsShedding`). **`TRiteEvent`** = (`reNone`,
+  `reWaveCalled`, `reWaveSeated`, `rePaused`, `reCollapsing`,
+  `reFinished`): `reWaveCalled` and `reWaveSeated` come by the schedule,
+  three times each - the listener counts the waves itself.
+- **`TRiteOrb`** (`TOrb`) - its wave and its number in it (its seat; its
+  place in the ring for an orb of a suit shed), the spot matter gives it
+  up at, its stage (**`TRiteOrbStage`** = `roEmerging`, `roHovering`,
+  `roFlying`, `roSeated`, `roCondensing`, `roCollapsing`, `roShedding`)
+  and the ticks in it, whether it is armed in flight, how long it hangs,
+  its flight (how long, the rite's tick it is due to land at, where it
+  took off, the turn about the hero it makes), its drawing in (a wait, a
+  length, a side and the point of the body it enters at) and the tick it
+  fades at in the ring. **`TRiteBirth`** - an orb the rite has called and
+  does not yet see born. **`TBodyProbe`** (`reference to function:
+  TBodyPoints`) - the points of the hero's body as it stands on the
+  screen; the game passes `HeroBodyPoints`.
+- **`TOrbRite`**:
+  - `Create(tint, body)`. `Start(pattern, score, center, matter)` - a
+    rite already going is dropped (`Clear`); the spots of all the waves
+    are taken at once (`HarvestAround`, `pattern.PerWave` a wave) and the
+    stage is `rsGathering`. `Tick(center)` - once a tick, with the hero's
+    center where the tick has left it: `ReplaceSpent`, `Flock.Tick`,
+    `Follow` (the hero's step, a leap noticed), `RunSchedule`, `BeBorn`,
+    the pattern's clock and the flash, then every living orb by `Lead`,
+    and `Finish` on the tick of the suit. Idle, it ticks the flock alone:
+    the dust flies and what is imploding goes out. `DrainEvent` - what
+    has come to pass since the last call, the oldest first; `reNone` when
+    there is nothing.
+  - The gathering. `CallWave` queues a wave's births, each up to 2 ticks
+    after the call. An orb (`NewOrb`) begins 3 units under its face,
+    unarmed, at no size and no light. `Emerge` - 8 ticks (`AppearTicks`)
+    along the normal of the face to 6 units over it, the face marked on
+    the second tick (`MarkFace`); a spot in thin air has no normal and no
+    mark. `Hover` - it sways over the face for 4 to 7 ticks. `TakeOff` -
+    it leaves from where it is, armed if it is a fighter. `Fly` - a
+    spiral about the hero from the takeoff to the seat, the distance from
+    him and the turn about him both eased (`EasedInOut`); the turn is 0.5
+    to 0.9 of a half-lap, each orb its own, the middle wave against the
+    others; the seat's depth and light come in with the flight. A flight
+    takes 18 ticks and one more for every 9 units the orb was called
+    from, but ends 16 ticks before its wave's term at the latest
+    (`FlightOf`): the far ones fly faster and a wave arrives as a blow.
+    `Land` - seated and unarmed; `KeepSeat` holds it in its seat by
+    `MoveBeside` with the hero's whole step.
+  - Only an orb in flight is armed. At the pause (`BeginHover`) whoever
+    is still in flight sits where it is, and nobody is armed from there
+    on.
+  - Stand-ins: an orb struck down in flight (`osGone` at `roFlying`) is
+    found before the flock's tick drops it (`ReplaceSpent`) and born anew
+    from the same face 2 ticks later (`StandInFor`) - armed while the
+    stock lasts (`StandIns`), unarmed after. One that would not sit
+    before the pause is hurried (it leaves its face 10 ticks after its
+    birth and lands as the pause begins) or, with the pause nearer than
+    20 ticks, thickens at its seat in 8 ticks, unarmed (`roCondensing`,
+    `Condense`). So the pattern has no holes.
+  - A leap of the hero - a step over `LeapStep` 24, the return from a
+    pit: an orb in flight begins its flight anew from where it is
+    (`Rewind`), due when it was but no sooner than 6 ticks from now; the
+    seated go with him.
+  - The pattern's clock (`FFlow`, by `FlowStep`): a tick a tick through
+    the gathering, quicker and quicker through the hover (toward 1.8),
+    slowing to a stand over the last `FreezeTicks`, standing through the
+    collapse. The flash of the freeze (`FlashAt`): a bell with its top 3
+    ticks before the collapse, from 4 ticks before it to 8 after. `Shine`
+    writes the size and the light an orb is drawn with: what its stage
+    gives it, what its depth makes of that (size by 18% of the depth,
+    light from 0.72 at the far side to 1 at the near one) and the flash
+    (light up to 1.7 times, size up to 1.12); light does not pass 1, so
+    the flash is carried by the dim orbs behind and by the size.
+  - A seat that leaps (the vortex): `SeatLeapt` compares an orb's seat
+    with where it stood a tick ago (`FFlowBefore`); farther than
+    `SeatLeap` 24, and `Lead` calls `TOrb.Arrive` - the orb is there at
+    once, with no trail under the hero's feet. For the flying, the seated
+    and the condensing.
+  - The collapse (`BeginCollapsing`): the body is asked once and every
+    orb is given a point of it by the dice (`EntryIn`; no probe or no
+    points - the chest, 2 units above the middle of the body). `Converge`
+    - an orb waits its own time (up to 45% of the collapse), then goes in
+    over 35% to 55% of it, winding to one side, shrinking to 0.35 of its
+    size and brightening; one that has gone in stays on the body, its
+    point standing rigidly from the hero's center whatever he does.
+    `Finish` - on the tick of the suit all are released at once, with no
+    dust; the stage is `rsIdle` and `reFinished` is told.
+  - `Shed(score, center)` - the suit gives its orbs back: a rite going is
+    dropped, the body is asked once, and `ShedOrbs` orbs are born at
+    once, each at its own point of the body, armed from the first tick.
+    `TickShed` leads them by `Shield`: 6 ticks (`ShedExitTicks`) out of
+    the point to the orb's place in the ring, quickest at first (size
+    from 0.5, light from 0.6), then in the ring - the aura's oval,
+    half-axes 28 and 35, the orbs sharing it evenly by their numbers, a
+    lap in 330 ticks (`RingSeat`) - in the hero's frame and in front of
+    him (depth 0). No pattern, no waves, no stand-ins: a ring that has
+    lost orbs stays gapped. Each orb implodes at its own tick -
+    `ShedTicks` and up to `ShedSpread` more; with the flock empty the
+    stage is `rsIdle`. A shed tells no events.
+  - `Carry(stepX, stepY)` - a door: the births still waiting are born at
+    once (`FlushBirths`); the flock (`Shift`), the hero's center, the
+    spots of the waves (a stand-in's face crosses too) and the takeoffs
+    move by the step, and nobody flies anywhere. An orb still on its face
+    takes off at once: the face stays on the screen behind. `Collapse` -
+    the hero's death: every orb implodes, a ring of a suit shed too, the
+    births are dropped, the stage is `rsIdle`; `reFinished` never comes.
+    `Clear`. `DrawBehind` / `DrawInFront` - the two layers of the flock
+    (`TOrbFlock.DrawLayer`): the marks of the faces and the orbs behind
+    the hero, the orbs in front of him and the dust.
+- Tests: `Tests/Orbs/Tests.Orbs.Rite.pas`, with `Tests.Orbs.Harvest.pas`
+  for the spots - see Tests below; the look of it all is for the eye.
+
 ### `Game/Game.Shroud.pas` (~1015 lines)
 The hero's shroud (3.0.47): smoke and light that gather round him when he
 appears and when he changes his suit. A picture over the hero's frame that
@@ -2740,28 +2964,55 @@ writes it: `docs/SHROUD-PLAN.md`.
 - Tests: `Tests/Game/Tests.Game.Shroud.pas` - the counting class alone (the
   painter draws, so it is judged by eye): see Tests below.
 
-### `Game/Game.Henshin.pas` (~290 lines)
-The transformation ceremony as one automaton, lifted out of the dpr (3.0.2):
-the 3..2..1 prelude (2026), the five converging healing waves of 2008, the
-flash, the suit going on - and the suit coming off. **`THenshin`** takes the
+### `Game/Game.Henshin.pas` (~300 lines)
+The transformation ceremony as one automaton, lifted out of the dpr (3.0.2)
+and rebuilt on orbs (3.0.49): the 3..2..1 prelude (2026), the rite of orbs
+about the hero (`Orbs.Rite`), the suit going on - and the suit coming off.
+The five rings of bullets closing in on the hero and the two fans of 2008
+are gone. The ceremony has no clock of its own: the rite leads the orbs and
+tells what has come to pass, the ceremony listens and does the game's side
+of it. **`THenshin`** takes the
 stage it acts on - **`THenshinStage`**, a record of the hero, the sound bank,
-the message board, the shake meter and (3.0.47) the shroud, so the constructor
-stays at two parameters - plus a
-`TCureHero` callback (`reference to procedure`) for the one thing it does not
-own, the hero's health; the game passes its `CureHero` method directly.
+the message board, the shake meter, (3.0.47) the shroud and (3.0.49) the
+rite - and what it asks the game for - **`THenshinCalls`**, a record of four
+callbacks (`reference to procedure`; the game passes its methods directly):
+`Cure` (`TCureHero`: +1 health), `GrantMercy` (`TGrantMercy`: mercy for the
+hero for a number of ticks), `BeginRite` (`TBeginRite`: the rite begins
+about the hero - the game knows his center, the matter of his screen and
+the level's pattern) and `ShedSuit` (`TShedSuit`: the suit's orbs come out
+about him). So the constructor stays at two parameters.
 Reborn with the hero on every level load.
-- `StartCountdown(henshinAtTick)` (the boss path: prelude, then the
-  cinematic), `Start(atTick)` (straight in; 30 skips the first wave - the
-  gravel trial), `Tick` (prelude and cinematic in one breath, every logic
-  tick, even over the corpse), `DrawCountdown(font, alpha)` (the growing,
-  dissolving digit, topmost), `RemoveIceForm` (the shatter fan, no sound of
-  its own), `Reset` (restart: everything dies, the suit comes off silently).
-- Owns its schedule and tuning: the wave table (`Waves[0..4]`:
-  tick/bullets/radius), `FlashTick=135`, `FinishTick=140`, the regen and perk
-  ticker lives, its two shake doses (`WaveTrauma`, `FinishTrauma`), the
-  countdown tuning, and its sound names - loaded strictly in the
-  constructor. The suit's light is the shroud's: `Finish` starts `IceOnLook`,
-  `RemoveIceForm` starts `IceOffLook`; `Reset` leaves the shroud as it is
+- `StartCountdown` (the boss path: prelude, then the ceremony), `Start`
+  (straight in - the gravel trial: the big message, `evolution.wav` twice,
+  `BeginRite`), `Tick` (once a logic tick, right after the rite's own, even
+  over the corpse: the prelude, then `HearRite`), `DrawCountdown(font,
+  alpha)` (the growing, dissolving digit, topmost), `RemoveIceForm`, `Reset`
+  (restart: the countdown and the ice form die with the hero, the suit
+  comes off silently; the rite is the game's to clear).
+- `HearRite` drains the rite's events until `reNone`: `reWaveSeated` -
+  `Cure` and the regen ticker (three times: the rite's ticks 56, 78 and
+  100); `rePaused` - `GrantMercy` for `HoverTicks` + `CollapseTicks` of
+  `IceRiteScore`, 54 ticks - to the suit; `reCollapsing` - the shroud
+  starts `ChargeLook` (a private function: `IceOnLook` with no bands and no
+  motes and its top at 0.9 of a life counted from `CollapseTicks` - the
+  body fills with light as the orbs go in, and the look tops out a tick
+  past the suit, so `IceOnLook` takes the light over with no dip between);
+  `reFinished` - `Finish`. `reWaveCalled` has no listener yet: it and
+  `reCollapsing` are where the sounds of the rite will go.
+- `Finish`: the perk ticker, three `Cure` (with the point of each wave that
+  sat, the six of the 2008 ceremony), `hfIce`, the shroud's `IceOnLook`,
+  `bottle.wav`, `FinishTrauma`, the big message. No fan.
+- `RemoveIceForm` (nothing if the hero is not wearing the suit): `hfNormal`,
+  the shroud's `IceOffLook`, `ShedSuit` and `GrantMercy` for
+  `IceRiteScore.ShedTicks` - 100 ticks, as long as the ring stands: the ring
+  is up against what a dying boss throws in that very tick. No sound of its
+  own.
+- Owns its tuning: the regen and perk
+  ticker lives, its one shake dose (`FinishTrauma`), the
+  countdown tuning, and its sound names (`evolution.wav`, `countdown.wav`,
+  `bottle.wav`) - loaded strictly in the
+  constructor. The numbers of the rite are not here: `IceRiteScore` lives in
+  `Orbs.Rite`. `Reset` leaves the shroud as it is
   (the dpr clears it). `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
@@ -2966,7 +3217,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2725 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2830 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -2999,7 +3250,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   the briefing (`THudBriefing`), the screen shake, sound bank,
   menu, the explosions and the impacts (`FExplosions`, `FImpacts`, one of
   each for the run), the hero's aura (`FAura: TAura`, one for the run
-  too), the ceremony
+  too), the rite of the henshin (`FRite: TOrbRite`, one for the run as
+  well; `HeroBodyPoints` is its body probe) and the pattern it builds on
+  this level (`FPattern: TOrbPattern`), the ceremony
   (`THenshin`), the event director (`TEventDirector`), the arena of the
   boss fight (`FArena: TPadArena`, made before the director, which gets
   its `Engage` and `Restore` as the `TArenaCues` built in `LoadLevel`),
@@ -3039,7 +3292,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     impacts (on the monsters' channel - they sit on armor), then the
     health rows (`FMarks`, each on its figure's channel) - the
     hero on
-    his own, with `FineY` = `FHero.DeckLift(alpha)`: the shroud under him
+    his own, the back layer of the rite behind him (`FRite.DrawBehind`,
+    on the world channel: the marks of the faces and the orbs behind
+    him), with `FineY` = `FHero.DeckLift(alpha)`: the shroud under him
     (`FShroudPainter.DrawUnder`), him (`FHero.Draw`, skipped while
     `FShroud.Assembling`), the light on his body (`DrawBody`), his arm alone
     while he is put together (`FHero.DrawArm`), then `FineY` back to 0 and
@@ -3052,7 +3307,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     over the hero's corpse (`FArena.Tick`, then `padhum.wav` on
     `Warned`), and `FDynamics` after the monsters
     and the director, so a smoking monster's puffs leave from where this
-    frame draws it), `LoadLevel` (the tile cache refuses a palette name two
+    frame draws it), `LoadLevel` (the level's `HenshinPattern` becomes
+    `FPattern` as soon as the file is read: `FindPattern` of the word,
+    `DefaultPatternName` for an empty one - a name the game does not know
+    raises `EOrbPatternError` there, not mid-boss; the tile cache refuses
+    a palette name two
     declared sets carry - `AmbiguousNames`, `SAmbiguousSprites`; the object
     cache: the
     level's own objects set if it ships one, then `objectSets`; handed to
@@ -3166,13 +3425,25 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use; the
     aura reward goes to `CastAura`). The
     ceremony itself is driven through `FHenshin`: started
-    by `meHenshin` (countdown) and the gravel trigger (straight in), ticked in
-    `Update`, drawn last in `Render`, reset in `RestartLevel`.
+    by `meHenshin` (`StartCountdown`) and the gravel trigger (`Start`,
+    straight in), ticked in
+    `Update` right after the rite - after the monsters' events, so the
+    first tick of a countdown falls on the tick of the boss's event -,
+    drawn last in `Render`, reset in `RestartLevel`; the suit comes off
+    (`RemoveIceForm`) on `meLevelComplete` and at the breakthrough of the
+    gravel trial (`TickGravelAttack`, with `bottle.wav` there). What the
+    ceremony asks the game for (its `THenshinCalls`, filled in
+    `LoadLevel`): `CureHero`; `GrantMercy(ticks)` - `FHurtCooldown`
+    becomes no less than `ticks`: a mercy never cuts a longer one short,
+    and the window after a hit (`HurtHero`) and the aura's (`CastAura`)
+    go through it too; `BeginRite` - `FRite.Start(FPattern, IceRiteScore,
+    HeroCenter, MatterAround)`; `ShedSuit` - `FRite.Shed(IceRiteScore,
+    HeroCenter)`; the last two do nothing over the corpse.
   - Orbs: `CastAura` (the aura reward and the G debug key: `FAura.Cast`
     around `HeroCenter`, the middle of the hero's body, out of
     `MatterAround` - the solid cells of the hero's screen and the bodies
     of its pads, `FPads.Bodies`; then the mercy window of a hit,
-    `FHurtCooldown := HurtMercyTicks`, because the ring is no shield
+    `GrantMercy(HurtMercyTicks)`, because the ring is no shield
     until the orbs are in it - the HUD blinks as after a hit, a pit hurts
     as ever; over the corpse it does nothing). `Update` ticks the aura
     right after the impacts
@@ -3193,12 +3464,31 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     included (`FAura.Carry`) - `ArriveOnScreen` leaves it alone;
     `HurtHero` collapses it on the hero's death; `LoadLevel` and
     `RestartLevel` clear it.
+    The rite (3.0.49): `FRite`, the orbs of the henshin, begun and shed
+    through the ceremony's calls above. `HeroBodyPoints` is its body
+    probe: the opaque points of the frame the hero is in
+    (`FShroudPainter.SeedsOf`), mirrored with him, where they stand on
+    the screen. `Update` ticks it right after the aura
+    (`FRite.Tick(HeroCenter)`), then the ceremony (`FHenshin.Tick`: what
+    the rite tells this tick, the ceremony hears this tick), and calls
+    `ResolveOrbHits(FRite.Flock)` after the aura's. `Render` draws it in
+    two layers about the hero, both on the world channel: `DrawBehind`
+    right before the shroud under him, `DrawInFront` right after the
+    aura. `HandleScreenTransitions` takes it through a door
+    (`FRite.Carry`) by the door's step and before `ArriveOnScreen`: a
+    trigger of the new screen may begin a rite of its own - the gravel
+    trial does - and that one has crossed nothing; a trigger that moves
+    the hero there is a leap to the rite. `HurtHero` collapses it on the
+    hero's death (`FRite.Collapse`); `LoadLevel` and `RestartLevel` clear
+    it.
     The rain: `PourRain` (the fire rain reward - `bkFireRain` in
     `ActivateQueuedBonus` - and the H debug key: `FRain.Pour` over
     `MatterAround`; over the corpse it does nothing; no shake, no mercy
-    window). `Update` ticks it right after the aura (`FRain.Tick`) and
-    calls `ResolveOrbHits(FRain.Flock)` after the aura's - one verdict for
-    both flocks; `Render` draws it right after the aura (`FRain.Draw`).
+    window). `Update` ticks it after the aura, the rite, the ceremony
+    and the shroud (`FRain.Tick`) and
+    calls `ResolveOrbHits(FRain.Flock)` after the aura's and the rite's -
+    one verdict for the three flocks; `Render` draws it right after the
+    front layer of the rite (`FRain.Draw`).
     `HurtHero` collapses it (`FRain.Collapse`); `LoadLevel`,
     `RestartLevel` and `ArriveOnScreen` clear it - a door puts the rain
     out, as it does bullets, while the aura goes through with the hero.
@@ -3211,7 +3501,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `Clear`, then `ReviveLook` once the hero is revived and put down.
     `HurtHero` clears it on the hero's death; `ArriveOnScreen` calls
     `LeaveMotes` - a door leaves the motes and the mist behind. `Update`
-    ticks it right after the aura: one `FHero.Pose` read gives both the
+    ticks it right after the ceremony: one `FHero.Pose` read gives both the
     pose and the frame whose seeds the painter hands over (`SeedsOf`). The
     destructor frees the ceremony, the painter and the shroud before the
     hero.
@@ -3224,7 +3514,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     else. All four exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `CastAura` (G: the aura straight
     onto the hero, the slot untouched), `PourRain` (H: the fire rain over
-    the hero's screen, the slot untouched), `NudgeCrosshair`,
+    the hero's screen, the slot untouched), `FHenshin.Start` (J,
+    `ScancodeJ`, 3.0.49: the henshin at once, no boss and no countdown),
+    `ShedSuit` with `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
+    3.0.49: the ring of orbs and its mercy as the boss's death gives
+    them, with no suit to take off), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave, no
@@ -3384,14 +3678,45 @@ Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
 what it draws: no window, no SDL call. Game units come in through the
 project's search path (`..\Core`, `..\Game\Orbs`); the executable goes
 to `bin\`.
-- **`Moon2D.Tests.dpr`** (~45 lines) - the runner: every registered
+- **`Moon2D.Tests.dpr`** (~65 lines) - the runner: every registered
   fixture, a verbose console log, the exit code (0 - green). A test that
   asserts nothing fails.
-- **`Orbs/Tests.Orbs.Flock.pas`** (~295 lines) - **`TOrbFlockTests`**:
+- **`Orbs/Tests.Orbs.Flock.pas`** (~320 lines) - **`TOrbFlockTests`**
+  (17 tests):
   the life of an orb in a flock through its public face - the order of
   `Add` / `Insert`, aging, the three ends (`Implode`, `Spend`,
-  `Release`), what `Tick` drops, `Shift`, `Clear`. A fixture registers
+  `Release`), what `Tick` drops, `Shift`, `Clear`, and (3.0.49) the depth
+  of a new orb and `Arrive`. A fixture registers
   itself in its unit's `initialization`.
+- **`Tests.Matter.pas`** (~100 lines) - no fixture: the matter of a
+  screen made by hand, for the orbs that are drawn out of it -
+  `MatterFromRows` (the twelve rows of a screen, `#` solid, `.` open),
+  `WalledMatter` (a room shut on every side), `EmptyMatter`, `SolidAt`.
+- **`Orbs/Tests.Orbs.Harvest.pas`** (~340 lines) - **`TOrbHarvestTests`**
+  (11 tests): `HarvestAround` - every wave its count, no spot twice, the
+  matter at the hero's feet passed by, every wave from all sides, the
+  nearer faces to the earlier waves, a wave ordered by its turn, thin air
+  in an empty room and for what the matter is short of, a body
+  harvested, `Away` and `Turn` from the center, the same dice - the same
+  spots. `HarvestSpots`, the aura's harvest, has no test yet.
+- **`Orbs/Tests.Orbs.Patterns.pas`** (~445 lines) -
+  **`TOrbPatternsTests`** (11 tests): the names (the game's patterns are
+  found by their words, an unknown word raises, a level file names its
+  pattern), the snowflake (the rays behind and the hexagon in front, the
+  seats apart and within reach, six rays, the hexagon walking against
+  the turn) and the vortex (an arm to a wave, an orb goes round the
+  hero, narrow at the feet and wide over the head, a seat leaps only
+  with its light out).
+- **`Orbs/Tests.Orbs.Rite.pas`** (~1620 lines) - **`TOrbRiteTests`** (41
+  tests): the rite ticked with no window, mostly on a pattern and a score
+  of the test's own - a grid of seats that stand still and a short score
+  whose ticks are spelled: the events and the stages by the schedule, the
+  count of orbs and where they are born, an orb armed only on its way to
+  its seat, a pattern with no holes after a walk, a leap, a door and
+  losses in flight, the stand-ins and their stock, the pattern's clock
+  and the flash, the drawing into the body, death, a restart, and the
+  suit shed as a ring; the ice score runs the game's two patterns to the
+  suit.
 - **`Game/Tests.Game.Blasts.pas`** (~270 lines) - **`TBlastTests`**: the
   wave of `Game.Blasts` - a near body before a far one, a body struck
   once, none beyond the radius, a wall's shelter, the lives and the knock
@@ -3469,7 +3794,11 @@ The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
 objects set, e.g. `["sky"]`),
-`music`, `legacyTrailing` (a migration artifact, cleanup pending), `grid`
+`music`, `henshinPattern` (optional, 3.0.49: the word of the pattern the
+orbs of the henshin build on this level - `snowflake` on level 1, `vortex`
+on level 2; none - the game's default, `snowflake`; a word the game does
+not know stops the load), `legacyTrailing` (a migration artifact, cleanup
+pending), `grid`
 (16x12), `backgrounds` (fromScreen + image + optional `tint`, three
 percentages), `objects` (optional: sprite, screen, x, y, width in screen
 units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
@@ -3757,15 +4086,18 @@ music loads leniently. Four one-shots are synthesised by
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; a hull's points: `hull` in monsters.json) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
-| The henshin ceremony: countdown, waves, the suit on and off | Game.Henshin.pas (+Bullets.pas for the fans and rings) |
-| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Tests.Game.Shroud.pas (+docs/SHROUD-PLAN.md) |
+| The henshin ceremony: the countdown, what each event of the rite means for the hero (the cure, the mercy, the light on the body, the suit), the suit on and off | Game.Henshin.pas (`HearRite`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; the J and K debug keys) + docs/HENSHIN-PLAN.md |
+| The rite of orbs of the henshin: its schedule (`IceRiteScore`), the waves and where they are drawn from, the flight to a seat, when an orb is armed, the stand-ins and their stock, the freeze and the flash, the collapse over the body, a door, a leap, the hero's death | Orbs.Rite.pas (formulas and numbers) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, the two layers in `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/HENSHIN-PLAN.md |
+| A pattern of the henshin: the snowflake, the vortex, a new one; which level builds which | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, the `Patterns` table) + `henshinPattern` in levelN.json + Levels.Defs.pas (`HenshinPattern`) + Moon2D.dpr `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (a seat that leaps) + Tests.Orbs.Patterns.pas |
+| The suit coming off: the ring of orbs, how long it stands, the mercy | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` of the score) + Game.Henshin.pas `RemoveIceForm` + Moon2D.dpr (`ShedSuit`, `GrantMercy`) |
+| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Tests.Game.Shroud.pas (+docs/SHROUD-PLAN.md) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
 | The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, the ring's ceiling, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
-| The call of the aura: where the orbs show through (faces of cells and pads, thin air), the wait over a face, the flight, when an orb is armed, the mercy window | Orbs.Harvest.pas (the spots) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`) |
+| The call of the aura: where the orbs show through (faces of cells and pads, thin air), the wait over a face, the flight, when an orb is armed, the mercy window | Orbs.Harvest.pas (the spots) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`, `GrantMercy`) |
 | The fire rain of orbs: the waves, the formula of a drop, the floor of a column (matter, a pit), landing, a second pour, the hero's death | Orbs.Rain.pas (formulas and numbers) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/ORBS-PLAN.md |
-| An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
+| An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks, its depth and the two layers about the hero; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
@@ -3790,7 +4122,7 @@ music loads leniently. Four one-shots are synthesised by
 | Repainting a 2008 screen: what becomes a pad, an object, a fan; the blockout and the prompt; seating a picture on the grid; what may be done to a generated picture | docs/REPAINT.md + levelN.json (`objects`, `pads`, `dynamics`, `tiles`) + `<assetsDir>-objects.mset` |
 | Screen pictures for repainting the art (the P debug key) | Moon2D.dpr (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
 | Free-form art over the backdrop (the ship, the satellite): place, size, tint | `objects` in levelN.json + `<assetsDir>-objects.mset` or a shared set in `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
-| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`WaveTrauma`, `FinishTrauma`) + Render.Shake.pas |
+| Screen shake: doses, what shakes, what stands still | Moon2D.dpr (`*Trauma` constants, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`FinishTrauma`) + Render.Shake.pas |
 | A sprite name resolves to the wrong picture | Render.Sprites.pas (Get, AmbiguousNames) + the level's `spriteSets` order |
 | A monster/hero loads wrong frames from a set | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Sprite sets / the `.mset` format | Sprites.Sets.pas + docs/MSET-FORMAT.md |
