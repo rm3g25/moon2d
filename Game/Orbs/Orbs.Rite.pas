@@ -14,9 +14,16 @@
   face, armed while the rite's stock of stand-ins lasts, unarmed after; so
   the pattern has no holes.
 
+  The suit comes off the way it went on, in orbs: each comes out of its own
+  point of the hero's body into the pattern, then closes into a ring about
+  him that shields him a while and goes out, orb by orb. Here every orb is
+  armed from its first tick, and one struck down is not replaced: the ring
+  is left gapped on the side the blow came from.
+
   What passes is told to the listener by events, the oldest first. Where
   the orbs are and when they come and go is the rite's; what it means for
-  the hero - the cure, the mercy, the suit - is the listener's.
+  the hero - the cure, the mercy, the suit - is the listener's. A suit shed
+  tells nothing: it ends of itself, and the stage goes back to idle.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -38,9 +45,11 @@ type
     FreezeTicks: Integer; // the last of the hover: the flow stands still
     CollapseTicks: Integer;
     StandIns: Integer; // armed stand-ins for the whole rite
+    ShedTicks: Integer; // the ring of a suit shed stands this long
+    ShedSpread: Integer; // and up to this much longer, each orb its own
   end;
 
-  TRiteStage = (rsIdle, rsGathering, rsHovering, rsCollapsing);
+  TRiteStage = (rsIdle, rsGathering, rsHovering, rsCollapsing, rsShedding);
 
   TRiteEvent = (reNone, reWaveCalled, reWaveSeated, rePaused, reCollapsing,
     reFinished);
@@ -48,9 +57,10 @@ type
   // How far a called orb has come: it shows through on a face, hangs over
   // it, flies to its seat, sits in it, and at the end draws into the hero.
   // A late stand-in has no face to show through on: it thickens at its
-  // seat.
+  // seat. An orb of a suit shed has one stage for its whole life: out of the
+  // body, in the pattern, in the ring.
   TRiteOrbStage = (roEmerging, roHovering, roFlying, roSeated, roCondensing,
-    roCollapsing);
+    roCollapsing, roShedding);
 
   // The points of the hero's body as it stands on the screen, in screen
   // units
@@ -78,6 +88,7 @@ type
     FLength: Single;
     FSide: Single; // 1 or -1
     FEntry: TSdlFPoint; // where it goes into him, from his center
+    FFadeAt: Integer; // the shed's tick it draws in at, its own
   end;
 
   // An orb the rite has called and does not yet see born
@@ -133,6 +144,9 @@ type
     function NewOrb(const ABirth: TRiteBirth): TRiteOrb;
     function Follow(ACenter: TSdlFPoint): TSdlFPoint;
     function EntryIn(const ABody: TBodyPoints): TSdlFPoint;
+    function RingSeat(AWave, ANumber: Integer): TSdlFPoint;
+    function ShedOrb(AWave, ANumber: Integer;
+      const AEntry: TSdlFPoint): TRiteOrb;
     procedure CallWave(AWave: Integer);
     procedure ReplaceSpent;
     procedure BeBorn;
@@ -152,6 +166,8 @@ type
     procedure KeepSeat(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
     procedure Condense(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
     procedure Converge(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
+    procedure Shield(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
+    procedure TickShed(ACenter: TSdlFPoint);
   public
     // ABody is asked once a rite, as the orbs begin to draw in; with
     // none every orb goes in at the chest
@@ -161,6 +177,12 @@ type
     // screen. One already going is dropped.
     procedure Start(const APattern: TOrbPattern; const AScore: TRiteScore;
       ACenter: TSdlFPoint; const AMatter: TMatter);
+    // The suit gives its orbs back: every one comes out of its own point of
+    // the hero's body - asked as the collapse asks it - into the pattern,
+    // then a ring about him that stands a while and goes out. One already
+    // going is dropped.
+    procedure Shed(const APattern: TOrbPattern; const AScore: TRiteScore;
+      ACenter: TSdlFPoint);
     // Once a tick, with the hero's center where the tick has left it
     procedure Tick(ACenter: TSdlFPoint);
     // What has come to pass since the last call, the oldest first
@@ -186,7 +208,8 @@ type
 
 const
   IceRiteScore: TRiteScore = (WaveGap: 22; WaveSpan: 56; HoverTicks: 32;
-    FreezeTicks: 9; CollapseTicks: 22; StandIns: 24);
+    FreezeTicks: 9; CollapseTicks: 22; StandIns: 24; ShedTicks: 100;
+    ShedSpread: 33);
 
 implementation
 
@@ -272,6 +295,20 @@ const
   // comes up to LightPeak
   ShrinkShare = 0.65;
   LightPeak = 1.15;
+
+  // A suit shed, in ticks from its start: an orb comes out of its point of
+  // the body in ShedExitTicks, stands in the pattern until ShedHoldUntil
+  // and has closed into the ring by ShedRingUntil. It leaves the body at
+  // this size and light. The ring is an oval, as the aura's is: its
+  // half-axes, and the ticks it takes to flow once around.
+  ShedExitTicks = 6;
+  ShedHoldUntil = 12;
+  ShedRingUntil = 26;
+  ShedExitSize = 0.5;
+  ShedExitLight = 0.6;
+  RingRadiusX = 28;
+  RingRadiusY = 35;
+  RingLapTicks = 330;
 
   DiceSeed = $52697465; // "Rite"
 
@@ -503,6 +540,22 @@ begin
   FEvents.Add(reWaveCalled);
 end;
 
+procedure TOrbRite.Shed(const APattern: TOrbPattern; const AScore: TRiteScore;
+  ACenter: TSdlFPoint);
+begin
+  Clear;
+  FPattern := APattern;
+  FScore := AScore;
+  FHeroCenter := ACenter;
+  var Body: TBodyPoints := nil;
+  if Assigned(FBodyOf) then
+    Body := FBodyOf();
+  for var Wave := 0 to PatternWaves - 1 do
+    for var Number := 0 to APattern.PerWave - 1 do
+      FFlock.Add(ShedOrb(Wave, Number, EntryIn(Body)));
+  FStage := rsShedding;
+end;
+
 // An orb struck down in flight is still in the flock until the flock's
 // next tick: it is looked for before that
 procedure TOrbRite.ReplaceSpent;
@@ -572,6 +625,36 @@ begin
   var Pick := Trunc(FRandom.NextUnit * Length(ABody));
   Result.X := ABody[Pick].X - FHeroCenter.X;
   Result.Y := ABody[Pick].Y - FHeroCenter.Y;
+end;
+
+// Where the orb of this place in the pattern stands in the ring: the
+// places of all the waves, in order, share the oval evenly, and it flows
+// slowly about the hero
+function TOrbRite.RingSeat(AWave, ANumber: Integer): TSdlFPoint;
+begin
+  var Place := AWave * FPattern.PerWave + ANumber;
+  var Turn: Single := 2 * Pi * (Place / (PatternWaves * FPattern.PerWave) +
+    FFlow / RingLapTicks);
+  Result.X := RingRadiusX * Cos(Turn);
+  Result.Y := RingRadiusY * Sin(Turn);
+end;
+
+// The orb of a suit shed, at its point of the body: armed from the first
+// tick, and drawn in when its own time is up
+function TOrbRite.ShedOrb(AWave, ANumber: Integer;
+  const AEntry: TSdlFPoint): TRiteOrb;
+begin
+  Result := TRiteOrb.Create(FHeroCenter.X + AEntry.X,
+    FHeroCenter.Y + AEntry.Y);
+  Result.FWave := AWave;
+  Result.FNumber := ANumber;
+  Result.FStage := roShedding;
+  Result.FEntry := AEntry;
+  Result.FFadeAt := FScore.ShedTicks +
+    Trunc(FRandom.NextUnit * FScore.ShedSpread);
+  Result.Size := ShedExitSize;
+  Result.Level := ShedExitLight;
+  Result.Armed := True;
 end;
 
 // The body is taken as it stands now: the points stay where they are
@@ -757,6 +840,73 @@ begin
     Seat.Level + (LightPeak - Seat.Level) * Entered);
 end;
 
+// An orb of a suit shed, by the shed's tick: out of its point of the body to
+// its seat, quickest at first, then in the pattern as it stood before the
+// collapse, then from its seat into its place in the ring, which it keeps
+// in front of the hero until its time is up. Everything stands in the hero's
+// frame: a seat that has leapt takes the orb with it, undrawn.
+procedure TOrbRite.Shield(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
+begin
+  var Seat := SeatFor(AOrb.FWave, AOrb.FNumber);
+  var Entry := AOrb.FEntry;
+  var PlaceX: Single := Seat.X;
+  var PlaceY: Single := Seat.Y;
+  var Size: Single := 1;
+  var Light: Single := Seat.Level;
+  var Depth: Single := Seat.Depth;
+
+  if FAge < ShedExitTicks then
+  begin
+    var Exited: Single := 1 - Sqr(1 - FAge / ShedExitTicks);
+    PlaceX := Entry.X + (Seat.X - Entry.X) * Exited;
+    PlaceY := Entry.Y + (Seat.Y - Entry.Y) * Exited;
+    Size := ShedExitSize + (1 - ShedExitSize) * Exited;
+    Light := ShedExitLight + (Seat.Level - ShedExitLight) * Exited;
+    Depth := Seat.Depth * Sqr(Exited);
+  end
+  else if FAge > ShedHoldUntil then
+  begin
+    var Ringed := EasedInOut(UpToOne((FAge - ShedHoldUntil) /
+      (ShedRingUntil - ShedHoldUntil)));
+    var Ring := RingSeat(AOrb.FWave, AOrb.FNumber);
+    PlaceX := Seat.X + (Ring.X - Seat.X) * Ringed;
+    PlaceY := Seat.Y + (Ring.Y - Seat.Y) * Ringed;
+    Light := Seat.Level + (1 - Seat.Level) * Ringed;
+    Depth := Seat.Depth + (1 - Seat.Depth) * Ringed;
+  end;
+
+  AOrb.MoveBeside(FHeroCenter.X + PlaceX, FHeroCenter.Y + PlaceY,
+    AHeroStep.X, AHeroStep.Y);
+  AOrb.Depth := Depth;
+  Shine(AOrb, Size, Light);
+  if (FAge <= ShedRingUntil) and SeatLeapt(AOrb) then
+    AOrb.Arrive;
+  if FAge >= AOrb.FFadeAt then
+    FFlock.Implode(AOrb);
+end;
+
+// The pattern's clock goes a tick, and every orb is put where its own tick
+// has it. Nobody is born and nobody replaced: a ring left gapped stays so.
+// With the last orb gone the shed is over.
+procedure TOrbRite.TickShed(ACenter: TSdlFPoint);
+begin
+  FFlock.Tick;
+  var HeroStep := Follow(ACenter);
+  FFlowBefore := FFlow;
+  FFlow := FFlow + 1;
+
+  for var i := 0 to FFlock.Orbs.Count - 1 do
+  begin
+    var Orb := RiteOrb(i);
+    if Orb.State = osAlive then
+      Shield(Orb, HeroStep);
+  end;
+
+  Inc(FAge);
+  if FFlock.Orbs.Count = 0 then
+    FStage := rsIdle;
+end;
+
 procedure TOrbRite.Lead(const AOrb: TRiteOrb; AHeroStep: TSdlFPoint);
 begin
   Inc(AOrb.FStageAge);
@@ -787,6 +937,11 @@ begin
   if FStage = rsIdle then
   begin
     FFlock.Tick;
+    Exit;
+  end;
+  if FStage = rsShedding then
+  begin
+    TickShed(ACenter);
     Exit;
   end;
 

@@ -209,6 +209,7 @@ const
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
   ScancodeJ = 13; // the henshin at once: no boss, no countdown
+  ScancodeK = 14; // the suit shed at once: the ring of orbs, suit or none
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
@@ -444,6 +445,7 @@ type
     procedure CureHero;
     procedure GrantMercy(ATicks: Integer);
     procedure BeginRite;
+    procedure ShedSuit;
     function HeroCenter: TSdlFPoint;
     function HeroBodyPoints: TBodyPoints;
     function MatterAround: TMatter;
@@ -660,6 +662,7 @@ begin
   Calls.Cure := CureHero;
   Calls.GrantMercy := GrantMercy;
   Calls.BeginRite := BeginRite;
+  Calls.ShedSuit := ShedSuit;
   FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
@@ -1099,10 +1102,11 @@ begin
     FGravelAttack := False;
     FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
     // The breakthrough shatter RINGS, unlike the silent level-complete
-    // one: Snd_bottle right before the same 12x16 fan (397-403). The
-    // levelmass write before it (391-392) is dropped: physics read the
-    // hero's and monsters' own copies of the level string, so the
-    // write only split off a copy nobody collided with.
+    // one: Snd_bottle right before the suit comes off, which is a ring of
+    // orbs now, not the fan of 2008. The levelmass write before it
+    // (391-392) is dropped: physics read the hero's and monsters' own
+    // copies of the level string, so the write only split off a copy
+    // nobody collided with.
     if FHero.HeroForm <> hfNormal then
       FAudio.Play(BottleSoundFile);
     FHenshin.RemoveIceForm;
@@ -1279,6 +1283,15 @@ begin
   if FHero.Dead then
     Exit;
   FRite.Start(FPattern, IceRiteScore, HeroCenter, MatterAround);
+end;
+
+// The suit's orbs are the living hero's, like the rite's: over the corpse
+// they are spent on nothing
+procedure TMoonGame.ShedSuit;
+begin
+  if FHero.Dead then
+    Exit;
+  FRite.Shed(FPattern, IceRiteScore, HeroCenter);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2062,9 +2075,9 @@ begin
           PayDodgePrize(Monster);
         meLevelComplete:
           begin
-            // The suit comes off with a shatter, the victory track plays
-            // over the wreckage, and 'ToEndLev := 400' (949) starts the
-            // walk-out timer - Update loads the next level when it dries
+            // The suit comes off in a ring of orbs, the victory track
+            // plays over the wreckage, and 'ToEndLev := 400' (949) starts
+            // the walk-out timer - Update loads the next level when it dries
             FHenshin.RemoveIceForm;
             FAudio.PlayMusic(VictoryMusicFile, mmOnce);
             FEndLevelTimer := LevelEndLingerTicks;
@@ -2520,6 +2533,13 @@ begin
       // The boss gives the ceremony once a fight, at two thirds of his
       // lives - too far to tune against
       FHenshin.Start;
+    ScancodeK:
+      // The ring and its mercy, as the boss's death gives them, with
+      // no suit to take off - too far to tune against
+      begin
+        ShedSuit;
+        GrantMercy(IceRiteScore.ShedTicks);
+      end;
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine

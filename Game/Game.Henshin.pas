@@ -10,6 +10,11 @@
   the body as the orbs go in, the suit as the last of them does. It has
   no clock of its own.
 
+  The suit comes off the way it went on, in orbs: the game is asked to
+  have the rite give them back, they come out of the body into a ring
+  about the hero, and the mercy lasts as long as the ring does. The fan of
+  bullets the suit shattered into in 2008 is gone.
+
   The ceremony acts on the stage it is given - the hero, the sound bank,
   the message board, the shake meter, the shroud, the rite - and asks
   the game for what it does not own, through its calls. The game ticks
@@ -41,6 +46,8 @@ type
   // The rite begins about the hero, owned by the game: it knows his
   // center, the matter of his screen and the level's pattern
   TBeginRite = reference to procedure;
+  // The suit's orbs come out about the hero, owned by the game
+  TShedSuit = reference to procedure;
 
   // What the ceremony acts on
   THenshinStage = record
@@ -58,6 +65,7 @@ type
     Cure: TCureHero;
     GrantMercy: TGrantMercy;
     BeginRite: TBeginRite;
+    ShedSuit: TShedSuit;
   end;
 
   THenshin = class
@@ -88,7 +96,8 @@ type
     procedure Tick;
     // The digit of the prelude, topmost on the display
     procedure DrawCountdown(const AFont: TMoonFont; AAlpha: Double);
-    // The suit shatters with a fan; nothing if the hero is not wearing it
+    // The suit comes off as a ring of orbs and the hero is spared as long
+    // as it stands; nothing if he is not wearing it
     procedure RemoveIceForm;
     // A fresh boss means a fresh ceremony: the countdown and the ice
     // form die with the hero - the suit comes off silently. The rite is
@@ -99,7 +108,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math, Bullets, Localization, Game.Space;
+  System.SysUtils, System.Math, Localization, Game.Space;
 
 const
   HenshinSoundFile = 'evolution.wav'; // the transformation sting (878/966)
@@ -279,16 +288,15 @@ begin
 end;
 
 procedure THenshin.RemoveIceForm;
-const
-  ShatterFan: TFanShape = (Rows: 12; Cols: 16; BaseSpeed: 4; SpeedSpread: 3);
 begin
   if FHero.HeroForm = hfNormal then
     Exit;
-  // Verbatim 940-947: the suit shatters with a fan but NO sound of its
-  // own - the victory music covers the moment (2008 played nothing here)
   FHero.HeroForm := hfNormal;
-  FHero.Bullets.SpawnFan(FHero.X, FHero.Y, ShatterFan);
   FShroud.Start(IceOffLook);
+  // The ring stands against what a dying boss throws in this very tick,
+  // and the mercy lasts as long as the ring does
+  FCalls.ShedSuit();
+  FCalls.GrantMercy(IceRiteScore.ShedTicks);
 end;
 
 end.
