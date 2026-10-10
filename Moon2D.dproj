@@ -229,6 +229,7 @@
         <DCCReference Include="Game\Audio.pas"/>
         <DCCReference Include="Core\Localization.pas"/>
         <DCCReference Include="Core\Render.Glow.pas"/>
+        <DCCReference Include="Core\Render.Silhouette.pas"/>
         <DCCReference Include="Core\Render.Globe.pas"/>
         <DCCReference Include="Menu\Menu.Starfield.pas"/>
         <DCCReference Include="Menu\Menu.Globe.pas"/>

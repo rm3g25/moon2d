@@ -108,7 +108,8 @@ type
 implementation
 
 uses
-  System.SysUtils, Sdl2.Core, Effects.Emitter, Effects.Sparks, Hero;
+  System.SysUtils, Sdl2.Core, Render.Silhouette, Effects.Emitter,
+  Effects.Sparks, Hero;
 
 const
   DefaultSeed = 7;

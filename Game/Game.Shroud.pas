@@ -27,8 +27,8 @@ unit Game.Shroud;
 interface
 
 uses
-  System.SysUtils, Sdl2.Core, Render.Brush, Effects.Emitter, Effects.Sparks,
-  Levels.Dynamics, Hero;
+  System.SysUtils, Sdl2.Core, Render.Brush, Render.Silhouette, Effects.Emitter,
+  Effects.Sparks, Levels.Dynamics, Hero;
 
 const
   ShroudStrips = 16;
@@ -73,9 +73,6 @@ type
     Age: Integer; // ticks of the look's life gone, as a band's clock
     X, Y: Single; // where the band stands: its middle, on its row
   end;
-
-  // Opaque points of one frame, in units from the picture's corner as painted
-  TSeedList = TArray<TSdlFPoint>;
 
   THeroShroud = class
   private
@@ -125,15 +122,6 @@ type
     property Mist: TArray<TShroudCloud> read FMist;
   end;
 
-  // What is made of one hero frame at load
-  TShroudFrameArt = record
-    Seeds: TSeedList;
-    Mask: PSdlTexture; // white, with the frame's alpha
-    Halo: PSdlTexture; // the frame's alpha blurred
-    HaloMarginX, HaloMarginY: Single; // units the halo reaches past the frame
-    TexW, TexH: Integer; // texels of the frame
-  end;
-
   // Where and when the shroud is drawn this frame
   TShroudView = record
     Pose: THeroPose;
@@ -147,7 +135,7 @@ type
     FRenderer: PSdlRenderer;
     FHero: THero;
     FShroud: THeroShroud;
-    FArt: TArray<TShroudFrameArt>;
+    FArt: TArray<TSilhouette>;
     procedure BuildFrame(AIndex: Integer; const AName: string);
     function ViewOf(AOrigin: TSdlPoint; ALift, AAlpha: Single): TShroudView;
     procedure DrawBands(const ACanvas: TDynamicCanvas; const AView: TShroudView;
@@ -223,11 +211,6 @@ uses
 
 resourcestring
   SShroudFrameFailed = 'Cannot build the shroud of the hero frame "%s": %s';
-  SShroudMaskFailed = 'Cannot build a shroud mask: %s';
-
-type
-  PPixelBytes = ^TPixelBytes;
-  TPixelBytes = array [0..3] of Byte; // R,G,B,A of SdlPixelFormatAbgr8888
 
 const
   // A band's place along the body is moved by up to this share of the gap
@@ -289,14 +272,6 @@ const
   WhiteFrom = 0.6;
   WhiteLevel = 0.9;
   WhiteMix = 0.7;
-
-  // Frame art
-  SeedAlpha = 128;
-  // A frame wider than this is shrunk to it before it is blurred
-  HaloMaxCells = 64;
-  // Units, from the edge of the body
-  HaloReach = 2.5;
-  HaloPasses = 3;
 
   // Typed: Power has three overloads
   SmokeWavePower: Single = 0.5;
@@ -413,101 +388,6 @@ begin
   SDL_SetTextureAlphaMod(ATexture, Round(255 * Limit(ALevel, 0, 1)));
   SDL_RenderCopyExF(ARenderer, ATexture, ASource, @ADest, 0.0, nil,
     FlipFlag(AMirrored));
-end;
-
-// ---------------------------------------------------------------------------
-// What is made of a frame
-// ---------------------------------------------------------------------------
-
-function CollectSeeds(ASurface: PSdlSurface): TSeedList;
-begin
-  SetLength(Result, ASurface.W * ASurface.H);
-  var Count := 0;
-  for var Row := 0 to ASurface.H - 1 do
-  begin
-    var Pixel := PPixelBytes(PByte(ASurface.Pixels) + Row * ASurface.Pitch);
-    for var Col := 0 to ASurface.W - 1 do
-    begin
-      if Pixel[3] >= SeedAlpha then
-      begin
-        Result[Count].X := (Col + 0.5) * HeroSize / ASurface.W;
-        Result[Count].Y := (Row + 0.5) * HeroSize / ASurface.H;
-        Inc(Count);
-      end;
-      Inc(Pixel);
-    end;
-  end;
-  SetLength(Result, Count);
-end;
-
-function CreateFrameMask(ARenderer: PSdlRenderer;
-  ASurface: PSdlSurface): PSdlTexture;
-begin
-  var Mask := SDL_CreateRGBSurfaceWithFormat(0, ASurface.W, ASurface.H, 32,
-    SdlPixelFormatAbgr8888);
-  if Mask = nil then
-    raise EShroudError.CreateFmt(SShroudMaskFailed, [SdlErrorText]);
-  try
-    SDL_LockSurface(Mask);
-    try
-      for var Row := 0 to ASurface.H - 1 do
-      begin
-        var Source := PPixelBytes(PByte(ASurface.Pixels) + Row * ASurface.Pitch);
-        var Target := PPixelBytes(PByte(Mask.Pixels) + Row * Mask.Pitch);
-        for var Col := 0 to ASurface.W - 1 do
-        begin
-          Target[0] := 255;
-          Target[1] := 255;
-          Target[2] := 255;
-          Target[3] := Source[3];
-          Inc(Source);
-          Inc(Target);
-        end;
-      end;
-    finally
-      SDL_UnlockSurface(Mask);
-    end;
-    Result := CreateGlowTexture(ARenderer, Mask);
-  finally
-    SDL_FreeSurface(Mask);
-  end;
-end;
-
-// The frame's alpha shrunk into the middle of an apron-padded image, blurred
-// and made a glow; the margins are how far the apron reaches, in units
-function CreateFrameHalo(ARenderer: PSdlRenderer; ASurface: PSdlSurface;
-  out AMarginX, AMarginY: Single): PSdlTexture;
-var
-  Image: TArray<Single>;
-begin
-  var Scale := (ASurface.W + HaloMaxCells - 1) div HaloMaxCells;
-  var CellsX := (ASurface.W + Scale - 1) div Scale;
-  var CellsY := (ASurface.H + Scale - 1) div Scale;
-  var Radius: Integer := Round(HaloReach * CellsX / HeroSize);
-  if Radius < 1 then
-    Radius := 1;
-  var Apron := Radius * HaloPasses;
-  var Width := CellsX + 2 * Apron;
-  var Height := CellsY + 2 * Apron;
-  SetLength(Image, Width * Height);
-
-  var BlockArea := Scale * Scale * 255;
-  for var Row := 0 to ASurface.H - 1 do
-  begin
-    var Pixel := PPixelBytes(PByte(ASurface.Pixels) + Row * ASurface.Pitch);
-    var Target := (Row div Scale + Apron) * Width + Apron;
-    for var Col := 0 to ASurface.W - 1 do
-    begin
-      var Cell := Target + Col div Scale;
-      Image[Cell] := Image[Cell] + Pixel[3] / BlockArea;
-      Inc(Pixel);
-    end;
-  end;
-
-  BlurImage(Image, Width, Height, Radius, HaloPasses);
-  AMarginX := Apron * (HeroSize * Scale / ASurface.W);
-  AMarginY := Apron * (HeroSize * Scale / ASurface.H);
-  Result := CreateGlowFromImage(ARenderer, Image, Width, Height);
 end;
 
 // ---------------------------------------------------------------------------
@@ -765,13 +645,8 @@ end;
 
 destructor TShroudPainter.Destroy;
 begin
-  for var Art in FArt do
-  begin
-    if Assigned(Art.Mask) then
-      SDL_DestroyTexture(Art.Mask);
-    if Assigned(Art.Halo) then
-      SDL_DestroyTexture(Art.Halo);
-  end;
+  for var i := 0 to High(FArt) do
+    FreeSilhouette(FArt[i]);
   inherited;
 end;
 
@@ -785,17 +660,7 @@ begin
   if Surface = nil then
     raise EShroudError.CreateFmt(SShroudFrameFailed, [AName, SdlErrorText]);
   try
-    FArt[AIndex].TexW := Surface.W;
-    FArt[AIndex].TexH := Surface.H;
-    SDL_LockSurface(Surface);
-    try
-      FArt[AIndex].Seeds := CollectSeeds(Surface);
-      FArt[AIndex].Mask := CreateFrameMask(FRenderer, Surface);
-      FArt[AIndex].Halo := CreateFrameHalo(FRenderer, Surface,
-        FArt[AIndex].HaloMarginX, FArt[AIndex].HaloMarginY);
-    finally
-      SDL_UnlockSurface(Surface);
-    end;
+    FArt[AIndex] := BuildSilhouette(FRenderer, Surface, HeroSize, HeroSize);
   finally
     SDL_FreeSurface(Surface);
   end;
