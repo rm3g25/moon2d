@@ -1291,7 +1291,7 @@ procedure TMoonGame.ShedSuit;
 begin
   if FHero.Dead then
     Exit;
-  FRite.Shed(FPattern, IceRiteScore, HeroCenter);
+  FRite.Shed(IceRiteScore, HeroCenter);
 end;
 
 // ---------------------------------------------------------------------------
