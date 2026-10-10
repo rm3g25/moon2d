@@ -69,6 +69,7 @@ uses
   Game.Space in 'Core\Game.Space.pas',
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Shroud in 'Game\Game.Shroud.pas',
+  Game.Uptake in 'Game\Game.Uptake.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
@@ -348,6 +349,8 @@ type
     FHenshin: THenshin; // the ceremony; reborn with the hero
     FShroud: THeroShroud; // the hero's smoke and light; reborn with the hero
     FShroudPainter: TShroudPainter;
+    FUptake: TUptake; // what the hero takes in; reborn with the level
+    FUptakePainter: TUptakePainter;
     FDirector: TEventDirector; // the level's events; reborn with the level
     FArena: TPadArena; // the rebuilds of the boss fight; reborn with the level
     // The bonus slot: one reward at a time, spent by right click.
@@ -398,11 +401,15 @@ type
     procedure ResolveBlasts;
     function ShardStruck(const AShard: TLiveShard): Boolean;
     procedure ResolveMonsterContact;
+    procedure TakeLoot(const AMonster: TMonster);
+    procedure BeginUptake(const ALook: TUptakeLook; const AMonster: TMonster);
+    procedure WarmPickupPictures;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
     procedure SoundArmorHit(AThrewTracer: Boolean);
     procedure ThrowCrashSparks(const ACrash: TPilotCrash);
     procedure PayDodgePrize(const ABoss: TMonster);
     procedure RewardMonsterKill(const AMonster: TMonster);
+    procedure BurstPickup(const AMonster: TMonster; const AHeart: TSdlFPoint);
     procedure DrainMonsterEvents;
     procedure CreateHud;
     procedure HurtHero;
@@ -542,6 +549,8 @@ begin
   FVitals.Free;
   FCharge.Free;
   FHenshin.Free;
+  FUptakePainter.Free;
+  FUptake.Free;
   FShroudPainter.Free;
   FShroud.Free;
   FDirector.Free;
@@ -647,10 +656,14 @@ begin
     World);
 
   FHero := THero.Create(FRenderer, FLevel, FPads);
+  FreeAndNil(FUptakePainter);
+  FreeAndNil(FUptake);
   FreeAndNil(FShroudPainter);
   FreeAndNil(FShroud);
   FShroud := THeroShroud.Create(SolidUnderPoint, RollDiceSeed);
   FShroudPainter := TShroudPainter.Create(FRenderer, FHero, FShroud);
+  FUptake := TUptake.Create(SolidUnderPoint, FShroud.Feed, RollDiceSeed);
+  FUptakePainter := TUptakePainter.Create(FRenderer, FUptake);
   FreeAndNil(FHenshin);
   var Stage: THenshinStage;
   Stage.Hero := FHero;
@@ -667,6 +680,7 @@ begin
   FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
+  WarmPickupPictures;
   CreateHud;
   FreeAndNil(FArena);
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
@@ -938,6 +952,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FRain.Clear;
+  FUptake.Settle;
   FShroud.LeaveMotes;
   FMessages.ClearPopups;
   FireScreenTriggers;
@@ -1623,6 +1638,24 @@ begin
   var ShardLives: Integer := Round(AMonster.Def.Blast.ShardLives *
     DifficultyMonsterLives[FDifficulty]);
   FExplosions.Detonate(Heart.X, Heart.Y, AMonster.Def.Explosion, ShardLives);
+  if AMonster.Def.Category = mcPickup then
+    BurstPickup(AMonster, Heart);
+end;
+
+// A pickup destroyed by anything but the hero: the same picture, crumbled
+// and let fall, and sparks where it stood
+procedure TMoonGame.BurstPickup(const AMonster: TMonster; const AHeart: TSdlFPoint);
+const
+  PickupSparks = 6;
+begin
+  BeginUptake(PickupBurst, AMonster);
+
+  var Strike := Default(TStrike);
+  Strike.X := AHeart.X;
+  Strike.Y := AHeart.Y;
+  Strike.NormalY := -1;
+  Strike.ExtraSparks := PickupSparks;
+  FImpacts.Land(Strike);
 end;
 
 // The monster half: walls and the void as above, plus the hero's hide -
@@ -1836,6 +1869,7 @@ begin
     FAura.Collapse;
     FRite.Collapse;
     FShroud.Clear;
+    FUptake.Drop;
     FRain.Collapse;
     FGameOverTimer := GameOverDelayTicks;
     // Dying cancels the pending exit: the door reopens when the reborn
@@ -1857,6 +1891,7 @@ begin
   FField.Free;
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
+  WarmPickupPictures;
   // The pads first: Reseat finds the pad of a lamp where the level file
   // puts it
   FPads.Rewind(RollDiceSeed);
@@ -1873,6 +1908,7 @@ begin
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
+  FUptake.Clear;
   FShroud.Clear;
   FShroud.Start(ReviveLook);
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
@@ -1912,6 +1948,33 @@ begin
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
   PinRespawnPoint;
+end;
+
+// What the hero touches is his this tick; what is seen of it from here on
+// is the uptake's
+procedure TMoonGame.TakeLoot(const AMonster: TMonster);
+begin
+  var Look := MedkitUptake;
+  if AMonster.Def.PickupEffect.Kind = peGiveWeapon then
+    Look := WeaponUptake;
+  BeginUptake(Look, AMonster);
+  AMonster.Collect;
+end;
+
+procedure TMoonGame.BeginUptake(const ALook: TUptakeLook; const AMonster: TMonster);
+begin
+  var Picture := FUptakePainter.PictureOf(AMonster.ArtSet);
+  FUptake.Start(ALook, Picture, FUptakePainter.ShapeOf(Picture),
+    Round(AMonster.X), Round(AMonster.Y) - SpriteSize, AMonster.Mirrored,
+    HeroCenter);
+end;
+
+// Built now, so that the first touch does not stop on loading a picture
+procedure TMoonGame.WarmPickupPictures;
+begin
+  for var Monster in FField.Monsters do
+    if Monster.Def.Category = mcPickup then
+      FUptakePainter.PictureOf(Monster.ArtSet);
 end;
 
 procedure TMoonGame.ResolveMonsterContact;
@@ -1954,7 +2017,7 @@ begin
                 Monster.Def.PickupEffect.BulletSpeed,
                 Monster.Def.PickupEffect.BulletGravity);
           end;
-          Monster.TakeDamage(0, Monster.Lives, FMonsterBullets);
+          TakeLoot(Monster);
         end;
     else
       if Monster.Def.Dangerous then
@@ -2176,7 +2239,11 @@ begin
   // After the rite: what it tells this tick, the ceremony hears this tick
   FHenshin.Tick;
   var HeroPose := FHero.Pose;
-  FShroud.Tick(HeroPose, FShroudPainter.SeedsOf(HeroPose.Frame));
+  var HeroSeeds := FShroudPainter.SeedsOf(HeroPose.Frame);
+  // The uptake first: what comes in feeds the shroud's light, and the
+  // light then fades by a tick
+  FUptake.Tick(HeroPose, HeroSeeds);
+  FShroud.Tick(HeroPose, HeroSeeds);
   FRain.Tick;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
@@ -2259,7 +2326,10 @@ begin
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FSprites.Origin := FShake.Offset(scMonsters);
+        FUptakePainter.DrawBehind(FField, FHero.Screen, FSprites.Origin, AAlpha);
         FField.Draw(FSprites, FHero.Screen, AAlpha);
+        FUptakePainter.DrawLoot(FDynamics.Canvas, FField, FHero.Screen,
+          FSprites.Origin, AAlpha);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
@@ -2279,6 +2349,8 @@ begin
           FHero.DrawArm(FSprites);
         FSprites.FineY := 0;
         FShroudPainter.DrawOver(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
+        FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
+          AAlpha);
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);

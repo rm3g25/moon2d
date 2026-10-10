@@ -19,6 +19,10 @@
   Nothing here knows how the hero looks. Sizes and shapes come from the
   frames, so a redrawn hero brings its own shroud.
 
+  The shroud also holds one light that is no scene's: what the hero takes
+  in (Game.Uptake) feeds it, it lights the body and dies out by itself,
+  whether a scene runs or not.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Shroud;
@@ -86,6 +90,9 @@ type
     FMotes: TParticleSwarm;
     FMoteDebt: Single;
     FMist: TArray<TShroudCloud>;
+    FFed: Single;
+    FFedTint: TRgb;
+    FFedKeep: Single;
     function GetAssembling: Boolean;
     procedure RollBands;
     procedure RollStrips;
@@ -106,6 +113,9 @@ type
     // behind, the light goes with him
     procedure LeaveMotes;
     procedure Clear;
+    // A light on the body that is no scene's: it takes what it is fed and
+    // dies out by itself; AKeep - the share of it a tick leaves
+    procedure Feed(ATint: TRgb; AShare, AKeep: Single);
     // The share of life gone, 0..1; AAlpha - the step between two ticks
     function Time(AAlpha: Single): Single;
     // The own clock of a place along the body, 0..1
@@ -120,6 +130,8 @@ type
     property Bands: TArray<TShroudBand> read FBands;
     property Motes: TParticleSwarm read FMotes;
     property Mist: TArray<TShroudCloud> read FMist;
+    property Fed: Single read FFed;
+    property FedTint: TRgb read FFedTint;
   end;
 
   // Where and when the shroud is drawn this frame
@@ -149,6 +161,9 @@ type
     procedure DrawHalo(const ACanvas: TDynamicCanvas; const AView: TShroudView);
     procedure DrawStrips(const AView: TShroudView);
     procedure DrawBodyLight(const AView: TShroudView);
+    procedure DrawFedUnder(const ACanvas: TDynamicCanvas;
+      const AView: TShroudView);
+    procedure DrawFedBody(const AView: TShroudView);
     procedure DrawMotes(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
   public
@@ -156,7 +171,7 @@ type
       const AShroud: THeroShroud);
     destructor Destroy; override;
     function SeedsOf(AFrame: Integer): TSeedList;
-    // Behind the hero: the mist, the far bands, the halo
+    // Behind the hero: the mist, the far bands, the halo, the fed light
     procedure DrawUnder(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       ALift, AAlpha: Single);
     // On him: the strips while he is assembled, the light on the body
@@ -272,6 +287,15 @@ const
   WhiteFrom = 0.6;
   WhiteLevel = 0.9;
   WhiteMix = 0.7;
+
+  // The light fed to the body
+  FedCeiling = 1.3;
+  FedFloor = 0.01;
+  FedSpotSize = 44;
+  FedSpotLevel = 0.3;
+  FedBodyLevel = 0.45;
+  FedWhiteMix = 0.35;
+  FedWhiteLevel = 0.6;
 
   // Typed: Power has three overloads
   SmokeWavePower: Single = 0.5;
@@ -460,6 +484,12 @@ end;
 
 procedure THeroShroud.Tick(const APose: THeroPose; const ASeeds: TSeedList);
 begin
+  if FFed > 0 then
+  begin
+    FFed := FFed * FFedKeep;
+    if FFed < FedFloor then
+      FFed := 0;
+  end;
   if FActive then
   begin
     Inc(FAge);
@@ -486,6 +516,14 @@ begin
   FActive := False;
   FMotes.Clear;
   FMist := nil;
+  FFed := 0;
+end;
+
+procedure THeroShroud.Feed(ATint: TRgb; AShare, AKeep: Single);
+begin
+  FFed := AtMost(FFed + AShare, FedCeiling);
+  FFedTint := ATint;
+  FFedKeep := AKeep;
 end;
 
 function THeroShroud.Time(AAlpha: Single): Single;
@@ -687,18 +725,24 @@ procedure TShroudPainter.DrawUnder(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; ALift, AAlpha: Single);
 begin
   DrawMist(ACanvas, AOrigin, AAlpha, False);
-  if not FShroud.Active then
+  if not FShroud.Active and (FShroud.Fed <= 0) then
     Exit;
   var View := ViewOf(AOrigin, ALift, AAlpha);
+  DrawFedUnder(ACanvas, View);
+  if not FShroud.Active then
+    Exit;
   DrawBands(ACanvas, View, False);
   DrawHalo(ACanvas, View);
 end;
 
 procedure TShroudPainter.DrawBody(AOrigin: TSdlPoint; ALift, AAlpha: Single);
 begin
-  if not FShroud.Active then
+  if not FShroud.Active and (FShroud.Fed <= 0) then
     Exit;
   var View := ViewOf(AOrigin, ALift, AAlpha);
+  DrawFedBody(View);
+  if not FShroud.Active then
+    Exit;
   if FShroud.Assembling then
     DrawStrips(View);
   DrawBodyLight(View);
@@ -855,6 +899,49 @@ begin
     PaintGlowPiece(FRenderer, FArt[AView.Pose.Frame - 1].Mask, nil, Frame,
       Mix(FShroud.Look.Tint, White, WhiteMix),
       (AView.Glow - WhiteFrom) * WhiteLevel, AView.Pose.Mirrored);
+end;
+
+// Under the body: a spot and the halo of the light the hero has taken in
+procedure TShroudPainter.DrawFedUnder(const ACanvas: TDynamicCanvas;
+  const AView: TShroudView);
+begin
+  var Level := FShroud.Fed;
+  if Level <= 0 then
+    Exit;
+  var Tint := FShroud.FedTint;
+  var Art := FArt[AView.Pose.Frame - 1];
+
+  var Spot := CenteredRect(AView.Left + HeroSize / 2, AView.Top + HeroSize / 2,
+    FedSpotSize, FedSpotSize);
+  DrawGlowRect(ACanvas.Renderer, ACanvas.PointGlow, Spot, Tint,
+    Limit(Level * FedSpotLevel, 0, 1));
+
+  var Dest: TSdlFRect;
+  Dest.X := AView.Left - Art.HaloMarginX;
+  Dest.Y := AView.Top - Art.HaloMarginY;
+  Dest.W := HeroSize + 2 * Art.HaloMarginX;
+  Dest.H := HeroSize + 2 * Art.HaloMarginY;
+  PaintGlowPiece(FRenderer, Art.Halo, nil, Dest, Tint, AtMost(Level, 1),
+    AView.Pose.Mirrored);
+end;
+
+// On the body: his own frame and a white mask of it, added on. While the
+// body is being put together there is nothing whole to light.
+procedure TShroudPainter.DrawFedBody(const AView: TShroudView);
+begin
+  var Level := FShroud.Fed;
+  if (Level <= 0) or FShroud.Assembling then
+    Exit;
+  var Frame: TSdlFRect;
+  Frame.X := AView.Left;
+  Frame.Y := AView.Top;
+  Frame.W := HeroSize;
+  Frame.H := HeroSize;
+  PaintHeroLight(FRenderer, AView.Pose.Texture, Frame, Level * FedBodyLevel,
+    AView.Pose.Mirrored);
+  PaintGlowPiece(FRenderer, FArt[AView.Pose.Frame - 1].Mask, nil, Frame,
+    Mix(FShroud.FedTint, White, FedWhiteMix), Level * FedWhiteLevel,
+    AView.Pose.Mirrored);
 end;
 
 procedure TShroudPainter.DrawMotes(const ACanvas: TDynamicCanvas;

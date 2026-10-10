@@ -24,6 +24,10 @@
   (Game.Blasts, the "blast" of monsters.json). 2008 fanned 360 bullets
   instead, half of them the hero's and half hostile.
 
+  A pickup is never drawn dying: the hero taking one (Collect) or anything
+  else destroying one takes its body off the screen at once, and what the
+  player sees of it is the game's own (Game.Uptake).
+
   Boss extras carried over: minion requests on a timer, HENSHIN at 2/3
   lives (turns the HERO into ice form), rage (speed x2, music change, a
   24x44 fragment wave), victory double-fan. The rage is longer and
@@ -101,6 +105,7 @@ type
     FX, FY: Double;
     FScreen: Integer;
     FTag: string; // the placement's tag, '' for most; the events read it
+    FArtSet: string; // the stem of the sprite list the body was born with
     FDirection: Boolean; // True = right
     FAction: TMonsterAction;
     FLife: TMonsterLife;
@@ -223,6 +228,10 @@ type
     // thresholds.
     procedure TakeDamage(AKnockDx, ALosses: Integer;
       const AEnemyBullets: TBurst);
+    // The hero has taken the pickup: it is gone at once, with no dying
+    procedure Collect;
+    // The picture is drawn turned over (2008 art faces left)
+    function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
     // A flying boss takes them up; the rest have no pilot to tell
     procedure SetTactics(ATactics: TPilotTactics);
@@ -256,6 +265,8 @@ type
     property Y: Double read FY;
     property Screen: Integer read FScreen;
     property Tag: string read FTag;
+    // The stem of the sprite list the body was born with: its set's name
+    property ArtSet: string read FArtSet;
     property Life: TMonsterLife read FLife;
     property Lives: Integer read FLives;
     property LivesAll: Integer read FLivesAll;
@@ -469,6 +480,7 @@ begin
 
   FScreen := APlacement.Screen;
   FTag := APlacement.Tag;
+  FArtSet := ChangeFileExt(APlacement.SpriteList, '');
   // Placement coordinates are sprite-grid cells, as FindMostersOnScreen read
   FX := (APlacement.X - 1) * SpriteSize;
   FY := APlacement.Y * SpriteSize;
@@ -811,6 +823,11 @@ begin
   if FAction = maStand then
     Exit(FDirection);
   Result := FAction = maWalkRight;
+end;
+
+function TMonster.Mirrored: Boolean;
+begin
+  Result := FacesRight;
 end;
 
 // A point of the left-facing art on the screen: it mirrors with the body.
@@ -1581,10 +1598,21 @@ begin
     BeginDying(AEnemyBullets);
 end;
 
+procedure TMonster.Collect;
+begin
+  FLife := mlDead;
+  FStep := 0;
+  FEvents.Add(meDied);
+end;
+
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
 begin
+  // A pickup that is not there is not drawn dying: the game draws what
+  // becomes of it
+  if (FDef.Category = mcPickup) and (FLife <> mlAlive) then
+    Exit;
   if (FDisc <> nil) and (FLife = mlAlive) then
   begin
     FDisc.Draw(ASprites, AAlpha);
