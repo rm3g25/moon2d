@@ -74,6 +74,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Tests.Matter.pas"/>
         <DCCReference Include="Tests.Rooms.pas"/>
         <DCCReference Include="Effects\Tests.Effects.Lightning.pas"/>
         <DCCReference Include="Game\Tests.Game.Blasts.pas"/>
@@ -87,6 +88,9 @@
         <DCCReference Include="Monsters\Tests.Monsters.Hull.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Mount.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Flock.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Harvest.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Patterns.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Rite.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Plunge.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

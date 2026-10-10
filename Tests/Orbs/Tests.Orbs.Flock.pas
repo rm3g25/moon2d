@@ -4,8 +4,9 @@
   the way it ends - an implosion takes its time, a strike and a release
   are at once, and the gone are dropped at the tick.
 
-  What a flock draws - the breath, the dust, the mark on a face - has no
-  test here: that is for the eye.
+  What a flock draws - the breath, the dust, the mark on a face, the two
+  layers about the hero, what is drawn ahead between ticks - has no test
+  here: that is for the eye.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -33,6 +34,8 @@ type
     [Test]
     procedure TestNewOrbIsAliveArmedAndFull;
     [Test]
+    procedure TestNewOrbIsInFrontOfTheHero;
+    [Test]
     procedure TestAddKeepsOwnersOrder;
     [Test]
     procedure TestInsertPutsOrbBeforeIndex;
@@ -42,6 +45,8 @@ type
     procedure TestMovedOrbStaysPutThroughTicks;
     [Test]
     procedure TestMoveBesidePutsOrbWhereMoveToWould;
+    [Test]
+    procedure TestArrivedOrbStaysWhereItWasPut;
     [Test]
     procedure TestImplodingOrbLingersThenIsDropped;
     [Test]
@@ -121,6 +126,14 @@ begin
   Assert.IsTrue(IsFull, 'A new orb is at its full size and light');
 end;
 
+procedure TOrbFlockTests.TestNewOrbIsInFrontOfTheHero;
+begin
+  var Orb := AddOrbAt(40, 60);
+
+  Assert.IsTrue(Orb.Depth >= 0,
+    'An orb whose owner knows no depth is drawn behind the hero');
+end;
+
 procedure TOrbFlockTests.TestAddKeepsOwnersOrder;
 begin
   var Head := AddOrbAt(10, 10);
@@ -174,6 +187,18 @@ begin
 
   Orb.MoveBeside(70, 90, 4, -2);
 
+  ExpectAt(Orb, 70, 90);
+end;
+
+procedure TOrbFlockTests.TestArrivedOrbStaysWhereItWasPut;
+begin
+  var Orb := AddOrbAt(10, 20);
+
+  Orb.MoveTo(70, 90);
+  Orb.Arrive;
+  ExpectAt(Orb, 70, 90);
+
+  FFlock.Tick;
   ExpectAt(Orb, 70, 90);
 end;
 

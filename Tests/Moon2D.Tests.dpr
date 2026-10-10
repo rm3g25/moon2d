@@ -17,6 +17,7 @@ uses
   System.SysUtils,
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
+  Tests.Matter in 'Tests.Matter.pas',
   Tests.Rooms in 'Tests.Rooms.pas',
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
@@ -30,6 +31,9 @@ uses
   Tests.Monsters.Hull in 'Monsters\Tests.Monsters.Hull.pas',
   Tests.Monsters.Mount in 'Monsters\Tests.Monsters.Mount.pas',
   Tests.Orbs.Flock in 'Orbs\Tests.Orbs.Flock.pas',
+  Tests.Orbs.Harvest in 'Orbs\Tests.Orbs.Harvest.pas',
+  Tests.Orbs.Patterns in 'Orbs\Tests.Orbs.Patterns.pas',
+  Tests.Orbs.Rite in 'Orbs\Tests.Orbs.Rite.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas';
 
 procedure RunSuite;

@@ -55,6 +55,7 @@ The code style of tests is CODESTYLE 16.
 Tests\
   Moon2D.Tests.dproj      console project, DUnitX; fourth in Moon2D.groupproj
   Moon2D.Tests.dpr        the runner: verbose log, exit code
+  Tests.Matter.pas        the matter of a screen made by hand, for the orbs
   Tests.Rooms.pas         a room of solid cells to stand monsters in, and the
                           level of one for the load tests (LevelFromRows)
   Effects\
@@ -74,6 +75,9 @@ Tests\
     Tests.Monsters.Mount.pas
   Orbs\
     Tests.Orbs.Flock.pas  one test unit to one game unit
+    Tests.Orbs.Harvest.pas
+    Tests.Orbs.Patterns.pas
+    Tests.Orbs.Rite.pas
   Pads\
     Tests.Pads.Plunge.pas
 run-tests.cmd             build and run
@@ -124,6 +128,16 @@ a console: started from the IDE, its window closes with the last line.
   to be compared across a tick is copied first (`Copy(Shroud.Mist, 0,
   Length(Shroud.Mist))`). A mote is a pointer into its swarm; it is read
   at once (`Swarm[i]^`) and never kept over a tick.
+- **The orbs of a finished rite are gone, not dropped.** On the tick a
+  rite tells `reFinished` its orbs are still in the flock, `osGone`, each
+  where it went into the hero; the flock is empty a tick later. The same
+  holds for whatever a test spends: it is in the list until the next tick.
+- **A tick is counted from 0.** What a score puts on tick N has been told
+  after N + 1 calls of `Tick`. A fixture that keeps the number of the next
+  tick (`FTicks`) keeps the two apart.
+- **A seat function is a plain function.** `TPatternSeatFunc` is a
+  procedural type: the seat function of a test's own pattern is declared at
+  unit level, not as a method and not nested.
 - **The runner fails a test that asserts nothing.**
 
 ## The conveyor
@@ -147,7 +161,8 @@ a console: started from the IDE, its window closes with the last line.
 
 ## Orbs.Flock
 
-State: written, 15 tests.
+State: written, 17 tests; the last two, of the depth and of `Arrive`, not
+yet run on a compiler.
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -166,20 +181,33 @@ State: written, 15 tests.
 | `TestTickDropsOnlyTheGone` | the others stay, in their order | the tick drops a neighbour or reorders |
 | `TestShiftCarriesEveryOrbByTheStep` | a door moves every orb by its step | an axis is lost or swapped |
 | `TestClearEmptiesTheFlock` | nothing is left | `Clear` forgets the orbs |
+| `TestNewOrbIsInFrontOfTheHero` | a new orb has a depth of zero or more | the default depth goes below zero: the aura and the rain, which know no depth, are drawn behind the hero |
+| `TestArrivedOrbStaysWhereItWasPut` | an orb moved and then told it has arrived is where it was moved to, and stays there through a tick | `Arrive` takes back the move instead of what is drawn ahead |
 
 Left to the eye: the breath, the look of an implosion, the dust of a
 strike, the mark on a face (`MarkFace`) - the flock keeps them to itself
-and only draws them.
+and only draws them. So with the two layers about the hero (`DrawLayer`
+picks one by the depth) and with what an orb is drawn ahead by between
+ticks: `MoveBeside` and `Arrive` change no place a test can read.
 
 ## Orbs.Harvest
 
-State: designed, not written.
+State: `HarvestSpots` - designed, not written. `HarvestAround` - written,
+11 tests, not yet run on a compiler; its table is the second below. The
+unit is tried by `Tests\Orbs\Tests.Orbs.Harvest.pas`, fixture
+`TOrbHarvestTests`; the tests of `HarvestSpots` join it when they are
+written.
 
-Shared setup, `Tests\Tests.Matter.pas`: `MatterFromRows` builds a
+Shared setup, `Tests\Tests.Matter.pas`, written: `MatterFromRows` builds a
 `TMatter` from twelve strings of sixteen characters, `#` a solid cell,
-`.` an open one, and `SolidAt(AMatter, AX, AY)` answers for a point in
-units. The dice of a test are a `TXorShift` with a seed of its own, any
-but zero: a xorshift seeded with zero rolls zeros for ever.
+`.` an open one; `WalledMatter` is a room shut on every side - the floor,
+the ceiling and both walls, a cell thick - and `EmptyMatter` has nothing in
+it; `SolidAt(AMatter, AX, AY)` answers for a point in units: a solid cell
+or a body. A pad's body a test puts into `Bodies` itself. The dice of a
+test are a `TXorShift` with a seed of its own, any but zero: a xorshift
+seeded with zero rolls zeros for ever.
+
+`HarvestSpots`:
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -194,6 +222,31 @@ but zero: a xorshift seeded with zero rolls zeros for ever.
 | `TestSameDiceGiveSameSpots` | two calls with dice of one seed give the same spots | the function reaches for `Random` |
 
 Left to the eye: how evenly the spots scatter along a face.
+
+`HarvestAround`. The expectations were checked on a Python mirror of the
+harvest, over two hundred seeds of the dice; with the sectors taken out of
+the mirror `TestAroundDrawsEveryWaveFromAllSides` is red. The hero stands
+on the floor of the walled room, his middle at (256, 336), 16 units over
+it; three waves of 24 are asked for unless a test says otherwise. Numbers
+spelled, as decided: a spot nearer than 34 units is passed by; a spot in
+thin air stands 70 to 110 units away.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestAroundGivesEveryWaveItsCount` | three waves of 24 asked - three of 24 given; two of 10 - two of 10 | a wave is cut to what its sectors gave, or the two counts are swapped |
+| `TestAroundTakesNoSpotTwice` | of the 72 spots no two lie within half a unit | a wave forgets what the waves before it took |
+| `TestAroundPassesByTheMatterAtTheHerosFeet` | every spot has a normal and lies 34 units or more from the hero's middle, though the floor is 16 under it | the nearest spots are taken: orbs are born under the hero's feet with nowhere to fly from |
+| `TestAroundDrawsEveryWaveFromAllSides` | in every wave at least 6 of the 24 spots lie to his left, 6 to his right and 6 above him | a wave is the nearest spots by the ruler: the first comes off the floor alone |
+| `TestAroundGivesNearerFacesToEarlierWaves` | the mean distance of a wave's spots grows from wave to wave | the waves are dealt without regard to distance, or the last gets the nearest |
+| `TestAroundOrdersAWaveByItsTurn` | within a wave `Turn` never falls | the order is lost: the rite seats an orb by its number in the wave |
+| `TestAroundInAnEmptyRoomGivesSpotsInThinAir` | no matter: 72 spots, none with a normal, each 70 to 110 units away | the ring of air moves, or a wave of an empty room is short |
+| `TestAroundTopsUpShortMatterWithAir` | one lone cell: every wave has its 24; the spots with a normal lie on the cell's outline, 16 at most; the second and the third wave are all air | air is taken while matter is free, or a wave short of matter is short of spots |
+| `TestAroundHarvestsABody` | no cells, one pad body: there are spots with a normal, and every one lies on the body's outline | the bodies of pads are not harvested: an arena of pads gives air |
+| `TestAroundAwayAndTurnPointFromCenter` | of every spot: the center plus `Away` along `Turn` is the spot | the arguments of the arctangent are swapped: flights are timed and sectors cut by wrong numbers |
+| `TestAroundSameDiceGiveSameSpots` | two calls with dice of one seed give the same spots; dice of another seed give others | the function reaches for `Random`, or ignores its dice |
+
+Left to the eye: whether twelve sectors read as "from all sides" on a
+real screen with little matter (screens 1 and 5 of level 1).
 
 ## Orbs.Rain
 
@@ -258,6 +311,152 @@ matter is a floor two cells thick; the hero's center is a cell above it.
 Left to the eye: the ceremony itself (the rise out of a face, the sway,
 the spiral of the flight), the squeeze of the tail into a drop, the
 thread of a leap in flight, a ring called after an empty one.
+
+## Orbs.Patterns
+
+State: written, 11 tests, not yet run on a compiler. The expectations were
+checked on a Python mirror of the two figures. The unit is tried by
+`Tests\Orbs\Tests.Orbs.Patterns.pas`, fixture `TOrbPatternsTests`.
+
+A pattern is a function of a wave, a number in it and the pattern's own
+clock, so a test asks for the 72 seats of a moment and looks at them as a
+figure: at eight moments of the clock where a figure is the subject, tick
+by tick where its motion is. The word of a level file is read through
+`LevelFromRows` of `Tests.Rooms`.
+
+Numbers spelled, as decided: 72 orbs to a pattern, three waves of 24; the
+words `snowflake` and `vortex`; the snowflake's six rays. The bounds are
+the plan's and loose: no seat of the snowflake 50 units from the hero's
+middle, none of the vortex 60. Not spelled: the radii, the paces and the
+lights of either figure. One bound belongs to the rite: it takes a seat
+that goes over 24 units in a tick for one that has leapt, so a seat that
+keeps to its figure is held under 12 units and one that leaps over 40.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestGamePatternsAreFoundByTheirWords` | `snowflake` and `vortex` are found, each with a seat function and 72 orbs in its three waves; the default name finds the snowflake | a word of the level files is renamed, or a pattern leaves the 72 orbs the ceremony's damage is counted by |
+| `TestUnknownPatternRaises` | `blizzard` and the empty name raise `EOrbPatternError` | an unknown word quietly gets some pattern: a typo in a level file shows only at the boss |
+| `TestLevelFileNamesItsPattern` | a level with `"henshinPattern": "vortex"` gives that word, and the word finds the vortex; a level without the member gives an empty word | the member is renamed in the loader: level 2 silently gets the snowflake |
+| `TestSnowflakeRaysAreBehindAndHexagonInFront` | the seats of waves 0 and 1 have a depth below zero, those of wave 2 above | a wave changes its side of the hero |
+| `TestSnowflakeSeatsAreApartAndWithinReach` | no two of the 72 seats lie within a unit; none lies 50 units from the hero's middle; every light is 0 to 1 | two orbs share a seat, the figure outgrows the hero, or a light leaves its range |
+| `TestSnowflakeHasSixRays` | a sixth of a turn about the middle of the rays lands every seat on a seat of its own wave | a ray, a tip or a twig is lost or misplaced: the figure is no snowflake |
+| `TestSnowflakeTurnsAndItsHexagonWalksAgainst` | over 500 ticks of the clock: the seats of the rays all turn one way about the heart and the seats of the hexagon the other; no seat goes 3 units in two ticks of the clock | the hexagon turns with the rays, or a seat of the snowflake leaps |
+| `TestVortexGivesEachWaveAnArmOfItsOwn` | the three seats of one number, a wave each, balance about the hero's upright - their X and their depths sum to zero - and are three seats | two waves share an arm, or the arms are not a third of a lap apart |
+| `TestVortexOrbGoesRoundTheHero` | within 128 ticks of the clock every seat has been well behind the hero (a depth under -0.5) and well in front of him (over 0.5) | the funnel stands on one side of him |
+| `TestVortexIsNarrowAtTheFeetAndWideOverTheHead` | the widest seat over his head is over one and a half times as far from his upright as the widest by his feet; no seat lies 60 units from his middle; every light is 0 to 1 | the funnel is turned upside down or made a column |
+| `TestVortexSeatLeapsOnlyWithItsLightOut` | at one tick of the clock a step and at two: a seat goes under 12 units or over 40, nothing between; when it goes over 40 its light is under 0.2 before and after; such leaps do happen | the leap from the top of an arm to its foot is seen, or a step of a seat comes near what the rite takes for a leap |
+
+Left to the eye: whether a figure is beautiful; the wave of light that
+runs along the snowflake; the tilt of the vortex's rings.
+
+## Orbs.Rite
+
+State: written, 41 tests, not yet run on a compiler. The expectations were
+checked on a Python mirror of the rite with its flock, harvest and
+patterns: every test is green on the mirror with the game's dice, green
+over sixty other seeds of the dice, and red with the rule it guards taken
+out of the mirror. The mirror and the unit were made in a session that
+had read the implementation, so the table is what the tests answer to.
+The unit is tried by `Tests\Orbs\Tests.Orbs.Rite.pas`, fixture
+`TOrbRiteTests`.
+
+The rite knows no pattern and no score of its own, and the tests use
+that. Shared in the unit:
+
+- The hero is a point the test moves: his middle, (256, 336) as he stands
+  on the floor of `WalledMatter`. His body is five points about it, given
+  through the rite's `TBodyProbe`; the fixture counts the asks.
+- A tick is `Rite.Tick` with his middle and a drain of the events, which
+  the fixture keeps with their ticks. Ticks are counted from 0.
+- A strike is the game's (`ResolveOrbHits`): an orb alive and armed is
+  spent.
+- "The grid" is a pattern of the test's own, 10 orbs to a wave: three rows
+  of seats that stand still, the first behind the hero (depth -1) and the
+  other two in front (depth 1), all at full light. A seat is found by its
+  place, so "the grid is full" is: every seat about the hero holds one
+  orb, and there are 30 orbs. "The clock pattern" is the grid sinking 0.05
+  units for every tick of the pattern's clock: an orb in its seat shows
+  how far the clock has gone.
+- "The bench score" is a score of the test's own: gap 10, span 40, hover
+  12, freeze 4, collapse 9, 5 stand-ins; 30 orbs of a suit shed, standing
+  40 ticks and up to 12 more. Its ticks are spelled: calls on 0, 10 and
+  20, seats on 40, 50 and 60, the pause on 60, the collapse on 72, the
+  finish on 81. The ticks of `IceRiteScore` are never spelled: its numbers
+  are still being tuned, and a test reads them from the record.
+
+Numbers spelled, as decided: three waves; 72 orbs with either pattern of
+the game and 72 of the ice suit; the oval of the shield, 28 by 35, the
+aura's own; a whole rite strikes once for every orb and once for every
+stand-in of the stock. Not spelled: sizes and lights (an orb just born is
+"under half its size", one behind the hero "smaller and dimmer" than one
+in front), the chest ("one point within 4 units of his middle"), the
+times of a flight, of the shield's forming ("there half a second on") and
+of its lap.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNewRiteIsIdleAndEmpty` | a new rite is idle, has no orbs and nothing to tell; ten ticks change none of it | `Create` leaves a stage or an event behind |
+| `TestEventsComeByTheScoresSchedule` | the bench score: three calls on ticks 0, 10, 20; three seats on 40, 50, 60; the pause on 60, after the third seat; the collapse on 72; the finish on 81; nothing more in a hundred ticks | the rite counts by numbers of its own instead of the score's; an event is a tick off, told twice or out of order |
+| `TestStageFollowsTheSchedule` | gathering from `Start`; hovering after tick 60, collapsing after 72, idle after 81 | `Stage` lags its event, or never comes back to idle |
+| `TestGamePatternsRunTheIceRiteToTheSuit` | the ice score with the snowflake and with the vortex: the nine events in order; 72 orbs and none armed at the pause; the finish comes `HoverTicks + CollapseTicks` after the pause | a pattern of the game breaks the rite; the mercy the ceremony grants at the pause no longer runs out on the tick of the suit |
+| `TestEveryWaveBringsItsCountOfOrbs` | no orb before the first tick; between a call and the next exactly 10 orbs are born, the grid's count; 30 at the pause | a wave is short or long, or the rite calls 24 whatever the pattern says |
+| `TestOrbsAreBornInTheMatterSmallAndUnarmed` | the walled room: each of the 72 orbs is born at a solid point, under half its size, unarmed | an orb is born over its face or beside it, at its full size, or armed inside the matter |
+| `TestOrbIsArmedOnlyOnItsWayToItsSeat` | no orb is born armed; when the first wave is told seated none of its ten is armed; by the pause every orb has been armed; from the pause to the suit none is | a seated orb goes on striking, or an orb never arms |
+| `TestPatternIsFullAtThePause` | the grid is full | an orb misses its seat, two share one, or a wave is seated by the seats of another |
+| `TestSeatedOrbTakesTheDepthOfItsSeat` | the ten orbs of the back row have a depth below zero, the other twenty have not; an orb behind is smaller and dimmer than one in front, their seats burning alike | the depth of a seat does not reach the orb: the whole pattern is drawn in front of the hero |
+| `TestMiddleWaveTurnsAgainstTheOthers` | summed over the flights of a wave, far from the hero: the first and the third wave turn one way about him, the second the other | all three waves spiral one way |
+| `TestPatternGathersAboutAWalkingHero` | he walks 2 units a tick through the gathering: at the pause the grid is full about where he is | the flights end where he was |
+| `TestSeatedPatternKeepsToTheHeroWhateverHisStep` | after the pause, through a walk, an ice jump and a leap of 200 units: the grid is full about him on every tick | the pattern is on a leash, as the aura is, or a leap leaves it behind |
+| `TestLeapDoesNotThrowFlyingOrbs` | the ice score; late in the flight of the first wave the hero is 180 units away within a tick: no orb in flight moves a quarter of that on the tick; at the pause the grid is full about him | a flight half flown is thrown half the way with the hero: the orbs jump across the screen on the return from a pit |
+| `TestPauseSeatsWhoeverIsStillInFlight` | a leap three ticks before the pause starts the flights over; at the pause no orb is armed and the grid is full | an orb is still armed inside the mercy of the hover, or the pattern has holes after a late return from a pit |
+| `TestRiteInAnEmptyRoomStillFillsItsPattern` | no matter: the grid is full at the pause | a room with no faces gives a rite with no orbs |
+| `TestOrbStruckInFlightIsReplaced` | three orbs struck on each of ticks 15, 30, 45 and 52: never more orbs than seats; on tick 65 the grid is full | a loss leaves a hole, or a stand-in is sent for an orb that is still there |
+| `TestStandInComesOutOfTheFaceOfTheStruck` | four orbs struck on tick 30: four are born after it, each where one of the four was born, no two at one place | a stand-in comes off another face, or one loss is replaced twice |
+| `TestArmedStandInsAreNoMoreThanTheStock` | every armed orb is struck on every tick of a rite: 35 strikes, the 30 orbs and the 5 stand-ins of the bench score; on tick 65 the grid is full all the same | the stock is not counted: a monster in the stream loses a life for every stand-in without end; or the unarmed stand-ins are not sent |
+| `TestLateStandInThickensAtItsSeatUnarmed` | every orb in flight struck five ticks before the pause: as many are born as were struck, each on a seat of the grid from its first tick and under half its size; no orb is armed from the strike on; before the collapse the grid is full | a late stand-in flies in through the pause, armed inside the hero's mercy, or is not sent at all |
+| `TestPatternClockQuickensThenStandsStillAndFlashes` | the ice score, the clock pattern. Against a tick of the clock before the pause: the quickest tick of the hover is over 1.3 times as long, the last under a tenth; through the freeze the clock only slows. An orb is at its biggest within the freeze, over 5% bigger than at the pause | the pattern is frozen through the hover, falls into the hero while it still turns, or does not flash |
+| `TestOrbsDrawIntoTheBodyAndStayUntilTheSuit` | from the collapse to the suit all 30 orbs are alive and none is armed; on the tick of the finish every orb is gone and stands on one of the five points of the body, more than one point used; a tick later the flock is empty and the rite idle | an orb vanishes as it goes in - the fault of the first live run, the lights out before the halo came -, or all go in at one point |
+| `TestOrbsDrawInOutOfStep` | the ice score: the orbs come onto the body on five different ticks or more, none leaves it, all are there by the suit | the orbs go in as one |
+| `TestBodyIsAskedOnceAsTheCollapseBegins` | the body is not asked for before the tick of the collapse, is asked on it, and not again | the body is asked every tick, or at `Start`, when the hero stands otherwise |
+| `TestLightsOnTheBodyRideWithTheHero` | he walks through the collapse: at the suit every orb stands on a point of the body where he is now | the lights stay where he stood as the collapse began |
+| `TestWithNoBodyEveryOrbGoesInAtTheChest` | a rite with no probe, and one whose probe gives no points: at the suit all 30 orbs stand at one point, within 4 units of his middle | a body of no points is indexed: the rite of a frame that gave no seeds falls over |
+| `TestCollapseImplodesEveryOrbAndTellsNoFinish` | `Collapse` in the gathering: idle at once, every orb imploding; no orb is born after it, the flock is empty within a second, nothing is told in two hundred ticks | the rite goes on over a dead hero: waves are called and the suit goes on a corpse |
+| `TestClearLeavesNothingAndNothingComes` | `Clear` two ticks in, with orbs unborn and an event unheard: no orbs, idle, nothing to tell; nothing comes in two hundred ticks | a restart keeps the unborn of the last try, or what it had to tell |
+| `TestStartDropsTheRiteAlreadyGoing` | `Start` over a rite thirty ticks old and unheard: no orbs, nothing to tell; the new rite tells its own seven events up to its pause, and the grid is full, not doubled | the orbs or the events of the old rite leak into the new |
+| `TestShedAndRiteDropEachOther` | `Shed` over a rite: the orbs of the ring alone, and nothing of the rite is told; `Start` over the ring: no orbs, gathering, the grid full at the pause | a shed and a rite share the flock |
+| `TestCarryTakesTheGatheringThroughADoor` | `Carry` after the first tick, part of the first wave unborn: all ten orbs are there and armed, those that were there moved by the door's step; at the pause the grid is full about the hero | an orb waits on a face of the screen left behind, the unborn are lost, or the pattern does not fill behind a door |
+| `TestCarrySendsNobodyFlyingBack` | `Carry` twenty ticks in, some orbs in flight and some on their faces: all are armed; on the next tick no orb moves a quarter of the door's step | a flight goes on from its takeoff on the old screen: the orbs fly back across the door |
+| `TestCarryKeepsTheSeatedPatternAboutTheHero` | `Carry` in the hover: the grid is full about him at once and a tick later | the seated pattern is left behind the door |
+| `TestShedBringsItsOrbsOutOfTheBodyArmed` | `Shed` with the bench score: shedding, the body asked once, 30 orbs at once, each alive, armed and on a point of the body, more than one point used | the ring is no shield until it has formed, or every orb comes out of the chest |
+| `TestShedWithNoBodyComesOutOfTheChest` | no probe: every orb at one point, within 4 units of his middle | a shed with no body falls over |
+| `TestIceShedStandsInAnEvenRingOfSeventyTwo` | the ice score: 72 orbs; half a second on all are alive, each on the oval of 28 by 35 about the hero, the gaps between neighbours even to 2%, every orb at its full size and light | the count or the oval leaves the aura's; the ring has a knot or a hole |
+| `TestShedRingKeepsToAWalkingHeroAndFlowsOneWay` | he walks for twenty ticks: on each every orb is on the oval about him; over them every orb has gone round it, all the same way | the ring stays where the suit came off, or stands still |
+| `TestShedRingStandsItsTimeThenGoesOutOrbByOrb` | the bench score: through `ShedTicks` ticks all 30 are alive; then the count falls on five different ticks or more; `ShedSpread` and a second later the flock is empty and the rite idle, having been shedding while an orb was left; nothing was told | the shield goes out before the mercy does, or all at once; the stage never comes back; a shed tells an event |
+| `TestShedRingIsLeftGappedAfterLosses` | the ice score, ten neighbours struck: 62 orbs through the next thirty ticks, none born; one gap eleven even gaps wide, the rest even | the ring closes up as the aura's does, or a lost orb is replaced |
+| `TestDeathImplodesTheShedRing` | `Collapse` on a ring: idle, every orb imploding, none left a second later | the shield outlives the hero |
+| `TestCarryTakesTheShedRingThroughADoor` | `Carry`: every orb moved by the step; a tick later all are alive and on the oval about him | the ring is left behind a door, or flies after him |
+| `TestSameCallsGiveTheSameRite` | two rites, the same calls and the same walking hero: the same places, sizes, lights, depths and states on every tick of a whole ice rite | the rite reaches for `Random` |
+
+Open: `TestOrbIsArmedOnlyOnItsWayToItsSeat` and
+`TestMiddleWaveTurnsAgainstTheOthers` tell the waves apart by the order of
+the flock: the first ten orbs are the first wave. That holds while a wave
+is all born before the next is called, as it is with both scores; a score
+whose waves overlap at birth would ask for another way.
+
+Left to the eye:
+
+- The look of the way in: the rise out of a face and the mark it leaves,
+  the sway over it, the spiral of a flight, the wind of the drawing in.
+- What is drawn between ticks: the share of the hero's step an orb takes
+  (`MoveBeside`) and the orb that is put at once behind a seat that leapt
+  (`Arrive`, the vortex) change no place a test can read.
+- The two layers, `DrawBehind` and `DrawInFront`.
+- The light of the flash: an orb's `Level` is cut at 1, so only its size
+  is tried.
+- A hurried stand-in against an unhurried one: both are in their seats by
+  the pause, and that is what is tried.
+- The light that fills the body through the collapse: the ceremony's, not
+  the rite's.
 
 ## Monsters
 
@@ -1149,3 +1348,10 @@ Left to the eye and to the ear:
   gone on the next tick.
 - Traces of the design stand are not used: the game has moved off the
   stand's numbers on purpose, and its dice are not the stand's.
+- The ceremony, `Game.Henshin`: the countdown, the cure as a wave sits,
+  the mercy from the pause on, the suit going on and coming off. It acts
+  on the hero, the sound bank and the message board, and all three ask a
+  renderer or a device: it waits for the stage, with the hero. The rite's
+  side of that contract is in the table of `Orbs.Rite`: three waves told
+  seated, the finish as far from the pause as the mercy is long, a shed
+  that tells nothing.
