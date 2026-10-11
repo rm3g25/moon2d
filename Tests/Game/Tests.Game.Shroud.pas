@@ -2,7 +2,9 @@
   Tests.Game.Shroud - the hero's shroud counted without a window: when it
   runs and when it stops, the clock of its halo and of every place along
   the body, the strips the body is put together of, the motes that drift
-  off him and the mist that settles where a band slid off his feet.
+  off him and the mist that settles where a band slid off his feet. And
+  the light that is no scene's: what it is fed, how it fades, what puts it
+  out.
 
   The hero's pose is built by hand with no texture, the matter is a
   function, the dice are seeded. What TShroudPainter draws has no test
@@ -100,6 +102,24 @@ type
     [Test]
     procedure TestMistDiesByTheAgeOfItsOwnLook;
     [Test]
+    procedure TestFeedLightsTheBodyAndStartsNoScene;
+    [Test]
+    procedure TestFedLightFadesByItsKeepEveryTick;
+    [Test]
+    procedure TestFedLightGoesOutAltogether;
+    [Test]
+    procedure TestFeedsAddUpToACeiling;
+    [Test]
+    procedure TestLastFeedSetsTheTintAndTheKeep;
+    [Test]
+    procedure TestFedLightFadesWhetherAShroudRunsOrNot;
+    [Test]
+    procedure TestStartAndLeaveMotesKeepTheFedLight;
+    [Test]
+    procedure TestClearPutsOutTheFedLight;
+    [Test]
+    procedure TestFeedDoesNotTouchARunningShroud;
+    [Test]
     procedure TestSameSeedGivesTheSameRun;
     [Test]
     procedure TestOtherSeedGivesAnotherRun;
@@ -108,7 +128,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Sdl2.Core, Render.Silhouette, Effects.Emitter,
+  System.SysUtils, Sdl2.Core, Render.Brush, Render.Silhouette, Effects.Emitter,
   Effects.Sparks, Hero;
 
 const
@@ -140,6 +160,9 @@ const
   // The least number of strips that start at another distance than the first
   MinSpread = 4;
   WaitLimit = 200; // ticks
+  // The share of a fed light a tick leaves, where a test is not about it
+  SlowKeep = 0.9;
+  HalfKeep = 0.5;
 
 // ---------------------------------------------------------------------------
 // Poses, seeds and matter
@@ -1179,6 +1202,164 @@ begin
 
   Assert.IsTrue(Lived > IceOffLook.Life, 'The cloud outlives the look that replaced its own');
   Assert.AreEqual(IceOnLook.Life - AgeWhenFallen, Lived, 'and goes when its own look is out');
+end;
+
+// ---------------------------------------------------------------------------
+// The light fed to the body
+// ---------------------------------------------------------------------------
+
+function SameTint(const ALeft, ARight: TRgb): Boolean;
+begin
+  Result := (ALeft.R = ARight.R) and (ALeft.G = ARight.G) and (ALeft.B = ARight.B);
+end;
+
+procedure THeroShroudTests.TestFeedLightsTheBodyAndStartsNoScene;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+
+  FShroud.Feed(HaleColor, 0.4, SlowKeep);
+
+  ExpectNear(0.4, FShroud.Fed, 'The light is what was fed');
+  Assert.IsTrue(SameTint(HaleColor, FShroud.FedTint), 'in the color it was fed in');
+  Assert.IsFalse(FShroud.Active, 'A fed shroud is not running');
+  Assert.IsFalse(FShroud.Assembling, 'and the hero is drawn whole');
+
+  TickTimes(FShroud, 10);
+
+  Assert.IsFalse(FShroud.Active, 'Ticks start nothing either');
+  Assert.AreEqual(0, FShroud.Motes.Count, 'The light sheds no motes');
+  Assert.AreEqual(0, Length(FShroud.Mist), 'and leaves no mist');
+  Assert.AreEqual(0, Length(FShroud.Bands), 'and has no bands');
+end;
+
+procedure THeroShroudTests.TestFedLightFadesByItsKeepEveryTick;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Feed(HaleColor, 1, HalfKeep);
+
+  TickTimes(FShroud, 1);
+  ExpectNear(0.5, FShroud.Fed, 'A tick leaves the share that was asked');
+
+  TickTimes(FShroud, 1);
+  ExpectNear(0.25, FShroud.Fed, 'and the next tick the same share of that');
+end;
+
+procedure THeroShroudTests.TestFedLightGoesOutAltogether;
+const
+  StillLitTicks = 5;
+  // Fading by a fifth a tick, a light is a hundredth of itself in 21
+  DarkTicks = 40;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Feed(HaleColor, 1, 0.8);
+
+  TickTimes(FShroud, StillLitTicks);
+  Assert.IsTrue(FShroud.Fed > 0, 'The light does not go out at once');
+
+  TickTimes(FShroud, DarkTicks - StillLitTicks);
+  Assert.IsTrue(FShroud.Fed = 0,
+    Format('The light smoulders on at %g', [FShroud.Fed]));
+end;
+
+procedure THeroShroudTests.TestFeedsAddUpToACeiling;
+const
+  Flood = 10;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+
+  FShroud.Feed(HaleColor, 0.3, SlowKeep);
+  FShroud.Feed(HaleColor, 0.3, SlowKeep);
+  ExpectNear(0.6, FShroud.Fed, 'A second feed adds to the first');
+
+  FShroud.Feed(HaleColor, Flood, SlowKeep);
+  var Full := FShroud.Fed;
+  Assert.IsTrue((Full >= 1) and (Full < 2),
+    Format('A flood of light is held at %g', [Full]));
+
+  FShroud.Feed(HaleColor, Flood, SlowKeep);
+  ExpectNear(Full, FShroud.Fed, 'and no feed lifts it higher');
+end;
+
+procedure THeroShroudTests.TestLastFeedSetsTheTintAndTheKeep;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+
+  FShroud.Feed(HaleColor, 0.5, HalfKeep);
+  FShroud.Feed(WaryColor, 0.5, SlowKeep);
+
+  Assert.IsTrue(SameTint(WaryColor, FShroud.FedTint), 'The light takes the last color');
+  TickTimes(FShroud, 1);
+  ExpectNear(SlowKeep, FShroud.Fed, 'and fades as the last feed asked');
+end;
+
+procedure THeroShroudTests.TestFedLightFadesWhetherAShroudRunsOrNot;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FTwin := THeroShroud.Create(nil, DefaultSeed);
+  FTwin.Start(IceOnLook);
+  FShroud.Feed(HaleColor, 1, SlowKeep);
+  FTwin.Feed(HaleColor, 1, SlowKeep);
+
+  for var i := 1 to 20 do
+  begin
+    FShroud.Tick(Standing, TwoSeeds);
+    FTwin.Tick(Standing, TwoSeeds);
+    ExpectNear(FShroud.Fed, FTwin.Fed, 'Under a running shroud the light fades the same');
+  end;
+
+  Assert.IsTrue(FTwin.Active, 'The shroud was running all the while');
+  Assert.IsTrue((FShroud.Fed > 0) and (FShroud.Fed < 1), 'and the light did fade');
+end;
+
+procedure THeroShroudTests.TestStartAndLeaveMotesKeepTheFedLight;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Feed(HaleColor, 0.7, SlowKeep);
+
+  FShroud.Start(ReviveLook);
+  ExpectNear(0.7, FShroud.Fed, 'A shroud that starts leaves the light alone');
+
+  FShroud.LeaveMotes;
+  ExpectNear(0.7, FShroud.Fed, 'and so does a door: the light goes with the hero');
+end;
+
+procedure THeroShroudTests.TestClearPutsOutTheFedLight;
+begin
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Feed(HaleColor, 0.7, SlowKeep);
+
+  FShroud.Clear;
+  Assert.IsTrue(FShroud.Fed = 0, 'A death puts the light out');
+
+  TickTimes(FShroud, 3);
+  Assert.IsTrue(FShroud.Fed = 0, 'and it does not come back');
+end;
+
+procedure THeroShroudTests.TestFeedDoesNotTouchARunningShroud;
+const
+  FeedEvery = 5; // ticks
+begin
+  FShroud := THeroShroud.Create(EverywhereOpen, DefaultSeed);
+  FTwin := THeroShroud.Create(EverywhereOpen, DefaultSeed);
+  FShroud.Start(IceOnLook);
+  FTwin.Start(IceOnLook);
+
+  var Diverged := 0;
+  for var i := 1 to 100 do
+  begin
+    if i mod FeedEvery = 0 then
+      FShroud.Feed(HaleColor, 0.2, SlowKeep);
+    FShroud.Tick(Standing, TwoSeeds);
+    FTwin.Tick(Standing, TwoSeeds);
+    var IsInStep := (FShroud.Active = FTwin.Active) and
+      (FShroud.Time(0) = FTwin.Time(0));
+    if not IsInStep or not SameState(FShroud, FTwin) then
+      Inc(Diverged);
+  end;
+
+  Assert.AreEqual(0, Diverged, 'A fed shroud parts ways with one that is not');
+  Assert.IsTrue(FShroud.Fed > 0, 'The light was there all the while');
+  Assert.IsTrue(FShroud.Motes.Count > 0, 'and there were motes to compare');
 end;
 
 // ---------------------------------------------------------------------------

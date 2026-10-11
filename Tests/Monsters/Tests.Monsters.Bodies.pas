@@ -7,7 +7,8 @@
   ledge) and gravel females (a walker that does not look for one), in
   rooms of a few solid cells. A gravel carries no smoke and fans no
   fragments, so it can die into a nil burst; a body that explodes cannot,
-  and none is used here.
+  and none is used here. A medkit is the pickup the hero takes: the one
+  body that is dead with no dying.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -54,6 +55,10 @@ type
     procedure TestWalkerWithNoEdgeCheckWalksOffALedge;
     [Test]
     procedure TestWalkerDroppedAboveALedgeLandsOnIt;
+    [Test]
+    procedure TestCollectedPickupIsGoneAtOnceAndTellsTheGameOnce;
+    [Test]
+    procedure TestCollectedPickupIsNotKilledByALaterBlow;
   end;
 
 implementation
@@ -308,6 +313,36 @@ begin
   TickBody(Body, FallTicks);
 
   Assert.AreEqual(LedgeTopY, PlaceY(Body), 'the body did not land on the ledge');
+end;
+
+procedure TMonsterBodyTests.TestCollectedPickupIsGoneAtOnceAndTellsTheGameOnce;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('medkit', 8, 11);
+  Assert.AreEqual<TMonsterLife>(mlAlive, Body.Life, 'a medkit lies alive');
+
+  Body.Collect;
+
+  Assert.AreEqual<TMonsterLife>(mlDead, Body.Life,
+    'a taken pickup is gone at once, with no dying');
+  Assert.AreEqual<TMonsterEvent>(meDied, Body.DrainEvent, 'the first event');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent, 'the second event');
+end;
+
+procedure TMonsterBodyTests.TestCollectedPickupIsNotKilledByALaterBlow;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('medkit', 8, 11);
+  Body.Collect;
+  Assert.AreEqual<TMonsterEvent>(meDied, Body.DrainEvent, 'the taking');
+
+  Body.TakeDamage(0, Body.Lives, nil);
+
+  // A body found dying after a blow is one the game rewards as killed
+  Assert.AreEqual<TMonsterLife>(mlDead, Body.Life,
+    'a blow set a taken pickup dying');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'a taken pickup died a second time');
 end;
 
 initialization

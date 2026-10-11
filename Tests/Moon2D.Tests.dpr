@@ -22,6 +22,7 @@ uses
   Tests.Effects.Lightning in 'Effects\Tests.Effects.Lightning.pas',
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
   Tests.Game.Shroud in 'Game\Tests.Game.Shroud.pas',
+  Tests.Game.Uptake in 'Game\Tests.Game.Uptake.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',

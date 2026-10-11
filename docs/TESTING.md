@@ -63,6 +63,7 @@ Tests\
   Game\
     Tests.Game.Blasts.pas
     Tests.Game.Shroud.pas
+    Tests.Game.Uptake.pas
   Levels\
     Tests.Levels.Entities.pas
     Tests.Levels.Pads.pas
@@ -138,6 +139,16 @@ a console: started from the IDE, its window closes with the last line.
 - **A seat function is a plain function.** `TPatternSeatFunc` is a
   procedural type: the seat function of a test's own pattern is declared at
   unit level, not as a method and not nested.
+- **Scenes and crumbs are the uptake's own arrays.** `TUptake.Scenes` and
+  a scene's `Crumbs` hand out the arrays the uptake works in, as the
+  shroud's mist does: the crumbs of the tick before are copied
+  (`CrumbsOf`) before the tick. A scene read into a variable keeps its old
+  `Age` and shows its crumbs as they are now; it is read anew after every
+  tick.
+- **A scene goes with its last crumb.** On the tick the last crumb of a
+  scene goes out the scene is dropped, so that crumb's last state is never
+  seen; the spot it lit is. A test that watches crumbs go out counts what
+  it saw and asks that it saw some.
 - **The runner fails a test that asserts nothing.**
 
 ## The conveyor
@@ -535,10 +546,11 @@ Left to the eye:
 
 ## Monsters.Bodies
 
-State: written, 11 tests, green (239 in the suite). The expectations were
-checked on a Python port of the monster's floor physics (the oracles, the
-patrol, the fall, the death) with the corpse rule switched on and off: with
-it off, test 6 is red. The unit is tried by
+State: written, 13 tests. Eleven are green (239 in the suite); the two of
+`Collect` came with `Game.Uptake` and have not been run yet. The
+expectations were checked on a Python port of the monster's floor physics
+(the oracles, the patrol, the fall, the death) with the corpse rule
+switched on and off: with it off, test 6 is red. The unit is tried by
 `Tests\Monsters\Tests.Monsters.Bodies.pas`, fixture `TMonsterBodyTests`.
 
 Shared setup: `Tests.Rooms`, as above. `RoomRowsOf` (the rows of a room
@@ -548,7 +560,7 @@ x = 160 and x = 352 - is built from it in the unit. The subjects are the
 `gravel` (a patrol walker that turns at a ledge's end) and the
 `gravelFemale` (walls only). Neither explodes, so both die into a `nil`
 burst. A body is laid dead by one blow for all its lives and a hundred
-ticks at most.
+ticks at most. The pickup the hero takes is a `medkit`, on the floor.
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -563,6 +575,8 @@ ticks at most.
 | `TestPatrolTurnsBackAtWalls` | corridor: nine hundred ticks, the art never more than two units into a wall; the body has gone both ways | a walker passes through a wall, or sticks to one. Two units, not none: the probes of 2008 let the art in by one before they turn it |
 | `TestWalkerWithNoEdgeCheckWalksOffALedge` | ledge, a gravel female: three hundred ticks on, it is on the floor | the edge check is put on every walker |
 | `TestWalkerDroppedAboveALedgeLandsOnIt` | ledge, a gravel dropped above it: after a hundred and fifty ticks it is on the ledge (y = 256), not on the floor | a fall goes by a ledge to the floor |
+| `TestCollectedPickupIsGoneAtOnceAndTellsTheGameOnce` | floor, a medkit, alive; `Collect`: `mlDead` on the spot, never `mlDying`; `DrainEvent` gives `meDied`, then `meNone` | a taken pickup stays alive and is taken again on the next tick, or its sound is not played, or played twice |
+| `TestCollectedPickupIsNotKilledByALaterBlow` | a medkit collected, then struck for all its lives: still `mlDead`, no second `meDied` | a blast of the same tick finds a taken pickup dying: the game rewards it as killed and bursts it as a wreck over its own uptake |
 
 Left to the eye:
 
@@ -789,7 +803,9 @@ Left to the eye:
 
 ## Game.Shroud
 
-State: written, 38 tests, green on the first run (151 in the whole suite).
+State: written, 47 tests. Thirty-eight were green on the first run (151 in
+the whole suite then); the nine of the fed light came with `Game.Uptake`
+and have not been run yet - their mirror and its edits are told there.
 The expectations were checked on a Python mirror of the shroud's clock,
 bands, motes and mist (single-precision floats for the sinking motes). The
 mirror and the unit were made in a session that had read the implementation,
@@ -816,6 +832,14 @@ the end of every look; the mirror turns a point in the frame about its
 middle (x to 32 - x). Not spelled: `MistSink` (the tests say "one even
 step, down, under four units"), the speed, life and size of a mote, the
 sizes and levels of anything drawn.
+
+The fed light (`Feed`, `Fed`, `FedTint`) is the light of what the hero
+takes in. Its tints are `HaleColor` and `WaryColor`; a feed that is not
+about its fade leaves nine tenths a tick. Spelled, as the contract of
+`Feed`: the share a tick leaves is the keep it was fed with. Not spelled:
+the ceiling ("a flood is held at 1 or more and under 2") and the floor
+under which the light is put out ("out within forty ticks at four fifths a
+tick").
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -857,12 +881,23 @@ sizes and levels of anything drawn.
 | `TestMistDiesByTheAgeOfItsOwnLook` | a cloud, then a shorter look started: the cloud outlives the new look and is gone when the life of its own look is spent | a cloud is cut by the look that replaced its own, or kept past its own |
 | `TestSameSeedGivesTheSameRun` | two shrouds of one seed through a hundred ticks of ice on: the same bands, motes and mist at every tick | the shroud reaches for `Random` |
 | `TestOtherSeedGivesAnotherRun` | a shroud of another seed does not keep step with it | the seed is ignored |
+| `TestFeedLightsTheBodyAndStartsNoScene` | a feed on a new shroud: the light is the share fed, in the tint fed; the shroud is not running and puts no body together; ten ticks bring no motes, mist or bands | a feed starts a scene: the hero is left undrawn, or a medkit sheds motes |
+| `TestFedLightFadesByItsKeepEveryTick` | fed 1 with a keep of a half: a half after a tick, a quarter after two | the fade is skipped or done twice a tick, or the keep is not the one fed |
+| `TestFedLightGoesOutAltogether` | fed 1 at four fifths a tick: lit five ticks on, exactly 0 forty ticks on | the floor is lost: the painter goes on drawing a light nobody sees for seconds |
+| `TestFeedsAddUpToACeiling` | two feeds of 0.3 make 0.6; a flood is held at 1 or more and under 2, and a second flood lifts it no higher | a feed replaces the light instead of adding to it, or five medkits at once burn the hero white |
+| `TestLastFeedSetsTheTintAndTheKeep` | green at a half, then amber at nine tenths: the tint is amber and the next tick leaves nine tenths | the first tint stays: a weapon lights the body green |
+| `TestFedLightFadesWhetherAShroudRunsOrNot` | an idle shroud and one running ice on, fed alike: the same light on each of twenty ticks, and it has faded | the fade is tied to a running scene: the light of a medkit stands on the body for ever |
+| `TestStartAndLeaveMotesKeepTheFedLight` | fed, then `Start`, then `LeaveMotes`: the light is as it was after each | a respawn or a suit cuts the light of a medkit, or a door leaves it behind |
+| `TestClearPutsOutTheFedLight` | fed, then `Clear`: 0, and 0 three ticks on | the light of a medkit survives the hero's death |
+| `TestFeedDoesNotTouchARunningShroud` | two shrouds of one seed through a hundred ticks of ice on, one of them fed every five ticks: the same clock, bands, motes and mist at every tick | a feed rolls the shroud's dice or starts its clock again: a medkit in the boss fight cuts the ice glow short |
 
 Left to the eye:
 
 - Everything `TShroudPainter` draws: the bands, the strips, the halo, the
   colours, the layers of the arm and of the mist, the seams between strips.
   `SeedsOf` needs a renderer.
+- The fed light as drawn (`DrawFedUnder`, `DrawFedBody`): its spot, its
+  halo, the white of the mask, and how it adds to the light of a scene.
 - `Band.Puff` and `Band.Wide`: only the painter reads them.
 - The pace of the mist: only that it sinks evenly and settles is tried.
 
@@ -870,6 +905,131 @@ Open: motes already in flight take the pull of the look that replaces
 their own (`FlyMotes`) and are drawn in its tint (`DrawMotes`). Neither is
 tried or decided: a live run says whether frost on a floor turning white
 when a respawn comes in the middle of the ice glow is seen at all.
+
+## Game.Uptake
+
+State: written, 41 tests, not run yet (291 in the whole suite with the
+nine of `Game.Shroud` and the two of `Monsters.Bodies` that came with
+them). The expectations were checked on a Python mirror of the count -
+`CutCrumbs`, `TUptake` and the shroud's fed light: every test is green on
+the mirror, green over sixty other seeds of the dice, and red under at
+least one of the 67 edits made to the mirror; every edit turns a test red.
+The mirror and the unit were made in a session that had read the
+implementation, so the table is what the tests answer to. The unit is
+tried by `Tests\Game\Tests.Game.Uptake.pas`, fixture `TUptakeTests`.
+
+Only `CutCrumbs` and `TUptake` are tried: they count and touch no SDL.
+Shared in the unit:
+
+- A picture is a `TUptakeShape` painted by hand, texel by texel: 64 texels
+  to a side over a frame of 32 units unless a test says otherwise, so a
+  cell of a grid of 2 units is sixteen texels, as in a 2008 frame. "The
+  case" is 20 by 16 units on the bottom of the frame, the shape of the
+  medkit, 80 crumbs; "the dot" is one whole cell and so one crumb; "the
+  column" and "the beam" cross the frame from edge to edge; "the boot" is
+  an L with no mirror in it.
+- The picture's corner is at (200, 300). The hero is a `THeroPose` with no
+  texture and three points of his frame. He stands "beside" the pickup,
+  his frame's corner at (260, 300), or "on" it, his frame over the
+  picture's.
+- The light a scene gives is caught by the fixture: `TFeedLight` takes a
+  method. One test gives the uptake `THeroShroud.Feed` instead, as the
+  game does.
+- The looks are the game's (`MedkitUptake`, `WeaponUptake`, `PickupBurst`)
+  or the medkit's with what a test is about changed: no push and a long
+  free flight ("the still look": a crumb stands where it took off), a
+  crumbling of 20 ticks in an order, a free flight with no end.
+- "Over the seeds" is seeds 1 to 20. "A wreck" is a scene of `PickupBurst`.
+
+Numbers spelled, as decided: a scene that is taken gives the body twice
+its `Pulse`, crumb by crumb or at a door; a spot lives `SpotTicks`, read
+from the unit; one painted texel of sixteen is no crumb and two are; the
+mirror turns a point of a frame about its middle (x to 32 - x); with no
+points the hero's frame gives its middle. Not spelled: `Fill`, `Crumble`,
+`Burst`, `Pull`, `Scatter` and the lives of a wreck's crumbs - the tests
+read them from the records or bound them loosely (a scene is over within
+three seconds, a hero running at 10 units a tick is caught within five, a
+crumb goes out within half a frame of its point when the hero stands).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSolidPictureIsCutIntoAFullGrid` | a solid frame, a step of 2: 256 cells in rows from the top left, each 2 by 2, fully covered, its middle in its middle | a row or a column of the grid is lost, or the order the painter and the queue go by changes |
+| `TestPictureWithNoPaintGivesNoCrumbs` | a clear picture gives none; a faint veil over the whole frame gives none | the veil a generated picture carries counts as paint: the frame crumbles as a square |
+| `TestSpeckOfPaintIsNoCrumb` | one painted texel of a cell's sixteen is no crumb, two are, and the cover is their share | the threshold is lost (a stray texel of a 2008 gun flies off as a crumb) or raised |
+| `TestCrumbMiddleIsTheMiddleOfItsPaint` | a picture of 16 by 8 units in 16 by 4 texels, paint in one column of a cell: the cell is a step wide and tall, the cover is 2 of 8, the middle is the paint's on both axes | a crumb takes off from the middle of its cell, where there is no paint, or the two axes share a scale |
+| `TestCrumbsTileThePictureAtAnyStep` | solid pictures of 64, 192 and 50 texels, steps of 2, 3, 1.5, 2.5, 0.7, 5, 32 and 40: no cell is empty, every source lies in the texels and every cell in the picture, every texel is in one cell and one only | the last column is not cut to the picture (the alpha is read past its end), or a fractional step loses or doubles a line of texels: a seam or a bright stripe in the crumbling picture |
+| `TestShortAlphaIsRefused` | an alpha a byte short of the texels raises `EUptakeError` | the check is lost and the cut reads past the array |
+| `TestStartSeatsEveryCrumbInAStillPicture` | `Start`: one scene of age 0 with the picture number, the corner, the mirror and the look given; the crumbs `CutCrumbs` gives, all sitting; nothing fed, no spot | the scene loses what the painter draws it by, or a start feeds the body |
+| `TestPictureWithNoPaintStartsNoScene` | a clear picture: no scene, ten ticks pass, nothing is fed | the guard is lost: the center of no paint divides by zero |
+| `TestFullerCellGivesBiggerCrumb` | a whole cell and a quarter of one: both crumbs have a size, the fuller the bigger | a crumb gets no size and is drawn as nothing in flight, or all are of one size |
+| `TestSceneCenterIsTheMiddleOfThePaint` | the boot with a half-painted cell: the scene's center is the middle of the painted texels; of the mirrored scene, its reflection | the center is the frame's or is not weighed by paint: the crumbs burst away from a point that is not the picture's |
+| `TestMirroredSceneIsTheSameCrumbsReflected` | the boot under a step of 3, plain and mirrored: as many crumbs; each cell and the middle of its paint reflected in the frame, nothing moved up or down, the cover kept | the mirrored picture is cut anew (another count where the step does not divide the frame), or only the cell or only its middle is turned |
+| `TestPictureIsWholeWhileItFills` | the medkit's look, the hero on the pickup: until `Fill` every crumb sits and the scene is a tick older each tick; nothing is fed, no spot | a crumb leaves a picture still taking its color, or the body lights before the picture is full |
+| `TestEveryCrumbHasLeftWhenTheCrumblingIsOver` | `Fill + Crumble` ticks on no crumb sits, and they left on three different ticks or more | a crumb sits on for ever, or the picture vanishes in one tick |
+| `TestTopDownEmptiesThePictureFromTheTop` | the column, top down over 20 ticks: every crumb of the top row has left before the first of the bottom row | the order is not read from the look, or is upside down |
+| `TestNearFirstEmptiesThePictureFromTheHerosSide` | the beam, nearest first: with the hero on the left the left end is gone before the right end starts, with him on the right the other way | the distance is not measured to the hero, or the far end goes first |
+| `TestZeroSeedStillScattersTheLeaving` | a seed of zero: the crumbs leave on three different ticks or more | a zero seed freezes the xorshift stream: every crumb leaves on one tick, one way |
+| `TestCrumbTakesOffFromTheMiddleOfItsPaint` | the boot, the still look: every crumb in flight stands at the picture's corner plus the middle of its paint, as `CutCrumbs` gives it | a crumb takes off from the corner of its cell or of the frame |
+| `TestMirroredPictureCrumblesFromItsReflection` | the same, mirrored: at the corner plus the middle reflected in the frame | the mirror is applied twice or not at all: a turned medkit crumbles from where it is not drawn |
+| `TestCrumbGoesForAPointOfTheHerosFrame` | every crumb that has left has one of the points given, and every one of the three points gets crumbs | all crumbs go for one point of the chest, or for a point off the body |
+| `TestWithNoPointsCrumbsGoForTheMiddleOfTheFrame` | an empty list of points: every crumb goes for (16, 16), the scene ends and gives its whole light | a frame with no points sends the crumbs to the corner of the frame, or stops the scene |
+| `TestHerosLookDoesNotChangeTheScatter` | two uptakes of one seed, crumbs never pulled, one with points and one with none: the same crumbs in the same places at every tick | the die of the body's point is rolled only when there are points: the picture crumbles by what frame the hero shows |
+| `TestStandingHeroTakesInEveryCrumb` | the medkit, the hero beside it: the scene is over within three seconds; one feed and one new spot to a crumb; every feed in the look's tint, of one share, with a keep between 0 and 1 | a crumb never comes home or comes twice, or the shares follow the size of a crumb |
+| `TestSceneGivesTwiceItsPulseWhateverTickTheDoorComes` | for a door on every tick from the start to past the scene's end: the shares fed sum to twice `Pulse`; no scene and no spot is left; nothing is fed in twenty ticks behind the door | `Settle` forgets the crumbs still sitting, counts the ones already home, feeds nothing, or leaves the scene to fly after the hero through the door |
+| `TestCrumbsCatchAHeroWhoRunsAway` | over the seeds, the hero going 10 units a tick from the start: the scene is over within five seconds and gives its whole light | the pull stops growing: a jump in the ice suit outruns the crumbs for good |
+| `TestCrumbGoesOutOnItsPointOfTheBody` | over the seeds, the hero standing: every crumb seen going out is within half a frame of its point of the pose | a crumb is counted home anywhere on the screen |
+| `TestMirroredPoseTurnsThePointAboutTheFrame` | over the seeds, a mirrored pose and points by the left edge of the frame: every crumb seen going out is nearer the reflected point than the point as painted, and within half a frame of it | the mirror of the pose is not applied: the crumbs go into the air behind the hero's back |
+| `TestCrumbsFollowAHeroWhoLeaps` | the first crumbs in the air, none home, and the hero 200 units away up and aside in one tick: the scene ends within three seconds and every crumb seen going out is within a frame of its point where he is now | a crumb flies to where the hero stood when it left the picture |
+| `TestSpotLivesItsTicksOnTheBody` | the dot: on the tick its crumb comes home the scene is gone and one spot is there, on a point of the frame, in the look's tint, of the crumb's size, of age 0; it is a tick older every tick and is seen on `SpotTicks` ticks in all | a spot dies a tick early or late or never, or ages before it is shown |
+| `TestWreckFeedsNoOneAndLeavesNoSpots` | a wreck with the hero standing on it: it crumbles and is over within three seconds; no feed, no spot on any tick | the crumbs of a pickup blown up seek the hero and light him |
+| `TestWreckCrumbsFallAndStopAtAFloor` | over the seeds, a floor on the line the picture stands on: no crumb of a wreck is seen under it; with no matter the lowest crumb is over a frame under that line | the step back out of matter is lost: the crumbs sink through the floor |
+| `TestDoorGivesTheLightOfWhatWasTakenAndNoneOfAWreck` | a medkit and a wreck going, a door three ticks in: every feed is in the medkit's tint, they sum to twice its `Pulse`, no scene is left | a wreck is counted as taken at a door |
+| `TestDroppedSceneEndsWhateverTickTheHeroDies` | for a death on every tick of a scene: the spots are out at once; the scene is over within three seconds; no spot and no feed after the death | the crumbs go on into a corpse, or a crumb in flight at the death gets no life and flies for ever |
+| `TestDroppedCrumbsFallInsteadOfVanishing` | a death with crumbs in the air: ten ticks on the scene is there, every one of them is still in flight and falls faster than it did | `Drop` erases the scenes, or the crumbs are still pulled to the hero |
+| `TestDropChangesNothingForAWreck` | two uptakes of one seed with a wreck in the air, one of them told the hero died: the same crumbs in the same places to the end | a death rolls the lives of a wreck's crumbs anew: they hang twice as long |
+| `TestClearTakesScenesAndSpots` | a scene on its way with a spot lit, `Clear`: no scene, no spot; three seconds on nothing more is fed or lit | a restart leaves crumbs flying into the reborn hero |
+| `TestClockCountsEveryTick` | 0 at birth; 5 after five ticks with no scene; 12 after a scene, seven ticks and `Clear`; 15 three ticks on | the clock runs only while a scene does (the crosses of the medkits that lie stop breathing), or a restart sets it back |
+| `TestScenesRunSideBySide` | a dot and a weapon, and eight ticks later a second medkit: the late picture is whole until its own `Fill`; to the end every scene there is in its order with the crumbs it began with; the green light sums to four times `Pulse`, the amber to twice | the scenes share a clock, or dropping a finished scene takes or garbles its neighbour |
+| `TestRunsWithNoFeedAndNoProbe` | no feed and no probe given: a medkit's scene ends with a spot to every crumb, a wreck falls and ends | an uptake with no one to feed or nothing to ask falls over |
+| `TestSameSeedGivesTheSameRun` | two uptakes of one seed, a medkit and a wreck each: the same crumbs and spots at every one of thirty ticks | the uptake reaches for `Random` |
+| `TestOtherSeedGivesAnotherRun` | an uptake of another seed does not keep step with it | the seed is ignored |
+| `TestTakenMedkitLightsTheBodyAndTheLightDies` | the uptake feeding a shroud, ticked in the game's order: the shroud never runs; its light rises over zero and stays under twice `Pulse`, in the medkit's tint; it outlives the last crumb and is out three times `PulseTicks` later | `Feed` no longer fits `TFeedLight` (the suite does not build), the light never dies, or taking a medkit starts a shroud |
+
+Left to the eye:
+
+- Everything `TUptakePainter` draws and keeps: the pictures of the sets
+  (`PictureOf`, `ShapeOf` - they load a sprite set and need a renderer),
+  the fill and its ease, the halo of a filled picture and its second pass
+  above 1, the crumbs that sit and the bleed between them (the seams), the
+  crumbs in flight and their fade, the spots, the tints, and the light of
+  the pickups that lie - the breath of a cross and the halo of a weapon.
+- `Flash`, `Tint` and `Size` beyond "a fuller cell is bigger": only the
+  painter reads them. So with the push from the center and the scatter of
+  a take-off: the tests hold where a crumb starts and that the dice roll
+  alike, not how the burst looks.
+- `TMonster.ArtSet` and `TMonster.Mirrored`: the game starts a scene by
+  them, and a wrong name stops the level's load at once.
+- What the game does around the uptake lives in `Moon2D.dpr` and is tried
+  in a live run: `TakeLoot` and `BurstPickup`, the tick order with the
+  shroud, `Settle` at a door, `Drop` at the death, `Clear` at a restart.
+
+Not tried: `CutCrumbs` with a step of zero or less. The guard gives no
+cells; without it the cut never ends, and a test of it would hang the
+suite instead of turning red.
+
+Open, found while the tests were designed; neither tried nor decided:
+
+- A wreck's crumb is stepped back out of matter along Y only. A floor and
+  a ceiling hold it. A crumb that flies sideways into a wall goes in - up
+  to 12 units on the mirror - and hangs there until its life is out. It is
+  the model as designed; a live run says whether it is seen: a medkit
+  blown up beside a wall.
+- Two scenes of different tints coming home on the same ticks (a medkit
+  and a weapon taken together): the shroud's light takes the tint of the
+  last feed, so its color may change from tick to tick.
+- A cell covered by exactly the threshold (3 texels of 25) is likely no
+  crumb: the cover is kept as a `Single` and compared with 0.12. No
+  picture of the game has such a cell under a step of 2.
 
 ## Effects.Lightning
 
