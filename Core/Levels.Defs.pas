@@ -174,6 +174,7 @@ type
     function TryFindWall(AScreen: Integer; const AZone: TPadZone;
       out ACol, ARow: Integer): Boolean;
     procedure CheckPadPlunge(const APad: TPadPlacement);
+    procedure CheckPadShelf(const APad: TPadPlacement);
     procedure CheckEvents;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
@@ -294,6 +295,8 @@ resourcestring
     + 'or joins a group - a pad that plunges stands on its place';
   SLevelPadPlungeWall = 'Level "%s": pad "%s" plunges into a wall, cell '
     + '(%d, %d) - a pad that plunges falls out of its screen';
+  SLevelPadShelfBusy = 'Level "%s": pad "%s" is a shelf that plunges or '
+    + 'joins a group - a shelf leaves the front by its program alone';
   SLevelPadGroupBadScreen = 'Level "%s": pad group "%s" sits on screen %d '
     + 'of %d';
   SLevelPadGroupTwoTags = 'Level "%s": two pad groups are tagged "%s"';
@@ -631,10 +634,11 @@ begin
 end;
 
 // A wall below the cell, or under its middle the deck of a pad that
-// stands still - one with no path, no group and no plunge: the hero put
-// on the cell comes to rest. A pad that travels, is rebuilt or plunges
-// may not be there when he arrives. A wall is the surer floor of the two:
-// the boss's ram knocks even a still pad aside for a moment.
+// stands still - one with no path, no group and no plunge, and no
+// shelf: the hero put on the cell comes to rest. A pad that travels, is
+// rebuilt, plunges or slides in may not be there when he arrives. A wall
+// is the surer floor of the two: the boss's ram knocks even a still pad
+// aside for a moment.
 function TLevel.RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
 begin
   var Col := APoint.X - 1;
@@ -647,7 +651,7 @@ begin
   for var Pad in FPads do
   begin
     var StandsStill := (Pad.Path.Route = prNone) and (Pad.Group = '') and
-      not Pad.Plunge.Plunges;
+      not Pad.Plunge.Plunges and not Pad.Shelf.Slides;
     var Under := (Pad.Screen = APoint.Screen) and (Pad.Y >= FeetY) and
       InRange(Middle, Pad.X, Pad.X + Pad.Width);
     if StandsStill and Under then
@@ -731,6 +735,16 @@ begin
       [FId, APad.Sprite, WallCol, WallRow]);
 end;
 
+// A shelf leaves the front by its program: a plunge would drop the deck
+// it has just slid out, a rebuild would fly a pad that is in the wall
+procedure TLevel.CheckPadShelf(const APad: TPadPlacement);
+begin
+  if not APad.Shelf.Slides then
+    Exit;
+  if APad.Plunge.Plunges or (APad.Group <> '') then
+    raise ELevelError.CreateFmt(SLevelPadShelfBusy, [FId, APad.Sprite]);
+end;
+
 // A pad off the screen list never shows; two pads with one tag leave a
 // dynamic object hung on it to the first of them; a pad that travels off
 // its screen leaves its riders in the air
@@ -749,6 +763,7 @@ begin
       raise ELevelError.CreateFmt(SLevelPadStopOff,
         [FId, Pad.Sprite, Off.X, Off.Y]);
     CheckPadPlunge(Pad);
+    CheckPadShelf(Pad);
   end;
 end;
 

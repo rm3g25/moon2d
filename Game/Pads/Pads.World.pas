@@ -61,6 +61,16 @@
   climbs back as a floor, and carries up whoever lands on it. Its twitch
   is drawn with the sag, not felt.
 
+  A shelf (Pads.Shelf counts its cycle) slides into the wall behind it
+  and out again. It goes nowhere: its deck stays on its line, and while
+  the shelf is not out all the way it is neither a floor nor a body, as
+  a pad flown into the depth - what stands on it falls. The slide is
+  drawn as that depth is, at the shelf's own size and light, its picture
+  sinking as the level file says. A shelf does not sag: it is bolted to
+  its rails. What hangs on it is the wall's and stays in front. The
+  monsters ask for their deck every tick and fall by themselves; the
+  hero, who asks nothing while he stands, asks DeckWithdrawn.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -74,7 +84,7 @@ interface
 uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
-  Pads.Formations, Pads.Flights, Pads.Plunge;
+  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf;
 
 const
   // A pad all the way into the depth: its size and its light
@@ -99,6 +109,7 @@ type
     FPlacement: TPadPlacement;
     FTexture: PSdlTexture;
     FPictureHeight: Integer;
+    FBodyDepth: Integer;
     // The path as one cycle: from every stop to the next, the last back
     // to the first
     FStops: TArray<TPadStop>;
@@ -128,6 +139,10 @@ type
     FTurnedCorner: Boolean;
     FLanded: Boolean;
     FPlunge: TPlungeCycle;
+    FShelf: TShelfCycle;
+    FWasBehind: Boolean;
+    // All the way into the depth, as the pad looks there
+    FDeep: TPadDeepLook;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure TickFlight;
@@ -143,7 +158,8 @@ type
     function DeckSpans(ALeft, ARight: Double): Boolean;
     // The same for the deck as it stood a tick ago
     function DeckSpannedBefore(ALeft, ARight: Double): Boolean;
-    // The point lies in the body: the deck's width across, a cell down
+    // The point lies in the body: the deck's width across, as far down
+    // as the picture goes - half a cell at the least, a cell at the most
     function BodyHolds(AX, AY: Single): Boolean;
     // The body as a box, in screen units
     function Body: TSdlFRect;
@@ -151,7 +167,7 @@ type
     procedure Tick(AOnView: Boolean);
     procedure Rewind;
     // Something has landed on the deck at ASpeed units a tick: the pad
-    // gives under it and springs back
+    // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
     // The hero stands on the deck this tick: a pad that plunges starts
     // to give way
@@ -171,15 +187,20 @@ type
     // the tell of the pad about to go.
     function Thrusting: Boolean;
     // How hard the pad works its jets, 0..1: flat out while Thrusting; a
-    // pad that plunges, as its cycle says; else at rest
+    // pad that plunges, as its cycle says; else at rest. A shelf has no
+    // jets: 1 is its warning that it is about to slide in.
     function Effort: Single;
     // The two stand flush side by side where their paths or flights put
     // them
     function FlushWith(const AOther: TPad): Boolean;
-    // In the depth behind the others: neither a floor nor a body
+    // In the depth behind the others, or a shelf not out all the way:
+    // neither a floor nor a body
     function Behind: Boolean;
     // 0 in front .. 1 all the way into the depth, eased; AAlpha as Lift's
     function Depth(AAlpha: Single): Double;
+    // The same for what hangs on the pad: a flight takes it along, a
+    // shelf slides in without it
+    function RigDepth(AAlpha: Single): Double;
     // The middle of the picture, from its top-left corner: the point the
     // pad shrinks about in the depth
     function Middle: TSdlFPoint;
@@ -202,6 +223,8 @@ type
     // Where the path or the flight puts the pad, the knock left out
     property HomeLeft: Double read FPathLeft;
     property HomeTop: Double read FPathTop;
+    // Behind a tick ago
+    property WasBehind: Boolean read FWasBehind;
     // One tick only: a flight in front came onto its corner; a flight
     // ended on its cell
     property TurnedCorner: Boolean read FTurnedCorner;
@@ -318,6 +341,10 @@ type
     // The deck the feet stood on a tick ago, which carries them this tick
     function DeckCarrying(AScreen: Integer; ALeft, ARight,
       AFeetY: Double): TPad;
+    // A deck the feet stood on a tick ago has gone from under them this
+    // tick, and not by moving: a shelf has started into its wall
+    function DeckWithdrawn(AScreen: Integer; ALeft, ARight,
+      AFeetY: Double): Boolean;
     // The deck the feet came down onto between two ticks: the feet were
     // not below it at APrevY and are not above it at AFeetY - for the
     // hero, a deck rising into still feet catches them too. The highest one when the
@@ -393,6 +420,11 @@ const
   BobFadeTicks = 10;
   // A pad's jets flare this many ticks before it leaves its place
   ThrustLeadTicks = 10;
+  // The fastest bullet flies 12 units a tick and strikes with a point: a
+  // body shallower than this would be flown through between two ticks
+  ThinnestBody = TileSize div 2;
+  // A pad flown into the depth all the way, as it looks there
+  FlownDeep: TPadDeepLook = (Scale: DeepScale; Tone: DeepTone; Sink: 0);
   // A plunged pad comes to rest this far under the screen: past the line
   // where the game takes a faller out of the pit, 66 units under it, so a
   // hero riding the pad down is in the pit before it stops
@@ -422,6 +454,11 @@ begin
   FTexture := ATexture;
   SDL_QueryTexture(ATexture, nil, nil, @ArtWidth, @ArtHeight);
   FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
+  FBodyDepth := EnsureRange(FPictureHeight, ThinnestBody, TileSize);
+  FShelf.Build(APlacement.Shelf);
+  FDeep := FlownDeep;
+  if APlacement.Shelf.Slides then
+    FDeep := APlacement.Shelf.Deep;
   BuildCycle;
   Rewind;
 end;
@@ -487,6 +524,7 @@ begin
   FBobShare := 1;
   FPlunge.Rewind(FPlacement.Plunge,
     ScreenHeight + PlungeDepth - FPlacement.Y, PlungeSeed(FPlacement));
+  FWasBehind := Behind;
 end;
 
 // A leg, then the pause at the stop it ends at, round the cycle
@@ -590,6 +628,7 @@ procedure TPad.Tick(AOnView: Boolean);
 begin
   FPrevLeft := FLeft;
   FPrevTop := FTop;
+  FWasBehind := Behind;
   FTurnedCorner := False;
   FLanded := False;
   if not AOnView then
@@ -647,7 +686,7 @@ end;
 
 function TPad.Effort: Single;
 begin
-  if Thrusting then
+  if Thrusting or FShelf.Warns(FClock) then
     Exit(1);
   Result := FPlunge.Effort;
 end;
@@ -670,14 +709,21 @@ end;
 
 function TPad.Behind: Boolean;
 begin
-  Result := Flying and FFlight.Behind(FFlightClock);
+  var FlownBehind := Flying and FFlight.Behind(FFlightClock);
+  Result := FlownBehind or not FShelf.Holds(FClock);
 end;
 
-function TPad.Depth(AAlpha: Single): Double;
+function TPad.RigDepth(AAlpha: Single): Double;
 begin
   Result := 0;
   if Flying then
     Result := Smoothstep(FFlight.Depth(FFlightClock - 1 + AAlpha));
+end;
+
+function TPad.Depth(AAlpha: Single): Double;
+begin
+  var SlidIn := Smoothstep(FShelf.Depth(FClock - 1 + AAlpha));
+  Result := Max(RigDepth(AAlpha), SlidIn);
 end;
 
 // A damped rock from the blow on, drawn only
@@ -703,6 +749,8 @@ end;
 
 procedure TPad.Press(ASpeed: Double);
 begin
+  if FShelf.Slides then
+    Exit;
   FSagSpeed := FSagSpeed + Min(ASpeed * SagGain, SagMaxKick);
 end;
 
@@ -746,7 +794,7 @@ end;
 function TPad.BodyHolds(AX, AY: Single): Boolean;
 begin
   Result := (AX >= FLeft) and (AX < Right) and (AY >= FTop) and
-    (AY < FTop + TileSize);
+    (AY < FTop + FBodyDepth);
 end;
 
 function TPad.Body: TSdlFRect;
@@ -754,7 +802,7 @@ begin
   Result.X := FLeft;
   Result.Y := FTop;
   Result.W := FPlacement.Width;
-  Result.H := TileSize;
+  Result.H := FBodyDepth;
 end;
 
 function TPad.Middle: TSdlFPoint;
@@ -763,20 +811,22 @@ begin
   Result.Y := FPictureHeight / 2;
 end;
 
-// In the depth smaller about its middle, and darker
+// In the depth smaller about its middle, darker, and as far down as it
+// sinks there
 procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Dest: TSdlFRect;
 begin
   var Sunk := Depth(AAlpha);
-  var Scale := 1 - (1 - DeepScale) * Sunk;
-  var Tone := 1 - (1 - DeepTone) * Sunk;
+  var Scale := 1 - (1 - FDeep.Scale) * Sunk;
+  var Tone := 1 - (1 - FDeep.Tone) * Sunk;
   var Pivot := Middle;
   Dest.W := FPlacement.Width * Scale;
   Dest.H := FPictureHeight * Scale;
   Dest.X := Round(FLeft) + Pivot.X * (1 - Scale);
   // As the riders are drawn, so the feet do not flicker into the deck
-  Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale);
+  Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale) +
+    FDeep.Sink * Sunk;
   TintTexture(FTexture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
   ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha) + FPlunge.Lean);
@@ -870,6 +920,17 @@ begin
       Pad.DeckSpannedBefore(ALeft, ARight) then
       Exit(Pad);
   Result := nil;
+end;
+
+function TPadWorld.DeckWithdrawn(AScreen: Integer; ALeft, ARight,
+  AFeetY: Double): Boolean;
+begin
+  for var Pad in FPads do
+    if (Pad.Screen = AScreen) and Pad.Behind and not Pad.WasBehind and
+      (Abs(Pad.PrevTop - AFeetY) < DeckSlop) and
+      Pad.DeckSpannedBefore(ALeft, ARight) then
+      Exit(True);
+  Result := False;
 end;
 
 function TPadWorld.DeckCrossed(AScreen: Integer; ALeft, ARight, APrevY,

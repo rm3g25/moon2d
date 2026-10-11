@@ -57,6 +57,7 @@ uses
   Pads.Formations in 'Game\Pads\Pads.Formations.pas',
   Pads.Flights in 'Game\Pads\Pads.Flights.pas',
   Pads.Plunge in 'Game\Pads\Pads.Plunge.pas',
+  Pads.Shelf in 'Game\Pads\Pads.Shelf.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
   Pads.Arena in 'Game\Pads\Pads.Arena.pas',
   Render.Font in 'Core\Render.Font.pas',
@@ -1191,12 +1192,14 @@ begin
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     AStand.Alive := True;
     // A pad working its jets lifts what hangs on it: flat out in a
-    // flight and just before one, in fits when it is a pad that plunges
+    // flight and just before one, in fits when it is a pad that plunges;
+    // a shelf lights it to warn that it is about to slide in
     AStand.Effort := Pad.Effort;
-    // Into the depth as the pad's own picture goes: the same depth at
-    // the two ticks, the same shrink and shade, about the same point
-    AStand.Depth.Sunk := Pad.Depth(1);
-    AStand.Depth.LastSunk := Pad.Depth(0);
+    // Into the depth as the picture of a flying pad goes: the same depth
+    // at the two ticks, the same shrink and shade, about the same point.
+    // A shelf slides in alone: what hangs on it stays in front.
+    AStand.Depth.Sunk := Pad.RigDepth(1);
+    AStand.Depth.LastSunk := Pad.RigDepth(0);
     AStand.Depth.Shrink := 1 - DeepScale;
     AStand.Depth.Dim := 1 - DeepTone;
     AStand.Depth.Pivot := Pad.Middle;

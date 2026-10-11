@@ -5,8 +5,9 @@
 
   A pad holds from above only. Its deck, the top edge, carries what lands
   on it; from below and from the side anything passes through. Under the
-  deck the pad has a body one cell deep: it stops the boss's flight, the
-  sparks and the debris, and the bullets unless the pad lets them by.
+  deck the pad has a body as deep as its picture, a cell at the most: it
+  stops the boss's flight, the sparks and the debris, and the bullets
+  unless the pad lets them by.
 
   A pad may travel a path - back and forth along its points, or round
   them - and may bob in the air. The path moves the pad itself; the bob
@@ -23,6 +24,12 @@
   falls out of the screen and climbs back to its place (Pads.Plunge
   counts the cycle). It is a failing pad and looks it; it stands on its
   place, with no path and in no group.
+
+  A pad may be a shelf: it slides out of the wall behind it and back in
+  by a program of steps that goes round and round (Pads.Shelf counts the
+  cycle). Out, it is a pad as any other; on its way and in the wall it
+  is neither a floor nor a body. It joins no group and does not plunge;
+  a path it may travel.
 
   A pad may wear rigs - lamps, jets and the like, hung on it as dynamic
   objects. It only names them here; Levels.Rigs holds them and hangs
@@ -71,6 +78,37 @@ type
     Rise: Single;
   end;
 
+  // Where a step of a shelf's program holds it: out in front, or in the
+  // wall
+  TShelfStand = (shOut, shIn);
+
+  TShelfStep = record
+    Stand: TShelfStand;
+    Seconds: Single; // held there, the slide not counted
+  end;
+
+  // A pad all the way into the depth: its size and its light, as shares
+  // of what they are in front, and how far down its picture has gone
+  TPadDeepLook = record
+    Scale: Single;
+    Tone: Single;
+    Sink: Single; // units
+  end;
+
+  // A pad that slides out of the wall behind it and back in. Its steps
+  // take turns, out and in, and go round: after the last comes the
+  // first. Between two steps it slides for SlideSeconds; WarnSeconds
+  // before it leaves the front it says so. It starts OffsetSeconds into
+  // its program: shelves in a row go as a wave.
+  TPadShelf = record
+    Slides: Boolean; // False - the pad never leaves the front
+    Steps: TArray<TShelfStep>;
+    SlideSeconds: Single;
+    WarnSeconds: Single;
+    OffsetSeconds: Single;
+    Deep: TPadDeepLook; // in the wall
+  end;
+
   TPadPlacement = record
     Sprite: string; // in the level's object art, as a static object's
     Screen: Integer; // 1-based
@@ -86,6 +124,7 @@ type
     Path: TPadPath;
     Bob: Single; // how far the pad sways up and down, in units; 0 = still
     Plunge: TPadPlunge;
+    Shelf: TPadShelf;
     // The pad group it is rebuilt with; '' = none
     Group: string;
     // The rigs it wears, by name, in the order they are hung
@@ -120,12 +159,17 @@ type
 const
   PadBulletsIds: array [TPadBullets] of string = ('block', 'pass');
   PadRouteIds: array [TPadRoute] of string = ('none', 'pingpong', 'loop');
+  ShelfStandIds: array [TShelfStand] of string = ('out', 'in');
 
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
 // without stops or with a speed of zero or less, a pause or a bob below
 // zero, a plunge with a delay or a rest below zero or a rise of zero or
-// less, a rig that is not a list of names raise.
+// less, a rig that is not a list of names raise. So does a shelf with a
+// program beside its out or in, with a step that is not a stand and
+// seconds above zero, with steps that do not take turns, with a slide,
+// a warn or an offset below zero, a scale out of 0..1 or zero, a tone
+// out of 0..1.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
@@ -149,6 +193,12 @@ resourcestring
   SPadNoStops = 'Level "%s": pad "%s" has a path without stops';
   SPadBadStop = 'Level "%s": pad "%s" has a stop that is not [x, y]';
   SPadBadNumber = 'Level "%s": pad "%s" takes %s %g';
+  SPadShelfTwoPrograms = 'Level "%s": pad "%s" is a shelf with a program '
+    + 'and with out or in beside it - one or the other';
+  SPadShelfBadStep = 'Level "%s": pad "%s" has a shelf step that is not '
+    + '["out", seconds] or ["in", seconds]';
+  SPadShelfNoTurns = 'Level "%s": pad "%s" has a shelf program whose steps '
+    + 'do not take turns, out and in, the last and the first too';
   SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
     + '[left, top, right, bottom]';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
@@ -161,6 +211,14 @@ const
   DefaultPlungeDelay = 0.5;
   DefaultPlungeRest = 0.5;
   DefaultPlungeRise = 64;
+  // What a shelf takes for a number it leaves out: the seconds it stays
+  // out, stays in, slides and warns; its size and its light in the wall
+  DefaultShelfOut = 2.0;
+  DefaultShelfIn = 1.5;
+  DefaultShelfSlide = 0.25;
+  DefaultShelfWarn = 0.5;
+  DefaultShelfScale = 0.72;
+  DefaultShelfTone = 0.4;
 
 function ReadBullets(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadBullets;
@@ -242,6 +300,120 @@ begin
       [ALevelId, ASprite, 'rise', Result.Rise]);
 end;
 
+// JSON: ["out", 2] or ["in", 1.5]
+function ReadShelfStep(const AValue: TJSONValue;
+  const ALevelId, ASprite: string): TShelfStep;
+begin
+  var IsPair := (AValue is TJSONArray) and (TJSONArray(AValue).Count = 2);
+  if not IsPair then
+    raise EPadError.CreateFmt(SPadShelfBadStep, [ALevelId, ASprite]);
+  var Id := TJSONArray(AValue).Items[0];
+  var Held := TJSONArray(AValue).Items[1];
+  // System.JSON holds a number as a string of a kind
+  var IsWord := (Id is TJSONString) and not (Id is TJSONNumber);
+  if not IsWord or not (Held is TJSONNumber) then
+    raise EPadError.CreateFmt(SPadShelfBadStep, [ALevelId, ASprite]);
+
+  Result.Seconds := TJSONNumber(Held).AsDouble;
+  for var Stand := Low(TShelfStand) to High(TShelfStand) do
+    if SameText(Id.Value, ShelfStandIds[Stand]) then
+    begin
+      Result.Stand := Stand;
+      Exit;
+    end;
+  raise EPadError.CreateFmt(SPadShelfBadStep, [ALevelId, ASprite]);
+end;
+
+// The program the keys "out" and "in" stand for: out for the seconds of
+// the one, then in for the seconds of the other
+function StepsOfOutAndIn(const AShelf: TJSONObject): TArray<TShelfStep>;
+var
+  StaysOut, StaysIn: TShelfStep;
+begin
+  StaysOut.Stand := shOut;
+  StaysOut.Seconds := AShelf.GetValue<Double>('out', DefaultShelfOut);
+  StaysIn.Stand := shIn;
+  StaysIn.Seconds := AShelf.GetValue<Double>('in', DefaultShelfIn);
+  Result := [StaysOut, StaysIn];
+end;
+
+// No two steps on end hold the shelf alike, the last and the first
+// neither: between any two it has a slide to make
+function StepsTakeTurns(const ASteps: TArray<TShelfStep>): Boolean;
+begin
+  for var i := 0 to High(ASteps) do
+    if ASteps[i].Stand = ASteps[(i + 1) mod Length(ASteps)].Stand then
+      Exit(False);
+  Result := Length(ASteps) > 0;
+end;
+
+function ReadShelfSteps(const AShelf: TJSONObject;
+  const ALevelId, ASprite: string): TArray<TShelfStep>;
+begin
+  Result := [];
+  var ProgramArr := AShelf.GetValue<TJSONArray>('program', nil);
+  var HasOutOrIn := (AShelf.GetValue('out') <> nil) or
+    (AShelf.GetValue('in') <> nil);
+  if (ProgramArr <> nil) and HasOutOrIn then
+    raise EPadError.CreateFmt(SPadShelfTwoPrograms, [ALevelId, ASprite]);
+
+  if ProgramArr = nil then
+    Result := StepsOfOutAndIn(AShelf)
+  else
+    for var Item in ProgramArr do
+      Result := Result + [ReadShelfStep(Item, ALevelId, ASprite)];
+
+  for var Step in Result do
+    if Step.Seconds <= 0 then
+      raise EPadError.CreateFmt(SPadBadNumber,
+        [ALevelId, ASprite, 'shelf step', Step.Seconds]);
+  if not StepsTakeTurns(Result) then
+    raise EPadError.CreateFmt(SPadShelfNoTurns, [ALevelId, ASprite]);
+end;
+
+// JSON: "shelf": {"out": 2, "in": 1.5, "slide": 0.25, "warn": 0.5,
+// "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}, or with
+// "program": [["out", 2], ["in", 0.5], ["out", 0.5], ["in", 1.5]] in
+// place of "out" and "in"; absent = the pad never leaves the front
+function ReadShelf(const AObj: TJSONObject;
+  const ALevelId, ASprite: string): TPadShelf;
+var
+  ShelfObj: TJSONObject;
+
+  function NotBelowZero(const AKey: string; ADefault: Double): Double;
+  begin
+    Result := ShelfObj.GetValue<Double>(AKey, ADefault);
+    if Result < 0 then
+      raise EPadError.CreateFmt(SPadBadNumber,
+        [ALevelId, ASprite, AKey, Result]);
+  end;
+
+begin
+  Result := Default(TPadShelf);
+  ShelfObj := AObj.GetValue<TJSONObject>('shelf', nil);
+  if ShelfObj = nil then
+    Exit;
+
+  Result.Slides := True;
+  Result.Steps := ReadShelfSteps(ShelfObj, ALevelId, ASprite);
+  Result.SlideSeconds := NotBelowZero('slide', DefaultShelfSlide);
+  Result.WarnSeconds := NotBelowZero('warn', DefaultShelfWarn);
+  Result.OffsetSeconds := NotBelowZero('offset', 0);
+
+  Result.Deep.Sink := ShelfObj.GetValue<Double>('sink', 0);
+  Result.Deep.Scale := ShelfObj.GetValue<Double>('scale', DefaultShelfScale);
+  Result.Deep.Tone := ShelfObj.GetValue<Double>('tone', DefaultShelfTone);
+  // At a scale of zero there is no picture to draw
+  var ScaleFits := (Result.Deep.Scale > 0) and (Result.Deep.Scale <= 1);
+  if not ScaleFits then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'scale', Result.Deep.Scale]);
+  var ToneFits := (Result.Deep.Tone >= 0) and (Result.Deep.Tone <= 1);
+  if not ToneFits then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'tone', Result.Deep.Tone]);
+end;
+
 function PadRigName(const APad: TPadPlacement): string;
 begin
   var Shown := APad.Sprite;
@@ -274,6 +446,7 @@ begin
     Pad.Path := ReadPath(Obj, ALevelId, Pad.Sprite);
     Pad.Bob := Obj.GetValue<Double>('bob', 0);
     Pad.Plunge := ReadPlunge(Obj, ALevelId, Pad.Sprite);
+    Pad.Shelf := ReadShelf(Obj, ALevelId, Pad.Sprite);
     Pad.Group := Obj.GetValue<string>('group', '');
     Pad.Rigs := ReadRigNames(Obj, ALevelId, PadRigName(Pad));
 

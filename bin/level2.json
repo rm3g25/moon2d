@@ -14,7 +14,8 @@
   "objectSets": [
     "sky",
     "level1-structures",
-    "ventilation"
+    "ventilation",
+    "pads"
   ],
   "music": "hallu.ogg",
   "henshinPattern": "vortex",
@@ -258,6 +259,15 @@
       "y": 225,
       "width": 70,
       "tag": "s07-stash"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 7,
+      "x": 189,
+      "y": 321,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s07-shelf-dock"
     }
   ],
   "pads": [
@@ -560,19 +570,31 @@
       "rig": ["pad"]
     },
     {
-      "sprite": "s16-platform-out",
+      "sprite": "shelf",
       "screen": 7,
       "x": 192,
       "y": 320,
       "width": 32,
       "bullets": "block",
-      "bob": 1,
-      "tag": "s07-plat-02",
-      "rig": ["padFailing"],
-      "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}
+      "tag": "s07-shelf-01",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.5, "in": 1.5, "slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4}
     }
   ],
   "rigs": {
+    "shelfDock": [
+      {
+        "kind": "beacon",
+        "x": 15.6,
+        "y": 21.7,
+        "tint": [100, 14, 8],
+        "blink": "flash",
+        "frequency": 5,
+        "intensity": 0,
+        "surge": 100,
+        "size": 14
+      }
+    ],
     "pad": [
       {
         "kind": "beacon",

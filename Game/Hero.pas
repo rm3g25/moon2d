@@ -158,6 +158,7 @@ type
     function LandOnDeck(APrevY: Double): Boolean;
     procedure DropThroughDeck;
     procedure RideDeck;
+    procedure LoseDeck;
     procedure CarryX(AWay: Double);
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
@@ -992,13 +993,18 @@ end;
 // it went - across while no wall stands in the way, up while the head is
 // clear. A deck that would crush the hero into the ceiling rises through
 // him instead, and he falls; one a wall has pulled from under him leaves
-// him to the ground below, the corpse too.
+// him to the ground below, the corpse too. So does a shelf that has slid
+// into its wall.
 procedure THero.RideDeck;
 begin
   var Middle := FX + HeroSize / 2;
   var Deck := FPads.DeckCarrying(FScreen, Middle, Middle, FY);
   if Deck = nil then
+  begin
+    if FPads.DeckWithdrawn(FScreen, Middle, Middle, FY) then
+      LoseDeck;
     Exit;
+  end;
 
   CarryX(Deck.MotionX);
 
@@ -1017,6 +1023,28 @@ begin
   FCorpseSettled := False;
   if FAction = haStand then
     SettleOnGround;
+end;
+
+// The deck underfoot is gone, the hero where he was. A foot on the
+// grid's floor still holds him; else he falls the way he was going, as
+// off a ledge - a stand asks the floor nothing, and a walk only sees the
+// ledge once the cells on both sides of him are empty.
+procedure THero.LoseDeck;
+begin
+  FCorpseSettled := False;
+  if GroundUnderFeet or not CanIGoDown then
+    Exit;
+  case FAction of
+    haStand:
+      FAction := haFall;
+    haWalkLeft:
+      FAction := haFallLeft;
+    haWalkRight:
+      FAction := haFallRight;
+  else
+    Exit;
+  end;
+  FAcceleration := 1;
 end;
 
 // A unit at a time, the wall asked before every one, as ShoveX: a knocked
