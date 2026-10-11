@@ -13,7 +13,8 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
 at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
-shroud at `v3.0.47` and the henshin on orbs at `v3.0.49` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+shroud at `v3.0.47`, the henshin on orbs at `v3.0.49` and the uptake of
+pickups at `v3.0.50` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -23,7 +24,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 `{$I ..\..\Moon2D.inc}` from `Game/Events/`, `Game/Pads/` and `Game/Orbs/`).
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
-  sets, rendering (the shake included), the brush, the effects (particle
+  sets, rendering (the shake included, and what is made of a picture's alpha -
+  `Render.Silhouette`), the brush, the effects (particle
   swarm, sparks, debris), the level/monster/config/language models, the
   frame-vs-screen space. **Core never uses a unit outside Core** - a tool or
   the editor that references only `Core/` fails to build the day that rule
@@ -31,7 +33,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 - `Game/` - the game itself: hero, monsters, the boss's disc and its pilot,
   bullets,
   explosions, bullet impacts, sound, the loop host,
-  the bonus vocabulary, the henshin ceremony, the hero's shroud, the version. `Game/Events/`
+  the bonus vocabulary, the henshin ceremony, the hero's shroud, the taking
+  of a pickup (`Game.Uptake`), the version. `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
   (`Pads.Plunge`), the rebuild of a pad group (`Pads.Formations`,
@@ -98,9 +101,16 @@ and of the rite come
 from: over `Game.Space`, `Render.Brush` and `Sdl2.Core` alone - it knows
 neither the level nor the pads) / `Orbs.Patterns` (the figures of the
 henshin: over no unit of the game) -> `Hud.Marks` /
-`Game.Shroud` (the hero's shroud: over `Hero`, `Effects.Emitter`,
+`Game.Shroud` (the hero's shroud: over `Hero`, `Render.Silhouette` for the
+art of his frames, `Effects.Emitter`,
 `Effects.Sparks` for the probe type and the canvas of `Levels.Dynamics`;
 it draws through `Render.Glow` and `Render.Puff`) /
+`Game.Uptake` (the taking of a pickup: over `Hero`, `Monsters`,
+`Monsters.Defs`, `Render.Silhouette`, `Render.Brush`, `Effects.Sparks` for
+the probe type and the canvas of `Levels.Dynamics`; it draws through
+`Render.Glow`, reads the sprite sets itself through `Sprites.Sets` and
+`Render.Sprites` and knows no shroud - the light goes to the body through
+a callback) /
 `Orbs.Rite` (the rite of the henshin: over `Orbs.Flock`, `Orbs.Harvest`
 and `Orbs.Patterns`, `Render.Brush` and the canvas of `Levels.Dynamics`) /
 `Game.Henshin` (over `Game.Shroud` and `Orbs.Rite` too) / `Events.Director` / `Orbs.Aura` (the hero's aura: over
@@ -112,6 +122,7 @@ rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
 game unit). The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 `Menu.Logo` -> `Menu` (with `Menu.Globe`, a thin moon over `Render.Globe`).
+`Render.Silhouette` stands over `Render.Glow` and `Sdl2.Core` alone.
 
 ---
 
@@ -2016,7 +2027,7 @@ besides taking lives is the monster's.
   ticks in a row take at most `Lives` lives, and a gun that fires less than
   that is never touched.
 
-### `Game/Monsters.pas` (~1650 lines)
+### `Game/Monsters.pas` (~1890 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -2117,9 +2128,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   pilot's, for `Pads.Arena`; a body without a pilot holds nothing, never
   flies a lap and has none ahead),
   `Draw(sprites, alpha)` (a living disc monster draws its disc between
-  ticks; everything else - frames on the tick, alpha unused),
+  ticks; everything else - frames on the tick, alpha unused; a pickup
+  that is not alive is not drawn at all - 3.0.50, below),
   `DrawSmoke(canvas, origin, alpha)`, `DrawSparks` (the same shape),
-  `DrainEvent`, `HealthTier` (the
+  `DrainEvent`, `Collect`, `ArtSet` and `Mirrored` (3.0.50: see "A pickup
+  leaves no body" below), `HealthTier` (the
   crosshair's thirds of `LivesAll` as
   `TMonsterHealthTier` - the one home of that rule, via `ThirdMark`),
   `TierShare` (how full the current third is, 0..1), `TicksSinceHit` /
@@ -2220,6 +2233,19 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `SpawnSeed` (the spawn point, the smoke's seed too) under a salt, so the
   two do not roll alike. `TickSparks` after `TickSmoke`, `DrawSparks` over
   the smoke.
+- **A pickup leaves no body** (3.0.50): `Collect` is the hero's take -
+  `FLife` goes straight to `mlDead`, `FStep` to 0, and one `meDied` goes
+  out, on which the game plays the pickup's sound as for any death.
+  Neither `TakeDamage` nor `BeginDying` is called: nothing dies, the body
+  is gone at once, and a later blow does not kill it again. A pickup
+  destroyed by anything else still dies through `TakeDamage`. Either way
+  `Draw` leaves a pickup (`mcPickup`) that is not `mlAlive` undrawn - its
+  `death` frames no longer play, and what is seen of it from that tick on
+  is `Game.Uptake`'s to draw. `ArtSet` - the stem of the sprite list the
+  body was born with (`medic`, `weapon1`), kept in the constructor: the
+  set's name, by which `TUptakePainter.PictureOf` finds the picture.
+  `Mirrored` - whether the picture is drawn turned over: `FacesRight`,
+  what `Draw` hands the sprites for a living body.
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -2899,15 +2925,18 @@ and the record stage by stage: `docs/HENSHIN-PLAN.md`.
 - Tests: `Tests/Orbs/Tests.Orbs.Rite.pas`, with `Tests.Orbs.Harvest.pas`
   for the spots - see Tests below; the look of it all is for the eye.
 
-### `Game/Game.Shroud.pas` (~1015 lines)
+### `Game/Game.Shroud.pas` (~965 lines)
 The hero's shroud (3.0.47): smoke and light that gather round him when he
 appears and when he changes his suit. A picture over the hero's frame that
 lives on its own clock and dies out: bands of smoke and light cross the
 body, the body may be put together out of strips, a halo flares round it and
 motes drift off. It never takes the controls from the hero and knows nothing
 of how he looks - sizes and shapes come from his 24 frames, so a redrawn hero
-brings his own shroud. The plan, the numbers and the rules for whoever
-writes it: `docs/SHROUD-PLAN.md`.
+brings his own shroud. Since 3.0.50 the shroud also holds one light that is
+no scene's: what the hero takes in (`Game.Uptake`) feeds it, it lights the
+body and dies out by itself, whether a scene runs or not. The plan, the
+numbers and the rules for whoever writes it: `claude/SHROUD-PLAN.md` (the
+project's storage, not the repository).
 - **`TShroudLook`** (record, one per scene; ticks, screen units and shares):
   `Life`, `Bands`, `WidthFrom`/`WidthTo`, `Travel` (down the body over a
   band's life, up below zero), `Order` (`TShroudOrder` = `soTogether`,
@@ -2926,20 +2955,23 @@ writes it: `docs/SHROUD-PLAN.md`.
   strips, the motes (`TParticleSwarm`), the mist. Own `TXorShift` dice from
   the seed it is given, never `Random`. The probe (`TSolidProbe`, screen
   units) is the game's `SolidUnderPoint`. `Tick(pose, seeds)` runs, in this
-  order: the clock (age + 1, the end at `Life`), the mist, and while active
+  order: the fade of the fed light, the clock (age + 1, the end at `Life`),
+  the mist, and while active
   the bands' fall and the birth of motes, then the flight and the settling of
   motes. Reads for the painter: `Time(alpha)`, `PartTime`, `Glow`,
-  `StripShift`, `Look`, `Bands`, `Motes`, `Mist`; `Active`; `Assembling`
+  `StripShift`, `Look`, `Bands`, `Motes`, `Mist`, `Fed`, `FedTint`;
+  `Active`; `Assembling`
   (the body is being put together: the game leaves him undrawn).
   - `Start(look)` begins a scene; it erases neither motes nor mist. `Clear`
     erases everything (death, a restart); `LeaveMotes` is a door - what has
     left the hero (the motes and the mist) stays behind, the light goes with
     him.
-  - Motes are born at the opaque points of the frame (alpha >= `SeedAlpha`
-    128, mirrored with the hero) at a rate of `Motes` x the halo's level; a
+  - Motes are born at the opaque points of the frame (the seeds of
+    `Render.Silhouette`: alpha from 128; mirrored with the hero) at a rate
+    of `Motes` x the halo's level; a
     sinking mote (`Lift` above zero) is settled out of matter by the probe.
     A mote already in flight when a new `Start` comes takes the new look's
-    `Lift` and is drawn in its `Tint` (open: docs/SHROUD-PLAN.md).
+    `Lift` and is drawn in its `Tint` (open: claude/SHROUD-PLAN.md).
   - Mist: a band that reaches the feet line (`HeroSize - 1`; only a look with
     `Travel` above zero gets there - `IceOnLook`) leaves the hero, is marked
     `Fallen` and is copied into `Mist` as a **`TShroudCloud`** (its look, the
@@ -2947,14 +2979,31 @@ writes it: `docs/SHROUD-PLAN.md`.
     The mist stands on the screen, lives by its own look's clock (a new
     `Start` does not hurry it), and sinks `MistSink`=1.2 units a tick until
     the probe says "inside" matter; with no probe it stands.
+  - The fed light (3.0.50): `Feed(tint, share, keep)` adds the share to
+    the level, up to `FedCeiling` 1.3, and takes the tint and the keep of
+    the last feed. Every `Tick`, before anything else and whether a scene
+    runs or not, the level is multiplied by the keep; under `FedFloor`
+    0.01 it is 0. `Clear` puts it out; `Start` and `LeaveMotes` do not
+    touch it - through a door the light goes with the hero. A feed rolls
+    no dice and starts no scene. `Fed` is the level, `FedTint` the tint.
 - **`TShroudPainter`** draws, and makes at load what the drawing needs from the
-  hero's 24 frames (`TShroudFrameArt`: the seed points, a white mask with the
-  frame's alpha, a halo - the alpha blurred by `BlurImage` - and the margins
-  it reaches past the frame). `SeedsOf(frame)` hands the points to the shroud.
+  hero's 24 frames: a `TSilhouette` each (`BuildSilhouette` of
+  `Render.Silhouette` at `HeroSize` - the seed points, a white mask with the
+  frame's alpha, a halo and the margins it reaches past the frame; the
+  making of them lived here until 3.0.50). `SeedsOf(frame)` hands the points
+  out: the game gives them to the shroud, to the rite and (3.0.50) to the
+  uptake.
   Three calls bracket the hero's draw: `DrawUnder` (behind him: the mist
-  behind, the far bands, the halo), `DrawBody` (on him: the strips while he
+  behind, the fed light - `DrawFedUnder` -, the far bands, the halo),
+  `DrawBody` (on him: the fed light - `DrawFedBody` -, the strips while he
   is put together, the light on the body, through the mask), `DrawOver` (over
-  him: the near bands, the mist before him, the motes). A band and a piece of
+  him: the near bands, the mist before him, the motes). The fed light is
+  drawn whenever its level is above zero, a scene or none, and the two
+  lights add up, each in its own tint: under the body a `gsPoint` of 44
+  units at the middle of the frame (0.3 of the level) and the frame's halo
+  (the level, no higher than 1, one pass); on the body his own frame added
+  on (0.45) and the white mask in the tint taken 0.35 toward white (0.6) -
+  but not while he is put together: there is nothing whole to light. A band and a piece of
   mist share `DrawCloud`: smoke is `DrawPuffRect` of `Render.Puff` (alpha
   blended), light is `DrawGlowRect` over `gsPoint` of `Render.Glow` (additive).
   The painter restores the texture's alpha mod and blend mode after it
@@ -2963,6 +3012,150 @@ writes it: `docs/SHROUD-PLAN.md`.
   the screen, and is drawn even after the shroud has ended.
 - Tests: `Tests/Game/Tests.Game.Shroud.pas` - the counting class alone (the
   painter draws, so it is judged by eye): see Tests below.
+
+### `Game/Game.Uptake.pas` (~1205 lines)
+The hero takes a pickup in (3.0.50): the picture stays where it lay, fills
+with color, crumbles, and the crumbs fly into his body, each one lighting
+the point it enters. A pickup that is destroyed instead is filled and
+crumbled the same way, but its crumbs fall and seek no one. The unit is the
+picture alone: health and the weapon are the game's to give, in the tick of
+the touch, and nothing here takes the controls from the hero. What differs
+between a medkit, a weapon and a wreck is numbers only. The plan and the
+model: `claude/PICKUPS-PLAN.md` (the project's storage, not the repository).
+- **`TUptakeLook`** (record, one per kind of scene; ticks, screen units and
+  shares): `Fill` (the picture takes the color), `Crumble` (the crumbs
+  leave, from the first to the last), `Order` (`TUptakeOrder` =
+  `uoScattered`, `uoTopDown`, `uoNearFirst`), `Crumb` (the side of a
+  crumb), `Flash` (the halo of the filled picture), `Apart` (the crumbs
+  fall and seek no one), `Scatter` (a crumb's speed as it leaves), `Burst`
+  (ticks it flies free before the pull), `Pull`, `Pulse` (half of the
+  light the whole picture gives the body: the feeds of a scene sum to 2 x
+  `Pulse`) and `PulseTicks` (the light is all but gone in this many),
+  `Tint`. Typed constants in the unit: `MedkitUptake`
+  (`Fill` 5, `Crumble` 6, `Crumb` 2, `Pulse` 0.65 over 14 ticks; green
+  64/208/96), `WeaponUptake` (the same numbers, amber 255/178/56) and
+  `PickupBurst` (`Apart`; `Fill` 2, `Crumble` 2, `Pulse` 0; pale
+  236/240/255). All three leave `uoScattered`. The game says which one to
+  start and when.
+- **`TUptakeShape`** - a picture as the count sees it, since the count
+  touches no SDL: `Alpha` row by row, `TexW` / `TexH`, `Width` / `Height`
+  in units.
+- **`CutCrumbs(shape, crumb)`** (a free function, no state): the cells of a
+  grid of step `crumb` from the picture's top left corner that hold paint,
+  in rows. A cell's texels run from `Round` of its left edge to `Round` of
+  its right one, cut at the picture's edge, so no texel is lost or taken
+  twice at a fractional step; a cell with no texels is skipped. A texel is
+  painted from alpha 128 (`PaintedAlpha`); a cell covered by less than
+  `MinCover` 0.12 is no crumb. A **`TCrumbCell`**: `Source` (texels), `X`,
+  `Y`, `W`, `H` (units from the picture's corner, of the texel box),
+  `MidX`, `MidY` (the middle of what is painted in it) and `Cover`. A
+  picture of no texels or a step of zero or less gives no cells; an
+  `Alpha` shorter than `TexW` x `TexH` raises `EUptakeError`.
+- **`TUptake`** counts and touches no SDL: the scenes (**`TUptakeScene`**:
+  the look by copy, `Picture` - the painter's number, only carried -,
+  `Left` / `Top` - the picture's corner on the screen -, `Mirrored`, `Age`,
+  `CenterX` / `CenterY` - the middle of all that is painted, each cell by
+  the paint it holds -, `Crumbs`), the crumbs (**`TCrumb`**: its cell,
+  `LeaveAt`, `State` = `csSitting` / `csFlying` / `csGone`, place and
+  speed, `Age` and `Life` in flight, `Size`, `Seed` - its point on the
+  hero's frame), the spots on the body (**`TBodySpot`**: `Seed`, `Age`,
+  `Tint`, `Size`) and the `Clock`. Own `TXorShift` dice from the seed it is
+  given (a zero seed becomes 1), never `Random`. `Create(solid, feed,
+  seed)`: the probe is a `TSolidProbe` of `Effects.Sparks` (screen units;
+  the game's `SolidUnderPoint`), the feed a **`TFeedLight`** (`reference to
+  procedure(tint, share, keep)`; the game passes `FShroud.Feed`). Either
+  may be nil: no probe - a falling crumb meets no floor, no feed - nobody
+  is lit. Reads for the painter: `Scenes`, `Spots`, `Clock`.
+  - `Start(look, picture, shape, left, top, mirrored, hero)`: cuts the
+    shape by the look's `Crumb`; a picture with no painted cell starts no
+    scene. A mirrored scene has its cells reflected about the picture's
+    width. Every crumb gets its `LeaveAt` = `Fill` + queue x `Crumble` -
+    the queue is a roll for `uoScattered`; for the other two, 0.8 of the
+    crumb's place between the nearest and the farthest key (its height for
+    `uoTopDown`, the distance from it to `hero`, the middle of the hero,
+    for `uoNearFirst`) plus 0.2 of a roll - and its `Size` = `Crumb` x
+    (0.7 + 0.6 x `Cover`).
+  - `Tick(pose, seeds)` runs, in this order: the clock + 1; the spots age,
+    and one that has reached `SpotTicks` (6, public) is dropped - a spot
+    born in a tick is aged first in the next, so it is there for six; every
+    scene steps (age + 1; a sitting crumb whose `LeaveAt` has come is
+    launched and flies in that same tick; the flying fly); the scenes with
+    every crumb `csGone` are dropped.
+  - A crumb leaves (`Launch`) from the middle of its paint, at a rolled
+    angle and a speed of `Scatter` x 0.4..1, lifted by 0.35 x `Scatter`
+    and pushed away from the scene's center. In a scene that is not
+    `Apart` it rolls its point of the frame the hero shows this tick
+    (`PickSeed`: the die is thrown always, so the stream does not depend
+    on how the hero looks; no points - the middle of the frame). In one
+    that is `Apart` it gets a kick upward and a life of 20..41 ticks.
+  - To the hero (`FlyHome`): for `Burst` ticks the crumb coasts, speed x
+    0.86; then it goes for its point on the pose as it is this tick
+    (mirrored with the hero). Within its own speed of the point, or
+    within 3 units if it is slower, it is home: `Arrive` and `csGone`.
+    Else speed x 0.78 plus `Pull` x (1 + ticks past the burst / 25) toward
+    the point. There is no life: the pull grows until a hero who runs or
+    leaps is caught.
+  - `Arrive`: one feed for the crumb that came - the look's `Tint`, 2 x
+    `Pulse` / the crumbs of the scene, a keep of exp(-3 / `PulseTicks`)
+    (0 for `PulseTicks` of zero or less) - and a spot on its point. A look
+    with `Pulse` 0 feeds all the same, a share of 0.
+  - Apart (`FlyApart`): gravity 0.32, the speed along X x 0.97; a crumb
+    that has gone into matter by the probe steps back along Y alone and
+    bounces (speed Y x -0.3, X x 0.7); at its life it is `csGone`.
+  - `Settle` (a door): every scene that is not `Apart` gives one feed for
+    all that has not come home, sitting and flying - 2 x `Pulse` x left /
+    all -, then every scene and every spot is erased, the wrecks among
+    them. `Drop` (the hero is dead): a scene that is not `Apart` becomes
+    one - its flying crumbs get a life of 20..41 ticks from the age they
+    have, the sitting ones leave in their turn and fall -, a scene already
+    `Apart` is left as it is; the spots are erased. `Clear` erases the
+    scenes and the spots; it does not reset the `Clock`.
+- **`TUptakePainter`** draws, and keeps what is made of the pickups'
+  pictures: one picture to a sprite set, in a dictionary by the set's name
+  in lower case - the `TUptakeShape`, the `TSilhouette`
+  (`Render.Silhouette`, at `SpriteSize`), the frame's own texture and, when
+  the set carries a sprite `light`, a glow texture of it and the middle of
+  the cross (the middle of its alpha). `PictureOf(setName)` builds it on
+  the first ask and answers the number `Start` takes: `sprites\<name>.mset`
+  is opened, the first frame of `alive` read (`LoadImageSurface`, turned
+  into ABGR8888); a frame wider than 64 px is dense art and gets the linear
+  filter, any other - 64 px and under, the 2008 frames on black - gets the
+  color key, as in the monsters' cache. A set with no frame in `alive` or a picture
+  that cannot be read raises `EUptakeError`. `ShapeOf(picture)` hands the
+  shape over. Three calls:
+  - `DrawBehind(field, screen, origin, alpha)` - under the pickups: the
+    halo of every scene in its `Tint` (`Flash` x the ease of age / `Fill`
+    while it fills, then `Flash` x the share of crumbs still sitting; a
+    level above 1 is drawn in two passes) and the halos of the weapons
+    that lie.
+  - `DrawLoot(canvas, field, screen, origin, alpha)` - over them: the light
+    of the crosses, then the scenes. While a scene fills: the frame as
+    painted and over it the mask in the `Tint` taken 0.2 toward white,
+    rising to a solid silhouette. After `Fill` the frame is gone: only
+    the sitting crumbs are drawn, pieces of that same mask, each
+    `CrumbBleed` 0.15 units wider on every side - on a window scaled to
+    fractions the seams between neighbors would show as hairs. The mask
+    is a glow texture, additive by its make: for these two it is laid on
+    by plain alpha and put back to additive before the call returns.
+  - `DrawOver(canvas, pose, origin, lift, alpha)` - over the hero: the
+    crumbs in flight (two `gsPoint` glows, a spot of 2 x `Size` in the
+    `Tint` and a core of 0.8 x `Size` near white, carried between ticks by
+    the speed; in a scene `Apart` both fade as (1 - age / life)^1.2) and
+    the spots on his body (on the frame as he stands now, mirrored with
+    him, `lift` added: 3.2 x `Size`, dying out over `SpotTicks`).
+  - The light of a pickup that lies - of the screen, `mcPickup`, `mlAlive`
+    - breathes on the uptake's `Clock`: its level x (0.45 + 0.55 x a sine
+    wave of the period). A set with a `light` (the medkit): the `light`
+    sprite added over the frame in `MedkitUptake.Tint` taken 0.25 toward
+    white, and a `gsPoint` of 15 units at the middle of the cross; level
+    0.60, period 50 ticks. A set without one (a weapon): the halo of its
+    silhouette under the frame in `WeaponUptake.Tint`; level 0.55, period
+    60. Both stand where the monster is drawn - `Round(X)`, `Round(Y)` -
+    `SpriteSize`, the origin and the monster's `DeckLift(alpha)` - and
+    turn over with it (`Mirrored`). A scene does not ride a deck: it
+    stands on the screen where the pickup was.
+- Tests: `Tests/Game/Tests.Game.Uptake.pas` - `CutCrumbs` and the counting
+  class (the painter draws, so it is judged by eye): see Tests below.
 
 ### `Game/Game.Henshin.pas` (~300 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2)
@@ -3066,8 +3259,41 @@ additive, linear-filtered, so one texture serves every tint and level.
 - Users: the stars, the embers, the logo halo, the beacons, the heat of a
   smoke puff, the explosion flash, the sparks (`gsStreak`; the blast's with
   `gsPoint`) and hot shards, the flash of a hit and of an arc, the sensor
-  eye of the boss's disc, the halos and the light of the hero's shroud.
+  eye of the boss's disc, the masks and the halos of `Render.Silhouette`
+  (the hero's shroud, the pickups), the light of the shroud, and of
+  `Game.Uptake` the cross of a medkit, the crumbs and the spots.
   `EGlowError`.
+
+### `Core/Render.Silhouette.pas` (~185 lines)
+What is made of the alpha of a picture: the points that lie in its body, a
+white mask in its shape and a blurred halo round it. Lifted out of
+`Game.Shroud` for 3.0.50, since the pickups are lit by the same art.
+Nothing here knows what the picture is: the caller says how large it is
+drawn, in screen units, and the points come back in those units, from the
+picture's corner as painted.
+- **`TSeedList`** = `TArray<TSdlFPoint>` - the opaque points of a picture.
+- **`TSilhouette`** (record): `Seeds`, `Mask` (white, with the picture's
+  alpha), `Halo` (the alpha blurred), `HaloMarginX` / `HaloMarginY` (the
+  units the halo reaches past the picture), `TexW` / `TexH` (the texels of
+  the picture). The mask and the halo are glow textures of `Render.Glow`:
+  additive by their make, so whoever lays one on by plain alpha puts the
+  blend mode back.
+- `BuildSilhouette(renderer, surface, width, height)` - the surface is
+  ABGR8888, the size is the picture's on the screen, in units. Under one
+  lock of the surface: the seeds (a point at the middle of every texel
+  with alpha from `SeedAlpha` 128), the mask (through `CreateGlowTexture`)
+  and the halo - the alpha gathered into cells (a picture wider than
+  `HaloMaxCells` 64 is shrunk by a whole factor first), set in an apron,
+  blurred by `BlurImage` in `HaloPasses` 3 passes of a radius of
+  `HaloReach` 2.5 units (no less than one cell) and made a glow by
+  `CreateGlowFromImage`; the margins are the apron in units. A halo that
+  fails frees the mask before the error goes on. `ESilhouetteError` - the
+  mask's surface could not be made.
+- `FreeSilhouette(var silhouette)` destroys the two textures and empties
+  the record.
+- Users: `TShroudPainter` (the hero's frames, at `HeroSize`) and
+  `TUptakePainter` (the first `alive` frame of a pickup's set, at
+  `SpriteSize`).
 
 ### `Menu/Menu.Starfield.pas` (~250 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`** of
@@ -3217,7 +3443,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2830 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2900 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -3253,7 +3479,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   too), the rite of the henshin (`FRite: TOrbRite`, one for the run as
   well; `HeroBodyPoints` is its body probe) and the pattern it builds on
   this level (`FPattern: TOrbPattern`), the ceremony
-  (`THenshin`), the event director (`TEventDirector`), the arena of the
+  (`THenshin`), the uptake of pickups (`FUptake: TUptake` and
+  `FUptakePainter`, 3.0.50; reborn with the level, right after the
+  shroud), the event director (`TEventDirector`), the arena of the
   boss fight (`FArena: TPadArena`, made before the director, which gets
   its `Engage` and `Restore` as the `TArenaCues` built in `LoadLevel`),
   the two corner HUDs (`THudVitals`, `THudCharge`) and the health rows over
@@ -3284,7 +3512,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the back dynamics right after the pads, behind tiles
     and hero - monsters (the field gets
     the frame's alpha:
-    the boss's disc draws between ticks), then the
+    the boss's disc draws between ticks; the uptake's halos right before
+    them - `FUptakePainter.DrawBehind` - and its loot layer right after -
+    `DrawLoot`), then the
     machines' wreck smoke and sparks, then the front dynamics (the boss smoke and
     lamps), on
     the monsters' channel - the explosion plumes before them, right after
@@ -3297,8 +3527,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     him), with `FineY` = `FHero.DeckLift(alpha)`: the shroud under him
     (`FShroudPainter.DrawUnder`), him (`FHero.Draw`, skipped while
     `FShroud.Assembling`), the light on his body (`DrawBody`), his arm alone
-    while he is put together (`FHero.DrawArm`), then `FineY` back to 0 and
-    the shroud over him (`DrawOver`) -, cursor and HUD still; `Update` ticks the pads right before
+    while he is put together (`FHero.DrawArm`), then `FineY` back to 0,
+    the shroud over him (`DrawOver`) and the uptake over that
+    (`FUptakePainter.DrawOver`) -, cursor and HUD still; `Update` ticks the pads right before
     the hero
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves; right after the pads' tick it voices
@@ -3401,7 +3632,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     monster with a `blast` and `Detonate` of the monster's `explosion`,
     both at the middle of its sprite, in the tick of the kill; the debris
     is detonated live with the blast's `ShardLives` scaled by
-    `DifficultyMonsterLives`), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
+    `DifficultyMonsterLives`; a pickup killed so also gets `BurstPickup` -
+    Uptake below), `HurtHero`, `DrainMonsterEvents` (also where explosions and boss
     blasts feed the shake; `meBossRage` detonates a machine-size blast on
     the boss and sounds it with `RageBlastSoundFile` - a machine's
     `platform.wav`; `meBossCrashed` - the boss's ram ended in a wall:
@@ -3415,7 +3647,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `meBossOwesPrize` - `PayDodgePrize` hands
     a living hero the boss's `DodgePrize` with `SpawnOn`),
     `ResolveMonsterContact` also reports every touch to the monster
-    (`NoteHeroContact` - the pilot's prize rule), `EchoAftershock` (the `TEchoAftershock` of
+    (`NoteHeroContact` - the pilot's prize rule) and takes a pickup the
+    hero touches through `TakeLoot` (3.0.50, Uptake below), `EchoAftershock` (the `TEchoAftershock` of
     `Game.Explosions`: each pop of the boss's wreck plays `bottle.wav` and
     adds `AftershockTrauma`), `SolidUnderPoint` (the probe of debris, impacts and
     dynamic objects: `TLevel.SolidAtPoint` or a pad's body (`BodyAt`) for
@@ -3501,10 +3734,52 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `Clear`, then `ReviveLook` once the hero is revived and put down.
     `HurtHero` clears it on the hero's death; `ArriveOnScreen` calls
     `LeaveMotes` - a door leaves the motes and the mist behind. `Update`
-    ticks it right after the ceremony: one `FHero.Pose` read gives both the
-    pose and the frame whose seeds the painter hands over (`SeedsOf`). The
-    destructor frees the ceremony, the painter and the shroud before the
-    hero.
+    ticks it after the ceremony, right after the uptake: one `FHero.Pose`
+    read gives both the pose and the frame whose seeds the painter hands
+    over (`SeedsOf`), and the two get the same pair. The destructor frees
+    the ceremony, the uptake, the painter and the shroud before the hero.
+  - Uptake (3.0.50): `FUptake` (`TUptake`; the probe is `SolidUnderPoint`,
+    the feed `FShroud.Feed`, the dice seed `RollDiceSeed`) and
+    `FUptakePainter` are reborn in `LoadLevel` right after the shroud - the
+    feed is its method - and before the ceremony and the field; they are
+    freed there before the shroud's pair. `WarmPickupPictures`, after every
+    birth of the field (`LoadLevel`, `RestartLevel`), asks the painter for
+    the picture of every pickup's `ArtSet`: the first touch does not stop
+    on loading one, and a set that cannot be read stops the load of the
+    level, not the touch. A pickup born later - from the sky, a prize -
+    has its picture built when it is first drawn or taken.
+    Starts: `BeginUptake(look, monster)` is the one place a scene begins -
+    the painter's picture and shape of the monster's `ArtSet`, the corner
+    its frame is drawn at (`Round(X)`, `Round(Y)` - `SpriteSize`), its
+    `Mirrored`, `HeroCenter`. `TakeLoot`, from the pickup branch of
+    `ResolveMonsterContact` after the ticker and the cure or the weapon, in
+    place of the lethal `TakeDamage` of 2008: `WeaponUptake` for a
+    `peGiveWeapon` pickup, `MedkitUptake` for any other, then
+    `Monster.Collect`. `BurstPickup`, at the end of `RewardMonsterKill`
+    for a body of the `mcPickup` category: `PickupBurst` and one strike
+    for `FImpacts.Land` at the middle of the frame, normal up, with
+    `PickupSparks` = 6 as its `ExtraSparks`. `RewardMonsterKill` is called
+    in the tick of the kill from all four places a monster is killed (a
+    bullet, an orb, a wave, a shard), so the scene begins in the tick the
+    body stops being drawn and the pickup does not vanish for a tick. (An
+    orb strikes dangerous bodies only and no pickup is one: as the data
+    stands, a pickup dies of a bullet, a wave or a shard.)
+    `DrainMonsterEvents` is as it was: the pickup's sound plays on
+    `meDied`, taken or destroyed.
+    `Update` ticks it after the ceremony and right before the shroud, with
+    the same pose and seeds: what comes home feeds the shroud's light, and
+    the light then fades by a tick. The contact is resolved later in
+    `Update`, so a scene takes its first step on the tick after the touch.
+    `Render`: `DrawBehind` right before `FField.Draw` and `DrawLoot` right
+    after it, both on the monsters' channel; `DrawOver` right after the
+    shroud's, with `FHero.Pose`, the hero's channel and his `DeckLift`.
+    `ArriveOnScreen` - `FUptake.Settle`, right before `FShroud.LeaveMotes`:
+    what was on its way is the hero's at once and nothing flies beyond the
+    door. `HurtHero`, on the hero's death - `FUptake.Drop`, after
+    `FShroud.Clear`: the light is out and the crumbs fall. `RestartLevel` -
+    `FUptake.Clear`, before `FShroud.Clear`. The destructor frees the
+    painter, then the count, after the ceremony and before the shroud's
+    pair.
   - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
     `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
@@ -3667,11 +3942,35 @@ measured boxes, axles and radii are constants at the top; a denser
 screen is `DENSITY` and a rebuild. The sources are not in the
 repository. numpy, scipy, Pillow.
 
+### `tools/medkit/build_medkit.py`
+Puts the HD art of the medkit into `bin/sprites/medic.mset` from one
+generated picture - the TeK case seen from the front on a clear ground:
+`build <picture> <set>`. The set is read and written: the 2008 frames in
+it are carried over byte for byte, and what the script makes is made anew
+on every run. `build` puts the generator's alpha right (8 of 255 and below
+is nothing, 250 and above is solid: the case stands at 253 and a veil of
+1..5 lies around it), cuts the case by the box of its silhouette, sets it
+in a square of a monster's cell (32 units to the 20 of the case's width,
+centered, standing on the bottom edge), takes the cross out as a light
+(what is green enough, the largest patch of it; white with the shape in
+alpha), shrinks both to `DENSITY` (6 px a screen unit, 192x192) in
+premultiplied alpha with the edge color bled outward, adds the clear frame
+`gone` and writes the sequences: `alive` is `medkit` eight times, `death`
+is `gone` eight times, the 2008 ones stay under `alive-2008` and
+`death-2008`. It prints the box of the case and the box and the middle of
+the cross in screen units. The source picture is not in the repository.
+numpy, scipy, Pillow.
+
 ---
 
 ## Tests
 
 The concept, the rules and the tables of tests are in `docs/TESTING.md`.
+At 3.0.50 the suite is 291 tests, all green. Not every test unit has its
+entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
+`Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
+`Tests.Levels.Pads`, `Tests.Effects.Lightning` and `Tests.Pads.Plunge` are
+told in `docs/TESTING.md` alone.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -3728,16 +4027,46 @@ to `bin\`.
   and grenade volley never cut; **`TCappedBossTests`**:
   `boss1` on one tick takes no more than the cap, and a blow over it still
   shoves him.
-- **`Game/Tests.Game.Shroud.pas`** (~1230 lines) - **`THeroShroudTests`**
-  (38 tests): the counting half of `Game.Shroud`, no SDL - a new shroud is
+- **`Game/Tests.Game.Shroud.pas`** (~1410 lines) - **`THeroShroudTests`**
+  (47 tests): the counting half of `Game.Shroud`, no SDL - a new shroud is
   still and dark, `Start` and the restart on the run, `Clear` and
   `LeaveMotes` against `Start`, the glow's peak, the own clock of a part of
   the body in each order, the strips' sides and their stop at home, the motes
   (born at the seeds only, mirrored, none without seeds, dying out, the
   sinking ones out of matter), the mist (one cloud per band of `IceOnLook`,
   born on the feet line, standing where the hero fell, sinking, settling,
-  with no probe, dying by its own look's age) and the dice (the same seed
-  - the same run).
+  with no probe, dying by its own look's age), the dice (the same seed
+  - the same run) and (3.0.50, nine tests) the fed light: a feed lights
+  the body and starts no scene, the light fades by its keep every tick,
+  a scene or none, and goes out altogether, feeds add up to a ceiling, the
+  last feed sets the tint and the keep, `Start` and `LeaveMotes` keep the
+  light and `Clear` puts it out, a feed changes nothing in a running
+  shroud.
+- **`Game/Tests.Game.Uptake.pas`** (~1660 lines) - **`TUptakeTests`** (41
+  tests, 3.0.50): `CutCrumbs` and `TUptake`, no SDL - pictures painted by
+  hand, texel by texel, the hero a pose with a few points of his frame,
+  the matter a function, the dice seeded, the light a scene gives caught
+  by the fixture. The cut (a full grid, no paint - no crumbs, a speck is
+  no crumb, the middle of a crumb's paint, the tiling at any step, a short
+  alpha refused); the plan of a scene (every crumb seated, no paint - no
+  scene, a fuller cell - a bigger crumb, the center, the mirror); the
+  leaving (whole while it fills, all gone when the crumbling is over, the
+  two orders, a zero seed); the flight home (a point of the hero's frame,
+  no points - the middle, the hero's look does not change the scatter,
+  a hero who stands, runs away and leaps, the mirrored pose, twice the
+  `Pulse` in all whatever tick a door comes, the spot and its ticks); the
+  wreck (no feed, no spots, the fall and the floor); `Settle`, `Drop`,
+  `Clear`, the clock, scenes side by side, no feed and no probe, the
+  dice; and one test wires the uptake to a shroud as the game does.
+- **`Monsters/Tests.Monsters.Bodies.pas`** (~350 lines) -
+  **`TMonsterBodyTests`** (13 tests): what the floor does to a body, alive
+  and dead - a lethal hit starts the dying and tells the game once, the
+  corpse lies where it died and falls when nothing is under it, the patrol
+  turns at a ledge's end and at walls, a walker with no edge check walks
+  off, a body dropped above a ledge lands on it - and (3.0.50, two tests)
+  `Collect`: a collected pickup is gone at once and tells the game once,
+  and a later blow does not kill it again. The tests of `Collect` live
+  here, not in the uptake's unit: a test unit mirrors its game unit.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -3975,14 +4304,28 @@ plainest example), `introText`/`introTextEn`.
 ### `sprites\*.mset` (40 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
-  `weapon1`-`weapon4` (the pickups).
+  `weapon1`-`weapon4` (the pickups: 2008 frames; since 3.0.50 their
+  `death` frames are never drawn either, and with no `light` sprite in the
+  set a weapon that lies is lit by the halo of its own silhouette).
 - **Entities**: `gravel`, `gravel2`, `vinter`, `shoot1`, `betoner`, `barrel`,
   `medic`, `krep`, `platform`, `tank`, `boss1` - referenced by a placement's
   `spriteList`, still spelled `<stem>.mns`. All frames are 64x64, 2 px a
-  unit, but one: `barrel` carries the HD sprite `barrel` (128x128, 4 px a
-  unit; its `alive` is that one frame eight times over) beside the 2008
-  frames `boch1`-`boch4` (the `alive-2008` sequence, which nothing asks
-  for).
+  unit, but in two sets. `barrel` carries the HD sprite `barrel` (128x128,
+  4 px a unit; its `alive` is that one frame eight times over) beside the
+  2008 frames `boch1`-`boch4` (the `alive-2008` sequence, which nothing
+  asks for). `medic` (3.0.50) carries `medkit` (192x192, 6 px a unit: a
+  TeK case of 20 x 16 units standing on the bottom edge of the cell; its
+  `alive` is that one frame eight times over) and `light` (the cross of
+  the case alone, white with the shape in alpha, in the same 192x192
+  frame; the build script puts the middle of its box at 16.00, 25.25
+  units from the frame's corner, the game measures the middle itself,
+  weighed by alpha - about 16.02, 25.32; no sequence names it,
+  `Game.Uptake` finds it by its name and lights it)
+  beside the 2008 frames `1`-`5` and `d1`-`d8` (`alive-2008` and
+  `death-2008`, which nothing asks for); its `death` is the clear 64x64
+  frame `gone` eight times over, loaded for the `TAnimSet` contract and
+  never drawn - a pickup that is not alive is not drawn. Built by
+  `tools/medkit/build_medkit.py`.
 - **Disc layers**: `boss1-disc` (`rim`, `rimDamaged`, `core`, `coreDamaged`,
   `iris`, `gloss`; 144x144 each - 4 px per screen unit, a 36-unit square -
   every layer centered on the rotation axis, transparent pixels filled
@@ -4090,7 +4433,9 @@ music loads leniently. Four one-shots are synthesised by
 | The rite of orbs of the henshin: its schedule (`IceRiteScore`), the waves and where they are drawn from, the flight to a seat, when an orb is armed, the stand-ins and their stock, the freeze and the flash, the collapse over the body, a door, a leap, the hero's death | Orbs.Rite.pas (formulas and numbers) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, the two layers in `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/HENSHIN-PLAN.md |
 | A pattern of the henshin: the snowflake, the vortex, a new one; which level builds which | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, the `Patterns` table) + `henshinPattern` in levelN.json + Levels.Defs.pas (`HenshinPattern`) + Moon2D.dpr `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (a seat that leaps) + Tests.Orbs.Patterns.pas |
 | The suit coming off: the ring of orbs, how long it stands, the mercy | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` of the score) + Game.Henshin.pas `RemoveIceForm` + Moon2D.dpr (`ShedSuit`, `GrantMercy`) |
-| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Tests.Game.Shroud.pas (+docs/SHROUD-PLAN.md) |
+| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (the masks, the halos, the seeds) + Tests.Game.Shroud.pas (+claude/SHROUD-PLAN.md, in the project's storage) |
+| Taking a pickup: the fill, the crumbs, their flight into the hero's body and the light on it; a pickup destroyed instead; the light of a medkit and of a weapon that lie; a door, the hero's death and a restart in the middle of a scene; one more kind of pickup | Game.Uptake.pas (`TUptakeLook` and the three looks, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Moon2D.dpr (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; tools/medkit/build_medkit.py makes them) + Tests.Game.Uptake.pas (+claude/PICKUPS-PLAN.md, in the project's storage) |
+| What is made of a picture's alpha - the mask, the halo, the points: for one more thing that glows in its own shape | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |

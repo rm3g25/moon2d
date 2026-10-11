@@ -546,8 +546,9 @@ Left to the eye:
 
 ## Monsters.Bodies
 
-State: written, 13 tests. Eleven are green (239 in the suite); the two of
-`Collect` came with `Game.Uptake` and have not been run yet. The
+State: written, 13 tests, green (291 in the suite). Eleven were green
+before (239 in the suite then); the two of `Collect` came with
+`Game.Uptake` and were green on the first run. The
 expectations were checked on a Python port of the monster's floor physics
 (the oracles, the patrol, the fall, the death) with the corpse rule
 switched on and off: with it off, test 6 is red. The unit is tried by
@@ -803,9 +804,10 @@ Left to the eye:
 
 ## Game.Shroud
 
-State: written, 47 tests. Thirty-eight were green on the first run (151 in
-the whole suite then); the nine of the fed light came with `Game.Uptake`
-and have not been run yet - their mirror and its edits are told there.
+State: written, 47 tests, green (291 in the suite). Thirty-eight were
+green on the first run (151 in the whole suite then); the nine of the fed
+light came with `Game.Uptake` and were green on the first run too - their
+mirror and its edits are told there.
 The expectations were checked on a Python mirror of the shroud's clock,
 bands, motes and mist (single-precision floats for the sinking motes). The
 mirror and the unit were made in a session that had read the implementation,
@@ -908,9 +910,9 @@ when a respawn comes in the middle of the ice glow is seen at all.
 
 ## Game.Uptake
 
-State: written, 41 tests, not run yet (291 in the whole suite with the
-nine of `Game.Shroud` and the two of `Monsters.Bodies` that came with
-them). The expectations were checked on a Python mirror of the count -
+State: written, 41 tests, green on the first run (291 in the whole suite
+with the nine of `Game.Shroud` and the two of `Monsters.Bodies` that came
+with them). The expectations were checked on a Python mirror of the count -
 `CutCrumbs`, `TUptake` and the shroud's fed light: every test is green on
 the mirror, green over sixty other seeds of the dice, and red under at
 least one of the 67 edits made to the mirror; every edit turns a test red.

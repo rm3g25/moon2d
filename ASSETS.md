@@ -94,6 +94,18 @@ The 2008 death frames - the painted explosion cloud, the same in the sets
 of the barrel, the tank, the platform, the mount and the boss - are out of
 play since 3.0.42: they stay in each set as the `death-2008` sequence.
 
+**The medkit** (`sprites/medic.mset`, sprites `medkit`, `light` and `gone`) -
+since 3.0.50, generated with ChatGPT's image model to the author's direction
+(a TeK field case seen from the front on a clear ground), then packed by
+`tools/medkit/build_medkit.py`: the generator's alpha put right, the case
+set in the cell of a monster, standing on its bottom edge, and scaled to
+192x192 (6 px per screen unit) with a bled edge. `light` is the cross of
+the case alone, a white shape the code lights; `gone` is a clear frame, for
+a medkit that is taken leaves no body. The case replaced the five 2008
+frames `1`-`5`, which stay in the set as the `alive-2008` sequence, unused;
+the 2008 death frames `d1`-`d8` stay there as `death-2008`. The source
+picture is not in the repository.
+
 **The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
 ChatGPT's image model from the author's prompts (a heavy rotor and a round
 guard over it; since 3.0.25 a turbine rotor, a wall plate and a louver
