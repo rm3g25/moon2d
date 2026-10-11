@@ -70,10 +70,11 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (над `Monsters.Defs`
 ради тактики, которую ставит событие) / `Effects.Emitter` / `Render.Puff` /
-`Effects.Sparks` (текстуру штриха ему даёт владелец) ->
+`Effects.Sparks` (текстуру штриха ему даёт владелец) /
+`Effects.Traces` (над `Render.Brush` ради его xorshift) ->
 `Effects.Debris` (над `Effects.Sparks`, рисует через `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (над `Effects.Sparks` ради вида
-искр; рисует через `Render.Glow`, `Render.Puff` и `Render.Globe`) ->
+искр и `Effects.Traces` ради графика; рисует через `Render.Glow`, `Render.Puff` и `Render.Globe`) ->
 `Levels.Rigs` (то, что носят платформы и монстры: над
 `Levels.Dynamics`) -> `Levels.Pads` (над `Levels.Tint`, а ради имён
 обвесов платформы - над `Levels.Rigs`) ->
@@ -669,6 +670,28 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   комета `gsStreak` из `Render.Glow` или размытая `gsPoint` (взрыв).
 - Свой `TXorShift`, никогда `Random`.
 
+### `Core/Effects.Traces.pas` (~140 строк)
+Что рисует монитор, как чистая функция. **`TraceAt(source, time, cell)`**
+отвечает -1..1 для момента в секундах, только по времени и сиду: ничего не
+буферизуется, поэтому кадр между двумя тиками согласен с обоими, а тот, кто
+рисует, спрашивает момент каждой колонки. Не знает ни экрана, ни цвета, ни
+размера. Пользователь: `TGraph` в `Levels.Dynamics`.
+- **`TTraceShape`** = (`trHeartbeat`, `trSine`, `trSquare`, `trSaw`,
+  `trNoise`, `trFlat`, `trBars`); **`TTraceSource`** (запись) - `Shape`,
+  `Frequency` (циклов в секунду; выше нуля следит вызывающий), `Seed`.
+- Сердцебиение: цикл - один удар (`BeatShare` цикла; `BeatNodes` - бугорок
+  P, провал Q, пик R, провал S, волна T, узлы соединены прямыми) и ровный
+  покой. Каждый удар выходит ниже полного не больше чем на `BeatJitter`,
+  бросок по номеру цикла. Шум: `NoiseSlotsPerCycle` (24) новых значений за
+  цикл, внутри слота стоит на месте. Столбики: `ACell` читают только они;
+  у каждой ячейки свой сдвиг часов, цели она бросает из сида и своего
+  номера, а уровень плавно (smoothstep) идёт от одной цели к другой.
+- `SlotRoll(slot, seed)` (приватная) - 0..1 по номеру слота. Слот
+  умножается на множитель меньше 2^31 в Int64 и складывается с сидом, а не
+  xor-ится: xorshift линеен, и два сида, склеенные xor с теми же слотами,
+  бросают те же числа за вычетом константы - второй шум вышел бы
+  зеркальной копией первого. У `Levels.Dynamics` свой `SlotRoll`.
+
 ### `Core/Effects.Debris.pas` (~560 строк)
 Что разбрасывает взрыв. Украшение, если взрыв не рождён острым
 (3.0.44): тогда каждый осколок несёт жизни, которые отнимет у тела, пока
@@ -980,6 +1003,30 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   считается внутри них, в Double. В глубине (`Scale` и `Tone` канвы) плюм
   меньше относительно своей точки и слабее. Под родителем, который мёртв
   или пропал, он не рисуется (`GoesOutWithParent`). По умолчанию в слое задника.
+- **`TGraph`** (вид `graph`) - график на экране: линия, которую рисует
+  монитор, в собственной рамке. Рамку раскладывает `TGraphLook` (запись:
+  `Width`, `Height`, `Amplitude`, `Sweep`, `Thickness`, `Glow`, `Grid`,
+  `GridStep`, `GridColor`, `Plate`, `PlateColor`); что рисуется, говорит
+  `TTraceSource` из `Effects.Traces` (сид из `PlacementSeed`). Рисует
+  `THudBrush`, созданная в `Acquire` и освобождаемая в `Release`, снизу
+  вверх: подложка, сетка (линии идут от середины, так что нулевая линия -
+  линия сетки), трасса. `DrawTrace` режет рамку на колонки
+  (`GraphColumnsPerUnit`, 2 на единицу) и проводит по ним головку слева
+  направо за `sweep` секунд; колонка показывает трассу такой, какой она
+  была, когда головка её проходила, поэтому чем дальше головка ушла, тем
+  колонка тусклее (до `GraphTrailKeep`) и менее белая; участок
+  `GraphWipeShare` перед головкой тёмный, и линия через него не тянется;
+  свечение едет с головкой. У столбиков (`DrawBars`) головки нет: они
+  стоят на нижнем краю рамки и не ниже одной линии. Свет - интенсивность на
+  `Tone` канвы. JSON: `shape` (heartbeat / sine / square / saw / noise /
+  flat / bars; по умолчанию heartbeat), `frequency` (циклов в секунду),
+  `width`, `height`, `thickness`, `gridStep` (единицы) и `sweep` (секунды)
+  - всё выше нуля; `amplitude` (80), `glow` (60), `grid` (0) и `plate` (0) -
+  проценты; `gridTint` (по умолчанию тинт) и `plateTint`; `tint` - цвет
+  самой трассы. Неверное слово, нулевой размер или процент вне 0..100 -
+  `EDynamicError`, неверный тинт - `ETintError`. По умолчанию слой "back";
+  уходит вместе с родителем (`GoesOutWithParent`). Висит на мониторе
+  медлаборатории (`s12-monitor` первого уровня).
 - **`ParseDynamic(obj, levelId, where)`** - один объект, записанный так,
   как пишется элемент секции; `where` называет его в ошибках после его
   вида ("#2" даёт "beacon #2"). Через него читают и секция, и обвесы
@@ -4133,7 +4180,7 @@ sprite, screen, x, y - настил -, width в единицах экрана, �
 `respawns` (необязательно: `screen`, `x`, `y` - клетка, на которую яма и
 смерть возвращают героя, отсчитанная как у сущности - см. `Levels.Defs`),
 `dynamics` (необязательно:
-`kind` (beacon / smoke / globe / sparks / fan / haze), `screen`, `screens`
+`kind` (beacon / smoke / globe / sparks / fan / haze / lightning / graph), `screen`, `screens`
 [первый, последний]
 или `parent` - тег статического объекта, платформы или монстра -, `x`, `y`, необязательные `tint`, `tag`, `layer`,
 `intensity`, `surge`, `turns` (под вращающимся родителем), дальше свойства
@@ -4439,7 +4486,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | Марево от жара - под струёй, над турбиной: плюм, его сила, зерно и поток | `haze` в `dynamics` или в обвесе в levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (слой задника, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
 | То, что носят платформы и монстры, - лампы, марева, струи: один список на много носителей, число, брошенное для каждого носителя своё | `rigs` + `"rig"` у платформ и у сущностей в levelN.json + Levels.Rigs.pas (`WearRigs`, `ReadRigNames`, `TRigWearer`) + Levels.Defs.pas `RigWearersOf` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
 | То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, порядок в `Render`) |
-| Динамический объект (маячок, его мигание, лучи); новый вид; подвесить к статическому объекту | `dynamics` в levelN.json + Levels.Dynamics.pas (виды, парсер) + Render.Dynamics.pas (где стоит, слой) (+`tag` у `objects`) |
+| Динамический объект (маячок, его мигание, лучи; график на экране - его форма, рамка, сетка); новый вид; подвесить к статическому объекту | `dynamics` в levelN.json + Levels.Dynamics.pas (виды, парсер) + Effects.Traces.pas (что отвечает трасса) + Render.Dynamics.pas (где стоит, слой) (+`tag` у `objects`) |
 | Отрисовка текста / новые подписи | Render.Font.pas + Hud.Messages.pas + ключ `S*` в Localization.pas + оба JSON языков |
 | Подсказки уровня / терминал связи | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня) |
 | Экран рассказа перед уровнем / ритм печати | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` в JSON уровня) |

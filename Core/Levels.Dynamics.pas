@@ -40,7 +40,7 @@ interface
 uses
   System.SysUtils, System.JSON, System.Generics.Collections, Sdl2.Core,
   Render.Sprites, Render.Brush, Render.Puff, Render.Globe, Effects.Emitter,
-  Effects.Sparks, Effects.Lightning, Levels.Tint;
+  Effects.Sparks, Effects.Lightning, Effects.Traces, Levels.Tint;
 
 type
   EDynamicError = class(Exception);
@@ -706,6 +706,66 @@ type
     function GoesOutWithParent: Boolean; override;
   end;
 
+  // How a graph is laid out, beside what it shows: the frame in units,
+  // the shares of it the trace and the shades take
+  TGraphLook = record
+    Width, Height: Single;
+    Amplitude: Single; // 0..1, of the half height
+    Sweep: Single; // seconds a pass of the head takes
+    Thickness: Single;
+    Glow: Single; // 0..1
+    Grid: Single; // 0..1, 0 = no grid
+    GridStep: Single;
+    GridColor: TRgb;
+    Plate: Single; // 0..1
+    PlateColor: TRgb;
+  end;
+
+  // The frame being drawn: where the corner of the graph is, how much
+  // light it gets and the moment in seconds it shows
+  TGraphView = record
+    Left, Top, Light: Single;
+    Time: Double;
+  end;
+
+  // A trace on a screen: the line a monitor draws, in a frame of its own.
+  // The head sweeps the frame from left to right, the trace behind it
+  // fades and a dark stretch lies ahead of it. Bars have no head: they
+  // stand where they are and move in place. The tint is the color of the
+  // trace; the grid and the plate behind it have colors of their own.
+  // Frequency is in cycles - beats - a second and sweep in seconds a
+  // pass; width, height, thickness and gridStep are in screen units;
+  // amplitude, grid, plate and glow are percentages.
+  // JSON:
+  //   {"kind": "graph", "parent": "s12-monitor", "x": 5, "y": 6,
+  //    "width": 31, "height": 15, "shape": "heartbeat",
+  //    "tint": [30, 100, 50], "frequency": 1.2, "amplitude": 70,
+  //    "sweep": 2.2, "thickness": 1, "grid": 18, "gridStep": 4,
+  //    "gridTint": [20, 70, 35], "plate": 0, "plateTint": [2, 5, 4],
+  //    "glow": 60}
+  TGraph = class(TDynamicObject)
+  private
+    FSource: TTraceSource;
+    FLook: TGraphLook;
+    FBrush: THudBrush;
+    FTicks: Integer;
+    procedure DrawPlate(const AView: TGraphView);
+    procedure DrawGrid(const AView: TGraphView);
+    procedure DrawTrace(const ACanvas: TDynamicCanvas; const AView: TGraphView);
+    procedure DrawBars(const AView: TGraphView);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    function GoesOutWithParent: Boolean; override;
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+  end;
+
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
@@ -726,7 +786,7 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning);
+    dkLightning, dkGraph);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -740,11 +800,11 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan', 'haze', 'lightning');
+    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack, dlBackdrop, dlBack);
+    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack);
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
@@ -753,6 +813,8 @@ const
   LightningCollideIds: array [TLightningCollide] of string = ('none',
     'strike');
   MotorRunIds: array [TMotorRun] of string = ('steady', 'dying');
+  GraphShapeIds: array [TTraceShape] of string = ('heartbeat', 'sine',
+    'square', 'saw', 'noise', 'flat', 'bars');
 
   // Seconds and percentages in JSON, ticks and shares in the code; the
   // logic runs 33 ticks a second (tickRate of Game.Config)
@@ -825,6 +887,32 @@ const
   DefaultFrequency = 1.0;
   DefaultBeaconSize = 12.0;
   DefaultRayIntensity = 60;
+
+  // Graph: the trace is cut into columns, this many to a unit
+  GraphColumnsPerUnit = 2;
+  // The dark stretch ahead of the head, a share of a pass; behind the head
+  // the trace fades down to GraphTrailKeep of its light
+  GraphWipeShare = 0.08;
+  GraphTrailKeep = 0.2;
+  // The newest part of the trace burns toward white, and a band of light
+  // lies around it
+  GraphHotShare = 0.3;
+  GraphBloomShare = 0.25;
+  GraphHeadGlowPerThickness = 8;
+  // A bar is this many thicknesses wide and a pitch of this many apart
+  GraphBarWidthPerThickness = 2;
+  GraphBarPitchPerThickness = 3;
+  GraphBarBodyShare = 0.7;
+  GraphGridLine = 0.5;
+
+  DefaultGraphWidth = 32;
+  DefaultGraphHeight = 16;
+  DefaultGraphAmplitude = 80;
+  DefaultGraphSweep = 2.0;
+  DefaultGraphThickness = 1.0;
+  DefaultGraphGlow = 60;
+  DefaultGraphGridStep = 4.0;
+  DefaultPlateTint: TColorTint = (R: 4; G: 10; B: 8);
 
   // Smoke: every puff differs from the pattern by up to these shares
   SpawnJitter = 0.25; // of the birth size, around the point
@@ -2756,6 +2844,211 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TGraph
+// ---------------------------------------------------------------------------
+
+constructor TGraph.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FSource.Shape := TTraceShape(ReadWord(AObj, 'shape',
+    GraphShapeIds[trHeartbeat], GraphShapeIds, 'shape', AOwner));
+  FSource.Frequency := ReadPositive(AObj, 'frequency', DefaultFrequency,
+    AOwner);
+  FSource.Seed := PlacementSeed(APlacement);
+  FLook.Width := ReadPositive(AObj, 'width', DefaultGraphWidth, AOwner);
+  FLook.Height := ReadPositive(AObj, 'height', DefaultGraphHeight, AOwner);
+  FLook.Amplitude := ReadShare(AObj, 'amplitude', DefaultGraphAmplitude,
+    AOwner);
+  FLook.Sweep := ReadPositive(AObj, 'sweep', DefaultGraphSweep, AOwner);
+  FLook.Thickness := ReadPositive(AObj, 'thickness', DefaultGraphThickness,
+    AOwner);
+  FLook.Glow := ReadShare(AObj, 'glow', DefaultGraphGlow, AOwner);
+  FLook.Grid := ReadShare(AObj, 'grid', 0, AOwner);
+  FLook.GridStep := ReadPositive(AObj, 'gridStep', DefaultGraphGridStep,
+    AOwner);
+  FLook.GridColor := TintColor(ReadTintOrDefault(AObj, 'gridTint',
+    APlacement.Tint, AOwner));
+  FLook.Plate := ReadShare(AObj, 'plate', 0, AOwner);
+  FLook.PlateColor := TintColor(ReadTintOrDefault(AObj, 'plateTint',
+    DefaultPlateTint, AOwner));
+end;
+
+function TGraph.GoesOutWithParent: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TGraph.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  FBrush := THudBrush.Create(ACanvas.Renderer);
+end;
+
+procedure TGraph.Release;
+begin
+  FreeAndNil(FBrush);
+end;
+
+procedure TGraph.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  Inc(FTicks);
+end;
+
+procedure TGraph.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  var Light: Single := Intensity * ACanvas.Tone;
+  if (FBrush = nil) or (Light <= 0) then
+    Exit;
+
+  var View: TGraphView;
+  View.Left := AX;
+  View.Top := AY;
+  View.Light := Light;
+  View.Time := (FTicks + AAlpha) / LogicTicksPerSecond;
+
+  FBrush.BeginDraw;
+  DrawPlate(View);
+  DrawGrid(View);
+  if FSource.Shape = trBars then
+    DrawBars(View)
+  else
+    DrawTrace(ACanvas, View);
+  FBrush.EndDraw;
+end;
+
+procedure TGraph.DrawPlate(const AView: TGraphView);
+begin
+  if FLook.Plate <= 0 then
+    Exit;
+  FBrush.Fill(AView.Left, AView.Top, FLook.Width, FLook.Height,
+    FLook.PlateColor, FLook.Plate * AView.Light);
+end;
+
+// Lines go out from the middle of the frame both ways, so the baseline of
+// the trace is a line of the grid and the grid is the same on both sides
+procedure TGraph.DrawGrid(const AView: TGraphView);
+begin
+  if FLook.Grid <= 0 then
+    Exit;
+
+  var Alpha: Single := FLook.Grid * AView.Light;
+  var MiddleX: Single := AView.Left + FLook.Width / 2;
+  var MiddleY: Single := AView.Top + FLook.Height / 2;
+  var LastX: Single := AView.Left + FLook.Width - GraphGridLine;
+  var LastY: Single := AView.Top + FLook.Height - GraphGridLine;
+
+  for var i := 0 to Trunc(FLook.Width / 2 / FLook.GridStep) do
+  begin
+    var Offset: Single := i * FLook.GridStep;
+    var Line: Single := MiddleX - Offset - GraphGridLine / 2;
+    FBrush.Fill(EnsureRange(Line, AView.Left, LastX), AView.Top,
+      GraphGridLine, FLook.Height, FLook.GridColor, Alpha);
+    if i > 0 then
+    begin
+      Line := MiddleX + Offset - GraphGridLine / 2;
+      FBrush.Fill(EnsureRange(Line, AView.Left, LastX), AView.Top,
+        GraphGridLine, FLook.Height, FLook.GridColor, Alpha);
+    end;
+  end;
+
+  for var i := 0 to Trunc(FLook.Height / 2 / FLook.GridStep) do
+  begin
+    var Offset: Single := i * FLook.GridStep;
+    var Line: Single := MiddleY - Offset - GraphGridLine / 2;
+    FBrush.Fill(AView.Left, EnsureRange(Line, AView.Top, LastY),
+      FLook.Width, GraphGridLine, FLook.GridColor, Alpha);
+    if i > 0 then
+    begin
+      Line := MiddleY + Offset - GraphGridLine / 2;
+      FBrush.Fill(AView.Left, EnsureRange(Line, AView.Top, LastY),
+        FLook.Width, GraphGridLine, FLook.GridColor, Alpha);
+    end;
+  end;
+end;
+
+// Every column shows the trace as it was when the head passed it, so the
+// age of a column is how far the head is past it, a share of a pass. A
+// column ahead of the head, in the dark stretch, shows nothing, and the
+// line is not carried across it.
+procedure TGraph.DrawTrace(const ACanvas: TDynamicCanvas;
+  const AView: TGraphView);
+begin
+  var Columns: Integer := Max(2, Round(FLook.Width * GraphColumnsPerUnit));
+  var ColumnWidth: Single := FLook.Width / Columns;
+  var Middle: Single := AView.Top + FLook.Height / 2;
+  // The line keeps whole inside the frame
+  var Reach: Single := FLook.Height / 2 * FLook.Amplitude - FLook.Thickness / 2;
+  if Reach < 0 then
+    Reach := 0;
+  var Head: Double := Frac(AView.Time / FLook.Sweep);
+  var Color: TRgb := TintColor(Placement.Tint);
+
+  var Previous: Single := 0;
+  var HasPrevious := False;
+  for var i := 0 to Columns - 1 do
+  begin
+    var Age: Double := Head - i / Columns;
+    if Age < 0 then
+      Age := Age + 1;
+    if Age > 1 - GraphWipeShare then
+    begin
+      HasPrevious := False;
+      Continue;
+    end;
+
+    var Y: Single := Middle - TraceAt(FSource,
+      AView.Time - Age * FLook.Sweep, i) * Reach;
+    if not HasPrevious then
+      Previous := Y;
+    var Fade: Single := (1 - (1 - GraphTrailKeep) * Age) * AView.Light;
+    var Upper: Single := Min(Y, Previous) - FLook.Thickness / 2;
+    var Span: Single := Abs(Y - Previous) + FLook.Thickness;
+    var X: Single := AView.Left + i * ColumnWidth;
+    FBrush.Fill(X, Upper, ColumnWidth, Span,
+      Mix(Color, White, GraphHotShare * (1 - Age)), Fade);
+    FBrush.Glow(X, Upper - FLook.Thickness, ColumnWidth,
+      Span + 2 * FLook.Thickness, Color,
+      FLook.Glow * GraphBloomShare * Fade);
+    Previous := Y;
+    HasPrevious := True;
+  end;
+
+  var HeadY: Single := Middle - TraceAt(FSource, AView.Time,
+    Trunc(Head * Columns)) * Reach;
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AView.Left + Head * FLook.Width,
+    HeadY, FLook.Thickness * GraphHeadGlowPerThickness,
+    Mix(Color, White, GraphHotShare), FLook.Glow * AView.Light);
+end;
+
+// Bars stand on the bottom edge of the frame and never shorter than one
+// line, so a dead bar still shows
+procedure TGraph.DrawBars(const AView: TGraphView);
+begin
+  var BarWidth: Single := Min(FLook.Thickness * GraphBarWidthPerThickness,
+    FLook.Width);
+  var Pitch: Single := FLook.Thickness * GraphBarPitchPerThickness;
+  var Count: Integer := Max(1, Trunc((FLook.Width - BarWidth) / Pitch) + 1);
+  var Base: Single := AView.Top + FLook.Height;
+  var Tallest: Single := FLook.Height * FLook.Amplitude;
+  var Color := TintColor(Placement.Tint);
+  var Tip := Mix(Color, White, GraphHotShare);
+
+  for var i := 0 to Count - 1 do
+  begin
+    var Level: Single := (TraceAt(FSource, AView.Time, i) + 1) / 2;
+    var BarHeight: Single := Max(FLook.Thickness, Level * Tallest);
+    var X: Single := AView.Left + i * Pitch;
+    FBrush.Fill(X, Base - BarHeight, BarWidth, BarHeight, Color,
+      GraphBarBodyShare * AView.Light);
+    FBrush.Fill(X, Base - BarHeight, BarWidth,
+      Min(FLook.Thickness, BarHeight), Tip, AView.Light);
+    FBrush.Glow(X, Base - BarHeight - FLook.Thickness, BarWidth,
+      3 * FLook.Thickness, Color, FLook.Glow * GraphBloomShare * AView.Light);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
@@ -2841,6 +3134,8 @@ begin
       Result := THaze.Create(APlacement, AObj, AOwner);
     dkLightning:
       Result := TLightning.Create(APlacement, AObj, AOwner);
+    dkGraph:
+      Result := TGraph.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

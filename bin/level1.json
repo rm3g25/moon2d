@@ -2265,19 +2265,37 @@
       "size": 22
     },
     {
-      "kind": "beacon",
+      "kind": "graph",
       "parent": "s12-monitor",
-      "x": 19.0,
-      "y": 15.0,
+      "x": 5.0,
+      "y": 6.0,
+      "width": 31.0,
+      "height": 15.0,
+      "shape": "heartbeat",
       "tint": [
         30,
         100,
         50
       ],
-      "blink": "pulse",
       "frequency": 1.2,
-      "intensity": 55,
-      "size": 14,
+      "amplitude": 70,
+      "sweep": 2.2,
+      "thickness": 1.0,
+      "grid": 18,
+      "gridStep": 4.0,
+      "gridTint": [
+        20,
+        70,
+        35
+      ],
+      "plate": 0,
+      "plateTint": [
+        2,
+        5,
+        4
+      ],
+      "glow": 60,
+      "intensity": 85,
       "tag": "s12-pulse"
     },
     {

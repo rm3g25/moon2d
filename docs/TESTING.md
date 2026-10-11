@@ -60,12 +60,14 @@ Tests\
                           level of one for the load tests (LevelFromRows)
   Effects\
     Tests.Effects.Lightning.pas
+    Tests.Effects.Traces.pas
   Game\
     Tests.Game.Blasts.pas
     Tests.Game.Shroud.pas
     Tests.Game.Uptake.pas
   Levels\
     Tests.Levels.Entities.pas
+    Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
   Monsters\
     Tests.Monsters.pas
@@ -1106,6 +1108,87 @@ shows no difference without a `Draw`, which divides by it. The half chance
 of a branch of a branch: it is a share of tries, not a thing a single seed
 holds. `TLightning` (when it shoots, where it ends) is a game unit with its
 own door, `TakeJolt`, and is not tried here.
+
+## Effects.Traces
+
+State: written, 19 tests, not yet run - there is no Delphi compiler where
+the models work, so the first run is on the developer's machine. The
+expectations were checked on a Python mirror of the unit: every bound
+holds over the seeds and the times the tests use, and the two traps found
+there (see `SlotRoll` in the map) are each red on the mirror without
+their fix. The unit is tried by `Tests\Effects\Tests.Effects.Traces.pas`, in
+three fixtures: `TTraceAnswerTests` (what every shape answers),
+`TTraceHeartbeatTests` and `TTraceNoiseAndBarsTests`. The unit is one
+function, `TraceAt`; it knows no screen, so the whole of it is seen from
+outside, and `Draw` of the graph that asks it is never called.
+
+The sources of the tests have a frequency of 1 unless said otherwise, and
+two seeds, `$1234` and `$4321`. A cycle is a second, so a time in seconds
+is a number of cycles. "Looking" is sampling a cycle at 400 moments.
+
+Numbers spelled, as decided: 24 noise slots to a cycle; a beat has a spike
+over a half; the rest of a beat is exactly 0 from nine tenths of the
+cycle on; a bar moves under a tenth between two ticks (33 a second) at a
+frequency of 1. Not spelled: how much of a cycle a beat takes, the nodes
+of the beat, how far a beat falls short of the full height (the tests ask
+for at least 0.7 of it), the speed of a bar.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestEveryShapeStaysWithinOne` | every shape, at 0.5, 1 and 3 cycles a second, over three seeds (the lowest, a middle and the highest), at 601 moments from -4 to 8 seconds, cells 0 and 5: the answer is within -1..1 | a shape leaves its frame: the line draws outside the screen of the monitor |
+| `TestSameQuestionGetsSameAnswer` | for every shape, the same time and cell asked twice give the same answer | the trace keeps a state or reaches for `Random`: a frame drawn between two ticks disagrees with the tick |
+| `TestFrequencyOnlyScalesTime` | for every shape, frequency 2 at half a moment answers as frequency 1 at the moment | the frequency changes the shape, or scales the seed |
+| `TestSineHighAtQuarterCycle` | 0 at the start, 1 at a quarter, 0 at a half, -1 at three quarters | the wave is shifted or its sign turned |
+| `TestSquareIsHighThenLow` | 1 in the first half of a cycle, -1 in the second, 1 in the next | the halves are swapped or the cycle is off |
+| `TestSawClimbsAcrossTheCycle` | -1 at the start, 0 at a half, over 0.9 just before the end, -1 at the next cycle | the saw is falling, or does not wrap |
+| `TestFlatStaysOnTheBaseline` | exactly 0 at every moment from -2 seconds on | a dead monitor twitches |
+| `TestHeartbeatBeatsOncePerCycle` | looking at ten cycles: the line goes up through a half exactly once in each | a beat splits in two (a bump counts as a spike) or goes missing |
+| `TestHeartbeatRestsBeforeTheNextBeat` | from nine tenths of a cycle to its end the answer is exactly 0, over ten cycles | the rest is lost: the trace is a wave, not a heartbeat |
+| `TestHeartbeatDipsUnderItsBaseline` | looking at ten cycles: the lowest point is under -0.05 | the dips of Q and S are lost: the beat is a bump |
+| `TestBeatsStayNearTheTop` | the peaks of twenty cycles are within 0.7 and 1 | a beat is lost under the jitter, or scaled past the frame |
+| `TestNoTwoBeatsAreAsHighAsEachOther` | the peaks of twenty cycles are twenty different numbers; cycles 2k and 2k+1 never share a peak | the beats roll in pairs: the monitor stutters |
+| `TestOtherSeedMakesOtherBeats` | the peaks of the two seeds differ in at least 18 of 20 cycles | the seed is dropped, or two seeds roll alike |
+| `TestNoiseHoldsStillInsideASlot` | two moments of the first slot answer alike | the noise shivers between its values |
+| `TestNoiseRollsNewValueEverySlot` | 120 slots: at least 115 different values | slots roll in pairs, or the roll repeats |
+| `TestOtherSeedMakesOtherNoiseNotItsMirror` | 120 slots under two seeds: the mean distance is over 0.3 and the mean product within 0.3 of 0 | two seeds give the same noise less a constant: the second monitor shows the first one upside down (the xorshift is linear) |
+| `TestBarsDifferFromEachOther` | at three moments, eight cells give eight different levels | the cells share a clock or targets: the meter moves as one |
+| `TestBarsNeverJumpBetweenTicks` | two seeds, eight cells, ten seconds in ticks: no step is a tenth | a bar jumps from target to target instead of easing |
+| `TestBarsKeepMoving` | eight cells, ten seconds: every bar swings over 1 | a bar stands still |
+
+Left to the eye: everything the picture of a trace is made of - how the
+line looks, the glow, how fast it fades behind the head - lives in
+`TGraph.Draw` and is tried in a live run. The slow fade of a long run of
+beats (does ten minutes of the same jitter look like a pattern) is a
+matter of the eye, too.
+
+## Levels.Graph
+
+State: written, 9 tests, not yet run (see `Effects.Traces`). The unit is
+tried by `Tests\Levels\Tests.Levels.Graph.pas`, fixture `TLevelGraphTests`,
+through `ParseDynamic` and `ParseDynamics` of `Levels.Dynamics`: an object
+is parsed from a JSON text of the test and read back through its
+`Placement`. Only the `graph` kind is tried here; the other kinds of the
+unit have no suite yet. Nothing is drawn, `Acquire` is never called, and
+no renderer is made.
+
+Shared in the unit: a graph of a test is `{"kind": "graph", "screen": 1,
+"x": 4, "y": 6}` and the words under test; the caller frees what
+`ParseGraph` returns. The full set of words is `FullGraph`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBareGraphComesToItsDefaults` | a graph with nothing but its place is a `TGraph` on the back layer, with no tag, and goes out with its parent | the kind is not registered, or a default layer is another |
+| `TestGraphReadsEveryWordItIsGiven` | all the words at once load; the layer, the tag and the tint land where they are read | a word of the kind spoils the common placement |
+| `TestEveryShapeWordIsRead` | each of the seven words loads | a word of `GraphShapeIds` is misspelled or a shape is added to `TTraceShape` and not to the words |
+| `TestShapeWordIsReadInAnyCase` | `HeartBeat` loads | the words are compared case-sensitively, as no other kind's are |
+| `TestUnknownShapeRaises` | `zigzag` raises `EDynamicError` | a typo quietly draws the default heartbeat |
+| `TestSizesAndRatesAtZeroRaise` | width, height, frequency, sweep, thickness and gridStep, each at 0 alone, raise `EDynamicError` | a frame of no size, or a sweep that never ends, loads |
+| `TestPercentagesOutOfRangeRaise` | amplitude, glow, grid and plate, each at 101 and at -1 alone, raise `EDynamicError` | a percentage over the range loads and the trace leaves its frame |
+| `TestBadGridOrPlateTintRaises` | a grid tint of two numbers and a plate tint over 100 raise `ETintError` | the tints of the grid and the plate are skipped or read leniently |
+| `TestGraphIsFoundInTheListByItsTag` | `ParseDynamics` of a section with one tagged graph: `AnyTagged` finds it as a `TGraph` and not as a `TBeacon` | the graph is built as another class, or loses its tag on the way |
+
+Left to the eye: where the graph stands on the monitor of the med lab
+(`s12-monitor`), whether its grid and head glow read as an oscilloscope.
 
 ## The stage
 

@@ -67,10 +67,11 @@ Dependency direction (roughly bottom-up):
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (over `Monsters.Defs`
 for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
-`Effects.Sparks` (its streak texture comes from the owner) ->
+`Effects.Sparks` (its streak texture comes from the owner) /
+`Effects.Traces` (over `Render.Brush` for its xorshift) ->
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
 `Render.Globe` -> `Levels.Dynamics` (over `Effects.Sparks` for the sparks
-kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
+kind and `Effects.Traces` for the graph kind; draws through `Render.Glow`, `Render.Puff` and `Render.Globe`) ->
 `Levels.Rigs` (what the pads and the monsters wear: over
 `Levels.Dynamics`) -> `Levels.Pads` (over `Levels.Tint`, and over
 `Levels.Rigs` for the names of the rigs a pad wears) ->
@@ -648,6 +649,29 @@ in `Levels.Dynamics`), the hits on armor (`Game.Impacts`).
   `gsStreak` comet of `Render.Glow`, or a `gsPoint` blur (the blast).
 - Own `TXorShift`, never `Random`.
 
+### `Core/Effects.Traces.pas` (~140 lines)
+What a monitor draws, as a pure function. **`TraceAt(source, time, cell)`**
+answers -1..1 for a moment in seconds, from the time and the seed alone:
+nothing is buffered, so a frame drawn between two ticks agrees with both,
+and whoever draws asks for the moment of every column. Knows no screen, no
+color and no size. Users: `TGraph` in `Levels.Dynamics`.
+- **`TTraceShape`** = (`trHeartbeat`, `trSine`, `trSquare`, `trSaw`,
+  `trNoise`, `trFlat`, `trBars`); **`TTraceSource`** (record) - `Shape`,
+  `Frequency` (cycles a second; the caller keeps it above zero), `Seed`.
+- Heartbeat: a cycle is one beat (`BeatShare` of it; `BeatNodes` - the P
+  bump, the dip of Q, the spike of R, the dip of S, the T wave, joined by
+  straight lines) and a flat rest. Every beat comes out up to `BeatJitter`
+  lower, rolled by its cycle number. Noise: `NoiseSlotsPerCycle` (24) new
+  values a cycle, held still inside a slot. Bars: `ACell` is read by bars
+  alone; every cell has a clock offset of its own and rolls its targets
+  from the seed and its number, and the level eases (smoothstep) from one
+  target to the next.
+- `SlotRoll(slot, seed)` (private) - 0..1 by a numbered slot. The slot is
+  multiplied by a factor under 2^31 in Int64 and added to the seed, not
+  xored: the xorshift is linear, so two seeds xored with the same slots
+  roll the same numbers less a constant, and a second noise is the first
+  one mirrored. `Levels.Dynamics` keeps a `SlotRoll` of its own.
+
 ### `Core/Effects.Debris.pas` (~560 lines)
 What an explosion throws. Decoration, unless a burst is born live
 (3.0.44): then each shard carries the lives it takes off a body until it
@@ -960,6 +984,31 @@ in `CreateDynamic`.
   them, in Double. In the depth (the canvas' `Scale` and `Tone`) the plume
   is smaller about its point and weaker. Under a parent that is dead or
   gone it is not drawn (`GoesOutWithParent`). Backdrop layer by default.
+- **`TGraph`** (kind `graph`) - a trace on a screen: the line a monitor
+  draws, in a frame of its own. `TGraphLook` (record: `Width`, `Height`,
+  `Amplitude`, `Sweep`, `Thickness`, `Glow`, `Grid`, `GridStep`,
+  `GridColor`, `Plate`, `PlateColor`) lays the frame out; a `TTraceSource`
+  of `Effects.Traces` (seed from `PlacementSeed`) says what is drawn. A
+  `THudBrush` made in `Acquire` and freed in `Release` draws, bottom to
+  top: the plate, the grid (lines go out from the middle, so the baseline
+  is a line of the grid), the trace. `DrawTrace` cuts the frame into
+  columns (`GraphColumnsPerUnit`, 2 a unit) and sweeps a head across them
+  left to right once in `sweep` seconds; a column shows the trace as it was
+  when the head passed it, so the farther the head is past it the dimmer
+  (down to `GraphTrailKeep`) and the less white it is, a stretch of
+  `GraphWipeShare` ahead of the head is dark and the line is not carried
+  across it, and a glow rides the head. Bars (`DrawBars`) have no head: they
+  stand on the bottom edge of the frame, never shorter than a line. The light
+  is the intensity times the canvas' `Tone`. JSON: `shape` (heartbeat /
+  sine / square / saw / noise / flat / bars; heartbeat by default),
+  `frequency` (cycles a second), `width`, `height`, `thickness`, `gridStep`
+  (units) and `sweep` (seconds) - all above zero; `amplitude` (80), `glow`
+  (60), `grid` (0) and `plate` (0) - percentages; `gridTint` (the tint by
+  default) and `plateTint`; `tint` is the color of the trace. A bad word, a
+  zero size or a percentage out of 0..100 raises `EDynamicError`, a bad
+  tint `ETintError`. Back layer by default; goes out with its parent
+  (`GoesOutWithParent`). Hangs on the monitor of the med lab (`s12-monitor`
+  of level 1).
 - **`ParseDynamic(obj, levelId, where)`** - one object, written as an item
   of the section is; `where` names it in errors after its kind ("#2" makes
   "beacon #2"). The section and the rigs (`Levels.Rigs`) both read through
@@ -4144,7 +4193,7 @@ number of a part may be `{"spread": [from, to]}` - see `Levels.Rigs`),
 `respawns` (optional: `screen`, `x`, `y` - the cell a pit and death
 return the hero to, counted as an entity's - see `Levels.Defs`), `dynamics`
 (optional: `kind`
-(beacon / smoke / globe / sparks / fan / haze), `screen`, `screens`
+(beacon / smoke / globe / sparks / fan / haze / lightning / graph), `screen`, `screens`
 [first, last] or `parent` -
 a static object's, a pad's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
 `layer`, `intensity`, `surge`, `turns`
@@ -4457,7 +4506,7 @@ music loads leniently. Four one-shots are synthesised by
 | Heat haze - under a jet, over a turbine: the plume, its strength, grain and flow | `haze` in `dynamics` or in a rig of levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (the backdrop layer, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
 | What the pads and the monsters wear - lamps, hazes, jets: one list for many wearers, a number rolled wearer by wearer | `rigs` + `"rig"` on the pads and the entities in levelN.json + Levels.Rigs.pas (`WearRigs`, `ReadRigNames`, `TRigWearer`) + Levels.Defs.pas `RigWearersOf` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
 | What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
-| A dynamic object (a beacon, its blink, rays); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
+| A dynamic object (a beacon, its blink, rays; a graph on a screen - its shape, frame, grid); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Effects.Traces.pas (what a trace answers) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
 | Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
 | Story screen before a level / typing rhythm | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` in level JSON) |
