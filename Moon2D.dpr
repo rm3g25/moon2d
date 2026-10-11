@@ -125,6 +125,8 @@ const
   PadHumSoundFile = 'padhum.wav';
   PadClickSoundFile = 'padclick.wav';
   PadClackSoundFile = 'padclack.wav';
+  // A shelf out all the way: its latch catches
+  ShelfLatchSoundFile = 'shelflatch.wav';
   // A bullet on armor: one of the pings, a tracer leaves with a whine
   ArmorHitSounds: array [0..2] of string =
     ('armor1.wav', 'armor2.wav', 'armor3.wav');
@@ -2226,6 +2228,8 @@ begin
     FAudio.Play(PadClickSoundFile);
   if FPads.PairDocked then
     FAudio.Play(PadClackSoundFile);
+  if FPads.ShelfLatched then
+    FAudio.Play(ShelfLatchSoundFile);
   FHero.Tick;
   if FHeldFire and FHero.Fire then
     FAudio.Play(WeaponShotSounds[FHero.WeaponType]);

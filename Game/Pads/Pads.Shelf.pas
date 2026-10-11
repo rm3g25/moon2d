@@ -52,6 +52,8 @@ type
     function Holds(ATick: Integer): Boolean;
     // Out, and about to start in
     function Warns(ATick: Integer): Boolean;
+    // At this tick the shelf has come out all the way: its latch catches
+    function Latches(ATick: Integer): Boolean;
     // 0 out in front .. 1 all the way in, at an even pace; ATime between
     // ticks
     function Depth(ATime: Double): Double;
@@ -145,6 +147,11 @@ begin
     Exit(False);
   var Span := SpanAt(ATick, Into);
   Result := (Span.Phase = spOut) and (Span.Ticks - Into <= FWarnTicks);
+end;
+
+function TShelfCycle.Latches(ATick: Integer): Boolean;
+begin
+  Result := Holds(ATick) and not Holds(ATick - 1);
 end;
 
 function TShelfCycle.Depth(ATime: Double): Double;

@@ -69,7 +69,9 @@
   sinking as the level file says. A shelf does not sag: it is bolted to
   its rails. What hangs on it is the wall's and stays in front. The
   monsters ask for their deck every tick and fall by themselves; the
-  hero, who asks nothing while he stands, asks DeckWithdrawn.
+  hero, who asks nothing while he stands, asks DeckWithdrawn. The tick
+  its latch catches the world tells, as a rebuild's sounds, and the game
+  voices.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -138,6 +140,7 @@ type
     FBobShare: Double;
     FTurnedCorner: Boolean;
     FLanded: Boolean;
+    FLatched: Boolean;
     FPlunge: TPlungeCycle;
     FShelf: TShelfCycle;
     FWasBehind: Boolean;
@@ -229,6 +232,8 @@ type
     // ended on its cell
     property TurnedCorner: Boolean read FTurnedCorner;
     property Landed: Boolean read FLanded;
+    // One tick only: a shelf came out all the way
+    property Latched: Boolean read FLatched;
     property Left: Double read FLeft;
     property Right: Double read GetRight;
     // The deck: the feet line of whatever stands on the pad
@@ -271,6 +276,7 @@ type
     FFlyingGroup: string; // the group being rebuilt, '' when none
     FCornerTurned: Boolean;
     FPairDocked: Boolean;
+    FShelfLatched: Boolean;
     function PadStruck(AScreen: Integer; const ABlow: TPadBlow): TPad;
     function RowShut(AScreen: Integer; ALeft, ARight, AY: Double;
       const AFence: TPadFence): Boolean;
@@ -288,6 +294,7 @@ type
     function MembersOf(const ATag: string): TArray<TPad>;
     function StillSpans(const AGroup: TPadGroup): TPadSpans;
     procedure HearFlights;
+    procedure HearShelves;
     function DocksBeside(const APad: TPad): Boolean;
     procedure StartAskedRebuild(AScreen: Integer);
     procedure StartRebuild(const AGroup: TPadGroup);
@@ -334,6 +341,9 @@ type
     // corner of its flight; a pad landed flush beside one on its cell
     property CornerTurned: Boolean read FCornerTurned;
     property PairDocked: Boolean read FPairDocked;
+    // One tick only, for the game to voice: a shelf of the hero's screen
+    // came out all the way and latched
+    property ShelfLatched: Boolean read FShelfLatched;
     // The deck the feet stand on: at AFeetY, spanning some of
     // ALeft..ARight. nil when there is none.
     function DeckUnder(AScreen: Integer; ALeft, ARight,
@@ -520,6 +530,7 @@ begin
   FFlightClock := NoFlight;
   FTurnedCorner := False;
   FLanded := False;
+  FLatched := False;
   FBobX := FPlacement.X;
   FBobShare := 1;
   FPlunge.Rewind(FPlacement.Plunge,
@@ -631,9 +642,11 @@ begin
   FWasBehind := Behind;
   FTurnedCorner := False;
   FLanded := False;
+  FLatched := False;
   if not AOnView then
     Exit;
   Inc(FClock);
+  FLatched := FShelf.Latches(FClock);
   PlaceOnPath;
   TickFlight;
   TickBob;
@@ -862,6 +875,7 @@ begin
   for var Pad in FPads do
     Pad.Tick(Pad.Screen = AScreen);
   HearFlights;
+  HearShelves;
   if not GroupFlying(FFlyingGroup) then
     FFlyingGroup := '';
 end;
@@ -876,6 +890,13 @@ begin
     FCornerTurned := FCornerTurned or Pad.TurnedCorner;
     FPairDocked := FPairDocked or Docked;
   end;
+end;
+
+procedure TPadWorld.HearShelves;
+begin
+  FShelfLatched := False;
+  for var Pad in FPads do
+    FShelfLatched := FShelfLatched or Pad.Latched;
 end;
 
 // A pad of the screen, in no flight or done with it, stands flush beside
@@ -897,6 +918,7 @@ begin
   FFlyingGroup := '';
   FCornerTurned := False;
   FPairDocked := False;
+  FShelfLatched := False;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
 end;

@@ -189,6 +189,7 @@ type
     procedure SetScreenX(AX: Double);
     // Pushed by the world (monster contact): moves unit by unit and
     // stops at the first wall - the hero cannot be shoved into geometry.
+    // Pushed off the edge of a deck, he falls.
     procedure ShoveX(ADeltaX: Integer);
     procedure SetY(AY: Double);
     // The deck under the hero's middle; nil when there is none
@@ -488,6 +489,7 @@ end;
 
 procedure THero.ShoveX(ADeltaX: Integer);
 begin
+  var StoodOnDeck := DeckUnderFeet <> nil;
   // Unit-by-unit with a probe at every position: a single pre-check
   // cannot guarantee a multi-unit displacement lands in free space
   // (bugfix queue item 12 - monster contact shoved the hero into walls)
@@ -495,11 +497,13 @@ begin
   for var i := 1 to Abs(ADeltaX) do
   begin
     if (StepDir < 0) and WallBlocksLeft then
-      Exit;
+      Break;
     if (StepDir > 0) and WallBlocksRight then
-      Exit;
+      Break;
     FX := FX + StepDir;
   end;
+  if StoodOnDeck and (DeckUnderFeet = nil) then
+    LoseDeck;
 end;
 
 procedure THero.NudgeMinigun(ADeltaX, ADeltaY, ADeltaLen: Integer);
@@ -1025,10 +1029,11 @@ begin
     SettleOnGround;
 end;
 
-// The deck underfoot is gone, the hero where he was. A foot on the
-// grid's floor still holds him; else he falls the way he was going, as
-// off a ledge - a stand asks the floor nothing, and a walk only sees the
-// ledge once the cells on both sides of him are empty.
+// The deck is underfoot no more: it slid into its wall, or the hero was
+// shoved off its edge. A foot on the grid's floor still holds him; else
+// he falls the way he was going, as off a ledge - a stand asks the floor
+// nothing, and a walk only sees the ledge once the cells on both sides
+// of him are empty.
 procedure THero.LoseDeck;
 begin
   FCorpseSettled := False;
