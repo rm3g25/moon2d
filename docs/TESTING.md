@@ -83,6 +83,7 @@ Tests\
     Tests.Orbs.Rite.pas
   Pads\
     Tests.Pads.Plunge.pas
+    Tests.Pads.Shelf.pas
 run-tests.cmd             build and run
 ```
 
@@ -631,6 +632,16 @@ The two tests of a body on a pad that flies into the depth are one test
 of `Pads.Rebuild`, `TestNoBodyHangsAfterARebuild`, flown on the arena the
 game has: there the judge has ground to jump from, and its jump reach is
 `JumpReach` of `Hero.pas`, a free function.
+
+### The shelf (3.0.51)
+
+State: designed, not written - needs the stage. The shelf is the one of
+`Pads.World`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBodyOnAShelfFallsWhenItSlidesIn` | a medkit, and then a gravel on a shelf 96 wide, stand on its deck through the stand; a hundred and fifty ticks after the slide in begins each is on the floor (y = 352) | a monster asks no deck of a shelf in the wall: a medkit hangs over the pit |
+| `TestBodyDroppedOnAShelfThatIsInFallsToTheFloor` | a gravel dropped over the shelf in the wall lands on the floor; one dropped over it while it is out lands on its deck | a shelf in the wall catches a falling body, or a shelf that is out does not |
 
 ## Monsters.Damage
 
@@ -1211,7 +1222,9 @@ on first use:
   it. No window, no `SDL_Init`. The second call is bound in the test unit
   (`external 'SDL2.dll'`): the game does not import it.
 - The art of the pads: a `TSpriteCache` on that renderer, the colour key
-  off, `level1-structures.mset` attached - `s16-platform` is in it.
+  off, `level1-structures.mset` attached - `s16-platform` is in it - and
+  `pads.mset`, where the shelf (`shelf`, 32 by 11 units) lives. The smoke
+  asks for the shelf's picture too.
 - Game code does not change.
 
 The rule would then read: "No window. A test never calls `Draw`. The
@@ -1289,14 +1302,100 @@ the tread.
 Left to the eye: how a twitch looks and how the jets cough - the rig
 reads the effort, and a rig is drawn.
 
+## Pads.Shelf
+
+State: written, 12 tests, not yet run. Needs no stage: `TShelfCycle` is a
+record that counts, built from a `TPadShelf` the test fills by hand
+(`Levels.Pads` is in the interface). The expectations were checked on a
+Python mirror of the cycle: every test is green on it, and under each of
+13 edits made to the mirror (the slides swapped, the offset dropped, the
+offset in seconds, the wrap folded by truncation, no least tick, the ease
+reversed, a floor while sliding out, a warning from any phase, from the
+start of the stand, one tick short, a latch on every tick, a latch at the
+end of the stand, the slide back to the first step left out) at least one
+test is red. The unit is tried by `Tests\Pads\Tests.Pads.Shelf.pas`,
+fixture `TShelfCycleTests`; `Tests.Pads.Plunge.pas` is the sample.
+
+Shared in the unit:
+
+- `ShelfOf(ASteps, ASlide, AWarn, AOffset)` - a `TPadShelf` with `Slides`
+  True, the steps as (stand, seconds) pairs, the rest in seconds; `CycleOf`
+  builds a `TShelfCycle` from it.
+- "The base shelf": out 5 s, in 2 s, slide 1 s, warn 3 s, offset 0. At
+  33 ticks a second a lap is 297 ticks: out on ticks 0 to 164, going in on
+  165 to 197, in the wall on 198 to 263, going out on 264 to 296, out
+  again from 297.
+- Every number of a test is in whole seconds, or in hundredths that round
+  without a half: `Round` of Delphi rounds a half to the even tick (82.5
+  ticks is 82), so a test never spells seconds that land on a half tick.
+- A tick is counted from 0. The game asks `Latches` from tick 1 on (the
+  clock is raised first), so the tests that count latches count from tick
+  1; `Latches(0)` is not a question the game asks and no test pins it.
+
+Numbers spelled, as decided: 33 ticks a second; the order of a lap (a
+step, the slide to the next, the last back to the first); the floor and
+the body only while out all the way, from the first tick of the slide in to
+the first tick out again none. Not spelled: the numbers of the shelf in
+`level2.json`, the defaults of the parser.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestPadThatIsNoShelfNeverLeavesTheFront` | a `Default(TPadShelf)`: `Slides` False; over a thousand ticks it holds on every one, never warns, never latches, and its depth is 0 at every tick and between ticks | a pad with no shelf word gets a program: every ordinary pad of the game slides |
+| `TestProgramGoesRoundAndRepeats` | the base shelf from tick 0: out for 165 ticks, going in for 33, in the wall for 66, going out for 33; the same again a lap on and seven laps on | a span is lost or out of order; the slides in and out are swapped; the slide back to the first step is left out |
+| `TestShelfHoldsOnlyWhileOutAllTheWay` | it holds on exactly the ticks it is out (165 a lap) and on no other; on the first tick of the slide in it does not, on the last of the slide out it does not, on the first tick out it does | a floor while sliding: the hero stands on a shelf that has begun to leave, or is caught by one that is not yet out |
+| `TestWarningLastsItsTicksAtTheEndOfTheStand` | warn 3 s: it warns on exactly 99 ticks of a lap, those just before the slide in, every one of them a holding tick; never in the slide or in the wall. Warn 0: never. A warning longer than the stand (9 s over 5): it lights on holding ticks only, and on some | the warning is counted from the start of the stand, a tick short or long, or lit through the slide: the lamp of the dock lies about when the floor goes |
+| `TestLatchComesOnceWhenTheShelfIsOut` | from tick 1, over three laps: exactly three latches, each on a holding tick whose tick before was the slide out. A program of two outs (out, in, out, in): two a lap | the latch sounds on every tick of the stand, at the end of it, or in the slide: the sound loops or comes late |
+| `TestDepthRisesEvenlyOnTheWayInAndFallsOnTheWayOut` | 0 on every tick out; on the slide in: 0 on its first tick, then rising by equal steps, 1 on the first tick in the wall and on every tick of it; on the slide out: 1 on its first tick, then falling, 0 on the first tick out; between two ticks the depth lies between the depths of the two ticks | the ease is reversed (the picture goes out when it should go in), the pace is uneven, or the depth leaves 0 to 1 |
+| `TestOffsetStartsTheProgramFurtherIn` | offset 2 s: at every tick of two laps phase, warning and depth (also half a tick on) are those of the unshifted shelf 66 ticks on; offset 13 s (more than a lap, 132 ticks over it): those of the unshifted shelf 132 ticks on | the offset is dropped, or taken in ticks, not seconds: a row of shelves goes in step, not as a wave |
+| `TestStepsOfAProgramRunInOrder` | out 1 s, in 2 s, out 3 s, in 4 s, slide 1 s: 33 out, 33 going in, 66 in, 33 going out, 99 out, 33 going in, 132 in, 33 going out, and again | steps are merged or reordered, or the slide between two steps is skipped |
+| `TestProgramMayStartInTheWall` | in 1 s, out 2 s, slide 1 s: tick 0 is in the wall (no floor, depth 1); going out from 33; out from 66; the latch on tick 66 and not on 65 | the first step is taken for out whatever it says; the latch is a tick off |
+| `TestStepAndSlideShorterThanATickTakeATick` | slide 0 s: a lap has exactly one tick of the slide in and one of the slide out; a step of 0.01 s holds for one tick | the least of one tick is lost: the shelf jumps from out to in with no tick of slide between |
+| `TestCycleIsAFunctionOfTheTickAlone` | the base shelf asked for ticks 500, 3, 296, 0, 500, 165, 164, 1000, 3, 297, 298 and then again in the reverse order: the same phase, floor, warning, latch and depth at every tick | the cycle keeps a cursor, a clock or a cache: a hero leaving the screen, or a restart, finds the shelf out of step (not on the mirror - it has no such edit to make) |
+| `TestTimeBeforeTheStartIsTheEndOfTheLap` | the pad draws at its clock less one and a share, which after a restart is before the start: the depth at -x equals the depth at a lap less x, for x of 0.25, 0.5, 1, 1.75, 5, 33 and 40.5, and lies in 0 to 1; the phase at -1 is the last slide of the lap | the lap is folded by truncation and not by floor: right after a restart the picture pops or the depth goes below 0 |
+
+Left to the eye: how the slide looks (the sink, the scale, the tone are
+the world's and `Draw`'s), and that an even pace in the cycle reads as an
+even slide once the world has smoothed it.
+
+Left to the eye and to the ear, for the shelf as a whole:
+
+- The look of the slide (`Draw`: the sink, the scale, the tone), the dock
+  art and the lamp's blinking, that the dock's planks are not read as a
+  deck, the jump window (jumping from the crates while the shelf is in or
+  just out is a trap for the late; if the live run calls it a cheat, the
+  stand gets longer).
+- The latch's sound as heard: `ShelfLatchSoundFile` and the call that plays
+  it live in `Moon2D.dpr` and are tried in a live run. The unit's side is
+  the table (once per lap, on the tick it is out, only on the hero's
+  screen).
+- `LocateParent` of the dock's lamp to the shelf: a wrong tag stops the
+  level's load at once.
+
+Open, found while the tests were designed:
+
+- `Latches(0)` is True for a program that starts out: the game never asks
+  tick 0, and no test pins it.
+- A warning longer than the stand lights the whole stand, the latch tick
+  too. The design says nothing; the test only asks that a warning is on
+  holding ticks.
+- A negative `sink` loads and lifts the picture. Not tried, not decided.
+- A shelf over a shaft with a wall at its bottom loads, a plunging pad does
+  not. Not decided, so not tried.
+- A blow of the boss against a shelf in front knocks it a cell as any pad
+  (a shelf in the wall is not struck). No boss stands on a screen with a
+  shelf; not decided for a shelf, not tried.
+- The judge of a formation (`StillSpans`) counts any pad of the screen that
+  is in no group as a foothold, a shelf too. No shelf stands near a group.
+
 ## Levels.Pads
 
-State: written, green (239 in the suite). Needs no stage. The unit is
-tried by `Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
+State: written, green (239 in the suite); the tests of the shelf, below,
+written and not yet run. Needs no stage. The unit is tried by
+`Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
 `TLevel.LoadFromFile`: the parser (`Levels.Pads`) and the checks at load
-(`Levels.Defs`) are one door from outside - a level that loads, its
-`Pads` to read, or an exception: `EPadError` from the parser,
-`ELevelError` from the checks.
+(`Levels.Defs`) are one door from outside - a level that loads, its `Pads`
+to read, or an exception: `EPadError` from the parser, `ELevelError` from
+the checks.
 
 Shared setup: `Tests.Rooms` gains `LevelFromRows(ARows, ASections)` - the
 level of a room with `ASections`, JSON members such as `"pads": [...]`
@@ -1333,6 +1432,41 @@ plunge first.
 
 Left to the eye: nothing here is drawn. The checks of the groups, of the
 rigs a pad wears and of the events that rebuild are not tried.
+
+### The shelf (3.0.51)
+
+State: written, 12 tests and one line, not yet run. Needs no stage. The
+tests join `TLevelPadsTests` (`Tests\Levels\Tests.Levels.Pads.pas`),
+through `TLevel.LoadFromFile` as the others. One line is added to an
+existing test, and twelve tests are new.
+
+Shared: `ShelfPad(AMembers)` - a pad of the gap room, `PadJson(GapX,
+LedgeTopY, '"shelf":{' + AMembers + '}')`; the checks of a shelf are tried
+in the gap, as the plunge's are, and each test that expects a raise loads
+the same pads without the fault first, so the raise is the shelf's and not
+another check's.
+
+Edit to an existing test: `TestPadReadsItsPlaceAndDefaults` gains one
+line, `Shelf.Slides` False. It turns red when a pad with no shelf word
+reads as a shelf.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBareShelfComesToItsDefaults` | `"shelf":{}`: it slides; two steps, out then in, each above 0 seconds; the slide above 0; the warning not below 0 and shorter than the out step; the offset 0; the sink 0; the scale above 0 and at most 1; the tone from 0 to 1. The defaults themselves are not spelled: they are tuned by eye | an empty word is no shelf, a default leaves a program that cannot turn, or a scale of 0 (a picture of no size) |
+| `TestShelfReadsWhatItIsGiven` | out 3, in 2, slide 0.5, warn 1, offset 4, sink 9, scale 0.5, tone 0.2: the steps are out 3 then in 2, and each other number is in its own field | two members are swapped on the way in: out and in, slide and warn, or sink, scale and tone |
+| `TestShelfProgramIsReadInOrder` | a program of in 1, out 2, in 3, out 4 gives four steps in this order, each with its stand and seconds as written | the steps are reversed or reordered, or the first is forced to out |
+| `TestShelfStepWordsAreReadInAnyCase` | `["Out", 1]` and `["IN", 2]` load as out then in | the words are compared case-sensitively |
+| `TestShelfProgramBesideOutOrInRaises` | a program with `"out"`, and a program with `"in"`, each raises `EPadError`; the program alone and `"out"` with `"in"` alone load | both ways of writing a shelf are given and one quietly wins |
+| `TestBadShelfStepRaises` | each alone raises `EPadError`: `["out"]`, `["out", 1, 2]`, `["sideways", 1]`, `[1, 1]`, `["out", "1"]`, `["out", true]`, a step that is the bare word `"out"`, a step of 0 seconds, a step of -1, `"out": 0`, `"in": -1` | a typo in a program loads: the shelf stands in front for ever, or for a time nobody wrote |
+| `TestShelfStepsMustTakeTurns` | each alone raises `EPadError`: an empty program; one step; out, out; out, in, out (the last meets the first). In, out and out, in, out, in load | two outs on end load (the slide between them has no direction), or the last step is not asked against the first: the level fails to load, or loads and the shelf never moves |
+| `TestBadShelfNumbersRaise` | each alone raises `EPadError`: slide -1, warn -1, offset -1, scale 0, scale 1.01, scale -0.5, tone -0.1, tone 1.1. Slide 0, warn 0, offset 0, scale 1, tone 0 and tone 1 load | a scale of 0 loads (a picture of no size), a tone over 1 loads (a shelf brighter than a pad in front), or a number below 0 loads |
+| `TestShelfMayNotPlungeOrJoinAGroup` | the gap, a shelf alone loads; the same pad with `"plunge":{}` raises `ELevelError`; the same shelf joining a group of five (as `GroupOfFive`, its zone given) raises `ELevelError` while the group of five without the shelf loads | the check is dropped: a plunge would drop the deck the shelf has just slid out, a rebuild would fly a pad that is in the wall |
+| `TestShelfMayTravelAPath` | a shelf with a ping-pong path to a stop 64 units up loads, as the same path without the shelf does | the shelf is held to its place as a plunging pad is: the decision "a path is allowed" is lost |
+| `TestRespawnOverAShelfRaises` | the gap, a respawn point over a still pad: loads; over a shelf: `ELevelError` | a shelf counts as a floor that stays: the hero is reborn over a pad that is in the wall half of every lap and falls into the pit he came from |
+| `TestLevelTwoShelfIsInItsFile` | `level2.json` beside the executable loads (as `monsters.json` is found in `Tests.Rooms`); the pad tagged `s07-shelf-01` is on screen 7, slides, is in no group and does not plunge; its warning is shorter than every step that stands out | the word of the level file is renamed or its program stops turning (the level then fails to load at its first screen), or the shelf drops out of the pit. If loading the real level needs a renderer the first run says so, and this one test waits for the stage |
+
+Left to the eye: that the dock's lamp and the shelf's picture sit right
+(`s07-shelf-dock`, tint, the unit under the floor line).
 
 ## Levels.Entities
 
@@ -1415,13 +1549,40 @@ Left to the eye:
   breaks on it: `Monsters.Pilot`, and a boss needs the textures of its
   disc.
 
+### The shelf (3.0.51)
+
+State: designed, not written - needs the stage.
+
+Shared: "the shelf" is a pad of sprite `shelf`, screen 1, x = 224, y =
+224, width 32, bullets `block`, with the base shelf of `Pads.Shelf` (out
+5 s, in 2 s, slide 1 s, warn 3 s, no sink); "a lap" is 297 ticks, "tick
+N" is the room after N calls of `Pads.Tick(1)`. The shelf is out on ticks
+0 to 164, goes in on 165 to 197, is in the wall on 198 to 263, goes out
+on 264 to 296.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestShelfIsAFloorAndABodyOnlyWhileOut` | over two laps, on every tick: `DeckUnder` for feet on the deck line, `BodyAt` and `StopsBulletAt` for a point in the body, and `Bodies(1)` holding the shelf's box are all there on the ticks it is out and none on the others. A second shelf with bullets `pass`: `StopsBulletAt` never, `BodyAt` as the first | a shelf in the wall is a floor (the hero walks on air), a roof for the boss and the sparks, or a wall for a bullet |
+| `TestShelfStaysOnItsLineAndDoesNotSag` | `Left` and `Top` are the file's on every tick of a lap; `Travels` False, `MotionX` 0; `Press(8)` while out: `Lift(1)` is 0 on each of the next thirty ticks, while an ordinary still pad pressed alike leaves 0 | the guard of `Press` is dropped: a landing sags a shelf bolted to its rails; or the deck wanders |
+| `TestShelfWarnsWithItsEffort` | `Effort` is 1 on exactly the 99 ticks before the slide in (ticks 66 to 164) and 0 on every other tick of a lap; `Thrusting` is False throughout | the lamp lights through the slide or on other ticks, or the shelf burns jets |
+| `TestShelfRigStaysInFront` | `RigDepth` is 0 at alpha 0 and 1 on every tick of a lap, while `Depth(1)` is 0 when it is out and reaches 1 in the wall | what hangs on the shelf slides into the wall with it: the lamp of the dock shrinks and goes dark behind the dock |
+| `TestDepthIsContinuousFromTickToTick` | over two laps `Depth(1)` of a tick equals `Depth(0)` of the next; at alphas 0, 0.5 and 1 it lies in 0 to 1; it rises through the slide in and falls through the slide out | the share between ticks is mapped a tick off: the drawn shelf jumps at every tick it is drawn |
+| `TestLatchIsToldOncePerLapAndOnlyOnTheHerosScreen` | with `Pads.Tick(1)`: `ShelfLatched` is True on exactly one tick a lap, the tick the shelf is out all the way (297, 594), and `Latched` of the pad on that tick too. With `Pads.Tick(2)` for 600 ticks: never | a shelf on a screen the hero has left latches (the sound is played in the next room), or the latch is told on every tick of the stand |
+| `TestShelfOffTheHerosScreenHoldsStill` | a hundred ticks of `Pads.Tick(2)`: the shelf is as built (out, depth 0); then with `Pads.Tick(1)` it goes tick by tick as the shelf of a room that was never off the screen | the program runs on off the screen: the hero comes back to a shelf in the wall, or one that has latched meanwhile |
+| `TestRewindPutsTheShelfBackOnItsProgram` | 230 ticks in (in the wall), `Rewind`: it is out, no floor is missing, depth 0, nothing latched; ticked on, it goes tick by tick as a new room's | a restart leaves the shelf in the wall (the hero is reborn with no floor) or in the middle of its lap |
+| `TestDeckWithdrawnIsToldTheTickTheShelfStartsIn` | feet on the deck line, the middle over the shelf: `DeckWithdrawn` is True on exactly one tick a lap, tick 165, and `DeckCarrying` is `nil` on it; it is False for feet a unit above or below the line, a unit past either end of the span, and on screen 2; and False the tick after | told on every tick of the slide or never: the standing hero asks nothing but this and hangs in the air (the bug of the first live run); or told for a hero who is not on the shelf, and one beside it falls |
+| `TestFeetFallThroughAShelfInTheWallAndLandOnOneThatIsOut` | `DeckCrossed` for feet 40 units above the line a tick ago and 40 below it now gives the shelf on the ticks it is out and `nil` on the others | feet land on a shelf in the wall, or go through one that is out |
+| `TestFastestBulletCannotSkipAShelf` | a bullet falling 12 units a tick, at each of the twelve phases over the deck of an out shelf: one of its points is always in the body, by `StopsBulletAt` | the body is as shallow as the picture (11 units): a bullet is flown through between two ticks. 12 is spelled, as decided: the fastest bullet's pace |
+
 ## Hero.Pads
 
-State: designed, not written - needs the stage. Three of its tests are
-red by design, marked in the table: they show two faults found while the
-suite was designed. The expectations were checked on a Python port of the
-hero's floor physics (the oracles, the walk, the jump, the fall, the
-deck) over a port of the pads; on the port the three are red and the rest
+State: designed, not written - needs the stage. One of its tests is red by
+design, marked in the table: it shows a fault found while the suite was
+designed. Two more were red by design, the shoves off a pad; 3.0.51 fixed
+them (`ShoveX` drops a hero whose deck was under him before the shove and
+is not after it). The expectations were checked on a Python port of the
+hero's floor physics (the oracles, the walk, the jump, the fall, the deck)
+over a port of the pads; on the port the three were red and the rest
 green. The unit is tried by `Tests\Hero\Tests.Hero.Pads.pas`, fixture
 `THeroPadTests`.
 
@@ -1451,8 +1612,8 @@ eight times over.
 | `TestCorpseLandsOnADeck` | put 88 units over the still pad, `Kill`: a hundred ticks on, `Y` is the deck | a corpse falls through a deck |
 | `TestCorpseRidesAFerry` | on the ferry, `Kill`, two cycles: `X` less the pad's `Left` does not change, `Y` is the deck | the dead are not carried |
 | `TestShoveAlongTheDeckKeepsHeroRiding` | on the ferry, one `ShoveX(4)`: two cycles on he stands on it, 4 units from where he stood on it | a shove throws a rider off a deck that is still under him |
-| `TestShovedOffAPadHeroFalls` | on the still pad, shoved: a hundred ticks on he is on the floor | red by design. Nobody asks a standing hero for a floor after a shove: he hangs at the deck's height until a key is pressed |
-| `TestShovedOffAFerryHeroFalls` | the same on the ferry, shoved in the middle of a leg | red by design: the case seen in the live run. The pad goes on, he hangs where it was |
+| `TestShovedOffAPadHeroFalls` | on the still pad, shoved: a hundred ticks on he is on the floor | `ShoveX` writes X and asks for no floor: he hangs at the deck's height until a key is pressed (red by design until 3.0.51) |
+| `TestShovedOffAFerryHeroFalls` | the same on the ferry, shoved in the middle of a leg | the same, the case seen in the live run: the pad goes on, he hangs where it was (red by design until 3.0.51) |
 | `TestPlungingPadTakesStandingHeroDown` | "gap", a pad with a plunge, he is put on it: for ten ticks `Y` = 288; then `DeckUnderFeet` is the pad and `Y` its `Top` on every tick until `Y` is over 450; the pad is not at rest before that | the pad falls from under him, or stops over the pit's line with him on it |
 | `TestHeroWalkingAcrossIsNotTakenDown` | the same room, he walks from the left ledge to the right without a stop and stands: he is on the right ledge, within a unit of y = 288; the pad's `Top` is over 384 within two seconds | a walk across no longer makes it - the delay is shorter than the crossing -, or stepping off saves the pad |
 | `TestHeroLeavesAFallingPadOnTheLedgesLine` | the same walk: at the end `Y` is 288 exactly | red by design, by the port: 288.5. The deck's first step down takes him while his middle is on its last unit, and the walk on along the ledge never puts the feet back on the line; a deck on that line would not hold them |
@@ -1463,9 +1624,10 @@ Open:
 
 - The same hang with no pad in the room: a hero shoved off a wall's top
   while he stands hangs too, on the port. It seems to be the 2008
-  behaviour - a shove wrote X and asked for no floor. Whether the fix of
-  the two shove tests covers the grid is not decided; if it does,
-  `TestShovedOffALedgeHeroFalls` joins them.
+  behaviour - a shove wrote X and asked for no floor. The fix of 3.0.51
+  covers decks only and leaves the grid as it was in 2008, so
+  `TestShovedOffALedgeHeroFalls` is not written; if the grid is ever
+  fixed, it joins the two.
 - `TestHeroLeavesAFallingPadOnTheLedgesLine` is a question before it is a
   test: half a unit is not seen on the screen, and no pad of level 2
   stands on that line past the plunging one.
@@ -1480,6 +1642,22 @@ Left to the eye and outside the suite:
   deck (`DeckLift`).
 - A restart: `RestartLevel` rewinds the world (`TestRewindPutsEveryPadHome`)
   and revives the hero, in the game.
+
+### The shelf (3.0.51)
+
+State: designed, not written - needs the stage. The shelf is the one of
+`Pads.World`.
+
+The hero is put on the shelf at its `Left` and `Top`; no key unless said.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestStandingHeroFallsWhenTheShelfSlidesIn` | he stands, `Y` is the deck and `DeckUnderFeet` the shelf on every tick up to 164; within two ticks of 165 he is falling; a hundred and fifty ticks on he is on the floor, standing (`Y` = 352) | a standing hero asks the floor nothing and hangs at the deck's height: the bug of the first live run |
+| `TestWalkingHeroFallsTheWayHeWalks` | a shelf 96 wide at x = 192 with the program out 1 s, in 10 s, slide 1 s, no warning; he walks right from its left end and is mid-deck when the slide begins: he falls, and his `X` goes on growing; the same to the left from the right end | the walking case of `LoseDeck` is lost: he stops in the air, or drops straight down with the key held |
+| `TestFootOnTheGridFloorHoldsHeroWhenTheShelfGoes` | "gap", the shelf in the gap (x = 256, y = 288), flush with the ledges; he stands with his middle over the shelf and a foot over the left ledge (left edge at 244, as read from `GroundUnderFeet`; the first run confirms the place): `Y` is 288 on every tick of two laps, he never falls | the loss of a deck drops a hero who has the grid's floor under a foot: he walks off a ledge he is standing on |
+| `TestWarningDoesNotDropTheHero` | on the shelf through ticks 66 to 164 (the warning): `Y` the deck and `Action` standing on every one | the warning is taken for a withdrawal: the hero falls three seconds early |
+| `TestDownDropsThroughAShelfThatIsOut` | `hcDrop` on the shelf while it is out: he ends on the floor (`Y` = 352) | the shelf holds the drop: S on a shelf does nothing |
+| `TestCorpseOnAShelfFallsWhenItSlidesIn` | `Kill` on the shelf: the corpse lies on the deck through the stand; a hundred and fifty ticks after the slide in begins `Y` = 352 | the corpse hangs over the pit the shelf left (the corpse is not asked for a floor again) |
 
 ## Pads.Formations
 

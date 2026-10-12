@@ -95,6 +95,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Patterns.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Rite.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Plunge.pas"/>
+        <DCCReference Include="Pads\Tests.Pads.Shelf.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

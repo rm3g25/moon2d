@@ -6,8 +6,9 @@
   that run after it.
 
   The level is loaded from a one-screen room with the pads and the
-  respawns of the test added to its root. The checks of pad groups, of
-  the rigs a pad wears and of the events are not tried here.
+  respawns of the test added to its root; one test loads level2.json
+  beside the executable, for the shelf it holds. The checks of pad
+  groups, of the rigs a pad wears and of the events are not tried here.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -56,11 +57,36 @@ type
     procedure TestPlungingPadOverAWallRaises;
     [Test]
     procedure TestRespawnNeedsAFloorThatStays;
+    [Test]
+    procedure TestBareShelfComesToItsDefaults;
+    [Test]
+    procedure TestShelfReadsWhatItIsGiven;
+    [Test]
+    procedure TestShelfProgramIsReadInOrder;
+    [Test]
+    procedure TestShelfStepWordsAreReadInAnyCase;
+    [Test]
+    procedure TestShelfProgramBesideOutOrInRaises;
+    [Test]
+    procedure TestBadShelfStepRaises;
+    [Test]
+    procedure TestShelfStepsMustTakeTurns;
+    [Test]
+    procedure TestBadShelfNumbersRaise;
+    [Test]
+    procedure TestShelfMayNotPlungeOrJoinAGroup;
+    [Test]
+    procedure TestShelfMayTravelAPath;
+    [Test]
+    procedure TestRespawnOverAShelfRaises;
+    [Test]
+    procedure TestLevelTwoShelfIsInItsFile;
   end;
 
 implementation
 
 uses
+  System.IOUtils,
   System.SysUtils,
   Levels.Pads,
   Tests.Rooms;
@@ -81,6 +107,10 @@ const
   LastPadX = 480;
   SpriteName = 's16-platform';
   SingleSlack = 0.0001;
+  // The shelf of level 2, screen 7
+  LevelTwoFile = 'level2.json';
+  LevelTwoShelfTag = 's07-shelf-01';
+  LevelTwoShelfScreen = 7;
 
 function OpenRows: TArray<string>;
 begin
@@ -151,6 +181,31 @@ begin
     PadJson(320, 160, MateGroup)]);
 end;
 
+// The zone the pads of GroupOfFive join
+function GroupZone: string;
+begin
+  Result := '"padGroups":[{"tag":"zone","screen":1,"zone":[2,4,13,8],' +
+    '"pairs":2,"farFlight":5,"farShare":5}]';
+end;
+
+// The pad of the gap as a shelf: AMembers inside its shelf word, AExtra
+// beside it
+function ShelfPad(const AMembers: string; const AExtra: string = ''): string;
+begin
+  var Members := '"shelf":{' + AMembers + '}';
+  if AExtra <> '' then
+    Members := Members + ',' + AExtra;
+  Result := PadJson(GapX, LedgeTopY, Members);
+end;
+
+procedure ExpectStep(const AStep: TShelfStep; AStand: TShelfStand;
+  ASeconds: Double; const AWhat: string);
+begin
+  Assert.AreEqual<TShelfStand>(AStand, AStep.Stand, AWhat);
+  Assert.IsTrue(IsNear(AStep.Seconds, ASeconds), Format('%s: %g seconds, ' +
+    'not %g', [AWhat, AStep.Seconds, ASeconds]));
+end;
+
 function RespawnOverTheGap: string;
 begin
   Result := Format('"respawns":[{"screen":1,"x":%d,"y":8}]', [GapCol]);
@@ -213,6 +268,7 @@ begin
   Assert.AreEqual('', Pad.Tag);
   Assert.AreEqual('', Pad.Group);
   Assert.IsFalse(Pad.Plunge.Plunges, 'A pad holds unless it is asked to give');
+  Assert.IsFalse(Pad.Shelf.Slides, 'A pad stays in front unless it is a shelf');
 end;
 
 procedure TLevelPadsTests.TestPadReadsWhatItIsGiven;
@@ -341,8 +397,7 @@ begin
   var Path := PathJson('"pingpong"', Format('[[%d,%d]]', [GapX, LedgeTopY - 64]),
     '32', '1');
   var Group := '"group":"zone"';
-  var Zone := '"padGroups":[{"tag":"zone","screen":1,"zone":[2,4,13,8],' +
-    '"pairs":2,"farFlight":5,"farShare":5}]';
+  var Zone := GroupZone;
 
   // The same pads that do not plunge load: the plunge is what is turned down
   ExpectLoads(GapRows(shOpen), PadsSection([PadJson(GapX, LedgeTopY, Path)]),
@@ -388,6 +443,227 @@ begin
     'A respawn point over a pad on a path');
   ExpectRaises(ELevelError, GapRows(shOpen), Respawn,
     'A respawn point over a gap with no pad in it');
+end;
+
+procedure TLevelPadsTests.TestBareShelfComesToItsDefaults;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('')]));
+
+  var Shelf := OnlyPad(FLevel).Shelf;
+  Assert.IsTrue(Shelf.Slides, 'An empty shelf word is no shelf');
+  Assert.AreEqual(2, Integer(Length(Shelf.Steps)), 'The steps of a bare shelf');
+  Assert.AreEqual<TShelfStand>(shOut, Shelf.Steps[0].Stand,
+    'The first step of a bare shelf');
+  Assert.AreEqual<TShelfStand>(shIn, Shelf.Steps[1].Stand,
+    'The second step of a bare shelf');
+  Assert.IsTrue(Shelf.Steps[0].Seconds > 0, 'The shelf stays out no time');
+  Assert.IsTrue(Shelf.Steps[1].Seconds > 0, 'The shelf stays in no time');
+  Assert.IsTrue(Shelf.SlideSeconds > 0, 'The shelf slides in no time');
+  Assert.IsTrue((Shelf.WarnSeconds >= 0) and
+    (Shelf.WarnSeconds < Shelf.Steps[0].Seconds), Format('A warning of %g ' +
+    'seconds over a stand of %g', [Shelf.WarnSeconds,
+    Shelf.Steps[0].Seconds]));
+  Assert.IsTrue(IsNear(Shelf.OffsetSeconds, 0), 'A bare shelf starts late');
+  Assert.IsTrue(IsNear(Shelf.Deep.Sink, 0), 'A bare shelf sinks');
+  Assert.IsTrue((Shelf.Deep.Scale > 0) and (Shelf.Deep.Scale <= 1),
+    Format('In the wall the shelf is %g of its size', [Shelf.Deep.Scale]));
+  Assert.IsTrue((Shelf.Deep.Tone >= 0) and (Shelf.Deep.Tone <= 1),
+    Format('In the wall the shelf is %g of its light', [Shelf.Deep.Tone]));
+end;
+
+procedure TLevelPadsTests.TestShelfReadsWhatItIsGiven;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('"out":3,"in":2,' +
+    '"slide":0.5,"warn":1,"offset":4,"sink":9,"scale":0.5,"tone":0.2')]));
+
+  var Shelf := OnlyPad(FLevel).Shelf;
+  Assert.AreEqual(2, Integer(Length(Shelf.Steps)), 'The steps of out and in');
+  ExpectStep(Shelf.Steps[0], shOut, 3, 'The first step');
+  ExpectStep(Shelf.Steps[1], shIn, 2, 'The second step');
+  Assert.IsTrue(IsNear(Shelf.SlideSeconds, 0.5),
+    'The slide is read as written');
+  Assert.IsTrue(IsNear(Shelf.WarnSeconds, 1), 'The warning is read as written');
+  Assert.IsTrue(IsNear(Shelf.OffsetSeconds, 4),
+    'The offset is read as written');
+  Assert.IsTrue(IsNear(Shelf.Deep.Sink, 9), 'The sink is read as written');
+  Assert.IsTrue(IsNear(Shelf.Deep.Scale, 0.5), 'The scale is read as written');
+  Assert.IsTrue(IsNear(Shelf.Deep.Tone, 0.2), 'The tone is read as written');
+end;
+
+procedure TLevelPadsTests.TestShelfProgramIsReadInOrder;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad(
+    '"program":[["in",1],["out",2],["in",3],["out",4]]')]));
+
+  var Shelf := OnlyPad(FLevel).Shelf;
+  Assert.AreEqual(4, Integer(Length(Shelf.Steps)), 'The steps of the program');
+  ExpectStep(Shelf.Steps[0], shIn, 1, 'The first step');
+  ExpectStep(Shelf.Steps[1], shOut, 2, 'The second step');
+  ExpectStep(Shelf.Steps[2], shIn, 3, 'The third step');
+  ExpectStep(Shelf.Steps[3], shOut, 4, 'The fourth step');
+end;
+
+procedure TLevelPadsTests.TestShelfStepWordsAreReadInAnyCase;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad(
+    '"program":[["Out",1],["IN",2]]')]));
+
+  var Shelf := OnlyPad(FLevel).Shelf;
+  Assert.AreEqual(2, Integer(Length(Shelf.Steps)), 'The steps of the program');
+  ExpectStep(Shelf.Steps[0], shOut, 1, 'The step "Out"');
+  ExpectStep(Shelf.Steps[1], shIn, 2, 'The step "IN"');
+end;
+
+procedure TLevelPadsTests.TestShelfProgramBesideOutOrInRaises;
+begin
+  var TwoSteps := '"program":[["out",1],["in",1]]';
+  ExpectLoads(GapRows(shOpen), PadsSection([ShelfPad(TwoSteps)]),
+    'A shelf with a program alone');
+  ExpectLoads(GapRows(shOpen), PadsSection([ShelfPad('"out":1,"in":1')]),
+    'A shelf with out and in alone');
+
+  ExpectRaises(EPadError, GapRows(shOpen),
+    PadsSection([ShelfPad(TwoSteps + ',"out":1')]),
+    'A shelf with a program and out');
+  ExpectRaises(EPadError, GapRows(shOpen),
+    PadsSection([ShelfPad(TwoSteps + ',"in":1')]),
+    'A shelf with a program and in');
+end;
+
+procedure TLevelPadsTests.TestBadShelfStepRaises;
+const
+  // Each beside a good step: the bad one is what is turned down
+  BadPrograms: array [0 .. 8] of string = (
+    '"program":[["out"],["in",1]]',
+    '"program":[["out",1,2],["in",1]]',
+    '"program":[["sideways",1],["in",1]]',
+    '"program":[[1,1],["in",1]]',
+    '"program":[["out","1"],["in",1]]',
+    '"program":[["out",true],["in",1]]',
+    '"program":["out",["in",1]]',
+    '"program":[["out",0],["in",1]]',
+    '"program":[["out",-1],["in",1]]');
+begin
+  ExpectLoads(GapRows(shOpen),
+    PadsSection([ShelfPad('"program":[["out",1],["in",1]]')]),
+    'A program of two good steps');
+
+  for var Bad in BadPrograms do
+    ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad(Bad)]),
+      'A shelf of ' + Bad);
+  ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad('"out":0')]),
+    'A shelf out for 0 seconds');
+  ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad('"in":-1')]),
+    'A shelf in for -1 seconds');
+end;
+
+procedure TLevelPadsTests.TestShelfStepsMustTakeTurns;
+const
+  NoTurns: array [0 .. 3] of string = (
+    '"program":[]',
+    '"program":[["out",1]]',
+    '"program":[["out",1],["out",2]]',
+    '"program":[["out",1],["in",1],["out",1]]');
+  Turns: array [0 .. 1] of string = (
+    '"program":[["in",1],["out",1]]',
+    '"program":[["out",1],["in",1],["out",1],["in",1]]');
+begin
+  for var Good in Turns do
+    ExpectLoads(GapRows(shOpen), PadsSection([ShelfPad(Good)]),
+      'A shelf of ' + Good);
+  for var Bad in NoTurns do
+    ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad(Bad)]),
+      'A shelf of ' + Bad);
+end;
+
+procedure TLevelPadsTests.TestBadShelfNumbersRaise;
+const
+  BadNumbers: array [0 .. 7] of string = ('"slide":-1', '"warn":-1',
+    '"offset":-1', '"scale":0', '"scale":1.01', '"scale":-0.5',
+    '"tone":-0.1', '"tone":1.1');
+  EdgeNumbers: array [0 .. 5] of string = ('"slide":0', '"warn":0',
+    '"offset":0', '"scale":1', '"tone":0', '"tone":1');
+begin
+  for var Edge in EdgeNumbers do
+    ExpectLoads(GapRows(shOpen), PadsSection([ShelfPad(Edge)]),
+      'A shelf of ' + Edge);
+  for var Bad in BadNumbers do
+    ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad(Bad)]),
+      'A shelf of ' + Bad);
+end;
+
+procedure TLevelPadsTests.TestShelfMayNotPlungeOrJoinAGroup;
+begin
+  var Group := '"group":"zone"';
+
+  // The same pads that are no shelf load: the shelf is what is turned down
+  ExpectLoads(GapRows(shOpen), PadsSection([ShelfPad('')]), 'A shelf alone');
+  ExpectLoads(GapRows(shOpen), PadsSection([PlungingPad]),
+    'A pad that plunges and is no shelf');
+  ExpectLoads(GapRows(shOpen),
+    GroupOfFive(PadJson(GapX, LedgeTopY, Group)) + ',' + GroupZone,
+    'A pad in a group that is no shelf');
+
+  ExpectRaises(ELevelError, GapRows(shOpen),
+    PadsSection([ShelfPad('', '"plunge":{}')]), 'A shelf that plunges');
+  ExpectRaises(ELevelError, GapRows(shOpen),
+    GroupOfFive(ShelfPad('', Group)) + ',' + GroupZone,
+    'A shelf that joins a group');
+end;
+
+procedure TLevelPadsTests.TestShelfMayTravelAPath;
+begin
+  var Path := PathJson('"pingpong"', Format('[[%d,%d]]',
+    [GapX, LedgeTopY - 64]), '32', '1');
+  ExpectLoads(GapRows(shOpen), PadsSection([PadJson(GapX, LedgeTopY, Path)]),
+    'A pad that travels and is no shelf');
+
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('', Path)]));
+  var Pad := OnlyPad(FLevel);
+  Assert.IsTrue(Pad.Shelf.Slides, 'The shelf that travels is no shelf');
+  Assert.AreEqual<TPadRoute>(prPingPong, Pad.Path.Route,
+    'The route of the shelf that travels');
+end;
+
+procedure TLevelPadsTests.TestRespawnOverAShelfRaises;
+begin
+  var Respawn := RespawnOverTheGap;
+  ExpectLoads(GapRows(shOpen),
+    PadsSection([PadJson(GapX, LedgeTopY)]) + ',' + Respawn,
+    'A respawn point over a still pad');
+
+  ExpectRaises(ELevelError, GapRows(shOpen),
+    PadsSection([ShelfPad('')]) + ',' + Respawn,
+    'A respawn point over a shelf');
+end;
+
+procedure TLevelPadsTests.TestLevelTwoShelfIsInItsFile;
+begin
+  FreeAndNil(FLevel);
+  FLevel := TLevel.Create;
+  FLevel.LoadFromFile(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    LevelTwoFile));
+
+  var Found := False;
+  var Placement := Default(TPadPlacement);
+  for var Pad in FLevel.Pads do
+    if Pad.Tag = LevelTwoShelfTag then
+    begin
+      Found := True;
+      Placement := Pad;
+    end;
+
+  Assert.IsTrue(Found, 'Level 2 holds no pad tagged ' + LevelTwoShelfTag);
+  Assert.AreEqual(LevelTwoShelfScreen, Placement.Screen,
+    'The screen of the shelf');
+  Assert.IsTrue(Placement.Shelf.Slides, 'The shelf of level 2 does not slide');
+  Assert.AreEqual('', Placement.Group, 'The shelf of level 2 joins a group');
+  Assert.IsFalse(Placement.Plunge.Plunges, 'The shelf of level 2 plunges');
+  for var Step in Placement.Shelf.Steps do
+    if Step.Stand = shOut then
+      Assert.IsTrue(Placement.Shelf.WarnSeconds < Step.Seconds,
+        Format('A warning of %g seconds over a stand of %g',
+        [Placement.Shelf.WarnSeconds, Step.Seconds]));
 end;
 
 initialization
