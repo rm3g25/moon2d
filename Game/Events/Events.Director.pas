@@ -47,6 +47,7 @@ type
     function ConditionHolds(const AEvent: TLevelEvent;
       const AField: TMonsterField): Boolean;
     procedure Play(const AEvent: TLevelEvent; const AField: TMonsterField);
+    procedure PlayHint(const AAction: TEventAction);
   public
     constructor Create(const AEvents: TArray<TLevelEvent>;
       const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
@@ -63,7 +64,7 @@ type
 implementation
 
 uses
-  Localization;
+  Localization, Hud.Terminal;
 
 constructor TEventDirector.Create(const AEvents: TArray<TLevelEvent>;
   const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
@@ -121,6 +122,19 @@ begin
   end;
 end;
 
+// A hint speaks in the voice its event gives it, the channel's own when
+// the event gives none
+procedure TEventDirector.PlayHint(const AAction: TEventAction);
+begin
+  var Header := AAction.Header.Current;
+  if Header = '' then
+    Header := Tr(STerminalHeader);
+  var Place := tlTop;
+  if AAction.AtBottom then
+    Place := tlBottom;
+  FMessages.StartTerminal(Header, AAction.Text.Current, Place);
+end;
+
 procedure TEventDirector.Play(const AEvent: TLevelEvent;
   const AField: TMonsterField);
 begin
@@ -131,7 +145,7 @@ begin
       eaSmallMessage:
         FMessages.AddTicker(Action.Text.Current, TickerNoticeTicks);
       eaHint:
-        FMessages.StartTerminal(Tr(STerminalHeader), Action.Text.Current);
+        PlayHint(Action);
       eaMusic:
         FChangeMusic(Action.FileName);
       eaIntensity:

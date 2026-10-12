@@ -4,8 +4,11 @@
   blinking cursor, stands long enough to be read, and fades. The reader
   sets the pace by glancing at it, not the text by crawling past.
 
-  The header line names who speaks. Today it is the channel itself;
-  voiced lines later keep the same box.
+  The header line names who speaks. Today it is the channel itself, or
+  the voice a level gives a transmission; voiced lines later keep the
+  same box. Where the box stands is the caller's word: under the heart
+  monitor, or along the bottom edge on a screen where the hero comes
+  in at the top and the monitor corner would sit on him.
 
   The typing itself is Hud.Typewriter's. The terminal makes no sound of
   its own: KeyStruck goes up on the ticks a key should click, and the
@@ -23,6 +26,7 @@ uses
 
 type
   TTerminalPhase = (tpOff, tpTyping, tpHolding, tpFading);
+  TTerminalPlace = (tlTop, tlBottom);
 
   THudTerminal = class
   private
@@ -31,11 +35,13 @@ type
     FTypewriter: TTypewriter;
     FHeader: string;
     FPhase: TTerminalPhase;
+    FPlace: TTerminalPlace;
     FPhaseTicksLeft: Integer;
     FKeyStruck: Boolean;
     procedure EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
     procedure CountDown(ANextPhase: TTerminalPhase; ANextTicks: Integer);
     function BoxHeight: Single;
+    function BoxY: Single;
     function TextTop: Single;
     function Opacity: Single;
     function CursorVisible: Boolean;
@@ -46,8 +52,10 @@ type
     constructor Create(const AFont: TMoonFont; ARenderer: PSdlRenderer);
     destructor Destroy; override;
     // A newcomer replaces the message mid-way: a hint belongs to the
-    // screen that fired it. A text with no words is ignored.
-    procedure Start(const AHeader, AText: string);
+    // screen that fired it, and takes its place with it. A text with no
+    // words is ignored.
+    procedure Start(const AHeader, AText: string;
+      APlace: TTerminalPlace = tlTop);
     procedure Clear;
     procedure Tick;
     procedure Draw;
@@ -55,16 +63,19 @@ type
     // The lowest game-unit Y the box covers; meaningful while Visible
     function Bottom: Single;
     property KeyStruck: Boolean read FKeyStruck;
+    // Where the box stands now; the ticker steps aside only for the top
+    property Place: TTerminalPlace read FPlace;
   end;
 
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils, Game.Space;
 
 const
   BoxX = PanelMargin;
-  BoxY = PanelY + PanelH + 4;
+  TopBoxY = PanelY + PanelH + 4;
+  BottomGap = PanelMargin;
   BoxW = 360;
   Padding = 6;
   LineStep = SmallLineStep + 3;
@@ -120,12 +131,14 @@ begin
   inherited;
 end;
 
-procedure THudTerminal.Start(const AHeader, AText: string);
+procedure THudTerminal.Start(const AHeader, AText: string;
+  APlace: TTerminalPlace);
 begin
   var Lines := WrapWords(AText, MaxLineChars);
   if Lines = nil then
     Exit;
   FHeader := AHeader;
+  FPlace := APlace;
   FTypewriter.Start(Lines);
   EnterPhase(tpTyping, 0);
 end;
@@ -179,6 +192,16 @@ function THudTerminal.BoxHeight: Single;
 begin
   Result := 2 * Padding + SmallGlyphHeight + HeaderGap +
     Length(FTypewriter.Lines) * LineStep - (LineStep - SmallGlyphHeight);
+end;
+
+// The bottom box grows upward from the edge, so its top follows the
+// number of lines it holds
+function THudTerminal.BoxY: Single;
+begin
+  if FPlace = tlBottom then
+    Result := FrameHeight - BottomGap - BoxHeight
+  else
+    Result := TopBoxY;
 end;
 
 function THudTerminal.TextTop: Single;

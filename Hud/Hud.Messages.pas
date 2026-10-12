@@ -16,7 +16,8 @@
      tutorial hints, the '_string:' of .mon - no longer crawl right to
      left; they type out in the comm box of Hud.Terminal under the heart
      monitor. The ticker steps down below the box while it stands and
-     climbs back when it is gone.
+     climbs back when it is gone. A text may ask for the bottom edge
+     instead; the ticker has no reason to move for that one.
 
   3. BIG MESSAGE (AddBigMessage of 2008): one headline mid-screen -
      level titles, bonuses, EVOLUTION. A newcomer replaces the current.
@@ -97,8 +98,9 @@ type
     procedure ShowBig(const AText: string; ATicks: Integer;
       const ANote: string = '');
     // A long text for the comm terminal under AHeader; replaces the one
-    // being typed. '' is ignored.
-    procedure StartTerminal(const AHeader, AText: string);
+    // being typed. '' is ignored. APlace says where the box stands.
+    procedure StartTerminal(const AHeader, AText: string;
+      APlace: TTerminalPlace = tlTop);
     // True on a tick the terminal typed a clicking key - the game owns
     // the sound
     function TerminalKeyStruck: Boolean;
@@ -204,9 +206,10 @@ begin
   FBigTicksLeft := ATicks;
 end;
 
-procedure TMessageBoard.StartTerminal(const AHeader, AText: string);
+procedure TMessageBoard.StartTerminal(const AHeader, AText: string;
+  APlace: TTerminalPlace);
 begin
-  FTerminal.Start(AHeader, AText);
+  FTerminal.Start(AHeader, AText, APlace);
 end;
 
 function TMessageBoard.TerminalKeyStruck: Boolean;
@@ -230,7 +233,7 @@ procedure TMessageBoard.ShiftTicker;
 begin
   FTickerShiftBefore := FTickerShift;
   var Target: Double := 0;
-  if FTerminal.Visible then
+  if FTerminal.Visible and (FTerminal.Place = tlTop) then
     Target := FTerminal.Bottom + TickerBelowBoxGap - TickerTopY;
   if FTickerShift < Target then
     FTickerShift := Min(Target, FTickerShift + TickerShiftStep)

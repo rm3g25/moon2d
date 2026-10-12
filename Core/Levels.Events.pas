@@ -49,7 +49,14 @@ type
     // eaRestore: the pad group tagged Target is rebuilt no more, its
     // pads fly back to where the level file puts them (Pads.Arena).
     // JSON: "target".
+    // eaHint: Header names who speaks, empty for the channel itself;
+    // AtBottom puts the box on the bottom edge instead of under the
+    // heart monitor, for a screen where the hero comes in at the top.
+    // JSON: "header" (localized like "text"), "place" ("top" by
+    // default, or "bottom").
     Target: string;
+    Header: TLocalizedText;
+    AtBottom: Boolean;
     Level: Single;
     Angle: Single;
     Ticks: Integer;
@@ -115,6 +122,8 @@ resourcestring
   SEventGroupNoTarget = 'Level "%s": event "%s": %s names no target';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
+  SEventBadPlace = 'Level "%s": event "%s": a hint takes "place" top or '
+    + 'bottom, not "%s"';
 
 // A typo raises, as a difficulty grade does in Levels.Defs: an event
 // that never fires is a debugging season, not a feature
@@ -191,6 +200,18 @@ begin
       [ALevelId, AEventId, EventActionIds[AAction.Kind]]);
 end;
 
+procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+begin
+  AAction.Header := ReadLocalizedText(AObj, 'header');
+  var Place := AObj.GetValue<string>('place', 'top');
+  if SameText(Place, 'bottom') then
+    AAction.AtBottom := True
+  else if not SameText(Place, 'top') then
+    raise ELevelEventError.CreateFmt(SEventBadPlace,
+      [ALevelId, AEventId, Place]);
+end;
+
 function ReadAction(const AObj: TJSONObject;
   const ALevelId, AEventId: string): TEventAction;
 begin
@@ -200,6 +221,8 @@ begin
   Result.Text := ReadLocalizedText(AObj, 'text');
   Result.FileName := AObj.GetValue<string>('file', '');
   case Result.Kind of
+    eaHint:
+      ReadHint(AObj, ALevelId, AEventId, Result);
     eaIntensity:
       ReadIntensity(AObj, ALevelId, AEventId, Result);
     eaSun:
