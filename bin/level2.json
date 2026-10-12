@@ -268,6 +268,122 @@
       "width": 38,
       "tint": [55, 55, 55],
       "tag": "s07-shelf-dock"
+    },
+    {
+      "sprite": "s08-room",
+      "screen": 8,
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "tag": "s08-room"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 61,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-01"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 93,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-02"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 125,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-03"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 157,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-04"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 189,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-05"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 221,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-06"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 253,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-07"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 285,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-08"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 317,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-09"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 349,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-10"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 381,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-11"
+    },
+    {
+      "sprite": "shelf-dock",
+      "screen": 8,
+      "x": 413,
+      "y": 353,
+      "width": 38,
+      "tint": [55, 55, 55],
+      "tag": "s08-shelf-dock-12"
     }
   ],
   "pads": [
@@ -579,6 +695,229 @@
       "tag": "s07-shelf-01",
       "rig": ["shelfDock"],
       "shelf": {"out": 2.5, "in": 1.5, "slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 64,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-01",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 96,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-02",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 128,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-03",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 160,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-04",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 192,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-05",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 224,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-06",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 256,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-07",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 288,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-08",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 320,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-09",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 352,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-10",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 384,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-11",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "shelf",
+      "screen": 8,
+      "x": 416,
+      "y": 352,
+      "width": 32,
+      "bullets": "block",
+      "tag": "s08-shelf-12",
+      "rig": ["shelfDock"],
+      "shelf": {"out": 2.6, "in": 1.5, "slide": 0.25, "warn": 0.6, "offset": 2.3, "sink": 7, "scale": 0.72, "tone": 0.4}
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-01",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-02",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-03",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-04",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-05",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-06",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-07",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 8,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s08-ride-08",
+      "rig": ["pad"],
+      "carousel": "s08-carousel"
+    }
+  ],
+  "carousels": [
+    {
+      "tag": "s08-carousel",
+      "screen": 8,
+      "shape": "oval",
+      "center": [288, 179],
+      "size": [150, 150],
+      "period": 12,
+      "turn": "cw"
     }
   ],
   "rigs": {
@@ -1707,6 +2046,21 @@
       "frequency": 1.6,
       "intensity": 90,
       "size": 30
+    },
+    {
+      "kind": "beacon",
+      "parent": "s08-room",
+      "x": 346.7,
+      "y": 70.0,
+      "tint": [
+        70,
+        82,
+        100
+      ],
+      "blink": "dying",
+      "frequency": 1.1,
+      "intensity": 90,
+      "size": 30
     }
   ],
   "tilePalette": [
@@ -1972,31 +2326,31 @@
         "screen": 8,
         "rows": [
           "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
-          "12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12",
-          "10,10,10,10,10,10,10,11,10,11,10,11,10,10,10,12",
-          "10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,12",
-          "12,12,12,10,10,10,10,12,10,12,10,12,10,10,10,12",
-          "0,0,12,10,10,10,10,12,10,10,10,12,10,12,10,12",
-          "0,0,12,10,10,10,10,10,10,10,10,10,10,10,10,12",
-          "0,0,12,10,10,10,10,12,10,12,10,12,10,10,10,12",
-          "0,0,12,10,12,12,10,12,10,12,10,12,10,12,12,12",
-          "12,12,12,10,10,10,10,11,10,11,10,11,10,10,10,10",
-          "12,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10",
-          "12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12"
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
         ],
         "collision": [
           "0000000000000000",
           "1111111111111111",
           "0000000000000001",
           "0000000000000001",
-          "1110000101010001",
-          "0010000100010101",
+          "1110000000000001",
           "0010000000000001",
-          "0010000101010001",
-          "0010110101010111",
+          "0010000000000001",
+          "0010000000000001",
+          "0010000000000001",
           "1110000000000000",
           "1000000000000000",
-          "1111111111111111"
+          "1100000000000011"
         ]
       },
       {
@@ -2300,13 +2654,12 @@
       }
     },
     {
-      "monsterId": "barrel",
+      "monsterId": "betoner",
       "screen": 8,
-      "spriteList": "barrel.mns",
-      "x": 8,
-      "y": 4,
+      "spriteList": "betoner.mns",
+      "seat": "s08-ride-01",
       "overrides": {
-        "direction": 1
+        "speed": 0
       },
       "triggers": {
         "heroY": 4
@@ -2316,8 +2669,7 @@
       "monsterId": "barrel",
       "screen": 8,
       "spriteList": "barrel.mns",
-      "x": 10,
-      "y": 4,
+      "seat": "s08-ride-02",
       "overrides": {
         "direction": 1
       }
@@ -2326,8 +2678,7 @@
       "monsterId": "barrel",
       "screen": 8,
       "spriteList": "barrel.mns",
-      "x": 12,
-      "y": 4,
+      "seat": "s08-ride-03",
       "overrides": {
         "direction": 1
       }
@@ -2336,8 +2687,25 @@
       "monsterId": "barrel",
       "screen": 8,
       "spriteList": "barrel.mns",
-      "x": 14,
-      "y": 5,
+      "seat": "s08-ride-04",
+      "overrides": {
+        "direction": 1
+      }
+    },
+    {
+      "monsterId": "betoner",
+      "screen": 8,
+      "spriteList": "betoner.mns",
+      "seat": "s08-ride-05",
+      "overrides": {
+        "speed": 0
+      }
+    },
+    {
+      "monsterId": "barrel",
+      "screen": 8,
+      "spriteList": "barrel.mns",
+      "seat": "s08-ride-06",
       "overrides": {
         "direction": 1
       }
@@ -2346,8 +2714,7 @@
       "monsterId": "barrel",
       "screen": 8,
       "spriteList": "barrel.mns",
-      "x": 15,
-      "y": 8,
+      "seat": "s08-ride-07",
       "overrides": {
         "direction": 1
       }
@@ -2356,41 +2723,9 @@
       "monsterId": "barrel",
       "screen": 8,
       "spriteList": "barrel.mns",
-      "x": 14,
-      "y": 8,
+      "seat": "s08-ride-08",
       "overrides": {
         "direction": 1
-      }
-    },
-    {
-      "monsterId": "barrel",
-      "screen": 8,
-      "spriteList": "barrel.mns",
-      "x": 8,
-      "y": 7,
-      "overrides": {
-        "direction": 1,
-        "lives": 1
-      }
-    },
-    {
-      "monsterId": "barrel",
-      "screen": 8,
-      "spriteList": "barrel.mns",
-      "x": 10,
-      "y": 7,
-      "overrides": {
-        "direction": 1
-      }
-    },
-    {
-      "monsterId": "barrel",
-      "screen": 8,
-      "spriteList": "barrel.mns",
-      "x": 12,
-      "y": 7,
-      "overrides": {
-        "direction": 7
       }
     },
     {
