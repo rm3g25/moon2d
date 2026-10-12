@@ -66,6 +66,7 @@ Tests\
     Tests.Game.Shroud.pas
     Tests.Game.Uptake.pas
   Levels\
+    Tests.Levels.Carousels.pas
     Tests.Levels.Entities.pas
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
@@ -152,6 +153,11 @@ a console: started from the IDE, its window closes with the last line.
   scene goes out the scene is dropped, so that crumb's last state is never
   seen; the spot it lit is. A test that watches crumbs go out counts what
   it saw and asks that it saw some.
+- **A JSON key is never given twice.** Of two keys alike in one object
+  `GetValue` takes the first: a helper that writes a member and then lets
+  a test add the same member "beside" it tries the first, and a test that
+  should raise loads. A helper takes the members it writes as parameters
+  and leaves one out when told (`SectionOf` of `Tests.Levels.Carousels`).
 - **The runner fails a test that asserts nothing.**
 
 ## The conveyor
@@ -1468,6 +1474,123 @@ reads as a shelf.
 
 Left to the eye: that the dock's lamp and the shelf's picture sit right
 (`s07-shelf-dock`, tint, the unit under the floor line).
+
+### The carousel (3.0.52)
+
+State: written, 13 tests and one line, green on the first run (376 in
+the suite). Needs no stage. The
+tests join `TLevelPadsTests`, through `TLevel.LoadFromFile` as the others:
+what the level makes of a `carousels` section beside its pads, and of an
+entity that sits on a pad (`"seat"`), which leans on the pads as a respawn
+point does. The track and the orbit themselves are tried in
+`Levels.Carousels`, below.
+
+Shared: "the wheel" - `WheelJson`, a circle of 80 round (256, 160), a lap
+in 4 seconds; its decks fly from 176 to 336 across and from 80 to 240
+down. `RiderJson` - a pad 32 wide on it, with no place of its own;
+`WheelOfOne` - the wheel and one rider. "Sky" - a room with no solid cell
+at all, where a plunge hits nothing: the tests of what a rider may not do
+stand there, and load the same word on a still pad where the rider starts
+first, so the raise is the carousel's. `SeatedJson(APad)` - a barrel that
+sits on the pad tagged so.
+
+Numbers spelled, as decided: the start on the right of the middle and
+clockwise down; the riders a share of the lap apart in file order; the
+room of a rider, a cell over its deck and a cell under it; a seated body a
+cell wide, its middle over the middle of the deck. Not spelled: the
+numbers of the carousel in `level2.json`, how many pads it carries.
+
+Edit to an existing test: `TestPadReadsItsPlaceAndDefaults` gains one
+line, `Carousel` empty. It turns red when a pad with no carousel word
+reads as a rider.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestCarouselPlacesItsPadsWhereTheyStart` | the open room, the wheel and four riders: one carousel, tagged "wheel"; the riders keep its tag and are placed at (320, 160), (240, 240), (160, 160), (240, 80), in file order - the left edge of the deck and its height | the placement holds the middle of the deck, not its left edge; the riders are spaced by their index among all the pads; the start is not on the right or the way is not down |
+| `TestCarouselPadTakesNoPlaceOfItsOwn` | a rider loads with no x and no y; with an x it raises `EPadError`, with a y it raises too | a rider takes a place the carousel then quietly overrides, and the file lies about where the pad is |
+| `TestCarouselAndItsPadsMustMatch` | the wheel and its rider load; each alone raises `ELevelError`: a second rider of "whel" beside the first, a carousel that carries no pad (a still pad beside it), two carousels tagged "wheel", a carousel on screen 2 of a level of one | a typo of a tag loads: a pad stands at (0, 0) or a carousel turns with nothing on it |
+| `TestCarouselPadDoesNothingElse` | sky: the rider alone loads, and a still pad where it starts loads with a path, with a plunge and as a shelf; the rider with a path, with a plunge, as a shelf, in a group (its zone given) each raises `ELevelError` | the check is dropped: two motions fight over one pad, its riders jump between them |
+| `TestCarouselKeepsARoomClearOfWalls` | the open room: a ledge on row 1 over the top of the wheel loads, on row 2 raises; a ledge on row 10 under its bottom loads, on row 9 raises; a wall on column 6, in the way of its left side, raises - all `ELevelError` | the room over the deck is dropped (a betoner rides through the ceiling), the room under it is dropped (the body cuts a wall), or only the start is checked and not the lap |
+| `TestCarouselStaysOnTheScreen` | the wheel round (256, 112), its top deck at 32 and its room up to the edge: loads; round (256, 100): raises; round (460, 160), its right deck past the edge: raises | a rider flies off the hero's screen with what stands on it |
+| `TestCarouselPadsMayNotCutIntoEachOther` | two riders on the wheel load; two on a circle of 10 (half a lap apart, their bodies through one another) raise `ELevelError` | the check of the pairs is dropped: two decks pass through one another and the barrels on them too |
+| `TestRespawnOverACarouselPadRaises` | sky, a respawn point on column 11, row 4: over a still pad at (320, 160) it loads; over the rider placed there it raises `ELevelError` | a rider counts as a floor that stays because its placement says it is there: the hero is reborn over a pad that has flown off |
+| `TestEntitySitsOnTheMiddleOfItsPad` | a pad 64 wide at (100, 160), tagged "bench", and a barrel on it: `Seat` "bench", `SeatLeft` 116, `SeatFeet` 160, its cell 5 and 5 (the nearest); a barrel beside it with no seat keeps column 12 and row 3, `Seat` empty | the body is set by its left edge on the left of the deck, or by its middle on the left edge; the cell is not put and the triggers of the placement count from (0, 0) |
+| `TestEntityOnACarouselSitsOnTheStartItself` | the wheel round (256.4, 160.3) and a rider tagged "ride": the rider is placed at (320, 160), the barrel on it sits from 320.4 with its feet on 160.3 | the seat is taken from the rounded placement: the betoner hangs a few tenths off its deck all the way round |
+| `TestSeatedEntityTakesNoCell` | an entity on "bench" loads; with an x it raises `ELevelError`, with a y too | a seated entity takes a cell the seat then overrides |
+| `TestSeatOnAnUnknownPadRaises` | a seat on "bnech" raises `ELevelError` | a typo of a seat loads: the barrel stands at (0, 0) |
+| `TestLevelTwoCarouselIsInItsFile` | `level2.json` loads; it holds `s08-carousel` on screen 8, turning clockwise; it carries more than two pads; each of them has exactly one entity seated on it; two are betoners and the rest barrels | the hall of screen 8 loses a seat or a word, a pad of the carousel flies empty, or a betoner turns into a barrel |
+
+Left to the eye: that the riders fly round in the game - the world flies
+them by the orbit (`Pads.World`, which needs the stage) and the riders go
+with them as with any path; that a seated monster is put on the seat and
+not on its cell (`Monsters`, which needs a pad world with a carousel); the
+picture of the hall and its rigs.
+
+## Levels.Carousels
+
+State: written, 20 tests, green (376 in the suite) after one red that
+was the test's own (a key given twice, above). Needs no stage: the track and the
+orbit are records that count, built from a `TCarousel` the test fills by
+hand, and `ParseCarousels` takes a JSON root the test makes. The unit is
+tried by `Tests\Levels\Tests.Levels.Carousels.pas`, fixtures
+`TCarouselTrackTests`, `TCarouselOrbitTests` and `TLevelsCarouselsTests`
+(the free functions). The expectations were computed on a Python mirror of
+the track and the orbit; `Tests.Pads.Shelf.pas` is the sample.
+
+Shared:
+
+- `CarouselOf(Shape, CenterX, CenterY, Width, Height, Corner)` - a
+  carousel tagged "wheel" on screen 1, a lap in 4 seconds, clockwise,
+  start 0; `TrackOf` and `OrbitOfSlot` build from it.
+- "The circle" (`CircleOf`) - an oval of 160 by 160 round (256, 160): a
+  lap of 132 ticks, a quarter in 33.
+- A place is compared within 0.01: the points of the track are `Single`.
+
+Numbers spelled, as decided: 33 ticks a second; the start on the right of
+the middle, clockwise down the screen; one even pace along the track, not
+along the angle; a pad a share of the lap ahead of the one before it in
+file order; the start a share of the lap the way the carousel turns; a lap
+of one tick at the least; the words oval, box, cw, ccw and the defaults
+oval, cw, corner 0, start 0. Not spelled: how many points make an oval or
+a corner (only that the track keeps to its curve within a hair).
+
+### TCarouselTrack
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestOvalStartsRightOfItsMiddleAndGoesDown` | an oval of 200 by 100 round (256, 192): at 0 it is at (356, 192), a quarter round at (256, 242), half round at (156, 192), three quarters at (256, 142) | the start is on another side, or the track runs counter-clockwise on the screen (the angle taken with y up) |
+| `TestOvalLiesOnItsCurve` | a hundred points along it lie on the ellipse within a thousandth; its length is Ramanujan's within a thousandth | the width is taken for the half width, or the two halves are swapped |
+| `TestOvalIsWalkedAtAnEvenPace` | forty equal steps along it cover lengths on the screen within 2% of one another | the pace follows the angle: the pads bunch at the narrow ends of an oval |
+| `TestBoxGoesDownItsRightSideFirst` | a box of 200 by 100 round (256, 192), corners 0: 600 long; at 0 (356, 192), 50 (356, 242), 150 (256, 242), 250 (156, 242), 350 (156, 142), 450 (256, 142), 575 (356, 167) | the box starts in a corner, runs the other way, or a side is left out |
+| `TestRoundedBoxCutsItsCornersAndKeepsItsSides` | the same box with corners of 20: shorter than the sharp one by (8 - 2 Pi) * 20 within half a unit; over 2000 points it reaches 156 and 356 across and 142 and 242 down, and never within 7 units of a corner of the box | a corner is rounded outward or about the wrong middle, a side is lost, or the corner is ignored |
+| `TestBoxRoundedAllTheWayIsACircle` | a square of 100 with corners of 50: every point within half a unit of 50 from the middle; at 0 (306, 192), a quarter round (256, 242) | a leg of no length (the sides of no length between the quarters) divides by zero: the pad's place is NaN |
+| `TestPlaceWrapsPastALapAndBelowZero` | a box with corners of 10: any of five distances is the same place 3 and 1 laps back and 1 and 5 laps on; 25 units back from the start is (356, 167) | the lap is folded by truncation, not floor (below zero reads off the line), or a distance past a lap is not folded |
+
+### TCarouselOrbit
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestOrbitOfNoCarouselDoesNotRide` | a `Default(TCarouselOrbit)` does not ride; `OrbitOf` gives none to a pad with no carousel word, none to a pad of a carousel the list has not, one to a pad of the wheel | every pad of the game rides, or a misspelt rider goes round a carousel it was not given |
+| `TestFirstPadStartsAtItsShareOfTheLap` | the circle, one pad: start 0 at the right; 0.25 clockwise at the bottom; 0.75 clockwise at the top; 0.25 counter-clockwise at the top | the start is counted clockwise whatever the turn, or taken from another side |
+| `TestPadsShareTheLapInFileOrder` | five pads: wheel, none, other, wheel, wheel. The three of the wheel at tick 0: the right, a third round (120 degrees), two thirds round; the one of "other" at the right, the only pad of its carousel | the slot is the index among all the pads, or the count of the slots takes the pads of another carousel |
+| `TestLapTakesThePeriod` | the circle of 4 seconds: at tick 33 the bottom, at 66 the left; at ticks 0, 7, 50 and 131 the place is the same a lap (132 ticks) on | the period is taken as ticks or frames, or a lap is a tick off and the riders drift from their places lap by lap |
+| `TestPadMovesBetweenTicksToo` | a tick takes the pad a 132nd of the circle; half a tick takes it half of that, the other half the rest; half a tick on it is on the circle | the time is cut to whole ticks: the pad stutters on the screen, as drawn between ticks |
+| `TestCounterClockwiseMirrorsClockwise` | an oval of 200 by 100, start 0.1, 3 seconds: at ticks 0, 17, 50 and 98 the pad turning counter-clockwise is the clockwise one mirrored over y = 192 | counter-clockwise runs clockwise, or its start is counted the other way |
+
+### The free functions
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNoSectionIsNoCarousels` | a root with no section, and an empty section: no carousels | a level without the word fails to load |
+| `TestCarouselReadsWhatItIsGiven` | tag, screen 3, box, center (288, 179), size 150 by 120, corner 10, period 12, ccw, start 0.5: each in its own field | two members are swapped on the way in |
+| `TestCarouselLeftOutComesToItsDefaults` | only tag, screen, center, size and period: oval, corner 0, clockwise, start 0 | a default changes under the level files |
+| `TestWordsAreReadInAnyCase` | "BOX" and "Ccw", "Oval" and "CW" read as their words | the words are compared case-sensitively |
+| `TestBadCarouselRaises` | each alone raises `ECarouselError`: shape "circle", turn "left", a center of one number, of three, of a word, no center, a width of 0, a height of -1, no size, a corner of -1, a corner of 60.5 on a box of 150 by 120, a period of 0, of -1, no period, a start of -0.1, of 1. A corner of 60 with a start of 0.99 loads | a typo loads: a carousel of no size, one that never turns or divides by zero, a start a lap on |
+| `TestCarouselIsFoundByItsTag` | of two, "second" is found and is the second (screen 5); "third" is not found | the first is given whatever the tag |
+| `TestLapIsATickAtTheLeast` | 12 seconds: 396 ticks; a 33rd of a second: 1; a thousandth: 1 | a lap of 0 ticks: the step divides by zero |
+
+Left to the eye: how a pad looks going round - the bob, the sag, the
+lamps it wears; that the even pace reads as even in a live run.
 
 ## Levels.Entities
 

@@ -81,6 +81,7 @@
         <DCCReference Include="Game\Tests.Game.Blasts.pas"/>
         <DCCReference Include="Game\Tests.Game.Shroud.pas"/>
         <DCCReference Include="Game\Tests.Game.Uptake.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Carousels.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Entities.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Graph.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>

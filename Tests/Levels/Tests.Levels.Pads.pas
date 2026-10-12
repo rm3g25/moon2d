@@ -6,8 +6,10 @@
   that run after it.
 
   The level is loaded from a one-screen room with the pads and the
-  respawns of the test added to its root; one test loads level2.json
-  beside the executable, for the shelf it holds. The checks of pad
+  respawns of the test added to its root; two tests load level2.json
+  beside the executable, for the shelf and the carousel it holds. The
+  carousels of a level and the entities that sit on a pad lean on the
+  pads as the respawns do, and are tried here too. The checks of pad
   groups, of the rigs a pad wears and of the events are not tried here.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -81,6 +83,32 @@ type
     procedure TestRespawnOverAShelfRaises;
     [Test]
     procedure TestLevelTwoShelfIsInItsFile;
+    [Test]
+    procedure TestCarouselPlacesItsPadsWhereTheyStart;
+    [Test]
+    procedure TestCarouselPadTakesNoPlaceOfItsOwn;
+    [Test]
+    procedure TestCarouselAndItsPadsMustMatch;
+    [Test]
+    procedure TestCarouselPadDoesNothingElse;
+    [Test]
+    procedure TestCarouselKeepsARoomClearOfWalls;
+    [Test]
+    procedure TestCarouselStaysOnTheScreen;
+    [Test]
+    procedure TestCarouselPadsMayNotCutIntoEachOther;
+    [Test]
+    procedure TestRespawnOverACarouselPadRaises;
+    [Test]
+    procedure TestEntitySitsOnTheMiddleOfItsPad;
+    [Test]
+    procedure TestEntityOnACarouselSitsOnTheStartItself;
+    [Test]
+    procedure TestSeatedEntityTakesNoCell;
+    [Test]
+    procedure TestSeatOnAnUnknownPadRaises;
+    [Test]
+    procedure TestLevelTwoCarouselIsInItsFile;
   end;
 
 implementation
@@ -88,6 +116,7 @@ implementation
 uses
   System.IOUtils,
   System.SysUtils,
+  Levels.Carousels,
   Levels.Pads,
   Tests.Rooms;
 
@@ -111,6 +140,16 @@ const
   LevelTwoFile = 'level2.json';
   LevelTwoShelfTag = 's07-shelf-01';
   LevelTwoShelfScreen = 7;
+  // The carousel of level 2, screen 8
+  LevelTwoCarouselTag = 's08-carousel';
+  LevelTwoCarouselScreen = 8;
+  // The carousel of the tests: a circle of 80 round (256, 160), a lap in
+  // 4 seconds. Its decks go from 176 to 336 across and from 80 to 240
+  // down; a pad 32 wide starts on the right at (320, 160) as placed.
+  WheelTag = 'wheel';
+  // A respawn point on column 11, row 4: its middle is over the first
+  // pad of the wheel, its feet above the deck
+  RespawnOverTheWheel = '"respawns":[{"screen":1,"x":11,"y":4}]';
 
 function OpenRows: TArray<string>;
 begin
@@ -206,6 +245,59 @@ begin
     'not %g', [AWhat, AStep.Seconds, ASeconds]));
 end;
 
+// The sky room: no wall anywhere, nothing for a plunge to hit
+function SkyRows: TArray<string>;
+begin
+  SetLength(Result, RoomRows);
+  for var i := 0 to RoomRows - 1 do
+    Result[i] := StringOfChar('.', RoomCols);
+end;
+
+// The carousel of the tests, its center and size as they stand in a file
+function WheelJson(const ACenter: string = '[256,160]';
+  const ASize: string = '[160,160]'; AScreen: Integer = 1): string;
+begin
+  Result := Format('{"tag":"%s","screen":%d,"center":%s,"size":%s,' +
+    '"period":4}', [WheelTag, AScreen, ACenter, ASize]);
+end;
+
+function CarouselsSection(const ACarousels: array of string): string;
+begin
+  Result := '"carousels":[' + string.Join(',', ACarousels) + ']';
+end;
+
+// A pad that rides the carousel tagged ACarousel, with no place of its own
+function RiderJson(const AExtra: string = '';
+  const ACarousel: string = WheelTag): string;
+begin
+  Result := Format('{"sprite":"%s","screen":1,"width":%d,"carousel":"%s"',
+    [SpriteName, PadWidth, ACarousel]);
+  if AExtra <> '' then
+    Result := Result + ',' + AExtra;
+  Result := Result + '}';
+end;
+
+// The wheel and one rider with AExtra
+function WheelOfOne(const AExtra: string = ''): string;
+begin
+  Result := CarouselsSection([WheelJson]) + ',' +
+    PadsSection([RiderJson(AExtra)]);
+end;
+
+function EntitiesSection(const AEntities: array of string): string;
+begin
+  Result := '"entities":[' + string.Join(',', AEntities) + ']';
+end;
+
+// A barrel that sits on the pad tagged APad; AExtra beside it
+function SeatedJson(const APad: string; const AExtra: string = ''): string;
+begin
+  Result := Format('{"monsterId":"barrel","screen":1,"seat":"%s"', [APad]);
+  if AExtra <> '' then
+    Result := Result + ',' + AExtra;
+  Result := Result + '}';
+end;
+
 function RespawnOverTheGap: string;
 begin
   Result := Format('"respawns":[{"screen":1,"x":%d,"y":8}]', [GapCol]);
@@ -269,6 +361,7 @@ begin
   Assert.AreEqual('', Pad.Group);
   Assert.IsFalse(Pad.Plunge.Plunges, 'A pad holds unless it is asked to give');
   Assert.IsFalse(Pad.Shelf.Slides, 'A pad stays in front unless it is a shelf');
+  Assert.AreEqual('', Pad.Carousel, 'A pad rides no carousel unless asked');
 end;
 
 procedure TLevelPadsTests.TestPadReadsWhatItIsGiven;
@@ -664,6 +757,226 @@ begin
       Assert.IsTrue(Placement.Shelf.WarnSeconds < Step.Seconds,
         Format('A warning of %g seconds over a stand of %g',
         [Placement.Shelf.WarnSeconds, Step.Seconds]));
+end;
+
+// The four pads of the wheel start a quarter of the lap apart, in file
+// order, from the right of the middle down: the placement holds the left
+// edge of the deck and the deck's height, rounded to whole units
+procedure TLevelPadsTests.TestCarouselPlacesItsPadsWhereTheyStart;
+const
+  Expected: array [0 .. 3, 0 .. 1] of Integer =
+    ((320, 160), (240, 240), (160, 160), (240, 80));
+begin
+  UseLevel(OpenRows, CarouselsSection([WheelJson]) + ',' +
+    PadsSection([RiderJson, RiderJson, RiderJson, RiderJson]));
+
+  Assert.AreEqual(1, Integer(Length(FLevel.Carousels)), 'One carousel');
+  Assert.AreEqual(WheelTag, FLevel.Carousels[0].Tag);
+  Assert.AreEqual(4, Integer(Length(FLevel.Pads)), 'Four pads');
+  for var i := 0 to 3 do
+  begin
+    var Pad := FLevel.Pads[i];
+    Assert.AreEqual(WheelTag, Pad.Carousel, Format('Pad %d rides', [i]));
+    Assert.AreEqual(Expected[i, 0], Pad.X, Format('The x of pad %d', [i]));
+    Assert.AreEqual(Expected[i, 1], Pad.Y, Format('The y of pad %d', [i]));
+  end;
+end;
+
+procedure TLevelPadsTests.TestCarouselPadTakesNoPlaceOfItsOwn;
+begin
+  ExpectLoads(OpenRows, WheelOfOne, 'A rider with no place');
+  ExpectRaises(EPadError, OpenRows, WheelOfOne('"x":96'), 'A rider with an x');
+  ExpectRaises(EPadError, OpenRows, WheelOfOne('"y":160'), 'A rider with a y');
+end;
+
+// A pad on a carousel the level has not, a carousel with no pad, two
+// carousels of one tag, a carousel off the screen list
+procedure TLevelPadsTests.TestCarouselAndItsPadsMustMatch;
+begin
+  ExpectLoads(OpenRows, WheelOfOne, 'The wheel and its rider');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson]) + ',' +
+    PadsSection([RiderJson, RiderJson('', 'whel')]),
+    'A rider of a misspelt carousel beside one of the wheel');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson]) + ',' +
+    PadsSection([PadJson(96, 160)]), 'A carousel that carries no pad');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson,
+    WheelJson('[256,192]')]) + ',' + PadsSection([RiderJson]),
+    'Two carousels of one tag');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson(
+    '[256,160]', '[160,160]', 2)]) + ',' + PadsSection([RiderJson]),
+    'A carousel on a screen the level has not');
+end;
+
+// The sky room: a still pad where the rider starts may travel, plunge or
+// be a shelf; the rider may do none of it, and may join no group
+procedure TLevelPadsTests.TestCarouselPadDoesNothingElse;
+const
+  PathTo = '"path":{"stops":[[200,160]],"speed":32}';
+begin
+  ExpectLoads(SkyRows, WheelOfOne, 'The rider alone');
+  ExpectLoads(SkyRows, PadsSection([PadJson(320, 160, PathTo)]),
+    'A still pad there on a path');
+  ExpectLoads(SkyRows, PadsSection([PadJson(320, 160, '"plunge":{}')]),
+    'A still pad there that plunges');
+  ExpectLoads(SkyRows, PadsSection([PadJson(320, 160, '"shelf":{}')]),
+    'A still pad there that is a shelf');
+
+  ExpectRaises(ELevelError, SkyRows, WheelOfOne(PathTo),
+    'A rider on a path');
+  ExpectRaises(ELevelError, SkyRows, WheelOfOne('"plunge":{}'),
+    'A rider that plunges');
+  ExpectRaises(ELevelError, SkyRows, WheelOfOne('"shelf":{}'),
+    'A rider that is a shelf');
+  ExpectRaises(ELevelError, SkyRows, WheelOfOne('"group":"zone"') + ',' +
+    GroupZone, 'A rider in a group');
+end;
+
+// A rider keeps a cell clear above its deck, for what stands on it, and
+// a cell below, for its body: the top deck flies at 80, the bottom at 240
+procedure TLevelPadsTests.TestCarouselKeepsARoomClearOfWalls;
+begin
+  ExpectLoads(RoomRowsOf(0, 1, 8, 9), WheelOfOne,
+    'A ledge on row 1, two cells over the top deck');
+  ExpectRaises(ELevelError, RoomRowsOf(0, 2, 8, 9), WheelOfOne,
+    'A ledge on row 2, within a cell over the top deck');
+  ExpectLoads(RoomRowsOf(0, 10, 8, 9), WheelOfOne,
+    'A ledge on row 10, two cells under the bottom deck');
+  ExpectRaises(ELevelError, RoomRowsOf(0, 9, 8, 9), WheelOfOne,
+    'A ledge on row 9, within a cell under the bottom deck');
+  ExpectRaises(ELevelError, RoomRowsOf(6, 0, 0, 0), WheelOfOne,
+    'A wall on column 6, in the way of the left side');
+end;
+
+// A rider and its room stay on the screen all the way round
+procedure TLevelPadsTests.TestCarouselStaysOnTheScreen;
+begin
+  ExpectLoads(OpenRows, CarouselsSection([WheelJson('[256,112]')]) + ',' +
+    PadsSection([RiderJson]), 'The top deck at 32, its room up to the edge');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson(
+    '[256,100]')]) + ',' + PadsSection([RiderJson]),
+    'The top deck at 20, its room over the edge');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson(
+    '[460,160]')]) + ',' + PadsSection([RiderJson]),
+    'The right deck past the right edge');
+end;
+
+// Two riders half a lap apart on a circle of 10 cut into one another;
+// on the wheel they do not
+procedure TLevelPadsTests.TestCarouselPadsMayNotCutIntoEachOther;
+begin
+  ExpectLoads(OpenRows, CarouselsSection([WheelJson]) + ',' +
+    PadsSection([RiderJson, RiderJson]), 'Two riders on the wheel');
+  ExpectRaises(ELevelError, OpenRows, CarouselsSection([WheelJson(
+    '[256,160]', '[20,20]')]) + ',' + PadsSection([RiderJson, RiderJson]),
+    'Two riders on a circle of 10');
+end;
+
+procedure TLevelPadsTests.TestRespawnOverACarouselPadRaises;
+begin
+  ExpectLoads(SkyRows, PadsSection([PadJson(320, 160)]) + ',' +
+    RespawnOverTheWheel, 'Over a still pad where the rider starts');
+  ExpectRaises(ELevelError, SkyRows, WheelOfOne + ',' + RespawnOverTheWheel,
+    'Over the rider');
+end;
+
+// A pad 64 wide at (100, 160): its middle is 132, so a body a cell wide
+// stands from 116, its feet on 160; its cell is the nearest, 5 and 5. An
+// entity with no seat keeps its cell.
+procedure TLevelPadsTests.TestEntitySitsOnTheMiddleOfItsPad;
+begin
+  UseLevel(OpenRows, PadsSection([PadJson(100, 160, '"tag":"bench"', 64)]) +
+    ',' + EntitiesSection([SeatedJson('bench'),
+    '{"monsterId":"barrel","screen":1,"x":12,"y":3}']));
+
+  var Seated := FLevel.Entities[0];
+  Assert.AreEqual('bench', Seated.Seat);
+  Assert.IsTrue(IsNear(Seated.SeatLeft, 116), Format('It stands from %g',
+    [Seated.SeatLeft]));
+  Assert.IsTrue(IsNear(Seated.SeatFeet, 160), Format('Its feet are on %g',
+    [Seated.SeatFeet]));
+  Assert.AreEqual(5, Seated.X, 'The column nearest');
+  Assert.AreEqual(5, Seated.Y, 'The row nearest');
+
+  var Standing := FLevel.Entities[1];
+  Assert.AreEqual('', Standing.Seat);
+  Assert.AreEqual(12, Standing.X, 'An entity with no seat keeps its column');
+  Assert.AreEqual(3, Standing.Y, 'and its row');
+end;
+
+// A wheel round (256.4, 160.3): the rider is placed at (320, 160), and the
+// entity on it sits where the deck truly starts, 320.4 and 160.3
+procedure TLevelPadsTests.TestEntityOnACarouselSitsOnTheStartItself;
+begin
+  UseLevel(OpenRows, CarouselsSection([WheelJson('[256.4,160.3]')]) + ',' +
+    PadsSection([RiderJson('"tag":"ride"')]) + ',' +
+    EntitiesSection([SeatedJson('ride')]));
+
+  Assert.AreEqual(320, FLevel.Pads[0].X, 'The rider is placed rounded');
+  Assert.AreEqual(160, FLevel.Pads[0].Y, 'in x and in y');
+  var Seated := FLevel.Entities[0];
+  Assert.IsTrue(Abs(Seated.SeatLeft - 320.4) < 0.001, Format('It stands ' +
+    'from %g', [Seated.SeatLeft]));
+  Assert.IsTrue(Abs(Seated.SeatFeet - 160.3) < 0.001, Format('Its feet are ' +
+    'on %g', [Seated.SeatFeet]));
+end;
+
+procedure TLevelPadsTests.TestSeatedEntityTakesNoCell;
+begin
+  var Bench := PadsSection([PadJson(100, 160, '"tag":"bench"', 64)]);
+  ExpectLoads(OpenRows, Bench + ',' + EntitiesSection([SeatedJson('bench')]),
+    'An entity on a seat');
+  ExpectRaises(ELevelError, OpenRows, Bench + ',' +
+    EntitiesSection([SeatedJson('bench', '"x":4')]), 'A seat and an x');
+  ExpectRaises(ELevelError, OpenRows, Bench + ',' +
+    EntitiesSection([SeatedJson('bench', '"y":5')]), 'A seat and a y');
+end;
+
+procedure TLevelPadsTests.TestSeatOnAnUnknownPadRaises;
+begin
+  ExpectRaises(ELevelError, OpenRows,
+    PadsSection([PadJson(100, 160, '"tag":"bench"', 64)]) + ',' +
+    EntitiesSection([SeatedJson('bnech')]), 'A seat on a misspelt pad');
+end;
+
+// The hall of screen 8: the carousel turns clockwise, and every pad it
+// carries has one entity on it - two betoners, barrels on the rest
+procedure TLevelPadsTests.TestLevelTwoCarouselIsInItsFile;
+var
+  Carousel: TCarousel;
+begin
+  FreeAndNil(FLevel);
+  FLevel := TLevel.Create;
+  FLevel.LoadFromFile(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    LevelTwoFile));
+
+  Assert.IsTrue(TryFindCarousel(FLevel.Carousels, LevelTwoCarouselTag,
+    Carousel), 'Level 2 holds no carousel tagged ' + LevelTwoCarouselTag);
+  Assert.AreEqual(LevelTwoCarouselScreen, Carousel.Screen,
+    'The screen of the carousel');
+  Assert.AreEqual<TCarouselTurn>(ctClockwise, Carousel.Turn);
+
+  var Riders := 0;
+  var Betoners := 0;
+  for var Pad in FLevel.Pads do
+  begin
+    if Pad.Carousel <> LevelTwoCarouselTag then
+      Continue;
+    Inc(Riders);
+    var Seated := 0;
+    for var Entity in FLevel.Entities do
+      if (Entity.Seat <> '') and (Entity.Seat = Pad.Tag) then
+      begin
+        Inc(Seated);
+        if Entity.MonsterId = 'betoner' then
+          Inc(Betoners)
+        else
+          Assert.AreEqual('barrel', Entity.MonsterId,
+            'On ' + Pad.Tag + ' sits neither a betoner nor a barrel');
+      end;
+    Assert.AreEqual(1, Seated, 'Entities on ' + Pad.Tag);
+  end;
+  Assert.IsTrue(Riders > 2, Format('The carousel carries %d pads', [Riders]));
+  Assert.AreEqual(2, Betoners, 'Betoners on the carousel');
 end;
 
 initialization
