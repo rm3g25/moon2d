@@ -1122,8 +1122,7 @@ own door, `TakeJolt`, and is not tried here.
 
 ## Effects.Traces
 
-State: written, 19 tests, not yet run - there is no Delphi compiler where
-the models work, so the first run is on the developer's machine. The
+State: written, 19 tests, green (343 in the suite). The
 expectations were checked on a Python mirror of the unit: every bound
 holds over the seeds and the times the tests use, and the two traps found
 there (see `SlotRoll` in the map) are each red on the mirror without
@@ -1174,7 +1173,7 @@ matter of the eye, too.
 
 ## Levels.Graph
 
-State: written, 9 tests, not yet run (see `Effects.Traces`). The unit is
+State: written, 9 tests, green (343 in the suite). The unit is
 tried by `Tests\Levels\Tests.Levels.Graph.pas`, fixture `TLevelGraphTests`,
 through `ParseDynamic` and `ParseDynamics` of `Levels.Dynamics`: an object
 is parsed from a JSON text of the test and read back through its
@@ -1304,7 +1303,8 @@ reads the effort, and a rig is drawn.
 
 ## Pads.Shelf
 
-State: written, 12 tests, not yet run. Needs no stage: `TShelfCycle` is a
+State: written, 12 tests, green on the first run (343 in the suite).
+Needs no stage: `TShelfCycle` is a
 record that counts, built from a `TPadShelf` the test fills by hand
 (`Levels.Pads` is in the interface). The expectations were checked on a
 Python mirror of the cycle: every test is green on it, and under each of
@@ -1389,8 +1389,8 @@ Open, found while the tests were designed:
 
 ## Levels.Pads
 
-State: written, green (239 in the suite); the tests of the shelf, below,
-written and not yet run. Needs no stage. The unit is tried by
+State: written, green (343 in the suite); the tests of the shelf, below,
+green on the first run. Needs no stage. The unit is tried by
 `Tests\Levels\Tests.Levels.Pads.pas`, fixture `TLevelPadsTests`, through
 `TLevel.LoadFromFile`: the parser (`Levels.Pads`) and the checks at load
 (`Levels.Defs`) are one door from outside - a level that loads, its `Pads`
@@ -1435,7 +1435,8 @@ rigs a pad wears and of the events that rebuild are not tried.
 
 ### The shelf (3.0.51)
 
-State: written, 12 tests and one line, not yet run. Needs no stage. The
+State: written, 12 tests and one line, green on the first run (343 in
+the suite). Needs no stage. The
 tests join `TLevelPadsTests` (`Tests\Levels\Tests.Levels.Pads.pas`),
 through `TLevel.LoadFromFile` as the others. One line is added to an
 existing test, and twelve tests are new.

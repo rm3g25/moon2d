@@ -13,8 +13,8 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 `v3.0.40`, for the repaint of level 2's screens 1-3 after it, for the blast
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
 at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
-shroud at `v3.0.47`, the henshin on orbs at `v3.0.49` and the uptake of
-pickups at `v3.0.50` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
+pickups at `v3.0.50` and the shelf at `v3.0.51` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -37,7 +37,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   of a pickup (`Game.Uptake`), the version. `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
-  (`Pads.Plunge`), the rebuild of a pad group (`Pads.Formations`,
+  (`Pads.Plunge`), the cycle of a shelf that slides in and out of its
+  wall (`Pads.Shelf`), the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one and of the
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
   (`Orbs.Flock`), the harvest of spots on the matter of a screen
@@ -78,8 +79,9 @@ kind and `Effects.Traces` for the graph kind; draws through `Render.Glow`, `Rend
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) / `Pads.Plunge` (the cycle of a
-plunging pad: over `Levels.Pads` and `Render.Brush` alone) -> `Pads.World`
-(the pads in play: over the three, `Levels.Pads`, `Levels.Defs`,
+plunging pad: over `Levels.Pads` and `Render.Brush` alone) / `Pads.Shelf`
+(the cycle of a shelf: over `Levels.Pads` alone) -> `Pads.World`
+(the pads in play: over the four, `Levels.Pads`, `Levels.Defs`,
 `Render.Sprites`,
 `Render.Brush`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
@@ -313,7 +315,8 @@ screen dump of the dpr.
   (`reference to function(tag, out TParentStand)`: screen, the top-left of
   the parent's picture, alive, `Effort` - how hard it works, 0..1: a pad
   flying or about to leave its place works at 1, a pad that plunges in
-  fits (3.0.46, `TPad.Effort`), and `Tick` passes it on
+  fits (3.0.46, `TPad.Effort`), a shelf at 1 while it warns that it is
+  about to slide in (3.0.51), and `Tick` passes it on
   to the object before the tick (`FollowEffort`); for a monster that spins
   also `Spins` and a `TParentSpin` - its `TSpinPose` (the axis on the
   screen, the angle in degrees clockwise) now and a tick ago, plus where the
@@ -332,7 +335,9 @@ screen dump of the dpr.
   children go in as the parent's picture does), `Shrink` and `Dim` (the
   shares of its size and of its light the parent has lost all the way in),
   `Pivot` (the point it shrinks about, from its top-left corner); all zero -
-  a parent in front, and one that never leaves it. `Tick(screen)` ticks
+  a parent in front, and one that never leaves it. A shelf slides into its
+  wall without what hangs on it (3.0.51): the game hands it the depth of
+  a flight alone (`TPad.RigDepth`), zero for a shelf. `Tick(screen)` ticks
   every object whatever
   the screen (a
   lamp keeps its rhythm off screen) with the origin of its stand on the
@@ -469,7 +474,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1140 lines)
+### `Core/Levels.Defs.pas` (~1155 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -528,7 +533,11 @@ Level data model + JSON parser. No game logic.
   in the cells under it down to the bottom of the grid, its own included
   (`ShaftUnder` makes the zone, `TryFindWall` looks;
   `SLevelPadPlungeWall` - it falls straight out of its screen, through
-  anything, its riders with it). `PadGroups` - the pads rebuilt together (`Levels.Pads`), in
+  anything, its riders with it); and, for a shelf (3.0.51,
+  `CheckPadShelf`), a plunge or a group (`SLevelPadShelfBusy` - a shelf
+  leaves the front by its program alone: a plunge would drop the deck it
+  has just slid out, a rebuild would fly a pad that is in the wall; a path
+  it may travel). `PadGroups` - the pads rebuilt together (`Levels.Pads`), in
   file order. The private `CheckPadGroups` -> `CheckPadGroup` refuses a
   group off the screen list, two groups with one tag, a zone off the
   screen, under three cells either way, with a wall in it (`TryFindWall`)
@@ -591,8 +600,8 @@ Level data model + JSON parser. No game logic.
   (`SLevelRespawnInWall`) and one with no floor under it
   (`SLevelRespawnOverPit`; `RespawnHasFloor` - a wall below in the column,
   or under the cell's middle the deck of a pad that stands still, one with
-  no path, no group and no plunge: a pad that travels, is rebuilt or
-  plunges may not be there).
+  no path, no group, no plunge and no shelf: a pad that travels, is
+  rebuilt, plunges or slides in may not be there).
   Coming through a door moves nobody to the point; a named deviation from
   2008, whose checkpoint was the entry point and what a heroX / heroY
   trigger wrote.
@@ -1072,14 +1081,15 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~345 lines)
+### `Core/Levels.Pads.pas` (~520 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
 edge, carries what lands on it; from below and from the side anything
-passes through. Under the deck the pad has a body one cell deep: it stops
-the boss's flight, the sparks and the debris, and the bullets unless the
-pad lets them by. A pad may travel a path - there and back along its
+passes through. Under the deck the pad has a body as deep as its picture,
+a cell at the most (3.0.51; `Pads.World` keeps half a cell at the least):
+it stops the boss's flight, the sparks and the debris, and the bullets
+unless the pad lets them by. A pad may travel a path - there and back along its
 stops, or round them - and may bob in the air: the path moves the pad
 itself, the bob is for the eye alone (`Pads.World` says why). Pads of a
 group are rebuilt together: they fly to a new formation inside the
@@ -1088,8 +1098,12 @@ by its `group`); a pad the file puts outside the zone flies in with the
 first rebuild (3.0.38). A pad may plunge (3.0.46): it holds until the hero
 stands on it, then gives way, falls out of the screen and climbs back to
 its place - a failing pad, and it looks it (`Pads.Plunge` counts the
-cycle); it stands on its place, with no path and in no group. A 2026
-addition.
+cycle); it stands on its place, with no path and in no group. A pad may
+be a shelf (3.0.51): it slides out of the wall behind it and back in by a
+program of steps that goes round and round (`Pads.Shelf` counts the
+cycle); out, it is a pad as any other, on its way and in the wall it is
+neither a floor nor a body; it joins no group and does not plunge, a path
+it may travel. A 2026 addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
@@ -1098,7 +1112,8 @@ addition.
   `Path` (a `TPadPath`; `prNone` - the pad stands where it is placed),
   `Bob` (how far the pad sways up and down, in units; 0 = still),
   `Plunge` (a `TPadPlunge`; `Plunges` False - the pad holds whatever
-  stands on it), `Group`
+  stands on it), `Shelf` (a `TPadShelf`; `Slides` False - the pad never
+  leaves the front), `Group`
   (the pad group it is rebuilt with; '' = none), `Rigs` (the rigs it wears,
   by name, in the order they are hung - `Levels.Rigs` holds them and hangs
   them).
@@ -1108,6 +1123,22 @@ addition.
   climbs home at - the mean of an uneven climb). `DefaultPlungeDelay`
   (0.5), `DefaultPlungeRest` (0.5), `DefaultPlungeRise` (64) - what a
   plunge takes for a number it leaves out.
+- **`TPadShelf`** (record, 3.0.51) - a pad that slides out of the wall
+  behind it and back in: `Slides`, `Steps` (a `TArray<TShelfStep>`: the
+  program, its steps taking turns, out and in, the last and the first
+  too; after the last comes the first), `SlideSeconds` (between two
+  steps), `WarnSeconds` (before it leaves the front it says so),
+  `OffsetSeconds` (it starts this far into its program: shelves in a row
+  go as a wave), `Deep` (how it looks in the wall). **`TShelfStand`** =
+  (`shOut`, `shIn`) - where a step holds it; `ShelfStandIds`
+  ('out'/'in') - the JSON words. **`TShelfStep`** (record) - `Stand`,
+  `Seconds` (held there, the slide not counted). **`TPadDeepLook`**
+  (record) - a pad all the way into the depth: `Scale` and `Tone` (shares
+  of its size and its light in front), `Sink` (units its picture goes
+  down). `DefaultShelfOut` (2.0), `DefaultShelfIn` (1.5),
+  `DefaultShelfSlide` (0.25), `DefaultShelfWarn` (0.5),
+  `DefaultShelfScale` (0.72), `DefaultShelfTone` (0.4) - what a shelf
+  takes for a number it leaves out; the offset and the sink take 0.
 - **`TPadZone`** (record) - `Left`, `Top`, `Right`, `Bottom`: cells of a
   screen, 0-based, the bounds included. **`TPadGroup`** (record) - `Tag`,
   `Screen` (1-based), `Zone`, `Pairs` (at least this many pairs side by
@@ -1144,6 +1175,13 @@ addition.
   "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"`,
   `"plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}` (`ReadPlunge`;
   absent = the pad holds, a number left out takes its default),
+  `"shelf": {"out": 2, "in": 1.5, "slide": 0.25, "warn": 0.5, "offset":
+  0, "sink": 7, "scale": 0.72, "tone": 0.4}` (`ReadShelf`; absent = the
+  pad never leaves the front, `{}` - a shelf on the defaults), or with
+  `"program": [["out", 2], ["in", 0.5], ["out", 0.5], ["in", 1.5]]` in
+  place of `"out"` and `"in"` (`ReadShelfSteps`: `StepsOfOutAndIn` makes
+  the two-step program of the keys, `ReadShelfStep` reads a step, the
+  words in any case; `StepsTakeTurns` asks the order),
   `"group"` and `"rig": ["pad", "arenaAlarm"]` (`ReadRigNames` of
   `Levels.Rigs`; absent = the pad wears nothing). **`PadRigName(pad)`** -
   the pad as the errors of its rigs call it: `pad "<tag>"`, without a tag
@@ -1154,11 +1192,17 @@ addition.
   (`SPadNoStops`), a stop that is not a pair of numbers (`ReadStop`,
   `SPadBadStop`), a speed of zero or less, a pause or a bob below zero,
   a plunge with a delay or a rest below zero or a rise of zero or less
-  (`SPadBadNumber`); a rig that is not a list of names raises `ERigError`,
-  in `Levels.Rigs`. The
+  (`SPadBadNumber`); a shelf with a `program` beside its `out` or `in`
+  (`SPadShelfTwoPrograms`), a step that is not `["out", seconds]` or
+  `["in", seconds]` (`SPadShelfBadStep`), steps that do not take turns or
+  no steps (`SPadShelfNoTurns`), a step of zero seconds or less, a slide,
+  a warn or an offset below zero, a scale out of 0..1 or zero, a tone out
+  of 0..1 (`SPadBadNumber`); a rig that is not a list of names raises
+  `ERigError`, in `Levels.Rigs`. The
   screen range, a tag on two pads, a stop off
-  the screen and what a plunge needs of the level - no path, no group, a
-  clear shaft - are `Levels.Defs`' (`CheckPads`).
+  the screen, what a plunge needs of the level - no path, no group, a
+  clear shaft - and what a shelf may not - plunge, join a group - are
+  `Levels.Defs`' (`CheckPads`).
 
 ### `Core/Levels.Rigs.pas` (~320 lines)
 The `rigs` section of level JSON: what the pads and the monsters wear. A
@@ -1475,7 +1519,44 @@ addition.
     to 1 by the power.
   - `Phase`; `Below` - units below its place.
 
-### `Game/Pads/Pads.World.pas` (~1315 lines)
+### `Game/Pads/Pads.Shelf.pas` (~175 lines)
+The cycle of a shelf (`Levels.Pads`, `shelf`; 3.0.51): a pad that slides
+out of the wall behind it and back in by its program. A step holds it out
+or in for its seconds; between two steps it slides. The program goes
+round: after its last step the shelf slides to its first. The cycle keeps
+the program laid out in ticks and nothing else: where the shelf is at a
+tick of its pad's clock it works out anew every time, so a pad that stood
+still off the hero's screen, or was rewound, needs no telling. Out all
+the way, the shelf holds: it is a floor and a body; from the tick it
+starts in until it is out again it is neither. Before it starts in it
+warns. No SDL and no level in it - a record a test drives alone.
+`Pads.World` asks it and draws the slide. A 2026 addition.
+- **`TShelfPhase`** = (`spOut`, `spGoingIn`, `spIn`, `spGoingOut`).
+  **`TShelfSpan`** (record) - `Phase`, `Ticks`: a held step or a slide.
+- **`TShelfCycle`** (record; its state is private) -
+  - `Build(shelf)` - the program in ticks (seconds * 33,
+    `LogicTicksPerSecond`, local; `Round`, so a half tick goes to the even
+    one): round the steps, a span held (`HeldPhases`: `spOut` / `spIn`)
+    and the slide to the next step (`SlidePhases`: `spGoingOut` /
+    `spGoingIn`, by where the next one stands), the last step's slide back
+    to the first; a step or a slide too short for a tick takes one all the
+    same - a span of no ticks would be a jump. The warning and the offset
+    in ticks. A pad that is no shelf gets no spans: `Slides` False, and
+    every answer below is the front's.
+  - `PhaseAt(tick)`; `Holds(tick)` - out all the way (`spOut`), a floor
+    and a body; `Warns(tick)` - out, and the end of the stand closer than
+    the warning (after a span out comes the slide in, whatever the
+    program): the pad's `Effort` is 1 then; `Latches(tick)` - out at this
+    tick and not at the one before: the shelf has come out all the way and
+    its latch catches. `Depth(time)` - 0 out .. 1 all the way in, at an
+    even pace through a slide, `time` between ticks (the world eases it).
+  - `SpanAt(time, into)` (private) - the span at a time and how far into
+    it: the offset added, the lap folded by `Floor` (a time before the
+    start, which a draw right after a restart asks, is the end of the
+    lap), a time a hair before the lap's end that rounds up to the end
+    itself held at the last span.
+
+### `Game/Pads/Pads.World.pas` (~1400 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1514,7 +1595,18 @@ path would take it: the deck goes, the rider with it, out of the screen
 and past the line where the game takes a faller out of the pit; no wall
 stops it - the level keeps the shaft under it clear. It climbs back as a
 floor and carries up whoever lands on it; its twitch is drawn with the
-sag, not felt.
+sag, not felt. A shelf (3.0.51; `Pads.Shelf` counts its cycle) slides
+into the wall behind it and out again. It goes nowhere: its deck stays on
+its line, and while the shelf is not out all the way it is neither a
+floor nor a body, as a pad flown into the depth - what stands on it
+falls, bullets fly through. The slide is drawn as that depth is, at the
+shelf's own size and light (`TPadDeepLook` of the level file), its
+picture sinking. A shelf does not sag and has no jets: its `Effort` is
+its warning. What hangs on it is the wall's and stays in front. The
+monsters ask for their deck every tick and fall by themselves; the hero,
+who asks nothing while he stands, asks `DeckWithdrawn`. The tick its
+latch catches the world tells, as a rebuild's sounds, and the game
+voices.
 Born with the level (`LoadLevel`); a restart rewinds it, the dice of the
 rebuilds new for the new try.
 - **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
@@ -1539,12 +1631,15 @@ rebuilds new for the new try.
   depth, at whatever depth, and the rest: the layer `Draw` takes.
   `DeepScale` (0.85) and `DeepTone` (0.6) - a pad all the way into the
   depth, its size and its light; open, for the game passes them on to what
-  hangs on the pad.
+  hangs on the pad. `FlownDeep` (implementation) - the same as a
+  `TPadDeepLook` with no sink: what every pad but a shelf draws its depth
+  by (`FDeep`); a shelf draws by its placement's `Shelf.Deep`.
 - **`TPad`** - one pad: `Left`, `Right` (`Left` + width), `Top` (the deck -
   the feet line of whatever stands on the pad), `PrevTop` (the deck a tick
   ago), `Screen`, `Tag`, `Bullets`, `Group`, `Placement`, `HomeLeft` /
   `HomeTop` (where the path or the flight puts the pad, the knock left
-  out).
+  out), `WasBehind` (3.0.51: `Behind` a tick ago - `Tick` catches it
+  first, `Rewind` last).
   - The path: `BuildCycle` (in the constructor) makes it one cycle of
     stops - the first is the level file's place, the path's stops follow;
     pingpong comes back through the inner stops (each passed twice, the
@@ -1574,9 +1669,14 @@ rebuilds new for the new try.
     `DeckSpannedBefore(left, right)` - the same for the deck as it stood a
     tick ago;
     `BodyHolds(x, y)` - the point lies in the body, the deck's width across
-    and one cell (`TileSize`) down from the deck, half-open (`Left` <= x <
-    `Right`, `Top` <= y < `Top` + `TileSize`). `Body` - the same body as
-    a box, in screen units.
+    and `FBodyDepth` down from the deck, half-open (`Left` <= x <
+    `Right`, `Top` <= y < `Top` + `FBodyDepth`). `Body` - the same body as
+    a box, in screen units. `FBodyDepth` (3.0.51, the constructor) - the
+    picture's height, no shallower than `ThinnestBody` (half a cell: the
+    fastest bullet flies 12 units a tick and strikes with a point, a
+    shallower body would be flown through between two ticks) and no deeper
+    than `TileSize`. The pads of the game before the shelf are square
+    pictures - a cell, as before; the shelf (32 by 11 units) - 16.
   - `Lift(alpha)` - units down from the deck the pad is drawn at, a
     fraction (never rounded): the bob (`Bob` times a sine, one sway in
     `BobPeriodTicks` = 3 s, taken at `FClock` - 1 + alpha - between the
@@ -1591,7 +1691,8 @@ rebuilds new for the new try.
     `Press(speed)` - something landed on the deck
     at speed units a tick: the sag's speed takes speed * `SagGain` (0.6),
     no more than `SagMaxKick` (2.7 - about three units down at the
-    deepest), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
+    deepest; a shelf does not give - it is bolted to its rails, `Press`
+    does nothing), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
     brings it back, at rest closer than `SagRest` (0.05). The physics deck
     stays on the path: the feet never feel the `Lift`.
   - The knock (3.0.28): `Knock(dx, dy, ticks)` - the pad goes dx, dy from
@@ -1620,6 +1721,18 @@ rebuilds new for the new try.
     what hangs on the pad. The riders go down and up with the deck as
     with a path; a ram would knock the pad as it knocks any pad without
     a path.
+  - The shelf (3.0.51): `FShelf` - the pad's `TShelfCycle`
+    (`Pads.Shelf`), built in the constructor from the placement's `Shelf`
+    and asked at `FClock`; a pad that is no shelf gets one that never
+    leaves the front. `Behind` - flown into the depth, or a shelf that
+    does not hold (`not FShelf.Holds`). `Effort` - 1 while `Thrusting` or
+    while the shelf warns. `Depth(alpha)` - the deeper of the flight's
+    and the slide's (`FShelf.Depth` at `FClock` - 1 + alpha, eased by
+    `Smoothstep`); `RigDepth(alpha)` - the flight's alone, for what hangs
+    on the pad: a flight takes it along, a shelf slides in without it.
+    One tick only: `Latched` - `FShelf.Latches` at the tick the clock has
+    just reached (only on the hero's screen: the clock goes nowhere
+    elsewhere).
   - The flight (3.0.29): `Fly(flight)` - the pad flies a `TPadFlight`,
     its ticks counted from now (`FFlightClock`; `NoFlight` = -1 - none).
     `TickFlight` puts the path's place where the flight has it, moves the
@@ -1629,8 +1742,9 @@ rebuilds new for the new try.
     `ThrustLeadTicks` (10) before it leaves its place in a flight until it
     is on its cell - the moment before is the tell of the pad about to go;
     `Settled` - in no flight, or its flight is over;
-    `Behind` - in the depth, neither a floor nor a body; `Depth(alpha)` -
-    0 in front .. 1 in the depth, eased; `FlushWith(other)` - the two
+    `Behind` - in the depth, neither a floor nor a body (a shelf not out
+    all the way too); `Depth(alpha)` - 0 in front .. 1 in the depth,
+    eased; `FlushWith(other)` - the two
     stand flush side by side where their paths or flights put them. One
     tick only: `TurnedCorner` (a flight in front came onto its corner - in
     the depth a corner is turned out of earshot) and `Landed` (the flight
@@ -1641,8 +1755,9 @@ rebuilds new for the new try.
     lean of a plunging pad's twitch (`FPlunge.Lean`), in the
     depth smaller about its middle (`Middle` - from the picture's top-left
     corner, the one point `Draw` and the pad's rig shrink about;
-    `DeepScale` 0.85) and darker
-    (`DeepTone` 0.6) by `Depth(alpha)` - the riders are drawn with the same
+    `FDeep.Scale` - 0.85 for a flight), darker
+    (`FDeep.Tone` - 0.6 for a flight) and lower by `FDeep.Sink` (0 for a
+    flight; 3.0.51) by `Depth(alpha)` - the riders are drawn with the same
     `Lift` (through the renderer's `FineY`), so the feet do not flicker
     into the deck - with the pad's tint set before every draw
     (`TintTexture`), as a static object is.
@@ -1655,7 +1770,7 @@ rebuilds new for the new try.
   the riders move: a rebuild asked for may start (`StartAskedRebuild`),
   then every pad's `Tick`, on view for the pads of that screen alone - a
   pad elsewhere keeps its `Prev*` caught up and goes nowhere -, then
-  `HearFlights`.
+  `HearFlights` and `HearShelves`.
   `Rewind(seed)` - every pad back to where the level file puts it, no
   rebuild asked for or flying, the dice seeded anew (`seed or 1`: an
   xorshift seeded with zero stays at zero). The deck and body queries
@@ -1667,7 +1782,12 @@ rebuilds new for the new try.
   when there is none (a fraction left by arithmetic must not drop a
   rider). `DeckCarrying(screen, left, right, feetY)` - the deck the feet
   stood on a tick ago (`PrevTop` within the slop of feetY,
-  `DeckSpannedBefore`), which carries them this tick. `DeckCrossed(screen,
+  `DeckSpannedBefore`), which carries them this tick.
+  `DeckWithdrawn(screen, left, right, feetY)` (3.0.51) - a deck the feet
+  stood on a tick ago has gone from under them this tick, and not by
+  moving: a pad of the screen `Behind` now and not a tick ago
+  (`WasBehind`), its `PrevTop` within the slop of feetY and spanning them
+  before - a shelf that has started into its wall. `DeckCrossed(screen,
   left, right, prevY, feetY, ignored)` - the deck the feet came down onto
   between two ticks: the previous feet not below the deck as it stood
   (prevY <= `PrevTop`) and the feet not above it now (feetY >= `Top`) - a
@@ -1731,7 +1851,10 @@ rebuilds new for the new try.
   `GroupFlying`. `HearFlights` gathers what the tick sounded like, for
   the game to voice, one tick only: `CornerTurned` - a pad in front
   turned the corner of its flight; `PairDocked` - a pad landed flush
-  beside one that is `Settled` (`DocksBeside`).
+  beside one that is `Settled` (`DocksBeside`). `HearShelves` (3.0.51)
+  the same for `ShelfLatched` - a shelf latched this tick; only the pads
+  of the hero's screen tick their clocks, so it is always one of his.
+  `Rewind` clears it.
 
 ### `Game/Pads/Pads.Arena.pas` (~350 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
@@ -1787,7 +1910,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1440 lines)
+### `Game/Hero.pas` (~1475 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -1822,7 +1945,14 @@ moves in comes from `Game.Space`.
     deck a wall has pulled from under him (no `DeckUnderFeet` after the
     ride) leaves him to the ground below: a standing hero through
     `SettleOnGround`, the corpse unsettled (`FCorpseSettled` False) to fall
-    again. `LandOnDeck(prevY)` at the end of `Tick`, after the verbatim
+    again. No deck carrying him, but one withdrawn from under him
+    (`DeckWithdrawn`, 3.0.51 - a shelf has started into its wall):
+    `LoseDeck` - the corpse unsettled; a foot on the grid's floor
+    (`GroundUnderFeet`, or no `CanIGoDown`) still holds him; else he falls
+    the way he was going, as off a ledge - `haStand` into `haFall`,
+    `haWalkLeft/Right` into `haFallLeft/Right`, acceleration 1: a stand
+    asks the floor nothing, and a walk only sees the ledge once the cells
+    on both sides of him are empty. `LandOnDeck(prevY)` at the end of `Tick`, after the verbatim
     state machine: a deck the feet came down onto this tick, or one that
     rose into them (`DeckCrossed`), holds them at its `Top`, the
     acceleration zeroed, and is told so (`Tread`, 3.0.46 - every tick it
@@ -1866,7 +1996,10 @@ moves in comes from `Game.Space`.
     so the shroud takes the very frame the hero is drawn with.
   - Lifecycle: `Command`, `Tick` (verbatim OurHero.Timer), `Draw`, `SetMouse`,
     `PlaceAtCell`, `SetScreenX`, `SetY`, `ShoveX` (unit by unit, stops at
-    walls), `ApplyWeaponPickup`, `Kill`, `Revive`; `Dead`, `HeroForm`
+    walls; 3.0.51: one who stood on a deck before the shove and has none
+    under his middle after it is shoved off its edge - `LoseDeck`; off a
+    ledge of the grid a shove still drops nobody, as in 2008),
+    `ApplyWeaponPickup`, `Kill`, `Revive`; `Dead`, `HeroForm`
     (writable - the ceremony sets it).
 - **The arc of a jump** (3.0.29): the two steps of the 2008 arc are the
   free `RiseStep(y, acceleration)` (False once the arc has peaked) and
@@ -3492,12 +3625,13 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2900 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~2910 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
   sounds (the bonus cost lives in `Game.Bonus`; the three of an arena
-  rebuild - `PadHumSoundFile`, `PadClickSoundFile`, `PadClackSoundFile`),
+  rebuild - `PadHumSoundFile`, `PadClickSoundFile`, `PadClackSoundFile`;
+  the latch of a shelf - `ShelfLatchSoundFile`, 3.0.51),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
   cadence and monster (`GravelMonsterId`), ticker durations, damage
@@ -3583,7 +3717,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves; right after the pads' tick it voices
     a rebuild - `padclick.wav` on `CornerTurned`, `padclack.wav` on
-    `PairDocked`), ticks the arena right after the director, both skipped
+    `PairDocked` - and a shelf, `shelflatch.wav` on `ShelfLatched`), ticks
+    the arena right after the director, both skipped
     over the hero's corpse (`FArena.Tick`, then `padhum.wav` on
     `Warned`), and `FDynamics` after the monsters
     and the director, so a smoking monster's puffs leave from where this
@@ -3624,10 +3759,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
     a fraction, the stand's Y is a `Single`), alive, its effort
     (`TPad.Effort`: 1 while the pad is `Thrusting`, in fits when it is a
-    pad that plunges - what hangs on it surges), and how deep it
-    stands (`TParentDepth`: the pad's `Depth(1)` and `Depth(0)`,
+    pad that plunges, 1 while a shelf warns - what hangs on it surges),
+    and how deep it
+    stands (`TParentDepth`: the pad's `RigDepth(1)` and `RigDepth(0)`,
     1 - `DeepScale`, 1 - `DeepTone`, its `Middle`) - what hangs on a pad
-    goes into the depth as the pad's own picture does; else the
+    goes into the depth as the picture of a flying pad does, and stays in
+    front of a shelf that slides in; else the
     first monster carrying the tag - screen, sprite top-left as
     `TMonster.Draw` puts it (Y lowered by `DeckLift(1)`), alive, and for a disc monster the
     disc's last two poses with the axis in the middle of the sprite;
@@ -3956,6 +4093,19 @@ of its flight: a small latch, the armor ping's plate higher and shorter)
 and `padclack.wav` (two pads docking: two latches over a thump). Borrows
 `strike`, `finish` and `save` from `armor.py` beside it. Seeded. numpy.
 
+### `tools/sounds/shelf.py`
+Cuts the latch of a shelf (`bin/sounds/shelflatch.wav`, 3.0.51) out of a
+take generated in Suno: the first of its three sounds, a heavy steel latch
+striking twice with a low thud dying under it. Nothing is done but the
+cut: the take's two channels averaged, its 48 kHz brought to the game's
+44.1 kHz, `CutFrom` 0.060 to `CutTo` 0.800 s of it, the mean taken off
+first (a low thud cut mid-swing leaves one), a fade in of `FadeIn` (2 ms)
+and out of `FadeOut` (50 ms), the peak at `LatchPeak` (0.45 of full
+scale - well under the crash: the shelf of a screen latches every few
+seconds). `python shelf.py <take.wav> [path/to/bin/sounds]`; the take is
+not in the repository. Borrows `SampleRate` and `save` from `armor.py`
+beside it. numpy, scipy.
+
 ### `tools/fans/build_fans.py`
 Builds `bin/sprites/ventilation.mset`, the art of `TFan`, from generated
 pictures - rotors seen from the front in flat light, the guards in front
@@ -4015,11 +4165,11 @@ numpy, scipy, Pillow.
 ## Tests
 
 The concept, the rules and the tables of tests are in `docs/TESTING.md`.
-At 3.0.50 the suite is 291 tests, all green. Not every test unit has its
+At 3.0.51 the suite is 343 tests, all green. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
-`Tests.Levels.Pads`, `Tests.Effects.Lightning` and `Tests.Pads.Plunge` are
-told in `docs/TESTING.md` alone.
+`Tests.Levels.Pads`, `Tests.Effects.Lightning`, `Tests.Pads.Plunge` and
+`Tests.Pads.Shelf` are told in `docs/TESTING.md` alone.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -4167,7 +4317,7 @@ limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
 
-### `level1.json` (~97 KB) / `level2.json` (~41 KB)
+### `level1.json` (~97 KB) / `level2.json` (~47 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -4183,7 +4333,8 @@ units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
 x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
 `bullets` block / pass, block when absent, optional `path` - `route`,
 `stops`, `speed`, `pause` -, `bob`, `plunge` - `delay`, `rest`, `rise` -,
-`group` and `rig` - the rigs it wears;
+`shelf` - `out` and `in` or `program`, `slide`, `warn`, `offset`, `sink`,
+`scale`, `tone` -, `group` and `rig` - the rigs it wears;
 see `Levels.Pads`),
 `padGroups` (optional: `tag`, `screen`, `zone` [left, top, right, bottom]
 in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`
@@ -4344,13 +4495,29 @@ plainest example), `introText`/`introTextEn`.
   dark puffs of `padBroken` at 60 and sparks from its side, which pass
   through its own body (`collide` none). `tunnel-gate`, `s03-room`,
   `s04-room` and `s04-tek-crates` are the level's own art, the set
-  `level2-objects`. The
+  `level2-objects`. Screens 5 and 6 are repainted too (the rooms of the
+  TeK mount; `docs/PORTING-NOTES.md`). Screen 7 is `s07-room`, joined
+  from several generations, its tiles cleared and its matter as it was
+  but one floor cell (column 6, row 10, under the shaft) taken out; the
+  crates are objects of the earlier screens (`s07-pile` of `s02-crates`
+  with `s07-pile-top`, `s07-stash` of `s04-tek-crates`), a `dying` beacon
+  on the room. A still pad `s07-plat-01` hangs at the first descent on
+  the right, so the player learns one may jump down from a pad. In the
+  hole stands the first shelf (3.0.51), `s07-shelf-01` - the picture
+  `shelf` of the set `pads`, which the level declares in `objectSets`:
+  out 2.5 s, in 1.5 s, slide 0.25, warn 0.6, sink 7, scale 0.72, tone 0.4
+  - 82 ticks out (the last 20 warning), 8 going in, 50 in, 8 going out,
+  148 a lap. Behind it the dock, the object `s07-shelf-dock` (`shelf-dock`,
+  tinted 55, a unit under the floor line so its plank is not read as a
+  deck); on the shelf the rig `shelfDock` - a red `flash` beacon dark at
+  rest (intensity 0) and lit by the shelf's warning (`surge` 100); it stays
+  on the dock while the shelf goes in. The
   gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
   the original campaign.
 
-### `sprites\*.mset` (40 sets)
+### `sprites\*.mset` (44 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups: 2008 frames; since 3.0.50 their
@@ -4427,7 +4594,12 @@ plainest example), `introText`/`introTextEn`.
   and 96.5% at its widest, the bezel plate fills the square like a tile,
   and the blade tips of either rotor (90.6% and 88%) end under the ring
   of either guard. Beside them `louver-2x1` (256x128) - a blind louver
-  panel for a static object, 64 by 32 units.
+  panel for a static object, 64 by 32 units. `pads` (3.0.51, declared by
+  level 2) - the art of the pads and their kin, shared by every level, 6
+  px a unit: `shelf` (192x68, 32 units wide) and `shelf-dock` (228x132, 38
+  units wide, the lamp glass painted off - a beacon is its light). The
+  pads before it, `s16-platform` and `s16-platform-out`, still live in
+  `level1-structures`.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
   `font`/`fontx`/`fonty` atlases plus `fonty-2008` (the original 448x448
@@ -4439,12 +4611,13 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (27 WAV) and `music/` (OGG)
+### `sounds/` (28 WAV) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
 music loads leniently. Four one-shots are synthesised by
 `tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`; a fifth,
 `crash.wav`, by `tools/sounds/crash.py`; three more - `padhum.wav`,
-`padclick.wav`, `padclack.wav` - by `tools/sounds/pads.py`. Tracks named by code: `moon.ogg` (menu,
+`padclick.wav`, `padclack.wav` - by `tools/sounds/pads.py`; `shelflatch.wav`
+is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.ogg` (menu,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
 `moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
@@ -4459,6 +4632,7 @@ music loads leniently. Four one-shots are synthesised by
 | Hero movement / collision / jump feel | Hero.pas |
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/PADS-PLAN.md, stage 8) |
+| A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/PADS-PLAN.md, stage 9) |
 | The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |

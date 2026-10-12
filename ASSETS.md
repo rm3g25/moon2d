@@ -75,7 +75,8 @@ floors to bring them to the grid, its two doorways carried to the edges of
 the screen. `s04-room`: kept as generated, not resampled - 41 columns
 taken out of its shaft, moved as a whole, its two openings carried to the
 edges. `s04-tek-crates`: cut to its ink, scaled to 6 px per screen unit.
-They replaced the 2008 tiles of those screens, which stay in
+`s07-room`: joined into one room from several generations, none of which
+came out whole. They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
@@ -105,6 +106,14 @@ a medkit that is taken leaves no body. The case replaced the five 2008
 frames `1`-`5`, which stay in the set as the `alive-2008` sequence, unused;
 the 2008 death frames `d1`-`d8` stay there as `death-2008`. The source
 picture is not in the repository.
+
+**The pads' kin** (`sprites/pads.mset`, sprites `shelf` and `shelf-dock`) -
+since 3.0.51, generated with ChatGPT's image model from the author's
+prompts, the shelf and its dock on one sheet; cut to their ink and scaled
+whole to 6 px per screen unit (192x68 and 228x132). The dock is turned
+upside down from the generation, so its lamp hangs under the frame, and
+the lamp glass is painted switched off: a beacon is its light. A set of
+its own because the mechanic is the whole game's, not one level's.
 
 **The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
 ChatGPT's image model from the author's prompts (a heavy rotor and a round
@@ -152,6 +161,12 @@ and noise alone.
 synthesised by `tools/sounds/pads.py`: the hum that warns of an arena
 rebuild, the click of a pad turning the corner of its flight and the clack
 of two pads docking, from sine tones and noise alone.
+
+**`bin/sounds/shelflatch.wav`** - since 3.0.51, generated in Suno by the
+author (a take of three sounds; the first, a steel latch striking twice,
+is the one used) and cut by `tools/sounds/shelf.py`: averaged to mono,
+brought to 44.1 kHz, faded at both ends and leveled, nothing else. The
+take is not in the repository.
 
 ## Third-party runtime libraries
 
