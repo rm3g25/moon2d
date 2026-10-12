@@ -73,6 +73,11 @@
   its latch catches the world tells, as a rebuild's sounds, and the game
   voices.
 
+  A pad on a carousel (Levels.Carousels) goes round its track at an even
+  pace, from the place the carousel gives it at the start of its clock:
+  its path is the track, and the riders go with it as with any path. It
+  travels, so a ram only rocks it.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -86,7 +91,7 @@ interface
 uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
-  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf;
+  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf, Levels.Carousels;
 
 const
   // A pad all the way into the depth: its size and its light
@@ -143,11 +148,13 @@ type
     FLatched: Boolean;
     FPlunge: TPlungeCycle;
     FShelf: TShelfCycle;
+    FOrbit: TCarouselOrbit;
     FWasBehind: Boolean;
     // All the way into the depth, as the pad looks there
     FDeep: TPadDeepLook;
     procedure BuildCycle;
     procedure PlaceOnPath;
+    procedure PlaceOnOrbit;
     procedure TickFlight;
     procedure TickBob;
     procedure TickSag;
@@ -156,7 +163,10 @@ type
     function Tilt(AAlpha: Single): Double;
     function GetRight: Double;
   public
-    constructor Create(const APlacement: TPadPlacement; ATexture: PSdlTexture);
+    // AOrbit - the pad's way round its carousel; one that does not ride
+    // for a pad on none
+    constructor Create(const APlacement: TPadPlacement; ATexture: PSdlTexture;
+      const AOrbit: TCarouselOrbit);
     // The deck spans some of ALeft..ARight, edges included
     function DeckSpans(ALeft, ARight: Double): Boolean;
     // The same for the deck as it stood a tick ago
@@ -455,7 +465,7 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TPad.Create(const APlacement: TPadPlacement;
-  ATexture: PSdlTexture);
+  ATexture: PSdlTexture; const AOrbit: TCarouselOrbit);
 var
   ArtWidth, ArtHeight: Integer;
 begin
@@ -466,6 +476,7 @@ begin
   FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
   FBodyDepth := EnsureRange(FPictureHeight, ThinnestBody, TileSize);
   FShelf.Build(APlacement.Shelf);
+  FOrbit := AOrbit;
   FDeep := FlownDeep;
   if APlacement.Shelf.Slides then
     FDeep := APlacement.Shelf.Deep;
@@ -515,6 +526,10 @@ begin
   FClock := 0;
   FPathLeft := FPlacement.X;
   FPathTop := FPlacement.Y;
+  // The placement holds the start rounded to whole units; the riders
+  // seated on the pad stand on the start itself
+  if FOrbit.Rides then
+    PlaceOnOrbit;
   FKnockFromX := 0;
   FKnockFromY := 0;
   FKnockToX := 0;
@@ -541,6 +556,11 @@ end;
 // A leg, then the pause at the stop it ends at, round the cycle
 procedure TPad.PlaceOnPath;
 begin
+  if FOrbit.Rides then
+  begin
+    PlaceOnOrbit;
+    Exit;
+  end;
   if Length(FStops) < 2 then
     Exit;
 
@@ -565,6 +585,16 @@ begin
     end;
     Dec(Time, FPauseTicks);
   end;
+end;
+
+// The track is the path of the middle of the deck
+procedure TPad.PlaceOnOrbit;
+var
+  MiddleX, DeckY: Double;
+begin
+  FOrbit.Place(FClock, MiddleX, DeckY);
+  FPathLeft := MiddleX - FPlacement.Width / 2;
+  FPathTop := DeckY;
 end;
 
 // The bob's ripple goes with the pad: on its cell the pad sways in step
@@ -672,7 +702,7 @@ end;
 
 function TPad.Travels: Boolean;
 begin
-  Result := Length(FStops) >= 2;
+  Result := (Length(FStops) >= 2) or FOrbit.Rides;
 end;
 
 function TPad.Knocked: Boolean;
@@ -858,8 +888,10 @@ begin
   FLevel := ALevel;
   FReach := AReach;
   FPads := TObjectList<TPad>.Create(True);
-  for var Placement in ALevel.Pads do
-    FPads.Add(TPad.Create(Placement, ACache.Get(Placement.Sprite)));
+  var Placements := ALevel.Pads;
+  for var i := 0 to High(Placements) do
+    FPads.Add(TPad.Create(Placements[i], ACache.Get(Placements[i].Sprite),
+      OrbitOf(ALevel.Carousels, Placements, i)));
   Rewind(ASeed);
 end;
 

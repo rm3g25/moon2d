@@ -484,6 +484,11 @@ begin
   // Placement coordinates are sprite-grid cells, as FindMostersOnScreen read
   FX := (APlacement.X - 1) * SpriteSize;
   FY := APlacement.Y * SpriteSize;
+  if APlacement.Seat <> '' then
+  begin
+    FX := APlacement.SeatLeft;
+    FY := APlacement.SeatFeet;
+  end;
 
   FLives := ADef.Lives;
   if APlacement.Overrides.HasLives then

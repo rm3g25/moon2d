@@ -31,6 +31,11 @@
   is neither a floor nor a body. It joins no group and does not plunge;
   a path it may travel.
 
+  A pad may ride a carousel (Levels.Carousels): it flies round the
+  carousel's track with the other pads it carries. The carousel places
+  it, so the pad takes no x or y; it travels no path, does not plunge,
+  is no shelf and joins no group.
+
   A pad may wear rigs - lamps, jets and the like, hung on it as dynamic
   objects. It only names them here; Levels.Rigs holds them and hangs
   them.
@@ -127,6 +132,8 @@ type
     Shelf: TPadShelf;
     // The pad group it is rebuilt with; '' = none
     Group: string;
+    // The carousel it rides; '' = none. The carousel puts X and Y.
+    Carousel: string;
     // The rigs it wears, by name, in the order they are hung
     Rigs: TArray<string>;
   end;
@@ -169,7 +176,8 @@ const
 // program beside its out or in, with a step that is not a stand and
 // seconds above zero, with steps that do not take turns, with a slide,
 // a warn or an offset below zero, a scale out of 0..1 or zero, a tone
-// out of 0..1.
+// out of 0..1. A pad on a carousel that is given an x or a y raises
+// too: the carousel places it.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
@@ -193,6 +201,8 @@ resourcestring
   SPadNoStops = 'Level "%s": pad "%s" has a path without stops';
   SPadBadStop = 'Level "%s": pad "%s" has a stop that is not [x, y]';
   SPadBadNumber = 'Level "%s": pad "%s" takes %s %g';
+  SPadCarouselPlaced = 'Level "%s": pad "%s" rides carousel "%s" and is '
+    + 'given an x or a y - the carousel places it';
   SPadShelfTwoPrograms = 'Level "%s": pad "%s" is a shelf with a program '
     + 'and with out or in beside it - one or the other';
   SPadShelfBadStep = 'Level "%s": pad "%s" has a shelf step that is not '
@@ -422,6 +432,23 @@ begin
   Result := Format('pad "%s"', [Shown]);
 end;
 
+// A pad on a carousel is placed by it: Levels.Defs puts its X and Y
+procedure ReadPlace(const AObj: TJSONObject; const ALevelId: string;
+  var APad: TPadPlacement);
+begin
+  APad.X := 0;
+  APad.Y := 0;
+  if APad.Carousel = '' then
+  begin
+    APad.X := AObj.GetValue<Integer>('x');
+    APad.Y := AObj.GetValue<Integer>('y');
+    Exit;
+  end;
+  if (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil) then
+    raise EPadError.CreateFmt(SPadCarouselPlaced,
+      [ALevelId, APad.Sprite, APad.Carousel]);
+end;
+
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 var
@@ -437,8 +464,8 @@ begin
     var Pad: TPadPlacement;
     Pad.Sprite := Obj.GetValue<string>('sprite');
     Pad.Screen := Obj.GetValue<Integer>('screen');
-    Pad.X := Obj.GetValue<Integer>('x');
-    Pad.Y := Obj.GetValue<Integer>('y');
+    Pad.Carousel := Obj.GetValue<string>('carousel', '');
+    ReadPlace(Obj, ALevelId, Pad);
     Pad.Width := Obj.GetValue<Integer>('width');
     Pad.Tint := ReadTint(Obj, Pad.Sprite);
     Pad.Tag := Obj.GetValue<string>('tag', '');

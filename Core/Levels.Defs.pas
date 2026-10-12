@@ -5,7 +5,8 @@
   A level is: a tile grid (screens of 16x12 cells), a tile palette
   (BMP names), background changes, free-form objects over the backdrop
   (art of any shape, no collision), pads - platforms apart from the grid
-  (Levels.Pads) - and dynamic objects living beside them
+  (Levels.Pads), some of them flying round a carousel
+  (Levels.Carousels) - and dynamic objects living beside them
   (Levels.Dynamics), the hero's respawn points, music, and entity
   placements with
   optional per-placement overrides (speed, lives, shooting) and triggers
@@ -22,7 +23,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
-  Localization, Levels.Events, Levels.Tint, Levels.Dynamics, Levels.Pads;
+  Localization, Levels.Events, Levels.Tint, Levels.Dynamics, Levels.Pads,
+  Levels.Carousels;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -95,6 +97,14 @@ type
     // (Levels.Rigs): their parts hang on the monster by its tag, counted
     // from the top-left corner of its cell. JSON: "rig": ["tekPlatform"].
     Rigs: TArray<string>;
+    // The pad it sits on, by tag, in place of a cell: it stands in the
+    // middle of the deck as the pad starts out, the deck under its feet.
+    // JSON: "seat": "s08-ride-01", with no x or y; '' = none. The level
+    // puts SeatLeft and SeatFeet, in screen units, and the cell nearest
+    // to them in X and Y.
+    Seat: string;
+    SeatLeft: Double;
+    SeatFeet: Double;
   end;
 
   TBackgroundChange = record
@@ -153,6 +163,7 @@ type
     FObjects: TArray<TLevelObject>;
     FPads: TArray<TPadPlacement>;
     FPadGroups: TArray<TPadGroup>;
+    FCarousels: TArray<TCarousel>;
     FRespawns: TArray<TRespawnPoint>;
     FEntities: TArray<TEntityPlacement>;
     FEvents: TArray<TLevelEvent>;
@@ -175,6 +186,16 @@ type
       out ACol, ARow: Integer): Boolean;
     procedure CheckPadPlunge(const APad: TPadPlacement);
     procedure CheckPadShelf(const APad: TPadPlacement);
+    procedure PlaceCarouselPads;
+    procedure CheckCarousels;
+    procedure CheckCarouselPad(AIndex: Integer);
+    procedure CheckCarouselRoom(const ACarousel: TCarousel);
+    procedure CheckCarouselPair(const ACarousel: TCarousel; AFirst,
+      ASecond: Integer);
+    function RoomClear(AScreen: Integer; ALeft, ATop, ARight,
+      ABottom: Double): Boolean;
+    procedure SeatEntities;
+    procedure SeatEntity(var AEntity: TEntityPlacement);
     procedure CheckEvents;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
@@ -231,6 +252,8 @@ type
     property Pads: TArray<TPadPlacement> read FPads;
     // Pads rebuilt together, in file order (Levels.Pads)
     property PadGroups: TArray<TPadGroup> read FPadGroups;
+    // Pads flying round a track, in file order (Levels.Carousels)
+    property Carousels: TArray<TCarousel> read FCarousels;
     // Where a pit and death return the hero, a screen each at most
     property Respawns: TArray<TRespawnPoint> read FRespawns;
     property Entities: TArray<TEntityPlacement> read FEntities;
@@ -318,6 +341,28 @@ resourcestring
     + 'group "%s" and is not of it';
   SLevelPadGroupBadCount = 'Level "%s": pad group "%s" has %d pads, takes '
     + '%d to %d';
+  SLevelCarouselBadScreen = 'Level "%s": carousel "%s" sits on screen %d '
+    + 'of %d';
+  SLevelCarouselTwoTags = 'Level "%s": two carousels are tagged "%s"';
+  SLevelCarouselEmpty = 'Level "%s": carousel "%s" carries no pad';
+  SLevelCarouselUnknown = 'Level "%s": %s rides carousel "%s", which no '
+    + 'carousel carries';
+  SLevelCarouselScreen = 'Level "%s": %s sits on screen %d and rides '
+    + 'carousel "%s" of screen %d';
+  SLevelCarouselBusy = 'Level "%s": %s rides a carousel and travels a '
+    + 'path, plunges, is a shelf or joins a group - the carousel alone '
+    + 'moves it';
+  SLevelCarouselWall = 'Level "%s": carousel "%s" takes %s into a wall or '
+    + 'off the screen, its deck at (%g, %g) - its body and the room of its '
+    + 'riders, a cell each way, must stay clear';
+  SLevelCarouselCrowded = 'Level "%s": carousel "%s" takes the bodies of '
+    + 'two of its pads into one another, the decks at (%g, %g)';
+  SLevelEntitySeatPlaced = 'Level "%s": entity "%s" on screen %d sits on '
+    + '"%s" and is given an x or a y - the seat places it';
+  SLevelEntitySeatUnknown = 'Level "%s": entity "%s" on screen %d sits on '
+    + '"%s", which no pad carries';
+  SLevelEntitySeatScreen = 'Level "%s": entity "%s" on screen %d sits on '
+    + '"%s", a pad of screen %d';
   SLevelRespawnBadScreen = 'Level "%s": a respawn point sits on screen %d '
     + 'of %d';
   SLevelRespawnTwice = 'Level "%s": screen %d has two respawn points';
@@ -508,9 +553,15 @@ begin
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
   // Pads before the dynamics: a dynamic object may hang on one
   FPads := ParsePads(ARoot, FId);
+  // Before the checks of the pads: a carousel puts its pads' places
+  FCarousels := ParseCarousels(ARoot, FId);
+  PlaceCarouselPads;
   CheckPads;
+  CheckCarousels;
   FPadGroups := ParsePadGroups(ARoot, FId);
   CheckPadGroups;
+  // After the pads: an entity may sit on one
+  SeatEntities;
   // After the pads: a point may stand over the deck of one
   ParseRespawns(ARoot.GetValue<TJSONArray>('respawns', nil));
   CheckRespawns;
@@ -651,7 +702,7 @@ begin
   for var Pad in FPads do
   begin
     var StandsStill := (Pad.Path.Route = prNone) and (Pad.Group = '') and
-      not Pad.Plunge.Plunges and not Pad.Shelf.Slides;
+      (Pad.Carousel = '') and not Pad.Plunge.Plunges and not Pad.Shelf.Slides;
     var Under := (Pad.Screen = APoint.Screen) and (Pad.Y >= FeetY) and
       InRange(Middle, Pad.X, Pad.X + Pad.Width);
     if StandsStill and Under then
@@ -765,6 +816,189 @@ begin
     CheckPadPlunge(Pad);
     CheckPadShelf(Pad);
   end;
+end;
+
+// The deck of a carousel pad as it starts out, rounded to whole units:
+// what reads the places of the pads before the game flies them - the
+// checks of the level, an editor - finds it there
+procedure TLevel.PlaceCarouselPads;
+begin
+  for var i := 0 to High(FPads) do
+  begin
+    var Orbit := OrbitOf(FCarousels, FPads, i);
+    if not Orbit.Rides then
+      Continue;
+    var MiddleX, DeckY: Double;
+    Orbit.Place(0, MiddleX, DeckY);
+    FPads[i].X := Round(MiddleX - FPads[i].Width / 2);
+    FPads[i].Y := Round(DeckY);
+  end;
+end;
+
+function CarouselsTagged(const ACarousels: TArray<TCarousel>;
+  const ATag: string): Integer;
+begin
+  Result := 0;
+  for var Carousel in ACarousels do
+    if Carousel.Tag = ATag then
+      Inc(Result);
+end;
+
+function PadsRiding(const APads: TArray<TPadPlacement>;
+  const ATag: string): Integer;
+begin
+  Result := 0;
+  for var Pad in APads do
+    if Pad.Carousel = ATag then
+      Inc(Result);
+end;
+
+// A carousel off the screen list never shows, two with one tag leave a
+// pad to the first, one with no pad is a typo of a tag; a pad goes round
+// clear of the walls and of the other pads, or its riders go through
+// them
+procedure TLevel.CheckCarousels;
+begin
+  for var Carousel in FCarousels do
+  begin
+    if (Carousel.Screen < 1) or (Carousel.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelCarouselBadScreen,
+        [FId, Carousel.Tag, Carousel.Screen, FScreenCount]);
+    if CarouselsTagged(FCarousels, Carousel.Tag) > 1 then
+      raise ELevelError.CreateFmt(SLevelCarouselTwoTags, [FId, Carousel.Tag]);
+    if PadsRiding(FPads, Carousel.Tag) = 0 then
+      raise ELevelError.CreateFmt(SLevelCarouselEmpty, [FId, Carousel.Tag]);
+  end;
+  for var i := 0 to High(FPads) do
+    if FPads[i].Carousel <> '' then
+      CheckCarouselPad(i);
+  for var Carousel in FCarousels do
+    CheckCarouselRoom(Carousel);
+end;
+
+procedure TLevel.CheckCarouselPad(AIndex: Integer);
+var
+  Carousel: TCarousel;
+begin
+  var Pad := FPads[AIndex];
+  var Name := PadRigName(Pad);
+  if not TryFindCarousel(FCarousels, Pad.Carousel, Carousel) then
+    raise ELevelError.CreateFmt(SLevelCarouselUnknown,
+      [FId, Name, Pad.Carousel]);
+  if Pad.Screen <> Carousel.Screen then
+    raise ELevelError.CreateFmt(SLevelCarouselScreen,
+      [FId, Name, Pad.Screen, Carousel.Tag, Carousel.Screen]);
+  var Busy := (Pad.Path.Route <> prNone) or Pad.Plunge.Plunges or
+    Pad.Shelf.Slides or (Pad.Group <> '');
+  if Busy then
+    raise ELevelError.CreateFmt(SLevelCarouselBusy, [FId, Name]);
+
+  var Orbit := OrbitOf(FCarousels, FPads, AIndex);
+  for var Tick := 0 to LapTicks(Carousel) - 1 do
+  begin
+    var MiddleX, DeckY: Double;
+    Orbit.Place(Tick, MiddleX, DeckY);
+    var Left := MiddleX - Pad.Width / 2;
+    if not RoomClear(Pad.Screen, Left, DeckY - TileSize, Left + Pad.Width,
+      DeckY + TileSize) then
+      raise ELevelError.CreateFmt(SLevelCarouselWall,
+        [FId, Carousel.Tag, Name, MiddleX, DeckY]);
+  end;
+end;
+
+// No two pads of the carousel cut into one another's bodies anywhere on
+// the lap; touching is no cut
+procedure TLevel.CheckCarouselRoom(const ACarousel: TCarousel);
+var
+  Members: TArray<Integer>;
+begin
+  Members := [];
+  for var i := 0 to High(FPads) do
+    if FPads[i].Carousel = ACarousel.Tag then
+      Members := Members + [i];
+  for var i := 0 to High(Members) - 1 do
+    for var j := i + 1 to High(Members) do
+      CheckCarouselPair(ACarousel, Members[i], Members[j]);
+end;
+
+procedure TLevel.CheckCarouselPair(const ACarousel: TCarousel; AFirst,
+  ASecond: Integer);
+begin
+  var FirstOrbit := OrbitOf(FCarousels, FPads, AFirst);
+  var SecondOrbit := OrbitOf(FCarousels, FPads, ASecond);
+  var HalfWidths := (FPads[AFirst].Width + FPads[ASecond].Width) / 2;
+  for var Tick := 0 to LapTicks(ACarousel) - 1 do
+  begin
+    var FirstX, FirstY, SecondX, SecondY: Double;
+    FirstOrbit.Place(Tick, FirstX, FirstY);
+    SecondOrbit.Place(Tick, SecondX, SecondY);
+    var Cuts := (Abs(FirstX - SecondX) < HalfWidths) and
+      (Abs(FirstY - SecondY) < TileSize);
+    if Cuts then
+      raise ELevelError.CreateFmt(SLevelCarouselCrowded,
+        [FId, ACarousel.Tag, FirstX, FirstY]);
+  end;
+end;
+
+// The box is on the screen and no point of it, a few units apart and a
+// hair inside its edges, lies in a wall
+function TLevel.RoomClear(AScreen: Integer; ALeft, ATop, ARight,
+  ABottom: Double): Boolean;
+const
+  ProbeStep = 8;
+  ProbeInset = 0.5;
+begin
+  var OnScreen := (ALeft >= 0) and (ARight <= ScreenWidth) and (ATop >= 0) and
+    (ABottom <= ScreenHeight);
+  if not OnScreen then
+    Exit(False);
+
+  var Across := Ceil((ARight - ALeft) / ProbeStep);
+  var Down := Ceil((ABottom - ATop) / ProbeStep);
+  for var i := 0 to Across do
+    for var j := 0 to Down do
+    begin
+      var X := ALeft + ProbeInset + (ARight - ALeft - 2 * ProbeInset) * i / Across;
+      var Y := ATop + ProbeInset + (ABottom - ATop - 2 * ProbeInset) * j / Down;
+      if SolidAtPoint(AScreen, X, Y) then
+        Exit(False);
+    end;
+  Result := True;
+end;
+
+procedure TLevel.SeatEntities;
+begin
+  for var i := 0 to High(FEntities) do
+    if FEntities[i].Seat <> '' then
+      SeatEntity(FEntities[i]);
+end;
+
+// A monster's body is a cell wide: it stands with its middle over the
+// middle of the deck where the pad starts out - a carousel's pad
+// starts between the units, the place in its placement is rounded
+procedure TLevel.SeatEntity(var AEntity: TEntityPlacement);
+begin
+  var Index := -1;
+  for var i := 0 to High(FPads) do
+    if FPads[i].Tag = AEntity.Seat then
+      Index := i;
+  if Index < 0 then
+    raise ELevelError.CreateFmt(SLevelEntitySeatUnknown,
+      [FId, AEntity.MonsterId, AEntity.Screen, AEntity.Seat]);
+  var Pad := FPads[Index];
+  if Pad.Screen <> AEntity.Screen then
+    raise ELevelError.CreateFmt(SLevelEntitySeatScreen,
+      [FId, AEntity.MonsterId, AEntity.Screen, AEntity.Seat, Pad.Screen]);
+
+  var MiddleX: Double := Pad.X + Pad.Width / 2;
+  var DeckY: Double := Pad.Y;
+  var Orbit := OrbitOf(FCarousels, FPads, Index);
+  if Orbit.Rides then
+    Orbit.Place(0, MiddleX, DeckY);
+  AEntity.SeatLeft := MiddleX - TileSize / 2;
+  AEntity.SeatFeet := DeckY;
+  AEntity.X := Round(AEntity.SeatLeft / TileSize) + 1;
+  AEntity.Y := Round(DeckY / TileSize);
 end;
 
 // The pad's cell is a cell of its screen, the whole of it
@@ -1134,6 +1368,25 @@ begin
     TryReadDifficultyValue(TriggersObj, 'gravelBoss', AOut.GravelQuota);
 end;
 
+// An entity on a seat is placed by it: SeatEntities puts its cell
+procedure ReadEntityCell(const AObj: TJSONObject; const ALevelId: string;
+  var AEntity: TEntityPlacement);
+begin
+  AEntity.X := 0;
+  AEntity.Y := 0;
+  AEntity.SeatLeft := 0;
+  AEntity.SeatFeet := 0;
+  if AEntity.Seat = '' then
+  begin
+    AEntity.X := AObj.GetValue<Integer>('x');
+    AEntity.Y := AObj.GetValue<Integer>('y');
+    Exit;
+  end;
+  if (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil) then
+    raise ELevelError.CreateFmt(SLevelEntitySeatPlaced,
+      [ALevelId, AEntity.MonsterId, AEntity.Screen, AEntity.Seat]);
+end;
+
 procedure TLevel.ParseEntities(const AArr: TJSONArray);
 begin
   SetLength(FEntities, AArr.Count);
@@ -1142,8 +1395,8 @@ begin
     var Obj := AArr.Items[i] as TJSONObject;
     FEntities[i].MonsterId := Obj.GetValue<string>('monsterId');
     FEntities[i].Screen := Obj.GetValue<Integer>('screen');
-    FEntities[i].X := Obj.GetValue<Integer>('x');
-    FEntities[i].Y := Obj.GetValue<Integer>('y');
+    FEntities[i].Seat := Obj.GetValue<string>('seat', '');
+    ReadEntityCell(Obj, FId, FEntities[i]);
     FEntities[i].SpriteList := Obj.GetValue<string>('spriteList', '');
     FEntities[i].Grades := ParseGrades(
       Obj.GetValue<TJSONArray>('difficulty', nil), FEntities[i].MonsterId);
