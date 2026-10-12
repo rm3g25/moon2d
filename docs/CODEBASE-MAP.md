@@ -14,7 +14,8 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
 at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
 shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
-pickups at `v3.0.50` and the shelf at `v3.0.51` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+pickups at `v3.0.50`, the shelf at `v3.0.51` and the carousel at
+`v3.0.52` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -57,8 +58,9 @@ driven from level JSON split by that rule: the model and parser
 (`Levels.Events`) sit in `Core/`, since the editor will write them; the
 runner (`Events.Director`) in `Game/Events/`. The pads split the same way:
 the model and parser (`Levels.Pads`) sit in `Core/` beside `Levels.Events`,
-since the editor will write pads too; the pads in play (`Pads.World`) and
-their rebuilds in `Game/Pads/`; what a pad or a monster wears, its rigs
+since the editor will write pads too, and the carousels they may fly round
+(`Levels.Carousels`) with them; the pads in play (`Pads.World`) and their
+rebuilds in `Game/Pads/`; what a pad or a monster wears, its rigs
 (`Levels.Rigs`), is a parser in `Core/` too. Two unit names in `Core/` still
 carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
@@ -76,12 +78,15 @@ kind and `Effects.Traces` for the graph kind; draws through `Render.Glow`, `Rend
 `Levels.Rigs` (what the pads and the monsters wear: over
 `Levels.Dynamics`) -> `Levels.Pads` (over `Levels.Tint`, and over
 `Levels.Rigs` for the names of the rigs a pad wears) ->
+`Levels.Carousels` (the carousels and the track round which they fly
+their pads: over `Levels.Pads` alone) ->
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) / `Pads.Plunge` (the cycle of a
 plunging pad: over `Levels.Pads` and `Render.Brush` alone) / `Pads.Shelf`
 (the cycle of a shelf: over `Levels.Pads` alone) -> `Pads.World`
-(the pads in play: over the four, `Levels.Pads`, `Levels.Defs`,
+(the pads in play: over the four, `Levels.Pads`, `Levels.Carousels`,
+`Levels.Defs`,
 `Render.Sprites`,
 `Render.Brush`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
@@ -474,7 +479,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1155 lines)
+### `Core/Levels.Defs.pas` (~1410 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -494,7 +499,19 @@ Level data model + JSON parser. No game logic.
   monster; '' = none), `Rigs` (the rigs it wears, by name, in the order
   they are hung - JSON `"rig": ["tekPlatform"]`, read by `ReadRigNames` of
   `Levels.Rigs`; their parts hang on the monster by its tag, counted from
-  the top-left corner of its cell).
+  the top-left corner of its cell). `Seat` (3.0.52) - the pad it sits on,
+  by tag, in place of a cell: JSON `"seat": "s08-ride-01"` with no `x`
+  and no `y` (`ReadEntityCell` reads the cell or refuses one beside a
+  seat, `SLevelEntitySeatPlaced`); '' = none. `SeatLeft` and `SeatFeet` -
+  where it sits, in screen units: put at load by `SeatEntities` ->
+  `SeatEntity`, after the pads - its body a cell wide, its middle over
+  the middle of the deck as the pad starts out (a carousel's pad by its
+  orbit at tick 0, not by its rounded placement), its feet on the deck;
+  `X`/`Y` become the cell nearest to that, so the triggers of the
+  placement and whatever counts cells still have one. A seat no pad
+  carries (`SLevelEntitySeatUnknown`) or a pad of another screen
+  (`SLevelEntitySeatScreen`) is refused. `TMonster.Create` puts a seated
+  monster on the seat, not on its cell.
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
@@ -553,7 +570,29 @@ Level data model + JSON parser. No game logic.
   zone has cells; and a pad naming a group nobody carries. After the
   dynamics, `CheckPadGroupLinks` refuses a `conductor` no entity of the
   group's screen carries (`AnyPlacementTaggedOn`) and an `alarm` no
-  dynamic object carries. `Events` - the level's events (`Levels.Events`), in
+  dynamic object carries. `Carousels` (3.0.52) - the carousels
+  (`Levels.Carousels`), in file order, parsed right after the pads and
+  before their checks: `PlaceCarouselPads` writes into the `X`/`Y` of a
+  carousel's pad where it starts (its orbit at tick 0, the deck's left
+  edge and height rounded to whole units), so what reads the places of the
+  pads before the game flies them - the checks, an editor - finds them
+  there. The private `CheckCarousels` refuses a carousel off the screen
+  list (`SLevelCarouselBadScreen`), two with one tag
+  (`SLevelCarouselTwoTags`), one with no pad (`SLevelCarouselEmpty` - a
+  typo of a tag); for each pad of a carousel (`CheckCarouselPad`) a
+  carousel nobody carries (`SLevelCarouselUnknown`), one of another
+  screen (`SLevelCarouselScreen`), a pad that also travels a path,
+  plunges, is a shelf or joins a group (`SLevelCarouselBusy` - the
+  carousel alone moves it), and at any tick of a lap (`LapTicks`) its
+  body and the room of its riders - the deck's width, a cell over the
+  deck and a cell under it - in a wall or off the screen (`RoomClear`:
+  the box on the screen, and no point of it, 8 units apart and half a
+  unit inside its edges, `SolidAtPoint`; `SLevelCarouselWall`); for each
+  pair of pads of one carousel (`CheckCarouselRoom` ->
+  `CheckCarouselPair`) bodies that cut into one another anywhere on the
+  lap - closer than their half widths across and a cell down; touching is
+  no cut (`SLevelCarouselCrowded`).
+  `Events` - the level's events (`Levels.Events`), in
   file order. Queries: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (the
   same for a point in screen units - the one home of the units-to-cells
   rule and its guard against negatives; the solid probes of the game and
@@ -600,8 +639,9 @@ Level data model + JSON parser. No game logic.
   (`SLevelRespawnInWall`) and one with no floor under it
   (`SLevelRespawnOverPit`; `RespawnHasFloor` - a wall below in the column,
   or under the cell's middle the deck of a pad that stands still, one with
-  no path, no group, no plunge and no shelf: a pad that travels, is
-  rebuilt, plunges or slides in may not be there).
+  no path, no group, no plunge, no shelf and no carousel: a pad that
+  travels, is rebuilt, plunges, slides in or flies round may not be
+  there).
   Coming through a door moves nobody to the point; a named deviation from
   2008, whose checkpoint was the entry point and what a heroX / heroY
   trigger wrote.
@@ -1081,7 +1121,7 @@ game runs them through `Events.Director`; the editor will write them).
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`.
 
-### `Core/Levels.Pads.pas` (~520 lines)
+### `Core/Levels.Pads.pas` (~545 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -1103,7 +1143,10 @@ be a shelf (3.0.51): it slides out of the wall behind it and back in by a
 program of steps that goes round and round (`Pads.Shelf` counts the
 cycle); out, it is a pad as any other, on its way and in the wall it is
 neither a floor nor a body; it joins no group and does not plunge, a path
-it may travel. A 2026 addition.
+it may travel. A pad may ride a carousel (3.0.52, `Levels.Carousels`): it
+flies round the carousel's track with the other pads it carries; the
+carousel places it, so it takes no `x` or `y`, and it travels no path,
+does not plunge, is no shelf and joins no group. A 2026 addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
@@ -1114,7 +1157,9 @@ it may travel. A 2026 addition.
   `Plunge` (a `TPadPlunge`; `Plunges` False - the pad holds whatever
   stands on it), `Shelf` (a `TPadShelf`; `Slides` False - the pad never
   leaves the front), `Group`
-  (the pad group it is rebuilt with; '' = none), `Rigs` (the rigs it wears,
+  (the pad group it is rebuilt with; '' = none), `Carousel` (3.0.52: the
+  carousel it rides, by tag; '' = none - the carousel puts `X` and `Y`,
+  `Levels.Defs` writes them at load), `Rigs` (the rigs it wears,
   by name, in the order they are hung - `Levels.Rigs` holds them and hangs
   them).
 - **`TPadPlunge`** (record, 3.0.46) - a pad that gives way under the
@@ -1169,7 +1214,10 @@ it may travel. A 2026 addition.
   `Stops` (the stops after the pad's own place, in order), `Speed` (units
   a second, the mean over a leg), `Pause` (seconds the pad stands at
   every stop).
-- **`ParsePads(root, levelId)`** - absent section = no pads; `bullets`
+- **`ParsePads(root, levelId)`** - absent section = no pads; `x` and `y`
+  are read by `ReadPlace` - required of a pad on no carousel, refused
+  beside a `"carousel"` (`SPadCarouselPlaced`), left 0 for `Levels.Defs`
+  to fill; `bullets`
   absent = block; `path` absent = no path (`ReadPath`), `bob` absent = 0.
   The JSON: `"path": {"route", "stops": [[x, y], ...], "speed",
   "pause"}` (`route` absent = pingpong, `pause` absent = 0), `"bob"`,
@@ -1202,7 +1250,70 @@ it may travel. A 2026 addition.
   screen range, a tag on two pads, a stop off
   the screen, what a plunge needs of the level - no path, no group, a
   clear shaft - and what a shelf may not - plunge, join a group - are
-  `Levels.Defs`' (`CheckPads`).
+  `Levels.Defs`' (`CheckPads`); what a carousel's pad may not, and the room
+  of its lap, too (`CheckCarousels`).
+
+### `Core/Levels.Carousels.pas` (~405 lines)
+The `carousels` section of level JSON (3.0.52): pads that fly round a
+closed track, one after another, without end. Model, parser and the track
+itself, no game logic: `Pads.World` flies the pads, `Levels.Defs` places
+them and checks their round. The track is the path of the middle of
+every deck - an oval, or a box whose corners may be rounded. It starts on
+the right of its middle and runs clockwise on the screen, down from
+there (Y grows down: an angle that grows goes clockwise). The pads go
+round it at one even pace - by length along the track, not by angle, so
+they do not bunch at the narrow ends of an oval - a lap in the
+carousel's period, the way it turns, each a share of the lap ahead of the
+one before it in file order. A pad keeps its deck level all the way
+round. A pad joins by its `"carousel"`; the carousel places it. A 2026
+addition.
+- **`TCarouselShape`** = (`csOval`, `csBox`), **`TCarouselTurn`** =
+  (`ctClockwise`, `ctCounterClockwise` - as seen on the screen);
+  `CarouselShapeIds` ('oval'/'box') and `CarouselTurnIds` ('cw'/'ccw') -
+  the JSON words, read in any case.
+- **`TCarousel`** (record) - `Tag`, `Screen` (1-based), `Shape`,
+  `CenterX`/`CenterY` and `Width`/`Height` (the middle of the track and
+  its size across and down, screen units, `Single`), `Corner` (a box's
+  corner radius; 0 = sharp), `Period` (seconds a lap), `Turn`, `Start`
+  (where the first pad starts: a share of the lap from the right of the
+  middle, the way the carousel turns).
+- **`TCarouselTrack`** (record; its state is private) - the track as a
+  closed line of points, the last joined to the first. `Build(carousel)`
+  - an oval as `OvalPoints` (360) points (`BuildOval`, within a hair of
+  the curve at the size of a screen); a box (`BuildBox`) down the right
+  side from the middle, along the bottom, up the left, along the top,
+  each rounded corner a quarter circle of `CornerLegs` (12) legs
+  (`AddCorner`); then `Measure` - the distance along the line to every
+  point and the `Length`. `PointAt(distance, out x, y)` - any distance,
+  past a lap or below zero too (folded by `Floor`, not truncation), a
+  binary search for the leg, a leg of no length (a side as short as its
+  corners - a box rounded all the way is a circle) taken as a point.
+- **`TCarouselOrbit`** (record) - one pad's way round: `Build(carousel,
+  slot, slots)` - the track, the start `Frac(Start + slot / slots)` of a
+  lap along it, the step a lap / `LapTicks` per tick, both negative for
+  counter-clockwise. `Rides` - False for `Default(TCarouselOrbit)`, the
+  orbit of a pad on no carousel: `Place` says nothing then.
+  `Place(time, out x, y)` - the middle of the deck at `time` ticks,
+  between ticks too (the world draws between them).
+- **`ParseCarousels(root, levelId)`** - absent section = no carousels.
+  JSON: `{"tag": "s08-carousel", "screen": 8, "shape": "oval", "center":
+  [288, 179], "size": [150, 150], "corner": 0, "period": 12, "turn":
+  "cw", "start": 0}`; `shape` absent = oval, `turn` absent = cw, `corner`
+  and `start` absent = 0; `period` has no default - absent it reads 0 and
+  is refused. `ECarouselError` is raised by a shape or a turn out of its
+  words (`SCarouselBadShape`, `SCarouselBadTurn`), a `center` or a `size`
+  that is not `[x, y]` (`ReadPair`, `SCarouselBadPair`), a width or a
+  height of zero or less, a corner below zero or past half the shorter
+  side, a period of zero or less, a start out of 0..1, 1 itself excluded
+  (`CheckNumbers`, `SCarouselBadNumber`). The screen range, the tags and
+  the room of the lap are `Levels.Defs`' (`CheckCarousels`).
+- **`TryFindCarousel(carousels, tag, out carousel)`** - False when no
+  carousel carries the tag. **`OrbitOf(carousels, pads, index)`** - the
+  orbit of the pad at `index`: its slot among the pads of its carousel, in
+  file order, counting only the pads of that carousel; a pad on no
+  carousel, or on one the list has not, gets one that does not ride.
+  **`LapTicks(carousel)`** - the period in ticks (seconds * 33,
+  `LogicTicksPerSecond`, local; `Round`), one at the least.
 
 ### `Core/Levels.Rigs.pas` (~320 lines)
 The `rigs` section of level JSON: what the pads and the monsters wear. A
@@ -1556,7 +1667,7 @@ warns. No SDL and no level in it - a record a test drives alone.
     lap), a time a hair before the lap's end that rounds up to the end
     itself held at the last span.
 
-### `Game/Pads/Pads.World.pas` (~1400 lines)
+### `Game/Pads/Pads.World.pas` (~1430 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1606,7 +1717,10 @@ its warning. What hangs on it is the wall's and stays in front. The
 monsters ask for their deck every tick and fall by themselves; the hero,
 who asks nothing while he stands, asks `DeckWithdrawn`. The tick its
 latch catches the world tells, as a rebuild's sounds, and the game
-voices.
+voices. A pad on a carousel (3.0.52, `Levels.Carousels`) goes round its
+track at an even pace from the place its orbit gives it at the start of
+its clock: its path is the track, and the riders go with it as with any
+path. It travels, so a ram only rocks it.
 Born with the level (`LoadLevel`); a restart rewinds it, the dice of the
 rebuilds new for the new try.
 - **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
@@ -1639,7 +1753,9 @@ rebuilds new for the new try.
   ago), `Screen`, `Tag`, `Bullets`, `Group`, `Placement`, `HomeLeft` /
   `HomeTop` (where the path or the flight puts the pad, the knock left
   out), `WasBehind` (3.0.51: `Behind` a tick ago - `Tick` catches it
-  first, `Rewind` last).
+  first, `Rewind` last). `Create(placement, texture, orbit)` - the orbit
+  (3.0.52, `FOrbit`) is the pad's way round its carousel, one that does
+  not ride for a pad on none; the world makes it with `OrbitOf`.
   - The path: `BuildCycle` (in the constructor) makes it one cycle of
     stops - the first is the level file's place, the path's stops follow;
     pingpong comes back through the inner stops (each passed twice, the
@@ -1660,7 +1776,12 @@ rebuilds new for the new try.
     `Rewind` - the clock to 0, the pad
     on the level file's place, no sag, no knock, no flight, its plunge
     holding; the
-    constructor ends with it.
+    constructor ends with it. A pad of a carousel (3.0.52): `PlaceOnPath`
+    hands over to `PlaceOnOrbit` - the orbit's place at `FClock` is the
+    middle of the deck, the pad's left edge half its width off; `Rewind`
+    puts it there too, on the start itself, not on the placement, which
+    holds it rounded to whole units (the riders seated on the pad sit on
+    the start itself).
     `MotionX` - how far the pad went across this tick.
   - The deck and the body: `DeckSpans(left, right)` - the deck spans some
     of left..right, edges included (closed) and `EdgeSlop` (0.001) past
@@ -1703,7 +1824,8 @@ rebuilds new for the new try.
     `KnockBackTicks` (12); `NoKnock` (-1) on the clock - none. `Tilt(alpha)`
     - the rock, drawn only: `KnockTilt` (7 degrees) times a sine of one rock
     in `KnockTiltPeriodTicks` (8), dying by `KnockTiltDecayTicks` (12),
-    between ticks. `Travels` - the pad has a path. `ClearOf(other, dx, dy)` -
+    between ticks. `Travels` - the pad has a path, or rides a carousel
+    (3.0.52). `ClearOf(other, dx, dy)` -
     the body moved dx, dy would not cut into the other's; touching is no
     cut. `Knocked` - off its place by a blow.
   - The plunge (3.0.46): `FPlunge` - the pad's `TPlungeCycle`
@@ -1766,7 +1888,9 @@ rebuilds new for the new try.
   `seed` the dice of the rebuilds; the cache is the
   level's object art, the textures are its; it and the level (the
   placements, and the grid a knock is tried against) must outlive the
-  world; a picture the cache lacks raises here, at level load. `Tick(screen)` - before
+  world; a picture the cache lacks raises here, at level load; every
+  pad gets its orbit here (`OrbitOf` over the level's `Carousels`,
+  3.0.52). `Tick(screen)` - before
   the riders move: a rebuild asked for may start (`StartAskedRebuild`),
   then every pad's `Tick`, on view for the pads of that screen alone - a
   pad elsewhere keeps its `Prev*` caught up and goes nowhere -, then
@@ -2223,7 +2347,11 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   rest) and for an `mkBossFly` monster its `TPilot`. Its own
   collision oracles
   (`CanGoLeftEdgeAware`/`WallOnly` pairs = CanIGo*1/2 of 2008, `CanGoDown`),
-  `ShoveX`. Pads (a 2026 addition; the constructor takes the pad world):
+  `ShoveX`. The constructor puts the monster on its placement's cell
+  (column - 1 and row, times the sprite size), a seated one (3.0.52,
+  `TEntityPlacement.Seat`) on the seat itself - `SeatLeft` and
+  `SeatFeet`, in screen units. Pads (a 2026 addition; the constructor
+  takes the pad world):
   the floor half of the edge-aware oracles asks `FloorAhead` - the grid's
   cell ahead or a deck spanning the inset edge the oracle looks at - and
   the pull of gravity in `MoveWalking` holds off while `StandsOnDeck`
@@ -4165,11 +4293,12 @@ numpy, scipy, Pillow.
 ## Tests
 
 The concept, the rules and the tables of tests are in `docs/TESTING.md`.
-At 3.0.51 the suite is 343 tests, all green. Not every test unit has its
+At 3.0.52 the suite is 376 tests, all green. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
-`Tests.Levels.Pads`, `Tests.Effects.Lightning`, `Tests.Pads.Plunge` and
-`Tests.Pads.Shelf` are told in `docs/TESTING.md` alone.
+`Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
+`Tests.Pads.Plunge` and `Tests.Pads.Shelf` are told in `docs/TESTING.md`
+alone.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -4317,7 +4446,7 @@ limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
 
-### `level1.json` (~97 KB) / `level2.json` (~47 KB)
+### `level1.json` (~97 KB) / `level2.json` (~56 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -4334,8 +4463,12 @@ x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
 `bullets` block / pass, block when absent, optional `path` - `route`,
 `stops`, `speed`, `pause` -, `bob`, `plunge` - `delay`, `rest`, `rise` -,
 `shelf` - `out` and `in` or `program`, `slide`, `warn`, `offset`, `sink`,
-`scale`, `tone` -, `group` and `rig` - the rigs it wears;
+`scale`, `tone` -, `group`, `carousel` - the carousel it rides, in
+place of `x` and `y` - and `rig` - the rigs it wears;
 see `Levels.Pads`),
+`carousels` (optional, 3.0.52: `tag`, `screen`, `shape` oval / box,
+`center` and `size` [x, y] in screen units, `corner`, `period` in
+seconds, `turn` cw / ccw, `start` - see `Levels.Carousels`),
 `padGroups` (optional: `tag`, `screen`, `zone` [left, top, right, bottom]
 in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`
 and `alarm` - the pads rebuilt together, see `Levels.Pads`), `rigs`
@@ -4358,7 +4491,8 @@ informational, unread; `note`; `screens` - one object per screen: `screen`,
 `rows` (12 strings of 16 comma-separated palette indices) and `collision`
 (12 strings of 16 '0'/'1', 1 = solid - the grid `SolidAt` reads)),
 `entities` (placements:
-monsterId, screen, x, y, spriteList, optional `difficulty` grades (parsed,
+monsterId, screen, x, y - or, since 3.0.52, `seat`: the tag of the pad it
+sits on, in place of both -, spriteList, optional `difficulty` grades (parsed,
 unused by both levels),
 `overrides` (direction / speed / lives / canShoot / fireOffset), `triggers` -
 messages/hints/changeMusic/heroX-heroY/gravelBoss (the wave quota per
@@ -4511,7 +4645,25 @@ plainest example), `introText`/`introTextEn`.
   tinted 55, a unit under the floor line so its plank is not read as a
   deck); on the shelf the rig `shelfDock` - a red `flash` beacon dark at
   rest (intensity 0) and lit by the shelf's warning (`surge` 100); it stays
-  on the dock while the shelf goes in. The
+  on the dock while the shelf goes in. Screen 8 (3.0.52) is a hall with a
+  carousel in its middle: `s08-room` (the set `level2-objects`), its
+  tiles cleared and its matter new - the hero comes in on a ledge at the
+  top left (respawn column 1, row 4), the floor of row 11 is a pit from
+  column 2 to 13, the way out at the bottom right. Over the pit twelve
+  shelves stand side by side as the floor, `s08-shelf-01` to `-12` (x 64
+  to 416, deck 352), each in its dock (`s08-shelf-dock-01` to `-12`,
+  tinted 55) and wearing `shelfDock`: out 2.6 s, in 1.5, slide 0.25, warn
+  0.6, sink 7, scale 0.72, tone 0.4 - 86 ticks out, 8 going in, 50 in, 8
+  going out, 152 a lap; three by three they take turns (`offset` 0 and
+  2.3 - 76 ticks, half a lap). In the air eight pads `s08-ride-01` to
+  `-08` (`s16-platform`, 32 wide, `bullets` pass, `bob` 1, the rig `pad`)
+  fly round `s08-carousel` - an oval of 150 by 150 round (288, 179), a lap
+  in 12 s (396 ticks), clockwise; the decks go from 104 to 254 down. No
+  wheel, no rim, no pylon: the pads fly the round on their own thrust.
+  The nine barrels of 2008 are gone; on every pad sits a monster (`seat`):
+  betoners on `-01` and `-05` (speed 0; the first keeps the `heroY` 4
+  trigger of the 2008 first barrel), barrels on the rest (direction 1).
+  A `dying` beacon on the room. The
   gravel trial
   lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
   difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
@@ -4573,8 +4725,9 @@ plainest example), `introText`/`introTextEn`.
   since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
 - **Objects**: `level1-objects` (`ship`) and `level2-objects`
-  (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s03-room` and
-  `s04-room`, whole screens at backdrop density) - the `<assetsDir>-objects` convention, never declared,
+  (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s03-room`,
+  `s04-room` and the rooms of the screens repainted after them, `s08-room`
+  the last - 3.0.52 -, whole screens at backdrop density) - the `<assetsDir>-objects` convention, never declared,
   optional. Shared:
   `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
   `objectSets`. The ship and the satellite are drawn at backdrop density
@@ -4633,6 +4786,7 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/PADS-PLAN.md, stage 8) |
 | A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/PADS-PLAN.md, stage 9) |
+| A carousel: pads flying round a track - its shape, size and pace, the slots of its pads, where each starts; a monster seated on a pad; where a carousel may turn | `carousels` + `carousel` on a pad + `seat` on an entity in levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/PADS-PLAN.md, stage 10) |
 | The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |

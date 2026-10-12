@@ -76,7 +76,10 @@ the screen. `s04-room`: kept as generated, not resampled - 41 columns
 taken out of its shaft, moved as a whole, its two openings carried to the
 edges. `s04-tek-crates`: cut to its ink, scaled to 6 px per screen unit.
 `s07-room`: joined into one room from several generations, none of which
-came out whole. They replaced the 2008 tiles of those screens, which stay in
+came out whole. `s08-room` (3.0.52): the second of its generations, its
+ceiling, ledge and walls moved by a few pixels onto the grid, the hazard
+posts of its back wall painted over with the wall beside them, the aprons
+of the floor taken from the first generation. They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
