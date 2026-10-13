@@ -27,9 +27,6 @@ const
   TrialWaveTicks = 18;
   // The breath of the room between two acts, before the next batch falls
   TrialActBreakTicks = 40;
-  // A wave is skipped while this many gravels are alive: they do not
-  // leave the room, so a long batch would pile up without the cap
-  TrialLiveCap = 10;
   TrialKillsPerMedkit = 15;
 
 type
@@ -112,13 +109,12 @@ end;
 procedure TGravelTrial.DealWave(AGravelsAlive: Integer;
   var ACue: TTrialCue);
 begin
+  // No cap on the living: a gravel left alive does not hold the next one
+  // back - the batch is the only limit
   if FBatchLeft > 0 then
   begin
-    if AGravelsAlive < TrialLiveCap then
-    begin
-      Dec(FBatchLeft);
-      ACue.SpawnGravel := True;
-    end;
+    Dec(FBatchLeft);
+    ACue.SpawnGravel := True;
     Exit;
   end;
 
