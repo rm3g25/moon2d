@@ -72,7 +72,7 @@ uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Sprites.Sets, Game.Config, Game.Space, Levels.Defs,
   Levels.Dynamics, Levels.Tint, Monsters.Defs, Monsters.Disc, Monsters.Hull,
-  Monsters.Pilot, Monsters.Damage, Bullets, Pads.World;
+  Monsters.Pilot, Monsters.Damage, Bullets, Pads.World, Levels.Events;
 
 type
   TMonsterAction = (maStand, maWalkLeft, maWalkRight, maFalling, maFlying);
@@ -86,6 +86,16 @@ type
 
   // Thirds of full health, the crosshair's language
   TMonsterHealthTier = (htHale, htWounded, htCritical);
+
+  // Where a body stands in the lane an event let it in on; lpNone for a
+  // body no event let in
+  TLanePhase = (lpNone, lpEntering, lpOnLane, lpLeaving, lpGone);
+
+  TLaneRun = record
+    Phase: TLanePhase;
+    // Entering: where the body stops sliding and starts to patrol
+    InsideX: Double;
+  end;
 
   // A body's smoke: the look, the point where it leaves the left-facing
   // art, how thick it stands before the last third and in it (0..1), and
@@ -145,6 +155,7 @@ type
     FRageLives: Integer; // a boss goes into its rage below this
     FFired: Boolean; // this tick
     FAsleep: Boolean; // a sentry with no hero to watch
+    FLane: TLaneRun; // a body an event let in only
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -174,6 +185,9 @@ type
     procedure MoveWalking;
     procedure MoveFalling;
     procedure MoveFlying;
+    procedure MoveInLane;
+    procedure SlideIn;
+    procedure FlyAway;
     procedure EnrageTankIfLow;
     procedure ProcessBossThresholds(const AEnemyBullets: TBurst);
     procedure BeginDying(const AEnemyBullets: TBurst);
@@ -237,6 +251,12 @@ type
     procedure Reappear(AX, AY: Double);
     // The side the body walks off to when it lands, as the dice pick
     procedure HeadRandomly;
+    // The body comes in through the wall from the side of the screen and
+    // patrols its row: a body an event lets in
+    procedure EnterFrom(ASide: TLaneSide);
+    // A body that came in leaves through the top. Not a death: no wreck, no
+    // score, and it hurts and is shot no more
+    procedure Depart;
     // The picture is drawn turned over (2008 art faces left)
     function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
@@ -304,6 +324,8 @@ type
     FLivesScale: Double;
     function SpawnAt(const AMonsterId: string;
       AScreen, APlacementX, APlacementY: Integer): TMonster;
+    function SpawnPlaced(const APlacement: TEntityPlacement): TMonster;
+    procedure CheckSpawnIds;
     function AnimFor(const AMnsName: string): TAnimSet;
     function DiscArtFor(const ADef: TMonsterDef): TDiscArt;
     function HullArtFor(const ADef: TMonsterDef): THullArt;
@@ -326,6 +348,11 @@ type
     // hero's hands - the contact of the same tick collects it
     procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
       AX, AY: Double);
+    // A body let in along a row: it comes in through the wall from one side
+    function SpawnInLane(const AOrders: TSpawnOrders;
+      AScreen: Integer): TMonster;
+    // Every body that came in along a lane flies off the top
+    procedure DepartGuests(AScreen: Integer);
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
     // The live bodies of one kind gone out of the side come back from the
@@ -392,6 +419,10 @@ const
   // units the two answers agree at a deck's ends too
   DeckEdgeInset = 0.5;
   ThrowStep = 12; // units a tick: a thrown body goes as fast as a bullet
+  // A body let in along a lane slides in at LaneStep units a tick and
+  // flies off the top at LaneLeaveStep
+  LaneStep = 4;
+  LaneLeaveStep = 8;
   SpriteResetThreshold = 8.7;
   // Patrol turns AT the right edge, not beyond it
   PatrolRightLimit = ScreenWidth - SpriteSize; // 480
@@ -1448,6 +1479,36 @@ begin
     FEvents.Add(meBossOwesPrize);
 end;
 
+// The wall is not asked: the body comes through it, and leaves over it
+procedure TMonster.MoveInLane;
+begin
+  case FLane.Phase of
+    lpEntering:
+      SlideIn;
+    lpLeaving:
+      FlyAway;
+  end;
+end;
+
+procedure TMonster.SlideIn;
+begin
+  var Remaining := FLane.InsideX - FX;
+  if Abs(Remaining) <= LaneStep then
+  begin
+    FX := FLane.InsideX;
+    FLane.Phase := lpOnLane;
+    Exit;
+  end;
+  FX := FX + Sign(Remaining) * LaneStep;
+end;
+
+procedure TMonster.FlyAway;
+begin
+  FY := FY - LaneLeaveStep;
+  if FY < -SpriteSize then
+    FLane.Phase := lpGone;
+end;
+
 procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
 begin
   FHeroX := AHeroX;
@@ -1479,7 +1540,7 @@ begin
   // After a hold the aimed gun takes a whole interval to speak again
   if PilotHoldsGun then
     FTimeOfFire := 0
-  else if FAsleep then
+  else if FAsleep or (FLane.Phase = lpEntering) then
     FTimeOfFire := FFireStart
   else if FCanShoot and (FLife = mlAlive) then
   begin
@@ -1504,18 +1565,21 @@ begin
     end;
   end;
 
-  case FAction of
-    maWalkLeft, maWalkRight, maStand:
-      if FLife <> mlDead then
-        MoveWalking
-      else
-        // A corpse does not walk, but a deck that left it must not leave it hanging
-        FallIfUnsupported;
-    maFalling:
-      MoveFalling;
-    maFlying:
-      MoveFlying;
-  end;
+  if FLane.Phase in [lpEntering, lpLeaving] then
+    MoveInLane
+  else
+    case FAction of
+      maWalkLeft, maWalkRight, maStand:
+        if FLife <> mlDead then
+          MoveWalking
+        else
+          // A corpse does not walk, but a deck that left it must not leave it hanging
+          FallIfUnsupported;
+      maFalling:
+        MoveFalling;
+      maFlying:
+        MoveFlying;
+    end;
   WreckIfCritical;
   TickSmoke;
   TickSparks;
@@ -1655,10 +1719,46 @@ begin
     FAction := maWalkLeft;
 end;
 
+procedure TMonster.EnterFrom(ASide: TLaneSide);
+begin
+  FLane.Phase := lpEntering;
+  case ASide of
+    lsLeft:
+      begin
+        FX := -SpriteSize - MonsterBound;
+        FLane.InsideX := SpriteSize;
+        FAction := maWalkRight;
+      end;
+    lsRight:
+      begin
+        FX := ScreenWidth + MonsterBound;
+        FLane.InsideX := ScreenWidth - 2 * SpriteSize;
+        FAction := maWalkLeft;
+      end;
+  end;
+  FDirection := ASide = lsLeft;
+  FHullX := FX;
+end;
+
+procedure TMonster.Depart;
+begin
+  if FLife <> mlAlive then
+    Exit;
+  if not (FLane.Phase in [lpEntering, lpOnLane]) then
+    Exit;
+
+  FLane.Phase := lpLeaving;
+  FLife := mlDead;
+  FStep := 0;
+  FCanShoot := False;
+end;
+
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
 begin
+  if FLane.Phase = lpGone then
+    Exit;
   // A pickup that is not there is not drawn dying: the game draws what
   // becomes of it
   if (FDef.Category = mcPickup) and (FLife <> mlAlive) then
@@ -1668,7 +1768,8 @@ begin
     FDisc.Draw(ASprites, AAlpha);
     Exit;
   end;
-  if (FHull <> nil) and (FLife = mlAlive) then
+  var HullShows := (FLife = mlAlive) or (FLane.Phase = lpLeaving);
+  if (FHull <> nil) and HullShows then
   begin
     FHull.Draw(ASprites, HullStand, AAlpha);
     Exit;
@@ -1721,6 +1822,7 @@ begin
   FLevel := ALevel;
   FPads := APads;
   FLivesScale := ALivesScale;
+  CheckSpawnIds;
 
   for var Placement in ALevel.Entities do
   begin
@@ -1775,9 +1877,51 @@ begin
   // Whether AddMonstOnBoss1 scaled its minions is monst.pas knowledge
   // (the 2008 call took no multiplier) - scaled here for consistency.
   // TODO: verify against monst.pas (tracked: PORTING-NOTES)
-  Result := TMonster.Create(Def, AnimFor(Def.SpriteList), DiscArtFor(Def),
-    HullArtFor(Def), FLevel, FPads, Placement, FLivesScale);
+  Result := SpawnPlaced(Placement);
+end;
+
+function TMonsterField.SpawnPlaced(const APlacement: TEntityPlacement): TMonster;
+begin
+  var Def := FRegistry.Find(APlacement.MonsterId);
+  Result := TMonster.Create(Def, AnimFor(APlacement.SpriteList), DiscArtFor(Def),
+    HullArtFor(Def), FLevel, FPads, APlacement, FLivesScale);
   FMonsters.Add(Result);
+end;
+
+// Find raises on an unknown id: a typo in an event dies when the level
+// starts, not when the event fires
+procedure TMonsterField.CheckSpawnIds;
+begin
+  for var Event in FLevel.Events do
+    for var Action in Event.Actions do
+    begin
+      if Action.Kind <> eaSpawn then
+        Continue;
+      FRegistry.Find(Action.Spawn.MonsterId);
+    end;
+end;
+
+function TMonsterField.SpawnInLane(const AOrders: TSpawnOrders;
+  AScreen: Integer): TMonster;
+begin
+  var Def := FRegistry.Find(AOrders.MonsterId);
+  var Placement := Default(TEntityPlacement);
+  Placement.MonsterId := AOrders.MonsterId;
+  Placement.Screen := AScreen;
+  Placement.X := 1;
+  Placement.Y := AOrders.Row + 1;
+  Placement.SpriteList := AOrders.SpriteList;
+  if Placement.SpriteList = '' then
+    Placement.SpriteList := Def.SpriteList;
+  Result := SpawnPlaced(Placement);
+  Result.EnterFrom(AOrders.Side);
+end;
+
+procedure TMonsterField.DepartGuests(AScreen: Integer);
+begin
+  for var Monster in FMonsters do
+    if Monster.Screen = AScreen then
+      Monster.Depart;
 end;
 
 function TMonsterField.CountAliveOf(const AMonsterId: string;

@@ -26,13 +26,17 @@ type
   // normal grade that grows with the difficulty as the lives do; enraged
   // - one gone into its rage (the boss below its rage mark, a tank below
   // its own). actReached watches the gravel trial: it has come to its
-  // act "act" or past it.
+  // act "act" or past it. gravelDealt watches the batch of the act "act":
+  // it holds from the moment the gravel number batch * part div of + 1 is
+  // let down - a third of a batch of 15 puts it at the sixth gravel, and
+  // the batch is told by the grade. JSON: "act", "part" (0 by default), "of".
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
-    ecActReached);
+    ecActReached, ecGravelDealt);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
-    eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons);
+    eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
+    eaSpawn);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -42,6 +46,16 @@ type
     Rows: TArray<Integer>;
     YieldBank: string;
     YieldRows: TArray<Integer>;
+  end;
+
+  // A body let in along a row of the screen: which monster, the sprite list
+  // it wears when its definition names none, the row (the cells of the
+  // screen, 0 at the top) and the side it comes in from
+  TSpawnOrders = record
+    MonsterId: string;
+    SpriteList: string;
+    Row: Integer;
+    Side: TLaneSide;
   end;
 
   TEventAction = record
@@ -79,6 +93,10 @@ type
     // the trial they come in (Game.Cannons). JSON: "rows" (the rows they
     // fire at), "yield" (a bank of shelves, optional) and "yieldRows"
     // (while a cannon is on any of them the bank stays in the wall).
+    // eaSpawn: a body of the monster Spawn.MonsterId slides in through the
+    // wall along the row, for the act of the trial the event waits for, and
+    // flies off when that act ends - so the event must wait for one. JSON:
+    // "monster", "spriteList" (optional), "row", "from" ("left" or "right").
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -95,6 +113,7 @@ type
     Order: TBankOrder;
     StepSeconds: Single;
     Cannons: TCannonOrders;
+    Spawn: TSpawnOrders;
   end;
 
   // One event in level JSON:
@@ -103,7 +122,8 @@ type
   //     "screen": 12,
   //     "when": "allDead", "tag": "labGuard",
   //     (or "when": "livesBelow", "tag": "boss", "lives": 150,
-  //     or "when": "actReached", "act": 2)
+  //     or "when": "actReached", "act": 2
+  //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -115,7 +135,9 @@ type
     Condition: TEventCondition;
     Tag: string; // the placements the monster conditions watch
     Lives: Integer; // ecLivesBelow
-    Act: Integer; // ecActReached
+    Act: Integer; // ecActReached, ecGravelDealt
+    Part: Integer; // ecGravelDealt
+    Whole: Integer; // ecGravelDealt, "of" in JSON
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -124,13 +146,15 @@ const
   // The JSON vocabulary of "when", of "action" and of the "value" the
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
-    'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached');
+    'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
+    'gravelDealt');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
-    'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons');
+    'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
+  EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
 
   // The conditions that watch tagged placements
   TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
@@ -153,6 +177,9 @@ resourcestring
   SEventNoTag = 'Level "%s": event "%s": %s names no tag';
   SEventNoLives = 'Level "%s": event "%s": livesBelow needs "lives" above zero';
   SEventNoAct = 'Level "%s": event "%s": actReached needs "act" above zero';
+  SEventNoBatchAct = 'Level "%s": event "%s": gravelDealt needs "act" above zero';
+  SEventBadShare = 'Level "%s": event "%s": gravelDealt takes "of" above zero '
+    + 'and "part" from 0 to below "of"';
   SEventNoTarget = 'Level "%s": event "%s": intensity names no target';
   SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
   SEventSunNoTarget = 'Level "%s": event "%s": sun names no target';
@@ -173,6 +200,12 @@ resourcestring
     + 'screen';
   SEventNoYieldRows = 'Level "%s": event "%s": cannons name a bank to '
     + 'yield but no "yieldRows"';
+  SEventNoSpawnMonster = 'Level "%s": event "%s": spawn names no "monster"';
+  SEventBadSpawnRow = 'Level "%s": event "%s": spawn: row %d is off the screen';
+  SEventBadLaneSide = 'Level "%s": event "%s": spawn comes "from" left or '
+    + 'right, not "%s"';
+  SEventSpawnNoAct = 'Level "%s": event "%s": spawn needs an event that waits '
+    + 'for an act';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -347,6 +380,29 @@ begin
     raise ELevelEventError.CreateFmt(SEventNoYieldRows, [ALevelId, AEventId]);
 end;
 
+function LaneSideOf(const AId, ALevelId, AEventId: string): TLaneSide;
+begin
+  for var Side := Low(TLaneSide) to High(TLaneSide) do
+    if SameText(AId, EventLaneSideIds[Side]) then
+      Exit(Side);
+  raise ELevelEventError.CreateFmt(SEventBadLaneSide, [ALevelId, AEventId, AId]);
+end;
+
+procedure ReadSpawn(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+begin
+  AAction.Spawn.MonsterId := AObj.GetValue<string>('monster', '');
+  if AAction.Spawn.MonsterId = '' then
+    raise ELevelEventError.CreateFmt(SEventNoSpawnMonster, [ALevelId, AEventId]);
+  AAction.Spawn.SpriteList := AObj.GetValue<string>('spriteList', '');
+  AAction.Spawn.Row := AObj.GetValue<Integer>('row', -1);
+  if (AAction.Spawn.Row < 0) or (AAction.Spawn.Row >= ScreenRows) then
+    raise ELevelEventError.CreateFmt(SEventBadSpawnRow,
+      [ALevelId, AEventId, AAction.Spawn.Row]);
+  AAction.Spawn.Side := LaneSideOf(AObj.GetValue<string>('from', ''), ALevelId,
+    AEventId);
+end;
+
 procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;
   var AAction: TEventAction);
 begin
@@ -382,7 +438,20 @@ begin
       ReadShelves(AObj, ALevelId, AEventId, Result);
     eaCannons:
       ReadCannons(AObj, ALevelId, AEventId, Result);
+    eaSpawn:
+      ReadSpawn(AObj, ALevelId, AEventId, Result);
   end;
+end;
+
+procedure ReadGravelDealt(const AObj: TJSONObject; const ALevelId: string;
+  var AEvent: TLevelEvent);
+begin
+  if AEvent.Act <= 0 then
+    raise ELevelEventError.CreateFmt(SEventNoBatchAct, [ALevelId, AEvent.Id]);
+  AEvent.Part := AObj.GetValue<Integer>('part', 0);
+  AEvent.Whole := AObj.GetValue<Integer>('of', 0);
+  if (AEvent.Whole <= 0) or (AEvent.Part < 0) or (AEvent.Part >= AEvent.Whole) then
+    raise ELevelEventError.CreateFmt(SEventBadShare, [ALevelId, AEvent.Id]);
 end;
 
 function ReadEvent(const AObj: TJSONObject; const ALevelId: string;
@@ -406,6 +475,8 @@ begin
   Result.Act := AObj.GetValue<Integer>('act', 0);
   if (Result.Condition = ecActReached) and (Result.Act <= 0) then
     raise ELevelEventError.CreateFmt(SEventNoAct, [ALevelId, Result.Id]);
+  if Result.Condition = ecGravelDealt then
+    ReadGravelDealt(AObj, ALevelId, Result);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);
@@ -415,6 +486,9 @@ begin
   for var i := 0 to ActionsArr.Count - 1 do
     Result.Actions[i] := ReadAction(ActionsArr.Items[i] as TJSONObject,
       ALevelId, Result.Id);
+  for var Action in Result.Actions do
+    if (Action.Kind = eaSpawn) and (Result.Act <= 0) then
+      raise ELevelEventError.CreateFmt(SEventSpawnNoAct, [ALevelId, Result.Id]);
 end;
 
 function ParseLevelEvents(const ARoot: TJSONObject;

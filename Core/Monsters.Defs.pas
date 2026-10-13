@@ -50,6 +50,9 @@ type
   //   turns, one after another.
   TPilotTactics = (ptLaps, ptDives, ptRams, ptHunts);
 
+  // The side of the screen a body is let in from
+  TLaneSide = (lsLeft, lsRight);
+
   TMovementDef = record
     Kind: TMovementKind;
     Speed: Integer;

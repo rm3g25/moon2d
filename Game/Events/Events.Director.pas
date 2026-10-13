@@ -9,9 +9,9 @@
   for restarts; the arena that rebuilds a pad group, restores it and
   flies it in; the shelves of a bank, which take their order from where
   the hero stands; the trial's medkits; the wall cannons of the trial;
-  and the act the gravel trial has come to. The monster field is reborn on every restart, so it arrives
-  with every tick instead of being kept: asked for the conditions, told
-  the tactics.
+  the bodies an event lets in; and how far the gravel trial has come. The
+  monster field is reborn on every restart, so it arrives with every tick
+  instead of being kept: asked for the conditions, told the tactics.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -21,7 +21,7 @@ unit Events.Director;
 interface
 
 uses
-  Levels.Events, Levels.Dynamics, Hud.Messages, Monsters;
+  Levels.Events, Levels.Dynamics, Hud.Messages, Monsters, Game.Trial;
 
 type
   // Plays a track and remembers it as the level's current one. A
@@ -46,6 +46,11 @@ type
   // event waits for, 0 for one that waits for no act
   TCannonsCue = reference to procedure(const AOrders: TCannonOrders;
     AAct: Integer);
+  // How far the trial has come: its act, its batch and the gravels dealt
+  TTrialProgressCue = reference to function: TTrialProgress;
+  // A body comes in along a lane for the act AAct of the trial
+  TSpawnCue = reference to procedure(const AOrders: TSpawnOrders;
+    AAct: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -53,7 +58,9 @@ type
     Shelves: TShelfCue;
     MedkitsOnto: TBankCue;
     TrialAct: TTrialAct;
+    TrialProgress: TTrialProgressCue;
     Cannons: TCannonsCue;
+    Spawn: TSpawnCue;
   end;
 
   TEventDirector = class
@@ -66,6 +73,7 @@ type
     FTicksLeft: TArray<Integer>; // of the delay, once the condition holds
     procedure Arm(AIndex: Integer);
     procedure RewindTargets(const AEvent: TLevelEvent);
+    function GravelDealt(const AEvent: TLevelEvent): Boolean;
     function ConditionHolds(const AEvent: TLevelEvent;
       const AField: TMonsterField): Boolean;
     procedure Play(const AEvent: TLevelEvent; const AField: TMonsterField);
@@ -127,6 +135,17 @@ begin
       FDynamics.RewindTagged(Action.Target);
 end;
 
+// An act past counts as dealt too: the event waits for a moment that has
+// gone by
+function TEventDirector.GravelDealt(const AEvent: TLevelEvent): Boolean;
+begin
+  var Progress := FCues.TrialProgress();
+  if Progress.Act <> AEvent.Act then
+    Exit(Progress.Act > AEvent.Act);
+  var Number := Progress.Batch * AEvent.Part div AEvent.Whole + 1;
+  Result := Progress.Dealt >= Number;
+end;
+
 function TEventDirector.ConditionHolds(const AEvent: TLevelEvent;
   const AField: TMonsterField): Boolean;
 begin
@@ -140,6 +159,8 @@ begin
       Result := AField.AnyTaggedEnraged(AEvent.Tag);
     ecActReached:
       Result := FCues.TrialAct() >= AEvent.Act;
+    ecGravelDealt:
+      Result := GravelDealt(AEvent);
   else
     Result := True;
   end;
@@ -189,6 +210,8 @@ begin
         FCues.MedkitsOnto(Action.Target);
       eaCannons:
         FCues.Cannons(Action.Cannons, AEvent.Act);
+      eaSpawn:
+        FCues.Spawn(Action.Spawn, AEvent.Act);
     end;
 end;
 

@@ -24,6 +24,9 @@
   the column of an aimed one and lets it down there, brings one gravel
   back from the pit, lets a medkit down, or ends the trial.
 
+  The trial also says how far its batch is dealt, for the events that wait
+  on that, and tells the game when an act is over.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Trial;
@@ -58,7 +61,18 @@ type
     // Bring back one gravel fallen into the pit, if one is down there
     ReturnFromPit: Boolean;
     SpawnMedkit: Boolean;
+    // The gate opened: the act is over, the last one too
+    ActEnded: Boolean;
     Finished: Boolean;
+  end;
+
+  // Where the trial stands, for the events that wait on it; all zero while
+  // it does not run
+  TTrialProgress = record
+    Act: Integer;
+    Batch: Integer;
+    // Gravels of the batch let down so far, an aimed one from its mark
+    Dealt: Integer;
   end;
 
   TGravelTrial = class
@@ -87,6 +101,7 @@ type
     procedure NoteGravelKilled;
     // One logic tick; AGravelsAlive - the live gravels of the trial
     function Tick(AGravelsAlive: Integer): TTrialCue;
+    function Progress: TTrialProgress;
     property Active: Boolean read FActive;
     // 1..TrialActs
     property Act: Integer read FAct;
@@ -156,6 +171,16 @@ begin
   DealGravel(Result);
 end;
 
+function TGravelTrial.Progress: TTrialProgress;
+begin
+  Result := Default(TTrialProgress);
+  if not FActive then
+    Exit;
+  Result.Act := FAct;
+  Result.Batch := FBatch;
+  Result.Dealt := FBatch - FBatchLeft;
+end;
+
 procedure TGravelTrial.TickAimed(var ACue: TTrialCue);
 begin
   if FAimedIn = 0 then
@@ -200,6 +225,7 @@ end;
 
 procedure TGravelTrial.EndAct(var ACue: TTrialCue);
 begin
+  ACue.ActEnded := True;
   if FAct >= TrialActs then
   begin
     FActive := False;

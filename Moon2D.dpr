@@ -461,6 +461,7 @@ type
     procedure TellShelves(const AAction: TEventAction);
     procedure SendMedkitsOnto(const ABank: string);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
+    procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
     procedure TickCannons;
     procedure TellYieldBank(ACall: TShelfCall);
     procedure LandCannonStrike(const APoint: TSdlFPoint);
@@ -735,12 +736,18 @@ begin
   Cues.Shelves := TellShelves;
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.Cannons := StartCannons;
+  Cues.Spawn := SpawnGuest;
   // A function without parameters named alone would be called, not
   // passed: the reference wraps it
   Cues.TrialAct :=
     function: Integer
     begin
       Result := TrialAct;
+    end;
+  Cues.TrialProgress :=
+    function: TTrialProgress
+    begin
+      Result := FTrial.Progress;
     end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
@@ -1241,6 +1248,15 @@ begin
   FCannons.Start(AOrders, Act);
 end;
 
+// The body belongs to the act the event waits for: once that act is over
+// there is no one to let in
+procedure TMoonGame.SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
+begin
+  if TrialAct <> AAct then
+    Exit;
+  FField.SpawnInLane(AOrders, FGravelScreen);
+end;
+
 // A tick of the gravel trial, called every tick while it runs - even over
 // the hero's corpse, like the rest of the timer. Game.Trial holds the
 // rules; here its cue is carried out on the field. Once the last act is
@@ -1276,6 +1292,8 @@ begin
     FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn).HeadRandomly;
   if Cue.SpawnMedkit then
     LetDownMedkit;
+  if Cue.ActEnded then
+    FField.DepartGuests(FGravelScreen);
   if not Cue.Finished then
     Exit;
 
