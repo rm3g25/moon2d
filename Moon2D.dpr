@@ -443,9 +443,10 @@ type
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
-    procedure LetDownFromSky(const AMonsterId: string;
-      ALook: TArrivalLook = alPlain);
+    function LetDownFromSky(const AMonsterId: string;
+      ALook: TArrivalLook = alPlain): TMonster;
     procedure LetDownMedkit;
+    procedure ArriveAgain(AGravel: TMonster);
     function HeroColumn: Integer;
     function TrialAct: Integer;
     procedure TellShelves(const AAction: TEventAction);
@@ -1134,11 +1135,19 @@ begin
   end;
 end;
 
-procedure TMoonGame.LetDownFromSky(const AMonsterId: string;
-  ALook: TArrivalLook);
+function TMoonGame.LetDownFromSky(const AMonsterId: string;
+  ALook: TArrivalLook): TMonster;
 begin
-  var Born := FField.SpawnFromSky(AMonsterId, FGravelScreen);
-  FArrivals.Add(Born.X + SpriteSize / 2, ALook);
+  Result := FField.SpawnFromSky(AMonsterId, FGravelScreen);
+  FArrivals.Add(Result.X + SpriteSize / 2, ALook);
+end;
+
+// A gravel of the trial back from the side or the pit, in the violet
+// light, to walk off whichever way the dice say
+procedure TMoonGame.ArriveAgain(AGravel: TMonster);
+begin
+  FArrivals.Add(AGravel.X + SpriteSize / 2);
+  AGravel.HeadRandomly;
 end;
 
 // Over a shelf of the bank an event named, when one did - the hero has
@@ -1206,15 +1215,20 @@ begin
   if not FTrial.Active then
     Exit;
 
-  // A gravel fallen into the pit comes down on the hero who dropped it
-  var Strays := FField.ReturnStrays(GravelMonsterId, FGravelScreen, HeroColumn);
-  for var Returned in Strays do
-    FArrivals.Add(Returned.X + SpriteSize / 2);
+  for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
+    ArriveAgain(Returned);
   var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
+  // A gravel fallen into the pit comes down on the hero who dropped it
+  var FromPit: TMonster;
+  if Cue.ReturnFromPit and
+    FField.TryReturnPitStray(GravelMonsterId, FGravelScreen, HeroColumn, FromPit) then
+    ArriveAgain(FromPit);
+  // 2008 lets every monster down heading left; the trial's gravels go
+  // either way, or they all pile up on the left
   if Cue.SpawnGravel and Cue.Herald then
-    LetDownFromSky(GravelMonsterId, alHerald)
+    LetDownFromSky(GravelMonsterId, alHerald).HeadRandomly
   else if Cue.SpawnGravel then
-    LetDownFromSky(GravelMonsterId);
+    LetDownFromSky(GravelMonsterId).HeadRandomly;
   // The mark goes up over the hero; the gravel follows it there, wherever
   // he has gone meanwhile
   if Cue.MarkAimed then
@@ -1223,7 +1237,7 @@ begin
     FArrivals.Add(FAimedColumn * SpriteSize + SpriteSize / 2);
   end;
   if Cue.SpawnAimed then
-    FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn);
+    FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn).HeadRandomly;
   if Cue.SpawnMedkit then
     LetDownMedkit;
   if not Cue.Finished then

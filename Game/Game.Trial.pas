@@ -8,6 +8,9 @@
   gate of the last act ends the trial. Every fifteenth gravel killed pays
   one medkit, counted across the acts.
 
+  A gravel fallen into the pit comes back one at a time, a beat apart:
+  a crowd dropped at once does not land on the hero at once.
+
   The first gravel of every act comes as a herald, in a light of its own.
   From the second act on every third gravel of a batch is aimed: the
   light marks the column the hero stands in, and the gravel follows it a
@@ -15,8 +18,8 @@
 
   The game tells the trial how many gravels are alive and which of them
   died, and does what the cue of a tick says: lets a gravel down, marks
-  the column of an aimed one and lets it down there, lets a medkit down,
-  or ends the trial.
+  the column of an aimed one and lets it down there, brings one gravel
+  back from the pit, lets a medkit down, or ends the trial.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -39,6 +42,7 @@ const
   // The mark of an aimed gravel leads it by this much: shorter than a wave,
   // so no more than one is ever on its way
   TrialAimedLeadTicks = 10;
+  TrialPitReturnTicks = 10;
 
 type
   TTrialCue = record
@@ -48,6 +52,8 @@ type
     // Mark the hero's column for an aimed gravel; let it down there
     MarkAimed: Boolean;
     SpawnAimed: Boolean;
+    // Bring back one gravel fallen into the pit, if one is down there
+    ReturnFromPit: Boolean;
     SpawnMedkit: Boolean;
     Finished: Boolean;
   end;
@@ -63,7 +69,9 @@ type
     FMedkitsOwed: Integer;
     // Ticks until the aimed gravel follows its mark; 0 - none on its way
     FAimedIn: Integer;
+    FTicksToReturn: Integer;
     procedure TickAimed(var ACue: TTrialCue);
+    procedure TickPitReturn(var ACue: TTrialCue);
     procedure DealWave(AGravelsAlive: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
@@ -92,6 +100,7 @@ begin
   FKills := 0;
   FMedkitsOwed := 0;
   FAimedIn := 0;
+  FTicksToReturn := TrialPitReturnTicks;
 end;
 
 procedure TGravelTrial.Stop;
@@ -121,6 +130,7 @@ begin
     Result.SpawnMedkit := True;
   end;
   TickAimed(Result);
+  TickPitReturn(Result);
 
   Dec(FTicksToWave);
   if FTicksToWave > 0 then
@@ -135,6 +145,15 @@ begin
     Exit;
   Dec(FAimedIn);
   ACue.SpawnAimed := FAimedIn = 0;
+end;
+
+procedure TGravelTrial.TickPitReturn(var ACue: TTrialCue);
+begin
+  Dec(FTicksToReturn);
+  if FTicksToReturn > 0 then
+    Exit;
+  FTicksToReturn := TrialPitReturnTicks;
+  ACue.ReturnFromPit := True;
 end;
 
 procedure TGravelTrial.DealWave(AGravelsAlive: Integer;

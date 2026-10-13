@@ -235,6 +235,8 @@ type
     // The body is put at AX, AY as if just born there: falling, nothing
     // thrown
     procedure Reappear(AX, AY: Double);
+    // The side the body walks off to when it lands, as the dice pick
+    procedure HeadRandomly;
     // The picture is drawn turned over (2008 art faces left)
     function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
@@ -326,12 +328,15 @@ type
       AX, AY: Double);
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
-    // The live bodies of one kind that have strayed out come back from
-    // the sky: one gone out of the side over a column of its own, one
-    // fallen into the pit over APitColumn or beside it; the bodies that
-    // came back
-    function ReturnStrays(const AMonsterId: string;
-      AScreen, APitColumn: Integer): TArray<TMonster>;
+    // The live bodies of one kind gone out of the side come back from the
+    // sky, each over a column of its own; the bodies that came back
+    function ReturnSideStrays(const AMonsterId: string;
+      AScreen: Integer): TArray<TMonster>;
+    // One live body of the kind fallen into the pit comes back from the
+    // sky over APitColumn or up to two columns beside it; False when none
+    // is down there
+    function TryReturnPitStray(const AMonsterId: string;
+      AScreen, APitColumn: Integer; out ABody: TMonster): Boolean;
     // Any live body carrying the placement tag, on any screen - the
     // events' allDead condition asks here
     function AnyAliveTagged(const ATag: string): Boolean;
@@ -1639,6 +1644,17 @@ begin
   FAction := maFalling;
 end;
 
+procedure TMonster.HeadRandomly;
+begin
+  FDirection := Random(2) = 0;
+  if not (FAction in [maWalkLeft, maWalkRight]) then
+    Exit;
+  if FDirection then
+    FAction := maWalkRight
+  else
+    FAction := maWalkLeft;
+end;
+
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
@@ -1774,22 +1790,41 @@ begin
       Inc(Result);
 end;
 
-function TMonsterField.ReturnStrays(const AMonsterId: string;
-  AScreen, APitColumn: Integer): TArray<TMonster>;
+function TMonsterField.ReturnSideStrays(const AMonsterId: string;
+  AScreen: Integer): TArray<TMonster>;
 begin
   Result := nil;
   for var Monster in FMonsters do
   begin
     if (Monster.Screen <> AScreen) or (Monster.Def.Id <> AMonsterId) then
       Continue;
-    if (Monster.Life <> mlAlive) or not Monster.StrayedOut then
+    var OutOfSide := Monster.StrayedOut and (Monster.Y <= ScreenHeight);
+    if (Monster.Life <> mlAlive) or not OutOfSide then
       Continue;
-    var Column := Random(SkyColumns);
-    if Monster.Y > ScreenHeight then
-      Column := EnsureRange(APitColumn + Random(3) - 1, 0, SkyColumns - 1);
-    Monster.Reappear(Column * SpriteSize, 0);
+    Monster.Reappear(Random(SkyColumns) * SpriteSize, 0);
     Result := Result + [Monster];
   end;
+end;
+
+function TMonsterField.TryReturnPitStray(const AMonsterId: string;
+  AScreen, APitColumn: Integer; out ABody: TMonster): Boolean;
+const
+  PitSpread = 2;
+begin
+  for var Monster in FMonsters do
+  begin
+    if (Monster.Screen <> AScreen) or (Monster.Def.Id <> AMonsterId) then
+      Continue;
+    if (Monster.Life <> mlAlive) or (Monster.Y <= ScreenHeight) then
+      Continue;
+    var Shift := Random(2 * PitSpread + 1) - PitSpread;
+    var Column := EnsureRange(APitColumn + Shift, 0, SkyColumns - 1);
+    Monster.Reappear(Column * SpriteSize, 0);
+    ABody := Monster;
+    Exit(True);
+  end;
+  ABody := nil;
+  Result := False;
 end;
 
 function TMonsterField.AnyAliveTagged(const ATag: string): Boolean;
