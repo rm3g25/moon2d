@@ -75,6 +75,8 @@ uses
   Game.Uptake in 'Game\Game.Uptake.pas',
   Game.Trial in 'Game\Game.Trial.pas',
   Game.Arrivals in 'Game\Game.Arrivals.pas',
+  Game.Shield in 'Game\Game.Shield.pas',
+  Game.Cannons in 'Game\Game.Cannons.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
@@ -134,6 +136,9 @@ const
   ArmorHitSounds: array [0..2] of string =
     ('armor1.wav', 'armor2.wav', 'armor3.wav');
   RicochetSoundFile = 'ricochet.wav';
+  // A burst of the wall cannons: the hero's own chain gun, one sound for
+  // a few rounds
+  CannonShotSoundFile = 'shoot2.wav';
   TerminalKeySoundFile = 'terminal.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
@@ -192,6 +197,7 @@ const
   ArmorSoundGapTicks = 4;
   // The pings roll dice of their own: Random feeds the game
   ArmorPingSeed = $50696E67; // "Ping"
+  CannonSeed = $43616E6E; // "Cann"
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -266,6 +272,7 @@ const
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
+  CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
 
   // Campaign-end screen layout, in Render.Font grid steps
   EndingTextColumn = 3;    // farewell prose column (small font)
@@ -338,6 +345,8 @@ type
     FBlasts: TObjectList<TBlast>; // the waves of the explosions in flight
     FImpacts: TImpacts;
     FArrivals: TArrivals; // the violet light of the trial's arrivals
+    FCannonArt: TCannonArt;
+    FCannons: TCannonPair; // the wall cannons of the trial
     FAura: TAura; // the hero's ring of orbs
     FRite: TOrbRite; // the orbs of the henshin
     FPattern: TOrbPattern; // the figure the rite builds
@@ -451,6 +460,13 @@ type
     function TrialAct: Integer;
     procedure TellShelves(const AAction: TEventAction);
     procedure SendMedkitsOnto(const ABank: string);
+    procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
+    procedure TickCannons;
+    procedure TellYieldBank(ACall: TShelfCall);
+    procedure LandCannonStrike(const APoint: TSdlFPoint);
+    procedure BlowCannons(const ACue: TCannonCue);
+    procedure ResolveCannonContact;
+    function BulletStruckCannon(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -533,6 +549,8 @@ begin
   FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FArrivals := TArrivals.Create;
+  FCannonArt := TCannonArt.Create(ARenderer);
+  FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
   FAura := TAura.Create(IceOrbTint);
   FTrial := TGravelTrial.Create;
   FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
@@ -560,6 +578,9 @@ begin
   FAura.Free;
   FImpacts.Free;
   FArrivals.Free;
+  // The pair before its art
+  FCannons.Free;
+  FCannonArt.Free;
   FBlasts.Free;
   FExplosions.Free;
   FMessages.Free;
@@ -713,6 +734,7 @@ begin
   Cues.Arena.FlyIn := FArena.FlyIn;
   Cues.Shelves := TellShelves;
   Cues.MedkitsOnto := SendMedkitsOnto;
+  Cues.Cannons := StartCannons;
   // A function without parameters named alone would be called, not
   // passed: the reference wraps it
   Cues.TrialAct :=
@@ -728,6 +750,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FArrivals.Clear;
+  FCannons.Clear;
   FAura.Clear;
   FRite.Clear;
   FRain.Clear;
@@ -986,6 +1009,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FArrivals.Clear;
+  FCannons.Clear;
   FRain.Clear;
   FUptake.Settle;
   FShroud.LeaveMotes;
@@ -1206,6 +1230,17 @@ begin
   FMedkitBank := ABank;
 end;
 
+// The act the event names, or the one the trial is in: a delayed event
+// may fire after its act is over, and then the scene of the end plays at
+// once
+procedure TMoonGame.StartCannons(const AOrders: TCannonOrders; AAct: Integer);
+begin
+  var Act := AAct;
+  if Act = 0 then
+    Act := TrialAct;
+  FCannons.Start(AOrders, Act);
+end;
+
 // A tick of the gravel trial, called every tick while it runs - even over
 // the hero's corpse, like the rest of the timer. Game.Trial holds the
 // rules; here its cue is carried out on the field. Once the last act is
@@ -1217,6 +1252,7 @@ begin
 
   for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
     ArriveAgain(Returned);
+  FTrial.RoomBusy := FCannons.Leaving;
   var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
   // A gravel fallen into the pit comes down on the hero who dropped it
   var FromPit: TMonster;
@@ -1387,6 +1423,7 @@ begin
   for var Name in ArmorHitSounds do
     FAudio.Load(Name);
   FAudio.Load(RicochetSoundFile);
+  FAudio.Load(CannonShotSoundFile);
   FAudio.Load(TerminalKeySoundFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
@@ -1642,6 +1679,21 @@ begin
   end;
 end;
 
+// A shield takes the bullet into its light, bare steel in sparks; the
+// cannons lose nothing either way
+function TMoonGame.BulletStruckCannon(const ABullet: TBullet): Boolean;
+begin
+  var Stretch := BulletStretch(ABullet);
+  var At: TSdlFPoint;
+  var Met := FCannons.Block(Stretch.Start, Stretch.Finish, At);
+  Result := Met <> cbNone;
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
+  if Met = cbHull then
+    LandCannonStrike(At);
+end;
+
 // Verbatim port of the hero half of the WindowProc bullet block: a
 // Contact bullet intercepts monster bullets mid-air, any bullet bursts
 // against a solid wall keeping 1/8 inertia, off-screen means gone.
@@ -1672,7 +1724,7 @@ begin
     else if BulletStruckWall(Own) then
       Own.StartBurstSliding;
 
-    if Own.Status <> bsFlying then
+    if (Own.Status <> bsFlying) or BulletStruckCannon(Own) then
       Continue;
 
     // Hit a monster: knockback dx/2; a death that blows up sends its
@@ -2031,6 +2083,7 @@ begin
   FBlasts.Clear;
   FImpacts.Clear;
   FArrivals.Clear;
+  FCannons.Clear;
   FAura.Clear;
   FRite.Clear;
   FRain.Clear;
@@ -2172,6 +2225,92 @@ begin
       end;
     end;
   end;
+end;
+
+// A cannon is no bunker: its body wounds, and shoves the hero off the wall
+// it hangs on
+procedure TMoonGame.ResolveCannonContact;
+const
+  CannonShove = 4;
+begin
+  if FHero.Dead then
+    Exit;
+  var Side: TCannonSide;
+  if not FCannons.Touches(HeroBody(FHero), Side) then
+    Exit;
+  if FHurtCooldown = 0 then
+  begin
+    FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
+    FAudio.Play(PainSoundFile);
+    HurtHero;
+  end;
+  if Side = csLeft then
+    FHero.ShoveX(CannonShove)
+  else
+    FHero.ShoveX(-CannonShove);
+end;
+
+// A tick of the wall cannons, carried out: the rules are Game.Cannons'
+procedure TMoonGame.TickCannons;
+begin
+  if not FCannons.Active then
+    Exit;
+  var Body := Default(TSdlFRect);
+  if not FHero.Dead then
+    Body := HeroBody(FHero);
+  var Cue := FCannons.Tick(TrialAct, Body);
+  if Cue.Hum then
+    FAudio.Play(PadHumSoundFile);
+  if Cue.Shot then
+    FAudio.Play(CannonShotSoundFile);
+  if Cue.YieldSleep then
+    TellYieldBank(scSleep);
+  if Cue.YieldWake then
+    TellYieldBank(scWake);
+  for var Strike in Cue.Strikes do
+    LandCannonStrike(Strike);
+  // The mercy window holds against a round as it does against a bullet
+  if Cue.HeroHit and not FHero.Dead and (FHurtCooldown = 0) then
+  begin
+    FMessages.AddTicker(Tr(SHitByBullet), TickerNoticeTicks);
+    FAudio.Play(PainSoundFile);
+    HurtHero;
+  end;
+  if Cue.Blast then
+    BlowCannons(Cue);
+end;
+
+// The bank of shelves in the cannons' way: into the wall, or out to hold
+procedure TMoonGame.TellYieldBank(ACall: TShelfCall);
+var
+  Command: TShelfCommand;
+begin
+  Command := Default(TShelfCommand);
+  Command.Call := ACall;
+  Command.Run.Kind := pgHold;
+  FPads.TellBank(FCannons.YieldBank, Command, boFile, 0, HeroCenter.X);
+end;
+
+// Sparks off a cannon's steel, thrown back the way the shot came from:
+// the cannon on the left faces right
+procedure TMoonGame.LandCannonStrike(const APoint: TSdlFPoint);
+begin
+  var Strike := Default(TStrike);
+  Strike.X := APoint.X;
+  Strike.Y := APoint.Y;
+  Strike.NormalX := 1;
+  if APoint.X > ScreenWidth / 2 then
+    Strike.NormalX := -1;
+  SoundArmorHit(FImpacts.Land(Strike));
+end;
+
+// The end of their scene: decoration only - it wounds no one
+procedure TMoonGame.BlowCannons(const ACue: TCannonCue);
+begin
+  for var Point in ACue.BlastPoints do
+    FExplosions.Detonate(Point.X, Point.Y, ekMachine);
+  FAudio.Play(RageBlastSoundFile);
+  FShake.AddTrauma(CannonBlastTrauma);
 end;
 
 // A fan of sparks off the rim that struck, with its flash, and thinner
@@ -2395,6 +2534,8 @@ begin
   FExplosions.StrikeShards(ShardStruck);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
+  TickCannons;
+  ResolveCannonContact;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
@@ -2464,6 +2605,7 @@ begin
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FCannons.DrawBodies(FSprites, AAlpha);
         FSprites.Origin := FShake.Offset(scMonsters);
         FUptakePainter.DrawBehind(FField, FHero.Screen, FSprites.Origin, AAlpha);
         FField.Draw(FSprites, FHero.Screen, AAlpha);
@@ -2493,6 +2635,7 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FAura.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRite.DrawInFront(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRain.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);

@@ -4,9 +4,12 @@
 
   The trial runs in acts. An act is a batch of gravels let down a wave at
   a time. The next act does not come until every gravel of the batch is
-  dead; then the room takes a short breath and the next batch starts. The
-  gate of the last act ends the trial. Every fifteenth gravel killed pays
-  one medkit, counted across the acts.
+  dead - the gate is watched every tick once the batch is spent, so the
+  room rebuilds the moment the last one dies; then the room takes a short
+  breath and the next batch starts. A room that is busy with a scene of
+  its own holds the next batch back until the scene is over. The gate of
+  the last act ends the trial. Every fifteenth gravel killed pays one
+  medkit, counted across the acts.
 
   A gravel fallen into the pit comes back one at a time, a beat apart:
   a crowd dropped at once does not land on the hero at once.
@@ -70,9 +73,10 @@ type
     // Ticks until the aimed gravel follows its mark; 0 - none on its way
     FAimedIn: Integer;
     FTicksToReturn: Integer;
+    FRoomBusy: Boolean;
     procedure TickAimed(var ACue: TTrialCue);
     procedure TickPitReturn(var ACue: TTrialCue);
-    procedure DealWave(AGravelsAlive: Integer; var ACue: TTrialCue);
+    procedure WatchGate(AGravelsAlive: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
   public
@@ -86,6 +90,8 @@ type
     property Active: Boolean read FActive;
     // 1..TrialActs
     property Act: Integer read FAct;
+    // A scene plays in the room: the first wave of the next act waits
+    property RoomBusy: Boolean read FRoomBusy write FRoomBusy;
   end;
 
 implementation
@@ -107,6 +113,7 @@ procedure TGravelTrial.Stop;
 begin
   FActive := False;
   FAimedIn := 0;
+  FRoomBusy := False;
 end;
 
 procedure TGravelTrial.NoteGravelKilled;
@@ -132,11 +139,21 @@ begin
   TickAimed(Result);
   TickPitReturn(Result);
 
+  if FBatchLeft = 0 then
+  begin
+    WatchGate(AGravelsAlive, Result);
+    Exit;
+  end;
+  // No gravel of the act let down yet: this is the breath between acts
+  if FRoomBusy and (FBatchLeft = FBatch) then
+    Exit;
   Dec(FTicksToWave);
   if FTicksToWave > 0 then
     Exit;
   FTicksToWave := TrialWaveTicks;
-  DealWave(AGravelsAlive, Result);
+  // No cap on the living: a gravel left alive does not hold the next one
+  // back - the batch is the only limit
+  DealGravel(Result);
 end;
 
 procedure TGravelTrial.TickAimed(var ACue: TTrialCue);
@@ -156,19 +173,13 @@ begin
   ACue.ReturnFromPit := True;
 end;
 
-procedure TGravelTrial.DealWave(AGravelsAlive: Integer;
+procedure TGravelTrial.WatchGate(AGravelsAlive: Integer;
   var ACue: TTrialCue);
 begin
-  // No cap on the living: a gravel left alive does not hold the next one
-  // back - the batch is the only limit
-  if FBatchLeft > 0 then
-  begin
-    DealGravel(ACue);
-    Exit;
-  end;
-
-  // An aimed gravel still on its way is of the batch, alive or not yet
-  if (AGravelsAlive = 0) and (FAimedIn = 0) then
+  // An aimed gravel still on its way is of the batch, alive or not yet -
+  // and so is one let down this very tick, which the count has not seen
+  var AimedOnItsWay := (FAimedIn > 0) or ACue.SpawnAimed;
+  if (AGravelsAlive = 0) and not AimedOnItsWay then
     EndAct(ACue);
 end;
 

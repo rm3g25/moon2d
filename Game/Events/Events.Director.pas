@@ -8,8 +8,8 @@
   not own through callbacks: the music, whose track the game remembers
   for restarts; the arena that rebuilds a pad group, restores it and
   flies it in; the shelves of a bank, which take their order from where
-  the hero stands; the trial's medkits; and the act the gravel trial has
-  come to. The monster field is reborn on every restart, so it arrives
+  the hero stands; the trial's medkits; the wall cannons of the trial;
+  and the act the gravel trial has come to. The monster field is reborn on every restart, so it arrives
   with every tick instead of being kept: asked for the conditions, told
   the tactics.
 
@@ -42,6 +42,10 @@ type
   TBankCue = reference to procedure(const ABank: string);
   // The act the gravel trial has come to; 0 while it does not run
   TTrialAct = reference to function: Integer;
+  // The wall cannons come in for the act AAct of the trial - the act the
+  // event waits for, 0 for one that waits for no act
+  TCannonsCue = reference to procedure(const AOrders: TCannonOrders;
+    AAct: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -49,6 +53,7 @@ type
     Shelves: TShelfCue;
     MedkitsOnto: TBankCue;
     TrialAct: TTrialAct;
+    Cannons: TCannonsCue;
   end;
 
   TEventDirector = class
@@ -182,6 +187,8 @@ begin
         FCues.Shelves(Action);
       eaMedkitsOnto:
         FCues.MedkitsOnto(Action.Target);
+      eaCannons:
+        FCues.Cannons(Action.Cannons, AEvent.Act);
     end;
 end;
 

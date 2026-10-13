@@ -32,7 +32,17 @@ type
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
-    eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto);
+    eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons);
+
+  // The wall cannons of the gravel trial: the rows they stop at to fire,
+  // the bank of shelves in their way and the rows that bank stands in the
+  // way at. Rows are the cells of the screen, 0 at the top; a cannon is
+  // one row tall.
+  TCannonOrders = record
+    Rows: TArray<Integer>;
+    YieldBank: string;
+    YieldRows: TArray<Integer>;
+  end;
 
   TEventAction = record
     Kind: TEventActionKind;
@@ -65,6 +75,10 @@ type
     // "target".
     // eaMedkitsOnto: from now on the trial's medkits come down over the
     // shelves of the bank Target. JSON: "target".
+    // eaCannons: the two TeK cannons slide in on the walls for the act of
+    // the trial they come in (Game.Cannons). JSON: "rows" (the rows they
+    // fire at), "yield" (a bank of shelves, optional) and "yieldRows"
+    // (while a cannon is on any of them the bank stays in the wall).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -80,6 +94,7 @@ type
     Shelves: TShelfProgram;
     Order: TBankOrder;
     StepSeconds: Single;
+    Cannons: TCannonOrders;
   end;
 
   // One event in level JSON:
@@ -113,7 +128,7 @@ const
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
-    'shelvesProgram', 'flyIn', 'medkitsOnto');
+    'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
 
@@ -130,7 +145,7 @@ function ParseLevelEvents(const ARoot: TJSONObject;
 implementation
 
 uses
-  System.Generics.Collections, System.Math;
+  System.Generics.Collections, System.Math, Game.Space;
 
 resourcestring
   SEventNoId = 'Level "%s": event #%d has no id';
@@ -153,6 +168,11 @@ resourcestring
   SEventNoProgram = 'Level "%s": event "%s": shelvesProgram names no program';
   SEventBadOrder = 'Level "%s": event "%s": unknown bank order "%s"';
   SEventShelfNumber = 'Level "%s": event "%s": %s takes %s %g';
+  SEventNoCannonRows = 'Level "%s": event "%s": cannons name no "rows"';
+  SEventBadCannonRow = 'Level "%s": event "%s": cannons: row %d is off the '
+    + 'screen';
+  SEventNoYieldRows = 'Level "%s": event "%s": cannons name a bank to '
+    + 'yield but no "yieldRows"';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -297,6 +317,36 @@ begin
       [ALevelId, AEventId, EventActionIds[AAction.Kind], 'a wait', Shortest]);
 end;
 
+// The rows of a list, each one on the screen; an absent list is empty
+function ReadRows(const AObj: TJSONObject; const AKey: string;
+  const ALevelId, AEventId: string): TArray<Integer>;
+begin
+  Result := nil;
+  var RowsArr := AObj.GetValue<TJSONArray>(AKey, nil);
+  if RowsArr = nil then
+    Exit;
+  SetLength(Result, RowsArr.Count);
+  for var i := 0 to RowsArr.Count - 1 do
+  begin
+    Result[i] := RowsArr.Items[i].GetValue<Integer>;
+    if (Result[i] < 0) or (Result[i] >= ScreenRows) then
+      raise ELevelEventError.CreateFmt(SEventBadCannonRow,
+        [ALevelId, AEventId, Result[i]]);
+  end;
+end;
+
+procedure ReadCannons(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.Cannons.Rows := ReadRows(AObj, 'rows', ALevelId, AEventId);
+  if AAction.Cannons.Rows = nil then
+    raise ELevelEventError.CreateFmt(SEventNoCannonRows, [ALevelId, AEventId]);
+  AAction.Cannons.YieldBank := AObj.GetValue<string>('yield', '');
+  AAction.Cannons.YieldRows := ReadRows(AObj, 'yieldRows', ALevelId, AEventId);
+  if (AAction.Cannons.YieldBank <> '') and (AAction.Cannons.YieldRows = nil) then
+    raise ELevelEventError.CreateFmt(SEventNoYieldRows, [ALevelId, AEventId]);
+end;
+
 procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;
   var AAction: TEventAction);
 begin
@@ -330,6 +380,8 @@ begin
       ReadGroupTarget(AObj, ALevelId, AEventId, Result);
     eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
       ReadShelves(AObj, ALevelId, AEventId, Result);
+    eaCannons:
+      ReadCannons(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

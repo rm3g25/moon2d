@@ -687,6 +687,11 @@ begin
       if not AnyShelfOfBank(FPads, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventBankUnknown,
           [FId, AEventId, AAction.Target]);
+    eaCannons:
+      if (AAction.Cannons.YieldBank <> '') and
+        not AnyShelfOfBank(FPads, AAction.Cannons.YieldBank) then
+        raise ELevelError.CreateFmt(SLevelEventBankUnknown,
+          [FId, AEventId, AAction.Cannons.YieldBank]);
   end;
 end;
 
