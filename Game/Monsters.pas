@@ -316,7 +316,7 @@ type
       const ABullets: TBurst);
     // AddMonstOnBoss1 verbatim: a random minion at cell (random(15)+1, 1)
     // - the top edge of the boss screen; gravity does the dramatic entry.
-    procedure SpawnFromSky(const AMonsterId: string; AScreen: Integer);
+    function SpawnFromSky(const AMonsterId: string; AScreen: Integer): TMonster;
     // On the very place of a body at AX, AY: a prize put into the
     // hero's hands - the contact of the same tick collects it
     procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
@@ -324,8 +324,9 @@ type
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
     // The live bodies of one kind that have strayed out come back from
-    // the sky, each over a column of its own
-    procedure ReturnStrays(const AMonsterId: string; AScreen: Integer);
+    // the sky, each over a column of its own; the bodies that came back
+    function ReturnStrays(const AMonsterId: string;
+      AScreen: Integer): TArray<TMonster>;
     // Any live body carrying the placement tag, on any screen - the
     // events' allDead condition asks here
     function AnyAliveTagged(const ATag: string): Boolean;
@@ -1709,11 +1710,11 @@ begin
   end;
 end;
 
-procedure TMonsterField.SpawnFromSky(const AMonsterId: string;
-  AScreen: Integer);
+function TMonsterField.SpawnFromSky(const AMonsterId: string;
+  AScreen: Integer): TMonster;
 begin
   // Row 0 is fully above the visible screen: the entry IS the fall
-  SpawnAt(AMonsterId, AScreen, Random(15) + 1, 0);
+  Result := SpawnAt(AMonsterId, AScreen, Random(15) + 1, 0);
 end;
 
 procedure TMonsterField.SpawnOn(const AMonsterId: string;
@@ -1757,15 +1758,18 @@ begin
       Inc(Result);
 end;
 
-procedure TMonsterField.ReturnStrays(const AMonsterId: string;
-  AScreen: Integer);
+function TMonsterField.ReturnStrays(const AMonsterId: string;
+  AScreen: Integer): TArray<TMonster>;
 begin
+  Result := nil;
   for var Monster in FMonsters do
   begin
     if (Monster.Screen <> AScreen) or (Monster.Def.Id <> AMonsterId) then
       Continue;
-    if (Monster.Life = mlAlive) and Monster.StrayedOut then
-      Monster.Reappear(Random(15) * SpriteSize, 0);
+    if (Monster.Life <> mlAlive) or not Monster.StrayedOut then
+      Continue;
+    Monster.Reappear(Random(15) * SpriteSize, 0);
+    Result := Result + [Monster];
   end;
 end;
 

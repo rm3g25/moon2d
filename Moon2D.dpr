@@ -74,6 +74,7 @@ uses
   Game.Shroud in 'Game\Game.Shroud.pas',
   Game.Uptake in 'Game\Game.Uptake.pas',
   Game.Trial in 'Game\Game.Trial.pas',
+  Game.Arrivals in 'Game\Game.Arrivals.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
@@ -336,6 +337,7 @@ type
     FExplosions: TExplosions;
     FBlasts: TObjectList<TBlast>; // the waves of the explosions in flight
     FImpacts: TImpacts;
+    FArrivals: TArrivals; // the violet light of the trial's arrivals
     FAura: TAura; // the hero's ring of orbs
     FRite: TOrbRite; // the orbs of the henshin
     FPattern: TOrbPattern; // the figure the rite builds
@@ -437,6 +439,7 @@ type
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
+    procedure LetDownFromSky(const AMonsterId: string);
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -518,6 +521,7 @@ begin
     EchoAftershock);
   FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
+  FArrivals := TArrivals.Create;
   FAura := TAura.Create(IceOrbTint);
   FTrial := TGravelTrial.Create;
   FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
@@ -544,6 +548,7 @@ begin
   FRite.Free;
   FAura.Free;
   FImpacts.Free;
+  FArrivals.Free;
   FBlasts.Free;
   FExplosions.Free;
   FMessages.Free;
@@ -700,6 +705,7 @@ begin
   FExplosions.Clear;
   FBlasts.Clear;
   FImpacts.Clear;
+  FArrivals.Clear;
   FAura.Clear;
   FRite.Clear;
   FRain.Clear;
@@ -956,6 +962,7 @@ begin
   FExplosions.Clear;
   FBlasts.Clear;
   FImpacts.Clear;
+  FArrivals.Clear;
   FRain.Clear;
   FUptake.Settle;
   FShroud.LeaveMotes;
@@ -1105,6 +1112,12 @@ begin
   end;
 end;
 
+procedure TMoonGame.LetDownFromSky(const AMonsterId: string);
+begin
+  var Born := FField.SpawnFromSky(AMonsterId, FGravelScreen);
+  FArrivals.Add(Born.X + SpriteSize / 2);
+end;
+
 // A tick of the gravel trial, called every tick while it runs - even over
 // the hero's corpse, like the rest of the timer. Game.Trial holds the
 // rules; here its cue is carried out on the field. Once the last act is
@@ -1114,12 +1127,13 @@ begin
   if not FTrial.Active then
     Exit;
 
-  FField.ReturnStrays(GravelMonsterId, FGravelScreen);
+  for var Returned in FField.ReturnStrays(GravelMonsterId, FGravelScreen) do
+    FArrivals.Add(Returned.X + SpriteSize / 2);
   var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
   if Cue.SpawnGravel then
-    FField.SpawnFromSky(GravelMonsterId, FGravelScreen);
+    LetDownFromSky(GravelMonsterId);
   if Cue.SpawnMedkit then
-    FField.SpawnFromSky(MedkitMonsterId, FGravelScreen);
+    LetDownFromSky(MedkitMonsterId);
   if not Cue.Finished then
     Exit;
 
@@ -1910,6 +1924,7 @@ begin
   FExplosions.Clear;
   FBlasts.Clear;
   FImpacts.Clear;
+  FArrivals.Clear;
   FAura.Clear;
   FRite.Clear;
   FRain.Clear;
@@ -2250,6 +2265,7 @@ begin
   FMonsterBullets.Update;
   FExplosions.Tick;
   FImpacts.Tick;
+  FArrivals.Tick;
   FAura.Tick(HeroCenter);
   FRite.Tick(HeroCenter);
   // After the rite: what it tells this tick, the ceremony hears this tick
@@ -2375,6 +2391,7 @@ begin
         FRain.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
+        FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;
