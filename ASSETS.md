@@ -79,7 +79,12 @@ edges. `s04-tek-crates`: cut to its ink, scaled to 6 px per screen unit.
 came out whole. `s08-room` (3.0.52): the second of its generations, its
 ceiling, ledge and walls moved by a few pixels onto the grid, the hazard
 posts of its back wall painted over with the wall beside them, the aprons
-of the floor taken from the first generation. They replaced the 2008 tiles of those screens, which stay in
+of the floor taken from the first generation. `s09-room` (3.0.54): kept
+as generated, not resampled, nothing moved; it has no floor - the shelves
+are the floor and the back wall below them is the shaft. `s09-doorstep`:
+the left pit-lip slab of `s08-room`, cut out whole, so both sides of the
+flip show the same slab. `s09-lamp-off`: the glass of the room's wall
+lamp from its own pixels, dimmed by a mask, so a beacon can light it. They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
