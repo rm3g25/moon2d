@@ -1135,7 +1135,7 @@
       "bullets": "block",
       "tag": "s09-floor-03",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1146,7 +1146,7 @@
       "bullets": "block",
       "tag": "s09-floor-04",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1201,7 +1201,7 @@
       "bullets": "block",
       "tag": "s09-floor-09",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1212,7 +1212,7 @@
       "bullets": "block",
       "tag": "s09-floor-10",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1289,7 +1289,7 @@
       "bullets": "block",
       "tag": "s09-ladder-01",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1300,7 +1300,7 @@
       "bullets": "block",
       "tag": "s09-ladder-02",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1355,7 +1355,7 @@
       "bullets": "block",
       "tag": "s09-ladder-07",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1366,7 +1366,7 @@
       "bullets": "block",
       "tag": "s09-ladder-08",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -3088,6 +3088,7 @@
       "when": "actReached", "act": 2,
       "then": [
         {"action": "shelvesSleep", "target": "s09-wall"},
+        {"action": "shelvesWake", "target": "s09-foot"},
         {"action": "shelvesWake", "target": "s09-ladder", "order": "up", "step": 0.2},
         {"action": "shelvesWake", "target": "s09-crown", "order": "left", "step": 0.2},
         {"action": "medkitsOnto", "target": "s09-crown"}
@@ -3098,7 +3099,18 @@
       "screen": 9,
       "when": "actReached", "act": 3,
       "then": [
-        {"action": "shelvesSleep", "target": "s09-floor", "order": "toHero", "step": 0.35}
+        {"action": "shelvesSleep", "target": "s09-floor", "order": "toHero", "step": 0.35},
+        {"action": "shelvesSleep", "target": "s09-isle", "order": "toHero", "step": 0.35}
+      ]
+    },
+    {
+      "id": "s09-act3-cannons",
+      "screen": 9,
+      "when": "actReached", "act": 3,
+      "delay": 200,
+      "then": [
+        {"action": "shelvesWake", "target": "s09-isle"},
+        {"action": "cannons", "rows": [10, 8, 6, 4], "yield": "s09-foot", "yieldRows": [8, 9]}
       ]
     }
   ],
