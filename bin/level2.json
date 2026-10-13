@@ -2727,38 +2727,18 @@
       "overrides": {
         "direction": 1
       }
-    },
+    }
+  ],
+  "screenTriggers": [
     {
-      "monsterId": "medkit",
       "screen": 9,
-      "spriteList": "medic.mns",
-      "x": 5,
-      "y": 11,
       "triggers": {
-        "changeMusic": "boss2.ogg"
-      }
-    },
-    {
-      "monsterId": "medkit",
-      "screen": 9,
-      "spriteList": "medic.mns",
-      "x": 6,
-      "y": 11,
-      "triggers": {
-        "heroX": 1
-      }
-    },
-    {
-      "monsterId": "medkit",
-      "screen": 9,
-      "spriteList": "medic.mns",
-      "x": 7,
-      "y": 11,
-      "triggers": {
+        "changeMusic": "boss2.ogg",
+        "heroX": 1,
         "gravelBoss": {
-          "normal": 75,
-          "hard": 125,
-          "wild": 200
+          "normal": 15,
+          "hard": 25,
+          "wild": 40
         }
       }
     }

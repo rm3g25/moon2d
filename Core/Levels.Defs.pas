@@ -48,8 +48,8 @@ type
   // A level number that may differ per difficulty grade. In JSON either
   // a plain number (one value for all grades) or an object keyed by the
   // config protocol ids:
-  //   "gravelBoss": 75
-  //   "gravelBoss": {"normal": 75, "hard": 125, "wild": 200}
+  //   "gravelBoss": 15
+  //   "gravelBoss": {"normal": 15, "hard": 25, "wild": 40}
   // Grades missing from the object inherit the "normal" value. Levels
   // load once and difficulty changes on restart, so all three values
   // are parsed up front and the game picks its grade at use time.
@@ -72,10 +72,10 @@ type
     HeroX: Integer;
     HasHeroY: Boolean;
     HeroY: Integer;
-    // The gravel trial ('Атака грейвелов' of moon.dpr 955-971): the
-    // value is the wave quota, per difficulty since part 5.3
+    // The gravel trial: the value is the gravels of one act, per
+    // difficulty
     HasGravelBoss: Boolean;
-    GravelQuota: TDifficultyValue;
+    GravelBatch: TDifficultyValue;
   end;
 
   TEntityPlacement = record
@@ -105,6 +105,15 @@ type
     Seat: string;
     SeatLeft: Double;
     SeatFeet: Double;
+  end;
+
+  // Triggers of a screen that no body on it carries. JSON:
+  //   {"screen": 9, "difficulty": ["hard"], "triggers": {...}}
+  // "difficulty" absent = all grades; "triggers" as an entity's.
+  TScreenTrigger = record
+    Screen: Integer; // 1-based, as the placements count
+    Grades: TDifficultyGrades;
+    Triggers: TEntityTriggers;
   end;
 
   TBackgroundChange = record
@@ -166,11 +175,13 @@ type
     FCarousels: TArray<TCarousel>;
     FRespawns: TArray<TRespawnPoint>;
     FEntities: TArray<TEntityPlacement>;
+    FScreenTriggers: TArray<TScreenTrigger>;
     FEvents: TArray<TLevelEvent>;
     FDynamics: TDynamicObjects;
     procedure ParseRoot(const ARoot: TJSONObject);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
+    procedure ParseScreenTriggers(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
     procedure ParseObjects(const AArr: TJSONArray);
     procedure ParseRespawns(const AArr: TJSONArray);
@@ -257,6 +268,8 @@ type
     // Where a pit and death return the hero, a screen each at most
     property Respawns: TArray<TRespawnPoint> read FRespawns;
     property Entities: TArray<TEntityPlacement> read FEntities;
+    // The triggers that belong to a screen itself, in file order
+    property ScreenTriggers: TArray<TScreenTrigger> read FScreenTriggers;
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
     property Events: TArray<TLevelEvent> read FEvents;
@@ -551,6 +564,7 @@ begin
   ParseBackgrounds(ARoot.GetValue<TJSONArray>('backgrounds'));
   ParseObjects(ARoot.GetValue<TJSONArray>('objects', nil));
   ParseEntities(ARoot.GetValue<TJSONArray>('entities'));
+  ParseScreenTriggers(ARoot.GetValue<TJSONArray>('screenTriggers', nil));
   // Pads before the dynamics: a dynamic object may hang on one
   FPads := ParsePads(ARoot, FId);
   // Before the checks of the pads: a carousel puts its pads' places
@@ -1365,7 +1379,7 @@ begin
   AOut.HasHeroX := TriggersObj.TryGetValue<Integer>('heroX', AOut.HeroX);
   AOut.HasHeroY := TriggersObj.TryGetValue<Integer>('heroY', AOut.HeroY);
   AOut.HasGravelBoss :=
-    TryReadDifficultyValue(TriggersObj, 'gravelBoss', AOut.GravelQuota);
+    TryReadDifficultyValue(TriggersObj, 'gravelBoss', AOut.GravelBatch);
 end;
 
 // An entity on a seat is placed by it: SeatEntities puts its cell
@@ -1404,6 +1418,21 @@ begin
     ReadTriggers(Obj, FEntities[i].Triggers);
     FEntities[i].Tag := Obj.GetValue<string>('tag', '');
     FEntities[i].Rigs := ReadRigNames(Obj, FId, EntityRigName(FEntities[i]));
+  end;
+end;
+
+procedure TLevel.ParseScreenTriggers(const AArr: TJSONArray);
+begin
+  if AArr = nil then
+    Exit;
+  SetLength(FScreenTriggers, AArr.Count);
+  for var i := 0 to AArr.Count - 1 do
+  begin
+    var Obj := AArr.Items[i] as TJSONObject;
+    FScreenTriggers[i].Screen := Obj.GetValue<Integer>('screen');
+    FScreenTriggers[i].Grades := ParseGrades(
+      Obj.GetValue<TJSONArray>('difficulty', nil), 'screenTriggers');
+    ReadTriggers(Obj, FScreenTriggers[i].Triggers);
   end;
 end;
 

@@ -73,6 +73,7 @@ uses
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Shroud in 'Game\Game.Shroud.pas',
   Game.Uptake in 'Game\Game.Uptake.pas',
+  Game.Trial in 'Game\Game.Trial.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',
@@ -147,14 +148,12 @@ const
   // gravel-trial chapter.
   DifficultyHeroHealth: array [TDifficulty] of Integer = (5, 4, 2);
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
-  // The gravel trial ('Атака грейвелов', moon.dpr 955-971 / GravAttack
-  // 371-408): first wave 25 ticks after the trigger, then every 18.
+  // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
   // descend and besiege the hero - edge-checked males would idle on the
   // top platforms. Author's call by live behavior.
   GravelMonsterId = 'gravelFemale';
-  GravelFirstWaveTicks = 25;
-  GravelWaveTicks = 18;
+  MedkitMonsterId = 'medkit';
   // The main-menu track (StartingPhase, moon.dpr 1857). Played at boot;
   // opening the menu MID-game leaves the level music running - verbatim
   MenuMusicFile = 'moon.ogg';
@@ -371,13 +370,9 @@ type
     FHeldAlt: Boolean;          // Alt+Enter - the industry-standard chord
     FFullscreen: Boolean;
     FDifficulty: TDifficulty;
-    // 'GravelAttack' of 2008 (moon.dpr 136): while the trial runs, the
-    // right edge is a wall (1072) - the fight cannot be skipped by
-    // walking out. The gravel chapter raises it; the block and the
-    // resets are ported now.
-    FGravelAttack: Boolean;
-    FGravelLeft: Integer;    // 'GravelLeft': wave quota, may run negative
-    FToNextGravel: Integer;  // 'ToNextGravel': ticks to the next wave
+    // While the trial runs, the right edge is a wall - the fight cannot
+    // be skipped by walking out
+    FTrial: TGravelTrial;
     FGravelScreen: Integer;  // where the trial rages - spawns pin here
     // 'EndLev'/'ToEndLev' of 2008 (525-528): the boss is dead, the
     // victory track plays, and this many ticks later the next level
@@ -439,6 +434,8 @@ type
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
+    procedure FireTriggersOf(AIndex, AScreen: Integer;
+      AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
@@ -522,6 +519,7 @@ begin
   FBlasts := TObjectList<TBlast>.Create(True);
   FImpacts := TImpacts.Create(SolidUnderPoint);
   FAura := TAura.Create(IceOrbTint);
+  FTrial := TGravelTrial.Create;
   FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
   FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
@@ -554,6 +552,7 @@ begin
   FVitals.Free;
   FCharge.Free;
   FHenshin.Free;
+  FTrial.Free;
   FUptakePainter.Free;
   FUptake.Free;
   FShroudPainter.Free;
@@ -712,7 +711,7 @@ begin
   // Stale-flag hygiene 2008 never had: StartLevel did not reset
   // GravelAttack - a latent bug that could not fire only because death
   // led to the menu. With checkpoint respawn it would be a softlock.
-  FGravelAttack := False;
+  FTrial.Stop;
   FEndLevelTimer := 0;
   FScore := 0;
   FKillStreak := 0;
@@ -720,7 +719,8 @@ begin
   FBonus := bkNone;
   FBonusActivateQueued := False;
   FTriggerFired := nil;
-  SetLength(FTriggerFired, Length(FLevel.Entities));
+  SetLength(FTriggerFired,
+    Length(FLevel.Entities) + Length(FLevel.ScreenTriggers));
 
   FLevelLoaded := True;
   FMenu.HasActiveGame := True;
@@ -976,7 +976,7 @@ begin
 
   // Transition blocked while the gravel trial runs and for the dead;
   // land at x=4 - ArriveOnScreen pins the checkpoint
-  if not FGravelAttack and not FHero.Dead then
+  if not FTrial.Active and not FHero.Dead then
   begin
     if FHero.Screen < FLevel.ScreenCount then
     begin
@@ -1030,108 +1030,109 @@ begin
   end;
 end;
 
-// Entity triggers of the CURRENT screen: location titles, captions and
-// tutorial hints. Each fires once per game - a hint that nags on every
-// backtrack stops being a hint. The 2008 '_string:' hints ran as a
+// Entity and screen triggers of the CURRENT screen: location titles,
+// captions and tutorial hints. Each fires once per game - a hint that nags
+// on every backtrack stops being a hint. The 2008 '_string:' hints ran as a
 // marquee; here they type out in the comm terminal.
 procedure TMoonGame.FireScreenTriggers;
 begin
   for var i := 0 to High(FLevel.Entities) do
+    FireTriggersOf(i, FLevel.Entities[i].Screen, FLevel.Entities[i].Grades,
+      FLevel.Entities[i].Triggers);
+  for var i := 0 to High(FLevel.ScreenTriggers) do
+    FireTriggersOf(Length(FLevel.Entities) + i, FLevel.ScreenTriggers[i].Screen,
+      FLevel.ScreenTriggers[i].Grades, FLevel.ScreenTriggers[i].Triggers);
+end;
+
+// AIndex - the place of the trigger in FTriggerFired
+procedure TMoonGame.FireTriggersOf(AIndex, AScreen: Integer;
+  AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
+begin
+  if AScreen <> FHero.Screen then
+    Exit;
+  if FTriggerFired[AIndex] then
+    Exit;
+
+  // A trigger filtered out by the difficulty grade is silent - a
+  // hard-only trial must not arm on normal
+  if not (FDifficulty in AGrades) then
+    Exit;
+  if (ATriggers.BigMessage.Current = '') and
+     (ATriggers.SmallMessage.Current = '') and
+     (ATriggers.HintText.Current = '') and
+     (ATriggers.ChangeMusic = '') and
+     not ATriggers.HasHeroX and not ATriggers.HasHeroY and
+     not ATriggers.HasGravelBoss then
+    Exit;
+
+  FTriggerFired[AIndex] := True;
+  FMessages.ShowBig(ATriggers.BigMessage.Current, BigMessageTicks);
+  FMessages.AddTicker(ATriggers.SmallMessage.Current, TickerNoticeTicks);
+  FMessages.StartTerminal(Tr(STerminalHeader), ATriggers.HintText.Current);
+  // The changeMusic field of level JSON waited since part 1 for a
+  // player to exist - here it is (empty name is a no-op inside)
+  ChangeMusic(ATriggers.ChangeMusic);
+  // 'Сменить X/Y герою' of 2008 (884-898): the trigger relocates the
+  // hero by CELL number (value*32, no off-by-one - raw as the original
+  // did it) and writes the checkpoint for its axis. Death and pits now
+  // return to the tunnel entrance, not to the start of the level.
+  // SetY drops into a fall - no standing on air (deviation 5).
+  if ATriggers.HasHeroX then
   begin
-    if FLevel.Entities[i].Screen <> FHero.Screen then
-      Continue;
-    if FTriggerFired[i] then
-      Continue;
-
-    // An entity filtered out by the difficulty grade takes its
-    // triggers with it - a hard-only trial must not arm on normal
-    if not (FDifficulty in FLevel.Entities[i].Grades) then
-      Continue;
-    var Triggers := FLevel.Entities[i].Triggers;
-    if (Triggers.BigMessage.Current = '') and
-       (Triggers.SmallMessage.Current = '') and
-       (Triggers.HintText.Current = '') and
-       (Triggers.ChangeMusic = '') and
-       not Triggers.HasHeroX and not Triggers.HasHeroY and
-       not Triggers.HasGravelBoss then
-      Continue;
-
-    FTriggerFired[i] := True;
-    FMessages.ShowBig(Triggers.BigMessage.Current, BigMessageTicks);
-    FMessages.AddTicker(Triggers.SmallMessage.Current, TickerNoticeTicks);
-    FMessages.StartTerminal(Tr(STerminalHeader), Triggers.HintText.Current);
-    // The changeMusic field of level JSON waited since part 1 for a
-    // player to exist - here it is (empty name is a no-op inside)
-    ChangeMusic(Triggers.ChangeMusic);
-    // 'Сменить X/Y герою' of 2008 (884-898): the trigger relocates the
-    // hero by CELL number (value*32, no off-by-one - raw as the original
-    // did it) and writes the checkpoint for its axis. Death and pits now
-    // return to the tunnel entrance, not to the start of the level.
-    // SetY drops into a fall - no standing on air (deviation 5).
-    if Triggers.HasHeroX then
-    begin
-      FHero.SetScreenX(Triggers.HeroX * TileSize);
-      FCheckpointX := FHero.X;
-      // A heroY of the same screen may have already settled the hero
-      // at an intermediate X where the ground verdict was meaningless
-      // (screen 7 pairs them) - settle again at the final spot
-      FHero.SettleOnGround;
-    end;
-    if Triggers.HasHeroY then
-    begin
-      FHero.SetY(Triggers.HeroY * TileSize);
-      FCheckpointY := FHero.Y;
-    end;
-    // 'Атака грейвелов' (955-971): one message armed BOTH the gravel
-    // rain and the transformation, and the ceremony fired INSTANTLY.
-    // Verbatim: no countdown here - the first wave of orbs must open the
-    // scene; the 3..2..1 prelude stays boss-only.
-    if Triggers.HasGravelBoss then
-    begin
-      FGravelAttack := True;
-      // The quota lives in the level JSON, split by difficulty there
-      // (75/125/200 for level2) - the game only picks its grade
-      FGravelLeft := Triggers.GravelQuota.ForGrade(FDifficulty);
-      FToNextGravel := GravelFirstWaveTicks;
-      FGravelScreen := FHero.Screen;
-      FHenshin.Start;
-    end;
+    FHero.SetScreenX(ATriggers.HeroX * TileSize);
+    FCheckpointX := FHero.X;
+    // A heroY of the same screen may have already settled the hero
+    // at an intermediate X where the ground verdict was meaningless
+    // (screen 7 pairs them) - settle again at the final spot
+    FHero.SettleOnGround;
+  end;
+  if ATriggers.HasHeroY then
+  begin
+    FHero.SetY(ATriggers.HeroY * TileSize);
+    FCheckpointY := FHero.Y;
+  end;
+  // 'Атака грейвелов' (955-971): one message armed BOTH the gravel
+  // rain and the transformation, and the ceremony fired INSTANTLY.
+  // Verbatim: no countdown here - the first wave of orbs must open the
+  // scene; the 3..2..1 prelude stays boss-only.
+  if ATriggers.HasGravelBoss then
+  begin
+    // The batch of one act lives in the level JSON, split by difficulty
+    // there (15/25/40 for level2) - the game only picks its grade
+    FTrial.Start(ATriggers.GravelBatch.ForGrade(FDifficulty));
+    FGravelScreen := FHero.Screen;
+    FHenshin.Start;
   end;
 end;
 
-// 'GravAttack' of moon.dpr 371-408, called every tick while the flag is
-// up (545) - even over the hero's corpse, like the rest of the timer.
-// Each wave burns one unit of the quota and drops gravels from the sky;
-// once the quota is dry AND the screen holds no live body, the
-// breakthrough opens the right edge again.
+// A tick of the gravel trial, called every tick while it runs - even over
+// the hero's corpse, like the rest of the timer. Game.Trial holds the
+// rules; here its cue is carried out on the field. Once the last act is
+// through, the breakthrough opens the right edge again.
 procedure TMoonGame.TickGravelAttack;
 begin
-  if not FGravelAttack then
+  if not FTrial.Active then
     Exit;
 
-  Dec(FToNextGravel);
-  if FToNextGravel <> 0 then
-    Exit;
-  FToNextGravel := GravelWaveTicks;
-
-  Dec(FGravelLeft);
-  if FGravelLeft > 0 then
+  FField.ReturnStrays(GravelMonsterId, FGravelScreen);
+  var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
+  if Cue.SpawnGravel then
     FField.SpawnFromSky(GravelMonsterId, FGravelScreen);
+  if Cue.SpawnMedkit then
+    FField.SpawnFromSky(MedkitMonsterId, FGravelScreen);
+  if not Cue.Finished then
+    Exit;
 
-  if (FGravelLeft < 1) and not FField.AnyAliveOnScreen(FGravelScreen) then
-  begin
-    FGravelAttack := False;
-    FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
-    // The breakthrough shatter RINGS, unlike the silent level-complete
-    // one: Snd_bottle right before the suit comes off, which is a ring of
-    // orbs now, not the fan of 2008. The levelmass write before it
-    // (391-392) is dropped: physics read the hero's and monsters' own
-    // copies of the level string, so the write only split off a copy
-    // nobody collided with.
-    if FHero.HeroForm <> hfNormal then
-      FAudio.Play(BottleSoundFile);
-    FHenshin.RemoveIceForm;
-  end;
+  FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
+  // The breakthrough shatter RINGS, unlike the silent level-complete
+  // one: Snd_bottle right before the suit comes off, which is a ring of
+  // orbs now, not the fan of 2008. The levelmass write before it
+  // (391-392) is dropped: physics read the hero's and monsters' own
+  // copies of the level string, so the write only split off a copy
+  // nobody collided with.
+  if FHero.HeroForm <> hfNormal then
+    FAudio.Play(BottleSoundFile);
+  FHenshin.RemoveIceForm;
 end;
 
 // Verbatim ladder of moon.dpr 826-864, quirks included: the 4th bonus
@@ -1921,9 +1922,9 @@ begin
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
   FHurtCooldown := 0;
   // See the LoadLevel comment: 2008 never cleared this flag, here it
-  // would softlock the reborn screen. The gravel chapter re-raises it
-  // through its screen trigger.
-  FGravelAttack := False;
+  // would softlock the reborn screen. The screen trigger of the trial
+  // raises it again.
+  FTrial.Stop;
   // Monsters regrow, so the score they paid out is taken back -
   // otherwise dying becomes a farming strategy. Captions die with you.
   FScore := 0;
@@ -1951,6 +1952,9 @@ begin
   for var i := 0 to High(FLevel.Entities) do
     if FLevel.Entities[i].Screen = FHero.Screen then
       FTriggerFired[i] := False;
+  for var i := 0 to High(FLevel.ScreenTriggers) do
+    if FLevel.ScreenTriggers[i].Screen = FHero.Screen then
+      FTriggerFired[Length(FLevel.Entities) + i] := False;
   FDirector.ReArm(FHero.Screen);
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
@@ -2111,6 +2115,9 @@ begin
             // the double explosion plays both, verbatim 903-925
             for var Name in Monster.Def.DeathSounds do
               FAudio.Play(Name);
+            if (Monster.Def.Id = GravelMonsterId) and
+              (Monster.Screen = FGravelScreen) then
+              FTrial.NoteGravelKilled;
             if Monster.Def.Boss.EndsLevelOnDeath then
               FShake.AddTrauma(BossBlastTrauma)
             else if Monster.Def.Blast.Enabled then

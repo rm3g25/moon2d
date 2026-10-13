@@ -230,6 +230,11 @@ type
       const AEnemyBullets: TBurst);
     // The hero has taken the pickup: it is gone at once, with no dying
     procedure Collect;
+    // Out at the right edge, where a patrol turns, or below the screen
+    function StrayedOut: Boolean;
+    // The body is put at AX, AY as if just born there: falling, nothing
+    // thrown
+    procedure Reappear(AX, AY: Double);
     // The picture is drawn turned over (2008 art faces left)
     function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
@@ -316,12 +321,11 @@ type
     // hero's hands - the contact of the same tick collects it
     procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
       AX, AY: Double);
-    // 'ExistLive' of monst.pas as the breakthrough gate: ANY live body
-    // on the screen counts, pickups included - the 2008 check did not
-    // discriminate by category (or did - monst.pas knows; the verbatim
-    // reading is kept: the trial medkits lie on the floor by the entry
-    // and get trampled in the chaos anyway).
-    function AnyAliveOnScreen(AScreen: Integer): Boolean;
+    // The live bodies of one kind on the screen
+    function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
+    // The live bodies of one kind that have strayed out come back from
+    // the sky, each over a column of its own
+    procedure ReturnStrays(const AMonsterId: string; AScreen: Integer);
     // Any live body carrying the placement tag, on any screen - the
     // events' allDead condition asks here
     function AnyAliveTagged(const ATag: string): Boolean;
@@ -1610,6 +1614,20 @@ begin
   FEvents.Add(meDied);
 end;
 
+function TMonster.StrayedOut: Boolean;
+begin
+  Result := (FX > PatrolRightLimit) or (FY > ScreenHeight);
+end;
+
+procedure TMonster.Reappear(AX, AY: Double);
+begin
+  FX := AX;
+  FY := AY;
+  FAcceleration := 0;
+  FThrown := 0;
+  FAction := maFalling;
+end;
+
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
@@ -1729,12 +1747,26 @@ begin
   FMonsters.Add(Result);
 end;
 
-function TMonsterField.AnyAliveOnScreen(AScreen: Integer): Boolean;
+function TMonsterField.CountAliveOf(const AMonsterId: string;
+  AScreen: Integer): Integer;
+begin
+  Result := 0;
+  for var Monster in FMonsters do
+    if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) and
+      (Monster.Def.Id = AMonsterId) then
+      Inc(Result);
+end;
+
+procedure TMonsterField.ReturnStrays(const AMonsterId: string;
+  AScreen: Integer);
 begin
   for var Monster in FMonsters do
-    if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) then
-      Exit(True);
-  Result := False;
+  begin
+    if (Monster.Screen <> AScreen) or (Monster.Def.Id <> AMonsterId) then
+      Continue;
+    if (Monster.Life = mlAlive) and Monster.StrayedOut then
+      Monster.Reappear(Random(15) * SpriteSize, 0);
+  end;
 end;
 
 function TMonsterField.AnyAliveTagged(const ATag: string): Boolean;
