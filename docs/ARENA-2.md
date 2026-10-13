@@ -1,6 +1,6 @@
 # Level 2 screen 9: the gravel arena (first of the two level 2 bosses)
 
-Stage plan. Status: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TeK cannons, the shared TeK shield, the floor islands, the bottom steps yielding; waits for its live run). The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
+Stage plan. Status: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TeK cannons, the shared TeK shield, the floor islands, the bottom steps yielding; waits for its live run). Stage 4 (act 4, the carousel) is designed (2026-10-13), not built. The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
 
 ## The idea in one line
 Five arenas in one room: each act brings its own gravels (15 on normal, more on hard and wild); when the last of them is dead, the room rebuilds itself, and every rebuild takes away what the hero stood on. Selena does not throw gravels at the hero - she rearranges the room; the gravels are the weather.
@@ -12,6 +12,7 @@ Five arenas in one room: each act brings its own gravels (15 on normal, more on 
 - Steps are two cells wide: a gravel is a cell wide and the aimed one lands on the hero's column, so a one-cell step leaves no sidestep.
 - Walls left and right stay; the floor is shelves, as on screen 8 - the room has no painted floor, the back wall below the shelves is the shaft.
 - The room art is the ChatGPT generation with the violet ceiling grating; the docks for the sleeping shelves are the shelf-dock of pads.mset behind every shelf, as on screen 8 - the whole room is a wall, so every dock is a wall nest.
+- Barrels and gravels: a barrel's blast strikes every living monster of the screen inside its radius (StrikeMonsters in Moon2D.dpr), gravels included, and the kills are rewarded. A barrel the hero can shoot over a pack is a gravel grinder, so no barrels ride the carousel (decided 2026-10-13). The sky barrels of act 5 stay hero-only - the flag goes on the spawn.
 
 ## Gravels
 - Arrive in violet light - Selena's colour: a column of light from the top edge and a glow gathering into the point (Game.Arrivals, a light effect of its own, not the hero's shroud).
@@ -41,6 +42,7 @@ Five arenas in one room: each act brings its own gravels (15 on normal, more on 
 - On normal the 15th kill is the end of the act, so the medkit comes at the act change. A medkit at the start of every act was offered and turned down - too generous; the medkits stay one per 15 kills.
 - Bait pads (two falling pads at the top riding medkits) - dropped 2026-10-13: nothing new, and a medkit on a pad is taken and left in one jump.
 - Pickups are excluded from the gate (AnyAliveOnScreen counts them now - an untaken medkit would hold an act forever).
+- Act 4 (decided 2026-10-13): two medkits, both riding carousel pads (a seat, as the barrels and betoners of screen 8), not teleported onto a bank - the crown sleeps in act 4, and a medkit on a pad that has to be caught on the fly is a reason to climb. The hero is worn by then and act 5 is chaos. The two sit on pads half a lap apart. Whether the per-15-kills teleport also brings one in act 4: see Open.
 
 ## TeK cannons (stage 3)
 The room gets guns that do not aim. They sweep a whole level of the pyramid at once from both sides: the damage is unavoidable on that level, and the only way out is not to be on it.
@@ -87,14 +89,19 @@ Their death is a scene, not a mechanic: they do not die of hits. The hero may sh
 1. **Floor.** Flat floor, two shelves at the walls. Random drops. "A shooting gallery." The wall shelves alternate with a long warning (1.2 s) - the lamp lesson in the safe act.
 2. **Ladder.** The pair pyramid wakes from both walls up to the peak and HOLDS for the act. Aimed rain starts: every third gravel arrives in the column over the hero. The medkit goes on the peak. A rehearsal act: the player learns the ladder while the floor is still there.
 3. **Collapse.** The floor slides away in sections from the end farthest from the hero toward him, the wave drives the hero onto the ladder, which holds. Below - a pit; a fallen gravel teleports up over the hero. Gravels landing on steps walk off them and cascade down. Then the floor comes back as islands and the TeK cannons arrive (see TeK cannons) - decided 2026-10-13, the cannons and the islands both approved.
-4. **Carousel.** Pads fly in from above and form a box carousel in the centre (rehearsal of the square carousel wanted for the next level). Barrels on the pads. The ladder falls asleep from the bottom up, step by step - late means the pit. The barrels are blown up when the pit below is full of gravels.
+4. **Carousel.** The room is rebuilt around a box carousel in the centre (a rehearsal of the square carousel wanted for the next level). Details in "Stage 4 design" below.
+   - The pyramid thins out: the crown and the ladder go to sleep from the bottom up, step by step - late means the pit - and only the foot (row 9, cols 2-3 and 12-13) stays, as ledges at the walls.
+   - The floor comes back one through one: a shelf, a hole, a shelf.
+   - The carousel, parked above the screen, flies in and stands on its track, then starts to turn. Two medkits ride two of its pads. No barrels.
+   - Two TeK-K10 platforms come gradually - the first at a third of the batch, the second at two thirds - one above the carousel, one below it; they leave when the act ends.
 5. **Chaos.** The carousel breaks: its pads become falling pads one after another. The floor comes back in random pieces. Shelves blink out of step.
    - Stray pads: ordinary pads fly in from beyond a random edge to a random point, hang, fly on to another point or out. They misbehave at random: fall like a falling pad, turn back halfway, twitch. Transport nobody can count on.
    - Barrels from the sky through the same violet teleport, exploding on impact with the floor, a shelf or a pad. The blast wounds only the hero - gravels walk through it. Not a weapon, the weather.
+   - Idea (2026-10-13, not decided): big shells in place of the barrels, striking the hero only.
 6. **Finale - betoners.** The floor stands, everything below sleeps. Only the top row of shelves under the ceiling wakes; 10 betoners teleport onto it, no more than 3 alive at once.
    - The press: every ~10 s the top row sleeps and the row below wakes - the betoners drop a row lower. In half a minute they are on the floor beside the hero, point-blank.
    - A killed betoner is replaced on the TOP row: a fast killer keeps them far, a slow one gets all ten at his feet.
-   - Barrels keep falling through the finale: time itself hurts.
+   - Barrels keep falling through the finale: time itself hurts (or the big shells, if the idea stands).
    - The way up to them is the falling and stray pads in the middle of the room.
    - Note: the pyramid has no "rows" to press down; the press needs rows of its own (betoner rows may roof each other - betoners shoot, a roof does not shelter from them). Decide at stage 6.
 
@@ -127,6 +134,34 @@ Their death is a scene, not a mechanic: they do not die of hits. The hero may sh
 - **Floor islands.** s09-isle = floor shelves cols 4-5 and 10-11: they sleep with the floor at act 3 and come back with the cannons 200 ticks into it (event s09-act3-cannons).
 - **Left for the live run.** Shield ellipse 38x22 eats hero bullets near the walls, and its rim ring still crosses the muzzle tips and the clamp plate (31 units out of a 38 half-axis) - 42x24 would clear the gun but eat more bullets; burst/warn/ride tuning; the islands' roofs (every floor column has a pyramid shelf above); the doorstep under the bottom-row cannon.
 
+## Stage 4 design (act 4: the carousel)
+Decided 2026-10-13 unless marked "first guess"; the numbers are tuned at the live run.
+
+### The room in act 4
+- **Pyramid.** The crown (s09-crown) and the ladder (the row 7 pairs) sleep from the bottom up, step by step, before the pads land - they stand inside the carousel's box. s09-foot (row 9, cols 2-3 and 12-13) stays: the doorstep -> the left foot is a rise of 2 (JumpReach), and the foot is the ledge from which the bottom run of the carousel is reached. Twelve shelves of the pyramid become four.
+- **Floor, one through one.** Shelves on cols 4, 6, 8, 10 and 14 (floor-03, -05, -07, -09, -13), holes between. Cols 2 and 12 are left out on purpose: with the foot over them they would be a roof (the aimed rain and the random drops land on the foot and walk off, so the hero under it is untouched - a bunker). Under each foot there is a hole two cells wide instead. Col 15 stays a hole (the right gap, where gravels walk out and teleport). The shelves of the old isle that are not in the new set (floor-04, -10) sleep.
+- **A hole of one cell is a real hole.** The hero stands on a deck by the point of his middle (THero.DeckUnderFeet), so he falls when his middle is over a hole and crosses it by a jump. A gravel falls into it the same way and comes back through the pit queue.
+- **Carousel.** One carousel of shape "box" (Levels.Carousels has it, with a rounded corner). First guess: centre (256, 232), size 224 x 112, corner 24, 8-10 pads, a lap in 14-16 s, clockwise. The bottom run is at about y 288 - a rise of 2 from the floor, level with the foot. The pads fly the lap on their own thrust (rig "pad"), as on screen 8.
+- **No barrels.** See "Rules of the room".
+
+### Parked carousel
+- The whole carousel is parked: its pads wait two cells above the top edge over their slots on the track. A pad of a carousel joins no group today, so the `flyIn` of a parked pad group does not reach it - the parked flag goes on the carousel itself, and `flyIn` takes a carousel tag as well as a group tag.
+- On the event the pads ride out from above one after another (BriskPace, rippling from the middle) and stand on the track in their slots. They stand still until every pad has settled; then the carousel starts to turn, its clock speeding up from zero over about 3 s (first guess). A pad that caught up with a running slot would be a chase, not a landing.
+- The orbit clock runs at a constant step today (TCarouselOrbit): the speed-up is a new piece. A rewind (death restarts the trial from act 1) parks the carousel again.
+
+### Shooting platforms
+- **Who.** The TeK-K10 platform of monsters.json as it is: patrolNoEdgeCheck at speed 2 (a horizontal lane, wall to wall), aimedDouble every 41 ticks at bullet speed 5, 27 lives, a machine explosion with a blast of 100 lives over 80 units. Shootable, as on level 1.
+- **When.** By the birth of the batch's gravels, not by kills (no cap on the living, so the two differ): the first when gravel number floor(batch / 3) + 1 is born, the second at floor(2 * batch / 3) + 1. Normal (15): the 6th and the 11th; hard (25): the 9th and the 17th; wild (40): the 14th and the 27th.
+- **Where.** Two lanes. The upper at row 2 over the carousel (hull about y 70-90; the top run is at about y 176, so a hero on it has 54 units of air over his head), entering from the left wall. The lower at row 10, the hero's own row, sweeping the floor wall to wall, entering from the right wall (hull about y 326-346, 6 units under the carousel's pad bodies). The lower one wounds by touch and aims: the floor is no place to stand, the way out is up, onto the foot and the carousel. The foot ledges (row 9) are above its hull and do not touch it.
+- **Entering.** A slide from beyond the screen edge, as the cannons do.
+- **Leaving.** They fly up off the screen when the act's gate opens, so the room is clear for the rebuild (default, not confirmed). Not a kill: no score, no wreck. They do not hold the gate - the gate counts gravels only.
+- **New engine pieces.** An event condition "the N-th gravel of the act's batch is born" (pulled from the trial through a cue, like actReached; N as a share of the batch, rounded as above), and an event action that spawns a monster (monsterId, lane row, entrance side, leaves at the gate). The names are picked at 4.1.
+
+### Sequence of the act
+1. The trial reaches act 4: the crown and the ladder go to sleep from the bottom up; the floor wakes one through one; the carousel flies in and then starts to turn; the first wave waits until it stands (RoomBusy, as for the cannons' scene - to settle at 4.2); then the batch begins to fall.
+2. The 6th gravel born (normal): the first platform enters. The 11th: the second.
+3. The last gravel dies: the platforms fly up, the rebuild goes on into act 5.
+
 ## Stages
 Each stage ends with a live run. Versions: one per stage that changes mechanics, next free after 3.0.56; the tag lands after the docs.
 
@@ -135,11 +170,14 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 2. **Acts engine.** Built (3.0.54). Event condition "act N reached"; actions: shelf bank wake / sleep, program switch (hold, wave, alternate, blink), pad fly-in from above, medkits onto a bank. Acts 1-3 in level2.json. Aimed rain, herald, pit returns over the hero, crown medkits.
 2a. **Trial tuning.** Done and committed (3.0.55). Pit returns as a queue (TrialPitReturnTicks 10, cue ReturnFromPit; TMonsterField.TryReturnPitStray, spread 2) - side returns stay at once (ReturnSideStrays); TMonster.HeadRandomly on every trial gravel let down or brought back. The medkit at the start of an act - dropped.
 3. **TeK cannons.** Built (3.0.56), see "Stage 3 as built"; waits for its live run.
-4. **Carousel act.** Box carousel built by fly-in, barrels on its pads, ladder sleeping bottom-up. Act 4.
-5. **Chaos act.** Carousel pads turn into falling pads; Pads.Stray (edge -> point -> point/edge, random misbehaviour from the existing plunge and path pieces); sky barrels with death-on-landing and a hero-only blast - the flag goes on the spawn, not on the bullet class (the henshin rings use Contact against the boss). Act 5.
+4. **Carousel act (3.0.57).** Designed, see "Stage 4 design". Three commits, a live run after the last:
+   - 4.1 **Platforms' engine.** The event condition "the N-th gravel of the batch is born" (a cue from the trial) and the event action that spawns a monster in a lane with an entrance and a leave at the gate.
+   - 4.2 **Parked carousel.** `parked` on the carousel, `flyIn` by a carousel tag, the clock speed-up from zero, a rewind parks it again, RoomBusy for the fly-in.
+   - 4.3 **Act 4 data.** The banks (the foot stays, the crown and the ladder sleep bottom-up, the one-through-one floor), the carousel and its pads with two medkit seats in level2.json, the act 4 events, the two platforms.
+5. **Chaos act.** Carousel pads turn into falling pads; Pads.Stray (edge -> point -> point/edge, random misbehaviour from the existing plunge and path pieces); sky barrels with death-on-landing and a hero-only blast - the flag goes on the spawn, not on the bullet class (the henshin rings use Contact against the boss). Act 5. Big shells in place of the sky barrels are an idea (2026-10-13), to decide here.
 6. **Finale.** Betoner wave after the act 5 gate; spawn on the top awake row; cap 3; the press (row wake/sleep on a timer); barrels continue. Check betoners fall when their shelf sleeps (affectedByGravity).
-7. **Tests.** Black-box, one module per new entity: trial rules (batch by grade, per-act gate, no carry-over, teleport keeps the gravel, a wave every time while the batch lasts, medkit per 15 kills, pickups out of the gate, aimed every third from act 2, herald, aimed holds the gate - also the aimed one let down on the gate's tick, pit returns one per TrialPitReturnTicks, RoomBusy holds only the first wave), acts conditions, shelf commands (sleep / wake / program from any depth, told-before-origin look), bank orders and waits, parking and fly-in, cannons (TCannonPair with no renderer needs a TCannonArt - split the art off or pass nil; unison, one row per volley, rounds harmless to gravels, shield takes every hit, shield falls with the act change, the scene deals no damage, the yield bank sleeps before a ride through rows 8-9 and wakes after, contact wounds, a late event plays the scene at once), the shield (cells inside the ellipse, flare fades in 16 ticks, fall in 14), stray pad, sky barrel, press.
-8. **Docs.** ASSETS (tek-cannon.mset, tools/cannon), both codebase maps (Game.Shield, Game.Cannons, the cannons action, RoomBusy), PADS-PLAN, PORTING-NOTES, docs/ARENA-2.md (the repository copy is behind since stage 2); then the tag.
+7. **Tests.** Black-box, one module per new entity: trial rules (batch by grade, per-act gate, no carry-over, teleport keeps the gravel, a wave every time while the batch lasts, medkit per 15 kills, pickups out of the gate, aimed every third from act 2, herald, aimed holds the gate - also the aimed one let down on the gate's tick, pit returns one per TrialPitReturnTicks, RoomBusy holds only the first wave), acts conditions, shelf commands (sleep / wake / program from any depth, told-before-origin look), bank orders and waits, parking and fly-in (the parked carousel, the clock speed-up, the re-park on a rewind), the batch-birth condition (thirds by grade) and the spawn action (lane, entrance, leave at the gate, the gate not held), cannons (TCannonPair with no renderer needs a TCannonArt - split the art off or pass nil; unison, one row per volley, rounds harmless to gravels, shield takes every hit, shield falls with the act change, the scene deals no damage, the yield bank sleeps before a ride through rows 8-9 and wakes after, contact wounds, a late event plays the scene at once), the shield (cells inside the ellipse, flare fades in 16 ticks, fall in 14), stray pad, sky barrel, press.
+8. **Docs.** ASSETS (tek-cannon.mset, tools/cannon), both codebase maps (Game.Shield, Game.Cannons, the cannons action, RoomBusy), PADS-PLAN, PORTING-NOTES, the stage 4 units, docs/ARENA-2.md (the repository copy was refreshed to stage 3 on 2026-10-13; refresh it again from this plan); then the tag.
 
 ## Risks
 - Five acts = five balances; acts 3 and 5 on wild (40 each) will be meat - tune the batch sizes by live runs.
@@ -154,9 +192,18 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 - Cannons: a jump between two rows passes through the swept row in between - the best trap of the act, but check it is not a certain death on take-off.
 - Cannons: the bottom steps sit right at the muzzle (when they are out) and so does the island next to a wall - they take the volley with no flight time; and a step yielding under the hero is a fall into the pit - check live that it is readable (the cannon riding toward it is the warning) - more dangerous than a centre island. Probably fine (the centre has the aimed rain), check live.
 - Cannons: a debug browse (PgUp/PgDn) off the screen while s09-foot is asleep leaves it asleep - the door is closed during the trial, so only the debug path reaches it.
+- Act 4: the pads ride out while the first gravels fall - a gravel landing on a pad still on its way in, or under the box while the ladder is still sleeping down. RoomBusy holds the first wave until the carousel stands; check live.
+- Act 4: the lower platform on the floor lane, the one-through-one floor and the aimed rain together are thick. If too much, the lower platform comes later or the lane goes to row 9 (then the foot ledges, which stand on row 9, would have to go and the bottom run of the carousel would have to come down a row).
+- Act 4: the crown and the ladder sleep bottom-up while the hero may be standing on them - a fall readable only if the order is clear; the step against the fly-in is a live-run matter.
+- Act 4: the wreck of the lower platform (blast of 100 lives over 80 units) at floor height hurts the hero and the gravels around it - a point-blank kill costs him; that is the price of the kill.
 
 ## Open
 - Hard and wild batch sizes: 25 / 40 proposed.
 - Ice form on this screen: on or off.
 - Where the hero stands at the moment an act floors out under him (act 3) - a grace of a second, or none.
 - How many cannons by grade, if two turn out too soft or too hard.
+- Act 4 floor: cols 4, 6, 8, 10 and 14 (cols 2 and 12 left out under the foot) - proposed, to be seen live.
+- Platforms: counted by birth, not by kills, and leaving at the gate - both defaults; by kills would need one more cue.
+- Medkits in act 4: the two on pads; whether the per-15-kills teleport also brings one in act 4 (no bank to land on) - default: no, the two replace it.
+- Carousel size, pad count, period and speed-up time: first guesses, tuned live.
+- Act 5: big shells in place of the sky barrels - an idea, to decide at stage 5.
