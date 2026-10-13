@@ -8,9 +8,15 @@
   gate of the last act ends the trial. Every fifteenth gravel killed pays
   one medkit, counted across the acts.
 
+  The first gravel of every act comes as a herald, in a light of its own.
+  From the second act on every third gravel of a batch is aimed: the
+  light marks the column the hero stands in, and the gravel follows it a
+  moment later - time enough to step aside, if he looks up.
+
   The game tells the trial how many gravels are alive and which of them
-  died, and does what the cue of a tick says: lets a gravel down, lets a
-  medkit down, or ends the trial.
+  died, and does what the cue of a tick says: lets a gravel down, marks
+  the column of an aimed one and lets it down there, lets a medkit down,
+  or ends the trial.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -28,10 +34,20 @@ const
   // The breath of the room between two acts, before the next batch falls
   TrialActBreakTicks = 40;
   TrialKillsPerMedkit = 15;
+  TrialAimedFromAct = 2;
+  TrialAimedEvery = 3;
+  // The mark of an aimed gravel leads it by this much: shorter than a wave,
+  // so no more than one is ever on its way
+  TrialAimedLeadTicks = 10;
 
 type
   TTrialCue = record
     SpawnGravel: Boolean;
+    // The gravel let down is the first of its act
+    Herald: Boolean;
+    // Mark the hero's column for an aimed gravel; let it down there
+    MarkAimed: Boolean;
+    SpawnAimed: Boolean;
     SpawnMedkit: Boolean;
     Finished: Boolean;
   end;
@@ -45,7 +61,11 @@ type
     FTicksToWave: Integer;
     FKills: Integer;
     FMedkitsOwed: Integer;
+    // Ticks until the aimed gravel follows its mark; 0 - none on its way
+    FAimedIn: Integer;
+    procedure TickAimed(var ACue: TTrialCue);
     procedure DealWave(AGravelsAlive: Integer; var ACue: TTrialCue);
+    procedure DealGravel(var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
   public
     // ABatch - the gravels of one act
@@ -71,11 +91,13 @@ begin
   FTicksToWave := TrialFirstWaveTicks;
   FKills := 0;
   FMedkitsOwed := 0;
+  FAimedIn := 0;
 end;
 
 procedure TGravelTrial.Stop;
 begin
   FActive := False;
+  FAimedIn := 0;
 end;
 
 procedure TGravelTrial.NoteGravelKilled;
@@ -98,12 +120,21 @@ begin
     Dec(FMedkitsOwed);
     Result.SpawnMedkit := True;
   end;
+  TickAimed(Result);
 
   Dec(FTicksToWave);
   if FTicksToWave > 0 then
     Exit;
   FTicksToWave := TrialWaveTicks;
   DealWave(AGravelsAlive, Result);
+end;
+
+procedure TGravelTrial.TickAimed(var ACue: TTrialCue);
+begin
+  if FAimedIn = 0 then
+    Exit;
+  Dec(FAimedIn);
+  ACue.SpawnAimed := FAimedIn = 0;
 end;
 
 procedure TGravelTrial.DealWave(AGravelsAlive: Integer;
@@ -113,13 +144,28 @@ begin
   // back - the batch is the only limit
   if FBatchLeft > 0 then
   begin
-    Dec(FBatchLeft);
-    ACue.SpawnGravel := True;
+    DealGravel(ACue);
     Exit;
   end;
 
-  if AGravelsAlive = 0 then
+  // An aimed gravel still on its way is of the batch, alive or not yet
+  if (AGravelsAlive = 0) and (FAimedIn = 0) then
     EndAct(ACue);
+end;
+
+procedure TGravelTrial.DealGravel(var ACue: TTrialCue);
+begin
+  Dec(FBatchLeft);
+  var Dealt := FBatch - FBatchLeft;
+  var Aimed := (FAct >= TrialAimedFromAct) and (Dealt mod TrialAimedEvery = 0);
+  if Aimed then
+  begin
+    ACue.MarkAimed := True;
+    FAimedIn := TrialAimedLeadTicks;
+    Exit;
+  end;
+  ACue.SpawnGravel := True;
+  ACue.Herald := Dealt = 1;
 end;
 
 procedure TGravelTrial.EndAct(var ACue: TTrialCue);

@@ -317,6 +317,9 @@ type
     // AddMonstOnBoss1 verbatim: a random minion at cell (random(15)+1, 1)
     // - the top edge of the boss screen; gravity does the dramatic entry.
     function SpawnFromSky(const AMonsterId: string; AScreen: Integer): TMonster;
+    // The same over a column of the caller's, 0-based
+    function SpawnFromSkyOver(const AMonsterId: string;
+      AScreen, AColumn: Integer): TMonster;
     // On the very place of a body at AX, AY: a prize put into the
     // hero's hands - the contact of the same tick collects it
     procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
@@ -324,9 +327,11 @@ type
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
     // The live bodies of one kind that have strayed out come back from
-    // the sky, each over a column of its own; the bodies that came back
+    // the sky: one gone out of the side over a column of its own, one
+    // fallen into the pit over APitColumn or beside it; the bodies that
+    // came back
     function ReturnStrays(const AMonsterId: string;
-      AScreen: Integer): TArray<TMonster>;
+      AScreen, APitColumn: Integer): TArray<TMonster>;
     // Any live body carrying the placement tag, on any screen - the
     // events' allDead condition asks here
     function AnyAliveTagged(const ATag: string): Boolean;
@@ -357,6 +362,11 @@ implementation
 
 uses
   Effects.Sparks;
+
+const
+  // The columns a body comes down from the sky over, as AddMonstOnBoss1
+  // rolled them
+  SkyColumns = 15;
 
 resourcestring
   SFireOffsetOutOfRange = 'Level "%s", screen %d, cell %d,%d: fireOffset %d ' +
@@ -1714,7 +1724,13 @@ function TMonsterField.SpawnFromSky(const AMonsterId: string;
   AScreen: Integer): TMonster;
 begin
   // Row 0 is fully above the visible screen: the entry IS the fall
-  Result := SpawnAt(AMonsterId, AScreen, Random(15) + 1, 0);
+  Result := SpawnAt(AMonsterId, AScreen, Random(SkyColumns) + 1, 0);
+end;
+
+function TMonsterField.SpawnFromSkyOver(const AMonsterId: string;
+  AScreen, AColumn: Integer): TMonster;
+begin
+  Result := SpawnAt(AMonsterId, AScreen, AColumn + 1, 0);
 end;
 
 procedure TMonsterField.SpawnOn(const AMonsterId: string;
@@ -1759,7 +1775,7 @@ begin
 end;
 
 function TMonsterField.ReturnStrays(const AMonsterId: string;
-  AScreen: Integer): TArray<TMonster>;
+  AScreen, APitColumn: Integer): TArray<TMonster>;
 begin
   Result := nil;
   for var Monster in FMonsters do
@@ -1768,7 +1784,10 @@ begin
       Continue;
     if (Monster.Life <> mlAlive) or not Monster.StrayedOut then
       Continue;
-    Monster.Reappear(Random(15) * SpriteSize, 0);
+    var Column := Random(SkyColumns);
+    if Monster.Y > ScreenHeight then
+      Column := EnsureRange(APitColumn + Random(3) - 1, 0, SkyColumns - 1);
+    Monster.Reappear(Column * SpriteSize, 0);
     Result := Result + [Monster];
   end;
 end;

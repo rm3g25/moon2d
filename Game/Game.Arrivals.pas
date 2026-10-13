@@ -4,8 +4,9 @@
   strayed out comes back.
 
   A mark is a column of light and a glow at the top edge, on its own clock:
-  it gathers, peaks and dies out. The look only - the body itself is the
-  monster field's.
+  it gathers, peaks and dies out. The herald of an act - its first gravel
+  - comes in a column twice as broad and long, that stands a while
+  longer. The look only - the body itself is the monster field's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -18,11 +19,14 @@ uses
   System.Generics.Collections, Sdl2.Core, Render.Brush, Levels.Dynamics;
 
 type
+  TArrivalLook = (alPlain, alHerald);
+
   TArrivals = class
   private type
     TMark = record
       X: Single;
       Age: Integer;
+      Look: TArrivalLook;
     end;
   private
     FMarks: TList<TMark>;
@@ -32,7 +36,7 @@ type
     constructor Create;
     destructor Destroy; override;
     // AX - the middle of the body, in screen units
-    procedure Add(AX: Single);
+    procedure Add(AX: Single; ALook: TArrivalLook = alPlain);
     procedure Tick;
     // AOrigin - the shake of the monsters; AAlpha - the step between two
     // ticks
@@ -47,6 +51,14 @@ implementation
 uses
   System.Math, Render.Glow;
 
+type
+  // How a look stretches the plain mark
+  TArrivalScale = record
+    Ticks: Integer;
+    Size: Single;
+    Beam: Single;
+  end;
+
 const
   ArrivalTicks = 14;
   // The body falls in from above the screen, so the glow stands just
@@ -59,6 +71,9 @@ const
   ArrivalBeamLevel = 0.6;
   ArrivalColor: TRgb = (R: 168; G: 92; B: 255);
   ArrivalCoreColor: TRgb = (R: 232; G: 208; B: 255);
+  ArrivalScales: array [TArrivalLook] of TArrivalScale = (
+    (Ticks: ArrivalTicks; Size: 1; Beam: 1),
+    (Ticks: 2 * ArrivalTicks; Size: 1.5; Beam: 2));
 
 constructor TArrivals.Create;
 begin
@@ -72,11 +87,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TArrivals.Add(AX: Single);
+procedure TArrivals.Add(AX: Single; ALook: TArrivalLook);
 begin
   var Mark: TMark;
   Mark.X := AX;
   Mark.Age := 0;
+  Mark.Look := ALook;
   FMarks.Add(Mark);
 end;
 
@@ -86,7 +102,7 @@ begin
   begin
     var Mark := FMarks[i];
     Inc(Mark.Age);
-    if Mark.Age >= ArrivalTicks then
+    if Mark.Age >= ArrivalScales[Mark.Look].Ticks then
       FMarks.Delete(i)
     else
       FMarks[i] := Mark;
@@ -96,20 +112,21 @@ end;
 procedure TArrivals.DrawMark(const ACanvas: TDynamicCanvas;
   const AMark: TMark; AOrigin: TSdlPoint; AAlpha: Single);
 begin
-  var Share: Single := (AMark.Age + AAlpha) / ArrivalTicks;
+  var Scale := ArrivalScales[AMark.Look];
+  var Share: Single := (AMark.Age + AAlpha) / Scale.Ticks;
   if Share > 1 then
     Share := 1;
   var Level: Single := Sin(Pi * Share);
   var CenterX: Single := AOrigin.X + AMark.X;
   var CenterY: Single := AOrigin.Y + ArrivalHeight;
   // The light gathers into the point the body arrives at
-  var Across: Single := ArrivalSize * (1.3 - 0.5 * Share);
+  var Across: Single := ArrivalSize * Scale.Size * (1.3 - 0.5 * Share);
 
   var Beam: TSdlFRect;
-  Beam.X := CenterX - ArrivalBeamWidth / 2;
+  Beam.W := ArrivalBeamWidth * Scale.Beam;
+  Beam.H := ArrivalBeamLength * Scale.Beam;
+  Beam.X := CenterX - Beam.W / 2;
   Beam.Y := AOrigin.Y;
-  Beam.W := ArrivalBeamWidth;
-  Beam.H := ArrivalBeamLength;
   DrawGlowRect(ACanvas.Renderer, ACanvas.PointGlow, Beam, ArrivalColor,
     Level * ArrivalBeamLevel);
   DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY, Across,

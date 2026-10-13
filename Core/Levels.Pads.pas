@@ -31,6 +31,14 @@
   is neither a floor nor a body. It joins no group and does not plunge;
   a path it may travel.
 
+  Shelves of one bank are told together by the level's events: to fall
+  asleep in the wall, to wake, to run another program. A shelf of a bank
+  may be held from the start - out in front or in the wall - and run no
+  program until an event tells it one.
+
+  The pads of a group may be parked above the screen: each waits over
+  its own place until an event flies the group in.
+
   A pad may ride a carousel (Levels.Carousels): it flies round the
   carousel's track with the other pads it carries. The carousel places
   it, so the pad takes no x or y; it travels no path, does not plunge,
@@ -112,7 +120,34 @@ type
     WarnSeconds: Single;
     OffsetSeconds: Single;
     Deep: TPadDeepLook; // in the wall
+    // The bank the events tell it with; '' = none
+    Bank: string;
+    // Held at HeldStand from the start, the steps run not at all, until
+    // an event tells it otherwise
+    Held: Boolean;
+    HeldStand: TShelfStand;
   end;
+
+  // What a bank of shelves runs once an event tells it to:
+  // - hold: out, and stays out;
+  // - wave: out and in by turns, each shelf a step after the one before;
+  // - alternate: out and in by turns, every other shelf out of step;
+  // - blink: short turns, every shelf at a time of its own.
+  TShelfProgramKind = (pgHold, pgWave, pgAlternate, pgBlink);
+
+  TShelfProgram = record
+    Kind: TShelfProgramKind;
+    OutSeconds: Single;
+    InSeconds: Single;
+    // Of the warning before a shelf leaves the front; 0 = the shelf's own
+    WarnSeconds: Single;
+  end;
+
+  // The order the shelves of a bank are told in, one a step after
+  // another: as the level file lists them, from the left, from the
+  // right, from the bottom, from the top, or from the farthest from the
+  // hero to the nearest
+  TBankOrder = (boFile, boLeft, boRight, boUp, boDown, boToHero);
 
   TPadPlacement = record
     Sprite: string; // in the level's object art, as a static object's
@@ -161,12 +196,20 @@ type
     Conductor: string;
     Every: Single;
     Alarm: string;
+    // The pads wait above the screen, each over its place, until the
+    // group is flown in
+    Parked: Boolean;
   end;
 
 const
   PadBulletsIds: array [TPadBullets] of string = ('block', 'pass');
   PadRouteIds: array [TPadRoute] of string = ('none', 'pingpong', 'loop');
   ShelfStandIds: array [TShelfStand] of string = ('out', 'in');
+  ShelfProgramIds: array [TShelfProgramKind] of string = (
+    'hold', 'wave', 'alternate', 'blink');
+  BankOrderIds: array [TBankOrder] of string = (
+    'file', 'left', 'right', 'up', 'down', 'toHero');
+  PadParkedAbove = 'above';
 
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
@@ -176,13 +219,14 @@ const
 // program beside its out or in, with a step that is not a stand and
 // seconds above zero, with steps that do not take turns, with a slide,
 // a warn or an offset below zero, a scale out of 0..1 or zero, a tone
-// out of 0..1. A pad on a carousel that is given an x or a y raises
-// too: the carousel places it.
+// out of 0..1, a shelf held but in no bank or held neither out nor in.
+// A pad on a carousel that is given an x or a y raises too: the carousel
+// places it.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The section padGroups; absent = no groups. A zone that is not four
 // numbers, pairs or farShare below zero, a farFlight below one, a
-// conductor without every above zero raise.
+// conductor without every above zero, parked anywhere but above raise.
 function ParsePadGroups(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadGroup>;
 // A pad as the errors of its rigs call it: by the tag, without one by
@@ -209,11 +253,16 @@ resourcestring
     + '["out", seconds] or ["in", seconds]';
   SPadShelfNoTurns = 'Level "%s": pad "%s" has a shelf program whose steps '
     + 'do not take turns, out and in, the last and the first too';
+  SPadShelfHeldAlone = 'Level "%s": pad "%s" is a shelf held in no bank - '
+    + 'no event could ever let it go';
+  SPadShelfBadHeld = 'Level "%s": pad "%s" is a shelf held "%s" - out or in';
   SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
     + '[left, top, right, bottom]';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
   SPadGroupBadEvery = 'Level "%s": pad group "%s" has a conductor and '
     + 'takes every %g - seconds above zero';
+  SPadGroupBadParked = 'Level "%s": pad group "%s" is parked "%s" - above '
+    + 'is the only place';
 
 const
   // What a plunge takes for a number it leaves out: seconds, seconds and
@@ -381,10 +430,30 @@ begin
     raise EPadError.CreateFmt(SPadShelfNoTurns, [ALevelId, ASprite]);
 end;
 
+// JSON: "held": "out" or "in"; absent = the shelf runs its steps
+procedure ReadShelfHeld(const AShelfObj: TJSONObject;
+  const ALevelId, ASprite: string; var AShelf: TPadShelf);
+begin
+  var Id := AShelfObj.GetValue<string>('held', '');
+  AShelf.Held := Id <> '';
+  if not AShelf.Held then
+    Exit;
+  if AShelf.Bank = '' then
+    raise EPadError.CreateFmt(SPadShelfHeldAlone, [ALevelId, ASprite]);
+  for var Stand := Low(TShelfStand) to High(TShelfStand) do
+    if SameText(Id, ShelfStandIds[Stand]) then
+    begin
+      AShelf.HeldStand := Stand;
+      Exit;
+    end;
+  raise EPadError.CreateFmt(SPadShelfBadHeld, [ALevelId, ASprite, Id]);
+end;
+
 // JSON: "shelf": {"out": 2, "in": 1.5, "slide": 0.25, "warn": 0.5,
-// "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4}, or with
-// "program": [["out", 2], ["in", 0.5], ["out", 0.5], ["in", 1.5]] in
-// place of "out" and "in"; absent = the pad never leaves the front
+// "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "ladder",
+// "held": "in"}, or with "program": [["out", 2], ["in", 0.5],
+// ["out", 0.5], ["in", 1.5]] in place of "out" and "in"; absent = the
+// pad never leaves the front
 function ReadShelf(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadShelf;
 var
@@ -409,6 +478,8 @@ begin
   Result.SlideSeconds := NotBelowZero('slide', DefaultShelfSlide);
   Result.WarnSeconds := NotBelowZero('warn', DefaultShelfWarn);
   Result.OffsetSeconds := NotBelowZero('offset', 0);
+  Result.Bank := ShelfObj.GetValue<string>('bank', '');
+  ReadShelfHeld(ShelfObj, ALevelId, ASprite, Result);
 
   Result.Deep.Sink := ShelfObj.GetValue<Double>('sink', 0);
   Result.Deep.Scale := ShelfObj.GetValue<Double>('scale', DefaultShelfScale);
@@ -525,6 +596,11 @@ begin
     Group.Conductor := Obj.GetValue<string>('conductor', '');
     Group.Every := Obj.GetValue<Double>('every', 0);
     Group.Alarm := Obj.GetValue<string>('alarm', '');
+    var Parked := Obj.GetValue<string>('parked', '');
+    Group.Parked := Parked <> '';
+    if Group.Parked and not SameText(Parked, PadParkedAbove) then
+      raise EPadError.CreateFmt(SPadGroupBadParked,
+        [ALevelId, Group.Tag, Parked]);
 
     if Group.Pairs < 0 then
       raise EPadError.CreateFmt(SPadGroupBadNumber,

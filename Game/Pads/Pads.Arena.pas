@@ -25,6 +25,10 @@
   (Pads.World). The wave of it ripples out from the conductor - from its
   wreck, when the fight was won. A rebuild in the air lands first.
 
+  A fly-in is a restore at the brisk pace of a fight: the pads of a group
+  parked above the screen come down to their places, rippling out from
+  the middle of the zone.
+
   Not here: the pads' flights (Pads.World, Pads.Flights) and what the
   conductor does with a lap let go (Monsters.Pilot).
 
@@ -37,7 +41,7 @@ interface
 
 uses
   Levels.Pads, Levels.Dynamics, Monsters, Monsters.Pilot, Pads.Formations,
-  Pads.World;
+  Pads.Flights, Pads.World;
 
 type
   TArenaPhase = (arAsleep, arResting, arHolding, arWarning, arFlying,
@@ -56,6 +60,7 @@ type
     FWarned: Boolean;
     FLap: TArray<TLapStep>; // the conductor's lap from the rebuild's start
     FRipple: TPadCell; // the wave of a restore spreads from here
+    FPace: TFlightPace; // of the restore
     function ReleaseOf(const ACell: TPadCell): Integer;
     function LapBars(ATick: Integer; AX, AY: Double): Boolean;
     function RippleOf(const ACell: TPadCell): Integer;
@@ -67,6 +72,7 @@ type
     procedure TickWarning(const AConductor: TMonster);
     procedure TickFlying(const AConductor: TMonster);
     procedure FallAsleep;
+    procedure StartRestore(const AGroup: string; const APace: TFlightPace);
   public
     // APads and ADynamics must outlive the arena; ALoad says which pad the
     // rebuilds must not take into the depth
@@ -80,6 +86,9 @@ type
     // The event's restore action: the group tagged AGroup is rebuilt no
     // more, its pads fly back to where the level file puts them
     procedure Restore(const AGroup: string);
+    // The event's fly-in action: the group tagged AGroup, parked above the
+    // screen, flies in to where the level file puts it
+    procedure FlyIn(const AGroup: string);
     // One logic tick with the hero on AScreen, after the monsters have
     // moved: the field is reborn on a restart, so it comes every tick
     procedure Tick(AScreen: Integer; const AField: TMonsterField);
@@ -148,11 +157,23 @@ end;
 
 procedure TPadArena.Restore(const AGroup: string);
 begin
+  StartRestore(AGroup, CalmPace);
+end;
+
+procedure TPadArena.FlyIn(const AGroup: string);
+begin
+  StartRestore(AGroup, BriskPace);
+end;
+
+procedure TPadArena.StartRestore(const AGroup: string;
+  const APace: TFlightPace);
+begin
   for var Group in FGroups do
     if Group.Tag = AGroup then
     begin
       FallAsleep;
       FGroup := Group;
+      FPace := APace;
       FTicksLeft := 0;
       FPhase := arRestoring;
       Exit;
@@ -319,7 +340,7 @@ begin
   if FTicksLeft > 0 then
     Exit;
   FRipple := RippleCell(AField);
-  FPads.RequestRestore(FGroup.Tag, FLoad, RippleOf);
+  FPads.RequestRestore(FGroup.Tag, FLoad, RippleOf, FPace);
   FTicksLeft := RestoreRetryTicks;
 end;
 

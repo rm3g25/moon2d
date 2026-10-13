@@ -4,12 +4,14 @@
   out its delay, plays its actions once.
 
   The director acts on the stage it is given - the message board and
-  the level's dynamic objects - and asks the game for the two things it
-  does not own through callbacks: the music, whose track the game
-  remembers for restarts, and the arena that rebuilds a pad group and
-  restores it. The monster field is reborn on every restart, so it
-  arrives with every tick instead of being kept: asked for the
-  conditions, told the tactics.
+  the level's dynamic objects - and asks the game for the things it does
+  not own through callbacks: the music, whose track the game remembers
+  for restarts; the arena that rebuilds a pad group, restores it and
+  flies it in; the shelves of a bank, which take their order from where
+  the hero stands; the trial's medkits; and the act the gravel trial has
+  come to. The monster field is reborn on every restart, so it arrives
+  with every tick instead of being kept: asked for the conditions, told
+  the tactics.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -31,6 +33,22 @@ type
   TArenaCues = record
     Engage: TArenaCue; // the group is rebuilt from now on
     Restore: TArenaCue; // no more: its pads fly back to their places
+    FlyIn: TArenaCue; // the group parked above flies in to its places
+  end;
+
+  // A shelf action of an event: its bank, its program, its order
+  TShelfCue = reference to procedure(const AAction: TEventAction);
+  // The trial's medkits come down over the shelves of ABank from now on
+  TBankCue = reference to procedure(const ABank: string);
+  // The act the gravel trial has come to; 0 while it does not run
+  TTrialAct = reference to function: Integer;
+
+  TDirectorCues = record
+    ChangeMusic: TChangeMusic;
+    Arena: TArenaCues;
+    Shelves: TShelfCue;
+    MedkitsOnto: TBankCue;
+    TrialAct: TTrialAct;
   end;
 
   TEventDirector = class
@@ -38,8 +56,7 @@ type
     FEvents: TArray<TLevelEvent>;
     FMessages: TMessageBoard;
     FDynamics: TDynamicObjects;
-    FChangeMusic: TChangeMusic;
-    FArena: TArenaCues;
+    FCues: TDirectorCues;
     FFired: TArray<Boolean>; // in step with FEvents
     FTicksLeft: TArray<Integer>; // of the delay, once the condition holds
     procedure Arm(AIndex: Integer);
@@ -51,7 +68,7 @@ type
   public
     constructor Create(const AEvents: TArray<TLevelEvent>;
       const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
-      const AChangeMusic: TChangeMusic; const AArena: TArenaCues);
+      const ACues: TDirectorCues);
 
     // One logic tick with the hero on AScreen
     procedure Tick(AScreen: Integer; const AField: TMonsterField);
@@ -68,14 +85,13 @@ uses
 
 constructor TEventDirector.Create(const AEvents: TArray<TLevelEvent>;
   const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
-  const AChangeMusic: TChangeMusic; const AArena: TArenaCues);
+  const ACues: TDirectorCues);
 begin
   inherited Create;
   FEvents := AEvents;
   FMessages := AMessages;
   FDynamics := ADynamics;
-  FChangeMusic := AChangeMusic;
-  FArena := AArena;
+  FCues := ACues;
   SetLength(FFired, Length(FEvents));
   SetLength(FTicksLeft, Length(FEvents));
   for var i := 0 to High(FEvents) do
@@ -117,6 +133,8 @@ begin
       Result := AField.AnyTaggedLivesBelow(AEvent.Tag, AEvent.Lives);
     ecEnraged:
       Result := AField.AnyTaggedEnraged(AEvent.Tag);
+    ecActReached:
+      Result := FCues.TrialAct() >= AEvent.Act;
   else
     Result := True;
   end;
@@ -147,7 +165,7 @@ begin
       eaHint:
         PlayHint(Action);
       eaMusic:
-        FChangeMusic(Action.FileName);
+        FCues.ChangeMusic(Action.FileName);
       eaIntensity:
         FDynamics.FadeTagged(Action.Target, Action.Level, Action.Ticks);
       eaSun:
@@ -155,9 +173,15 @@ begin
       eaTactics:
         AField.SetTaggedTactics(Action.Target, Action.Tactics);
       eaRebuild:
-        FArena.Engage(Action.Target);
+        FCues.Arena.Engage(Action.Target);
       eaRestore:
-        FArena.Restore(Action.Target);
+        FCues.Arena.Restore(Action.Target);
+      eaFlyIn:
+        FCues.Arena.FlyIn(Action.Target);
+      eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
+        FCues.Shelves(Action);
+      eaMedkitsOnto:
+        FCues.MedkitsOnto(Action.Target);
     end;
 end;
 

@@ -14,7 +14,7 @@ unit Levels.Events;
 interface
 
 uses
-  System.SysUtils, System.JSON, Localization, Monsters.Defs;
+  System.SysUtils, System.JSON, Localization, Monsters.Defs, Levels.Pads;
 
 type
   ELevelEventError = class(Exception);
@@ -25,11 +25,14 @@ type
   // - one alive with fewer lives than "lives", a mark told for the
   // normal grade that grows with the difficulty as the lives do; enraged
   // - one gone into its rage (the boss below its rage mark, a tank below
-  // its own).
-  TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged);
+  // its own). actReached watches the gravel trial: it has come to its
+  // act "act" or past it.
+  TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
+    ecActReached);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
-    eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore);
+    eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
+    eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto);
 
   TEventAction = record
     Kind: TEventActionKind;
@@ -49,6 +52,19 @@ type
     // eaRestore: the pad group tagged Target is rebuilt no more, its
     // pads fly back to where the level file puts them (Pads.Arena).
     // JSON: "target".
+    // eaShelvesWake: the shelves of the bank Target come out of the wall
+    // and run Shelves - hold, unless "program" says another.
+    // eaShelvesProgram: they run Shelves from now on, waking if asleep.
+    // eaShelvesSleep: they warn and go into the wall, and stay there.
+    // The three tell the shelves in Order, each StepSeconds after the one
+    // before. JSON: "target", "program" (a word of ShelfProgramIds),
+    // "out", "in", "warn" (seconds), "order" (a word of BankOrderIds,
+    // file by default), "step" (seconds, 0 by default).
+    // eaFlyIn: the pads of the group Target, parked above the screen,
+    // fly in to where the level file puts them (Pads.Arena). JSON:
+    // "target".
+    // eaMedkitsOnto: from now on the trial's medkits come down over the
+    // shelves of the bank Target. JSON: "target".
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -61,6 +77,9 @@ type
     Angle: Single;
     Ticks: Integer;
     Tactics: TPilotTactics;
+    Shelves: TShelfProgram;
+    Order: TBankOrder;
+    StepSeconds: Single;
   end;
 
   // One event in level JSON:
@@ -68,7 +87,8 @@ type
   //     "id": "labHint",
   //     "screen": 12,
   //     "when": "allDead", "tag": "labGuard",
-  //     (or "when": "livesBelow", "tag": "boss", "lives": 150)
+  //     (or "when": "livesBelow", "tag": "boss", "lives": 150,
+  //     or "when": "actReached", "act": 2)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -80,6 +100,7 @@ type
     Condition: TEventCondition;
     Tag: string; // the placements the monster conditions watch
     Lives: Integer; // ecLivesBelow
+    Act: Integer; // ecActReached
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -88,15 +109,18 @@ const
   // The JSON vocabulary of "when", of "action" and of the "value" the
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
-    'enterScreen', 'allDead', 'livesBelow', 'enraged');
+    'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
-    'tactics', 'rebuild', 'restore');
+    'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
+    'shelvesProgram', 'flyIn', 'medkitsOnto');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
 
   // The conditions that watch tagged placements
   TaggedConditions = [ecAllDead, ecLivesBelow, ecEnraged];
+  // The actions that tell a bank of shelves
+  ShelfActions = [eaShelvesWake, eaShelvesSleep, eaShelvesProgram];
 
 // Reads the "events" array of a level; an absent section is an empty
 // list. ALevelId names the level in errors.
@@ -106,13 +130,14 @@ function ParseLevelEvents(const ARoot: TJSONObject;
 implementation
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections, System.Math;
 
 resourcestring
   SEventNoId = 'Level "%s": event #%d has no id';
   SEventBadCondition = 'Level "%s": event "%s": unknown condition "%s"';
   SEventNoTag = 'Level "%s": event "%s": %s names no tag';
   SEventNoLives = 'Level "%s": event "%s": livesBelow needs "lives" above zero';
+  SEventNoAct = 'Level "%s": event "%s": actReached needs "act" above zero';
   SEventNoTarget = 'Level "%s": event "%s": intensity names no target';
   SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
   SEventSunNoTarget = 'Level "%s": event "%s": sun names no target';
@@ -124,6 +149,18 @@ resourcestring
   SEventNoActions = 'Level "%s": event "%s" has no actions';
   SEventBadPlace = 'Level "%s": event "%s": a hint takes "place" top or '
     + 'bottom, not "%s"';
+  SEventBadProgram = 'Level "%s": event "%s": unknown shelf program "%s"';
+  SEventNoProgram = 'Level "%s": event "%s": shelvesProgram names no program';
+  SEventBadOrder = 'Level "%s": event "%s": unknown bank order "%s"';
+  SEventShelfNumber = 'Level "%s": event "%s": %s takes %s %g';
+
+const
+  // What a shelf program takes for the seconds it leaves out: the turns
+  // of a wave and of an alternation, and the short ones of a blink
+  DefaultTurnOut = 2.0;
+  DefaultTurnIn = 1.5;
+  DefaultBlinkOut = 0.6;
+  DefaultBlinkIn = 0.5;
 
 // A typo raises, as a difficulty grade does in Levels.Defs: an event
 // that never fires is a debugging season, not a feature
@@ -190,7 +227,8 @@ begin
     AEventId);
 end;
 
-// The pad group of a rebuild or a restore
+// The pad group of a rebuild, a restore or a fly-in; the bank of the
+// shelf actions
 procedure ReadGroupTarget(const AObj: TJSONObject;
   const ALevelId, AEventId: string; var AAction: TEventAction);
 begin
@@ -198,6 +236,65 @@ begin
   if AAction.Target = '' then
     raise ELevelEventError.CreateFmt(SEventGroupNoTarget,
       [ALevelId, AEventId, EventActionIds[AAction.Kind]]);
+end;
+
+function ShelfProgramOf(const AId, ALevelId, AEventId: string): TShelfProgramKind;
+begin
+  for var Kind := Low(TShelfProgramKind) to High(TShelfProgramKind) do
+    if SameText(AId, ShelfProgramIds[Kind]) then
+      Exit(Kind);
+  raise ELevelEventError.CreateFmt(SEventBadProgram, [ALevelId, AEventId, AId]);
+end;
+
+function BankOrderOf(const AId, ALevelId, AEventId: string): TBankOrder;
+begin
+  for var Order := Low(TBankOrder) to High(TBankOrder) do
+    if SameText(AId, BankOrderIds[Order]) then
+      Exit(Order);
+  raise ELevelEventError.CreateFmt(SEventBadOrder, [ALevelId, AEventId, AId]);
+end;
+
+// A program without its word is hold for a wake; a program switch must
+// say which
+procedure ReadShelfProgram(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  var Id := AObj.GetValue<string>('program', '');
+  if (Id = '') and (AAction.Kind = eaShelvesProgram) then
+    raise ELevelEventError.CreateFmt(SEventNoProgram, [ALevelId, AEventId]);
+  if Id = '' then
+    Id := ShelfProgramIds[pgHold];
+  AAction.Shelves.Kind := ShelfProgramOf(Id, ALevelId, AEventId);
+
+  var DefaultOut := DefaultTurnOut;
+  var DefaultIn := DefaultTurnIn;
+  if AAction.Shelves.Kind = pgBlink then
+  begin
+    DefaultOut := DefaultBlinkOut;
+    DefaultIn := DefaultBlinkIn;
+  end;
+  AAction.Shelves.OutSeconds := AObj.GetValue<Double>('out', DefaultOut);
+  AAction.Shelves.InSeconds := AObj.GetValue<Double>('in', DefaultIn);
+  var Shortest := Min(AAction.Shelves.OutSeconds, AAction.Shelves.InSeconds);
+  if Shortest <= 0 then
+    raise ELevelEventError.CreateFmt(SEventShelfNumber,
+      [ALevelId, AEventId, EventActionIds[AAction.Kind], 'a turn', Shortest]);
+end;
+
+procedure ReadShelves(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  ReadGroupTarget(AObj, ALevelId, AEventId, AAction);
+  if AAction.Kind <> eaShelvesSleep then
+    ReadShelfProgram(AObj, ALevelId, AEventId, AAction);
+  AAction.Shelves.WarnSeconds := AObj.GetValue<Double>('warn', 0);
+  AAction.Order := BankOrderOf(AObj.GetValue<string>('order',
+    BankOrderIds[boFile]), ALevelId, AEventId);
+  AAction.StepSeconds := AObj.GetValue<Double>('step', 0);
+  var Shortest := Min(AAction.Shelves.WarnSeconds, AAction.StepSeconds);
+  if Shortest < 0 then
+    raise ELevelEventError.CreateFmt(SEventShelfNumber,
+      [ALevelId, AEventId, EventActionIds[AAction.Kind], 'a wait', Shortest]);
 end;
 
 procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;
@@ -229,8 +326,10 @@ begin
       ReadSun(AObj, ALevelId, AEventId, Result);
     eaTactics:
       ReadTactics(AObj, ALevelId, AEventId, Result);
-    eaRebuild, eaRestore:
+    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto:
       ReadGroupTarget(AObj, ALevelId, AEventId, Result);
+    eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
+      ReadShelves(AObj, ALevelId, AEventId, Result);
   end;
 end;
 
@@ -252,6 +351,9 @@ begin
   Result.Lives := AObj.GetValue<Integer>('lives', 0);
   if (Result.Condition = ecLivesBelow) and (Result.Lives <= 0) then
     raise ELevelEventError.CreateFmt(SEventNoLives, [ALevelId, Result.Id]);
+  Result.Act := AObj.GetValue<Integer>('act', 0);
+  if (Result.Condition = ecActReached) and (Result.Act <= 0) then
+    raise ELevelEventError.CreateFmt(SEventNoAct, [ALevelId, Result.Id]);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);

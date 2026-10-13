@@ -376,6 +376,10 @@ type
     // be skipped by walking out
     FTrial: TGravelTrial;
     FGravelScreen: Integer;  // where the trial rages - spawns pin here
+    // The bank of shelves an event sends the trial's medkits down onto;
+    // '' - they come down anywhere
+    FMedkitBank: string;
+    FAimedColumn: Integer; // where the aimed gravel on its way comes down
     // 'EndLev'/'ToEndLev' of 2008 (525-528): the boss is dead, the
     // victory track plays, and this many ticks later the next level
     // loads. 0 = idle.
@@ -439,7 +443,13 @@ type
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
-    procedure LetDownFromSky(const AMonsterId: string);
+    procedure LetDownFromSky(const AMonsterId: string;
+      ALook: TArrivalLook = alPlain);
+    procedure LetDownMedkit;
+    function HeroColumn: Integer;
+    function TrialAct: Integer;
+    procedure TellShelves(const AAction: TEventAction);
+    procedure SendMedkitsOnto(const ABank: string);
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -695,11 +705,22 @@ begin
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
     HeroRides);
   FreeAndNil(FDirector);
-  var Cues: TArenaCues;
-  Cues.Engage := FArena.Engage;
-  Cues.Restore := FArena.Restore;
+  var Cues: TDirectorCues;
+  Cues.ChangeMusic := ChangeMusic;
+  Cues.Arena.Engage := FArena.Engage;
+  Cues.Arena.Restore := FArena.Restore;
+  Cues.Arena.FlyIn := FArena.FlyIn;
+  Cues.Shelves := TellShelves;
+  Cues.MedkitsOnto := SendMedkitsOnto;
+  // A function without parameters named alone would be called, not
+  // passed: the reference wraps it
+  Cues.TrialAct :=
+    function: Integer
+    begin
+      Result := TrialAct;
+    end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
-    FLevel.Dynamics, ChangeMusic, Cues);
+    FLevel.Dynamics, Cues);
 
   FMonsterBullets.Clear;
   FExplosions.Clear;
@@ -718,6 +739,7 @@ begin
   // GravelAttack - a latent bug that could not fire only because death
   // led to the menu. With checkpoint respawn it would be a softlock.
   FTrial.Stop;
+  FMedkitBank := '';
   FEndLevelTimer := 0;
   FScore := 0;
   FKillStreak := 0;
@@ -1112,10 +1134,67 @@ begin
   end;
 end;
 
-procedure TMoonGame.LetDownFromSky(const AMonsterId: string);
+procedure TMoonGame.LetDownFromSky(const AMonsterId: string;
+  ALook: TArrivalLook);
 begin
   var Born := FField.SpawnFromSky(AMonsterId, FGravelScreen);
+  FArrivals.Add(Born.X + SpriteSize / 2, ALook);
+end;
+
+// Over a shelf of the bank an event named, when one did - the hero has
+// to climb for it
+procedure TMoonGame.LetDownMedkit;
+var
+  ShelfX: Double;
+begin
+  if not FPads.TryPickBankMiddle(FMedkitBank, ShelfX) then
+  begin
+    LetDownFromSky(MedkitMonsterId);
+    Exit;
+  end;
+  var Column := Trunc(ShelfX / SpriteSize);
+  var Born := FField.SpawnFromSkyOver(MedkitMonsterId, FGravelScreen, Column);
   FArrivals.Add(Born.X + SpriteSize / 2);
+end;
+
+// The column over the middle of the hero, kept inside the walls of the
+// room
+function TMoonGame.HeroColumn: Integer;
+const
+  FirstColumn = 1;
+  LastColumn = ScreenCols - 2;
+begin
+  Result := Trunc(HeroCenter.X / SpriteSize);
+  if Result < FirstColumn then
+    Result := FirstColumn
+  else if Result > LastColumn then
+    Result := LastColumn;
+end;
+
+function TMoonGame.TrialAct: Integer;
+begin
+  Result := 0;
+  if FTrial.Active then
+    Result := FTrial.Act;
+end;
+
+// The order from the farthest shelf to the hero reads where he stands
+// now
+procedure TMoonGame.TellShelves(const AAction: TEventAction);
+var
+  Command: TShelfCommand;
+begin
+  Command.Call := scWake;
+  if AAction.Kind = eaShelvesSleep then
+    Command.Call := scSleep;
+  Command.Run := AAction.Shelves;
+  FPads.TellBank(AAction.Target, Command, AAction.Order, AAction.StepSeconds,
+    HeroCenter.X);
+end;
+
+procedure TMoonGame.SendMedkitsOnto(const ABank: string);
+begin
+  FMedkitBank := ABank;
 end;
 
 // A tick of the gravel trial, called every tick while it runs - even over
@@ -1127,13 +1206,26 @@ begin
   if not FTrial.Active then
     Exit;
 
-  for var Returned in FField.ReturnStrays(GravelMonsterId, FGravelScreen) do
+  // A gravel fallen into the pit comes down on the hero who dropped it
+  var Strays := FField.ReturnStrays(GravelMonsterId, FGravelScreen, HeroColumn);
+  for var Returned in Strays do
     FArrivals.Add(Returned.X + SpriteSize / 2);
   var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
-  if Cue.SpawnGravel then
+  if Cue.SpawnGravel and Cue.Herald then
+    LetDownFromSky(GravelMonsterId, alHerald)
+  else if Cue.SpawnGravel then
     LetDownFromSky(GravelMonsterId);
+  // The mark goes up over the hero; the gravel follows it there, wherever
+  // he has gone meanwhile
+  if Cue.MarkAimed then
+  begin
+    FAimedColumn := HeroColumn;
+    FArrivals.Add(FAimedColumn * SpriteSize + SpriteSize / 2);
+  end;
+  if Cue.SpawnAimed then
+    FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn);
   if Cue.SpawnMedkit then
-    LetDownFromSky(MedkitMonsterId);
+    LetDownMedkit;
   if not Cue.Finished then
     Exit;
 
@@ -1940,6 +2032,7 @@ begin
   // would softlock the reborn screen. The screen trigger of the trial
   // raises it again.
   FTrial.Stop;
+  FMedkitBank := '';
   // Monsters regrow, so the score they paid out is taken back -
   // otherwise dying becomes a farming strategy. Captions die with you.
   FScore := 0;
@@ -2596,7 +2689,7 @@ procedure TMoonGame.DebugRestorePads;
 begin
   for var Group in FLevel.PadGroups do
     if Group.Screen = FHero.Screen then
-      FPads.RequestRestore(Group.Tag, HeroRides, nil);
+      FPads.RequestRestore(Group.Tag, HeroRides, nil, CalmPace);
 end;
 {$ENDIF} // DEBUGKEYS
 

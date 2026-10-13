@@ -310,6 +310,10 @@ resourcestring
     + 'no pad group carries';
   SLevelEventRestoreUnknown = 'Level "%s": event "%s" restores "%s", which '
     + 'no pad group carries';
+  SLevelEventFlyInUnknown = 'Level "%s": event "%s" flies in "%s", which '
+    + 'no parked pad group carries';
+  SLevelEventBankUnknown = 'Level "%s": event "%s" tells the bank "%s", '
+    + 'which no shelf carries';
   SLevelPadGroupNoConductor = 'Level "%s": pad group "%s" follows "%s", '
     + 'which no entity on its screen carries';
   SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
@@ -608,6 +612,24 @@ begin
       Inc(Result);
 end;
 
+function AnyParkedGroupTagged(const AGroups: TArray<TPadGroup>;
+  const ATag: string): Boolean;
+begin
+  for var Group in AGroups do
+    if Group.Parked and (Group.Tag = ATag) then
+      Exit(True);
+  Result := False;
+end;
+
+function AnyShelfOfBank(const APads: TArray<TPadPlacement>;
+  const ABank: string): Boolean;
+begin
+  for var Pad in APads do
+    if Pad.Shelf.Slides and (Pad.Shelf.Bank = ABank) then
+      Exit(True);
+  Result := False;
+end;
+
 // An event off the screen list never fires; one watching a tag no
 // entity carries fires at once or never; one turning a tag no dynamic
 // object carries turns nothing. Typos all - they die at load, not
@@ -656,6 +678,14 @@ begin
     eaRestore:
       if PadGroupsTagged(FPadGroups, AAction.Target) = 0 then
         raise ELevelError.CreateFmt(SLevelEventRestoreUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaFlyIn:
+      if not AnyParkedGroupTagged(FPadGroups, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventFlyInUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaShelvesWake, eaShelvesSleep, eaShelvesProgram, eaMedkitsOnto:
+      if not AnyShelfOfBank(FPads, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventBankUnknown,
           [FId, AEventId, AAction.Target]);
   end;
 end;

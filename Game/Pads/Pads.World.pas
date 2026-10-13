@@ -73,6 +73,17 @@
   its latch catches the world tells, as a rebuild's sounds, and the game
   voices.
 
+  The shelves of a bank are told together (TellBank): to go into the
+  wall, to come out, to run another program. They are told in an order,
+  one a step after another, so a bank wakes up the room as a wave and
+  its latches rattle rather than bang; the program adds a wait of its
+  own - every other shelf of an alternation waits out a turn, every
+  shelf of a blink a time the dice give it. A told shelf keeps to its
+  run until its moment comes.
+
+  The pads of a parked group wait above the screen, each over its place,
+  from the start and after every rewind. A restore flies them in.
+
   A pad on a carousel (Levels.Carousels) goes round its track at an even
   pace, from the place the carousel gives it at the start of its clock:
   its path is the track, and the riders go with it as with any path. It
@@ -152,6 +163,10 @@ type
     FWasBehind: Boolean;
     // All the way into the depth, as the pad looks there
     FDeep: TPadDeepLook;
+    // What an event told the shelf, and the tick of the clock it takes it
+    // up at; NoCommand when it is told nothing
+    FShelfCommand: TShelfCommand;
+    FShelfCommandAt: Integer;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure PlaceOnOrbit;
@@ -179,6 +194,12 @@ type
     // A step of the path; AOnView - the pad is on the hero's screen
     procedure Tick(AOnView: Boolean);
     procedure Rewind;
+    // A shelf takes up ACommand ADelayTicks after the next tick of its
+    // clock; a command told before replaces one that has not come yet
+    procedure TellShelf(const ACommand: TShelfCommand; ADelayTicks: Integer);
+    // The pad waits with its deck at ATop, over its place: above the
+    // screen, until a restore flies it in
+    procedure Park(ATop: Double);
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
@@ -268,8 +289,9 @@ type
     Load: TPadLoad;
     Release: TPadRelease;
     Traffic: TPadTraffic;
-    // Back to the level file's places, not to a new formation
+    // Back to the level file's places, not to a new formation, at Pace
     Restore: Boolean;
+    Pace: TFlightPace;
   end;
 
   // The pads gone into the depth, at whatever depth, and the rest
@@ -310,6 +332,12 @@ type
     procedure StartRebuild(const AGroup: TPadGroup);
     function TryPlanRebuild(const AGroup: TPadGroup;
       const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
+    procedure ParkGroups;
+    function BankOf(const ABank: string): TArray<TPad>;
+    function OrderedBank(const ABank: string; AOrder: TBankOrder;
+      AHeroX: Double): TArray<TPad>;
+    function ProgramWait(const APad: TPad; AIndex: Integer;
+      const ACommand: TShelfCommand): Integer;
   public
     // ACache is the level's object art; it and ALevel must outlive the
     // world. A picture the cache lacks raises here, at level load.
@@ -335,11 +363,19 @@ type
     procedure RequestRebuild(const AGroup: string; const ALoad: TPadLoad;
       const ARelease: TPadRelease; const ATraffic: TPadTraffic);
     // The pads of the group tagged AGroup fly back to where the level
-    // file puts them, each to its own place, calmly; asked for and
+    // file puts them, each to its own place, at APace; asked for and
     // started as a rebuild is, ALoad and ARelease as a rebuild's. A plan
     // that finds a pad no way flies nothing: ask again.
     procedure RequestRestore(const AGroup: string; const ALoad: TPadLoad;
-      const ARelease: TPadRelease);
+      const ARelease: TPadRelease; const APace: TFlightPace);
+    // The shelves of the bank ABank take up ACommand in AOrder, each
+    // AStepSeconds after the one before; AHeroX - the middle of the hero,
+    // for the order from the farthest to him
+    procedure TellBank(const ABank: string; const ACommand: TShelfCommand;
+      AOrder: TBankOrder; AStepSeconds: Single; AHeroX: Double);
+    // The middle across of one shelf of the bank ABank, as the dice pick
+    // it. False when the bank has none.
+    function TryPickBankMiddle(const ABank: string; out AX: Double): Boolean;
     // A rebuild or a restore is asked for or flying
     function Rebuilding: Boolean;
     // Every pad of the group tagged AGroup stands where the level file
@@ -435,6 +471,10 @@ const
   // arithmetic - a rider carried a unit at a time - must not drop them
   EdgeSlop = 0.001;
   NoFlight = -1;
+  NoCommand = -1;
+  // A parked pad waits with its deck this high over the top edge: its
+  // picture and its rigs out of sight
+  ParkedTop = -2 * TileSize;
   // A flying pad stills its bob over this many ticks and takes it up
   // again over as many on its cell
   BobFadeTicks = 10;
@@ -475,7 +515,6 @@ begin
   SDL_QueryTexture(ATexture, nil, nil, @ArtWidth, @ArtHeight);
   FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
   FBodyDepth := EnsureRange(FPictureHeight, ThinnestBody, TileSize);
-  FShelf.Build(APlacement.Shelf);
   FOrbit := AOrbit;
   FDeep := FlownDeep;
   if APlacement.Shelf.Slides then
@@ -523,6 +562,8 @@ end;
 
 procedure TPad.Rewind;
 begin
+  FShelf.Build(FPlacement.Shelf);
+  FShelfCommandAt := NoCommand;
   FClock := 0;
   FPathLeft := FPlacement.X;
   FPathTop := FPlacement.Y;
@@ -676,6 +717,11 @@ begin
   if not AOnView then
     Exit;
   Inc(FClock);
+  if FClock = FShelfCommandAt then
+  begin
+    FShelf.Command(FClock, FShelfCommand);
+    FShelfCommandAt := NoCommand;
+  end;
   FLatched := FShelf.Latches(FClock);
   PlaceOnPath;
   TickFlight;
@@ -687,6 +733,20 @@ begin
   KnockOffset(OffX, OffY);
   FLeft := FPathLeft + OffX;
   FTop := FPathTop + OffY + FPlunge.Below;
+end;
+
+procedure TPad.TellShelf(const ACommand: TShelfCommand; ADelayTicks: Integer);
+begin
+  FShelfCommand := ACommand;
+  FShelfCommandAt := FClock + 1 + ADelayTicks;
+end;
+
+procedure TPad.Park(ATop: Double);
+begin
+  FPathTop := ATop;
+  FTop := ATop;
+  FPrevTop := ATop;
+  FWasBehind := Behind;
 end;
 
 procedure TPad.Knock(ADX, ADY: Double; ATicks: Integer);
@@ -946,6 +1006,7 @@ procedure TPadWorld.Rewind(ASeed: Cardinal);
 begin
   for var Pad in FPads do
     Pad.Rewind;
+  ParkGroups;
   FAsked := Default(TRebuildAsk);
   FFlyingGroup := '';
   FCornerTurned := False;
@@ -1210,7 +1271,8 @@ begin
 end;
 
 procedure TPadWorld.RequestRestore(const AGroup: string;
-  const ALoad: TPadLoad; const ARelease: TPadRelease);
+  const ALoad: TPadLoad; const ARelease: TPadRelease;
+  const APace: TFlightPace);
 var
   Ask: TRebuildAsk;
 begin
@@ -1219,6 +1281,7 @@ begin
   Ask.Load := ALoad;
   Ask.Release := ARelease;
   Ask.Restore := True;
+  Ask.Pace := APace;
   TakeAsk(Ask);
 end;
 
@@ -1404,8 +1467,123 @@ function TPadWorld.TryPlanRestore(const AGroup: TPadGroup;
 begin
   var Brief := BriefOf(AGroup, AMembers);
   Brief.Target := FileCellsOf(AMembers);
-  Brief.Pace := CalmPace;
+  Brief.Pace := FAsked.Pace;
   Result := TryPlanFlights(FDice, Brief, AFlights);
+end;
+
+procedure TPadWorld.ParkGroups;
+begin
+  for var Group in FLevel.PadGroups do
+  begin
+    if not Group.Parked then
+      Continue;
+    for var Pad in MembersOf(Group.Tag) do
+      Pad.Park(ParkedTop);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// The banks of shelves
+// ---------------------------------------------------------------------------
+
+// In file order; none for ''
+function TPadWorld.BankOf(const ABank: string): TArray<TPad>;
+begin
+  Result := [];
+  if ABank = '' then
+    Exit;
+  for var Pad in FPads do
+    if Pad.Placement.Shelf.Bank = ABank then
+      Result := Result + [Pad];
+end;
+
+// The lower the key, the sooner the shelf is told
+function BankKey(const APad: TPad; AOrder: TBankOrder; AHeroX: Double): Double;
+begin
+  var Place := APad.Placement;
+  case AOrder of
+    boLeft:
+      Result := Place.X;
+    boRight:
+      Result := -Place.X;
+    boUp:
+      Result := -Place.Y;
+    boDown:
+      Result := Place.Y;
+    boToHero:
+      Result := -Abs(Place.X + Place.Width / 2 - AHeroX);
+  else
+    Result := 0;
+  end;
+end;
+
+// Sorted by the key; shelves with one key keep the file's order
+function TPadWorld.OrderedBank(const ABank: string; AOrder: TBankOrder;
+  AHeroX: Double): TArray<TPad>;
+begin
+  Result := BankOf(ABank);
+  for var i := 1 to High(Result) do
+  begin
+    var Pad := Result[i];
+    var Key := BankKey(Pad, AOrder, AHeroX);
+    var Slot := i;
+    while (Slot > 0) and (BankKey(Result[Slot - 1], AOrder, AHeroX) > Key) do
+    begin
+      Result[Slot] := Result[Slot - 1];
+      Dec(Slot);
+    end;
+    Result[Slot] := Pad;
+  end;
+end;
+
+// The wait the program adds to the shelf at AIndex of the order: every
+// other shelf of an alternation waits out a turn out and a slide, so it
+// goes in as its neighbours come out; a shelf of a blink waits a time
+// within one round of its own
+function TPadWorld.ProgramWait(const APad: TPad; AIndex: Integer;
+  const ACommand: TShelfCommand): Integer;
+begin
+  Result := 0;
+  if ACommand.Call <> scWake then
+    Exit;
+  var Run := ACommand.Run;
+  var SlideTicks := Max(1,
+    Round(APad.Placement.Shelf.SlideSeconds * LogicTicksPerSecond));
+  var OutTicks := Round(Run.OutSeconds * LogicTicksPerSecond);
+  var InTicks := Round(Run.InSeconds * LogicTicksPerSecond);
+  case Run.Kind of
+    pgAlternate:
+      if Odd(AIndex) then
+        Result := OutTicks + SlideTicks;
+    pgBlink:
+      Result := Trunc(FDice.NextUnit * (OutTicks + InTicks + 2 * SlideTicks));
+  end;
+end;
+
+procedure TPadWorld.TellBank(const ABank: string;
+  const ACommand: TShelfCommand; AOrder: TBankOrder; AStepSeconds: Single;
+  AHeroX: Double);
+begin
+  var Shelves := OrderedBank(ABank, AOrder, AHeroX);
+  for var i := 0 to High(Shelves) do
+  begin
+    var Stagger := Round(i * AStepSeconds * LogicTicksPerSecond);
+    Shelves[i].TellShelf(ACommand,
+      Stagger + ProgramWait(Shelves[i], i, ACommand));
+  end;
+end;
+
+function TPadWorld.TryPickBankMiddle(const ABank: string;
+  out AX: Double): Boolean;
+begin
+  AX := 0;
+  var Shelves := BankOf(ABank);
+  Result := Length(Shelves) > 0;
+  if not Result then
+    Exit;
+  var Index := Min(High(Shelves), Trunc(FDice.NextUnit * Length(Shelves)));
+  var Place := Shelves[Index].Placement;
+  AX := Place.X + Place.Width / 2;
 end;
 
 // ---------------------------------------------------------------------------
