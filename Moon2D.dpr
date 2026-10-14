@@ -1400,7 +1400,8 @@ begin
     // the deck underfoot
     AStand.X := Round(Monster.X);
     AStand.Y := Round(Monster.Y) - SpriteSize + Monster.DeckLift(1);
-    AStand.Alive := Monster.Life = mlAlive;
+    // A body flying off the top keeps its jets: they lift it away
+    AStand.Alive := (Monster.Life = mlAlive) or Monster.Leaving;
     AStand.Spins := Monster.Disc <> nil;
     if AStand.Spins then
     begin

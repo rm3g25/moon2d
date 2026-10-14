@@ -507,9 +507,6 @@ const
   EdgeSlop = 0.001;
   NoFlight = -1;
   NoCommand = -1;
-  // A parked pad waits with its deck this high over the top edge: its
-  // picture and its rigs out of sight
-  ParkedTop = -2 * TileSize;
   // A flying pad stills its bob over this many ticks and takes it up
   // again over as many on its cell
   BobFadeTicks = 10;
@@ -675,7 +672,7 @@ begin
   FOrbit.Place(Time, MiddleX, DeckY);
   case FOrbitPhase of
     opParked:
-      DeckY := ParkedTop;
+      DeckY := PadParkedTop;
     opLanding:
       DeckY := FLanding.DeckAt(FLandingClock);
   end;
@@ -713,7 +710,7 @@ procedure TPad.Land;
 begin
   if FOrbitPhase <> opParked then
     Exit;
-  FLanding := FOrbit.Landing(ParkedTop);
+  FLanding := FOrbit.Landing(PadParkedTop);
   FLandingClock := 0;
   FOrbitPhase := opLanding;
 end;
@@ -1569,7 +1566,7 @@ begin
     if not Group.Parked then
       Continue;
     for var Pad in MembersOf(Group.Tag) do
-      Pad.Park(ParkedTop);
+      Pad.Park(PadParkedTop);
   end;
 end;
 
@@ -1640,7 +1637,7 @@ begin
   if ABank = '' then
     Exit;
   for var Pad in FPads do
-    if Pad.Placement.Shelf.Bank = ABank then
+    if Pad.Placement.Shelf.InBank(ABank) then
       Result := Result + [Pad];
 end;
 

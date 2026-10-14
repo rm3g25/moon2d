@@ -6,8 +6,9 @@
   that run after it.
 
   The level is loaded from a one-screen room with the pads and the
-  respawns of the test added to its root; two tests load level2.json
-  beside the executable, for the shelf and the carousel it holds. The
+  respawns of the test added to its root; four tests load level2.json
+  beside the executable, for the shelf and the two carousels it holds and
+  the floor of the gravel arena. The
   carousels of a level and the entities that sit on a pad lean on the
   pads as the respawns do, and are tried here too. The checks of pad
   groups, of the rigs a pad wears and of the events are not tried here.
@@ -29,6 +30,7 @@ type
     FLevel: TLevel;
     procedure UseLevel(const ARows: array of string;
       const ASections: string);
+    procedure UseLevelTwo;
   public
     [TearDown]
     procedure TearDown;
@@ -72,6 +74,10 @@ type
     [Test]
     procedure TestBadShelfStepRaises;
     [Test]
+    procedure TestShelfStandsInEveryBankItIsGiven;
+    [Test]
+    procedure TestBadShelfBankRaises;
+    [Test]
     procedure TestShelfStepsMustTakeTurns;
     [Test]
     procedure TestBadShelfNumbersRaise;
@@ -104,11 +110,17 @@ type
     [Test]
     procedure TestEntityOnACarouselSitsOnTheStartItself;
     [Test]
+    procedure TestEntityOnAParkedCarouselWaitsOverThePark;
+    [Test]
     procedure TestSeatedEntityTakesNoCell;
     [Test]
     procedure TestSeatOnAnUnknownPadRaises;
     [Test]
     procedure TestLevelTwoCarouselIsInItsFile;
+    [Test]
+    procedure TestLevelTwoArenaCarouselIsInItsFile;
+    [Test]
+    procedure TestLevelTwoArenaFloorOfActFourIsOneThroughOne;
   end;
 
 implementation
@@ -118,6 +130,7 @@ uses
   System.SysUtils,
   Levels.Carousels,
   Levels.Pads,
+  Render.Sprites,
   Tests.Rooms;
 
 type
@@ -143,6 +156,12 @@ const
   // The carousel of level 2, screen 8
   LevelTwoCarouselTag = 's08-carousel';
   LevelTwoCarouselScreen = 8;
+  // The carousel of the gravel arena, screen 9, parked until act 4, and
+  // the banks of the floor that act 4 wakes and puts to sleep
+  LevelTwoArenaCarouselTag = 's09-carousel';
+  LevelTwoArenaScreen = 9;
+  LevelTwoArenaGridBank = 's09-grid';
+  LevelTwoArenaGapsBank = 's09-gaps';
   // The carousel of the tests: a circle of 80 round (256, 160), a lap in
   // 4 seconds. Its decks go from 176 to 336 across and from 80 to 240
   // down; a pad 32 wide starts on the right at (320, 160) as placed.
@@ -303,6 +322,18 @@ begin
   Result := Format('"respawns":[{"screen":1,"x":%d,"y":8}]', [GapCol]);
 end;
 
+// The columns of the shelves of ABank on AScreen, in file order, one space
+// between two
+function BankColumns(const ALevel: TLevel; AScreen: Integer;
+  const ABank: string): string;
+begin
+  var Columns: TArray<string> := [];
+  for var Pad in ALevel.Pads do
+    if (Pad.Screen = AScreen) and Pad.Shelf.InBank(ABank) then
+      Columns := Columns + [IntToStr(Pad.X div TileSize)];
+  Result := string.Join(' ', Columns);
+end;
+
 function OnlyPad(const ALevel: TLevel): TPadPlacement;
 begin
   Assert.AreEqual(1, Integer(Length(ALevel.Pads)),
@@ -342,6 +373,14 @@ procedure TLevelPadsTests.UseLevel(const ARows: array of string;
 begin
   FreeAndNil(FLevel);
   FLevel := LevelFromRows(ARows, ASections);
+end;
+
+procedure TLevelPadsTests.UseLevelTwo;
+begin
+  FreeAndNil(FLevel);
+  FLevel := TLevel.Create;
+  FLevel.LoadFromFile(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    LevelTwoFile));
 end;
 
 procedure TLevelPadsTests.TestPadReadsItsPlaceAndDefaults;
@@ -650,6 +689,35 @@ begin
     'A shelf in for -1 seconds');
 end;
 
+procedure TLevelPadsTests.TestShelfStandsInEveryBankItIsGiven;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('"bank":"floor"')]));
+  var OneBank := OnlyPad(FLevel).Shelf;
+  Assert.IsTrue(OneBank.InBank('floor'), 'A bank given as a name');
+  Assert.IsFalse(OneBank.InBank('grid'), 'and no other bank');
+
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('"bank":["floor","grid"]')]));
+  var TwoBanks := OnlyPad(FLevel).Shelf;
+  Assert.AreEqual(2, Integer(Length(TwoBanks.Banks)), 'Banks given as a list');
+  Assert.IsTrue(TwoBanks.InBank('floor'), 'The first bank of the list');
+  Assert.IsTrue(TwoBanks.InBank('grid'), 'The second bank of the list');
+  Assert.IsFalse(TwoBanks.InBank('isle'), 'No bank the list leaves out');
+
+  UseLevel(GapRows(shOpen), PadsSection([ShelfPad('')]));
+  Assert.AreEqual(0, Integer(Length(OnlyPad(FLevel).Shelf.Banks)),
+    'A shelf with no bank stands in none');
+end;
+
+procedure TLevelPadsTests.TestBadShelfBankRaises;
+const
+  BadBanks: array [0 .. 4] of string = ('"bank":""', '"bank":5',
+    '"bank":{}', '"bank":["floor",3]', '"bank":["floor",""]');
+begin
+  for var Bad in BadBanks do
+    ExpectRaises(EPadError, GapRows(shOpen), PadsSection([ShelfPad(Bad)]),
+      'A shelf of ' + Bad);
+end;
+
 procedure TLevelPadsTests.TestShelfStepsMustTakeTurns;
 const
   NoTurns: array [0 .. 3] of string = (
@@ -920,6 +988,21 @@ begin
     'on %g', [Seated.SeatFeet]));
 end;
 
+procedure TLevelPadsTests.TestEntityOnAParkedCarouselWaitsOverThePark;
+begin
+  var ParkedWheel := Format('{"tag":"%s","screen":1,"center":[256,160],' +
+    '"size":[160,160],"period":4,"parked":"above"}', [WheelTag]);
+  UseLevel(OpenRows, CarouselsSection([ParkedWheel]) + ',' +
+    PadsSection([RiderJson('"tag":"ride"')]) + ',' +
+    EntitiesSection([SeatedJson('ride')]));
+
+  var Seated := FLevel.Entities[0];
+  Assert.IsTrue(Abs(Seated.SeatLeft - 320) < 0.001, Format('It stands over ' +
+    'its slot, from %g', [Seated.SeatLeft]));
+  Assert.IsTrue(Abs(Seated.SeatFeet - PadParkedTop) < 0.001, Format('Its ' +
+    'feet are on the parked deck, not on %g', [Seated.SeatFeet]));
+end;
+
 procedure TLevelPadsTests.TestSeatedEntityTakesNoCell;
 begin
   var Bench := PadsSection([PadJson(100, 160, '"tag":"bench"', 64)]);
@@ -977,6 +1060,67 @@ begin
   end;
   Assert.IsTrue(Riders > 2, Format('The carousel carries %d pads', [Riders]));
   Assert.AreEqual(2, Betoners, 'Betoners on the carousel');
+end;
+
+// Two medkits ride it half a lap apart: a pad's slot is its place among
+// the riders in file order
+procedure TLevelPadsTests.TestLevelTwoArenaCarouselIsInItsFile;
+var
+  Carousel: TCarousel;
+begin
+  UseLevelTwo;
+
+  Assert.IsTrue(TryFindCarousel(FLevel.Carousels, LevelTwoArenaCarouselTag,
+    Carousel), 'Level 2 holds no carousel tagged ' + LevelTwoArenaCarouselTag);
+  Assert.AreEqual(LevelTwoArenaScreen, Carousel.Screen,
+    'The screen of the carousel');
+  Assert.AreEqual<TCarouselShape>(csBox, Carousel.Shape);
+  Assert.IsTrue(Carousel.Parked, 'It waits above the screen until act 4');
+
+  var Riders := 0;
+  var MedkitSlots: TArray<Integer> := [];
+  for var Pad in FLevel.Pads do
+  begin
+    if Pad.Carousel <> LevelTwoArenaCarouselTag then
+      Continue;
+    for var Entity in FLevel.Entities do
+      if Entity.Seat = Pad.Tag then
+      begin
+        Assert.AreEqual('medkit', Entity.MonsterId,
+          'On ' + Pad.Tag + ' sits something other than a medkit');
+        MedkitSlots := MedkitSlots + [Riders];
+      end;
+    Inc(Riders);
+  end;
+  Assert.IsTrue(Riders >= 2, Format('The carousel carries %d pads', [Riders]));
+  Assert.AreEqual(2, Integer(Length(MedkitSlots)), 'Medkits on the carousel');
+  Assert.AreEqual(Riders div 2, Abs(MedkitSlots[1] - MedkitSlots[0]),
+    'The medkits ride half a lap apart');
+end;
+
+// Columns 4, 6, 8, 10 and 14 wake in act 4; the old isle's columns 5 and
+// 11 go to sleep. Every one of them is a shelf of the floor, so act 3 takes
+// them away with the rest.
+procedure TLevelPadsTests.TestLevelTwoArenaFloorOfActFourIsOneThroughOne;
+const
+  FloorBank = 's09-floor';
+begin
+  UseLevelTwo;
+
+  Assert.AreEqual('4 6 8 10 14',
+    BankColumns(FLevel, LevelTwoArenaScreen, LevelTwoArenaGridBank),
+    'The columns of the floor that wakes in act 4');
+  Assert.AreEqual('5 11',
+    BankColumns(FLevel, LevelTwoArenaScreen, LevelTwoArenaGapsBank),
+    'The columns of the floor that sleeps in act 4');
+  for var Pad in FLevel.Pads do
+  begin
+    var OfActFour := Pad.Shelf.InBank(LevelTwoArenaGridBank) or
+      Pad.Shelf.InBank(LevelTwoArenaGapsBank);
+    if OfActFour then
+      Assert.IsTrue(Pad.Shelf.InBank(FloorBank),
+        Pad.Tag + ' is not a shelf of the floor');
+  end;
 end;
 
 initialization

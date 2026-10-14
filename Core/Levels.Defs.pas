@@ -322,10 +322,10 @@ resourcestring
   SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
     + 'dynamic object carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
-    + 'a tag no object, no pad and no entity carries';
+    + 'a tag no object, no pad, no entity and no spawned body carries';
   SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by more than '
-    + 'one of an object, a pad and an entity - a dynamic object hung on '
-    + 'it cannot tell which';
+    + 'one of an object, a pad, an entity and a spawned body - a dynamic '
+    + 'object hung on it cannot tell which';
   SLevelDynamicTwoMonsters = 'Level "%s": two monsters tagged "%s" live '
     + 'on one difficulty - a dynamic object hung on it cannot tell which';
   SLevelDynamicTwoParents = 'Level "%s": two objects tagged "%s" stand '
@@ -534,16 +534,32 @@ begin
   Result.Rigs := AEntity.Rigs;
 end;
 
-// The pads first, then the placements, each in file order. A haze paints
-// over the ones hung before it: the order is the order they are drawn in.
+// A body an event spawns has no placement: its rigs hang on its tag at
+// load and find it once it is let in
+function SpawnWearer(const AEventId: string;
+  const AOrders: TSpawnOrders): TRigWearer;
+begin
+  Result.Tag := AOrders.Tag;
+  Result.Name := Format('spawn of event "%s"', [AEventId]);
+  Result.Rigs := AOrders.Rigs;
+end;
+
+// The pads first, then the placements, then the spawned bodies, each in
+// file order. A haze paints over the ones hung before it: the order is the
+// order they are drawn in.
 function RigWearersOf(const APads: TArray<TPadPlacement>;
-  const AEntities: TArray<TEntityPlacement>): TArray<TRigWearer>;
+  const AEntities: TArray<TEntityPlacement>;
+  const AEvents: TArray<TLevelEvent>): TArray<TRigWearer>;
 begin
   Result := [];
   for var Pad in APads do
     Result := Result + [PadWearer(Pad)];
   for var Entity in AEntities do
     Result := Result + [EntityWearer(Entity)];
+  for var Event in AEvents do
+    for var Action in Event.Actions do
+      if Action.Kind = eaSpawn then
+        Result := Result + [SpawnWearer(Event.Id, Action.Spawn)];
 end;
 
 procedure TLevel.ParseRoot(const ARoot: TJSONObject);
@@ -586,14 +602,15 @@ begin
   // After the pads: a point may stand over the deck of one
   ParseRespawns(ARoot.GetValue<TJSONArray>('respawns', nil));
   CheckRespawns;
-  // Dynamics first: an event may name a dynamic object's tag
   FDynamics := ParseDynamics(ARoot, FId);
+  // Before the rigs: a body an event spawns may wear them
+  FEvents := ParseLevelEvents(ARoot, FId);
   // Before the checks: the parts of a rig are dynamic objects as the
   // rest, and a group's alarm lamps may be among them
-  WearRigs(ARoot, FId, RigWearersOf(FPads, FEntities), FDynamics);
+  WearRigs(ARoot, FId, RigWearersOf(FPads, FEntities, FEvents), FDynamics);
   CheckDynamics;
   CheckPadGroupLinks;
-  FEvents := ParseLevelEvents(ARoot, FId);
+  // After the dynamics: an event may name a dynamic object's tag
   CheckEvents;
 end;
 
@@ -636,7 +653,7 @@ function AnyShelfOfBank(const APads: TArray<TPadPlacement>;
   const ABank: string): Boolean;
 begin
   for var Pad in APads do
-    if Pad.Shelf.Slides and (Pad.Shelf.Bank = ABank) then
+    if Pad.Shelf.Slides and Pad.Shelf.InBank(ABank) then
       Exit(True);
   Result := False;
 end;
@@ -818,6 +835,16 @@ begin
   for var Pad in APads do
     if Pad.Tag = ATag then
       Inc(Result);
+end;
+
+function AnySpawnTagged(const AEvents: TArray<TLevelEvent>;
+  const ATag: string): Boolean;
+begin
+  for var Event in AEvents do
+    for var Action in Event.Actions do
+      if (Action.Kind = eaSpawn) and (Action.Spawn.Tag = ATag) then
+        Exit(True);
+  Result := False;
 end;
 
 // The first stop of the path that puts the pad past an edge of its
@@ -1071,6 +1098,9 @@ begin
   var Orbit := OrbitOf(FCarousels, FPads, Index);
   if Orbit.Rides then
     Orbit.Place(0, MiddleX, DeckY);
+  // Over its slot, but where the pad waits: it rides the pad down
+  if Orbit.Parked then
+    DeckY := PadParkedTop;
   AEntity.SeatLeft := MiddleX - TileSize / 2;
   AEntity.SeatFeet := DeckY;
   AEntity.X := Round(AEntity.SeatLeft / TileSize) + 1;
@@ -1272,7 +1302,8 @@ begin
 
   var OnPad := PadsTagged(FPads, ATag) > 0;
   var OnEntity := AnyPlacementTagged(FEntities, ATag);
-  var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity);
+  var OnSpawn := AnySpawnTagged(FEvents, ATag);
+  var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity) + Ord(OnSpawn);
   if Kinds > 1 then
     raise ELevelError.CreateFmt(SLevelDynamicTwoKinds, [FId, ATag]);
   if Kinds = 0 then

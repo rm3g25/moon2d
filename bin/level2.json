@@ -1135,7 +1135,7 @@
       "bullets": "block",
       "tag": "s09-floor-03",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-isle", "s09-grid"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1146,7 +1146,7 @@
       "bullets": "block",
       "tag": "s09-floor-04",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-isle", "s09-gaps"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1157,7 +1157,7 @@
       "bullets": "block",
       "tag": "s09-floor-05",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-grid"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1179,7 +1179,7 @@
       "bullets": "block",
       "tag": "s09-floor-07",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-grid"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1201,7 +1201,7 @@
       "bullets": "block",
       "tag": "s09-floor-09",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-isle", "s09-grid"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1212,7 +1212,7 @@
       "bullets": "block",
       "tag": "s09-floor-10",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-isle", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-isle", "s09-gaps"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1245,7 +1245,7 @@
       "bullets": "block",
       "tag": "s09-floor-13",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-floor", "held": "out"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-floor", "s09-grid"], "held": "out"}
     },
     {
       "sprite": "shelf",
@@ -1311,7 +1311,7 @@
       "bullets": "block",
       "tag": "s09-ladder-03",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-ladder", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1322,7 +1322,7 @@
       "bullets": "block",
       "tag": "s09-ladder-04",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-ladder", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1333,7 +1333,7 @@
       "bullets": "block",
       "tag": "s09-ladder-05",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-ladder", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1344,7 +1344,7 @@
       "bullets": "block",
       "tag": "s09-ladder-06",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-ladder", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-ladder", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1377,7 +1377,7 @@
       "bullets": "block",
       "tag": "s09-crown-01",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-crown", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-crown", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1388,7 +1388,7 @@
       "bullets": "block",
       "tag": "s09-crown-02",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-crown", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-crown", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1399,7 +1399,7 @@
       "bullets": "block",
       "tag": "s09-crown-03",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-crown", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-crown", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1410,7 +1410,7 @@
       "bullets": "block",
       "tag": "s09-crown-04",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-crown", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-crown", "s09-pyramid"], "held": "in"}
     },
     {
       "sprite": "s16-platform",
@@ -1491,6 +1491,86 @@
       "tag": "s08-ride-08",
       "rig": ["pad"],
       "carousel": "s08-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-01",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-02",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-03",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-04",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-05",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-06",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-07",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
+    },
+    {
+      "sprite": "s16-platform",
+      "screen": 9,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s09-ride-08",
+      "rig": ["pad"],
+      "carousel": "s09-carousel"
     }
   ],
   "carousels": [
@@ -1502,6 +1582,18 @@
       "size": [150, 150],
       "period": 12,
       "turn": "cw"
+    },
+    {
+      "tag": "s09-carousel",
+      "screen": 9,
+      "shape": "box",
+      "center": [256, 232],
+      "size": [224, 112],
+      "corner": 24,
+      "period": 15,
+      "turn": "cw",
+      "parked": "above",
+      "speedUp": 3
     }
   ],
   "rigs": {
@@ -1706,6 +1798,56 @@
         "collide": "none",
         "intensity": 60,
         "surge": 100
+      }
+    ],
+    "tekPlatform": [
+      {
+        "kind": "beacon",
+        "x": 1.8,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "beacon",
+        "x": 30.2,
+        "y": 10.9,
+        "layer": "front",
+        "tint": [10, 40, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.8, 1.2]},
+        "intensity": 70,
+        "size": 5
+      },
+      {
+        "kind": "haze",
+        "x": 1.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
+      },
+      {
+        "kind": "haze",
+        "x": 31.0,
+        "y": 24.5,
+        "angle": 270,
+        "length": 28,
+        "mouth": 4,
+        "width": 14,
+        "shift": 3,
+        "grain": 5,
+        "speed": 60,
+        "shade": 10
       }
     ],
     "tekPlatform": [
@@ -3031,6 +3173,18 @@
       "overrides": {
         "direction": 1
       }
+    },
+    {
+      "monsterId": "medkit",
+      "screen": 9,
+      "spriteList": "medic.mns",
+      "seat": "s09-ride-03"
+    },
+    {
+      "monsterId": "medkit",
+      "screen": 9,
+      "spriteList": "medic.mns",
+      "seat": "s09-ride-07"
     }
   ],
   "screenTriggers": [
@@ -3099,8 +3253,7 @@
       "screen": 9,
       "when": "actReached", "act": 3,
       "then": [
-        {"action": "shelvesSleep", "target": "s09-floor", "order": "toHero", "step": 0.35},
-        {"action": "shelvesSleep", "target": "s09-isle", "order": "toHero", "step": 0.35}
+        {"action": "shelvesSleep", "target": "s09-floor", "order": "toHero", "step": 0.25}
       ]
     },
     {
@@ -3111,6 +3264,42 @@
       "then": [
         {"action": "shelvesWake", "target": "s09-isle"},
         {"action": "cannons", "rows": [10, 8, 6, 4], "yield": "s09-foot", "yieldRows": [8, 9]}
+      ]
+    },
+    {
+      "id": "s09-act4",
+      "screen": 9,
+      "when": "actReached", "act": 4,
+      "then": [
+        {"action": "shelvesSleep", "target": "s09-pyramid", "order": "up", "step": 0.2},
+        {"action": "shelvesSleep", "target": "s09-gaps"},
+        {"action": "shelvesWake", "target": "s09-grid", "order": "left", "step": 0.2},
+        {"action": "medkitsOnto", "target": "s09-grid"}
+      ]
+    },
+    {
+      "id": "s09-act4-carousel",
+      "screen": 9,
+      "when": "actReached", "act": 4,
+      "delay": 190,
+      "then": [
+        {"action": "flyIn", "target": "s09-carousel"}
+      ]
+    },
+    {
+      "id": "s09-act4-tek-upper",
+      "screen": 9,
+      "when": "gravelDealt", "act": 4, "part": 1, "of": 3,
+      "then": [
+        {"action": "spawn", "monster": "platform", "spriteList": "platform.mns", "row": 2, "from": "left", "tag": "s09-tek-01", "rig": ["tekPlatform"]}
+      ]
+    },
+    {
+      "id": "s09-act4-tek-lower",
+      "screen": 9,
+      "when": "gravelDealt", "act": 4, "part": 2, "of": 3,
+      "then": [
+        {"action": "spawn", "monster": "platform", "spriteList": "platform.mns", "row": 10, "from": "right", "tag": "s09-tek-02", "rig": ["tekPlatform"]}
       ]
     }
   ],

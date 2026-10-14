@@ -50,12 +50,16 @@ type
 
   // A body let in along a row of the screen: which monster, the sprite list
   // it wears when its definition names none, the row (the cells of the
-  // screen, 0 at the top) and the side it comes in from
+  // screen, 0 at the top) and the side it comes in from; the tag it
+  // carries ('' = none) and the rigs the level hangs on that tag, as on a
+  // placement
   TSpawnOrders = record
     MonsterId: string;
     SpriteList: string;
     Row: Integer;
     Side: TLaneSide;
+    Tag: string;
+    Rigs: TArray<string>;
   end;
 
   TEventAction = record
@@ -97,7 +101,8 @@ type
     // eaSpawn: a body of the monster Spawn.MonsterId slides in through the
     // wall along the row, for the act of the trial the event waits for, and
     // flies off when that act ends - so the event must wait for one. JSON:
-    // "monster", "spriteList" (optional), "row", "from" ("left" or "right").
+    // "monster", "spriteList" (optional), "row", "from" ("left" or "right"),
+    // "tag" and "rig" (optional, a rig needs the tag).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -170,7 +175,7 @@ function ParseLevelEvents(const ARoot: TJSONObject;
 implementation
 
 uses
-  System.Generics.Collections, System.Math, Game.Space;
+  System.Generics.Collections, System.Math, Game.Space, Levels.Rigs;
 
 resourcestring
   SEventNoId = 'Level "%s": event #%d has no id';
@@ -402,6 +407,9 @@ begin
       [ALevelId, AEventId, AAction.Spawn.Row]);
   AAction.Spawn.Side := LaneSideOf(AObj.GetValue<string>('from', ''), ALevelId,
     AEventId);
+  AAction.Spawn.Tag := AObj.GetValue<string>('tag', '');
+  AAction.Spawn.Rigs := ReadRigNames(AObj, ALevelId,
+    Format('spawn of event "%s"', [AEventId]));
 end;
 
 procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;

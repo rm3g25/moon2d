@@ -32,7 +32,9 @@
   a path it may travel.
 
   Shelves of one bank are told together by the level's events: to fall
-  asleep in the wall, to wake, to run another program. A shelf of a bank
+  asleep in the wall, to wake, to run another program. A shelf may stand
+  in several banks: a bank names the shelves one command is for, and two
+  commands may want two sets that overlap. A shelf of a bank
   may be held from the start - out in front or in the wall - and run no
   program until an event tells it one.
 
@@ -120,12 +122,13 @@ type
     WarnSeconds: Single;
     OffsetSeconds: Single;
     Deep: TPadDeepLook; // in the wall
-    // The bank the events tell it with; '' = none
-    Bank: string;
+    // The banks the events tell it with; none - no event tells it
+    Banks: TArray<string>;
     // Held at HeldStand from the start, the steps run not at all, until
     // an event tells it otherwise
     Held: Boolean;
     HeldStand: TShelfStand;
+    function InBank(const ABank: string): Boolean;
   end;
 
   // What a bank of shelves runs once an event tells it to:
@@ -210,6 +213,9 @@ const
   BankOrderIds: array [TBankOrder] of string = (
     'file', 'left', 'right', 'up', 'down', 'toHero');
   PadParkedAbove = 'above';
+  // A parked pad waits with its deck this high over the top edge, two
+  // cells of 32 units: its picture and its rigs out of sight
+  PadParkedTop = -64;
 
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
@@ -219,7 +225,8 @@ const
 // program beside its out or in, with a step that is not a stand and
 // seconds above zero, with steps that do not take turns, with a slide,
 // a warn or an offset below zero, a scale out of 0..1 or zero, a tone
-// out of 0..1, a shelf held but in no bank or held neither out nor in.
+// out of 0..1, a bank that is neither a name nor a list of names, a
+// shelf held but in no bank or held neither out nor in.
 // A pad on a carousel that is given an x or a y raises too: the carousel
 // places it.
 function ParsePads(const ARoot: TJSONObject;
@@ -253,6 +260,8 @@ resourcestring
     + '["out", seconds] or ["in", seconds]';
   SPadShelfNoTurns = 'Level "%s": pad "%s" has a shelf program whose steps '
     + 'do not take turns, out and in, the last and the first too';
+  SPadShelfBadBank = 'Level "%s": pad "%s" has a shelf bank that is not a '
+    + 'name or a list of names';
   SPadShelfHeldAlone = 'Level "%s": pad "%s" is a shelf held in no bank - '
     + 'no event could ever let it go';
   SPadShelfBadHeld = 'Level "%s": pad "%s" is a shelf held "%s" - out or in';
@@ -278,6 +287,14 @@ const
   DefaultShelfWarn = 0.5;
   DefaultShelfScale = 0.72;
   DefaultShelfTone = 0.4;
+
+function TPadShelf.InBank(const ABank: string): Boolean;
+begin
+  for var Bank in Banks do
+    if Bank = ABank then
+      Exit(True);
+  Result := False;
+end;
 
 function ReadBullets(const AObj: TJSONObject;
   const ALevelId, ASprite: string): TPadBullets;
@@ -430,6 +447,37 @@ begin
     raise EPadError.CreateFmt(SPadShelfNoTurns, [ALevelId, ASprite]);
 end;
 
+// A name that is a string and not empty; System.JSON holds a number as a
+// string of a kind
+function IsBankName(AValue: TJSONValue): Boolean;
+begin
+  Result := (AValue is TJSONString) and not (AValue is TJSONNumber) and
+    (AValue.Value <> '');
+end;
+
+// JSON: "bank": "ladder" or ["ladder", "pyramid"]; absent = none
+function ReadShelfBanks(const AShelfObj: TJSONObject;
+  const ALevelId, ASprite: string): TArray<string>;
+begin
+  Result := [];
+  var Raw := AShelfObj.GetValue('bank');
+  if Raw = nil then
+    Exit;
+  if IsBankName(Raw) then
+  begin
+    Result := [Raw.Value];
+    Exit;
+  end;
+  if not (Raw is TJSONArray) then
+    raise EPadError.CreateFmt(SPadShelfBadBank, [ALevelId, ASprite]);
+  for var Item in TJSONArray(Raw) do
+  begin
+    if not IsBankName(Item) then
+      raise EPadError.CreateFmt(SPadShelfBadBank, [ALevelId, ASprite]);
+    Result := Result + [Item.Value];
+  end;
+end;
+
 // JSON: "held": "out" or "in"; absent = the shelf runs its steps
 procedure ReadShelfHeld(const AShelfObj: TJSONObject;
   const ALevelId, ASprite: string; var AShelf: TPadShelf);
@@ -438,7 +486,7 @@ begin
   AShelf.Held := Id <> '';
   if not AShelf.Held then
     Exit;
-  if AShelf.Bank = '' then
+  if Length(AShelf.Banks) = 0 then
     raise EPadError.CreateFmt(SPadShelfHeldAlone, [ALevelId, ASprite]);
   for var Stand := Low(TShelfStand) to High(TShelfStand) do
     if SameText(Id, ShelfStandIds[Stand]) then
@@ -450,7 +498,8 @@ begin
 end;
 
 // JSON: "shelf": {"out": 2, "in": 1.5, "slide": 0.25, "warn": 0.5,
-// "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "ladder",
+// "offset": 0, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "ladder"
+// (or "bank": ["ladder", "pyramid"]),
 // "held": "in"}, or with "program": [["out", 2], ["in", 0.5],
 // ["out", 0.5], ["in", 1.5]] in place of "out" and "in"; absent = the
 // pad never leaves the front
@@ -478,7 +527,7 @@ begin
   Result.SlideSeconds := NotBelowZero('slide', DefaultShelfSlide);
   Result.WarnSeconds := NotBelowZero('warn', DefaultShelfWarn);
   Result.OffsetSeconds := NotBelowZero('offset', 0);
-  Result.Bank := ShelfObj.GetValue<string>('bank', '');
+  Result.Banks := ReadShelfBanks(ShelfObj, ALevelId, ASprite);
   ReadShelfHeld(ShelfObj, ALevelId, ASprite, Result);
 
   Result.Deep.Sink := ShelfObj.GetValue<Double>('sink', 0);

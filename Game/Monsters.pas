@@ -257,6 +257,8 @@ type
     // A body that came in leaves through the top. Not a death: no wreck, no
     // score, and it hurts and is shot no more
     procedure Depart;
+    // On its way off the top since Depart: dead, and still drawn
+    function Leaving: Boolean;
     // The picture is drawn turned over (2008 art faces left)
     function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
@@ -1753,6 +1755,11 @@ begin
   FCanShoot := False;
 end;
 
+function TMonster.Leaving: Boolean;
+begin
+  Result := FLane.Phase = lpLeaving;
+end;
+
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
@@ -1768,7 +1775,7 @@ begin
     FDisc.Draw(ASprites, AAlpha);
     Exit;
   end;
-  var HullShows := (FLife = mlAlive) or (FLane.Phase = lpLeaving);
+  var HullShows := (FLife = mlAlive) or Leaving;
   if (FHull <> nil) and HullShows then
   begin
     FHull.Draw(ASprites, HullStand, AAlpha);
@@ -1913,6 +1920,7 @@ begin
   Placement.SpriteList := AOrders.SpriteList;
   if Placement.SpriteList = '' then
     Placement.SpriteList := Def.SpriteList;
+  Placement.Tag := AOrders.Tag;
   Result := SpawnPlaced(Placement);
   Result.EnterFrom(AOrders.Side);
 end;
