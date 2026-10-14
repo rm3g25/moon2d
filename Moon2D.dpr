@@ -273,6 +273,9 @@ const
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
   CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
+  // The smoke of the cannons' blast hangs over the room about this long:
+  // nothing flies in through it and no gravel falls into it
+  CannonSmokeTicks = 50;
 
   // Campaign-end screen layout, in Render.Font grid steps
   EndingTextColumn = 3;    // farewell prose column (small font)
@@ -388,6 +391,10 @@ type
     // The bank of shelves an event sends the trial's medkits down onto;
     // '' - they come down anywhere
     FMedkitBank: string;
+    // The fly-ins told while the cannons' scene plays, and the ticks left
+    // of the smoke after their blast: they wait for the scene to end
+    FHeldFlyIns: TArray<string>;
+    FCannonSmoke: Integer;
     FAimedColumn: Integer; // where the aimed gravel on its way comes down
     // 'EndLev'/'ToEndLev' of 2008 (525-528): the boss is dead, the
     // victory track plays, and this many ticks later the next level
@@ -460,6 +467,8 @@ type
     function TrialAct: Integer;
     procedure TellShelves(const AAction: TEventAction);
     procedure FlyInParked(const ATag: string);
+    function CannonsScenePlays: Boolean;
+    procedure ReleaseHeldFlyIns;
     procedure SendMedkitsOnto(const ABank: string);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
     procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
@@ -772,6 +781,8 @@ begin
   // led to the menu. With checkpoint respawn it would be a softlock.
   FTrial.Stop;
   FMedkitBank := '';
+  FHeldFlyIns := [];
+  FCannonSmoke := 0;
   FEndLevelTimer := 0;
   FScore := 0;
   FKillStreak := 0;
@@ -1225,19 +1236,44 @@ procedure TMoonGame.TellShelves(const AAction: TEventAction);
 var
   Command: TShelfCommand;
 begin
+  Command := Default(TShelfCommand);
   Command.Call := scWake;
   if AAction.Kind = eaShelvesSleep then
     Command.Call := scSleep;
   Command.Run := AAction.Shelves;
+  Command.SpareHero := AAction.SpareHero;
   FPads.TellBank(AAction.Target, Command, AAction.Order, AAction.StepSeconds,
     HeroCenter.X);
 end;
 
-// The level lets no tag name both a carousel and a pad group
+// The level lets no tag name both a carousel and a pad group. Told while
+// the cannons blow themselves up, the pads wait for the smoke to clear.
 procedure TMoonGame.FlyInParked(const ATag: string);
 begin
+  if CannonsScenePlays then
+  begin
+    FHeldFlyIns := FHeldFlyIns + [ATag];
+    Exit;
+  end;
   if not FPads.TryFlyInCarousel(ATag) then
     FArena.FlyIn(ATag);
+end;
+
+function TMoonGame.CannonsScenePlays: Boolean;
+begin
+  Result := FCannons.Leaving or (FCannonSmoke > 0);
+end;
+
+procedure TMoonGame.ReleaseHeldFlyIns;
+begin
+  if FCannonSmoke > 0 then
+    Dec(FCannonSmoke);
+  if CannonsScenePlays then
+    Exit;
+  var Held := FHeldFlyIns;
+  FHeldFlyIns := [];
+  for var Tag in Held do
+    FlyInParked(Tag);
 end;
 
 procedure TMoonGame.SendMedkitsOnto(const ABank: string);
@@ -1276,7 +1312,11 @@ begin
 
   for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
     ArriveAgain(Returned);
-  FTrial.RoomBusy := FCannons.Leaving or FPads.CarouselLanding;
+  // Released before the room is asked: a carousel let in now is landing
+  // this very tick, so the first wave sees no gap between the two
+  ReleaseHeldFlyIns;
+  FTrial.RoomBusy := CannonsScenePlays or (Length(FHeldFlyIns) > 0) or
+    FPads.CarouselLanding;
   // A body an event let in holds the gate with the gravels: it waits for
   // the hero to kill it, so the leave at the gate finds no one alive
   var GateHolders := FField.CountAliveOf(GravelMonsterId, FGravelScreen) +
@@ -2131,6 +2171,8 @@ begin
   // raises it again.
   FTrial.Stop;
   FMedkitBank := '';
+  FHeldFlyIns := [];
+  FCannonSmoke := 0;
   // Monsters regrow, so the score they paid out is taken back -
   // otherwise dying becomes a farming strategy. Captions die with you.
   FScore := 0;
@@ -2342,6 +2384,7 @@ begin
     FExplosions.Detonate(Point.X, Point.Y, ekMachine);
   FAudio.Play(RageBlastSoundFile);
   FShake.AddTrauma(CannonBlastTrauma);
+  FCannonSmoke := CannonSmokeTicks;
 end;
 
 // A fan of sparks off the rim that struck, with its flash, and thinner
@@ -2522,8 +2565,12 @@ begin
   if FHeldDown then
     FHero.Command(hcDrop);
 
-  // The pads go first: their riders move with them, then by themselves
-  FPads.Tick(FHero.Screen);
+  // The pads go first: their riders move with them, then by themselves.
+  // A shelf told to spare the hero asks where he stands.
+  var HeroDeck: TPad := nil;
+  if not FHero.Dead then
+    HeroDeck := FHero.DeckUnderFeet;
+  FPads.Tick(FHero.Screen, HeroDeck);
   if FPads.CornerTurned then
     FAudio.Play(PadClickSoundFile);
   if FPads.PairDocked then

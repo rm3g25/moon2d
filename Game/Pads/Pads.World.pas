@@ -209,8 +209,9 @@ type
     function BodyHolds(AX, AY: Single): Boolean;
     // The body as a box, in screen units
     function Body: TSdlFRect;
-    // A step of the path; AOnView - the pad is on the hero's screen
-    procedure Tick(AOnView: Boolean);
+    // A step of the path; AOnView - the pad is on the hero's screen,
+    // AHeroAboard - he stands on its deck
+    procedure Tick(AOnView, AHeroAboard: Boolean);
     procedure Rewind;
     // A shelf takes up ACommand ADelayTicks after the next tick of its
     // clock; a command told before replaces one that has not come yet
@@ -377,8 +378,9 @@ type
     destructor Destroy; override;
 
     // Before the riders move: a rebuild asked for may start, the pads of
-    // AScreen go on along their paths and flights
-    procedure Tick(AScreen: Integer);
+    // AScreen go on along their paths and flights. AHeroDeck - the pad the
+    // hero stands on, nil when none.
+    procedure Tick(AScreen: Integer; const AHeroDeck: TPad);
     // Back to where the level file puts them, no rebuild asked for or
     // flying; ASeed - the dice of the new try
     procedure Rewind(ASeed: Cardinal);
@@ -791,7 +793,7 @@ begin
     FKnockClock := NoKnock;
 end;
 
-procedure TPad.Tick(AOnView: Boolean);
+procedure TPad.Tick(AOnView, AHeroAboard: Boolean);
 begin
   FPrevLeft := FLeft;
   FPrevTop := FTop;
@@ -802,7 +804,13 @@ begin
   if not AOnView then
     Exit;
   Inc(FClock);
-  if FClock = FShelfCommandAt then
+  // A shelf told to sleep in mercy waits under the hero's feet, a tick at
+  // a time, and goes as soon as he is off
+  var Spares := AHeroAboard and FShelfCommand.SpareHero and
+    (FShelfCommand.Call = scSleep);
+  if (FClock = FShelfCommandAt) and Spares then
+    FShelfCommandAt := FClock + 1
+  else if FClock = FShelfCommandAt then
   begin
     FShelf.Command(FClock, FShelfCommand);
     FShelfCommandAt := NoCommand;
@@ -1048,11 +1056,11 @@ begin
   inherited;
 end;
 
-procedure TPadWorld.Tick(AScreen: Integer);
+procedure TPadWorld.Tick(AScreen: Integer; const AHeroDeck: TPad);
 begin
   StartAskedRebuild(AScreen);
   for var Pad in FPads do
-    Pad.Tick(Pad.Screen = AScreen);
+    Pad.Tick(Pad.Screen = AScreen, Pad = AHeroDeck);
   TurnLandedCarousels;
   HearFlights;
   HearShelves;

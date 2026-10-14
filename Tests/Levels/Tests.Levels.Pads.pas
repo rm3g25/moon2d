@@ -121,6 +121,8 @@ type
     procedure TestLevelTwoArenaCarouselIsInItsFile;
     [Test]
     procedure TestLevelTwoArenaFloorOfActFourIsOneThroughOne;
+    [Test]
+    procedure TestLevelTwoArenaPyramidSparesTheHero;
   end;
 
 implementation
@@ -129,6 +131,7 @@ uses
   System.IOUtils,
   System.SysUtils,
   Levels.Carousels,
+  Levels.Events,
   Levels.Pads,
   Render.Sprites,
   Tests.Rooms;
@@ -1121,6 +1124,37 @@ begin
       Assert.IsTrue(Pad.Shelf.InBank(FloorBank),
         Pad.Tag + ' is not a shelf of the floor');
   end;
+end;
+
+// The act 4 pyramid waits for the hero to step off; the act 3 floor goes
+// under his feet as before
+procedure TLevelPadsTests.TestLevelTwoArenaPyramidSparesTheHero;
+const
+  PyramidBank = 's09-pyramid';
+  FloorBank = 's09-floor';
+begin
+  UseLevelTwo;
+
+  var PyramidSleeps := 0;
+  var FloorSleeps := 0;
+  for var Event in FLevel.Events do
+    for var Action in Event.Actions do
+    begin
+      if Action.Kind <> eaShelvesSleep then
+        Continue;
+      if Action.Target = PyramidBank then
+      begin
+        Inc(PyramidSleeps);
+        Assert.IsTrue(Action.SpareHero, 'The pyramid spares the hero');
+      end;
+      if Action.Target = FloorBank then
+      begin
+        Inc(FloorSleeps);
+        Assert.IsFalse(Action.SpareHero, 'The floor does not');
+      end;
+    end;
+  Assert.AreEqual(1, PyramidSleeps, 'The pyramid is told to sleep once');
+  Assert.AreEqual(1, FloorSleeps, 'The floor is told to sleep once');
 end;
 
 initialization

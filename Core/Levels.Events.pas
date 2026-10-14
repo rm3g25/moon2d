@@ -83,11 +83,13 @@ type
     // eaShelvesWake: the shelves of the bank Target come out of the wall
     // and run Shelves - hold, unless "program" says another.
     // eaShelvesProgram: they run Shelves from now on, waking if asleep.
-    // eaShelvesSleep: they warn and go into the wall, and stay there.
+    // eaShelvesSleep: they warn and go into the wall, and stay there;
+    // with SpareHero a shelf the hero stands on waits until he is off it.
     // The three tell the shelves in Order, each StepSeconds after the one
     // before. JSON: "target", "program" (a word of ShelfProgramIds),
     // "out", "in", "warn" (seconds), "order" (a word of BankOrderIds,
-    // file by default), "step" (seconds, 0 by default).
+    // file by default), "step" (seconds, 0 by default); eaShelvesSleep
+    // also "spareHero" (false by default).
     // eaFlyIn: the pads of the group Target, parked above the screen,
     // fly in to where the level file puts them (Pads.Arena); or the
     // carousel Target, parked, comes down to its track and turns
@@ -118,6 +120,7 @@ type
     Shelves: TShelfProgram;
     Order: TBankOrder;
     StepSeconds: Single;
+    SpareHero: Boolean;
     Cannons: TCannonOrders;
     Spawn: TSpawnOrders;
   end;
@@ -350,6 +353,8 @@ begin
   AAction.Order := BankOrderOf(AObj.GetValue<string>('order',
     BankOrderIds[boFile]), ALevelId, AEventId);
   AAction.StepSeconds := AObj.GetValue<Double>('step', 0);
+  if AAction.Kind = eaShelvesSleep then
+    AAction.SpareHero := AObj.GetValue<Boolean>('spareHero', False);
   var Shortest := Min(AAction.Shelves.WarnSeconds, AAction.StepSeconds);
   if Shortest < 0 then
     raise ELevelEventError.CreateFmt(SEventShelfNumber,

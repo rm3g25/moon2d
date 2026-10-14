@@ -3271,18 +3271,10 @@
       "screen": 9,
       "when": "actReached", "act": 4,
       "then": [
-        {"action": "shelvesSleep", "target": "s09-pyramid", "order": "up", "step": 0.2},
+        {"action": "shelvesSleep", "target": "s09-pyramid", "order": "up", "step": 0.2, "spareHero": true},
         {"action": "shelvesSleep", "target": "s09-gaps"},
         {"action": "shelvesWake", "target": "s09-grid", "order": "left", "step": 0.2},
-        {"action": "medkitsOnto", "target": "s09-grid"}
-      ]
-    },
-    {
-      "id": "s09-act4-carousel",
-      "screen": 9,
-      "when": "actReached", "act": 4,
-      "delay": 190,
-      "then": [
+        {"action": "medkitsOnto", "target": "s09-grid"},
         {"action": "flyIn", "target": "s09-carousel"}
       ]
     },

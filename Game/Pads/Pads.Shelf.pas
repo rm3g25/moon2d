@@ -50,6 +50,8 @@ type
   TShelfCommand = record
     Call: TShelfCall;
     Run: TShelfProgram; // scWake: the program it runs once out
+    // scSleep: a shelf the hero stands on waits until he is off it
+    SpareHero: Boolean;
   end;
 
   // Where a shelf stands at a moment
