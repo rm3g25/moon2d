@@ -415,6 +415,7 @@ type
     procedure ResolveHeroBulletHits;
     procedure ResolveMonsterBulletHits;
     function EnemyBulletNear(AX, AY: Single): TBullet;
+    function OrbTakes(AFromX, AToX, AY: Single): Boolean;
     function DangerousMonsterAt(AX, AY: Single): TMonster;
     procedure ResolveOrbHits(const AFlock: TOrbFlock);
     function BlastStoppedAt(AX, AY: Single): Boolean;
@@ -1952,6 +1953,36 @@ begin
   Result := nil;
 end;
 
+// The first armed orb of the hero's flocks within OrbReach of the stretch
+// from AFromX to AToX at AY is spent on what flies there - a shard, a
+// cannon's round - as on an enemy bullet; False when none is
+function TMoonGame.OrbTakes(AFromX, AToX, AY: Single): Boolean;
+var
+  Flocks: TArray<TOrbFlock>;
+begin
+  var Nearer: Single := AFromX - OrbReach;
+  var Farther: Single := AToX + OrbReach;
+  if AToX < AFromX then
+  begin
+    Nearer := AToX - OrbReach;
+    Farther := AFromX + OrbReach;
+  end;
+  Flocks := [FAura.Flock, FRite.Flock, FRain.Flock];
+  for var Flock in Flocks do
+    for var Orb in Flock.Orbs do
+    begin
+      var Ready := (Orb.State = osAlive) and Orb.Armed;
+      var InReach := (Abs(Orb.Y - AY) < OrbReach) and (Orb.X > Nearer) and
+        (Orb.X < Farther);
+      if Ready and InReach then
+      begin
+        Flock.Spend(Orb);
+        Exit(True);
+      end;
+    end;
+  Result := False;
+end;
+
 // The dangerous monster of the hero's screen whose body holds the
 // point, nil when none does. A medkit, a weapon, a barrel are not
 // dangerous: an orb passes through them unspent.
@@ -2083,6 +2114,9 @@ begin
   Result := False;
   if AShard.Drop <= ShardWoundsBelow then
     Exit;
+  // An orb takes a shard as it takes a bullet, ahead of whatever it falls on
+  if OrbTakes(AShard.X, AShard.X, AShard.Y) then
+    Exit(True);
 
   for var Monster in FField.Monsters do
   begin
@@ -2331,7 +2365,7 @@ begin
   var Body := Default(TSdlFRect);
   if not FHero.Dead then
     Body := HeroBody(FHero);
-  var Cue := FCannons.Tick(TrialAct, Body);
+  var Cue := FCannons.Tick(TrialAct, Body, OrbTakes);
   if Cue.Hum then
     FAudio.Play(PadHumSoundFile);
   if Cue.Shot then

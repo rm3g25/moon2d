@@ -36,6 +36,10 @@ type
   // What a hero's bullet ran into
   TCannonBlock = (cbNone, cbShield, cbHull);
 
+  // The game's word on a round's stretch of this tick, from AFromX to
+  // AToX at AY: True - something in its way took it, and it flies no more
+  TRoundCatch = reference to function(AFromX, AToX, AY: Single): Boolean;
+
   TCannonCue = record
     // padhum: before a volley, and through the race of the scene
     Hum: Boolean;
@@ -121,7 +125,7 @@ type
     procedure TickMove;
     procedure Arrive;
     procedure Fire;
-    procedure TickRounds(const AHeroBody: TSdlFRect);
+    procedure TickRounds(const AHeroBody: TSdlFRect; const ACatch: TRoundCatch);
     function RoundEnds(var ARound: TRound): Boolean;
     function RoundMeets(const ARound: TRound;
       const ABody: TSdlFRect): Boolean;
@@ -142,8 +146,10 @@ type
     // A door, a death: gone at once, with no scene
     procedure Clear;
     // AAct - the act the trial is in now, 0 when it does not run;
-    // AHeroBody - where the living hero is, empty for the dead
-    function Tick(AAct: Integer; const AHeroBody: TSdlFRect): TCannonCue;
+    // AHeroBody - where the living hero is, empty for the dead; ACatch -
+    // asked of every round that can wound, before the hero is
+    function Tick(AAct: Integer; const AHeroBody: TSdlFRect;
+      const ACatch: TRoundCatch): TCannonCue;
     // Where a bullet's stretch of this tick runs into a cannon; a shield
     // lights up where it was struck
     function Block(const AFrom, ATo: TSdlFPoint;
@@ -444,8 +450,8 @@ begin
   BeginMove(Target, RaceSpeed, cpRacing);
 end;
 
-function TCannonPair.Tick(AAct: Integer;
-  const AHeroBody: TSdlFRect): TCannonCue;
+function TCannonPair.Tick(AAct: Integer; const AHeroBody: TSdlFRect;
+  const ACatch: TRoundCatch): TCannonCue;
 begin
   FCue := Default(TCannonCue);
   Result := FCue;
@@ -466,7 +472,7 @@ begin
   TickHum;
   TickPhase;
   TickYield;
-  TickRounds(AHeroBody);
+  TickRounds(AHeroBody, ACatch);
   if FLeaving then
     FHeat := Min(FHeat + 1 / HeatTicks, 1.0);
   Result := FCue;
@@ -628,7 +634,8 @@ begin
   Inc(FBurstAge);
 end;
 
-procedure TCannonPair.TickRounds(const AHeroBody: TSdlFRect);
+procedure TCannonPair.TickRounds(const AHeroBody: TSdlFRect;
+  const ACatch: TRoundCatch);
 begin
   for var i := FRounds.Count - 1 downto 0 do
   begin
@@ -638,6 +645,13 @@ begin
       Flying.X := Flying.X + RoundSpeed
     else
       Flying.X := Flying.X - RoundSpeed;
+    var Caught := not Flying.Harmless and Assigned(ACatch) and
+      ACatch(Flying.LastX, Flying.X, Flying.Y);
+    if Caught then
+    begin
+      FRounds.Delete(i);
+      Continue;
+    end;
     if not Flying.Harmless and RoundMeets(Flying, AHeroBody) then
       FCue.HeroHit := True;
     if RoundEnds(Flying) then
