@@ -459,6 +459,7 @@ type
     function HeroColumn: Integer;
     function TrialAct: Integer;
     procedure TellShelves(const AAction: TEventAction);
+    procedure FlyInParked(const ATag: string);
     procedure SendMedkitsOnto(const ABank: string);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
     procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
@@ -732,7 +733,7 @@ begin
   Cues.ChangeMusic := ChangeMusic;
   Cues.Arena.Engage := FArena.Engage;
   Cues.Arena.Restore := FArena.Restore;
-  Cues.Arena.FlyIn := FArena.FlyIn;
+  Cues.Arena.FlyIn := FlyInParked;
   Cues.Shelves := TellShelves;
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.Cannons := StartCannons;
@@ -1232,6 +1233,13 @@ begin
     HeroCenter.X);
 end;
 
+// The level lets no tag name both a carousel and a pad group
+procedure TMoonGame.FlyInParked(const ATag: string);
+begin
+  if not FPads.TryFlyInCarousel(ATag) then
+    FArena.FlyIn(ATag);
+end;
+
 procedure TMoonGame.SendMedkitsOnto(const ABank: string);
 begin
   FMedkitBank := ABank;
@@ -1268,7 +1276,7 @@ begin
 
   for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
     ArriveAgain(Returned);
-  FTrial.RoomBusy := FCannons.Leaving;
+  FTrial.RoomBusy := FCannons.Leaving or FPads.CarouselLanding;
   var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
   // A gravel fallen into the pit comes down on the hero who dropped it
   var FromPit: TMonster;

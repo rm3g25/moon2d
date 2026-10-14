@@ -211,6 +211,7 @@ type
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
       const AAction: TEventAction);
+    procedure CheckFlyIn(const AEventId, ATarget: string);
     procedure CheckDynamics;
     procedure CheckDynamicScreens(const APlacement: TDynamicPlacement);
     procedure CheckDynamicParent(const ATag: string);
@@ -311,7 +312,9 @@ resourcestring
   SLevelEventRestoreUnknown = 'Level "%s": event "%s" restores "%s", which '
     + 'no pad group carries';
   SLevelEventFlyInUnknown = 'Level "%s": event "%s" flies in "%s", which '
-    + 'no parked pad group carries';
+    + 'no parked pad group and no parked carousel carries';
+  SLevelEventFlyInTwoKinds = 'Level "%s": event "%s" flies in "%s", which '
+    + 'both a pad group and a carousel carry - it cannot tell which';
   SLevelEventBankUnknown = 'Level "%s": event "%s" tells the bank "%s", '
     + 'which no shelf carries';
   SLevelPadGroupNoConductor = 'Level "%s": pad group "%s" follows "%s", '
@@ -621,6 +624,14 @@ begin
   Result := False;
 end;
 
+function AnyParkedCarouselTagged(const ACarousels: TArray<TCarousel>;
+  const ATag: string): Boolean;
+var
+  Carousel: TCarousel;
+begin
+  Result := TryFindCarousel(ACarousels, ATag, Carousel) and Carousel.Parked;
+end;
+
 function AnyShelfOfBank(const APads: TArray<TPadPlacement>;
   const ABank: string): Boolean;
 begin
@@ -680,9 +691,7 @@ begin
         raise ELevelError.CreateFmt(SLevelEventRestoreUnknown,
           [FId, AEventId, AAction.Target]);
     eaFlyIn:
-      if not AnyParkedGroupTagged(FPadGroups, AAction.Target) then
-        raise ELevelError.CreateFmt(SLevelEventFlyInUnknown,
-          [FId, AEventId, AAction.Target]);
+      CheckFlyIn(AEventId, AAction.Target);
     eaShelvesWake, eaShelvesSleep, eaShelvesProgram, eaMedkitsOnto:
       if not AnyShelfOfBank(FPads, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventBankUnknown,
@@ -693,6 +702,24 @@ begin
         raise ELevelError.CreateFmt(SLevelEventBankUnknown,
           [FId, AEventId, AAction.Cannons.YieldBank]);
   end;
+end;
+
+// The game asks the carousels first: a tag of both would never reach the
+// group
+procedure TLevel.CheckFlyIn(const AEventId, ATarget: string);
+var
+  Tagged: TCarousel;
+begin
+  var GroupParked := AnyParkedGroupTagged(FPadGroups, ATarget);
+  var CarouselParked := AnyParkedCarouselTagged(FCarousels, ATarget);
+  if not GroupParked and not CarouselParked then
+    raise ELevelError.CreateFmt(SLevelEventFlyInUnknown,
+      [FId, AEventId, ATarget]);
+  var BothTagged := (PadGroupsTagged(FPadGroups, ATarget) > 0) and
+    TryFindCarousel(FCarousels, ATarget, Tagged);
+  if BothTagged then
+    raise ELevelError.CreateFmt(SLevelEventFlyInTwoKinds,
+      [FId, AEventId, ATarget]);
 end;
 
 function TLevel.TryFindRespawn(AScreen: Integer;

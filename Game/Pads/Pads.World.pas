@@ -89,6 +89,12 @@
   its path is the track, and the riders go with it as with any path. It
   travels, so a ram only rocks it.
 
+  The pads of a parked carousel wait above the screen, each over its slot,
+  from the start and after every rewind. A fly-in brings them straight
+  down to their slots, their jets flat out; on its slot a pad stands still
+  until the last of them is down, then the carousel turns, its clock
+  speeding up from a standstill.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -121,6 +127,10 @@ type
     WayX, WayY: Single;
     Ticks: Integer;
   end;
+
+  // A pad on a carousel: going round it, waiting above the screen, coming
+  // down to its slot, standing on the slot until the rest are down
+  TOrbitPhase = (opTurning, opParked, opLanding, opOnSlot);
 
   TPad = class
   private
@@ -160,6 +170,12 @@ type
     FPlunge: TPlungeCycle;
     FShelf: TShelfCycle;
     FOrbit: TCarouselOrbit;
+    FOrbitPhase: TOrbitPhase;
+    // Ticks on the hero's screen since the carousel started to turn, and
+    // since the fly-in
+    FOrbitClock: Integer;
+    FLandingClock: Integer;
+    FLanding: TCarouselLanding;
     FWasBehind: Boolean;
     // All the way into the depth, as the pad looks there
     FDeep: TPadDeepLook;
@@ -170,6 +186,8 @@ type
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure PlaceOnOrbit;
+    procedure RewindOrbit;
+    procedure TickOrbit;
     procedure TickFlight;
     procedure TickBob;
     procedure TickSag;
@@ -200,6 +218,11 @@ type
     // The pad waits with its deck at ATop, over its place: above the
     // screen, until a restore flies it in
     procedure Park(ATop: Double);
+    // A pad of a parked carousel sets off down to its slot; nothing for any
+    // other
+    procedure Land;
+    // A pad on its slot starts round the track; nothing for any other
+    procedure StartTurning;
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
@@ -220,9 +243,10 @@ type
     // place in a flight until it is on its cell. The moment before is
     // the tell of the pad about to go.
     function Thrusting: Boolean;
-    // How hard the pad works its jets, 0..1: flat out while Thrusting; a
-    // pad that plunges, as its cycle says; else at rest. A shelf has no
-    // jets: 1 is its warning that it is about to slide in.
+    // How hard the pad works its jets, 0..1: flat out while Thrusting or
+    // coming down to its slot; a pad that plunges, as its cycle says; else
+    // at rest. A shelf has no jets: 1 is its warning that it is about to
+    // slide in.
     function Effort: Single;
     // The two stand flush side by side where their paths or flights put
     // them
@@ -254,6 +278,8 @@ type
     property Bullets: TPadBullets read FPlacement.Bullets;
     property Group: string read FPlacement.Group;
     property Placement: TPadPlacement read FPlacement;
+    // Of a pad on a carousel; opTurning for a pad on none
+    property OrbitPhase: TOrbitPhase read FOrbitPhase;
     // Where the path or the flight puts the pad, the knock left out
     property HomeLeft: Double read FPathLeft;
     property HomeTop: Double read FPathTop;
@@ -333,6 +359,8 @@ type
     function TryPlanRebuild(const AGroup: TPadGroup;
       const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
     procedure ParkGroups;
+    function RidersOf(const ACarousel: string): TArray<TPad>;
+    procedure TurnLandedCarousels;
     function BankOf(const ABank: string): TArray<TPad>;
     function OrderedBank(const ABank: string; AOrder: TBankOrder;
       AHeroX: Double): TArray<TPad>;
@@ -376,6 +404,13 @@ type
     // The middle across of one shelf of the bank ABank, as the dice pick
     // it. False when the bank has none.
     function TryPickBankMiddle(const ABank: string; out AX: Double): Boolean;
+    // The parked carousel tagged ATag comes down to its track and turns
+    // once all its pads are on it. False when no carousel carries the tag;
+    // True and nothing more for one not parked or flown in already.
+    function TryFlyInCarousel(const ATag: string): Boolean;
+    // A carousel flown in does not turn yet: a pad of it is still coming
+    // down or waits on its slot for the rest
+    function CarouselLanding: Boolean;
     // A rebuild or a restore is asked for or flying
     function Rebuilding: Boolean;
     // Every pad of the group tagged AGroup stands where the level file
@@ -570,7 +605,7 @@ begin
   // The placement holds the start rounded to whole units; the riders
   // seated on the pad stand on the start itself
   if FOrbit.Rides then
-    PlaceOnOrbit;
+    RewindOrbit;
   FKnockFromX := 0;
   FKnockFromY := 0;
   FKnockToX := 0;
@@ -628,14 +663,67 @@ begin
   end;
 end;
 
-// The track is the path of the middle of the deck
+// The track is the path of the middle of the deck; off it the pad keeps
+// over its slot, where the track starts it
 procedure TPad.PlaceOnOrbit;
 var
   MiddleX, DeckY: Double;
 begin
-  FOrbit.Place(FClock, MiddleX, DeckY);
+  var Time: Double := 0;
+  if FOrbitPhase = opTurning then
+    Time := FOrbit.Clock(FOrbitClock);
+  FOrbit.Place(Time, MiddleX, DeckY);
+  case FOrbitPhase of
+    opParked:
+      DeckY := ParkedTop;
+    opLanding:
+      DeckY := FLanding.DeckAt(FLandingClock);
+  end;
   FPathLeft := MiddleX - FPlacement.Width / 2;
   FPathTop := DeckY;
+end;
+
+procedure TPad.RewindOrbit;
+begin
+  FOrbitClock := 0;
+  FLandingClock := 0;
+  FOrbitPhase := opTurning;
+  if FOrbit.Parked then
+    FOrbitPhase := opParked;
+  PlaceOnOrbit;
+end;
+
+procedure TPad.TickOrbit;
+begin
+  if not FOrbit.Rides then
+    Exit;
+  case FOrbitPhase of
+    opTurning:
+      Inc(FOrbitClock);
+    opLanding:
+      begin
+        Inc(FLandingClock);
+        if FLandingClock >= FLanding.Done then
+          FOrbitPhase := opOnSlot;
+      end;
+  end;
+end;
+
+procedure TPad.Land;
+begin
+  if FOrbitPhase <> opParked then
+    Exit;
+  FLanding := FOrbit.Landing(ParkedTop);
+  FLandingClock := 0;
+  FOrbitPhase := opLanding;
+end;
+
+procedure TPad.StartTurning;
+begin
+  if FOrbitPhase <> opOnSlot then
+    Exit;
+  FOrbitClock := 0;
+  FOrbitPhase := opTurning;
 end;
 
 // The bob's ripple goes with the pad: on its cell the pad sways in step
@@ -723,6 +811,7 @@ begin
     FShelfCommandAt := NoCommand;
   end;
   FLatched := FShelf.Latches(FClock);
+  TickOrbit;
   PlaceOnPath;
   TickFlight;
   TickBob;
@@ -789,7 +878,8 @@ end;
 
 function TPad.Effort: Single;
 begin
-  if Thrusting or FShelf.Warns(FClock) then
+  var Landing := FOrbitPhase = opLanding;
+  if Thrusting or Landing or FShelf.Warns(FClock) then
     Exit(1);
   Result := FPlunge.Effort;
 end;
@@ -966,6 +1056,7 @@ begin
   StartAskedRebuild(AScreen);
   for var Pad in FPads do
     Pad.Tick(Pad.Screen = AScreen);
+  TurnLandedCarousels;
   HearFlights;
   HearShelves;
   if not GroupFlying(FFlyingGroup) then
@@ -1480,6 +1571,62 @@ begin
     for var Pad in MembersOf(Group.Tag) do
       Pad.Park(ParkedTop);
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// The carousels
+// ---------------------------------------------------------------------------
+
+// In file order; none for ''
+function TPadWorld.RidersOf(const ACarousel: string): TArray<TPad>;
+begin
+  Result := [];
+  if ACarousel = '' then
+    Exit;
+  for var Pad in FPads do
+    if Pad.Placement.Carousel = ACarousel then
+      Result := Result + [Pad];
+end;
+
+function AllOnSlots(const APads: TArray<TPad>): Boolean;
+begin
+  for var Pad in APads do
+    if Pad.OrbitPhase <> opOnSlot then
+      Exit(False);
+  Result := Length(APads) > 0;
+end;
+
+// Together: a pad that set off round the track alone would be a chase for
+// the rest, not a landing
+procedure TPadWorld.TurnLandedCarousels;
+begin
+  for var Carousel in FLevel.Carousels do
+  begin
+    var Riders := RidersOf(Carousel.Tag);
+    if not AllOnSlots(Riders) then
+      Continue;
+    for var Pad in Riders do
+      Pad.StartTurning;
+  end;
+end;
+
+function TPadWorld.TryFlyInCarousel(const ATag: string): Boolean;
+var
+  Carousel: TCarousel;
+begin
+  Result := TryFindCarousel(FLevel.Carousels, ATag, Carousel);
+  if not Result then
+    Exit;
+  for var Pad in RidersOf(ATag) do
+    Pad.Land;
+end;
+
+function TPadWorld.CarouselLanding: Boolean;
+begin
+  for var Pad in FPads do
+    if Pad.OrbitPhase in [opLanding, opOnSlot] then
+      Exit(True);
+  Result := False;
 end;
 
 // ---------------------------------------------------------------------------

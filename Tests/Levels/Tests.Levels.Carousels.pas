@@ -5,8 +5,12 @@
   The track starts on the right of its middle and runs clockwise on the
   screen - down from there - at one even pace; a pad is a share of the
   lap ahead of the one before it in file order, and a lap takes the
-  carousel's period. The track and the orbit keep no state, so the tests
-  ask them about any distance and any tick, in any order. The section is
+  carousel's period. The clock of a turning carousel comes up to that
+  pace from a standstill over its speed-up. A parked pad comes straight
+  down to its slot: the deeper slots set off sooner, the middle ones
+  across sooner too. The track, the orbit and the landing keep no state,
+  so the tests ask them about any distance and any tick, in any order.
+  The section is
   parsed from a JSON root made in the test; what the level makes of it at
   load is tried in Tests.Levels.Pads.
 
@@ -54,6 +58,27 @@ type
     procedure TestPadMovesBetweenTicksToo;
     [Test]
     procedure TestCounterClockwiseMirrorsClockwise;
+    [Test]
+    procedure TestOrbitKnowsItsCarouselIsParked;
+    [Test]
+    procedure TestClockWithoutASpeedUpRunsAtItsPace;
+    [Test]
+    procedure TestClockSpeedsUpFromAStandstill;
+  end;
+
+  [TestFixture]
+  TCarouselLandingTests = class
+  public
+    [Test]
+    procedure TestPadWaitsThenComesDownOntoItsSlot;
+    [Test]
+    procedure TestPadBrakesToAStop;
+    [Test]
+    procedure TestShortWayIsBrakedAllTheWay;
+    [Test]
+    procedure TestPadsInAColumnKeepTheGapOfTheirSlots;
+    [Test]
+    procedure TestWaveRipplesOutFromTheMiddle;
   end;
 
   [TestFixture]
@@ -97,6 +122,8 @@ const
   QuarterTicks = CircleLapTicks div 4;
   // The points of the track are Single: a place is compared within this
   PlaceSlack = 0.01;
+  // Where the landing tests park their pads: two cells over the screen
+  ParkY = -64;
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -479,6 +506,185 @@ begin
   end;
 end;
 
+procedure TCarouselOrbitTests.TestOrbitKnowsItsCarouselIsParked;
+begin
+  var Carousel := CircleOf;
+  Assert.IsFalse(OrbitOfSlot(Carousel, 0, 1).Parked, 'A carousel in its place');
+  Carousel.Parked := True;
+  Assert.IsTrue(OrbitOfSlot(Carousel, 0, 1).Parked, 'A parked carousel');
+  var Nothing := Default(TCarouselOrbit);
+  Assert.IsFalse(Nothing.Parked, 'An orbit made of nothing');
+end;
+
+procedure TCarouselOrbitTests.TestClockWithoutASpeedUpRunsAtItsPace;
+const
+  Times: array [0 .. 4] of Double = (0, 0.5, 1, 17, 500);
+begin
+  var Orbit := OrbitOfSlot(CircleOf, 0, 1);
+  for var Time in Times do
+    Assert.IsTrue(IsNear(Orbit.Clock(Time), Time),
+      Format('%g ticks after it started to turn', [Time]));
+end;
+
+// A speed-up of a second is 33 ticks: the clock gains more every tick and
+// less than a whole one within it, a whole one every tick after it, and
+// stays half the speed-up behind a carousel that never had to speed up
+procedure TCarouselOrbitTests.TestClockSpeedsUpFromAStandstill;
+const
+  SpeedUpTicks = TicksPerSecond;
+begin
+  var Carousel := CircleOf;
+  Carousel.SpeedUp := 1;
+  var Orbit := OrbitOfSlot(Carousel, 0, 1);
+  Assert.IsTrue(IsNear(Orbit.Clock(0), 0), 'It starts on its slot');
+
+  var Gain: Double := 0;
+  for var Tick := 1 to SpeedUpTicks do
+  begin
+    var Step := Orbit.Clock(Tick) - Orbit.Clock(Tick - 1);
+    Assert.IsTrue((Step > Gain) and (Step < 1), Format('Tick %d of the ' +
+      'speed-up gains %g, the one before %g', [Tick, Step, Gain]));
+    Gain := Step;
+  end;
+  for var Tick := SpeedUpTicks + 1 to SpeedUpTicks + 10 do
+    Assert.IsTrue(IsNear(Orbit.Clock(Tick) - Orbit.Clock(Tick - 1), 1),
+      Format('Tick %d, past the speed-up, gains a whole tick', [Tick]));
+  Assert.IsTrue(IsNear(Orbit.Clock(100), 100 - SpeedUpTicks / 2),
+    'A hundred ticks on it is half the speed-up behind');
+end;
+
+// ---------------------------------------------------------------------------
+// TCarouselLandingTests
+// ---------------------------------------------------------------------------
+
+// A parked box 200 across and 100 down, middle (256, 192), its pad AAlong
+// units round the track: 25 is (356, 217) on the right side, 575 is
+// (356, 167) above it, 150 is (256, 242) the middle of the bottom, 100
+// and 200 are 50 to either side of it
+function BoxPadAt(AAlong: Double): TCarouselOrbit;
+begin
+  var Carousel := CarouselOf(csBox, 256, 192, 200, 100);
+  Carousel.Parked := True;
+  Carousel.Start := AAlong / 600;
+  Result := OrbitOfSlot(Carousel, 0, 1);
+end;
+
+// The first tick the pad has left its park
+function SetsOffAt(const ALanding: TCarouselLanding): Integer;
+begin
+  Result := 0;
+  while (Result < ALanding.Done) and (ALanding.DeckAt(Result) <= ParkY) do
+    Inc(Result);
+end;
+
+procedure TCarouselLandingTests.TestPadWaitsThenComesDownOntoItsSlot;
+var
+  SlotX, SlotY: Double;
+begin
+  var Orbit := BoxPadAt(575);
+  Orbit.Place(0, SlotX, SlotY);
+  var Landing := Orbit.Landing(ParkY);
+
+  Assert.IsTrue(IsNear(Landing.DeckAt(0), ParkY), 'At the fly-in it is parked');
+  Assert.IsTrue(SetsOffAt(Landing) > 1,
+    'A slot over the lowest deck waits before it sets off');
+  var Deck: Double := ParkY;
+  for var Tick := 1 to Landing.Done do
+  begin
+    var Next := Landing.DeckAt(Tick);
+    Assert.IsTrue((Next >= Deck) and (Next <= SlotY + PlaceSlack),
+      Format('Tick %d takes the deck from %g to %g, the slot at %g',
+      [Tick, Deck, Next, SlotY]));
+    Deck := Next;
+  end;
+  Assert.IsTrue(IsNear(Landing.DeckAt(Landing.Done), SlotY), 'Done on the slot');
+  Assert.IsTrue(IsNear(Landing.DeckAt(Landing.Done + 50), SlotY),
+    'and stays there');
+  Assert.IsTrue(Landing.DeckAt(Landing.Done - 1) < SlotY,
+    'and not a tick sooner');
+end;
+
+// The steps grow, or hold, until the braking; then they only shrink, and
+// the last is a small share of the pace
+procedure TCarouselLandingTests.TestPadBrakesToAStop;
+begin
+  var Landing := BoxPadAt(150).Landing(ParkY);
+  var Largest: Double := 0;
+  var Braking := False;
+  var Step: Double := 0;
+  for var Tick := 1 to Landing.Done do
+  begin
+    Step := Landing.DeckAt(Tick) - Landing.DeckAt(Tick - 1);
+    if Step < Largest - PlaceSlack then
+      Braking := True;
+    Assert.IsFalse(Braking and (Step > Largest),
+      Format('Tick %d speeds up again, %g units', [Tick, Step]));
+    Largest := Max(Largest, Step);
+  end;
+  Assert.IsTrue(Step < Largest / 4, Format('The last step is %g units, the ' +
+    'pace %g', [Step, Largest]));
+end;
+
+// A way of 20 units, shorter than the braking: every step is shorter than
+// the one before it. A way of nothing stands still.
+procedure TCarouselLandingTests.TestShortWayIsBrakedAllTheWay;
+begin
+  var Landing := Default(TCarouselLanding);
+  Landing.Build(0, 20, 0);
+  var Step: Double := MaxDouble;
+  for var Tick := 1 to Landing.Done do
+  begin
+    var Next := Landing.DeckAt(Tick) - Landing.DeckAt(Tick - 1);
+    Assert.IsTrue(Next < Step, Format('Tick %d steps %g units after %g',
+      [Tick, Next, Step]));
+    Step := Next;
+  end;
+  Assert.IsTrue(IsNear(Landing.DeckAt(Landing.Done), 20), 'On the slot');
+
+  Landing.Build(10, 10, 3);
+  Assert.AreEqual(3, Landing.Done, 'Done when it would set off');
+  Assert.IsTrue(IsNear(Landing.DeckAt(0), 10) and
+    IsNear(Landing.DeckAt(100), 10), 'Where it stands all along');
+end;
+
+// Two slots 50 apart in one column: the lower sets off first, the gap
+// opens to 50 by the time the upper sets off and stays 50 all the way
+// down - they brake at once, and land on one tick
+procedure TCarouselLandingTests.TestPadsInAColumnKeepTheGapOfTheirSlots;
+const
+  SlotGap = 50;
+begin
+  var Lower := BoxPadAt(25).Landing(ParkY);
+  var Upper := BoxPadAt(575).Landing(ParkY);
+  Assert.IsTrue(SetsOffAt(Lower) < SetsOffAt(Upper), 'The lower sets off first');
+  Assert.AreEqual(Lower.Done, Upper.Done, 'They land on one tick');
+
+  var Gap: Double := 0;
+  for var Tick := 0 to Lower.Done do
+  begin
+    var Next := Lower.DeckAt(Tick) - Upper.DeckAt(Tick);
+    Assert.IsTrue((Next >= Gap - PlaceSlack) and (Next <= SlotGap + PlaceSlack),
+      Format('Tick %d: the gap goes from %g to %g', [Tick, Gap, Next]));
+    if Upper.DeckAt(Tick) > ParkY then
+      Assert.IsTrue(IsNear(Next, SlotGap), Format('Tick %d, both on their ' +
+        'way: a gap of %g', [Tick, Next]));
+    Gap := Next;
+  end;
+end;
+
+// Three slots at one height: the middle one sets off first and lands
+// first, the two 50 to either side of it set off together
+procedure TCarouselLandingTests.TestWaveRipplesOutFromTheMiddle;
+begin
+  var Middle := BoxPadAt(150).Landing(ParkY);
+  var Right := BoxPadAt(100).Landing(ParkY);
+  var Left := BoxPadAt(200).Landing(ParkY);
+  Assert.IsTrue(SetsOffAt(Middle) < SetsOffAt(Right), 'The middle sets off first');
+  Assert.IsTrue(Middle.Done < Right.Done, 'and lands first');
+  Assert.AreEqual(SetsOffAt(Right), SetsOffAt(Left),
+    'Either side of the middle sets off at once');
+end;
+
 // ---------------------------------------------------------------------------
 // TLevelsCarouselsTests
 // ---------------------------------------------------------------------------
@@ -547,7 +753,7 @@ end;
 procedure TLevelsCarouselsTests.TestCarouselReadsWhatItIsGiven;
 begin
   var Carousel := OnlyCarousel(SectionOf('"shape":"box","corner":10,' +
-    '"turn":"ccw","start":0.5'));
+    '"turn":"ccw","start":0.5,"parked":"above","speedUp":2.5'));
   Assert.AreEqual('wheel', Carousel.Tag);
   Assert.AreEqual(3, Carousel.Screen);
   Assert.AreEqual<TCarouselShape>(csBox, Carousel.Shape);
@@ -557,6 +763,8 @@ begin
   Assert.IsTrue(IsNear(Carousel.Period, 12), 'The period');
   Assert.AreEqual<TCarouselTurn>(ctCounterClockwise, Carousel.Turn);
   Assert.IsTrue(IsNear(Carousel.Start, 0.5), 'The start');
+  Assert.IsTrue(Carousel.Parked, 'Parked');
+  Assert.IsTrue(IsNear(Carousel.SpeedUp, 2.5), 'The speed-up');
 end;
 
 procedure TLevelsCarouselsTests.TestCarouselLeftOutComesToItsDefaults;
@@ -567,6 +775,8 @@ begin
   Assert.AreEqual<TCarouselTurn>(ctClockwise, Carousel.Turn);
   Assert.IsTrue(IsNear(Carousel.Start, 0),
     'The first pad starts on the right of the middle');
+  Assert.IsFalse(Carousel.Parked, 'In its place from the start');
+  Assert.IsTrue(IsNear(Carousel.SpeedUp, 0), 'At its pace at once');
 end;
 
 procedure TLevelsCarouselsTests.TestWordsAreReadInAnyCase;
@@ -577,6 +787,8 @@ begin
   Carousel := OnlyCarousel(SectionOf('"shape":"Oval","turn":"CW"'));
   Assert.AreEqual<TCarouselShape>(csOval, Carousel.Shape);
   Assert.AreEqual<TCarouselTurn>(ctClockwise, Carousel.Turn);
+  Carousel := OnlyCarousel(SectionOf('"parked":"ABOVE"'));
+  Assert.IsTrue(Carousel.Parked, 'Parked ABOVE');
 end;
 
 // Each alone; a box of 150 by 120 takes corners up to 60
@@ -602,6 +814,8 @@ begin
     'No period: the carousel never turns');
   ExpectRaises(SectionOf('"start":-0.1'), 'A start below 0');
   ExpectRaises(SectionOf('"start":1'), 'A start of a whole lap');
+  ExpectRaises(SectionOf('"parked":"below"'), 'Parked anywhere but above');
+  ExpectRaises(SectionOf('"speedUp":-0.5'), 'A speed-up below 0');
 
   Assert.AreEqual(1, Integer(Length(ParseText(SectionOf(
     '"shape":"box","corner":60,"start":0.99')))),
@@ -638,6 +852,7 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TCarouselTrackTests);
   TDUnitX.RegisterTestFixture(TCarouselOrbitTests);
+  TDUnitX.RegisterTestFixture(TCarouselLandingTests);
   TDUnitX.RegisterTestFixture(TLevelsCarouselsTests);
 
 end.

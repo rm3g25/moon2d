@@ -14,6 +14,12 @@
   A pad joins a carousel by its "carousel". The carousel places it, so
   the pad takes no x or y of its own.
 
+  A carousel may be parked above the screen: its pads wait over their
+  slots - the places they start the lap from - until an event flies it
+  in. Each comes straight down to its slot; the carousel turns once all
+  of them are on it, its clock coming up to its pace from a standstill
+  over the carousel's speed-up.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Carousels;
@@ -47,6 +53,27 @@ type
     // Where the first pad starts: a share of the lap from the right of
     // the middle, the way the carousel turns
     Start: Single;
+    // Its pads wait above the screen until an event flies it in
+    Parked: Boolean;
+    // Seconds the clock takes to come up to the pace of the period from a
+    // standstill once the carousel starts to turn; 0 = at its pace at once
+    SpeedUp: Single;
+  end;
+
+  // A parked pad's way down to its slot: straight down at an even pace,
+  // braking to a stop on the slot
+  TCarouselLanding = record
+  private
+    FFromY, FToY: Double;
+    FDepart: Double; // ticks after the fly-in before it sets off
+    FCruiseTicks: Double;
+    FBrakeTicks: Double;
+  public
+    procedure Build(AFromY, AToY, ADepart: Double);
+    // The deck ATime ticks after the fly-in, between ticks too
+    function DeckAt(ATime: Double): Double;
+    // The first tick the pad stands on its slot
+    function Done: Integer;
   end;
 
   // The track as a closed line of points, the last joined to the first
@@ -76,6 +103,12 @@ type
     FRides: Boolean;
     FFirst: Double; // along the track at tick 0
     FStep: Double; // units a tick, below zero counter-clockwise
+    FParked: Boolean;
+    FSpeedUpTicks: Integer;
+    // The middle of the carousel across and its lowest deck: what the
+    // landing of a parked pad goes by
+    FCenterX: Double;
+    FBottom: Double;
   public
     // ASlot of ASlots: the pad's place among those its carousel carries
     procedure Build(const ACarousel: TCarousel; ASlot, ASlots: Integer);
@@ -83,6 +116,17 @@ type
     function Rides: Boolean;
     // The middle of the deck at ATime ticks, between ticks too
     procedure Place(ATime: Double; out AX, AY: Double);
+    // Its carousel waits above the screen until an event flies it in
+    function Parked: Boolean;
+    // The time of Place ATurning ticks after the carousel started to turn:
+    // from a standstill up to its pace over the speed-up, at its pace on
+    function Clock(ATurning: Double): Double;
+    // The pad's way down from its deck at AFromY to its slot, where Place
+    // puts it at time 0. The deeper the slot, the sooner the pad sets off:
+    // every pad of the carousel brakes at once, so a pad over another
+    // keeps the gap of their slots from the moment it sets off. Across,
+    // the wave ripples out from the middle.
+    function Landing(AFromY: Double): TCarouselLanding;
   end;
 
 const
@@ -92,7 +136,8 @@ const
 // The section; absent = no carousels. A shape or a turn out of its
 // words, a center or a size that is not [x, y], a size of zero or less,
 // a corner below zero or wider than half the box, a period of zero or
-// less, a start out of 0..1 raise.
+// less, a start out of 0..1, a speed-up below zero, parked anywhere but
+// above raise.
 function ParseCarousels(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TCarousel>;
 // False when no carousel carries the tag
@@ -116,11 +161,20 @@ resourcestring
   SCarouselBadTurn = 'Level "%s": carousel "%s" takes turn "%s" - cw or ccw';
   SCarouselBadPair = 'Level "%s": carousel "%s" has a %s that is not [x, y]';
   SCarouselBadNumber = 'Level "%s": carousel "%s" takes %s %g';
+  SCarouselBadParked = 'Level "%s": carousel "%s" is parked "%s" - above '
+    + 'is the only place';
 
 const
   // Seconds in JSON, ticks in the code; the logic runs 33 ticks a second
   // (tickRate of Game.Config)
   LogicTicksPerSecond = 33;
+  // A parked pad comes down at this many units a tick and brakes over the
+  // last LandingBrakeTicks of its way
+  LandingSpeed = 8.0;
+  LandingBrakeTicks = 10;
+  // A pad a cell of 32 units farther from the middle across sets off 4
+  // ticks later, as a pad of a group flown in does
+  LandingRippleTicksPerUnit = 4 / 32;
   // An oval as a line of this many points: within a hair of the curve
   // at the size of a screen
   OvalPoints = 360;
@@ -258,6 +312,10 @@ begin
   var Share := Frac(ACarousel.Start + ASlot / ASlots);
   FFirst := Way * Share * FTrack.Length;
   FStep := Way * FTrack.Length / LapTicks(ACarousel);
+  FParked := ACarousel.Parked;
+  FSpeedUpTicks := Round(ACarousel.SpeedUp * LogicTicksPerSecond);
+  FCenterX := ACarousel.CenterX;
+  FBottom := ACarousel.CenterY + ACarousel.Height / 2;
 end;
 
 function TCarouselOrbit.Rides: Boolean;
@@ -268,6 +326,66 @@ end;
 procedure TCarouselOrbit.Place(ATime: Double; out AX, AY: Double);
 begin
   FTrack.PointAt(FFirst + FStep * ATime, AX, AY);
+end;
+
+function TCarouselOrbit.Parked: Boolean;
+begin
+  Result := FParked;
+end;
+
+function TCarouselOrbit.Clock(ATurning: Double): Double;
+begin
+  if ATurning >= FSpeedUpTicks then
+    Exit(ATurning - FSpeedUpTicks / 2);
+  // The pace grows evenly from nothing: the clock runs the area under it
+  Result := Sqr(ATurning) / (2 * FSpeedUpTicks);
+end;
+
+function TCarouselOrbit.Landing(AFromY: Double): TCarouselLanding;
+var
+  SlotX, SlotY: Double;
+begin
+  Place(0, SlotX, SlotY);
+  var Ripple := LandingRippleTicksPerUnit * Abs(SlotX - FCenterX);
+  // A slot higher than the lowest deck by some units waits as many units
+  // of the pace: it then flies the very way of the lowest, that much behind
+  var Wait := (FBottom - SlotY) / LandingSpeed;
+  Result.Build(AFromY, SlotY, Ripple + Wait);
+end;
+
+// ---------------------------------------------------------------------------
+// TCarouselLanding
+// ---------------------------------------------------------------------------
+
+procedure TCarouselLanding.Build(AFromY, AToY, ADepart: Double);
+begin
+  FFromY := AFromY;
+  FToY := AToY;
+  FDepart := ADepart;
+  var Distance := Max(0.0, AToY - AFromY);
+  // A way shorter than the braking is braked all the way, in fewer ticks
+  var BrakeDistance := Min(Distance, LandingSpeed * LandingBrakeTicks / 2);
+  FBrakeTicks := 2 * BrakeDistance / LandingSpeed;
+  FCruiseTicks := (Distance - BrakeDistance) / LandingSpeed;
+end;
+
+function TCarouselLanding.DeckAt(ATime: Double): Double;
+begin
+  var Flown := ATime - FDepart;
+  if Flown <= 0 then
+    Exit(FFromY);
+  if Flown <= FCruiseTicks then
+    Exit(FFromY + LandingSpeed * Flown);
+  var Braking := Flown - FCruiseTicks;
+  if Braking >= FBrakeTicks then
+    Exit(FToY);
+  Result := FFromY + LandingSpeed *
+    (FCruiseTicks + Braking - Sqr(Braking) / (2 * FBrakeTicks));
+end;
+
+function TCarouselLanding.Done: Integer;
+begin
+  Result := Ceil(FDepart + FCruiseTicks + FBrakeTicks);
 end;
 
 // ---------------------------------------------------------------------------
@@ -312,6 +430,15 @@ begin
   raise ECarouselError.CreateFmt(SCarouselBadTurn, [ALevelId, ATag, Id]);
 end;
 
+function ReadParked(const AObj: TJSONObject;
+  const ALevelId, ATag: string): Boolean;
+begin
+  var Place := AObj.GetValue<string>('parked', '');
+  Result := Place <> '';
+  if Result and not SameText(Place, PadParkedAbove) then
+    raise ECarouselError.CreateFmt(SCarouselBadParked, [ALevelId, ATag, Place]);
+end;
+
 procedure CheckNumbers(const ACarousel: TCarousel; const ALevelId: string);
 
   procedure Refuse(const AKey: string; AValue: Double);
@@ -332,12 +459,15 @@ begin
     Refuse('period', ACarousel.Period);
   if (ACarousel.Start < 0) or (ACarousel.Start >= 1) then
     Refuse('start', ACarousel.Start);
+  if ACarousel.SpeedUp < 0 then
+    Refuse('speedUp', ACarousel.SpeedUp);
 end;
 
 // JSON: {"tag": "s08-carousel", "screen": 8, "shape": "oval", "center":
 // [288, 179], "size": [150, 150], "corner": 0, "period": 12, "turn":
-// "cw", "start": 0}; shape absent = oval, corner and start absent = 0,
-// turn absent = cw
+// "cw", "start": 0, "parked": "above", "speedUp": 3}; shape absent =
+// oval, corner, start and speedUp absent = 0, turn absent = cw, parked
+// absent = in its place from the start
 function ParseCarousels(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TCarousel>;
 var
@@ -362,6 +492,8 @@ begin
     Carousel.Period := Obj.GetValue<Double>('period', 0);
     Carousel.Turn := ReadTurn(Obj, ALevelId, Carousel.Tag);
     Carousel.Start := Obj.GetValue<Double>('start', 0);
+    Carousel.Parked := ReadParked(Obj, ALevelId, Carousel.Tag);
+    Carousel.SpeedUp := Obj.GetValue<Double>('speedUp', 0);
     CheckNumbers(Carousel, ALevelId);
     Result := Result + [Carousel];
   end;

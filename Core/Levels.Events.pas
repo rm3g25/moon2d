@@ -85,8 +85,9 @@ type
     // "out", "in", "warn" (seconds), "order" (a word of BankOrderIds,
     // file by default), "step" (seconds, 0 by default).
     // eaFlyIn: the pads of the group Target, parked above the screen,
-    // fly in to where the level file puts them (Pads.Arena). JSON:
-    // "target".
+    // fly in to where the level file puts them (Pads.Arena); or the
+    // carousel Target, parked, comes down to its track and turns
+    // (Pads.World). JSON: "target".
     // eaMedkitsOnto: from now on the trial's medkits come down over the
     // shelves of the bank Target. JSON: "target".
     // eaCannons: the two TeK cannons slide in on the walls for the act of

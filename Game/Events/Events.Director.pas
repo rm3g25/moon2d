@@ -33,7 +33,8 @@ type
   TArenaCues = record
     Engage: TArenaCue; // the group is rebuilt from now on
     Restore: TArenaCue; // no more: its pads fly back to their places
-    FlyIn: TArenaCue; // the group parked above flies in to its places
+    // The group or the carousel parked above flies in to its places
+    FlyIn: TArenaCue;
   end;
 
   // A shelf action of an event: its bank, its program, its order
