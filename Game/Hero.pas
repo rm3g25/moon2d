@@ -1257,6 +1257,8 @@ end;
 function THero.Fire: Boolean;
 const
   Spread = 5; // 'rasbros'
+  MinigunNarrowAngle = 5;
+  MinigunWideAngle = 10;
 var
   BaseAngle: Integer;
   SpawnX, SpawnY: Double;
@@ -1296,8 +1298,8 @@ begin
         FBullets.NewBullet(FBulletSpeed, SpawnX + i, SpawnY,
           BaseAngle, FBulletGravity, True);
 
-    4: // minigun: center + side pair alternating 15/30 degrees,
-       // all three born at the muzzle (see the const block above)
+    4: // minigun: a doubled center line and a side pair alternating
+       // narrow/wide, all born at the muzzle (see the const block above)
       begin
         var Rad := BaseAngle * Pi / 180;
         var MuzzleX := Round(FX) + FMinigunBaseX +
@@ -1306,7 +1308,12 @@ begin
           FMinigunMuzzleLen * Sin(Rad);
         FBullets.NewBullet(FBulletSpeed, MuzzleX, MuzzleY, BaseAngle,
           FBulletGravity, True);
-        var SideAngle := IfThen(FMinigunUpDown, 15, 30);
+        // Half a flight step behind, so the two never overlap on screen
+        var Trail := FBulletSpeed div 2;
+        FBullets.NewBullet(FBulletSpeed, MuzzleX - Trail * Cos(Rad),
+          MuzzleY + Trail * Sin(Rad), BaseAngle, FBulletGravity, True);
+        var SideAngle := IfThen(FMinigunUpDown, MinigunNarrowAngle,
+          MinigunWideAngle);
         FBullets.NewBullet(FBulletSpeed, MuzzleX, MuzzleY,
           BaseAngle + SideAngle, FBulletGravity, True);
         FBullets.NewBullet(FBulletSpeed, MuzzleX, MuzzleY,
