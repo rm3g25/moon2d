@@ -1277,7 +1277,11 @@ begin
   for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
     ArriveAgain(Returned);
   FTrial.RoomBusy := FCannons.Leaving or FPads.CarouselLanding;
-  var Cue := FTrial.Tick(FField.CountAliveOf(GravelMonsterId, FGravelScreen));
+  // A body an event let in holds the gate with the gravels: it waits for
+  // the hero to kill it, so the leave at the gate finds no one alive
+  var GateHolders := FField.CountAliveOf(GravelMonsterId, FGravelScreen) +
+    FField.CountAliveGuests(FGravelScreen);
+  var Cue := FTrial.Tick(GateHolders);
   // A gravel fallen into the pit comes down on the hero who dropped it
   var FromPit: TMonster;
   if Cue.ReturnFromPit and

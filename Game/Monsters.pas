@@ -148,6 +148,9 @@ type
     FHull: THull; // a hull monster only, nil for the rest
     FHullX: Double; // where the hull stood when its wheels last turned
     FCarriedX: Double; // this tick, by a deck
+    // Units a tick across that a body walked off a moving deck keeps while
+    // it falls: the deck would catch it up again otherwise
+    FFallDriftX: Double;
     FThrown: Integer; // units a throw has still to carry the body, signed
     FDamageWindow: TDamageWindow; // a monster with a damage cap only, nil for the rest
     FPilot: TPilot; // an mkBossFly monster only, nil for the rest
@@ -259,6 +262,8 @@ type
     procedure Depart;
     // On its way off the top since Depart: dead, and still drawn
     function Leaving: Boolean;
+    // It came in along a lane an event let it in on
+    function CameAlongLane: Boolean;
     // The picture is drawn turned over (2008 art faces left)
     function Mirrored: Boolean;
     function DrainEvent: TMonsterEvent;
@@ -357,6 +362,8 @@ type
     procedure DepartGuests(AScreen: Integer);
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
+    // The live bodies on the screen that came in along a lane
+    function CountAliveGuests(AScreen: Integer): Integer;
     // The live bodies of one kind gone out of the side come back from the
     // sky, each over a column of its own; the bodies that came back
     function ReturnSideStrays(const AMonsterId: string;
@@ -992,7 +999,10 @@ end;
 procedure TMonster.FallIfUnsupported;
 begin
   if CanGoDown and not StandsOnDeck and FDef.AffectedByGravity then
+  begin
     FAction := maFalling;
+    FFallDriftX := FCarriedX;
+  end;
 end;
 
 // Before the tick: the deck the body lay on a tick ago takes it where it
@@ -1013,8 +1023,12 @@ begin
   FY := Deck.Top;
   CarryX(Deck.MotionX);
 
+  // Pulled off by a wall: it drops where it stands
   if not StandsOnDeck and CanGoDown and FDef.AffectedByGravity then
+  begin
     FAction := maFalling;
+    FFallDriftX := 0;
+  end;
 end;
 
 // A unit at a time, the wall asked before every one, as ShoveX: a knocked
@@ -1433,6 +1447,10 @@ const
   // world instead of snapping to a cell
   BelowFloorY = ScreenHeight - 17; // 367
 begin
+  // A fall starts at no speed and the feet stay level with the deck for a
+  // few ticks: without the drift a deck moving the same way slides back
+  // under them and lands them, over and over
+  CarryX(FFallDriftX);
   if CanGoDown or (FY > BelowFloorY) then
   begin
     var PrevY := FY;
@@ -1452,6 +1470,7 @@ begin
     FY := (CellOfY(Round(FY)) - 1) * SpriteSize; // exact landing snap
   end;
   FAcceleration := 0;
+  FFallDriftX := 0;
   if FDef.Movement.Kind = mkChaseHero then
   begin
     if FX > FHeroX then
@@ -1707,6 +1726,7 @@ begin
   FY := AY;
   FAcceleration := 0;
   FThrown := 0;
+  FFallDriftX := 0;
   FAction := maFalling;
 end;
 
@@ -1758,6 +1778,11 @@ end;
 function TMonster.Leaving: Boolean;
 begin
   Result := FLane.Phase = lpLeaving;
+end;
+
+function TMonster.CameAlongLane: Boolean;
+begin
+  Result := FLane.Phase <> lpNone;
 end;
 
 procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
@@ -1930,6 +1955,15 @@ begin
   for var Monster in FMonsters do
     if Monster.Screen = AScreen then
       Monster.Depart;
+end;
+
+function TMonsterField.CountAliveGuests(AScreen: Integer): Integer;
+begin
+  Result := 0;
+  for var Monster in FMonsters do
+    if (Monster.Screen = AScreen) and (Monster.Life = mlAlive) and
+      Monster.CameAlongLane then
+      Inc(Result);
 end;
 
 function TMonsterField.CountAliveOf(const AMonsterId: string;

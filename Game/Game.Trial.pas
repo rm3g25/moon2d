@@ -19,8 +19,8 @@
   light marks the column the hero stands in, and the gravel follows it a
   moment later - time enough to step aside, if he looks up.
 
-  The game tells the trial how many gravels are alive and which of them
-  died, and does what the cue of a tick says: lets a gravel down, marks
+  The game tells the trial how many bodies hold the gate - the gravels
+  alive and whoever else it counts in - and which gravels died, and does what the cue of a tick says: lets a gravel down, marks
   the column of an aimed one and lets it down there, brings one gravel
   back from the pit, lets a medkit down, or ends the trial.
 
@@ -90,7 +90,7 @@ type
     FRoomBusy: Boolean;
     procedure TickAimed(var ACue: TTrialCue);
     procedure TickPitReturn(var ACue: TTrialCue);
-    procedure WatchGate(AGravelsAlive: Integer; var ACue: TTrialCue);
+    procedure WatchGate(AGateHolders: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
   public
@@ -99,8 +99,9 @@ type
     procedure Stop;
     // A gravel of the trial died
     procedure NoteGravelKilled;
-    // One logic tick; AGravelsAlive - the live gravels of the trial
-    function Tick(AGravelsAlive: Integer): TTrialCue;
+    // One logic tick; AGateHolders - the live bodies that hold the gate:
+    // the gravels of the trial and whoever else the game counts in
+    function Tick(AGateHolders: Integer): TTrialCue;
     function Progress: TTrialProgress;
     property Active: Boolean read FActive;
     // 1..TrialActs
@@ -140,7 +141,7 @@ begin
     Inc(FMedkitsOwed);
 end;
 
-function TGravelTrial.Tick(AGravelsAlive: Integer): TTrialCue;
+function TGravelTrial.Tick(AGateHolders: Integer): TTrialCue;
 begin
   Result := Default(TTrialCue);
   if not FActive then
@@ -156,7 +157,7 @@ begin
 
   if FBatchLeft = 0 then
   begin
-    WatchGate(AGravelsAlive, Result);
+    WatchGate(AGateHolders, Result);
     Exit;
   end;
   // No gravel of the act let down yet: this is the breath between acts
@@ -198,13 +199,13 @@ begin
   ACue.ReturnFromPit := True;
 end;
 
-procedure TGravelTrial.WatchGate(AGravelsAlive: Integer;
+procedure TGravelTrial.WatchGate(AGateHolders: Integer;
   var ACue: TTrialCue);
 begin
   // An aimed gravel still on its way is of the batch, alive or not yet -
   // and so is one let down this very tick, which the count has not seen
   var AimedOnItsWay := (FAimedIn > 0) or ACue.SpawnAimed;
-  if (AGravelsAlive = 0) and not AimedOnItsWay then
+  if (AGateHolders = 0) and not AimedOnItsWay then
     EndAct(ACue);
 end;
 
