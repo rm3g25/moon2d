@@ -6,7 +6,8 @@
   screen - down from there - at one even pace; a pad is a share of the
   lap ahead of the one before it in file order, and a lap takes the
   carousel's period. The clock of a turning carousel comes up to that
-  pace from a standstill over its speed-up. A parked pad comes straight
+  pace from a standstill over its speed-up, and a halt runs it down to a
+  standstill again. A parked pad comes straight
   down to its slot: the deeper slots set off sooner, the middle ones
   across sooner too. The track, the orbit and the landing keep no state,
   so the tests ask them about any distance and any tick, in any order.
@@ -64,6 +65,14 @@ type
     procedure TestClockWithoutASpeedUpRunsAtItsPace;
     [Test]
     procedure TestClockSpeedsUpFromAStandstill;
+    [Test]
+    procedure TestHaltStartsWhereTheClockStood;
+    [Test]
+    procedure TestHaltRunsDownToAStandstill;
+    [Test]
+    procedure TestHaltInTheSpeedUpBrakesFromTheSlowerPace;
+    [Test]
+    procedure TestHaltOfNoTicksStandsAtOnce;
   end;
 
   [TestFixture]
@@ -95,6 +104,12 @@ type
     [Test]
     procedure TestBadCarouselRaises;
     [Test]
+    procedure TestFailingLookReadsWhatItIsGiven;
+    [Test]
+    procedure TestBadFailingLookRaises;
+    [Test]
+    procedure TestFailingRigTagIsATagOfItsOwn;
+    [Test]
     procedure TestCarouselIsFoundByItsTag;
     [Test]
     procedure TestLapIsATickAtTheLeast;
@@ -107,7 +122,8 @@ uses
   System.Math,
   System.SysUtils,
   Levels.Carousels,
-  Levels.Pads;
+  Levels.Pads,
+  Levels.Rigs;
 
 const
   // The world ticks 33 times a second
@@ -553,6 +569,72 @@ begin
     'A hundred ticks on it is half the speed-up behind');
 end;
 
+procedure TCarouselOrbitTests.TestHaltStartsWhereTheClockStood;
+const
+  HaltTicks = 66;
+  // In the speed-up and past it
+  Turnings: array [0..3] of Integer = (0, 10, 33, 100);
+begin
+  var Carousel := CircleOf;
+  Carousel.SpeedUp := 1;
+  var Orbit := OrbitOfSlot(Carousel, 0, 1);
+  for var Turning in Turnings do
+    Assert.IsTrue(IsNear(Orbit.Halting(Turning, HaltTicks, 0),
+      Orbit.Clock(Turning)), Format('A halt %d ticks into the turn starts ' +
+      'there', [Turning]));
+end;
+
+// At full pace the clock gains a tick less every tick, a little less each
+// time, and stands half the halt on
+procedure TCarouselOrbitTests.TestHaltRunsDownToAStandstill;
+const
+  Turning = 100;
+  HaltTicks = 66;
+  Afterwards: array [0..2] of Integer = (HaltTicks, HaltTicks + 1,
+    HaltTicks + 500);
+begin
+  var Orbit := OrbitOfSlot(CircleOf, 0, 1);
+  var Gain: Double := 1;
+  for var Tick := 1 to HaltTicks do
+  begin
+    var Step := Orbit.Halting(Turning, HaltTicks, Tick) -
+      Orbit.Halting(Turning, HaltTicks, Tick - 1);
+    Assert.IsTrue((Step < Gain) and (Step > 0), Format('Tick %d of the halt ' +
+      'gains %g, the one before %g', [Tick, Step, Gain]));
+    Gain := Step;
+  end;
+  var Stand := Orbit.Clock(Turning) + HaltTicks / 2;
+  for var Tick in Afterwards do
+    Assert.IsTrue(IsNear(Orbit.Halting(Turning, HaltTicks, Tick), Stand),
+      Format('%d ticks into the halt the clock stands', [Tick]));
+end;
+
+procedure TCarouselOrbitTests.TestHaltInTheSpeedUpBrakesFromTheSlowerPace;
+const
+  SpeedUpTicks = TicksPerSecond;
+  HaltTicks = 40;
+begin
+  var Carousel := CircleOf;
+  Carousel.SpeedUp := 1;
+  var Orbit := OrbitOfSlot(Carousel, 0, 1);
+  var Turning := SpeedUpTicks div 2;
+  var Pace := Turning / SpeedUpTicks;
+  Assert.IsTrue(IsNear(Orbit.Halting(Turning, HaltTicks, HaltTicks),
+    Orbit.Clock(Turning) + Pace * HaltTicks / 2),
+    'Halfway up to its pace, it runs on half as far');
+end;
+
+procedure TCarouselOrbitTests.TestHaltOfNoTicksStandsAtOnce;
+const
+  Turning = 100;
+  Ticks: array [0..2] of Integer = (0, 1, 50);
+begin
+  var Orbit := OrbitOfSlot(CircleOf, 0, 1);
+  for var Tick in Ticks do
+    Assert.IsTrue(IsNear(Orbit.Halting(Turning, 0, Tick),
+      Orbit.Clock(Turning)), Format('%d ticks into a halt of none', [Tick]));
+end;
+
 // ---------------------------------------------------------------------------
 // TCarouselLandingTests
 // ---------------------------------------------------------------------------
@@ -777,6 +859,7 @@ begin
     'The first pad starts on the right of the middle');
   Assert.IsFalse(Carousel.Parked, 'In its place from the start');
   Assert.IsTrue(IsNear(Carousel.SpeedUp, 0), 'At its pace at once');
+  Assert.IsFalse(Carousel.Failing.Breaks, 'It cannot break');
 end;
 
 procedure TLevelsCarouselsTests.TestWordsAreReadInAnyCase;
@@ -820,6 +903,56 @@ begin
   Assert.AreEqual(1, Integer(Length(ParseText(SectionOf(
     '"shape":"box","corner":60,"start":0.99')))),
     'A corner of half the box and a start just short of a lap load');
+end;
+
+procedure TLevelsCarouselsTests.TestFailingLookReadsWhatItIsGiven;
+begin
+  var Carousel := OnlyCarousel(SectionOf('"failing":{"sprite":"pad-out",' +
+    '"rig":["sparks","smoke"],"plunge":{"delay":0.25,"rest":1,"rise":32}}'));
+  var Failing := Carousel.Failing;
+  Assert.IsTrue(Failing.Breaks, 'It may break');
+  Assert.AreEqual('pad-out', Failing.Sprite);
+  Assert.AreEqual(2, Integer(Length(Failing.Rigs)), 'The rigs');
+  Assert.AreEqual('sparks', Failing.Rigs[0]);
+  Assert.AreEqual('smoke', Failing.Rigs[1]);
+  Assert.IsTrue(Failing.Plunge.Plunges, 'Its pads plunge');
+  Assert.IsTrue(IsNear(Failing.Plunge.Delay, 0.25), 'The delay');
+  Assert.IsTrue(IsNear(Failing.Plunge.Rest, 1), 'The rest');
+  Assert.IsTrue(IsNear(Failing.Plunge.Rise, 32), 'The rise');
+
+  Carousel := OnlyCarousel(SectionOf('"failing":{"sprite":"pad-out",' +
+    '"plunge":{}}'));
+  Assert.AreEqual(0, Integer(Length(Carousel.Failing.Rigs)),
+    'No rig named, none worn');
+  Assert.IsTrue(Carousel.Failing.Plunge.Plunges,
+    'A plunge of no numbers plunges as a pad of the level file does');
+end;
+
+procedure TLevelsCarouselsTests.TestBadFailingLookRaises;
+begin
+  ExpectRaises(SectionOf('"failing":{"plunge":{}}'), 'A look with no sprite');
+  ExpectRaises(SectionOf('"failing":{"sprite":"pad-out"}'),
+    'Pads that break but do not plunge');
+  Assert.WillRaise(
+    procedure
+    begin
+      ParseText(SectionOf('"failing":{"sprite":"pad-out",' +
+        '"plunge":{"rise":0}}'));
+    end, EPadError, 'A plunge a pad would refuse');
+  Assert.WillRaise(
+    procedure
+    begin
+      ParseText(SectionOf('"failing":{"sprite":"pad-out","rig":"sparks",' +
+        '"plunge":{}}'));
+    end, ERigError, 'Rigs that are not a list');
+end;
+
+procedure TLevelsCarouselsTests.TestFailingRigTagIsATagOfItsOwn;
+begin
+  Assert.AreNotEqual('ride-01', FailingRigTag('ride-01'),
+    'The look of a pad hangs apart from the pad');
+  Assert.AreNotEqual(FailingRigTag('ride-01'), FailingRigTag('ride-02'),
+    'Two pads, two looks');
 end;
 
 procedure TLevelsCarouselsTests.TestCarouselIsFoundByItsTag;

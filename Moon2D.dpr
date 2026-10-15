@@ -467,6 +467,8 @@ type
     function HeroColumn: Integer;
     function TrialAct: Integer;
     procedure TellShelves(const AAction: TEventAction);
+    procedure BreakCarousel(const ATag: string;
+      const ABreakdown: TCarouselBreak);
     procedure FlyInParked(const ATag: string);
     function CannonsScenePlays: Boolean;
     procedure ReleaseHeldFlyIns;
@@ -745,6 +747,7 @@ begin
   Cues.Arena.Restore := FArena.Restore;
   Cues.Arena.FlyIn := FlyInParked;
   Cues.Shelves := TellShelves;
+  Cues.BreakCarousel := BreakCarousel;
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.Cannons := StartCannons;
   Cues.Spawn := SpawnGuest;
@@ -1243,8 +1246,13 @@ begin
     Command.Call := scSleep;
   Command.Run := AAction.Shelves;
   Command.SpareHero := AAction.SpareHero;
-  FPads.TellBank(AAction.Target, Command, AAction.Order, AAction.StepSeconds,
-    HeroCenter.X);
+  FPads.TellBank(AAction.Target, Command, AAction.Telling, HeroCenter.X);
+end;
+
+procedure TMoonGame.BreakCarousel(const ATag: string;
+  const ABreakdown: TCarouselBreak);
+begin
+  FPads.TryBreakCarousel(ATag, ABreakdown.HaltSeconds, ABreakdown.StepSeconds);
 end;
 
 // The level lets no tag name both a carousel and a pad group. Told while
@@ -1415,13 +1423,16 @@ function TMoonGame.LocateParent(const ATag: string;
   out AStand: TParentStand): Boolean;
 begin
   AStand := Default(TParentStand);
-  var Pad := FPads.FindTagged(ATag);
+  var FailingLook: Boolean;
+  var Pad := FPads.FindWearer(ATag, FailingLook);
   if Pad <> nil then
   begin
     AStand.Screen := Pad.Screen;
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
-    AStand.Alive := True;
+    // A broken pad puts out its own rigs and lights those of its failing
+    // look
+    AStand.Alive := Pad.Failed = FailingLook;
     // A pad working its jets lifts what hangs on it: flat out in a
     // flight and just before one, in fits when it is a pad that plunges;
     // a shelf lights it to warn that it is about to slide in
@@ -2395,7 +2406,8 @@ begin
   Command := Default(TShelfCommand);
   Command.Call := ACall;
   Command.Run.Kind := pgHold;
-  FPads.TellBank(FCannons.YieldBank, Command, boFile, 0, HeroCenter.X);
+  FPads.TellBank(FCannons.YieldBank, Command, Default(TBankTelling),
+    HeroCenter.X);
 end;
 
 // Sparks off a cannon's steel, thrown back the way the shot came from:

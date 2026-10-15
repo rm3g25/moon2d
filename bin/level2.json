@@ -1593,7 +1593,8 @@
       "period": 15,
       "turn": "cw",
       "parked": "above",
-      "speedUp": 3
+      "speedUp": 3,
+      "failing": {"sprite": "s16-platform-out", "rig": ["padFailing"], "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}}
     }
   ],
   "rigs": {
@@ -3292,6 +3293,19 @@
       "when": "gravelDealt", "act": 4, "part": 2, "of": 3,
       "then": [
         {"action": "spawn", "monster": "platform", "spriteList": "platform.mns", "row": 10, "from": "right", "tag": "s09-tek-02", "rig": ["tekPlatform"]}
+      ]
+    },
+    {
+      "id": "s09-act5",
+      "screen": 9,
+      "when": "actReached", "act": 5,
+      "then": [
+        {"action": "breakCarousel", "target": "s09-carousel", "halt": 2, "step": 0.4},
+        {"action": "shelvesSleep", "target": "s09-floor", "order": "toHero", "step": 0.1},
+        {"action": "shelvesWake", "target": "s09-floor", "pick": 6, "order": "left", "step": 0.15},
+        {"action": "shelvesProgram", "target": "s09-foot", "program": "blink", "out": 2.0, "in": 1.2},
+        {"action": "shelvesProgram", "target": "s09-wall", "program": "blink", "out": 2.0, "in": 1.2},
+        {"action": "medkitsOnto", "target": "s09-floor"}
       ]
     }
   ],

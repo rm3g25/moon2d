@@ -95,6 +95,19 @@
   until the last of them is down, then the carousel turns, its clock
   speeding up from a standstill.
 
+  A turning carousel may break: its clock runs down to a standstill, and
+  then its pads, one after another in an order the dice give, become pads
+  that plunge where they stand, in the picture of their failing look. The
+  rigs of a pad hang on its tag, those of its failing look on a tag of
+  their own (Levels.Carousels): the game asks which a tag is, and lights
+  the ones that fit the pad as it is now. A carousel not yet in the room -
+  parked, or coming down - does not break.
+
+  The shelves of a bank may be told a few at a time: as many as the event
+  says, as the dice pick them. Asked where a medkit may come down, the
+  bank names a shelf meant to stand out - told to come out, or never told
+  and held out by the level file - when it has one.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -129,8 +142,17 @@ type
   end;
 
   // A pad on a carousel: going round it, waiting above the screen, coming
-  // down to its slot, standing on the slot until the rest are down
-  TOrbitPhase = (opTurning, opParked, opLanding, opOnSlot);
+  // down to its slot, standing on the slot until the rest are down, its
+  // clock running down to a standstill after a break
+  TOrbitPhase = (opTurning, opParked, opLanding, opOnSlot, opHalting);
+
+  // What a pad of a carousel that may break becomes: its picture and the
+  // way it plunges. Breaks is False for any other pad.
+  TPadFailLook = record
+    Breaks: Boolean;
+    Texture: PSdlTexture;
+    Plunge: TPadPlunge;
+  end;
 
   TPad = class
   private
@@ -176,6 +198,15 @@ type
     FOrbitClock: Integer;
     FLandingClock: Integer;
     FLanding: TCarouselLanding;
+    // The halt: the turning ticks it began at, its length, and the ticks
+    // into it
+    FHaltFrom: Integer;
+    FHaltTicks: Integer;
+    FHaltClock: Integer;
+    FFailLook: TPadFailLook;
+    FFailed: Boolean;
+    // The tick of the clock the pad breaks at; NoBreak when it is not to
+    FBreakAt: Integer;
     FWasBehind: Boolean;
     // All the way into the depth, as the pad looks there
     FDeep: TPadDeepLook;
@@ -183,11 +214,13 @@ type
     // up at; NoCommand when it is told nothing
     FShelfCommand: TShelfCommand;
     FShelfCommandAt: Integer;
+    FShelfTold: Boolean;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure PlaceOnOrbit;
     procedure RewindOrbit;
     procedure TickOrbit;
+    procedure Fail;
     procedure TickFlight;
     procedure TickBob;
     procedure TickSag;
@@ -197,9 +230,10 @@ type
     function GetRight: Double;
   public
     // AOrbit - the pad's way round its carousel; one that does not ride
-    // for a pad on none
+    // for a pad on none. AFailLook - what it becomes when its carousel
+    // breaks.
     constructor Create(const APlacement: TPadPlacement; ATexture: PSdlTexture;
-      const AOrbit: TCarouselOrbit);
+      const AOrbit: TCarouselOrbit; const AFailLook: TPadFailLook);
     // The deck spans some of ALeft..ARight, edges included
     function DeckSpans(ALeft, ARight: Double): Boolean;
     // The same for the deck as it stood a tick ago
@@ -224,6 +258,11 @@ type
     procedure Land;
     // A pad on its slot starts round the track; nothing for any other
     procedure StartTurning;
+    // A pad of a turning carousel: its clock runs down to a standstill
+    // over AHaltTicks, and AFailTicks after the next tick the pad becomes
+    // one that plunges. Nothing for a pad on no carousel, or one of a
+    // carousel not yet in the room.
+    procedure BreakDown(AHaltTicks, AFailTicks: Integer);
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
@@ -252,6 +291,9 @@ type
     // The two stand flush side by side where their paths or flights put
     // them
     function FlushWith(const AOther: TPad): Boolean;
+    // A shelf meant to stand out: told to come out, or never told and held
+    // out by the level file - or one that runs the level file's program
+    function MeantOut: Boolean;
     // In the depth behind the others, or a shelf not out all the way:
     // neither a floor nor a body
     function Behind: Boolean;
@@ -281,6 +323,10 @@ type
     property Placement: TPadPlacement read FPlacement;
     // Of a pad on a carousel; opTurning for a pad on none
     property OrbitPhase: TOrbitPhase read FOrbitPhase;
+    // Its carousel has broken and the pad plunges now, in its failing look
+    property Failed: Boolean read FFailed;
+    // It has a failing look: a pad of a carousel that may break
+    property CanFail: Boolean read FFailLook.Breaks;
     // Where the path or the flight puts the pad, the knock left out
     property HomeLeft: Double read FPathLeft;
     property HomeTop: Double read FPathTop;
@@ -361,10 +407,12 @@ type
       const AMembers: TArray<TPad>; out AFlights: TPadFlights): Boolean;
     procedure ParkGroups;
     function RidersOf(const ACarousel: string): TArray<TPad>;
+    function Shuffled(const APads: TArray<TPad>): TArray<TPad>;
     procedure TurnLandedCarousels;
     function BankOf(const ABank: string): TArray<TPad>;
     function OrderedBank(const ABank: string; AOrder: TBankOrder;
       AHeroX: Double): TArray<TPad>;
+    function Picked(const AShelves: TArray<TPad>; ACount: Integer): TArray<TPad>;
     function ProgramWait(const APad: TPad; AIndex: Integer;
       const ACommand: TShelfCommand): Integer;
   public
@@ -398,13 +446,14 @@ type
     // that finds a pad no way flies nothing: ask again.
     procedure RequestRestore(const AGroup: string; const ALoad: TPadLoad;
       const ARelease: TPadRelease; const APace: TFlightPace);
-    // The shelves of the bank ABank take up ACommand in AOrder, each
-    // AStepSeconds after the one before; AHeroX - the middle of the hero,
-    // for the order from the farthest to him
+    // The shelves of the bank ABank, or as many of them as ATelling picks,
+    // take up ACommand in its order, a step apart; AHeroX - the middle of
+    // the hero, for the order from the farthest to him
     procedure TellBank(const ABank: string; const ACommand: TShelfCommand;
-      AOrder: TBankOrder; AStepSeconds: Single; AHeroX: Double);
+      const ATelling: TBankTelling; AHeroX: Double);
     // The middle across of one shelf of the bank ABank, as the dice pick
-    // it. False when the bank has none.
+    // it - one meant to stand out, when the bank has any. False when the
+    // bank has none at all.
     function TryPickBankMiddle(const ABank: string; out AX: Double): Boolean;
     // The parked carousel tagged ATag comes down to its track and turns
     // once all its pads are on it. False when no carousel carries the tag;
@@ -413,6 +462,11 @@ type
     // A carousel flown in does not turn yet: a pad of it is still coming
     // down or waits on its slot for the rest
     function CarouselLanding: Boolean;
+    // The carousel tagged ATag runs down to a standstill over AHaltSeconds,
+    // then its pads break one every AStepSeconds. False when no carousel
+    // that may break carries the tag.
+    function TryBreakCarousel(const ATag: string; AHaltSeconds,
+      AStepSeconds: Single): Boolean;
     // A rebuild or a restore is asked for or flying
     function Rebuilding: Boolean;
     // Every pad of the group tagged AGroup stands where the level file
@@ -454,8 +508,9 @@ type
     // The bodies of the screen's pads standing in front: the matter of
     // the pads. A pad in the depth is none.
     function Bodies(AScreen: Integer): TArray<TSdlFRect>;
-    // nil when no pad carries the tag
-    function FindTagged(const ATag: string): TPad;
+    // The pad the rigs tagged ATag hang on: by its own tag, or by the tag
+    // of its failing look - AFailingLook says which. nil when none.
+    function FindWearer(const ATag: string; out AFailingLook: Boolean): TPad;
     // The boss's body struck: the pad it struck, if one, is knocked the
     // way the body went - a cell, or as far as the walls, AFence and the
     // other pads let it; on a screen whose group is being rebuilt it only
@@ -509,6 +564,7 @@ const
   EdgeSlop = 0.001;
   NoFlight = -1;
   NoCommand = -1;
+  NoBreak = -1;
   // A flying pad stills its bob over this many ticks and takes it up
   // again over as many on its cell
   BobFadeTicks = 10;
@@ -539,7 +595,8 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TPad.Create(const APlacement: TPadPlacement;
-  ATexture: PSdlTexture; const AOrbit: TCarouselOrbit);
+  ATexture: PSdlTexture; const AOrbit: TCarouselOrbit;
+  const AFailLook: TPadFailLook);
 var
   ArtWidth, ArtHeight: Integer;
 begin
@@ -550,6 +607,7 @@ begin
   FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
   FBodyDepth := EnsureRange(FPictureHeight, ThinnestBody, TileSize);
   FOrbit := AOrbit;
+  FFailLook := AFailLook;
   FDeep := FlownDeep;
   if APlacement.Shelf.Slides then
     FDeep := APlacement.Shelf.Deep;
@@ -598,6 +656,9 @@ procedure TPad.Rewind;
 begin
   FShelf.Build(FPlacement.Shelf);
   FShelfCommandAt := NoCommand;
+  FShelfTold := False;
+  FFailed := False;
+  FBreakAt := NoBreak;
   FClock := 0;
   FPathLeft := FPlacement.X;
   FPathTop := FPlacement.Y;
@@ -669,8 +730,12 @@ var
   MiddleX, DeckY: Double;
 begin
   var Time: Double := 0;
-  if FOrbitPhase = opTurning then
-    Time := FOrbit.Clock(FOrbitClock);
+  case FOrbitPhase of
+    opTurning:
+      Time := FOrbit.Clock(FOrbitClock);
+    opHalting:
+      Time := FOrbit.Halting(FHaltFrom, FHaltTicks, FHaltClock);
+  end;
   FOrbit.Place(Time, MiddleX, DeckY);
   case FOrbitPhase of
     opParked:
@@ -705,6 +770,8 @@ begin
         if FLandingClock >= FLanding.Done then
           FOrbitPhase := opOnSlot;
       end;
+    opHalting:
+      Inc(FHaltClock);
   end;
 end;
 
@@ -723,6 +790,35 @@ begin
     Exit;
   FOrbitClock := 0;
   FOrbitPhase := opTurning;
+end;
+
+// A pad still on its slot stands where it is: its clock has not started
+procedure TPad.BreakDown(AHaltTicks, AFailTicks: Integer);
+begin
+  if not FOrbit.Rides or (FOrbitPhase in [opParked, opLanding, opHalting]) then
+    Exit;
+  FHaltFrom := 0;
+  FHaltTicks := 0;
+  if FOrbitPhase = opTurning then
+  begin
+    FHaltFrom := FOrbitClock;
+    FHaltTicks := AHaltTicks;
+  end;
+  FHaltClock := 0;
+  FOrbitPhase := opHalting;
+  FBreakAt := FClock + 1 + AFailTicks;
+end;
+
+// It falls from where it stands now, as far under the screen as a pad of
+// the level file falls from its place; the dice go by its place, as ever
+procedure TPad.Fail;
+begin
+  FBreakAt := NoBreak;
+  if not FFailLook.Breaks then
+    Exit;
+  FFailed := True;
+  FPlunge.Rewind(FFailLook.Plunge, ScreenHeight + PlungeDepth - FPathTop,
+    PlungeSeed(FPlacement));
 end;
 
 // The bob's ripple goes with the pad: on its cell the pad sways in step
@@ -818,6 +914,8 @@ begin
   FLatched := FShelf.Latches(FClock);
   TickOrbit;
   PlaceOnPath;
+  if FClock = FBreakAt then
+    Fail;
   TickFlight;
   TickBob;
   TickSag;
@@ -833,6 +931,7 @@ procedure TPad.TellShelf(const ACommand: TShelfCommand; ADelayTicks: Integer);
 begin
   FShelfCommand := ACommand;
   FShelfCommandAt := FClock + 1 + ADelayTicks;
+  FShelfTold := True;
 end;
 
 procedure TPad.Park(ATop: Double);
@@ -903,6 +1002,14 @@ begin
     Abs(FPathLeft + FPlacement.Width - AOther.FPathLeft) < DeckSlop;
   var Meets := MeetsOnLeft or MeetsOnRight;
   Result := OnOneLine and Meets;
+end;
+
+function TPad.MeantOut: Boolean;
+begin
+  if FShelfTold then
+    Exit(FShelfCommand.Call = scWake);
+  var Shelf := FPlacement.Shelf;
+  Result := not Shelf.Held or (Shelf.HeldStand = shOut);
 end;
 
 function TPad.Behind: Boolean;
@@ -1025,14 +1132,34 @@ begin
   // As the riders are drawn, so the feet do not flicker into the deck
   Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale) +
     FDeep.Sink * Sunk;
-  TintTexture(FTexture, Round(FPlacement.Tint.R * Tone),
+  var Texture := FTexture;
+  if FFailed then
+    Texture := FFailLook.Texture;
+  TintTexture(Texture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
-  ASprites.DrawRectF(FTexture, Dest, Tilt(AAlpha) + FPlunge.Lean);
+  ASprites.DrawRectF(Texture, Dest, Tilt(AAlpha) + FPlunge.Lean);
 end;
 
 // ---------------------------------------------------------------------------
 // TPadWorld
 // ---------------------------------------------------------------------------
+
+// What the pad becomes when its carousel breaks; nothing for a pad of no
+// carousel that may break
+function FailLookOf(const ACache: TSpriteCache; const ALevel: TLevel;
+  const APlacement: TPadPlacement): TPadFailLook;
+var
+  Carousel: TCarousel;
+begin
+  Result := Default(TPadFailLook);
+  var Breaks := TryFindCarousel(ALevel.Carousels, APlacement.Carousel,
+    Carousel) and Carousel.Failing.Breaks;
+  if not Breaks then
+    Exit;
+  Result.Breaks := True;
+  Result.Texture := ACache.Get(Carousel.Failing.Sprite);
+  Result.Plunge := Carousel.Failing.Plunge;
+end;
 
 constructor TPadWorld.Create(const ASprites: TSpriteRenderer;
   const ACache: TSpriteCache; const ALevel: TLevel;
@@ -1046,7 +1173,8 @@ begin
   var Placements := ALevel.Pads;
   for var i := 0 to High(Placements) do
     FPads.Add(TPad.Create(Placements[i], ACache.Get(Placements[i].Sprite),
-      OrbitOf(ALevel.Carousels, Placements, i)));
+      OrbitOf(ALevel.Carousels, Placements, i),
+      FailLookOf(ACache, ALevel, Placements[i])));
   Rewind(ASeed);
 end;
 
@@ -1292,11 +1420,21 @@ begin
   Pad.Knock(KnockX, KnockY, ABlow.Ticks);
 end;
 
-function TPadWorld.FindTagged(const ATag: string): TPad;
+function TPadWorld.FindWearer(const ATag: string;
+  out AFailingLook: Boolean): TPad;
 begin
+  AFailingLook := False;
   for var Pad in FPads do
+  begin
     if Pad.Tag = ATag then
       Exit(Pad);
+    var OfItsLook := Pad.CanFail and (FailingRigTag(Pad.Tag) = ATag);
+    if OfItsLook then
+    begin
+      AFailingLook := True;
+      Exit(Pad);
+    end;
+  end;
   Result := nil;
 end;
 
@@ -1634,6 +1772,37 @@ begin
   Result := False;
 end;
 
+// Every order as likely as another
+function TPadWorld.Shuffled(const APads: TArray<TPad>): TArray<TPad>;
+begin
+  Result := Copy(APads);
+  for var i := High(Result) downto 1 do
+  begin
+    var Other := Min(i, Trunc(FDice.NextUnit * (i + 1)));
+    var Pad := Result[i];
+    Result[i] := Result[Other];
+    Result[Other] := Pad;
+  end;
+end;
+
+// All break at once on the halt, so a pad over another keeps the gap of
+// their slots as the clock runs down
+function TPadWorld.TryBreakCarousel(const ATag: string; AHaltSeconds,
+  AStepSeconds: Single): Boolean;
+var
+  Carousel: TCarousel;
+begin
+  Result := TryFindCarousel(FLevel.Carousels, ATag, Carousel) and
+    Carousel.Failing.Breaks;
+  if not Result then
+    Exit;
+  var HaltTicks := Round(AHaltSeconds * LogicTicksPerSecond);
+  var Riders := Shuffled(RidersOf(ATag));
+  for var i := 0 to High(Riders) do
+    Riders[i].BreakDown(HaltTicks,
+      HaltTicks + Round(i * AStepSeconds * LogicTicksPerSecond));
+end;
+
 // ---------------------------------------------------------------------------
 // The banks of shelves
 // ---------------------------------------------------------------------------
@@ -1712,24 +1881,52 @@ begin
   end;
 end;
 
+// ACount of the shelves, in their order: each is taken with the odds of
+// the places left among the shelves left, so every set of ACount is as
+// likely as another. All of them for 0 or for no fewer than they are.
+function TPadWorld.Picked(const AShelves: TArray<TPad>;
+  ACount: Integer): TArray<TPad>;
+begin
+  if (ACount = 0) or (ACount >= Length(AShelves)) then
+    Exit(AShelves);
+  Result := [];
+  var PlacesLeft := ACount;
+  for var i := 0 to High(AShelves) do
+  begin
+    var ShelvesLeft := Length(AShelves) - i;
+    if FDice.NextUnit * ShelvesLeft < PlacesLeft then
+    begin
+      Result := Result + [AShelves[i]];
+      Dec(PlacesLeft);
+    end;
+  end;
+end;
+
 procedure TPadWorld.TellBank(const ABank: string;
-  const ACommand: TShelfCommand; AOrder: TBankOrder; AStepSeconds: Single;
+  const ACommand: TShelfCommand; const ATelling: TBankTelling;
   AHeroX: Double);
 begin
-  var Shelves := OrderedBank(ABank, AOrder, AHeroX);
+  var Shelves := Picked(OrderedBank(ABank, ATelling.Order, AHeroX),
+    ATelling.Pick);
   for var i := 0 to High(Shelves) do
   begin
-    var Stagger := Round(i * AStepSeconds * LogicTicksPerSecond);
+    var Stagger := Round(i * ATelling.StepSeconds * LogicTicksPerSecond);
     Shelves[i].TellShelf(ACommand,
       Stagger + ProgramWait(Shelves[i], i, ACommand));
   end;
 end;
 
+// A medkit over a shelf about to go into the wall falls into the pit
 function TPadWorld.TryPickBankMiddle(const ABank: string;
   out AX: Double): Boolean;
 begin
   AX := 0;
-  var Shelves := BankOf(ABank);
+  var Shelves: TArray<TPad> := [];
+  for var Shelf in BankOf(ABank) do
+    if Shelf.MeantOut then
+      Shelves := Shelves + [Shelf];
+  if Length(Shelves) = 0 then
+    Shelves := BankOf(ABank);
   Result := Length(Shelves) > 0;
   if not Result then
     Exit;

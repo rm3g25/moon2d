@@ -317,6 +317,8 @@ resourcestring
     + 'both a pad group and a carousel carry - it cannot tell which';
   SLevelEventBankUnknown = 'Level "%s": event "%s" tells the bank "%s", '
     + 'which no shelf carries';
+  SLevelEventBreakUnknown = 'Level "%s": event "%s" breaks "%s", which no '
+    + 'carousel that may break carries';
   SLevelPadGroupNoConductor = 'Level "%s": pad group "%s" follows "%s", '
     + 'which no entity on its screen carries';
   SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
@@ -544,16 +546,38 @@ begin
   Result.Rigs := AOrders.Rigs;
 end;
 
-// The pads first, then the placements, then the spawned bodies, each in
-// file order. A haze paints over the ones hung before it: the order is the
-// order they are drawn in.
+// The look a pad of a carousel that may break takes when it breaks: its
+// rigs hang on a tag made from the pad's. A pad with no tag gives none, and
+// the rigs refuse it.
+function FailingWearer(const APad: TPadPlacement;
+  const AFailing: TCarouselFailing): TRigWearer;
+begin
+  Result.Tag := '';
+  if APad.Tag <> '' then
+    Result.Tag := FailingRigTag(APad.Tag);
+  Result.Name := PadRigName(APad) + ' broken';
+  Result.Rigs := AFailing.Rigs;
+end;
+
+// The pads first, each with its failing look after it, then the
+// placements, then the spawned bodies, each in file order. A haze paints
+// over the ones hung before it: the order is the order they are drawn in.
 function RigWearersOf(const APads: TArray<TPadPlacement>;
+  const ACarousels: TArray<TCarousel>;
   const AEntities: TArray<TEntityPlacement>;
   const AEvents: TArray<TLevelEvent>): TArray<TRigWearer>;
+var
+  Carousel: TCarousel;
 begin
   Result := [];
   for var Pad in APads do
+  begin
     Result := Result + [PadWearer(Pad)];
+    var Breaks := TryFindCarousel(ACarousels, Pad.Carousel, Carousel) and
+      Carousel.Failing.Breaks;
+    if Breaks then
+      Result := Result + [FailingWearer(Pad, Carousel.Failing)];
+  end;
   for var Entity in AEntities do
     Result := Result + [EntityWearer(Entity)];
   for var Event in AEvents do
@@ -607,7 +631,8 @@ begin
   FEvents := ParseLevelEvents(ARoot, FId);
   // Before the checks: the parts of a rig are dynamic objects as the
   // rest, and a group's alarm lamps may be among them
-  WearRigs(ARoot, FId, RigWearersOf(FPads, FEntities, FEvents), FDynamics);
+  WearRigs(ARoot, FId, RigWearersOf(FPads, FCarousels, FEntities, FEvents),
+    FDynamics);
   CheckDynamics;
   CheckPadGroupLinks;
   // After the dynamics: an event may name a dynamic object's tag
@@ -647,6 +672,15 @@ var
   Carousel: TCarousel;
 begin
   Result := TryFindCarousel(ACarousels, ATag, Carousel) and Carousel.Parked;
+end;
+
+function AnyBreakingCarouselTagged(const ACarousels: TArray<TCarousel>;
+  const ATag: string): Boolean;
+var
+  Carousel: TCarousel;
+begin
+  Result := TryFindCarousel(ACarousels, ATag, Carousel) and
+    Carousel.Failing.Breaks;
 end;
 
 function AnyShelfOfBank(const APads: TArray<TPadPlacement>;
@@ -718,6 +752,10 @@ begin
         not AnyShelfOfBank(FPads, AAction.Cannons.YieldBank) then
         raise ELevelError.CreateFmt(SLevelEventBankUnknown,
           [FId, AEventId, AAction.Cannons.YieldBank]);
+    eaBreakCarousel:
+      if not AnyBreakingCarouselTagged(FCarousels, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventBreakUnknown,
+          [FId, AEventId, AAction.Target]);
   end;
 end;
 
@@ -835,6 +873,22 @@ begin
   for var Pad in APads do
     if Pad.Tag = ATag then
       Inc(Result);
+end;
+
+// The rigs of a pad's failing look hang on it as on the pad itself
+function AnyFailingLookTagged(const APads: TArray<TPadPlacement>;
+  const ACarousels: TArray<TCarousel>; const ATag: string): Boolean;
+var
+  Carousel: TCarousel;
+begin
+  for var Pad in APads do
+  begin
+    var Breaks := TryFindCarousel(ACarousels, Pad.Carousel, Carousel) and
+      Carousel.Failing.Breaks;
+    if Breaks and (Pad.Tag <> '') and (FailingRigTag(Pad.Tag) = ATag) then
+      Exit(True);
+  end;
+  Result := False;
 end;
 
 function AnySpawnTagged(const AEvents: TArray<TLevelEvent>;
@@ -1300,7 +1354,8 @@ begin
     Found := True;
   end;
 
-  var OnPad := PadsTagged(FPads, ATag) > 0;
+  var OnPad := (PadsTagged(FPads, ATag) > 0) or
+    AnyFailingLookTagged(FPads, FCarousels, ATag);
   var OnEntity := AnyPlacementTagged(FEntities, ATag);
   var OnSpawn := AnySpawnTagged(FEvents, ATag);
   var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity) + Ord(OnSpawn);

@@ -36,7 +36,7 @@ type
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
-    eaSpawn);
+    eaSpawn, eaBreakCarousel);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -62,6 +62,14 @@ type
     Rigs: TArray<string>;
   end;
 
+  // A carousel that breaks: its clock runs down to a standstill over
+  // HaltSeconds, then its pads become pads that plunge where they stand, one
+  // every StepSeconds, in an order the dice give
+  TCarouselBreak = record
+    HaltSeconds: Single;
+    StepSeconds: Single;
+  end;
+
   TEventAction = record
     Kind: TEventActionKind;
     Text: TLocalizedText; // the message kinds; localized like the triggers
@@ -85,11 +93,13 @@ type
     // eaShelvesProgram: they run Shelves from now on, waking if asleep.
     // eaShelvesSleep: they warn and go into the wall, and stay there;
     // with SpareHero a shelf the hero stands on waits until he is off it.
-    // The three tell the shelves in Order, each StepSeconds after the one
-    // before. JSON: "target", "program" (a word of ShelfProgramIds),
-    // "out", "in", "warn" (seconds), "order" (a word of BankOrderIds,
-    // file by default), "step" (seconds, 0 by default); eaShelvesSleep
-    // also "spareHero" (false by default).
+    // The three tell the shelves as Telling says: in its order, a step
+    // apart; with a pick above zero only that many of the bank, as the dice
+    // pick them, are told, the rest are left as they are. JSON: "target",
+    // "program" (a word of ShelfProgramIds), "out", "in", "warn"
+    // (seconds), "order" (a word of BankOrderIds, file by default), "step"
+    // (seconds, 0 by default), "pick" (0 by default - every shelf);
+    // eaShelvesSleep also "spareHero" (false by default).
     // eaFlyIn: the pads of the group Target, parked above the screen,
     // fly in to where the level file puts them (Pads.Arena); or the
     // carousel Target, parked, comes down to its track and turns
@@ -105,6 +115,8 @@ type
     // flies off when that act ends - so the event must wait for one. JSON:
     // "monster", "spriteList" (optional), "row", "from" ("left" or "right"),
     // "tag" and "rig" (optional, a rig needs the tag).
+    // eaBreakCarousel: the carousel Target breaks as Breakdown says. JSON:
+    // "target", "halt" and "step" (seconds, 0 by default).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -118,11 +130,11 @@ type
     Ticks: Integer;
     Tactics: TPilotTactics;
     Shelves: TShelfProgram;
-    Order: TBankOrder;
-    StepSeconds: Single;
+    Telling: TBankTelling;
     SpareHero: Boolean;
     Cannons: TCannonOrders;
     Spawn: TSpawnOrders;
+    Breakdown: TCarouselBreak;
   end;
 
   // One event in level JSON:
@@ -160,7 +172,8 @@ const
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
-    'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn');
+    'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
+    'breakCarousel');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -215,6 +228,8 @@ resourcestring
     + 'right, not "%s"';
   SEventSpawnNoAct = 'Level "%s": event "%s": spawn needs an event that waits '
     + 'for an act';
+  SEventBadPick = 'Level "%s": event "%s": %s picks %d shelves';
+  SEventBreakNumber = 'Level "%s": event "%s": breakCarousel takes %s %g';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -290,7 +305,7 @@ begin
 end;
 
 // The pad group of a rebuild, a restore or a fly-in; the bank of the
-// shelf actions
+// shelf actions; the carousel of a break
 procedure ReadGroupTarget(const AObj: TJSONObject;
   const ALevelId, AEventId: string; var AAction: TEventAction);
 begin
@@ -350,15 +365,33 @@ begin
   if AAction.Kind <> eaShelvesSleep then
     ReadShelfProgram(AObj, ALevelId, AEventId, AAction);
   AAction.Shelves.WarnSeconds := AObj.GetValue<Double>('warn', 0);
-  AAction.Order := BankOrderOf(AObj.GetValue<string>('order',
+  AAction.Telling.Order := BankOrderOf(AObj.GetValue<string>('order',
     BankOrderIds[boFile]), ALevelId, AEventId);
-  AAction.StepSeconds := AObj.GetValue<Double>('step', 0);
+  AAction.Telling.StepSeconds := AObj.GetValue<Double>('step', 0);
   if AAction.Kind = eaShelvesSleep then
     AAction.SpareHero := AObj.GetValue<Boolean>('spareHero', False);
-  var Shortest := Min(AAction.Shelves.WarnSeconds, AAction.StepSeconds);
+  var Shortest := Min(AAction.Shelves.WarnSeconds, AAction.Telling.StepSeconds);
   if Shortest < 0 then
     raise ELevelEventError.CreateFmt(SEventShelfNumber,
       [ALevelId, AEventId, EventActionIds[AAction.Kind], 'a wait', Shortest]);
+  AAction.Telling.Pick := AObj.GetValue<Integer>('pick', 0);
+  if AAction.Telling.Pick < 0 then
+    raise ELevelEventError.CreateFmt(SEventBadPick,
+      [ALevelId, AEventId, EventActionIds[AAction.Kind], AAction.Telling.Pick]);
+end;
+
+procedure ReadBreak(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+begin
+  ReadGroupTarget(AObj, ALevelId, AEventId, AAction);
+  AAction.Breakdown.HaltSeconds := AObj.GetValue<Double>('halt', 0);
+  if AAction.Breakdown.HaltSeconds < 0 then
+    raise ELevelEventError.CreateFmt(SEventBreakNumber,
+      [ALevelId, AEventId, 'a halt', AAction.Breakdown.HaltSeconds]);
+  AAction.Breakdown.StepSeconds := AObj.GetValue<Double>('step', 0);
+  if AAction.Breakdown.StepSeconds < 0 then
+    raise ELevelEventError.CreateFmt(SEventBreakNumber,
+      [ALevelId, AEventId, 'a step', AAction.Breakdown.StepSeconds]);
 end;
 
 // The rows of a list, each one on the screen; an absent list is empty
@@ -454,6 +487,8 @@ begin
       ReadCannons(AObj, ALevelId, AEventId, Result);
     eaSpawn:
       ReadSpawn(AObj, ALevelId, AEventId, Result);
+    eaBreakCarousel:
+      ReadBreak(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

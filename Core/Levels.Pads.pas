@@ -152,6 +152,14 @@ type
   // hero to the nearest
   TBankOrder = (boFile, boLeft, boRight, boUp, boDown, boToHero);
 
+  // How the shelves of a bank are told: in an order, each StepSeconds after
+  // the one before; Pick of them as the dice pick them, 0 - every one
+  TBankTelling = record
+    Order: TBankOrder;
+    StepSeconds: Single;
+    Pick: Integer;
+  end;
+
   TPadPlacement = record
     Sprite: string; // in the level's object art, as a static object's
     Screen: Integer; // 1-based
@@ -231,6 +239,11 @@ const
 // places it.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
+// The "plunge" of AObj, as a pad reads it; absent = no plunge. A delay or
+// a rest below zero, a rise of zero or less raise, the error naming the
+// owner by AName.
+function ReadPlunge(const AObj: TJSONObject;
+  const ALevelId, AName: string): TPadPlunge;
 // The section padGroups; absent = no groups. A zone that is not four
 // numbers, pairs or farShare below zero, a farFlight below one, a
 // conductor without every above zero, parked anywhere but above raise.
@@ -351,10 +364,9 @@ begin
       [ALevelId, ASprite, 'pause', Result.Pause]);
 end;
 
-// JSON: "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}; absent = the
-// pad holds whatever stands on it
+// JSON: "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}
 function ReadPlunge(const AObj: TJSONObject;
-  const ALevelId, ASprite: string): TPadPlunge;
+  const ALevelId, AName: string): TPadPlunge;
 begin
   Result := Default(TPadPlunge);
   var PlungeObj := AObj.GetValue<TJSONObject>('plunge', nil);
@@ -365,15 +377,15 @@ begin
   Result.Delay := PlungeObj.GetValue<Double>('delay', DefaultPlungeDelay);
   if Result.Delay < 0 then
     raise EPadError.CreateFmt(SPadBadNumber,
-      [ALevelId, ASprite, 'delay', Result.Delay]);
+      [ALevelId, AName, 'delay', Result.Delay]);
   Result.Rest := PlungeObj.GetValue<Double>('rest', DefaultPlungeRest);
   if Result.Rest < 0 then
     raise EPadError.CreateFmt(SPadBadNumber,
-      [ALevelId, ASprite, 'rest', Result.Rest]);
+      [ALevelId, AName, 'rest', Result.Rest]);
   Result.Rise := PlungeObj.GetValue<Double>('rise', DefaultPlungeRise);
   if Result.Rise <= 0 then
     raise EPadError.CreateFmt(SPadBadNumber,
-      [ALevelId, ASprite, 'rise', Result.Rise]);
+      [ALevelId, AName, 'rise', Result.Rise]);
 end;
 
 // JSON: ["out", 2] or ["in", 1.5]

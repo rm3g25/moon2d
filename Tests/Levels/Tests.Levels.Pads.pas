@@ -123,6 +123,10 @@ type
     procedure TestLevelTwoArenaFloorOfActFourIsOneThroughOne;
     [Test]
     procedure TestLevelTwoArenaPyramidSparesTheHero;
+    [Test]
+    procedure TestLevelTwoArenaCarouselBreaksInActFive;
+    [Test]
+    procedure TestLevelTwoArenaFloorOfActFiveComesBackInPieces;
   end;
 
 implementation
@@ -165,6 +169,9 @@ const
   LevelTwoArenaScreen = 9;
   LevelTwoArenaGridBank = 's09-grid';
   LevelTwoArenaGapsBank = 's09-gaps';
+  LevelTwoArenaFloorBank = 's09-floor';
+  // The act the arena carousel breaks and the floor comes back in pieces
+  LevelTwoArenaChaosAct = 5;
   // The carousel of the tests: a circle of 80 round (256, 160), a lap in
   // 4 seconds. Its decks go from 176 to 336 across and from 80 to 240
   // down; a pad 32 wide starts on the right at (320, 160) as placed.
@@ -1126,8 +1133,8 @@ begin
   end;
 end;
 
-// The act 4 pyramid waits for the hero to step off; the act 3 floor goes
-// under his feet as before
+// The act 4 pyramid waits for the hero to step off; the floor goes under
+// his feet in act 3 and in act 5
 procedure TLevelPadsTests.TestLevelTwoArenaPyramidSparesTheHero;
 const
   PyramidBank = 's09-pyramid';
@@ -1154,7 +1161,85 @@ begin
       end;
     end;
   Assert.AreEqual(1, PyramidSleeps, 'The pyramid is told to sleep once');
-  Assert.AreEqual(1, FloorSleeps, 'The floor is told to sleep once');
+  Assert.AreEqual(2, FloorSleeps, 'The floor is told to sleep twice');
+end;
+
+// The event of act 5 breaks it; every pad of it has a tag, and the rigs of
+// the failing look hang on the tag made from it
+procedure TLevelPadsTests.TestLevelTwoArenaCarouselBreaksInActFive;
+var
+  Carousel: TCarousel;
+begin
+  UseLevelTwo;
+
+  Assert.IsTrue(TryFindCarousel(FLevel.Carousels, LevelTwoArenaCarouselTag,
+    Carousel), 'Level 2 holds no carousel tagged ' + LevelTwoArenaCarouselTag);
+  Assert.IsTrue(Carousel.Failing.Breaks, 'The arena carousel may break');
+  Assert.IsTrue(Carousel.Failing.Plunge.Plunges, 'Its pads plunge then');
+
+  var Breaks := 0;
+  for var Event in FLevel.Events do
+    for var Action in Event.Actions do
+      if (Action.Kind = eaBreakCarousel) and
+        (Action.Target = LevelTwoArenaCarouselTag) then
+      begin
+        Inc(Breaks);
+        Assert.AreEqual(LevelTwoArenaChaosAct, Event.Act,
+          'The act the carousel breaks in');
+      end;
+  Assert.AreEqual(1, Breaks, 'The carousel is broken once');
+
+  for var Pad in FLevel.Pads do
+  begin
+    if Pad.Carousel <> LevelTwoArenaCarouselTag then
+      Continue;
+    var Hung := 0;
+    for var DynamicObject in FLevel.Dynamics do
+      if DynamicObject.Placement.Parent = FailingRigTag(Pad.Tag) then
+        Inc(Hung);
+    Assert.IsTrue(Hung > 0, 'No part of the failing look hangs on ' + Pad.Tag);
+  end;
+end;
+
+// Act 5 puts the whole floor to sleep and wakes a few shelves of it, as the
+// dice pick them: the wake replaces the sleep of the shelves it picks
+procedure TLevelPadsTests.TestLevelTwoArenaFloorOfActFiveComesBackInPieces;
+begin
+  UseLevelTwo;
+
+  var Shelves := 0;
+  for var Pad in FLevel.Pads do
+    if Pad.Shelf.InBank(LevelTwoArenaFloorBank) then
+      Inc(Shelves);
+
+  var Sleeps := 0;
+  var Wakes := 0;
+  for var Event in FLevel.Events do
+  begin
+    if (Event.Condition <> ecActReached) or
+      (Event.Act <> LevelTwoArenaChaosAct) then
+      Continue;
+    for var Action in Event.Actions do
+    begin
+      if Action.Target <> LevelTwoArenaFloorBank then
+        Continue;
+      if Action.Kind = eaShelvesSleep then
+      begin
+        Inc(Sleeps);
+        Assert.AreEqual(0, Wakes, 'The floor sleeps before it wakes');
+        Assert.AreEqual(0, Action.Telling.Pick, 'The whole floor sleeps');
+      end;
+      if Action.Kind = eaShelvesWake then
+      begin
+        Inc(Wakes);
+        var Pick := Action.Telling.Pick;
+        Assert.IsTrue((Pick > 0) and (Pick < Shelves), Format('%d of %d ' +
+          'floor shelves wake', [Pick, Shelves]));
+      end;
+    end;
+  end;
+  Assert.AreEqual(1, Sleeps, 'The floor of act 5 is told to sleep once');
+  Assert.AreEqual(1, Wakes, 'The floor of act 5 is told to wake once');
 end;
 
 initialization

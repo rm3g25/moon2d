@@ -20,6 +20,13 @@
   of them are on it, its clock coming up to its pace from a standstill
   over the carousel's speed-up.
 
+  A carousel may break, when an event says so: its clock runs down to a
+  standstill, and its pads, one after another, become pads that plunge
+  where they stand. A carousel that may break says what its pads look
+  like then - another picture, other rigs - and how they plunge. The
+  rigs of that look hang on a tag of its own, made from the pad's tag:
+  the game lights them when the pad breaks and puts out the pad's own.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Carousels;
@@ -37,6 +44,15 @@ type
 
   // Clockwise as seen on the screen
   TCarouselTurn = (ctClockwise, ctCounterClockwise);
+
+  // What a pad of a broken carousel becomes: its picture in the level's
+  // object art, the rigs it wears from then on, the way it plunges
+  TCarouselFailing = record
+    Breaks: Boolean; // False - the carousel cannot break
+    Sprite: string;
+    Rigs: TArray<string>;
+    Plunge: TPadPlunge;
+  end;
 
   TCarousel = record
     Tag: string;
@@ -58,6 +74,7 @@ type
     // Seconds the clock takes to come up to the pace of the period from a
     // standstill once the carousel starts to turn; 0 = at its pace at once
     SpeedUp: Single;
+    Failing: TCarouselFailing;
   end;
 
   // A parked pad's way down to its slot: straight down at an even pace,
@@ -121,6 +138,11 @@ type
     // The time of Place ATurning ticks after the carousel started to turn:
     // from a standstill up to its pace over the speed-up, at its pace on
     function Clock(ATurning: Double): Double;
+    // The time of Place ABraking ticks into a halt that began ATurning
+    // ticks after the carousel started to turn: the pace the clock had
+    // then falls evenly to nothing over AHaltTicks, and the clock stands
+    // from there on
+    function Halting(ATurning, AHaltTicks, ABraking: Double): Double;
     // The pad's way down from its deck at AFromY to its slot, where Place
     // puts it at time 0. The deeper the slot, the sooner the pad sets off:
     // every pad of the carousel brakes at once, so a pad over another
@@ -137,7 +159,8 @@ const
 // words, a center or a size that is not [x, y], a size of zero or less,
 // a corner below zero or wider than half the box, a period of zero or
 // less, a start out of 0..1, a speed-up below zero, parked anywhere but
-// above raise.
+// above raise; so does a failing look with no sprite or no plunge, or a
+// plunge or rigs a pad would refuse.
 function ParseCarousels(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TCarousel>;
 // False when no carousel carries the tag
@@ -150,11 +173,13 @@ function OrbitOf(const ACarousels: TArray<TCarousel>;
   const APads: TArray<TPadPlacement>; AIndex: Integer): TCarouselOrbit;
 // The ticks of a lap, one at the least
 function LapTicks(const ACarousel: TCarousel): Integer;
+// The tag the rigs of a pad's failing look hang on
+function FailingRigTag(const APadTag: string): string;
 
 implementation
 
 uses
-  System.Math, System.Generics.Collections;
+  System.Math, System.Generics.Collections, Levels.Rigs;
 
 resourcestring
   SCarouselBadShape = 'Level "%s": carousel "%s" takes shape "%s" - oval or box';
@@ -163,6 +188,10 @@ resourcestring
   SCarouselBadNumber = 'Level "%s": carousel "%s" takes %s %g';
   SCarouselBadParked = 'Level "%s": carousel "%s" is parked "%s" - above '
     + 'is the only place';
+  SCarouselFailingNoSprite = 'Level "%s": carousel "%s" fails into pads '
+    + 'that name no "sprite"';
+  SCarouselFailingNoPlunge = 'Level "%s": carousel "%s" fails into pads '
+    + 'that do not "plunge"';
 
 const
   // Seconds in JSON, ticks in the code; the logic runs 33 ticks a second
@@ -180,6 +209,8 @@ const
   OvalPoints = 360;
   // A rounded corner, a quarter of a circle, as this many legs
   CornerLegs = 12;
+  // Joined to a pad's tag: no tag of a level file holds a slash
+  FailingRigSuffix = '/failing';
 
 // ---------------------------------------------------------------------------
 // TCarouselTrack
@@ -341,6 +372,19 @@ begin
   Result := Sqr(ATurning) / (2 * FSpeedUpTicks);
 end;
 
+function TCarouselOrbit.Halting(ATurning, AHaltTicks,
+  ABraking: Double): Double;
+begin
+  Result := Clock(ATurning);
+  if AHaltTicks <= 0 then
+    Exit;
+  var Pace: Double := 1;
+  if ATurning < FSpeedUpTicks then
+    Pace := ATurning / FSpeedUpTicks;
+  var Braked := Min(ABraking, AHaltTicks);
+  Result := Result + Pace * (Braked - Sqr(Braked) / (2 * AHaltTicks));
+end;
+
 function TCarouselOrbit.Landing(AFromY: Double): TCarouselLanding;
 var
   SlotX, SlotY: Double;
@@ -397,6 +441,11 @@ begin
   Result := Max(1, Round(ACarousel.Period * LogicTicksPerSecond));
 end;
 
+function FailingRigTag(const APadTag: string): string;
+begin
+  Result := APadTag + FailingRigSuffix;
+end;
+
 // JSON: [x, y]
 procedure ReadPair(const AObj: TJSONObject; const AKey, ALevelId,
   ATag: string; out AX, AY: Single);
@@ -439,6 +488,29 @@ begin
     raise ECarouselError.CreateFmt(SCarouselBadParked, [ALevelId, ATag, Place]);
 end;
 
+// JSON: "failing": {"sprite": "s16-platform-out", "rig": ["padFailing"],
+// "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}}; absent = the
+// carousel cannot break
+function ReadFailing(const AObj: TJSONObject;
+  const ALevelId, ATag: string): TCarouselFailing;
+begin
+  Result := Default(TCarouselFailing);
+  var FailingObj := AObj.GetValue<TJSONObject>('failing', nil);
+  if FailingObj = nil then
+    Exit;
+
+  Result.Breaks := True;
+  Result.Sprite := FailingObj.GetValue<string>('sprite', '');
+  if Result.Sprite = '' then
+    raise ECarouselError.CreateFmt(SCarouselFailingNoSprite, [ALevelId, ATag]);
+  Result.Rigs := ReadRigNames(FailingObj, ALevelId,
+    Format('failing pads of carousel "%s"', [ATag]));
+  Result.Plunge := ReadPlunge(FailingObj, ALevelId,
+    Format('%s (failing)', [ATag]));
+  if not Result.Plunge.Plunges then
+    raise ECarouselError.CreateFmt(SCarouselFailingNoPlunge, [ALevelId, ATag]);
+end;
+
 procedure CheckNumbers(const ACarousel: TCarousel; const ALevelId: string);
 
   procedure Refuse(const AKey: string; AValue: Double);
@@ -465,9 +537,9 @@ end;
 
 // JSON: {"tag": "s08-carousel", "screen": 8, "shape": "oval", "center":
 // [288, 179], "size": [150, 150], "corner": 0, "period": 12, "turn":
-// "cw", "start": 0, "parked": "above", "speedUp": 3}; shape absent =
-// oval, corner, start and speedUp absent = 0, turn absent = cw, parked
-// absent = in its place from the start
+// "cw", "start": 0, "parked": "above", "speedUp": 3, "failing": {...}};
+// shape absent = oval, corner, start and speedUp absent = 0, turn absent
+// = cw, parked absent = in its place from the start
 function ParseCarousels(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TCarousel>;
 var
@@ -494,6 +566,7 @@ begin
     Carousel.Start := Obj.GetValue<Double>('start', 0);
     Carousel.Parked := ReadParked(Obj, ALevelId, Carousel.Tag);
     Carousel.SpeedUp := Obj.GetValue<Double>('speedUp', 0);
+    Carousel.Failing := ReadFailing(Obj, ALevelId, Carousel.Tag);
     CheckNumbers(Carousel, ALevelId);
     Result := Result + [Carousel];
   end;

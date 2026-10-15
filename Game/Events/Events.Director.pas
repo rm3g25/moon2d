@@ -8,7 +8,8 @@
   not own through callbacks: the music, whose track the game remembers
   for restarts; the arena that rebuilds a pad group, restores it and
   flies it in; the shelves of a bank, which take their order from where
-  the hero stands; the trial's medkits; the wall cannons of the trial;
+  the hero stands; a carousel that breaks; the trial's medkits; the wall
+  cannons of the trial;
   the bodies an event lets in; and how far the gravel trial has come. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
@@ -39,6 +40,9 @@ type
 
   // A shelf action of an event: its bank, its program, its order
   TShelfCue = reference to procedure(const AAction: TEventAction);
+  // The carousel tagged ATag breaks as ABreakdown says
+  TBreakCue = reference to procedure(const ATag: string;
+    const ABreakdown: TCarouselBreak);
   // The trial's medkits come down over the shelves of ABank from now on
   TBankCue = reference to procedure(const ABank: string);
   // The act the gravel trial has come to; 0 while it does not run
@@ -57,6 +61,7 @@ type
     ChangeMusic: TChangeMusic;
     Arena: TArenaCues;
     Shelves: TShelfCue;
+    BreakCarousel: TBreakCue;
     MedkitsOnto: TBankCue;
     TrialAct: TTrialAct;
     TrialProgress: TTrialProgressCue;
@@ -213,6 +218,8 @@ begin
         FCues.Cannons(Action.Cannons, AEvent.Act);
       eaSpawn:
         FCues.Spawn(Action.Spawn, AEvent.Act);
+      eaBreakCarousel:
+        FCues.BreakCarousel(Action.Target, Action.Breakdown);
     end;
 end;
 
