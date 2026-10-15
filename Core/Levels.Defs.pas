@@ -197,6 +197,7 @@ type
       out ACol, ARow: Integer): Boolean;
     procedure CheckPadPlunge(const APad: TPadPlacement);
     procedure CheckPadShelf(const APad: TPadPlacement);
+    procedure CheckPadStray(const APad: TPadPlacement);
     procedure PlaceCarouselPads;
     procedure CheckCarousels;
     procedure CheckCarouselPad(AIndex: Integer);
@@ -342,6 +343,17 @@ resourcestring
     + '(%d, %d) - a pad that plunges falls out of its screen';
   SLevelPadShelfBusy = 'Level "%s": pad "%s" is a shelf that plunges or '
     + 'joins a group - a shelf leaves the front by its program alone';
+  SLevelPadStrayBusy = 'Level "%s": pad "%s" strays and travels a path, '
+    + 'plunges, is a shelf, joins a group or rides a carousel - its cycle '
+    + 'alone moves it';
+  SLevelPadStrayOutOfRoom = 'Level "%s": pad "%s" strays in a zone outside '
+    + 'its room - the screen less a cell at the left, the right and the top';
+  SLevelPadStrayRowShut = 'Level "%s": pad "%s" strays along row %d, which '
+    + 'a wall crosses between the walls of the room';
+  SLevelPadStrayColumnShut = 'Level "%s": pad "%s" strays down column %d, '
+    + 'which a wall crosses between the top of the room and the bottom';
+  SLevelEventStraysUnknown = 'Level "%s": event "%s" lets go the flock "%s", '
+    + 'which no pad strays in';
   SLevelPadGroupBadScreen = 'Level "%s": pad group "%s" sits on screen %d '
     + 'of %d';
   SLevelPadGroupTwoTags = 'Level "%s": two pad groups are tagged "%s"';
@@ -683,6 +695,15 @@ begin
     Carousel.Failing.Breaks;
 end;
 
+function AnyPadOfFlock(const APads: TArray<TPadPlacement>;
+  const AFlock: string): Boolean;
+begin
+  for var Pad in APads do
+    if Pad.Stray.Strays and (Pad.Stray.Flock = AFlock) then
+      Exit(True);
+  Result := False;
+end;
+
 function AnyShelfOfBank(const APads: TArray<TPadPlacement>;
   const ABank: string): Boolean;
 begin
@@ -755,6 +776,10 @@ begin
     eaBreakCarousel:
       if not AnyBreakingCarouselTagged(FCarousels, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventBreakUnknown,
+          [FId, AEventId, AAction.Target]);
+    eaStrays:
+      if not AnyPadOfFlock(FPads, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventStraysUnknown,
           [FId, AEventId, AAction.Target]);
   end;
 end;
@@ -953,6 +978,41 @@ begin
     raise ELevelError.CreateFmt(SLevelPadShelfBusy, [FId, APad.Sprite]);
 end;
 
+// The room a pad strays in is its screen less the walls of a cell at the
+// left, the right and the top. It flies in and out along the row or down
+// the column of a point of its zone, between the points across the
+// rectangle the zone makes, falls straight down: the rows of the zone are
+// kept clear wall to wall, with the room over the deck, and its columns
+// from the top of the room to the bottom of the screen.
+procedure TLevel.CheckPadStray(const APad: TPadPlacement);
+begin
+  if not APad.Stray.Strays then
+    Exit;
+  var Busy := (APad.Path.Route <> prNone) or APad.Plunge.Plunges or
+    APad.Shelf.Slides or (APad.Group <> '') or (APad.Carousel <> '');
+  if Busy then
+    raise ELevelError.CreateFmt(SLevelPadStrayBusy, [FId, APad.Sprite]);
+
+  var Zone := APad.Stray.Zone;
+  var InRoom := (Zone.Left >= 1) and (Zone.Top >= 1) and
+    (Zone.Left <= Zone.Right) and (Zone.Top <= Zone.Bottom) and
+    (Zone.Right * TileSize + APad.Width <= ScreenWidth - TileSize) and
+    (Zone.Bottom < ScreenRows);
+  if not InRoom then
+    raise ELevelError.CreateFmt(SLevelPadStrayOutOfRoom, [FId, APad.Sprite]);
+
+  for var Row := Zone.Top to Zone.Bottom do
+    if not RoomClear(APad.Screen, TileSize, (Row - 1) * TileSize,
+      ScreenWidth - TileSize, (Row + 1) * TileSize) then
+      raise ELevelError.CreateFmt(SLevelPadStrayRowShut,
+        [FId, APad.Sprite, Row]);
+  for var Col := Zone.Left to Zone.Right do
+    if not RoomClear(APad.Screen, Col * TileSize, TileSize,
+      Col * TileSize + APad.Width, ScreenHeight) then
+      raise ELevelError.CreateFmt(SLevelPadStrayColumnShut,
+        [FId, APad.Sprite, Col]);
+end;
+
 // A pad off the screen list never shows; two pads with one tag leave a
 // dynamic object hung on it to the first of them; a pad that travels off
 // its screen leaves its riders in the air
@@ -972,6 +1032,7 @@ begin
         [FId, Pad.Sprite, Off.X, Off.Y]);
     CheckPadPlunge(Pad);
     CheckPadShelf(Pad);
+    CheckPadStray(Pad);
   end;
 end;
 

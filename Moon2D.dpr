@@ -59,6 +59,7 @@ uses
   Pads.Flights in 'Game\Pads\Pads.Flights.pas',
   Pads.Plunge in 'Game\Pads\Pads.Plunge.pas',
   Pads.Shelf in 'Game\Pads\Pads.Shelf.pas',
+  Pads.Stray in 'Game\Pads\Pads.Stray.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
   Pads.Arena in 'Game\Pads\Pads.Arena.pas',
   Render.Font in 'Core\Render.Font.pas',
@@ -469,6 +470,7 @@ type
     procedure TellShelves(const AAction: TEventAction);
     procedure BreakCarousel(const ATag: string;
       const ABreakdown: TCarouselBreak);
+    procedure LetStraysGo(const AFlock: string);
     procedure FlyInParked(const ATag: string);
     function CannonsScenePlays: Boolean;
     procedure ReleaseHeldFlyIns;
@@ -748,6 +750,7 @@ begin
   Cues.Arena.FlyIn := FlyInParked;
   Cues.Shelves := TellShelves;
   Cues.BreakCarousel := BreakCarousel;
+  Cues.Strays := LetStraysGo;
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.Cannons := StartCannons;
   Cues.Spawn := SpawnGuest;
@@ -1253,6 +1256,11 @@ procedure TMoonGame.BreakCarousel(const ATag: string;
   const ABreakdown: TCarouselBreak);
 begin
   FPads.TryBreakCarousel(ATag, ABreakdown.HaltSeconds, ABreakdown.StepSeconds);
+end;
+
+procedure TMoonGame.LetStraysGo(const AFlock: string);
+begin
+  FPads.TryLaunchFlock(AFlock);
 end;
 
 // The level lets no tag name both a carousel and a pad group. Told while

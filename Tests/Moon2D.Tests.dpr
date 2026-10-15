@@ -39,7 +39,8 @@ uses
   Tests.Orbs.Patterns in 'Orbs\Tests.Orbs.Patterns.pas',
   Tests.Orbs.Rite in 'Orbs\Tests.Orbs.Rite.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas',
-  Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas';
+  Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas',
+  Tests.Pads.Stray in 'Pads\Tests.Pads.Stray.pas';
 
 procedure RunSuite;
 begin

@@ -36,7 +36,7 @@ type
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
-    eaSpawn, eaBreakCarousel);
+    eaSpawn, eaBreakCarousel, eaStrays);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -117,6 +117,8 @@ type
     // "tag" and "rig" (optional, a rig needs the tag).
     // eaBreakCarousel: the carousel Target breaks as Breakdown says. JSON:
     // "target", "halt" and "step" (seconds, 0 by default).
+    // eaStrays: the pads of the flock Target are let go and stray from now
+    // on (Pads.Stray). JSON: "target".
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -173,7 +175,7 @@ const
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
-    'breakCarousel');
+    'breakCarousel', 'strays');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -305,7 +307,7 @@ begin
 end;
 
 // The pad group of a rebuild, a restore or a fly-in; the bank of the
-// shelf actions; the carousel of a break
+// shelf actions; the carousel of a break; the flock let go
 procedure ReadGroupTarget(const AObj: TJSONObject;
   const ALevelId, AEventId: string; var AAction: TEventAction);
 begin
@@ -479,7 +481,7 @@ begin
       ReadSun(AObj, ALevelId, AEventId, Result);
     eaTactics:
       ReadTactics(AObj, ALevelId, AEventId, Result);
-    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto:
+    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto, eaStrays:
       ReadGroupTarget(AObj, ALevelId, AEventId, Result);
     eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
       ReadShelves(AObj, ALevelId, AEventId, Result);

@@ -2,7 +2,8 @@
   Pads.Plunge - the cycle of a pad that plunges under the hero
   (Levels.Pads, "plunge"): it holds until he stands on it, gives for the
   delay, falls out of the screen, lies below for the rest and climbs
-  home, to hold again. Once it gives, stepping off does not save it.
+  home, to hold again - or, told to stay down, lies below for good. Once
+  it gives, stepping off does not save it.
 
   The pad is failing and shows it all the way round: it twitches, and its
   jets work unevenly - in fits while it holds, flat out and choking while
@@ -48,6 +49,7 @@ type
   TPlungeCycle = record
   private
     FPlunges: Boolean;
+    FStaysDown: Boolean;
     FDelayTicks, FRestTicks: Integer;
     FRiseStep: Double; // units a tick, at an even gait
     FReach: Double;
@@ -161,6 +163,7 @@ procedure TPlungeCycle.Rewind(const APlunge: TPadPlunge; AReach: Double;
   ASeed: Cardinal);
 begin
   FPlunges := APlunge.Plunges;
+  FStaysDown := APlunge.StaysDown;
   FDelayTicks := Round(APlunge.Delay * LogicTicksPerSecond);
   FRestTicks := Round(APlunge.Rest * LogicTicksPerSecond);
   FRiseStep := APlunge.Rise / LogicTicksPerSecond;
@@ -276,7 +279,7 @@ begin
     ppFalling:
       Fall;
     ppFallen:
-      if FPhaseTicks >= FRestTicks then
+      if not FStaysDown and (FPhaseTicks >= FRestTicks) then
         Enter(ppClimbing);
     ppClimbing:
       Climb;

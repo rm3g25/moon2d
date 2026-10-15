@@ -38,6 +38,8 @@ type
     [Test]
     procedure TestClimbsHomeUnevenlyAndHoldsAgain;
     [Test]
+    procedure TestPadThatStaysDownNeverClimbs;
+    [Test]
     procedure TestTroddenOnTheClimbItComesHomeThenGivesAgain;
     [Test]
     procedure TestFailingPadTwitchesWithinBounds;
@@ -277,6 +279,25 @@ begin
     Format('The pad rests %g units below', [Cycle.Below]));
   Assert.IsTrue(FallenAt - FallStart < 2 * TicksPerSecond,
     Format('The fall took %d ticks', [FallenAt - FallStart]));
+end;
+
+procedure TPlungeCycleTests.TestPadThatStaysDownNeverClimbs;
+begin
+  var Plunge := PlungeOf(DefaultDelay, DefaultRest, DefaultRise);
+  Plunge.StaysDown := True;
+  var Cycle := Default(TPlungeCycle);
+  Cycle.Rewind(Plunge, ReachUnits, DefaultSeed);
+  Cycle.Tread;
+  TicksUntil(Cycle, ppFallen);
+
+  for var i := 1 to WholeCycle do
+  begin
+    Cycle.Tick;
+    ExpectPhase(Cycle, ppFallen, i);
+    Assert.IsTrue(Abs(Cycle.Below - ReachUnits) < PlaceSlack,
+      Format('Tick %d after the fall: the pad is %g units below',
+        [i, Cycle.Below]));
+  end;
 end;
 
 procedure TPlungeCycleTests.TestLiesBelowForTheRestThenClimbs;

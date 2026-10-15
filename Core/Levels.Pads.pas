@@ -22,7 +22,7 @@
 
   A pad may plunge: it holds until the hero stands on it, then gives way,
   falls out of the screen and climbs back to its place (Pads.Plunge
-  counts the cycle). It is a failing pad and looks it; it stands on its
+  counts the cycle) - or stays down for good, if it is told so. It is a failing pad and looks it; it stands on its
   place, with no path and in no group.
 
   A pad may be a shelf: it slides out of the wall behind it and back in
@@ -40,6 +40,12 @@
 
   The pads of a group may be parked above the screen: each waits over
   its own place until an event flies the group in.
+
+  A pad may stray (Pads.Stray): once an event lets its flock go, it flies
+  in from beyond an edge of its screen to a point of its zone, hangs
+  there, flies on to another point or out again, and now and then
+  misbehaves. Its cycle places it, so it takes no x or y of its own and
+  does nothing else: no path, no plunge, no shelf, no group, no carousel.
 
   A pad may ride a carousel (Levels.Carousels): it flies round the
   carousel's track with the other pads it carries. The carousel places
@@ -85,12 +91,13 @@ type
   // A pad that gives way under the hero: it holds for Delay seconds
   // after he stands on it, falls out of the screen, lies below for Rest
   // seconds and climbs home at Rise units a second, the mean of an
-  // uneven climb
+  // uneven climb - unless it StaysDown, fallen for good
   TPadPlunge = record
     Plunges: Boolean; // False - the pad holds whatever stands on it
     Delay: Single;
     Rest: Single;
     Rise: Single;
+    StaysDown: Boolean;
   end;
 
   // Where a step of a shelf's program holds it: out in front, or in the
@@ -160,6 +167,21 @@ type
     Pick: Integer;
   end;
 
+  // Cells of a screen, 0-based, the bounds included
+  TPadZone = record
+    Left, Top, Right, Bottom: Integer;
+  end;
+
+  // A pad that strays: the flock an event lets go, the cells the top-left
+  // corner of its deck hangs at, and the seconds after the flock is let go
+  // before it first flies in
+  TPadStray = record
+    Strays: Boolean; // False - the pad does not stray
+    Flock: string;
+    Zone: TPadZone;
+    Wait: Single;
+  end;
+
   TPadPlacement = record
     Sprite: string; // in the level's object art, as a static object's
     Screen: Integer; // 1-based
@@ -180,13 +202,10 @@ type
     Group: string;
     // The carousel it rides; '' = none. The carousel puts X and Y.
     Carousel: string;
+    // Its cycle puts X and Y: off the screen until it flies in
+    Stray: TPadStray;
     // The rigs it wears, by name, in the order they are hung
     Rigs: TArray<string>;
-  end;
-
-  // Cells of a screen, 0-based, the bounds included
-  TPadZone = record
-    Left, Top, Right, Bottom: Integer;
   end;
 
   // Pads rebuilt together: where they may stand and what a formation of
@@ -224,6 +243,9 @@ const
   // A parked pad waits with its deck this high over the top edge, two
   // cells of 32 units: its picture and its rigs out of sight
   PadParkedTop = -64;
+  // A pad that strays waits this far left of the left edge, as high as a
+  // parked one: out of sight with its rigs
+  PadStrayWaitLeft = -96;
 
 // The section; absent = no pads. A width of zero or less, a bullets word
 // out of PadBulletsIds, a route other than pingpong or loop, a path
@@ -236,7 +258,8 @@ const
 // out of 0..1, a bank that is neither a name nor a list of names, a
 // shelf held but in no bank or held neither out nor in.
 // A pad on a carousel that is given an x or a y raises too: the carousel
-// places it.
+// places it. So does a pad that strays, and one that strays with no flock,
+// a zone that is not four numbers or a wait below zero.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The "plunge" of AObj, as a pad reads it; absent = no plunge. A delay or
@@ -278,8 +301,12 @@ resourcestring
   SPadShelfHeldAlone = 'Level "%s": pad "%s" is a shelf held in no bank - '
     + 'no event could ever let it go';
   SPadShelfBadHeld = 'Level "%s": pad "%s" is a shelf held "%s" - out or in';
-  SPadGroupBadZone = 'Level "%s": pad group "%s" has a zone that is not '
+  SPadGroupBadZone = 'Level "%s": %s has a zone that is not '
     + '[left, top, right, bottom]';
+  SPadStrayPlaced = 'Level "%s": pad "%s" strays and is given an x or a y - '
+    + 'its cycle places it';
+  SPadStrayNoFlock = 'Level "%s": pad "%s" strays in no flock - no event '
+    + 'could ever let it go';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
   SPadGroupBadEvery = 'Level "%s": pad group "%s" has a conductor and '
     + 'takes every %g - seconds above zero';
@@ -364,7 +391,8 @@ begin
       [ALevelId, ASprite, 'pause', Result.Pause]);
 end;
 
-// JSON: "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64}
+// JSON: "plunge": {"delay": 0.5, "rest": 0.5, "rise": 64, "staysDown":
+// false}
 function ReadPlunge(const AObj: TJSONObject;
   const ALevelId, AName: string): TPadPlunge;
 begin
@@ -386,6 +414,7 @@ begin
   if Result.Rise <= 0 then
     raise EPadError.CreateFmt(SPadBadNumber,
       [ALevelId, AName, 'rise', Result.Rise]);
+  Result.StaysDown := PlungeObj.GetValue<Boolean>('staysDown', False);
 end;
 
 // JSON: ["out", 2] or ["in", 1.5]
@@ -564,19 +593,67 @@ begin
   Result := Format('pad "%s"', [Shown]);
 end;
 
-// A pad on a carousel is placed by it: Levels.Defs puts its X and Y
+// JSON: "zone": [left, top, right, bottom], in cells; AOwner names the
+// owner in the error, as pad group "tag"
+function ReadZone(const AObj: TJSONObject;
+  const ALevelId, AOwner: string): TPadZone;
+begin
+  var ZoneArr := AObj.GetValue<TJSONArray>('zone', nil);
+  if (ZoneArr = nil) or (ZoneArr.Count <> 4) then
+    raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, AOwner]);
+  for var Item in ZoneArr do
+    if not (Item is TJSONNumber) then
+      raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, AOwner]);
+  Result.Left := TJSONNumber(ZoneArr.Items[0]).AsInt;
+  Result.Top := TJSONNumber(ZoneArr.Items[1]).AsInt;
+  Result.Right := TJSONNumber(ZoneArr.Items[2]).AsInt;
+  Result.Bottom := TJSONNumber(ZoneArr.Items[3]).AsInt;
+end;
+
+// JSON: "stray": {"flock": "s09-strays", "zone": [2, 3, 13, 8], "wait": 1.5};
+// absent = the pad does not stray, wait absent = 0
+function ReadStray(const AObj: TJSONObject;
+  const ALevelId, ASprite: string): TPadStray;
+begin
+  Result := Default(TPadStray);
+  var StrayObj := AObj.GetValue<TJSONObject>('stray', nil);
+  if StrayObj = nil then
+    Exit;
+
+  Result.Strays := True;
+  Result.Flock := StrayObj.GetValue<string>('flock', '');
+  if Result.Flock = '' then
+    raise EPadError.CreateFmt(SPadStrayNoFlock, [ALevelId, ASprite]);
+  Result.Zone := ReadZone(StrayObj, ALevelId, Format('pad "%s"', [ASprite]));
+  Result.Wait := StrayObj.GetValue<Double>('wait', 0);
+  if Result.Wait < 0 then
+    raise EPadError.CreateFmt(SPadBadNumber,
+      [ALevelId, ASprite, 'wait', Result.Wait]);
+end;
+
+// A pad on a carousel is placed by it: Levels.Defs puts its X and Y. A pad
+// that strays waits out of sight until its cycle flies it in.
 procedure ReadPlace(const AObj: TJSONObject; const ALevelId: string;
   var APad: TPadPlacement);
 begin
   APad.X := 0;
   APad.Y := 0;
+  var Given := (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil);
+  if APad.Stray.Strays then
+  begin
+    if Given then
+      raise EPadError.CreateFmt(SPadStrayPlaced, [ALevelId, APad.Sprite]);
+    APad.X := PadStrayWaitLeft;
+    APad.Y := PadParkedTop;
+    Exit;
+  end;
   if APad.Carousel = '' then
   begin
     APad.X := AObj.GetValue<Integer>('x');
     APad.Y := AObj.GetValue<Integer>('y');
     Exit;
   end;
-  if (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil) then
+  if Given then
     raise EPadError.CreateFmt(SPadCarouselPlaced,
       [ALevelId, APad.Sprite, APad.Carousel]);
 end;
@@ -597,6 +674,7 @@ begin
     Pad.Sprite := Obj.GetValue<string>('sprite');
     Pad.Screen := Obj.GetValue<Integer>('screen');
     Pad.Carousel := Obj.GetValue<string>('carousel', '');
+    Pad.Stray := ReadStray(Obj, ALevelId, Pad.Sprite);
     ReadPlace(Obj, ALevelId, Pad);
     Pad.Width := Obj.GetValue<Integer>('width');
     Pad.Tint := ReadTint(Obj, Pad.Sprite);
@@ -619,22 +697,6 @@ begin
   end;
 end;
 
-// JSON: "zone": [left, top, right, bottom], in cells
-function ReadZone(const AObj: TJSONObject;
-  const ALevelId, ATag: string): TPadZone;
-begin
-  var ZoneArr := AObj.GetValue<TJSONArray>('zone', nil);
-  if (ZoneArr = nil) or (ZoneArr.Count <> 4) then
-    raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, ATag]);
-  for var Item in ZoneArr do
-    if not (Item is TJSONNumber) then
-      raise EPadError.CreateFmt(SPadGroupBadZone, [ALevelId, ATag]);
-  Result.Left := TJSONNumber(ZoneArr.Items[0]).AsInt;
-  Result.Top := TJSONNumber(ZoneArr.Items[1]).AsInt;
-  Result.Right := TJSONNumber(ZoneArr.Items[2]).AsInt;
-  Result.Bottom := TJSONNumber(ZoneArr.Items[3]).AsInt;
-end;
-
 function ParsePadGroups(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadGroup>;
 var
@@ -650,7 +712,8 @@ begin
     var Group: TPadGroup;
     Group.Tag := Obj.GetValue<string>('tag');
     Group.Screen := Obj.GetValue<Integer>('screen');
-    Group.Zone := ReadZone(Obj, ALevelId, Group.Tag);
+    Group.Zone := ReadZone(Obj, ALevelId,
+      Format('pad group "%s"', [Group.Tag]));
     Group.Pairs := Obj.GetValue<Integer>('pairs', 0);
     Group.FarFlight := Obj.GetValue<Integer>('farFlight', 1);
     Group.FarShare := Obj.GetValue<Integer>('farShare', 0);

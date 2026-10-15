@@ -103,6 +103,12 @@
   the ones that fit the pad as it is now. A carousel not yet in the room -
   parked, or coming down - does not break.
 
+  A pad that strays (Pads.Stray counts its cycle) waits out of sight
+  until its flock is let go; then its cycle puts it, as a path would,
+  and the riders go with it. Out of the room it is neither a floor nor a
+  body, as a pad flown into the depth: what stands on it falls. It
+  travels, so a ram only rocks it. Its twitch is drawn with the sag.
+
   The shelves of a bank may be told a few at a time: as many as the event
   says, as the dice pick them. Asked where a medkit may come down, the
   bank names a shelf meant to stand out - told to come out, or never told
@@ -121,7 +127,8 @@ interface
 uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
-  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf, Levels.Carousels;
+  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf, Pads.Stray,
+  Levels.Carousels;
 
 const
   // A pad all the way into the depth: its size and its light
@@ -205,6 +212,7 @@ type
     FHaltClock: Integer;
     FFailLook: TPadFailLook;
     FFailed: Boolean;
+    FStray: TStrayCycle;
     // The tick of the clock the pad breaks at; NoBreak when it is not to
     FBreakAt: Integer;
     FWasBehind: Boolean;
@@ -263,6 +271,9 @@ type
     // one that plunges. Nothing for a pad on no carousel, or one of a
     // carousel not yet in the room.
     procedure BreakDown(AHaltTicks, AFailTicks: Integer);
+    // A pad that strays is let go with its flock, its dice seeded with
+    // ASeed; nothing for any other
+    procedure Launch(ASeed: Cardinal);
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
@@ -462,6 +473,9 @@ type
     // A carousel flown in does not turn yet: a pad of it is still coming
     // down or waits on its slot for the rest
     function CarouselLanding: Boolean;
+    // The pads that stray in the flock AFlock are let go. False when no pad
+    // strays in it.
+    function TryLaunchFlock(const AFlock: string): Boolean;
     // The carousel tagged ATag runs down to a standstill over AHaltSeconds,
     // then its pads break one every AStepSeconds. False when no carousel
     // that may break carries the tag.
@@ -686,12 +700,20 @@ begin
   FBobShare := 1;
   FPlunge.Rewind(FPlacement.Plunge,
     ScreenHeight + PlungeDepth - FPlacement.Y, PlungeSeed(FPlacement));
+  FStray.Rewind(FPlacement.Stray, FPlacement.Width, FPlacement.X,
+    FPlacement.Y);
   FWasBehind := Behind;
 end;
 
 // A leg, then the pause at the stop it ends at, round the cycle
 procedure TPad.PlaceOnPath;
 begin
+  if FPlacement.Stray.Strays then
+  begin
+    FPathLeft := FStray.Left;
+    FPathTop := FStray.Top;
+    Exit;
+  end;
   if FOrbit.Rides then
   begin
     PlaceOnOrbit;
@@ -809,6 +831,12 @@ begin
   FBreakAt := FClock + 1 + AFailTicks;
 end;
 
+procedure TPad.Launch(ASeed: Cardinal);
+begin
+  if FPlacement.Stray.Strays then
+    FStray.Launch(ASeed);
+end;
+
 // It falls from where it stands now, as far under the screen as a pad of
 // the level file falls from its place; the dice go by its place, as ever
 procedure TPad.Fail;
@@ -913,6 +941,8 @@ begin
   end;
   FLatched := FShelf.Latches(FClock);
   TickOrbit;
+  if FPlacement.Stray.Strays then
+    FStray.Tick(AHeroAboard);
   PlaceOnPath;
   if FClock = FBreakAt then
     Fail;
@@ -955,7 +985,7 @@ end;
 
 function TPad.Travels: Boolean;
 begin
-  Result := (Length(FStops) >= 2) or FOrbit.Rides;
+  Result := (Length(FStops) >= 2) or FOrbit.Rides or FPlacement.Stray.Strays;
 end;
 
 function TPad.Knocked: Boolean;
@@ -985,6 +1015,8 @@ begin
   var Landing := FOrbitPhase = opLanding;
   if Thrusting or Landing or FShelf.Warns(FClock) then
     Exit(1);
+  if FPlacement.Stray.Strays then
+    Exit(FStray.Effort);
   Result := FPlunge.Effort;
 end;
 
@@ -1015,7 +1047,8 @@ end;
 function TPad.Behind: Boolean;
 begin
   var FlownBehind := Flying and FFlight.Behind(FFlightClock);
-  Result := FlownBehind or not FShelf.Holds(FClock);
+  var OutOfRoom := FPlacement.Stray.Strays and not FStray.Deck;
+  Result := FlownBehind or not FShelf.Holds(FClock) or OutOfRoom;
 end;
 
 function TPad.RigDepth(AAlpha: Single): Double;
@@ -1066,7 +1099,7 @@ end;
 
 function TPad.Lift(AAlpha: Single): Double;
 begin
-  Result := FSag + FPlunge.Dip;
+  Result := FSag + FPlunge.Dip + FStray.Dip;
   if FPlacement.Bob <= 0 then
     Exit;
   var Time := FClock - 1 + AAlpha;
@@ -1137,7 +1170,7 @@ begin
     Texture := FFailLook.Texture;
   TintTexture(Texture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
-  ASprites.DrawRectF(Texture, Dest, Tilt(AAlpha) + FPlunge.Lean);
+  ASprites.DrawRectF(Texture, Dest, Tilt(AAlpha) + FPlunge.Lean + FStray.Lean);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1770,6 +1803,21 @@ begin
     if Pad.OrbitPhase in [opLanding, opOnSlot] then
       Exit(True);
   Result := False;
+end;
+
+// Each with dice of its own, new for every try
+function TPadWorld.TryLaunchFlock(const AFlock: string): Boolean;
+begin
+  Result := False;
+  for var Pad in FPads do
+  begin
+    var OfFlock := Pad.Placement.Stray.Strays and
+      (Pad.Placement.Stray.Flock = AFlock);
+    if not OfFlock then
+      Continue;
+    Pad.Launch(Cardinal(Trunc(FDice.NextUnit * MaxInt)));
+    Result := True;
+  end;
 end;
 
 // Every order as likely as another

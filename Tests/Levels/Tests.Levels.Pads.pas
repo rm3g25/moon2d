@@ -127,6 +127,20 @@ type
     procedure TestLevelTwoArenaCarouselBreaksInActFive;
     [Test]
     procedure TestLevelTwoArenaFloorOfActFiveComesBackInPieces;
+    [Test]
+    procedure TestStrayReadsWhatItIsGiven;
+    [Test]
+    procedure TestBadStrayRaises;
+    [Test]
+    procedure TestStrayDoesNothingElse;
+    [Test]
+    procedure TestStrayZoneStaysInItsRoom;
+    [Test]
+    procedure TestStrayRowsAndColumnsAreClearOfWalls;
+    [Test]
+    procedure TestStraysOfAnUnknownFlockRaise;
+    [Test]
+    procedure TestLevelTwoArenaStraysAreLetGoInActFive;
   end;
 
 implementation
@@ -170,6 +184,7 @@ const
   LevelTwoArenaGridBank = 's09-grid';
   LevelTwoArenaGapsBank = 's09-gaps';
   LevelTwoArenaFloorBank = 's09-floor';
+  LevelTwoArenaFlock = 's09-strays';
   // The act the arena carousel breaks and the floor comes back in pieces
   LevelTwoArenaChaosAct = 5;
   // The carousel of the tests: a circle of 80 round (256, 160), a lap in
@@ -227,6 +242,17 @@ function PathJson(const ARoute, AStops, ASpeed, APause: string): string;
 begin
   Result := Format('"path":{"route":%s,"stops":%s,"speed":%s,"pause":%s}',
     [ARoute, AStops, ASpeed, APause]);
+end;
+
+// A pad that strays in AZone - [left, top, right, bottom] in cells - with
+// AExtra beside its stray section and none of a place
+function StrayPad(const AZone: string; const AExtra: string = ''): string;
+begin
+  Result := Format('{"sprite":"%s","screen":1,"width":%d,' +
+    '"stray":{"flock":"flock","zone":%s}', [SpriteName, PadWidth, AZone]);
+  if AExtra <> '' then
+    Result := Result + ',' + AExtra;
+  Result := Result + '}';
 end;
 
 // The pad of the gap that plunges, with the numbers the parser gives
@@ -507,6 +533,11 @@ begin
   Assert.IsTrue(IsNear(Plunge.Delay, 1), 'The delay is read as written');
   Assert.IsTrue(IsNear(Plunge.Rest, 2), 'The rest is read as written');
   Assert.IsTrue(IsNear(Plunge.Rise, 3), 'The rise is read as written');
+  Assert.IsFalse(Plunge.StaysDown, 'A pad climbs home unless told otherwise');
+
+  UseLevel(GapRows(shOpen), PadsSection([
+    PadJson(GapX, LedgeTopY, '"plunge":{"staysDown":true}')]));
+  Assert.IsTrue(OnlyPad(FLevel).Plunge.StaysDown, 'Told so, it stays down');
 end;
 
 procedure TLevelPadsTests.TestPlungeLeftOutTakesHalfASecond;
@@ -1176,6 +1207,8 @@ begin
     Carousel), 'Level 2 holds no carousel tagged ' + LevelTwoArenaCarouselTag);
   Assert.IsTrue(Carousel.Failing.Breaks, 'The arena carousel may break');
   Assert.IsTrue(Carousel.Failing.Plunge.Plunges, 'Its pads plunge then');
+  Assert.IsTrue(Carousel.Failing.Plunge.StaysDown,
+    'A broken pad that falls under the hero does not come back');
 
   var Breaks := 0;
   for var Event in FLevel.Events do
@@ -1240,6 +1273,121 @@ begin
   end;
   Assert.AreEqual(1, Sleeps, 'The floor of act 5 is told to sleep once');
   Assert.AreEqual(1, Wakes, 'The floor of act 5 is told to wake once');
+end;
+
+// The gap room's shaft, column 8, is open from the top to the bottom: a pad
+// strays down it
+procedure TLevelPadsTests.TestStrayReadsWhatItIsGiven;
+begin
+  UseLevel(GapRows(shOpen), PadsSection([Format('{"sprite":"%s","screen":1,' +
+    '"width":32,"stray":{"flock":"birds","zone":[8,2,8,7],"wait":1.5}}',
+    [SpriteName])]));
+
+  var Stray := OnlyPad(FLevel).Stray;
+  Assert.IsTrue(Stray.Strays, 'It strays');
+  Assert.AreEqual('birds', Stray.Flock);
+  Assert.AreEqual(8, Stray.Zone.Left);
+  Assert.AreEqual(2, Stray.Zone.Top);
+  Assert.AreEqual(8, Stray.Zone.Right);
+  Assert.AreEqual(7, Stray.Zone.Bottom);
+  Assert.IsTrue(IsNear(Stray.Wait, 1.5), 'The wait');
+  Assert.AreEqual(PadStrayWaitLeft, OnlyPad(FLevel).X, 'It waits off the left');
+  Assert.AreEqual(PadParkedTop, OnlyPad(FLevel).Y, 'As high as a parked pad');
+
+  UseLevel(GapRows(shOpen), PadsSection([StrayPad('[8,2,8,7]')]));
+  Assert.IsTrue(IsNear(OnlyPad(FLevel).Stray.Wait, 0), 'No wait by default');
+  UseLevel(OpenRows, PadsSection([PadJson(96, 160)]));
+  Assert.IsFalse(OnlyPad(FLevel).Stray.Strays, 'A pad strays only when asked');
+end;
+
+procedure TLevelPadsTests.TestBadStrayRaises;
+begin
+  ExpectRaises(EPadError, GapRows(shOpen),
+    PadsSection([StrayPad('[8,2,8,7]', '"x":256,"y":64')]),
+    'A pad that strays given a place');
+  ExpectRaises(EPadError, GapRows(shOpen), PadsSection([Format(
+    '{"sprite":"%s","screen":1,"width":32,"stray":{"zone":[8,2,8,7]}}',
+    [SpriteName])]), 'A pad that strays in no flock');
+  ExpectRaises(EPadError, GapRows(shOpen), PadsSection([StrayPad('[8,2,8]')]),
+    'A zone of three numbers');
+  ExpectRaises(EPadError, GapRows(shOpen), PadsSection([Format(
+    '{"sprite":"%s","screen":1,"width":32,"stray":{"flock":"flock",' +
+    '"zone":[8,2,8,7],"wait":-1}}', [SpriteName])]), 'A wait below 0');
+end;
+
+procedure TLevelPadsTests.TestStrayDoesNothingElse;
+begin
+  ExpectLoads(GapRows(shOpen), PadsSection([StrayPad('[8,2,8,7]')]),
+    'A pad that strays and does nothing else');
+  ExpectRaises(ELevelError, GapRows(shOpen),
+    PadsSection([StrayPad('[8,2,8,7]', '"plunge":{}')]),
+    'A pad that strays and plunges');
+  ExpectRaises(ELevelError, GapRows(shOpen),
+    PadsSection([StrayPad('[8,2,8,7]', '"path":{"stops":[[256,64]],"speed":32}')]),
+    'A pad that strays and travels a path');
+end;
+
+// The room is the screen less a cell at the left, the right and the top
+procedure TLevelPadsTests.TestStrayZoneStaysInItsRoom;
+begin
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[0,2,8,7]')]),
+    'A zone in the left wall');
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[8,0,8,7]')]),
+    'A zone in the top row');
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[8,2,15,7]')]),
+    'A zone whose pad reaches into the right wall');
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[8,7,8,2]')]),
+    'A zone upside down');
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[8,2,8,12]')]),
+    'A zone past the bottom');
+end;
+
+procedure TLevelPadsTests.TestStrayRowsAndColumnsAreClearOfWalls;
+begin
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[7,2,8,7]')]),
+    'Column 7 falls onto the floor');
+  ExpectRaises(ELevelError, GapRows(shOpen), PadsSection([StrayPad('[8,2,8,9]')]),
+    'Row 9 runs into the floor');
+  ExpectRaises(ELevelError, GapRows(shPlugged),
+    PadsSection([StrayPad('[8,2,8,7]')]), 'The shaft under column 8 plugged');
+end;
+
+procedure TLevelPadsTests.TestStraysOfAnUnknownFlockRaise;
+const
+  Event = ',"events":[{"id":"go","screen":1,"when":"enterScreen",' +
+    '"then":[{"action":"strays","target":"%s"}]}]';
+begin
+  var Pads := PadsSection([StrayPad('[8,2,8,7]')]);
+  ExpectLoads(GapRows(shOpen), Pads + Format(Event, ['flock']),
+    'Its own flock let go');
+  ExpectRaises(ELevelError, GapRows(shOpen), Pads + Format(Event, ['nobody']),
+    'A flock no pad strays in');
+end;
+
+// The act 5 event lets the flock go once
+procedure TLevelPadsTests.TestLevelTwoArenaStraysAreLetGoInActFive;
+begin
+  UseLevelTwo;
+
+  var Strays := 0;
+  for var Pad in FLevel.Pads do
+    if Pad.Stray.Strays and (Pad.Stray.Flock = LevelTwoArenaFlock) then
+    begin
+      Inc(Strays);
+      Assert.AreEqual(LevelTwoArenaScreen, Pad.Screen, Pad.Tag + ' strays off the arena');
+    end;
+  Assert.IsTrue(Strays > 0, 'No pad strays in ' + LevelTwoArenaFlock);
+
+  var LetGo := 0;
+  for var Event in FLevel.Events do
+    for var Action in Event.Actions do
+      if (Action.Kind = eaStrays) and (Action.Target = LevelTwoArenaFlock) then
+      begin
+        Inc(LetGo);
+        Assert.AreEqual(LevelTwoArenaChaosAct, Event.Act,
+          'The act the flock is let go in');
+      end;
+  Assert.AreEqual(1, LetGo, 'The flock is let go once');
 end;
 
 initialization
