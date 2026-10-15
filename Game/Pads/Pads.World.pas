@@ -466,6 +466,12 @@ type
     // it - one meant to stand out, when the bank has any. False when the
     // bank has none at all.
     function TryPickBankMiddle(const ABank: string; out AX: Double): Boolean;
+      overload;
+    // The same, from the half of the screen ASide names when the shelves
+    // to pick from have any there: below 0 the left, above 0 the right,
+    // 0 either
+    function TryPickBankMiddle(const ABank: string; ASide: Integer;
+      out AX: Double): Boolean; overload;
     // The parked carousel tagged ATag comes down to its track and turns
     // once all its pads are on it. False when no carousel carries the tag;
     // True and nothing more for one not parked or flown in already.
@@ -1964,8 +1970,15 @@ begin
   end;
 end;
 
-// A medkit over a shelf about to go into the wall falls into the pit
 function TPadWorld.TryPickBankMiddle(const ABank: string;
+  out AX: Double): Boolean;
+begin
+  Result := TryPickBankMiddle(ABank, 0, AX);
+end;
+
+// A medkit over a shelf about to go into the wall falls into the pit; the
+// side is a wish, not a must
+function TPadWorld.TryPickBankMiddle(const ABank: string; ASide: Integer;
   out AX: Double): Boolean;
 begin
   AX := 0;
@@ -1975,6 +1988,16 @@ begin
       Shelves := Shelves + [Shelf];
   if Length(Shelves) = 0 then
     Shelves := BankOf(ABank);
+  var OnSide: TArray<TPad> := [];
+  for var Shelf in Shelves do
+  begin
+    var Middle := Shelf.Placement.X + Shelf.Placement.Width / 2;
+    var Left := Middle < ScreenWidth / 2;
+    if ((ASide < 0) and Left) or ((ASide > 0) and not Left) then
+      OnSide := OnSide + [Shelf];
+  end;
+  if Length(OnSide) > 0 then
+    Shelves := OnSide;
   Result := Length(Shelves) > 0;
   if not Result then
     Exit;

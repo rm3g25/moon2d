@@ -9,9 +9,9 @@
   for restarts; the arena that rebuilds a pad group, restores it and
   flies it in; the shelves of a bank, which take their order from where
   the hero stands; a carousel that breaks; a flock of stray pads let go;
-  the trial's medkits; the wall cannons of the trial;
-  the bodies an event lets in; the open sky of the trial; and how far the
-  gravel trial has come. The
+  the trial's medkits and the bank its wave comes down onto; the wall
+  cannons of the trial; the bodies an event lets in; the open sky of the
+  trial; how far the gravel trial has come and whether it is won. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -50,6 +50,8 @@ type
   TBankCue = reference to procedure(const ABank: string);
   // The act the gravel trial has come to; 0 while it does not run
   TTrialAct = reference to function: Integer;
+  // The trial of the screen has finished, its last act won
+  TTrialDone = reference to function: Boolean;
   // The wall cannons come in for the act AAct of the trial - the act the
   // event waits for, 0 for one that waits for no act
   TCannonsCue = reference to procedure(const AOrders: TCannonOrders;
@@ -70,7 +72,10 @@ type
     BreakCarousel: TBreakCue;
     Strays: TFlockCue;
     MedkitsOnto: TBankCue;
+    // The bodies of the trial's wave come down over the shelves of a bank
+    WaveOnto: TBankCue;
     TrialAct: TTrialAct;
+    TrialDone: TTrialDone;
     TrialProgress: TTrialProgressCue;
     Cannons: TCannonsCue;
     Spawn: TSpawnCue;
@@ -175,6 +180,8 @@ begin
       Result := FCues.TrialAct() >= AEvent.Act;
     ecGravelDealt:
       Result := GravelDealt(AEvent);
+    ecTrialDone:
+      Result := FCues.TrialDone();
   else
     Result := True;
   end;
@@ -222,6 +229,8 @@ begin
         FCues.Shelves(Action);
       eaMedkitsOnto:
         FCues.MedkitsOnto(Action.Target);
+      eaWaveOnto:
+        FCues.WaveOnto(Action.Target);
       eaCannons:
         FCues.Cannons(Action.Cannons, AEvent.Act);
       eaSpawn:

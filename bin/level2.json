@@ -1267,7 +1267,7 @@
       "bullets": "block",
       "tag": "s09-wall-01",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-wall", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-wall", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1278,7 +1278,7 @@
       "bullets": "block",
       "tag": "s09-wall-02",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-wall", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-wall", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1289,7 +1289,7 @@
       "bullets": "block",
       "tag": "s09-ladder-01",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-foot", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1300,7 +1300,7 @@
       "bullets": "block",
       "tag": "s09-ladder-02",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-foot", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1355,7 +1355,7 @@
       "bullets": "block",
       "tag": "s09-ladder-07",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-foot", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -1366,7 +1366,7 @@
       "bullets": "block",
       "tag": "s09-ladder-08",
       "rig": ["shelfDock"],
-      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": "s09-foot", "held": "in"}
+      "shelf": {"slide": 0.25, "warn": 0.6, "sink": 7, "scale": 0.72, "tone": 0.4, "bank": ["s09-foot", "s09-press-4"], "held": "in"}
     },
     {
       "sprite": "shelf",
@@ -3228,6 +3228,15 @@
           "normal": 15,
           "hard": 25,
           "wild": 40
+        },
+        "finale": {
+          "monster": "betoner",
+          "count": {
+            "normal": 10,
+            "hard": 15,
+            "wild": 20
+          },
+          "alive": 3
         }
       }
     }
@@ -3338,6 +3347,25 @@
         {"action": "medkitsOnto", "target": "s09-floor"},
         {"action": "strays", "target": "s09-strays"},
         {"action": "skyFall", "monster": "skyBarrel", "every": 2.5}
+      ]
+    },
+    {
+      "id": "s09-act6",
+      "screen": 9,
+      "when": "actReached", "act": 6,
+      "then": [
+        {"action": "shelvesWake", "target": "s09-floor", "order": "left", "step": 0.1},
+        {"action": "shelvesWake", "target": "s09-press-4"},
+        {"action": "waveOnto", "target": "s09-press-4"},
+        {"action": "medkitsOnto", "target": "s09-floor"}
+      ]
+    },
+    {
+      "id": "s09-done",
+      "screen": 9,
+      "when": "trialDone",
+      "then": [
+        {"action": "shelvesSleep", "target": "s09-press-4", "order": "down", "step": 0.25, "spareHero": true}
       ]
     }
   ],

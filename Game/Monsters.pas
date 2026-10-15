@@ -1967,8 +1967,8 @@ begin
   FMonsters.Add(Result);
 end;
 
-// Find raises on an unknown id: a typo in an event dies when the level
-// starts, not when the event fires
+// Find raises on an unknown id: a typo in an event or in the wave of a
+// trial dies when the level starts, not when the body is let in
 procedure TMonsterField.CheckSpawnIds;
 begin
   for var Event in FLevel.Events do
@@ -1979,6 +1979,12 @@ begin
         eaSkyFall:
           FRegistry.Find(Action.SkyFall.MonsterId);
       end;
+  for var Placement in FLevel.Entities do
+    if Placement.Triggers.HasFinale then
+      FRegistry.Find(Placement.Triggers.Finale.MonsterId);
+  for var Trigger in FLevel.ScreenTriggers do
+    if Trigger.Triggers.HasFinale then
+      FRegistry.Find(Trigger.Triggers.Finale.MonsterId);
 end;
 
 function TMonsterField.SpawnInLane(const AOrders: TSpawnOrders;

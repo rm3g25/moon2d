@@ -59,6 +59,17 @@ type
     function ForGrade(AGrade: TDifficulty): Integer;
   end;
 
+  // The wave the gravel trial ends in, an act after its gravels: Count
+  // bodies of MonsterId, by difficulty, no more than Alive of them alive at
+  // once. JSON, beside "gravelBoss":
+  //   "finale": {"monster": "betoner",
+  //              "count": {"normal": 10, "hard": 15, "wild": 20}, "alive": 3}
+  TTrialFinale = record
+    MonsterId: string;
+    Count: TDifficultyValue;
+    Alive: Integer;
+  end;
+
   TEntityTriggers = record
     // The three player-facing texts are localized content (part 6.3):
     // base JSON field = Russian, 'En' sibling = English, absent
@@ -76,6 +87,9 @@ type
     // difficulty
     HasGravelBoss: Boolean;
     GravelBatch: TDifficultyValue;
+    // The trial ends in a wave; needs the trial
+    HasFinale: Boolean;
+    Finale: TTrialFinale;
   end;
 
   TEntityPlacement = record
@@ -406,6 +420,12 @@ resourcestring
     + 'in a wall';
   SLevelRespawnOverPit = 'Level "%s": the respawn point of screen %d has no '
     + 'floor under it - a wall, or the deck of a pad that stands still';
+  SLevelFinaleNoTrial = 'Level "%s": %s names a finale but no gravelBoss';
+  SLevelFinaleNoMonster = 'Level "%s": %s names a finale with no "monster"';
+  SLevelFinaleBadCount = 'Level "%s": %s names a finale whose "count" is not '
+    + 'a number above zero on every grade';
+  SLevelFinaleBadAlive = 'Level "%s": %s names a finale with "alive" %d, '
+    + 'not above zero';
 
 class function TDifficultyValue.Uniform(AValue: Integer): TDifficultyValue;
 begin
@@ -764,7 +784,8 @@ begin
           [FId, AEventId, AAction.Target]);
     eaFlyIn:
       CheckFlyIn(AEventId, AAction.Target);
-    eaShelvesWake, eaShelvesSleep, eaShelvesProgram, eaMedkitsOnto:
+    eaShelvesWake, eaShelvesSleep, eaShelvesProgram, eaMedkitsOnto,
+    eaWaveOnto:
       if not AnyShelfOfBank(FPads, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventBankUnknown,
           [FId, AEventId, AAction.Target]);
@@ -1572,7 +1593,32 @@ begin
   AOut.HasFireOffset := Ov.TryGetValue<Integer>('fireOffset', AOut.FireOffset);
 end;
 
-procedure ReadTriggers(const AObj: TJSONObject; var AOut: TEntityTriggers);
+// AOwner names whose triggers they are, in the errors
+procedure ReadFinale(const ATriggersObj: TJSONObject;
+  const ALevelId, AOwner: string; var AOut: TEntityTriggers);
+begin
+  var FinaleObj := ATriggersObj.GetValue<TJSONObject>('finale', nil);
+  AOut.HasFinale := FinaleObj <> nil;
+  if not AOut.HasFinale then
+    Exit;
+  if not AOut.HasGravelBoss then
+    raise ELevelError.CreateFmt(SLevelFinaleNoTrial, [ALevelId, AOwner]);
+  AOut.Finale.MonsterId := FinaleObj.GetValue<string>('monster', '');
+  if AOut.Finale.MonsterId = '' then
+    raise ELevelError.CreateFmt(SLevelFinaleNoMonster, [ALevelId, AOwner]);
+  if not TryReadDifficultyValue(FinaleObj, 'count', AOut.Finale.Count) then
+    raise ELevelError.CreateFmt(SLevelFinaleBadCount, [ALevelId, AOwner]);
+  for var Grade := Low(TDifficulty) to High(TDifficulty) do
+    if AOut.Finale.Count.ForGrade(Grade) <= 0 then
+      raise ELevelError.CreateFmt(SLevelFinaleBadCount, [ALevelId, AOwner]);
+  AOut.Finale.Alive := FinaleObj.GetValue<Integer>('alive', 0);
+  if AOut.Finale.Alive <= 0 then
+    raise ELevelError.CreateFmt(SLevelFinaleBadAlive,
+      [ALevelId, AOwner, AOut.Finale.Alive]);
+end;
+
+procedure ReadTriggers(const AObj: TJSONObject; const ALevelId,
+  AOwner: string; var AOut: TEntityTriggers);
 begin
   AOut := Default(TEntityTriggers);
   // Not 'Tr' - that name now belongs to the dictionary lookup of
@@ -1589,6 +1635,7 @@ begin
   AOut.HasHeroY := TriggersObj.TryGetValue<Integer>('heroY', AOut.HeroY);
   AOut.HasGravelBoss :=
     TryReadDifficultyValue(TriggersObj, 'gravelBoss', AOut.GravelBatch);
+  ReadFinale(TriggersObj, ALevelId, AOwner, AOut);
 end;
 
 // An entity on a seat is placed by it: SeatEntities puts its cell
@@ -1624,7 +1671,7 @@ begin
     FEntities[i].Grades := ParseGrades(
       Obj.GetValue<TJSONArray>('difficulty', nil), FEntities[i].MonsterId);
     ReadOverrides(Obj, FEntities[i].Overrides);
-    ReadTriggers(Obj, FEntities[i].Triggers);
+    ReadTriggers(Obj, FId, EntityRigName(FEntities[i]), FEntities[i].Triggers);
     FEntities[i].Tag := Obj.GetValue<string>('tag', '');
     FEntities[i].Rigs := ReadRigNames(Obj, FId, EntityRigName(FEntities[i]));
   end;
@@ -1641,7 +1688,9 @@ begin
     FScreenTriggers[i].Screen := Obj.GetValue<Integer>('screen');
     FScreenTriggers[i].Grades := ParseGrades(
       Obj.GetValue<TJSONArray>('difficulty', nil), 'screenTriggers');
-    ReadTriggers(Obj, FScreenTriggers[i].Triggers);
+    ReadTriggers(Obj, FId,
+      Format('the triggers of screen %d', [FScreenTriggers[i].Screen]),
+      FScreenTriggers[i].Triggers);
   end;
 end;
 

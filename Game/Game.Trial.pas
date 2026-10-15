@@ -20,9 +20,10 @@
   moment later - time enough to step aside, if he looks up.
 
   The game tells the trial how many bodies hold the gate - the gravels
-  alive and whoever else it counts in - and which gravels died, and does what the cue of a tick says: lets a gravel down, marks
-  the column of an aimed one and lets it down there, brings one gravel
-  back from the pit, lets a medkit down, or ends the trial.
+  alive and whoever else it counts in - and which gravels died, and does
+  what the cue of a tick says: lets a gravel down, marks the column of an
+  aimed one and lets it down there, lets a body of the wave down, brings
+  one gravel back from the pit, lets a medkit down, or ends the trial.
 
   The trial also says how far its batch is dealt, for the events that wait
   on that, and tells the game when an act is over.
@@ -30,6 +31,12 @@
   An event may open the sky for the act it waits for: from then on a body
   falls from it every so many seconds, until that act is over. The trial
   keeps the pace; which body falls is the game's.
+
+  A trial may end in a wave: one act more after the gravels, dealt by
+  another rule. The wave has a count, not a batch, and never more of it
+  alive than its cap: a body comes a wave apart while the room fills up,
+  and a dead one is replaced a beat after it dies. No body of the wave is
+  aimed; its first is a herald. Which body comes is the game's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -39,6 +46,7 @@ unit Game.Trial;
 interface
 
 const
+  // The acts of gravels; a wave, when the trial has one, is an act more
   TrialActs = 5;
   // The pace of 2008: the first wave this many ticks after the start of
   // the trial, then one every TrialWaveTicks
@@ -53,12 +61,16 @@ const
   // so no more than one is ever on its way
   TrialAimedLeadTicks = 10;
   TrialPitReturnTicks = 10;
+  // A dead body of the wave is replaced this long after it dies
+  TrialWaveRefillTicks = 33;
   LogicTicksPerSecond = 33;
 
 type
   TTrialCue = record
     SpawnGravel: Boolean;
-    // The gravel let down is the first of its act
+    // Let down a body of the wave
+    SpawnWave: Boolean;
+    // The gravel or the body of the wave let down is the first of its act
     Herald: Boolean;
     // Mark the hero's column for an aimed gravel; let it down there
     MarkAimed: Boolean;
@@ -74,7 +86,7 @@ type
   end;
 
   // Where the trial stands, for the events that wait on it; all zero while
-  // it does not run
+  // it does not run. In the act of the wave the batch is the wave's count.
   TTrialProgress = record
     Act: Integer;
     Batch: Integer;
@@ -85,9 +97,15 @@ type
   TGravelTrial = class
   private
     FActive: Boolean;
+    FGravelBatch: Integer;
+    // Of the act in progress: the gravel batch, or the wave's count
     FBatch: Integer;
     FAct: Integer;
+    FActs: Integer;
     FBatchLeft: Integer;
+    // The wave: its count (0 - the trial has none) and its cap of the living
+    FWaveCount: Integer;
+    FWaveAlive: Integer;
     FTicksToWave: Integer;
     FKills: Integer;
     FMedkitsOwed: Integer;
@@ -103,10 +121,14 @@ type
     procedure TickSky(var ACue: TTrialCue);
     procedure WatchGate(AGateHolders: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
+    procedure DealWave(AGateHolders: Integer; var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
+    function InWaveAct: Boolean;
   public
-    // ABatch - the gravels of one act
-    procedure Start(ABatch: Integer);
+    // ABatch - the gravels of one act. AWaveCount above zero ends the trial
+    // in a wave of that many bodies, no more than AWaveAlive alive at once.
+    procedure Start(ABatch: Integer; AWaveCount: Integer = 0;
+      AWaveAlive: Integer = 0);
     procedure Stop;
     // A gravel of the trial died
     procedure NoteGravelKilled;
@@ -119,18 +141,31 @@ type
     function Tick(AGateHolders: Integer): TTrialCue;
     function Progress: TTrialProgress;
     property Active: Boolean read FActive;
-    // 1..TrialActs
+    // 1..Acts
     property Act: Integer read FAct;
+    // TrialActs, one more with a wave
+    property Acts: Integer read FActs;
     // A scene plays in the room: the first wave of the next act waits
     property RoomBusy: Boolean read FRoomBusy write FRoomBusy;
   end;
 
 implementation
 
-procedure TGravelTrial.Start(ABatch: Integer);
+procedure TGravelTrial.Start(ABatch: Integer; AWaveCount: Integer;
+  AWaveAlive: Integer);
 begin
   FActive := True;
+  FGravelBatch := ABatch;
   FBatch := ABatch;
+  FWaveCount := 0;
+  FWaveAlive := 0;
+  FActs := TrialActs;
+  if (AWaveCount > 0) and (AWaveAlive > 0) then
+  begin
+    FWaveCount := AWaveCount;
+    FWaveAlive := AWaveAlive;
+    FActs := TrialActs + 1;
+  end;
   FAct := 1;
   FBatchLeft := ABatch;
   FTicksToWave := TrialFirstWaveTicks;
@@ -194,6 +229,11 @@ begin
   // No gravel of the act let down yet: this is the breath between acts
   if FRoomBusy and (FBatchLeft = FBatch) then
     Exit;
+  if InWaveAct then
+  begin
+    DealWave(AGateHolders, Result);
+    Exit;
+  end;
   Dec(FTicksToWave);
   if FTicksToWave > 0 then
     Exit;
@@ -211,6 +251,11 @@ begin
   Result.Act := FAct;
   Result.Batch := FBatch;
   Result.Dealt := FBatch - FBatchLeft;
+end;
+
+function TGravelTrial.InWaveAct: Boolean;
+begin
+  Result := (FWaveCount > 0) and (FAct > TrialActs);
 end;
 
 procedure TGravelTrial.TickAimed(var ACue: TTrialCue);
@@ -266,6 +311,26 @@ begin
   ACue.Herald := Dealt = 1;
 end;
 
+// The wave is capped, as the gravels are not: while it is full the beat to
+// the next body stands at the refill, so a dead one is replaced a beat
+// after it dies; while it fills up a body comes a wave apart
+procedure TGravelTrial.DealWave(AGateHolders: Integer; var ACue: TTrialCue);
+begin
+  if AGateHolders >= FWaveAlive then
+  begin
+    FTicksToWave := TrialWaveRefillTicks;
+    Exit;
+  end;
+  Dec(FTicksToWave);
+  if FTicksToWave > 0 then
+    Exit;
+  FTicksToWave := TrialWaveTicks;
+  Dec(FBatchLeft);
+  var Dealt := FBatch - FBatchLeft;
+  ACue.SpawnWave := True;
+  ACue.Herald := Dealt = 1;
+end;
+
 // The sky is the act's: it shuts with it, and lets nothing fall on the tick
 // it shuts
 procedure TGravelTrial.EndAct(var ACue: TTrialCue);
@@ -273,7 +338,7 @@ begin
   ACue.ActEnded := True;
   ACue.SkyFall := False;
   FSkyEvery := 0;
-  if FAct >= TrialActs then
+  if FAct >= FActs then
   begin
     FActive := False;
     ACue.Finished := True;
@@ -281,6 +346,9 @@ begin
   end;
 
   Inc(FAct);
+  FBatch := FGravelBatch;
+  if InWaveAct then
+    FBatch := FWaveCount;
   FBatchLeft := FBatch;
   FTicksToWave := TrialActBreakTicks;
 end;

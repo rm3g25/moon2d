@@ -30,13 +30,15 @@ type
   // it holds from the moment the gravel number batch * part div of + 1 is
   // let down - a third of a batch of 15 puts it at the sixth gravel, and
   // the batch is told by the grade. JSON: "act", "part" (0 by default), "of".
+  // trialDone holds once the trial of the screen has finished, its last
+  // act won; a restart, which starts the trial over, clears it.
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
-    ecActReached, ecGravelDealt);
+    ecActReached, ecGravelDealt, ecTrialDone);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
-    eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall);
+    eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -113,6 +115,8 @@ type
     // (Pads.World). JSON: "target".
     // eaMedkitsOnto: from now on the trial's medkits come down over the
     // shelves of the bank Target. JSON: "target".
+    // eaWaveOnto: from now on the bodies of the trial's wave come down
+    // over the shelves of the bank Target. JSON: "target".
     // eaCannons: the two TeK cannons slide in on the walls for the act of
     // the trial they come in (Game.Cannons). JSON: "rows" (the rows they
     // fire at), "yield" (a bank of shelves, optional) and "yieldRows"
@@ -158,7 +162,8 @@ type
   //     "when": "allDead", "tag": "labGuard",
   //     (or "when": "livesBelow", "tag": "boss", "lives": 150,
   //     or "when": "actReached", "act": 2
-  //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3)
+  //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3
+  //     or "when": "trialDone")
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -182,12 +187,12 @@ const
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
-    'gravelDealt');
+    'gravelDealt', 'trialDone');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
-    'breakCarousel', 'strays', 'skyFall');
+    'breakCarousel', 'strays', 'skyFall', 'waveOnto');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -324,7 +329,8 @@ begin
 end;
 
 // The pad group of a rebuild, a restore or a fly-in; the bank of the
-// shelf actions; the carousel of a break; the flock let go
+// shelf actions, of the medkits and of the wave; the carousel of a break;
+// the flock let go
 procedure ReadGroupTarget(const AObj: TJSONObject;
   const ALevelId, AEventId: string; var AAction: TEventAction);
 begin
@@ -510,7 +516,7 @@ begin
       ReadSun(AObj, ALevelId, AEventId, Result);
     eaTactics:
       ReadTactics(AObj, ALevelId, AEventId, Result);
-    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto, eaStrays:
+    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto, eaStrays, eaWaveOnto:
       ReadGroupTarget(AObj, ALevelId, AEventId, Result);
     eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
       ReadShelves(AObj, ALevelId, AEventId, Result);

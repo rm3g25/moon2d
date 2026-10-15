@@ -392,6 +392,12 @@ type
     // The bank of shelves an event sends the trial's medkits down onto;
     // '' - they come down anywhere
     FMedkitBank: string;
+    // The monster of the wave the trial ends in, '' - it has none; the bank
+    // an event sends its bodies down onto, '' - they come down anywhere
+    FWaveMonster: string;
+    FWaveBank: string;
+    // The trial of the screen is won: the events of the end wait for it
+    FTrialDone: Boolean;
     // What the open sky of the trial lets fall; '' - the sky is shut
     FSkyMonster: string;
     // The fly-ins told while the cannons' scene plays, and the ticks left
@@ -466,6 +472,8 @@ type
     function LetDownFromSky(const AMonsterId: string;
       ALook: TArrivalLook = alPlain): TMonster;
     procedure LetDownMedkit;
+    function WaveSideWanted: Integer;
+    procedure LetDownWave(AHerald: Boolean);
     procedure ArriveAgain(AGravel: TMonster);
     function HeroColumn: Integer;
     function TrialAct: Integer;
@@ -477,6 +485,7 @@ type
     function CannonsScenePlays: Boolean;
     procedure ReleaseHeldFlyIns;
     procedure SendMedkitsOnto(const ABank: string);
+    procedure SendWaveOnto(const ABank: string);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
     procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
     procedure OpenSky(const AOrders: TSkyFall; AAct: Integer);
@@ -755,6 +764,7 @@ begin
   Cues.BreakCarousel := BreakCarousel;
   Cues.Strays := LetStraysGo;
   Cues.MedkitsOnto := SendMedkitsOnto;
+  Cues.WaveOnto := SendWaveOnto;
   Cues.Cannons := StartCannons;
   Cues.Spawn := SpawnGuest;
   Cues.SkyFall := OpenSky;
@@ -769,6 +779,11 @@ begin
     function: TTrialProgress
     begin
       Result := FTrial.Progress;
+    end;
+  Cues.TrialDone :=
+    function: Boolean
+    begin
+      Result := FTrialDone;
     end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
@@ -792,6 +807,9 @@ begin
   // led to the menu. With checkpoint respawn it would be a softlock.
   FTrial.Stop;
   FMedkitBank := '';
+  FWaveMonster := '';
+  FWaveBank := '';
+  FTrialDone := False;
   FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
@@ -1183,8 +1201,17 @@ begin
   if ATriggers.HasGravelBoss then
   begin
     // The batch of one act lives in the level JSON, split by difficulty
-    // there (15/25/40 for level2) - the game only picks its grade
-    FTrial.Start(ATriggers.GravelBatch.ForGrade(FDifficulty));
+    // there (15/25/40 for level2) - the game only picks its grade; so
+    // does the count of the wave the trial may end in
+    FWaveMonster := '';
+    if ATriggers.HasFinale then
+    begin
+      FWaveMonster := ATriggers.Finale.MonsterId;
+      FTrial.Start(ATriggers.GravelBatch.ForGrade(FDifficulty),
+        ATriggers.Finale.Count.ForGrade(FDifficulty), ATriggers.Finale.Alive);
+    end
+    else
+      FTrial.Start(ATriggers.GravelBatch.ForGrade(FDifficulty));
     FGravelScreen := FHero.Screen;
     FHenshin.Start;
   end;
@@ -1219,6 +1246,42 @@ begin
   var Column := Trunc(ShelfX / SpriteSize);
   var Born := FField.SpawnFromSkyOver(MedkitMonsterId, FGravelScreen, Column);
   FArrivals.Add(Born.X + SpriteSize / 2);
+end;
+
+// The half of the room with fewer bodies of the wave alive: below 0 the
+// left, above 0 the right, 0 when they are even
+function TMoonGame.WaveSideWanted: Integer;
+begin
+  Result := 0;
+  for var Monster in FField.Monsters do
+  begin
+    if (Monster.Screen <> FGravelScreen) or (Monster.Life <> mlAlive) or
+      (Monster.Def.Id <> FWaveMonster) then
+      Continue;
+    if Monster.X + SpriteSize / 2 < ScreenWidth / 2 then
+      Inc(Result)
+    else
+      Dec(Result);
+  end;
+end;
+
+// Over a shelf of the bank an event named, on the side with fewer of the
+// wave; anywhere when it named none
+procedure TMoonGame.LetDownWave(AHerald: Boolean);
+var
+  ShelfX: Double;
+begin
+  var Look := alPlain;
+  if AHerald then
+    Look := alHerald;
+  if not FPads.TryPickBankMiddle(FWaveBank, WaveSideWanted, ShelfX) then
+  begin
+    LetDownFromSky(FWaveMonster, Look);
+    Exit;
+  end;
+  var Column := Trunc(ShelfX / SpriteSize);
+  var Born := FField.SpawnFromSkyOver(FWaveMonster, FGravelScreen, Column);
+  FArrivals.Add(Born.X + SpriteSize / 2, Look);
 end;
 
 // The column over the middle of the hero, kept inside the walls of the
@@ -1303,6 +1366,11 @@ begin
   FMedkitBank := ABank;
 end;
 
+procedure TMoonGame.SendWaveOnto(const ABank: string);
+begin
+  FWaveBank := ABank;
+end;
+
 // The act the event names, or the one the trial is in: a delayed event
 // may fire after its act is over, and then the scene of the end plays at
 // once
@@ -1343,6 +1411,11 @@ begin
 
   for var Returned in FField.ReturnSideStrays(GravelMonsterId, FGravelScreen) do
     ArriveAgain(Returned);
+  // A body of the wave out of the room would hold the gate forever: it
+  // comes back as a gravel does
+  if FWaveMonster <> '' then
+    for var Returned in FField.ReturnSideStrays(FWaveMonster, FGravelScreen) do
+      ArriveAgain(Returned);
   // Released before the room is asked: a carousel let in now is landing
   // this very tick, so the first wave sees no gap between the two
   ReleaseHeldFlyIns;
@@ -1352,12 +1425,23 @@ begin
   // the hero to kill it, so the leave at the gate finds no one alive
   var GateHolders := FField.CountAliveOf(GravelMonsterId, FGravelScreen) +
     FField.CountAliveGuests(FGravelScreen);
+  // The wave holds the gate too, and its cap is counted against them
+  if FWaveMonster <> '' then
+    Inc(GateHolders, FField.CountAliveOf(FWaveMonster, FGravelScreen));
   var Cue := FTrial.Tick(GateHolders);
-  // A gravel fallen into the pit comes down on the hero who dropped it
-  var FromPit: TMonster;
-  if Cue.ReturnFromPit and
-    FField.TryReturnPitStray(GravelMonsterId, FGravelScreen, HeroColumn, FromPit) then
-    ArriveAgain(FromPit);
+  // A gravel fallen into the pit comes down on the hero who dropped it,
+  // and so does a body of the wave, should one fall out of the room
+  if Cue.ReturnFromPit then
+  begin
+    var FromPit: TMonster;
+    var Back := FField.TryReturnPitStray(GravelMonsterId, FGravelScreen,
+      HeroColumn, FromPit);
+    if not Back and (FWaveMonster <> '') then
+      Back := FField.TryReturnPitStray(FWaveMonster, FGravelScreen, HeroColumn,
+        FromPit);
+    if Back then
+      ArriveAgain(FromPit);
+  end;
   // 2008 lets every monster down heading left; the trial's gravels go
   // either way, or they all pile up on the left
   if Cue.SpawnGravel and Cue.Herald then
@@ -1373,6 +1457,8 @@ begin
   end;
   if Cue.SpawnAimed then
     FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn).HeadRandomly;
+  if Cue.SpawnWave then
+    LetDownWave(Cue.Herald);
   if Cue.SpawnMedkit then
     LetDownMedkit;
   // The violet light marks the column a moment before the body shows
@@ -1383,6 +1469,7 @@ begin
   if not Cue.Finished then
     Exit;
 
+  FTrialDone := True;
   FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
   // The breakthrough shatter RINGS, unlike the silent level-complete
   // one: Snd_bottle right before the suit comes off, which is a ring of
@@ -1393,6 +1480,10 @@ begin
   if FHero.HeroForm <> hfNormal then
     FAudio.Play(BottleSoundFile);
   FHenshin.RemoveIceForm;
+  // The victory track of a boss, once; the level goes on, so no timer of
+  // its end - the room stays silent until a screen ahead changes the music.
+  // A restart brings back FCurrentMusic, the trial's own track.
+  FAudio.PlayMusic(VictoryMusicFile, mmOnce);
 end;
 
 // Verbatim ladder of moon.dpr 826-864, quirks included: the 4th bonus
@@ -2246,6 +2337,9 @@ begin
   // raises it again.
   FTrial.Stop;
   FMedkitBank := '';
+  FWaveMonster := '';
+  FWaveBank := '';
+  FTrialDone := False;
   FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
