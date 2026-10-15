@@ -1,6 +1,6 @@
 # Level 2 screen 9: the gravel arena (first of the two level 2 bosses)
 
-Stage plan. Status: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TeK cannons, the shared TeK shield, the floor islands, the bottom steps yielding; waits for its live run). Stage 4 (act 4, the carousel) is designed (2026-10-13); 4.1 (the platforms' engine) is built (2026-10-13), 4.2 (the parked carousel) is built (2026-10-14) and 4.3 (the act 4 data, 3.0.57) is built (2026-10-14), run live and committed with its fixes. Stage 5 (act 5, chaos) is designed (2026-10-15); 5.1 (the carousel breaks, the act 5 room, 3.0.58) is built, run live and pushed (2026-10-15); 5.2 (stray pads, a thicker floor) is built (2026-10-15); 5.3 (sky barrels) is built (2026-10-15). The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
+Stage plan. Status: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TeK cannons, the shared TeK shield, the floor islands, the bottom steps yielding; waits for its live run). Stage 4 (act 4, the carousel) is designed (2026-10-13); 4.1 (the platforms' engine) is built (2026-10-13), 4.2 (the parked carousel) is built (2026-10-14) and 4.3 (the act 4 data, 3.0.57) is built (2026-10-14), run live and committed with its fixes. Stage 5 (act 5, chaos) is designed (2026-10-15); 5.1 (the carousel breaks, the act 5 room, 3.0.58) is built, run live and pushed (2026-10-15); 5.2 (stray pads, a thicker floor) is built (2026-10-15); 5.3 (sky barrels) is built (2026-10-15); stage 5 is run live and done. Stage 6 (the finale) is designed (2026-10-15); variant A taken (2026-10-16). The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
 
 ## The idea in one line
 Five arenas in one room: each act brings its own gravels (15 on normal, more on hard and wild); when the last of them is dead, the room rebuilds itself, and every rebuild takes away what the hero stood on. Selena does not throw gravels at the hero - she rearranges the room; the gravels are the weather.
@@ -103,7 +103,7 @@ Their death is a scene, not a mechanic: they do not die of hits. The hero may sh
    - A killed betoner is replaced on the TOP row: a fast killer keeps them far, a slow one gets all ten at his feet.
    - No barrels in the finale (decided 2026-10-15): they stop with act 5, the betoner wave comes under a clear sky.
    - The way up to them is the falling and stray pads in the middle of the room.
-   - Note: the pyramid has no "rows" to press down; the press needs rows of its own (betoner rows may roof each other - betoners shoot, a roof does not shelter from them). Decide at stage 6.
+   - The press rows are balconies of their own at the walls, rows 3, 5, 7 and 9 (decided at stage 6, see "Stage 6 design").
 
 ## The acts engine as built (3.0.54)
 - Condition `"when": "actReached", "act": N` - holds while the trial's act is N or later (the director pulls the act through a cue; 0 while the trial does not run). A restart re-arms the screen and the trial is back on act 1, so act 1 events fire again.
@@ -250,6 +250,56 @@ Not compiled by Claude; waits for the live run.
 - **Tests.** Tests.Game.Trial (new): the sky shut until opened, its pace, under a tick a tick, a new pace from the moment it is told, shut with the act (nothing on the closing tick), shut by Stop, not opened outside the trial; skyFall read, no monster, no pace and no act refused, level 2 opens the sky once, in act 5 over the arena. Tests.Monsters.Defs: the sky barrel is weather, pays nothing and blows up, the barrel is not weather, weather only when asked, weather free of gravity refused. Tests.Monsters.Bodies: weather bursts where it lands (meDied, meBurst), on a ledge, the pit takes it with no event and it falls no more, it bursts once, the barrel of the levels lands and stands.
 - **Files.** Monsters.Defs, Monsters, Levels.Events, Events.Director, Game.Trial, Moon2D.dpr, bin/monsters.json, bin/level2.json, docs/ARENA-2.md; Tests.Game.Trial (new), Tests.Monsters.Defs, Tests.Monsters.Bodies, Tests.Rooms (its header), Moon2D.Tests.dpr, Moon2D.Tests.dproj.
 
+## Stage 6 design (the finale: betoners)
+Designed 2026-10-15; the numbers are first guesses, tuned at the live runs. The fork of where the rules of the wave live: variant A taken (2026-10-16) - the wave is act 6 of Game.Trial.
+
+### The press is a conveyor
+The plan said both "the top row sleeps and the row below wakes" and "a killed betoner is replaced on the TOP row". Together they mean that the awake rows are a conveyor going down, not one row: a newcomer wakes the top row while the older betoners are lower.
+- **A beat** every 10 s (first guess): every awake press row sleeps and the row under it wakes, told at the same moment. The waking row is out in 0.25 s; the sleeping one warns 0.6 s and slides - a betoner falls onto a row already out (64 units, about 29 ticks of 2008 gravity). The bottom press row sleeping drops its betoners onto the floor.
+- **A newcomer** wakes the top row (if it sleeps) and comes down in the violet light over a shelf of it, as a medkit onto a bank.
+- **A beat waits** while a newcomer is on its way (45 ticks from its let-down, first guess): the top row does not sleep from under a body still in the air.
+- **An emptied row rides on.** A row whose betoner is dead keeps going down until it reaches the floor: the room keeps pressing, whoever stands on it.
+- **No mercy on the press.** A hero on a balcony at a beat falls a row with the betoners (no spareHero) - the row under him has just woken.
+- **Timing.** A betoner landed on the top row reaches the floor in four beats: 30-40 s. A fast killer keeps them on the balconies; a slow one gets them at his feet.
+
+### The room of the finale
+- **Press rows: balconies at the walls**, three cells a side: rows 3, 5, 7 and 9 (decks y 96, 160, 224, 288), cols 1-3 and 12-14. Row 9 is there already: s09-wall (cols 1, 14) and s09-foot (cols 2-3, 12-13) - they join the bank s09-press-4. Rows 3, 5 and 7 are 18 new shelves with docks, held in through acts 1-5: banks s09-press-1..3. The top betoner stands in row 2, a cell clear of the grating.
+- **Why the walls.** The centre (cols 4-11) is the carousel's wreck and the strays - the way up; the balconies lie clear of the box (x 128-384). The docks show on the walls from act 1 - the player sees where something will come out.
+- **Roofs are fine**: betoners shoot. The balconies block bullets, as every shelf of the room: a betoner does not shoot down through its own deck, and the hero does not shoot up through a balcony from under it.
+- **The floor stands.** The whole s09-floor wakes and holds, col 15 too (the way out).
+- **The foot and the wall stop blinking.** They sleep at the act change (they are press row 4 now) and wake only on the conveyor.
+- **Strays fly on**, zone narrowed to [4, 3, 11, 8] (was [2, 3, 13, 8]). A stray's deck at zone row r is at y 32r, the deck of a balcony on that row: hung at cols 2-3 or 12-13 it would stand inside a balcony and could carry a betoner off it (RideDeck takes whichever deck carries). In the centre, a stray at col 4 or col 11 on rows 3, 5, 7 is level with a balcony and one step from it - that is the way up. Act 5 gets the narrower zone too.
+- **The broken carousel pads** the hero has not ridden down stay where they stand, one-shot.
+- **No barrels** (the sky shuts at the act 5 gate - built at 5.3). Medkits: none of the wave's own (they are per 15 gravels); the one of the last gravel comes down at the act change onto s09-floor, all of which wakes.
+
+### The wave
+- **Size.** 10 betoners on normal, 15 on hard, 20 on wild (a TDifficultyValue, first guess); no more than 3 alive on every grade.
+- **Start.** After the act change's breath (TrialActBreakTicks) the first three come a wave apart (TrialWaveTicks); the first is a herald column.
+- **Replacement.** A dead betoner's place is filled 33 ticks later (first guess), always on the top row; a side with fewer betoners on that row is preferred, else the dice.
+- **The betoner as it is** (monsters.json): patrol 1, edge-aware - it paces its balcony and turns at its ends; aimedDouble every 51 ticks at bullet speed 2; 10 lives; score 2. Its kill pays as any (score, streak); it does not count toward the medkits (gravels only).
+- **It falls when its shelf sleeps** - checked in the code: affectedByGravity is true by default (betoner sets none); TMonster.Tick calls FallIfUnsupported after the move every tick; a sleeping shelf is Behind, DeckUnder ignores it, and the grid of the room is open (CanGoDown). To confirm live: a betoner mid-turn at the end of its balcony.
+- **The end.** The last betoner dead and the count spent: the trial is finished - the breakthrough message, the ice form comes off, the victory track of level 1 plays (win.ogg, once - VictoryMusicFile, as at the boss's meLevelComplete; decided 2026-10-16), the right door opens. The level does NOT end here: screens follow (the second level 2 boss), so no level-end timer - only the track. After it the room stays silent until the next screen's changeMusic. A restart puts FCurrentMusic back (boss2.ogg), as it does for win.ogg today.
+- **The room calms down (decided 2026-10-16).** After the victory only the floor is left: it already stands whole in act 6 and stays; every other shelf slides in slowly, one after another from the top down (the press rows, order down, step 0.25 s - about 6 s, under the victory track), sparing the hero (spareHero: a shelf he stands on waits until he is off it). The floor cannot have holes in act 6 itself: a betoner has no pit return, one fallen out of the room would hold the gate forever. Strays and the broken carousel pads are not shelves and stay as they are.
+- **New engine piece: the condition `"when": "trialDone"`** - holds once the trial of the screen has finished (the game keeps the flag from the Finished cue; the director pulls it through a cue, as the act). A restart clears it with the trial.
+- Death in the finale restarts the trial from act 1 (kept, as decided for every act).
+
+### Fork: where the rules of the wave live
+- **A (proposed): act 6 of Game.Trial.** The trial deals its last act by a second rule: a capped wave instead of a batch. Free for it: the gate, the act change, RoomBusy, actReached 6 for the events, the restart from act 1, the door shut while the trial runs, the Finished cue and its scene. Cost: Game.Trial gets a second dealing rule beside DealGravel, and its number of acts comes from the data.
+- **B: a unit of its own after the trial** (Game.Finale): the trial ends at act 5 as now, the finale starts on its Finished. Game.Trial stays a gravel trial; but the finale has to repeat the gate, the restart, the door and the end scene, and the events need a condition of their own ("finale reached") beside actReached.
+
+### Engine (variant A)
+- **Trigger.** `"finale": {"monster": "betoner", "count": {"normal": 10, "hard": 15, "wild": 20}, "alive": 3}` in screenTriggers beside gravelBoss (TScreenTriggers.Finale, Levels.Defs; the monster checked at level start; alive above 0). Without it the trial is five acts as now.
+- **Game.Trial.** Start(batch, finale): one act more when a finale is given. In the wave act: no aimed gravels; DealWave lets one down when the gate holders are fewer than "alive" and the count is not spent - TrialWaveTicks while filling up, TrialWaveRefillTicks (33) after a death; cue SpawnWave (Herald on the first). The gate as for every act: count spent and no holder alive. Progress reports the wave act as any act.
+- **Where a newcomer lands.** Event action `{"action": "waveOnto", "target": <bank>}` - the sibling of medkitsOnto; the game keeps the bank and lets the wave down over a shelf of it (TryPickBankMiddle + SpawnFromSkyOver; the side rule above). No bank told - a random column, as a gravel.
+- **Game.Press** (new, no SDL): the press rows (banks, top first) and the beat in ticks; the awake mask; Tick gives a beat - the banks to sleep and to wake; Arrive(bank) wakes the top row when the bank is it and holds the beat for the arrival window; Shut and Reset. Tested as a black box.
+- **Event action** `{"action": "press", "rows": ["s09-press-1", "s09-press-2", "s09-press-3", "s09-press-4"], "every": 10}` (Levels.Events eaPress, TPressOrders; needs an event that waits for an act; Levels.Defs checks the banks; Events.Director cue Press). The game starts it only in the act the event waits for; the trial's end, Stop and a restart shut it. A beat goes to TellBank as shelvesSleep / shelvesWake (hold) of each row.
+- **Moon2D.dpr.** Gate holders = gravels + guests + bodies of the wave alive. LetDownWave: the press told Arrive first, then the body let down over the onto bank.
+
+### Sub-stages
+Each its own commit, each bringing its piece of the data, each run live.
+- **6.1 The wave (3.0.59).** The finale trigger, the wave act of Game.Trial, waveOnto, the wiring, win.ogg on Finished, the trialDone condition. Data: the trigger; event s09-act6 (actReached 6) - the whole floor wakes and holds, the foot and the wall stop blinking and hold out (row 9 is the only row for now), waveOnto s09-press-4 (the bank added on the wall and foot shelves), medkits onto s09-floor; event s09-done (trialDone): s09-press-4 sleeps (order down, step 0.25, spareHero). Runnable: three betoners on the row 9 balconies, replaced as they die, the door opens at the end. Tests: Tests.Game.Trial (the wave act: one more act only with a finale, the cap, the refill pace, the herald, the gate, Finished after it), Tests.Levels (the trigger read and refused, level 2 has a finale on screen 9).
+- **6.2 The press.** Game.Press, the press action and its cue, Arrive in LetDownWave. Data: 18 shelves of rows 3, 5, 7 with docks (held in), banks s09-press-1..3, the strays' zone narrowed, waveOnto s09-press-1, the foot and the wall sleep at the act change (the conveyor wakes them), the press action every 10 s; s09-done sleeps every press row (one bank s09-balcony over the four rows, order down). Tests: Tests.Game.Press (new: the mask goes down a row on a beat, the bottom row falls off, the top wakes on an arrival, a beat waits out the arrival window, an emptied row rides on, shut and reset), Tests.Levels.Pads (the press banks of level 2, the rows top first, the zone of the strays clear of the balconies).
+
 ## Stages
 Each stage ends with a live run. Versions: one per stage that changes mechanics, next free after 3.0.56; the tag lands after the docs.
 
@@ -266,7 +316,9 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
    - 5.1 **The carousel breaks, the act 5 room (3.0.58).** Built (2026-10-15), see "Built at 5.1".
    - 5.2 **Stray pads.** Built (2026-10-15), see "Built at 5.2".
    - 5.3 **Sky barrels.** Built (2026-10-15), see "Built at 5.3".
-6. **Finale.** Betoner wave after the act 5 gate; spawn on the top awake row; cap 3; the press (row wake/sleep on a timer); no barrels (they stop with act 5). Check betoners fall when their shelf sleeps (affectedByGravity).
+6. **Finale.** Designed, see "Stage 6 design". Two commits, each run live:
+   - 6.1 **The wave (3.0.59).** The betoners as act 6 of the trial, landing on the row 9 balconies.
+   - 6.2 **The press.** The balconies of rows 3, 5, 7 and the conveyor.
 7. **Tests.** Black-box, one module per new entity: trial rules (batch by grade, per-act gate, no carry-over, teleport keeps the gravel, a wave every time while the batch lasts, medkit per 15 kills, pickups out of the gate, aimed every third from act 2, herald, aimed holds the gate - also the aimed one let down on the gate's tick, pit returns one per TrialPitReturnTicks, RoomBusy holds only the first wave), acts conditions, shelf commands (sleep / wake / program from any depth, told-before-origin look), bank orders and waits, parking and fly-in (the parked carousel, the clock speed-up, the re-park on a rewind), the batch-birth condition (thirds by grade) and the spawn action (lane, entrance, leave at the gate, the gate not held), cannons (TCannonPair with no renderer needs a TCannonArt - split the art off or pass nil; unison, one row per volley, rounds harmless to gravels, shield takes every hit, shield falls with the act change, the scene deals no damage, the yield bank sleeps before a ride through rows 8-9 and wakes after, contact wounds, a late event plays the scene at once), the shield (cells inside the ellipse, flare fades in 16 ticks, fall in 14), stray pad, sky barrel, press.
 8. **Docs.** ASSETS (tek-cannon.mset, tools/cannon), both codebase maps (Game.Shield, Game.Cannons, the cannons action, RoomBusy), PADS-PLAN, PORTING-NOTES, the stage 4 units, docs/ARENA-2.md (the repository copy was refreshed to stage 3 on 2026-10-13; refresh it again from this plan); then the tag.
 
@@ -295,6 +347,11 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 - Act 5: a hero on the carousel at the act change rides the halt; then every pad under him is a falling pad. The fall needs him to stand on it, so standing still is no longer safe - the point, but check that it reads.
 - Act 5: a falling carousel pad goes down through the floor shelves (pads pass through each other); a hero riding one down may land on a floor shelf on the way - looks natural, check live.
 - Act 5: the foot, the way up from the doorstep, blinks; with 6 random floor shelves the climb to the carousel may be a wait. Check live; the foot can hold if it is too mean.
+- Finale: a stray entering along a row passes through a balcony at its deck height and may carry a betoner off for a few ticks (RideDeck takes whichever deck carries). If seen live: strays of act 6 come in from the top only, or the betoner keeps to its shelf.
+- Finale: four awake balconies at once make a wall ladder (rise 2 each) - betoners shoot, so no bunker, but check live it is not a quiet climb.
+- Finale: the hero standing on the floor under a balcony with a betoner on it is out of its reach (its own deck blocks the shot down) until the press brings it down - the press is the answer, check live it does not turn into waiting under a balcony.
+- Finale: a death replays acts 1-5 (no checkpoints) - the price of the finale is the whole arena. Watch the live runs.
+- Finale: a newcomer let down over a balcony already taken lands on the betoner's cell; they part as they pace (patrol 1). Cosmetic.
 
 ## Open
 - Hard and wild batch sizes: 25 / 40 proposed.
@@ -306,3 +363,5 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 - The hero's weapon (to do, not now): the arena is hard and will get harder; the gun is a weak pop-gun, a parody of the Contra 1 spread - same principle, tighter, and two rounds.
 - Carousel size, pad count, period and speed-up time: first guesses, tuned live. So are the landing's pace (8 units a tick), braking (10 ticks) and ripple (4 ticks a cell), constants in Levels.Carousels.
 - Act 5: decided 2026-10-15 - the sky barrels strike the gravels too, nobody is shielded.
+- Finale: wave size by grade (10 / 15 / 20) and the cap (3 on every grade); the press beat (10 s), the arrival window (45 ticks) and the refill (33 ticks) - first guesses.
+- Finale: a medkit inside the wave (none now - medkits are per 15 gravels).
