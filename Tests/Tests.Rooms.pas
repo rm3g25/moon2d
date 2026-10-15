@@ -9,9 +9,10 @@
   sprite cache and both are nil, as the jump reach is.
 
   No animation set, no disc art, no bursts: what is placed here can be
-  moved, shoved and ticked, never drawn. A body that explodes is never
-  made to die (its death fans bullets into a burst, and a burst needs a
-  renderer); a gravel carries none and can die into a nil one.
+  moved, shoved and ticked, never drawn. The boss is never made to die
+  (its death fans bullets into a burst, and a burst needs a renderer); the
+  rest fan none and can die into a nil one - a barrel too, whose blast is
+  the game's to send out.
 
   LevelFromRows is the same level with more in its root - the pads and
   the respawn points of a test - and with nothing around it: no pad

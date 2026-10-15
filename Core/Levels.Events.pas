@@ -36,7 +36,7 @@ type
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
-    eaSpawn, eaBreakCarousel, eaStrays);
+    eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -68,6 +68,13 @@ type
   TCarouselBreak = record
     HaltSeconds: Single;
     StepSeconds: Single;
+  end;
+
+  // The open sky of the gravel trial: a body of MonsterId falls from it every
+  // EverySeconds, in a column the dice pick
+  TSkyFall = record
+    MonsterId: string;
+    EverySeconds: Single;
   end;
 
   TEventAction = record
@@ -119,6 +126,10 @@ type
     // "target", "halt" and "step" (seconds, 0 by default).
     // eaStrays: the pads of the flock Target are let go and stray from now
     // on (Pads.Stray). JSON: "target".
+    // eaSkyFall: the sky opens for the act of the trial the event waits for
+    // and lets a body of SkyFall.MonsterId fall every SkyFall.EverySeconds
+    // until that act is over - so the event must wait for one. JSON:
+    // "monster", "every" (seconds, above 0).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -137,6 +148,7 @@ type
     Cannons: TCannonOrders;
     Spawn: TSpawnOrders;
     Breakdown: TCarouselBreak;
+    SkyFall: TSkyFall;
   end;
 
   // One event in level JSON:
@@ -175,7 +187,7 @@ const
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
-    'breakCarousel', 'strays');
+    'breakCarousel', 'strays', 'skyFall');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -232,6 +244,11 @@ resourcestring
     + 'for an act';
   SEventBadPick = 'Level "%s": event "%s": %s picks %d shelves';
   SEventBreakNumber = 'Level "%s": event "%s": breakCarousel takes %s %g';
+  SEventNoSkyMonster = 'Level "%s": event "%s": skyFall names no "monster"';
+  SEventBadSkyPace = 'Level "%s": event "%s": skyFall takes "every" above 0 ' +
+    'seconds, not %g';
+  SEventActOnly = 'Level "%s": event "%s": %s needs an event that waits for ' +
+    'an act';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -396,6 +413,18 @@ begin
       [ALevelId, AEventId, 'a step', AAction.Breakdown.StepSeconds]);
 end;
 
+procedure ReadSkyFall(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+begin
+  AAction.SkyFall.MonsterId := AObj.GetValue<string>('monster', '');
+  if AAction.SkyFall.MonsterId = '' then
+    raise ELevelEventError.CreateFmt(SEventNoSkyMonster, [ALevelId, AEventId]);
+  AAction.SkyFall.EverySeconds := AObj.GetValue<Double>('every', 0);
+  if AAction.SkyFall.EverySeconds <= 0 then
+    raise ELevelEventError.CreateFmt(SEventBadSkyPace,
+      [ALevelId, AEventId, AAction.SkyFall.EverySeconds]);
+end;
+
 // The rows of a list, each one on the screen; an absent list is empty
 function ReadRows(const AObj: TJSONObject; const AKey: string;
   const ALevelId, AEventId: string): TArray<Integer>;
@@ -491,6 +520,8 @@ begin
       ReadSpawn(AObj, ALevelId, AEventId, Result);
     eaBreakCarousel:
       ReadBreak(AObj, ALevelId, AEventId, Result);
+    eaSkyFall:
+      ReadSkyFall(AObj, ALevelId, AEventId, Result);
   end;
 end;
 
@@ -538,8 +569,13 @@ begin
     Result.Actions[i] := ReadAction(ActionsArr.Items[i] as TJSONObject,
       ALevelId, Result.Id);
   for var Action in Result.Actions do
+  begin
     if (Action.Kind = eaSpawn) and (Result.Act <= 0) then
       raise ELevelEventError.CreateFmt(SEventSpawnNoAct, [ALevelId, Result.Id]);
+    if (Action.Kind = eaSkyFall) and (Result.Act <= 0) then
+      raise ELevelEventError.CreateFmt(SEventActOnly,
+        [ALevelId, Result.Id, EventActionIds[Action.Kind]]);
+  end;
 end;
 
 function ParseLevelEvents(const ARoot: TJSONObject;

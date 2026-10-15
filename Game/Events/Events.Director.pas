@@ -10,7 +10,8 @@
   flies it in; the shelves of a bank, which take their order from where
   the hero stands; a carousel that breaks; a flock of stray pads let go;
   the trial's medkits; the wall cannons of the trial;
-  the bodies an event lets in; and how far the gravel trial has come. The
+  the bodies an event lets in; the open sky of the trial; and how far the
+  gravel trial has come. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -58,6 +59,9 @@ type
   // A body comes in along a lane for the act AAct of the trial
   TSpawnCue = reference to procedure(const AOrders: TSpawnOrders;
     AAct: Integer);
+  // The sky opens for the act AAct of the trial
+  TSkyFallCue = reference to procedure(const AOrders: TSkyFall;
+    AAct: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -70,6 +74,7 @@ type
     TrialProgress: TTrialProgressCue;
     Cannons: TCannonsCue;
     Spawn: TSpawnCue;
+    SkyFall: TSkyFallCue;
   end;
 
   TEventDirector = class
@@ -225,6 +230,8 @@ begin
         FCues.BreakCarousel(Action.Target, Action.Breakdown);
       eaStrays:
         FCues.Strays(Action.Target);
+      eaSkyFall:
+        FCues.SkyFall(Action.SkyFall, AEvent.Act);
     end;
 end;
 

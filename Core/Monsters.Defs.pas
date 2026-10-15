@@ -204,6 +204,11 @@ type
     Category: TMonsterCategory;
     Dangerous: Boolean;
     AffectedByGravity: Boolean; // platforms, mounts and the boss ignore it
+    // Weather: a body the sky lets fall. It bursts where it lands, the
+    // pit takes it without a blast, and its death pays the hero nothing -
+    // neither shot down nor burst. JSON "weather", false by default; the
+    // sky barrel of the gravel trial.
+    Weather: Boolean;
     Blast: TBlastDef; // the barrel, the tank, the platform, the mount
     Explosion: TExplosionKind;
     Material: TMonsterMaterial;
@@ -281,6 +286,8 @@ resourcestring
   SMuzzleOfWrongPattern = 'Monster "%s": the muzzle of a hull is for a ' +
     'straight shot or a volley, and the monster fires neither';
   SBadSentry = 'Monster "%s": a sentry needs a reach above 0';
+  SWeatherFloats = 'Monster "%s": weather falls - it cannot be free of ' +
+    'gravity';
 
 const
   // JSON protocol keys read in more than one place
@@ -637,6 +644,9 @@ begin
     DefaultBool('dangerous', True));
   Result.AffectedByGravity := AObj.GetValue<Boolean>('affectedByGravity',
     True);
+  Result.Weather := AObj.GetValue<Boolean>('weather', False);
+  if Result.Weather and not Result.AffectedByGravity then
+    raise EMonsterDefError.CreateFmt(SWeatherFloats, [Result.Id]);
   var Blast := AObj.GetValue<TJSONObject>('blast', nil);
   if Assigned(Blast) then
     Result.Blast := ParseBlast(Blast, Result.Id);

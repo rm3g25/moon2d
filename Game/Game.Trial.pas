@@ -27,6 +27,10 @@
   The trial also says how far its batch is dealt, for the events that wait
   on that, and tells the game when an act is over.
 
+  An event may open the sky for the act it waits for: from then on a body
+  falls from it every so many seconds, until that act is over. The trial
+  keeps the pace; which body falls is the game's.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Trial;
@@ -49,6 +53,7 @@ const
   // so no more than one is ever on its way
   TrialAimedLeadTicks = 10;
   TrialPitReturnTicks = 10;
+  LogicTicksPerSecond = 33;
 
 type
   TTrialCue = record
@@ -61,6 +66,8 @@ type
     // Bring back one gravel fallen into the pit, if one is down there
     ReturnFromPit: Boolean;
     SpawnMedkit: Boolean;
+    // The open sky lets its body down
+    SkyFall: Boolean;
     // The gate opened: the act is over, the last one too
     ActEnded: Boolean;
     Finished: Boolean;
@@ -87,9 +94,13 @@ type
     // Ticks until the aimed gravel follows its mark; 0 - none on its way
     FAimedIn: Integer;
     FTicksToReturn: Integer;
+    // The pace of the open sky, 0 - it is shut; the ticks to its next body
+    FSkyEvery: Integer;
+    FTicksToSky: Integer;
     FRoomBusy: Boolean;
     procedure TickAimed(var ACue: TTrialCue);
     procedure TickPitReturn(var ACue: TTrialCue);
+    procedure TickSky(var ACue: TTrialCue);
     procedure WatchGate(AGateHolders: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
@@ -99,6 +110,10 @@ type
     procedure Stop;
     // A gravel of the trial died
     procedure NoteGravelKilled;
+    // A body falls from the sky every AEverySeconds, the first one that long
+    // from now, until the act in progress is over. Told again, the sky takes
+    // the new pace from now.
+    procedure OpenSky(AEverySeconds: Single);
     // One logic tick; AGateHolders - the live bodies that hold the gate:
     // the gravels of the trial and whoever else the game counts in
     function Tick(AGateHolders: Integer): TTrialCue;
@@ -123,13 +138,28 @@ begin
   FMedkitsOwed := 0;
   FAimedIn := 0;
   FTicksToReturn := TrialPitReturnTicks;
+  FSkyEvery := 0;
 end;
 
 procedure TGravelTrial.Stop;
 begin
   FActive := False;
   FAimedIn := 0;
+  FSkyEvery := 0;
   FRoomBusy := False;
+end;
+
+// A pace under a tick is a tick: the sky never pours more than one body a
+// tick
+procedure TGravelTrial.OpenSky(AEverySeconds: Single);
+begin
+  if not FActive then
+    Exit;
+  var Ticks: Integer := Round(AEverySeconds * LogicTicksPerSecond);
+  if Ticks < 1 then
+    Ticks := 1;
+  FSkyEvery := Ticks;
+  FTicksToSky := FSkyEvery;
 end;
 
 procedure TGravelTrial.NoteGravelKilled;
@@ -154,6 +184,7 @@ begin
   end;
   TickAimed(Result);
   TickPitReturn(Result);
+  TickSky(Result);
 
   if FBatchLeft = 0 then
   begin
@@ -199,6 +230,17 @@ begin
   ACue.ReturnFromPit := True;
 end;
 
+procedure TGravelTrial.TickSky(var ACue: TTrialCue);
+begin
+  if FSkyEvery = 0 then
+    Exit;
+  Dec(FTicksToSky);
+  if FTicksToSky > 0 then
+    Exit;
+  FTicksToSky := FSkyEvery;
+  ACue.SkyFall := True;
+end;
+
 procedure TGravelTrial.WatchGate(AGateHolders: Integer;
   var ACue: TTrialCue);
 begin
@@ -224,9 +266,13 @@ begin
   ACue.Herald := Dealt = 1;
 end;
 
+// The sky is the act's: it shuts with it, and lets nothing fall on the tick
+// it shuts
 procedure TGravelTrial.EndAct(var ACue: TTrialCue);
 begin
   ACue.ActEnded := True;
+  ACue.SkyFall := False;
+  FSkyEvery := 0;
   if FAct >= TrialActs then
   begin
     FActive := False;

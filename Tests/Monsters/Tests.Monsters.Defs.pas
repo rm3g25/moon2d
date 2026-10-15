@@ -2,10 +2,12 @@
   Tests.Monsters.Defs - what the monster registry makes of the sentry
   word of an attack: the mount of monsters.json is a sentry, the other
   attackers are not, and a sentry that watches a strip of no width is
-  turned down at load.
+  turned down at load. And of the weather word: the sky barrel is
+  weather and pays nothing, the barrel is not, and weather free of
+  gravity is turned down.
 
-  The sentry word is tried on a one-monster file of the test's own,
-  beside the real one, which is read as the game reads it.
+  The words are tried on one-monster files of the test's own, beside the
+  real one, which is read as the game reads it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -38,6 +40,12 @@ type
     procedure TestAttackWithoutSentryIsNoSentry;
     [Test]
     procedure TestSentryWithNoReachRaises;
+    [Test]
+    procedure TestSkyBarrelIsWeatherThatPaysNothing;
+    [Test]
+    procedure TestBodyWithNoWeatherWordIsNoWeather;
+    [Test]
+    procedure TestWeatherFreeOfGravityRaises;
   end;
 
 implementation
@@ -133,6 +141,47 @@ begin
   ExpectPostRefused('{"reach":0}');
   ExpectPostRefused('{"reach":-5}');
   ExpectPostRefused('{}');
+end;
+
+// A falling prop with the words given after its category
+function DropJson(const AWords: string): string;
+begin
+  Result := '{"monsters":[{"id":"drop","category":"prop",'
+    + '"stats":{"lives":1},"movement":{"kind":"static"}' + AWords + '}]}';
+end;
+
+procedure TMonsterDefsTests.TestSkyBarrelIsWeatherThatPaysNothing;
+begin
+  UseGameRegistry;
+  var SkyBarrel := FRegistry.Find('skyBarrel');
+  Assert.IsTrue(SkyBarrel.Weather, 'The sky barrel is weather');
+  Assert.AreEqual(0, SkyBarrel.Score, 'and pays nothing');
+  Assert.IsTrue(SkyBarrel.Blast.Enabled, 'yet it blows up');
+  Assert.IsFalse(FRegistry.Find('barrel').Weather,
+    'The barrel of the levels stands where it is put');
+end;
+
+procedure TMonsterDefsTests.TestBodyWithNoWeatherWordIsNoWeather;
+begin
+  FreeAndNil(FRegistry);
+  FRegistry := TMonsterRegistry.Create;
+  FRegistry.LoadFromString(DropJson(''));
+  Assert.IsFalse(FRegistry.Find('drop').Weather, 'Weather only when asked');
+end;
+
+procedure TMonsterDefsTests.TestWeatherFreeOfGravityRaises;
+begin
+  var Registry := TMonsterRegistry.Create;
+  try
+    Assert.WillRaise(
+      procedure
+      begin
+        Registry.LoadFromString(
+          DropJson(',"weather":true,"affectedByGravity":false'));
+      end, EMonsterDefError, 'Weather that never falls');
+  finally
+    Registry.Free;
+  end;
 end;
 
 initialization

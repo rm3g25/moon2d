@@ -24,6 +24,12 @@
   (Game.Blasts, the "blast" of monsters.json). 2008 fanned 360 bullets
   instead, half of them the hero's and half hostile.
 
+  Weather (a 2026 addition, the "weather" of monsters.json - the sky
+  barrel of the gravel trial) is a body that falls: it bursts on the tick it
+  lands, on the grid's floor or a deck, and tells the game so (meBurst), so
+  the game sends its blast out; the game bursts it on the hero too. One the
+  pit takes is gone - dead, never drawn, never ticked - without a blast.
+
   A pickup is never drawn dying: the hero taking one (Collect) or anything
   else destroying one takes its body off the screen at once, and what the
   player sees of it is the game's own (Game.Uptake).
@@ -81,8 +87,10 @@ type
 
   // Requests a monster cannot fulfil itself ('MessageToMain' of 2008);
   // the game loop drains these each tick.
+  // meBurst follows the meDied of a body that burst by itself: no blow
+  // killed it, so the game has its blast to send out
   TMonsterEvent = (meNone, meBossWantsMinion, meHenshin, meBossRage,
-    meLevelComplete, meDied, meBossCrashed, meBossOwesPrize);
+    meLevelComplete, meDied, meBossCrashed, meBossOwesPrize, meBurst);
 
   // Thirds of full health, the crosshair's language
   TMonsterHealthTier = (htHale, htWounded, htCritical);
@@ -159,6 +167,8 @@ type
     FFired: Boolean; // this tick
     FAsleep: Boolean; // a sentry with no hero to watch
     FLane: TLaneRun; // a body an event let in only
+    FLanded: Boolean; // this tick, out of a fall
+    FGone: Boolean; // weather the pit took: no longer in the world
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -187,6 +197,7 @@ type
     procedure PatrolStep(ACanLeft, ACanRight: Boolean);
     procedure MoveWalking;
     procedure MoveFalling;
+    procedure EndWeather(const AEnemyBullets: TBurst);
     procedure MoveFlying;
     procedure MoveInLane;
     procedure SlideIn;
@@ -247,6 +258,10 @@ type
       const AEnemyBullets: TBurst);
     // The hero has taken the pickup: it is gone at once, with no dying
     procedure Collect;
+    // A body that bursts by itself - weather landing or falling on the
+    // hero: dying at once, with meDied and meBurst. Nothing for one that
+    // is not alive.
+    procedure Burst(const AEnemyBullets: TBurst);
     // Out at the right edge, where a patrol turns, or below the screen
     function StrayedOut: Boolean;
     // The body is put at AX, AY as if just born there: falling, nothing
@@ -1469,6 +1484,7 @@ begin
     FY := FY + 16;
     FY := (CellOfY(Round(FY)) - 1) * SpriteSize; // exact landing snap
   end;
+  FLanded := True;
   FAcceleration := 0;
   FFallDriftX := 0;
   if FDef.Movement.Kind = mkChaseHero then
@@ -1532,6 +1548,9 @@ end;
 
 procedure TMonster.Tick(AHeroX, AHeroY: Integer; const ABullets: TBurst);
 begin
+  if FGone then
+    Exit;
+  FLanded := False;
   FHeroX := AHeroX;
   FHeroY := AHeroY;
   var BeforeRide := FX;
@@ -1601,6 +1620,7 @@ begin
       maFlying:
         MoveFlying;
     end;
+  EndWeather(ABullets);
   WreckIfCritical;
   TickSmoke;
   TickSparks;
@@ -1610,6 +1630,24 @@ begin
   // After the disc has turned: the ports are where the frame shows them
   if (FPilot <> nil) and FPilot.PortsDue then
     FirePorts(ABullets);
+end;
+
+// Weather lives only while it falls: it bursts where it lands, and one
+// that fell a sprite past the bottom of the screen is in the pit - gone,
+// with nothing to blow up. So is what is left of a burst one the pit
+// took: it would fall there for good.
+procedure TMonster.EndWeather(const AEnemyBullets: TBurst);
+begin
+  if not FDef.Weather then
+    Exit;
+  if FY > ScreenHeight + SpriteSize then
+  begin
+    FLife := mlDead;
+    FGone := True;
+    Exit;
+  end;
+  if FLanded and (FLife = mlAlive) then
+    Burst(AEnemyBullets);
 end;
 
 // Tank rage: below the threshold a cluster5 shooter doubles speed and
@@ -1715,6 +1753,15 @@ begin
   FEvents.Add(meDied);
 end;
 
+procedure TMonster.Burst(const AEnemyBullets: TBurst);
+begin
+  if FLife <> mlAlive then
+    Exit;
+  FLives := 0;
+  BeginDying(AEnemyBullets);
+  FEvents.Add(meBurst);
+end;
+
 function TMonster.StrayedOut: Boolean;
 begin
   Result := (FX > PatrolRightLimit) or (FY > ScreenHeight);
@@ -1789,7 +1836,7 @@ procedure TMonster.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Frame: Integer;
 begin
-  if FLane.Phase = lpGone then
+  if (FLane.Phase = lpGone) or FGone then
     Exit;
   // A pickup that is not there is not drawn dying: the game draws what
   // becomes of it
@@ -1926,11 +1973,12 @@ procedure TMonsterField.CheckSpawnIds;
 begin
   for var Event in FLevel.Events do
     for var Action in Event.Actions do
-    begin
-      if Action.Kind <> eaSpawn then
-        Continue;
-      FRegistry.Find(Action.Spawn.MonsterId);
-    end;
+      case Action.Kind of
+        eaSpawn:
+          FRegistry.Find(Action.Spawn.MonsterId);
+        eaSkyFall:
+          FRegistry.Find(Action.SkyFall.MonsterId);
+      end;
 end;
 
 function TMonsterField.SpawnInLane(const AOrders: TSpawnOrders;

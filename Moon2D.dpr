@@ -392,6 +392,8 @@ type
     // The bank of shelves an event sends the trial's medkits down onto;
     // '' - they come down anywhere
     FMedkitBank: string;
+    // What the open sky of the trial lets fall; '' - the sky is shut
+    FSkyMonster: string;
     // The fly-ins told while the cannons' scene plays, and the ticks left
     // of the smoke after their blast: they wait for the scene to end
     FHeldFlyIns: TArray<string>;
@@ -477,6 +479,7 @@ type
     procedure SendMedkitsOnto(const ABank: string);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
     procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
+    procedure OpenSky(const AOrders: TSkyFall; AAct: Integer);
     procedure TickCannons;
     procedure TellYieldBank(ACall: TShelfCall);
     procedure LandCannonStrike(const APoint: TSdlFPoint);
@@ -754,6 +757,7 @@ begin
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.Cannons := StartCannons;
   Cues.Spawn := SpawnGuest;
+  Cues.SkyFall := OpenSky;
   // A function without parameters named alone would be called, not
   // passed: the reference wraps it
   Cues.TrialAct :=
@@ -788,6 +792,7 @@ begin
   // led to the menu. With checkpoint respawn it would be a softlock.
   FTrial.Stop;
   FMedkitBank := '';
+  FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
   FEndLevelTimer := 0;
@@ -1318,6 +1323,15 @@ begin
   FField.SpawnInLane(AOrders, FGravelScreen);
 end;
 
+// The sky is the act's, as a guest is: once that act is over it stays shut
+procedure TMoonGame.OpenSky(const AOrders: TSkyFall; AAct: Integer);
+begin
+  if TrialAct <> AAct then
+    Exit;
+  FSkyMonster := AOrders.MonsterId;
+  FTrial.OpenSky(AOrders.EverySeconds);
+end;
+
 // A tick of the gravel trial, called every tick while it runs - even over
 // the hero's corpse, like the rest of the timer. Game.Trial holds the
 // rules; here its cue is carried out on the field. Once the last act is
@@ -1361,6 +1375,9 @@ begin
     FField.SpawnFromSkyOver(GravelMonsterId, FGravelScreen, FAimedColumn).HeadRandomly;
   if Cue.SpawnMedkit then
     LetDownMedkit;
+  // The violet light marks the column a moment before the body shows
+  if Cue.SkyFall then
+    LetDownFromSky(FSkyMonster);
   if Cue.ActEnded then
     FField.DepartGuests(FGravelScreen);
   if not Cue.Finished then
@@ -1888,17 +1905,22 @@ begin
 end;
 
 // The kill aftermath: score, death ticker, '+N' popup, streak credit,
-// the blast of exploders. AMonster has just flipped to dying.
+// the blast of exploders. AMonster has just flipped to dying. Weather pays
+// nothing, shot down or burst: the sky is no bonus farm - only its blast
+// goes out.
 procedure TMoonGame.RewardMonsterKill(const AMonster: TMonster);
 begin
-  Inc(FScore, AMonster.Def.Score);
-  FMessages.AddTicker(AMonster.Def.DeathText.Current,
-    TickerDeathTextTicks);
-  // '+N' rises from the body top (Y is the feet line, the body
-  // is drawn upward from it)
-  FMessages.AddScorePopup('+' + IntToStr(AMonster.Def.Score),
-    AMonster.X, AMonster.Y - SpriteSize);
-  ProcessKillStreak;
+  if not AMonster.Def.Weather then
+  begin
+    Inc(FScore, AMonster.Def.Score);
+    FMessages.AddTicker(AMonster.Def.DeathText.Current,
+      TickerDeathTextTicks);
+    // '+N' rises from the body top (Y is the feet line, the body
+    // is drawn upward from it)
+    FMessages.AddScorePopup('+' + IntToStr(AMonster.Def.Score),
+      AMonster.X, AMonster.Y - SpriteSize);
+    ProcessKillStreak;
+  end;
   // From the middle of the body: X is its left edge, Y the feet line
   var Heart: TSdlFPoint;
   Heart.X := AMonster.X + SpriteSize / 2;
@@ -2224,6 +2246,7 @@ begin
   // raises it again.
   FTrial.Stop;
   FMedkitBank := '';
+  FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
   // Monsters regrow, so the score they paid out is taken back -
@@ -2312,6 +2335,13 @@ begin
       (FHero.Y + SpriteSize > Monster.Y);
     if not Touching then
       Continue;
+
+    // Weather that comes down on the hero bursts on him
+    if Monster.Def.Weather then
+    begin
+      Monster.Burst(FMonsterBullets);
+      Continue;
+    end;
 
     case Monster.Def.Category of
       mcPickup:
@@ -2543,6 +2573,9 @@ begin
           end;
         meBossOwesPrize:
           PayDodgePrize(Monster);
+        meBurst:
+          // No blow killed it: the blast is sent out here
+          RewardMonsterKill(Monster);
         meLevelComplete:
           begin
             // The suit comes off in a ring of orbs, the victory track

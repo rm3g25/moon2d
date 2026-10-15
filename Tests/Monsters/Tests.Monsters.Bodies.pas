@@ -6,9 +6,11 @@
   The bodies are gravels (a patrol walker that turns at the end of a
   ledge) and gravel females (a walker that does not look for one), in
   rooms of a few solid cells. A gravel carries no smoke and fans no
-  fragments, so it can die into a nil burst; a body that explodes cannot,
-  and none is used here. A medkit is the pickup the hero takes: the one
-  body that is dead with no dying.
+  fragments, so it can die into a nil burst; so can a barrel, whose blast
+  is the game's to send out. A medkit is the pickup the hero takes: the one
+  body that is dead with no dying. The sky barrel is weather: it bursts
+  where it lands, and the pit takes it without a blast; the barrel of the
+  levels lands and stands.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -59,6 +61,16 @@ type
     procedure TestCollectedPickupIsGoneAtOnceAndTellsTheGameOnce;
     [Test]
     procedure TestCollectedPickupIsNotKilledByALaterBlow;
+    [Test]
+    procedure TestWeatherBurstsWhereItLands;
+    [Test]
+    procedure TestWeatherBurstsOnALedge;
+    [Test]
+    procedure TestWeatherThePitTakesIsGoneWithoutABlast;
+    [Test]
+    procedure TestWeatherBurstsOnce;
+    [Test]
+    procedure TestBarrelOfTheLevelsLandsAndStands;
   end;
 
 implementation
@@ -343,6 +355,94 @@ begin
     'a blow set a taken pickup dying');
   Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
     'a taken pickup died a second time');
+end;
+
+// The floor row of a room with a hole three cells wide, columns AFrom to
+// AFrom + 2
+function HoledRows(AFrom: Integer): TArray<string>;
+begin
+  Result := RoomRowsOf(0, 0, 0, 0);
+  for var Col := AFrom to AFrom + 2 do
+    Result[RoomRows - 1][Col] := '.';
+end;
+
+// Ticks the body until it is no longer alive, FallTicks at most
+procedure TickWhileAlive(const ABody: TMonster);
+begin
+  var Ticks := 0;
+  while (ABody.Life = mlAlive) and (Ticks < FallTicks) do
+  begin
+    ABody.Tick(0, 0, nil);
+    Inc(Ticks);
+  end;
+end;
+
+procedure TMonsterBodyTests.TestWeatherBurstsWhereItLands;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('skyBarrel', 8, 2);
+
+  TickWhileAlive(Body);
+
+  Assert.AreEqual<TMonsterLife>(mlDying, Body.Life, 'It did not burst');
+  Assert.AreEqual(FloorY, PlaceY(Body), 'It burst off the floor');
+  Assert.AreEqual<TMonsterEvent>(meDied, Body.DrainEvent, 'the first event');
+  Assert.AreEqual<TMonsterEvent>(meBurst, Body.DrainEvent,
+    'the second: the game has its blast to send out');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent, 'the third');
+end;
+
+procedure TMonsterBodyTests.TestWeatherBurstsOnALedge;
+begin
+  UseRoom(RoomRowsOf(0, 9, 4, 6));
+  var Body := FRoom.Place('skyBarrel', 5, 2);
+
+  TickWhileAlive(Body);
+
+  Assert.AreEqual<TMonsterLife>(mlDying, Body.Life, 'It did not burst');
+  Assert.AreEqual(LedgeTopY, PlaceY(Body), 'It did not burst on the ledge');
+end;
+
+procedure TMonsterBodyTests.TestWeatherThePitTakesIsGoneWithoutABlast;
+begin
+  UseRoom(HoledRows(7));
+  var Body := FRoom.Place('skyBarrel', 8, 2);
+
+  TickBody(Body, FallTicks * 2);
+
+  Assert.AreEqual<TMonsterLife>(mlDead, Body.Life, 'The pit did not take it');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'It died or burst in the pit');
+  var GoneY := PlaceY(Body);
+  TickBody(Body, FallTicks);
+  Assert.AreEqual(GoneY, PlaceY(Body), 'It is still falling');
+end;
+
+procedure TMonsterBodyTests.TestWeatherBurstsOnce;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('skyBarrel', 8, 2);
+
+  Body.Burst(nil);
+  Body.Burst(nil);
+  TickBody(Body, FallTicks);
+
+  Assert.AreEqual<TMonsterEvent>(meDied, Body.DrainEvent, 'the death');
+  Assert.AreEqual<TMonsterEvent>(meBurst, Body.DrainEvent, 'the burst');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'It burst a second time, or again on landing');
+end;
+
+procedure TMonsterBodyTests.TestBarrelOfTheLevelsLandsAndStands;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('barrel', 8, 2);
+
+  TickBody(Body, FallTicks);
+
+  Assert.AreEqual<TMonsterLife>(mlAlive, Body.Life, 'The barrel burst');
+  Assert.AreEqual(FloorY, PlaceY(Body), 'The barrel hangs in the air');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent, 'An event');
 end;
 
 initialization

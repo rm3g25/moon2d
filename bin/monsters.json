@@ -353,6 +353,37 @@
       "material": "metal"
     },
     {
+      "id": "skyBarrel",
+      "displayName": "Бочка с неба",
+      "displayNameEn": "Sky barrel",
+      "category": "prop",
+      "spriteList": "barrel.mns",
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "stats": {
+        "lives": 5,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Бочка взорвана",
+      "deathTextEn": "Barrel went boom",
+      "deathSounds": [
+        "bottle.wav"
+      ],
+      "blast": {
+        "radius": 80,
+        "lives": 100,
+        "shardLives": 6
+      },
+      "explosion": "barrel",
+      "material": "metal",
+      "weather": true,
+      "_note": "The sky barrel of the gravel trial (act 5): the barrel that falls and bursts where it lands; pays nothing"
+    },
+    {
       "id": "medkit",
       "legacyName": "Аптечка",
       "displayName": "Аптечка",

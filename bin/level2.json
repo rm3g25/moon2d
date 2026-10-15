@@ -3336,7 +3336,8 @@
         {"action": "shelvesProgram", "target": "s09-foot", "program": "blink", "out": 2.0, "in": 1.2},
         {"action": "shelvesProgram", "target": "s09-wall", "program": "blink", "out": 2.0, "in": 1.2},
         {"action": "medkitsOnto", "target": "s09-floor"},
-        {"action": "strays", "target": "s09-strays"}
+        {"action": "strays", "target": "s09-strays"},
+        {"action": "skyFall", "monster": "skyBarrel", "every": 2.5}
       ]
     }
   ],
