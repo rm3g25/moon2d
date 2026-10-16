@@ -14,8 +14,9 @@ hull at `v3.0.36` and its rig at `v3.0.37`, for the arena's pads at
 wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
 at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
 shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
-pickups at `v3.0.50`, the shelf at `v3.0.51` and the carousel at
-`v3.0.52` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
+`v3.0.52` and the gravel arena of level 2's screen 9 at `v3.0.53` to
+`v3.0.59` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -35,11 +36,16 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   bullets,
   explosions, bullet impacts, sound, the loop host,
   the bonus vocabulary, the henshin ceremony, the hero's shroud, the taking
-  of a pickup (`Game.Uptake`), the version. `Game/Events/`
+  of a pickup (`Game.Uptake`), the version, and the gravel arena of level
+  2: the rules of the trial (`Game.Trial`), the violet light its bodies
+  come down in (`Game.Arrivals`), the TeK wall cannons (`Game.Cannons`)
+  and the shield they wear (`Game.Shield`), the press of the finale
+  (`Game.Press`). `Game/Events/`
   runs the level events; `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
   (`Pads.Plunge`), the cycle of a shelf that slides in and out of its
-  wall (`Pads.Shelf`), the rebuild of a pad group (`Pads.Formations`,
+  wall (`Pads.Shelf`), the cycle of a pad that strays (`Pads.Stray`),
+  the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one and of the
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
   (`Orbs.Flock`), the harvest of spots on the matter of a screen
@@ -69,7 +75,8 @@ Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (over `Monsters.Defs`
-for the tactics an event sets) / `Effects.Emitter` / `Render.Puff` /
+for the tactics an event sets and the side a body comes in from, and over
+`Levels.Pads` for the shelf programs and bank orders an event tells) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (its streak texture comes from the owner) /
 `Effects.Traces` (over `Render.Brush` for its xorshift) ->
 `Effects.Debris` (over `Effects.Sparks`, draws through `Render.Glow`) ->
@@ -84,8 +91,11 @@ their pads: over `Levels.Pads` alone) ->
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) / `Pads.Plunge` (the cycle of a
 plunging pad: over `Levels.Pads` and `Render.Brush` alone) / `Pads.Shelf`
-(the cycle of a shelf: over `Levels.Pads` alone) -> `Pads.World`
-(the pads in play: over the four, `Levels.Pads`, `Levels.Carousels`,
+(the cycle of a shelf: over `Levels.Pads` alone) -> `Pads.Stray` (the
+cycle of a pad that strays: over `Levels.Pads`, `Pads.Plunge` for its
+fall, `Render.Brush` for its dice, `Render.Sprites` and `Game.Space` for
+the sizes) -> `Pads.World`
+(the pads in play: over the five, `Levels.Pads`, `Levels.Carousels`,
 `Levels.Defs`,
 `Render.Sprites`,
 `Render.Brush`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
@@ -97,7 +107,8 @@ hulls of the platform and the tank: the same, the eye through `Render.Glow`) / `
 boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 `Game.Space` and the sizes of `Render.Sprites`) / `Monsters.Damage` (the
 window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
-`Monsters` (both over `Pads.World` too) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+`Monsters` (both over `Pads.World` too; `Monsters` over `Levels.Events`
+for the orders of a body an event lets in) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
 explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
@@ -121,7 +132,17 @@ the probe type and the canvas of `Levels.Dynamics`; it draws through
 a callback) /
 `Orbs.Rite` (the rite of the henshin: over `Orbs.Flock`, `Orbs.Harvest`
 and `Orbs.Patterns`, `Render.Brush` and the canvas of `Levels.Dynamics`) /
-`Game.Henshin` (over `Game.Shroud` and `Orbs.Rite` too) / `Events.Director` / `Orbs.Aura` (the hero's aura: over
+`Game.Henshin` (over `Game.Shroud` and `Orbs.Rite` too) / `Game.Trial`
+(the rules of the gravel trial: over no unit of the game) / `Game.Press`
+(the press of its finale: over no unit of the game either) /
+`Game.Arrivals` (the violet light: over `Sdl2.Core`, `Render.Brush` and
+the canvas of `Levels.Dynamics`, drawn through `Render.Glow`) /
+`Game.Shield` (the TeK shield: over `Sdl2.Core`, `Render.Brush` and the
+canvas of `Levels.Dynamics`, drawn through `Render.Glow`) ->
+`Game.Cannons` (the wall cannons: over `Game.Shield`, `Levels.Events`
+for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
+`Render.Brush`, `Game.Space` and the canvas of `Levels.Dynamics`) /
+`Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
@@ -479,7 +500,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1410 lines)
+### `Core/Levels.Defs.pas` (~1700 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -491,7 +512,29 @@ Level data model + JSON parser. No game logic.
   `{"normal":..,"hard":..,"wild":..}`; `Uniform`, `ForGrade`.
 - **`TEntityTriggers`** (record) - `BigMessage`/`SmallMessage`/`HintText`
   (localized), `ChangeMusic`, heroX/heroY reposition (vertical transitions),
-  the gravel trial quota (`HasGravelBoss` + `GravelQuota: TDifficultyValue`).
+  the gravel trial (`HasGravelBoss` + `GravelBatch: TDifficultyValue` - the
+  gravels of one act since 3.0.53, `"gravelBoss": {"normal": 15, "hard":
+  25, "wild": 40}` on level 2; it was the quota of the whole trial), and
+  the wave it may end in (3.0.59: `HasFinale` + `Finale`).
+- **`TTrialFinale`** (record, 3.0.59) - `MonsterId`, `Count` (a
+  `TDifficultyValue`), `Alive` (the cap of the living): the act after the
+  gravels. JSON beside `gravelBoss`: `"finale": {"monster": "betoner",
+  "count": {"normal": 10, "hard": 15, "wild": 20}, "alive": 3}`
+  (`ReadFinale`). Refused (`ELevelError`): a finale with no gravelBoss
+  (`SLevelFinaleNoTrial`), no monster (`SLevelFinaleNoMonster`), a count
+  that is no number or not above zero on some grade
+  (`SLevelFinaleBadCount`), alive not above zero (`SLevelFinaleBadAlive`);
+  the errors name the owner (`ReadTriggers` takes the level id and the
+  owner now). The monster id is checked at level start by
+  `TMonsterField.CheckSpawnIds`.
+- **`TScreenTrigger`** (record, 3.0.53) - `Screen` (1-based), `Grades`,
+  `Triggers`: the triggers of a screen that no body carries. JSON: the
+  root section `"screenTriggers": [{"screen": 9, "difficulty": ["hard"],
+  "triggers": {...}}]` (`ParseScreenTriggers`; `difficulty` absent = all
+  grades). The trial medkits of 2008 carried the trial's triggers
+  (changeMusic, heroX, gravelBoss); the medkits went, the triggers moved
+  here. `TLevel.ScreenTriggers`; the game fires them after the entities'
+  (`FireScreenTriggers`).
 - **`TEntityPlacement`** (record) - monsterId, screen (1-based), x/y (sprite
   grid), spriteList, `Grades` (the Doom skill-flag idiom), overrides,
   triggers, `Tag` (names the placement for the events' tagged conditions -
@@ -592,6 +635,18 @@ Level data model + JSON parser. No game logic.
   `CheckCarouselPair`) bodies that cut into one another anywhere on the
   lap - closer than their half widths across and a cell down; touching is
   no cut (`SLevelCarouselCrowded`).
+  A pad that strays (3.0.58, `CheckPadStray`): one that also travels a
+  path, plunges, is a shelf, joins a group or rides a carousel
+  (`SLevelPadStrayBusy` - its cycle alone moves it); a zone outside its
+  room - left and top from 1, the pad's right edge a cell short of the
+  screen's, the bottom on the screen (`SLevelPadStrayOutOfRoom`); a row of
+  the zone a wall crosses between the walls of the room, the room over the
+  deck included (`SLevelPadStrayRowShut` - the way in, out and across), a
+  column of it a wall crosses from the top of the room to the bottom of
+  the screen (`SLevelPadStrayColumnShut` - the way down, the fall); all
+  through `RoomClear`. A parked carousel (3.0.57) seats an entity over the
+  park: `SeatEntity` takes `PadParkedTop` for the deck when the orbit is
+  `Parked`, and the body rides its pad down.
   `Events` - the level's events (`Levels.Events`), in
   file order. Queries: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (the
   same for a point in screen units - the one home of the units-to-cells
@@ -599,30 +654,45 @@ Level data model + JSON parser. No game logic.
   of the monsters call it), `BackgroundFor` (the whole
   change, last one wins; `Image = ''` when the level defines none).
   `LoadFromFile`; the pads are parsed before the dynamics, since a dynamic
-  object may hang on one; the rigs the pads and the monsters wear are hung
+  object may hang on one; the events right after the dynamics and before
+  the rigs (3.0.57: a body an event spawns may wear rigs); the rigs the pads and the monsters wear are hung
   right after the dynamics are parsed and before the checks (`WearRigs` of
   `Levels.Rigs` over the wearers `RigWearersOf` lists - the pads first,
-  then the placements, each in file order, so the parts of the pads keep
+  each followed by its failing look when it rides a carousel that may
+  break (`FailingWearer`, 3.0.58: the rigs hang on `FailingRigTag` of the
+  pad's tag, named `pad "..." broken`), then the placements, then the
+  bodies the spawn actions let in (`SpawnWearer`, 3.0.57: the action's
+  `Tag` and `Rigs`, named `spawn of event "..."`), each in file order, so
+  the parts of the pads keep
   their places in the list; `PadWearer` and `EntityWearer` make them,
   named for the errors by `PadRigName` of `Levels.Pads` and by
   `EntityRigName` - a placement by its tag or, without one, by what
   stands where: their parts are dynamic objects as the rest, and a
-  group's alarm lamps may be among them); and the dynamics before the
-  events, since an
-  event may name a dynamic object's tag. Private `CheckEvents` refuses an event
+  group's alarm lamps may be among them). Private `CheckEvents` refuses an event
   off the screen list, one watching a tag no placement carries, and
   (`CheckEventTargets` -> `CheckEventTarget`) an intensity action turning a
   tag no dynamic object carries, a sun action turning a tag no globe
   carries, a tactics action naming a tag no placement carries or a
   rebuild or a restore action (3.0.39: `SLevelEventRestoreUnknown`)
-  naming a tag no pad group carries. `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
+  naming a tag no pad group carries; and since 3.0.54: a flyIn whose tag
+  is neither a parked pad group nor a parked carousel
+  (`SLevelEventFlyInUnknown`) or is carried by both a group and a
+  carousel (`SLevelEventFlyInTwoKinds`; `CheckFlyIn` - the game asks the
+  carousels first); a shelf action, medkitsOnto, waveOnto, a press row or
+  a cannons' yield naming a bank no shelf stands in
+  (`SLevelEventBankUnknown`, `AnyShelfOfBank` over `TPadShelf.InBank`); a
+  breakCarousel naming no carousel that may break
+  (`SLevelEventBreakUnknown`); strays or straysLeave naming a flock no pad
+  strays in (`SLevelEventStraysUnknown`). `Dynamics` - the dynamic objects (`Levels.Dynamics`), owned by
   the level (the only destructor here) and kept through a restart - a lamp
   keeps its rhythm; only what a re-armed event changed goes back. Private
   `CheckDynamics` refuses a nailed object off the screen list or a
   `screens` run running backwards or past it (`CheckDynamicScreens`), and
   (`CheckDynamicParent`, which counts the kinds carrying the tag - an
-  object, a pad, an entity: exactly one) a parent tag no object, no pad and
-  no entity carries, a tag carried by more than one kind, two
+  object, a pad (its own tag or that of its failing look,
+  `AnyFailingLookTagged`), an entity, a body a spawn action lets in
+  (`AnySpawnTagged`): exactly one) a parent tag none of them carries, a
+  tag carried by more than one kind, two
   objects with one tag on one screen, and (`CheckMonsterParent`) two
   entities with one tag on a shared difficulty grade (the child could not
   tell its parent). **`TRespawnPoint`** (record: `Screen`, `X`, `Y`) and
@@ -1072,56 +1142,129 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~255 lines)
+### `Core/Levels.Events.pas` (~650 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
+Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
+2's screen 9 (`docs/ARENA-2.md`).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
-  `ecEnraged`) - what the event waits for. The hero must be on the event's
-  screen for any of them; enterScreen asks nothing more; the rest
-  (`TaggedConditions`) watch the monsters carrying the tag: allDead - none
-  alive, livesBelow - one alive with fewer lives than `lives` (a mark told
-  for the normal grade: it grows with the difficulty as the lives do -
-  `TMonsterField.AnyTaggedLivesBelow`), enraged -
-  one alive in its rage (the boss below its rage mark, a tank below its
-  own).
+  `ecEnraged`, `ecActReached`, `ecGravelDealt`, `ecTrialDone`,
+  `ecWaveKilled`) - what the event waits for. The hero must be on the
+  event's screen for any of them; enterScreen asks nothing more; the
+  tagged ones (`TaggedConditions`) watch the monsters carrying the tag:
+  allDead - none alive, livesBelow - one alive with fewer lives than
+  `lives` (a mark told for the normal grade: it grows with the difficulty
+  as the lives do - `TMonsterField.AnyTaggedLivesBelow`), enraged - one
+  alive in its rage (the boss below its rage mark, a tank below its own).
+  The trial's (3.0.54 on): actReached - the gravel trial has come to its
+  act `act` or past it (0 while it does not run, so a restart, which
+  starts the trial on act 1 again, re-arms the act 1 events);
+  gravelDealt (3.0.57) - gravel number `batch * part div of + 1` of act
+  `act` is let down (an aimed one counts from its mark), and stays true
+  once the act is past: `"part": 1, "of": 3` of a batch of 15 is the 6th;
+  trialDone (3.0.59) - the trial of the screen has finished, its last act
+  won (cleared by a restart); waveKilled (3.0.59) - `count * part div of`
+  bodies of the wave are killed in act `act`, true once the act is past
+  (`"act": 6, "part": 1, "of": 2` - half the wave). `ReadActShare` reads
+  the act and the share of the last two.
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
   `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`, `eaRebuild`, `eaRestore`
-  (3.0.39)); **`TEventAction`**
-  (record) - kind +
-  localized `Text` (the message kinds), `FileName` (music), or `Target` /
-  `Level` (0..1) / `Ticks` (intensity: the dynamic objects carrying the tag
-  fade there; JSON `target`, `value` a percentage, `ticks` 0 = at once),
-  or `Target` / `Angle` / `Ticks` (sun: the globes carrying the tag turn
-  their sun there; JSON `value` in degrees), or `Target` / `Tactics`
-  (tactics: the monsters placed with the tag fly by them from now on, see
-  `Monsters.Pilot`; JSON `target`, `value` - a word of `EventTacticsIds`:
-  laps / dives / rams / hunts), or `Target` alone (rebuild: the pad group
-  carrying the tag is rebuilt from now on, over and over, as its
-  conductor flies - `Pads.Arena`; JSON `target`; restore (3.0.39): the
-  same group is rebuilt no more and its pads fly back to where the level
-  file puts them; JSON `target`, the word `restore`).
+  (3.0.39), `eaShelvesWake`, `eaShelvesSleep`, `eaShelvesProgram`,
+  `eaFlyIn`, `eaMedkitsOnto` (3.0.54), `eaCannons` (3.0.56), `eaSpawn`
+  (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
+  `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59)). **`TEventAction`**
+  (record) - kind and what the kind reads:
+  - the messages: localized `Text`; a hint also `Header` (who speaks,
+    localized as the text; empty - the channel itself, `STerminalHeader`)
+    and `AtBottom` (JSON `"place": "bottom"`, `"top"` by default - the
+    comm box on the bottom edge for a screen where the hero comes in at
+    the top; `SEventBadPlace` for another word; `ReadHint`; added for the
+    transmission of level 2's screen 7, between 3.0.52 and 3.0.53);
+  - music: `FileName`; intensity: `Target`, `Level` (0..1, JSON `value`
+    a percentage), `Ticks`; sun: `Target`, `Angle` (JSON `value` in
+    degrees), `Ticks`; tactics: `Target`, `Tactics` (a word of
+    `EventTacticsIds`: laps / dives / rams / hunts, see
+    `Monsters.Pilot`); rebuild, restore: `Target` (a pad group,
+    `Pads.Arena`);
+  - the shelves (`ShelfActions`: shelvesWake, shelvesSleep,
+    shelvesProgram; `ReadShelves`): `Target` - a bank (`TPadShelf.Banks`
+    of `Levels.Pads`); `Shelves` (a `TShelfProgram`: `Kind` - a word of
+    `ShelfProgramIds`, hold / wave / alternate / blink, `"program"`, hold
+    by default, required by shelvesProgram (`SEventNoProgram`); `out`
+    and `in` seconds, 2 and 1.5 by default, 0.6 and 0.5 for a blink;
+    `warn` seconds, 0 - the shelf's own); `Telling` (a `TBankTelling`:
+    `order` - a word of `BankOrderIds`, file / left / right / up / down /
+    toHero, file by default; `step` seconds between two shelves; `pick` -
+    only that many of the bank, as the dice pick them, 0 = every one,
+    3.0.58); `SpareHero` (shelvesSleep only, `"spareHero": true`,
+    3.0.57: a shelf the hero stands on waits until he is off it).
+    shelvesWake brings the bank out to run its program, shelvesProgram
+    switches it (waking one asleep), shelvesSleep warns and slides it in
+    for good. A turn of no seconds, a wait or a step below zero, a pick
+    below zero raise (`SEventShelfNumber`, `SEventBadPick`);
+  - flyIn (3.0.54): `Target` - a pad group parked above
+    (`Pads.Arena.FlyIn`) or, since 3.0.57, a parked carousel
+    (`TPadWorld.TryFlyInCarousel`); medkitsOnto and waveOnto (3.0.59):
+    `Target` - a bank the trial's medkits / the bodies of its wave come
+    down over from now on; strays and straysLeave: `Target` - a flock
+    (`Pads.Stray`): let go, or sent away for good;
+  - cannons (3.0.56): `Cannons` - a **`TCannonOrders`**: `Rows` (the
+    rows they stop at to fire, cells from 0 at the top, on the screen -
+    `SEventNoCannonRows`, `SEventBadCannonRow`), `YieldBank` (`"yield"`,
+    optional) and `YieldRows` (`"yieldRows"`, required with a yield -
+    `SEventNoYieldRows`; `ReadRows`): `Game.Cannons`;
+  - spawn (3.0.57): `Spawn` - a **`TSpawnOrders`**: `MonsterId`
+    (`"monster"`), `SpriteList` (optional - the key a placement has; the
+    platform's definition names none), `Row` (on the screen,
+    `SEventBadSpawnRow`), `Side` (`"from"`: a word of `EventLaneSideIds`,
+    left / right, `TLaneSide` of `Monsters.Defs`), `Tag` and `Rigs`
+    (`"tag"`, `"rig"` - optional, the rigs hang on the tag at load):
+    the body comes in through the wall along the row
+    (`TMonsterField.SpawnInLane`);
+  - breakCarousel (3.0.58): `Target` and `Breakdown` - a
+    **`TCarouselBreak`**: `HaltSeconds`, `StepSeconds` (`"halt"`,
+    `"step"`, 0 by default, not below 0 - `SEventBreakNumber`);
+  - skyFall (3.0.58): `SkyFall` - a **`TSkyFall`**: `MonsterId`,
+    `EverySeconds` (above 0; `SEventNoSkyMonster`, `SEventBadSkyPace`);
+  - press (3.0.59): `Press` - a **`TPressOrders`**: `Rows` (banks, top
+    first, two at least, none empty - `SEventPressRows`), `EverySeconds`
+    (above 0 - `SEventPressPace`): `Game.Press`.
+  spawn, skyFall and press need an event that waits for an act
+  (`SEventSpawnNoAct`, `SEventActOnly`): what they bring belongs to that
+  act alone.
 - **`TLevelEvent`** (record) - id, screen (1-based), condition, tag,
-  `Lives` (livesBelow), `DelayTicks` (counted after the condition holds,
-  for any condition), actions. JSON: `"when": "allDead", "tag":
-  "labGuard", "delay": 33, "then": [{"action": "hint", "text": "...",
-  "textEn": "..."}]`; `"when": "livesBelow", "tag": "boss", "lives": 200,
-  "then": [{"action": "intensity", "target": "bossSmoke", "value": 60,
-  "ticks": 66}]`.
-- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` - the JSON
-  vocabulary as typed
-  constants. `ParseLevelEvents(root, levelId)`; an absent section is an
-  empty list, an unknown condition or action, a missing id, a tagged
-  condition without a tag, livesBelow without lives above zero, intensity
-  without a target or with a value outside 0..100, sun without a target or
-  without a `value`, tactics without a target or with an unknown word,
-  rebuild or restore without a target (`ReadGroupTarget`,
-  `SEventGroupNoTarget`), or an event without actions raises
-  `ELevelEventError`.
+  `Lives` (livesBelow), `Act` (actReached, gravelDealt, waveKilled),
+  `Part` / `Whole` (gravelDealt, waveKilled; `"of"` in JSON),
+  `DelayTicks` (counted after the condition holds, for any condition),
+  actions. JSON: `"when": "allDead", "tag": "labGuard", "delay": 33,
+  "then": [{"action": "hint", "text": "...", "textEn": "..."}]`;
+  `"when": "actReached", "act": 4, "then": [{"action": "shelvesSleep",
+  "target": "s09-pyramid", "order": "up", "step": 0.2, "spareHero":
+  true}, {"action": "flyIn", "target": "s09-carousel"}]`.
+- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` /
+  `EventLaneSideIds` - the JSON vocabulary as typed constants.
+  `ParseLevelEvents(root, levelId)`; an absent section is an empty list,
+  an unknown condition or action, a missing id, a tagged condition
+  without a tag, livesBelow without lives above zero, actReached without
+  an act above zero (`SEventNoAct`), gravelDealt or waveKilled without an
+  act (`SEventNoBatchAct`) or with a share that is no share - `of` above
+  zero, `part` from 0 to below `of` (`SEventBadShare`) -, intensity
+  without a target or with a value outside 0..100, sun without a target
+  or without a `value`, tactics without a target or with an unknown word,
+  an action that needs a target without one (`ReadGroupTarget`,
+  `SEventGroupNoTarget`), an unknown shelf program or bank order
+  (`SEventBadProgram`, `SEventBadOrder`), what each action above refuses,
+  or an event without actions raises `ELevelEventError`. What needs the
+  level - the banks, the carousels, the flocks, the parked groups - is
+  `Levels.Defs`' (`CheckEventTarget`, `CheckFlyIn`); the monster ids of
+  spawn and skyFall are checked by the field at level start
+  (`TMonsterField.CheckSpawnIds`).
 - Extending: a condition is an enum member, a word in `EventConditionIds`
   and a branch in the director's `ConditionHolds`; an action the same with
-  `EventActionIds` and `Play`.
+  `EventActionIds` and `Play`, and a cue of `TDirectorCues` when the game
+  has to carry it out.
 
-### `Core/Levels.Pads.pas` (~545 lines)
+### `Core/Levels.Pads.pas` (~745 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -1146,13 +1289,22 @@ neither a floor nor a body; it joins no group and does not plunge, a path
 it may travel. A pad may ride a carousel (3.0.52, `Levels.Carousels`): it
 flies round the carousel's track with the other pads it carries; the
 carousel places it, so it takes no `x` or `y`, and it travels no path,
-does not plunge, is no shelf and joins no group. A 2026 addition.
+does not plunge, is no shelf and joins no group. Since 3.0.54 shelves
+stand in banks the events tell together (a shelf may stand in several,
+3.0.57), and a bank's shelf may be held out or in from the start, running
+no program until told; the pads of a group may be parked above the
+screen until an event flies them in. A pad may stray (3.0.58,
+`Pads.Stray`): once an event lets its flock go it flies in from beyond an
+edge to points of its zone and out again, misbehaving now and then; its
+cycle places it, so it takes no `x` or `y` and does nothing else. A plunge
+may stay down for good (3.0.58). A 2026 addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
   units; the picture's height follows its aspect), `Tint`, `Tag` (names
   the pad for the dynamic objects hung on it; '' = none), `Bullets`,
   `Path` (a `TPadPath`; `prNone` - the pad stands where it is placed),
+  `Stray` (a `TPadStray`, 3.0.58; `Strays` False - it does not),
   `Bob` (how far the pad sways up and down, in units; 0 = still),
   `Plunge` (a `TPadPlunge`; `Plunges` False - the pad holds whatever
   stands on it), `Shelf` (a `TPadShelf`; `Slides` False - the pad never
@@ -1165,7 +1317,11 @@ does not plunge, is no shelf and joins no group. A 2026 addition.
 - **`TPadPlunge`** (record, 3.0.46) - a pad that gives way under the
   hero: `Plunges`, `Delay` (seconds it holds after he stands on it),
   `Rest` (seconds it lies under the screen), `Rise` (units a second it
-  climbs home at - the mean of an uneven climb). `DefaultPlungeDelay`
+  climbs home at - the mean of an uneven climb), `StaysDown` (3.0.58,
+  JSON `"staysDown"`, false by default: fallen, it never climbs - the
+  broken carousel pads of the arena). `ReadPlunge(obj, levelId, name)` is
+  public since 3.0.58: the failing look of a carousel reads its plunge
+  with it, the error naming its owner. `DefaultPlungeDelay`
   (0.5), `DefaultPlungeRest` (0.5), `DefaultPlungeRise` (64) - what a
   plunge takes for a number it leaves out.
 - **`TPadShelf`** (record, 3.0.51) - a pad that slides out of the wall
@@ -1174,7 +1330,13 @@ does not plunge, is no shelf and joins no group. A 2026 addition.
   too; after the last comes the first), `SlideSeconds` (between two
   steps), `WarnSeconds` (before it leaves the front it says so),
   `OffsetSeconds` (it starts this far into its program: shelves in a row
-  go as a wave), `Deep` (how it looks in the wall). **`TShelfStand`** =
+  go as a wave), `Deep` (how it looks in the wall); since 3.0.54 `Banks`
+  (the banks the events tell it with: JSON `"bank": "s09-ladder"` or, since
+  3.0.57, a list `["s09-floor", "s09-grid"]` - `ReadShelfBanks`; none -
+  no event tells it), `Held` and `HeldStand` (JSON `"held": "out"` or
+  `"in"` - `ReadShelfHeld`: it stands there from the start and runs no
+  steps until an event tells it otherwise; a held shelf needs a bank),
+  `InBank(bank)`. **`TShelfStand`** =
   (`shOut`, `shIn`) - where a step holds it; `ShelfStandIds`
   ('out'/'in') - the JSON words. **`TShelfStep`** (record) - `Stand`,
   `Seconds` (held there, the slide not counted). **`TPadDeepLook`**
@@ -1184,20 +1346,47 @@ does not plunge, is no shelf and joins no group. A 2026 addition.
   `DefaultShelfSlide` (0.25), `DefaultShelfWarn` (0.5),
   `DefaultShelfScale` (0.72), `DefaultShelfTone` (0.4) - what a shelf
   takes for a number it leaves out; the offset and the sink take 0.
+- **`TShelfProgramKind`** = (`pgHold`, `pgWave`, `pgAlternate`,
+  `pgBlink`) and **`TShelfProgram`** (record: `Kind`, `OutSeconds`,
+  `InSeconds`, `WarnSeconds` - 0 the shelf's own) - what a bank runs once
+  an event tells it (3.0.54): out for good; out and in by turns, each a
+  step after the one before; every other one out of step; short turns,
+  each at a time of its own. `ShelfProgramIds` ('hold' / 'wave' /
+  'alternate' / 'blink'). **`TBankOrder`** = (`boFile`, `boLeft`,
+  `boRight`, `boUp`, `boDown`, `boToHero` - from the farthest from the
+  hero to the nearest) and `BankOrderIds`. **`TBankTelling`** (record,
+  3.0.58) - `Order`, `StepSeconds`, `Pick` (0 = every shelf): how a bank
+  is told; the events read it, `TPadWorld.TellBank` takes it.
+- **`TPadStray`** (record, 3.0.58) - `Strays`, `Flock` (the flock an
+  event lets go), `Zone` (cells the top-left corner of the deck hangs at),
+  `Wait` (seconds after the flock is let go before it first flies in).
+  JSON: `"stray": {"flock": "s09-strays", "zone": [4, 3, 11, 8], "wait":
+  1.5}` (`ReadStray`; `wait` absent = 0). A pad that strays is placed by
+  `ReadPlace` at `PadStrayWaitLeft` (-96), `PadParkedTop` (-64): out of
+  sight with its rigs.
+- **`PadParkedAbove`** ('above' - the one word of `"parked"`) and
+  **`PadParkedTop`** (-64, two cells over the top edge: where a parked
+  pad, a parked carousel's pad and a stray wait; moved here from
+  `Pads.World` at 3.0.57 so the level seats on a parked carousel at the
+  same height the world parks).
 - **`TPadZone`** (record) - `Left`, `Top`, `Right`, `Bottom`: cells of a
-  screen, 0-based, the bounds included. **`TPadGroup`** (record) - `Tag`,
+  screen, 0-based, the bounds included; declared before `TPadPlacement`
+  since the stray needs it. **`TPadGroup`** (record) - `Tag`,
   `Screen` (1-based), `Zone`, `Pairs` (at least this many pairs side by
   side in a formation), `FarFlight` / `FarShare` (a flight of `FarFlight`
   cells or more is far; a rebuild flies at least `FarShare` pads far),
   `Conductor` (the tag of the monster the rebuilds follow; '' = none),
   `Every` (seconds between two rebuilds), `Alarm` (the tag of the dynamic
-  objects lit to warn of one; '' = none).
+  objects lit to warn of one; '' = none), `Parked` (3.0.54, JSON
+  `"parked": "above"`: its pads wait above the screen over their places
+  until an event flies the group in; another word -
+  `SPadGroupBadParked`).
 - **`ParsePadGroups(root, levelId)`** - the section `padGroups`; absent =
   no groups. JSON: `{"tag", "screen", "zone": [left, top, right, bottom],
   "pairs", "farFlight", "farShare", "conductor", "every", "alarm"}`
   (`pairs` and `farShare` absent = 0, `farFlight` absent = 1). `EPadError`
-  is raised by a zone that is not four numbers (`ReadZone`,
-  `SPadGroupBadZone`), pairs or farShare below zero, a farFlight below one
+  is raised by a zone that is not four numbers (`ReadZone`, which names
+  its owner since 3.0.58 - a group or a stray pad; `SPadGroupBadZone`), pairs or farShare below zero, a farFlight below one
   (`SPadGroupBadNumber`) and a conductor without `every` above zero
   (`SPadGroupBadEvery`). What needs the level - the screen, the walls, the
   group's pads, the conductor, the alarm - is `Levels.Defs`'
@@ -1245,7 +1434,12 @@ does not plunge, is no shelf and joins no group. A 2026 addition.
   `["in", seconds]` (`SPadShelfBadStep`), steps that do not take turns or
   no steps (`SPadShelfNoTurns`), a step of zero seconds or less, a slide,
   a warn or an offset below zero, a scale out of 0..1 or zero, a tone out
-  of 0..1 (`SPadBadNumber`); a rig that is not a list of names raises
+  of 0..1 (`SPadBadNumber`); a bank that is neither a name nor a list of
+  names (`SPadShelfBadBank`), a shelf held in no bank
+  (`SPadShelfHeldAlone`) or held neither out nor in (`SPadShelfBadHeld`);
+  a pad that strays and is given an x or a y (`SPadStrayPlaced`), strays
+  in no flock (`SPadStrayNoFlock`), or waits below zero
+  (`SPadBadNumber`); a rig that is not a list of names raises
   `ERigError`, in `Levels.Rigs`. The
   screen range, a tag on two pads, a stop off
   the screen, what a plunge needs of the level - no path, no group, a
@@ -1253,7 +1447,7 @@ does not plunge, is no shelf and joins no group. A 2026 addition.
   `Levels.Defs`' (`CheckPads`); what a carousel's pad may not, and the room
   of its lap, too (`CheckCarousels`).
 
-### `Core/Levels.Carousels.pas` (~405 lines)
+### `Core/Levels.Carousels.pas` (~610 lines)
 The `carousels` section of level JSON (3.0.52): pads that fly round a
 closed track, one after another, without end. Model, parser and the track
 itself, no game logic: `Pads.World` flies the pads, `Levels.Defs` places
@@ -1265,8 +1459,13 @@ round it at one even pace - by length along the track, not by angle, so
 they do not bunch at the narrow ends of an oval - a lap in the
 carousel's period, the way it turns, each a share of the lap ahead of the
 one before it in file order. A pad keeps its deck level all the way
-round. A pad joins by its `"carousel"`; the carousel places it. A 2026
-addition.
+round. A pad joins by its `"carousel"`; the carousel places it. Since
+3.0.57 a carousel may be parked above the screen until an event flies it
+in: each pad comes straight down to its slot, and the carousel turns once
+all of them are on it, its clock coming up to its pace over the speed-up.
+Since 3.0.58 it may break: its clock runs down to a standstill, and its
+pads, one after another, become pads that plunge where they stand, in a
+look of their own. A 2026 addition.
 - **`TCarouselShape`** = (`csOval`, `csBox`), **`TCarouselTurn`** =
   (`ctClockwise`, `ctCounterClockwise` - as seen on the screen);
   `CarouselShapeIds` ('oval'/'box') and `CarouselTurnIds` ('cw'/'ccw') -
@@ -1276,7 +1475,21 @@ addition.
   its size across and down, screen units, `Single`), `Corner` (a box's
   corner radius; 0 = sharp), `Period` (seconds a lap), `Turn`, `Start`
   (where the first pad starts: a share of the lap from the right of the
-  middle, the way the carousel turns).
+  middle, the way the carousel turns); `Parked` (3.0.57, JSON `"parked":
+  "above"`, another word - `SCarouselBadParked`; `ReadParked`),
+  `SpeedUp` (3.0.57, seconds from a standstill to the pace of the
+  period once it starts to turn; 0 = at its pace at once; below 0
+  refused), `Failing` (3.0.58).
+- **`TCarouselFailing`** (record, 3.0.58) - what a pad of a broken
+  carousel becomes: `Breaks` (False - it cannot break), `Sprite` (in the
+  level's object art), `Rigs` (by name), `Plunge` (a `TPadPlunge`, read
+  by `ReadPlunge` of `Levels.Pads`). JSON: `"failing": {"sprite":
+  "s16-platform-out", "rig": ["padFailing"], "plunge": {"delay": 0.5,
+  "rise": 64, "staysDown": true}}` (`ReadFailing`); no sprite
+  (`SCarouselFailingNoSprite`), no plunge (`SCarouselFailingNoPlunge`),
+  or a plunge or rigs a pad would refuse raise. **`FailingRigTag(padTag)`**
+  - the tag the rigs of a pad's failing look hang on: the pad's tag plus
+  `/failing` (`FailingRigSuffix`; no tag of a file holds a slash).
 - **`TCarouselTrack`** (record; its state is private) - the track as a
   closed line of points, the last joined to the first. `Build(carousel)`
   - an oval as `OvalPoints` (360) points (`BuildOval`, within a hair of
@@ -1294,12 +1507,33 @@ addition.
   counter-clockwise. `Rides` - False for `Default(TCarouselOrbit)`, the
   orbit of a pad on no carousel: `Place` says nothing then.
   `Place(time, out x, y)` - the middle of the deck at `time` ticks,
-  between ticks too (the world draws between them).
+  between ticks too (the world draws between them). `Parked` - its
+  carousel waits above the screen. `Clock(turning)` (3.0.57) - the time of
+  `Place` that many ticks after the carousel started to turn: the pace
+  grows evenly from nothing over the speed-up (the clock runs the area
+  under it, `turning^2 / (2 * speedUp)`), after it the clock runs half the
+  speed-up behind. `Halting(turning, haltTicks, braking)` (3.0.58) - the
+  time of `Place` that many ticks into a halt begun `turning` ticks after
+  the start: the pace of that moment (lower inside the speed-up) falls
+  evenly to nothing over the halt, and the clock stands from there on.
+  `Landing(fromY)` (3.0.57) - the pad's way down to its slot, a
+  `TCarouselLanding`: a slot higher than the carousel's lowest deck waits
+  its height over it divided by the pace, so every pad brakes at once
+  and a pad over another keeps the gap of their slots from the moment it
+  sets off; across, the wave ripples out from the middle, 4 ticks a cell
+  (`LandingRippleTicksPerUnit`).
+- **`TCarouselLanding`** (record, 3.0.57) - `Build(fromY, toY, depart)`:
+  straight down at `LandingSpeed` (8 units a tick), braking over the last
+  `LandingBrakeTicks` (10); a way shorter than the braking is braked all
+  the way, in fewer ticks. `DeckAt(time)` - the deck at a time after the
+  fly-in, between ticks too; `Done` - the first tick it stands on its
+  slot.
 - **`ParseCarousels(root, levelId)`** - absent section = no carousels.
   JSON: `{"tag": "s08-carousel", "screen": 8, "shape": "oval", "center":
   [288, 179], "size": [150, 150], "corner": 0, "period": 12, "turn":
-  "cw", "start": 0}`; `shape` absent = oval, `turn` absent = cw, `corner`
-  and `start` absent = 0; `period` has no default - absent it reads 0 and
+  "cw", "start": 0, "parked": "above", "speedUp": 3, "failing": {...}}`;
+  `shape` absent = oval, `turn` absent = cw, `corner`, `start` and
+  `speedUp` absent = 0, `parked` absent = in its place from the start; `period` has no default - absent it reads 0 and
   is refused. `ECarouselError` is raised by a shape or a turn out of its
   words (`SCarouselBadShape`, `SCarouselBadTurn`), a `center` or a `size`
   that is not `[x, y]` (`ReadPair`, `SCarouselBadPair`), a width or a
@@ -1372,7 +1606,7 @@ that of a monster's cell. The unit knows neither a pad nor a placement:
   "y": 27, "angle": 270}]}`; a pad: `"rig": ["pad"]`; a monster:
   `"tag": "s07-tek-01", "rig": ["tekPlatform"]`.
 
-### `Core/Monsters.Defs.pas` (~570 lines)
+### `Core/Monsters.Defs.pas` (~815 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
@@ -1438,7 +1672,14 @@ Monster definition model + registry (parses monsters.json). No behavior.
   `TMonsterDef` - the full sheet: id, legacyName, displayName (localized),
   spriteList, category, dangerous, affectedByGravity, blast,
   explosion, material, movement, attack, pickupEffect, lives, score, damageCap, animFreq, deathText
-  (localized), deathSounds array, boss, disc, hull.
+  (localized), deathSounds array, boss, disc, hull, and `Weather` (3.0.58,
+  JSON `"weather"`, false by default: a body the sky lets fall - it bursts
+  where it lands, the pit takes it without a blast, and its death pays
+  the hero nothing, shot down or burst; the sky barrel of the gravel
+  trial; weather free of gravity raises, `SWeatherFloats`).
+- **`TLaneSide`** = (`lsLeft`, `lsRight`) (3.0.57) - the side of the
+  screen a body an event lets in comes from (`Levels.Events`
+  `TSpawnOrders`, `TMonster.EnterFrom`).
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table and dodge-prize validation.
@@ -1573,7 +1814,9 @@ of the screen, lies below for the rest and climbs home, to hold again.
 Once it gives, stepping off does not save it. The pad is failing and
 shows it all the way round: it twitches, and its jets work unevenly - in
 fits while it holds, flat out and choking while it gives, dead in the
-fall, by lunges on the climb, which goes as unevenly as they do. The
+fall, by lunges on the climb, which goes as unevenly as they do. A plunge
+told to stay down (`StaysDown`, 3.0.58) lies below for good once it has
+fallen: the rest never runs out. The
 cycle only counts: how far below its place the pad is, how far a twitch
 dips and leans its picture, how hard its jets work. `Pads.World` moves
 the pad and draws it; the game passes the effort on to what hangs on the
@@ -1630,7 +1873,7 @@ addition.
     to 1 by the power.
   - `Phase`; `Below` - units below its place.
 
-### `Game/Pads/Pads.Shelf.pas` (~175 lines)
+### `Game/Pads/Pads.Shelf.pas` (~325 lines)
 The cycle of a shelf (`Levels.Pads`, `shelf`; 3.0.51): a pad that slides
 out of the wall behind it and back in by its program. A step holds it out
 or in for its seconds; between two steps it slides. The program goes
@@ -1640,10 +1883,22 @@ tick of its pad's clock it works out anew every time, so a pad that stood
 still off the hero's screen, or was rewound, needs no telling. Out all
 the way, the shelf holds: it is a floor and a body; from the tick it
 starts in until it is out again it is neither. Before it starts in it
-warns. No SDL and no level in it - a record a test drives alone.
-`Pads.World` asks it and draws the slide. A 2026 addition.
+warns. Since 3.0.54 an event may tell it a run of its own (`Command`):
+the run starts at the tick it is told, plays its lead once - the warning,
+the slide from wherever the shelf stood - and then goes round a program
+from its first step, or rests out in front or in the wall for good;
+before its tick the shelf stands as it stood the tick before, so a shelf
+told late keeps to its old run until then. No SDL and no level in it - a
+record a test drives alone. `Pads.World` asks it and draws the slide. A
+2026 addition.
 - **`TShelfPhase`** = (`spOut`, `spGoingIn`, `spIn`, `spGoingOut`).
-  **`TShelfSpan`** (record) - `Phase`, `Ticks`: a held step or a slide.
+  **`TShelfSpan`** (record) - `Phase`, `Ticks`, `From` (3.0.54: the depth
+  a slide starts at, 0 out .. 1 in): a held step or a slide.
+- **`TShelfCall`** = (`scSleep` - into the wall for good, `scWake` - out
+  and the program); **`TShelfCommand`** (record) - `Call`, `Run` (a
+  `TShelfProgram` of `Levels.Pads`, for a wake), `SpareHero` (a sleep:
+  the world holds it while the hero stands on the shelf). **`TShelfLook`**
+  (record) - `Phase`, `Depth`, `Warns`: where a shelf stands at a moment.
 - **`TShelfCycle`** (record; its state is private) -
   - `Build(shelf)` - the program in ticks (seconds * 33,
     `LogicTicksPerSecond`, local; `Round`, so a half tick goes to the even
@@ -1653,7 +1908,17 @@ warns. No SDL and no level in it - a record a test drives alone.
     to the first; a step or a slide too short for a tick takes one all the
     same - a span of no ticks would be a jump. The warning and the offset
     in ticks. A pad that is no shelf gets no spans: `Slides` False, and
-    every answer below is the front's.
+    every answer below is the front's. A shelf `Held` by the file rests
+    at its `HeldStand` from the start and runs no steps.
+  - `Command(tick, command)` (3.0.54) - a run from that tick on: the look
+    of the tick before is kept for the time before it (`FBefore`, through
+    `LookAt`), the lead (`AddLead`) is a warning if the shelf is out and
+    goes in, then the slide from its present depth; a wake then goes
+    round its program (`BuildProgram`: hold - rest out; wave and
+    alternate - out and in by the program's seconds; blink - the same,
+    short; the waits of an order and of the program are the world's) and
+    a sleep rests in (`RestTicks` = `MaxInt`). The run's own warning,
+    when the program gives one, replaces the shelf's.
   - `PhaseAt(tick)`; `Holds(tick)` - out all the way (`spOut`), a floor
     and a body; `Warns(tick)` - out, and the end of the stand closer than
     the warning (after a span out comes the slide in, whatever the
@@ -1667,7 +1932,54 @@ warns. No SDL and no level in it - a record a test drives alone.
     lap), a time a hair before the lap's end that rounds up to the end
     itself held at the last span.
 
-### `Game/Pads/Pads.World.pas` (~1430 lines)
+### `Game/Pads/Pads.Stray.pas` (~560 lines)
+The cycle of a pad that strays (`Levels.Pads`, `stray`; 3.0.58, the act 5
+chaos of the gravel arena): transport nobody can count on. Asleep out of
+sight until its flock is let go (the event action `strays`); then it waits
+its wait, flies in from beyond the left, the right or the top edge (a cell
+beyond, `OutsideMargin`, its rigs out of sight too) along the row or down
+the column of a point of its zone, hangs there 1-2.5 s (`HangSpan`), and
+then falls (odds `FallOdds` 0.15), flies out beyond an edge (`OutOdds`
+0.35, never with the hero aboard) or flies on to another point straight
+across the zone. Legs are eased (`Smoothstep`), 96 units a second on
+average (`StrayPace`). A leg on or out turns back at 35-65 % of its way
+(`TurnOdds` 0.2); any leg but a leg back stalls at 25-75 % of its way for
+8-14 ticks, twitching, its jets cut (`StallOdds` 0.2); a hang is twitchy
+(`TwitchyOdds` 0.3), its jets in fits. The fall is a `TPlungeCycle` with
+half a second of shaking and no rest: it falls three cells under the
+screen (`FallDepth`) and the pad waits 1-4 s out of sight
+(`ReturnSpan`) to come in again; so does a pad flown out. With the hero
+aboard, a leg out turns back on the spot. A pad sent away (3.0.59, the
+action `straysLeave`, `Dismiss`) flies out along its row beyond the
+nearer side at half the pace (`QuietShare`), its jets at half
+(`QuietEffort`), and stays asleep out of sight; it no longer turns back,
+stalls, twitches or falls; a leg or a fall under way runs out first;
+with the hero aboard it hangs until he is off it. The room is the screen
+less a cell at the left, the right and the top (`RoomInset`): only inside
+it is the pad a deck - out past the walls nobody rides it, and a rider it
+takes there falls. The cycle only counts; `Pads.World` moves the pad and
+draws it. No SDL and no level in it - a record a test drives alone
+(`Tests.Pads.Stray`). A 2026 addition.
+- **`TStrayPhase`** = (`spAsleep`, `spWaiting`, `spFlying`, `spHanging`,
+  `spGiving` - shaking before a fall, `spFalling`). **`TStrayLeg`** =
+  (`slIn`, `slOn`, `slOut`, `slBack` - back to where the leg it turned
+  from began).
+- **`TStrayCycle`** (record; its state is private) -
+  - `Rewind(stray, width, waitLeft, waitTop)` - asleep at that place,
+    out of sight; a pad that does not stray never leaves this state.
+  - `Launch(seed)` - its flock is let go: it waits its wait, then flies
+    in; its dice (`TXorShift`) seeded by the caller. Nothing for a pad
+    let go already, or sent away.
+  - `Dismiss` - sent away; nothing for a pad asleep, which stays asleep.
+  - `Tick(loaded)` - `loaded`: the hero stands on it this tick.
+  - `Deck` - in the air inside the room: a floor and a body. `Effort` -
+    the jets, 0..1. `Dip`, `Lean` - the twitch, for the picture alone
+    (two `TTwitchSpring`s of `Pads.Plunge`, kicked every 2-6 ticks by up
+    to `DipKick` 2.2 units and `LeanKick` 3 degrees). `Phase`, `Leg`,
+    `Dismissed`, `Left`, `Top` (the top-left corner of the deck; the fall
+    adds its depth).
+
+### `Game/Pads/Pads.World.pas` (~2055 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -1721,8 +2033,34 @@ voices. A pad on a carousel (3.0.52, `Levels.Carousels`) goes round its
 track at an even pace from the place its orbit gives it at the start of
 its clock: its path is the track, and the riders go with it as with any
 path. It travels, so a ram only rocks it.
+The gravel arena (3.0.54-3.0.59) added five things. The shelves of a bank
+are told together (`TellBank`) - to go into the wall, to come out, to run
+another program - in an order, a step apart, so a bank wakes the room as
+a wave; the program adds a wait of its own (every other shelf of an
+alternation a turn, every shelf of a blink a time the dice give), and a
+told shelf keeps to its run until its moment; a few of a bank may be told
+(the pick), and a sleep may spare the hero (the shelf waits while he
+stands on it). The pads of a parked group wait above the screen over
+their places, and a restore flies them in. The pads of a parked carousel
+wait above the screen over their slots; a fly-in brings them straight
+down, jets flat out, and the carousel turns once the last of them is on
+its slot, its clock speeding up from a standstill. A turning carousel may
+break: its clock runs down to a standstill, then its pads, one after
+another in an order the dice give, become pads that plunge where they
+stand, in the picture of their failing look; a carousel not yet in the
+room does not break. A pad that strays (`Pads.Stray`) waits out of sight
+until its flock is let go, then its cycle places it as a path would, the
+riders with it; out of the room it is `Behind`, and it travels, so a ram
+only rocks it.
 Born with the level (`LoadLevel`); a restart rewinds it, the dice of the
 rebuilds new for the new try.
+- **`TOrbitPhase`** = (`opTurning`, `opParked`, `opLanding`, `opOnSlot`,
+  `opHalting`) (3.0.57-3.0.58) - a pad of a carousel: going round, waiting
+  above the screen, coming down to its slot, standing on it until the
+  rest are down, its clock running down after a break; `opTurning` for a
+  pad on none. **`TPadFailLook`** (record, 3.0.58) - `Breaks`, `Texture`,
+  `Plunge`: what a pad of a carousel that may break becomes; built by the
+  world from the carousel's `Failing` (its sprite from the object cache).
 - **`TPadFence`** - `reference to function(x, y): Boolean`: the point is
   shut to a knocked pad besides the walls (the game passes
   `Monsters.Pilot.LapHolds`).
@@ -1855,6 +2193,29 @@ rebuilds new for the new try.
     One tick only: `Latched` - `FShelf.Latches` at the tick the clock has
     just reached (only on the hero's screen: the clock goes nowhere
     elsewhere).
+  - The arena's pieces (3.0.54-3.0.59): `Tick(onView, heroAboard)` - the
+    hero stands on its deck this tick (a sleep that spares him waits; a
+    stray with him aboard never leaves the room). `TellShelf(command,
+    delay)` - a shelf takes up the command that many ticks after the next
+    tick of its clock (`FShelfCommand`, `FShelfCommandAt`); a command told
+    before replaces one that has not come yet. `MeantOut` - a shelf meant
+    to stand out: told to come out, or never told and held out by the
+    file or running its file program (where a medkit may come down).
+    `Park(top)` - waits with its deck at that height over its place, for
+    a parked group. The carousel: `Land` (a parked pad sets off down its
+    `TCarouselLanding`, `FLandingClock`), `StartTurning` (on its slot it
+    starts round, `FOrbitClock` from zero, eased by `TCarouselOrbit.Clock`),
+    `BreakDown(haltTicks, failTicks)` (the clock runs down over the halt -
+    `Halting`, `FHaltFrom`, `FHaltClock` -, and `failTicks` after the next
+    tick the pad `Fail`s: its plunge cycle rewound with the failing plunge,
+    the reach as far under the screen as a placed pad's goes from where the
+    pad stands now, the picture switched to the failing texture; nothing
+    for a pad on no carousel or of one not yet in the room); `OrbitPhase`,
+    `Failed`, `CanFail`; `RewindOrbit` parks the pads of a parked carousel
+    again. The stray: `FStray` - its `TStrayCycle`; `Launch(seed)`,
+    `Dismiss`; it places the pad, `Behind` while it is not a `Deck`, its
+    twitch on the sag, its jets its `Effort`. `Effort` is also 1 while a
+    pad comes down to its slot.
   - The flight (3.0.29): `Fly(flight)` - the pad flies a `TPadFlight`,
     its ticks counted from now (`FFlightClock`; `NoFlight` = -1 - none).
     `TickFlight` puts the path's place where the flight has it, moves the
@@ -1890,11 +2251,14 @@ rebuilds new for the new try.
   placements, and the grid a knock is tried against) must outlive the
   world; a picture the cache lacks raises here, at level load; every
   pad gets its orbit here (`OrbitOf` over the level's `Carousels`,
-  3.0.52). `Tick(screen)` - before
-  the riders move: a rebuild asked for may start (`StartAskedRebuild`),
+  3.0.52) and its failing look (3.0.58); a parked group is parked
+  (`ParkGroups`, after every rewind too). `Tick(screen, heroDeck)` - before
+  the riders move (`heroDeck`, 3.0.57: the pad the hero stands on, nil
+  while he is dead; every pad is told whether it is that one): a rebuild asked for may start (`StartAskedRebuild`),
   then every pad's `Tick`, on view for the pads of that screen alone - a
   pad elsewhere keeps its `Prev*` caught up and goes nowhere -, then
-  `HearFlights` and `HearShelves`.
+  `HearFlights` and `HearShelves`, then `TurnLandedCarousels` (3.0.57: a
+  carousel every pad of which is on its slot starts to turn).
   `Rewind(seed)` - every pad back to where the level file puts it, no
   rebuild asked for or flying, the dice seeded anew (`seed or 1`: an
   xorshift seeded with zero stays at zero). The deck and body queries
@@ -1924,8 +2288,9 @@ rebuilds new for the new try.
   x, y)` - the same for the `pbBlock` pads alone; `Bodies(screen)` - the
   bodies of the screen's pads standing in front, as boxes: the matter of
   the pads, which an aura is drawn out of (a pad in the depth is none);
-  `FindTagged(tag)` - nil
-  when no pad carries the tag; `Draw(screen, alpha, layer)` - the pads of
+  `FindWearer(tag, out failingLook)` (3.0.58, in place of `FindTagged`) -
+  the pad the rigs tagged so hang on: by its own tag, or by the tag of its
+  failing look (`FailingRigTag`), which `failingLook` tells; nil when none; `Draw(screen, alpha, layer)` - the pads of
   that screen in one layer, the frame's alpha passed on to their `Lift`:
   the game draws the pads in the depth first, then what hangs on them,
   then the pads in front, which pass before both.
@@ -1966,8 +2331,9 @@ rebuilds new for the new try.
   in the zone (`CellsInZone`; not so on screen 17); no plan at all - no
   rebuild this time. `StartRebuild` flies no `Idle` flight: a pad that
   stays on its cell bobs on. The restore (3.0.39):
-  `RequestRestore(group, load, release)` - the same ask with `Restore`
-  set; `TryPlanRestore` plans every pad to its own place of the level
+  `RequestRestore(group, load, release, pace)` - the same ask with
+  `Restore` set, at a pace of the caller's (3.0.54: `CalmPace` for a
+  restore, `BriskPace` for a fly-in, `TRebuildAsk.Pace`); `TryPlanRestore` plans every pad to its own place of the level
   file at `CalmPace` - no dice, no judge - and flies nothing when a
   pad finds no way: the caller asks again.
   `GroupRestored(group)` - every pad stands on its file place and none
@@ -1979,6 +2345,31 @@ rebuilds new for the new try.
   the same for `ShelfLatched` - a shelf latched this tick; only the pads
   of the hero's screen tick their clocks, so it is always one of his.
   `Rewind` clears it.
+  The banks (3.0.54): `TellBank(bank, command, telling, heroX)` - the
+  shelves of the bank (`BankOf`, `TPadShelf.InBank`) in the order of the
+  telling (`OrderedBank`; `boToHero` from the farthest from `heroX`),
+  `Picked` down to the pick (3.0.58: each in its order with the odds of
+  the places left, so every set is as likely as another), each told
+  `step * i` ticks on plus `ProgramWait` (alternate: every odd one a turn
+  out and a slide; blink: a dice wait within one round). `TryPickBankMiddle
+  (bank, out x)` / `(bank, side, out x)` (3.0.54 / 3.0.59) - the middle
+  across of a shelf of the bank as the dice pick it, among those
+  `MeantOut` when any is (all of them else), and from the half of the
+  screen `side` names (below 0 the left, above 0 the right) when that
+  half has one; False for a bank with no shelf.
+  The carousels (3.0.57-3.0.58): `TryFlyInCarousel(tag)` - the parked
+  carousel's pads `Land`; False when no carousel carries the tag, True and
+  nothing more for one not parked or flown in already.
+  `CarouselLanding` - a carousel flown in does not turn yet (the game's
+  `RoomBusy`). `TryBreakCarousel(tag, halt, step)` - every pad of a
+  turning carousel `BreakDown`s at once (a pad over another keeps the gap
+  of their slots as the clock runs down), each failing at the halt and
+  then one every step, in a `Shuffled` order; False for a tag of no
+  carousel that may break. `RidersOf(tag)`.
+  The strays (3.0.58-3.0.59): `TryLaunchFlock(flock)` - every pad of the
+  flock `Launch`es, each with its own seed off the world's dice, new for
+  every try; `TryDismissFlock(flock)` - every one `Dismiss`es; both False
+  for a flock no pad strays in.
 
 ### `Game/Pads/Pads.Arena.pas` (~350 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
@@ -1995,7 +2386,10 @@ after it. A 2026 addition (3.0.29).
   tick only: the warning of a rebuild has begun (the game hums).
   `Restore(group)` (3.0.39) - the events' `restore` action: the group is
   rebuilt no more (`FallAsleep`: the lamps out), whether it was engaged
-  or not, and its pads fly home (`arRestoring`).
+  or not, and its pads fly home (`arRestoring`). `FlyIn(group)` (3.0.54) -
+  the events' `flyIn` for a parked group: the same restore at
+  `BriskPace`, rippling from the middle of the zone (`StartRestore` takes
+  the pace; `Restore` passes `CalmPace`).
 - **`TArenaPhase`** = (`arAsleep`, `arResting`, `arHolding`, `arWarning`,
   `arFlying`, `arRestoring`). `arResting` counts the group's `Every`
   seconds (the first rebuild comes at once), then holds the conductor's lap
@@ -2100,7 +2494,10 @@ moves in comes from `Game.Space`.
     feel.
   - Weapon: `FBullets: TBurst` (public as `Bullets`), type 0..4
     (`WeaponType`: pistol / shotgun x5 / grenade
-    cloud x22 / chain x3 / minigun with alternating side shots), cooldown /
+    cloud x22 / chain x3 / minigun: since 3.0.57 a doubled center line - a
+    second round half a flight step behind - and a side pair alternating
+    `MinigunNarrowAngle` 5 and `MinigunWideAngle` 10 degrees, 15 and 30
+    before), cooldown /
     speed / gravity state, `Fire: Boolean` (True = a shot actually left the
     barrel, so the caller barks the sound), `SetWeaponAngle` (verbatim, but
     the sine goes into `ArcSin` clamped to -1..1: feet on a fraction - a
@@ -2333,13 +2730,40 @@ besides taking lives is the monster's.
   ticks in a row take at most `Lives` lives, and a gun that fires less than
   that is never touched.
 
-### `Game/Monsters.pas` (~1890 lines)
+### `Game/Monsters.pas` (~2225 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
   crosshair's thirds), `TMonsterEvent` (meNone/BossWantsMinion/Henshin/
-  BossRage/LevelComplete/Died/BossCrashed/BossOwesPrize) - 'MessageToMain'
-  of 2008, drained by the game loop every tick.
+  BossRage/LevelComplete/Died/BossCrashed/BossOwesPrize/Burst) - 'MessageToMain'
+  of 2008, drained by the game loop every tick; `meBurst` (3.0.58) follows
+  the `meDied` of a body that burst by itself - no blow killed it, so the
+  game sends its blast out. `TLanePhase` = (`lpNone`, `lpEntering`,
+  `lpOnLane`, `lpLeaving`, `lpGone`) and `TLaneRun` (3.0.57) - where a
+  body an event let in stands in its lane.
+- **The arena's pieces of `TMonster`** (3.0.53-3.0.58): `StrayedOut` - out
+  at the right edge, where a patrol turns, or below the screen (a trial
+  gravel that walked out of the right gap or fell into the pit);
+  `Reappear(x, y)` - put there as if just born, falling, nothing thrown;
+  `HeadRandomly` - walks off the way the dice say (2008 lets every
+  monster down heading left). The lane: `EnterFrom(side)` - comes in from
+  off the screen (x -40 / x 520) through the wall pillar at `LaneStep` 4
+  units a tick, no wall oracle asked, to x 32 / x 448, then patrols away
+  from that side (`MoveInLane`, `SlideIn`; it holds fire until in);
+  `Depart` - a body that came in flies off the top at `LaneLeaveStep` 8
+  (`FlyAway`): `mlDead` with no death event, no wreck, no score, it hurts
+  and is shot no more; `Leaving` - on its way off, still drawn (its hull
+  too); `CameAlongLane`. The drift (`FFallDriftX`, 3.0.57): a body that
+  walks off a moving deck keeps the deck's carry across while it falls
+  (`CarryX` in `MoveFalling`), or the deck slides back under the feet and
+  lands them, over and over; zero when a wall pulled it off, after a
+  `Reappear` and on landing. Weather (`TMonsterDef.Weather`):
+  `EndWeather` after the move - it bursts on the tick it lands
+  (`FLanded`, set by `MoveFalling`), on the grid's floor or a deck; one a
+  sprite past the bottom of the screen is gone (`FGone`: dead, never
+  drawn, never ticked, no events), and so are the remains of a burst one
+  the pit took; `Burst` - dying at once, `meDied` then `meBurst` (the game
+  bursts weather on the hero with it too).
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
   lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
@@ -2466,13 +2890,27 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   placement whose `Grades` do not hold the difficulty - the field is reborn
   on restart, so a difficulty change lands here. `Tick` (current
   screen), `SpawnFromSky(monsterId, screen)` (boss minions and the gravel
-  trial's gravels, at a random column one row above the screen - the fall
-  is the entry), `SpawnOn(monsterId, screen, x, y)` (on the very place
+  trial's gravels, at a random column of `SkyColumns` (15) one row above
+  the screen - the fall is the entry; returns the body since 3.0.53),
+  `SpawnFromSkyOver(monsterId, screen, column)` (the same over a column of
+  the caller's, 0-based: the aimed gravel, a medkit or a body of the wave
+  over a shelf), `SpawnInLane(orders, screen)` (3.0.57: the body of a
+  spawn action, made in column 1 of the row's feet line with the orders'
+  tag and sprite list, then `EnterFrom`), `DepartGuests(screen)` (every
+  body that came along a lane flies off the top), `CountAliveOf(monsterId,
+  screen)`, `CountAliveGuests(screen)` (the gate of the trial counts
+  them), `ReturnSideStrays(monsterId, screen)` (the live bodies of that
+  kind gone out of the side come back from the sky, each over a column of
+  its own), `TryReturnPitStray(monsterId, screen, pitColumn, out body)`
+  (one fallen into the pit comes back over that column or up to two
+  beside it), `CheckSpawnIds` (in the constructor: `Find` raises on an
+  unknown monster of a spawn or a skyFall action or of a finale, at level
+  start), `SpawnPlaced` (the private maker of a body from a placement),
+  `SpawnOn(monsterId, screen, x, y)` (on the very place
   of a body at the point: a prize put into the hero's hands, the contact
   of the same tick collects it; both over the private `SpawnAt` in
   placement cells), `SetTaggedTactics(tag, tactics)` (the events' tactics
   action),
-  `AnyAliveOnScreen` (the breakthrough gate - pickups count, verbatim),
   `AnyAliveTagged(tag)` (any live body carrying the placement tag, on any
   screen - the events' allDead), `AnyTaggedLivesBelow(tag, lives)` and
   `AnyTaggedEnraged(tag)` (live bodies only - livesBelow and enraged; the
@@ -2563,7 +3001,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   (private `TScorePopup`, '+N' rising), and the comm terminal it owns
   (`Hud.Terminal`) in place of the 2008 marquee. `Tick` / `Draw(alpha)` - draw
   is interpolation-aware (popups, the ticker's step). API: `AddTicker`,
-  `ShowBig`, `StartTerminal(header, text)`, `TerminalKeyStruck` (the game plays
+  `ShowBig`, `StartTerminal(header, text, place)` (`place` - a
+  `TTerminalPlace`, top by default; the ticker steps down only for a box
+  at the top), `TerminalKeyStruck` (the game plays
   the click), `AddScorePopup`, `ClearPopups` (screen transitions strand popups
   over the wrong geometry), `Clear` (death silences the board, the terminal
   too). The ticker stacks from y=52; while the terminal box stands the stack
@@ -2599,17 +3039,21 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `KeyStruck`. Owned by `TMoonGame`; `AdvanceBriefing` there decides
   "finish typing" or "start the level".
 
-### `Hud/Hud.Terminal.pas` (~245 lines)
+### `Hud/Hud.Terminal.pas` (~270 lines)
 - **`THudTerminal`** - the station's comm channel: a framed box (x=6, y=40,
   360 wide) under the heart monitor. A long text is word-wrapped by glyph count
   (45 per line - the small font is monospaced), typed by its own `TTypewriter`,
   held for 1 s plus a tick per letter, then faded in 1 s.
-  `TTerminalPhase` = (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`). `Start`
-  (header, text; a newcomer replaces the current), `Clear`, `Tick`, `Draw`,
+  `TTerminalPhase` = (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`);
+  `TTerminalPlace` = (`tlTop`, `tlBottom`) - under the heart monitor, or
+  along the bottom edge (a gap of `PanelMargin`, the box growing upward
+  from it: `BoxY`) on a screen where the hero comes in at the top and the
+  monitor corner would sit on him. `Start` (header, text, place; a
+  newcomer replaces the current and takes its place with it), `Place`, `Clear`, `Tick`, `Draw`,
   `Visible`, `Bottom` (the ticker lane reads it), `KeyStruck` (every second
   typed letter that is not a space - the terminal makes no sound itself).
-  Header `> ` + `terminalHeader` from the lang files today; a named speaker
-  later. Box and cursor through its own `THudBrush`, text through the font.
+  Header `> ` + `terminalHeader` from the lang files, or the voice an
+  event's hint gives (its `header`, the screen 7 transmission). Box and cursor through its own `THudBrush`, text through the font.
   The terminal knows nothing of the fight: a hint that must wait for one is
   a level event (`Levels.Events`) that starts it after the last body falls.
 
@@ -3520,24 +3964,217 @@ Reborn with the hero on every level load.
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
 
-### `Game/Events/Events.Director.pas` (~175 lines)
+### `Game/Game.Trial.pas` (~400 lines)
+The rules of the gravel trial of level 2's screen 9 (3.0.53, reworked
+into acts; `docs/ARENA-2.md` holds the whole design): no monster field,
+no hero and no SDL in it - a class a test drives alone
+(`Tests.Game.Trial`). The trial runs in acts (`TrialActs` = 5): an act is
+a batch of gravels let down a wave at a time (`TrialFirstWaveTicks` 25,
+then `TrialWaveTicks` 18 - the pace of 2008), with no cap on the living -
+the batch is the only limit. The next act does not come until every
+gravel of the batch is dead: once the batch is spent the gate is watched
+every tick (`WatchGate`), so the room rebuilds the moment the last one
+dies; an aimed gravel still on its way holds it, the one let down this
+very tick too. Then the room breathes (`TrialActBreakTicks` 40) and the
+next batch falls; a room busy with a scene of its own (`RoomBusy`, the
+game's word) holds the first wave of the next act back. The gate of the
+last act ends the trial. Nothing carries over between acts. The first
+gravel of every act is a herald; from act 2 (`TrialAimedFromAct`) every
+third (`TrialAimedEvery`) is aimed: a mark over the hero's column, the
+gravel `TrialAimedLeadTicks` (10) after it. A gravel fallen into the pit
+comes back one at a time, a beat apart (`TrialPitReturnTicks` 10).
+Medkits: one per `TrialKillsPerMedkit` (15) gravels killed, counted
+across the acts, and (3.0.59) one more at the middle of every act - the
+kill that makes half its batch, or half the wave (`PayMiddle`; an act of
+one has no middle). An event may open the sky for its act (3.0.58,
+`OpenSky`): a body falls every so many seconds until that act is over -
+the trial keeps the pace, the game picks the body. The trial may end in a
+wave (3.0.59): one act more, dealt by `DealWave` instead of
+`DealGravel` - a count, not a batch, never more of it alive than its cap
+(a body `TrialWaveTicks` apart while the room fills up, a dead one
+replaced `TrialWaveRefillTicks` (33) after it is gone); only the wave's
+own living count against the cap; no body of it is aimed, its first is a
+herald. A 2026 addition.
+- **`TTrialCue`** (record) - what the game carries out on a tick:
+  `SpawnGravel`, `SpawnWave`, `Herald` (the gravel or body let down is
+  the first of its act), `MarkAimed` / `SpawnAimed`, `ReturnFromPit`,
+  `SpawnMedkit`, `SkyFall`, `ActEnded` (the gate opened, the last one
+  too), `Finished`.
+- **`TTrialProgress`** (record, 3.0.57) - `Act`, `Batch` (the wave's count
+  in its act), `Dealt` (of the batch, an aimed one from its mark),
+  `WaveKilled` (0 outside the act of the wave); all zero while the trial
+  does not run. The events' gravelDealt and waveKilled read it.
+- **`TGravelTrial`** (class) - `Start(batch, waveCount = 0, waveCap =
+  0)` (both above 0 - a trial of `TrialActs + 1` acts, `Acts`), `Stop`,
+  `NoteGravelKilled`, `NoteWaveKilled` (only in the act of the wave),
+  `OpenSky(seconds)` (a tick at least; told again, the new pace from now;
+  nothing outside the trial), `Tick(gateHolders, waveAlive = 0)` - the
+  gate holders are everyone the game counts in (the gravels, the guests
+  an event let in, the wave), `waveAlive` the wave's own living;
+  `Progress`, `Active`, `Act` (1..`Acts`), `Acts`, `RoomBusy` (read and
+  written by the game). The act's end shuts the sky, and nothing falls on
+  the tick it shuts; `Start` and `Stop` shut it too.
+
+### `Game/Game.Arrivals.pas` (~150 lines)
+The violet light a body comes down in (3.0.53) - Selena's colour: where
+the trial lets a gravel, a medkit, a sky barrel or a body of the wave
+down from the sky, where a gravel that strayed out comes back, and over
+the column of an aimed one. A mark is a column of light from the top edge
+(`ArrivalBeamWidth` 14, `ArrivalBeamLength` 60) and a glow just inside
+it (`ArrivalHeight` 14, `ArrivalSize` 44, a white core of
+`ArrivalCoreShare`) on its own clock (`ArrivalTicks` 14): it gathers into
+the point, peaks and dies out (`Sin(Pi * share)`). The herald's mark
+(`alHerald`) is twice as long, broader and stands twice as long
+(`ArrivalScales`). The look only - the body is the field's; a light of
+its own, not the hero's shroud (decided). A 2026 addition.
+- **`TArrivalLook`** = (`alPlain`, `alHerald`). **`TArrivals`** (class) -
+  `Add(x, look)` (x - the middle of the body, screen units), `Tick`,
+  `Draw(canvas, origin, alpha)` (through `DrawGlow` / `DrawGlowRect` of
+  `Render.Glow`, on the monsters' channel), `Clear` (a door or a death:
+  nothing follows the hero to the next screen).
+
+### `Game/Game.Shield.pas` (~355 lines)
+The shield of a TeK machine while it cannot be hit (3.0.56): a pale gold
+honeycomb about it, always seen, on its rim alone - the machine inside
+stays in plain view (asked after the first look: a full honeycomb hid the
+gun). A hit lights the cells about its point, and the flare dies out in
+about half a second; no sparks - sparks are the game's sign of a wound,
+and a shield takes none. A shield that falls blinks its cells a few times
+and goes out; it does not come back by itself. The cannons wear it first;
+it is meant for the bosses after them while they may not be hit (unlike
+the mast-turret machine's hull, which is invulnerable always). A 2026
+addition.
+- **`TShieldArt`** (class) - one hex cell texture in additive light
+  (`FillCell`, `CellSide` 48 px), one for every shield of the game.
+- **`TShieldState`** = (`sdUp`, `sdFalling`, `sdDown`).
+- **`TTekShield`** (class) - `Create(radiusX, radiusY)`: an ellipse of
+  pointy-topped cells (`HexSize` 3.4, `LayCells`) about the machine's
+  middle, each with its `Rim` share (0 middle .. 1 edge). At rest only the
+  cells past `RestRimFrom` (0.72) show, easing in to full at `RimFull`
+  (0.95); a flare reaches in to `FlareRimFrom` (0.5); cells under
+  `DimmestLevel` (0.01) are not drawn. `Rise`, `Fall` (blinks every
+  `FallBlinkTicks` and is out in `FallTicks` 14), `Strike(point)` (a
+  flare of `FlareTicks` 16 within `FlareReach` 9 units), `Holds(point)`,
+  `TryEntry(from, to, out entry)` - where a stretch first comes into it,
+  looked for every `EntryStep` unit; False outside it or when it is not
+  up; `Tick`, `Draw(canvas, art, center, alpha)`, `State`. Points are
+  from the machine's middle.
+
+### `Game/Game.Cannons.pas` (~900 lines)
+The two TeK cannons of the gravel arena (3.0.56, act 3): guns clamped to
+the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
+cells out of the wall; variant B of the design) that do not aim. They
+slide in from beyond both edges once (`ArrivalTicks` 30, smoothstep) and
+ride the walls in unison, face to face, always on one row (`RideSpeed`
+3); at a row they warn with a red fire at the muzzles (`WarnTicks` 20,
+the game hums `padhum.wav`) and sweep it with a long burst from both
+sides at once (`BurstTicks` 40, a round every `ShotEveryTicks` 2 from
+each, barrels in turn, `RoundSpeed` 16, a streak 18x3), then rest
+(`RestTicks` 22, the rounds reach the far shield) and ride to another
+row of their orders. A row a volley sweeps is closed, the others free.
+The shield of each (`TTekShield`, 38x22) takes the rounds of the other
+and the hero's bullets; a round wounds the hero alone - a gravel is no
+one's target. Touching a cannon wounds (the contact boxes - plate,
+receiver, barrels - measured on the art, `ContactBoxes`), so its body is
+no bunker. When a cannon is to ride through the rows a bank of shelves
+stands in its way at (the `yield` of the orders - the bottom steps
+s09-foot at rows 8-9), the bank goes into the wall first (`YieldTicks` 28,
+the shelf's warning and slide) and comes out once the pair has left those
+rows. A pair lives one act: when the trial moves past it, the shields
+fall, rounds in flight go harmless, the barrels overheat (`HeatTicks`
+100), the pair races up and down between rows 1 and 6 (`RaceSpeed` 8,
+`RaceLegs` 5, `padhum` every `RaceHumTicks` 36), stops face to face at
+row 2 over the pyramid (`HaltTicks` 16), duels point-blank (`DuelTicks`
+50, harmless, sparks on the other muzzle) and both blow up: a scene, not
+a death of hits, and nothing in it wounds. The rules and the look; the
+game carries out the cue - the sounds, the wound, the shelves, the sparks
+and the blast. A 2026 addition.
+- **`TCannonSide`** = (`csLeft`, `csRight`); **`TCannonBlock`** =
+  (`cbNone`, `cbShield`, `cbHull`) - what a hero's bullet ran into;
+  **`TRoundCatch`** - `reference to function(fromX, toX, y): Boolean`: the
+  game's word on a round's stretch of the tick (an orb took it -
+  `TMoonGame.OrbTakes`, 3.0.57); **`TCannonCue`** (record) - `Hum`,
+  `Shot` (one shot sound stands for a few rounds, `ShotSoundEveryTicks`
+  4), `HeroHit`, `YieldSleep`, `YieldWake`, `Strikes` (rounds on bare
+  steel in the scene: sparks, no wound), `Blast` and `BlastPoints`.
+- **`TCannonArt`** (class) - the set `tek-cannon` (`bin/sprites`,
+  `tools/cannon/build_cannon.py`): the hull and the heat (the barrels in
+  alpha, added red as they overheat), through a cache of its own with
+  soft edges and linear filtering (drawn at a size of its own), and the
+  shield's `TShieldArt`. The art faces right and is mirrored for the
+  right wall; measured points in units of it: muzzles 63.4, 14.07 /
+  21.54, lens 32.16, 12.37.
+- **`TCannonPhase`** = (`cpGone`, `cpArriving`, `cpYielding`,
+  `cpRiding`, `cpWarning`, `cpFiring`, `cpResting`, `cpRacing`,
+  `cpHalting`, `cpHolding`, `cpDueling`).
+- **`TCannonPair`** (class) - `Create(art, seed)`; `Start(orders, act)` -
+  both slide in for that act of the trial (an event fired after its act
+  plays the scene at once); `Clear` (a door, a death: gone, no scene);
+  `Tick(act, heroBody, catch)` - `act` the trial's now (0 when it does not
+  run), `heroBody` empty for the dead, `catch` asked of every round that
+  can wound before the hero is (its whole stretch of the tick, so a round
+  does not jump an orb); `Block(from, to, out at)` - where a bullet's
+  stretch runs into a cannon, the shield lighting up; `Touches(body, out
+  side)` - nothing in the scene wounds; `DrawBodies(sprites, alpha)`,
+  `DrawLight(canvas, origin, alpha)` (rounds, muzzles, lens, shields);
+  `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
+  `YieldBank`.
+
+### `Game/Game.Press.pas` (~205 lines)
+The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
+with no pads, no monsters and no SDL - a class a test drives alone
+(`Tests.Game.Press`). The press is a stack of rows of shelves, top first
+(the balconies at the walls, rows 3, 5, 7 and 9 of screen 9; the betoners
+stand on them). The rows that are out ride down together like a conveyor:
+on every beat each row out goes into the wall and the row under it comes
+out, so whoever stood on a row falls one row lower; the bottom row going
+in drops its bodies onto the floor; a row whose body is dead rides on all
+the same. A newcomer comes down onto the top row: its arrival brings the
+top row out and holds the beat `PressArrivalTicks` (45) - the top row
+does not go from under a body still in the air. Two rows out one over
+the other (not in the first design): the lower goes in with the beat to
+drop its own body and comes out again `PressRewakeTicks` (40) later, to
+catch the body of the row over it, which falls a row only. The press
+counts which rows are out and which are told to move; the game tells the
+shelves. A 2026 addition.
+- **`TPressCall`** (record) - `Sleep`, `Wake` (banks), `IsEmpty`.
+- **`TPress`** (class) - `Start(rows, beatTicks)` (every row starts in;
+  nothing for no rows or a beat below a tick), `Shut` (stops where it
+  stands, no rows told), `Arrive(bank)` (nothing for another bank than
+  the top row), `Tick`, `RowOut(bank)`, `Active`, `Rows`.
+  **`PressBeatTicks(seconds)`** - the level file's seconds in ticks, a
+  tick at least.
+
+### `Game/Events/Events.Director.pas` (~295 lines)
 Runs the level's events (`Levels.Events`) against the live game.
 **`TEventDirector`** takes the events, the message board, the level's
-dynamic objects and two callbacks (`reference to procedure`): `TChangeMusic` (the game passes its
-`ChangeMusic` method, which also remembers the track for restarts) and
-`TArenaCues` (3.0.39; a record of two `TArenaCue`s: the game passes
-`TPadArena.Engage` and `TPadArena.Restore`). The
-monster field is reborn on every restart, so it arrives with every tick
-instead of being kept: asked for the conditions, told the tactics.
+dynamic objects and the cues (3.0.54: one record, **`TDirectorCues`**, in
+place of the two callbacks): `ChangeMusic` (the game's method, which also
+remembers the track for restarts), `Arena` (`TArenaCues`: `Engage`,
+`Restore` of `TPadArena` and, since 3.0.54, `FlyIn` - the game's
+`FlyInParked`), `Shelves` (`TShelfCue` - a shelf action whole),
+`BreakCarousel` (`TBreakCue`), `Strays` / `StraysLeave` (`TFlockCue`),
+`MedkitsOnto` / `WaveOnto` (`TBankCue`), `TrialAct` (`TTrialAct` - the
+trial's act, 0 while it does not run), `TrialDone` (`TTrialDone`),
+`TrialProgress` (`TTrialProgressCue` - a `TTrialProgress` of
+`Game.Trial`), `Cannons` (`TCannonsCue`), `Spawn` (`TSpawnCue`),
+`SkyFall` (`TSkyFallCue`), `Press` (`TPressCue`); the last four take the
+act the event waits for, 0 for one that waits for none. The director
+pulls the trial's state through these, it does not push. The monster
+field is reborn on every restart, so it arrives with every tick instead
+of being kept: asked for the conditions, told the tactics.
 - `Tick(screen, field)` - once per logic tick with the hero's screen: for
   every unfired event of that screen, the condition is checked
-  (`ConditionHolds`); while it holds the delay counts down, a lapse starts
-  the count over; at zero the actions play once (`Play`: `ShowBig`,
-  `AddTicker`, `StartTerminal` with the terminal header, the music
-  callback, `FadeTagged` / `TurnSunTagged` on the dynamics,
-  `SetTaggedTactics` on the field, the arena cues for `rebuild` and
-  `restore`). The game skips the tick over
-  the hero's corpse.
+  (`ConditionHolds`: actReached - `TrialAct() >= act`; gravelDealt -
+  `GravelDealt`, `Dealt >= batch * part div of + 1`; waveKilled -
+  `WaveKilled`, `WaveKilled >= batch * part div of`; both true once the
+  act is past; trialDone - `TrialDone()`); while it holds the delay
+  counts down, a lapse starts the count over; at zero the actions play
+  once (`Play`: `ShowBig`, `AddTicker`, a hint through `PlayHint` -
+  `StartTerminal` with the event's header or the channel's own and its
+  place -, the music cue, `FadeTagged` / `TurnSunTagged` on the dynamics,
+  `SetTaggedTactics` on the field, and every other action through its
+  cue). The game skips the tick over the hero's corpse.
 - `ReArm(screen)` - death re-enters the screen with its monsters reborn,
   so its events wait for their moment again, as the entity triggers do,
   and the dynamic objects their intensity actions turned are rewound
@@ -3753,16 +4390,20 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2910 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~3500 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
   sounds (the bonus cost lives in `Game.Bonus`; the three of an arena
   rebuild - `PadHumSoundFile`, `PadClickSoundFile`, `PadClackSoundFile`;
-  the latch of a shelf - `ShelfLatchSoundFile`, 3.0.51),
+  the latch of a shelf - `ShelfLatchSoundFile`, 3.0.51; the burst of the
+  wall cannons - `CannonShotSoundFile`, `shoot2.wav`, 3.0.56),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
   per-difficulty hero health and monster-lives multipliers, gravel trial
-  cadence and monster (`GravelMonsterId`), ticker durations, damage
+  monster (`GravelMonsterId`) and the medkit it lets down
+  (`MedkitMonsterId`), the cannons' dice (`CannonSeed`) and the smoke the
+  next act waits out after their blast (`CannonSmokeTicks` 50), ticker
+  durations, damage
   bookkeeping (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (how near an orb takes an
   enemy bullet), the font choice (`FontFileName`,
@@ -3770,7 +4411,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   extra scancodes (`ScancodeS` - the drop - among them; the debug ones
   under DEBUGKEYS), the screen-shake doses
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
-  `AftershockTrauma`, `BossCrashTrauma` - a 2026
+  `AftershockTrauma`, `BossCrashTrauma`, `CannonBlastTrauma` - a 2026
   addition; the
   ceremony's own live in `Game.Henshin`), ending-screen layout rows. The
   three developer-facing errors are resourcestrings in English, outside
@@ -3786,7 +4427,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   field, the shared enemy burst (`FMonsterBullets`), font, message board,
   the briefing (`THudBriefing`), the screen shake, sound bank,
   menu, the explosions and the impacts (`FExplosions`, `FImpacts`, one of
-  each for the run), the hero's aura (`FAura: TAura`, one for the run
+  each for the run), the gravel arena's (3.0.53-3.0.59, one each for the
+  run, made in the constructor): the trial's rules (`FTrial:
+  TGravelTrial`), the violet light (`FArrivals: TArrivals`), the wall
+  cannons (`FCannons: TCannonPair` over `FCannonArt`), the press of the
+  finale (`FPress: TPress`), the hero's aura (`FAura: TAura`, one for the run
   too), the rite of the henshin (`FRite: TOrbRite`, one for the run as
   well; `HeroBodyPoints` is its body probe) and the pattern it builds on
   this level (`FPattern: TOrbPattern`), the ceremony
@@ -3807,7 +4452,13 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   kill streak, per-entity trigger-fired flags, the bonus slot
   (+ its queued activation; `FBonusLearned` - the first reward spent - is the
   one thing that survives levels, so the HUD insists once per launch), the
-  gravel trial (attack flag, quota, wave timer, screen), the
+  gravel trial's screen (`FGravelScreen`) and what the events told it -
+  the bank its medkits come down onto (`FMedkitBank`), the monster and the
+  bank of its wave (`FWaveMonster`, `FWaveBank`), the body of its open sky
+  (`FSkyMonster`), the column of the aimed gravel on its way
+  (`FAimedColumn`), the fly-ins held through the cannons' scene
+  (`FHeldFlyIns`, `FCannonSmoke`) and whether it is won (`FTrialDone`) -
+  all of it cleared by `LoadLevel` and `RestartLevel`, the
   end-level timer, the level list + current file + current music, fullscreen,
   difficulty.
   Method clusters:
@@ -3845,7 +4496,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves; right after the pads' tick it voices
     a rebuild - `padclick.wav` on `CornerTurned`, `padclack.wav` on
-    `PairDocked` - and a shelf, `shelflatch.wav` on `ShelfLatched`), ticks
+    `PairDocked` - and a shelf, `shelflatch.wav` on `ShelfLatched`; since
+    3.0.57 `FPads.Tick(FHero.Screen, HeroDeck)` - the pad under the living
+    hero, for a sleep that spares him and a stray he rides), runs
+    `TickGravelAttack` before the input (the slot of 2008), ticks
+    `FArrivals` after the impacts, `TickCannons` and
+    `ResolveCannonContact` right after `ResolveMonsterContact`, ticks
     the arena right after the director, both skipped
     over the hero's corpse (`FArena.Tick`, then `padhum.wav` on
     `Warned`), and `FDynamics` after the monsters
@@ -3883,7 +4539,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     for restarts; '' is a no-op), `HeroRides(pad)` (the `TPadLoad` of the
     rebuilds: the pad under the hero - monsters are no riders, they fall
     through a pad that goes deep), `LocateParent` (the `TLocateParent` of
-    `Render.Dynamics`: a pad first (`FindTagged`) - its screen, `Left` /
+    `Render.Dynamics`: a pad first (`FindWearer` since 3.0.58: a pad's
+    own rigs live until it breaks, those of its failing look from then on
+    - the rig is alive only while it fits the pad as it is) - its screen, `Left` /
     `Round(Top)` + `Lift(1)` (where the pad is drawn as the tick leaves it -
     a fraction, the stand's Y is a `Single`), alive, its effort
     (`TPad.Effort`: 1 while the pad is `Thrusting`, in fits when it is a
@@ -3904,8 +4562,68 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ArriveOnScreen`, `StartPlaying` and `RestartLevel`, so the point has
     the last word over the entry point and over the triggers; the hero
     himself is not moved),
-    `FireScreenTriggers`, `TickGravelAttack`; the events are the director's
-    (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`).
+    `FireScreenTriggers` (the entities' triggers, then since 3.0.53 the
+    level's `ScreenTriggers`, both through `FireTriggersOf`: the gravel
+    trigger starts `FTrial` with the batch of the grade and, with a
+    finale, its count and cap - `FWaveMonster` -, and the ceremony
+    straight in), `TickGravelAttack`; the events are the director's
+    (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`;
+    its `TDirectorCues` are built in `LoadLevel`).
+  - The gravel arena (3.0.53-3.0.59; rules in `Game.Trial`, `Game.Press`,
+    `Game.Cannons`, the design in `docs/ARENA-2.md`): `TickGravelAttack` -
+    every tick while the trial runs, even over the corpse: the gravels
+    and the wave's bodies out of the right gap come back from the sky
+    (`ReturnSideStrays`, `ArriveAgain` - the violet light and
+    `HeadRandomly`); `ReleaseHeldFlyIns` (before the room is asked, so a
+    carousel let in is landing on this very tick); `FTrial.RoomBusy` = the
+    cannons' scene or their smoke (`CannonsScenePlays`), a held fly-in, or
+    a carousel landing; the gate holders = the gravels alive + the guests
+    (`CountAliveGuests`) + the wave alive, the cap counted against the
+    wave alone; then `FTrial.Tick` and `TellPress(FPress.Tick)`, and the
+    cue carried out: a pit return over `HeroColumn` (a gravel first, then
+    a body of the wave), a gravel let down (`LetDownFromSky`, the herald's
+    light on the first, `HeadRandomly`), the mark of an aimed one
+    (`FAimedColumn`) and the gravel over it, a body of the wave
+    (`LetDownWave`: the press told `Arrive` first, then over a shelf of
+    `FWaveBank` picked from the half with fewer of the wave -
+    `WaveSideWanted`, `TryPickBankMiddle(bank, side)`; no bank - a random
+    column), a medkit (`LetDownMedkit`: over a shelf of `FMedkitBank`),
+    the sky's body (`FSkyMonster`); `ActEnded` - `DepartGuests` and
+    `FPress.Shut`; `Finished` - `FTrialDone`, the breakthrough message,
+    `bottle.wav` and `RemoveIceForm` as before, and `win.ogg` once
+    (`VictoryMusicFile`, `mmOnce`) with no level-end timer - the level
+    goes on to the second boss. The cues of the director: `TellShelves`
+    (an action into a `TShelfCommand`; `TellBank` with the hero's middle),
+    `BreakCarousel`, `LetStraysGo`, `SendStraysAway`, `FlyInParked` (held
+    in `FHeldFlyIns` while `CannonsScenePlays`; then
+    `TryFlyInCarousel`, else `FArena.FlyIn`), `SendMedkitsOnto`,
+    `SendWaveOnto`, `StartCannons` (the event's act, or the trial's for one
+    that names none), `SpawnGuest` / `OpenSky` / `StartPress` (only in the
+    act the event waits for: `TrialAct`), and the pulls `TrialAct`,
+    `TrialProgress`, `TrialDone`. The press: `TellPress` ->
+    `TellPressRow` (`TellBank` sleep, or wake with hold; no spareHero -
+    no mercy on the press). The cannons: `TickCannons` (`FCannons.Tick`
+    with `TrialAct`, the living hero's body and `OrbTakes`; the cue: hum,
+    shot, the yield bank through `TellYieldBank`, sparks off steel through
+    `LandCannonStrike`, `SHitByBullet` and `HurtHero` under the mercy
+    window, `BlowCannons` - two `ekMachine` blasts, `platform.wav`,
+    `CannonBlastTrauma`, the smoke), `ResolveCannonContact` (a touch
+    wounds, `SHurtByMonster`, and shoves the hero `CannonShove` 4 off the
+    wall), `BulletStruckCannon` (in `ResolveHeroBulletHits`: a shield eats
+    the bullet, bare steel gives sparks and a ping, no damage).
+    `OrbTakes(fromX, toX, y)` (3.0.57) - the first armed orb of the aura,
+    the rite or the rain within `OrbReach` of a stretch is spent on what
+    flies there: the cannons' rounds and, through `ShardStruck`, a live
+    shard. Weather (3.0.58): `ResolveMonsterContact` bursts it on the hero
+    (`Monster.Burst`), `meBurst` sends its blast out (`RewardMonsterKill`),
+    and `RewardMonsterKill` pays nothing for it - no score, ticker, popup
+    or streak. `DrainMonsterEvents` tells the trial of a gravel killed on
+    its screen (`NoteGravelKilled`) and of a body of the wave
+    (`NoteWaveKilled`). Drawn: `FCannons.DrawBodies` after the explosion
+    smoke, before the monsters; `DrawLight` after the bullets;
+    `FArrivals.Draw` after the impacts, on the monsters' channel.
+    `ArriveOnScreen`, `LoadLevel` and `RestartLevel` clear the arrivals
+    and the cannons.
   - Combat: `ResolveHeroBulletHits` (a bullet lands on the monster whose
     `HitBox` the stretch of its last tick meets: `HeroBulletTarget` over
     `BulletInMonsterBox`, `BulletStretch` and `StretchEntry`, the stretch
@@ -4288,24 +5006,41 @@ is `gone` eight times, the 2008 ones stay under `alive-2008` and
 the cross in screen units. The source picture is not in the repository.
 numpy, scipy, Pillow.
 
+### `tools/cannon/build_cannon.py`
+Builds `bin/sprites/tek-cannon.mset`, the art of the TeK wall cannon of the
+gravel arena (`Game.Cannons`), from one generated picture - the cannon
+seen from the side, facing right, at exactly 2:1 - found in a sources
+folder as `cannon.png` (`SOURCE_FILE`): `build <sources dir> <set>`. It
+scales the picture whole to `DENSITY` (6 px a screen unit, 384x192 for a
+gun of 64 x 32 units) in premultiplied alpha, cuts the heat layer (the
+barrels from where they leave the receiver) out of it, measures the
+contact boxes from the alpha, and prints the points in screen units - the
+muzzles, the lens and the boxes `Game.Cannons` holds as constants. The
+measured points of the source are constants at the top. No text and no
+emblem on the art: the right gun is the left one mirrored. The source is
+not in the repository. numpy, scipy, Pillow.
+
 ---
 
 ## Tests
 
 The concept, the rules and the tables of tests are in `docs/TESTING.md`.
-At 3.0.52 the suite is 376 tests, all green. Not every test unit has its
+At 3.0.52 the suite was 376 tests, all green; the gravel arena
+(3.0.53-3.0.59) brought 112 more - 488. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
-`Tests.Pads.Plunge` and `Tests.Pads.Shelf` are told in `docs/TESTING.md`
-alone.
+`Tests.Pads.Plunge`, `Tests.Pads.Shelf`, and the arena's new units
+`Tests.Game.Trial` (the trial's sky, wave and middle medkits; the finale
+and the sky events of the level), `Tests.Game.Press` and
+`Tests.Pads.Stray` are told in `docs/TESTING.md` alone.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
 what it draws: no window, no SDL call. Game units come in through the
 project's search path (`..\Core`, `..\Game\Orbs`); the executable goes
 to `bin\`.
-- **`Moon2D.Tests.dpr`** (~65 lines) - the runner: every registered
+- **`Moon2D.Tests.dpr`** (~70 lines) - the runner: every registered
   fixture, a verbose console log, the exit code (0 - green). A test that
   asserts nothing fails.
 - **`Orbs/Tests.Orbs.Flock.pas`** (~320 lines) - **`TOrbFlockTests`**
@@ -4413,11 +5148,13 @@ anything written in by hand) and overrides config.json key by key. It lives
 outside the game folder: not in the repository, not in a release, kept when a
 new release is unpacked over the old one.
 
-### `monsters.json` (~12 KB)
+### `monsters.json` (~15 KB)
 Keys: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
-dangerous - inherited by monsters), `monsters` array. 15 ids: `gravel`,
+dangerous - inherited by monsters), `monsters` array. 16 ids: `gravel`,
 `gravelFemale`, `winter`, `zombieShooter`, `betoner`, `platform`, `tank`,
-`mount`, `barrel`, `medkit`, `weaponShotgun`, `weaponGrenade`, `weapon3`,
+`mount`, `barrel`, `skyBarrel` (3.0.58: the barrel's art, lives, blast
+and explosion, score 0, `weather` - the sky barrel of the gravel arena's
+act 5), `medkit`, `weaponShotgun`, `weaponGrenade`, `weapon3`,
 `weapon4`, `boss1`. Parsed by `TMonsterRegistry` into `TMonsterDef` (see
 Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
@@ -4446,7 +5183,7 @@ limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
 
-### `level1.json` (~97 KB) / `level2.json` (~56 KB)
+### `level1.json` (~107 KB) / `level2.json` (~84 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -4462,16 +5199,21 @@ units, optional `tint`, optional `tag`), `pads` (optional: sprite, screen,
 x, y - the deck -, width in screen units, optional `tint`, optional `tag`,
 `bullets` block / pass, block when absent, optional `path` - `route`,
 `stops`, `speed`, `pause` -, `bob`, `plunge` - `delay`, `rest`, `rise` -,
+`plunge` also `staysDown` -,
 `shelf` - `out` and `in` or `program`, `slide`, `warn`, `offset`, `sink`,
-`scale`, `tone` -, `group`, `carousel` - the carousel it rides, in
-place of `x` and `y` - and `rig` - the rigs it wears;
+`scale`, `tone`, `bank` (a name or a list), `held` -, `group`, `carousel` -
+the carousel it rides, in place of `x` and `y` -, `stray` - `flock`,
+`zone`, `wait`, in place of `x` and `y` - and `rig` - the rigs it wears;
 see `Levels.Pads`),
 `carousels` (optional, 3.0.52: `tag`, `screen`, `shape` oval / box,
 `center` and `size` [x, y] in screen units, `corner`, `period` in
-seconds, `turn` cw / ccw, `start` - see `Levels.Carousels`),
+seconds, `turn` cw / ccw, `start`, `parked`, `speedUp`, `failing` - see
+`Levels.Carousels`),
 `padGroups` (optional: `tag`, `screen`, `zone` [left, top, right, bottom]
-in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`
-and `alarm` - the pads rebuilt together, see `Levels.Pads`), `rigs`
+in cells, `pairs`, `farFlight`, `farShare`, optional `conductor`, `every`,
+`alarm` and `parked` - the pads rebuilt together, see `Levels.Pads`),
+`screenTriggers` (optional, 3.0.53: `screen`, `difficulty`, `triggers` -
+the triggers of a screen no body carries, see `Levels.Defs`), `rigs`
 (optional: named lists of dynamic objects with no place of their own, a
 number of a part may be `{"spread": [from, to]}` - see `Levels.Rigs`),
 `respawns` (optional: `screen`, `x`, `y` - the cell a pit and death
@@ -4495,18 +5237,22 @@ monsterId, screen, x, y - or, since 3.0.52, `seat`: the tag of the pad it
 sits on, in place of both -, spriteList, optional `difficulty` grades (parsed,
 unused by both levels),
 `overrides` (direction / speed / lives / canShoot / fireOffset), `triggers` -
-messages/hints/changeMusic/heroX-heroY/gravelBoss (the wave quota per
-difficulty),
+messages/hints/changeMusic/heroX-heroY/gravelBoss (the gravels of one
+act per difficulty) and `finale`,
 optional `tag` for the events and the dynamics, optional `rig` - the rigs
 the monster wears, which takes the tag (see `Levels.Rigs`); `secret` on one level-1
 medkit is data nobody reads yet), `events` (each: `id`,
 `screen`, `when` = enterScreen | allDead / enraged + `tag` | livesBelow +
-`tag` + `lives`, optional `delay` in ticks, `then` = a list of `action`
-objects - bigMessage/smallMessage/hint with `text`/`textEn`, music with
-`file`, intensity with `target`/`value`/`ticks`, sun with
-`target`/`value` (degrees)/`ticks`, tactics with `target`/`value`, rebuild
-and restore with `target`; the med lab hint, `labHint`, is the
-plainest example), `introText`/`introTextEn`.
+`tag` + `lives` | actReached + `act` | gravelDealt / waveKilled + `act`,
+`part`, `of` | trialDone, optional `delay` in ticks, `then` = a list of
+`action` objects - bigMessage/smallMessage/hint with `text`/`textEn` (a
+hint also `header`, `place`), music with `file`, intensity with
+`target`/`value`/`ticks`, sun with `target`/`value` (degrees)/`ticks`,
+tactics with `target`/`value`, rebuild and restore with `target`, and
+the arena's: shelvesWake / shelvesSleep / shelvesProgram, flyIn,
+medkitsOnto, waveOnto, cannons, spawn, breakCarousel, strays,
+straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
+`labHint`, is the plainest example), `introText`/`introTextEn`.
 - level1: 17 screens, 145 entities, a 156-tile palette, 4 backgrounds - night
   (1-7), pre-dawn (8-11), `_black` for the fully tiled lab screens 12-13,
   sunrise (14-17); sets
@@ -4586,21 +5332,20 @@ plainest example), `introText`/`introTextEn`.
   `arena17`). The marks are those of the
   normal grade (400 lives: dives under 200, the rage under 120, hunts
   under 45) and grow with the difficulty - by 1.5 on hard, 2 on wild.
-- level2: 9 screens, 38 entities, a 35-tile palette, 4 backgrounds - day
+- level2: 9 screens, 36 entities, a 35-tile palette, 4 backgrounds - day
   (1), the chasm edge (2), rock (3-5), the same rock darker (6-9); sets
   `moon-surface machinery facility common mine-interior`. Object: the
   satellite on screen 1, lit a little brighter (day), tagged `satellite`;
   the Earth on screen 1 as level 1 left it, a thinner crescent (sun 70, no
   events); the satellite's lamp is `dying` - a dim fast flutter, the battery running out, and
   one leak is left, a puff now and then (`flow` puffs); the breach still
-  sparks, at intensity 25 - a spark now and then. Sixteen fans (`fan`:
-  the `turbine` rotor behind the `bezel` plate over the `shaft` back, one
-  cell each) stand where the 2008 tiles `cooler1`-`cooler4` and `ventelat`
-  stood - the cells are empty in the grid and solid as before, the names
-  stay in the palette: two at 150 turns a minute on the floor of screen 3
-  with a `louver-2x1` object between them, fourteen at 180 on the ducts
-  of screen 9 with the red of the old grille for a light, one of them
-  `dying`. The one TeK platform, on screen 6, is tagged `s06-tek-01` and
+  sparks, at intensity 25 - a spark now and then. Two fans (`fan`: the
+  `turbine` rotor behind the `bezel` plate over the `shaft` back, one
+  cell each) stand where the 2008 tiles `cooler1`-`cooler4` stood on the
+  floor of screen 3, at 150 turns a minute, with a `louver-2x1` object
+  between them - the cells are empty in the grid and solid as before, the
+  names stay in the palette; the fourteen on the ducts of screen 9 went
+  with its repaint (3.0.54). The one TeK platform, on screen 6, is tagged `s06-tek-01` and
   wears the rig `tekPlatform` - the numbers of level 1, written again in
   this file's `rigs`. Screens 1-4 are repainted (`docs/REPAINT.md`).
   Screen 1 is the arena of level 1's screen 17 moved six cells left:
@@ -4663,13 +5408,38 @@ plainest example), `introText`/`introTextEn`.
   The nine barrels of 2008 are gone; on every pad sits a monster (`seat`):
   betoners on `-01` and `-05` (speed 0; the first keeps the `heroY` 4
   trigger of the 2008 first barrel), barrels on the rest (direction 1).
-  A `dying` beacon on the room. The
-  gravel trial
-  lives here (screen 9: the `gravelBoss` trigger, quota 75/125/200 by
-  difficulty, under `boss2.ogg`) - there is no boss monster - and it ends
-  the original campaign.
+  A `dying` beacon on the room. Screen 9 is the gravel arena
+  (3.0.53-3.0.59; the whole design and the data act by act are in
+  `docs/ARENA-2.md`): `s09-room` (the ChatGPT room with the violet
+  ceiling grating), `s09-doorstep` (the left slab, cols 0-1 of row 11 -
+  the only solid floor; respawn column 2, row 11), `s09-lamp-off` with a
+  `dying` beacon, and a `shelf-dock` behind every shelf (49 objects in
+  all). The trial's triggers are a screen trigger (`changeMusic`
+  `boss2.ogg`, `heroX` 1, `gravelBoss` 15 / 25 / 40, `finale` betoner
+  10 / 15 / 20 alive 3); the three trial medkits of 2008 are gone. 57 pads:
+  46 shelves held at the start in their banks - `s09-floor` (14, row 11
+  cols 2-15) with its subsets `s09-isle`, `s09-grid`, `s09-gaps`,
+  `s09-wall` (row 9 cols 1, 14), `s09-foot` (row 9 cols 2-3, 12-13),
+  `s09-ladder` (row 7 cols 4-5, 10-11), `s09-crown` (row 5 cols 6-9),
+  `s09-pyramid` (the ladder and the crown), the press rows
+  `s09-press-1..3` (rows 3, 5, 7, cols 1-3 and 12-14) and `s09-press-4`
+  (the wall and the foot), all 24 of the four also `s09-balcony` -; eight
+  pads `s09-ride-01..08` on `s09-carousel` (a box round (256, 232), 224 by
+  112, corner 24, 15 s a lap, parked above, speed-up 3 s, bullets block,
+  breaking into `s16-platform-out` / `padFailing` with a plunge that
+  stays down), the two medkits of act 4 seated on `-03` and `-07`; three
+  strays `s09-stray-01..03` of the flock `s09-strays` (zone [4, 3, 11,
+  8], waits 0, 1.5, 3). Twelve events run the six acts: `s09-act1` ..
+  `s09-act6` (actReached), `s09-act3-cannons` (200 ticks into act 3),
+  `s09-act4-tek-upper` / `-lower` (gravelDealt: the two TeK-K10 platforms,
+  tagged `s09-tek-01` / `-02`, wearing `tekPlatform`), `s09-act6-tanks`
+  and `-tanks-2` (waveKilled 1 of 2: two tanks from each side, the second
+  pair 66 ticks later), `s09-done` (trialDone: every balcony slides in
+  sparing the hero, the strays leave). There is no boss monster; the
+  victory track plays at the end and the level goes on - the second boss
+  of level 2 comes on the screens after it (not yet built).
 
-### `sprites\*.mset` (44 sets)
+### `sprites\*.mset` (45 sets)
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups: 2008 frames; since 3.0.50 their
@@ -4709,6 +5479,11 @@ plainest example), `introText`/`introTextEn`.
   `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` and
   `tank` its drive frames `tank1`-`tank3` for
   the `TAnimSet` contract.
+- **The TeK wall cannon** (3.0.56): `tek-cannon` - `hull` (the cannon
+  whole, facing right, the lens unlit) and `heat` (the barrels alone,
+  white, their shape in alpha), 384x192 each, 6 px a unit, a 64 x 32 unit
+  gun; built by `tools/cannon/build_cannon.py`, read by `TCannonArt` of
+  `Game.Cannons` (no monster, so no `hull` entry in monsters.json).
 - **Death frames of what blows up** (3.0.42): in `barrel`, `tank`,
   `platform`, `krep` and `boss1` the `death` sequence is the empty frame
   `e8` eight times - the body vanishes in the tick it dies, and what the
@@ -4726,8 +5501,9 @@ plainest example), `introText`/`introTextEn`.
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
 - **Objects**: `level1-objects` (`ship`) and `level2-objects`
   (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s03-room`,
-  `s04-room` and the rooms of the screens repainted after them, `s08-room`
-  the last - 3.0.52 -, whole screens at backdrop density) - the `<assetsDir>-objects` convention, never declared,
+  `s04-room` and the rooms of the screens repainted after them up to
+  `s09-room` - 3.0.54 -, whole screens at backdrop density, with
+  `s09-doorstep` and `s09-lamp-off`) - the `<assetsDir>-objects` convention, never declared,
   optional. Shared:
   `sky` (`earth`, `earth-night`, `satellite`), declared by both levels in
   `objectSets`. The ship and the satellite are drawn at backdrop density
@@ -4815,7 +5591,17 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | What is made of a picture's alpha - the mask, the halo, the points: for one more thing that glows in its own shape | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
-| Game flow / state machine / scoring / bonuses / gravel trial | Moon2D.dpr (+Game.Bonus.pas) |
+| Game flow / state machine / scoring / bonuses | Moon2D.dpr (+Game.Bonus.pas) |
+| The gravel trial: acts and batches, the gate, the breath between acts, the herald, the aimed rain, pit and side returns, the medkits (per 15 kills, the middle of an act), the open sky, the wave of the finale and its cap; where a body comes down | Game.Trial.pas (rules) + Moon2D.dpr (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) in level2.json + docs/ARENA-2.md |
+| The gravel arena's room act by act: which shelves wake, sleep or blink, in which order, sparing the hero or not | `events` of screen 9 in level2.json (`s09-act1`..`s09-done`) + the banks of the shelves there + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/ARENA-2.md |
+| The violet light of an arrival; the herald's | Game.Arrivals.pas (+Moon2D.dpr `LetDownFromSky`, `ArriveAgain`) |
+| The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Moon2D.dpr (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
+| The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
+| The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Moon2D.dpr (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
+| Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Moon2D.dpr `SpawnGuest` |
+| A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Moon2D.dpr (`FlyInParked`, `ReleaseHeldFlyIns`) |
+| Stray pads: when they come, where they hang, how they misbehave, sent away | Pads.Stray.pas + `stray` on a pad and the `strays` / `straysLeave` actions in level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
+| Weather: a body that bursts where it lands (the sky barrel) | `weather` in monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Moon2D.dpr (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
 | The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, the ring's ceiling, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
 | The call of the aura: where the orbs show through (faces of cells and pads, thin air), the wait over a face, the flight, when an orb is armed, the mercy window | Orbs.Harvest.pas (the spots) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`, `GrantMercy`) |
 | The fire rain of orbs: the waves, the formula of a drop, the floor of a column (matter, a pit), landing, a second pour, the hero's death | Orbs.Rain.pas (formulas and numbers) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/ORBS-PLAN.md |
@@ -4836,7 +5622,7 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | What hangs on a pad going into the depth with it: smaller, darker, behind the pads in front | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (the canvas' `Scale` / `Tone` in `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, the order in `Render`) |
 | A dynamic object (a beacon, its blink, rays; a graph on a screen - its shape, frame, grid); a new kind; hanging one on a static object | `dynamics` in levelN.json + Levels.Dynamics.pas (kinds, parser) + Effects.Traces.pas (what a trace answers) + Render.Dynamics.pas (where it stands, layer) (+`tag` on `objects`) |
 | Text rendering / new captions | Render.Font.pas + Hud.Messages.pas + an `S*` key in Localization.pas + both lang JSONs |
-| Level hints / the comm terminal | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON) |
+| Level hints / the comm terminal; a hint's voice and place | Hud.Terminal.pas (+Hud.Messages.pas for the ticker lane, `hintText` in level JSON, `header` / `place` of a hint event) |
 | Story screen before a level / typing rhythm | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` in level JSON) |
 | Frame pacing / window / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Sound / music | Audio.pas (+sound constants and `PreloadSounds` in Moon2D.dpr, the ceremony's in Game.Henshin.pas, data fields in JSONs) |

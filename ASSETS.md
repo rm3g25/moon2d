@@ -157,6 +157,15 @@ edge and packed by `tools/mount/build_mount.py`; the worn pod is cut by the
 silhouette of the whole one. It is for the ceiling mount of level 2, which still
 draws its 2008 frame from `krep.mset`; the frame stays in that set.
 
+**The TeK wall cannon** (`sprites/tek-cannon.mset`) - since 3.0.56, generated
+with ChatGPT's image model to the author's direction, from a TeK style sheet
+made of the tank, mount, platform and medkit art (the cannon from the side,
+facing right, at 2:1, no text or emblem, since the right-wall gun is the same
+picture mirrored), then scaled whole to 6 px per screen unit - 384x192 - with
+the barrels cut out as a heat layer and packed by
+`tools/cannon/build_cannon.py`. It is new art for the gravel arena of level 2;
+no 2008 frame stands behind it.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.

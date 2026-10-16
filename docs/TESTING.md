@@ -63,7 +63,9 @@ Tests\
     Tests.Effects.Traces.pas
   Game\
     Tests.Game.Blasts.pas
+    Tests.Game.Press.pas
     Tests.Game.Shroud.pas
+    Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
   Levels\
     Tests.Levels.Carousels.pas
@@ -85,6 +87,7 @@ Tests\
   Pads\
     Tests.Pads.Plunge.pas
     Tests.Pads.Shelf.pas
+    Tests.Pads.Stray.pas
 run-tests.cmd             build and run
 ```
 
@@ -598,6 +601,29 @@ Left to the eye:
 - A corpse over a pit. The fall out of the world below the floor line is
   the 2008 behaviour, and no test pins it.
 
+### Weather (3.0.58)
+
+State: written, 5 tests. They came with 5.3; stage 5 was run live. They
+join `TMonsterBodyTests`. A barrel now dies into a `nil` burst too: its
+blast is the game's to send out, and the header of `Tests.Rooms` says so.
+
+Shared: `HoledRows(From)` - the floor with a hole three cells wide;
+`TickWhileAlive` ticks a body until it is no longer alive, a hundred and
+fifty ticks at most. The subjects are `skyBarrel` (weather) and `barrel`,
+put at row 2, in the air.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestWeatherBurstsWhereItLands` | floor: the sky barrel is `mlDying` with its feet on the floor (y = 352); `DrainEvent` gives `meDied`, `meBurst`, then `meNone` | it bursts in the air, never, or without telling the game: no blast |
+| `TestWeatherBurstsOnALedge` | ledge: it is `mlDying` with its feet on the ledge (y = 256) | weather asks the floor alone and falls through what it lands on |
+| `TestWeatherThePitTakesIsGoneWithoutABlast` | the barrel over the hole, three hundred ticks: `mlDead`, no event; a hundred and fifty ticks on, it has not moved | a barrel the pit takes blows up under the screen, or falls for ever |
+| `TestWeatherBurstsOnce` | `Burst` twice, then a hundred and fifty ticks with a landing in them: `meDied`, `meBurst`, `meNone` | a second burst, or the landing, sends a second blast |
+| `TestBarrelOfTheLevelsLandsAndStands` | the barrel, a hundred and fifty ticks: alive, on the floor, no event | weather leaks to the barrel: every barrel of the levels blows up where it stands |
+
+Left to the eye: the burst on the hero (`ResolveMonsterContact`) and the
+blast, the shards and the score the game gives a burst body, in
+`Moon2D.dpr`.
+
 ## Monsters.Pads
 
 State: designed, not written - needs the stage. `TPadWorld.Create` asks
@@ -784,6 +810,18 @@ makes of its input.
 
 Left to the eye: nothing here is drawn. The number in `monsters.json`
 (48 at the first go) is tuned in a live run.
+
+### Weather (3.0.58)
+
+State: written, 3 tests. They came with 5.3; stage 5 was run live. They
+join `TMonsterDefsTests`: the weather word, on the real `monsters.json`
+and on a one-monster file of the test's own (`drop`, a static prop).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSkyBarrelIsWeatherThatPaysNothing` | `skyBarrel` of `monsters.json`: weather, a score of 0, a blast; `barrel` is not weather | the sky barrel stands where it lands, pays a score, or does not blow up; the barrel of the levels bursts on landing |
+| `TestBodyWithNoWeatherWordIsNoWeather` | a body with no weather word is no weather | weather becomes a default: every body bursts where it lands |
+| `TestWeatherFreeOfGravityRaises` | `"weather":true` with `"affectedByGravity":false` raises `EMonsterDefError` | weather that never falls loads, and never lands to burst |
 
 ## Game.Blasts
 
@@ -1052,6 +1090,175 @@ Open, found while the tests were designed; neither tried nor decided:
   crumb: the cover is kept as a `Single` and compared with 0.12. No
   picture of the game has such a cell under a step of 2.
 
+## Game.Trial
+
+State: written, 41 tests. Needs no stage: `TGravelTrial` counts and
+touches no SDL, and the events are read from JSON. The open sky came with
+3.0.58 (stage 5.3), and stage 5 passed its live run. The wave, its
+medkit and its level came with 3.0.59 (6.1 and what was added to it
+before its live run), and 6.1 was run live; so was 6.2, which edited one
+test. With the tests of the arena (3.0.53 to 3.0.59) the
+suite counts 488. The unit is tried by `Tests\Game\Tests.Game.Trial.pas`,
+in five fixtures: `TTrialSkyTests`, `TTrialWaveTests`,
+`TTrialMiddleMedkitTests` (the trial itself), `TFinaleLevelTests` and
+`TSkyFallEventTests` (what a level makes of it).
+
+Shared in the unit:
+
+- A trial of the tests deals a batch of one. It is ticked with one body
+  holding the gate, so an act never ends by itself; a test that wants an
+  act over lets its gravel down and ticks once with nobody holding the
+  gate (`GoThroughGravelAct`). `ReachWaveAct` does that for every act of
+  gravels.
+- "The wave" is a count of 4 with a cap of 2 unless a test says
+  otherwise. In its act the test keeps the count of the living itself: a
+  body let down is alive from the next tick, and dies when the test says.
+- A tick is counted from 1. The trial's own numbers - `TrialActs`,
+  `TrialFirstWaveTicks`, `TrialWaveTicks`, `TrialActBreakTicks`,
+  `TrialWaveRefillTicks` - are read from the unit, not spelled.
+- `FinaleLevel` - a room of `Tests.Rooms` with one screen trigger, a trial
+  of 15 and the finale members given; `EventsOf` and `ReadOneEvent` parse
+  an events section of the test's own. Three tests load `level2.json`
+  beside the executable.
+
+Numbers spelled, as decided: 33 ticks a second; one act more for a wave;
+the medkit of the middle on the kill that makes half the batch, none for
+an act of one. From `level2.json`, as the plan has them: the arena on
+screen 9; the sky opens once, in act 5, with `skyBarrel`; a finale of
+`betoner`, 10, 15 and 20 by grade, 3 alive; six balconies in
+`s09-press-4`; the wave onto `s09-press-1`; the end sleeps `s09-balcony`;
+two pairs of tanks at half the wave, on row 10. A retune of those in the
+file turns its test red, by design. Not spelled: the pace of the sky in
+the file, the delay between the pairs of tanks.
+
+### TTrialSkyTests
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSkyIsShutUntilOpened` | a trial nobody opened the sky of: no `SkyFall` in ten seconds | the sky is open by default: barrels fall in every act |
+| `TestOpenSkyLetsABodyFallAtItsPace` | `OpenSky(1)`: three falls in three seconds, on ticks 33, 66 and 99 | the pace is taken in ticks, or the first body falls at once |
+| `TestPaceUnderATickIsATick` | `OpenSky(0.001)`: a fall on each of 20 ticks, never more | a pace under a tick rounds to 0: the sky never falls, or divides by zero |
+| `TestSkyOpenedAgainTakesTheNewPace` | open at 10 s, a second on open at 1 s: one fall in the next second, on its 33rd tick | a second `OpenSky` keeps the old pace, or counts the new one from the first |
+| `TestSkyShutsWithTheAct` | the gravel let down, the sky open a body a tick and falling: on the tick the gate opens, `ActEnded` and no `SkyFall`; none in five seconds after | the sky of act 5 stays open into the next act, or lets a body fall on the tick it shuts |
+| `TestSkyOfAStoppedTrialStaysShut` | open, `Stop`, `Start` again: no fall in five seconds | a restart of the trial keeps the sky of the last try |
+| `TestSkyIsNotOpenedOutsideTheTrial` | `OpenSky` before `Start`: no fall in five seconds | a sky told while no trial runs opens the next trial's |
+
+### TTrialWaveTests
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestWithoutFinaleTheGravelsAreTheWholeTrial` | `Start` with no wave: `Acts` is `TrialActs`; the first four acts end without `Finished`, the fifth with it, and the trial runs no more | a trial with no finale gains an act: the trial never ends |
+| `TestFinaleIsOneActMore` | a wave: `Acts` is one more; no act of gravels finishes the trial; it runs on into the act of the wave | the last act of gravels still ends the trial: the wave never comes |
+| `TestFinaleWithNoCapIsNoWave` | count 4 with cap 0, and count 0 with cap 2: `Acts` is `TrialActs` | a wave nobody may be alive in, or a wave of nobody, holds the trial open for ever |
+| `TestWaveFillsUpAWaveApart` | nobody dies, 300 ticks: two bodies let down, the first `TrialActBreakTicks` into the act, the second `TrialWaveTicks` after it | the wave falls at once over the act change, or all of it on one tick |
+| `TestWaveNeverPassesItsCap` | count 10, cap 3: the living are never over 3 and end at 3 | the cap is not asked: the room fills with betoners |
+| `TestDeadBodyIsReplacedAfterTheRefill` | the wave full, one dies: one body let down, `TrialWaveRefillTicks` after the death | a dead body is replaced at once, never, or by more than one |
+| `TestFirstBodyOfTheWaveIsAHerald` | every body dies at once: the first let down carries `Herald`, no other does; one herald in all | the wave comes with no herald, or every body does |
+| `TestWaveIsNeitherGravelsNorAimed` | through 300 ticks of the act: no `SpawnGravel`, no `MarkAimed`, no `SpawnAimed` | the act of the wave is dealt as one of gravels, or its bodies are aimed |
+| `TestWaveLetsDownItsCountAndNoMore` | every body dead at once: the trial finishes, with `ActEnded`, only after the fourth body and with no fifth; then it runs no more | the count is lost (the wave never ends), or the gate opens before the last body comes |
+| `TestWaveGateWaitsForTheLastBody` | count and cap 2, both down: 300 ticks with two alive and one with one alive do not finish; with none it finishes and runs no more | the trial ends over a living betoner: the door opens with the fight on |
+| `TestProgressOfTheWaveAct` | in the act of the wave: `Progress.Act` 6, `Batch` the count 4, `Dealt` 0; once it fills, `Dealt` 2 | the events that wait on the wave read the batch of gravels |
+| `TestGuestsHoldTheGateButNotTheWave` | four guests alive all along: both bodies of a wave of two come; with the wave dead and the guests alive 300 ticks do not finish; with nobody it finishes | the cap counts the guests (four tanks hold the betoners back), or the gate does not (the door opens over a tank) |
+| `TestWaveKillsAreCountedInItsActOnly` | a kill noted in act 1 is not counted; two noted in the act of the wave: `Progress.WaveKilled` 2 | `NoteWaveKilled` counts outside the wave: the tanks come early |
+
+### TTrialMiddleMedkitTests
+
+Shared: a batch of four, half of it two kills. Five acts of two kills
+stay under the fifteen that pay a medkit of their own, so every medkit
+seen is one of a middle. A medkit is looked for over the five ticks after
+the kills.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestHalfTheBatchKilledPaysAMedkit` | one kill: no medkit; the second: one; two more: none | the middle is paid early, late or twice |
+| `TestEveryActPaysItsMiddle` | in each of the five acts, the batch dealt and two killed: one medkit; the trial is over after the fifth | the kills of the act are not reset at the act change: only act 1 pays |
+| `TestHalfTheWaveKilledPaysAMedkit` | the wave of four: one kill no medkit, the second one, the third and the fourth none | the wave's middle is not paid, or is paid by the gravels' count |
+| `TestActOfOneHasNoMiddle` | a batch of one, its gravel killed: no medkit | half of one rounds to 0: the middle is paid on no kill, or on every one |
+
+### TFinaleLevelTests
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFinaleIsRead` | a finale of `betoner`, count 10, 15, 20 by grade, alive 3: `HasFinale`, its monster, each count on its grade, its cap; a count of 7 alone is 7 on every grade | a member is read from another key, or the grades are swapped |
+| `TestTrialWithoutFinaleHasNone` | `gravelBoss` alone: a trial, no finale | a finale is made up for every trial |
+| `TestFinaleWithoutTrialRaises` | a finale with no `gravelBoss` raises `ELevelError` | a finale with no trial to end loads and never comes |
+| `TestFinaleWithNoMonsterRaises` | no monster, and an empty one, each raise `ELevelError` | a wave of nobody loads |
+| `TestFinaleWithABadCountRaises` | each raises `ELevelError`: no count, 0, "ten", a count for one grade only | a typo of the count loads: the wave is empty on some grade |
+| `TestFinaleWithNoCapRaises` | no `alive`, and `alive` 0, each raise `ELevelError` | a wave nobody may be alive in loads |
+| `TestTrialDoneAndWaveOntoAreRead` | `trialDone` and `waveOnto` to "balcony": `ecTrialDone`, `eaWaveOnto`, its bank; a `waveOnto` with no target raises `ELevelEventError` | a word is renamed in the parser, or a wave onto no bank loads |
+| `TestWaveOntoAnUnknownBankRaises` | a `waveOnto` to a bank no shelf stands in raises `ELevelError` at load | a typo of a bank loads: the betoners have nowhere to land |
+| `TestLevelTwoArenaEndsInBetoners` | `level2.json`: one finale, on screen 9, `betoner`, 10, 15, 20, cap 3; six shelves in `s09-press-4`; one `waveOnto`, to `s09-press-1`, on `actReached` 6; every `trialDone` event is screen 9's, and one action of them sleeps `s09-balcony`, sparing the hero | the arena loses its finale, its bottom row of balconies, or the calm at its end |
+| `TestWaveKilledIsRead` | `waveKilled`, act 6, part 1 of 2: the condition, the act, the part, the whole; no act, part 2 of 2, and no `of` each raise `ELevelEventError` | the share is read wrong: the tanks come at the wrong kill or never |
+| `TestStraysLeaveIsRead` | `straysLeave` to "birds": the action and its flock; with no target it raises `ELevelEventError` | a word is renamed, or a leave of no flock loads |
+| `TestLevelTwoArenaTanksComeAtHalfTheWave` | `level2.json`: two `waveKilled` events, screen 9, act 6, 1 of 2; each only spawns, a tank of `tank.mns` on row 10, one from the left and one from the right; the two delays differ; one `straysLeave` of `s09-strays` on `trialDone` | a pair comes from one side, both pairs come at once, or the strays stay after the victory |
+
+Edit to an existing test: `TestLevelTwoArenaEndsInBetoners` came with
+6.1 asking the wave onto `s09-press-4` and the end to sleep that bank;
+with 6.2 it asks the wave onto `s09-press-1` and the end to sleep
+`s09-balcony`.
+
+### TSkyFallEventTests
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSkyFallReadsItsMonsterAndPace` | `skyFall` of `skyBarrel` every 2.5: `eaSkyFall`, the monster, the pace | the members are read from other keys |
+| `TestSkyFallWithNoMonsterRaises` | no monster, and an empty one, each raise `ELevelEventError` | a sky of nothing loads |
+| `TestSkyFallWithNoPaceRaises` | no `every`, 0 and -1 each raise `ELevelEventError` | a pace of nothing loads: a barrel every tick, or a division by zero |
+| `TestSkyFallNeedsAnEventThatWaitsForAnAct` | a `skyFall` on `enterScreen` raises `ELevelEventError` | a sky with no act to shut it loads and never shuts |
+| `TestLevelTwoArenaSkyOpensInActFive` | `level2.json`: one `skyFall`, on screen 9, in act 5, of `skyBarrel` | the sky opens in another act, twice, or drops another body |
+
+Left to the eye: what the game does with a cue, in `Moon2D.dpr` - which
+body falls from the sky and where, the side a betoner of the wave is let
+down on, the tanks along their lane, the violet glow of an arrival,
+`win.ogg` on `Finished`.
+
+Not tried yet: the acts of gravels themselves - the batch and its waves,
+the herald of an act of gravels, the aimed gravel, the pit returns,
+`RoomBusy` and the medkit of every fifteen.
+
+## Game.Press
+
+State: written, 13 tests. Needs no stage: `TPress` only counts which rows
+are out and which are told to move. Came with 6.2 (still 3.0.59), whose
+build was run live. The unit is tried by
+`Tests\Game\Tests.Game.Press.pas`, fixtures `TPressTests` (the press) and
+`TPressLevelTests` (the press action and the press of level 2).
+
+Shared in the unit: the rows are four banks of the test's own, `r1` to
+`r4`, top first; the beat is 100 ticks unless a test says otherwise.
+`TicksToNextCall` ticks the press until a tick tells the shelves
+anything, and gives that tick, counted from 1. `PressArrivalTicks` and
+`PressRewakeTicks` are read from the unit, not spelled. `PressEvents`
+parses a press action of the test's own; one test loads `level2.json`.
+
+Numbers spelled, as decided: 33 ticks a second; every row starts in; the
+order of a beat. From `level2.json`, as the plan has them: one press, on
+screen 9, in act 6; four rows `s09-press-1` to `s09-press-4`, top first,
+on rows 3, 5, 7 and 9 (decks at y = 96, 160, 224, 288); six shelves a
+row, all of them in `s09-balcony` and nothing else in it; the strays of
+`s09-strays` between columns 4 and 11. Not spelled: the beat of the file.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestEveryRowStartsIn` | `Start`: active, no row out; no call in three beats | the rows start out, or a beat over an empty press tells the shelves something |
+| `TestArrivalBringsTheTopRowOut` | `Arrive('r1')`: wakes `r1` and sleeps nothing, `r1` is out; a second arrival onto `r1` tells nothing; an arrival onto `r3` tells nothing and `r3` stays in | an arrival wakes a row that is not the top, or tells a row that is out again |
+| `TestBeatRidesTheRowsDownARow` | after an arrival the first call is on tick 100: it sleeps `r1` and wakes `r2`; `r1` is in, `r2` out | the row under is not woken (the body falls to the floor), or the top row stays out |
+| `TestBottomRowFallsOffThePress` | one arrival, then a call every 100 ticks: they wake `r2`, `r3`, `r4`; the fourth sleeps `r4` and wakes nothing; every row is in; no call in three beats after | the bottom row wakes a row past the press, or the press goes on beating an empty stack |
+| `TestBeatWaitsOutAnArrival` | beat 30, an arrival on tick 20: the next call comes `PressArrivalTicks` after the arrival, and sleeps `r1` | the top row goes from under a betoner still falling onto it |
+| `TestRowUnderARowGoesInAndComesOutAgain` | `r1` out, a beat, a newcomer onto `r1` again: the next beat, 100 ticks on, sleeps `r1` and `r2` and wakes `r3`, and `r2` counts as out; `PressRewakeTicks` later a call wakes `r2` and sleeps nothing | the lower row stays out (its own body never falls) or stays in (the body from above falls two rows) |
+| `TestShutAndStartedAgain` | after an arrival, `Shut`: not active; an arrival and three beats tell nothing; `Start` again: `r1` is in, and an arrival wakes it | a shut press goes on beating after the trial is won, or a restart keeps the rows of the last try |
+| `TestNoRowsOrNoBeatIsNoPress` | `Start` with no rows, and with a beat of 0: not active | a press of no rows indexes nothing, or a beat of 0 beats every tick |
+| `TestBeatTicksFromSeconds` | `PressBeatTicks`: 10 s is 330 ticks, 0.001 s is 1 | the beat is taken in ticks, or rounds to 0 |
+| `TestPressIsRead` | a press of rows a, b, c every 7.5 in act 6: `eaPress`, the rows in order, the beat | the rows are reversed, or a member is read from another key |
+| `TestBadPressRaises` | each raises `ELevelEventError`: no rows, one row, a row of no bank, no beat, a beat of 0, an event that waits for no act | a press that cannot ride or never beats loads, or one that never shuts |
+| `TestPressOntoAnUnknownBankRaises` | a press of banks no shelf stands in raises `ELevelError` at load | a typo of a row loads: the betoners fall through a row that is not there |
+| `TestLevelTwoArenaPressesItsBalconies` | `level2.json`: one press, screen 9, act 6, the four rows top first; the wave onto `s09-press-1`; one `trialDone` sleep of `s09-balcony`, sparing the hero; each row six shelves at its deck, each in `s09-balcony`, and the bank holds those 24 alone; every pad of `s09-strays` keeps to columns 4 to 11 | a row loses a shelf or its place, the newcomers land on another row, the calm takes a shelf that is no balcony, or the strays fly through the balconies |
+
+Left to the eye: what the shelves do with a call (`TellPress`: a wake
+that holds, no mercy on the press) and the body that falls a row; whether
+`PressArrivalTicks` and `PressRewakeTicks` fit the fall of a betoner and
+a shelf's warning and slide - they are the game's, judged in a live run.
+
 ## Effects.Lightning
 
 State: written, 31 tests, green on the first run. The unit is tried by
@@ -1307,6 +1514,15 @@ the tread.
 Left to the eye: how a twitch looks and how the jets cough - the rig
 reads the effort, and a rig is drawn.
 
+### A pad that stays down (3.0.58)
+
+State: written, 1 test. It came with 5.2, after the run of 5.1 asked for
+a broken carousel pad that does not come back (`"staysDown"`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestPadThatStaysDownNeverClimbs` | a plunge with `StaysDown`, trodden and let fall: on each of the 600 ticks after it is `ppFallen`, `Below` the reach | the flag is ignored: a broken carousel pad climbs back into a carousel that is not there |
+
 ## Pads.Shelf
 
 State: written, 12 tests, green on the first run (343 in the suite).
@@ -1392,6 +1608,61 @@ Open, found while the tests were designed:
   shelf; not decided for a shelf, not tried.
 - The judge of a formation (`StillSpans`) counts any pad of the screen that
   is in no group as a foothold, a shelf too. No shelf stands near a group.
+
+## Pads.Stray
+
+State: written, 16 tests. Needs no stage: `TStrayCycle` is a record that
+counts, built from a `TPadStray` the test fills by hand. Eleven came with
+5.2 (3.0.58); the cycle was run tick by tick in a port of it, against
+these tests, before it was handed over, and stage 5 passed its live run.
+The five of a pad sent away came with what was added to 6.1 (3.0.59).
+The unit is tried by `Tests\Pads\Tests.Pads.Stray.pas`, fixture
+`TStrayCycleTests`; `Tests.Pads.Plunge.pas` is the sample.
+
+Shared in the unit:
+
+- `StrayOf(AWait)` - a pad of flock "flock" that strays in the zone of
+  the arena, columns 2 to 13 and rows 3 to 8; `CycleOf` rewinds a cycle
+  of a pad 32 wide asleep at (-96, -64); `LaunchedCycle(ASeed)` is one
+  with no wait, let go at once.
+- "Over the seeds" is twelve seeds; "a long run" is 6000 ticks, long
+  enough for a pad to come, hang, leave and fall a few times.
+- "Out of sight" is the pad wholly past the left or the right edge, or
+  above the top. "The room" is the screen less a cell at the left, the
+  right and the top.
+- A test that asks that something happens at all (a hang, a fall, a ride,
+  a return) also asks that it was seen on some seed.
+
+Numbers spelled, as decided: 33 ticks a second; the room; a hang on a
+whole cell of the zone; half a second of shaking before a fall, a tick
+either way; the jets at half for a pad sent away. Bounds of the tests'
+own, loose: a dip under 10 units, a lean under 20 degrees. Not spelled:
+the odds of a misbehaviour, the times of a hang and of a wait, the pace
+of a leg.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestAsleepUntilLetGo` | 300 ticks, never let go: `spAsleep`, where it was put, no deck | a stray comes in before its flock is let go |
+| `TestWaitsItsWaitThenFliesInFromBeyondAnEdge` | over the seeds, a wait of 1 s: `spWaiting` on each of its first 32 ticks; on the 33rd `spFlying`, leg `slIn`, out of sight and no deck | the wait is taken in ticks or skipped, or a pad sets off from inside the screen |
+| `TestLetGoOnceOnly` | two cycles of one seed, one let go again with another seed on tick 100: the same place on every tick of a long run | a second letting go rolls the dice anew or restarts the wait |
+| `TestHangsOnlyAtPointsOfItsZone` | over the seeds, every tick of `spHanging`: the pad stands on whole cells, its column 2 to 13 and its row 3 to 8; some pad hangs | a pad hangs between cells, or outside its zone |
+| `TestDeckOnlyInsideTheRoom` | over the seeds, on every tick it is a deck it is inside the room; it is a deck on some ticks and flies with no deck on others | a pad out past a wall is a floor: a rider is carried off the screen |
+| `TestHeroAboardNeverLeavesTheRoom` | over the seeds, the hero aboard whenever it is a deck: while it flies, hangs or shakes it stays a deck, and it never flies a leg out; some ride happens | a pad flies the hero out of the room, or turns a leg out into one with him on it |
+| `TestEmptyPadComesAndGoes` | over the seeds, empty: a pad that flew a leg out is later seen flying in | a pad that left stays out for good |
+| `TestShakesThenFallsOutOfTheScreenAndComesBack` | over the seeds, every shake: in one place across, 16 ticks give or take one, then `spFalling`; the fall never rises and goes past the bottom of the screen; then `spWaiting`; some pad falls | the warning is cut or long, the pad slides as it shakes, stops short of the pit, or never comes back |
+| `TestTwitchStaysWithinBounds` | over the seeds, every tick: `Dip` under 10 units and `Lean` under 20 degrees; some lean over a degree | the twitch runs away, or is lost |
+| `TestJetsFollowThePhase` | asleep and waiting: `Effort` 0. Then over a long run: flying and shaking - only 0 or 1; waiting and falling - 0; hanging - within 0 to 1 | the jets burn out of sight or in the fall, or idle at half on a leg |
+| `TestDiceAreTheSeedsAlone` | two cycles of one seed: the same place on every tick; a cycle of another seed differs on some tick | the cycle reaches for `Random`, or the three pads of the flock fly in step |
+| `TestSentAwayFromAHangLeavesQuietlyAndStaysOut` | over the seeds, `Dismiss` at a hang: `Dismissed`; on the next tick `spFlying`, leg `slOut`; then for a long run never shaking or falling, never on a leg `slBack`, the jets never over half; it ends asleep out of sight | a pad sent away misbehaves on its way out, flies at full jets, or comes back in |
+| `TestSentAwayWaitsForTheHeroToGetOff` | over the seeds, `Dismiss` at a hang with the hero aboard for 500 ticks: hanging and a deck on every one; then empty, it leaves as above | a pad sent away flies off with the hero on it, out of the room |
+| `TestSentAwayWhileWaitingNeverComesIn` | a wait of 1 s, let go and sent away at once: `spAsleep` at once and after a long run; let go again: still asleep | a pad sent away before it came in flies in after the victory, or a later letting go wakes it |
+| `TestSentAwayWhileFallingDoesNotComeBack` | over the seeds, `Dismiss` while it shakes: after a long run `spAsleep`; some pad shook | the fall runs out and the pad flies in again after the victory |
+| `TestAsleepPadIsNotSentAwayAndARewindForgets` | `Dismiss` on a pad asleep: not `Dismissed`, and it is let go as ever; `Dismiss`, then `Rewind`: not `Dismissed`, and let go again it flies | a dismissal before the flock is let go keeps it away for good, or a restart keeps the strays away |
+
+Left to the eye: how a stall, a turn back and a twitch look; the rigs,
+the lamps and the jets as drawn; what `Pads.World` makes of the cycle -
+the riders carried, a pad `Behind` out of the room, a gravel that rides
+one out and falls - needs the stage.
 
 ## Levels.Pads
 
@@ -1526,6 +1797,73 @@ with them as with any path; that a seated monster is put on the seat and
 not on its cell (`Monsters`, which needs a pad world with a carousel); the
 picture of the hall and its rigs.
 
+### The arena of act 4 (3.0.57)
+
+State: written, 6 tests. Needs no stage. They join `TLevelPadsTests`, as
+the others. Five came with 4.3, whose build was run live; the pyramid's
+came with the fixes after that run. Four of the six load
+`level2.json` beside the executable (`UseLevelTwo`).
+
+Shared: `BankColumns(Level, Screen, Bank)` - the columns of the shelves
+of a bank on a screen, in file order. The shelf of a test stands in the
+gap, as before (`ShelfPad`).
+
+Numbers spelled, as decided, from `level2.json`: the arena carousel
+`s09-carousel` on screen 9, a box, parked, two medkits on it half a lap
+apart; the floor of act 4, `s09-grid` on columns 4, 6, 8, 10 and 14 and
+`s09-gaps` on 5 and 11, all of them in `s09-floor`; the pyramid
+`s09-pyramid` sleeps once, sparing the hero. Not spelled: how many pads
+the arena carousel carries, its size and period.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestShelfStandsInEveryBankItIsGiven` | `"bank":"floor"`: in "floor" and not in "grid"; `"bank":["floor","grid"]`: two banks, in both, not in "isle"; no bank word: in no bank | a list of banks is read as its first, or a shelf with no word lands in some bank |
+| `TestBadShelfBankRaises` | each alone raises `EPadError`: `""`, `5`, `{}`, `["floor",3]`, `["floor",""]` | a typo of a bank loads: the shelf never hears its act |
+| `TestEntityOnAParkedCarouselWaitsOverThePark` | the wheel parked above, a barrel on its rider: it sits from 320, over the rider's slot, with its feet on the parked deck, y = -64 | the seat is taken from the slot on the screen: the medkit hangs in the air over the room while its pad waits above the screen |
+| `TestLevelTwoArenaCarouselIsInItsFile` | `s09-carousel` is on screen 9, a box, parked; it carries two pads or more; exactly two entities sit on its pads, both medkits, half the riders apart in file order | the carousel loses its park or its seats, or the medkits ride side by side |
+| `TestLevelTwoArenaFloorOfActFourIsOneThroughOne` | on screen 9 `s09-grid` is columns 4 6 8 10 14 and `s09-gaps` is 5 11; every shelf of either is also in `s09-floor` | the floor of act 4 is laid otherwise, or a shelf of it is left out of the floor act 3 takes away |
+| `TestLevelTwoArenaPyramidSparesTheHero` | of the `shelvesSleep` actions: `s09-pyramid` once, sparing the hero; `s09-floor` twice (once when it was written; act 5 added the second, see below), never sparing him | the pyramid goes from under the hero's feet, or the floor waits for him |
+
+### The arena of act 5 (3.0.58)
+
+State: written, 9 tests and two edits. Needs no stage. They came with
+5.1 and 5.2; stage 5 was run live. Three of the nine load `level2.json`.
+
+Shared: `StrayPad(Zone, Extra)` - a pad of the gap room, 32 wide, that
+strays in flock "flock" in the zone given as [left, top, right, bottom]
+in cells, counted from 0, with no place of its own. The gap's shaft is
+column 8 counted so, open from the top to the bottom; zone [8,2,8,7] is
+a zone down it.
+
+Numbers spelled, as decided: a pad that strays waits at x = -96, y = -64,
+out of sight, and with no wait word waits 0; its room is the screen less
+a cell at the left, the right and the top. From `level2.json`: the arena
+carousel breaks once, in act 5, into pads that plunge and stay down; in
+act 5 the floor sleeps whole, then a pick of it wakes; the flock
+`s09-strays` is on screen 9 and is let go once, in act 5. Not spelled:
+how many floor shelves wake, how many pads stray.
+
+Edit to an existing test: `TestPlungeReadsItsNumbers` gains `StaysDown`
+False when the word is left out, and True for `"staysDown":true`. It
+turns red when a pad climbs home whatever the file says, or every pad
+stays down. `TestLevelTwoArenaPyramidSparesTheHero` now asks the floor
+to sleep twice, not once: act 5 puts it to sleep too.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestLevelTwoArenaCarouselBreaksInActFive` | `s09-carousel` may break, its failing look plunges and stays down; one `breakCarousel` of it, in act 5; on every pad of it some object of the level hangs on `FailingRigTag` of the pad's tag | the carousel never breaks, breaks in another act, a broken pad climbs back, or a pad wears no failing look |
+| `TestLevelTwoArenaFloorOfActFiveComesBackInPieces` | of the act 5 actions on `s09-floor`: one sleep of the whole floor (pick 0), before one wake that picks more than none and fewer than all its shelves | the floor of act 5 comes back whole, not at all, or the wake comes before the sleep and is taken back by it |
+| `TestStrayReadsWhatItIsGiven` | flock "birds", zone [8,2,8,7], wait 1.5: it strays, each number in its own field; it is placed at (-96, -64); with no wait word the wait is 0; a pad with no stray word does not stray | a member is swapped on the way in, the pad waits on the screen, or every pad strays |
+| `TestBadStrayRaises` | each alone raises `EPadError`: a stray given an x and a y, no flock, a zone of three numbers, a wait of -1 | a stray with a place the cycle then overrides loads, or a typo loads |
+| `TestStrayDoesNothingElse` | a stray alone loads; with a plunge, and with a path, it raises `ELevelError` | two motions fight over one pad |
+| `TestStrayZoneStaysInItsRoom` | each raises `ELevelError`: a zone in the left wall (left 0), in the top row (top 0), one whose pad reaches into the right wall (right 15), one upside down, one past the bottom (row 12) | a pad hangs in a wall or off the screen |
+| `TestStrayRowsAndColumnsAreClearOfWalls` | each raises `ELevelError`: a zone from column 7 (it falls onto the ledge), one down to row 9 (it runs into the floor), the zone of the shaft with the shaft plugged at its bottom | a pad flies in through a wall, or falls into one |
+| `TestStraysOfAnUnknownFlockRaise` | a `strays` action of "flock" loads; of "nobody" it raises `ELevelError` | a typo of a flock loads: the act comes and no pad strays |
+| `TestLevelTwoArenaStraysAreLetGoInActFive` | some pad strays in `s09-strays`, every one of them on screen 9; one `strays` action lets the flock go, in act 5 | the flock is let go in another act, twice, or strays off the arena |
+
+Left to the eye: what the world makes of a bank told to sleep or wake, a
+broken carousel and a flock let go - `Pads.World`, which needs the stage.
+
 ## Levels.Carousels
 
 State: written, 20 tests, green (376 in the suite) after one red that
@@ -1592,6 +1930,75 @@ a corner (only that the track keeps to its curve within a hair).
 Left to the eye: how a pad looks going round - the bob, the sag, the
 lamps it wears; that the even pace reads as even in a live run.
 
+### The parked carousel (3.0.57)
+
+State: written, 8 tests and four edits. Needs no stage. They came with
+4.2, which joined the build of 3.0.57; that build was run live. A new
+fixture, `TCarouselLandingTests`; the rest join `TCarouselOrbitTests` and
+`TLevelsCarouselsTests`.
+
+Shared: `BoxPadAt(Along)` - the parked box of 200 by 100 round
+(256, 192), its one pad `Along` units round the track: 25 is (356, 217)
+on the right side, 575 is (356, 167) above it, 150 is (256, 242), the
+middle of the bottom, and 100 and 200 lie 50 to either side of it. A
+landing starts from y = -64, two cells over the screen; `SetsOffAt` is
+the first tick the pad has left it.
+
+Numbers spelled, as decided: the word `parked` takes `above` alone; a
+speed-up at least 0; an even speed-up, which leaves the clock half the
+speed-up behind; the deeper slot sets off sooner, every pad brakes at
+once, the wave ripples out from the middle. Not spelled: the speed of a
+landing and the length of its braking ("the last step is under a quarter
+of the largest").
+
+Edits to existing tests: `TestCarouselReadsWhatItIsGiven` gains
+`"parked":"above"` and `"speedUp":2.5`, read into their fields;
+`TestCarouselLeftOutComesToItsDefaults` gains: not parked, a speed-up of
+0; `TestWordsAreReadInAnyCase` gains `"parked":"ABOVE"`;
+`TestBadCarouselRaises` gains `"parked":"below"` and `"speedUp":-0.5`.
+Each turns red as its table above says, for the new words.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestOrbitKnowsItsCarouselIsParked` | the circle: its orbit is not parked; parked, it is; a `Default(TCarouselOrbit)` is not | the orbit does not carry the park: a parked carousel turns on the screen from the start |
+| `TestClockWithoutASpeedUpRunsAtItsPace` | no speed-up: `Clock` is the time itself at 0, 0.5, 1, 17 and 500 ticks | a carousel with no speed-up word starts slow |
+| `TestClockSpeedsUpFromAStandstill` | a speed-up of 1 s: `Clock(0)` is 0; on each of the first 33 ticks the clock gains more than on the tick before and under a whole tick; on the next ten it gains a whole tick; at 100 it stands at 83.5 | the speed-up jerks, overshoots the pace, or never ends |
+| `TestPadWaitsThenComesDownOntoItsSlot` | the pad at 575: at the fly-in its deck is on the park; it sets off after tick 1; on every tick the deck never goes up and never past the slot; it is on the slot at `Done` and fifty ticks on, and not a tick sooner | a pad rises, overshoots its slot, or the slot over the lowest deck sets off at once |
+| `TestPadBrakesToAStop` | the pad at 150: once its steps begin to shrink they never grow again; the last step is under a quarter of the largest | the pad lands at full speed, or speeds up again in the braking |
+| `TestShortWayIsBrakedAllTheWay` | a way of 20 units, no wait: every step is shorter than the one before, and it ends on 20. A way of nothing with a wait of 3: `Done` is 3, the deck stands where it is at 0 and at 100 | a way shorter than the braking cruises first and stops dead, or a way of nothing divides by zero |
+| `TestPadsInAColumnKeepTheGapOfTheirSlots` | the pads at 25 and 575, 50 apart in one column: the lower sets off first; both land on one tick; the gap between them never shrinks and never passes 50, and is 50 once the upper has set off | the decks of one column come down out of step: a pad lands through the one under it |
+| `TestWaveRipplesOutFromTheMiddle` | the pads at 150, 100 and 200: the middle sets off first and lands first; the two beside it set off on one tick | the wave runs from one side, or is lost |
+
+### The broken carousel (3.0.58)
+
+State: written, 7 tests and one edit. Needs no stage. They came with 5.1,
+which was run live. The halts join `TCarouselOrbitTests`, the failing
+look `TLevelsCarouselsTests`.
+
+Numbers spelled, as decided: a halt starts where the clock stood, its
+pace falls evenly to nothing, so the clock stands half the halt on (at
+full pace) or the pace it had times half the halt; a carousel with no
+failing word cannot break. Not spelled: the length of the halt in the
+game.
+
+Edit to an existing test: `TestCarouselLeftOutComesToItsDefaults` gains:
+the carousel cannot break. It turns red when every carousel of the game
+may break.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestHaltStartsWhereTheClockStood` | a speed-up of 1 s, a halt of 66 ticks begun 0, 10, 33 and 100 ticks into the turn: at its first tick the clock is where `Clock` had it | the pads jump as the carousel begins to halt |
+| `TestHaltRunsDownToAStandstill` | no speed-up, a halt of 66 begun at 100: every tick of it gains less than the one before and more than nothing; 66, 67 and 566 ticks into it the clock stands at 133 | the halt stops dead, runs backward, or never stops |
+| `TestHaltInTheSpeedUpBrakesFromTheSlowerPace` | a speed-up of 33 ticks, a halt of 40 begun at 16, the pace then 16/33: the clock stands at `Clock(16)` plus 16/33 of 20 | a halt in the speed-up brakes from the full pace: the pads leap forward |
+| `TestHaltOfNoTicksStandsAtOnce` | a halt of 0 begun at 100: 0, 1 and 50 ticks into it the clock stands at `Clock(100)` | a halt of no ticks divides by zero |
+| `TestFailingLookReadsWhatItIsGiven` | sprite "pad-out", rigs sparks and smoke, plunge 0.25, 1, 32: it may break, the sprite, the two rigs in order, each plunge number in its own field; with no rig word it wears none, and a plunge of `{}` plunges | a member is swapped on the way in, or the plunge of the look is not read as a pad's |
+| `TestBadFailingLookRaises` | no sprite, and no plunge, each raise `ECarouselError`; a plunge with a rise of 0 raises `EPadError`; a rig word that is not a list raises `ERigError` | a broken pad with no picture, or one that never falls, loads |
+| `TestFailingRigTagIsATagOfItsOwn` | `FailingRigTag('ride-01')` is not "ride-01", and is not the tag of "ride-02" | the failing look hangs on the pad itself and is drawn before it breaks, or two pads share one look |
+
+Left to the eye: the fly-in, the halt and the fall of a broken pad as
+the world flies them (`Pads.World`, which needs the stage); the sparks and
+the smoke of the failing look.
+
 ## Levels.Entities
 
 State: written, 3 tests, green (239 in the suite). Needs no stage. The
@@ -1612,6 +2019,23 @@ column 12, row 3.
 
 Left to the eye: what the monster makes of the offset (above, in
 `Monsters.Mount`); the other members of a placement are not tried.
+
+### A spawned body (3.0.57)
+
+State: written, 3 tests. Needs no stage. They came with 4.3, which was
+run live. They join `TLevelEntitiesTests`: what a level makes of a body
+an event spawns, which has no placement - its tag and the rigs the level
+hangs on that tag.
+
+Shared: `SpawnJson(Members)` - an event of act 1 that spawns a platform
+along row 2 from the left, with the members given; `LampRig` - a rig of
+one beacon, "lamp".
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSpawnedBodyWearsTheRigsOfItsTag` | a spawn tagged "guest" wearing "lamp": its tag is "guest", it wears one rig, and one object of the level hangs on "guest" at load | the rig of a spawned platform is never hung: it comes in with no lamp |
+| `TestSpawnedBodyWithoutATagWearsNoRig` | a spawn with no tag carries none and wears nothing; the same spawn wearing "lamp" raises `ERigError` | a rig with nothing to hang on loads and hangs at (0, 0) |
+| `TestSpawnedBodyTakesNoTagOfAPlacement` | a mount placed with tag "guest" and a rigged spawn tagged "guest" raise `ELevelError` | a lamp hangs on whichever of the two the game finds first |
 
 ## Pads.World
 

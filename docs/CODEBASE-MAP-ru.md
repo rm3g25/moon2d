@@ -16,7 +16,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 по огненному шару на `v3.0.43`, по острым осколкам на `v3.0.44`, по
 корпусу танка на `v3.0.45`, по падающей платформе на `v3.0.46`, по покрову
 героя на `v3.0.47`, по хеншину орбами на `v3.0.49`, по подбору предметов на
-`v3.0.50`, по полке на `v3.0.51`, по карусели на `v3.0.52` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
+`v3.0.50`, по полке на `v3.0.51`, по карусели на `v3.0.52` и по арене
+грейвелов на экране 9 второго уровня на `v3.0.53`-`v3.0.59` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -37,11 +38,14 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   по броне, звук, хост
   цикла, словарь бонуса,
   церемония хеншина, покров героя, вбирание предмета (`Game.Uptake`),
-  версия. `Game/Events/` исполняет события уровня; в
+  версия, а ещё арена грейвелов второго уровня: правила испытания
+  (`Game.Trial`), фиолетовый свет, в котором спускаются её тела
+  (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
+  (`Game.Shield`), пресс финала (`Game.Press`). `Game/Events/` исполняет события уровня; в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
   которая падает под героем (`Pads.Plunge`), цикл полки, которая
-  выдвигается из своей стены и убирается обратно (`Pads.Shelf`),
-  перестройка группы
+  выдвигается из своей стены и убирается обратно (`Pads.Shelf`), цикл
+  платформы, которая блуждает (`Pads.Stray`), перестройка группы
   платформ (`Pads.Formations`, `Pads.Flights`) и директор боя с боссом
   над такой группой и восстановления после него (`Pads.Arena`); в
   `Game/Orbs/` - орбы: стая
@@ -72,7 +76,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (над `Monsters.Defs`
-ради тактики, которую ставит событие) / `Effects.Emitter` / `Render.Puff` /
+ради тактики, которую ставит событие, и стороны, с которой входит тело, и
+над `Levels.Pads` ради программ полок и порядков банков, которые
+отдаёт событие) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (текстуру штриха ему даёт владелец) /
 `Effects.Traces` (над `Render.Brush` ради его xorshift) ->
 `Effects.Debris` (над `Effects.Sparks`, рисует через `Render.Glow`) ->
@@ -87,9 +93,12 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Levels.Pads`, `Levels.Defs`, `Render.Brush` и `Game.Space`) ->
 `Pads.Flights` (над `Pads.Formations`) / `Pads.Plunge` (цикл падающей
 платформы: только над `Levels.Pads` и `Render.Brush`) / `Pads.Shelf`
-(цикл полки: только над `Levels.Pads`) -> `Pads.World`
+(цикл полки: только над `Levels.Pads`) -> `Pads.Stray` (цикл
+блуждающей платформы: над `Levels.Pads`, `Pads.Plunge` ради её падения,
+`Render.Brush` ради костей, `Render.Sprites` и `Game.Space` ради
+размеров) -> `Pads.World`
 (платформы в игре:
-над этими четырьмя, `Levels.Pads`, `Levels.Carousels`, `Levels.Defs`,
+над этими пятью, `Levels.Pads`, `Levels.Carousels`, `Levels.Defs`,
 `Render.Sprites`,
 `Render.Brush`, `Game.Space` и `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
 `Hud.Typewriter` ->
@@ -100,7 +109,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 босса: над `Levels.Defs`, `Monsters.Defs`, `Pads.World`, `Game.Space` и
 размерами из `Render.Sprites`) / `Monsters.Damage` (окно потолка урона
 монстра: над `Monsters.Defs`) -> `Hero` /
-`Monsters` (оба тоже над `Pads.World`) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+`Monsters` (оба тоже над `Pads.World`; `Monsters` - над `Levels.Events`
+ради приказов телу, которое впускает событие) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
 `Levels.Dynamics` и `Monsters.Defs`) / `Game.Blasts` (волна взрыва: над
 `Monsters.Defs`, `Effects.Sparks` ради типа щупа и `Sdl2.Core`) /
@@ -123,7 +133,17 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 свет уходит телу через колбэк) /
 `Orbs.Rite` (обряд хеншина: над `Orbs.Flock`, `Orbs.Harvest` и
 `Orbs.Patterns`, `Render.Brush` и канвой из `Levels.Dynamics`) /
-`Game.Henshin` (и над `Game.Shroud`, и над `Orbs.Rite`) / `Events.Director` / `Orbs.Aura` (аура героя: над
+`Game.Henshin` (и над `Game.Shroud`, и над `Orbs.Rite`) / `Game.Trial`
+(правила испытания грейвелами: ни над одним юнитом игры) / `Game.Press`
+(пресс его финала: тоже ни над одним юнитом игры) /
+`Game.Arrivals` (фиолетовый свет: над `Sdl2.Core`, `Render.Brush` и
+канвой из `Levels.Dynamics`, рисует через `Render.Glow`) /
+`Game.Shield` (щит TeK: над `Sdl2.Core`, `Render.Brush` и канвой из
+`Levels.Dynamics`, рисует через `Render.Glow`) ->
+`Game.Cannons` (настенные пушки: над `Game.Shield`, `Levels.Events` ради
+их приказов, `Sprites.Sets` и `Render.Sprites` ради их арта,
+`Render.Brush`, `Game.Space` и канвой из `Levels.Dynamics`) /
+`Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Pads.Arena` (директор перестроек:
 над `Pads.World`, `Pads.Formations`, `Monsters`, `Monsters.Pilot`,
@@ -493,7 +513,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   lang\en.json / ru.json, сверяясь с полным реестром ключей), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1410 строк)
+### `Core/Levels.Defs.pas` (~1700 строк)
 Модель данных уровня + JSON-парсер. Игровой логики нет.
 - **`EmptyTile = 0`** - значение сетки 0 это ничего; N >= 1 отображается в
   `TilePalette[N - 1]`.
@@ -505,8 +525,29 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   либо `{"normal":..,"hard":..,"wild":..}`; `Uniform`, `ForGrade`.
 - **`TEntityTriggers`** (запись) - `BigMessage`/`SmallMessage`/`HintText`
   (локализованные), `ChangeMusic`, перестановка героя по heroX/heroY
-  (вертикальные переходы), квота испытания грейвелов (`HasGravelBoss` +
-  `GravelQuota: TDifficultyValue`).
+  (вертикальные переходы), испытание грейвелами (`HasGravelBoss` +
+  `GravelBatch: TDifficultyValue` - грейвелы одного акта с 3.0.53,
+  `"gravelBoss": {"normal": 15, "hard": 25, "wild": 40}` на втором
+  уровне; раньше это была квота всего испытания) и волна, которой оно
+  может закончиться (3.0.59: `HasFinale` + `Finale`).
+- **`TTrialFinale`** (запись, 3.0.59) - `MonsterId`, `Count`
+  (`TDifficultyValue`), `Alive` (предел живых): акт после грейвелов. JSON
+  рядом с `gravelBoss`: `"finale": {"monster": "betoner", "count":
+  {"normal": 10, "hard": 15, "wild": 20}, "alive": 3}` (`ReadFinale`).
+  Отказ (`ELevelError`): финалу без gravelBoss (`SLevelFinaleNoTrial`),
+  без монстра (`SLevelFinaleNoMonster`), count, который не число или не
+  больше нуля на каком-то грейде (`SLevelFinaleBadCount`), alive не
+  больше нуля (`SLevelFinaleBadAlive`); ошибки называют владельца
+  (`ReadTriggers` теперь берёт id уровня и владельца). id монстра
+  проверяет на старте уровня `TMonsterField.CheckSpawnIds`.
+- **`TScreenTrigger`** (запись, 3.0.53) - `Screen` (с единицы), `Grades`,
+  `Triggers`: триггеры экрана, которые не несёт ни одно тело. JSON:
+  секция корня `"screenTriggers": [{"screen": 9, "difficulty": ["hard"],
+  "triggers": {...}}]` (`ParseScreenTriggers`; нет `difficulty` - все
+  грейды). Аптечки испытания 2008 несли триггеры испытания (changeMusic,
+  heroX, gravelBoss); аптечки ушли, триггеры переехали сюда.
+  `TLevel.ScreenTriggers`; игра стреляет ими после триггеров сущностей
+  (`FireScreenTriggers`).
 - **`TEntityPlacement`** (запись) - monsterId, экран (с единицы), x/y
   (спрайтовая сетка), spriteList, `Grades` (идиома doom-овских флагов
   сложности), overrides, triggers, `Tag` (метка расстановки для условий
@@ -611,6 +652,18 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   карусели (`CheckCarouselRoom` -> `CheckCarouselPair`) - если их тела
   где-то на круге врезаются друг в друга: ближе полусуммы ширин поперёк
   и клетки по высоте; касание - не врезание (`SLevelCarouselCrowded`).
+  Блуждающей платформе (3.0.58, `CheckPadStray`) - если она ещё и ездит
+  по пути, падает, полка, в группе или на карусели
+  (`SLevelPadStrayBusy` - двигает её только свой цикл); зоне вне её
+  комнаты - слева и сверху с 1, правый край платформы на клетку не
+  доходит до края экрана, низ на экране (`SLevelPadStrayOutOfRoom`);
+  строке зоны, которую стена пересекает между стенами комнаты, комната
+  над настилом тоже в счёт (`SLevelPadStrayRowShut` - путь внутрь, наружу
+  и поперёк), и столбцу зоны, который стена пересекает от верха комнаты
+  до низа экрана (`SLevelPadStrayColumnShut` - путь вниз, падение); всё
+  через `RoomClear`. Запаркованная карусель (3.0.57) сажает сущность над
+  парковкой: `SeatEntity` берёт настилом `PadParkedTop`, когда орбита
+  `Parked`, и тело едет вниз на своей платформе.
   `Events` - события уровня (`Levels.Events`) в порядке файла.
   Запросы: `TileAt`, `SolidAt`, `SolidAtPoint(screen, x, y)` (то же для
   точки в экранных единицах - единственный дом правила "единицы в клетки"
@@ -618,23 +671,36 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `BackgroundFor` (смена целиком, побеждает
   последняя; `Image = ''`, если у уровня задников нет). `LoadFromFile`;
   платформы разбираются раньше динамики (динамический объект может висеть
-  на платформе); обвесы, которые носят платформы и монстры, вешаются
+  на платформе); события - сразу после динамики и до обвесов (3.0.57:
+  тело, которое впускает событие, может носить обвесы); обвесы, которые носят платформы и монстры, вешаются
   сразу после разбора динамики и до проверок (`WearRigs` из `Levels.Rigs`
   по носителям, которых перечисляет `RigWearersOf`, - сначала платформы,
-  потом расстановки, те и другие в порядке файла, так что детали платформ
+  за каждой её облик поломки, если она едет на карусели, которая может
+  сломаться (`FailingWearer`, 3.0.58: обвесы висят на `FailingRigTag` от
+  тега платформы, имя `pad "..." broken`), потом расстановки, потом тела,
+  которые впускают действия spawn (`SpawnWearer`, 3.0.57: `Tag` и `Rigs`
+  действия, имя `spawn of event "..."`), все в порядке файла, так что детали платформ
   остаются на своих местах в списке; их делают `PadWearer` и
   `EntityWearer`, а для ошибок называют `PadRigName` из `Levels.Pads` и
   `EntityRigName` - расстановку по тегу, а без него по тому, что и где
   стоит: их детали - такие же динамические объекты, как остальные, и
-  среди них могут быть лампы тревоги группы); динамика - раньше событий (событие может назвать
-  тег динамического объекта). Приватный `CheckEvents` отказывает событию вне
+  среди них могут быть лампы тревоги группы). Приватный `CheckEvents` отказывает событию вне
   списка экранов, событию, следящему за тегом, которого не носит ни одна
   расстановка, и (`CheckEventTargets` -> `CheckEventTarget`) действию
   intensity с тегом, которого не носит ни один динамический объект,
   действию sun с тегом, которого не носит ни один глобус, действию
   tactics с тегом, которого не носит ни одна расстановка, и действию
   rebuild или restore (3.0.39: `SLevelEventRestoreUnknown`) с тегом,
-  которого не носит ни одна группа платформ.
+  которого не носит ни одна группа платформ; а с 3.0.54 - flyIn, чей тег
+  не запаркованная группа и не запаркованная карусель
+  (`SLevelEventFlyInUnknown`) или носят и группа, и карусель
+  (`SLevelEventFlyInTwoKinds`; `CheckFlyIn` - игра сначала спрашивает
+  карусели); действию полок, medkitsOnto, waveOnto, строке press или
+  уступке пушек (yield) с банком, в котором не стоит ни одна полка
+  (`SLevelEventBankUnknown`, `AnyShelfOfBank` над `TPadShelf.InBank`);
+  breakCarousel, который не называет карусели, способной сломаться
+  (`SLevelEventBreakUnknown`); strays или straysLeave со стаей, в которой
+  не блуждает ни одна платформа (`SLevelEventStraysUnknown`).
   `Dynamics` - динамические объекты
   (`Levels.Dynamics`); ими владеет уровень (единственный деструктор тут), и
   они переживают рестарт - лампа держит ритм, откатывается только то, что
@@ -642,8 +708,10 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   прибитому объекту вне списка экранов и отрезку `screens`, который идёт
   задом наперёд или выходит за список (`CheckDynamicScreens`), и
   (`CheckDynamicParent`, который считает виды носителей тега - объект,
-  платформа, сущность: ровно один) тегу родителя, которого не носит ни
-  объект, ни платформа, ни сущность, тегу на носителях больше одного вида,
+  платформа (её собственный тег или тег её облика поломки,
+  `AnyFailingLookTagged`), сущность, тело, которое впускает действие spawn
+  (`AnySpawnTagged`): ровно один) тегу родителя, которого не носит никто
+  из них, тегу на носителях больше одного вида,
   двум объектам с одним
   тегом на одном экране и (`CheckMonsterParent`) двум сущностям с одним
   тегом на общем грейде сложности (ребёнок не поймёт, кто родитель).
@@ -1090,54 +1158,126 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 - `LogicTicksPerSecond = 33` - частоты в секундах; логика идёт 33 тика в
   секунду.
 
-### `Core/Levels.Events.pas` (~255 строк)
+### `Core/Levels.Events.pas` (~650 строк)
 Секция `events` JSON уровня: модель и парсер, игровой логики нет (исполняет
-`Events.Director`, писать будет редактор).
+`Events.Director`, писать будет редактор). Большая часть словаря с 3.0.54
+принадлежит арене грейвелов на экране 9 второго уровня (`docs/ARENA-2.md`).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
-  `ecEnraged`) - чего событие ждёт. Герой должен быть на экране события при
-  любом условии; enterScreen больше ничего не просит; остальные
+  `ecEnraged`, `ecActReached`, `ecGravelDealt`, `ecTrialDone`,
+  `ecWaveKilled`) - чего событие ждёт. Герой должен быть на экране события
+  при любом условии; enterScreen больше ничего не просит; условия с тегом
   (`TaggedConditions`) следят за монстрами с тегом: allDead - живых не
   осталось, livesBelow - у живого жизней меньше `lives` (отметка названа
   для нормального грейда: она растёт со сложностью, как и жизни, -
-  `TMonsterField.AnyTaggedLivesBelow`), enraged - живой в
-  ярости (босс ниже своей отметки ярости, танк ниже своей).
+  `TMonsterField.AnyTaggedLivesBelow`), enraged - живой в ярости (босс
+  ниже своей отметки ярости, танк ниже своей).
+  Условия испытания (с 3.0.54): actReached - испытание грейвелами дошло до
+  акта `act` или дальше (0, пока оно не идёт, так что рестарт, который
+  снова начинает испытание с акта 1, перевзводит события акта 1);
+  gravelDealt (3.0.57) - спущен грейвел номер `batch * part div of + 1`
+  акта `act` (прицельный считается от своей отметки), и условие остаётся
+  верным, когда акт позади: `"part": 1, "of": 3` при пачке в 15 - это
+  6-й; trialDone (3.0.59) - испытание экрана закончилось, последний акт
+  выигран (сбрасывает рестарт); waveKilled (3.0.59) - убито
+  `count * part div of` тел волны в акте `act`, верно и когда акт позади
+  (`"act": 6, "part": 1, "of": 2` - половина волны). `ReadActShare` читает
+  акт и долю двух последних.
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
   `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`, `eaRebuild`, `eaRestore`
-  (3.0.39)); **`TEventAction`**
-  (запись) - вид +
-  локализованный `Text` (виды-сообщения), `FileName` (музыка) или `Target` /
-  `Level` (0..1) / `Ticks` (intensity: динамические объекты с тегом плавно
-  идут туда; JSON `target`, `value` - процент, `ticks` - 0 = сразу), или
-  `Target` / `Angle` / `Ticks` (sun: глобусы с тегом поворачивают солнце
-  туда; JSON `value` в градусах), или `Target` / `Tactics` (tactics:
-  монстры, расставленные с этим тегом, дальше летают по ней, см.
-  `Monsters.Pilot`; JSON `target`, `value` - слово из `EventTacticsIds`:
-  laps / dives / rams / hunts), или один `Target` (rebuild: группа
-  платформ с этим тегом дальше перестраивается, раз за разом, под полёт
-  её дирижёра - `Pads.Arena`; JSON `target`; restore (3.0.39): та же
-  группа больше не перестраивается, её платформы летят назад на места,
-  которые даёт файл уровня; JSON `target`, слово `restore`).
+  (3.0.39), `eaShelvesWake`, `eaShelvesSleep`, `eaShelvesProgram`,
+  `eaFlyIn`, `eaMedkitsOnto` (3.0.54), `eaCannons` (3.0.56), `eaSpawn`
+  (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
+  `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59)). **`TEventAction`**
+  (запись) - вид и то, что вид читает:
+  - сообщения: локализованный `Text`; у подсказки ещё `Header` (кто
+    говорит, локализован как текст; пусто - сам канал, `STerminalHeader`)
+    и `AtBottom` (JSON `"place": "bottom"`, по умолчанию `"top"` - окно
+    связи у нижнего края для экрана, куда герой входит сверху;
+    `SEventBadPlace` для другого слова; `ReadHint`; добавлено ради
+    передачи на экране 7 второго уровня, между 3.0.52 и 3.0.53);
+  - музыка: `FileName`; intensity: `Target`, `Level` (0..1, JSON
+    `value` - процент), `Ticks`; sun: `Target`, `Angle` (JSON `value` в
+    градусах), `Ticks`; tactics: `Target`, `Tactics` (слово из
+    `EventTacticsIds`: laps / dives / rams / hunts, см.
+    `Monsters.Pilot`); rebuild, restore: `Target` (группа платформ,
+    `Pads.Arena`);
+  - полки (`ShelfActions`: shelvesWake, shelvesSleep, shelvesProgram;
+    `ReadShelves`): `Target` - банк (`TPadShelf.Banks` из `Levels.Pads`);
+    `Shelves` (`TShelfProgram`: `Kind` - слово из `ShelfProgramIds`,
+    hold / wave / alternate / blink, `"program"`, по умолчанию hold,
+    shelvesProgram его требует (`SEventNoProgram`); секунды `out` и `in`,
+    по умолчанию 2 и 1.5, у blink 0.6 и 0.5; секунды `warn`, 0 - свои у
+    полки); `Telling` (`TBankTelling`: `order` - слово из
+    `BankOrderIds`, file / left / right / up / down / toHero, по
+    умолчанию file; `step` - секунды между двумя полками; `pick` - только
+    столько полок банка, сколько выберут кости, 0 = все, 3.0.58);
+    `SpareHero` (только shelvesSleep, `"spareHero": true`, 3.0.57: полка,
+    на которой стоит герой, ждёт, пока он с неё не сойдёт). shelvesWake
+    выводит банк крутить свою программу, shelvesProgram её меняет (и
+    будит спящий), shelvesSleep предупреждает и убирает его насовсем.
+    Ход без секунд, ожидание или шаг меньше нуля, pick меньше нуля
+    поднимают ошибку (`SEventShelfNumber`, `SEventBadPick`);
+  - flyIn (3.0.54): `Target` - группа платформ, запаркованная наверху
+    (`Pads.Arena.FlyIn`), или, с 3.0.57, запаркованная карусель
+    (`TPadWorld.TryFlyInCarousel`); medkitsOnto и waveOnto (3.0.59):
+    `Target` - банк, над которым отныне спускаются аптечки испытания /
+    тела его волны; strays и straysLeave: `Target` - стая
+    (`Pads.Stray`): отпустить или отослать насовсем;
+  - cannons (3.0.56): `Cannons` - **`TCannonOrders`**: `Rows` (строки, на
+    которых они встают стрелять, клетки с 0 сверху, на экране -
+    `SEventNoCannonRows`, `SEventBadCannonRow`), `YieldBank` (`"yield"`,
+    необязательно) и `YieldRows` (`"yieldRows"`, с yield обязательно -
+    `SEventNoYieldRows`; `ReadRows`): `Game.Cannons`;
+  - spawn (3.0.57): `Spawn` - **`TSpawnOrders`**: `MonsterId`
+    (`"monster"`), `SpriteList` (необязательно - ключ, как у
+    расстановки; определение платформы его не называет), `Row` (на
+    экране, `SEventBadSpawnRow`), `Side` (`"from"`: слово из
+    `EventLaneSideIds`, left / right, `TLaneSide` из `Monsters.Defs`),
+    `Tag` и `Rigs` (`"tag"`, `"rig"` - необязательно, обвесы вешаются на
+    тег при загрузке): тело входит сквозь стену по строке
+    (`TMonsterField.SpawnInLane`);
+  - breakCarousel (3.0.58): `Target` и `Breakdown` - **`TCarouselBreak`**:
+    `HaltSeconds`, `StepSeconds` (`"halt"`, `"step"`, по умолчанию 0, не
+    меньше 0 - `SEventBreakNumber`);
+  - skyFall (3.0.58): `SkyFall` - **`TSkyFall`**: `MonsterId`,
+    `EverySeconds` (больше 0; `SEventNoSkyMonster`, `SEventBadSkyPace`);
+  - press (3.0.59): `Press` - **`TPressOrders`**: `Rows` (банки, верхний
+    первым, не меньше двух, ни одного пустого - `SEventPressRows`),
+    `EverySeconds` (больше 0 - `SEventPressPace`): `Game.Press`.
+  spawn, skyFall и press требуют события, которое ждёт акта
+  (`SEventSpawnNoAct`, `SEventActOnly`): то, что они приносят, принадлежит
+  только этому акту.
 - **`TLevelEvent`** (запись) - id, экран (с единицы), условие, тег, `Lives`
-  (livesBelow), `DelayTicks` (отсчитывается после того, как условие
-  выполнилось, при любом условии), действия. JSON: `"when": "allDead",
-  "tag": "labGuard", "delay": 33, "then": [{"action": "hint", "text":
-  "...", "textEn": "..."}]`; `"when": "livesBelow", "tag": "boss", "lives":
-  200, "then": [{"action": "intensity", "target": "bossSmoke", "value": 60,
-  "ticks": 66}]`.
-- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` - словарь JSON
-  типизированными
-  константами. `ParseLevelEvents(root, levelId)`; отсутствующая секция -
-  пустой список, неизвестное условие или действие, событие без id, условие
-  с тегом без тега, livesBelow без lives выше нуля, intensity без target или
-  со value вне 0..100, sun без target или без `value`, tactics без target
-  или с неизвестным словом, rebuild или restore без target
-  (`ReadGroupTarget`, `SEventGroupNoTarget`), событие без действий
-  поднимают `ELevelEventError`.
+  (livesBelow), `Act` (actReached, gravelDealt, waveKilled), `Part` /
+  `Whole` (gravelDealt, waveKilled; в JSON `"of"`), `DelayTicks`
+  (отсчитывается после того, как условие выполнилось, при любом условии),
+  действия. JSON: `"when": "allDead", "tag": "labGuard", "delay": 33,
+  "then": [{"action": "hint", "text": "...", "textEn": "..."}]`;
+  `"when": "actReached", "act": 4, "then": [{"action": "shelvesSleep",
+  "target": "s09-pyramid", "order": "up", "step": 0.2, "spareHero":
+  true}, {"action": "flyIn", "target": "s09-carousel"}]`.
+- `EventConditionIds` / `EventActionIds` / `EventTacticsIds` /
+  `EventLaneSideIds` - словарь JSON типизированными константами.
+  `ParseLevelEvents(root, levelId)`; отсутствующая секция - пустой
+  список, неизвестное условие или действие, событие без id, условие с
+  тегом без тега, livesBelow без lives выше нуля, actReached без act выше
+  нуля (`SEventNoAct`), gravelDealt или waveKilled без act
+  (`SEventNoBatchAct`) или с долей, которая не доля, - `of` выше нуля,
+  `part` от 0 и меньше `of` (`SEventBadShare`) -, intensity без target
+  или со value вне 0..100, sun без target или без `value`, tactics без
+  target или с неизвестным словом, действие, которому нужен target, без
+  него (`ReadGroupTarget`, `SEventGroupNoTarget`), неизвестная программа
+  полок или порядок банка (`SEventBadProgram`, `SEventBadOrder`), то,
+  чему отказывает каждое действие выше, или событие без действий
+  поднимают `ELevelEventError`. То, чему нужен уровень, - банки,
+  карусели, стаи, запаркованные группы - проверяет `Levels.Defs`
+  (`CheckEventTarget`, `CheckFlyIn`); id монстров у spawn и skyFall
+  проверяет поле на старте уровня (`TMonsterField.CheckSpawnIds`).
 - Расширение: условие - член перечисления, слово в `EventConditionIds` и
   ветка в `ConditionHolds` директора; действие - то же с `EventActionIds` и
-  `Play`.
+  `Play`, плюс реплика в `TDirectorCues`, когда исполнять его должна игра.
 
-### `Core/Levels.Pads.pas` (~545 строк)
+### `Core/Levels.Pads.pas` (~745 строк)
 Секция `pads` JSON уровня: платформы отдельно от сетки коллизий. Модель и
 парсер, игровой логики нет (в игре их ведёт `Pads.World`, писать будет
 редактор). Платформа держит только сверху: её настил, верхняя кромка, несёт
@@ -1163,15 +1303,24 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 группы не входит и не падает, путь ей можно. Платформа может летать на
 карусели (3.0.52, `Levels.Carousels`): по дорожке карусели вместе с
 другими её платформами; ставит её карусель, поэтому `x` и `y` у неё нет,
-и она не ездит по пути, не падает, не полка и не в группе. Добавление
-2026.
+и она не ездит по пути, не падает, не полка и не в группе. С 3.0.54
+полки стоят в банках, которым события отдают команды вместе (полка может
+стоять в нескольких, 3.0.57), и полку банка можно держать выдвинутой или
+убранной с самого начала, без программы, пока не скажут; платформы
+группы могут ждать запаркованными над экраном, пока событие их не
+впустит. Платформа может блуждать (3.0.58, `Pads.Stray`): когда событие
+отпускает её стаю, она влетает из-за края к точкам своей зоны и улетает
+обратно, время от времени озоруя; ставит её цикл, поэтому `x` и `y` у
+неё нет, и ничего другого она не делает. Упавшая платформа может
+остаться внизу насовсем (3.0.58). Добавление 2026.
 - **`TPadPlacement`** (запись) - `Sprite` (в арте объектов уровня, как у
   статического объекта), `Screen` (с единицы), `X`/`Y` (левый верхний угол
   в единицах экрана, как у статического объекта; Y - настил), `Width`
   (единицы экрана; высота картинки следует её пропорциям), `Tint`, `Tag`
   (имя для динамических объектов, повешенных на платформу; '' = нет),
   `Bullets`, `Path` (`TPadPath`; `prNone` - платформа стоит, где
-  поставлена), `Bob` (на сколько единиц платформа качается вверх и вниз;
+  поставлена), `Stray` (`TPadStray`, 3.0.58; `Strays` False - не
+  блуждает), `Bob` (на сколько единиц платформа качается вверх и вниз;
   0 = стоит), `Plunge` (`TPadPlunge`; `Plunges` False - платформа держит
   всё, что на ней стоит), `Shelf` (`TPadShelf`; `Slides` False -
   платформа никогда не уходит с переднего плана), `Group` (группа платформ, с которой она перестраивается;
@@ -1183,7 +1332,11 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   героем: `Plunges`, `Delay` (сколько секунд она держит после того, как
   он встал), `Rest` (сколько секунд лежит под экраном), `Rise` (с какой
   скоростью, в единицах в секунду, лезет домой - среднее неровного
-  подъёма). `DefaultPlungeDelay` (0.5), `DefaultPlungeRest` (0.5),
+  подъёма), `StaysDown` (3.0.58, JSON `"staysDown"`, по умолчанию false:
+  упавшая, она не поднимается никогда - сломанные платформы карусели на
+  арене). `ReadPlunge(obj, levelId, name)` открыт с 3.0.58: облик
+  поломки карусели читает им своё падение, и ошибка называет владельца.
+  `DefaultPlungeDelay` (0.5), `DefaultPlungeRest` (0.5),
   `DefaultPlungeRise` (64) - что падение берёт вместо числа, которого в
   файле нет.
 - **`TPadShelf`** (запись, 3.0.51) - платформа, которая выдвигается из
@@ -1193,7 +1346,13 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   `SlideSeconds` (езда между двумя шагами), `WarnSeconds` (за сколько до
   ухода она об этом говорит), `OffsetSeconds` (со скольки секунд
   программы стартует: полки в ряд идут волной), `Deep` (как она выглядит
-  в стене). **`TShelfStand`** = (`shOut`, `shIn`) - где её держит шаг;
+  в стене); с 3.0.54 `Banks` (банки, которыми ей отдают команды события:
+  JSON `"bank": "s09-ladder"` или, с 3.0.57, список `["s09-floor",
+  "s09-grid"]` - `ReadShelfBanks`; нет - никакое событие ею не командует),
+  `Held` и `HeldStand` (JSON `"held": "out"` или `"in"` -
+  `ReadShelfHeld`: она стоит там с самого начала и не крутит шагов, пока
+  событие не скажет иначе; удержанной полке нужен банк), `InBank(bank)`.
+  **`TShelfStand`** = (`shOut`, `shIn`) - где её держит шаг;
   `ShelfStandIds` ('out'/'in') - слова JSON. **`TShelfStep`** (запись) -
   `Stand`, `Seconds` (сколько держится там, без езды).
   **`TPadDeepLook`** (запись) - платформа в глубине до конца: `Scale` и
@@ -1202,20 +1361,48 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   (1.5), `DefaultShelfSlide` (0.25), `DefaultShelfWarn` (0.5),
   `DefaultShelfScale` (0.72), `DefaultShelfTone` (0.4) - что полка берёт
   вместо числа, которого в файле нет; сдвиг и опускание берут 0.
+- **`TShelfProgramKind`** = (`pgHold`, `pgWave`, `pgAlternate`,
+  `pgBlink`) и **`TShelfProgram`** (запись: `Kind`, `OutSeconds`,
+  `InSeconds`, `WarnSeconds` - 0 значит свой у полки) - что банк крутит,
+  когда событие ему скажет (3.0.54): выдвинута насовсем; выдвинута и
+  убрана по очереди, каждая на шаг позже предыдущей; каждая вторая не в
+  такт; короткие ходы, у каждой в своё время. `ShelfProgramIds` ('hold' /
+  'wave' / 'alternate' / 'blink'). **`TBankOrder`** = (`boFile`,
+  `boLeft`, `boRight`, `boUp`, `boDown`, `boToHero` - от самой дальней от
+  героя к ближней) и `BankOrderIds`. **`TBankTelling`** (запись, 3.0.58) -
+  `Order`, `StepSeconds`, `Pick` (0 = все полки): как банку отдают
+  команду; читают его события, берёт `TPadWorld.TellBank`.
+- **`TPadStray`** (запись, 3.0.58) - `Strays`, `Flock` (стая, которую
+  отпускает событие), `Zone` (клетки, у которых висит левый верхний угол
+  настила), `Wait` (секунд после того, как стаю отпустили, до первого
+  влёта). JSON: `"stray": {"flock": "s09-strays", "zone": [4, 3, 11, 8],
+  "wait": 1.5}` (`ReadStray`; нет `wait` - 0). Блуждающую платформу
+  `ReadPlace` ставит в `PadStrayWaitLeft` (-96), `PadParkedTop` (-64):
+  с глаз долой вместе с обвесами.
+- **`PadParkedAbove`** ('above' - единственное слово `"parked"`) и
+  **`PadParkedTop`** (-64, две клетки над верхним краем: там ждут
+  запаркованная платформа, платформа запаркованной карусели и
+  блуждающая; переехал сюда из `Pads.World` в 3.0.57, чтобы уровень сажал
+  на запаркованную карусель на той же высоте, на которой паркует мир).
 - **`TPadZone`** (запись) - `Left`, `Top`, `Right`, `Bottom`: клетки
-  экрана, с нуля, границы включены. **`TPadGroup`** (запись) - `Tag`,
+  экрана, с нуля, границы включены; объявлен раньше `TPadPlacement`,
+  потому что он нужен блуждающей. **`TPadGroup`** (запись) - `Tag`,
   `Screen` (с единицы), `Zone`, `Pairs` (в раскладке не меньше стольких
   пар бок о бок), `FarFlight` / `FarShare` (перелёт на `FarFlight` клеток
   и больше - дальний; в перестройке далеко летят не меньше `FarShare`
   платформ), `Conductor` (тег монстра, за которым идут перестройки; '' =
   нет), `Every` (секунд между двумя перестройками), `Alarm` (тег
   динамических объектов, которые зажигаются, предупреждая о перестройке;
-  '' = нет).
+  '' = нет), `Parked` (3.0.54, JSON `"parked": "above"`: её платформы ждут
+  над экраном над своими местами, пока событие не впустит группу; другое
+  слово - `SPadGroupBadParked`).
 - **`ParsePadGroups(root, levelId)`** - секция `padGroups`; нет секции -
   нет групп. JSON: `{"tag", "screen", "zone": [left, top, right, bottom],
   "pairs", "farFlight", "farShare", "conductor", "every", "alarm"}`
   (нет `pairs` и `farShare` - 0, нет `farFlight` - 1). `EPadError`
-  поднимают зона не из четырёх чисел (`ReadZone`, `SPadGroupBadZone`),
+  поднимают зона не из четырёх чисел (`ReadZone`, который с 3.0.58
+  называет владельца - группу или блуждающую платформу;
+  `SPadGroupBadZone`),
   pairs или farShare меньше нуля, farFlight меньше единицы
   (`SPadGroupBadNumber`) и conductor без `every` выше нуля
   (`SPadGroupBadEvery`). То, чему нужен уровень, - экран, стены,
@@ -1263,7 +1450,12 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   `["out", секунды]` и не `["in", секунды]` (`SPadShelfBadStep`), шаги не
   по очереди или без шагов (`SPadShelfNoTurns`), шаг ноль секунд и меньше,
   езда, предупреждение или сдвиг меньше нуля, масштаб вне 0..1 или ноль,
-  тон вне 0..1 (`SPadBadNumber`); обвес не списком имён
+  тон вне 0..1 (`SPadBadNumber`); банк не именем и не списком имён
+  (`SPadShelfBadBank`), полка, удержанная вне банка
+  (`SPadShelfHeldAlone`) или удержанная ни выдвинутой, ни убранной
+  (`SPadShelfBadHeld`); блуждающая платформа с x или y
+  (`SPadStrayPlaced`), без стаи (`SPadStrayNoFlock`) или с ожиданием
+  меньше нуля (`SPadBadNumber`); обвес не списком имён
   поднимает `ERigError`, в `Levels.Rigs`. Диапазон экранов, тег на
   двух платформах, остановку за экраном, то, что падению нужно от
   уровня, - без пути, без группы, чистая шахта, - и то, чего нельзя
@@ -1272,7 +1464,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   тоже
   (`CheckCarousels`).
 
-### `Core/Levels.Carousels.pas` (~405 строк)
+### `Core/Levels.Carousels.pas` (~610 строк)
 Секция `carousels` JSON уровня (3.0.52): платформы, которые летают по
 замкнутой дорожке одна за другой, без конца. Модель, парсер и сама
 дорожка, игровой логики нет: платформы везёт `Pads.World`, ставит их и
@@ -1284,7 +1476,13 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 кучу на узких концах овала, - круг за период карусели, в её сторону,
 каждая на долю круга впереди предыдущей в порядке файла. Настил всю
 дорогу остаётся горизонтальным. Платформа входит в карусель своим
-`"carousel"`; ставит её карусель. Добавление 2026.
+`"carousel"`; ставит её карусель. С 3.0.57 карусель может ждать
+запаркованной над экраном, пока событие её не впустит: каждая платформа
+спускается прямо в своё гнездо, и карусель начинает вращаться, когда
+на ней все, а её часы за разгон выходят на её ход. С 3.0.58 она может
+сломаться: часы замедляются до полной остановки, а её платформы, одна за
+другой, становятся падающими там, где стоят, в своём собственном
+облике. Добавление 2026.
 - **`TCarouselShape`** = (`csOval`, `csBox`), **`TCarouselTurn`** =
   (`ctClockwise`, `ctCounterClockwise` - как видно на экране);
   `CarouselShapeIds` ('oval'/'box') и `CarouselTurnIds` ('cw'/'ccw') -
@@ -1294,7 +1492,22 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   поперёк и вниз, экранные единицы, `Single`), `Corner` (радиус угла
   коробки; 0 = острый), `Period` (секунд на круг), `Turn`, `Start` (где
   стартует первая платформа: доля круга от правой стороны середины, в
-  сторону вращения).
+  сторону вращения); `Parked` (3.0.57, JSON `"parked": "above"`, другое
+  слово - `SCarouselBadParked`; `ReadParked`), `SpeedUp` (3.0.57, секунд
+  от остановки до хода периода, когда она начинает вращаться; 0 = сразу
+  на своём ходу; меньше 0 - отказ), `Failing` (3.0.58).
+- **`TCarouselFailing`** (запись, 3.0.58) - чем становится платформа
+  сломанной карусели: `Breaks` (False - сломаться не может), `Sprite` (в
+  арте объектов уровня), `Rigs` (по именам), `Plunge` (`TPadPlunge`,
+  читает `ReadPlunge` из `Levels.Pads`). JSON: `"failing": {"sprite":
+  "s16-platform-out", "rig": ["padFailing"], "plunge": {"delay": 0.5,
+  "rise": 64, "staysDown": true}}` (`ReadFailing`); без спрайта
+  (`SCarouselFailingNoSprite`), без падения
+  (`SCarouselFailingNoPlunge`), с падением или обвесами, которым
+  платформа отказала бы, - ошибка. **`FailingRigTag(padTag)`** - тег, на
+  котором висят обвесы облика поломки платформы: тег платформы плюс
+  `/failing` (`FailingRigSuffix`; ни один тег файла не содержит косой
+  черты).
 - **`TCarouselTrack`** (запись; состояние приватное) - дорожка как
   замкнутая ломаная, последняя точка соединена с первой.
   `Build(carousel)` - овал как `OvalPoints` (360) точек (`BuildOval`, на
@@ -1313,12 +1526,32 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   отрицательные против часовой. `Rides` - False у
   `Default(TCarouselOrbit)`, орбиты платформы вне карусели: `Place` тогда
   ничего не говорит. `Place(time, out x, y)` - середина настила на
-  `time` тиков, между тиками тоже (мир рисует между ними).
+  `time` тиков, между тиками тоже (мир рисует между ними). `Parked` - её
+  карусель ждёт над экраном. `Clock(turning)` (3.0.57) - время для
+  `Place` через столько тиков после того, как карусель начала вращаться:
+  ход ровно растёт от нуля за разгон (часы бегут площадью под ним,
+  `turning^2 / (2 * speedUp)`), после него часы отстают на половину
+  разгона. `Halting(turning, haltTicks, braking)` (3.0.58) - время для
+  `Place` через столько тиков остановки, начатой через `turning` тиков
+  после старта: ход того мгновения (внутри разгона ниже) ровно падает до
+  нуля за остановку, а дальше часы стоят. `Landing(fromY)` (3.0.57) -
+  путь платформы вниз в её гнездо, `TCarouselLanding`: гнездо выше самого
+  нижнего настила карусели ждёт свою высоту над ним, делённую на ход,
+  так что все платформы тормозят разом, и платформа над другой держит
+  зазор их гнёзд с того мгновения, как тронулась; поперёк волна
+  расходится от середины, 4 тика на клетку
+  (`LandingRippleTicksPerUnit`).
+- **`TCarouselLanding`** (запись, 3.0.57) - `Build(fromY, toY, depart)`:
+  прямо вниз на `LandingSpeed` (8 единиц за тик), торможение за последние
+  `LandingBrakeTicks` (10); путь короче торможения тормозится весь, за
+  меньшее число тиков. `DeckAt(time)` - настил на время после влёта,
+  между тиками тоже; `Done` - первый тик, когда она стоит в гнезде.
 - **`ParseCarousels(root, levelId)`** - нет секции - нет каруселей.
   JSON: `{"tag": "s08-carousel", "screen": 8, "shape": "oval", "center":
   [288, 179], "size": [150, 150], "corner": 0, "period": 12, "turn":
-  "cw", "start": 0}`; нет `shape` - oval, нет `turn` - cw, нет `corner` и
-  `start` - 0; у `period` умолчания нет - без него читается 0 и получает
+  "cw", "start": 0, "parked": "above", "speedUp": 3, "failing": {...}}`;
+  нет `shape` - oval, нет `turn` - cw, нет `corner`, `start` и `speedUp` -
+  0, нет `parked` - на месте с самого начала; у `period` умолчания нет - без него читается 0 и получает
   отказ. `ECarouselError` поднимают форма или направление не из своих
   слов (`SCarouselBadShape`, `SCarouselBadTurn`), `center` или `size` не
   `[x, y]` (`ReadPair`, `SCarouselBadPair`), ширина или высота ноль и
@@ -1393,7 +1626,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   "y": 27, "angle": 270}]}`; платформа: `"rig": ["pad"]`; монстр:
   `"tag": "s07-tek-01", "rig": ["tekPlatform"]`.
 
-### `Core/Monsters.Defs.pas` (~570 строк)
+### `Core/Monsters.Defs.pas` (~815 строк)
 Модель определений монстров + реестр (разбирает monsters.json). Поведения нет.
 - **Перечисления**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss),
   `TMovementKind` (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly),
@@ -1457,7 +1690,15 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   `TMonsterDef` - полный лист: id, legacyName,
   displayName (локализованное), spriteList, category, dangerous,
   affectedByGravity, blast, explosion, material, movement, attack, pickupEffect, lives,
-  score, damageCap, animFreq, deathText (локализованный), массив deathSounds, boss, disc, hull.
+  score, damageCap, animFreq, deathText (локализованный), массив deathSounds, boss, disc, hull
+  и `Weather` (3.0.58, JSON `"weather"`, по умолчанию false: тело, которое
+  роняет небо, - лопается там, где приземлилось, яма забирает его без
+  взрыва, а его смерть ничего не платит герою, сбит он или лопнул;
+  небесная бочка испытания грейвелами; погода без гравитации - ошибка,
+  `SWeatherFloats`).
+- **`TLaneSide`** = (`lsLeft`, `lsRight`) (3.0.57) - сторона экрана, с
+  которой приходит тело, которое впускает событие (`TSpawnOrders` из
+  `Levels.Events`, `TMonster.EnterFrom`).
 - **`TMonsterRegistry`** (класс) - владеет всеми определениями;
   `LoadFromFile/String`, `Find`, `FindByLegacyName`, `TryFind`, `Count`,
   `AllDefs` (отсюда банк звуков прогревает кэш), валидация таблиц спавна и
@@ -1597,7 +1838,8 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 видно на всём круге: она дёргается, а её сопла работают неровно -
 приступами, пока она держит, на полную и с провалами, пока поддаётся,
 молчат в падении, рывками на подъёме, который идёт так же неровно, как
-они. Цикл только считает: на сколько платформа ниже своего места, на
+они. Падение, которому велено остаться внизу (`StaysDown`, 3.0.58), раз
+упав, лежит внизу насовсем: отдых не кончается никогда. Цикл только считает: на сколько платформа ниже своего места, на
 сколько рывок опускает и кренит её картинку, как сильно работают сопла.
 Двигает и рисует платформу `Pads.World`; усилие тому, что на ней висит,
 передаёт игра. Ни SDL, ни уровня в юните нет - запись, которую тест
@@ -1656,7 +1898,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     лезет - от `ClimbEffortLeast` (0.4) до 1 по тяге.
   - `Phase`; `Below` - единицы ниже своего места.
 
-### `Game/Pads/Pads.Shelf.pas` (~175 строк)
+### `Game/Pads/Pads.Shelf.pas` (~325 строк)
 Цикл полки (`Levels.Pads`, `shelf`; 3.0.51): платформа выдвигается из
 стены за ней и убирается обратно по своей программе. Шаг держит её
 выдвинутой или убранной свои секунды; между двумя шагами она едет.
@@ -1666,11 +1908,23 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 которая стояла вне экрана героя или была перемотана, ничего сообщать не
 надо. Выдвинутая до конца полка держит: она пол и тело; с тика, когда
 поехала внутрь, и до тика, когда снова выдвинулась, - ни то, ни другое.
-Перед уходом предупреждает. Ни SDL, ни уровня - запись, которую тест
-гоняет один. Спрашивает её и рисует езду `Pads.World`. Добавление 2026.
+Перед уходом предупреждает. С 3.0.54 событие может задать ей свой ход
+(`Command`): ход начинается на тике, когда его задали, один раз играет
+свой заход - предупреждение, езду оттуда, где полка стояла, - а потом
+идёт по кругу программы с её первого шага или стоит выдвинутой или в
+стене насовсем; до своего тика полка стоит так, как стояла на тике
+раньше, так что полка, которой сказали поздно, до тех пор держится
+старого хода. Ни SDL, ни уровня - запись, которую тест гоняет один.
+Спрашивает её и рисует езду `Pads.World`. Добавление 2026.
 - **`TShelfPhase`** = (`spOut`, `spGoingIn`, `spIn`, `spGoingOut`).
-  **`TShelfSpan`** (запись) - `Phase`, `Ticks`: шаг, который держит, или
-  езда.
+  **`TShelfSpan`** (запись) - `Phase`, `Ticks`, `From` (3.0.54: глубина,
+  с которой начинается езда, 0 выдвинута .. 1 убрана): шаг, который
+  держит, или езда.
+- **`TShelfCall`** = (`scSleep` - в стену насовсем, `scWake` - наружу и
+  программа); **`TShelfCommand`** (запись) - `Call`, `Run`
+  (`TShelfProgram` из `Levels.Pads`, для пробуждения), `SpareHero` (сон:
+  мир держит его, пока герой стоит на полке). **`TShelfLook`** (запись) -
+  `Phase`, `Depth`, `Warns`: где полка стоит в какой-то момент.
 - **`TShelfCycle`** (запись; состояние закрыто) -
   - `Build(shelf)` - программа в тиках (секунды * 33,
     `LogicTicksPerSecond`, свой; `Round`, так что половина тика уходит к
@@ -1680,7 +1934,18 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     последнего шага - назад к первому; шаг или езда короче тика всё
     равно получают тик - отрезок без тиков был бы скачком. Предупреждение
     и сдвиг - в тиках. Платформа не полка отрезков не получает: `Slides`
-    False, и каждый ответ ниже - ответ переднего плана.
+    False, и каждый ответ ниже - ответ переднего плана. Полка, которую
+    файл держит (`Held`), с самого начала стоит в своём `HeldStand` и
+    шагов не крутит.
+  - `Command(tick, command)` (3.0.54) - ход с этого тика: облик тика
+    раньше хранится для времени до него (`FBefore`, через `LookAt`),
+    заход (`AddLead`) - предупреждение, если полка выдвинута и уходит
+    внутрь, потом езда от её нынешней глубины; пробуждение потом идёт по
+    кругу своей программы (`BuildProgram`: hold - стоит выдвинутой; wave и
+    alternate - выдвинута и убрана по секундам программы; blink - то же,
+    коротко; ожидания порядка и программы - дело мира), а сон стоит
+    внутри (`RestTicks` = `MaxInt`). Своё предупреждение хода, когда
+    программа его даёт, заменяет предупреждение полки.
   - `PhaseAt(tick)`; `Holds(tick)` - выдвинута до конца (`spOut`), пол и
     тело; `Warns(tick)` - выдвинута, и до конца стоянки ближе, чем
     предупреждение (после отрезка "выдвинута" идёт езда внутрь, какой бы
@@ -1694,7 +1959,55 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     конец круга), время на волосок раньше конца круга, которое
     округляется до самого конца, держится на последнем отрезке.
 
-### `Game/Pads/Pads.World.pas` (~1430 строк)
+### `Game/Pads/Pads.Stray.pas` (~560 строк)
+Цикл блуждающей платформы (`Levels.Pads`, `stray`; 3.0.58, хаос акта 5
+на арене грейвелов): транспорт, на который нельзя положиться. Спит с глаз
+долой, пока не отпустят её стаю (действие события `strays`); потом ждёт
+своё ожидание, влетает из-за левого, правого или верхнего края (на клетку
+дальше, `OutsideMargin`, её обвесы тоже не видны) по строке или вниз по
+столбцу точки своей зоны, висит там 1-2.5 с (`HangSpan`), а потом падает
+(шанс `FallOdds` 0.15), улетает за край (`OutOdds` 0.35, никогда с героем
+на борту) или летит дальше к другой точке прямо через зону. Перелёты
+сглажены (`Smoothstep`), в среднем 96 единиц в секунду (`StrayPace`).
+Перелёт дальше или наружу поворачивает назад на 35-65 % своего пути
+(`TurnOdds` 0.2); любой перелёт, кроме перелёта назад, глохнет на 25-75 %
+пути на 8-14 тиков, дёргаясь, сопла выключены (`StallOdds` 0.2); зависание
+бывает нервным (`TwitchyOdds` 0.3), сопла приступами. Падение - это
+`TPlungeCycle` с полсекундой тряски и без отдыха: она падает на три
+клетки под экран (`FallDepth`), и платформа ждёт 1-4 с с глаз долой
+(`ReturnSpan`), чтобы влететь снова; так же и улетевшая. С героем на
+борту перелёт наружу тут же поворачивает назад. Отосланная платформа
+(3.0.59, действие `straysLeave`, `Dismiss`) улетает по своей строке за
+ближнюю сторону на половине хода (`QuietShare`), сопла на половину
+(`QuietEffort`), и дальше спит с глаз долой; она больше не поворачивает
+назад, не глохнет, не дёргается и не падает; начатый перелёт или падение
+сначала доходит до конца; с героем на борту она висит, пока он с неё не
+сойдёт. Комната - экран без клетки слева, справа и сверху (`RoomInset`):
+только внутри неё платформа - настил; за стенами на ней никто не едет, и
+седок, которого она там подхватит, падает. Цикл только считает; двигает и
+рисует платформу `Pads.World`. Ни SDL, ни уровня - запись, которую тест
+гоняет один (`Tests.Pads.Stray`). Добавление 2026.
+- **`TStrayPhase`** = (`spAsleep`, `spWaiting`, `spFlying`, `spHanging`,
+  `spGiving` - тряска перед падением, `spFalling`). **`TStrayLeg`** =
+  (`slIn`, `slOn`, `slOut`, `slBack` - назад туда, где начался перелёт,
+  с которого она повернула).
+- **`TStrayCycle`** (запись; состояние закрыто) -
+  - `Rewind(stray, width, waitLeft, waitTop)` - спит на этом месте, с
+    глаз долой; платформа, которая не блуждает, из этого состояния не
+    выходит.
+  - `Launch(seed)` - её стаю отпустили: она ждёт своё ожидание, потом
+    влетает; кости (`TXorShift`) сеет вызывающий. Ничего для платформы,
+    которую уже отпустили или отослали.
+  - `Dismiss` - отослана; ничего для спящей, она так и спит.
+  - `Tick(loaded)` - `loaded`: герой стоит на ней в этот тик.
+  - `Deck` - в воздухе внутри комнаты: пол и тело. `Effort` - сопла,
+    0..1. `Dip`, `Lean` - рывок, только для картинки (две
+    `TTwitchSpring` из `Pads.Plunge`, толчок раз в 2-6 тиков до `DipKick`
+    2.2 единицы и `LeanKick` 3 градуса). `Phase`, `Leg`, `Dismissed`,
+    `Left`, `Top` (левый верхний угол настила; падение прибавляет свою
+    глубину).
+
+### `Game/Pads/Pads.World.pas` (~2055 строк)
 Платформы уровня (`Levels.Pads`) в игре: где каждая стоит, что несёт её
 настил, что останавливает её тело, и её картинка. Мир не держит седоков:
 герой и монстры спрашивают у него настил под ногами, настил, который
@@ -1750,8 +2063,35 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 `Levels.Carousels`) идёт по её дорожке ровным ходом от места, которое
 орбита даёт ей в начале её часов: её путь - дорожка, и седоки едут с ней,
 как с любым путём. Она ездит, поэтому таран её только качает.
+Арена грейвелов (3.0.54-3.0.59) добавила пять вещей. Полкам банка
+командуют вместе (`TellBank`) - уйти в стену, выйти, крутить другую
+программу - по порядку, с шагом друг от друга, так что банк будит
+комнату волной; программа добавляет своё ожидание (каждой второй полке
+чередования - ход, каждой полке мигания - время, которое дадут кости), и
+полка, которой скомандовали, держится своего хода до своего мгновения;
+скомандовать можно нескольким полкам банка (pick), а сон может пощадить
+героя (полка ждёт, пока он на ней стоит). Платформы запаркованной группы
+ждут над экраном над своими местами, и их впускает восстановление.
+Платформы запаркованной карусели ждут над экраном над своими гнёздами;
+влёт опускает их прямо вниз, сопла на полную, и карусель начинает
+вращаться, когда последняя из них встала в своё гнездо, а её часы
+разгоняются с места. Вращающаяся карусель может сломаться: её часы
+замедляются до остановки, затем её платформы, одна за другой в порядке,
+который дадут кости, становятся падающими там, где стоят, в картинке
+своего облика поломки; карусель, которой ещё нет в комнате, не ломается.
+Блуждающая платформа (`Pads.Stray`) ждёт с глаз долой, пока не отпустят
+её стаю, потом её ставит цикл, как поставил бы путь, и седоки с ней; вне
+комнаты она `Behind`, и она ездит, поэтому таран её только качает.
 Мир рождается с уровнем (`LoadLevel`); рестарт перематывает его, кости
 перестроек - новые для новой попытки.
+- **`TOrbitPhase`** = (`opTurning`, `opParked`, `opLanding`, `opOnSlot`,
+  `opHalting`) (3.0.57-3.0.58) - платформа карусели: идёт по кругу, ждёт
+  над экраном, спускается в своё гнездо, стоит в нём, пока не спустятся
+  остальные, её часы замедляются после поломки; `opTurning` у платформы
+  вне карусели. **`TPadFailLook`** (запись, 3.0.58) - `Breaks`,
+  `Texture`, `Plunge`: чем становится платформа карусели, которая может
+  сломаться; строит мир из `Failing` карусели (спрайт - из кэша
+  объектов).
 - **`TPadFence`** - `reference to function(x, y): Boolean`: точка закрыта
   для сбитой платформы помимо стен (игра передаёт
   `Monsters.Pilot.LapHolds`).
@@ -1888,6 +2228,32 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     уезжает без него. Только на один тик: `Latched` - `FShelf.Latches`
     на тике, до которого только что дошли часы (только на экране героя:
     в другом месте часы стоят).
+  - Части арены (3.0.54-3.0.59): `Tick(onView, heroAboard)` - герой в
+    этот тик стоит на её настиле (сон, который его щадит, ждёт;
+    блуждающая с ним на борту не покидает комнату). `TellShelf(command,
+    delay)` - полка берёт команду через столько тиков после следующего
+    тика своих часов (`FShelfCommand`, `FShelfCommandAt`); команда,
+    отданная раньше, заменяет ту, что ещё не наступила. `MeantOut` - полка,
+    которой положено стоять выдвинутой: ей велели выйти, или ей никто не
+    командовал, и файл держит её выдвинутой или она крутит программу из
+    файла (туда может спуститься аптечка). `Park(top)` - ждёт с настилом
+    на этой высоте над своим местом, для запаркованной группы. Карусель:
+    `Land` (запаркованная платформа трогается вниз по своему
+    `TCarouselLanding`, `FLandingClock`), `StartTurning` (в гнезде она
+    трогается по кругу, `FOrbitClock` с нуля, сглажено
+    `TCarouselOrbit.Clock`), `BreakDown(haltTicks, failTicks)` (часы
+    замедляются за остановку - `Halting`, `FHaltFrom`, `FHaltClock` -, и
+    через `failTicks` после следующего тика платформа делает `Fail`: её
+    цикл падения перемотан с падением облика поломки, глубина - так далеко
+    под экран, как у расставленной платформы, от того места, где платформа
+    стоит сейчас, картинка переключена на текстуру поломки; ничего для
+    платформы вне карусели или на карусели, которой ещё нет в комнате);
+    `OrbitPhase`, `Failed`, `CanFail`; `RewindOrbit` снова паркует
+    платформы запаркованной карусели. Блуждание: `FStray` - её
+    `TStrayCycle`; `Launch(seed)`, `Dismiss`; он ставит платформу,
+    `Behind`, пока она не `Deck`, её рывок - на проседании, её сопла - её
+    `Effort`. `Effort` равен 1 ещё и пока платформа спускается в своё
+    гнездо.
   - Перелёт (3.0.29): `Fly(flight)` - платформа летит по `TPadFlight`,
     его тики считаются с этого момента (`FFlightClock`; `NoFlight` = -1 -
     перелёта нет). `TickFlight` ставит место пути туда, где его держит
@@ -1923,12 +2289,16 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   уровня, текстуры принадлежат ему; он и уровень (расстановка и сетка,
   по которой проверяется сбой) должны пережить мир; картинка, которой нет
   в кэше, падает здесь, на загрузке уровня; здесь же каждая платформа
-  получает свою орбиту (`OrbitOf` по `Carousels` уровня, 3.0.52).
-  `Tick(screen)` - до того, как двинутся седоки: запрошенная перестройка
-  может начаться (`StartAskedRebuild`), затем `Tick` каждой платформы,
+  получает свою орбиту (`OrbitOf` по `Carousels` уровня, 3.0.52) и свой
+  облик поломки (3.0.58); запаркованная группа паркуется (`ParkGroups`,
+  и после каждой перемотки тоже). `Tick(screen, heroDeck)` - до того, как
+  двинутся седоки (`heroDeck`, 3.0.57: платформа, на которой стоит герой,
+  nil, пока он мёртв; каждой платформе говорят, она ли это): запрошенная
+  перестройка может начаться (`StartAskedRebuild`), затем `Tick` каждой платформы,
   на виду - только для платформ этого экрана; платформа на другом экране
   подтягивает свои `Prev*` и никуда не едет, - затем `HearFlights` и
-  `HearShelves`.
+  `HearShelves`, затем `TurnLandedCarousels` (3.0.57: карусель, каждая
+  платформа которой стоит в своём гнезде, начинает вращаться).
   `Rewind(seed)` - все платформы обратно туда, где их ставит файл уровня,
   ни запрошенной, ни летящей перестройки, кости засеяны заново
   (`seed or 1`: xorshift, засеянный нулём, так на нуле и остаётся).
@@ -1959,8 +2329,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   y)` - то же только для платформ `pbBlock`; `Bodies(screen)` - тела
   платформ экрана, стоящих спереди, прямоугольниками: материя платформ,
   из которой добывается аура (платформа в глубине материей не
-  считается); `FindTagged(tag)` - nil, если
-  тег не носит ни одна платформа; `Draw(screen, alpha, layer)` - платформы
+  считается); `FindWearer(tag, out failingLook)` (3.0.58, вместо
+  `FindTagged`) - платформа, на которой висят обвесы с этим тегом: по её
+  собственному тегу или по тегу её облика поломки (`FailingRigTag`), о
+  чём говорит `failingLook`; nil, если такой нет; `Draw(screen, alpha, layer)` - платформы
   этого экрана в одном слое, alpha кадра уходит в их `Lift`: игра рисует
   сначала платформы в глубине, затем то, что на них висит, затем
   платформы спереди, которые проходят перед теми и другими.
@@ -2002,8 +2374,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   (`CellsInZone`; на экране 17 это не так); плана нет вовсе - в этот раз перестройки
   нет. `StartRebuild` не пускает в полёт `Idle`-перелёт: платформа,
   остающаяся на клетке, продолжает покачиваться. Восстановление
-  (3.0.39): `RequestRestore(group, load, release)` - тот же запрос с
-  `Restore`; `TryPlanRestore` планирует каждую платформу на её место из
+  (3.0.39): `RequestRestore(group, load, release, pace)` - тот же запрос
+  с `Restore`, с ходом от вызывающего (3.0.54: `CalmPace` для
+  восстановления, `BriskPace` для влёта, `TRebuildAsk.Pace`);
+  `TryPlanRestore` планирует каждую платформу на её место из
   файла уровня с `CalmPace` - без костей, без судьи - и не пускает в
   полёт никого, если какая-то платформа не нашла пути: вызывающий
   просит снова. `GroupRestored(group)` - каждая платформа
@@ -2016,6 +2390,32 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   `ShelfLatched`: полка в этом тике встала на защёлку; часы тикают только
   у платформ экрана героя, так что это всегда его полка. `Rewind` его
   сбрасывает.
+  Банки (3.0.54): `TellBank(bank, command, telling, heroX)` - полки банка
+  (`BankOf`, `TPadShelf.InBank`) в порядке команды (`OrderedBank`;
+  `boToHero` - от самой дальней от `heroX`), `Picked` до pick (3.0.58:
+  каждая в своём порядке с шансами оставшихся мест, так что любой набор
+  так же вероятен, как другой), каждой команда через `step * i` тиков
+  плюс `ProgramWait` (alternate: каждой нечётной - ход наружу и езда;
+  blink: ожидание по костям в пределах одного круга).
+  `TryPickBankMiddle(bank, out x)` / `(bank, side, out x)` (3.0.54 /
+  3.0.59) - середина поперёк полки банка, которую выберут кости, среди
+  `MeantOut`, если такие есть (иначе среди всех), и из той половины
+  экрана, которую называет `side` (меньше 0 - левая, больше 0 - правая),
+  если в этой половине она есть; False для банка без полок.
+  Карусели (3.0.57-3.0.58): `TryFlyInCarousel(tag)` - платформы
+  запаркованной карусели делают `Land`; False, когда тег не несёт ни одна
+  карусель, True и ничего больше для незапаркованной или уже впущенной.
+  `CarouselLanding` - впущенная карусель ещё не вращается (`RoomBusy`
+  игры). `TryBreakCarousel(tag, halt, step)` - каждая платформа
+  вращающейся карусели делает `BreakDown` разом (платформа над другой
+  держит зазор их гнёзд, пока часы замедляются), каждая ломается на
+  остановке, а потом по одной каждый шаг, в порядке `Shuffled`; False
+  для тега, который не несёт ни одна карусель, способная сломаться.
+  `RidersOf(tag)`.
+  Блуждающие (3.0.58-3.0.59): `TryLaunchFlock(flock)` - каждая платформа
+  стаи делает `Launch`, каждая со своим зерном от костей мира, новым для
+  каждой попытки; `TryDismissFlock(flock)` - каждая делает `Dismiss`; обе
+  False для стаи, в которой не блуждает ни одна платформа.
 
 ### `Game/Pads/Pads.Arena.pas` (~350 строк)
 Директор боя с боссом над группой платформ, которая перестраивается:
@@ -2033,6 +2433,9 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   гудит). `Restore(group)` (3.0.39) - действие `restore` событий: группа
   больше не перестраивается (`FallAsleep`: лампы гаснут), была она
   задействована или нет, и её платформы летят домой (`arRestoring`).
+  `FlyIn(group)` (3.0.54) - `flyIn` событий для запаркованной группы: то
+  же восстановление с `BriskPace`, волной от середины зоны (`StartRestore`
+  берёт ход; `Restore` передаёт `CalmPace`).
 - **`TArenaPhase`** = (`arAsleep`, `arResting`, `arHolding`, `arWarning`,
   `arFlying`, `arRestoring`). `arResting` отсчитывает `Every` секунд группы (первая
   перестройка приходит сразу), затем удерживает круг дирижёра
@@ -2138,7 +2541,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     чувствуют.
   - Оружие: `FBullets: TBurst` (наружу - `Bullets`), тип 0..4
     (`WeaponType`: пистолет / дробовик x5 / гранатное
-    облако x22 / цепь x3 / миниган с чередующимися боковыми выстрелами),
+    облако x22 / цепь x3 / миниган: с 3.0.57 удвоенная центральная линия -
+    второй снаряд на полшага полёта позади - и боковая пара, чередующая
+    `MinigunNarrowAngle` 5 и `MinigunWideAngle` 10 градусов, раньше 15 и
+    30),
     состояние перезарядки/скорости/гравитации, `Fire: Boolean` (True = выстрел
     действительно покинул ствол, и вызывающий даёт звук), `SetWeaponAngle`
     (дословно, но синус уходит в `ArcSin` зажатым в -1..1: ноги на дроби -
@@ -2369,15 +2775,43 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `CellOpen` в середине клетки и `BodyBlocked` в углах тела, так что нырок
   обходит платформу, а таран разбивается о неё, как о стену.
 
-### `Game/Monsters.pas` (~1890 строк)
+### `Game/Monsters.pas` (~2225 строк)
 Поведение монстров (управляется данными `TMonsterDef`) плюс поле, которое ими
 распоряжается.
 - **Перечисления**: `TMonsterAction` (стоит/идёт/падает/летит),
   `TMonsterLife` (mlAlive/Dying/Dead), `TMonsterHealthTier`
   (htHale/Wounded/Critical - трети прицела), `TMonsterEvent`
   (meNone/BossWantsMinion/Henshin/BossRage/LevelComplete/Died/BossCrashed/
-  BossOwesPrize) - 'MessageToMain' из 2008, игровой цикл вычерпывает их
-  каждый тик.
+  BossOwesPrize/Burst) - 'MessageToMain' из 2008, игровой цикл вычерпывает
+  их каждый тик; `meBurst` (3.0.58) идёт следом за `meDied` тела, которое
+  лопнуло само, - его не убил никакой удар, так что взрыв выпускает игра.
+  `TLanePhase` = (`lpNone`, `lpEntering`, `lpOnLane`, `lpLeaving`,
+  `lpGone`) и `TLaneRun` (3.0.57) - где на своей дорожке стоит тело,
+  которое впустило событие.
+- **Части арены в `TMonster`** (3.0.53-3.0.58): `StrayedOut` - вышел за
+  правый край, где патруль разворачивается, или под экран (грейвел
+  испытания, который ушёл в правый проём или упал в яму);
+  `Reappear(x, y)` - поставлен туда, как только что рождённый, падает,
+  ничего не брошено; `HeadRandomly` - уходит туда, куда скажут кости
+  (2008 спускает каждого монстра лицом влево). Дорожка:
+  `EnterFrom(side)` - входит из-за экрана (x -40 / x 520) сквозь столб стены со скоростью
+  `LaneStep` 4 единицы за тик, не спрашивая оракул стен, до x 32 / x 448,
+  потом патрулирует прочь от этой стороны (`MoveInLane`, `SlideIn`; пока
+  не вошёл, не стреляет); `Depart` - тело, которое вошло, улетает вверх
+  на `LaneLeaveStep` 8 (`FlyAway`): `mlDead` без события смерти, без
+  обломков, без очков, оно больше не ранит и в него больше не стреляют;
+  `Leaving` - на пути прочь, ещё рисуется (и его корпус тоже);
+  `CameAlongLane`. Снос (`FFallDriftX`, 3.0.57): тело, которое сходит с
+  движущегося настила, пока падает, сохраняет поперечный перенос настила
+  (`CarryX` в `MoveFalling`), иначе настил отъезжает назад под ноги и
+  приземляет их, снова и снова; ноль, когда его сняла стена, после
+  `Reappear` и при приземлении. Погода (`TMonsterDef.Weather`):
+  `EndWeather` после движения - лопается на тике, когда приземлилось
+  (`FLanded`, ставит `MoveFalling`), на полу сетки или на настиле; та, что
+  на спрайт ниже низа экрана, исчезает (`FGone`: мертва, не рисуется, не
+  тикает, без событий), как и останки лопнувшей, которые забрала яма;
+  `Burst` - умирает сразу, `meDied`, потом `meBurst` (погоду, лопнувшую на
+  герое, игра лопает этим же).
 - **`TMonster`** - позиция, экран, `Tag` расстановки, направление, `Life`,
   жизни (+`LivesAll`), кадр анимации, шаг, таймер огня, флаг ярости (`Enraged`), таймер миньонов босса, одноразовый
   флаг хеншина, список событий, у монстра-диска - его `TDisc` (`Disc`, у
@@ -2506,13 +2940,26 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   получает каждый монстр) пропускает расстановки, в чьих `Grades` нет этой
   сложности, - поле рождается заново на рестарте, так что смена сложности
   приходит сюда. `Tick` (текущий экран), `SpawnFromSky(monsterId, screen)`
-  (миньоны босса и грейвелы испытания, в случайной колонке на ряд выше
-  экрана - падение и есть выход на сцену), `SpawnOn(monsterId, screen,
+  (миньоны босса и грейвелы испытания, в случайной колонке из
+  `SkyColumns` (15) на ряд выше экрана - падение и есть выход на сцену; с
+  3.0.53 возвращает тело), `SpawnFromSkyOver(monsterId, screen, column)`
+  (то же над колонкой вызывающего, с нуля: прицельный грейвел, аптечка
+  или тело волны над полкой), `SpawnInLane(orders, screen)` (3.0.57: тело
+  действия spawn, сделанное в колонке 1 на линии ног строки с тегом и
+  списком спрайтов из приказа, потом `EnterFrom`), `DepartGuests(screen)`
+  (каждое тело, которое пришло по дорожке, улетает вверх),
+  `CountAliveOf(monsterId, screen)`, `CountAliveGuests(screen)` (их
+  считают ворота испытания), `ReturnSideStrays(monsterId, screen)` (живые
+  тела этого вида, ушедшие за бок, возвращаются с неба, каждое над своей
+  колонкой), `TryReturnPitStray(monsterId, screen, pitColumn, out body)`
+  (упавшее в яму возвращается над этой колонкой или до двух рядом),
+  `CheckSpawnIds` (в конструкторе: `Find` падает на неизвестном монстре
+  действия spawn или skyFall или финала, на старте уровня), `SpawnPlaced`
+  (приватный, делает тело из расстановки), `SpawnOn(monsterId, screen,
   x, y)` (прямо на месте тела в этой точке: приз в руки герою, его
   собирает контакт того же тика; оба - над приватным `SpawnAt` в клетках
   расстановки), `SetTaggedTactics(tag,
-  tactics)` (действие tactics событий), `AnyAliveOnScreen` (ворота
-  прорыва - пикапы считаются, дословно), `AnyAliveTagged(tag)` (живое тело с
+  tactics)` (действие tactics событий), `AnyAliveTagged(tag)` (живое тело с
   тегом расстановки на любом экране - allDead событий),
   `AnyTaggedLivesBelow(tag, lives)` и `AnyTaggedEnraged(tag)` (только живые -
   livesBelow и enraged; отметка livesBelow названа для нормального грейда
@@ -2602,7 +3049,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (приватная `TScorePopup`, поднимающееся '+N') и терминал связи, которым доска
   владеет (`Hud.Terminal`), на месте бегущей строки 2008. `Tick` /
   `Draw(alpha)` - отрисовка учитывает интерполяцию (всплывашки, шаг тикера).
-  API: `AddTicker`, `ShowBig`, `StartTerminal(header, text)`,
+  API: `AddTicker`, `ShowBig`, `StartTerminal(header, text, place)`
+  (`place` - `TTerminalPlace`, по умолчанию сверху; тикер съезжает вниз
+  только ради рамки сверху),
   `TerminalKeyStruck` (щелчок играет игра), `AddScorePopup`, `ClearPopups`
   (переход между экранами оставляет всплывашки над чужой геометрией), `Clear`
   (смерть заставляет доску замолчать, терминал тоже). Стопка тикера от y=52;
@@ -2638,16 +3087,21 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Draw(prompt)`, `KeyStruck`. Владелец - `TMoonGame`; там `AdvanceBriefing`
   решает "допечатать" или "начать уровень".
 
-### `Hud/Hud.Terminal.pas` (~245 строк)
+### `Hud/Hud.Terminal.pas` (~270 строк)
 - **`THudTerminal`** - канал связи станции: рамка (x=6, y=40, ширина 360) под
   кардиомонитором. Длинный текст переносится по словам по числу глифов (45 в
   строке - мелкий шрифт моноширинный), печатает его собственный `TTypewriter`,
   стоит 1 с плюс тик на букву, гаснет за 1 с. `TTerminalPhase` =
-  (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`). `Start` (заголовок, текст;
-  новый заменяет текущий), `Clear`, `Tick`, `Draw`, `Visible`, `Bottom` (его
+  (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`); `TTerminalPlace` =
+  (`tlTop`, `tlBottom`) - под кардиомонитором или вдоль нижнего края
+  (зазор `PanelMargin`, рамка растёт от него вверх: `BoxY`) на экране,
+  куда герой входит сверху и где угол монитора сел бы на него. `Start`
+  (заголовок, текст, место; новый заменяет текущий и забирает с собой
+  его место), `Place`, `Clear`, `Tick`, `Draw`, `Visible`, `Bottom` (его
   читает дорожка тикера), `KeyStruck` (каждая вторая напечатанная буква, не
-  пробел - сам терминал не звучит). Заголовок сегодня `> ` + `terminalHeader`
-  из языковых файлов; позже - имя говорящего. Рамка и курсор - своей
+  пробел - сам терминал не звучит). Заголовок - `> ` + `terminalHeader`
+  из языковых файлов или голос, который даёт подсказка события (её
+  `header`, передача на экране 7). Рамка и курсор - своей
   `THudBrush`, текст - шрифтом. О бое терминал не знает: подсказка, которой
   надо его дождаться, - это событие уровня (`Levels.Events`), запускающее её
   после последнего трупа.
@@ -3520,24 +3974,214 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `BottleSoundFile` публична: бочечный взрыв служит и взрывом бонуса, и
   хлопками обломков босса, и dpr берёт имя отсюда.
 
-### `Game/Events/Events.Director.pas` (~175 строк)
+### `Game/Game.Trial.pas` (~400 строк)
+Правила испытания грейвелами на экране 9 второго уровня (3.0.53,
+переделано на акты; весь замысел - в `docs/ARENA-2.md`): ни поля
+монстров, ни героя, ни SDL - класс, который тест гоняет один
+(`Tests.Game.Trial`). Испытание идёт актами (`TrialActs` = 5): акт - пачка
+грейвелов, которую спускают волна за волной (`TrialFirstWaveTicks` 25,
+потом `TrialWaveTicks` 18 - темп 2008), без предела живых - пачка и есть
+единственный предел. Следующий акт не приходит, пока не мёртв каждый
+грейвел пачки: когда пачка вышла, ворота проверяются каждый тик
+(`WatchGate`), так что комната перестраивается в то же мгновение, как
+умирает последний; прицельный грейвел, который ещё в пути, держит их, и
+тот, что спущен в этот самый тик, тоже. Потом комната переводит дух
+(`TrialActBreakTicks` 40) и падает следующая пачка; комната, занятая
+своей сценой (`RoomBusy`, слово игры), придерживает первую волну
+следующего акта. Ворота последнего акта заканчивают испытание. Между
+актами ничего не переносится. Первый грейвел каждого акта - вестник; со
+второго акта (`TrialAimedFromAct`) каждый третий (`TrialAimedEvery`) -
+прицельный: метка над столбцом героя, грейвел через
+`TrialAimedLeadTicks` (10) после неё. Грейвел, упавший в яму,
+возвращается по одному, с паузой (`TrialPitReturnTicks` 10). Аптечки:
+одна на `TrialKillsPerMedkit` (15) убитых грейвелов, счёт через все акты,
+и (3.0.59) ещё одна в середине каждого акта - убийство, которое делает
+половину его пачки или половину волны (`PayMiddle`; у акта из одного
+середины нет). Событие может открыть небо на свой акт (3.0.58,
+`OpenSky`): тело падает раз в столько-то секунд, пока этот акт не
+кончится, - темп держит испытание, тело выбирает игра. Испытание может
+закончиться волной (3.0.59): ещё один акт, его раздаёт `DealWave` вместо
+`DealGravel` - счёт, а не пачка, и живых из неё никогда не больше
+предела (тело через `TrialWaveTicks`, пока комната наполняется, мёртвое
+заменяется через `TrialWaveRefillTicks` (33) после того, как оно ушло);
+в предел считаются только свои живые волны; прицельных в ней нет, первое
+тело - вестник. Добавление 2026.
+- **`TTrialCue`** (запись) - что игра исполняет на тике: `SpawnGravel`,
+  `SpawnWave`, `Herald` (спущенный грейвел или тело - первый в своём
+  акте), `MarkAimed` / `SpawnAimed`, `ReturnFromPit`, `SpawnMedkit`,
+  `SkyFall`, `ActEnded` (ворота открылись, последние тоже), `Finished`.
+- **`TTrialProgress`** (запись, 3.0.57) - `Act`, `Batch` (в акте волны -
+  её счёт), `Dealt` (из пачки, прицельный - от своей метки), `WaveKilled`
+  (0 вне акта волны); всё ноль, пока испытание не идёт. Его читают
+  gravelDealt и waveKilled событий.
+- **`TGravelTrial`** (класс) - `Start(batch, waveCount = 0, waveCap = 0)`
+  (оба больше 0 - испытание из `TrialActs + 1` актов, `Acts`), `Stop`,
+  `NoteGravelKilled`, `NoteWaveKilled` (только в акте волны),
+  `OpenSky(seconds)` (не меньше тика; сказанный снова - новый темп с этого
+  момента; вне испытания ничего), `Tick(gateHolders, waveAlive = 0)` -
+  держатели ворот - все, кого игра считает (грейвелы, гости, которых
+  впустило событие, волна), `waveAlive` - свои живые волны; `Progress`,
+  `Active`, `Act` (1..`Acts`), `Acts`, `RoomBusy` (читает и пишет игра).
+  Конец акта закрывает небо, и на тике, когда оно закрывается, ничего не
+  падает; `Start` и `Stop` тоже его закрывают.
+
+### `Game/Game.Arrivals.pas` (~150 строк)
+Фиолетовый свет, в котором спускается тело (3.0.53), - цвет Селены: там,
+где испытание спускает с неба грейвела, аптечку, небесную бочку или тело
+волны, там, где возвращается грейвел, который ушёл, и над столбцом
+прицельного. Метка - столб света от верхнего края (`ArrivalBeamWidth` 14,
+`ArrivalBeamLength` 60) и свечение прямо под ним (`ArrivalHeight` 14,
+`ArrivalSize` 44, белое ядро в `ArrivalCoreShare`) на своих часах
+(`ArrivalTicks` 14): оно собирается в точку, вспыхивает и гаснет
+(`Sin(Pi * share)`). Метка вестника (`alHerald`) вдвое длиннее, шире и
+стоит вдвое дольше (`ArrivalScales`). Только облик - тело принадлежит
+полю; свой свет, а не покров героя (решено). Добавление 2026.
+- **`TArrivalLook`** = (`alPlain`, `alHerald`). **`TArrivals`** (класс) -
+  `Add(x, look)` (x - середина тела, экранные единицы), `Tick`,
+  `Draw(canvas, origin, alpha)` (через `DrawGlow` / `DrawGlowRect` из
+  `Render.Glow`, на канале монстров), `Clear` (дверь или смерть: за героем
+  на следующий экран ничего не идёт).
+
+### `Game/Game.Shield.pas` (~355 строк)
+Щит машины TeK, пока её нельзя ранить (3.0.56): бледно-золотые соты
+вокруг неё, видные всегда, только по ободу - машина внутри остаётся на
+виду (попросили после первого просмотра: полные соты прятали пушку).
+Попадание зажигает ячейки вокруг своей точки, и вспышка гаснет примерно
+за полсекунды; без искр - искры в игре знак раны, а щит ран не получает.
+Падающий щит несколько раз мигает ячейками и гаснет; сам он не
+возвращается. Первыми его носят пушки; он задуман для боссов после них,
+пока их нельзя ранить (в отличие от корпуса машины с мачтовыми турелями,
+который неуязвим всегда). Добавление 2026.
+- **`TShieldArt`** (класс) - одна текстура шестиугольной ячейки в
+  аддитивном свете (`FillCell`, `CellSide` 48 px), одна на все щиты игры.
+- **`TShieldState`** = (`sdUp`, `sdFalling`, `sdDown`).
+- **`TTekShield`** (класс) - `Create(radiusX, radiusY)`: эллипс ячеек
+  острым верхом (`HexSize` 3.4, `LayCells`) вокруг середины машины, у
+  каждой своя доля `Rim` (0 середина .. 1 край). В покое видны только
+  ячейки дальше `RestRimFrom` (0.72), плавно до полной яркости у `RimFull`
+  (0.95); вспышка достаёт внутрь до `FlareRimFrom` (0.5); ячейки слабее
+  `DimmestLevel` (0.01) не рисуются. `Rise`, `Fall` (мигает раз в
+  `FallBlinkTicks` и гаснет за `FallTicks` 14), `Strike(point)` (вспышка
+  на `FlareTicks` 16 в пределах `FlareReach` 9 единиц), `Holds(point)`,
+  `TryEntry(from, to, out entry)` - где отрезок впервые входит в него, ищется
+  через каждую `EntryStep` единицу; False вне его или когда он не поднят;
+  `Tick`, `Draw(canvas, art, center, alpha)`, `State`. Точки - от
+  середины машины.
+
+### `Game/Game.Cannons.pas` (~900 строк)
+Две пушки TeK арены грейвелов (3.0.56, акт 3): пушки, прижатые к боковым
+граням столбов стены (столбцы 1-2 и 13-14, дуло на две клетки от стены;
+вариант B замысла), которые не целятся. Они один раз въезжают из-за
+обоих краёв (`ArrivalTicks` 30, smoothstep) и ездят по стенам в лад,
+лицом к лицу, всегда на одной строке (`RideSpeed` 3); на строке
+предупреждают красным огнём у дул (`WarnTicks` 20, игра гудит
+`padhum.wav`) и метут её длинной очередью с обеих сторон разом
+(`BurstTicks` 40, снаряд раз в `ShotEveryTicks` 2 от каждой, стволы по
+очереди, `RoundSpeed` 16, штрих 18x3), потом отдыхают (`RestTicks` 22,
+снаряды долетают до дальнего щита) и едут на другую строку из своих
+приказов. Строка, которую метёт залп, закрыта, остальные свободны. Щит
+каждой (`TTekShield`, 38x22) принимает снаряды другой и пули героя;
+снаряд ранит только героя - грейвел ничья не цель. Касание пушки ранит
+(коробки контакта - плита, ствольная коробка, стволы - сняты по арту,
+`ContactBoxes`), так что её корпус - не укрытие. Когда пушке надо
+проехать через строки, на которых ей мешает банк полок (`yield`
+приказов - нижние ступени s09-foot на строках 8-9), банк сначала уходит в стену
+(`YieldTicks` 28, предупреждение и езда полки) и выходит, когда пара
+покинула эти строки. Пара живёт один акт: когда испытание уходит дальше,
+щиты падают, снаряды в полёте становятся безвредными, стволы
+перегреваются (`HeatTicks` 100), пара мечется вверх и вниз между
+строками 1 и 6 (`RaceSpeed` 8, `RaceLegs` 5, `padhum` раз в
+`RaceHumTicks` 36), встаёт лицом к лицу на строке 2 над пирамидой
+(`HaltTicks` 16), бьётся в упор (`DuelTicks` 50, безвредно, искры на
+чужом дуле), и обе взрываются: сцена, а не смерть от попаданий, и ничто
+в ней не ранит. Правила и облик; реплику исполняет игра - звуки, рану,
+полки, искры и взрыв. Добавление 2026.
+- **`TCannonSide`** = (`csLeft`, `csRight`); **`TCannonBlock`** =
+  (`cbNone`, `cbShield`, `cbHull`) - во что упёрлась пуля героя;
+  **`TRoundCatch`** - `reference to function(fromX, toX, y): Boolean`:
+  слово игры об отрезке снаряда за тик (его забрал орб -
+  `TMoonGame.OrbTakes`, 3.0.57); **`TCannonCue`** (запись) - `Hum`,
+  `Shot` (один звук выстрела за несколько снарядов,
+  `ShotSoundEveryTicks` 4), `HeroHit`, `YieldSleep`, `YieldWake`,
+  `Strikes` (снаряды по голой стали в сцене: искры, без раны), `Blast` и
+  `BlastPoints`.
+- **`TCannonArt`** (класс) - набор `tek-cannon` (`bin/sprites`,
+  `tools/cannon/build_cannon.py`): корпус и жар (стволы в альфе,
+  прибавляется красный по мере перегрева), через свой кэш с мягкими
+  краями и линейной фильтрацией (рисуется своим размером), и
+  `TShieldArt` щита. Арт смотрит вправо и зеркалится для правой стены;
+  снятые точки в его единицах: дула 63.4, 14.07 / 21.54, линза 32.16,
+  12.37.
+- **`TCannonPhase`** = (`cpGone`, `cpArriving`, `cpYielding`,
+  `cpRiding`, `cpWarning`, `cpFiring`, `cpResting`, `cpRacing`,
+  `cpHalting`, `cpHolding`, `cpDueling`).
+- **`TCannonPair`** (класс) - `Create(art, seed)`; `Start(orders, act)` -
+  обе въезжают на этот акт испытания (событие, которое сработало после
+  своего акта, сразу играет сцену); `Clear` (дверь, смерть: ушли, без
+  сцены); `Tick(act, heroBody, catch)` - `act` - нынешний акт испытания (0,
+  когда оно не идёт), `heroBody` пустое у мёртвого, `catch` спрашивается
+  о каждом снаряде, который может ранить, раньше, чем герой (весь его
+  отрезок за тик, чтобы снаряд не перепрыгнул орб); `Block(from, to, out
+  at)` - где отрезок пули упирается в пушку, щит загорается;
+  `Touches(body, out side)` - в сцене ничто не ранит;
+  `DrawBodies(sprites, alpha)`, `DrawLight(canvas, origin, alpha)`
+  (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
+  `RoomBusy` игры), `YieldBank`.
+
+### `Game/Game.Press.pas` (~205 строк)
+Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
+платформ, без монстров и без SDL - класс, который тест гоняет один
+(`Tests.Game.Press`). Пресс - стопка рядов полок, верхний первым
+(балконы у стен, строки 3, 5, 7 и 9 экрана 9; на них стоят бетонеры).
+Выдвинутые ряды едут вниз вместе, как конвейер: на каждом такте каждый
+выдвинутый ряд уходит в стену, а ряд под ним выходит, так что кто стоял
+на ряду, падает на ряд ниже; нижний ряд, уходя, роняет свои тела на пол;
+ряд, тело которого мертво, едет всё равно. Новичок спускается на верхний
+ряд: его прибытие выдвигает верхний ряд и придерживает такт на
+`PressArrivalTicks` (45) - верхний ряд не уходит из-под тела, которое ещё
+в воздухе. Два выдвинутых ряда один над другим (в первом замысле этого
+не было): нижний уходит с тактом, чтобы уронить своё тело, и снова
+выходит через `PressRewakeTicks` (40), чтобы поймать тело ряда над ним,
+которое падает только на ряд. Пресс считает, какие ряды выдвинуты и
+каким велено двигаться; командует полками игра. Добавление 2026.
+- **`TPressCall`** (запись) - `Sleep`, `Wake` (банки), `IsEmpty`.
+- **`TPress`** (класс) - `Start(rows, beatTicks)` (каждый ряд начинает
+  убранным; ничего без рядов или с тактом меньше тика), `Shut` (встаёт,
+  где стоит, рядам ничего не велено), `Arrive(bank)` (ничего для банка,
+  который не верхний ряд), `Tick`, `RowOut(bank)`, `Active`, `Rows`.
+  **`PressBeatTicks(seconds)`** - секунды файла уровня в тиках, не меньше
+  тика.
+
+### `Game/Events/Events.Director.pas` (~295 строк)
 Исполняет события уровня (`Levels.Events`) на живой игре.
 **`TEventDirector`** берёт события, доску сообщений, динамические объекты
-уровня и два колбэка (`reference to procedure`): `TChangeMusic` (игра
-передаёт свой метод `ChangeMusic`, который заодно запоминает трек для
-рестартов) и `TArenaCues` (3.0.39; запись из двух `TArenaCue`: игра
-передаёт `TPadArena.Engage` и `TPadArena.Restore`).
-Поле монстров рождается заново на
-каждом рестарте, поэтому приходит с каждым тиком, а не хранится: у него
-спрашивают условия, ему говорят тактику.
+уровня и реплики (3.0.54: одна запись, **`TDirectorCues`**, вместо двух
+колбэков): `ChangeMusic` (метод игры, который заодно запоминает трек для
+рестартов), `Arena` (`TArenaCues`: `Engage`, `Restore` из `TPadArena`
+и, с 3.0.54, `FlyIn` - `FlyInParked` игры), `Shelves` (`TShelfCue` -
+действие полок целиком), `BreakCarousel` (`TBreakCue`), `Strays` /
+`StraysLeave` (`TFlockCue`), `MedkitsOnto` / `WaveOnto` (`TBankCue`),
+`TrialAct` (`TTrialAct` - акт испытания, 0, пока оно не идёт),
+`TrialDone` (`TTrialDone`), `TrialProgress` (`TTrialProgressCue` -
+`TTrialProgress` из `Game.Trial`), `Cannons` (`TCannonsCue`), `Spawn`
+(`TSpawnCue`), `SkyFall` (`TSkyFallCue`), `Press` (`TPressCue`);
+последние четыре берут акт, которого ждёт событие, 0 для того, что
+никакого не ждёт. Директор тянет состояние испытания через них, а не
+толкает. Поле монстров рождается заново на каждом рестарте, поэтому
+приходит с каждым тиком, а не хранится: у него спрашивают условия, ему
+говорят тактику.
 - `Tick(screen, field)` - раз в логический тик с экраном героя: для каждого
   несработавшего события этого экрана проверяется условие
-  (`ConditionHolds`); пока оно держится, идёт отсчёт задержки, сбой условия
-  начинает отсчёт заново; на нуле действия играют один раз (`Play`:
-  `ShowBig`, `AddTicker`, `StartTerminal` с заголовком терминала, колбэк
-  музыки, `FadeTagged` / `TurnSunTagged` по динамике, `SetTaggedTactics`
-  по полю, реплики арене для `rebuild` и `restore`). Над трупом героя
-  игра тик пропускает.
+  (`ConditionHolds`: actReached - `TrialAct() >= act`; gravelDealt -
+  `GravelDealt`, `Dealt >= batch * part div of + 1`; waveKilled -
+  `WaveKilled`, `WaveKilled >= batch * part div of`; оба верны, когда акт
+  позади; trialDone - `TrialDone()`); пока оно держится, идёт отсчёт
+  задержки, сбой условия начинает отсчёт заново; на нуле действия играют
+  один раз (`Play`: `ShowBig`, `AddTicker`, подсказка через `PlayHint` -
+  `StartTerminal` с заголовком события или своим заголовком канала и её
+  местом -, реплика музыки, `FadeTagged` / `TurnSunTagged` по динамике,
+  `SetTaggedTactics` по полю, а каждое другое действие - через свою
+  реплику). Над трупом героя игра тик пропускает.
 - `ReArm(screen)` - смерть возвращает на экран с возрождёнными монстрами,
   и его события снова ждут своего часа, как триггеры сущностей, а
   динамические объекты, которые крутили их действия intensity, откатываются
@@ -3753,16 +4397,20 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~2910 строк - НЕ заглушка, всегда грепать вместе с .pas)
+### `Moon2D.dpr` (~3500 строк - НЕ заглушка, всегда грепать вместе с .pas)
 Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
 - **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
   папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
   именованные одиночные звуки (цена бонуса живёт в `Game.Bonus`; три
   звука перестройки арены - `PadHumSoundFile`, `PadClickSoundFile`,
-  `PadClackSoundFile`; защёлка полки - `ShelfLatchSoundFile`, 3.0.51),
+  `PadClackSoundFile`; защёлка полки - `ShelfLatchSoundFile`, 3.0.51;
+  очередь настенных пушек - `CannonShotSoundFile`, `shoot2.wav`, 3.0.56),
   `VictoryMusicFile`, `MenuMusicFile`, `LevelEndLingerTicks=400`,
-  здоровье героя и множители жизней монстров по сложности, темп испытания
-  грейвелов и его монстр (`GravelMonsterId`), длительности тикера, учёт
+  здоровье героя и множители жизней монстров по сложности, монстр
+  испытания грейвелами (`GravelMonsterId`) и аптечка, которую оно
+  спускает (`MedkitMonsterId`), кости пушек (`CannonSeed`) и дым, который
+  следующий акт пережидает после их взрыва (`CannonSmokeTicks` 50),
+  длительности тикера, учёт
   урона (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (с какого расстояния орб
   берёт вражескую пулю), выбор шрифта (`FontFileName`,
@@ -3770,7 +4418,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   дополнительные сканкоды (среди них `ScancodeS` - спрыгнуть; дебажные -
   под DEBUGKEYS), дозы тряски экрана
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
-  `AftershockTrauma`, `BossCrashTrauma` -
+  `AftershockTrauma`, `BossCrashTrauma`, `CannonBlastTrauma` -
   добавление 2026; дозы
   церемонии живут в `Game.Henshin`), строки макета финального экрана. Три
   ошибки для разработчика - resourcestring на английском, вне словарей
@@ -3786,7 +4434,10 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   монстров, общий всплеск вражеских пуль (`FMonsterBullets`), шрифт, доска
   сообщений, брифинг (`THudBriefing`), тряска экрана, банк звуков, меню,
   взрывы и попадания (`FExplosions`, `FImpacts`, по одному на весь запуск),
-  аура героя (`FAura: TAura`, тоже одна на запуск), обряд хеншина
+  то, что нужно арене грейвелов (3.0.53-3.0.59, по одному на запуск,
+  делается в конструкторе): правила испытания (`FTrial: TGravelTrial`),
+  фиолетовый свет (`FArrivals: TArrivals`), настенные пушки (`FCannons:
+  TCannonPair` над `FCannonArt`), пресс финала (`FPress: TPress`), аура героя (`FAura: TAura`, тоже одна на запуск), обряд хеншина
   (`FRite: TOrbRite`, тоже один на запуск; его проба тела -
   `HeroBodyPoints`) и узор, который он строит на этом уровне (`FPattern:
   TOrbPattern`), церемония (`THenshin`), вбирание предметов (`FUptake:
@@ -3809,8 +4460,13 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   сработавших триггеров по сущностям, слот бонуса (+ отложенная активация;
   `FBonusLearned` - первая потраченная награда - единственное, что переживает
   уровни, поэтому HUD настаивает один раз за запуск),
-  испытание
-  грейвелов (флаг атаки, квота, таймер волны, экран), таймер конца уровня,
+  экран испытания грейвелами (`FGravelScreen`) и то, что ему сказали
+  события, - банк, на который спускаются его аптечки (`FMedkitBank`),
+  монстр и банк его волны (`FWaveMonster`, `FWaveBank`), тело его
+  открытого неба (`FSkyMonster`), столбец прицельного грейвела в пути
+  (`FAimedColumn`), влёты, придержанные на время сцены пушек
+  (`FHeldFlyIns`, `FCannonSmoke`), и выиграно ли оно (`FTrialDone`) - всё
+  это сбрасывают `LoadLevel` и `RestartLevel`, таймер конца уровня,
   список уровней + текущий файл + текущая музыка, полный экран, сложность.
   Кластеры методов:
   - Поток: `Update`, `Render` (порядок слоёв там и есть спецификация тряски:
@@ -3843,7 +4499,12 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     настилами, потом двигаются сами; сразу после тика платформ он
     озвучивает перестройку - `padclick.wav` по `CornerTurned`,
     `padclack.wav` по `PairDocked`, - и полку, `shelflatch.wav` по
-    `ShelfLatched`), арену - сразу после директора, оба
+    `ShelfLatched`; с 3.0.57 `FPads.Tick(FHero.Screen, HeroDeck)` -
+    платформа под живым героем, ради сна, который его щадит, и блуждающей,
+    на которой он едет), гоняет `TickGravelAttack` до ввода (место 2008),
+    тикает `FArrivals` после попаданий, `TickCannons` и
+    `ResolveCannonContact` - сразу после `ResolveMonsterContact`, арену -
+    сразу после директора, оба
     пропускаются над трупом героя (`FArena.Tick`, затем `padhum.wav` по
     `Warned`), а `FDynamics` - после монстров и
     директора, чтобы
@@ -3883,7 +4544,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     (`TPadLoad` перестроек: платформа под героем - монстры не седоки, они
     проваливаются сквозь платформу, уходящую в глубину), `LocateParent`
     (`TLocateParent` из `Render.Dynamics`: сначала платформа
-    (`FindTagged`) - её экран, `Left` / `Round(Top)` + `Lift(1)` (где
+    (`FindWearer` с 3.0.58: собственные обвесы платформы живут, пока она
+    не сломается, обвесы её облика поломки - с этого момента; обвес жив,
+    только пока подходит платформе такой, какая она сейчас) - её экран, `Left` / `Round(Top)` + `Lift(1)` (где
     платформа нарисована, какой её оставил тик, - дробное, Y стойки -
     `Single`), жива, её усилие (`TPad.Effort`: 1, пока платформа
     `Thrusting`, приступами, когда это падающая платформа, 1, пока полка
@@ -3904,8 +4567,66 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `FireScreenTriggers` в `ArriveOnScreen`, `StartPlaying` и
     `RestartLevel`, так что за точкой последнее слово - и над точкой
     входа, и над триггерами; сам герой не переносится),
-    `FireScreenTriggers`, `TickGravelAttack`; события - у директора
-    (`FDirector.Tick` после вердиктов тика, `ReArm` в `RestartLevel`).
+    `FireScreenTriggers` (триггеры сущностей, а с 3.0.53 потом и
+    `ScreenTriggers` уровня, те и другие через `FireTriggersOf`: триггер
+    грейвелов запускает `FTrial` с пачкой грейда и, если есть финал, с его
+    счётом и пределом - `FWaveMonster`, - и церемонию сразу),
+    `TickGravelAttack`; события - у директора (`FDirector.Tick` после
+    вердиктов тика, `ReArm` в `RestartLevel`; его `TDirectorCues`
+    собираются в `LoadLevel`).
+  - Арена грейвелов (3.0.53-3.0.59; правила в `Game.Trial`, `Game.Press`,
+    `Game.Cannons`, замысел в `docs/ARENA-2.md`): `TickGravelAttack` -
+    каждый тик, пока идёт испытание, даже над трупом: грейвелы и тела
+    волны, ушедшие в правый проём, возвращаются с неба
+    (`ReturnSideStrays`, `ArriveAgain` - фиолетовый свет и
+    `HeadRandomly`); `ReleaseHeldFlyIns` (до того, как спросить комнату,
+    так что впущенная карусель садится в этот же тик); `FTrial.RoomBusy` =
+    сцена пушек или их дым (`CannonsScenePlays`), придержанный влёт или
+    карусель, которая садится; держатели ворот = живые грейвелы + гости
+    (`CountAliveGuests`) + живые волны, предел считается только по волне;
+    потом `FTrial.Tick` и `TellPress(FPress.Tick)`, и реплика исполняется:
+    возврат из ямы над `HeroColumn` (сначала грейвел, потом тело волны),
+    спущенный грейвел (`LetDownFromSky`, свет вестника на первом,
+    `HeadRandomly`), метка прицельного (`FAimedColumn`) и грейвел над ней,
+    тело волны (`LetDownWave`: прессу сначала `Arrive`, потом над полкой
+    `FWaveBank`, выбранной из той половины, где волны меньше, -
+    `WaveSideWanted`, `TryPickBankMiddle(bank, side)`; нет банка -
+    случайный столбец), аптечка (`LetDownMedkit`: над полкой
+    `FMedkitBank`), тело неба (`FSkyMonster`); `ActEnded` - `DepartGuests`
+    и `FPress.Shut`; `Finished` - `FTrialDone`, сообщение о прорыве,
+    `bottle.wav` и `RemoveIceForm`, как раньше, и один раз `win.ogg`
+    (`VictoryMusicFile`, `mmOnce`) без таймера конца уровня - уровень идёт
+    дальше, ко второму боссу. Реплики директора: `TellShelves` (действие в
+    `TShelfCommand`; `TellBank` с серединой героя), `BreakCarousel`,
+    `LetStraysGo`, `SendStraysAway`, `FlyInParked` (придерживается в
+    `FHeldFlyIns`, пока `CannonsScenePlays`; потом `TryFlyInCarousel`,
+    иначе `FArena.FlyIn`), `SendMedkitsOnto`, `SendWaveOnto`,
+    `StartCannons` (акт события или, если оно его не называет, акт
+    испытания), `SpawnGuest` / `OpenSky` / `StartPress` (только в акте,
+    которого ждёт событие: `TrialAct`) и запросы `TrialAct`,
+    `TrialProgress`, `TrialDone`. Пресс: `TellPress` -> `TellPressRow`
+    (`TellBank` сон или пробуждение с hold; без spareHero - пресс не
+    щадит). Пушки: `TickCannons` (`FCannons.Tick` с `TrialAct`, телом
+    живого героя и `OrbTakes`; реплика: гул, выстрел, банк уступки через
+    `TellYieldBank`, искры от стали через `LandCannonStrike`,
+    `SHitByBullet` и `HurtHero` под окном милосердия, `BlowCannons` - два
+    взрыва `ekMachine`, `platform.wav`, `CannonBlastTrauma`, дым),
+    `ResolveCannonContact` (касание ранит, `SHurtByMonster`, и отталкивает
+    героя на `CannonShove` 4 от стены), `BulletStruckCannon` (в
+    `ResolveHeroBulletHits`: щит съедает пулю, голая сталь даёт искры и
+    звон, без урона). `OrbTakes(fromX, toX, y)` (3.0.57) - первый
+    вооружённый орб ауры, обряда или дождя в пределах `OrbReach` от
+    отрезка тратится на то, что там летит: снаряды пушек и, через
+    `ShardStruck`, живой осколок. Погода (3.0.58): `ResolveMonsterContact`
+    лопает её на герое (`Monster.Burst`), `meBurst` выпускает её взрыв
+    (`RewardMonsterKill`), а `RewardMonsterKill` ничего за неё не платит -
+    ни очков, ни тикера, ни всплывашки, ни серии. `DrainMonsterEvents`
+    сообщает испытанию об убитом на его экране грейвеле
+    (`NoteGravelKilled`) и о теле волны (`NoteWaveKilled`). Рисуется:
+    `FCannons.DrawBodies` после дыма взрывов, до монстров; `DrawLight` -
+    после пуль; `FArrivals.Draw` - после попаданий, на канале монстров.
+    `ArriveOnScreen`, `LoadLevel` и `RestartLevel` убирают прибытия и
+    пушки.
   - Бой: `ResolveHeroBulletHits` (пуля попадает в монстра, чей `HitBox`
     встречает отрезок её последнего тика: `HeroBulletTarget` над
     `BulletInMonsterBox`, `BulletStretch` и `StretchEntry`, отрезок
@@ -4282,23 +5003,40 @@ numpy, scipy, Pillow.
 Печатает рамку кейса, рамку и середину креста в единицах экрана. Исходной
 картинки в репозитории нет. numpy, scipy, Pillow.
 
+### `tools/cannon/build_cannon.py`
+Собирает `bin/sprites/tek-cannon.mset`, арт настенной пушки TeK арены
+грейвелов (`Game.Cannons`), из одной сгенерированной картинки - пушки
+сбоку, дулом вправо, ровно 2:1, - которую ищет в папке исходников как
+`cannon.png` (`SOURCE_FILE`): `build <папка исходников> <набор>`. Ужимает
+картинку целиком до `DENSITY` (6 px на единицу экрана, 384x192 для пушки
+64 x 32 единицы) в предумноженной альфе, вырезает из неё слой жара
+(стволы с того места, где они выходят из ствольной коробки), снимает
+коробки контакта по альфе и печатает точки в единицах экрана - дула,
+линзу и коробки, которые `Game.Cannons` держит константами. Снятые точки
+исходника - константы в начале файла. Ни текста, ни эмблемы на арте:
+правая пушка - это левая в зеркале. Исходника в репозитории нет. numpy,
+scipy, Pillow.
+
 ---
 
 ## Тесты
 
 Концепт, правила и таблицы тестов - в `docs/TESTING.md`. На 3.0.52 в
-наборе 376 тестов, все зелёные. Не у каждого тестового юнита уже есть запись
+наборе было 376 тестов, все зелёные; арена грейвелов (3.0.53-3.0.59)
+принесла ещё 112 - 488. Не у каждого тестового юнита уже есть запись
 ниже: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
-`Tests.Pads.Plunge` и `Tests.Pads.Shelf` описаны только в
-`docs/TESTING.md`.
+`Tests.Pads.Plunge`, `Tests.Pads.Shelf` и новые юниты арены
+`Tests.Game.Trial` (небо, волна и аптечки середины испытания; финал и
+события неба на уровне), `Tests.Game.Press` и `Tests.Pads.Stray` описаны
+только в `docs/TESTING.md`.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
 не то, что рисует: без окна и без вызовов SDL. Юниты игры приходят через
 путь поиска проекта (`..\Core`, `..\Game\Orbs`); exe ложится в `bin\`.
-- **`Moon2D.Tests.dpr`** (~65 строк) - раннер: все зарегистрированные
+- **`Moon2D.Tests.dpr`** (~70 строк) - раннер: все зарегистрированные
   фикстуры, подробный лог в консоль, код возврата (0 - зелёное). Тест без
   единой проверки считается упавшим.
 - **`Orbs/Tests.Orbs.Flock.pas`** (~320 строк) - **`TOrbFlockTests`**
@@ -4403,11 +5141,13 @@ numpy, scipy, Pillow.
 руками) и перекрывает config.json по ключам. Живёт вне папки игры: не в
 репозитории, не в релизе, переживает распаковку новой версии поверх старой.
 
-### `monsters.json` (~12 КБ)
+### `monsters.json` (~15 КБ)
 Ключи: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
-dangerous - наследуются монстрами), массив `monsters`. 15 идентификаторов:
+dangerous - наследуются монстрами), массив `monsters`. 16 идентификаторов:
 `gravel`, `gravelFemale`, `winter`, `zombieShooter`, `betoner`, `platform`,
-`tank`, `mount`, `barrel`, `medkit`, `weaponShotgun`, `weaponGrenade`,
+`tank`, `mount`, `barrel`, `skyBarrel` (3.0.58: арт, жизни, ударная волна
+и взрыв бочки, score 0, `weather` - небесная бочка акта 5 арены
+грейвелов), `medkit`, `weaponShotgun`, `weaponGrenade`,
 `weapon3`, `weapon4`, `boss1`. Разбирается `TMonsterRegistry` в `TMonsterDef`
 (полный лист полей см. в Monsters.Defs выше). У девяти из пятнадцати нет
 `spriteList` - он приходит из расстановки в уровне. `explosion` называет
@@ -4437,7 +5177,7 @@ dangerous - наследуются монстрами), массив `monsters`.
 сложностью потолок не растёт, как растут жизни: стволы героя тоже не
 растут.
 
-### `level1.json` (~97 КБ) / `level2.json` (~56 КБ)
+### `level1.json` (~107 КБ) / `level2.json` (~84 КБ)
 Единый формат уровня, разбирается `TLevel`. Ключи: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (наборы окружения в порядке разрешения),
 **`objectSets`** (необязательно: общий арт объектов, ищется после
@@ -4453,17 +5193,21 @@ dangerous - наследуются монстрами), массив `monsters`.
 sprite, screen, x, y - настил -, width в единицах экрана, необязательные
 `tint` и `tag`, `bullets` block / pass, без него block, необязательные
 `path` - `route`, `stops`, `speed`, `pause` -, `bob`, `plunge` - `delay`,
-`rest`, `rise` -, `shelf` - `out` и `in` или `program`, `slide`, `warn`,
-`offset`, `sink`, `scale`, `tone` -, `group`, `carousel` - карусель, на
-которой она летает, вместо `x` и `y` - и `rig` -
+`rest`, `rise` -, у `plunge` ещё `staysDown` -, `shelf` - `out` и `in`
+или `program`, `slide`, `warn`, `offset`, `sink`, `scale`, `tone`, `bank`
+(имя или список), `held` -, `group`, `carousel` - карусель, на которой
+она летает, вместо `x` и `y` -, `stray` - `flock`, `zone`, `wait`, вместо
+`x` и `y` - и `rig` -
 обвесы, которые она носит; см. `Levels.Pads`), `carousels` (необязательно,
 3.0.52: `tag`, `screen`, `shape` oval / box, `center` и `size` [x, y] в
-единицах экрана, `corner`, `period` в секундах, `turn` cw / ccw, `start` -
-см. `Levels.Carousels`), `padGroups` (необязательно:
+единицах экрана, `corner`, `period` в секундах, `turn` cw / ccw, `start`,
+`parked`, `speedUp`, `failing` - см. `Levels.Carousels`), `padGroups` (необязательно:
 `tag`, `screen`, `zone` [left, top, right, bottom] в клетках, `pairs`,
 `farFlight`, `farShare`,
-необязательные `conductor`, `every` и `alarm` - платформы, которые
-перестраиваются вместе, см. `Levels.Pads`), `rigs` (необязательно:
+необязательные `conductor`, `every`, `alarm` и `parked` - платформы,
+которые перестраиваются вместе, см. `Levels.Pads`), `screenTriggers`
+(необязательно, 3.0.53: `screen`, `difficulty`, `triggers` - триггеры
+экрана, которые не несёт ни одно тело, см. `Levels.Defs`), `rigs` (необязательно:
 именованные списки динамических объектов без собственного места, число
 детали может быть `{"spread": [from, to]}` - см. `Levels.Rigs`),
 `respawns` (необязательно: `screen`, `x`, `y` - клетка, на которую яма и
@@ -4487,17 +5231,21 @@ monsterId, screen, x, y - или, с 3.0.52, `seat`: тег платформы, 
 которой она сидит, вместо обоих -, spriteList, необязательные грейды `difficulty`
 (разбираются, оба уровня ими не пользуются),
 `overrides` (direction / speed / lives / canShoot / fireOffset), `triggers` -
-сообщения/подсказки/changeMusic/heroX-heroY/gravelBoss (квота волны по
-сложности), необязательный `tag` для событий и динамики, необязательный
+сообщения/подсказки/changeMusic/heroX-heroY/gravelBoss (грейвелы одного
+акта по сложности) и `finale`, необязательный `tag` для событий и динамики, необязательный
 `rig` - обвесы, которые носит монстр, для них нужен тег (см.
 `Levels.Rigs`); `secret` у одной
 аптечки уровня 1 - данные, которые пока никто не читает), `events` (у
 каждого: `id`, `screen`, `when` = enterScreen | allDead / enraged + `tag` |
-livesBelow + `tag` + `lives`, необязательный `delay` в тиках, `then` =
-список объектов `action` - bigMessage/smallMessage/hint с `text`/`textEn`,
-music с `file`, intensity с `target`/`value`/`ticks`, sun с
-`target`/`value` (градусы)/`ticks`, tactics с `target`/`value`, rebuild и
-restore с `target`; подсказка медлаба, `labHint`, - самый
+livesBelow + `tag` + `lives` | actReached + `act` | gravelDealt /
+waveKilled + `act`, `part`, `of` | trialDone, необязательный `delay` в
+тиках, `then` = список объектов `action` - bigMessage/smallMessage/hint с
+`text`/`textEn` (у hint ещё `header`, `place`), music с `file`, intensity
+с `target`/`value`/`ticks`, sun с `target`/`value` (градусы)/`ticks`,
+tactics с `target`/`value`, rebuild и restore с `target`, и действия
+арены: shelvesWake / shelvesSleep / shelvesProgram, flyIn, medkitsOnto,
+waveOnto, cannons, spawn, breakCarousel, strays, straysLeave, skyFall,
+press - см. `Levels.Events`; подсказка медлаба, `labHint`, - самый
 простой пример),
 `introText`/`introTextEn`.
 - level1: 17 экранов, 145 сущностей, палитра из 156 тайлов, 4 фона - ночь
@@ -4574,7 +5322,7 @@ restore с `target`; подсказка медлаба, `labHint`, - самый
   тиков, restore `arena17`). Отметки - те, что у нормального грейда (400 жизней: dives
   ниже 200, ярость ниже 120, hunts ниже 45), и растут со сложностью - в
   1.5 раза на hard, в 2 на wild.
-- level2: 9 экранов, 38 сущностей, палитра из 35 тайлов, 4 фона - день (1),
+- level2: 9 экранов, 36 сущностей, палитра из 35 тайлов, 4 фона - день (1),
   край обрыва (2), скала (3-5), та же скала темнее (6-9); наборы
   `moon-surface machinery facility common mine-interior`. Объект: спутник на
   экране 1, чуть ярче (день), тег `satellite`; Земля на экране 1, как её
@@ -4582,13 +5330,12 @@ restore с `target`; подсказка медлаба, `labHint`, - самый
   `dying` - тусклое
   быстрое мельтешение, садится батарейка, и осталась одна утечка - изредка
   клуб (`flow` puffs); пробоина ещё искрит, на интенсивности 25 - искра
-  изредка. Шестнадцать вентиляторов (`fan`: ротор `turbine` за плитой
-  `bezel` над подложкой `shaft`, каждый в одну клетку) стоят там, где
-  стояли тайлы 2008 `cooler1`-`cooler4` и `ventelat` - клетки в сетке
-  пусты и твёрды, как раньше, имена остались в палитре: два по 150
-  оборотов в минуту на полу экрана 3 с объектом `louver-2x1` между ними,
-  четырнадцать по 180 на воздуховодах экрана 9 с красным старой решётки
-  вместо света, один из них `dying`. Единственная летающая платформа TeK,
+  изредка. Два вентилятора (`fan`: ротор `turbine` за плитой `bezel` над
+  подложкой `shaft`, каждый в одну клетку) стоят там, где на полу экрана
+  3 стояли тайлы 2008 `cooler1`-`cooler4`, по 150 оборотов в минуту, с
+  объектом `louver-2x1` между ними - клетки в сетке пусты и твёрды, как
+  раньше, имена остались в палитре; четырнадцать на воздуховодах экрана
+  9 ушли вместе с его перерисовкой (3.0.54). Единственная летающая платформа TeK,
   на экране 6, несёт тег `s06-tek-01` и носит обвес `tekPlatform` - числа
   уровня 1, записанные ещё раз в `rigs` этого файла. Экраны 1-4
   перерисованы (`docs/REPAINT.md`). Экран 1 - арена экрана 17 первого
@@ -4651,13 +5398,38 @@ restore с `target`; подсказка медлаба, `labHint`, - самый
   бочек 2008 больше нет; на каждой платформе сидит монстр (`seat`):
   бетонеры на `-01` и `-05` (скорость 0; первый унаследовал триггер
   `heroY` 4 первой бочки 2008), бочки на остальных (направление 1).
-  Маячок `dying` на комнате. Здесь
-  живёт испытание
-  грейвелов (экран 9: триггер `gravelBoss`, квота 75/125/200 по сложности,
-  под `boss2.ogg`) - монстра-босса нет, - и на этом кампания оригинала
-  кончается.
+  Маячок `dying` на комнате. Экран 9 - арена грейвелов (3.0.53-3.0.59;
+  весь замысел и данные акт за актом - в `docs/ARENA-2.md`): `s09-room`
+  (комната ChatGPT с фиолетовой решёткой потолка), `s09-doorstep` (левая
+  плита, столбцы 0-1 строки 11 - единственный твёрдый пол; точка
+  возрождения - столбец 2, строка 11), `s09-lamp-off` с маячком `dying` и
+  `shelf-dock` за каждой полкой (всего 49 объектов). Триггеры испытания -
+  триггер экрана (`changeMusic` `boss2.ogg`, `heroX` 1, `gravelBoss` 15 /
+  25 / 40, `finale` betoner 10 / 15 / 20 alive 3); трёх аптечек испытания
+  2008 больше нет. 57 платформ: 46 полок, удержанных с начала в своих
+  банках, - `s09-floor` (14, строка 11, столбцы 2-15) со своими
+  подмножествами `s09-isle`, `s09-grid`, `s09-gaps`, `s09-wall` (строка 9,
+  столбцы 1, 14), `s09-foot` (строка 9, столбцы 2-3, 12-13), `s09-ladder`
+  (строка 7, столбцы 4-5, 10-11), `s09-crown` (строка 5, столбцы 6-9),
+  `s09-pyramid` (ladder и crown), ряды пресса `s09-press-1..3` (строки 3,
+  5, 7, столбцы 1-3 и 12-14) и `s09-press-4` (wall и foot), все 24 из этих
+  четырёх ещё и `s09-balcony` -; восемь платформ `s09-ride-01..08` на
+  `s09-carousel` (коробка вокруг (256, 232), 224 на 112, угол 24, круг за
+  15 с, запаркована наверху, разгон 3 с, bullets block, ломается в
+  `s16-platform-out` / `padFailing` с падением, которое остаётся внизу),
+  две аптечки акта 4 сидят на `-03` и `-07`; три блуждающие
+  `s09-stray-01..03` стаи `s09-strays` (зона [4, 3, 11, 8], ожидание 0,
+  1.5, 3). Двенадцать событий ведут шесть актов: от `s09-act1` до
+  `s09-act6` (actReached), `s09-act3-cannons` (через 200 тиков после
+  начала акта 3), `s09-act4-tek-upper` / `-lower` (gravelDealt: две
+  платформы TeK-K10 с тегами `s09-tek-01` / `-02` в обвесе `tekPlatform`),
+  `s09-act6-tanks` и `-tanks-2` (waveKilled 1 из 2: по два танка с каждой
+  стороны, вторая пара через 66 тиков), `s09-done` (trialDone: каждый
+  балкон уезжает, щадя героя, блуждающие улетают). Монстра-босса нет; в
+  конце играет победная музыка, и уровень идёт дальше - второй босс
+  второго уровня придёт на экранах после него (ещё не построены).
 
-### `sprites\*.mset` (44 набора)
+### `sprites\*.mset` (45 наборов)
 - **Герой и оружие**: `hero` (последовательности walk/death/henshin),
   `weapon` (кадры оружия в руках, пули, прицел), `weapon1`-`weapon4`
   (подбираемое: кадры 2008; с 3.0.50 их кадры `death` тоже не рисуются, а
@@ -4696,6 +5468,12 @@ restore с `target`; подсказка медлаба, `labHint`, - самый
   `Monsters.Hull`. `platform` держит свои кадры полёта `plat1`-`plat3`, а
   `tank` - кадры хода `tank1`-`tank3` только
   ради контракта `TAnimSet`.
+- **Настенная пушка TeK** (3.0.56): `tek-cannon` - `hull` (пушка
+  целиком, дулом вправо, линза не горит) и `heat` (одни стволы, белые,
+  форма в альфе), по 384x192, 6 px на единицу, пушка 64 x 32 единицы;
+  собирает `tools/cannon/build_cannon.py`, читает `TCannonArt` из
+  `Game.Cannons` (это не монстр, поэтому записи `hull` в monsters.json
+  нет).
 - **Кадры смерти того, что взрывается** (3.0.42): в `barrel`, `tank`,
   `platform`, `krep` и `boss1` последовательность `death` - пустой кадр
   `e8` восемь раз: тело исчезает в тик смерти, а как смерть выглядит,
@@ -4713,8 +5491,9 @@ restore с `target`; подсказка медлаба, `labHint`, - самый
   линейным фильтром и тинтом смены; `_black` остаётся заливкой 512x512.
 - **Объекты**: `level1-objects` (`ship`) и `level2-objects`
   (`tunnel-gate` и `s04-tek-crates`, 6 px на единицу; `s03-room`,
-  `s04-room` и комнаты экранов, перерисованных после них, последняя -
-  `s08-room`, 3.0.52, - экраны целиком в плотности задника) - соглашение `<assetsDir>-objects`, не объявляется,
+  `s04-room` и комнаты экранов, перерисованных после них, до `s09-room` -
+  3.0.54, - экраны целиком в плотности задника, с `s09-doorstep` и
+  `s09-lamp-off`) - соглашение `<assetsDir>-objects`, не объявляется,
   необязателен. Общий: `sky`
   (`earth`, `earth-night`, `satellite`), оба уровня объявляют его в
   `objectSets`. Корабль и спутник нарисованы в плотности задника (1440 px на
@@ -4801,7 +5580,17 @@ JSON уровней и монстров, по схеме "базовое пол�
 | То, что делается из альфы картинки, - маска, ореол, точки: для ещё одной вещи, которая светится по своей форме | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Контент уровня / триггеры / экраны | levelN.json + Levels.Defs.pas |
 | Событие уровня: когда срабатывает, что делает; новое условие или действие | `events` в levelN.json + Levels.Events.pas (модель) + Events.Director.pas (исполнитель) |
-| Игровой поток / машина состояний / очки / бонусы / испытание грейвелов | Moon2D.dpr (+Game.Bonus.pas) |
+| Игровой поток / машина состояний / очки / бонусы | Moon2D.dpr (+Game.Bonus.pas) |
+| Испытание грейвелами: акты и пачки, ворота, передышка между актами, вестник, прицельный дождь, возвраты из ямы и сбоку, аптечки (на 15 убийств, в середине акта), открытое небо, волна финала и её предел; где спускается тело | Game.Trial.pas (правила) + Moon2D.dpr (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) в level2.json + docs/ARENA-2.md |
+| Комната арены грейвелов акт за актом: какие полки просыпаются, засыпают или мигают, в каком порядке, щадя героя или нет | `events` экрана 9 в level2.json (`s09-act1`..`s09-done`) + банки тамошних полок + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/ARENA-2.md |
+| Фиолетовый свет прибытия; свет вестника | Game.Arrivals.pas (+Moon2D.dpr `LetDownFromSky`, `ArriveAgain`) |
+| Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Moon2D.dpr (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
+| Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
+| Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Moon2D.dpr (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
+| Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Moon2D.dpr `SpawnGuest` |
+| Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Moon2D.dpr (`FlyInParked`, `ReleaseHeldFlyIns`) |
+| Блуждающие платформы: когда приходят, где висят, как озоруют, как их отсылают | Pads.Stray.pas + `stray` у платформы и действия `strays` / `straysLeave` в level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
+| Погода: тело, которое лопается там, где приземлилось (небесная бочка) | `weather` в monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Moon2D.dpr (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
 | Аура героя из орбов: кольцо, течение, как оно идёт за героем (поводок, нитка рывка), сроки, вплетение второго вызова, потолок кольца, дверь, смерть героя | Orbs.Aura.pas (формулы и числа) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
 | Вызов ауры: где проступают орбы (грани клеток и платформ, воздух), ожидание над гранью, полёт, когда орб взведён, окно пощады | Orbs.Harvest.pas (точки) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`, `GrantMercy`) |
 | Огненный дождь из орбов: волны, формула капли, пол столбца (материя, яма), посадка, второй вызов, смерть героя | Orbs.Rain.pas (формулы и числа) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/ORBS-PLAN.md |
@@ -4822,7 +5611,7 @@ JSON уровней и монстров, по схеме "базовое пол�
 | То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, порядок в `Render`) |
 | Динамический объект (маячок, его мигание, лучи; график на экране - его форма, рамка, сетка); новый вид; подвесить к статическому объекту | `dynamics` в levelN.json + Levels.Dynamics.pas (виды, парсер) + Effects.Traces.pas (что отвечает трасса) + Render.Dynamics.pas (где стоит, слой) (+`tag` у `objects`) |
 | Отрисовка текста / новые подписи | Render.Font.pas + Hud.Messages.pas + ключ `S*` в Localization.pas + оба JSON языков |
-| Подсказки уровня / терминал связи | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня) |
+| Подсказки уровня / терминал связи; голос и место подсказки | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня, `header` / `place` события-подсказки) |
 | Экран рассказа перед уровнем / ритм печати | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` в JSON уровня) |
 | Ритм кадров / окно / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
 | Звук / музыка | Audio.pas (+константы звуков и `PreloadSounds` в Moon2D.dpr, звуки церемонии в Game.Henshin.pas, поля данных в JSON) |
