@@ -141,6 +141,10 @@ type
     procedure TestStraysOfAnUnknownFlockRaise;
     [Test]
     procedure TestLevelTwoArenaStraysAreLetGoInActFive;
+    [Test]
+    procedure TestDeckRunsLoadAsPadsWithNoPicture;
+    [Test]
+    procedure TestBadCollisionLetterRaises;
   end;
 
 implementation
@@ -198,6 +202,14 @@ const
 function OpenRows: TArray<string>;
 begin
   Result := RoomRowsOf(0, 0, 0, 0);
+end;
+
+// A room whose row ARow (from 1) holds ACells in place of its air: decks
+// and walls as the file spells them
+function RowsWithCells(ARow: Integer; const ACells: string): TArray<string>;
+begin
+  Result := OpenRows;
+  Result[ARow - 1] := ACells;
 end;
 
 function GapRows(AShaft: TShaft): TArray<string>;
@@ -1388,6 +1400,44 @@ begin
           'The act the flock is let go in');
       end;
   Assert.AreEqual(1, LetGo, 'The flock is let go once');
+end;
+
+// The collision letter '2' is a deck: every run of them in a row is one
+// pad with no picture that stops bullets, a cell deep, and no wall
+procedure TLevelPadsTests.TestDeckRunsLoadAsPadsWithNoPicture;
+const
+  DeckRow = 8;
+begin
+  // Two runs in one row: columns 5 to 7 and column 11 (from 1)
+  UseLevel(RowsWithCells(DeckRow, '....222...2.....'),
+    PadsSection([PadJson(96, 160)]));
+
+  Assert.AreEqual(3, Integer(Length(FLevel.Pads)),
+    'The pad of the file and the two decks');
+  Assert.AreEqual(SpriteName, FLevel.Pads[0].Sprite, 'The file pad comes first');
+
+  var Run := FLevel.Pads[1];
+  Assert.AreEqual('', Run.Sprite, 'A deck has no picture');
+  Assert.AreEqual(1, Run.Screen, 'Run: screen');
+  Assert.AreEqual(4 * TileSize, Run.X, 'Run: left edge');
+  Assert.AreEqual((DeckRow - 1) * TileSize, Run.Y, 'Run: deck line');
+  Assert.AreEqual(3 * TileSize, Run.Width, 'Run: three cells wide');
+  Assert.IsTrue(Run.Bullets = pbBlock, 'Run: bullets burst on it');
+
+  var Lone := FLevel.Pads[2];
+  Assert.AreEqual(10 * TileSize, Lone.X, 'Lone: left edge');
+  Assert.AreEqual(TileSize, Lone.Width, 'Lone: one cell wide');
+
+  Assert.IsFalse(FLevel.SolidAt(1, 4, DeckRow - 1), 'A deck is no wall');
+end;
+
+procedure TLevelPadsTests.TestBadCollisionLetterRaises;
+begin
+  ExpectRaises(ELevelError, RowsWithCells(5, '....3...........'), '',
+    'A letter the grid does not know');
+  ExpectRaises(ELevelError, RowsWithCells(5, '....x...........'), '',
+    'A letter that is none');
+  ExpectLoads(RowsWithCells(5, '....2...........'), '', 'A deck is known');
 end;
 
 initialization

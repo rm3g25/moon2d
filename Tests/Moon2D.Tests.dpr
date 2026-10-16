@@ -40,6 +40,7 @@ uses
   Tests.Orbs.Harvest in 'Orbs\Tests.Orbs.Harvest.pas',
   Tests.Orbs.Patterns in 'Orbs\Tests.Orbs.Patterns.pas',
   Tests.Orbs.Rite in 'Orbs\Tests.Orbs.Rite.pas',
+  Tests.Pads.Decks in 'Pads\Tests.Pads.Decks.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas',
   Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas',
   Tests.Pads.Stray in 'Pads\Tests.Pads.Stray.pas';

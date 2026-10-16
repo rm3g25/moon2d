@@ -13,6 +13,10 @@
   (location titles, music changes) - faithfully carrying over the
   component system the 2008 .mon format invented by accident.
 
+  The collision grid has three letters: '0' is air, '1' a wall, '2' a deck,
+  a cell that holds the hero from above only. A run of decks in a row is
+  loaded as one pad with no picture, so a deck plays by the rules of pads.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Defs;
@@ -28,6 +32,9 @@ uses
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
+  CollisionAir = '0';
+  CollisionSolid = '1';
+  CollisionDeck = '2';
 
 type
   ELevelError = class(Exception);
@@ -180,7 +187,7 @@ type
     FGridHeight: Integer;
     FScreenCount: Integer;
     FTiles: TArray<TArray<TArray<Integer>>>; // [screen][row][col], 0-based
-    FCollision: TArray<TArray<string>>;       // [screen][row], '1' = solid
+    FCollision: TArray<TArray<string>>;       // [screen][row], '1' = solid, '2' = deck
     FTilePalette: TArray<string>;
     FBackgrounds: TArray<TBackgroundChange>;
     FObjects: TArray<TLevelObject>;
@@ -197,6 +204,8 @@ type
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseScreenTriggers(const AArr: TJSONArray);
     procedure ParseBackgrounds(const AArr: TJSONArray);
+    procedure CheckCollisionRow(AScreen, ARow: Integer);
+    procedure AddCollisionDecks;
     procedure ParseObjects(const AArr: TJSONArray);
     procedure ParseRespawns(const AArr: TJSONArray);
     procedure CheckRespawns;
@@ -275,7 +284,8 @@ type
     // Every screen's objects, in file order - later ones draw over
     // earlier ones
     property Objects: TArray<TLevelObject> read FObjects;
-    // Platforms apart from the grid, in file order (Levels.Pads)
+    // Platforms apart from the grid, in file order (Levels.Pads), then the
+    // decks of the collision grid by screen and row
     property Pads: TArray<TPadPlacement> read FPads;
     // Pads rebuilt together, in file order (Levels.Pads)
     property PadGroups: TArray<TPadGroup> read FPadGroups;
@@ -307,6 +317,8 @@ resourcestring
   SLevelBadRowCount = 'Level "%s": screen %d has %d %s rows, expected %d';
   SLevelBadCollision = 'Level "%s": screen %d collision row %d is '
     + '%d chars, expected %d';
+  SLevelBadCollisionChar = 'Level "%s": screen %d collision row %d column '
+    + '%d is "%s", expected 0, 1 or 2';
   SLevelBadScreen = 'TileAt: screen %d out of 1..%d';
   SLevelBadGrade = 'Level entity "%s": unknown difficulty id "%s"';
   SLevelEventBadScreen = 'Level "%s": event "%s" sits on screen %d of %d';
@@ -646,6 +658,8 @@ begin
   ParseScreenTriggers(ARoot.GetValue<TJSONArray>('screenTriggers', nil));
   // Pads before the dynamics: a dynamic object may hang on one
   FPads := ParsePads(ARoot, FId);
+  // Before the checks: a deck is a pad as they see it
+  AddCollisionDecks;
   // Before the checks of the pads: a carousel puts its pads' places
   FCarousels := ParseCarousels(ARoot, FId);
   PlaceCarouselPads;
@@ -1470,6 +1484,60 @@ begin
   end;
 end;
 
+function IsCollisionCell(AChar: Char): Boolean;
+begin
+  Result := (AChar = CollisionAir) or (AChar = CollisionSolid) or
+    (AChar = CollisionDeck);
+end;
+
+procedure TLevel.CheckCollisionRow(AScreen, ARow: Integer);
+begin
+  var Row := FCollision[AScreen - 1][ARow];
+  for var i := 1 to Length(Row) do
+    if not IsCollisionCell(Row[i]) then
+      raise ELevelError.CreateFmt(SLevelBadCollisionChar,
+        [FId, AScreen, ARow + 1, i, Row[i]]);
+end;
+
+// The body of a deck is the cell it stands for: a bullet is stopped where
+// the wall stopped it
+function DeckPad(AScreen, ARow, ACol, ACells: Integer): TPadPlacement;
+begin
+  Result := Default(TPadPlacement);
+  Result.Screen := AScreen;
+  Result.X := ACol * TileSize;
+  Result.Y := ARow * TileSize;
+  Result.Width := ACells * TileSize;
+  Result.Bullets := pbBlock;
+end;
+
+// A run of deck cells in a row is one pad, not a pad a cell
+function DecksOfRow(AScreen, ARow: Integer;
+  const AText: string): TArray<TPadPlacement>;
+begin
+  Result := [];
+  var Col := 1;
+  while Col <= Length(AText) do
+  begin
+    if AText[Col] <> CollisionDeck then
+    begin
+      Inc(Col);
+      Continue;
+    end;
+    var First := Col;
+    while (Col <= Length(AText)) and (AText[Col] = CollisionDeck) do
+      Inc(Col);
+    Result := Result + [DeckPad(AScreen, ARow, First - 1, Col - First)];
+  end;
+end;
+
+procedure TLevel.AddCollisionDecks;
+begin
+  for var s := 0 to FScreenCount - 1 do
+    for var r := 0 to FGridHeight - 1 do
+      FPads := FPads + DecksOfRow(s + 1, r, FCollision[s][r]);
+end;
+
 function TLevel.SolidAt(AScreen, AX, AY: Integer): Boolean;
 begin
   if (AScreen < 1) or (AScreen > FScreenCount) then
@@ -1516,6 +1584,7 @@ begin
       if Length(FCollision[s][c]) <> FGridWidth then
         raise ELevelError.CreateFmt(SLevelBadCollision,
           [FId, s + 1, c + 1, Length(FCollision[s][c]), FGridWidth]);
+      CheckCollisionRow(s + 1, c);
     end;
     var RowsArr := ScreenObj.GetValue<TJSONArray>('rows');
     if RowsArr.Count <> FGridHeight then

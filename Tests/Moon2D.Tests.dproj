@@ -97,6 +97,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Harvest.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Patterns.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Rite.pas"/>
+        <DCCReference Include="Pads\Tests.Pads.Decks.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Plunge.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Shelf.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Stray.pas"/>

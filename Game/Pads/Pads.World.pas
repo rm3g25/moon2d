@@ -628,8 +628,13 @@ begin
   inherited Create;
   FPlacement := APlacement;
   FTexture := ATexture;
-  SDL_QueryTexture(ATexture, nil, nil, @ArtWidth, @ArtHeight);
-  FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
+  // No picture: a deck of the collision grid, a cell deep as the wall was
+  FPictureHeight := TileSize;
+  if ATexture <> nil then
+  begin
+    SDL_QueryTexture(ATexture, nil, nil, @ArtWidth, @ArtHeight);
+    FPictureHeight := Round(APlacement.Width * ArtHeight / ArtWidth);
+  end;
   FBodyDepth := EnsureRange(FPictureHeight, ThinnestBody, TileSize);
   FOrbit := AOrbit;
   FFailLook := AFailLook;
@@ -1172,6 +1177,9 @@ procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Dest: TSdlFRect;
 begin
+  if FTexture = nil then
+    Exit;
+
   var Sunk := Depth(AAlpha);
   var Scale := 1 - (1 - FDeep.Scale) * Sunk;
   var Tone := 1 - (1 - FDeep.Tone) * Sunk;
@@ -1211,6 +1219,15 @@ begin
   Result.Plunge := Carousel.Failing.Plunge;
 end;
 
+// A deck of the collision grid has no sprite and asks the cache for none
+function PadTexture(const ACache: TSpriteCache;
+  const APlacement: TPadPlacement): PSdlTexture;
+begin
+  Result := nil;
+  if APlacement.Sprite <> '' then
+    Result := ACache.Get(APlacement.Sprite);
+end;
+
 constructor TPadWorld.Create(const ASprites: TSpriteRenderer;
   const ACache: TSpriteCache; const ALevel: TLevel;
   const AReach: TJumpReach; ASeed: Cardinal);
@@ -1222,7 +1239,7 @@ begin
   FPads := TObjectList<TPad>.Create(True);
   var Placements := ALevel.Pads;
   for var i := 0 to High(Placements) do
-    FPads.Add(TPad.Create(Placements[i], ACache.Get(Placements[i].Sprite),
+    FPads.Add(TPad.Create(Placements[i], PadTexture(ACache, Placements[i]),
       OrbitOf(ALevel.Carousels, Placements, i),
       FailLookOf(ACache, ALevel, Placements[i])));
   Rewind(ASeed);
