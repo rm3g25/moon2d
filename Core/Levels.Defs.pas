@@ -366,7 +366,7 @@ resourcestring
     + 'a wall crosses between the walls of the room';
   SLevelPadStrayColumnShut = 'Level "%s": pad "%s" strays down column %d, '
     + 'which a wall crosses between the top of the room and the bottom';
-  SLevelEventStraysUnknown = 'Level "%s": event "%s" lets go the flock "%s", '
+  SLevelEventStraysUnknown = 'Level "%s": event "%s" tells the flock "%s", '
     + 'which no pad strays in';
   SLevelPadGroupBadScreen = 'Level "%s": pad group "%s" sits on screen %d '
     + 'of %d';
@@ -798,7 +798,7 @@ begin
       if not AnyBreakingCarouselTagged(FCarousels, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventBreakUnknown,
           [FId, AEventId, AAction.Target]);
-    eaStrays:
+    eaStrays, eaStraysLeave:
       if not AnyPadOfFlock(FPads, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventStraysUnknown,
           [FId, AEventId, AAction.Target]);

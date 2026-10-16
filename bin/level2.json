@@ -3361,11 +3361,31 @@
       ]
     },
     {
+      "id": "s09-act6-tanks",
+      "screen": 9,
+      "when": "waveKilled", "act": 6, "part": 1, "of": 2,
+      "then": [
+        {"action": "spawn", "monster": "tank", "spriteList": "tank.mns", "row": 10, "from": "left"},
+        {"action": "spawn", "monster": "tank", "spriteList": "tank.mns", "row": 10, "from": "right"}
+      ]
+    },
+    {
+      "id": "s09-act6-tanks-2",
+      "screen": 9,
+      "when": "waveKilled", "act": 6, "part": 1, "of": 2,
+      "delay": 66,
+      "then": [
+        {"action": "spawn", "monster": "tank", "spriteList": "tank.mns", "row": 10, "from": "left"},
+        {"action": "spawn", "monster": "tank", "spriteList": "tank.mns", "row": 10, "from": "right"}
+      ]
+    },
+    {
       "id": "s09-done",
       "screen": 9,
       "when": "trialDone",
       "then": [
-        {"action": "shelvesSleep", "target": "s09-press-4", "order": "down", "step": 0.25, "spareHero": true}
+        {"action": "shelvesSleep", "target": "s09-press-4", "order": "down", "step": 0.25, "spareHero": true},
+        {"action": "straysLeave", "target": "s09-strays"}
       ]
     }
   ],

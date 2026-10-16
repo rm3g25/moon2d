@@ -8,10 +8,11 @@
   not own through callbacks: the music, whose track the game remembers
   for restarts; the arena that rebuilds a pad group, restores it and
   flies it in; the shelves of a bank, which take their order from where
-  the hero stands; a carousel that breaks; a flock of stray pads let go;
-  the trial's medkits and the bank its wave comes down onto; the wall
-  cannons of the trial; the bodies an event lets in; the open sky of the
-  trial; how far the gravel trial has come and whether it is won. The
+  the hero stands; a carousel that breaks; a flock of stray pads let go
+  and sent away; the trial's medkits and the bank its wave comes down
+  onto; the wall cannons of the trial; the bodies an event lets in; the
+  open sky of the trial; how far the gravel trial has come and whether it
+  is won. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -71,6 +72,8 @@ type
     Shelves: TShelfCue;
     BreakCarousel: TBreakCue;
     Strays: TFlockCue;
+    // The pads of a flock fly out quietly and stay out
+    StraysLeave: TFlockCue;
     MedkitsOnto: TBankCue;
     // The bodies of the trial's wave come down over the shelves of a bank
     WaveOnto: TBankCue;
@@ -93,6 +96,7 @@ type
     procedure Arm(AIndex: Integer);
     procedure RewindTargets(const AEvent: TLevelEvent);
     function GravelDealt(const AEvent: TLevelEvent): Boolean;
+    function WaveKilled(const AEvent: TLevelEvent): Boolean;
     function ConditionHolds(const AEvent: TLevelEvent;
       const AField: TMonsterField): Boolean;
     procedure Play(const AEvent: TLevelEvent; const AField: TMonsterField);
@@ -165,6 +169,16 @@ begin
   Result := Progress.Dealt >= Number;
 end;
 
+// As GravelDealt: a share of the wave's count, an act past counts too
+function TEventDirector.WaveKilled(const AEvent: TLevelEvent): Boolean;
+begin
+  var Progress := FCues.TrialProgress();
+  if Progress.Act <> AEvent.Act then
+    Exit(Progress.Act > AEvent.Act);
+  var Count := Progress.Batch * AEvent.Part div AEvent.Whole;
+  Result := Progress.WaveKilled >= Count;
+end;
+
 function TEventDirector.ConditionHolds(const AEvent: TLevelEvent;
   const AField: TMonsterField): Boolean;
 begin
@@ -182,6 +196,8 @@ begin
       Result := GravelDealt(AEvent);
     ecTrialDone:
       Result := FCues.TrialDone();
+    ecWaveKilled:
+      Result := WaveKilled(AEvent);
   else
     Result := True;
   end;
@@ -239,6 +255,8 @@ begin
         FCues.BreakCarousel(Action.Target, Action.Breakdown);
       eaStrays:
         FCues.Strays(Action.Target);
+      eaStraysLeave:
+        FCues.StraysLeave(Action.Target);
       eaSkyFall:
         FCues.SkyFall(Action.SkyFall, AEvent.Act);
     end;

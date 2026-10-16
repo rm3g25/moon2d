@@ -14,6 +14,11 @@
   come in again later. A pad with the hero on it never leaves the room:
   on a leg out it turns back.
 
+  A pad may be sent away: it flies out quietly beyond the nearer side, at
+  half its pace, and stays out of sight. From then on it neither turns
+  back, nor stalls, nor twitches, nor falls; a leg or a fall under way
+  runs out first, and with the hero aboard it hangs until he is off it.
+
   The room is the screen less a cell at the left, the right and the top:
   only inside it is the pad a deck. Out past the walls nobody rides it,
   and a rider it takes there falls.
@@ -65,6 +70,8 @@ type
     FTwitchIn: Integer;
     FDip, FLean: TTwitchSpring;
     FFall: TPlungeCycle;
+    // Sent away: it leaves quietly and does not come back
+    FDismissed: Boolean;
     function Roll: Double;
     function RollTicks(const ASpan: TTickSpan): Integer;
     function RollShare(ALeast, AMost: Double): Double;
@@ -74,6 +81,7 @@ type
     procedure FlyIn;
     procedure FlyOn;
     procedure FlyOut;
+    procedure FlyAway;
     procedure TurnBack;
     procedure Hang;
     procedure Give;
@@ -93,6 +101,9 @@ type
     // Its flock is let go: it waits its wait, then flies in. ASeed - its
     // dice. Nothing for a pad let go already.
     procedure Launch(ASeed: Cardinal);
+    // Sent away: it flies out quietly and stays out of sight. Nothing for a
+    // pad asleep - it stays asleep - and a pad sent away is let go no more.
+    procedure Dismiss;
     // ALoaded - the hero stands on the pad this tick
     procedure Tick(ALoaded: Boolean);
     // In the air inside the room: a floor and a body
@@ -105,6 +116,7 @@ type
 
     property Phase: TStrayPhase read FPhase;
     property Leg: TStrayLeg read FLeg;
+    property Dismissed: Boolean read FDismissed;
     // The top-left corner of the deck
     property Left: Double read FLeft;
     property Top: Double read GetTop;
@@ -147,6 +159,9 @@ const
   StallSpan: TTickSpan = (Least: 8; Most: 14);
   // The odds a hang is a twitchy one
   TwitchyOdds = 0.3;
+  // A pad sent away flies at this share of the pace, its jets at this much
+  QuietShare = 0.5;
+  QuietEffort = 0.5;
   // A twitch kicks the picture down by up to DipKick units a tick and
   // round by up to LeanKick degrees, no less than KickFloor of that, every
   // few ticks
@@ -191,11 +206,12 @@ begin
   FDip := Default(TTwitchSpring);
   FLean := Default(TTwitchSpring);
   FFall := Default(TPlungeCycle);
+  FDismissed := False;
 end;
 
 procedure TStrayCycle.Launch(ASeed: Cardinal);
 begin
-  if FPhase <> spAsleep then
+  if (FPhase <> spAsleep) or FDismissed then
     Exit;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
@@ -238,20 +254,26 @@ begin
 end;
 
 // From where the pad stands now. Turning back and stalling are thrown at
-// the start of the leg; a leg back neither turns nor stalls.
+// the start of the leg; a leg back neither turns nor stalls, nor does any
+// leg of a pad sent away, which flies it slower.
 procedure TStrayCycle.StartLeg(ALeg: TStrayLeg; AToX, AToY: Double);
 begin
+  var Step: Double := StrayStep;
+  if FDismissed then
+    Step := StrayStep * QuietShare;
   FLeg := ALeg;
   FFromX := FLeft;
   FFromY := FTop;
   FToX := AToX;
   FToY := AToY;
   FLegClock := 0;
-  FLegTicks := Max(1, Round(Hypot(AToX - FLeft, AToY - FTop) / StrayStep));
+  FLegTicks := Max(1, Round(Hypot(AToX - FLeft, AToY - FTop) / Step));
   FTurnAt := NoMoment;
   FStallAt := NoMoment;
   FStallLeft := 0;
   FPhase := spFlying;
+  if FDismissed then
+    Exit;
   var MayTurn := ALeg in [slOn, slOut];
   if MayTurn and (Roll < TurnOdds) then
     FTurnAt := Round(FLegTicks * RollShare(TurnShareLeast, TurnShareMost));
@@ -308,6 +330,33 @@ begin
   end;
 end;
 
+// Sent away: out along its row beyond the nearer side
+procedure TStrayCycle.FlyAway;
+begin
+  if FLeft + FWidth / 2 < ScreenWidth / 2 then
+    StartLeg(slOut, -FWidth - OutsideMargin, FTop)
+  else
+    StartLeg(slOut, ScreenWidth + OutsideMargin, FTop);
+end;
+
+procedure TStrayCycle.Dismiss;
+begin
+  if FDismissed or (FPhase = spAsleep) then
+    Exit;
+  FDismissed := True;
+  FTwitchyHang := False;
+  case FPhase of
+    spWaiting:
+      FPhase := spAsleep;
+    spFlying:
+      begin
+        FTurnAt := NoMoment;
+        FStallAt := NoMoment;
+        FStallLeft := 0;
+      end;
+  end;
+end;
+
 // Back to where the leg began - the point it last hung at
 procedure TStrayCycle.TurnBack;
 begin
@@ -318,7 +367,7 @@ procedure TStrayCycle.Hang;
 begin
   FPhase := spHanging;
   FTicksLeft := RollTicks(HangSpan);
-  FTwitchyHang := Roll < TwitchyOdds;
+  FTwitchyHang := not FDismissed and (Roll < TwitchyOdds);
 end;
 
 // As a pad that plunges under the hero, from where it hangs
@@ -336,10 +385,14 @@ begin
   FPhase := spGiving;
 end;
 
+// A pad sent away waits for nothing: out of sight it is asleep for good
 procedure TStrayCycle.GoWait(const ASpan: TTickSpan);
 begin
   FPhase := spWaiting;
-  FTicksLeft := RollTicks(ASpan);
+  if FDismissed then
+    FPhase := spAsleep
+  else
+    FTicksLeft := RollTicks(ASpan);
   FLeft := FWaitLeft;
   FTop := FWaitTop;
   FFall := Default(TPlungeCycle);
@@ -388,8 +441,15 @@ begin
     Hang;
 end;
 
+// Sent away, it leaves the hang at once - once the hero is off it
 procedure TStrayCycle.TickHang(ALoaded: Boolean);
 begin
+  if FDismissed then
+  begin
+    if not ALoaded then
+      FlyAway;
+    Exit;
+  end;
   Dec(FTicksLeft);
   if FTicksLeft <= 0 then
     LeaveHang(ALoaded);
@@ -480,6 +540,8 @@ begin
     spFlying:
       if FStallLeft > 0 then
         Result := 0
+      else if FDismissed then
+        Result := QuietEffort
       else
         Result := 1;
     spHanging:

@@ -32,13 +32,18 @@ type
   // the batch is told by the grade. JSON: "act", "part" (0 by default), "of".
   // trialDone holds once the trial of the screen has finished, its last
   // act won; a restart, which starts the trial over, clears it.
+  // waveKilled watches the wave the trial ends in, in its act "act": it
+  // holds once count * part div of of its bodies are killed - half a wave
+  // of 10 is the fifth - and stays true once the act is past. JSON as
+  // gravelDealt's.
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
-    ecActReached, ecGravelDealt, ecTrialDone);
+    ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
-    eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto);
+    eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
+    eaStraysLeave);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -130,6 +135,8 @@ type
     // "target", "halt" and "step" (seconds, 0 by default).
     // eaStrays: the pads of the flock Target are let go and stray from now
     // on (Pads.Stray). JSON: "target".
+    // eaStraysLeave: the pads of the flock Target fly out quietly, none of
+    // them with the hero aboard, and do not come back. JSON: "target".
     // eaSkyFall: the sky opens for the act of the trial the event waits for
     // and lets a body of SkyFall.MonsterId fall every SkyFall.EverySeconds
     // until that act is over - so the event must wait for one. JSON:
@@ -163,7 +170,8 @@ type
   //     (or "when": "livesBelow", "tag": "boss", "lives": 150,
   //     or "when": "actReached", "act": 2
   //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3
-  //     or "when": "trialDone")
+  //     or "when": "trialDone"
+  //     or "when": "waveKilled", "act": 6, "part": 1, "of": 2)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -175,9 +183,9 @@ type
     Condition: TEventCondition;
     Tag: string; // the placements the monster conditions watch
     Lives: Integer; // ecLivesBelow
-    Act: Integer; // ecActReached, ecGravelDealt
-    Part: Integer; // ecGravelDealt
-    Whole: Integer; // ecGravelDealt, "of" in JSON
+    Act: Integer; // ecActReached, ecGravelDealt, ecWaveKilled
+    Part: Integer; // ecGravelDealt, ecWaveKilled
+    Whole: Integer; // ecGravelDealt, ecWaveKilled, "of" in JSON
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -187,12 +195,12 @@ const
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
-    'gravelDealt', 'trialDone');
+    'gravelDealt', 'trialDone', 'waveKilled');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
-    'breakCarousel', 'strays', 'skyFall', 'waveOnto');
+    'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -218,8 +226,8 @@ resourcestring
   SEventNoTag = 'Level "%s": event "%s": %s names no tag';
   SEventNoLives = 'Level "%s": event "%s": livesBelow needs "lives" above zero';
   SEventNoAct = 'Level "%s": event "%s": actReached needs "act" above zero';
-  SEventNoBatchAct = 'Level "%s": event "%s": gravelDealt needs "act" above zero';
-  SEventBadShare = 'Level "%s": event "%s": gravelDealt takes "of" above zero '
+  SEventNoBatchAct = 'Level "%s": event "%s": %s needs "act" above zero';
+  SEventBadShare = 'Level "%s": event "%s": %s takes "of" above zero '
     + 'and "part" from 0 to below "of"';
   SEventNoTarget = 'Level "%s": event "%s": intensity names no target';
   SEventBadLevel = 'Level "%s": event "%s": intensity takes a "value", 0..100';
@@ -330,7 +338,7 @@ end;
 
 // The pad group of a rebuild, a restore or a fly-in; the bank of the
 // shelf actions, of the medkits and of the wave; the carousel of a break;
-// the flock let go
+// the flock let go or sent away
 procedure ReadGroupTarget(const AObj: TJSONObject;
   const ALevelId, AEventId: string; var AAction: TEventAction);
 begin
@@ -516,7 +524,8 @@ begin
       ReadSun(AObj, ALevelId, AEventId, Result);
     eaTactics:
       ReadTactics(AObj, ALevelId, AEventId, Result);
-    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto, eaStrays, eaWaveOnto:
+    eaRebuild, eaRestore, eaFlyIn, eaMedkitsOnto, eaStrays, eaWaveOnto,
+    eaStraysLeave:
       ReadGroupTarget(AObj, ALevelId, AEventId, Result);
     eaShelvesWake, eaShelvesSleep, eaShelvesProgram:
       ReadShelves(AObj, ALevelId, AEventId, Result);
@@ -531,15 +540,19 @@ begin
   end;
 end;
 
-procedure ReadGravelDealt(const AObj: TJSONObject; const ALevelId: string;
+// The act and the share of gravelDealt and of waveKilled
+procedure ReadActShare(const AObj: TJSONObject; const ALevelId: string;
   var AEvent: TLevelEvent);
 begin
+  var Name := EventConditionIds[AEvent.Condition];
   if AEvent.Act <= 0 then
-    raise ELevelEventError.CreateFmt(SEventNoBatchAct, [ALevelId, AEvent.Id]);
+    raise ELevelEventError.CreateFmt(SEventNoBatchAct, [ALevelId, AEvent.Id,
+      Name]);
   AEvent.Part := AObj.GetValue<Integer>('part', 0);
   AEvent.Whole := AObj.GetValue<Integer>('of', 0);
   if (AEvent.Whole <= 0) or (AEvent.Part < 0) or (AEvent.Part >= AEvent.Whole) then
-    raise ELevelEventError.CreateFmt(SEventBadShare, [ALevelId, AEvent.Id]);
+    raise ELevelEventError.CreateFmt(SEventBadShare, [ALevelId, AEvent.Id,
+      Name]);
 end;
 
 function ReadEvent(const AObj: TJSONObject; const ALevelId: string;
@@ -563,8 +576,8 @@ begin
   Result.Act := AObj.GetValue<Integer>('act', 0);
   if (Result.Condition = ecActReached) and (Result.Act <= 0) then
     raise ELevelEventError.CreateFmt(SEventNoAct, [ALevelId, Result.Id]);
-  if Result.Condition = ecGravelDealt then
-    ReadGravelDealt(AObj, ALevelId, Result);
+  if Result.Condition in [ecGravelDealt, ecWaveKilled] then
+    ReadActShare(AObj, ALevelId, Result);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);

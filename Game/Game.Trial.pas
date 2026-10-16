@@ -9,7 +9,8 @@
   breath and the next batch starts. A room that is busy with a scene of
   its own holds the next batch back until the scene is over. The gate of
   the last act ends the trial. Every fifteenth gravel killed pays one
-  medkit, counted across the acts.
+  medkit, counted across the acts; and every act pays one more at its
+  middle, when half its batch - or half the wave - is killed.
 
   A gravel fallen into the pit comes back one at a time, a beat apart:
   a crowd dropped at once does not land on the hero at once.
@@ -35,8 +36,11 @@
   A trial may end in a wave: one act more after the gravels, dealt by
   another rule. The wave has a count, not a batch, and never more of it
   alive than its cap: a body comes a wave apart while the room fills up,
-  and a dead one is replaced a beat after it dies. No body of the wave is
-  aimed; its first is a herald. Which body comes is the game's.
+  and a dead one is replaced a beat after it dies. Only the wave's own
+  living are counted against the cap; whoever else holds the gate does
+  not hold the wave back. No body of the wave is aimed; its first is a
+  herald. Which body comes is the game's, and so is telling the trial
+  which of them died.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -92,6 +96,8 @@ type
     Batch: Integer;
     // Gravels of the batch let down so far, an aimed one from its mark
     Dealt: Integer;
+    // Bodies of the wave killed; 0 outside the act of the wave
+    WaveKilled: Integer;
   end;
 
   TGravelTrial = class
@@ -105,9 +111,12 @@ type
     FBatchLeft: Integer;
     // The wave: its count (0 - the trial has none) and its cap of the living
     FWaveCount: Integer;
-    FWaveAlive: Integer;
+    FWaveCap: Integer;
+    FWaveKills: Integer;
     FTicksToWave: Integer;
     FKills: Integer;
+    // Gravels killed in the act in progress
+    FActKills: Integer;
     FMedkitsOwed: Integer;
     // Ticks until the aimed gravel follows its mark; 0 - none on its way
     FAimedIn: Integer;
@@ -121,24 +130,29 @@ type
     procedure TickSky(var ACue: TTrialCue);
     procedure WatchGate(AGateHolders: Integer; var ACue: TTrialCue);
     procedure DealGravel(var ACue: TTrialCue);
-    procedure DealWave(AGateHolders: Integer; var ACue: TTrialCue);
+    procedure DealWave(AWaveAlive: Integer; var ACue: TTrialCue);
     procedure EndAct(var ACue: TTrialCue);
     function InWaveAct: Boolean;
+    procedure PayMiddle(AActKills: Integer);
   public
     // ABatch - the gravels of one act. AWaveCount above zero ends the trial
-    // in a wave of that many bodies, no more than AWaveAlive alive at once.
+    // in a wave of that many bodies, no more than AWaveCap alive at once.
     procedure Start(ABatch: Integer; AWaveCount: Integer = 0;
-      AWaveAlive: Integer = 0);
+      AWaveCap: Integer = 0);
     procedure Stop;
     // A gravel of the trial died
     procedure NoteGravelKilled;
+    // A body of the wave died; nothing outside the act of the wave
+    procedure NoteWaveKilled;
     // A body falls from the sky every AEverySeconds, the first one that long
     // from now, until the act in progress is over. Told again, the sky takes
     // the new pace from now.
     procedure OpenSky(AEverySeconds: Single);
     // One logic tick; AGateHolders - the live bodies that hold the gate:
-    // the gravels of the trial and whoever else the game counts in
-    function Tick(AGateHolders: Integer): TTrialCue;
+    // the gravels of the trial, the bodies of its wave and whoever else
+    // the game counts in; AWaveAlive - the bodies of the wave alive alone,
+    // counted against its cap
+    function Tick(AGateHolders: Integer; AWaveAlive: Integer = 0): TTrialCue;
     function Progress: TTrialProgress;
     property Active: Boolean read FActive;
     // 1..Acts
@@ -152,24 +166,26 @@ type
 implementation
 
 procedure TGravelTrial.Start(ABatch: Integer; AWaveCount: Integer;
-  AWaveAlive: Integer);
+  AWaveCap: Integer);
 begin
   FActive := True;
   FGravelBatch := ABatch;
   FBatch := ABatch;
   FWaveCount := 0;
-  FWaveAlive := 0;
+  FWaveCap := 0;
+  FWaveKills := 0;
   FActs := TrialActs;
-  if (AWaveCount > 0) and (AWaveAlive > 0) then
+  if (AWaveCount > 0) and (AWaveCap > 0) then
   begin
     FWaveCount := AWaveCount;
-    FWaveAlive := AWaveAlive;
+    FWaveCap := AWaveCap;
     FActs := TrialActs + 1;
   end;
   FAct := 1;
   FBatchLeft := ABatch;
   FTicksToWave := TrialFirstWaveTicks;
   FKills := 0;
+  FActKills := 0;
   FMedkitsOwed := 0;
   FAimedIn := 0;
   FTicksToReturn := TrialPitReturnTicks;
@@ -204,9 +220,31 @@ begin
   Inc(FKills);
   if FKills mod TrialKillsPerMedkit = 0 then
     Inc(FMedkitsOwed);
+  if InWaveAct then
+    Exit;
+  Inc(FActKills);
+  PayMiddle(FActKills);
 end;
 
-function TGravelTrial.Tick(AGateHolders: Integer): TTrialCue;
+procedure TGravelTrial.NoteWaveKilled;
+begin
+  if not (FActive and InWaveAct) then
+    Exit;
+  Inc(FWaveKills);
+  PayMiddle(FWaveKills);
+end;
+
+// The medkit of the act's middle: on the kill that makes half of it. An act
+// of one has no middle.
+procedure TGravelTrial.PayMiddle(AActKills: Integer);
+begin
+  var Half := FBatch div 2;
+  if (Half > 0) and (AActKills = Half) then
+    Inc(FMedkitsOwed);
+end;
+
+function TGravelTrial.Tick(AGateHolders: Integer;
+  AWaveAlive: Integer): TTrialCue;
 begin
   Result := Default(TTrialCue);
   if not FActive then
@@ -231,7 +269,7 @@ begin
     Exit;
   if InWaveAct then
   begin
-    DealWave(AGateHolders, Result);
+    DealWave(AWaveAlive, Result);
     Exit;
   end;
   Dec(FTicksToWave);
@@ -251,6 +289,8 @@ begin
   Result.Act := FAct;
   Result.Batch := FBatch;
   Result.Dealt := FBatch - FBatchLeft;
+  if InWaveAct then
+    Result.WaveKilled := FWaveKills;
 end;
 
 function TGravelTrial.InWaveAct: Boolean;
@@ -314,9 +354,9 @@ end;
 // The wave is capped, as the gravels are not: while it is full the beat to
 // the next body stands at the refill, so a dead one is replaced a beat
 // after it dies; while it fills up a body comes a wave apart
-procedure TGravelTrial.DealWave(AGateHolders: Integer; var ACue: TTrialCue);
+procedure TGravelTrial.DealWave(AWaveAlive: Integer; var ACue: TTrialCue);
 begin
-  if AGateHolders >= FWaveAlive then
+  if AWaveAlive >= FWaveCap then
   begin
     FTicksToWave := TrialWaveRefillTicks;
     Exit;
@@ -350,6 +390,7 @@ begin
   if InWaveAct then
     FBatch := FWaveCount;
   FBatchLeft := FBatch;
+  FActKills := 0;
   FTicksToWave := TrialActBreakTicks;
 end;
 

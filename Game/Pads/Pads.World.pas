@@ -274,6 +274,8 @@ type
     // A pad that strays is let go with its flock, its dice seeded with
     // ASeed; nothing for any other
     procedure Launch(ASeed: Cardinal);
+    // A pad that strays is sent away with its flock; nothing for any other
+    procedure Dismiss;
     // Something has landed on the deck at ASpeed units a tick: the pad
     // gives under it and springs back; a shelf does not
     procedure Press(ASpeed: Double);
@@ -482,6 +484,9 @@ type
     // The pads that stray in the flock AFlock are let go. False when no pad
     // strays in it.
     function TryLaunchFlock(const AFlock: string): Boolean;
+    // The pads that stray in the flock AFlock fly out quietly and stay out.
+    // False when no pad strays in it.
+    function TryDismissFlock(const AFlock: string): Boolean;
     // The carousel tagged ATag runs down to a standstill over AHaltSeconds,
     // then its pads break one every AStepSeconds. False when no carousel
     // that may break carries the tag.
@@ -841,6 +846,12 @@ procedure TPad.Launch(ASeed: Cardinal);
 begin
   if FPlacement.Stray.Strays then
     FStray.Launch(ASeed);
+end;
+
+procedure TPad.Dismiss;
+begin
+  if FPlacement.Stray.Strays then
+    FStray.Dismiss;
 end;
 
 // It falls from where it stands now, as far under the screen as a pad of
@@ -1822,6 +1833,20 @@ begin
     if not OfFlock then
       Continue;
     Pad.Launch(Cardinal(Trunc(FDice.NextUnit * MaxInt)));
+    Result := True;
+  end;
+end;
+
+function TPadWorld.TryDismissFlock(const AFlock: string): Boolean;
+begin
+  Result := False;
+  for var Pad in FPads do
+  begin
+    var OfFlock := Pad.Placement.Stray.Strays and
+      (Pad.Placement.Stray.Flock = AFlock);
+    if not OfFlock then
+      Continue;
+    Pad.Dismiss;
     Result := True;
   end;
 end;

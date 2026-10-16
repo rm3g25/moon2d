@@ -3,7 +3,9 @@
   until its flock is let go, then in from beyond an edge to a point of its
   zone, hanging there, on to another point or out again; now and then a
   fall after half a second of shaking. A deck only inside the room, and
-  with the hero on it never out of the room.
+  with the hero on it never out of the room. Sent away, it flies out
+  quietly - no fall, no turn back, its jets at half - and stays out, but
+  not while the hero stands on it.
 
   The cycle only counts, and its dice are its seed alone, so the tests
   run it tick by tick over a few seeds and read its phase, its place, its
@@ -45,6 +47,16 @@ type
     procedure TestJetsFollowThePhase;
     [Test]
     procedure TestDiceAreTheSeedsAlone;
+    [Test]
+    procedure TestSentAwayFromAHangLeavesQuietlyAndStaysOut;
+    [Test]
+    procedure TestSentAwayWaitsForTheHeroToGetOff;
+    [Test]
+    procedure TestSentAwayWhileWaitingNeverComesIn;
+    [Test]
+    procedure TestSentAwayWhileFallingDoesNotComeBack;
+    [Test]
+    procedure TestAsleepPadIsNotSentAwayAndARewindForgets;
   end;
 
 implementation
@@ -390,6 +402,125 @@ begin
     Differs := Differs or not IsNear(First.Left, Other.Left);
   end;
   Assert.IsTrue(Differs, 'Two seeds, one flight');
+end;
+
+// Ticked empty until it stands in APhase; False when it never does
+function TickUntil(var ACycle: TStrayCycle; APhase: TStrayPhase): Boolean;
+begin
+  for var Tick := 1 to LongRun do
+  begin
+    if ACycle.Phase = APhase then
+      Exit(True);
+    ACycle.Tick(False);
+  end;
+  Result := ACycle.Phase = APhase;
+end;
+
+// Ticked empty for ATicks: whether it ever fell, turned back or worked its
+// jets past half, and whether it ends asleep out of sight
+procedure RunSentAway(var ACycle: TStrayCycle; ASeed: Integer);
+begin
+  for var Tick := 1 to LongRun do
+  begin
+    ACycle.Tick(False);
+    Assert.IsFalse(ACycle.Phase in [spGiving, spFalling], Format('Seed %d, ' +
+      'tick %d: a pad sent away fell', [ASeed, Tick]));
+    Assert.IsFalse((ACycle.Phase = spFlying) and (ACycle.Leg = slBack),
+      Format('Seed %d, tick %d: a pad sent away turned back', [ASeed, Tick]));
+    Assert.IsTrue(ACycle.Effort <= 0.5, Format('Seed %d, tick %d: jets at %g',
+      [ASeed, Tick, ACycle.Effort]));
+  end;
+  Assert.AreEqual<TStrayPhase>(spAsleep, ACycle.Phase,
+    Format('Seed %d: it did not leave', [ASeed]));
+  Assert.IsTrue(OutOfSight(ACycle), Format('Seed %d: asleep in sight', [ASeed]));
+end;
+
+procedure TStrayCycleTests.TestSentAwayFromAHangLeavesQuietlyAndStaysOut;
+begin
+  for var i := 0 to SeedCount - 1 do
+  begin
+    var Cycle := LaunchedCycle(SeedOf(i));
+    Assert.IsTrue(TickUntil(Cycle, spHanging), 'It never hung');
+    Cycle.Dismiss;
+    Assert.IsTrue(Cycle.Dismissed, 'It was not sent away');
+
+    Cycle.Tick(False);
+    Assert.AreEqual<TStrayPhase>(spFlying, Cycle.Phase, 'It leaves the hang at once');
+    Assert.AreEqual<TStrayLeg>(slOut, Cycle.Leg, 'out');
+    RunSentAway(Cycle, i);
+  end;
+end;
+
+procedure TStrayCycleTests.TestSentAwayWaitsForTheHeroToGetOff;
+const
+  RideTicks = 500;
+begin
+  for var i := 0 to SeedCount - 1 do
+  begin
+    var Cycle := LaunchedCycle(SeedOf(i));
+    Assert.IsTrue(TickUntil(Cycle, spHanging), 'It never hung');
+    Cycle.Dismiss;
+
+    for var Tick := 1 to RideTicks do
+    begin
+      Cycle.Tick(True);
+      Assert.AreEqual<TStrayPhase>(spHanging, Cycle.Phase,
+        Format('Seed %d, tick %d: it left with the hero aboard', [i, Tick]));
+      Assert.IsTrue(Cycle.Deck, 'and stays a deck');
+    end;
+    RunSentAway(Cycle, i);
+  end;
+end;
+
+procedure TStrayCycleTests.TestSentAwayWhileWaitingNeverComesIn;
+begin
+  var Cycle := CycleOf(1);
+  Cycle.Launch(SeedOf(0));
+  Cycle.Dismiss;
+
+  Assert.AreEqual<TStrayPhase>(spAsleep, Cycle.Phase, 'Asleep at once');
+  for var Tick := 1 to LongRun do
+    Cycle.Tick(False);
+  Assert.AreEqual<TStrayPhase>(spAsleep, Cycle.Phase, 'It came in');
+  Cycle.Launch(SeedOf(1));
+  Assert.AreEqual<TStrayPhase>(spAsleep, Cycle.Phase,
+    'A pad sent away was let go again');
+end;
+
+// The fall runs out; out of sight the pad does not come in again
+procedure TStrayCycleTests.TestSentAwayWhileFallingDoesNotComeBack;
+begin
+  var Falls := 0;
+  for var i := 0 to SeedCount - 1 do
+  begin
+    var Cycle := LaunchedCycle(SeedOf(i));
+    if not TickUntil(Cycle, spGiving) then
+      Continue;
+    Inc(Falls);
+    Cycle.Dismiss;
+    for var Tick := 1 to LongRun do
+      Cycle.Tick(False);
+    Assert.AreEqual<TStrayPhase>(spAsleep, Cycle.Phase,
+      Format('Seed %d: it came back after its fall', [i]));
+  end;
+  Assert.IsTrue(Falls > 0, 'No pad fell');
+end;
+
+procedure TStrayCycleTests.TestAsleepPadIsNotSentAwayAndARewindForgets;
+begin
+  var Cycle := CycleOf(0);
+  Cycle.Dismiss;
+  Assert.IsFalse(Cycle.Dismissed, 'A pad asleep was sent away');
+  Cycle.Launch(SeedOf(0));
+  Cycle.Tick(False);
+  Assert.AreEqual<TStrayPhase>(spFlying, Cycle.Phase, 'It is let go as ever');
+
+  Cycle.Dismiss;
+  Cycle.Rewind(StrayOf(0), PadWidth, WaitLeft, WaitTop);
+  Assert.IsFalse(Cycle.Dismissed, 'The rewind kept the dismissal');
+  Cycle.Launch(SeedOf(0));
+  Cycle.Tick(False);
+  Assert.AreEqual<TStrayPhase>(spFlying, Cycle.Phase, 'Let go after a rewind');
 end;
 
 initialization

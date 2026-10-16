@@ -481,6 +481,7 @@ type
     procedure BreakCarousel(const ATag: string;
       const ABreakdown: TCarouselBreak);
     procedure LetStraysGo(const AFlock: string);
+    procedure SendStraysAway(const AFlock: string);
     procedure FlyInParked(const ATag: string);
     function CannonsScenePlays: Boolean;
     procedure ReleaseHeldFlyIns;
@@ -763,6 +764,7 @@ begin
   Cues.Shelves := TellShelves;
   Cues.BreakCarousel := BreakCarousel;
   Cues.Strays := LetStraysGo;
+  Cues.StraysLeave := SendStraysAway;
   Cues.MedkitsOnto := SendMedkitsOnto;
   Cues.WaveOnto := SendWaveOnto;
   Cues.Cannons := StartCannons;
@@ -1331,6 +1333,11 @@ begin
   FPads.TryLaunchFlock(AFlock);
 end;
 
+procedure TMoonGame.SendStraysAway(const AFlock: string);
+begin
+  FPads.TryDismissFlock(AFlock);
+end;
+
 // The level lets no tag name both a carousel and a pad group. Told while
 // the cannons blow themselves up, the pads wait for the smoke to clear.
 procedure TMoonGame.FlyInParked(const ATag: string);
@@ -1425,10 +1432,12 @@ begin
   // the hero to kill it, so the leave at the gate finds no one alive
   var GateHolders := FField.CountAliveOf(GravelMonsterId, FGravelScreen) +
     FField.CountAliveGuests(FGravelScreen);
-  // The wave holds the gate too, and its cap is counted against them
+  // The wave holds the gate too; its cap is counted against its own
+  // living alone, so a guest let in during the wave does not hold it back
+  var WaveAlive := 0;
   if FWaveMonster <> '' then
-    Inc(GateHolders, FField.CountAliveOf(FWaveMonster, FGravelScreen));
-  var Cue := FTrial.Tick(GateHolders);
+    WaveAlive := FField.CountAliveOf(FWaveMonster, FGravelScreen);
+  var Cue := FTrial.Tick(GateHolders + WaveAlive, WaveAlive);
   // A gravel fallen into the pit comes down on the hero who dropped it,
   // and so does a body of the wave, should one fall out of the room
   if Cue.ReturnFromPit then
@@ -2631,6 +2640,9 @@ begin
             if (Monster.Def.Id = GravelMonsterId) and
               (Monster.Screen = FGravelScreen) then
               FTrial.NoteGravelKilled;
+            if (FWaveMonster <> '') and (Monster.Def.Id = FWaveMonster) and
+              (Monster.Screen = FGravelScreen) then
+              FTrial.NoteWaveKilled;
             if Monster.Def.Boss.EndsLevelOnDeath then
               FShake.AddTrauma(BossBlastTrauma)
             else if Monster.Def.Blast.Enabled then
