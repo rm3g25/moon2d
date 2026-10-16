@@ -11,8 +11,8 @@
   the hero stands; a carousel that breaks; a flock of stray pads let go
   and sent away; the trial's medkits and the bank its wave comes down
   onto; the wall cannons of the trial; the bodies an event lets in; the
-  open sky of the trial; how far the gravel trial has come and whether it
-  is won. The
+  open sky of the trial; the press of its finale; how far the gravel trial
+  has come and whether it is won. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -65,6 +65,9 @@ type
   // The sky opens for the act AAct of the trial
   TSkyFallCue = reference to procedure(const AOrders: TSkyFall;
     AAct: Integer);
+  // The press starts for the act AAct of the trial
+  TPressCue = reference to procedure(const AOrders: TPressOrders;
+    AAct: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -83,6 +86,7 @@ type
     Cannons: TCannonsCue;
     Spawn: TSpawnCue;
     SkyFall: TSkyFallCue;
+    Press: TPressCue;
   end;
 
   TEventDirector = class
@@ -259,6 +263,8 @@ begin
         FCues.StraysLeave(Action.Target);
       eaSkyFall:
         FCues.SkyFall(Action.SkyFall, AEvent.Act);
+      eaPress:
+        FCues.Press(Action.Press, AEvent.Act);
     end;
 end;
 

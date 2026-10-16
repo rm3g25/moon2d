@@ -802,6 +802,11 @@ begin
       if not AnyPadOfFlock(FPads, AAction.Target) then
         raise ELevelError.CreateFmt(SLevelEventStraysUnknown,
           [FId, AEventId, AAction.Target]);
+    eaPress:
+      for var Row in AAction.Press.Rows do
+        if not AnyShelfOfBank(FPads, Row) then
+          raise ELevelError.CreateFmt(SLevelEventBankUnknown,
+            [FId, AEventId, Row]);
   end;
 end;
 

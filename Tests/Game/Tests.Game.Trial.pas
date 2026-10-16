@@ -207,6 +207,9 @@ const
   // The tanks come along the hero's row, over the floor
   LevelTwoTankRow = 10;
   LevelTwoPressBank = 's09-press-4';
+  // The top row of the press, and all its rows
+  LevelTwoTopBank = 's09-press-1';
+  LevelTwoBalconyBank = 's09-balcony';
 
 procedure TTrialSkyTests.Setup;
 begin
@@ -822,8 +825,9 @@ begin
     end, ELevelError, 'A wave onto a bank no shelf stands in');
 end;
 
-// The betoners of the plan, onto the balconies of row 9, which sleep once
-// the trial is won, sparing the hero
+// The betoners of the plan, onto the top row of the press; the balconies of
+// row 9 its bottom row; all the balconies go in once the trial is won,
+// sparing the hero
 procedure TFinaleLevelTests.TestLevelTwoArenaEndsInBetoners;
 const
   BalconyShelves = 6;
@@ -863,7 +867,7 @@ begin
         if Action.Kind = eaWaveOnto then
         begin
           Inc(WaveOnto);
-          Assert.AreEqual(LevelTwoPressBank, Action.Target, 'Onto the balconies');
+          Assert.AreEqual(LevelTwoTopBank, Action.Target, 'Onto the top row');
           Assert.AreEqual<TEventCondition>(ecActReached, Event.Condition,
             'when the act comes');
           Assert.AreEqual(WaveAct, Event.Act, 'of the wave');
@@ -871,7 +875,7 @@ begin
         if Event.Condition <> ecTrialDone then
           Continue;
         Assert.AreEqual(LevelTwoArenaScreen, Event.Screen, 'The end is the arena''s');
-        if (Action.Kind = eaShelvesSleep) and (Action.Target = LevelTwoPressBank) then
+        if (Action.Kind = eaShelvesSleep) and (Action.Target = LevelTwoBalconyBank) then
         begin
           Inc(EndSleeps);
           Assert.IsTrue(Action.SpareHero, 'The calm spares the hero');

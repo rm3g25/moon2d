@@ -24,6 +24,7 @@ uses
   Tests.Game.Blasts in 'Game\Tests.Game.Blasts.pas',
   Tests.Game.Shroud in 'Game\Tests.Game.Shroud.pas',
   Tests.Game.Trial in 'Game\Tests.Game.Trial.pas',
+  Tests.Game.Press in 'Game\Tests.Game.Press.pas',
   Tests.Game.Uptake in 'Game\Tests.Game.Uptake.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',

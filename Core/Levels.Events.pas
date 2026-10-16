@@ -43,7 +43,7 @@ type
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
-    eaStraysLeave);
+    eaStraysLeave, eaPress);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -81,6 +81,13 @@ type
   // EverySeconds, in a column the dice pick
   TSkyFall = record
     MonsterId: string;
+    EverySeconds: Single;
+  end;
+
+  // The press of the trial's finale: the banks of its rows, top first, and
+  // its beat (Game.Press)
+  TPressOrders = record
+    Rows: TArray<string>;
     EverySeconds: Single;
   end;
 
@@ -137,6 +144,10 @@ type
     // on (Pads.Stray). JSON: "target".
     // eaStraysLeave: the pads of the flock Target fly out quietly, none of
     // them with the hero aboard, and do not come back. JSON: "target".
+    // eaPress: the rows of Press ride down a row every Press.EverySeconds,
+    // for the act of the trial the event waits for - so the event must wait
+    // for one. JSON: "rows" (banks, top first, two at least), "every"
+    // (seconds, above 0).
     // eaSkyFall: the sky opens for the act of the trial the event waits for
     // and lets a body of SkyFall.MonsterId fall every SkyFall.EverySeconds
     // until that act is over - so the event must wait for one. JSON:
@@ -160,6 +171,7 @@ type
     Spawn: TSpawnOrders;
     Breakdown: TCarouselBreak;
     SkyFall: TSkyFall;
+    Press: TPressOrders;
   end;
 
   // One event in level JSON:
@@ -200,7 +212,7 @@ const
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
-    'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave');
+    'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -262,6 +274,10 @@ resourcestring
     'seconds, not %g';
   SEventActOnly = 'Level "%s": event "%s": %s needs an event that waits for ' +
     'an act';
+  SEventPressRows = 'Level "%s": event "%s": press takes "rows" of two banks ' +
+    'or more';
+  SEventPressPace = 'Level "%s": event "%s": press takes "every" above 0 ' +
+    'seconds, not %g';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -439,6 +455,25 @@ begin
       [ALevelId, AEventId, AAction.SkyFall.EverySeconds]);
 end;
 
+procedure ReadPress(const AObj: TJSONObject; const ALevelId, AEventId: string;
+  var AAction: TEventAction);
+begin
+  AAction.Press.Rows := nil;
+  var RowsArr := AObj.GetValue<TJSONArray>('rows', nil);
+  if RowsArr <> nil then
+    for var i := 0 to RowsArr.Count - 1 do
+      AAction.Press.Rows := AAction.Press.Rows + [RowsArr.Items[i].Value];
+  if Length(AAction.Press.Rows) < 2 then
+    raise ELevelEventError.CreateFmt(SEventPressRows, [ALevelId, AEventId]);
+  for var Row in AAction.Press.Rows do
+    if Row = '' then
+      raise ELevelEventError.CreateFmt(SEventPressRows, [ALevelId, AEventId]);
+  AAction.Press.EverySeconds := AObj.GetValue<Double>('every', 0);
+  if AAction.Press.EverySeconds <= 0 then
+    raise ELevelEventError.CreateFmt(SEventPressPace,
+      [ALevelId, AEventId, AAction.Press.EverySeconds]);
+end;
+
 // The rows of a list, each one on the screen; an absent list is empty
 function ReadRows(const AObj: TJSONObject; const AKey: string;
   const ALevelId, AEventId: string): TArray<Integer>;
@@ -537,6 +572,8 @@ begin
       ReadBreak(AObj, ALevelId, AEventId, Result);
     eaSkyFall:
       ReadSkyFall(AObj, ALevelId, AEventId, Result);
+    eaPress:
+      ReadPress(AObj, ALevelId, AEventId, Result);
   end;
 end;
 
@@ -591,7 +628,7 @@ begin
   begin
     if (Action.Kind = eaSpawn) and (Result.Act <= 0) then
       raise ELevelEventError.CreateFmt(SEventSpawnNoAct, [ALevelId, Result.Id]);
-    if (Action.Kind = eaSkyFall) and (Result.Act <= 0) then
+    if (Action.Kind in [eaSkyFall, eaPress]) and (Result.Act <= 0) then
       raise ELevelEventError.CreateFmt(SEventActOnly,
         [ALevelId, Result.Id, EventActionIds[Action.Kind]]);
   end;

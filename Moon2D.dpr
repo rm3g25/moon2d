@@ -75,6 +75,7 @@ uses
   Game.Shroud in 'Game\Game.Shroud.pas',
   Game.Uptake in 'Game\Game.Uptake.pas',
   Game.Trial in 'Game\Game.Trial.pas',
+  Game.Press in 'Game\Game.Press.pas',
   Game.Arrivals in 'Game\Game.Arrivals.pas',
   Game.Shield in 'Game\Game.Shield.pas',
   Game.Cannons in 'Game\Game.Cannons.pas',
@@ -398,6 +399,8 @@ type
     FWaveBank: string;
     // The trial of the screen is won: the events of the end wait for it
     FTrialDone: Boolean;
+    // The press of the finale: the balconies ride down; shut outside it
+    FPress: TPress;
     // What the open sky of the trial lets fall; '' - the sky is shut
     FSkyMonster: string;
     // The fly-ins told while the cannons' scene plays, and the ticks left
@@ -487,6 +490,9 @@ type
     procedure ReleaseHeldFlyIns;
     procedure SendMedkitsOnto(const ABank: string);
     procedure SendWaveOnto(const ABank: string);
+    procedure StartPress(const AOrders: TPressOrders; AAct: Integer);
+    procedure TellPress(const ACall: TPressCall);
+    procedure TellPressRow(const ABank: string; ACall: TShelfCall);
     procedure StartCannons(const AOrders: TCannonOrders; AAct: Integer);
     procedure SpawnGuest(const AOrders: TSpawnOrders; AAct: Integer);
     procedure OpenSky(const AOrders: TSkyFall; AAct: Integer);
@@ -582,6 +588,7 @@ begin
   FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
   FAura := TAura.Create(IceOrbTint);
   FTrial := TGravelTrial.Create;
+  FPress := TPress.Create;
   FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
   FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
@@ -619,6 +626,7 @@ begin
   FCharge.Free;
   FHenshin.Free;
   FTrial.Free;
+  FPress.Free;
   FUptakePainter.Free;
   FUptake.Free;
   FShroudPainter.Free;
@@ -770,6 +778,7 @@ begin
   Cues.Cannons := StartCannons;
   Cues.Spawn := SpawnGuest;
   Cues.SkyFall := OpenSky;
+  Cues.Press := StartPress;
   // A function without parameters named alone would be called, not
   // passed: the reference wraps it
   Cues.TrialAct :=
@@ -812,6 +821,7 @@ begin
   FWaveMonster := '';
   FWaveBank := '';
   FTrialDone := False;
+  FPress.Shut;
   FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
@@ -1268,7 +1278,7 @@ begin
 end;
 
 // Over a shelf of the bank an event named, on the side with fewer of the
-// wave; anywhere when it named none
+// wave; anywhere when it named none. The bank may be the press's top row.
 procedure TMoonGame.LetDownWave(AHerald: Boolean);
 var
   ShelfX: Double;
@@ -1276,6 +1286,8 @@ begin
   var Look := alPlain;
   if AHerald then
     Look := alHerald;
+  // The press brings its top row out for the newcomer, and waits for it
+  TellPress(FPress.Arrive(FWaveBank));
   if not FPads.TryPickBankMiddle(FWaveBank, WaveSideWanted, ShelfX) then
   begin
     LetDownFromSky(FWaveMonster, Look);
@@ -1378,6 +1390,35 @@ begin
   FWaveBank := ABank;
 end;
 
+// The press is the act's, as the sky is: once that act is over it stays
+// shut
+procedure TMoonGame.StartPress(const AOrders: TPressOrders; AAct: Integer);
+begin
+  if TrialAct <> AAct then
+    Exit;
+  FPress.Start(AOrders.Rows, PressBeatTicks(AOrders.EverySeconds));
+end;
+
+procedure TMoonGame.TellPress(const ACall: TPressCall);
+begin
+  for var Bank in ACall.Sleep do
+    TellPressRow(Bank, scSleep);
+  for var Bank in ACall.Wake do
+    TellPressRow(Bank, scWake);
+end;
+
+// No mercy on the press: a row goes in under the hero too - the row under
+// him has just come out
+procedure TMoonGame.TellPressRow(const ABank: string; ACall: TShelfCall);
+var
+  Command: TShelfCommand;
+begin
+  Command := Default(TShelfCommand);
+  Command.Call := ACall;
+  Command.Run.Kind := pgHold;
+  FPads.TellBank(ABank, Command, Default(TBankTelling), HeroCenter.X);
+end;
+
 // The act the event names, or the one the trial is in: a delayed event
 // may fire after its act is over, and then the scene of the end plays at
 // once
@@ -1438,6 +1479,7 @@ begin
   if FWaveMonster <> '' then
     WaveAlive := FField.CountAliveOf(FWaveMonster, FGravelScreen);
   var Cue := FTrial.Tick(GateHolders + WaveAlive, WaveAlive);
+  TellPress(FPress.Tick);
   // A gravel fallen into the pit comes down on the hero who dropped it,
   // and so does a body of the wave, should one fall out of the room
   if Cue.ReturnFromPit then
@@ -1474,7 +1516,10 @@ begin
   if Cue.SkyFall then
     LetDownFromSky(FSkyMonster);
   if Cue.ActEnded then
+  begin
     FField.DepartGuests(FGravelScreen);
+    FPress.Shut;
+  end;
   if not Cue.Finished then
     Exit;
 
@@ -2349,6 +2394,7 @@ begin
   FWaveMonster := '';
   FWaveBank := '';
   FTrialDone := False;
+  FPress.Shut;
   FSkyMonster := '';
   FHeldFlyIns := [];
   FCannonSmoke := 0;
