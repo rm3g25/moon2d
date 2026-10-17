@@ -16,7 +16,8 @@ at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the pl
 shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
 pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
 `v3.0.52`, the gravel arena of level 2's screen 9 at `v3.0.53` to
-`v3.0.59` and the collision decks at `v3.0.60` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.59`, the collision decks at `v3.0.60` and the burst of the henshin
+suit at `v3.0.61` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -50,8 +51,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
   (`Orbs.Flock`), the harvest of spots on the matter of a screen
   (`Orbs.Harvest`), the hero's aura over both (`Orbs.Aura`), the fire
-  rain (`Orbs.Rain`), the patterns of the henshin (`Orbs.Patterns`) and
-  the rite that builds them about the hero (`Orbs.Rite`).
+  rain (`Orbs.Rain`), the patterns of the henshin (`Orbs.Patterns`), the
+  rite that builds them about the hero (`Orbs.Rite`) and the burst of the
+  light the suit cannot hold (`Orbs.Burst`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
   typewriter they share.
 - `Menu/` - the main menu and its sky rig.
@@ -132,7 +134,12 @@ the probe type and the canvas of `Levels.Dynamics`; it draws through
 a callback) /
 `Orbs.Rite` (the rite of the henshin: over `Orbs.Flock`, `Orbs.Harvest`
 and `Orbs.Patterns`, `Render.Brush` and the canvas of `Levels.Dynamics`) /
-`Game.Henshin` (over `Game.Shroud` and `Orbs.Rite` too) / `Game.Trial`
+`Orbs.Burst` (the burst of the suit: over `Orbs.Rite` for the body
+probe, `Orbs.Harvest` for the matter, `Effects.Emitter` for its swarms,
+`Render.Brush`, `Game.Space`, the cell size of `Render.Sprites` and the
+canvas of `Levels.Dynamics`, drawn through `Render.Glow`) /
+`Game.Henshin` (over `Game.Shroud`, `Orbs.Rite` and `Orbs.Burst` too) /
+`Game.Trial`
 (the rules of the gravel trial: over no unit of the game) / `Game.Press`
 (the press of its finale: over no unit of the game either) /
 `Game.Arrivals` (the violet light: over `Sdl2.Core`, `Render.Brush` and
@@ -3588,8 +3595,9 @@ and the record stage by stage: `docs/HENSHIN-PLAN.md`.
   for the suit shed `ShedOrbs`, `ShedTicks`, `ShedSpread`.
   **`IceRiteScore`** = 22, 56, 32, 9, 22, 24 and 72, 100, 33: the waves
   are called at ticks 0, 22 and 44 and seated by 56, 78 and 100; the
-  pause is at 100, the freeze from 123, the collapse at 132, the suit at
-  154 (`PauseAt`, `CollapseAt`, `FinishAt`).
+  pause is at 100, the freeze from 123, the collapse at 132, the end at
+  154 (`PauseAt`, `CollapseAt`, `FinishAt`) - since 3.0.61 the burst's
+  inhale begins there, and the suit goes on with its strike at 156.
 - **`TRiteStage`** = (`rsIdle`, `rsGathering`, `rsHovering`,
   `rsCollapsing`, `rsShedding`). **`TRiteEvent`** = (`reNone`,
   `reWaveCalled`, `reWaveSeated`, `rePaused`, `reCollapsing`,
@@ -3606,7 +3614,8 @@ and the record stage by stage: `docs/HENSHIN-PLAN.md`.
   fades at in the ring. **`TRiteBirth`** - an orb the rite has called and
   does not yet see born. **`TBodyProbe`** (`reference to function:
   TBodyPoints`) - the points of the hero's body as it stands on the
-  screen; the game passes `HeroBodyPoints`.
+  screen; the game passes `HeroBodyPoints`, and the burst
+  (`Orbs.Burst`) asks the same.
 - **`TOrbRite`**:
   - `Create(tint, body)`. `Start(pattern, score, center, matter)` - a
     rite already going is dropped (`Clear`); the spots of all the waves
@@ -3672,8 +3681,9 @@ and the record stage by stage: `docs/HENSHIN-PLAN.md`.
     over 35% to 55% of it, winding to one side, shrinking to 0.35 of its
     size and brightening; one that has gone in stays on the body, its
     point standing rigidly from the hero's center whatever he does.
-    `Finish` - on the tick of the suit all are released at once, with no
-    dust; the stage is `rsIdle` and `reFinished` is told.
+    `Finish` - on the rite's last tick all are released at once, with no
+    dust; the stage is `rsIdle` and `reFinished` is told (the ceremony
+    asks for the burst on it).
   - `Shed(score, center)` - the suit gives its orbs back: a rite going is
     dropped, the body is asked once, and `ShedOrbs` orbs are born at
     once, each at its own point of the body, armed from the first tick.
@@ -3699,7 +3709,81 @@ and the record stage by stage: `docs/HENSHIN-PLAN.md`.
 - Tests: `Tests/Orbs/Tests.Orbs.Rite.pas`, with `Tests.Orbs.Harvest.pas`
   for the spots - see Tests below; the look of it all is for the eye.
 
-### `Game/Game.Shroud.pas` (~965 lines)
+### `Game/Orbs/Orbs.Burst.pas` (~915 lines)
+The burst of the suit (3.0.61): the suit takes as much light as it holds,
+and the rest goes out of the hero. The end of the ceremony in place of the
+one tick the suit went on in, four beats: the inhale (two ticks: the world
+stands, the hero does not; a veil goes over the screen and he is a bare
+figure on it), the strike (24 rays out of his chest, a ring running out
+over the room, a flash), the flight (the rays go through matter and off
+the screen, leaving a mark where they go into a face), the echo (motes out
+of the points of his body; the marks melt). The look and the time only:
+what a ray strikes is the game's to settle through `Stretches`
+(`ResolveBurstHits` in the dpr), and what the strike means - the suit on -
+is the ceremony's (`Game.Henshin`). One burst for every form; a form lends
+it its colors only. Its own `TXorShift` (seed `$42757273`), the numbers
+constants at the top of `implementation`. The design, the numbers and the
+record of the stage: `docs/HENSHIN-PLAN.md`, the section on the burst and
+stages 8-10.
+- **`TBurstLook`** (record) - the colors a form lends: `Glow` (the haze,
+  the glow, the halo), `Core` (the heart of a light ray, the body of a
+  dark one), `Dark` (a black hole: the bodies are drawn over, not added,
+  and the inhale is a negative - a light veil, a dark figure), `Flash`,
+  `Veil` and `VeilLevel`, `Silhouette`, `Mote`. **`IceBurstLook`** - light
+  on light; **`MoonBurstLook`** - the black hole, waiting for the moon form
+  (`docs/ARENA-3.md`); only the U debug key wears it yet.
+- **`TBurstEvent`** = (`beNone`, `beStruck`). **`TBurstStretch`** - what a
+  ray's head passed this tick, from and to. **`TBurstFigure`** - the
+  hero's frame as a bare figure: the white mask (`TShroudPainter.MaskOf`),
+  where the frame stands on the screen, whether it is turned.
+- **`TOrbBurst`**:
+  - `Create(body)` - the body probe of the rite (`TBodyProbe`), asked once
+    a burst, at the strike. `Start(look, curl, center, matter)` - a burst
+    already going is dropped (`Clear`); the inhale is `InhaleTicks` = 2.
+    `curl` is a flag, not a pattern: the game passes `True` for the
+    vortex, and the burst knows no pattern. `Tick(center)` - once a tick,
+    with the hero's center where the tick has left it: through the inhale
+    the center is followed, on its last tick comes the strike and the
+    center is kept from there on - the rays neither lag behind the hero
+    nor follow him. `DrainEvent` - `beStruck` once, waiting until it is
+    asked; `Holding` / `Inhaling` - the inhale (the world stands; the hero
+    is drawn as a figure). `Marks`, `Motes` - the two swarms, read-only,
+    for the tests.
+  - The strike: the rays go out of the chest (2 units over the middle of
+    the body), one every 15 degrees, the first straight up, all alike - 20
+    units a tick, a tail of up to 170 units along the head's way; the head
+    walks in steps of 2 units. In a vortex each step turns the ray one way
+    by `0.06 * step / 20 * exp(-flown / 220)` radians, so the curl dies
+    off (about 35 degrees in all). A ray is gone once its head is 590
+    units from the center (`RayReach`: its whole tail is off the screen).
+    The ring (13 ticks) and the flash (4 ticks) start with the strike; 56
+    motes leave the points of the body (the chest with no probe or no
+    points), slow down by 0.93 a tick, sink, live 70 to 120 ticks.
+  - Matter is touched for the marks only (`MatterAt`: a solid cell or a
+    pad's body on the screen; off the screen there is none): where a
+    head steps from the open into matter, a mark is left at its last open
+    point - a particle that grows over 6 ticks to 18 units, shows in 4,
+    melts linearly by tick 130.
+  - Drawn as the lightning is (`Effects.Lightning`, `AppendLimb`): a ray
+    and the ring are a band of `gsBeam` (the canvas' `BeamGlow`) laid
+    along points by the private `AppendStrip` - a ray every 4 units from
+    tail to head, width and strength by its profile (`k^0.7`, thinning by
+    0.6 over the last fifth: no knot of light at the head), the head drawn
+    on between ticks; the ring a closed oval of 96 points. Three passes a
+    ray, haze to heart; a dark look draws its body with the band's texture
+    switched to blending, then back. `DrawVeil(canvas, origin)` - under
+    the hero, through the inhale: the veil over the frame, and for a light
+    look a white glow about him (`gsPoint` 130 across, 0.35).
+    `DrawSilhouette(canvas, figure)` - the figure in his place; a light
+    look doubles it at the edges (red 1.5 units left, blue right, 0.7),
+    then white over; a dark look has no fringe. `DrawWorld` - the marks,
+    the rays, the ring, the motes, on the world channel. `DrawGlass` - the
+    flash over the whole frame, blended, not added, unshaken.
+- Tests: `Tests/Orbs/Tests.Orbs.Burst.pas` - see Tests below; the look is
+  for the eye, and what the game does along a stretch waits for the scene
+  tests.
+
+### `Game/Game.Shroud.pas` (~980 lines)
 The hero's shroud (3.0.47): smoke and light that gather round him when he
 appears and when he changes his suit. A picture over the hero's frame that
 lives on its own clock and dies out: bands of smoke and light cross the
@@ -3766,7 +3850,9 @@ project's storage, not the repository).
   frame's alpha, a halo and the margins it reaches past the frame; the
   making of them lived here until 3.0.50). `SeedsOf(frame)` hands the points
   out: the game gives them to the shroud, to the rite and (3.0.50) to the
-  uptake.
+  uptake. `MaskOf(frame)` (3.0.61) hands out a frame's white mask, nil for
+  no frame: the burst draws the hero's bare figure with it. The mask adds
+  by its make; whoever draws it otherwise puts its mode back.
   Three calls bracket the hero's draw: `DrawUnder` (behind him: the mist
   behind, the fed light - `DrawFedUnder` -, the far bands, the halo),
   `DrawBody` (on him: the fed light - `DrawFedBody` -, the strips while he
@@ -3931,44 +4017,59 @@ model: `claude/PICKUPS-PLAN.md` (the project's storage, not the repository).
 - Tests: `Tests/Game/Tests.Game.Uptake.pas` - `CutCrumbs` and the counting
   class (the painter draws, so it is judged by eye): see Tests below.
 
-### `Game/Game.Henshin.pas` (~300 lines)
+### `Game/Game.Henshin.pas` (~335 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2)
 and rebuilt on orbs (3.0.49): the 3..2..1 prelude (2026), the rite of orbs
-about the hero (`Orbs.Rite`), the suit going on - and the suit coming off.
+about the hero (`Orbs.Rite`), (3.0.61) the burst of the suit
+(`Orbs.Burst`), the suit going on with its strike - and the suit coming
+off.
 The five rings of bullets closing in on the hero and the two fans of 2008
 are gone. The ceremony has no clock of its own: the rite leads the orbs and
 tells what has come to pass, the ceremony listens and does the game's side
 of it. **`THenshin`** takes the
 stage it acts on - **`THenshinStage`**, a record of the hero, the sound bank,
-the message board, the shake meter, (3.0.47) the shroud and (3.0.49) the
-rite - and what it asks the game for - **`THenshinCalls`**, a record of four
-callbacks (`reference to procedure`; the game passes its methods directly):
+the message board, the shake meter, (3.0.47) the shroud, (3.0.49) the
+rite and (3.0.61) the burst - and what it asks the game for -
+**`THenshinCalls`**, a record of five callbacks (`reference to
+procedure`; the game passes its methods directly):
 `Cure` (`TCureHero`: +1 health), `GrantMercy` (`TGrantMercy`: mercy for the
 hero for a number of ticks), `BeginRite` (`TBeginRite`: the rite begins
 about the hero - the game knows his center, the matter of his screen and
-the level's pattern) and `ShedSuit` (`TShedSuit`: the suit's orbs come out
-about him). So the constructor stays at two parameters.
+the level's pattern), `ShedSuit` (`TShedSuit`: the suit's orbs come out
+about him) and (3.0.61) `Burst` (`TBurstSuit`: the burst begins about him,
+with his center, the matter of his screen and the curl of the level's
+pattern). So the constructor stays at two parameters.
 Reborn with the hero on every level load.
 - `StartCountdown` (the boss path: prelude, then the ceremony), `Start`
   (straight in - the gravel trial: the big message, `evolution.wav` twice,
-  `BeginRite`), `Tick` (once a logic tick, right after the rite's own, even
-  over the corpse: the prelude, then `HearRite`), `DrawCountdown(font,
+  `BeginRite`), `Tick` (once a logic tick, right after the rite's and the
+  burst's own, even over the corpse: the prelude, `HearRite`, then
+  `HearBurst`), `DrawCountdown(font,
   alpha)` (the growing, dissolving digit, topmost), `RemoveIceForm`, `Reset`
-  (restart: the countdown and the ice form die with the hero, the suit
-  comes off silently; the rite is the game's to clear).
+  (restart: the countdown, the burst asked for and the ice form die with
+  the hero, the suit comes off silently; the rite and the burst are the
+  game's to clear).
 - `HearRite` drains the rite's events until `reNone`: `reWaveSeated` -
   `Cure` and the regen ticker (three times: the rite's ticks 56, 78 and
   100); `rePaused` - `GrantMercy` for `HoverTicks` + `CollapseTicks` of
-  `IceRiteScore`, 54 ticks - to the suit; `reCollapsing` - the shroud
-  starts `ChargeLook` (a private function: `IceOnLook` with no bands and no
-  motes and its top at 0.9 of a life counted from `CollapseTicks` - the
-  body fills with light as the orbs go in, and the look tops out a tick
-  past the suit, so `IceOnLook` takes the light over with no dip between);
-  `reFinished` - `Finish`. `reWaveCalled` has no listener yet: it and
-  `reCollapsing` are where the sounds of the rite will go.
-- `Finish`: the perk ticker, three `Cure` (with the point of each wave that
-  sat, the six of the 2008 ceremony), `hfIce`, the shroud's `IceOnLook`,
-  `bottle.wav`, `FinishTrauma`, the big message. No fan.
+  `IceRiteScore` + `InhaleTicks` of the burst, 56 ticks - to the strike
+  (the rite's ticks 100 to 155); `reCollapsing` - the shroud starts
+  `ChargeLook` (a private function: `IceOnLook` with no bands and no motes
+  and its top at 0.9 of a life counted from `CollapseTicks` - the body
+  fills with light as the orbs go in; the look tops out a tick past the
+  collapse, and the burst's inhale covers the body with a bare figure
+  until `IceOnLook` takes the light over at the strike); `reFinished`
+  (3.0.61) - `FBursting` up and `Burst()`: the burst inhales. `reWaveCalled`
+  has no listener yet: it and `reCollapsing` are where the sounds of the
+  rite will go.
+- `HearBurst` (3.0.61) drains the burst's events: `beStruck` with
+  `FBursting` up - `Finish`. A burst the ceremony did not ask for (the L
+  and U debug keys) puts no suit on.
+- `Finish` - the strike: `FBursting` down, the perk ticker, three `Cure`
+  (with the point of each wave that sat, the six of the 2008 ceremony),
+  `hfIce`, the shroud's `IceOnLook`, `bottle.wav`, `FinishTrauma`, the big
+  message. No fan. Since 3.0.61 all of it lands two ticks after the rite's
+  end, on the rite's tick 156.
 - `RemoveIceForm` (nothing if the hero is not wearing the suit): `hfNormal`,
   the shroud's `IceOffLook`, `ShedSuit` and `GrantMercy` for
   `IceRiteScore.ShedTicks` - 100 ticks, as long as the ring stands: the ring
@@ -3979,7 +4080,8 @@ Reborn with the hero on every level load.
   countdown tuning, and its sound names (`evolution.wav`, `countdown.wav`,
   `bottle.wav`) - loaded strictly in the
   constructor. The numbers of the rite are not here: `IceRiteScore` lives in
-  `Orbs.Rite`. `Reset` leaves the shroud as it is
+  `Orbs.Rite`, those of the burst in `Orbs.Burst`. `Reset` leaves the
+  shroud as it is
   (the dpr clears it). `BottleSoundFile` is public: the barrel burst doubles as the
   bonus explosion and the pops of the boss's wreck, and the dpr reads the
   name from here.
@@ -4410,7 +4512,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~3500 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~3630 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -4426,7 +4528,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   durations, damage
   bookkeeping (`HurtMercyTicks`,
   `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (how near an orb takes an
-  enemy bullet), the font choice (`FontFileName`,
+  enemy bullet), `BurstHitStep` (3.0.61: how often along a ray's way the
+  burst strikes, 4 units), the font choice (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
   extra scancodes (`ScancodeS` - the drop - among them; the debug ones
   under DEBUGKEYS), the screen-shake doses
@@ -4453,8 +4556,10 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   cannons (`FCannons: TCannonPair` over `FCannonArt`), the press of the
   finale (`FPress: TPress`), the hero's aura (`FAura: TAura`, one for the run
   too), the rite of the henshin (`FRite: TOrbRite`, one for the run as
-  well; `HeroBodyPoints` is its body probe) and the pattern it builds on
-  this level (`FPattern: TOrbPattern`), the ceremony
+  well; `HeroBodyPoints` is its body probe), the pattern it builds on
+  this level (`FPattern: TOrbPattern`), the burst of the suit (`FBurst:
+  TOrbBurst`, 3.0.61, one for the run, with the same probe) and what the
+  burst under way has wounded (`FBurstWounded`), the ceremony
   (`THenshin`), the uptake of pickups (`FUptake: TUptake` and
   `FUptakePainter`, 3.0.50; reborn with the level, right after the
   shroud), the event director (`TEventDirector`), the arena of the
@@ -4506,12 +4611,18 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     hero on
     his own, the back layer of the rite behind him (`FRite.DrawBehind`,
     on the world channel: the marks of the faces and the orbs behind
-    him), with `FineY` = `FHero.DeckLift(alpha)`: the shroud under him
+    him), the burst's veil (`FBurst.DrawVeil`, 3.0.61) and - while the
+    burst inhales - his bare figure alone (`DrawHeroSilhouette`) in place
+    of what follows up to the uptake; else `DrawHeroInShroud` (since
+    3.0.61 these lines live in it), with `FineY` =
+    `FHero.DeckLift(alpha)`: the shroud under him
     (`FShroudPainter.DrawUnder`), him (`FHero.Draw`, skipped while
     `FShroud.Assembling`), the light on his body (`DrawBody`), his arm alone
     while he is put together (`FHero.DrawArm`), then `FineY` back to 0,
     the shroud over him (`DrawOver`) and the uptake over that
-    (`FUptakePainter.DrawOver`) -, cursor and HUD still; `Update` ticks the pads right before
+    (`FUptakePainter.DrawOver`) -, the burst's flash over the world and
+    under the HUD (`FBurst.DrawGlass`, right after the arrivals, unshaken),
+    cursor and HUD still; `Update` ticks the pads right before
     the hero
     (`FPads.Tick(FHero.Screen)`, then `FHero.Tick` - the riders move with
     their decks, then by themselves; right after the pads' tick it voices
@@ -4712,7 +4823,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (`StartCountdown`) and the gravel trigger (`Start`,
     straight in), ticked in
-    `Update` right after the rite - after the monsters' events, so the
+    `Update` right after the rite and the burst - after the monsters'
+    events, so the
     first tick of a countdown falls on the tick of the boss's event -,
     drawn last in `Render`, reset in `RestartLevel`; the suit comes off
     (`RemoveIceForm`) on `meLevelComplete` and at the breakthrough of the
@@ -4723,7 +4835,8 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     and the window after a hit (`HurtHero`) and the aura's (`CastAura`)
     go through it too; `BeginRite` - `FRite.Start(FPattern, IceRiteScore,
     HeroCenter, MatterAround)`; `ShedSuit` - `FRite.Shed(IceRiteScore,
-    HeroCenter)`; the last two do nothing over the corpse.
+    HeroCenter)`; (3.0.61) `BurstSuit` - `StartBurst(IceBurstLook)`; the
+    last three do nothing over the corpse.
   - Orbs: `CastAura` (the aura reward and the G debug key: `FAura.Cast`
     around `HeroCenter`, the middle of the hero's body, out of
     `MatterAround` - the solid cells of the hero's screen and the bodies
@@ -4766,6 +4879,32 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     the hero there is a leap to the rite. `HurtHero` collapses it on the
     hero's death (`FRite.Collapse`); `LoadLevel` and `RestartLevel` clear
     it.
+    The burst (3.0.61): `FBurst`, begun through the ceremony's `BurstSuit`
+    and the L and U debug keys - `StartBurst(look)`: over the corpse
+    nothing, else `FBurstWounded` emptied and `FBurst.Start(look,
+    FPattern.Name = 'vortex', HeroCenter, MatterAround)`. `Update` reads
+    `FBurst.Holding` once a tick, before the field, into `WorldStands`:
+    while the burst inhales, `FField.Tick` with `DrainMonsterEvents`,
+    `FMonsterBullets.Update` and `TickCannons` do not run - the hero, his
+    bullets, the pads and the orbs go on; the strike inside `FBurst.Tick`
+    does not wake the cannons of that tick. `FBurst.Tick(HeroCenter)`
+    right after the rite's, before the ceremony's. `ResolveBurstHits`
+    right after `ResolveOrbHits(FRite.Flock)`: every stretch of
+    `FBurst.Stretches` walked in steps of no more than `BurstHitStep`,
+    and at every point `StrikeWithBurst` - an enemy bullet within
+    `OrbReach` bursts (`EnemyBulletNear`), a dangerous monster there
+    (`DangerousMonsterAt`) loses a life (`TakeDamage(0, 1, ...)`,
+    `RewardMonsterKill` on its death) and goes into `FBurstWounded`: none
+    loses more than a life a burst, however many rays cross it. Behind
+    walls too, and off the screen; not through `SpendBullet`. `Render`:
+    `DrawVeil` after `FRite.DrawBehind`, the figure in place of the hero
+    while `Inhaling` (`DrawHeroSilhouette`: `FShroudPainter.MaskOf` of his
+    frame, where `Pose` puts it with his shake and `DeckLift`, mirrored
+    with him), `DrawWorld` right after `FRite.DrawInFront`, `DrawGlass`
+    after `FArrivals.Draw`. `HurtHero` clears it on the hero's death - no
+    strike, no suit; `LoadLevel` and `RestartLevel` clear it and
+    `FBurstWounded`. A door does not carry it: its marks, rays and motes
+    stand in screen units, and no burst runs at a door in the game.
     The rain: `PourRain` (the fire rain reward - `bkFireRain` in
     `ActivateQueuedBonus` - and the H debug key: `FRain.Pour` over
     `MatterAround`; over the corpse it does nothing; no shake, no mercy
@@ -4845,7 +4984,11 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `ScancodeJ`, 3.0.49: the henshin at once, no boss and no countdown),
     `ShedSuit` with `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
     3.0.49: the ring of orbs and its mercy as the boss's death gives
-    them, with no suit to take off), `NudgeCrosshair`,
+    them, with no suit to take off), `StartBurst(IceBurstLook)` (L,
+    `ScancodeL`, 3.0.61: the burst on the hero at once, no rite and no
+    suit - the look, the world standing and the strikes only),
+    `StartBurst(MoonBurstLook)` (U, `ScancodeU`, 3.0.61: the same in the
+    moon's look, which no form wears yet), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave, no
@@ -5049,7 +5192,8 @@ At 3.0.52 the suite was 376 tests, all green; the gravel arena
 (3.0.53-3.0.59) brought 112 more - 488; the collision decks (3.0.60)
 brought 8 - six in `Tests.Pads.Decks`, two in `Tests.Levels.Pads` (a run
 of decks loads as one pad with no picture and is no wall; a bad collision
-letter raises). Not every test unit has its
+letter raises); the burst of the suit (3.0.61) brought 23 in
+`Tests.Orbs.Burst` - 519. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -5102,6 +5246,20 @@ to `bin\`.
   and the flash, the drawing into the body, death, a restart, and the
   suit shed as a ring; the ice score runs the game's two patterns to the
   suit.
+- **`Orbs/Tests.Orbs.Burst.pas`** (~1055 lines, 3.0.61) -
+  **`TOrbBurstTests`** (23 tests): the burst ticked with no window, the
+  rays watched by their stretches alone - the bench joins every tick's
+  stretches into the way of each head (`FlyOut`), and a stretch that
+  begins where no head stood fails. The inhale and the one strike told;
+  24 rays from the chest every 15 degrees, one straight up, all alike on
+  every tick; a straight ray keeps its line, a vortex's curl one way and
+  dying off; through matter and off the screen; a mark on each face a ray
+  goes into, none in an empty room, the marks melting; the motes out of
+  the points of the body (out of the chest with none), living a while;
+  the rays leaving from the hero at the strike and not following him;
+  `Clear`, `Start` over a burst in flight, the moon flying as the ice,
+  the dice. The marks and the motes are read through `Marks` and
+  `Motes`.
 - **`Game/Tests.Game.Blasts.pas`** (~270 lines) - **`TBlastTests`**: the
   wave of `Game.Blasts` - a near body before a far one, a body struck
   once, none beyond the radius, a wall's shelter, the lives and the knock
@@ -5618,7 +5776,8 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; a hull's points: `hull` in monsters.json) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
-| The henshin ceremony: the countdown, what each event of the rite means for the hero (the cure, the mercy, the light on the body, the suit), the suit on and off | Game.Henshin.pas (`HearRite`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; the J and K debug keys) + docs/HENSHIN-PLAN.md |
+| The henshin ceremony: the countdown, what each event of the rite and the burst means for the hero (the cure, the mercy, the light on the body, the suit), the suit on and off | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; the J and K debug keys) + docs/HENSHIN-PLAN.md |
+| The burst of the suit: the inhale (the world standing, the veil, the bare figure), the rays (count, speed, tail, the vortex's curl, through walls), the marks, the ring, the flash, the motes, the moon's dark look; what a ray strikes, a life a burst | Orbs.Burst.pas (formulas, numbers, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Moon2D.dpr (`StartBurst`, `BurstSuit`, `WorldStands` in `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; the L and U debug keys) + Tests.Orbs.Burst.pas + docs/HENSHIN-PLAN.md |
 | The rite of orbs of the henshin: its schedule (`IceRiteScore`), the waves and where they are drawn from, the flight to a seat, when an orb is armed, the stand-ins and their stock, the freeze and the flash, the collapse over the body, a door, a leap, the hero's death | Orbs.Rite.pas (formulas and numbers) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, the two layers in `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/HENSHIN-PLAN.md |
 | A pattern of the henshin: the snowflake, the vortex, a new one; which level builds which | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, the `Patterns` table) + `henshinPattern` in levelN.json + Levels.Defs.pas (`HenshinPattern`) + Moon2D.dpr `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (a seat that leaps) + Tests.Orbs.Patterns.pas |
 | The suit coming off: the ring of orbs, how long it stands, the mercy | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` of the score) + Game.Henshin.pas `RemoveIceForm` + Moon2D.dpr (`ShedSuit`, `GrantMercy`) |
