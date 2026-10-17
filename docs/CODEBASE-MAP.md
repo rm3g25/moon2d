@@ -1168,7 +1168,7 @@ in `CreateDynamic`.
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
-2's screen 9 (`docs/ARENA-2.md`).
+2's screen 9 (`docs/mechanics/arena-2.md`).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
   `ecEnraged`, `ecActReached`, `ecGravelDealt`, `ecTrialDone`,
   `ecWaveKilled`) - what the event waits for. The hero must be on the
@@ -3529,7 +3529,7 @@ every orb of every wave at any moment of the pattern's own clock. A
 pattern is a function and a name, with no state; it knows nothing of how
 the orbs come to their seats or what the seats are for. Over no unit of
 the game. The formulas and the numbers are the stand's
-(`docs/HENSHIN-PLAN.md`); the numbers are constants in `implementation`.
+(`docs/mechanics/henshin.md`); the numbers are constants in `implementation`.
 - **`TPatternSeat`** (record) - a seat in the hero's own frame: `X`, `Y`
   (units right and down from the middle of his body), `Depth` (from -1
   behind him to 1 in front) and `Level` (its light, 0..1).
@@ -3587,7 +3587,7 @@ aura is: a flock of its own, a descendant of `TOrb`, its own `TXorShift`
 (not `Random`: that one feeds the boss spawn table), the numbers
 constants at the top of `implementation`. The rite knows no pattern and
 no score of its own: both are handed to `Start`. The design, the numbers
-and the record stage by stage: `docs/HENSHIN-PLAN.md`.
+and the record stage by stage: `docs/mechanics/henshin.md`.
 - **`TRiteScore`** (record, ticks) - the numbers of a rite: `WaveGap`
   (between the calls of the waves), `WaveSpan` (from a wave's call to its
   last seat), `HoverTicks`, `FreezeTicks` (the last of the hover),
@@ -3723,7 +3723,7 @@ what a ray strikes is the game's to settle through `Stretches`
 is the ceremony's (`Game.Henshin`). One burst for every form; a form lends
 it its colors only. Its own `TXorShift` (seed `$42757273`), the numbers
 constants at the top of `implementation`. The design, the numbers and the
-record of the stage: `docs/HENSHIN-PLAN.md`, the section on the burst and
+record of the stage: `docs/mechanics/henshin.md`, the section on the burst and
 stages 8-10.
 - **`TBurstLook`** (record) - the colors a form lends: `Glow` (the haze,
   the glow, the halo), `Core` (the heart of a light ray, the body of a
@@ -3731,7 +3731,7 @@ stages 8-10.
   and the inhale is a negative - a light veil, a dark figure), `Flash`,
   `Veil` and `VeilLevel`, `Silhouette`, `Mote`. **`IceBurstLook`** - light
   on light; **`MoonBurstLook`** - the black hole, waiting for the moon form
-  (`docs/ARENA-3.md`); only the U debug key wears it yet.
+  (`docs/mechanics/arena-3.md`); only the U debug key wears it yet.
 - **`TBurstEvent`** = (`beNone`, `beStruck`). **`TBurstStretch`** - what a
   ray's head passed this tick, from and to. **`TBurstFigure`** - the
   hero's frame as a bare figure: the white mask (`TShroudPainter.MaskOf`),
@@ -3793,7 +3793,7 @@ of how he looks - sizes and shapes come from his 24 frames, so a redrawn hero
 brings his own shroud. Since 3.0.50 the shroud also holds one light that is
 no scene's: what the hero takes in (`Game.Uptake`) feeds it, it lights the
 body and dies out by itself, whether a scene runs or not. The plan, the
-numbers and the rules for whoever writes it: `claude/SHROUD-PLAN.md` (the
+numbers and the rules for whoever writes it: `docs/mechanics/hero-shroud.md` (the
 project's storage, not the repository).
 - **`TShroudLook`** (record, one per scene; ticks, screen units and shares):
   `Life`, `Bands`, `WidthFrom`/`WidthTo`, `Travel` (down the body over a
@@ -3829,7 +3829,7 @@ project's storage, not the repository).
     of `Motes` x the halo's level; a
     sinking mote (`Lift` above zero) is settled out of matter by the probe.
     A mote already in flight when a new `Start` comes takes the new look's
-    `Lift` and is drawn in its `Tint` (open: claude/SHROUD-PLAN.md).
+    `Lift` and is drawn in its `Tint` (open: docs/mechanics/hero-shroud.md).
   - Mist: a band that reaches the feet line (`HeroSize - 1`; only a look with
     `Travel` above zero gets there - `IceOnLook`) leaves the hero, is marked
     `Fallen` and is copied into `Mist` as a **`TShroudCloud`** (its look, the
@@ -3881,7 +3881,7 @@ crumbled the same way, but its crumbs fall and seek no one. The unit is the
 picture alone: health and the weapon are the game's to give, in the tick of
 the touch, and nothing here takes the controls from the hero. What differs
 between a medkit, a weapon and a wreck is numbers only. The plan and the
-model: `claude/PICKUPS-PLAN.md` (the project's storage, not the repository).
+model: `docs/mechanics/pickups.md` (the project's storage, not the repository).
 - **`TUptakeLook`** (record, one per kind of scene; ticks, screen units and
   shares): `Fill` (the picture takes the color), `Crumble` (the crumbs
   leave, from the first to the last), `Order` (`TUptakeOrder` =
@@ -4088,7 +4088,7 @@ Reborn with the hero on every level load.
 
 ### `Game/Game.Trial.pas` (~400 lines)
 The rules of the gravel trial of level 2's screen 9 (3.0.53, reworked
-into acts; `docs/ARENA-2.md` holds the whole design): no monster field,
+into acts; `docs/mechanics/arena-2.md` holds the whole design): no monster field,
 no hero and no SDL in it - a class a test drives alone
 (`Tests.Game.Trial`). The trial runs in acts (`TrialActs` = 5): an act is
 a batch of gravels let down a wave at a time (`TrialFirstWaveTicks` 25,
@@ -4701,7 +4701,7 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`;
     its `TDirectorCues` are built in `LoadLevel`).
   - The gravel arena (3.0.53-3.0.59; rules in `Game.Trial`, `Game.Press`,
-    `Game.Cannons`, the design in `docs/ARENA-2.md`): `TickGravelAttack` -
+    `Game.Cannons`, the design in `docs/mechanics/arena-2.md`): `TickGravelAttack` -
     every tick while the trial runs, even over the corpse: the gravels
     and the wave's bodies out of the right gap come back from the sky
     (`ReturnSideStrays`, `ArriveAgain` - the violet light and
@@ -5604,7 +5604,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   trigger of the 2008 first barrel), barrels on the rest (direction 1).
   A `dying` beacon on the room. Screen 9 is the gravel arena
   (3.0.53-3.0.59; the whole design and the data act by act are in
-  `docs/ARENA-2.md`): `s09-room` (the ChatGPT room with the violet
+  `docs/mechanics/arena-2.md`): `s09-room` (the ChatGPT room with the violet
   ceiling grating), `s09-doorstep` (the left slab, cols 0-1 of row 11 -
   the only solid floor; respawn column 2, row 11), `s09-lamp-off` with a
   `dying` beacon, and a `shelf-dock` behind every shelf (49 objects in
@@ -5753,11 +5753,11 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
-| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock; the collision decks ('2' in `collision`) | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
-| A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/PADS-PLAN.md, stage 8) |
-| A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/PADS-PLAN.md, stage 9) |
-| A carousel: pads flying round a track - its shape, size and pace, the slots of its pads, where each starts; a monster seated on a pad; where a carousel may turn | `carousels` + `carousel` on a pad + `seat` on an entity in levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/PADS-PLAN.md, stage 10) |
-| The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/PADS-PLAN.md) |
+| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock; the collision decks ('2' in `collision`) | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/mechanics/pads.md for the plan) |
+| A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/mechanics/pads.md, stage 8) |
+| A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/mechanics/pads.md, stage 9) |
+| A carousel: pads flying round a track - its shape, size and pace, the slots of its pads, where each starts; a monster seated on a pad; where a carousel may turn | `carousels` + `carousel` on a pad + `seat` on an entity in levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/mechanics/pads.md, stage 10) |
+| The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/mechanics/pads.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
 | Weapon patterns / crosshair | Hero.pas (+Bullets.pas) |
 | Monster behavior / AI / boss | Monsters.pas + Monsters.Defs.pas + monsters.json |
@@ -5776,19 +5776,19 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Wreck smoke and sparks of the machines | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; a hull's points: `hull` in monsters.json) |
 | The barrel's smoke; one more body that smokes | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD art in a monster set: filter, color key | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
-| The henshin ceremony: the countdown, what each event of the rite and the burst means for the hero (the cure, the mercy, the light on the body, the suit), the suit on and off | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; the J and K debug keys) + docs/HENSHIN-PLAN.md |
-| The burst of the suit: the inhale (the world standing, the veil, the bare figure), the rays (count, speed, tail, the vortex's curl, through walls), the marks, the ring, the flash, the motes, the moon's dark look; what a ray strikes, a life a burst | Orbs.Burst.pas (formulas, numbers, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Moon2D.dpr (`StartBurst`, `BurstSuit`, `WorldStands` in `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; the L and U debug keys) + Tests.Orbs.Burst.pas + docs/HENSHIN-PLAN.md |
-| The rite of orbs of the henshin: its schedule (`IceRiteScore`), the waves and where they are drawn from, the flight to a seat, when an orb is armed, the stand-ins and their stock, the freeze and the flash, the collapse over the body, a door, a leap, the hero's death | Orbs.Rite.pas (formulas and numbers) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, the two layers in `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/HENSHIN-PLAN.md |
+| The henshin ceremony: the countdown, what each event of the rite and the burst means for the hero (the cure, the mercy, the light on the body, the suit), the suit on and off | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; the J and K debug keys) + docs/mechanics/henshin.md |
+| The burst of the suit: the inhale (the world standing, the veil, the bare figure), the rays (count, speed, tail, the vortex's curl, through walls), the marks, the ring, the flash, the motes, the moon's dark look; what a ray strikes, a life a burst | Orbs.Burst.pas (formulas, numbers, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Moon2D.dpr (`StartBurst`, `BurstSuit`, `WorldStands` in `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; the L and U debug keys) + Tests.Orbs.Burst.pas + docs/mechanics/henshin.md |
+| The rite of orbs of the henshin: its schedule (`IceRiteScore`), the waves and where they are drawn from, the flight to a seat, when an orb is armed, the stand-ins and their stock, the freeze and the flash, the collapse over the body, a door, a leap, the hero's death | Orbs.Rite.pas (formulas and numbers) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, the two layers in `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/mechanics/henshin.md |
 | A pattern of the henshin: the snowflake, the vortex, a new one; which level builds which | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, the `Patterns` table) + `henshinPattern` in levelN.json + Levels.Defs.pas (`HenshinPattern`) + Moon2D.dpr `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (a seat that leaps) + Tests.Orbs.Patterns.pas |
 | The suit coming off: the ring of orbs, how long it stands, the mercy | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` of the score) + Game.Henshin.pas `RemoveIceForm` + Moon2D.dpr (`ShedSuit`, `GrantMercy`) |
-| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (the masks, the halos, the seeds) + Tests.Game.Shroud.pas (+claude/SHROUD-PLAN.md, in the project's storage) |
-| Taking a pickup: the fill, the crumbs, their flight into the hero's body and the light on it; a pickup destroyed instead; the light of a medkit and of a weapon that lie; a door, the hero's death and a restart in the middle of a scene; one more kind of pickup | Game.Uptake.pas (`TUptakeLook` and the three looks, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Moon2D.dpr (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; tools/medkit/build_medkit.py makes them) + Tests.Game.Uptake.pas (+claude/PICKUPS-PLAN.md, in the project's storage) |
+| The hero's shroud: when it plays and with which look, what a look says (bands, strips, halo, motes, mist), what the painter draws and in what order, the light of the ice suit | Game.Shroud.pas (`TShroudLook` and the looks, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (the masks, the halos, the seeds) + Tests.Game.Shroud.pas (+docs/mechanics/hero-shroud.md, in the project's storage) |
+| Taking a pickup: the fill, the crumbs, their flight into the hero's body and the light on it; a pickup destroyed instead; the light of a medkit and of a weapon that lie; a door, the hero's death and a restart in the middle of a scene; one more kind of pickup | Game.Uptake.pas (`TUptakeLook` and the three looks, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Moon2D.dpr (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; tools/medkit/build_medkit.py makes them) + Tests.Game.Uptake.pas (+docs/mechanics/pickups.md, in the project's storage) |
 | What is made of a picture's alpha - the mask, the halo, the points: for one more thing that glows in its own shape | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
 | Game flow / state machine / scoring / bonuses | Moon2D.dpr (+Game.Bonus.pas) |
-| The gravel trial: acts and batches, the gate, the breath between acts, the herald, the aimed rain, pit and side returns, the medkits (per 15 kills, the middle of an act), the open sky, the wave of the finale and its cap; where a body comes down | Game.Trial.pas (rules) + Moon2D.dpr (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) in level2.json + docs/ARENA-2.md |
-| The gravel arena's room act by act: which shelves wake, sleep or blink, in which order, sparing the hero or not | `events` of screen 9 in level2.json (`s09-act1`..`s09-done`) + the banks of the shelves there + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/ARENA-2.md |
+| The gravel trial: acts and batches, the gate, the breath between acts, the herald, the aimed rain, pit and side returns, the medkits (per 15 kills, the middle of an act), the open sky, the wave of the finale and its cap; where a body comes down | Game.Trial.pas (rules) + Moon2D.dpr (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) in level2.json + docs/mechanics/arena-2.md |
+| The gravel arena's room act by act: which shelves wake, sleep or blink, in which order, sparing the hero or not | `events` of screen 9 in level2.json (`s09-act1`..`s09-done`) + the banks of the shelves there + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/mechanics/arena-2.md |
 | The violet light of an arrival; the herald's | Game.Arrivals.pas (+Moon2D.dpr `LetDownFromSky`, `ArriveAgain`) |
 | The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Moon2D.dpr (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
@@ -5797,9 +5797,9 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Moon2D.dpr (`FlyInParked`, `ReleaseHeldFlyIns`) |
 | Stray pads: when they come, where they hang, how they misbehave, sent away | Pads.Stray.pas + `stray` on a pad and the `strays` / `straysLeave` actions in level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
 | Weather: a body that bursts where it lands (the sky barrel) | `weather` in monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Moon2D.dpr (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
-| The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, the ring's ceiling, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/ORBS-PLAN.md |
+| The hero's aura of orbs: the ring, its flow, how it follows (the leash, the thread of a leap), lives, weaving a second cast in, the ring's ceiling, a door, the hero's death | Orbs.Aura.pas (formulas and numbers) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/mechanics/orbs.md |
 | The call of the aura: where the orbs show through (faces of cells and pads, thin air), the wait over a face, the flight, when an orb is armed, the mercy window | Orbs.Harvest.pas (the spots) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`, `GrantMercy`) |
-| The fire rain of orbs: the waves, the formula of a drop, the floor of a column (matter, a pit), landing, a second pour, the hero's death | Orbs.Rain.pas (formulas and numbers) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/ORBS-PLAN.md |
+| The fire rain of orbs: the waves, the formula of a drop, the floor of a column (matter, a pit), landing, a second pour, the hero's death | Orbs.Rain.pas (formulas and numbers) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/mechanics/orbs.md |
 | An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks, its depth and the two layers about the hero; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |

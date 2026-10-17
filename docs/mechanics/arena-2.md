@@ -229,7 +229,7 @@ Not compiled by Claude; waits for the live run.
 ### After the run of 5.1 (2026-10-15, still 3.0.58)
 - **More floor.** The act 5 floor wakes 9 shelves of 14 (was 6): the fight ahead is hard.
 - **A broken pad stays down.** A plunge may stay down for good: `"staysDown": true` in its JSON (TPadPlunge.StaysDown, false by default; TPlungeCycle lies fallen and never climbs). The failing look of s09-carousel plunges so (its rest dropped - nothing to rest for): a broken carousel pad falls once under the hero and is gone. Tests: Tests.Pads.Plunge - a pad that stays down never climbs; Tests.Levels.Pads - staysDown read, false by default, the arena carousel's pads stay down.
-- **Files.** Levels.Pads, Pads.Plunge, bin/level2.json, docs/ARENA-2.md; Tests.Pads.Plunge, Tests.Levels.Pads.
+- **Files.** Levels.Pads, Pads.Plunge, bin/level2.json, docs/mechanics/arena-2.md; Tests.Pads.Plunge, Tests.Levels.Pads.
 
 ### Built at 5.2 (2026-10-15, still 3.0.58)
 Not compiled by Claude; the cycle was run tick by tick in a port of it, against the tests, before it was handed over.
@@ -250,7 +250,7 @@ Not compiled by Claude; waits for the live run.
 - **The open sky.** Event action `{"action": "skyFall", "monster": ..., "every": seconds}` (Levels.Events eaSkyFall, TSkyFall; needs an event that waits for an act; "every" above 0; the monster checked at level start with the spawn ids). Events.Director cue SkyFall; the game (OpenSky) takes it only in the act the event waits for, keeps the monster and tells the trial the pace. Game.Trial: OpenSky(seconds) - a body every that many ticks (a tick at least), the first a whole pace on; cue SkyFall; the act's end shuts the sky, and nothing falls on the tick it shuts; Start and Stop shut it too. The game lets the body down at a random column in the violet light (LetDownFromSky).
 - **Data.** s09-act5: skyFall skyBarrel every 2.5 s - the first guess, tuned live.
 - **Tests.** Tests.Game.Trial (new): the sky shut until opened, its pace, under a tick a tick, a new pace from the moment it is told, shut with the act (nothing on the closing tick), shut by Stop, not opened outside the trial; skyFall read, no monster, no pace and no act refused, level 2 opens the sky once, in act 5 over the arena. Tests.Monsters.Defs: the sky barrel is weather, pays nothing and blows up, the barrel is not weather, weather only when asked, weather free of gravity refused. Tests.Monsters.Bodies: weather bursts where it lands (meDied, meBurst), on a ledge, the pit takes it with no event and it falls no more, it bursts once, the barrel of the levels lands and stands.
-- **Files.** Monsters.Defs, Monsters, Levels.Events, Events.Director, Game.Trial, Moon2D.dpr, bin/monsters.json, bin/level2.json, docs/ARENA-2.md; Tests.Game.Trial (new), Tests.Monsters.Defs, Tests.Monsters.Bodies, Tests.Rooms (its header), Moon2D.Tests.dpr, Moon2D.Tests.dproj.
+- **Files.** Monsters.Defs, Monsters, Levels.Events, Events.Director, Game.Trial, Moon2D.dpr, bin/monsters.json, bin/level2.json, docs/mechanics/arena-2.md; Tests.Game.Trial (new), Tests.Monsters.Defs, Tests.Monsters.Bodies, Tests.Rooms (its header), Moon2D.Tests.dpr, Moon2D.Tests.dproj.
 
 ## Stage 6 design (the finale: betoners)
 Designed 2026-10-15; the numbers are first guesses, tuned at the live runs. The fork of where the rules of the wave live: variant A taken (2026-10-16) - the wave is act 6 of Game.Trial.
@@ -311,7 +311,7 @@ Run live (2026-10-16) with the additions below.
 - **Data.** Screen 9 trigger: finale betoner, count 10 / 15 / 20, alive 3. s09-wall and s09-foot shelves also stand in s09-press-4. Event s09-act6 (actReached 6): s09-floor wakes (order left, step 0.1), s09-press-4 wakes and holds (the blink of act 5 ends), waveOnto s09-press-4, medkits onto s09-floor. Event s09-done (trialDone): s09-press-4 sleeps, order down, step 0.25, spareHero.
 - **Version.** Game.Version 3.0.59.
 - **Tests.** Tests.Game.Trial: TTrialWaveTests - without a finale the gravels are the whole trial; a finale is one act more; a finale with no cap or no count is no wave; the wave fills up a wave apart after the breath; never past its cap; a dead body replaced after the refill; one herald, the first; no gravels and nothing aimed in the wave; its count and no more, the gate opening the tick after the last; the gate waits for the last body; the progress of the wave act. TFinaleLevelTests - the finale read (by grade and uniform), none without it, refused without a trial / monster / good count / cap; trialDone and waveOnto read, waveOnto with no bank refused, onto an unknown bank refused; level 2 ends in betoners (screen 9, 10 / 15 / 20, cap 3; six shelves in s09-press-4; waveOnto in act 6; s09-done sleeps the balconies sparing the hero). The side pick and the returns need pads and a field: checked by eye.
-- **Files.** Game.Trial, Levels.Defs, Levels.Events, Events.Director, Monsters, Pads.World, Moon2D.dpr, Game.Version, bin/level2.json, docs/ARENA-2.md; Tests.Game.Trial.
+- **Files.** Game.Trial, Levels.Defs, Levels.Events, Events.Director, Monsters, Pads.World, Moon2D.dpr, Game.Version, bin/level2.json, docs/mechanics/arena-2.md; Tests.Game.Trial.
 
 ### Added to 6.1 (2026-10-16, still 3.0.59)
 Asked after the build was handed over, before its live run; everything else of 6.1 stays.
@@ -321,7 +321,7 @@ Asked after the build was handed over, before its live run; everything else of 6
 - **The strays fly away after the victory.** Event action `{"action": "straysLeave", "target": <flock>}` (eaStraysLeave; Levels.Defs checks the flock as for strays; Events.Director cue StraysLeave; TPadWorld.TryDismissFlock; TStrayCycle.Dismiss). A pad sent away flies out along its row beyond the nearer side at half the pace, its jets at half, and stays asleep out of sight; it no longer turns back, stalls, twitches or falls; a leg or a fall under way runs out first; with the hero aboard it hangs until he is off it; asleep or waiting it stays asleep; a rewind forgets the dismissal. s09-done sends s09-strays away.
 - **Data.** Events s09-act6-tanks (waveKilled 6, 1 of 2) and s09-act6-tanks-2 (the same, delay 66): spawn tank, spriteList tank.mns, row 10, from left and from right. s09-done: straysLeave s09-strays.
 - **Tests.** Tests.Game.Trial: guests hold the gate but not the wave; wave kills counted in its act only; waveKilled read and refused (no act, a bad share); straysLeave read and refused (no flock); level 2's two tank pairs at half the wave, one from each side, the second delayed, and the strays sent away once the trial is won. Tests.Pads.Stray: sent away from a hang it leaves at once, quietly (no fall, no turn back, jets at half) and stays out; with the hero aboard it waits for him to get off; sent away while waiting it never comes in, nor is let go again; a fall under way runs out and it does not come back; an asleep pad is not sent away and a rewind forgets.
-- **Files.** Game.Trial, Levels.Events, Levels.Defs, Events.Director, Pads.Stray, Pads.World, Moon2D.dpr, bin/level2.json, docs/ARENA-2.md; Tests.Game.Trial, Tests.Pads.Stray.
+- **Files.** Game.Trial, Levels.Events, Levels.Defs, Events.Director, Pads.Stray, Pads.World, Moon2D.dpr, bin/level2.json, docs/mechanics/arena-2.md; Tests.Game.Trial, Tests.Pads.Stray.
 - **A medkit at the middle of every act** (asked 2026-10-16: the arena is too hard). Game.Trial pays one more medkit on the kill that makes half of the act's batch (normal 15: the 7th; hard 25: the 12th; wild 40: the 20th) and half of the wave (10: the 5th; 15: the 7th; 20: the 10th) - FActKills counts the gravels of the act, reset at the act change; NoteWaveKilled counts the wave. An act of one has no middle. It comes as every trial medkit does: the violet teleport, onto the act's medkitsOnto bank. The one per 15 gravels stays. Tests: Tests.Game.Trial TTrialMiddleMedkitTests - half the batch pays one (not before, not after), every act pays its middle, half the wave pays one, an act of one pays none.
 
 ### Built at 6.2 (2026-10-16, still 3.0.59)
@@ -331,7 +331,7 @@ Taken after the live run of 6.1 called the finale easy: betoners on the row 9 ba
 - **Moon2D.dpr.** FPress: StartPress only in the act the event waits for; TellPress carries a call out (TellPressRow: TellBank sleep, or wake with hold; no spareHero - no mercy on the press); the press ticks in TickGravelAttack before the trial; LetDownWave tells the press Arrive(FWaveBank) before it picks a shelf, so the top row it wakes is meant out; the act's end (ActEnded, Finished too), LoadLevel and a restart shut it. WaveSideWanted still counts the wave over the whole screen, not the top row alone.
 - **Data.** 18 new shelves s09-press-1-01..06 (row 3, deck y 96), s09-press-2-* (row 5, y 160), s09-press-3-* (row 7, y 224), cols 1-3 and 12-14, held in, rig shelfDock, banks s09-press-N and s09-balcony; a shelf-dock object behind each (x-3, y+1, width 38, tint 70). The row 9 wall and foot shelves join s09-balcony. Strays zone [4, 3, 11, 8] (acts 5 and 6). s09-act6: the floor wakes, s09-press-4 sleeps (the blink of act 5 ends, the conveyor brings it out), waveOnto s09-press-1, press rows s09-press-1..4 every 10 s, medkits onto the floor. s09-done: s09-balcony (all 24) sleeps order down step 0.25 spareHero; the strays leave.
 - **Tests.** Tests.Game.Press (new): every row starts in and a beat over no row moves nothing; an arrival brings the top row out (once, and never another row); a beat rides the rows down a row; the bottom row falls off and the press empties; a beat waits out an arrival; a row under a row goes in and comes out again after PressRewakeTicks; shut and started again; no rows or no beat is no press; the beat in ticks from seconds. TPressLevelTests: the press read; refused with no rows, one row, an empty bank, no beat, a beat of nothing, no act; onto an unknown bank refused; level 2's press - four rows top first in act 6, six shelves a row at their decks, all of them s09-balcony and nothing else, newcomers onto the top row, the strays between the balconies (cols 4-11), the balconies in once the trial is won, sparing the hero. Tests.Game.Trial: the finale test now expects waveOnto s09-press-1 and the end sleeping s09-balcony.
-- **Files.** Game.Press (new), Levels.Events, Levels.Defs, Events.Director, Moon2D.dpr, Moon2D.dproj, bin/level2.json, docs/ARENA-2.md; Tests.Game.Press (new), Tests.Game.Trial, Moon2D.Tests.dpr, Moon2D.Tests.dproj.
+- **Files.** Game.Press (new), Levels.Events, Levels.Defs, Events.Director, Moon2D.dpr, Moon2D.dproj, bin/level2.json, docs/mechanics/arena-2.md; Tests.Game.Press (new), Tests.Game.Trial, Moon2D.Tests.dpr, Moon2D.Tests.dproj.
 
 ## Stages
 Each stage ends with a live run. Versions: one per stage that changes mechanics, next free after 3.0.56; the tag lands after the docs.
@@ -397,3 +397,220 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 - Carousel size, pad count, period and speed-up time: first guesses, tuned live. So are the landing's pace (8 units a tick), braking (10 ticks) and ripple (4 ticks a cell), constants in Levels.Carousels.
 - Finale: wave size by grade (10 / 15 / 20) and the cap (3 on every grade); the press beat (10 s), the arrival window (45 ticks) and the refill (33 ticks) - first guesses.
 - Finale: a medkit inside the wave (none now - medkits are per 15 gravels).
+
+## Journal
+
+### Сессия: правый край грейвел-экрана (2026-09-16)
+
+Баг: во время испытания герой уходил за правый край экрана 9 level2 и
+падал в лунку. HandleScreenTransitions только отказывал в переходе, а в
+коллизии правой стены у пола дыра (строка 11, колонка 16).
+
+#### Откуда в 2008 была стена
+
+Не из кода перехода - условие 1071-1073 портировано дословно. Стену
+давал WhatTheSprite (coordinates.pas 113-131): для колонки 17 цикл поиска
+не находил совпадения, пробегал все 15x16 и читал байт
+`f = (screen-1)*384+481`, то есть клетку (кол 1, стр 4) СЛЕДУЮЩЕГО
+экрана, при любой запрошенной строке. У экрана 10 там стена, а
+CanIGoRight пробовал колонку 17 при x = 490 - герой вставал там. После последнего экрана уровня то же
+чтение уходит за конец строки в мусор.
+
+Обрезка level2 по экран 9 (часть 5.2) убрала соседа, SolidAt честно
+считает вне сетки воздухом - стена исчезла. Каждое решение по
+отдельности верное, вместе - дыра.
+
+#### Фикс
+
+Закрытая дверь = стена: при отказе в переходе герой прижимается к
+порогу x = 479. Восстановление поведения 2008, не отступление. Порог
+на 11 юнитов раньше оригинальных 490 - те получились арифметикой
+сломанного поиска, а не замыслом; герой целиком в кадре.
+
+#### Попутно: 391-392 не стирали триггер
+
+`levelmass[ff+1] := chr(31)` - байт коллизии клетки (1,1) текущего
+экрана, `levelmass[ff]` - байт текстуры последней клетки предыдущего.
+Физика героя и монстров читает не Files.levelmass, а свои копии AllLev
+(hero.pas 86, monst.pas 96), снятые при создании: запись по
+copy-on-write отщепляет строку, копии не меняются. Рисование экрана
+начинается с ff+2. Итого мёртвая запись. Триггер «раз за игру» в 2008
+давали односторонние двери и смерть в меню. Исправлены комментарии в
+Hero.pas (Solid), Moon2D.dpr (TickGravelAttack, RestartLevel) и пункт
+«ПЕРЕВЗВОД НА СМЕРТИ» выше.
+
+#### Тег
+
+**2.3.2** - PATCH: механика края, контента нет.
+
+### Сессия: комната арены грейвелов, этап 0 (2026-10-13)
+
+Экран 9 второго уровня встал на нарисованную комнату, и после первого
+прогона переложены акты 2-3: лестница больше не ходит волной. Только
+данные и арт, механика 3.0.54 не тронута - версия та же. План арены -
+`docs/mechanics/arena-2.md`; здесь то, что нужно помнить.
+
+#### Экран 9 второго уровня
+- `s09-room` - генерация ChatGPT как есть, 4:3, на 0, 0, ширина 512.
+  Стены на 31 и 481 единице, кончаются на 311 (сетка - 320): в допуске.
+- Пола в картинке нет: задняя стена уходит за нижний край. Пол - полки,
+  под ними шахта, как на экране 8.
+- `s09-doorstep` - левая плита экрана 8 (столбцы 0-1 строки 11) из
+  пикселей `s08-room`: с экрана 8 герой сходит на ту же плиту.
+- `s09-lamp-off` над лампой левой стены, маячок `dying` на `s09-room`
+  (18.4, 132.6).
+- Тайлы 2008 погашены, 14 вентиляторов 2008 убраны: колодцев под них в
+  новой комнате нет.
+- Гнёзда `shelf-dock` за каждой полкой, тинт 70 (стена темнее, чем на
+  экране 8): `s09-floor-dock-NN`, `-wall-`, `-ladder-`, `-crown-`.
+
+#### Что решено
+- Порог - столбцы 0-1, столбец 2 и столбец 15 строки 11 стали полками
+  `s09-floor` (14 штук, столбцы 2-15). Точка возрождения (2, 11) стоит
+  на столбце 1 порога.
+- Лестница - пирамида из пар, без крыш: строка 9 - столбцы 2-3 и 12-13,
+  строка 7 - 4-5 и 10-11, вершина `s09-crown` - строка 5, столбцы 6-9.
+  Отдельной короны под потолком нет: вершина и есть корона, аптечки
+  акта 2 садятся на неё. Каждый прыжок - подъём на 2 без зазора.
+- Ступени стоят весь акт (`hold`), а не ходят волной: правило "опора не
+  живёт дольше акта" значит "перестройка на смене акта", не "полка
+  уходит каждые 2.5 секунды". Волна делала лестницу непроходимой
+  (пять прыжков за 2.5 секунды), акт 3 загонял героя на порог, и весь
+  поток из ямы возвращался ему на голову. Антибункер на лестнице -
+  прицельный дождь, не тряска.
+- Ступени по две клетки, чтобы был шаг в сторону от прицельного
+  грейвела: грейвел шириной в клетку садится на одноклеточную ступень
+  ровно на героя.
+- Акт 2: лестница и вершина просыпаются (`order` up / left, `step`
+  0.2) и стоят; акт 3: уходит только пол (`toHero`, 0.35).
+- Бункеры, которые закрыла раскладка: ступень под ступенью; правый
+  проём на вечной клетке столбца 15 с акта 3 (прицельный зажат на
+  столбце 14, падает в яму и возвращается туда же); крыша над порогом.
+
+#### Проверка
+- Питоном: JSON разбирается, отличаются только `objects`, `pads`,
+  `dynamics`, `tiles`, `events` экрана 9; теги уникальны; пады не в
+  стене; у точки возрождения есть пол; крыш нет; все ступени достижимы
+  по портированному `JumpReach` - и с пола, и без пола (акт 3).
+- Сет читается обратно, прежние спрайты байт в байт.
+- Первый прогон (лестница волной, одноклеточные ступени): не играется -
+  см. "Что решено". Второй прогон - ещё нет.
+
+#### Открытое
+- Вершина на строке 5 - опора на весь акт 3. Если на прогоне на ней
+  можно отсидеться - одна моргающая ступень, не все.
+- Возвраты из ямы приходят толпой в один тик и ложатся на колонку
+  героя плюс-минус одна: очередь возвратов и разброс шире - механика,
+  отдельной версией.
+- Аптечка акта приходит на 15-м убитом - в конце акта на normal; повод
+  лезть наверх появился бы с аптечкой в начале акта - тоже механика.
+
+#### Коммиты
+Stand level 2 screen 9 on a repainted room.
+
+### Сессия: настройка испытания грейвелов, 3.0.55 (2026-10-13)
+
+Этап 2a плана арены (`docs/mechanics/arena-2.md`): два перекоса,
+найденных на прогоне комнаты экрана 9.
+
+#### Что решено
+- Грейвелы испытания идут в случайную сторону. 2008 рождает каждого
+  монстра лицом влево (`FDirection` False), а посадка (`MoveFalling`)
+  возвращает шаг из `FDirection` - патруль разворачивает только
+  `FAction`. Поэтому влево шли не только новые, но и каждый, кто сошёл
+  со ступени вправо: приземлился - и снова влево. Сторону теперь
+  бросают кости при рождении с неба и при каждом возврате; посадки
+  держат её. Остальные монстры - как в 2008.
+- Прицельный грейвел - тоже случайно: он падает в колонку героя, "к
+  герою" из той же колонки ничего не значит.
+- Упавшие в яму возвращаются по одному, раз в 10 тиков, над колонкой
+  героя плюс-минус две (было - вся яма разом, плюс-минус одна). Ушедшие
+  в правый проём - сразу, как было: они уходят по одному.
+- Аптечка в начале акта - нет: лишняя щедрость; аптечки остаются за
+  каждого 15-го убитого.
+
+#### Как вышло в коде
+- `Game.Trial`: `TrialPitReturnTicks` 10, метроном `TickPitReturn`,
+  в отсчёте `ReturnFromPit`. Правило - в испытании, игра исполняет.
+- `Monsters`: `TMonster.HeadRandomly`; `ReturnStrays` разделён на
+  `ReturnSideStrays` (все ушедшие вбок, сразу) и `TryReturnPitStray`
+  (один из ямы, разброс `PitSpread` 2).
+- `Moon2D.dpr`: `LetDownFromSky` возвращает тело; `ArriveAgain` -
+  фиолетовый свет и случайная сторона вернувшемуся; в
+  `TickGravelAttack` боковые возвраты до тика испытания, яма - по его
+  отсчёту.
+- `Game.Version`: 3.0.55.
+
+#### Побочное, что легко забыть
+- Ждущий очереди грейвел падает под экраном дальше: вне сетки воздух,
+  ускорение растёт, `Reappear` его обнуляет. Он жив и держит ворота
+  акта, пока не вернётся и не будет убит.
+- Яма в десять грейвелов отдаёт их за 3 секунды: акт с большим
+  провалом стал длиннее.
+
+#### Проверка
+- Без компилятора: правки сверены построчно, CRLF и BOM на месте.
+  Компиляция и прогон - вживую.
+- Тестов нет: испытание целиком (вместе с 3.0.53-3.0.54) - этап 7 плана
+  арены; метроном возвратов добавлен в его список.
+
+#### Коммиты
+Pace pit returns, face gravels both ways (3.0.55); Update the docs for
+the trial tuning.
+
+### Сессия: арена грейвелов, этапы 3-6, 3.0.56-3.0.59 (2026-10-13/16)
+
+Пушки TeK (3.0.56), акт карусели (3.0.57), хаос (3.0.58), финал с
+бетонерами и прессом (3.0.59). Весь план, решения и данные по этапам -
+`docs/mechanics/arena-2.md`, юниты - карта кода; здесь то, что нужно помнить.
+
+#### Что вышло
+- Новые юниты: `Game.Trial` (правила испытания, без SDL),
+  `Game.Arrivals` (фиолетовый свет прибытия), `Game.Shield` (сота TeK),
+  `Game.Cannons` (пушки на стенах), `Game.Press` (пресс финала, без SDL),
+  `Pads.Stray` (блуждающий пад, без SDL). Испытание - правила в
+  `Game.Trial`, игра исполняет его отсчёт в `TickGravelAttack`.
+- Словарь событий разросся: условия `actReached`, `gravelDealt`,
+  `trialDone`, `waveKilled`; действия полок по банкам, `flyIn`,
+  `medkitsOnto`, `waveOnto`, `cannons`, `spawn`, `breakCarousel`,
+  `strays`, `straysLeave`, `skyFall`, `press`. Режиссёр тянет состояние
+  испытания через реплики `TDirectorCues`, сам ничего не толкает.
+- Триггеры испытания живут в `screenTriggers` - у экрана, а не у тела:
+  три аптечки 2008, которые их носили, убраны.
+
+#### Побочное, что легко забыть
+- Тело, сошедшее с движущегося пада, падает с его переносом
+  (`FFallDriftX`): иначе падение 2008 стартует с нуля, ноги остаются на
+  уровне палубы, и палуба подъезжает обратно под них - грейвел дёргался
+  на краю карусели. Касается любого едущего пада.
+- Ворота акта держат и гости события (`CountAliveGuests`): неубитая
+  летающая платформа не улетает, акт ждёт её смерти. Уход по воротам
+  (`DepartGuests`) остался в движке, но никого живого уже не находит.
+- Прилёт карусели, сказанный во время сцены пушек, ждёт её конца и ещё
+  50 тиков дыма (`FHeldFlyIns`, `CannonSmokeTicks`). Отпускается в
+  начале тика испытания, до вопроса о `RoomBusy`, иначе первая волна
+  проскакивает в щель.
+- Пады карусели арены не пропускают пули: с `pass` платформы
+  расстреливали героя сквозь них.
+- Аура, обряд и дождь берут не только пули, но и снаряды пушек и живые
+  осколки (`OrbTakes`): снаряд проверяется по всему отрезку тика, 16
+  единиц за тик перепрыгнули бы досягаемость орба.
+- Сломанные пады карусели падают под героем один раз и не возвращаются
+  (`staysDown`).
+- Пресс: ряд под выдвинутым рядом убирается с битом, чтобы сбросить
+  своего, и выезжает снова через 40 тиков - поймать падающего сверху.
+  В дизайне этого не было; без этого нижний бетонер стоял на месте.
+- Зона блуждающих сужена до столбцов 4-11: на 2-3 и 12-13 пад вставал
+  внутрь балкона и мог увезти бетонера.
+- Колпак волны считается по самой волне: четыре танка-гостя не держат
+  бетонеров.
+- Победа не кончает уровень: только `win.ogg` один раз, без таймера
+  конца. Рестарт возвращает `boss2.ogg`.
+- Смерть начинает испытание с акта 1 - решено так оставить, без
+  чекпоинтов по актам.
+
+#### Проверка
+- Каждый этап - живой прогон и коммит; последний, 6.2, принят без правок.
+- Тесты: 112 новых, всего 488 - `docs/TESTING.md`. Не тестированы сами
+  акты грейвелов (пачка, ворота, прицельный, яма, `RoomBusy`, аптечка за
+  15) и пушки со щитом (им нужен арт) - смотрятся глазами.

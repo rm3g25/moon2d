@@ -72,7 +72,7 @@ CapBeforeLast := 100;  // the bar runs to 100 -> Evolution
 K is tuned so the turrets bring about 90-95% and the trickle the rest - a slow player never sticks at 94%.
 
 ## Evolution and the moon form
-- Evolution: black orbs fly to the hero - the henshin rite (docs/HENSHIN-PLAN.md) with black orbs and a third pattern, "eclipse": a black ring closing in (snowflake for arena 1, vortex for the gravels, eclipse here). Healing as the rite heals.
+- Evolution: black orbs fly to the hero - the henshin rite (docs/mechanics/henshin.md) with black orbs and a third pattern, "eclipse": a black ring closing in (snowflake for arena 1, vortex for the gravels, eclipse here). Healing as the rite heals.
 - The moon form: an orb gun - black orbs that pierce the TeK armour; jump +25%, as the ice form; the fire rain and the protective aura, both of black orbs.
 - The look of the moon form comes in the next version; in 3.0 it looks like the ice form. It must be felt through the weapon: the orb gun fires slower but heavier, with visible recoil and sound - a sledgehammer after a pistol.
 - Death after the evolution: the fight restarts from its start (as every death here).

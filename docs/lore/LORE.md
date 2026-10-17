@@ -1,4 +1,4 @@
-# LORE.md
+# docs/lore/LORE.md
 
 The canon of the Moon 2D universe. Source of truth for all story text in
 the game. Part of this document describes the wider universe ("Dark
@@ -6,7 +6,7 @@ Planet 1999", the Order of Elementals) — none of that is **ever revealed**
 in Moon 2D; it lives here so the game does not contradict future games.
 For what the player sees and what stays hidden, see "Disclosure".
 
-Russian version: `LORE-ru.md`.
+Russian version: `docs/lore/LORE-ru.md`.
 
 ---
 

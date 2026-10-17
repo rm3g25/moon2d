@@ -302,7 +302,7 @@ x 614.8 - оба за кадром.
 Следующий чат: проект реализации -> код -> прогон. Коммиты, предложение:
 0. **Сделано:** `Add the cordon art and the plan of scenes` -
    `bin/sprites/cordon.mset`, `tools/cordon/build_cordon.py`,
-   `docs/SCENES-PLAN.md`. Без версии.
+   `docs/mechanics/scenes.md`. Без версии.
 1. Машинерия сцен (модель, исполнение, новые виды динамики, пады, монстры, тень,
    звук) - одна причина, один коммит, следующая свободная 3.0.x.
 2. Экран 9: правка `level1.json` и `cordon.wav`.
