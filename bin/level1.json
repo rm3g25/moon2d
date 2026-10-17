@@ -4020,13 +4020,6 @@
       "y": 11
     },
     {
-      "monsterId": "tank",
-      "screen": 9,
-      "spriteList": "tank.mns",
-      "x": 13,
-      "y": 8
-    },
-    {
       "monsterId": "barrel",
       "screen": 10,
       "spriteList": "barrel.mns",
