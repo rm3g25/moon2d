@@ -1,14 +1,17 @@
 ﻿{
   Game.Henshin - the transformation ceremony: the 3..2..1 prelude, the
-  rite of orbs about the hero, the suit going on, and the suit coming
-  off. The countdown and the rite (Orbs.Rite) are of 2026: the ceremony
-  of 2008 was five rings of bullets closing in on the hero and a fan.
+  rite of orbs about the hero, the burst of the suit, and the suit coming
+  off. The countdown, the rite (Orbs.Rite) and the burst (Orbs.Burst) are
+  of 2026: the ceremony of 2008 was five rings of bullets closing in on
+  the hero and a fan.
 
   The rite leads the orbs and tells what has come to pass; the ceremony
   listens and does the game's side of it: the shout, a point of health
   as each wave sits, the mercy from the pause on, the light that fills
-  the body as the orbs go in, the suit as the last of them does. It has
-  no clock of its own.
+  the body as the orbs go in. As the last of them does, the game is asked
+  for the burst: the suit takes what light it holds, and the rest goes
+  out of the hero. The burst inhales, then strikes and says so - and the
+  suit is on with the strike. The ceremony has no clock of its own.
 
   The suit comes off the way it went on, in orbs: the game is asked to
   have the rite give them back, they come out of the body into a ring
@@ -16,10 +19,10 @@
   bullets the suit shattered into in 2008 is gone.
 
   The ceremony acts on the stage it is given - the hero, the sound bank,
-  the message board, the shake meter, the shroud, the rite - and asks
-  the game for what it does not own, through its calls. The game ticks
-  it every logic tick, right after the rite, even over the hero's
-  corpse; a restart resets it.
+  the message board, the shake meter, the shroud, the rite, the burst -
+  and asks the game for what it does not own, through its calls. The game
+  ticks it every logic tick, right after the rite and the burst, even over
+  the hero's corpse; a restart resets it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -30,7 +33,7 @@ interface
 
 uses
   Hero, Audio, Hud.Messages, Render.Shake, Render.Font, Game.Shroud,
-  Orbs.Rite;
+  Orbs.Rite, Orbs.Burst;
 
 const
   // bottle.wav is the barrel burst that doubles as the henshin flash,
@@ -48,6 +51,9 @@ type
   TBeginRite = reference to procedure;
   // The suit's orbs come out about the hero, owned by the game
   TShedSuit = reference to procedure;
+  // The burst of the suit begins about the hero, owned by the game: it
+  // knows his center, the matter of his screen and the level's pattern
+  TBurstSuit = reference to procedure;
 
   // What the ceremony acts on
   THenshinStage = record
@@ -57,6 +63,7 @@ type
     Shake: TScreenShake;
     Shroud: THeroShroud;
     Rite: TOrbRite;
+    Burst: TOrbBurst;
   end;
 
   // What the ceremony asks the game for: methods of the game passed
@@ -66,6 +73,7 @@ type
     GrantMercy: TGrantMercy;
     BeginRite: TBeginRite;
     ShedSuit: TShedSuit;
+    Burst: TBurstSuit;
   end;
 
   THenshin = class
@@ -76,12 +84,17 @@ type
     FShake: TScreenShake;
     FShroud: THeroShroud;
     FRite: TOrbRite;
+    FBurst: TOrbBurst;
     FCalls: THenshinCalls;
     // The 3..2..1 prelude; 0 = idle
     FCountdownDigit: Integer;
     FCountdownTick: Integer;
+    // The ceremony has asked for the burst and waits for its strike: a
+    // burst it did not ask for puts no suit on
+    FBursting: Boolean;
     procedure TickCountdown;
     procedure HearRite;
+    procedure HearBurst;
     procedure Finish;
   public
     constructor Create(const AStage: THenshinStage;
@@ -91,8 +104,9 @@ type
     procedure StartCountdown;
     // The ceremony straight away: the gravel trial of level 2
     procedure Start;
-    // Once per logic tick, after the rite's own: the prelude, then what
-    // the rite has told since the last one
+    // Once per logic tick, after the rite's and the burst's own: the
+    // prelude, then what the rite and the burst have told since the last
+    // one
     procedure Tick;
     // The digit of the prelude, topmost on the display
     procedure DrawCountdown(const AFont: TMoonFont; AAlpha: Double);
@@ -119,7 +133,7 @@ const
   RegenTicks = 100; // 'регенерировала здоровье +1' (457 et al.)
   PerkTicks = 300;  // 'ICE FORM: прыжок +25%' (501)
 
-  // The screen-shake dose of the suit going on (2026 addition), a trauma
+  // The screen-shake dose of the burst's strike (2026 addition), a trauma
   // share - see Render.Shake for the meter
   FinishTrauma = 0.7;
 
@@ -144,6 +158,7 @@ begin
   FShake := AStage.Shake;
   FShroud := AStage.Shroud;
   FRite := AStage.Rite;
+  FBurst := AStage.Burst;
   FCalls := ACalls;
   // Strict loads: a bad name blows up here, not mid-boss
   FAudio.Load(HenshinSoundFile);
@@ -155,6 +170,7 @@ procedure THenshin.Reset;
 begin
   FCountdownDigit := 0;
   FCountdownTick := 0;
+  FBursting := False;
   FHero.HeroForm := hfNormal;
 end;
 
@@ -214,7 +230,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// CEREMONY - the shout, what the rite tells, the suit
+// CEREMONY - the shout, what the rite and the burst tell, the suit
 // ---------------------------------------------------------------------------
 
 procedure THenshin.Start;
@@ -231,12 +247,14 @@ procedure THenshin.Tick;
 begin
   TickCountdown;
   HearRite;
+  HearBurst;
 end;
 
 // The body fills with light as the orbs go in: the look of the suit with
 // no frost and no motes, its light climbing all through the rite's
-// collapse. It tops out a tick past the collapse, so the suit's look
-// takes the light over at its top, with no dip between.
+// collapse. It tops out a tick past the collapse; the burst's inhale
+// covers the body with a bare figure until the suit's look takes the
+// light over at the strike.
 function ChargeLook: TShroudLook;
 const
   TopAt = 0.9; // the share of the look's life its top falls on
@@ -260,23 +278,40 @@ begin
           FMessages.AddTicker(Tr(SIceRegen), RegenTicks);
         end;
       rePaused:
-        // To the suit: while the orbs hover and while they draw in
+        // To the strike: while the orbs hover, while they draw in and
+        // while the burst inhales
         FCalls.GrantMercy(IceRiteScore.HoverTicks +
-          IceRiteScore.CollapseTicks);
+          IceRiteScore.CollapseTicks + InhaleTicks);
       reCollapsing:
         FShroud.Start(ChargeLook);
       reFinished:
-        Finish;
+        begin
+          FBursting := True;
+          FCalls.Burst();
+        end;
     end;
     Event := FRite.DrainEvent;
   end;
 end;
 
+procedure THenshin.HearBurst;
+begin
+  var Event := FBurst.DrainEvent;
+  while Event <> beNone do
+  begin
+    if (Event = beStruck) and FBursting then
+      Finish;
+    Event := FBurst.DrainEvent;
+  end;
+end;
+
+// The strike of the burst: the suit is on
 procedure THenshin.Finish;
 const
   // With the point of each wave that sat, the six of the 2008 ceremony
   Cures = 3;
 begin
+  FBursting := False;
   FMessages.AddTicker(Tr(SIceFormPerk), PerkTicks);
   for var i := 1 to Cures do
     FCalls.Cure();

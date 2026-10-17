@@ -171,6 +171,10 @@ type
       const AShroud: THeroShroud);
     destructor Destroy; override;
     function SeedsOf(AFrame: Integer): TSeedList;
+    // The white mask of a frame, for a figure drawn as its shape alone; nil
+    // for no frame. It adds by its make: a caller that draws it otherwise
+    // puts its mode back.
+    function MaskOf(AFrame: Integer): PSdlTexture;
     // Behind the hero: the mist, the far bands, the halo, the fed light
     procedure DrawUnder(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       ALift, AAlpha: Single);
@@ -709,6 +713,13 @@ begin
   if (AFrame < 1) or (AFrame > Length(FArt)) then
     Exit(nil);
   Result := FArt[AFrame - 1].Seeds;
+end;
+
+function TShroudPainter.MaskOf(AFrame: Integer): PSdlTexture;
+begin
+  if (AFrame < 1) or (AFrame > Length(FArt)) then
+    Exit(nil);
+  Result := FArt[AFrame - 1].Mask;
 end;
 
 function TShroudPainter.ViewOf(AOrigin: TSdlPoint; ALift,

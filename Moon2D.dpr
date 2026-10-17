@@ -88,6 +88,7 @@ uses
   Orbs.Rain in 'Game\Orbs\Orbs.Rain.pas',
   Orbs.Patterns in 'Game\Orbs\Orbs.Patterns.pas',
   Orbs.Rite in 'Game\Orbs\Orbs.Rite.pas',
+  Orbs.Burst in 'Game\Orbs\Orbs.Burst.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
@@ -188,6 +189,9 @@ const
   // An orb takes an enemy bullet nearer than this on either axis: the
   // reach a hero's bullet intercepts one at
   OrbReach = 6;
+  // A burst strikes along the way a ray's head has passed every this many
+  // units: under the orb's reach, so no bullet slips between
+  BurstHitStep = 4;
   // A live shard wounds once it is lower than this under the heart of
   // its blast: below the feet line of the body that blew up
   ShardWoundsBelow = SpriteSize / 2;
@@ -225,11 +229,13 @@ const
   ScancodeH = 11; // pour the fire rain over the hero's screen
   ScancodeJ = 13; // the henshin at once: no boss, no countdown
   ScancodeK = 14; // the suit shed at once: the ring of orbs, suit or none
+  ScancodeL = 15; // the burst at once on the hero: no rite, no suit
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
+  ScancodeU = 24; // the burst at once in the moon's look: no rite, no suit
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
@@ -355,6 +361,9 @@ type
     FAura: TAura; // the hero's ring of orbs
     FRite: TOrbRite; // the orbs of the henshin
     FPattern: TOrbPattern; // the figure the rite builds
+    FBurst: TOrbBurst; // the light the suit cannot hold
+    // What the burst under way has wounded: none loses more than a life
+    FBurstWounded: TList<TMonster>;
     FRain: TOrbRain; // the fire rain of orbs
     FArmorPings: TArmorPings;
     FScore: Integer;
@@ -430,6 +439,8 @@ type
     function OrbTakes(AFromX, AToX, AY: Single): Boolean;
     function DangerousMonsterAt(AX, AY: Single): TMonster;
     procedure ResolveOrbHits(const AFlock: TOrbFlock);
+    procedure StrikeWithBurst(AX, AY: Single);
+    procedure ResolveBurstHits;
     function BlastStoppedAt(AX, AY: Single): Boolean;
     procedure StrikeMonsters(const ABlast: TBlast);
     procedure StrikeHero(const ABlast: TBlast);
@@ -521,6 +532,8 @@ type
     procedure GrantMercy(ATicks: Integer);
     procedure BeginRite;
     procedure ShedSuit;
+    procedure StartBurst(const ALook: TBurstLook);
+    procedure BurstSuit;
     function HeroCenter: TSdlFPoint;
     function HeroBodyPoints: TBodyPoints;
     function MatterAround: TMatter;
@@ -529,6 +542,8 @@ type
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
     procedure AdvanceBriefing;
+    procedure DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
+    procedure DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
     procedure LoadLevel(const AFileName: string);
     function OpenSpriteSet(const ASetName: string): TSpriteSet;
     function LevelArtSetFile(const AKind: string): string;
@@ -590,6 +605,8 @@ begin
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
   FRite := TOrbRite.Create(IceOrbTint, HeroBodyPoints);
+  FBurst := TOrbBurst.Create(HeroBodyPoints);
+  FBurstWounded := TList<TMonster>.Create;
   FRain := TOrbRain.Create(IceOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
@@ -610,6 +627,8 @@ begin
   FMarks.Free;
   FShake.Free;
   FRain.Free;
+  FBurstWounded.Free;
+  FBurst.Free;
   FRite.Free;
   FAura.Free;
   FImpacts.Free;
@@ -750,11 +769,13 @@ begin
   Stage.Shake := FShake;
   Stage.Shroud := FShroud;
   Stage.Rite := FRite;
+  Stage.Burst := FBurst;
   var Calls: THenshinCalls;
   Calls.Cure := CureHero;
   Calls.GrantMercy := GrantMercy;
   Calls.BeginRite := BeginRite;
   Calls.ShedSuit := ShedSuit;
+  Calls.Burst := BurstSuit;
   FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
@@ -807,6 +828,8 @@ begin
   FCannons.Clear;
   FAura.Clear;
   FRite.Clear;
+  FBurst.Clear;
+  FBurstWounded.Clear;
   FRain.Clear;
   FMessages.Clear;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
@@ -1687,10 +1710,10 @@ end;
 
 // ---------------------------------------------------------------------------
 // HENSHIN - what the ceremony (Game.Henshin) asks the game for: a point of
-// health, a stretch of mercy, the rite of orbs about the hero. The world
-// does NOT pause, as it did not in 2008: the boss keeps shooting through
-// the ceremony, and an orb on its way to the hero wounds what it flies
-// into.
+// health, a stretch of mercy, the rite of orbs about the hero, the burst of
+// the suit. The world does NOT pause, as it did not in 2008: the boss keeps
+// shooting through the ceremony, and an orb on its way to the hero wounds
+// what it flies into. It stands only for the burst's inhale, two ticks.
 // ---------------------------------------------------------------------------
 
 // Original cured up to 15; we agreed on a modest 10
@@ -1726,6 +1749,22 @@ begin
   if FHero.Dead then
     Exit;
   FRite.Shed(IceRiteScore, HeroCenter);
+end;
+
+// The burst is the living hero's, like the rite's: over the corpse it is
+// spent on nothing. A vortex sends its rays out curled.
+procedure TMoonGame.StartBurst(const ALook: TBurstLook);
+begin
+  if FHero.Dead then
+    Exit;
+  FBurstWounded.Clear;
+  FBurst.Start(ALook, FPattern.Name = 'vortex', HeroCenter, MatterAround);
+end;
+
+// The ice suit's burst, as the ceremony asks for it
+procedure TMoonGame.BurstSuit;
+begin
+  StartBurst(IceBurstLook);
 end;
 
 // ---------------------------------------------------------------------------
@@ -2210,6 +2249,40 @@ begin
   end;
 end;
 
+// A ray of the burst at a point of its way: an enemy bullet there bursts,
+// a dangerous monster loses a life - one for the whole burst, however many
+// rays it stands in the way of. Not through SpendBullet, as an orb is not.
+procedure TMoonGame.StrikeWithBurst(AX, AY: Single);
+begin
+  var Enemy := EnemyBulletNear(AX, AY);
+  if Enemy <> nil then
+    Enemy.StartBurst;
+
+  var Monster := DangerousMonsterAt(AX, AY);
+  if (Monster = nil) or FBurstWounded.Contains(Monster) then
+    Exit;
+  FBurstWounded.Add(Monster);
+  Monster.TakeDamage(0, 1, FMonsterBullets);
+  if Monster.Life = mlDying then
+    RewardMonsterKill(Monster);
+end;
+
+// The burst strikes along all the way its heads have passed this tick,
+// behind walls as well
+procedure TMoonGame.ResolveBurstHits;
+begin
+  for var Stretch in FBurst.Stretches do
+  begin
+    var SpanX: Single := Stretch.ToX - Stretch.FromX;
+    var SpanY: Single := Stretch.ToY - Stretch.FromY;
+    // A step a hair short of BurstHitStep at most, and at least one
+    var Steps := Trunc(Sqrt(SpanX * SpanX + SpanY * SpanY) / BurstHitStep) + 1;
+    for var i := 0 to Steps do
+      StrikeWithBurst(Stretch.FromX + SpanX * i / Steps,
+        Stretch.FromY + SpanY * i / Steps);
+  end;
+end;
+
 // The hero's body in honest screen units, as a monster's HitBox: the box a
 // monster's bullet lands in
 function HeroBody(const AHero: THero): TSdlFRect;
@@ -2339,6 +2412,7 @@ begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
     FAura.Collapse;
     FRite.Collapse;
+    FBurst.Clear;
     FShroud.Clear;
     FUptake.Drop;
     FRain.Collapse;
@@ -2377,6 +2451,8 @@ begin
   FCannons.Clear;
   FAura.Clear;
   FRite.Clear;
+  FBurst.Clear;
+  FBurstWounded.Clear;
   FRain.Clear;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
@@ -2820,18 +2896,27 @@ begin
   if FHeldFire and FHero.Fire then
     FAudio.Play(WeaponShotSounds[FHero.WeaponType]);
 
-  FField.Tick(FHero.Screen, Round(FHero.X), Round(FHero.Y),
-    FMonsterBullets);
-  DrainMonsterEvents;
+  // The burst's inhale: the world stands, the hero, his arms and the pads
+  // go on
+  var WorldStands := FBurst.Holding;
+  if not WorldStands then
+  begin
+    FField.Tick(FHero.Screen, Round(FHero.X), Round(FHero.Y),
+      FMonsterBullets);
+    DrainMonsterEvents;
+  end;
 
   FHero.Bullets.Update;
-  FMonsterBullets.Update;
+  if not WorldStands then
+    FMonsterBullets.Update;
   FExplosions.Tick;
   FImpacts.Tick;
   FArrivals.Tick;
   FAura.Tick(HeroCenter);
   FRite.Tick(HeroCenter);
-  // After the rite: what it tells this tick, the ceremony hears this tick
+  FBurst.Tick(HeroCenter);
+  // After the rite and the burst: what they tell this tick, the ceremony
+  // hears this tick
   FHenshin.Tick;
   var HeroPose := FHero.Pose;
   var HeroSeeds := FShroudPainter.SeedsOf(HeroPose.Frame);
@@ -2846,12 +2931,14 @@ begin
   // Before the monster half: an orb takes a bullet ahead of the hero
   ResolveOrbHits(FAura.Flock);
   ResolveOrbHits(FRite.Flock);
+  ResolveBurstHits;
   ResolveOrbHits(FRain.Flock);
   ResolveBlasts;
   FExplosions.StrikeShards(ShardStruck);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
-  TickCannons;
+  if not WorldStands then
+    TickCannons;
   ResolveCannonContact;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
@@ -2879,6 +2966,39 @@ begin
   HandlePitFall;
 
   UpdateInspectorCaption;
+end;
+
+// The hero and his shroud, on the hero's shake channel, lifted with the
+// deck under his feet
+procedure TMoonGame.DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
+begin
+  FShroudPainter.DrawUnder(FDynamics.Canvas, AShake, ALift, AAlpha);
+  FSprites.Origin := AShake;
+  FSprites.FineY := ALift;
+  if not FShroud.Assembling then
+    FHero.Draw(FSprites);
+  FShroudPainter.DrawBody(AShake, ALift, AAlpha);
+  // The strips make the body, the arm stays his own
+  if FShroud.Assembling then
+    FHero.DrawArm(FSprites);
+  FSprites.FineY := 0;
+  FShroudPainter.DrawOver(FDynamics.Canvas, AShake, ALift, AAlpha);
+end;
+
+// The hero as the burst's bare figure: the mask of his frame, where the
+// frame stands
+procedure TMoonGame.DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
+var
+  Figure: TBurstFigure;
+begin
+  var Pose := FHero.Pose;
+  Figure.Mask := FShroudPainter.MaskOf(Pose.Frame);
+  Figure.Frame.X := Pose.Left + AShake.X;
+  Figure.Frame.Y := Pose.Top + AShake.Y + ALift;
+  Figure.Frame.W := HeroSize;
+  Figure.Frame.H := HeroSize;
+  Figure.Mirrored := Pose.Mirrored;
+  FBurst.DrawSilhouette(FDynamics.Canvas, Figure);
 end;
 
 procedure TMoonGame.Render(ARenderer: PSdlRenderer; AAlpha: Double);
@@ -2936,17 +3056,13 @@ begin
         FRite.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);
         var HeroLift := FHero.DeckLift(AAlpha);
-        FShroudPainter.DrawUnder(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
-        FSprites.Origin := HeroShake;
-        FSprites.FineY := HeroLift;
-        if not FShroud.Assembling then
-          FHero.Draw(FSprites);
-        FShroudPainter.DrawBody(HeroShake, HeroLift, AAlpha);
-        // The strips make the body, the arm stays his own
-        if FShroud.Assembling then
-          FHero.DrawArm(FSprites);
-        FSprites.FineY := 0;
-        FShroudPainter.DrawOver(FDynamics.Canvas, HeroShake, HeroLift, AAlpha);
+        FBurst.DrawVeil(FDynamics.Canvas, HeroShake);
+        // The burst's inhale: a bare figure stands for the hero and his
+        // shroud
+        if FBurst.Inhaling then
+          DrawHeroSilhouette(HeroShake, HeroLift)
+        else
+          DrawHeroInShroud(HeroShake, HeroLift, AAlpha);
         FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
           AAlpha);
         FSprites.Origin := FShake.Offset(scWorld);
@@ -2955,10 +3071,13 @@ begin
         FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FAura.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRite.DrawInFront(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FBurst.DrawWorld(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRain.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
+        // Over the world, under the HUD
+        FBurst.DrawGlass(FDynamics.Canvas, AAlpha);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;
@@ -3216,6 +3335,13 @@ begin
         ShedSuit;
         GrantMercy(IceRiteScore.ShedTicks);
       end;
+    ScancodeL:
+      // The burst as the ceremony gives it, with no rite before it and no
+      // suit after - too far to tune against
+      StartBurst(IceBurstLook);
+    ScancodeU:
+      // The moon form's burst: no form wears it yet
+      StartBurst(MoonBurstLook);
     ScancodeM:
       // Trailer capture: silence the score, keep the gunshots -
       // the footage gets its music in the edit, not in the engine
