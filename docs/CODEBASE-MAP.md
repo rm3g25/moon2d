@@ -15,8 +15,8 @@ wave at `v3.0.41`, the emptied death frames at `v3.0.42`, the fireball
 at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the plunging pad at `v3.0.46`, the hero's
 shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
 pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
-`v3.0.52` and the gravel arena of level 2's screen 9 at `v3.0.53` to
-`v3.0.59` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.52`, the gravel arena of level 2's screen 9 at `v3.0.53` to
+`v3.0.59` and the collision decks at `v3.0.60` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -500,10 +500,14 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1700 lines)
+### `Core/Levels.Defs.pas` (~1770 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
+- **`CollisionAir = '0'`, `CollisionSolid = '1'`, `CollisionDeck = '2'`**
+  (3.0.60) - the three letters of the collision grid. A deck holds the
+  hero from above only; a run of decks is loaded as a pad with no picture
+  (`AddCollisionDecks`, below), so a deck plays by the rules of pads.
 - **`TEntityOverrides`** (record) - optional per-placement direction, speed,
   lives, canShoot, fireOffset (Has* flag + value pairs; `fireOffset` - the
   tick of its fire count a monster starts from, held against the monster's own
@@ -569,7 +573,10 @@ Level data model + JSON parser. No game logic.
   collision - the grid and the pads (`Levels.Pads`) decide where the hero
   stands.
 - **`TLevel`** (class) - the parsed level: tiles `[screen][row][col]`,
-  collision strings `[screen][row]` ('1' = solid), tile palette, backgrounds,
+  collision strings `[screen][row]` ('0' = air, '1' = solid, '2' = deck,
+  3.0.60; `ParseTiles` -> `CheckCollisionRow` refuses any other letter with
+  `ELevelError` `SLevelBadCollisionChar`, naming screen, row and column),
+  tile palette, backgrounds,
   entities, id/title/assetsDir/**spriteSets**/**objectSets**/music/introText, grid dims,
   screenCount. `HenshinPattern` (3.0.49) - the word `henshinPattern` of the
   file's root: the pattern the orbs of the henshin build on this level; ''
@@ -581,7 +588,15 @@ Level data model + JSON parser. No game logic.
   draws over earlier); the private `ParseObjects` reads the optional
   `objects` section and refuses an object off the screen list or with a
   width of zero or less. `Pads` - the platforms apart from the grid
-  (`Levels.Pads`), in file order; the private `CheckPads` refuses a pad off
+  (`Levels.Pads`), in file order, then the collision decks (3.0.60):
+  `ParseRoot` calls `AddCollisionDecks` right after `ParsePads` and before
+  every check of the pads, and it folds each maximal horizontal run of '2'
+  in a row into one static pad (`DecksOfRow` -> `DeckPad`): `Sprite` '',
+  no tag, `Bullets` `pbBlock`, X and Y the run's top-left cell, width the
+  run, no path, group, plunge, shelf, carousel or stray. The decks are
+  appended screen by screen, row by row, left to right. Being still and
+  untagged, a deck is a floor to `RespawnHasFloor`. `SolidAt` reads '1'
+  only, so to the 2008 oracles a deck is air; the private `CheckPads` refuses a pad off
   the screen list (`SLevelPadBadScreen`), two pads with one tag
   (`SLevelPadTwoTags` - a dynamic object hung on it would go to the
   first) and a path with a stop that puts the pad past an edge of its
@@ -1979,7 +1994,7 @@ draws it. No SDL and no level in it - a record a test drives alone
     `Dismissed`, `Left`, `Top` (the top-left corner of the deck; the fall
     adds its depth).
 
-### `Game/Pads/Pads.World.pas` (~2055 lines)
+### `Game/Pads/Pads.World.pas` (~2070 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -2135,7 +2150,9 @@ rebuilds new for the new try.
     fastest bullet flies 12 units a tick and strikes with a point, a
     shallower body would be flown through between two ticks) and no deeper
     than `TileSize`. The pads of the game before the shelf are square
-    pictures - a cell, as before; the shelf (32 by 11 units) - 16.
+    pictures - a cell, as before; the shelf (32 by 11 units) - 16. A pad
+    with no picture (a collision deck, 3.0.60) takes `TileSize` as its
+    picture height: its body is the cell the wall stood in.
   - `Lift(alpha)` - units down from the deck the pad is drawn at, a
     fraction (never rounded): the bob (`Bob` times a sine, one sway in
     `BobPeriodTicks` = 3 s, taken at `FClock` - 1 + alpha - between the
@@ -2232,7 +2249,8 @@ rebuilds new for the new try.
     tick only: `TurnedCorner` (a flight in front came onto its corner - in
     the depth a corner is turned out of earshot) and `Landed` (the flight
     ended on its cell).
-  - The picture: `Draw(sprites, alpha)` - its height from the art's
+  - The picture: `Draw(sprites, alpha)` - nothing for a pad with no
+    texture (a collision deck, 3.0.60); else its height from the art's
     aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
     fractions of a unit (`DrawRectF`), turned by `Tilt(alpha)` plus the
     lean of a plunging pad's twitch (`FPlunge.Lean`), in the
@@ -2249,7 +2267,9 @@ rebuilds new for the new try.
   `seed` the dice of the rebuilds; the cache is the
   level's object art, the textures are its; it and the level (the
   placements, and the grid a knock is tried against) must outlive the
-  world; a picture the cache lacks raises here, at level load; every
+  world; a picture the cache lacks raises here, at level load
+  (`PadTexture`: a pad whose `Sprite` is '' - a collision deck, 3.0.60 -
+  asks the cache for nothing and gets no texture); every
   pad gets its orbit here (`OrbitOf` over the level's `Carousels`,
   3.0.52) and its failing look (3.0.58); a parked group is parked
   (`ParkGroups`, after every rewind too). `Tick(screen, heroDeck)` - before
@@ -5026,7 +5046,10 @@ not in the repository. numpy, scipy, Pillow.
 
 The concept, the rules and the tables of tests are in `docs/TESTING.md`.
 At 3.0.52 the suite was 376 tests, all green; the gravel arena
-(3.0.53-3.0.59) brought 112 more - 488. Not every test unit has its
+(3.0.53-3.0.59) brought 112 more - 488; the collision decks (3.0.60)
+brought 8 - six in `Tests.Pads.Decks`, two in `Tests.Levels.Pads` (a run
+of decks loads as one pad with no picture and is no wall; a bad collision
+letter raises). Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -5130,6 +5153,14 @@ to `bin\`.
   `Collect`: a collected pickup is gone at once and tells the game once,
   and a later blow does not kill it again. The tests of `Collect` live
   here, not in the uptake's unit: a test unit mirrors its game unit.
+- **`Pads/Tests.Pads.Decks.pas`** (~140 lines, 3.0.60) -
+  **`TDeckTests`** (6 tests): a run of decks on row 8 of an empty room
+  (`Tests.Rooms`, `LevelFromRows`) in a `TPadWorld` with no sprites and
+  no cache - feet on the deck line are held and at the underside are not
+  (`DeckUnder`), feet falling onto it are caught (`DeckCrossed`), feet
+  rising from below pass through, a bullet stops in the body only - not
+  above, below or beside it (`StopsBulletAt`), the deck cells are no wall
+  to the level (`SolidAt`), and feet beside the run find no deck.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -5231,7 +5262,9 @@ or qualified `set:name` when two declared sets share a name; index N in
 tiles -> palette[N-1]), `tiles` (`encoding` "csv-rows" and `emptyValue` -
 informational, unread; `note`; `screens` - one object per screen: `screen`,
 `rows` (12 strings of 16 comma-separated palette indices) and `collision`
-(12 strings of 16 '0'/'1', 1 = solid - the grid `SolidAt` reads)),
+(12 strings of 16 '0'/'1'/'2': 1 = solid - the grid `SolidAt` reads;
+2 = deck, 3.0.60 - a run of them loads as a pad with no picture, see
+`Levels.Defs`; any other letter fails the load)),
 `entities` (placements:
 monsterId, screen, x, y - or, since 3.0.52, `seat`: the tag of the pad it
 sits on, in place of both -, spriteList, optional `difficulty` grades (parsed,
@@ -5262,7 +5295,10 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   `satellite`. Pads: the 21 platforms of screens 16-17 (`s16-platform`,
   `s16-platform-out`; tagged `s16-plat-01`..`11` and `s17-plat-01`..`10`,
   bullets block) - static objects over solid cells before, the cells now
-  cleared from the grid; the lamps hung on them keep the same tags. Every
+  cleared from the grid; the lamps hung on them keep the same tags. Since
+  3.0.60 nine collision decks join them at load (17 cells '1' -> '2'):
+  the balconies of screens 14 and 15, a beam on the left of screen 3, a
+  ledge on the left of screen 4 - 30 pads in all. Every
   pad bobs: 1.5 on screen 16, 1 on screen 17. The ten pads of
   screen 17 (`s17-plat-01`..`10`) are the pad group `arena17`: zone
   columns 2-13, rows 4-8, two pairs, five flights of five cells or more,
@@ -5559,7 +5595,7 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
-| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
+| Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock; the collision decks ('2' in `collision`) | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/PADS-PLAN.md for the plan) |
 | A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/PADS-PLAN.md, stage 8) |
 | A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/PADS-PLAN.md, stage 9) |
 | A carousel: pads flying round a track - its shape, size and pace, the slots of its pads, where each starts; a monster seated on a pad; where a carousel may turn | `carousels` + `carousel` on a pad + `seat` on an entity in levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/PADS-PLAN.md, stage 10) |
