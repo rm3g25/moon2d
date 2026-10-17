@@ -84,6 +84,7 @@ Tests\
     Tests.Orbs.Harvest.pas
     Tests.Orbs.Patterns.pas
     Tests.Orbs.Rite.pas
+    Tests.Orbs.Burst.pas
   Pads\
     Tests.Pads.Plunge.pas
     Tests.Pads.Shelf.pas
@@ -479,6 +480,56 @@ Left to the eye:
   the pause, and that is what is tried.
 - The light that fills the body through the collapse: the ceremony's, not
   the rite's.
+
+## Orbs.Burst
+
+State: written, 23 tests, not yet run on a compiler.
+
+The rays are watched by their stretches alone: the bench joins every
+tick's stretches into the way of each head (`FlyOut`), and a stretch that
+begins where no head stood fails the test that flew it. The marks and the
+motes are read through `Marks` and `Motes`, read-only properties added
+for these tests under the one exception of the rules: they show the two
+swarms the burst keeps anyway. Expectations were checked on a Python
+mirror of `Orbs.Burst` first; in the walled room all 24 rays leave within
+31 ticks of the strike, and a vortex ray turns about 34 degrees in all.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNewBurstIsIdle` | a new burst: not holding, not inhaling, no stretch, mark or mote; a hundred ticks tell nothing and never ask for the body | a burst goes off unstarted |
+| `TestWorldStandsForTheInhaleOnly` | after `Start` the world stands and the hero is a figure before each of the `InhaleTicks` ticks, no ray out before the last; from then on neither for a hundred ticks | the inhale is a tick longer or shorter, or never ends |
+| `TestStrikeIsToldOnceAfterTheInhale` | `beStruck` once in a hundred ticks, on the last tick of the inhale, with the world moving and the rays out | the strike is told twice, late, or before its rays |
+| `TestUnheardStrikeWaitsToBeTold` | ten ticks after the strike unheard: told once, then nothing | an event is lost when the game drains it a tick late |
+| `TestStrikeSendsTwentyFourRaysFromTheChest` | 24 stretches on the strike, all from one point within 4 units of the hero's middle, none standing still | the count changes, or a ray leaves from elsewhere |
+| `TestRaysGoEveryFifteenDegreesOneStraightUp` | each ray's first stretch goes a multiple of 15 degrees from up, every multiple once, straight up among them | the fan is uneven or turned: the picture is not symmetrical |
+| `TestRaysAreAlikeOnEveryTick` | straight and curled: on every tick each stretch is as long as the others and each head as far from the chest | rays get their own speeds or a jitter |
+| `TestStretchesJoinIntoTheWayOfEachHead` | a vortex: 24 ways, each stretch begins where its head stood, none twice, each way longer than a stretch and never standing | a stretch skips, repeats or starts afresh: the game strikes where no ray went |
+| `TestStraightRayKeepsToItsLine` | no curl: every head on the line of its first stretch, to 0.05 units | a straight ray turns |
+| `TestVortexRaysCurlOneWayAndTheCurlDiesOff` | every step of every ray turns the same way; the first turn is more than twice any of the last five; the whole turn is under a quarter | the curl goes the other way for some rays, does not fade, or runs the ray in circles |
+| `TestRaysGoThroughMatterAndOffTheScreen` | straight and curled in the walled room: off within two seconds, every way runs through a wall and ends off the screen; nothing after | a wall stops a ray, a ray is dropped on the screen, or never dropped |
+| `TestRayMarksTheFaceItGoesInto` | walled room: 24 marks, each in the open within 3 units of matter and on a ray's way, one to each way | a mark is left on the way out of matter, inside it, or twice |
+| `TestRayMarksAFaceAgainAfterCrossingASlab` | a slab across the room above the hero: 31 marks; the rays within 45 degrees of up mark two faces, the rest one | a ray marks only its first face, or its way out of the slab |
+| `TestEmptyRoomTakesNoMarks` | no matter: all 24 rays fly out, no mark | marks are left off the screen or in the air |
+| `TestMarksStayPutThenMeltAway` | the 24 marks stand where they were left two seconds after the strike; none ten seconds after | marks drift, go at once, or never go |
+| `TestMotesComeOutOfThePointsOfTheBody` | the body is asked once, at the strike; every mote stands on one of its points, more than one point used; not asked again | motes come out of the chest only, or the body is asked every tick |
+| `TestWithNoBodyMotesComeOutOfTheChest` | no probe, and a probe of no points: every mote at one point within 4 units of the middle | a body of no points is indexed |
+| `TestMotesLiveAWhileThenGo` | every mote moves on the first tick; all are there half a second on, none ten seconds on | motes stand still, die at once, or never |
+| `TestRaysLeaveFromTheHeroAtTheStrikeAndDoNotFollowHim` | the hero leaps through the inhale and on: the rays leave from where he is at the strike, not where it began, and keep to their lines from there, all equally far out | the rays leave from the start, or follow the hero |
+| `TestClearLeavesNothingAndNothingComes` | `Clear` in the inhale: the world moves, a hundred quiet ticks, the body never asked; in flight: no stretch, mark, mote or untold strike, and none after | a death in the inhale still strikes, or the echo outlives the hero |
+| `TestStartDropsTheBurstAlreadyGoing` | `Start` over a burst in flight: inhaling, nothing of the old burst to tell or see; its strike sends 24 rays from the new hero, told once | the old burst leaks into the new |
+| `TestMoonBurstFliesAsTheIceOne` | the moon look and the ice look, the same calls: the same stretches, marks, motes and events on every tick | a look changes the flight, not the colors only |
+| `TestSameCallsGiveTheSameBurst` | two bursts, the same calls, a walking hero: the same on every tick for ten seconds | the burst reaches for `Random` |
+
+Left to the eye:
+
+- The look: the veil, the figure and its fringe, the bands of a ray and
+  its profile, the head drawn on between ticks, the ring, the flash, the
+  look of a mark and of a mote.
+- The pace of the motes: their drag, their fall and their spread.
+- Whether a mark is the size and light of the design.
+- What the game does along a stretch: the bullets put out, a monster
+  wounded once a burst, the world standing for the inhale. That is
+  `Moon2D.dpr`'s and waits for the scene tests with the hero.
 
 ## Monsters
 

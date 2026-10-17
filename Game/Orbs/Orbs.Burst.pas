@@ -174,6 +174,10 @@ type
     property Holding: Boolean read GetInhaling;
     // The inhale: the hero is drawn as a bare figure
     property Inhaling: Boolean read GetInhaling;
+    // The marks left on the faces and the motes of the echo, as they are
+    // now: to be read, not stirred
+    property Marks: TParticleSwarm read FMarks;
+    property Motes: TParticleSwarm read FMotes;
   end;
 
 const
