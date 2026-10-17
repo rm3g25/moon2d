@@ -2,8 +2,9 @@
 
 The canon of the Moon 2D universe. Source of truth for all story text in
 the game. Part of this document describes the wider universe ("Dark
-Planet 1999", the Order of Elementals) — none of that is **ever revealed**
-in Moon 2D; it lives here so the game does not contradict future games.
+Planet 1999", what the Order of Elementals is and what elementals can do)
+— none of that is **ever revealed** in Moon 2D beyond the Order's name and
+the hero's title; it lives here so the game does not contradict future games.
 For what the player sees and what stays hidden, see "Disclosure".
 
 Russian version: `docs/lore/LORE-ru.md`.
@@ -95,16 +96,16 @@ hole" — people opened the door themselves and could not close it.
 
 ## 6. The hero
 
-Officially: a **lieutenant of the TEK armed forces**, sent on a shuttle
-with several scientists to find out why the base has gone silent and to
-bring a transmitter back online so the research data can be relayed to
-Earth.
+A **master of the Order of Elementals** from the start. TEK works
+together with the Order: the corporation sends elementals on missions,
+and every mission is approved by the Order's council. The council sensed
+the Rift — a hole between realities lies squarely in the Order's domain —
+and in its wisdom found sending an elemental justified.
 
-Secretly (never revealed in the game): the hero is a member of the
-**Order of Elementals**, planted inside the expedition. The Order's
-council sensed the Rift — a hole between realities lies squarely in
-their domain — and placed their own man inside the corporate mission.
-This is why one soldier survives where the entire base fell.
+He flies out on a shuttle with several scientists to find out why the
+base has gone silent and to bring a transmitter back online so the
+research data can be relayed to Earth. The shuttle crew calls him simply
+"Master". This is why one man survives where the entire base fell.
 
 The shuttle scientists stay at the spaceport with the ship. Possible
 story use: radio voices in the level texts. The second story vehicle is
@@ -113,7 +114,9 @@ NPCs, the texts do all the work.
 
 ## 7. The Order of Elementals — DO NOT REVEAL IN GAME
 
-Wider-universe context. In Moon 2D: zero mentions.
+Wider-universe context. In Moon 2D: the Order's name and the hero's title
+"Master", nothing more — what the Order is and what an elemental can do
+stay off-screen.
 
 - A future order on Earth, keepers of the peace, with its own council
   (inspiration: the Jedi).
@@ -197,12 +200,12 @@ controlled-crossing experiment". Naturally.
 
 ## 11. Disclosure: what the player sees and what stays hidden
 
-**The player learns:** the TEK base has gone silent; the hero is a TEK
-lieutenant; the scientists opened a Rift into a parallel world and died;
+**The player learns:** the TEK base has gone silent; the hero is a master
+of the Order of Elementals, sent by TEK; the scientists opened a Rift into a parallel world and died;
 the robots are on quarantine; the road to the transmitter runs through
 Selene; the resonator; the signal is sent.
 
-**The player does NOT learn:** the elementals, the Order, the council,
+**The player does NOT learn:** what the Order is, the council,
 the trance state, the space of variants, the nature of the henshin, why
 the worlds are inverted, the further fate of Gate-1. All of that belongs
 to other games of the universe.

@@ -53,7 +53,7 @@ into a remake.
 
 ## The game
 
-A soldier lands on a lunar mining complex that stopped answering three days ago.
+An elemental master lands on a lunar mining complex that stopped answering three days ago.
 The transmitter is on the far side of it. Between him and the transmitter is
 everything that came up out of the shafts.
 
