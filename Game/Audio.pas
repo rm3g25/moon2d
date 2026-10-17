@@ -57,6 +57,18 @@ procedure Mix_FreeChunk(AChunk: PMixChunk); cdecl;
 function Mix_PlayChannelTimed(AChannel: Integer; AChunk: PMixChunk;
   ALoops, ATicks: Integer): Integer; cdecl;
   external MixerLib name 'Mix_PlayChannelTimed' delayed;
+function Mix_HaltChannel(AChannel: Integer): Integer; cdecl;
+  external MixerLib name 'Mix_HaltChannel' delayed;
+procedure Mix_Pause(AChannel: Integer); cdecl;
+  external MixerLib name 'Mix_Pause' delayed;
+procedure Mix_Resume(AChannel: Integer); cdecl;
+  external MixerLib name 'Mix_Resume' delayed;
+// Non-zero while the channel plays, paused or not
+function Mix_Playing(AChannel: Integer): Integer; cdecl;
+  external MixerLib name 'Mix_Playing' delayed;
+// The chunk the channel plays or has played last
+function Mix_GetChunk(AChannel: Integer): PMixChunk; cdecl;
+  external MixerLib name 'Mix_GetChunk' delayed;
 
 function Mix_LoadMUS(const AFileName: PAnsiChar): PMixMusic; cdecl;
   external MixerLib name 'Mix_LoadMUS' delayed;
@@ -73,6 +85,13 @@ function Mix_VolumeMusic(AVolume: Integer): Integer; cdecl;
 type
   TMusicMode = (mmLoop, mmOnce);
 
+  // A sound the game keeps hold of: the channel it plays on and what it
+  // plays. Channel -1 - it never started.
+  THeldSound = record
+    Channel: Integer;
+    FileName: string;
+  end;
+
   // One instance owns the mixer for the whole game. Two loading creeds:
   // WAV one-shots load strictly (a bad name must blow up at startup, not
   // mid-boss), music streams load leniently (a missing track skips
@@ -81,15 +100,30 @@ type
   private
     FEnabled: Boolean;
     FMusicMuted: Boolean;
+    FMusicLevel: Single; // 0..1 of the full volume
     FSounds: TDictionary<string, PMixChunk>;
     FMusic: PMixMusic;
     FSoundsDir: string;
     FMusicDir: string;
+    function ChunkOf(const AFileName: string): PMixChunk;
+    function StillHeld(const ASound: THeldSound): Boolean;
+    procedure ApplyMusicVolume;
   public
     constructor Create(const ASoundsDir, AMusicDir: string);
     destructor Destroy; override;
     procedure Load(const AFileName: string);
     procedure Play(const AFileName: string);
+    // Plays as Play does and keeps hold of the channel, so the sound can
+    // be paused and stopped before its end
+    function PlayHeld(const AFileName: string): THeldSound;
+    // A held sound that has ended, and whose channel another sound has
+    // taken since, is left alone by all three
+    procedure StopHeld(const ASound: THeldSound);
+    procedure PauseHeld(const ASound: THeldSound);
+    procedure ResumeHeld(const ASound: THeldSound);
+    // The music at a share of its volume, 0..1; it stays at it through
+    // track changes. Muting outranks it.
+    procedure SetMusicLevel(ALevel: Single);
     procedure PlayMusic(const AFileName: string; AMode: TMusicMode);
     procedure StopMusic;
     // Mutes the music channel at the mixer, effects untouched. The game
@@ -121,6 +155,7 @@ begin
   FSoundsDir := IncludeTrailingPathDelimiter(ASoundsDir);
   FMusicDir := IncludeTrailingPathDelimiter(AMusicDir);
   FSounds := TDictionary<string, PMixChunk>.Create;
+  FMusicLevel := 1;
   try
     // Delay-loaded import: a missing SDL2_mixer.dll surfaces exactly
     // here, as a catchable exception instead of a startup error box
@@ -162,23 +197,80 @@ begin
 end;
 
 procedure TSoundBank.Play(const AFileName: string);
+begin
+  PlayHeld(AFileName);
+end;
+
+// Startup preloading is a warm-up, not a contract: an unknown name loads
+// on first use, and a genuinely missing file still fails loudly
+function TSoundBank.ChunkOf(const AFileName: string): PMixChunk;
+begin
+  if not FSounds.TryGetValue(AFileName, Result) then
+  begin
+    Load(AFileName);
+    Result := FSounds[AFileName];
+  end;
+end;
+
+function TSoundBank.PlayHeld(const AFileName: string): THeldSound;
 const
   AnyFreeChannel = -1;
   PlayOnce = 0;
   NoTimeLimit = -1;
-var
-  Chunk: PMixChunk;
+begin
+  Result.Channel := -1;
+  Result.FileName := AFileName;
+  if not FEnabled then
+    Exit;
+  Result.Channel := Mix_PlayChannelTimed(AnyFreeChannel, ChunkOf(AFileName),
+    PlayOnce, NoTimeLimit);
+end;
+
+function TSoundBank.StillHeld(const ASound: THeldSound): Boolean;
+begin
+  Result := FEnabled and (ASound.Channel >= 0) and
+    (Mix_Playing(ASound.Channel) <> 0) and
+    (Mix_GetChunk(ASound.Channel) = ChunkOf(ASound.FileName));
+end;
+
+procedure TSoundBank.StopHeld(const ASound: THeldSound);
+begin
+  if StillHeld(ASound) then
+    Mix_HaltChannel(ASound.Channel);
+end;
+
+procedure TSoundBank.PauseHeld(const ASound: THeldSound);
+begin
+  if StillHeld(ASound) then
+    Mix_Pause(ASound.Channel);
+end;
+
+procedure TSoundBank.ResumeHeld(const ASound: THeldSound);
+begin
+  if StillHeld(ASound) then
+    Mix_Resume(ASound.Channel);
+end;
+
+procedure TSoundBank.SetMusicLevel(ALevel: Single);
+begin
+  if ALevel = FMusicLevel then
+    Exit;
+  FMusicLevel := ALevel;
+  ApplyMusicVolume;
+end;
+
+// Music volume is global mixer state: it survives Halt/Load/Play, so a
+// track change while muted stays silent until the toggle flips back
+procedure TSoundBank.ApplyMusicVolume;
+const
+  MixMaxVolume = 128; // MIX_MAX_VOLUME of SDL_mixer.h
 begin
   if not FEnabled then
     Exit;
-  // Startup preloading is a warm-up, not a contract: an unknown name
-  // loads on first use, and a genuinely missing file still fails loudly
-  if not FSounds.TryGetValue(AFileName, Chunk) then
-  begin
-    Load(AFileName);
-    Chunk := FSounds[AFileName];
-  end;
-  Mix_PlayChannelTimed(AnyFreeChannel, Chunk, PlayOnce, NoTimeLimit);
+  if FMusicMuted then
+    Mix_VolumeMusic(0)
+  else
+    Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel));
 end;
 
 procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode);
@@ -214,18 +306,11 @@ begin
 end;
 
 procedure TSoundBank.ToggleMusicMuted;
-const
-  MixMaxVolume = 128; // MIX_MAX_VOLUME of SDL_mixer.h
 begin
   if not FEnabled then
     Exit;
   FMusicMuted := not FMusicMuted;
-  // Music volume is global mixer state: it survives Halt/Load/Play, so
-  // a track change while muted stays silent until the toggle flips back
-  if FMusicMuted then
-    Mix_VolumeMusic(0)
-  else
-    Mix_VolumeMusic(MixMaxVolume);
+  ApplyMusicVolume;
 end;
 
 end.

@@ -35,6 +35,7 @@ uses
   Levels.Dynamics in 'Core\Levels.Dynamics.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
+  Levels.Scenes in 'Core\Levels.Scenes.pas',
   Levels.Pads in 'Core\Levels.Pads.pas',
   Levels.Carousels in 'Core\Levels.Carousels.pas',
   Levels.Rigs in 'Core\Levels.Rigs.pas',
@@ -90,6 +91,7 @@ uses
   Orbs.Rite in 'Game\Orbs\Orbs.Rite.pas',
   Orbs.Burst in 'Game\Orbs\Orbs.Burst.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
+  Scenes.Director in 'Game\Scenes\Scenes.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
   Audio in 'Game\Audio.pas',
@@ -381,6 +383,7 @@ type
     FUptake: TUptake; // what the hero takes in; reborn with the level
     FUptakePainter: TUptakePainter;
     FDirector: TEventDirector; // the level's events; reborn with the level
+    FScenes: TSceneDirector; // the level's scenes; reborn with the level
     FArena: TPadArena; // the rebuilds of the boss fight; reborn with the level
     // The bonus slot: one reward at a time, spent by right click.
     FBonus: TBonusKind;
@@ -550,6 +553,7 @@ type
     function OpenLevelArtSet(const AKind: string): TSpriteSet;
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
+    procedure ResumeGame;
     procedure ApplyMenuResult(const AResult: TMenuResult);
     procedure SetFullscreen(AValue: Boolean);
     procedure ToggleFullscreen;
@@ -623,6 +627,8 @@ end;
 destructor TMoonGame.Destroy;
 begin
   FMenu.Free;
+  // Before the bank: it stops what it holds
+  FScenes.Free;
   FAudio.Free;
   FMarks.Free;
   FShake.Free;
@@ -682,6 +688,8 @@ end;
 // version for death - it keeps the level, this one replaces it.
 procedure TMoonGame.LoadLevel(const AFileName: string);
 begin
+  // Before the level: what it plays and darkens goes with it
+  FreeAndNil(FScenes);
   FField.Free;
   FHero.Free;
   FDynamics.Free;
@@ -784,6 +792,7 @@ begin
   FreeAndNil(FArena);
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
     HeroRides);
+  FScenes := TSceneDirector.Create(FLevel.Scenes, FLevel.Dynamics, FAudio);
   FreeAndNil(FDirector);
   var Cues: TDirectorCues;
   Cues.ChangeMusic := ChangeMusic;
@@ -800,6 +809,7 @@ begin
   Cues.Spawn := SpawnGuest;
   Cues.SkyFall := OpenSky;
   Cues.Press := StartPress;
+  Cues.StartScene := FScenes.Start;
   // A function without parameters named alone would be called, not
   // passed: the reference wraps it
   Cues.TrialAct :=
@@ -1002,6 +1012,16 @@ begin
   FHeldFire := False;
   FMenu.ShowMain;
   // Level music keeps playing under the menu - verbatim 2008 behavior
+  if FScenes <> nil then
+    FScenes.Pause;
+end;
+
+// Back from the menu to where Escape came from; a scene waits there
+procedure TMoonGame.ResumeGame;
+begin
+  FState := FResumeState;
+  if (FState = gsPlaying) and (FScenes <> nil) then
+    FScenes.Resume;
 end;
 
 procedure TMoonGame.SetFullscreen(AValue: Boolean);
@@ -1025,7 +1045,7 @@ begin
     mcStartLevel:
       LoadLevel(AResult.LevelFile);
     mcResume:
-      FState := FResumeState;
+      ResumeGame;
     mcToggleFullscreen:
       ToggleFullscreen;
     mcSetDifficulty:
@@ -2505,6 +2525,7 @@ begin
     if FLevel.ScreenTriggers[i].Screen = FHero.Screen then
       FTriggerFired[Length(FLevel.Entities) + i] := False;
   FDirector.ReArm(FHero.Screen);
+  FScenes.ReArm(FHero.Screen);
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
   PinRespawnPoint;
@@ -2949,6 +2970,9 @@ begin
     if FArena.Warned then
       FAudio.Play(PadHumSoundFile);
   end;
+  // Before the dynamics: a craft it moves moves this tick
+  FScenes.Tick(FHero.Screen);
+  FShake.AddTrauma(FScenes.Trauma);
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind
   FDynamics.Tick(FHero.Screen);
@@ -3030,6 +3054,7 @@ begin
         FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
           dlBackdrop);
         FDynamics.Draw(FHero.Screen, NoShake, AAlpha, dlSky);
+        FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha, dlAloft);
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
@@ -3078,6 +3103,7 @@ begin
         FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         // Over the world, under the HUD
         FBurst.DrawGlass(FDynamics.Canvas, AAlpha);
+        FScenes.DrawShade(ARenderer);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FSprites.Origin := NoShake;
@@ -3457,7 +3483,7 @@ begin
     // resumes a running game (idle Escape at boot does nothing)
     if (AScancode = SdlScancodeEscape) and (AAction = kaDown) then
       if not FMenu.HandleEscape and FLevelLoaded then
-        FState := FResumeState;
+        ResumeGame;
     Exit;
   end;
 

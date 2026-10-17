@@ -10,6 +10,10 @@
   class here, a word in DynamicKindIds, its layer in DefaultLayers and
   a branch in CreateDynamic.
 
+  A craft (TCraft) is the one kind that never moves by itself: it
+  stands where the level file puts it until a scene (Levels.Scenes)
+  moves it.
+
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
   from the parent's top-left corner and the object shows wherever the
@@ -83,9 +87,11 @@ type
 
   // Backdrop: the backdrop itself, bent - under everything else. Sky:
   // right over the backdrop, standing still while the world shakes - the
-  // far things. Back: with the static objects, behind the tiles. Front:
-  // over the monsters, under the hero.
-  TDynamicLayer = (dlBackdrop, dlSky, dlBack, dlFront);
+  // far things. Aloft: over the sky, behind the static objects and the
+  // pads, shaking with the world - what flies over the place, a craft.
+  // Back: with the static objects, behind the tiles. Front: over the
+  // monsters, under the hero.
+  TDynamicLayer = (dlBackdrop, dlSky, dlAloft, dlBack, dlFront);
 
   // Shared by every kind. JSON: one of "screen", "screens" ([first,
   // last] - the same object on a run of screens) and "parent", then
@@ -103,6 +109,24 @@ type
     Tag: string;
     Layer: TDynamicLayer;
     Turns: Boolean;
+  end;
+
+  // How a motion gathers and loses speed: evenly, gathering it, losing
+  // it, or both
+  TMotionEase = (meLinear, meIn, meOut, meInOut);
+
+  // One axis of a motion: where it is, where it heads, over how many
+  // ticks and how far into them
+  TAxisMotion = record
+    Current: Single;
+    From, Target: Single;
+    Ticks, Elapsed: Integer;
+    Ease: TMotionEase;
+    // Stands at AValue and stays there
+    procedure Settle(AValue: Single);
+    // Heads for ATarget over ATicks; 0 ticks = there at once
+    procedure HeadFor(ATarget: Single; ATicks: Integer; AEase: TMotionEase);
+    procedure Tick;
   end;
 
   // A value and where the events are taking it
@@ -766,6 +790,73 @@ type
     procedure Release; override;
   end;
 
+  // How a part of a craft hangs on its point: by the middle of its top
+  // edge, by its middle, or by a point of its own picture
+  TPartAnchor = (paTop, paCenter, paPivot);
+
+  // A picture of the craft's set on the body. At is the point of the body
+  // it hangs on, in units from the body's top-left corner; Width is in
+  // units and the height follows the picture; Pivot, for paPivot, is the
+  // point of the part's own picture that lands on At.
+  TCraftPart = record
+    Sprite: string;
+    At: TSdlFPoint;
+    Width, Height: Single;
+    Anchor: TPartAnchor;
+    Pivot: TSdlFPoint;
+    Texture: PSdlTexture;
+  end;
+
+  // A machine built of the pictures of one set of the level's object art:
+  // a body and the parts hung on it, drawn back to front in the order of
+  // the file. x and y are the body's top-left corner; it stands there
+  // until a scene moves it (MoveX, MoveY) - the two axes go their own
+  // ways, at their own pace. Width is the body's, in units; the height
+  // follows the picture. The tint multiplies every picture; intensity is
+  // how opaque the whole machine is.
+  // JSON:
+  //   {"kind": "craft", "tag": "cordon", "screen": 9, "set": "cordon",
+  //    "body": "hull", "width": 1604.6, "x": -60, "y": -190,
+  //    "tint": [46, 48, 54],
+  //    "parts": [
+  //      {"sprite": "turretGun", "at": [492.7, 151.9], "width": 27,
+  //       "anchor": "pivot", "pivot": [13.5, 1.6]},
+  //      {"sprite": "eye", "at": [1093.8, 111.5], "width": 66,
+  //       "anchor": "top"}]}
+  // Anchor is "top" by default.
+  TCraft = class(TDynamicObject)
+  private
+    FSetName: string;
+    FBody: TCraftPart;
+    FParts: TArray<TCraftPart>;
+    FX, FY: TAxisMotion;
+    FLast: TSdlFPoint; // the corner a tick ago
+    procedure AcquirePart(const ACanvas: TDynamicCanvas;
+      var APart: TCraftPart);
+    procedure DrawPart(const ACanvas: TDynamicCanvas; const APart: TCraftPart;
+      ALeft, ATop, AOpacity: Single);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+    // Back to where the level file puts it, at once
+    procedure Rewind; override;
+    // The body's corner heads for AX (AY) over ATicks; 0 ticks = at once
+    procedure MoveX(AX: Single; ATicks: Integer; AEase: TMotionEase);
+    procedure MoveY(AY: Single; ATicks: Integer; AEase: TMotionEase);
+  end;
+
+const
+  // The JSON vocabulary of an ease
+  MotionEaseIds: array [TMotionEase] of string = ('linear', 'in', 'out',
+    'inOut');
+
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
 function ParseDynamics(ARoot: TJSONObject;
@@ -786,7 +877,7 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning, dkGraph);
+    dkLightning, dkGraph, dkCraft);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -800,11 +891,12 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph');
+    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
-    'back', 'front');
+    'aloft', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack);
+    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft);
+  PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
@@ -850,6 +942,8 @@ resourcestring
   SLightningBadSpread = '%s: "spread" takes two half-sizes, x and y, in '
     + 'units, neither below zero';
   SLightningBadStrokes = '%s: "strokes" takes a whole number, 1..%d';
+  SDynamicBadPoint = '%s: "%s" takes a point, [x, y] in units';
+  SCraftNoSprite = '%s: "%s" names no sprite';
 
 const
   // Beacon light, in shares of the halo size
@@ -1299,6 +1393,58 @@ begin
     if SameText(Id, AIds[i]) then
       Exit(i);
   raise EDynamicError.CreateFmt(SDynamicBadWord, [AOwner, AWhat, Id]);
+end;
+
+// ---------------------------------------------------------------------------
+// TAxisMotion
+// ---------------------------------------------------------------------------
+
+// The share of the way a motion has come at AShare of its ticks: the
+// cubes - a heavy thing gathers and loses speed slowly
+function EasedShare(AEase: TMotionEase; AShare: Single): Single;
+begin
+  case AEase of
+    meIn:
+      Result := AShare * AShare * AShare;
+    meOut:
+      Result := 1 - Power(1 - AShare, 3);
+    meInOut:
+      Result := AShare * AShare * (3 - 2 * AShare);
+  else
+    Result := AShare;
+  end;
+end;
+
+procedure TAxisMotion.Settle(AValue: Single);
+begin
+  Current := AValue;
+  From := AValue;
+  Target := AValue;
+  Ticks := 0;
+  Elapsed := 0;
+end;
+
+procedure TAxisMotion.HeadFor(ATarget: Single; ATicks: Integer;
+  AEase: TMotionEase);
+begin
+  if ATicks <= 0 then
+  begin
+    Settle(ATarget);
+    Exit;
+  end;
+  From := Current;
+  Target := ATarget;
+  Ticks := ATicks;
+  Elapsed := 0;
+  Ease := AEase;
+end;
+
+procedure TAxisMotion.Tick;
+begin
+  if Elapsed >= Ticks then
+    Exit;
+  Inc(Elapsed);
+  Current := From + (Target - From) * EasedShare(Ease, Elapsed / Ticks);
 end;
 
 // ---------------------------------------------------------------------------
@@ -3115,6 +3261,157 @@ begin
     raise EDynamicError.CreateFmt(SDynamicTurnsNailed, [ALevelId, AOwner]);
 end;
 
+// ---------------------------------------------------------------------------
+// TCraft
+// ---------------------------------------------------------------------------
+
+function ReadPoint(AObj: TJSONObject; const AKey, AOwner: string): TSdlFPoint;
+begin
+  var PointArr := AObj.GetValue<TJSONArray>(AKey, nil);
+  if (PointArr = nil) or (PointArr.Count <> 2) then
+    raise EDynamicError.CreateFmt(SDynamicBadPoint, [AOwner, AKey]);
+  Result.X := PointArr.Items[0].GetValue<Double>;
+  Result.Y := PointArr.Items[1].GetValue<Double>;
+end;
+
+function ReadCraftPart(AObj: TJSONObject; const AOwner: string): TCraftPart;
+begin
+  Result := Default(TCraftPart);
+  Result.Sprite := AObj.GetValue<string>('sprite', '');
+  if Result.Sprite = '' then
+    raise EDynamicError.CreateFmt(SCraftNoSprite, [AOwner, 'parts']);
+  Result.At := ReadPoint(AObj, 'at', AOwner);
+  Result.Width := ReadPositive(AObj, 'width', 0, AOwner);
+  Result.Anchor := TPartAnchor(ReadWord(AObj, 'anchor',
+    PartAnchorIds[paTop], PartAnchorIds, 'anchor', AOwner));
+  if Result.Anchor = paPivot then
+    Result.Pivot := ReadPoint(AObj, 'pivot', AOwner);
+end;
+
+constructor TCraft.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FSetName := AObj.GetValue<string>('set', '');
+  FBody.Sprite := AObj.GetValue<string>('body', '');
+  if FBody.Sprite = '' then
+    raise EDynamicError.CreateFmt(SCraftNoSprite, [AOwner, 'body']);
+  FBody.Width := ReadPositive(AObj, 'width', 0, AOwner);
+  var PartsArr := AObj.GetValue<TJSONArray>('parts', nil);
+  if PartsArr <> nil then
+    for var i := 0 to PartsArr.Count - 1 do
+      FParts := FParts + [ReadCraftPart(PartsArr.Items[i] as TJSONObject,
+        AOwner)];
+  FX.Settle(APlacement.X);
+  FY.Settle(APlacement.Y);
+  FLast.X := APlacement.X;
+  FLast.Y := APlacement.Y;
+end;
+
+procedure TCraft.AcquirePart(const ACanvas: TDynamicCanvas;
+  var APart: TCraftPart);
+var
+  PixelWidth, PixelHeight: Integer;
+begin
+  var Name := APart.Sprite;
+  if FSetName <> '' then
+    Name := FSetName + ':' + Name;
+  APart.Texture := ACanvas.Art.Get(Name);
+  SDL_QueryTexture(APart.Texture, nil, nil, @PixelWidth, @PixelHeight);
+  APart.Height := APart.Width * PixelHeight / PixelWidth;
+end;
+
+procedure TCraft.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  AcquirePart(ACanvas, FBody);
+  for var i := 0 to High(FParts) do
+    AcquirePart(ACanvas, FParts[i]);
+end;
+
+// The cache owns the textures
+procedure TCraft.Release;
+begin
+  FBody.Texture := nil;
+  for var i := 0 to High(FParts) do
+    FParts[i].Texture := nil;
+end;
+
+procedure TCraft.Rewind;
+begin
+  inherited;
+  FX.Settle(Placement.X);
+  FY.Settle(Placement.Y);
+  FLast.X := Placement.X;
+  FLast.Y := Placement.Y;
+end;
+
+procedure TCraft.MoveX(AX: Single; ATicks: Integer; AEase: TMotionEase);
+begin
+  FX.HeadFor(AX, ATicks, AEase);
+end;
+
+procedure TCraft.MoveY(AY: Single; ATicks: Integer; AEase: TMotionEase);
+begin
+  FY.HeadFor(AY, ATicks, AEase);
+end;
+
+procedure TCraft.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  FLast.X := FX.Current;
+  FLast.Y := FY.Current;
+  FX.Tick;
+  FY.Tick;
+end;
+
+procedure TCraft.DrawPart(const ACanvas: TDynamicCanvas;
+  const APart: TCraftPart; ALeft, ATop, AOpacity: Single);
+var
+  Dest: TSdlFRect;
+begin
+  if APart.Texture = nil then
+    Exit;
+  Dest.X := ALeft;
+  Dest.Y := ATop;
+  Dest.W := APart.Width;
+  Dest.H := APart.Height;
+  // The pictures are shared with the static objects, which set no tint
+  // and no alpha: both go back once drawn
+  TintTexture(APart.Texture, Placement.Tint.R, Placement.Tint.G,
+    Placement.Tint.B);
+  SDL_SetTextureAlphaMod(APart.Texture, Round(255 * AOpacity));
+  SDL_RenderCopyF(ACanvas.Renderer, APart.Texture, nil, @Dest);
+  SDL_SetTextureAlphaMod(APart.Texture, 255);
+  TintTexture(APart.Texture, 100, 100, 100);
+end;
+
+// AX, AY count from the placement; the craft is wherever its motion has
+// taken it, AAlpha of the way between the ticks
+procedure TCraft.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  var Opacity := Intensity;
+  if Opacity < VisibleLevel then
+    Exit;
+  var Left := AX - Placement.X + Lerp(FLast.X, FX.Current, AAlpha);
+  var Top := AY - Placement.Y + Lerp(FLast.Y, FY.Current, AAlpha);
+  DrawPart(ACanvas, FBody, Left, Top, Opacity);
+  for var Part in FParts do
+  begin
+    var PartLeft := Left + Part.At.X - Part.Width / 2;
+    var PartTop := Top + Part.At.Y;
+    case Part.Anchor of
+      paCenter:
+        PartTop := PartTop - Part.Height / 2;
+      paPivot:
+        begin
+          PartLeft := Left + Part.At.X - Part.Pivot.X;
+          PartTop := Top + Part.At.Y - Part.Pivot.Y;
+        end;
+    end;
+    DrawPart(ACanvas, Part, PartLeft, PartTop, Opacity);
+  end;
+end;
+
 function CreateDynamic(AKind: TDynamicKind;
   const APlacement: TDynamicPlacement; AObj: TJSONObject;
   const AOwner: string): TDynamicObject;
@@ -3136,6 +3433,8 @@ begin
       Result := TLightning.Create(APlacement, AObj, AOwner);
     dkGraph:
       Result := TGraph.Create(APlacement, AObj, AOwner);
+    dkCraft:
+      Result := TCraft.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

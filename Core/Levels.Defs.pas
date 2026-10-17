@@ -27,8 +27,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
-  Localization, Levels.Events, Levels.Tint, Levels.Dynamics, Levels.Pads,
-  Levels.Carousels;
+  Localization, Levels.Events, Levels.Scenes, Levels.Tint, Levels.Dynamics,
+  Levels.Pads, Levels.Carousels;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -198,6 +198,7 @@ type
     FEntities: TArray<TEntityPlacement>;
     FScreenTriggers: TArray<TScreenTrigger>;
     FEvents: TArray<TLevelEvent>;
+    FScenes: TArray<TLevelScene>;
     FDynamics: TDynamicObjects;
     procedure ParseRoot(const ARoot: TJSONObject);
     procedure ParseTiles(const ATiles: TJSONObject);
@@ -232,6 +233,7 @@ type
     procedure SeatEntities;
     procedure SeatEntity(var AEntity: TEntityPlacement);
     procedure CheckEvents;
+    procedure CheckScenes;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
       const AAction: TEventAction);
@@ -299,6 +301,9 @@ type
     // The level's events, in file order (Levels.Events); the game runs
     // them through Events.Director
     property Events: TArray<TLevelEvent> read FEvents;
+    // The level's scenes, in file order (Levels.Scenes); its events start
+    // them, the game plays them through Scenes.Director
+    property Scenes: TArray<TLevelScene> read FScenes;
     // Owned by the level and kept through a restart: a lamp keeps its
     // rhythm; only what a re-armed event changed goes back
     property Dynamics: TDynamicObjects read FDynamics;
@@ -330,6 +335,11 @@ resourcestring
     + '%d..%d of %d';
   SLevelEventTargetUnknown = 'Level "%s": event "%s" turns "%s", '
     + 'which no dynamic object carries';
+  SLevelEventSceneUnknown = 'Level "%s": event "%s" begins the scene "%s", '
+    + 'which the level does not have';
+  SLevelSceneBadScreen = 'Level "%s": scene "%s" plays on screen %d of %d';
+  SLevelSceneCraftUnknown = 'Level "%s": scene "%s" moves "%s", which no '
+    + 'craft carries';
   SLevelEventSunUnknown = 'Level "%s": event "%s" turns the sun of "%s", '
     + 'which no globe carries';
   SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
@@ -681,7 +691,11 @@ begin
     FDynamics);
   CheckDynamics;
   CheckPadGroupLinks;
-  // After the dynamics: an event may name a dynamic object's tag
+  // After the dynamics: a scene moves a craft by its tag
+  FScenes := ParseLevelScenes(ARoot, FId);
+  CheckScenes;
+  // After the dynamics: an event may name a dynamic object's tag; after
+  // the scenes: it may begin one
   CheckEvents;
 end;
 
@@ -766,6 +780,31 @@ begin
   end;
 end;
 
+function AnySceneCalled(const AScenes: TArray<TLevelScene>;
+  const AId: string): Boolean;
+begin
+  for var Scene in AScenes do
+    if SameText(Scene.Id, AId) then
+      Exit(True);
+  Result := False;
+end;
+
+// A scene off the screen list never plays; one moving a craft the level
+// does not have moves nothing
+procedure TLevel.CheckScenes;
+begin
+  for var Scene in FScenes do
+  begin
+    if (Scene.Screen < 1) or (Scene.Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelSceneBadScreen,
+        [FId, Scene.Id, Scene.Screen, FScreenCount]);
+    for var Cue in Scene.Cues do
+      if (Cue.Kind = ckMove) and not FDynamics.AnyTagged(Cue.Target, TCraft) then
+        raise ELevelError.CreateFmt(SLevelSceneCraftUnknown,
+          [FId, Scene.Id, Cue.Target]);
+  end;
+end;
+
 procedure TLevel.CheckEventTargets(const AEvent: TLevelEvent);
 begin
   for var Action in AEvent.Actions do
@@ -821,6 +860,10 @@ begin
         if not AnyShelfOfBank(FPads, Row) then
           raise ELevelError.CreateFmt(SLevelEventBankUnknown,
             [FId, AEventId, Row]);
+    eaScene:
+      if not AnySceneCalled(FScenes, AAction.Target) then
+        raise ELevelError.CreateFmt(SLevelEventSceneUnknown,
+          [FId, AEventId, AAction.Target]);
   end;
 end;
 

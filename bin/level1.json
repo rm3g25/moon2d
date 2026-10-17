@@ -19,7 +19,8 @@
     "sky",
     "level1-structures",
     "train",
-    "ventilation"
+    "ventilation",
+    "cordon"
   ],
   "music": "moon_surface.ogg",
   "henshinPattern": "snowflake",
@@ -1423,6 +1424,25 @@
     ]
   },
   "dynamics": [
+    {
+      "kind": "craft",
+      "tag": "cordon",
+      "screen": 9,
+      "set": "cordon",
+      "body": "hull",
+      "width": 1604.6,
+      "x": -60,
+      "y": -190,
+      "tint": [46, 48, 54],
+      "parts": [
+        {"sprite": "turretGun", "at": [492.7, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6]},
+        {"sprite": "turretMount", "at": [492.7, 132.5], "width": 46, "anchor": "top"},
+        {"sprite": "turretGun", "at": [597.3, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6]},
+        {"sprite": "turretMount", "at": [597.3, 132.5], "width": 46, "anchor": "top"},
+        {"sprite": "eye", "at": [1093.8, 111.5], "width": 66, "anchor": "top"},
+        {"sprite": "iris", "at": [1093.5, 146.5], "width": 17.3, "anchor": "center"}
+      ]
+    },
     {
       "kind": "globe",
       "screens": [
@@ -4818,6 +4838,17 @@
   ],
   "events": [
     {
+      "id": "cordonArrives",
+      "screen": 9,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "scene",
+          "target": "cordon9"
+        }
+      ]
+    },
+    {
       "id": "dawn1",
       "screen": 1,
       "when": "enterScreen",
@@ -5350,6 +5381,28 @@
           "action": "restore",
           "target": "arena17"
         }
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "cordon9",
+      "screen": 9,
+      "once": "level",
+      "cues": [
+        {"at": 0, "do": "music", "value": 0, "ticks": 66},
+        {"at": 0, "do": "sound", "file": "cordon.ogg"},
+        {"at": 0, "do": "sound", "file": "cordonhum.wav"},
+        {"at": 0, "do": "shake", "value": 40, "ticks": 99},
+        {"at": 0, "do": "shade", "value": 28, "ticks": 400},
+        {"at": 99, "do": "move", "target": "cordon", "x": -989.8, "ticks": 363, "ease": "out"},
+        {"at": 99, "do": "move", "target": "cordon", "y": -18.4, "ticks": 132, "ease": "out"},
+        {"at": 99, "do": "shake", "value": 100, "ticks": 66},
+        {"at": 462, "do": "shake", "value": 35, "ticks": 66},
+        {"at": 924, "do": "move", "target": "cordon", "y": -190, "ticks": 165, "ease": "in"},
+        {"at": 924, "do": "shade", "value": 0, "ticks": 165},
+        {"at": 924, "do": "shake", "value": 0, "ticks": 165},
+        {"at": 1089, "do": "music", "value": 100, "ticks": 99}
       ]
     }
   ],
