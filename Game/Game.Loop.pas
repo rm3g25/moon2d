@@ -190,6 +190,13 @@ begin
   // hint can't be honored SDL silently falls back to its default.
   SDL_SetHint(SdlHintRenderDriver, 'direct3d11');
 
+  // Naming a driver turns SDL's draw batching off: SDL takes a named
+  // driver for a sign that the app talks to the GPU itself. We do not,
+  // and without batching every RenderCopy is a draw call of its own - a
+  // few thousand glows in a frame (the henshin's burst over the shroud)
+  // took a frame to 200 ms. Ask for batching back explicitly.
+  SDL_SetHint('SDL_RENDER_BATCHING', '1');
+
   FRenderer := SDL_CreateRenderer(FWindow, -1, RendererFlags);
   if FRenderer = nil then
     raise EGameHostError.CreateFmt(SSdlRendererFailed,
