@@ -1437,14 +1437,30 @@
       "parts": [
         {"sprite": "hull-2", "at": [786.538, 0], "width": 409.231, "anchor": "pivot", "pivot": [0, 0]},
         {"sprite": "hull-3", "at": [1195.769, 0], "width": 408.846, "anchor": "pivot", "pivot": [0, 0]},
-        {"sprite": "turretGun", "at": [492.7, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6]},
+        {"sprite": "turretGun", "tag": "gun", "at": [492.7, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6], "turns": 30},
         {"sprite": "turretMount", "at": [492.7, 132.5], "width": 46, "anchor": "top"},
-        {"sprite": "turretGun", "at": [597.3, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6]},
+        {"sprite": "turretGun", "tag": "gun", "at": [597.3, 151.9], "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6], "turns": 30},
         {"sprite": "turretMount", "at": [597.3, 132.5], "width": 46, "anchor": "top"},
         {"sprite": "eye", "at": [1093.8, 111.5], "width": 66, "anchor": "top"},
-        {"sprite": "iris", "at": [1093.5, 146.5], "width": 17.3, "anchor": "center"}
+        {"sprite": "iris", "tag": "iris", "at": [1093.5, 146.5], "width": 17.3, "anchor": "center", "reach": 3}
       ]
     },
+    {"kind": "beacon", "tag": "cordonLensL", "parent": "cordon", "x": 1064.5, "y": 145.7, "layer": "aloft",
+     "tint": [100, 24, 16], "blink": "steady", "size": 6, "intensity": 0},
+    {"kind": "beacon", "tag": "cordonLensR", "parent": "cordon", "x": 1123.1, "y": 145.7, "layer": "aloft",
+     "tint": [100, 24, 16], "blink": "steady", "size": 6, "intensity": 0},
+    {"kind": "beam", "tag": "cordonScan", "parent": "cordon", "x": 1093.5, "y": 146.5,
+     "tint": [100, 22, 14], "width": 22, "intensity": 0},
+    {"kind": "beam", "tag": "cordonBurn", "parent": "cordon", "x": 1093.5, "y": 146.5,
+     "tint": [100, 88, 62], "width": 28, "intensity": 0},
+    {"kind": "lightning", "tag": "cordonArc", "parent": "cordon", "x": 1093.5, "y": 146.5, "layer": "front",
+     "tint": [100, 90, 70], "intensity": 0, "reach": 260, "spread": [2, 2], "angle": -90, "cone": 6,
+     "collide": "strike", "size": 0.5, "jag": 30, "fork": 25, "frequency": 12, "strokes": 1,
+     "life": 0.07, "leader": 0, "spell": 1, "pause": 0, "flash": 25, "jolt": 0},
+    {"kind": "smoke", "tag": "cordonAshes", "parent": "cordonPrey", "x": 16, "y": 26, "outlives": true, "layer": "front",
+     "tint": [40, 38, 36], "endTint": [64, 64, 66], "intensity": 0, "rate": 30, "life": 2.0,
+     "size": 4, "endSize": 22, "opacity": 55, "angle": 90, "cone": 40, "speed": 14, "drag": 20,
+     "turbulence": 2, "spin": 40, "flow": "gusty", "frequency": 1, "heat": 50},
     {
       "kind": "globe",
       "screens": [
@@ -4028,18 +4044,13 @@
       "y": 11
     },
     {
-      "monsterId": "medkit",
-      "screen": 9,
-      "spriteList": "medic.mns",
-      "x": 6,
-      "y": 11
-    },
-    {
       "monsterId": "betoner",
       "screen": 9,
       "spriteList": "betoner.mns",
       "x": 6,
-      "y": 11
+      "y": 11,
+      "tag": "cordonPrey",
+      "overrides": {"lives": 9999}
     },
     {
       "monsterId": "barrel",
@@ -5397,14 +5408,40 @@
         {"at": 0, "do": "sound", "file": "cordonhum.wav"},
         {"at": 0, "do": "shake", "value": 40, "ticks": 99},
         {"at": 0, "do": "shade", "value": 28, "ticks": 400},
+        {"at": 0, "do": "hold", "target": "cordonPrey"},
         {"at": 99, "do": "move", "target": "cordon", "x": -989.8, "ticks": 363, "ease": "out"},
         {"at": 99, "do": "move", "target": "cordon", "y": -18.4, "ticks": 132, "ease": "out"},
         {"at": 99, "do": "shake", "value": 100, "ticks": 66},
-        {"at": 462, "do": "shake", "value": 35, "ticks": 66},
-        {"at": 924, "do": "move", "target": "cordon", "y": -190, "ticks": 165, "ease": "in"},
-        {"at": 924, "do": "shade", "value": 0, "ticks": 165},
-        {"at": 924, "do": "shake", "value": 0, "ticks": 165},
-        {"at": 1089, "do": "music", "value": 100, "ticks": 99}
+        {"at": 99, "do": "track", "target": "cordon", "part": "gun", "on": "hero"},
+        {"at": 430, "do": "shake", "value": 35, "ticks": 66},
+        {"at": 430, "do": "intensity", "target": "cordonLensL", "value": 100, "ticks": 4},
+        {"at": 440, "do": "intensity", "target": "cordonLensR", "value": 100, "ticks": 4},
+        {"at": 440, "do": "track", "target": "cordon", "part": "iris", "on": "hero"},
+        {"at": 450, "do": "aim", "target": "cordonScan", "on": "hero", "ticks": 10, "ease": "out"},
+        {"at": 450, "do": "intensity", "target": "cordonScan", "value": 100, "ticks": 10},
+        {"at": 467, "do": "hint", "header": "TEK-Q6", "text": "ОБЪЕКТ НЕ ОПОЗНАН. ВЫСТАВЛЕНА ОХРАНА.", "textEn": "OBJECT UNIDENTIFIED. GUARD DEPLOYED."},
+        {"at": 516, "do": "intensity", "target": "cordonScan", "value": 0, "ticks": 8},
+        {"at": 516, "do": "track", "target": "cordon", "part": "iris", "on": "cordonPrey"},
+        {"at": 522, "do": "move", "target": "cordon", "x": -837.5, "ticks": 66, "ease": "inOut"},
+        {"at": 588, "do": "aim", "target": "cordonScan", "on": "cordonPrey", "ticks": 10, "ease": "out"},
+        {"at": 588, "do": "intensity", "target": "cordonScan", "value": 100, "ticks": 10},
+        {"at": 615, "do": "aim", "target": "cordonBurn", "on": "cordonPrey"},
+        {"at": 615, "do": "intensity", "target": "cordonBurn", "value": 100, "ticks": 4},
+        {"at": 615, "do": "intensity", "target": "cordonScan", "value": 0, "ticks": 4},
+        {"at": 615, "do": "aim", "target": "cordonArc", "on": "cordonPrey"},
+        {"at": 615, "do": "intensity", "target": "cordonArc", "value": 100, "ticks": 2},
+        {"at": 615, "do": "sound", "file": "cordonburn.wav"},
+        {"at": 648, "do": "kill", "target": "cordonPrey"},
+        {"at": 648, "do": "intensity", "target": "cordonAshes", "value": 100},
+        {"at": 655, "do": "intensity", "target": "cordonBurn", "value": 0, "ticks": 8},
+        {"at": 655, "do": "intensity", "target": "cordonArc", "value": 0, "ticks": 4},
+        {"at": 655, "do": "track", "target": "cordon", "part": "iris", "on": "hero"},
+        {"at": 655, "do": "move", "target": "cordon", "x": -989.8, "ticks": 59, "ease": "inOut"},
+        {"at": 747, "do": "intensity", "target": "cordonAshes", "value": 0, "ticks": 99},
+        {"at": 846, "do": "move", "target": "cordon", "y": -190, "ticks": 165, "ease": "in"},
+        {"at": 846, "do": "shade", "value": 0, "ticks": 165},
+        {"at": 846, "do": "shake", "value": 0, "ticks": 165},
+        {"at": 1011, "do": "music", "value": 100, "ticks": 99}
       ]
     }
   ],
