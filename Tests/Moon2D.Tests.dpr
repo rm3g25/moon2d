@@ -44,7 +44,8 @@ uses
   Tests.Pads.Decks in 'Pads\Tests.Pads.Decks.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas',
   Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas',
-  Tests.Pads.Stray in 'Pads\Tests.Pads.Stray.pas';
+  Tests.Pads.Stray in 'Pads\Tests.Pads.Stray.pas',
+  Tests.Sprites.Sets in 'Sprites\Tests.Sprites.Sets.pas';
 
 procedure RunSuite;
 begin
