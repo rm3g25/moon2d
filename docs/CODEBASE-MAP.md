@@ -5497,8 +5497,8 @@ At 3.0.52 the suite was 376 tests, all green; the gravel arena
 brought 8 - six in `Tests.Pads.Decks`, two in `Tests.Levels.Pads` (a run
 of decks loads as one pad with no picture and is no wall; a bad collision
 letter raises); the burst of the suit (3.0.61) brought 23 in
-`Tests.Orbs.Burst` - 519; the scenes (3.0.62) brought 67, not run yet
-when they were committed - see below. Not every test unit has its
+`Tests.Orbs.Burst` - 519; the scenes (3.0.62) brought 67, green on the
+first run - 586, see below. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,

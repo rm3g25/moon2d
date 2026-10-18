@@ -150,7 +150,8 @@ blast, the shards and the score the game gives a burst body, in
 
 ### What a scene does to a body (3.0.62)
 
-State: written, 7 tests, not run yet. They join `TMonsterBodyTests`: the
+State: written, 7 tests, green on the first run (586 in the suite).
+They join `TMonsterBodyTests`: the
 hands a scene lays on a body - asleep, its fire held, struck down, taken
 away, stood where it says. The hold of the fire is seen through the `nil`
 burst: a shot into it stops the run with an access violation, so a

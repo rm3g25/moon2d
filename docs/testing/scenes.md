@@ -12,7 +12,8 @@ body).
 
 ## Levels.Scenes
 
-State: written, 16 and 7 tests, not run yet (3.0.62). Needs no stage.
+State: written, 16 and 7 tests, green on the first run (3.0.62, 586 in
+the suite). Needs no stage.
 The unit is tried by `Tests\Levels\Tests.Levels.Scenes.pas`: the parser
 alone by `TLevelScenesTests`, over a root of JSON holding the scenes of
 the test and nothing else (`ParseLevelScenes`, `ELevelSceneError`); the
@@ -57,7 +58,8 @@ and sounds like is the cordon's live run.
 
 ## Levels.Dynamics: the craft
 
-State: written, 10 tests, not run yet (3.0.62). Needs no stage. The
+State: written, 10 tests, green on the first run (3.0.62). Needs no
+stage. The
 craft is tried by `Tests\Levels\Tests.Levels.Dynamics.pas`, fixture
 `TCraftTests`. A craft is read by `ParseDynamic`, as the level reads it,
 and ticked with its origin at the corner of the screen; its corner
@@ -87,7 +89,8 @@ makes textures; the layer `aloft`.
 
 ## Scenes.Director
 
-State: written, 16 tests, not run yet (3.0.62). The unit is tried by
+State: written, 16 tests, green on the first run (3.0.62). The unit is
+tried by
 `Tests\Scenes\Tests.Scenes.Director.pas`, fixture
 `TSceneDirectorTests`. Needs no stage, but opens the mixer: the
 director keeps hold of the sound bank, and `TSoundBank.Create` calls

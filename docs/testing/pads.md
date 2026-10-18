@@ -648,7 +648,8 @@ on 264 to 296.
 
 ### The dormant pad (3.0.62)
 
-State: written, 7 tests, not run yet. Needs no stage: the pad names no
+State: written, 7 tests, green on the first run (586 in the suite).
+Needs no stage: the pad names no
 sprite (`"sprite": ""`), so the world asks no art for it, as for a deck of
 the collision grid. They are the first of `Tests\Pads\Tests.Pads.World.pas`,
 fixture `TPadWorldTests`; the tests above wait for the stage and join it
@@ -827,7 +828,8 @@ depth.
 
 ### A straight flight (3.0.62)
 
-State: written, 4 tests, not run yet. Needs no stage. They are the first
+State: written, 4 tests, green on the first run (586 in the suite).
+Needs no stage. They are the first
 of `Tests\Pads\Tests.Pads.Flights.pas`, fixture `TPadFlightsTests`; the
 tests of the plan above join them when they are written. A scene flies a
 single pad on one leg (`StraightFlight`), at `CalmPace`, its time
