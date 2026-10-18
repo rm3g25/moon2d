@@ -224,6 +224,10 @@ Whatever was done goes into the sprite's description in the set.
 - A room is a canvas of 4:3 at 0, 0, width 512 - 1448x1086 as the
   generator gives it is fine, backdrop density. A small object is kept
   at 6 px a unit.
+- No sprite past 2048 px on either side - the oldest cards refuse the
+  texture (MSET-FORMAT, "How big a sprite may be"). A wide structure at
+  6 px a unit runs into it at 341 units: cut it into strips, or keep it
+  at the density it was generated at.
 - A prop asked for as squares comes back as it likes: the crates of
   level 2 screen 4 are 1.16 wide to 1 tall. Scale it whole and split
   the lie between its top and its sides (70 units over two cells: 3 a
@@ -290,6 +294,8 @@ set the level declares.
   pad, an entity; a respawn point has a floor; no pad in a wall.
 - Jumps, by the ported `JumpReach`, at every phase of every pad.
 - The set reads back; the sprites before the new one are byte for byte.
+- No sprite of the set is past 2048 px on either side (the test suite
+  holds it too).
 - A preview: the backdrop at its tint, the objects, the fans, a hero on
   every floor. It is put together by hand and says so; it is not a
   screenshot.

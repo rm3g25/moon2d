@@ -89,6 +89,9 @@ Tests\
     Tests.Pads.Plunge.pas
     Tests.Pads.Shelf.pas
     Tests.Pads.Stray.pas
+  Sprites\
+    Tests.Sprites.Sets.pas  the shipped sets, not the class: no sprite
+                            past 2048 px
 run-tests.cmd             build and run
 ```
 
@@ -187,8 +190,9 @@ a console: started from the IDE, its window closes with the last line.
 
 The table of every unit under test lives in `testing/`, one file per
 namespace: `testing/orbs.md`, `testing/monsters.md`, `testing/game.md`,
-`testing/effects.md`, `testing/pads.md`. A new unit's table goes into the
-file of its namespace; a new namespace gets a new file and a line here.
+`testing/effects.md`, `testing/pads.md`, `testing/sprites.md`. A new
+unit's table goes into the file of its namespace; a new namespace gets a
+new file and a line here.
 ## The stage
 
 State: proposed, not decided. It is the second of the ways out listed

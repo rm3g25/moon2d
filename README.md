@@ -163,13 +163,15 @@ hardware.
 | | |
 |---|---|
 | OS | Windows 7 SP1 or later (Direct3D 11 needs the Platform Update on 7) |
-| Graphics | DirectX 10 class: GeForce 8000, Radeon HD 2000, Intel HD Graphics (2010) or newer; 256 MB |
+| Graphics | DirectX 9 class with Shader Model 2 (GeForce 6, Radeon X-series, Intel GMA 950) or newer; 256 MB. Smooth from Intel HD Graphics 3000 |
 | Memory | 1 GB |
 | Processor | any dual core |
 | Disk | 90 MB |
 
-The graphics line is set by texture size, not by speed: one frame of the
-level 1 flyby is 4172 pixels wide, and DirectX 9 cards stop at 4096.
+No sprite is wider or taller than 2048 pixels, the texture limit of the
+oldest DirectX 9 cards, so those cards can run the game; what slows the
+oldest of them down is fill - additive glows and full-screen flashes drawn
+at window resolution.
 
 Cloning and building works too, and the clone is complete — the soundtrack is
 in the repository now that the tracks are finished and mine. If you delete

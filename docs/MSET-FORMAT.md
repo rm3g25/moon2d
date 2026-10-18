@@ -139,6 +139,26 @@ sets are frozen and will not grow. The grow-do-not-multiply rule applies
 to the new art, where a residential sector or a train earns its own set
 the moment it is a new subject rather than more of an old one.
 
+## How big a sprite may be
+
+**No wider and no taller than 2048 px.** Every sprite becomes one texture,
+and 2048 is the largest texture the oldest cards the game runs on take
+(Direct3D feature level 9_1: Intel GMA 950, GeForce 6/7, Radeon X-series;
+9_3 takes 4096, 10_x 8192). A bigger sprite is not created on such a card
+and the level stops loading; on a modern card nothing tells.
+
+- A picture bigger than that is cut into strips at pack time, each at
+  most 2048, and the code or the level file joins them. The first cut
+  goes along a line the picture already has (a rib, a seam of plating),
+  the rest in equal parts. Example: the cordon's hull, `hull-1..3` in
+  `cordon.mset`, joined as a craft's body and parts.
+- New art of the machines is drawn at 6 px a unit: past 341 units in
+  either direction a sprite needs strips. A screen-wide room at backdrop
+  density (1448x1086) fits; so does a 2048x1024 map.
+- What holds it: `Tests\Sprites\Tests.Sprites.Sets.pas` opens every set
+  in `bin\sprites\` and turns red on a sprite past 2048, whichever tool
+  packed it.
+
 ## Reading
 
 Opening a set parses the manifest and stops. Image bytes are read when
