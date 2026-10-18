@@ -16,15 +16,17 @@ at `v3.0.43`, the live shards at `v3.0.44`, the tank's hull at `v3.0.45`, the pl
 shroud at `v3.0.47`, the henshin on orbs at `v3.0.49`, the uptake of
 pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
 `v3.0.52`, the gravel arena of level 2's screen 9 at `v3.0.53` to
-`v3.0.59`, the collision decks at `v3.0.60` and the burst of the henshin
-suit at `v3.0.61` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.59`, the collision decks at `v3.0.60`, the burst of the henshin
+suit at `v3.0.61` and the scenes - the cordon over level 1's screen 9 - at
+`v3.0.62` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
 
 The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
 `Moon2D.inc` stay in the root, and every unit includes it (`{$I ..\Moon2D.inc}`;
-`{$I ..\..\Moon2D.inc}` from `Game/Events/`, `Game/Pads/` and `Game/Orbs/`).
+`{$I ..\..\Moon2D.inc}` from `Game/Events/`, `Game/Pads/`, `Game/Orbs/` and
+`Game/Scenes/`).
 
 - `Core/` - what the level editor and the tools share: SDL bindings, sprite
   sets, rendering (the shake included, and what is made of a picture's alpha -
@@ -42,7 +44,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   come down in (`Game.Arrivals`), the TeK wall cannons (`Game.Cannons`)
   and the shield they wear (`Game.Shield`), the press of the finale
   (`Game.Press`). `Game/Events/`
-  runs the level events; `Game/Pads/` holds the pads in play
+  runs the level events; `Game/Scenes/` plays the level's scenes
+  (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
   (`Pads.Plunge`), the cycle of a shelf that slides in and out of its
   wall (`Pads.Shelf`), the cycle of a pad that strays (`Pads.Stray`),
@@ -69,8 +72,10 @@ the model and parser (`Levels.Pads`) sit in `Core/` beside `Levels.Events`,
 since the editor will write pads too, and the carousels they may fly round
 (`Levels.Carousels`) with them; the pads in play (`Pads.World`) and their
 rebuilds in `Game/Pads/`; what a pad or a monster wears, its rigs
-(`Levels.Rigs`), is a parser in `Core/` too. Two unit names in `Core/` still
-carry the `Game.` prefix (`Game.Config`,
+(`Levels.Rigs`), is a parser in `Core/` too. The scenes split the same
+way (3.0.62): the model and parser (`Levels.Scenes`) in `Core/`, the
+director that plays them (`Scenes.Director`) in `Game/Scenes/`. Two unit
+names in `Core/` still carry the `Game.` prefix (`Game.Config`,
 `Game.Space`) - the folder is the truth about the layer, not the prefix.
 
 Dependency direction (roughly bottom-up):
@@ -88,7 +93,8 @@ kind and `Effects.Traces` for the graph kind; draws through `Render.Glow`, `Rend
 `Levels.Dynamics`) -> `Levels.Pads` (over `Levels.Tint`, and over
 `Levels.Rigs` for the names of the rigs a pad wears) ->
 `Levels.Carousels` (the carousels and the track round which they fly
-their pads: over `Levels.Pads` alone) ->
+their pads: over `Levels.Pads` alone) / `Levels.Scenes` (the scenes:
+over `Localization` and `Levels.Dynamics`, for the eases of a move) ->
 `Levels.Defs` -> `Pads.Formations` (the dice and the judge of a rebuild:
 over `Levels.Pads`, `Levels.Defs`, `Render.Brush` and `Game.Space`) ->
 `Pads.Flights` (over `Pads.Formations`) / `Pads.Plunge` (the cycle of a
@@ -153,7 +159,10 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Pads.Arena` (the director of the
 rebuilds: over `Pads.World`, `Pads.Formations`, `Monsters`,
-`Monsters.Pilot`, `Levels.Pads`, `Levels.Dynamics` and `Render.Sprites`) -> `Moon2D.dpr`, which also drives
+`Monsters.Pilot`, `Levels.Pads`, `Levels.Dynamics` and `Render.Sprites`) /
+`Scenes.Director` (the scenes: over `Levels.Scenes`, `Levels.Dynamics`,
+`Audio`, `Hud.Messages`, `Monsters`, `Bullets` and `Pads.World`; the
+place of a line from `Hud.Terminal`) -> `Moon2D.dpr`, which also drives
 `Game.Loop` (the host: over `Sdl2.Core` and `Game.Config` alone, it knows no
 game unit). The menu sky rig on the
 side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
@@ -330,10 +339,11 @@ screen dump of the dpr.
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
 
-### `Core/Render.Dynamics.pas` (~460 lines)
+### `Core/Render.Dynamics.pas` (~495 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
-  `TDynamicCanvas` (point, flare, starburst and streak glows - `Render.Glow`; the
+  `TDynamicCanvas` (point, flare, starburst, streak and beam glows -
+  `Render.Glow`, the beam's `gsBeam` since 3.0.62; the
   smoke puffs - `Render.Puff`) and lends it the cache of the level's
   object art (`Art`), made at level load; the objects
   themselves are the level's. After the canvas every object `Acquire`s
@@ -343,7 +353,14 @@ screen dump of the dpr.
   screen. A nailed object stands
   at (0, 0) on its screen, or on each screen of its `screens` run; one under a static object on every screen that
   object stands on, at its top-left - settled once, static objects never
-  move. A tag no object carries is a pad's or a monster's: that stand is
+  move. One under a craft (3.0.62) stands on every screen the craft does
+  and keeps a reference to the craft itself (`TPlace.Craft`, found by
+  `CraftTagged`): a craft never leaves the level, so nothing is looked
+  up; `OriginOf` adds the craft's `CornerAt(alpha)`, and what hangs on a
+  craft in flight is drawn with the hull between the ticks, not a tick
+  behind it. The craft goes first in the level file (`Levels.Defs`
+  checks), so it has moved by the time its children tick. A tag no
+  object and no craft carries is a pad's or a monster's: that stand is
   looked up every tick (`FollowParent`) through **`TLocateParent`**
   (`reference to function(tag, out TParentStand)`: screen, the top-left of
   the parent's picture, alive, `Effort` - how hard it works, 0..1: a pad
@@ -377,8 +394,8 @@ screen dump of the dpr.
   hero's screen, else its first (at the pose the tick has just reached,
   `ThisTick`); a lead stand on another screen is a jump
   (`ForgetOrigin`), not a flight. `Draw(screen, origin, alpha, layer)` draws
-  the ones on the screen in one layer (`dlBackdrop` / `dlSky` / `dlBack` /
-  `dlFront`; before the backdrop layer it puts the screen's backdrop on the
+  the ones on the screen in one layer (`dlBackdrop` / `dlSky` / `dlAloft`
+  (3.0.62) / `dlBack` / `dlFront`; before the backdrop layer it puts the screen's backdrop on the
   canvas, asked of the game); a
   place that `Turns` is not drawn once its parent is no longer alive (dying
   included) - there is nothing left to turn with. What hangs on a parent in
@@ -455,7 +472,7 @@ side divides by 16 - the cell size is read from the image at load.
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
 
-### `Game/Audio.pas` (~230 lines)
+### `Game/Audio.pas` (~315 lines)
 SDL2_mixer bindings (`delayed` imports - the game survives a missing DLL) plus
 the sound bank.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
@@ -468,6 +485,15 @@ the sound bank.
   -> every call becomes a no-op). `MixChannels` = 32: a one-shot with no free
   channel is dropped in silence, and the chain gun's 2.4 s shots alone hold
   sixteen.
+- Held sounds (3.0.62, for the scenes): **`PlayHeld(file)`** plays as
+  `Play` does and gives back a **`THeldSound`** (the channel and the
+  file); `StopHeld`, `PauseHeld`, `ResumeHeld` act on it only while that
+  channel still plays that chunk (`StillHeld`) - a sound that has ended,
+  and whose channel another sound has taken, is left alone.
+  **`SetMusicLevel(level)`** - the music at a share of its volume, 0..1,
+  kept through track changes; muting outranks it (`ApplyMusicVolume`). A
+  scene's own music plays as a held sound: the music stream is one, the
+  level's track fades under it.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -737,6 +763,28 @@ Level data model + JSON parser. No game logic.
   Coming through a door moves nobody to the point; a named deviation from
   2008, whose checkpoint was the entry point and what a heroX / heroY
   trigger wrote.
+- The scenes (3.0.62): **`Scenes`** - the level's scenes in file order
+  (`Levels.Scenes`), parsed after the dynamics. Private `CheckScenes`
+  refuses a scene off the screen list (`SLevelSceneBadScreen`) and, cue by
+  cue of its timeline and its aftermath (`CheckSceneCue`): a wake, a fly,
+  a wait or a spawn's seat naming no pad of the scene's screen
+  (`SLevelScenePadUnknown`, `AnyPadTaggedOn`); a move of no craft
+  (`SLevelSceneCraftUnknown`); a track of a part no craft of the tag has
+  that turns or slides (`SLevelScenePartUnknown`, `AnyFollowerOf` over
+  `TCraft.HasFollower`); an aim at no beam and no lightning
+  (`SLevelSceneBeamUnknown`); an intensity of a tag no dynamic object
+  carries (`SLevelSceneLightUnknown`); a hold, kill, release or remove -
+  and the mark of a track or an aim - naming a tag no entity carries and
+  the scene does not bring itself, on its timeline or in its aftermath
+  (`SLevelSceneMonsterUnknown`, `SceneSpawns`). Then `CheckDormantPads`:
+  a dormant pad no scene's cue wakes (`SLevelPadNeverWakes`). The monster
+  ids of a scene's spawns are the field's to check (`CheckSpawnIds`).
+  `CheckEvents` refuses a scene action naming a scene the level does not
+  have, in any case (`SLevelEventSceneUnknown`, `AnySceneCalled`).
+  `CheckDynamicParent` counts a craft among the kinds that carry a tag,
+  and `CheckCraftAhead` refuses an object that hangs on a craft standing
+  after it in the file (`SLevelDynamicCraftBehind`): it would trail the
+  hull by a tick.
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -882,7 +930,7 @@ wider than it is tall. `FreePuffTextures`. `EPuffError`.
   (`Levels.Dynamics`) - and `Levels.Defs` uses `Levels.Dynamics`, so the
   tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~2480 lines)
+### `Core/Levels.Dynamics.pas` (~3950 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -890,12 +938,14 @@ in `CreateDynamic`.
 - **`TDynamicPlacement`** (record) - what every kind shares: `Screen`,
   `screens` (JSON `[first, last]` - one object on a run of screens, read
   into `Screen`..`LastScreen`) or `Parent` (exactly one - with a parent the
-  parent decides the screens; the parent is a static object's, a pad's
-  or a monster's tag), `X`/`Y` (screen units; from the parent's top-left under
+  parent decides the screens; the parent is a static object's, a pad's,
+  a monster's or - 3.0.62 - a craft's tag), `X`/`Y` (screen units; from the parent's top-left under
   one), `Tint`, `Tag` (the name events turn it by), `Layer`
   (`TDynamicLayer`: `dlBackdrop` - the backdrop itself, bent, under
   everything else: a haze's; `dlSky` - right over the backdrop, still while the
-  world shakes, the far things; `dlBack` - with the static objects, behind
+  world shakes, the far things; `dlAloft` (3.0.62) - over the sky, behind
+  the static objects and the pads, shaking with the world: what flies
+  over the place, a craft and what hangs on it; `dlBack` - with the static objects, behind
   the tiles; `dlFront` - over the monsters, under the hero; the default is
   the kind's), `Turns` (JSON `turns`: the point turns with a parent that
   spins - a lamp on the boss's disc; without a parent it raises at load;
@@ -904,7 +954,14 @@ in `CreateDynamic`.
   dying, dead or gone).
 - **`TValueFade`** (record) - a value and where the events take it:
   initial, current, target, step; `Settle`, `HeadFor(target, ticks)`,
-  `Tick`. The intensity of every object, the sun of a sky globe.
+  `Tick`. The intensity of every object, the sun of a sky globe; the
+  shade, the rumble and the music of a scene (`Scenes.Director`).
+- **`TMotionEase`** (3.0.62) = (`meLinear`, `meIn`, `meOut`, `meInOut`) -
+  how a motion gathers and loses speed (`EasedShare`: cubic in, cubic
+  out, smoothstep); `MotionEaseIds` - its JSON words. **`TAxisMotion`**
+  (record) - one axis of a motion: `Current`, `From`, `Target`, `Ticks`,
+  `Elapsed`, `Ease`; `Settle(value)`, `HeadFor(target, ticks, ease)` (0
+  ticks - there at once), `Tick`. A craft's two axes and a beam's swing.
 - **`TDynamicObject`** (abstract) - holds the placement and the intensity
   (a `TValueFade`; JSON `intensity`, a percentage, 100 by default) and the
   surge (JSON `surge`, a percentage, 0 by default): how far a parent at
@@ -993,7 +1050,9 @@ in `CreateDynamic`.
   placement, look, intensity, seed)` makes a smoke from code - the wreck
   smoke of the machines in `Monsters`, the explosion plumes.
   `Exhausted` - the source is off and the last puff is gone (an
-  explosion's plume is freed then).
+  explosion's plume is freed then). JSON `outlives` (3.0.62, false by
+  default): a smoke on a monster keeps going on its dead body - what
+  smoulders after a kill (`cordonAshes` on the betoner the cordon burns).
 - **`TSparks`** (kind `sparks`) - sparks from torn metal and bare wires: a
   steady fall (`rate`) and, now and then, an arc - `burst` sparks at once,
   `frequency` a second with uneven gaps, poured over `ArcTicks` under a
@@ -1150,6 +1209,51 @@ in `CreateDynamic`.
   tint `ETintError`. Back layer by default; goes out with its parent
   (`GoesOutWithParent`). Hangs on the monitor of the med lab (`s12-monitor`
   of level 1).
+- **`TCraft`** (kind `craft`, 3.0.62) - a machine built of the pictures
+  of one set of the level's object art (`set`): a body (`body`, `width` in
+  units, the height from the picture) and its parts (**`TCraftPart`**:
+  `sprite`, `tag` - a group shares one -, `at` - the point of the body it
+  hangs on -, `width`, `anchor` - `top` by default, `center` or `pivot`
+  with a `pivot` of its own picture -, `turns` - degrees either way a part
+  that swings about its pivot may go, a gun - or `reach` - units a part
+  slides toward a point, a pupil; never both, and a part that turns hangs
+  by its pivot: `SCraftTurnsAndSlides`, `SCraftTurnsLoose`), drawn back
+  to front in the file's order, every picture tinted by `tint`, the whole
+  as opaque as the intensity. The one kind that never moves by itself: it
+  stands at `x`, `y` (the body's top-left) until a scene moves it -
+  **`MoveX` / `MoveY(target, ticks, ease)`**, each axis a `TAxisMotion`
+  of its own. **`CornerAt(alpha)`** - the corner between the last tick
+  and this one: the craft and what hangs on it are drawn there.
+  **`Watch(partTag, point)`** - the parts of the tag that follow head for
+  the point, told every tick; `Unwatch(partTag)` - back to how they are
+  drawn; a gun swings `PartTurnPerTick` (1.5 degrees) a tick, a pupil
+  slides `PartSlidePerTick` (0.25 units) - a machine's pace, not a
+  glance; both drawn between the ticks. **`HasFollower(partTag)`** - some
+  part of the tag turns or slides (the level's check of a track).
+  `Rewind` - back to the file's place at once, the parts at rest. A body
+  wider than 2048 px is cut into strips (the cordon's hull, `hull-1..3`):
+  the strips after the first hang on it as parts by their top-left
+  corner (`anchor` `pivot`, `pivot` [0, 0]). `Acquire` asks the canvas'
+  `Art` for every picture (`set:name`). Aloft by default.
+- **`TBeam`** (kind `beam`, 3.0.62) - a beam of light from its point to
+  the point it is aimed at, all of one colour, the tint. **`TBeamLook`**
+  (JSON `look`): `blScan` (by default) - a soft cone (`DrawCone`, the
+  `gsBeam` glow of the canvas), 2 units at the source and `width` at the
+  mark (14 by default), full light to a knee a little short of the mark
+  (`BeamFadeBefore`) and out to nothing a little past it
+  (`BeamFadeAfter`) - light does not stop on a body -, a brighter core
+  on the axis, a glow on the lens, a spot on the mark, a faint shimmer;
+  `blTractor` - a column of one width, dimmer, rings of light running
+  from the source down to the mark and fading toward both ends
+  (`DrawRing`). The intensity is how bright it burns, 0 is out. Until a
+  scene aims it the end stands at the source; **`AimAt(point, ticks,
+  ease)`** swings the end onto the mark - from where it was, or out of
+  the source when the beam is dark -, **`Follow(point)`** tells it where
+  the mark is now; `Rewind` - back at the source, aimed at nothing.
+  Front layer by default; the tractor of the cordon is aloft. A scene's
+  aim turns lightning too: **`TLightning.PointAt(point)`** heads the
+  angle of its look there from then on, the cone round it - the arcs run
+  down the burning beam.
 - **`ParseDynamic(obj, levelId, where)`** - one object, written as an item
   of the section is; `where` names it in errors after its kind ("#2" makes
   "beacon #2"). The section and the rigs (`Levels.Rigs`) both read through
@@ -1194,7 +1298,8 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   (3.0.39), `eaShelvesWake`, `eaShelvesSleep`, `eaShelvesProgram`,
   `eaFlyIn`, `eaMedkitsOnto` (3.0.54), `eaCannons` (3.0.56), `eaSpawn`
   (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
-  `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59)). **`TEventAction`**
+  `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59), `eaScene`
+  (3.0.62)). **`TEventAction`**
   (record) - kind and what the kind reads:
   - the messages: localized `Text`; a hint also `Header` (who speaks,
     localized as the text; empty - the channel itself, `STerminalHeader`)
@@ -1250,7 +1355,10 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     `EverySeconds` (above 0; `SEventNoSkyMonster`, `SEventBadSkyPace`);
   - press (3.0.59): `Press` - a **`TPressOrders`**: `Rows` (banks, top
     first, two at least, none empty - `SEventPressRows`), `EverySeconds`
-    (above 0 - `SEventPressPace`): `Game.Press`.
+    (above 0 - `SEventPressPace`): `Game.Press`;
+  - scene (3.0.62): `Target` - the id of a scene of the level
+    (`Levels.Scenes`); the director's cue `StartScene` begins it. The
+    scene has no condition of its own: an event is its start.
   spawn, skyFall and press need an event that waits for an act
   (`SEventSpawnNoAct`, `SEventActOnly`): what they bring belongs to that
   act alone.
@@ -1285,6 +1393,71 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`, and a cue of `TDirectorCues` when the game
   has to carry it out.
+
+### `Core/Levels.Scenes.pas` (~565 lines)
+The `scenes` section of level JSON (3.0.62): model and parser, no game
+logic (the game plays them through `Scenes.Director`; the editor will
+write them). A scene is a play on one screen: cues on a timeline of
+ticks move the level's crafts and turn their parts, aim beams, light and
+put out dynamic objects, set the sound, the shade and the rumble, speak
+through the terminal, hold, kill, bring and take away monsters, wake
+and fly pads - while the player keeps the controls. An event starts it
+(the action `scene`); it has no conditions of its own. The plan and the
+journal of the first one, the cordon over level 1's screen 9, are in
+`docs/mechanics/scenes.md`.
+- **`TSceneOnce`** = (`soLevel`, `soLife`; JSON `once`, `level` by
+  default) - once a level: a death in the middle plays it again from the
+  start, a death after it finds its end standing (the aftermath); once a
+  life: a death on its screen rewinds it and it plays again.
+- **`TSceneCueKind`** = (`ckSound`, `ckMusic`, `ckShade`, `ckShake`,
+  `ckMove`, `ckTrack`, `ckAim`, `ckIntensity`, `ckHint`, `ckHold`,
+  `ckKill`, `ckSpawn`, `ckRelease`, `ckRemove`, `ckWake`, `ckFly`,
+  `ckWait`); `SceneCueIds` its words (JSON `do`). **`TSceneMark`** =
+  (`smHero`, `smMonster`, `smPoint`, `smNothing`) - what a track or an
+  aim follows (JSON `on`: `hero`, a monster's tag, `none` - a track only
+  -, or `x` and `y` in its place, a point of the screen).
+  **`TSceneWait`** = (`swDeckEmpty`) - no live monster on the deck of the
+  pad `target` (JSON `until`).
+- **`TSceneCue`** (record) - `Id` ('' - nobody counts from it), `At`
+  (ticks from the start; `NotTimed` after a cue), `After` (the index of
+  the cue it counts from, -1 none), `Delay`, **`Plan`** (the tick it plays
+  at if no wait holds it up - the cues stand in this order), `Kind`,
+  `Target` (for a spawn the tag it gives), `Part`, `Mark` / `MarkTag`,
+  `FileName`, `Level` (0..1, JSON `value` a percentage), `MovesX` /
+  `MovesY` / `X` / `Y` (a move's, a fly's, a spawn's, a point mark's),
+  `Ticks` (0 - at once), `Ease` (`TMotionEase`, linear by default),
+  `Header` / `Text` (localized; a hint needs both - the header is the
+  voice: a scene has no channel of its own), `AtBottom` (JSON `place`),
+  `Monster`, `SpriteList` ('' - the monster's own), `Seat` (a pad: the
+  body stands in the middle of its deck; or `x`/`y` - the left edge of
+  its cell and its feet, one or the other), `FacesRight` (JSON `facing`,
+  left by default), `Asleep`, `Waits`.
+- **`TLevelScene`** (record) - `Id`, `Screen` (1-based), `Once`, `Cues`
+  (sorted by `Plan`, the file's order among equals: a later cue of a
+  tick overrides an earlier one, and a cue counted from another stays
+  after it; `SortByPlan` keeps `After` pointing at the same cue),
+  `Aftermath` (cues with neither `at` nor `after` nor `id`, played all at
+  once: the world the scene leaves behind - no sound, hint or wait,
+  `MuteAtOnce`).
+- When: `at`, or `after` - the id of a cue **above it in the file** - and
+  `delay` (0 by default); the cue counted from is known by then, so its
+  `Plan` is too, and no two cues can wait for each other (`ReadWhen`,
+  `IndexOfCue`). A wait is a cue (`do: "wait"`) that plays once its
+  condition holds: the cues after it count from that tick.
+- `SceneWorldCues` - what acts on the monsters and the pads (the world
+  the aftermath puts, not the scene's own things); `SceneMonsterCues`,
+  `ScenePadCues` - the cues whose `target` is a monster's tag, a pad's.
+- **`ParseLevelScenes(root, levelId)`** - an absent section is an empty
+  list; a typo raises `ELevelSceneError` (`WordOf`: an unknown cue, ease,
+  once, until, place or facing), and so do: a scene with no id, two of
+  one id in any case, no cues; a cue with both or neither of at and
+  after, after a cue not above it, two cues of one id, a tick, a delay or
+  ticks below 0, a sound of no file, a value outside 0..100, a cue of no
+  target, a move of no axis, a fly not of both, a track of no part, no
+  mark, an aim at `none`, a hint short of a header or a text, a spawn
+  short of a monster or a tag or not on exactly one of a seat and a point;
+  an aftermath cue that is timed or a sound, hint or wait. What needs the
+  level is `Levels.Defs`' (`CheckScenes`).
 
 ### `Core/Levels.Pads.pas` (~745 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
@@ -1335,7 +1508,9 @@ may stay down for good (3.0.58). A 2026 addition.
   carousel it rides, by tag; '' = none - the carousel puts `X` and `Y`,
   `Levels.Defs` writes them at load), `Rigs` (the rigs it wears,
   by name, in the order they are hung - `Levels.Rigs` holds them and hangs
-  them).
+  them), `Dormant` (3.0.62, JSON `"dormant": true`: the pad is not there -
+  not drawn, neither a floor nor a body - until a scene wakes it; one no
+  scene wakes does not load).
 - **`TPadPlunge`** (record, 3.0.46) - a pad that gives way under the
   hero: `Plunges`, `Delay` (seconds it holds after he stands on it),
   `Rest` (seconds it lies under the screen), `Rise` (units a second it
@@ -1828,6 +2003,12 @@ flies the pads along them. A 2026 addition.
   than `SinkTicks`. A loaded pad - the hero stands on it - never goes
   deep; False when a pad fits nowhere, and the caller throws the
   formation again or asks again.
+- **`StraightFlight(fromX, fromY, toX, toY, ticks, pace)`** (3.0.62) - the
+  flight a scene flies a single pad on: one leg, straight from one place
+  to another, setting off at once and in front, sped up and braked as the
+  pace does, its time stretched over the ticks given (`LegCovered` takes
+  the leg's own time over them). No corner, never deep; the places must
+  differ and the ticks be above zero (`TPad.FlyTo` sees to both).
 
 ### `Game/Pads/Pads.Plunge.pas` (~305 lines)
 The cycle of a pad that plunges under the hero (`Levels.Pads`, `plunge`;
@@ -2256,6 +2437,16 @@ rebuilds new for the new try.
     tick only: `TurnedCorner` (a flight in front came onto its corner - in
     the depth a corner is turned out of earshot) and `Landed` (the flight
     ended on its cell).
+  - The dormant pad (3.0.62): `Dormant` - asleep as the level file says
+    (`TPadPlacement.Dormant`): `Behind` (neither a floor nor a body), not
+    drawn, and what hangs on it out (`LocateParent` of the game gives it
+    no life); **`Wake`** - there from now on; `Rewind` puts it to sleep
+    again. **`FlyTo(x, y, ticks)`** - a scene flies the pad straight from
+    where its path or its last flight left it (a knock is not minded) to
+    x, y, its top-left corner, over the ticks (`StraightFlight` at
+    `CalmPace`; `Thrusting` while it goes, so its jets burn); 0 ticks or no
+    distance - there at once, the `Prev*` caught up, and what stood on it
+    is left in the air. It stays where it is flown.
   - The picture: `Draw(sprites, alpha)` - nothing for a pad with no
     texture (a collision deck, 3.0.60); else its height from the art's
     aspect, drawn at (`Round(Left)`, `Round(Top)` + `Lift(alpha)`) in
@@ -2791,6 +2982,18 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   drawn, never ticked, no events), and so are the remains of a burst one
   the pit took; `Burst` - dying at once, `meDied` then `meBurst` (the game
   bursts weather on the hero with it too).
+- **What a scene does to a body** (3.0.62): `Held` (read-write) - its
+  fire held: it walks as ever, its gun silent until let go; `Dormant`
+  (read-write, `SetDormant`) - asleep: no step, no shot, no frame, the
+  eye of its hull dark at once (`THull.Doze`), the deck and gravity still
+  at work (`FallIfUnsupported`), `Asleep` True; `Smite` - struck down
+  where it stands: dying at once with `meDied` alone, no `meBurst`, and
+  no blow for the game to pay for; `Vanish` - gone from the world: dead,
+  never drawn, never ticked, no death to tell (`FGone`); `Stand(x, y,
+  facesRight)` - stands there, the left edge of its cell and its feet,
+  facing as told: nothing thrown, no drift, the wheels of a hull at rest,
+  walking the way it faces; `DeckUnderFeet` - the deck under it, nil for
+  one falling, flying or that ignores gravity (a scene's wait reads it).
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
   lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
@@ -2945,7 +3148,15 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   `FLivesScale`, so a boss's marks keep their order on every grade),
   `FirstAliveTagged(tag)` (the first live body carrying the tag, nil when
   none - the arena's conductor), `FirstTagged(tag)` (the same, dead or
-  alive - 3.0.39, the arena's ripple of a restore),
+  alive - 3.0.39, the arena's ripple of a restore; a scene's mark and its
+  spawn), the scenes' hands (3.0.62) - `HoldTagged(tag, held)`,
+  `SmiteTagged(tag, bullets)`, `ReleaseTagged(tag)` (neither held nor
+  asleep), `RemoveTagged(tag)` (`Vanish`), every body carrying the tag -
+  and `SpawnStanding(monsterId, spriteList, screen, x, y, tag,
+  facesRight)` (a body tagged and stood at the point, its sprite list the
+  monster's own when '' - a monster with none, the tank, needs one;
+  `CheckSpawnIds` refuses a scene's spawn of a monster with no art on
+  either side, `SSceneSpawnNoArt`),
   `Draw(sprites, screen, alpha)` (each monster with the sprites' `FineY`
   set to its `DeckLift(alpha)` - `Origin` stays the monsters' shake -,
   `FineY` put back to 0 after; two passes, so a medkit or a weapon still
@@ -4281,7 +4492,8 @@ trial's act, 0 while it does not run), `TrialDone` (`TTrialDone`),
 `TrialProgress` (`TTrialProgressCue` - a `TTrialProgress` of
 `Game.Trial`), `Cannons` (`TCannonsCue`), `Spawn` (`TSpawnCue`),
 `SkyFall` (`TSkyFallCue`), `Press` (`TPressCue`); the last four take the
-act the event waits for, 0 for one that waits for none. The director
+act the event waits for, 0 for one that waits for none; `StartScene`
+(`TSceneStart`, 3.0.62 - the scene director's `Start`). The director
 pulls the trial's state through these, it does not push. The monster
 field is reborn on every restart, so it arrives with every tick instead
 of being kept: asked for the conditions, told the tactics.
@@ -4302,6 +4514,65 @@ of being kept: asked for the conditions, told the tactics.
   and the dynamic objects their intensity actions turned are rewound
   (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
+
+### `Game/Scenes/Scenes.Director.pas` (~615 lines)
+Plays the level's scenes (`Levels.Scenes`) against the live game, one at
+a time, cue by cue on its timeline (3.0.62). **`TSceneDirector`** takes
+the scenes, the level's dynamic objects, the pads, the sound bank and
+the message board - all the level's, outliving it. The monster field is
+reborn on every restart, so it comes with every tick in a
+**`TSceneStage`** (record: `Hero` - his middle in screen units -,
+`Field`, `Bullets` - the monsters' burst), as the event director's does.
+- `Start(id)` - the scene begins (its id in any case, as the load finds
+  it), unless one is under way or it has played (`FPlayed`); the clock
+  to 0, every cue `NotPlayed`, the shade and the rumble to 0, the music
+  to full.
+- `Tick(screen, stage)` - the hero off the scene's screen: `Finish`.
+  Else `PlayDue` - every cue not yet played whose tick has come (`Due`:
+  from its `At`, or from the tick the cue it counts from played plus its
+  `Delay`; a wait only when its condition `Holds` - `DeckEmpty`: no body
+  `mlAlive` with the pad as its `DeckUnderFeet`; a corpse rides along,
+  and so does the hero) plays in the order of the plan, so a chain with
+  no delay plays out on one tick (`FPlayedAt` - the tick each played);
+  `FollowMarks` tells every part and beam it follows where its mark is;
+  the shade, the rumble and the music step (`TValueFade`) and the bank
+  gets the music's level. **Over** once every cue has played and run its
+  ticks: the held sounds play out their tails on their own.
+- `Play(cue, atOnce, screen, stage)` - sound (`PlayHeld`, kept in
+  `FHeld`), music, shade, shake (`HeadFor` the level over the ticks),
+  move (`MoveCrafts` - `MoveX` / `MoveY` of every craft of the tag),
+  track and aim (`Pursue` keeps the cue, a later one for the same parts
+  or beam replacing it, `none` ending it - `Unwatch`; `MarkOf`: the hero,
+  the middle of the `HitBox` of the first body of the tag, dead or alive,
+  or the point; `Tell` - `TCraft.Watch`, `TBeam.Follow`,
+  `TLightning.PointAt`; an aim `AimAt`s the beam over its ticks),
+  intensity (`FadeTagged`), hint (`StartTerminal` with the header and
+  the place), hold, kill (`SmiteTagged` - nobody is paid), release,
+  remove (the field's tagged hands), spawn (`Spawn`: a body the tag
+  already names is not born twice - alive, it is stood where the cue
+  says; dead, it lies where it fell; none - `SpawnStanding`; then
+  `Dormant` as `asleep` says; a seat is the middle of the pad's deck),
+  wake (`TPad.Wake`), fly (`TPad.FlyTo`). At once (`atOnce`): the ticks 0,
+  no sound, no line.
+- **`Finish`** - the hero left in the middle: every cue of the scene's
+  own things plays at once, in order (a later one overrides an earlier
+  one as it would have), then the world is put as its aftermath says
+  (`Settle`) - replayed at once, the pad would leave before the tank got
+  off it; the held sounds stop, the music stays where it was.
+- **`ReArm(screen, stage)`** - a death: a scene under way on another
+  screen is finished; the one under way, and every scene once a life of
+  the death's screen, is rewound (`Rewind`: its held sounds stop, what
+  its move, track, aim and intensity cues set going goes back to the
+  level file - `RewindTagged` -, the shade and the rumble to 0, the music
+  to full, and it waits for its event again); every other scene once a
+  level that has played puts its aftermath, whatever the screen, over
+  the monsters reborn and the pads rewound.
+- `Pause` / `Resume` - the menu: the held sounds wait with the timeline,
+  the music under the menu at full volume. `Trauma` - what the rumble
+  adds to the screen's shake a tick (`RumbleTraumaPerTick` 0.05 at the
+  full). `DrawShade(renderer)` - the shade, black over the whole frame.
+- Reborn with the level (`LoadLevel`); the destructor stops what it holds
+  and, with a scene under way, gives the music back its volume.
 
 ### `Core/Render.Glow.pas` (~315 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
@@ -4591,7 +4862,9 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
   - Flow: `Update`, `Render` (the layer order there is the shake spec: backdrop
     still, the backdrop layer of the dynamics on the world channel - a
     haze bends the still backdrop where its jolted pad is -, the sky
-    dynamics (the Earth) still again, objects + pads + back
+    dynamics (the Earth) still again, the aloft dynamics (3.0.62: a
+    scene's craft, its tractor and its lamps) on the world channel,
+    objects + pads + back
     dynamics + tiles + bullets on the world channel -
     objects stand on the tiles and jolt with them, the pads draw right
     after the objects (with the frame's alpha - their sway between ticks):
@@ -4701,6 +4974,18 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     straight in), `TickGravelAttack`; the events are the director's
     (`FDirector.Tick` after the tick's verdicts, `ReArm` in `RestartLevel`;
     its `TDirectorCues` are built in `LoadLevel`).
+  - The scenes (3.0.62): `FScenes`, a `TSceneDirector` made in `LoadLevel`
+    over the level's scenes and dynamics, the pads, the sound bank and the
+    message board; the events start a scene through the cue
+    `StartScene`. `SceneStage` - the hero's middle, the field and the
+    monsters' burst of this tick. `Update` ticks it after the arena and
+    before the dynamics (a craft it moves moves this tick) - over the
+    hero's corpse too - and adds its `Trauma` to the shake; `RestartLevel`
+    calls `ReArm` right after the event director's; `OpenMenu` and the way
+    back pause and resume it; `Render` draws its shade right after the
+    burst's glass, over the world and under the marks and the HUD.
+    `LocateParent` gives a dormant pad no life (`Alive` = the look fits
+    and not `Dormant`): its rigs are out while it sleeps.
   - The gravel arena (3.0.53-3.0.59; rules in `Game.Trial`, `Game.Press`,
     `Game.Cannons`, the design in `docs/mechanics/arena-2.md`): `TickGravelAttack` -
     every tick while the trial runs, even over the corpse: the gravels
@@ -5095,6 +5380,14 @@ sliding down in pitch, a crunch of noise with the treble taken off and the
 hull ringing after them, pushed into a soft clip. Borrows the bar ratios,
 `finish` and `save` from `armor.py` beside it. Seeded. numpy.
 
+### `tools/sounds/cordon.py` and `tools/sounds/cordonburn.py`
+Synthesise the sounds of the cordon (3.0.62) after `pads.py`:
+`cordonhum.wav` - the hum of the hull from silence, its envelope baked
+to the scene's timeline (the stop at 13 s, the climb from 25.6 s, silence
+by 30.6 s); `cordonburn.wav` - the burning beam: an uneven drone of the
+arc, hiss and quick clicks of every strength, a heavy click at the first
+second where the betoner dies, then the arc dies out.
+
 ### `tools/sounds/pads.py`
 Synthesises the sounds of an arena rebuild into `bin/sounds`: `padhum.wav`
 (the warning: two low buzzing tones a hair apart, climbing, throbbing at
@@ -5151,6 +5444,16 @@ measured boxes, axles and radii are constants at the top; a denser
 screen is `DENSITY` and a rebuild. The sources are not in the
 repository. numpy, scipy, Pillow.
 
+### `tools/cordon/build_cordon.py`
+Builds `bin\sprites\cordon.mset` (3.0.62) from four ChatGPT pictures
+that are not in the repository (`cordon-scan.png`, `cordon-cargo.png`,
+`cordon-eye.png`, `cordon-turret.png`) and the iris of `boss1-disc.mset`:
+the hull at 2.6 px a unit as it was generated, cut in three strips
+(`hull-1..3`, 2045, 1064 and 1063 px - no texture over 2048 px), the first
+cut on the seam of the sections; the eye, the iris and the turret
+(`turretMount`, `turretGun`) at 6 px a unit. The points of every picture
+are in `docs/mechanics/scenes.md`.
+
 ### `tools/medkit/build_medkit.py`
 Puts the HD art of the medkit into `bin/sprites/medic.mset` from one
 generated picture - the TeK case seen from the front on a clear ground:
@@ -5194,7 +5497,8 @@ At 3.0.52 the suite was 376 tests, all green; the gravel arena
 brought 8 - six in `Tests.Pads.Decks`, two in `Tests.Levels.Pads` (a run
 of decks loads as one pad with no picture and is no wall; a bad collision
 letter raises); the burst of the suit (3.0.61) brought 23 in
-`Tests.Orbs.Burst` - 519. Not every test unit has its
+`Tests.Orbs.Burst` - 519; the scenes (3.0.62) brought 67, not run yet
+when they were committed - see below. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -5205,9 +5509,11 @@ and the sky events of the level), `Tests.Game.Press` and
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
-what it draws: no window, no SDL call. Game units come in through the
-project's search path (`..\Core`, `..\Game\Orbs`); the executable goes
-to `bin\`.
+what it draws: no window, and no SDL but the mixer the scene director's
+sound bank opens, on the dummy audio driver. Game units come in through
+the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
+`..\Game\Pads`, `..\Game\Scenes`, `..\Hud`); the executable goes to
+`bin\`.
 - **`Moon2D.Tests.dpr`** (~70 lines) - the runner: every registered
   fixture, a verbose console log, the exit code (0 - green). A test that
   asserts nothing fails.
@@ -5320,6 +5626,37 @@ to `bin\`.
   rising from below pass through, a bullet stops in the body only - not
   above, below or beside it (`StopsBulletAt`), the deck cells are no wall
   to the level (`SolidAt`), and feet beside the run find no deck.
+- The scenes (3.0.62; the tables in `docs/testing/scenes.md`,
+  `pads.md` and `monsters.md`):
+  - **`Levels/Tests.Levels.Scenes.pas`** - **`TLevelScenesTests`** (16):
+    the parser over a root of JSON alone - at, after and delay, the plan
+    and the sort, after looking only up, the aftermath, the spawn, the
+    marks, the axes of a move, the wait, every word and member that does
+    not load; **`TSceneLoadTests`** (7): the checks of the load through
+    `LevelFromRows` and the cordon of `level1.json`.
+  - **`Levels/Tests.Levels.Dynamics.pas`** - **`TCraftTests`** (10): a
+    craft read by `ParseDynamic` and ticked by hand, seen by `CornerAt`
+    alone - its place, its axes, the eases, the corner between the
+    ticks, `Rewind`, `HasFollower`, the parts that do not load; the
+    looks of a beam.
+  - **`Pads/Tests.Pads.Flights.pas`** - **`TPadFlightsTests`** (4): the
+    straight flight of a scene; the plan's tests are designed only.
+  - **`Pads/Tests.Pads.World.pas`** - **`TPadWorldTests`** (7): the
+    dormant pad, a pad of no sprite in a world with no art - no floor and
+    no body asleep, woken, flown at once and over ticks, its jets, its
+    rider carried, rewound to sleep.
+  - **`Monsters/Tests.Monsters.Bodies.pas`** - 7 more in
+    **`TMonsterBodyTests`**: asleep, held (seen through the `nil` burst:
+    a shot is an access violation), smitten, removed, stood, on a deck.
+  - **`Scenes/Tests.Scenes.Director.pas`** - **`TSceneDirectorTests`**
+    (16): a scene played over a stage made by hand - bodies from the
+    level's entities put in a field of no art, pads of no sprite, a
+    craft - the ticks of its cues, the wait, the end, leaving and dying
+    before and after the end, once a life, the shake, the tagged hands,
+    the spawn, the sleeping pad. The bank is opened once, on the dummy
+    audio driver.
+  - `Tests.Rooms` grows `RoomFromRows(rows, sections)` (pads of no
+    sprite in the room's level) and shows `Level` and `Pads`.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -5409,12 +5746,16 @@ number of a part may be `{"spread": [from, to]}` - see `Levels.Rigs`),
 `respawns` (optional: `screen`, `x`, `y` - the cell a pit and death
 return the hero to, counted as an entity's - see `Levels.Defs`), `dynamics`
 (optional: `kind`
-(beacon / smoke / globe / sparks / fan / haze / lightning / graph), `screen`, `screens`
+(beacon / smoke / globe / sparks / fan / haze / lightning / graph / craft
+/ beam), `screen`, `screens`
 [first, last] or `parent` -
-a static object's, a pad's or a monster's tag -, `x`, `y`, optional `tint`, `tag`,
+a static object's, a pad's, a monster's or a craft's tag -, `x`, `y`, optional `tint`, `tag`,
 `layer`, `intensity`, `surge`, `turns`
 (under a spinning parent), then the
-kind's own properties - see `Levels.Dynamics`),
+kind's own properties - see `Levels.Dynamics`), `scenes` (optional,
+3.0.62: `id`, `screen`, `once`, `cues` - each `at` or `after` (+
+`delay`), `do` and what that cue reads -, `aftermath` - see
+`Levels.Scenes`),
 `tilePalette`
 (sprite names in their 2008 file spelling - `level1\doom1.png`, `base1.png` -
 or qualified `set:name` when two declared sets share a name; index N in
@@ -5724,6 +6065,10 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   units wide, the lamp glass painted off - a beacon is its light). The
   pads before it, `s16-platform` and `s16-platform-out`, still live in
   `level1-structures`.
+- **The cordon** (3.0.62): `cordon` - the TEK-Q6 over level 1's screen
+  9, declared by level 1 in `objectSets`: `hull-1..3` (the hull in three
+  strips, 2.6 px a unit), `eye`, `iris`, `turretMount`, `turretGun` (6 px
+  a unit); built by `tools/cordon/build_cordon.py`, drawn as a `craft`.
 - **Interface**: `ui` - `sky` (16:9 nebula), `moonmap` (2048x1024 lunar
   surface), `logo` (letters alone), the language flags (240x160) and the
   `font`/`fontx`/`fonty` atlases plus `fonty-2008` (the original 448x448
@@ -5735,13 +6080,17 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (28 WAV) and `music/` (OGG)
+### `sounds/` (30 WAV, 1 OGG) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
 music loads leniently. Four one-shots are synthesised by
 `tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`; a fifth,
 `crash.wav`, by `tools/sounds/crash.py`; three more - `padhum.wav`,
 `padclick.wav`, `padclack.wav` - by `tools/sounds/pads.py`; `shelflatch.wav`
-is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.ogg` (menu,
+is cut from a Suno take by `tools/sounds/shelf.py`. The cordon's
+(3.0.62): `cordonhum.wav` and `cordonburn.wav` by `tools/sounds/cordon.py`
+and `cordonburn.py`, and `cordon.ogg` (Suno, "The Descent") - the scene's
+music, played as a sound: the music stream is one, and the level's track
+fades under it. Tracks named by code: `moon.ogg` (menu,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
 `moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
@@ -5757,6 +6106,7 @@ is cut from a Suno take by `tools/sounds/shelf.py`. Tracks named by code: `moon.
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock; the collision decks ('2' in `collision`) | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/mechanics/pads.md for the plan) |
 | A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/mechanics/pads.md, stage 8) |
 | A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/mechanics/pads.md, stage 9) |
+| A scene - a play on one screen while the player keeps the controls: its timeline (at, after, delay, wait), its cues (sound, music, shade, shake, move, track, aim, intensity, hint, hold, kill, spawn, release, remove, wake, fly), its aftermath, once a level or a life, what a death or a door does to it; the craft and its beams; the cordon over level 1's screen 9 | `scenes` + `dynamics` (`craft`, `beam`) + `dormant` on a pad + the action `scene` of an event in level1.json + Levels.Scenes.pas (model, parser) + Levels.Defs.pas (`CheckScenes`, `CheckSceneCue`, `CheckDormantPads`, `CheckCraftAhead`) + Scenes.Director.pas (`Start`, `Tick`, `PlayDue`, `Due`, `Play`, `Finish`, `ReArm`, `Rewind`) + Levels.Dynamics.pas (`TCraft`, `TBeam`, `TAxisMotion`, `TLightning.PointAt`) + Render.Dynamics.pas (`TPlace.Craft`, `OriginOf`) + Pads.World.pas (`Wake`, `FlyTo`, `Dormant`) + Pads.Flights.pas (`StraightFlight`) + Monsters.pas (`Held`, `Dormant`, `Smite`, `Stand`, `Vanish`, the field's tagged hands, `SpawnStanding`) + Audio.pas (`PlayHeld`, `SetMusicLevel`) + Moon2D.dpr (`FScenes`, `SceneStage`, `LocateParent`) + cordon.mset (tools/cordon/build_cordon.py) + tools/sounds/cordon.py, cordonburn.py + Tests.Scenes.Director.pas, Tests.Levels.Scenes.pas (+docs/mechanics/scenes.md) |
 | A carousel: pads flying round a track - its shape, size and pace, the slots of its pads, where each starts; a monster seated on a pad; where a carousel may turn | `carousels` + `carousel` on a pad + `seat` on an entity in levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/mechanics/pads.md, stage 10) |
 | The arena rebuild of a boss fight: which formations play, how the pads fly and avoid one another (and the conductor's body, and the ground outside the zone), the depth, the wave behind the boss, the warning, how often, the sounds; the calm restore of the pads after the boss dies and its ripple | `padGroups` + the `rebuild` / `restore` events + the alarm beacons in levelN.json + Pads.Formations.pas (dice, judge, assignment) + Pads.Flights.pas (the L, `TFlightPace`, `TFlightBrief`, `TFlightBar`, the plan, deep flights) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (phases, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - the R debug key, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/mechanics/pads.md) |
 | The boss's rage: when it starts, how fast the gun fires in it; when the aimed gun is silent | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + the `livesBelow` / `enraged` events of level1.json |
