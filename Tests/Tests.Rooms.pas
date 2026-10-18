@@ -6,7 +6,9 @@
   temporary JSON file, TLevel has no other way in), a pad world over it
   and the registry of monsters.json, which lies beside the executable.
   The level has no pads, so the pad world never asks the renderer or the
-  sprite cache and both are nil, as the jump reach is.
+  sprite cache and both are nil, as the jump reach is. A room may be given
+  pads all the same, when they name no sprite: a pad of no picture asks
+  the cache for none, as a deck of the collision grid does.
 
   No animation set, no disc art, no bursts: what is placed here can be
   moved, shoved and ticked, never drawn. The boss is never made to die
@@ -42,9 +44,11 @@ type
     FPads: TPadWorld;
     FRegistry: TMonsterRegistry;
     FMonsters: TObjectList<TMonster>;
-    procedure LoadLevel(const ARows: array of string);
+    procedure LoadLevel(const ARows: array of string;
+      const ASections: string);
   public
-    constructor Create(const ARows: array of string);
+    constructor Create(const ARows: array of string;
+      const ASections: string = '');
     destructor Destroy; override;
 
     // A monster on the cell (counted from 1, as the level file counts)
@@ -54,9 +58,16 @@ type
     // The same for a placement with more said: its overrides. The room
     // fills in the screen (the room has one).
     function Place(const APlacement: TEntityPlacement): TMonster; overload;
+    property Level: TLevel read FLevel;
+    property Pads: TPadWorld read FPads;
   end;
 
-function RoomFromRows(const ARows: array of string): TRoom;
+function RoomFromRows(const ARows: array of string): TRoom; overload;
+// The same room with more members in the root of its level, as
+// LevelFromRows takes them: pads of no sprite ('"sprite": ""') and what
+// the load asks to go with them
+function RoomFromRows(const ARows: array of string;
+  const ASections: string): TRoom; overload;
 
 // The level of a room with more members in its root. ASections is JSON
 // members as they stand in a file, '"pads":[...],"respawns":[...]'; ''
@@ -151,11 +162,12 @@ begin
   end;
 end;
 
-constructor TRoom.Create(const ARows: array of string);
+constructor TRoom.Create(const ARows: array of string;
+  const ASections: string);
 begin
   inherited Create;
   FMonsters := TObjectList<TMonster>.Create(True);
-  LoadLevel(ARows);
+  LoadLevel(ARows, ASections);
 
   FRegistry := TMonsterRegistry.Create;
   FRegistry.LoadFromFile(
@@ -174,9 +186,10 @@ begin
   inherited;
 end;
 
-procedure TRoom.LoadLevel(const ARows: array of string);
+procedure TRoom.LoadLevel(const ARows: array of string;
+  const ASections: string);
 begin
-  FLevel := BuildLevel(ARows, '');
+  FLevel := BuildLevel(ARows, ASections);
 end;
 
 function TRoom.Place(const AMonsterId: string; ACol, ARow: Integer): TMonster;
@@ -201,6 +214,12 @@ end;
 function RoomFromRows(const ARows: array of string): TRoom;
 begin
   Result := TRoom.Create(ARows);
+end;
+
+function RoomFromRows(const ARows: array of string;
+  const ASections: string): TRoom;
+begin
+  Result := TRoom.Create(ARows, ASections);
 end;
 
 function LevelFromRows(const ARows: array of string;

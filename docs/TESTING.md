@@ -39,7 +39,11 @@ into older code until there is a reason to.
   second") or compares orbs with each other.
 - **Same run, same result.** The units under test roll their own dice
   with fixed seeds; a test uses no `Random` and no clock.
-- **No window.** A test never calls `Draw` and never touches SDL.
+- **No window.** A test never calls `Draw` and never touches SDL. One
+  exception is decided, not a habit: the scene director keeps hold of the
+  sound bank, and the bank opens the mixer, so `Tests.Scenes.Director`
+  opens it on SDL's dummy audio driver, once for its fixture, and plays
+  nothing on it.
 - **Every test names its breakage.** The tables below give, for each
   test, the edit that would turn it red. A test with no such edit is not
   written.
@@ -69,9 +73,11 @@ Tests\
     Tests.Game.Uptake.pas
   Levels\
     Tests.Levels.Carousels.pas
+    Tests.Levels.Dynamics.pas  the craft and the looks of a beam
     Tests.Levels.Entities.pas
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
+    Tests.Levels.Scenes.pas    the parser of the scenes, and the load
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
@@ -86,9 +92,14 @@ Tests\
     Tests.Orbs.Rite.pas
     Tests.Orbs.Burst.pas
   Pads\
+    Tests.Pads.Decks.pas
+    Tests.Pads.Flights.pas
     Tests.Pads.Plunge.pas
     Tests.Pads.Shelf.pas
     Tests.Pads.Stray.pas
+    Tests.Pads.World.pas    the dormant pad, for now
+  Scenes\
+    Tests.Scenes.Director.pas
   Sprites\
     Tests.Sprites.Sets.pas  the shipped sets, not the class: no sprite
                             past 2048 px
@@ -102,8 +113,8 @@ run-tests.cmd             build and run
 - A fixture registers itself in its unit's `initialization`; the unit is
   listed in `Moon2D.Tests.dpr` and in `Moon2D.Tests.dproj`.
 - Game units reach the project through its search path (`..\Core`,
-  `..\Game`, `..\Game\Orbs`, `..\Game\Pads`); a new folder under test
-  is added there.
+  `..\Game`, `..\Game\Orbs`, `..\Game\Pads`, `..\Game\Scenes`,
+  `..\Hud`); a new folder under test is added there.
 - The executable goes to `bin\`, beside `SDL2.dll`: the SDL bindings are
   static imports.
 - The project's Debug configuration checks ranges and overflow, as the
@@ -166,6 +177,18 @@ a console: started from the IDE, its window closes with the last line.
   should raise loads. A helper takes the members it writes as parameters
   and leaves one out when told (`SectionOf` of `Tests.Levels.Carousels`).
 - **The runner fails a test that asserts nothing.**
+- **A shot into the `nil` burst is an access violation.** A room ticks its
+  bodies with a `nil` burst, so a body that fires stops the tick with
+  `EAccessViolation`. A test of a gun held silent asks for no raise over
+  the ticks it would fire in, and proves first, on a body left alone, that
+  the room sees the shot (`Monsters.Bodies`).
+- **A pad of no sprite asks for no art.** A room may carry pads with
+  `"sprite": ""` and make its pad world with no renderer and no cache, as
+  a deck of the collision grid has none: such a pad is a floor, a body and
+  a thing to fly, and is never drawn. A pad that names a picture waits
+  for the stage.
+- **A dormant pad needs a scene that wakes it**, or the level does not
+  load: a room with one carries a scene of a wake cue beside the test's.
 
 ## The conveyor
 
@@ -190,9 +213,9 @@ a console: started from the IDE, its window closes with the last line.
 
 The table of every unit under test lives in `testing/`, one file per
 namespace: `testing/orbs.md`, `testing/monsters.md`, `testing/game.md`,
-`testing/effects.md`, `testing/pads.md`, `testing/sprites.md`. A new
-unit's table goes into the file of its namespace; a new namespace gets a
-new file and a line here.
+`testing/effects.md`, `testing/pads.md`, `testing/sprites.md`,
+`testing/scenes.md`. A new unit's table goes into the file of its
+namespace; a new namespace gets a new file and a line here.
 ## The stage
 
 State: proposed, not decided. It is the second of the ways out listed

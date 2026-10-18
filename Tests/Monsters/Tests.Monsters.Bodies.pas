@@ -12,6 +12,12 @@
   where it lands, and the pit takes it without a blast; the barrel of the
   levels lands and stands.
 
+  A scene lays hands on a body too: it keeps it asleep, holds its fire,
+  strikes it down, takes it away and stands it where it says. Holding the
+  fire is seen through the nil burst: a shot into it stops the run with an
+  access violation, so a betoner that fires is a raise, and one held is
+  none. The deck a body stands on is a pad of no picture in the room.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Monsters.Bodies;
@@ -71,13 +77,28 @@ type
     procedure TestWeatherBurstsOnce;
     [Test]
     procedure TestBarrelOfTheLevelsLandsAndStands;
+    [Test]
+    procedure TestDormantBodyStandsStillAndSleeps;
+    [Test]
+    procedure TestDormantBodyStillFalls;
+    [Test]
+    procedure TestHeldBodyWalksAndHoldsItsFire;
+    [Test]
+    procedure TestSmittenBodyDiesTellingOnlyItsDeath;
+    [Test]
+    procedure TestRemovedBodyIsGoneWithNoDeath;
+    [Test]
+    procedure TestStoodBodyIsPutAtRest;
+    [Test]
+    procedure TestBodyStoodOnADeckHasItUnderItsFeet;
   end;
 
 implementation
 
 uses
   System.Math,
-  System.SysUtils;
+  System.SysUtils,
+  Pads.World;
 
 const
   // The feet of a body that stands on the floor row of a room
@@ -100,6 +121,17 @@ const
   WallSliver = 2;
   // Ticks enough for a walker to cross its room and come back
   PatrolTicks = 900;
+  // A betoner fires every 51 ticks (monsters.json): 60 ticks hold one
+  // shot, 300 hold five
+  FiringTicks = 60;
+  HeldTicks = 300;
+  // Ticks a body that sleeps is watched for
+  SleepTicks = 200;
+  // A run of a deck at x = 224, its line at y = 224, in an open room
+  DeckSections = '"pads":[{"sprite":"","screen":1,"x":224,"y":224,' +
+    '"width":32,"tag":"deck"}]';
+  DeckLeft = 224;
+  DeckTop = 224;
 
 function PlaceX(const AMonster: TMonster): Integer;
 begin
@@ -443,6 +475,132 @@ begin
   Assert.AreEqual<TMonsterLife>(mlAlive, Body.Life, 'The barrel burst');
   Assert.AreEqual(FloorY, PlaceY(Body), 'The barrel hangs in the air');
   Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent, 'An event');
+end;
+
+// Ticks the body and says whether it ever stood off where it started:
+// a patrol comes back past its start, so its last place proves nothing
+function WalksWithin(const ABody: TMonster; ATicks: Integer): Boolean;
+begin
+  var StartX := Round(ABody.X);
+  Result := False;
+  for var i := 1 to ATicks do
+  begin
+    ABody.Tick(0, 0, nil);
+    if Round(ABody.X) <> StartX then
+      Result := True;
+  end;
+end;
+
+procedure TMonsterBodyTests.TestDormantBodyStandsStillAndSleeps;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('gravel', 8, 11);
+
+  Body.Dormant := True;
+  Assert.IsFalse(WalksWithin(Body, SleepTicks), 'A sleeper walked');
+  Assert.IsTrue(Body.Asleep, 'A sleeper is not asleep');
+
+  Body.Dormant := False;
+  Assert.IsTrue(WalksWithin(Body, SleepTicks),
+    'Woken, it does not walk again');
+end;
+
+procedure TMonsterBodyTests.TestDormantBodyStillFalls;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('gravel', 8, 4);
+
+  Body.Dormant := True;
+  TickBody(Body, FallTicks);
+
+  Assert.AreEqual(FloorY, PlaceY(Body), 'A sleeper hangs in the air');
+end;
+
+procedure TMonsterBodyTests.TestHeldBodyWalksAndHoldsItsFire;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Loose: TMonster := FRoom.Place('betoner', 4, 11);
+  Assert.WillRaise(
+    procedure
+    begin
+      TickBody(Loose, FiringTicks);
+    end, EAccessViolation, 'A betoner not held never fired: the room sees ' +
+    'no shot, and the held one below proves nothing');
+
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Holding: TMonster := FRoom.Place('betoner', 8, 11);
+  Holding.Held := True;
+  var Walked := False;
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Walked := WalksWithin(Holding, HeldTicks);
+    end, EAccessViolation, 'A held betoner fired');
+  Assert.IsTrue(Walked, 'A held body stands: the hold is of its fire, not ' +
+    'of its feet');
+end;
+
+procedure TMonsterBodyTests.TestSmittenBodyDiesTellingOnlyItsDeath;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('gravel', 8, 11);
+
+  Body.Smite(nil);
+
+  Assert.AreEqual<TMonsterLife>(mlDying, Body.Life);
+  Assert.AreEqual<TMonsterEvent>(meDied, Body.DrainEvent, 'the death');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'A burst, or a second death: the game would blow it up or pay twice');
+  Body.Smite(nil);
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'A dying body is struck down again');
+end;
+
+procedure TMonsterBodyTests.TestRemovedBodyIsGoneWithNoDeath;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('gravel', 8, 4);
+  var StartY := PlaceY(Body);
+
+  Body.Vanish;
+  TickBody(Body, FallTicks);
+
+  Assert.AreEqual<TMonsterLife>(mlDead, Body.Life, 'A removed body lives');
+  Assert.AreEqual<TMonsterEvent>(meNone, Body.DrainEvent,
+    'A removed body tells a death: its sound plays, its score is paid');
+  Assert.AreEqual(StartY, PlaceY(Body), 'A removed body is still in the ' +
+    'world: it fell');
+end;
+
+procedure TMonsterBodyTests.TestStoodBodyIsPutAtRest;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Body := FRoom.Place('gravel', 8, 4);
+  Body.Throw(40);
+  TickBody(Body, 1);
+
+  Body.Stand(160, FloorY, True);
+
+  Assert.AreEqual(160, PlaceX(Body), 'Across');
+  Assert.AreEqual(FloorY, PlaceY(Body), 'Its feet');
+  Assert.IsTrue(Body.Direction, 'It faces right as told');
+  Assert.IsFalse(Body.InFlight, 'Stood, it is still thrown or falling');
+  TickBody(Body, 1);
+  Assert.IsTrue(PlaceX(Body) > 160, 'It walks off the way it faces');
+end;
+
+procedure TMonsterBodyTests.TestBodyStoodOnADeckHasItUnderItsFeet;
+begin
+  FreeAndNil(FRoom);
+  FRoom := RoomFromRows(RoomRowsOf(0, 0, 0, 0), DeckSections);
+  var Deck := FRoom.Pads.FindTagged('deck');
+  var Body := FRoom.Place('gravel', 2, 11);
+
+  Body.Stand(DeckLeft, DeckTop, False);
+  Assert.IsTrue(Body.DeckUnderFeet = Deck, 'Stood on the deck');
+
+  Body.Stand(64, FloorY, False);
+  Assert.IsNull(Body.DeckUnderFeet, 'Stood on the floor');
 end;
 
 initialization

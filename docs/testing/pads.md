@@ -646,6 +646,34 @@ on 264 to 296.
 | `TestFeetFallThroughAShelfInTheWallAndLandOnOneThatIsOut` | `DeckCrossed` for feet 40 units above the line a tick ago and 40 below it now gives the shelf on the ticks it is out and `nil` on the others | feet land on a shelf in the wall, or go through one that is out |
 | `TestFastestBulletCannotSkipAShelf` | a bullet falling 12 units a tick, at each of the twelve phases over the deck of an out shelf: one of its points is always in the body, by `StopsBulletAt` | the body is as shallow as the picture (11 units): a bullet is flown through between two ticks. 12 is spelled, as decided: the fastest bullet's pace |
 
+### The dormant pad (3.0.62)
+
+State: written, 7 tests, not run yet. Needs no stage: the pad names no
+sprite (`"sprite": ""`), so the world asks no art for it, as for a deck of
+the collision grid. They are the first of `Tests\Pads\Tests.Pads.World.pas`,
+fixture `TPadWorldTests`; the tests above wait for the stage and join it
+then. The test wakes and flies the pad itself, as a scene would
+(`Scenes.Director`, in `scenes.md`).
+
+Shared: the open room with "the sleeper", a pad tagged `sleeper` at (96,
+224) that is dormant, and a scene of the level that wakes it - the level
+loads no pad that sleeps for ever. "Away" is (224, 128). Feet on a deck
+are 16 units wide, 8 in from its left edge.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestDormantPadIsNoFloorAndNoBody` | `Dormant` and `Behind`; `DeckUnder` and `DeckCrossed` empty for feet on its line and a fall through it, `BodyAt` and `StopsBulletAt` False in its body, `Bodies(1)` empty; the same 30 ticks on. `FindTagged` finds it | the hero stands on a pad still in the hatch, or a bullet bursts on it; or the scene cannot find the pad to wake it |
+| `TestWokenPadIsAFloorAndABody` | `Wake`: a floor, a body, one of the bodies of the screen, not `Behind`, where the file puts it; the same 30 ticks on | the woken pad is drawn and stood through |
+| `TestFlownInNoTicksItIsThereAtOnce` | `FlyTo(away, 0)`: there before a tick, not `Flying`; `DeckCarrying` for feet on its old line is empty; there 30 ticks on | a jump is flown, or drags its riders across the screen |
+| `TestFlownPadGoesStraightThereAndStays` | `FlyTo(away, 30)`: `Flying`; on every one of 90 ticks on the straight line and never further from away; there from tick 30; not `Flying` after; a floor and a body where it landed | the pad flies an L as a rebuild does, overshoots, or lands as no floor |
+| `TestFlyingPadWorksItsJets` | at rest `Thrusting` False; in the flight, ticks 1 to 29, `Thrusting` and `Effort` 1; landed, `Thrusting` False | the jets of the pad of the cordon stay dark on the way down |
+| `TestFlyingPadCarriesWhatStandsOnIt` | on every tick of the flight, `DeckCarrying` for feet where the deck stood a tick ago gives the pad | the tank falls through the pad that brings it down |
+| `TestRewindPutsTheWokenPadBackToSleep` | woken and halfway through a flight, `Rewind(1)`: `Dormant`, not `Flying`, where the file puts it, no floor and no body | a death leaves the pad of the cordon on the dock, or in the air |
+
+Left to the eye: the pad drawn at all only once awake, and the rigs it
+wears going out while it sleeps - the parent the game finds for them
+(`LocateParent` in `Moon2D.dpr`) is not alive while the pad is dormant.
+
 ## Hero.Pads
 
 State: designed, not written - needs the stage. One of its tests is red by
@@ -796,6 +824,25 @@ space" at a tick when its flight is not `Deep`, or the tick is its
 
 Left to the eye: how the ballet reads - the order, the corners, the
 depth.
+
+### A straight flight (3.0.62)
+
+State: written, 4 tests, not run yet. Needs no stage. They are the first
+of `Tests\Pads\Tests.Pads.Flights.pas`, fixture `TPadFlightsTests`; the
+tests of the plan above join them when they are written. A scene flies a
+single pad on one leg (`StraightFlight`), at `CalmPace`, its time
+stretched over the ticks the scene gives.
+
+Shared: "the flight" is the pad of the cordon's, from (320, 118) down to
+(320, 256), over 66 ticks; "the slanted one" goes from (320, 118) to
+(224, 200).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestStraightFlightGoesFromWhereItIsToWhereItIsSent` | over 66 ticks and over 132: at tick 0 where it set off; a tick before the end still on the way; from the last tick on, for 50 more, where it was sent; `Arrive` and `Done` the ticks | the flight ignores the ticks the scene gives it, ends early or never ends |
+| `TestStraightFlightKeepsToTheLine` | the slanted one: on every tick on the straight line between its ends, and never further from where it goes | a scene's flight turns a corner as a rebuild's does |
+| `TestStraightFlightSetsOffAndStopsGently` | the first step and the last are under the mean and under the largest; halfway in time it is within a unit of halfway | the pad leaves the hatch at full speed and slams into the dock |
+| `TestStraightFlightStaysInFront` | not `Deep`, not `Idle`, `Depart` 0; on every tick to 50 past its end never `Behind`, no corner, depth 0 | the pad goes into the depth on its way down, where it is no floor for the tank |
 
 ## Pads.Rebuild
 

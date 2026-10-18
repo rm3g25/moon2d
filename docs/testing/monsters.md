@@ -148,6 +148,37 @@ Left to the eye: the burst on the hero (`ResolveMonsterContact`) and the
 blast, the shards and the score the game gives a burst body, in
 `Moon2D.dpr`.
 
+### What a scene does to a body (3.0.62)
+
+State: written, 7 tests, not run yet. They join `TMonsterBodyTests`: the
+hands a scene lays on a body - asleep, its fire held, struck down, taken
+away, stood where it says. The hold of the fire is seen through the `nil`
+burst: a shot into it stops the run with an access violation, so a
+betoner that fires is a raise and one held is none. The first half of
+that test is the control: a betoner left alone raises within 60 ticks,
+or the room sees no shot and the held one proves nothing.
+
+Shared: `Tests.Rooms` grows `RoomFromRows(ARows, ASections)` - the room
+with more members in its level, pads of no sprite among them - and shows
+the room's `Level` and `Pads`. "The deck" is a pad of no picture at (224,
+224). A body "walks within" N ticks when it stands off its start on any of
+them: a patrol comes back past its start, so its last place proves
+nothing.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestDormantBodyStandsStillAndSleeps` | a gravel on the floor made `Dormant`: it does not walk within 200 ticks and is `Asleep`; woken, it walks within 200 | the tank on the pad drives off the deck on the way down, or never wakes |
+| `TestDormantBodyStillFalls` | a gravel in the air made `Dormant`: on the floor 150 ticks on | a sleeper hangs in the air when its deck leaves |
+| `TestHeldBodyWalksAndHoldsItsFire` | a betoner left alone: 60 ticks raise (the control); a betoner `Held`: 300 ticks raise nothing, and it walks within them | the hold is lost - the betoner in the pit shoots the hero who looks up - or the hold freezes its feet |
+| `TestSmittenBodyDiesTellingOnlyItsDeath` | `Smite`: `mlDying`, `meDied` and then nothing - no `meBurst`; struck again, nothing | the game blows up the body a scene burns, or tells its death twice |
+| `TestRemovedBodyIsGoneWithNoDeath` | a gravel in the air, `Vanish`: `mlDead`, no event, and 150 ticks on it has not fallen | a removed body plays its death sound, is paid for, or goes on falling |
+| `TestStoodBodyIsPutAtRest` | a gravel thrown in the air, `Stand(160, floor, right)`: there, facing right, not `InFlight`; a tick on it walks right | the tank stood on the roof keeps its throw or its fall, or faces the wrong way |
+| `TestBodyStoodOnADeckHasItUnderItsFeet` | stood on the deck: `DeckUnderFeet` is the deck; stood on the floor: none | the wait for an empty deck never sees the tank on it |
+
+Left to the eye: the eye of a hull dark at once in its sleep (`Doze`,
+`Monsters.Hull` above) on a body that needs its art; the wheels at rest
+after `Stand`.
+
 ## Monsters.Pads
 
 State: designed, not written - needs the stage. `TPadWorld.Create` asks

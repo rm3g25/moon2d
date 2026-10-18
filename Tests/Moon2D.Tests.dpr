@@ -3,9 +3,11 @@
   units below register is run, and the exit code says whether all of
   them passed.
 
-  No window and no SDL call: the suite tries what the game counts, not
-  what it draws. The executable goes to bin\ all the same, beside
-  SDL2.dll, which the units under test import.
+  No window: the suite tries what the game counts, not what it draws.
+  The one part of SDL it opens is the mixer, for the scene director's
+  sound bank, on the dummy audio driver (Tests.Scenes.Director). The
+  executable goes to bin\ all the same, beside SDL2.dll, which the units
+  under test import.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -29,7 +31,9 @@ uses
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',
   Tests.Levels.Graph in 'Levels\Tests.Levels.Graph.pas',
+  Tests.Levels.Dynamics in 'Levels\Tests.Levels.Dynamics.pas',
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
+  Tests.Levels.Scenes in 'Levels\Tests.Levels.Scenes.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',
   Tests.Monsters.Damage in 'Monsters\Tests.Monsters.Damage.pas',
@@ -42,9 +46,12 @@ uses
   Tests.Orbs.Rite in 'Orbs\Tests.Orbs.Rite.pas',
   Tests.Orbs.Burst in 'Orbs\Tests.Orbs.Burst.pas',
   Tests.Pads.Decks in 'Pads\Tests.Pads.Decks.pas',
+  Tests.Pads.Flights in 'Pads\Tests.Pads.Flights.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas',
   Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas',
   Tests.Pads.Stray in 'Pads\Tests.Pads.Stray.pas',
+  Tests.Pads.World in 'Pads\Tests.Pads.World.pas',
+  Tests.Scenes.Director in 'Scenes\Tests.Scenes.Director.pas',
   Tests.Sprites.Sets in 'Sprites\Tests.Sprites.Sets.pas';
 
 procedure RunSuite;
