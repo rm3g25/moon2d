@@ -6,7 +6,7 @@ what holds, the breakage. The rules and the conveyor are in
 
 ## Sprites.Sets
 
-State: written, 1 test, not yet run. Tries the sets the game ships rather
+State: written, 1 test, green on the first run. Tries the sets the game ships rather
 than the `TSpriteSet` class: it opens every `.mset` in `bin\sprites\`
 through the class's interface and reads only the PNG header of each
 sprite. No window, no SDL. The unit is `Tests\Sprites\Tests.Sprites.Sets.pas`,
