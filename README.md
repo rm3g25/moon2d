@@ -113,6 +113,12 @@ Full accounts in [`PORTING.md`](PORTING.md); the highlights:
   Direct3D **9** renderer on Windows. The hint that fixes it is ignored
   silently if you set it after creating the renderer.
 
+- **...and naming the driver cost us the batching.** Set `SDL_RENDER_DRIVER`
+  and SDL quietly stops batching draw calls - it assumes you now talk to the
+  GPU yourself. Nobody noticed for three months, until a henshin threw a few
+  thousand glows into one frame and an RTX 4070 dropped to seven frames a
+  second. One more hint put it back.
+
 ---
 
 ## Read the code
@@ -148,6 +154,22 @@ Starts fullscreen; Alt+Enter switches to a window and back, and the choice is
 remembered. If the screen stays black, press Alt+Enter. Failing that, set
 `"fullscreen"` to `false` in `config.json` and delete `settings.json` if it
 exists - it overrides `config.json`.
+
+### System requirements
+
+Worked out from the code and the assets; not yet tried on genuinely old
+hardware.
+
+| | |
+|---|---|
+| OS | Windows 7 SP1 or later (Direct3D 11 needs the Platform Update on 7) |
+| Graphics | DirectX 10 class: GeForce 8000, Radeon HD 2000, Intel HD Graphics (2010) or newer; 256 MB |
+| Memory | 1 GB |
+| Processor | any dual core |
+| Disk | 90 MB |
+
+The graphics line is set by texture size, not by speed: one frame of the
+level 1 flyby is 4172 pixels wide, and DirectX 9 cards stop at 4096.
 
 Cloning and building works too, and the clone is complete — the soundtrack is
 in the repository now that the tracks are finished and mine. If you delete

@@ -28,7 +28,7 @@ kinds, and the kind decides where a thing goes.
 | `arena-3.md` | level 2 finale: the tunnels and the TeK machine (end of 3.0) |
 | `blasts.md` | the look of an explosion, sparks, the blast wave, the shards |
 | `boss-1.md` | the level 1 boss TEK-R1 in HD, its pilot, the damage ceiling |
-| `engine.md` | the frame: window, frame and screen, shake, settings, unit folders |
+| `engine.md` | the frame: window, frame and screen, shake, settings, unit folders, draw batching, system requirements |
 | `fans.md` | the `fan` dynamics |
 | `font.md` | the bitmap font in HD |
 | `graph.md` | the `graph` dynamics (the medlab monitor) |

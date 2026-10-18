@@ -4503,7 +4503,8 @@ Host: window and renderer plus the fixed-timestep loop.
   `RequestQuit` / `QuitRequested`.
 - **`TGameHost`** - `Create(config, title)`: declares per-monitor DPI
   awareness before `SDL_Init`, creates the window and renderer (the D3D11
-  hint lives here), hides the OS cursor (the game draws its own) and stamps
+  hint lives here, and right after it `SDL_RENDER_BATCHING`: naming a
+  driver turns SDL's batching off), hides the OS cursor (the game draws its own) and stamps
   the renderer backend and SDL version into the title once. Properties
   `Renderer`, `Window`. `Run(app)`: event pump, fixed-step accumulator at
   the config's `TickRate` (33 by default; a stalled frame is clamped to

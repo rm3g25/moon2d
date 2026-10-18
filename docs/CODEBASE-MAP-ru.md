@@ -4500,7 +4500,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Render(renderer, alpha)` (alpha - доля интерполяции),
   `HandleKey/MouseMove/MouseButton`, `RequestQuit` / `QuitRequested`.
 - **`TGameHost`** - `Create(config, title)`: объявляет per-monitor DPI до
-  `SDL_Init`, создаёт окно и рендерер (хинт D3D11 живёт здесь), прячет
+  `SDL_Init`, создаёт окно и рендерер (хинт D3D11 живёт здесь, сразу за ним -
+  `SDL_RENDER_BATCHING`: названный драйвер выключает батчинг SDL), прячет
   системный курсор (игра рисует свой) и один раз пишет в заголовок бэкенд
   рендерера и версию SDL. Свойства `Renderer`, `Window`. `Run(app)`: насос
   событий, аккумулятор фиксированного шага на `TickRate` из конфига (по
