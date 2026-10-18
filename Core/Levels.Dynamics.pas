@@ -813,12 +813,16 @@ type
   // until a scene moves it (MoveX, MoveY) - the two axes go their own
   // ways, at their own pace. Width is the body's, in units; the height
   // follows the picture. The tint multiplies every picture; intensity is
-  // how opaque the whole machine is.
+  // how opaque the whole machine is. A body wider than 2048 px - the
+  // texture limit of the oldest cards - is cut into strips, and the
+  // strips after the first hang on it as parts by their top-left corner.
   // JSON:
   //   {"kind": "craft", "tag": "cordon", "screen": 9, "set": "cordon",
-  //    "body": "hull", "width": 1604.6, "x": -60, "y": -190,
+  //    "body": "hull-1", "width": 786.538, "x": -60, "y": -190,
   //    "tint": [46, 48, 54],
   //    "parts": [
+  //      {"sprite": "hull-2", "at": [786.538, 0], "width": 409.231,
+  //       "anchor": "pivot", "pivot": [0, 0]},
   //      {"sprite": "turretGun", "at": [492.7, 151.9], "width": 27,
   //       "anchor": "pivot", "pivot": [13.5, 1.6]},
   //      {"sprite": "eye", "at": [1093.8, 111.5], "width": 66,

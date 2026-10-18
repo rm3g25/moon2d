@@ -5,10 +5,13 @@ of level 6 - from four generated pictures and the iris of the level-1 boss.
     python build_cordon.py build <sources dir> ../../bin/sprites/cordon.mset
 
 What comes out:
-- hull: the lower hull, two generated sections joined at a structural rib.
-  The ends and the top are straight cuts - the game never shows them. Kept
-  at the density it was generated at (HULL_DENSITY): stretched to 6 px a
-  unit it would be 9500 px wide and no sharper;
+- hull-1, hull-2, hull-3: the lower hull, two generated sections joined at
+  a structural rib, cut in strips no wider than MAX_TEXTURE_SIDE - the first
+  cut on the rib, the rest in equal parts. The level hangs the strips after
+  the first on it as parts; `build` prints their lines. The ends and the top
+  are straight cuts - the game never shows them. Kept at the density it was
+  generated at (HULL_DENSITY): stretched to 6 px a unit it would be 9500 px
+  wide and no sharper;
 - eye: the sensor turret, its lens glass empty;
 - iris: the iris of the level-1 boss (boss1-disc.mset), cut out and grown -
   the same eye family; slides inside the glass toward its target;
@@ -34,6 +37,8 @@ from PIL import Image
 from scipy import ndimage
 
 DENSITY = 6
+# The widest texture the oldest cards take (Direct3D feature level 9_1)
+MAX_TEXTURE_SIDE = 2048
 HULL_DENSITY = 2.6
 
 EYE_UNITS = 66      # the eye's width
@@ -181,6 +186,15 @@ def turret_pictures(source_dir):
 
 # --- the set ------------------------------------------------------------------
 
+def hull_cuts(width):
+    """Where the hull is cut: on the rib, then the rest in equal parts."""
+    assert SCAN_CUT <= MAX_TEXTURE_SIDE
+    rest = width - SCAN_CUT
+    pieces = -(-rest // MAX_TEXTURE_SIDE)
+    inner = [SCAN_CUT + -(-rest * i // pieces) for i in range(1, pieces)]
+    return [0, SCAN_CUT] + inner + [width]
+
+
 def png_bytes(image):
     buffer = io.BytesIO()
     image.save(buffer, 'PNG', optimize=True)
@@ -241,18 +255,33 @@ def build(source_dir, set_path):
     description = (
         f'The TEK-Q6 cordon - the orbital quarantine machine of TEK: flies over level 1 screen 9 '
         f'and is the boss of level 6. Side view, flat light, built of parts placed by code; points in '
-        f'screen units from the top-left corner of their own sprite. Back to front: hull, turretGun, '
+        f'screen units from the top-left corner of their own sprite. Back to front: hull-1..N, turretGun, '
         f'turretMount, eye, iris. The hull is at {HULL_DENSITY} px a unit, the rest at {DENSITY}.')
-    entries = [
-        ('hull', f'the lower hull, two sections joined at a rib; the ends and the top are straight cuts and '
+    whole = (f'Whole hull: the lower hull, cut in {{count}} strips (hull-1..{{count}}) so no texture is wider than '
+             f'{MAX_TEXTURE_SIDE} px, the limit of the oldest cards; the craft hangs the strips after the first on '
+             f'the body by their top-left corner. Two sections joined at a rib; the ends and the top are straight cuts and '
                  f'must stay off the screen; plating top y %.1f, keel y %.1f, joint (rib\'s left edge) x %.1f; '
                  f'cargo bay center x %.1f, its mouth y %.1f, doors down to y %.1f; eye mount {pair(points["hull: eye mount"])}; '
                  f'turret mounts {pair(points["hull: turret mount 1"])} and {pair(points["hull: turret mount 2"])}; '
                  f'free plate {pair(points["hull: free plate"])}; {size_of(hull, HULL_DENSITY)}'
                  % (points['hull: top of the plating'][1], points['hull: keel'][1],
                     points['hull: joint, the rib\'s left edge'][0], points['hull: bay center, its mouth'][0],
-                    points['hull: bay center, its mouth'][1], points['hull: bay doors, bottom'][1]),
-         hull),
+                    points['hull: bay center, its mouth'][1], points['hull: bay doors, bottom'][1]))
+    cuts = hull_cuts(hull.size[0])
+    count = len(cuts) - 1
+    entries = []
+    for i in range(count):
+        left, right = cuts[i], cuts[i + 1]
+        strip = hull.crop((left, 0, right, hull.size[1]))
+        what = (f'the lower hull, strip {i + 1} of {count}; hull px {left}..{right}, x {left / HULL_DENSITY:.3f}..'
+                f'{right / HULL_DENSITY:.3f} units of the hull; {size_of(strip, HULL_DENSITY)}')
+        if i == 0:
+            what += '. ' + whole.format(count=count)
+        else:
+            print('{"sprite": "hull-%d", "at": [%.3f, 0], "width": %.3f, "anchor": "pivot", "pivot": [0, 0]},'
+                  % (i + 1, left / HULL_DENSITY, strip.size[0] / HULL_DENSITY))
+        entries.append((f'hull-{i + 1}', what, strip))
+    entries += [
         ('eye', f'the sensor turret, hung by the flange top center {pair(points["eye: flange top center"])}; the lens glass '
                 f'dark and empty, center {pair(points["eye: lens center"])}, radius %.1f; side lenses '
                 f'{pair(points["eye: side lens left"])} and {pair(points["eye: side lens right"])}, unlit; '
