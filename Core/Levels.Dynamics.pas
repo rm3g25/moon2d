@@ -12,13 +12,14 @@
 
   A craft (TCraft) is the one kind that never moves by itself: it
   stands where the level file puts it until a scene (Levels.Scenes)
-  moves it.
+  moves it, and its parts follow only what a scene tells them to. A
+  beam (TBeam) points where a scene aims it.
 
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
   from the parent's top-left corner and the object shows wherever the
-  parent does. The parent is named by tag - a static object, a pad or a
-  monster; finding it is the business of Render.Dynamics.
+  parent does. The parent is named by tag - a static object, a pad, a
+  monster or a craft; finding it is the business of Render.Dynamics.
 
   A parent monster that dies puts out what hangs on it: a beacon and a
   haze are gone at once, a source stops and what it has in the air
@@ -294,6 +295,8 @@ type
   //    "angle": -15, "cone": 32, "speed": 26, "drag": 8, "lift": 0,
   //    "wind": 0, "turbulence": 1, "spin": 40, "flow": "gusty",
   //    "frequency": 0.8, "heat": 0, "heatTint": [45, 75, 100]}
+  // A smoke on a monster stops when it dies; "outlives": true (false by
+  // default) keeps it going on the body - what smoulders after a kill.
   TSmoke = class(TDynamicObject)
   private
     FRate: Single; // puffs per tick at full intensity
@@ -311,6 +314,7 @@ type
     FHeat: Single; // 0..1
     FHeatColor: TRgb;
     FEndTint: TColorTint;
+    FOutlives: Boolean; // goes on emitting on a dead parent
     FSwarm: TParticleSwarm;
     FRandom: TXorShift;
     FSeed: Cardinal;
@@ -524,6 +528,10 @@ type
     // the canvas
     procedure UseSolid(const ASolid: TSolidProbe);
     function TakeJolt: Single; override;
+    // A scene turns the source toward APoint, screen units: the angle of
+    // the look heads there from now on, the cone around it - the bolts
+    // run down a beam aimed at the same mark
+    procedure PointAt(const APoint: TSdlFPoint);
   end;
 
   // A body in the sky - the Earth over the Moon unless the level says
@@ -798,13 +806,26 @@ type
   // it hangs on, in units from the body's top-left corner; Width is in
   // units and the height follows the picture; Pivot, for paPivot, is the
   // point of the part's own picture that lands on At.
+  // A part a scene can name carries a tag; a group shares one. It may
+  // follow a point a scene tells it: one that turns swings about its
+  // pivot, up to Turns degrees either way from how it is drawn - a gun;
+  // one that slides shifts toward the point, up to Reach units - the
+  // pupil of an eye. Both go at a pace of their own, a machine's.
   TCraftPart = record
     Sprite: string;
+    Tag: string; // '' - no scene names it
     At: TSdlFPoint;
     Width, Height: Single;
     Anchor: TPartAnchor;
     Pivot: TSdlFPoint;
+    Turns: Single; // degrees; 0 - it does not turn
+    Reach: Single; // units; 0 - it does not slide
+    Watching: Boolean;
+    Watch: TSdlFPoint; // screen units
+    Angle, LastAngle: Single; // degrees clockwise, as SDL turns
+    Shift, LastShift: TSdlFPoint;
     Texture: PSdlTexture;
+    function Follows: Boolean;
   end;
 
   // A machine built of the pictures of one set of the level's object art:
@@ -823,11 +844,14 @@ type
   //    "parts": [
   //      {"sprite": "hull-2", "at": [786.538, 0], "width": 409.231,
   //       "anchor": "pivot", "pivot": [0, 0]},
-  //      {"sprite": "turretGun", "at": [492.7, 151.9], "width": 27,
-  //       "anchor": "pivot", "pivot": [13.5, 1.6]},
+  //      {"sprite": "turretGun", "tag": "gun", "at": [492.7, 151.9],
+  //       "width": 27, "anchor": "pivot", "pivot": [13.5, 1.6],
+  //       "turns": 30},
   //      {"sprite": "eye", "at": [1093.8, 111.5], "width": 66,
-  //       "anchor": "top"}]}
-  // Anchor is "top" by default.
+  //       "anchor": "top"},
+  //      {"sprite": "iris", "tag": "iris", "at": [1093.5, 146.5],
+  //       "width": 17.3, "anchor": "center", "reach": 3}]}
+  // Anchor is "top" by default. A part that turns hangs by its pivot.
   TCraft = class(TDynamicObject)
   private
     FSetName: string;
@@ -837,8 +861,9 @@ type
     FLast: TSdlFPoint; // the corner a tick ago
     procedure AcquirePart(const ACanvas: TDynamicCanvas;
       var APart: TCraftPart);
+    procedure FollowWatch(var APart: TCraftPart);
     procedure DrawPart(const ACanvas: TDynamicCanvas; const APart: TCraftPart;
-      ALeft, ATop, AOpacity: Single);
+      ALeft, ATop, AOpacity, AAlpha: Single);
   protected
     procedure Advance(AMotionX, AMotionY: Single;
       AParentAlive: Boolean); override;
@@ -854,6 +879,61 @@ type
     // The body's corner heads for AX (AY) over ATicks; 0 ticks = at once
     procedure MoveX(AX: Single; ATicks: Integer; AEase: TMotionEase);
     procedure MoveY(AY: Single; ATicks: Integer; AEase: TMotionEase);
+    // The body's corner in screen units, AAlpha of the way from the last
+    // tick to this one
+    function CornerAt(AAlpha: Single): TSdlFPoint;
+    // The parts tagged APartTag that follow head for APoint, in screen
+    // units; told every tick, they keep after it
+    procedure Watch(const APartTag: string; const APoint: TSdlFPoint);
+    // They go back to how they are drawn
+    procedure Unwatch(const APartTag: string);
+    // Some part tagged APartTag turns or slides
+    function HasFollower(const APartTag: string): Boolean;
+  end;
+
+  // A beam of light from its point to the point it is aimed at: a soft
+  // cone, narrow at the source and Width units across where it lands,
+  // with a glow at either end and a faint shimmer, as a scanner's - all
+  // of one color, the tint. Light does not stop on a body: the cone
+  // thins out from a little short of the mark to a little past it. The
+  // intensity is how bright it burns - 0 is out. Until a scene aims it (AimAt) the
+  // beam ends at its source; aimed, it swings onto the mark over the
+  // ticks given, then stays on it as long as the scene tells it where the
+  // mark is (Follow). A beam aimed while it is out has no end to swing
+  // from: it comes out of its source.
+  // JSON:
+  //   {"kind": "beam", "tag": "cordonScan", "parent": "cordon",
+  //    "x": 1093.5, "y": 146.5, "tint": [100, 22, 14], "width": 14,
+  //    "intensity": 0}
+  // Width 14 by default.
+  TBeam = class(TDynamicObject)
+  private
+    FWidth: Single;
+    FTicks: Integer;
+    FAimed: Boolean;
+    FSource, FLastSource: TSdlFPoint; // screen units
+    FEnd, FLastEnd: TSdlFPoint;
+    FFrom: TSdlFPoint; // where the end was when the aim began
+    FMark: TSdlFPoint; // where the mark is, as last told
+    FSwing: TAxisMotion; // 0..1 of the way from FFrom to FMark
+    procedure DrawCone(const ACanvas: TDynamicCanvas;
+      const AFrom, ATo: TSdlFPoint; AFromWidth, AToWidth: Single;
+      const AColor: TRgb; ALevel: Single);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    // Back to its source, aimed at nothing
+    procedure Rewind; override;
+    // The end swings onto APoint (screen units) over ATicks
+    procedure AimAt(const APoint: TSdlFPoint; ATicks: Integer;
+      AEase: TMotionEase);
+    // Where the mark is now
+    procedure Follow(const APoint: TSdlFPoint);
   end;
 
 const
@@ -881,7 +961,7 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning, dkGraph, dkCraft);
+    dkLightning, dkGraph, dkCraft, dkBeam);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -895,11 +975,11 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft');
+    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft', 'beam');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'aloft', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft);
+    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront);
   PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
@@ -948,6 +1028,9 @@ resourcestring
   SLightningBadStrokes = '%s: "strokes" takes a whole number, 1..%d';
   SDynamicBadPoint = '%s: "%s" takes a point, [x, y] in units';
   SCraftNoSprite = '%s: "%s" names no sprite';
+  SCraftTurnsLoose = '%s: part "%s" turns, so it hangs by its "pivot"';
+  SCraftTurnsAndSlides = '%s: part "%s" both turns and slides - one of the '
+    + 'two';
 
 const
   // Beacon light, in shares of the halo size
@@ -1800,6 +1883,7 @@ begin
   // Not of the look: the smokes the game makes itself all burn with fire
   if AObj.GetValue('heatTint') <> nil then
     FHeatColor := TintColor(ReadTint(AObj, AOwner, 'heatTint'));
+  FOutlives := AObj.GetValue<Boolean>('outlives', False);
 end;
 
 constructor TSmoke.CreateLook(const APlacement: TDynamicPlacement;
@@ -1944,7 +2028,7 @@ procedure TSmoke.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
 begin
   Inc(FTicks);
   FSwarm.ShiftFrame(AMotionX, AMotionY);
-  if AParentAlive and (Intensity > 0) then
+  if (AParentAlive or FOutlives) and (Intensity > 0) then
     Emit(AMotionX, AMotionY);
   if FTurbulence > 0 then
     Stir;
@@ -2329,6 +2413,16 @@ end;
 procedure TLightning.UseSolid(const ASolid: TSolidProbe);
 begin
   FSolid := ASolid;
+end;
+
+procedure TLightning.PointAt(const APoint: TSdlFPoint);
+begin
+  var AwayX: Single := APoint.X - (Origin.X + Placement.X);
+  var AwayY: Single := APoint.Y - (Origin.Y + Placement.Y);
+  if (AwayX = 0) and (AwayY = 0) then
+    Exit;
+  // Counterclockwise from the right, and the screen's Y runs down
+  FLook.Angle := RadToDeg(ArcTan2(-AwayY, AwayX));
 end;
 
 function TLightning.TakeJolt: Single;
@@ -3269,6 +3363,12 @@ end;
 // TCraft
 // ---------------------------------------------------------------------------
 
+const
+  // A part that follows is driven, not thrown: a gun swings this many
+  // degrees a tick, a pupil slides this many units
+  PartTurnPerTick = 1.5;
+  PartSlidePerTick = 0.25;
+
 function ReadPoint(AObj: TJSONObject; const AKey, AOwner: string): TSdlFPoint;
 begin
   var PointArr := AObj.GetValue<TJSONArray>(AKey, nil);
@@ -3284,12 +3384,33 @@ begin
   Result.Sprite := AObj.GetValue<string>('sprite', '');
   if Result.Sprite = '' then
     raise EDynamicError.CreateFmt(SCraftNoSprite, [AOwner, 'parts']);
+  Result.Tag := AObj.GetValue<string>('tag', '');
   Result.At := ReadPoint(AObj, 'at', AOwner);
   Result.Width := ReadPositive(AObj, 'width', 0, AOwner);
   Result.Anchor := TPartAnchor(ReadWord(AObj, 'anchor',
     PartAnchorIds[paTop], PartAnchorIds, 'anchor', AOwner));
   if Result.Anchor = paPivot then
     Result.Pivot := ReadPoint(AObj, 'pivot', AOwner);
+  Result.Turns := ReadReach(AObj, 'turns', 0, AOwner);
+  Result.Reach := ReadReach(AObj, 'reach', 0, AOwner);
+  if (Result.Turns > 0) and (Result.Reach > 0) then
+    raise EDynamicError.CreateFmt(SCraftTurnsAndSlides,
+      [AOwner, Result.Sprite]);
+  if (Result.Turns > 0) and (Result.Anchor <> paPivot) then
+    raise EDynamicError.CreateFmt(SCraftTurnsLoose, [AOwner, Result.Sprite]);
+end;
+
+function TCraftPart.Follows: Boolean;
+begin
+  Result := (Turns > 0) or (Reach > 0);
+end;
+
+// AFrom moved toward ATo by no more than AStep
+function StepToward(AFrom, ATo, AStep: Single): Single;
+begin
+  if Abs(ATo - AFrom) <= AStep then
+    Exit(ATo);
+  Result := AFrom + Sign(ATo - AFrom) * AStep;
 end;
 
 constructor TCraft.Create(const APlacement: TDynamicPlacement;
@@ -3347,6 +3468,14 @@ begin
   FY.Settle(Placement.Y);
   FLast.X := Placement.X;
   FLast.Y := Placement.Y;
+  for var i := 0 to High(FParts) do
+  begin
+    FParts[i].Watching := False;
+    FParts[i].Angle := 0;
+    FParts[i].LastAngle := 0;
+    FParts[i].Shift := Default(TSdlFPoint);
+    FParts[i].LastShift := Default(TSdlFPoint);
+  end;
 end;
 
 procedure TCraft.MoveX(AX: Single; ATicks: Integer; AEase: TMotionEase);
@@ -3359,18 +3488,85 @@ begin
   FY.HeadFor(AY, ATicks, AEase);
 end;
 
+function TCraft.CornerAt(AAlpha: Single): TSdlFPoint;
+begin
+  Result.X := Lerp(FLast.X, FX.Current, AAlpha);
+  Result.Y := Lerp(FLast.Y, FY.Current, AAlpha);
+end;
+
+procedure TCraft.Watch(const APartTag: string; const APoint: TSdlFPoint);
+begin
+  for var i := 0 to High(FParts) do
+    if (FParts[i].Tag = APartTag) and FParts[i].Follows then
+    begin
+      FParts[i].Watching := True;
+      FParts[i].Watch := APoint;
+    end;
+end;
+
+procedure TCraft.Unwatch(const APartTag: string);
+begin
+  for var i := 0 to High(FParts) do
+    if FParts[i].Tag = APartTag then
+      FParts[i].Watching := False;
+end;
+
+function TCraft.HasFollower(const APartTag: string): Boolean;
+begin
+  for var Part in FParts do
+    if (Part.Tag = APartTag) and Part.Follows then
+      Exit(True);
+  Result := False;
+end;
+
+// From where the body stands this tick; a part that watches nothing heads
+// back to how it is drawn
+procedure TCraft.FollowWatch(var APart: TCraftPart);
+begin
+  APart.LastAngle := APart.Angle;
+  APart.LastShift := APart.Shift;
+  var AimAngle: Single := 0;
+  var AimShift := Default(TSdlFPoint);
+  if APart.Watching then
+  begin
+    var AwayX: Single := APart.Watch.X - (FX.Current + APart.At.X);
+    var AwayY: Single := APart.Watch.Y - (FY.Current + APart.At.Y);
+    if APart.Turns > 0 then
+    begin
+      // The picture points down, and a clockwise turn swings it to the left
+      var Bearing: Double := -RadToDeg(ArcTan2(AwayX, AwayY));
+      var Limit: Double := APart.Turns;
+      AimAngle := EnsureRange(Bearing, -Limit, Limit);
+    end;
+    var Away: Single := Hypot(AwayX, AwayY);
+    if (APart.Reach > 0) and (Away > 0) then
+    begin
+      var Slide: Single := Min(Away, APart.Reach) / Away;
+      AimShift.X := AwayX * Slide;
+      AimShift.Y := AwayY * Slide;
+    end;
+  end;
+  APart.Angle := StepToward(APart.Angle, AimAngle, PartTurnPerTick);
+  APart.Shift.X := StepToward(APart.Shift.X, AimShift.X, PartSlidePerTick);
+  APart.Shift.Y := StepToward(APart.Shift.Y, AimShift.Y, PartSlidePerTick);
+end;
+
 procedure TCraft.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
 begin
   FLast.X := FX.Current;
   FLast.Y := FY.Current;
   FX.Tick;
   FY.Tick;
+  for var i := 0 to High(FParts) do
+    if FParts[i].Follows then
+      FollowWatch(FParts[i]);
 end;
 
 procedure TCraft.DrawPart(const ACanvas: TDynamicCanvas;
-  const APart: TCraftPart; ALeft, ATop, AOpacity: Single);
+  const APart: TCraftPart; ALeft, ATop, AOpacity, AAlpha: Single);
 var
   Dest: TSdlFRect;
+  Pivot: TSdlFPoint;
 begin
   if APart.Texture = nil then
     Exit;
@@ -3383,7 +3579,14 @@ begin
   TintTexture(APart.Texture, Placement.Tint.R, Placement.Tint.G,
     Placement.Tint.B);
   SDL_SetTextureAlphaMod(APart.Texture, Round(255 * AOpacity));
-  SDL_RenderCopyF(ACanvas.Renderer, APart.Texture, nil, @Dest);
+  if APart.Turns > 0 then
+  begin
+    Pivot := APart.Pivot;
+    SDL_RenderCopyExF(ACanvas.Renderer, APart.Texture, nil, @Dest,
+      Lerp(APart.LastAngle, APart.Angle, AAlpha), @Pivot, SdlFlipNone);
+  end
+  else
+    SDL_RenderCopyF(ACanvas.Renderer, APart.Texture, nil, @Dest);
   SDL_SetTextureAlphaMod(APart.Texture, 255);
   TintTexture(APart.Texture, 100, 100, 100);
 end;
@@ -3396,9 +3599,10 @@ begin
   var Opacity := Intensity;
   if Opacity < VisibleLevel then
     Exit;
-  var Left := AX - Placement.X + Lerp(FLast.X, FX.Current, AAlpha);
-  var Top := AY - Placement.Y + Lerp(FLast.Y, FY.Current, AAlpha);
-  DrawPart(ACanvas, FBody, Left, Top, Opacity);
+  var Corner := CornerAt(AAlpha);
+  var Left := AX - Placement.X + Corner.X;
+  var Top := AY - Placement.Y + Corner.Y;
+  DrawPart(ACanvas, FBody, Left, Top, Opacity, AAlpha);
   for var Part in FParts do
   begin
     var PartLeft := Left + Part.At.X - Part.Width / 2;
@@ -3412,8 +3616,172 @@ begin
           PartTop := Top + Part.At.Y - Part.Pivot.Y;
         end;
     end;
-    DrawPart(ACanvas, Part, PartLeft, PartTop, Opacity);
+    PartLeft := PartLeft + Lerp(Part.LastShift.X, Part.Shift.X, AAlpha);
+    PartTop := PartTop + Lerp(Part.LastShift.Y, Part.Shift.Y, AAlpha);
+    DrawPart(ACanvas, Part, PartLeft, PartTop, Opacity, AAlpha);
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// TBeam
+// ---------------------------------------------------------------------------
+
+const
+  DefaultBeamWidth = 14;
+  // Across at the source, in units: a lens, not a point
+  BeamSourceWidth = 3.0;
+  // A narrower cone of the same color runs down the middle: one hue,
+  // brighter along the axis, not a second color inside the first
+  BeamCoreShare = 0.4;
+  BeamCoreLevel = 0.6;
+  // The glow on the lens, in units across; the spot where the beam lands,
+  // in widths of the beam there
+  BeamSourceGlow = 12.0;
+  BeamSpotScale = 1.6;
+  BeamSpotLevel = 0.8;
+  // The cone fades out from this many of its widths at the mark short of
+  // the mark to this many past it
+  BeamFadeBefore = 0.5;
+  BeamFadeAfter = 1.0;
+  // A scanner's light breathes by this share, this many radians a tick
+  BeamShimmer = 0.12;
+  BeamShimmerRate = 0.6;
+  // Shorter than this the cone is not drawn, the glow on the lens is
+  BeamShortest = 1.0;
+
+constructor TBeam.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FWidth := ReadPositive(AObj, 'width', DefaultBeamWidth, AOwner);
+end;
+
+procedure TBeam.Rewind;
+begin
+  inherited;
+  FAimed := False;
+  FSwing.Settle(0);
+end;
+
+procedure TBeam.AimAt(const APoint: TSdlFPoint; ATicks: Integer;
+  AEase: TMotionEase);
+begin
+  FFrom := FEnd;
+  if Intensity < VisibleLevel then
+    FFrom := FSource;
+  FMark := APoint;
+  FAimed := True;
+  FSwing.Settle(0);
+  FSwing.HeadFor(1, ATicks, AEase);
+end;
+
+procedure TBeam.Follow(const APoint: TSdlFPoint);
+begin
+  FMark := APoint;
+end;
+
+// The source rides the parent; a jump of the origin is no motion, so the
+// last source is never left behind on another screen
+procedure TBeam.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  Inc(FTicks);
+  FSource.X := Origin.X + Placement.X;
+  FSource.Y := Origin.Y + Placement.Y;
+  FLastSource.X := FSource.X - AMotionX;
+  FLastSource.Y := FSource.Y - AMotionY;
+  FLastEnd := FEnd;
+  if not FAimed then
+  begin
+    FEnd := FSource;
+    FLastEnd := FLastSource;
+    Exit;
+  end;
+  FSwing.Tick;
+  FEnd.X := Lerp(FFrom.X, FMark.X, FSwing.Current);
+  FEnd.Y := Lerp(FFrom.Y, FMark.Y, FSwing.Current);
+end;
+
+// A strip from AFrom toward ATo, AFromWidth across at the source and
+// AToWidth at the mark, widening on past it: full light to the knee a
+// little short of the mark, then out to nothing a little past it. The
+// band texture lies across the strip, bright down the middle.
+procedure TBeam.DrawCone(const ACanvas: TDynamicCanvas;
+  const AFrom, ATo: TSdlFPoint; AFromWidth, AToWidth: Single;
+  const AColor: TRgb; ALevel: Single);
+const
+  // The source, the knee and the tail, two corners each
+  Sections = 3;
+  Triangles: array [0..11] of Integer = (0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4);
+var
+  Corners: array [0..2 * Sections - 1] of TSdlVertex;
+  Reaches: array [0..Sections - 1] of Single; // units from the source
+  Lights: array [0..Sections - 1] of Single; // shares of ALevel
+begin
+  var Span: Single := Hypot(ATo.X - AFrom.X, ATo.Y - AFrom.Y);
+  var AlongX: Single := (ATo.X - AFrom.X) / Span;
+  var AlongY: Single := (ATo.Y - AFrom.Y) / Span;
+  Reaches[0] := 0;
+  Lights[0] := 1;
+  Reaches[1] := Span - AToWidth * BeamFadeBefore;
+  if Reaches[1] < 0 then
+    Reaches[1] := 0;
+  Lights[1] := 1;
+  Reaches[2] := Span + AToWidth * BeamFadeAfter;
+  Lights[2] := 0;
+  for var k := 0 to Sections - 1 do
+  begin
+    var Half: Single := Lerp(AFromWidth, AToWidth, Reaches[k] / Span) / 2;
+    var MiddleX: Single := AFrom.X + AlongX * Reaches[k];
+    var MiddleY: Single := AFrom.Y + AlongY * Reaches[k];
+    var Alpha: UInt8 := Round(255 * EnsureRange(ALevel * Lights[k], 0.0, 1.0));
+    for var Side := 0 to 1 do
+    begin
+      var Corner := 2 * k + Side;
+      var Across: Single := (1 - 2 * Side) * Half;
+      Corners[Corner].Position.X := MiddleX - AlongY * Across;
+      Corners[Corner].Position.Y := MiddleY + AlongX * Across;
+      Corners[Corner].Color.R := AColor.R;
+      Corners[Corner].Color.G := AColor.G;
+      Corners[Corner].Color.B := AColor.B;
+      Corners[Corner].Color.A := Alpha;
+      Corners[Corner].TexCoord.X := 0.5;
+      Corners[Corner].TexCoord.Y := Side;
+    end;
+  end;
+  SDL_RenderGeometry(ACanvas.Renderer, ACanvas.BeamGlow, @Corners[0],
+    Length(Corners), @Triangles[0], Length(Triangles));
+end;
+
+// The source is drawn where the parent is between the ticks; the end
+// keeps its own point of the screen and is carried by the same shake
+procedure TBeam.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  var Light := Intensity;
+  if Light < VisibleLevel then
+    Exit;
+  var Source: TSdlFPoint;
+  Source.X := AX;
+  Source.Y := AY;
+  var Mark: TSdlFPoint;
+  Mark.X := AX + Lerp(FLastEnd.X, FEnd.X, AAlpha) -
+    Lerp(FLastSource.X, FSource.X, AAlpha);
+  Mark.Y := AY + Lerp(FLastEnd.Y, FEnd.Y, AAlpha) -
+    Lerp(FLastSource.Y, FSource.Y, AAlpha);
+  var Breath: Single := 0.5 + 0.5 * Sin((FTicks + AAlpha) * BeamShimmerRate);
+  var Level: Single := Light * (1 - BeamShimmer * Breath);
+  var Color := TintColor(Placement.Tint);
+
+  if Hypot(Mark.X - Source.X, Mark.Y - Source.Y) >= BeamShortest then
+  begin
+    DrawCone(ACanvas, Source, Mark, BeamSourceWidth, FWidth, Color, Level);
+    DrawCone(ACanvas, Source, Mark, BeamSourceWidth * BeamCoreShare,
+      FWidth * BeamCoreShare, Color, Level * BeamCoreLevel);
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, Mark.X, Mark.Y,
+      FWidth * BeamSpotScale, Color, Level * BeamSpotLevel);
+  end;
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, Source.X, Source.Y,
+    BeamSourceGlow, Color, Level);
 end;
 
 function CreateDynamic(AKind: TDynamicKind;
@@ -3439,6 +3807,8 @@ begin
       Result := TGraph.Create(APlacement, AObj, AOwner);
     dkCraft:
       Result := TCraft.Create(APlacement, AObj, AOwner);
+    dkBeam:
+      Result := TBeam.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

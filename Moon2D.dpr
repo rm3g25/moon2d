@@ -529,6 +529,7 @@ type
     function HeroRides(const APad: TPad): Boolean;
     function LocateParent(const ATag: string;
       out AStand: TParentStand): Boolean;
+    function SceneStage: TSceneStage;
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure EchoAftershock;
     procedure CureHero;
@@ -792,7 +793,8 @@ begin
   FreeAndNil(FArena);
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
     HeroRides);
-  FScenes := TSceneDirector.Create(FLevel.Scenes, FLevel.Dynamics, FAudio);
+  FScenes := TSceneDirector.Create(FLevel.Scenes, FLevel.Dynamics, FAudio,
+    FMessages);
   FreeAndNil(FDirector);
   var Cues: TDirectorCues;
   Cues.ChangeMusic := ChangeMusic;
@@ -1686,6 +1688,15 @@ begin
   Result := False;
 end;
 
+// What a scene acts on this tick: the field is reborn on every restart
+function TMoonGame.SceneStage: TSceneStage;
+begin
+  Result.Hero.X := FHero.X + SpriteSize / 2;
+  Result.Hero.Y := FHero.Y - SpriteSize / 2;
+  Result.Field := FField;
+  Result.Bullets := FMonsterBullets;
+end;
+
 // The solid layer debris and sparks ring off: the collision grid of the
 // hero's screen and the bodies of its pads, the point in screen units
 function TMoonGame.SolidUnderPoint(AX, AY: Single): Boolean;
@@ -2525,7 +2536,7 @@ begin
     if FLevel.ScreenTriggers[i].Screen = FHero.Screen then
       FTriggerFired[Length(FLevel.Entities) + i] := False;
   FDirector.ReArm(FHero.Screen);
-  FScenes.ReArm(FHero.Screen);
+  FScenes.ReArm(FHero.Screen, SceneStage);
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
   PinRespawnPoint;
@@ -2971,7 +2982,7 @@ begin
       FAudio.Play(PadHumSoundFile);
   end;
   // Before the dynamics: a craft it moves moves this tick
-  FScenes.Tick(FHero.Screen);
+  FScenes.Tick(FHero.Screen, SceneStage);
   FShake.AddTrauma(FScenes.Trauma);
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind

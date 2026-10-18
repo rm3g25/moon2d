@@ -34,6 +34,10 @@
   else destroying one takes its body off the screen at once, and what the
   player sees of it is the game's own (Game.Uptake).
 
+  A scene (Scenes.Director, a 2026 addition) may hold a body's fire - it
+  walks on and does not shoot - and smite it: it dies where it stands,
+  and nothing is paid for it.
+
   Boss extras carried over: minion requests on a timer, HENSHIN at 2/3
   lives (turns the HERO into ice form), rage (speed x2, music change, a
   24x44 fragment wave), victory double-fan. The rage is longer and
@@ -169,6 +173,7 @@ type
     FLane: TLaneRun; // a body an event let in only
     FLanded: Boolean; // this tick, out of a fall
     FGone: Boolean; // weather the pit took: no longer in the world
+    FHeld: Boolean; // a scene holds its fire
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -262,6 +267,10 @@ type
     // hero: dying at once, with meDied and meBurst. Nothing for one that
     // is not alive.
     procedure Burst(const AEnemyBullets: TBurst);
+    // Struck down where it stands - a scene kills it: dying at once, with
+    // meDied alone, and no blow for the game to pay for. Nothing for one
+    // that is not alive.
+    procedure Smite(const AEnemyBullets: TBurst);
     // Out at the right edge, where a patrol turns, or below the screen
     function StrayedOut: Boolean;
     // The body is put at AX, AY as if just born there: falling, nothing
@@ -325,6 +334,9 @@ type
     property Disc: TDisc read FDisc;
     // A sentry with no hero to watch, as of the last tick
     property Asleep: Boolean read FAsleep;
+    // A scene holds its fire: it walks as ever, its gun silent until let
+    // go
+    property Held: Boolean read FHeld write FHeld;
   end;
 
   TMonsterField = class
@@ -396,6 +408,9 @@ type
     function AnyTaggedEnraged(const ATag: string): Boolean;
     // The events' tactics action lands here
     procedure SetTaggedTactics(const ATag: string; ATactics: TPilotTactics);
+    // The scenes' hold and kill land here: every body carrying the tag
+    procedure HoldTagged(const ATag: string; AHeld: Boolean);
+    procedure SmiteTagged(const ATag: string; const AEnemyBullets: TBurst);
     // The first live body carrying the placement tag; nil when none
     function FirstAliveTagged(const ATag: string): TMonster;
     // The first body carrying the placement tag, dead or alive; nil when
@@ -1580,7 +1595,7 @@ begin
   // After a hold the aimed gun takes a whole interval to speak again
   if PilotHoldsGun then
     FTimeOfFire := 0
-  else if FAsleep or (FLane.Phase = lpEntering) then
+  else if FAsleep or FHeld or (FLane.Phase = lpEntering) then
     FTimeOfFire := FFireStart
   else if FCanShoot and (FLife = mlAlive) then
   begin
@@ -1760,6 +1775,15 @@ begin
   FLives := 0;
   BeginDying(AEnemyBullets);
   FEvents.Add(meBurst);
+end;
+
+procedure TMonster.Smite(const AEnemyBullets: TBurst);
+begin
+  if FLife <> mlAlive then
+    Exit;
+  FLives := 0;
+  FTicksSinceHit := 0;
+  BeginDying(AEnemyBullets);
 end;
 
 function TMonster.StrayedOut: Boolean;
@@ -2119,6 +2143,21 @@ begin
   for var Monster in FMonsters do
     if Monster.Tag = ATag then
       Monster.SetTactics(ATactics);
+end;
+
+procedure TMonsterField.HoldTagged(const ATag: string; AHeld: Boolean);
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
+      Monster.Held := AHeld;
+end;
+
+procedure TMonsterField.SmiteTagged(const ATag: string;
+  const AEnemyBullets: TBurst);
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
+      Monster.Smite(AEnemyBullets);
 end;
 
 procedure TMonsterField.Tick(AScreen, AHeroX, AHeroY: Integer;

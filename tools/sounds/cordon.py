@@ -38,9 +38,9 @@ Envelope = [
     (0.0, 0.0),
     (3.0, 0.35), # heard before seen
     (8.0, 0.9), # the belly comes over
-    (14.0, 1.0), # it stops over the hero
-    (28.0, 0.95),
-    (33.0, 0.0), # risen away
+    (13.0, 1.0), # it stops over the hero
+    (25.6, 0.95),
+    (30.6, 0.0), # risen away
     (Seconds, 0.0),
 ]
 

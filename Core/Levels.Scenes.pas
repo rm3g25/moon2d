@@ -1,11 +1,13 @@
 ﻿{
   Levels.Scenes - the scenes of a level: the "scenes" section of level
   JSON. A scene is a play on one screen: cues on a timeline of ticks
-  move the level's crafts and set the sound, the light and the ground
-  under the hero, while the player keeps the controls. An event starts
-  it (the action "scene" of Levels.Events); a scene has no conditions of
-  its own. Model and parser only: the game runs them (Scenes.Director),
-  the editor will write them.
+  move the level's crafts and turn their parts, aim beams, light and put
+  out the dynamic objects, set the sound, the light and the ground under
+  the hero, speak through the terminal, hold monsters and kill them,
+  while the player keeps the controls. An event starts it (the action
+  "scene" of Levels.Events); a scene has no conditions of its own. Model
+  and parser only: the game runs them (Scenes.Director), the editor will
+  write them.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -15,7 +17,7 @@ unit Levels.Scenes;
 interface
 
 uses
-  System.SysUtils, System.JSON, Levels.Dynamics;
+  System.SysUtils, System.JSON, Localization, Levels.Dynamics;
 
 type
   ELevelSceneError = class(Exception);
@@ -29,26 +31,56 @@ type
   // stops it if it ends early. Music: the level's music fades to a share
   // of its volume. Shade: the world darkens by a share. Shake: the
   // ground trembles, as a share of the scene's full rumble. Move: the
-  // craft Target heads for x and/or y, each axis on its own.
-  TSceneCueKind = (ckSound, ckMusic, ckShade, ckShake, ckMove);
+  // craft Target heads for x and/or y, each axis on its own. Track: the
+  // parts tagged Part of the craft Target follow the mark. Aim: the beam
+  // Target swings onto the mark and stays on it; lightning tagged Target
+  // turns its bolts toward it. Intensity: the dynamic
+  // objects tagged Target fade to a share. Hint: the terminal prints a
+  // line in the name of Header. Hold: the monsters tagged Target hold
+  // their fire from now on. Kill: they die, and nobody is paid for it.
+  TSceneCueKind = (ckSound, ckMusic, ckShade, ckShake, ckMove, ckTrack,
+    ckAim, ckIntensity, ckHint, ckHold, ckKill);
+
+  // What a part follows or a beam is aimed at: the hero, the monster
+  // tagged MarkTag, or nothing - a part goes back to rest
+  TSceneMark = (smHero, smMonster, smNothing);
 
   // One cue in level JSON:
   //   {"at": 99, "do": "move", "target": "cordon", "x": -989.8,
   //    "ticks": 363, "ease": "out"}
   //   {"at": 0, "do": "sound", "file": "cordon.ogg"}
   //   {"at": 0, "do": "music", "value": 0, "ticks": 66}
+  //   {"at": 99, "do": "track", "target": "cordon", "part": "gun",
+  //    "on": "hero"}
+  //   {"at": 627, "do": "aim", "target": "cordonScan", "on": "cordonPrey",
+  //    "ticks": 66, "ease": "inOut"}
+  //   {"at": 495, "do": "intensity", "target": "cordonLensL", "value": 100,
+  //    "ticks": 4}
+  //   {"at": 545, "do": "hint", "header": "TEK-Q6", "text": "...",
+  //    "textEn": "..."}
+  //   {"at": 0, "do": "hold", "target": "cordonPrey"}
+  //   {"at": 693, "do": "kill", "target": "cordonPrey"}
   // "value" is a percentage; "ticks" 0 by default - at once; "ease" one
-  // of "linear" (by default), "in", "out", "inOut".
+  // of "linear" (by default), "in", "out", "inOut". "on" is "hero", a
+  // monster's tag or, for a track alone, "none". A hint takes a "header"
+  // and a "text" (localized, "headerEn", "textEn") and "place" - "top"
+  // by default, or "bottom".
   TSceneCue = record
     At: Integer; // ticks from the start of the scene
     Kind: TSceneCueKind;
     Target: string;
+    Part: string;
+    Mark: TSceneMark;
+    MarkTag: string; // smMonster
     FileName: string;
     Level: Single; // 0..1
     MovesX, MovesY: Boolean;
     X, Y: Single;
     Ticks: Integer;
     Ease: TMotionEase;
+    Header: TLocalizedText;
+    Text: TLocalizedText;
+    AtBottom: Boolean;
   end;
 
   // One scene in level JSON:
@@ -66,7 +98,10 @@ type
 const
   SceneOnceIds: array [TSceneOnce] of string = ('level', 'life');
   SceneCueIds: array [TSceneCueKind] of string = ('sound', 'music', 'shade',
-    'shake', 'move');
+    'shake', 'move', 'track', 'aim', 'intensity', 'hint', 'hold', 'kill');
+  // The words of "on" that are not a tag
+  SceneMarkHero = 'hero';
+  SceneMarkNothing = 'none';
 
 // Reads the "scenes" array of a level; an absent section is an empty
 // list. ALevelId names the level in errors.
@@ -84,9 +119,19 @@ resourcestring
     + 'from 0 up';
   SSceneNoFile = 'Level "%s": scene "%s": a sound cue names no "file"';
   SSceneBadLevel = 'Level "%s": scene "%s": cue #%d takes a "value", 0..100';
-  SSceneMoveNoTarget = 'Level "%s": scene "%s": a move names no "target"';
+  SSceneNoTarget = 'Level "%s": scene "%s": cue #%d names no "target"';
   SSceneMoveNowhere = 'Level "%s": scene "%s": a move names neither "x" '
     + 'nor "y"';
+  SSceneNoPart = 'Level "%s": scene "%s": a track names no "part"';
+  SSceneNoMark = 'Level "%s": scene "%s": cue #%d says nothing "on"';
+  SSceneAimNowhere = 'Level "%s": scene "%s": a beam is aimed at something, '
+    + 'not "none"';
+  SSceneHintMute = 'Level "%s": scene "%s": a hint takes a "header" and a '
+    + '"text"';
+
+const
+  // Where a hint's box stands, by AtBottom
+  HintPlaceIds: array [Boolean] of string = ('top', 'bottom');
 
 function TLevelScene.EndTick: Integer;
 begin
@@ -118,14 +163,27 @@ begin
   ACue.Level := Percent / 100;
 end;
 
+procedure ReadTarget(const AObj: TJSONObject; const ALevelId,
+  ASceneId: string; ANumber: Integer; var ACue: TSceneCue);
+begin
+  ACue.Target := AObj.GetValue<string>('target', '');
+  if ACue.Target = '' then
+    raise ELevelSceneError.CreateFmt(SSceneNoTarget,
+      [ALevelId, ASceneId, ANumber]);
+end;
+
+procedure ReadEase(const AObj: TJSONObject; const ALevelId, ASceneId: string;
+  var ACue: TSceneCue);
+begin
+  ACue.Ease := TMotionEase(WordOf(AObj.GetValue<string>('ease',
+    MotionEaseIds[meLinear]), MotionEaseIds, ALevelId, ASceneId, 'ease'));
+end;
+
 procedure ReadMove(const AObj: TJSONObject; const ALevelId, ASceneId: string;
   var ACue: TSceneCue);
 var
   Value: Double;
 begin
-  ACue.Target := AObj.GetValue<string>('target', '');
-  if ACue.Target = '' then
-    raise ELevelSceneError.CreateFmt(SSceneMoveNoTarget, [ALevelId, ASceneId]);
   ACue.MovesX := AObj.TryGetValue<Double>('x', Value);
   if ACue.MovesX then
     ACue.X := Value;
@@ -134,8 +192,56 @@ begin
     ACue.Y := Value;
   if not (ACue.MovesX or ACue.MovesY) then
     raise ELevelSceneError.CreateFmt(SSceneMoveNowhere, [ALevelId, ASceneId]);
-  ACue.Ease := TMotionEase(WordOf(AObj.GetValue<string>('ease',
-    MotionEaseIds[meLinear]), MotionEaseIds, ALevelId, ASceneId, 'ease'));
+  ReadEase(AObj, ALevelId, ASceneId, ACue);
+end;
+
+procedure ReadMark(const AObj: TJSONObject; const ALevelId,
+  ASceneId: string; ANumber: Integer; var ACue: TSceneCue);
+begin
+  var Mark := AObj.GetValue<string>('on', '');
+  if Mark = '' then
+    raise ELevelSceneError.CreateFmt(SSceneNoMark,
+      [ALevelId, ASceneId, ANumber]);
+  if SameText(Mark, SceneMarkHero) then
+    ACue.Mark := smHero
+  else if SameText(Mark, SceneMarkNothing) then
+    ACue.Mark := smNothing
+  else
+  begin
+    ACue.Mark := smMonster;
+    ACue.MarkTag := Mark;
+  end;
+end;
+
+procedure ReadTrack(const AObj: TJSONObject; const ALevelId,
+  ASceneId: string; ANumber: Integer; var ACue: TSceneCue);
+begin
+  ACue.Part := AObj.GetValue<string>('part', '');
+  if ACue.Part = '' then
+    raise ELevelSceneError.CreateFmt(SSceneNoPart, [ALevelId, ASceneId]);
+  ReadMark(AObj, ALevelId, ASceneId, ANumber, ACue);
+end;
+
+procedure ReadAim(const AObj: TJSONObject; const ALevelId,
+  ASceneId: string; ANumber: Integer; var ACue: TSceneCue);
+begin
+  ReadMark(AObj, ALevelId, ASceneId, ANumber, ACue);
+  if ACue.Mark = smNothing then
+    raise ELevelSceneError.CreateFmt(SSceneAimNowhere, [ALevelId, ASceneId]);
+  ReadEase(AObj, ALevelId, ASceneId, ACue);
+end;
+
+// The header is the voice of whoever speaks: a scene has no channel of
+// its own to fall back on
+procedure ReadHint(const AObj: TJSONObject; const ALevelId, ASceneId: string;
+  var ACue: TSceneCue);
+begin
+  ACue.Header := ReadLocalizedText(AObj, 'header');
+  ACue.Text := ReadLocalizedText(AObj, 'text');
+  if (ACue.Header.Current = '') or (ACue.Text.Current = '') then
+    raise ELevelSceneError.CreateFmt(SSceneHintMute, [ALevelId, ASceneId]);
+  ACue.AtBottom := Boolean(WordOf(AObj.GetValue<string>('place',
+    HintPlaceIds[False]), HintPlaceIds, ALevelId, ASceneId, 'place'));
 end;
 
 function ReadCue(const AObj: TJSONObject; const ALevelId, ASceneId: string;
@@ -149,6 +255,8 @@ begin
   if (Result.At < 0) or (Result.Ticks < 0) then
     raise ELevelSceneError.CreateFmt(SSceneBadTick,
       [ALevelId, ASceneId, ANumber]);
+  if Result.Kind in [ckMove, ckTrack, ckAim, ckIntensity, ckHold, ckKill] then
+    ReadTarget(AObj, ALevelId, ASceneId, ANumber, Result);
   case Result.Kind of
     ckSound:
       begin
@@ -156,10 +264,16 @@ begin
         if Result.FileName = '' then
           raise ELevelSceneError.CreateFmt(SSceneNoFile, [ALevelId, ASceneId]);
       end;
-    ckMusic, ckShade, ckShake:
+    ckMusic, ckShade, ckShake, ckIntensity:
       ReadCueLevel(AObj, ALevelId, ASceneId, ANumber, Result);
     ckMove:
       ReadMove(AObj, ALevelId, ASceneId, Result);
+    ckTrack:
+      ReadTrack(AObj, ALevelId, ASceneId, ANumber, Result);
+    ckAim:
+      ReadAim(AObj, ALevelId, ASceneId, ANumber, Result);
+    ckHint:
+      ReadHint(AObj, ALevelId, ASceneId, Result);
   end;
 end;
 

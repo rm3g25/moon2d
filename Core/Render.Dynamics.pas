@@ -9,10 +9,14 @@
   at level load, static objects never move. One under a pad or a
   monster is looked up by tag every tick through the game's callback: a
   monster moves, dies and is reborn with the field on every restart, so
-  no reference to one is kept. A monster that spins (a
-  disc) also tells its pose of the last two ticks: an object that turns
-  with it is drawn where its point has turned to, between the ticks as
-  the disc is.
+  no reference to one is kept. One under a craft follows the craft
+  itself, which never leaves the level: it is drawn from the craft's
+  corner between the ticks, as the craft is, so a lamp on a ship in
+  flight does not tremble against the hull. The craft stands ahead of
+  it in the level file and has moved by the time it ticks. A monster
+  that spins (a disc) also tells its pose of the last two ticks: an
+  object that turns with it is drawn where its point has turned to,
+  between the ticks as the disc is.
 
   The solid layer comes from the game too, as a probe, and reaches the
   objects with the canvas: what a kind throws may ring off the walls.
@@ -112,6 +116,7 @@ type
       DynamicObject: TDynamicObject;
       Stands: TArray<TStand>;
       FollowsParent: Boolean;
+      Craft: TCraft; // the parent, when it is a craft
       ParentAlive: Boolean;
       ParentEffort: Single;
       LeadScreen: Integer; // the stand the last tick counted from
@@ -139,7 +144,8 @@ type
     FJolt: Single; // what the hero's screen has been shaken by, unasked
     function SolidInView(AX, AY: Single): Boolean;
     function PlaceOf(ADynamic: TDynamicObject;
-      const AObjects: TArray<TLevelObject>): TPlace;
+      const AObjects: TArray<TLevelObject>;
+      ADynamics: TDynamicObjects): TPlace;
     procedure FollowParent(var APlace: TPlace);
     function LeadStand(const APlace: TPlace; AScreen: Integer): TStand;
     function OriginOf(const APlace: TPlace; const AStand: TStand;
@@ -217,7 +223,8 @@ begin
 
   for var DynamicObject in ALevel.Dynamics do
   begin
-    FPlaces := FPlaces + [PlaceOf(DynamicObject, ALevel.Objects)];
+    FPlaces := FPlaces + [PlaceOf(DynamicObject, ALevel.Objects,
+      ALevel.Dynamics)];
     DynamicObject.Acquire(FCanvas);
   end;
 end;
@@ -240,10 +247,20 @@ begin
   inherited;
 end;
 
-// Levels.Defs has already refused a parent tag that no object, no pad and
-// no entity carries: a tag no object carries is a pad's or a monster's
+// The craft carrying ATag; nil when none does
+function CraftTagged(ADynamics: TDynamicObjects; const ATag: string): TCraft;
+begin
+  for var DynamicObject in ADynamics do
+    if (DynamicObject is TCraft) and (DynamicObject.Placement.Tag = ATag) then
+      Exit(TCraft(DynamicObject));
+  Result := nil;
+end;
+
+// Levels.Defs has already refused a parent tag that no object, no pad, no
+// entity and no craft carries: a tag no object and no craft carries is a
+// pad's or a monster's
 function TDynamicScreenRenderer.PlaceOf(ADynamic: TDynamicObject;
-  const AObjects: TArray<TLevelObject>): TPlace;
+  const AObjects: TArray<TLevelObject>; ADynamics: TDynamicObjects): TPlace;
 begin
   Result := Default(TPlace);
   Result.DynamicObject := ADynamic;
@@ -258,6 +275,19 @@ begin
       Nailed.OriginX := 0;
       Nailed.OriginY := 0;
       Result.Stands := Result.Stands + [Nailed];
+    end;
+    Exit;
+  end;
+
+  Result.Craft := CraftTagged(ADynamics, Placement.Parent);
+  if Result.Craft <> nil then
+  begin
+    var Flying := Result.Craft.Placement;
+    for var Screen := Flying.Screen to Flying.LastScreen do
+    begin
+      var Carried := Default(TStand);
+      Carried.Screen := Screen;
+      Result.Stands := Result.Stands + [Carried];
     end;
     Exit;
   end;
@@ -316,6 +346,12 @@ begin
   var Shrunk := Depth.Shrink * Depth.SunkAt(AAlpha);
   Result.X := AStand.OriginX + (Depth.Pivot.X - Placement.X) * Shrunk;
   Result.Y := AStand.OriginY + (Depth.Pivot.Y - Placement.Y) * Shrunk;
+  if APlace.Craft <> nil then
+  begin
+    var Corner := APlace.Craft.CornerAt(AAlpha);
+    Result.X := Result.X + Corner.X;
+    Result.Y := Result.Y + Corner.Y;
+  end;
   var TurnsWithParent := Placement.Turns and AStand.Spins;
   if not TurnsWithParent then
     Exit;

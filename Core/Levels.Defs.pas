@@ -234,6 +234,7 @@ type
     procedure SeatEntity(var AEntity: TEntityPlacement);
     procedure CheckEvents;
     procedure CheckScenes;
+    procedure CheckSceneCue(const ASceneId: string; const ACue: TSceneCue);
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
       const AAction: TEventAction);
@@ -241,6 +242,7 @@ type
     procedure CheckDynamics;
     procedure CheckDynamicScreens(const APlacement: TDynamicPlacement);
     procedure CheckDynamicParent(const ATag: string);
+    procedure CheckCraftAhead(AIndex: Integer);
     procedure CheckMonsterParent(const ATag: string);
   public
     destructor Destroy; override;
@@ -340,6 +342,14 @@ resourcestring
   SLevelSceneBadScreen = 'Level "%s": scene "%s" plays on screen %d of %d';
   SLevelSceneCraftUnknown = 'Level "%s": scene "%s" moves "%s", which no '
     + 'craft carries';
+  SLevelScenePartUnknown = 'Level "%s": scene "%s" tracks the part "%s" of '
+    + '"%s", but no craft of that tag has one that turns or slides';
+  SLevelSceneBeamUnknown = 'Level "%s": scene "%s" aims "%s", which no beam '
+    + 'and no lightning carries';
+  SLevelSceneLightUnknown = 'Level "%s": scene "%s" fades "%s", which no '
+    + 'dynamic object carries';
+  SLevelSceneMonsterUnknown = 'Level "%s": scene "%s" names the monster '
+    + '"%s", which no entity carries';
   SLevelEventSunUnknown = 'Level "%s": event "%s" turns the sun of "%s", '
     + 'which no globe carries';
   SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
@@ -361,10 +371,14 @@ resourcestring
   SLevelPadGroupNoAlarm = 'Level "%s": pad group "%s" lights "%s", which no '
     + 'dynamic object carries';
   SLevelDynamicNoParent = 'Level "%s": a dynamic object hangs on "%s", '
-    + 'a tag no object, no pad, no entity and no spawned body carries';
+    + 'a tag no object, no pad, no entity, no spawned body and no craft '
+    + 'carries';
   SLevelDynamicTwoKinds = 'Level "%s": tag "%s" is carried by more than '
-    + 'one of an object, a pad, an entity and a spawned body - a dynamic '
-    + 'object hung on it cannot tell which';
+    + 'one of an object, a pad, an entity, a spawned body and a craft - a '
+    + 'dynamic object hung on it cannot tell which';
+  SLevelDynamicCraftBehind = 'Level "%s": dynamic object #%d hangs on the '
+    + 'craft "%s", which comes after it - a craft goes first, or what hangs '
+    + 'on it lags a tick behind';
   SLevelDynamicTwoMonsters = 'Level "%s": two monsters tagged "%s" live '
     + 'on one difficulty - a dynamic object hung on it cannot tell which';
   SLevelDynamicTwoParents = 'Level "%s": two objects tagged "%s" stand '
@@ -789,8 +803,24 @@ begin
   Result := False;
 end;
 
-// A scene off the screen list never plays; one moving a craft the level
-// does not have moves nothing
+// Some craft tagged ACraftTag has a part tagged APartTag that turns or
+// slides
+function AnyFollowerOf(ADynamics: TDynamicObjects;
+  const ACraftTag, APartTag: string): Boolean;
+begin
+  for var DynamicObject in ADynamics do
+  begin
+    if not (DynamicObject is TCraft) or
+      (DynamicObject.Placement.Tag <> ACraftTag) then
+      Continue;
+    if TCraft(DynamicObject).HasFollower(APartTag) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// A scene off the screen list never plays; a cue naming what the level
+// does not have does nothing
 procedure TLevel.CheckScenes;
 begin
   for var Scene in FScenes do
@@ -799,10 +829,40 @@ begin
       raise ELevelError.CreateFmt(SLevelSceneBadScreen,
         [FId, Scene.Id, Scene.Screen, FScreenCount]);
     for var Cue in Scene.Cues do
-      if (Cue.Kind = ckMove) and not FDynamics.AnyTagged(Cue.Target, TCraft) then
-        raise ELevelError.CreateFmt(SLevelSceneCraftUnknown,
-          [FId, Scene.Id, Cue.Target]);
+      CheckSceneCue(Scene.Id, Cue);
   end;
+end;
+
+procedure TLevel.CheckSceneCue(const ASceneId: string; const ACue: TSceneCue);
+begin
+  case ACue.Kind of
+    ckMove:
+      if not FDynamics.AnyTagged(ACue.Target, TCraft) then
+        raise ELevelError.CreateFmt(SLevelSceneCraftUnknown,
+          [FId, ASceneId, ACue.Target]);
+    ckTrack:
+      if not AnyFollowerOf(FDynamics, ACue.Target, ACue.Part) then
+        raise ELevelError.CreateFmt(SLevelScenePartUnknown,
+          [FId, ASceneId, ACue.Part, ACue.Target]);
+    ckAim:
+      if not FDynamics.AnyTagged(ACue.Target, TBeam) and
+        not FDynamics.AnyTagged(ACue.Target, TLightning) then
+        raise ELevelError.CreateFmt(SLevelSceneBeamUnknown,
+          [FId, ASceneId, ACue.Target]);
+    ckIntensity:
+      if not FDynamics.AnyTagged(ACue.Target) then
+        raise ELevelError.CreateFmt(SLevelSceneLightUnknown,
+          [FId, ASceneId, ACue.Target]);
+    ckHold, ckKill:
+      if not AnyPlacementTagged(FEntities, ACue.Target) then
+        raise ELevelError.CreateFmt(SLevelSceneMonsterUnknown,
+          [FId, ASceneId, ACue.Target]);
+  end;
+  var MarksMonster := (ACue.Kind in [ckTrack, ckAim]) and
+    (ACue.Mark = smMonster);
+  if MarksMonster and not AnyPlacementTagged(FEntities, ACue.MarkTag) then
+    raise ELevelError.CreateFmt(SLevelSceneMonsterUnknown,
+      [FId, ASceneId, ACue.MarkTag]);
 end;
 
 procedure TLevel.CheckEventTargets(const AEvent: TLevelEvent);
@@ -1469,6 +1529,18 @@ begin
     else
       CheckDynamicScreens(Placement);
   end;
+  for var i := 0 to FDynamics.Count - 1 do
+    if FDynamics[i].Placement.Parent <> '' then
+      CheckCraftAhead(i);
+end;
+
+procedure TLevel.CheckCraftAhead(AIndex: Integer);
+begin
+  var Parent := FDynamics[AIndex].Placement.Parent;
+  for var i := AIndex + 1 to FDynamics.Count - 1 do
+    if (FDynamics[i] is TCraft) and (FDynamics[i].Placement.Tag = Parent) then
+      raise ELevelError.CreateFmt(SLevelDynamicCraftBehind,
+        [FId, AIndex + 1, Parent]);
 end;
 
 procedure TLevel.CheckDynamicScreens(const APlacement: TDynamicPlacement);
@@ -1502,7 +1574,9 @@ begin
     AnyFailingLookTagged(FPads, FCarousels, ATag);
   var OnEntity := AnyPlacementTagged(FEntities, ATag);
   var OnSpawn := AnySpawnTagged(FEvents, ATag);
-  var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity) + Ord(OnSpawn);
+  var OnCraft := FDynamics.AnyTagged(ATag, TCraft);
+  var Kinds := Ord(Found) + Ord(OnPad) + Ord(OnEntity) + Ord(OnSpawn) +
+    Ord(OnCraft);
   if Kinds > 1 then
     raise ELevelError.CreateFmt(SLevelDynamicTwoKinds, [FId, ATag]);
   if Kinds = 0 then
