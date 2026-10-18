@@ -127,7 +127,7 @@ type
 implementation
 
 uses
-  Render.Sprites, Hud.Terminal;
+  System.SysUtils, Render.Sprites, Hud.Terminal;
 
 const
   // Trauma a tick at the full rumble: the shake settles where the decay
@@ -163,10 +163,12 @@ begin
   inherited;
 end;
 
+// In any case: the load finds the scene of an event so, and the event
+// must not load and then never play
 function TSceneDirector.IndexOf(const AId: string): Integer;
 begin
   for var i := 0 to High(FScenes) do
-    if FScenes[i].Id = AId then
+    if SameText(FScenes[i].Id, AId) then
       Exit(i);
   Result := NoScene;
 end;
