@@ -234,7 +234,8 @@ type
     procedure SeatEntity(var AEntity: TEntityPlacement);
     procedure CheckEvents;
     procedure CheckScenes;
-    procedure CheckSceneCue(const ASceneId: string; const ACue: TSceneCue);
+    procedure CheckSceneCue(const AScene: TLevelScene; const ACue: TSceneCue);
+    procedure CheckDormantPads;
     procedure CheckEventTargets(const AEvent: TLevelEvent);
     procedure CheckEventTarget(const AEventId: string;
       const AAction: TEventAction);
@@ -349,7 +350,11 @@ resourcestring
   SLevelSceneLightUnknown = 'Level "%s": scene "%s" fades "%s", which no '
     + 'dynamic object carries';
   SLevelSceneMonsterUnknown = 'Level "%s": scene "%s" names the monster '
-    + '"%s", which no entity carries';
+    + '"%s", which no entity carries and the scene does not bring';
+  SLevelScenePadUnknown = 'Level "%s": scene "%s" names the pad "%s", which '
+    + 'no pad of its screen carries';
+  SLevelPadNeverWakes = 'Level "%s": pad "%s" is dormant, and no scene wakes '
+    + 'it';
   SLevelEventSunUnknown = 'Level "%s": event "%s" turns the sun of "%s", '
     + 'which no globe carries';
   SLevelEventTacticsUnknown = 'Level "%s": event "%s" sets the tactics of '
@@ -821,6 +826,25 @@ end;
 
 // A scene off the screen list never plays; a cue naming what the level
 // does not have does nothing
+// The scene brings a body tagged ATag: on its timeline or in its
+// aftermath
+function SceneSpawns(const AScene: TLevelScene; const ATag: string): Boolean;
+begin
+  for var Cue in AScene.Cues + AScene.Aftermath do
+    if (Cue.Kind = ckSpawn) and (Cue.Target = ATag) then
+      Exit(True);
+  Result := False;
+end;
+
+function AnyPadTaggedOn(const APads: TArray<TPadPlacement>;
+  const ATag: string; AScreen: Integer): Boolean;
+begin
+  for var Pad in APads do
+    if (Pad.Tag = ATag) and (Pad.Screen = AScreen) then
+      Exit(True);
+  Result := False;
+end;
+
 procedure TLevel.CheckScenes;
 begin
   for var Scene in FScenes do
@@ -828,41 +852,73 @@ begin
     if (Scene.Screen < 1) or (Scene.Screen > FScreenCount) then
       raise ELevelError.CreateFmt(SLevelSceneBadScreen,
         [FId, Scene.Id, Scene.Screen, FScreenCount]);
-    for var Cue in Scene.Cues do
-      CheckSceneCue(Scene.Id, Cue);
+    for var Cue in Scene.Cues + Scene.Aftermath do
+      CheckSceneCue(Scene, Cue);
+  end;
+  CheckDormantPads;
+end;
+
+// A pad asleep that no scene wakes would never be there at all
+procedure TLevel.CheckDormantPads;
+begin
+  for var Pad in FPads do
+  begin
+    if not Pad.Dormant then
+      Continue;
+    var Woken := False;
+    for var Scene in FScenes do
+      for var Cue in Scene.Cues do
+        if (Cue.Kind = ckWake) and (Cue.Target = Pad.Tag) then
+          Woken := True;
+    if not Woken then
+      raise ELevelError.CreateFmt(SLevelPadNeverWakes, [FId, PadRigName(Pad)]);
   end;
 end;
 
-procedure TLevel.CheckSceneCue(const ASceneId: string; const ACue: TSceneCue);
+procedure TLevel.CheckSceneCue(const AScene: TLevelScene; const ACue: TSceneCue);
 begin
+  var SeatsOnPad := (ACue.Kind = ckSpawn) and (ACue.Seat <> '');
+  var NamesPad := (ACue.Kind in ScenePadCues) or SeatsOnPad;
+  if NamesPad then
+  begin
+    var PadTag := ACue.Target;
+    if ACue.Kind = ckSpawn then
+      PadTag := ACue.Seat;
+    if not AnyPadTaggedOn(FPads, PadTag, AScene.Screen) then
+      raise ELevelError.CreateFmt(SLevelScenePadUnknown,
+        [FId, AScene.Id, PadTag]);
+  end;
   case ACue.Kind of
     ckMove:
       if not FDynamics.AnyTagged(ACue.Target, TCraft) then
         raise ELevelError.CreateFmt(SLevelSceneCraftUnknown,
-          [FId, ASceneId, ACue.Target]);
+          [FId, AScene.Id, ACue.Target]);
     ckTrack:
       if not AnyFollowerOf(FDynamics, ACue.Target, ACue.Part) then
         raise ELevelError.CreateFmt(SLevelScenePartUnknown,
-          [FId, ASceneId, ACue.Part, ACue.Target]);
+          [FId, AScene.Id, ACue.Part, ACue.Target]);
     ckAim:
       if not FDynamics.AnyTagged(ACue.Target, TBeam) and
         not FDynamics.AnyTagged(ACue.Target, TLightning) then
         raise ELevelError.CreateFmt(SLevelSceneBeamUnknown,
-          [FId, ASceneId, ACue.Target]);
+          [FId, AScene.Id, ACue.Target]);
     ckIntensity:
       if not FDynamics.AnyTagged(ACue.Target) then
         raise ELevelError.CreateFmt(SLevelSceneLightUnknown,
-          [FId, ASceneId, ACue.Target]);
-    ckHold, ckKill:
-      if not AnyPlacementTagged(FEntities, ACue.Target) then
+          [FId, AScene.Id, ACue.Target]);
+    ckHold, ckKill, ckRelease, ckRemove:
+      if not AnyPlacementTagged(FEntities, ACue.Target) and
+        not SceneSpawns(AScene, ACue.Target) then
         raise ELevelError.CreateFmt(SLevelSceneMonsterUnknown,
-          [FId, ASceneId, ACue.Target]);
+          [FId, AScene.Id, ACue.Target]);
   end;
   var MarksMonster := (ACue.Kind in [ckTrack, ckAim]) and
     (ACue.Mark = smMonster);
-  if MarksMonster and not AnyPlacementTagged(FEntities, ACue.MarkTag) then
+  var MarkKnown := AnyPlacementTagged(FEntities, ACue.MarkTag) or
+    SceneSpawns(AScene, ACue.MarkTag);
+  if MarksMonster and not MarkKnown then
     raise ELevelError.CreateFmt(SLevelSceneMonsterUnknown,
-      [FId, ASceneId, ACue.MarkTag]);
+      [FId, AScene.Id, ACue.MarkTag]);
 end;
 
 procedure TLevel.CheckEventTargets(const AEvent: TLevelEvent);

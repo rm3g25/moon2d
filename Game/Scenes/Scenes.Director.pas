@@ -9,18 +9,32 @@
   and puts out what the cues name, plays the scene's sounds and keeps
   hold of them, prints its lines on the terminal, sets the volume of the
   level's music, and keeps two values the game reads every tick: the
-  shade over the world and the rumble of the ground. It holds the fire of
-  monsters and kills them too; the field is reborn on every restart, so
-  it arrives with every tick in the stage, as the hero's place does. A
-  part told to follow, and a beam or lightning aimed at a mark, are told
-  where the mark is every tick until the scene ends or sends them
-  elsewhere.
+  shade over the world and the rumble of the ground. A part told to
+  follow, and a beam or lightning aimed at a mark, are told where the
+  mark is every tick until the scene ends or sends them elsewhere.
 
-  A scene cut short - the hero gone from its screen, or dead on it -
-  ends at once: every cue lands where it would have, the sounds it still
-  holds stop, no line is printed. A scene played once a level stays
-  played; one played once a life is rewound by a death and waits for its
-  event again.
+  It acts on the world too: it holds the fire of monsters, kills them,
+  brings new ones and takes them away, wakes the pads the level keeps
+  asleep and flies them. The field is reborn on every restart, so it
+  arrives with every tick in the stage, as the hero's place does; the
+  pads are the level's, as the director is.
+
+  A cue may wait for another to play, and a wait for the world: for the
+  deck of a pad to carry no live monster. The hero does not hold a pad
+  up - he rides it where it goes. The scene is over once every cue has
+  played and run its ticks.
+
+  A scene the hero leaves its screen in the middle of ends at once: every
+  cue of its own things lands where it would have, the sounds it still
+  holds stop, no line is printed; the world it acts on is put as its
+  aftermath says. A death on its screen in the middle of it takes it back
+  to its start instead - what its cues set going goes back to the level
+  file, the world is reborn anyway - and it waits for its event again:
+  the player sees it from the beginning. Played to the end, a scene
+  played once a level stays played: every death after it puts its
+  aftermath again, whatever screen the hero dies on, over the monsters
+  reborn and the pads rewound. One played once a life is rewound by a
+  death on its screen and waits for its event again.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -31,7 +45,7 @@ interface
 
 uses
   Sdl2.Core, Levels.Scenes, Levels.Dynamics, Audio, Hud.Messages, Monsters,
-  Bullets;
+  Bullets, Pads.World;
 
 type
   // What a scene acts on that it does not own, as of this tick
@@ -45,12 +59,14 @@ type
   private
     FScenes: TArray<TLevelScene>;
     FDynamics: TDynamicObjects;
+    FPads: TPadWorld;
     FAudio: TSoundBank;
     FMessages: TMessageBoard;
     FPlayed: TArray<Boolean>; // in step with FScenes
     FActive: Integer; // the scene under way; -1 - none
     FTick: Integer; // of the scene under way
-    FNextCue: Integer;
+    // The tick each cue of the scene under way played at; NotPlayed yet
+    FPlayedAt: TArray<Integer>;
     FHeld: TArray<THeldSound>;
     // The track and aim cues whose marks are followed now
     FPursuits: TArray<TSceneCue>;
@@ -58,7 +74,13 @@ type
     FRumble: TValueFade; // 0..1
     FMusic: TValueFade; // 0..1 of the music's volume
     function IndexOf(const AId: string): Integer;
-    procedure Play(const ACue: TSceneCue; AAtOnce: Boolean;
+    function Due(const AScene: TLevelScene; AIndex: Integer;
+      const AStage: TSceneStage): Boolean;
+    function Holds(const ACue: TSceneCue; const AStage: TSceneStage): Boolean;
+    function DeckEmpty(const APadTag: string; const AStage: TSceneStage): Boolean;
+    function Over(const AScene: TLevelScene): Boolean;
+    procedure PlayDue(const AScene: TLevelScene; const AStage: TSceneStage);
+    procedure Play(const ACue: TSceneCue; AAtOnce: Boolean; AScreen: Integer;
       const AStage: TSceneStage);
     procedure MoveCrafts(const ACue: TSceneCue; ATicks: Integer);
     procedure Track(const ACue: TSceneCue; const AStage: TSceneStage);
@@ -68,22 +90,28 @@ type
     procedure FollowMarks(const AStage: TSceneStage);
     procedure Tell(const ACue: TSceneCue; const APoint: TSdlFPoint);
     procedure Speak(const ACue: TSceneCue);
+    procedure Spawn(const ACue: TSceneCue; AScreen: Integer;
+      const AStage: TSceneStage);
+    procedure FlyPad(const ACue: TSceneCue; ATicks: Integer);
+    procedure Settle(const AScene: TLevelScene; const AStage: TSceneStage);
     procedure RewindTargets(const AScene: TLevelScene);
     procedure StopHeld;
     procedure Finish(const AStage: TSceneStage);
+    procedure Rewind(AIndex: Integer);
   public
     // The level owns the dynamic objects and must outlive the director,
-    // and the sound bank and the message board must too
+    // and the pads, the sound bank and the message board must too
     constructor Create(const AScenes: TArray<TLevelScene>;
-      const ADynamics: TDynamicObjects; const AAudio: TSoundBank;
-      const AMessages: TMessageBoard);
+      const ADynamics: TDynamicObjects; const APads: TPadWorld;
+      const AAudio: TSoundBank; const AMessages: TMessageBoard);
     destructor Destroy; override;
     // The scene AId begins, unless one is under way or it has played
     procedure Start(const AId: string);
     // One logic tick with the hero on AScreen
     procedure Tick(AScreen: Integer; const AStage: TSceneStage);
-    // Death re-enters AScreen: a scene under way there ends at once, and
-    // its scenes of a life are rewound
+    // Death re-enters AScreen with the monsters reborn and the pads
+    // rewound: a scene under way there and its scenes of a life are
+    // rewound, every other scene played once a level puts its aftermath
     procedure ReArm(AScreen: Integer; const AStage: TSceneStage);
     // The game leaves for the menu and comes back: the held sounds wait
     // with the timeline, the music plays at full volume under the menu
@@ -99,7 +127,7 @@ type
 implementation
 
 uses
-  Hud.Terminal;
+  Render.Sprites, Hud.Terminal;
 
 const
   // Trauma a tick at the full rumble: the shake settles where the decay
@@ -108,18 +136,21 @@ const
   // Under this the shade is not drawn at all
   ShadeVisible = 1 / 255;
   WholeFrame: PSdlFRect = nil;
+  NotPlayed = -1;
+  NoScene = -1;
 
 constructor TSceneDirector.Create(const AScenes: TArray<TLevelScene>;
-  const ADynamics: TDynamicObjects; const AAudio: TSoundBank;
-  const AMessages: TMessageBoard);
+  const ADynamics: TDynamicObjects; const APads: TPadWorld;
+  const AAudio: TSoundBank; const AMessages: TMessageBoard);
 begin
   inherited Create;
   FScenes := AScenes;
   FDynamics := ADynamics;
+  FPads := APads;
   FAudio := AAudio;
   FMessages := AMessages;
   SetLength(FPlayed, Length(FScenes));
-  FActive := -1;
+  FActive := NoScene;
   FMusic.Settle(1);
 end;
 
@@ -137,7 +168,7 @@ begin
   for var i := 0 to High(FScenes) do
     if FScenes[i].Id = AId then
       Exit(i);
-  Result := -1;
+  Result := NoScene;
 end;
 
 procedure TSceneDirector.Start(const AId: string);
@@ -150,7 +181,9 @@ begin
   FActive := Index;
   FPlayed[Index] := True;
   FTick := 0;
-  FNextCue := 0;
+  SetLength(FPlayedAt, Length(FScenes[Index].Cues));
+  for var i := 0 to High(FPlayedAt) do
+    FPlayedAt[i] := NotPlayed;
   FHeld := nil;
   FPursuits := nil;
   FShade.Settle(0);
@@ -173,16 +206,26 @@ begin
   end;
 end;
 
-// Where the mark of ACue stands now: the middle of the hero, or of the
-// body carrying the tag, dead or alive. False when no body carries it -
-// what follows it keeps to where it last was.
+// Where the mark of ACue stands now: the middle of the hero, of the body
+// carrying the tag, dead or alive, or the point itself. False when no
+// body carries the tag - what follows it keeps to where it last was.
 function MarkOf(const ACue: TSceneCue; const AStage: TSceneStage;
   out APoint: TSdlFPoint): Boolean;
 begin
-  if ACue.Mark = smHero then
-  begin
-    APoint := AStage.Hero;
-    Exit(True);
+  case ACue.Mark of
+    smHero:
+      begin
+        APoint := AStage.Hero;
+        Exit(True);
+      end;
+    smPoint:
+      begin
+        APoint.X := ACue.X;
+        APoint.Y := ACue.Y;
+        Exit(True);
+      end;
+    smNothing:
+      Exit(False);
   end;
   var Body := AStage.Field.FirstTagged(ACue.MarkTag);
   if Body = nil then
@@ -278,10 +321,41 @@ begin
   FMessages.StartTerminal(ACue.Header.Current, ACue.Text.Current, Place);
 end;
 
-// AAtOnce lands the cue where it would have ended, and plays no sound and
-// prints no line: the scene is being cut short
-procedure TSceneDirector.Play(const ACue: TSceneCue; AAtOnce: Boolean;
+// A body the tag already names is not born twice: alive, it stands where
+// the cue says; dead, it lies where it fell
+procedure TSceneDirector.Spawn(const ACue: TSceneCue; AScreen: Integer;
   const AStage: TSceneStage);
+begin
+  var X: Double := ACue.X;
+  var Y: Double := ACue.Y;
+  if ACue.Seat <> '' then
+  begin
+    var Pad := FPads.FindTagged(ACue.Seat);
+    X := Pad.Left + Pad.Placement.Width / 2 - SpriteSize / 2;
+    Y := Pad.Top;
+  end;
+  var Body := AStage.Field.FirstTagged(ACue.Target);
+  if Body = nil then
+    Body := AStage.Field.SpawnStanding(ACue.Monster, ACue.SpriteList, AScreen,
+      X, Y, ACue.Target, ACue.FacesRight)
+  else if Body.Life = mlAlive then
+    Body.Stand(X, Y, ACue.FacesRight)
+  else
+    Exit;
+  Body.Dormant := ACue.Asleep;
+end;
+
+procedure TSceneDirector.FlyPad(const ACue: TSceneCue; ATicks: Integer);
+begin
+  var Pad := FPads.FindTagged(ACue.Target);
+  if Pad <> nil then
+    Pad.FlyTo(ACue.X, ACue.Y, ATicks);
+end;
+
+// AAtOnce lands the cue where it would have ended, and plays no sound and
+// prints no line: the scene is being cut short, or its aftermath put
+procedure TSceneDirector.Play(const ACue: TSceneCue; AAtOnce: Boolean;
+  AScreen: Integer; const AStage: TSceneStage);
 begin
   var Ticks := ACue.Ticks;
   if AAtOnce then
@@ -311,7 +385,91 @@ begin
       AStage.Field.HoldTagged(ACue.Target, True);
     ckKill:
       AStage.Field.SmiteTagged(ACue.Target, AStage.Bullets);
+    ckSpawn:
+      Spawn(ACue, AScreen, AStage);
+    ckRelease:
+      AStage.Field.ReleaseTagged(ACue.Target);
+    ckRemove:
+      AStage.Field.RemoveTagged(ACue.Target);
+    ckWake:
+      begin
+        var Pad := FPads.FindTagged(ACue.Target);
+        if Pad <> nil then
+          Pad.Wake;
+      end;
+    ckFly:
+      FlyPad(ACue, Ticks);
   end;
+end;
+
+// No live body stands on the deck; a corpse rides along, and so does the
+// hero
+function TSceneDirector.DeckEmpty(const APadTag: string;
+  const AStage: TSceneStage): Boolean;
+begin
+  var Pad := FPads.FindTagged(APadTag);
+  if Pad = nil then
+    Exit(True);
+  for var Monster in AStage.Field.Monsters do
+    if (Monster.Life = mlAlive) and (Monster.DeckUnderFeet = Pad) then
+      Exit(False);
+  Result := True;
+end;
+
+function TSceneDirector.Holds(const ACue: TSceneCue;
+  const AStage: TSceneStage): Boolean;
+begin
+  case ACue.Waits of
+    swDeckEmpty:
+      Result := DeckEmpty(ACue.Target, AStage);
+  else
+    Result := True;
+  end;
+end;
+
+// Its tick has come - counted from the start, or from the cue it plays
+// after - and a wait finds its condition holding
+function TSceneDirector.Due(const AScene: TLevelScene; AIndex: Integer;
+  const AStage: TSceneStage): Boolean;
+begin
+  var Cue := AScene.Cues[AIndex];
+  var From := Cue.At;
+  if Cue.After >= 0 then
+  begin
+    var CountedFrom := FPlayedAt[Cue.After];
+    if CountedFrom = NotPlayed then
+      Exit(False);
+    From := CountedFrom + Cue.Delay;
+  end;
+  if FTick < From then
+    Exit(False);
+  Result := (Cue.Kind <> ckWait) or Holds(Cue, AStage);
+end;
+
+// In the order of the plan: a cue that plays after another stands
+// behind it, so a chain with no delay plays out on one tick
+procedure TSceneDirector.PlayDue(const AScene: TLevelScene;
+  const AStage: TSceneStage);
+begin
+  for var i := 0 to High(AScene.Cues) do
+  begin
+    if (FPlayedAt[i] <> NotPlayed) or not Due(AScene, i, AStage) then
+      Continue;
+    Play(AScene.Cues[i], False, AScene.Screen, AStage);
+    FPlayedAt[i] := FTick;
+  end;
+end;
+
+function TSceneDirector.Over(const AScene: TLevelScene): Boolean;
+begin
+  for var i := 0 to High(AScene.Cues) do
+  begin
+    if FPlayedAt[i] = NotPlayed then
+      Exit(False);
+    if FPlayedAt[i] + AScene.Cues[i].Ticks >= FTick then
+      Exit(False);
+  end;
+  Result := True;
 end;
 
 procedure TSceneDirector.StopHeld;
@@ -321,18 +479,30 @@ begin
   FHeld := nil;
 end;
 
-// Every cue in order, at once: a later one overrides an earlier one as
-// it would have on the timeline
+procedure TSceneDirector.Settle(const AScene: TLevelScene;
+  const AStage: TSceneStage);
+begin
+  for var Cue in AScene.Aftermath do
+    Play(Cue, True, AScene.Screen, AStage);
+end;
+
+// Every cue of the scene's own things in order, at once: a later one
+// overrides an earlier one as it would have on the timeline. The world
+// is the aftermath's: replayed at once, a pad would leave before what it
+// carries got off.
 procedure TSceneDirector.Finish(const AStage: TSceneStage);
 begin
   if FActive < 0 then
     Exit;
-  for var Cue in FScenes[FActive].Cues do
-    Play(Cue, True, AStage);
+  var Scene := FScenes[FActive];
+  for var Cue in Scene.Cues do
+    if not (Cue.Kind in SceneWorldCues) then
+      Play(Cue, True, Scene.Screen, AStage);
+  Settle(Scene, AStage);
   StopHeld;
   FPursuits := nil;
   FAudio.SetMusicLevel(FMusic.Current);
-  FActive := -1;
+  FActive := NoScene;
 end;
 
 procedure TSceneDirector.Tick(AScreen: Integer; const AStage: TSceneStage);
@@ -346,12 +516,7 @@ begin
     Exit;
   end;
 
-  while (FNextCue < Length(Scene.Cues)) and
-    (Scene.Cues[FNextCue].At <= FTick) do
-  begin
-    Play(Scene.Cues[FNextCue], False, AStage);
-    Inc(FNextCue);
-  end;
+  PlayDue(Scene, AStage);
   FollowMarks(AStage);
   FShade.Tick;
   FRumble.Tick;
@@ -360,11 +525,11 @@ begin
 
   Inc(FTick);
   // Done: the sounds play out their tails on their own
-  if FTick > Scene.EndTick then
+  if Over(Scene) then
   begin
     FHeld := nil;
     FPursuits := nil;
-    FActive := -1;
+    FActive := NoScene;
   end;
 end;
 
@@ -376,18 +541,38 @@ begin
       FDynamics.RewindTagged(Cue.Target);
 end;
 
+// Back to before its event: nothing of it is left playing or lit, the
+// music at full volume until the scene fades it again
+procedure TSceneDirector.Rewind(AIndex: Integer);
+begin
+  if AIndex = FActive then
+  begin
+    StopHeld;
+    FPursuits := nil;
+    FActive := NoScene;
+  end;
+  FPlayed[AIndex] := False;
+  RewindTargets(FScenes[AIndex]);
+  FShade.Settle(0);
+  FRumble.Settle(0);
+  FMusic.Settle(1);
+  FAudio.SetMusicLevel(1);
+end;
+
 procedure TSceneDirector.ReArm(AScreen: Integer; const AStage: TSceneStage);
 begin
-  if (FActive >= 0) and (FScenes[FActive].Screen = AScreen) then
+  if (FActive >= 0) and (FScenes[FActive].Screen <> AScreen) then
     Finish(AStage);
   for var i := 0 to High(FScenes) do
   begin
-    if (FScenes[i].Screen <> AScreen) or (FScenes[i].Once <> soLife) then
-      Continue;
-    FPlayed[i] := False;
-    RewindTargets(FScenes[i]);
-    FShade.Settle(0);
-    FRumble.Settle(0);
+    var OnScreen := FScenes[i].Screen = AScreen;
+    var OfLife := FScenes[i].Once = soLife;
+    var LifeHere := OfLife and OnScreen;
+    var Replays := (i = FActive) or LifeHere;
+    if Replays then
+      Rewind(i)
+    else if FPlayed[i] and not OfLife then
+      Settle(FScenes[i], AStage);
   end;
 end;
 

@@ -114,6 +114,10 @@
   bank names a shelf meant to stand out - told to come out, or never told
   and held out by the level file - when it has one.
 
+  A dormant pad is not there until a scene wakes it: neither a floor nor
+  a body, as a pad in the depth, and not drawn at all. Awake, the scene
+  may fly it straight to a place of its screen (FlyTo); it stays there.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -223,6 +227,7 @@ type
     FShelfCommand: TShelfCommand;
     FShelfCommandAt: Integer;
     FShelfTold: Boolean;
+    FDormant: Boolean;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure PlaceOnOrbit;
@@ -289,6 +294,12 @@ type
     function Knocked: Boolean;
     // The pad flies AFlight, its ticks counted from now
     procedure Fly(const AFlight: TPadFlight);
+    // A dormant pad is there from now on
+    procedure Wake;
+    // The pad flies straight to AX, AY (its top-left corner) over ATicks
+    // and stays there; 0 ticks - it is there at once, and whatever stood
+    // on it is left in the air
+    procedure FlyTo(AX, AY: Double; ATicks: Integer);
     function Flying: Boolean;
     // In no flight, or its flight is over
     function Settled: Boolean;
@@ -307,8 +318,8 @@ type
     // A shelf meant to stand out: told to come out, or never told and held
     // out by the level file - or one that runs the level file's program
     function MeantOut: Boolean;
-    // In the depth behind the others, or a shelf not out all the way:
-    // neither a floor nor a body
+    // In the depth behind the others, a shelf not out all the way, or a
+    // pad still dormant: neither a floor nor a body
     function Behind: Boolean;
     // 0 in front .. 1 all the way into the depth, eased; AAlpha as Lift's
     function Depth(AAlpha: Single): Double;
@@ -331,6 +342,8 @@ type
 
     property Screen: Integer read FPlacement.Screen;
     property Tag: string read FPlacement.Tag;
+    // Not there until a scene wakes it
+    property Dormant: Boolean read FDormant;
     property Bullets: TPadBullets read FPlacement.Bullets;
     property Group: string read FPlacement.Group;
     property Placement: TPadPlacement read FPlacement;
@@ -536,6 +549,8 @@ type
     // The pad the rigs tagged ATag hang on: by its own tag, or by the tag
     // of its failing look - AFailingLook says which. nil when none.
     function FindWearer(const ATag: string; out AFailingLook: Boolean): TPad;
+    // The pad tagged ATag; nil when none
+    function FindTagged(const ATag: string): TPad;
     // The boss's body struck: the pad it struck, if one, is knocked the
     // way the body went - a cell, or as far as the walls, AFence and the
     // other pads let it; on a screen whose group is being rebuilt it only
@@ -684,6 +699,7 @@ end;
 
 procedure TPad.Rewind;
 begin
+  FDormant := FPlacement.Dormant;
   FShelf.Build(FPlacement.Shelf);
   FShelfCommandAt := NoCommand;
   FShelfTold := False;
@@ -1021,6 +1037,31 @@ begin
   FFlightClock := 0;
 end;
 
+procedure TPad.Wake;
+begin
+  FDormant := False;
+end;
+
+// From where the path or the last flight left it; a knock is not minded,
+// a scene flies a pad nothing rams
+procedure TPad.FlyTo(AX, AY: Double; ATicks: Integer);
+begin
+  var Distance := Hypot(AX - FPathLeft, AY - FPathTop);
+  if (ATicks > 0) and (Distance > 0) then
+  begin
+    Fly(StraightFlight(FPathLeft, FPathTop, AX, AY, ATicks, CalmPace));
+    Exit;
+  end;
+  FFlightClock := NoFlight;
+  FPathLeft := AX;
+  FPathTop := AY;
+  FLeft := AX;
+  FTop := AY;
+  FPrevLeft := AX;
+  FPrevTop := AY;
+  FBobX := AX;
+end;
+
 function TPad.Flying: Boolean;
 begin
   Result := FFlightClock <> NoFlight;
@@ -1070,7 +1111,8 @@ function TPad.Behind: Boolean;
 begin
   var FlownBehind := Flying and FFlight.Behind(FFlightClock);
   var OutOfRoom := FPlacement.Stray.Strays and not FStray.Deck;
-  Result := FlownBehind or not FShelf.Holds(FClock) or OutOfRoom;
+  Result := FlownBehind or not FShelf.Holds(FClock) or OutOfRoom or
+    FDormant;
 end;
 
 function TPad.RigDepth(AAlpha: Single): Double;
@@ -1177,7 +1219,7 @@ procedure TPad.Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
 var
   Dest: TSdlFRect;
 begin
-  if FTexture = nil then
+  if (FTexture = nil) or FDormant then
     Exit;
 
   var Sunk := Depth(AAlpha);
@@ -1502,6 +1544,14 @@ begin
       Exit(Pad);
     end;
   end;
+  Result := nil;
+end;
+
+function TPadWorld.FindTagged(const ATag: string): TPad;
+begin
+  for var Pad in FPads do
+    if Pad.Tag = ATag then
+      Exit(Pad);
   Result := nil;
 end;
 

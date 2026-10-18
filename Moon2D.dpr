@@ -793,8 +793,8 @@ begin
   FreeAndNil(FArena);
   FArena := TPadArena.Create(FPads, FLevel.Dynamics, FLevel.PadGroups,
     HeroRides);
-  FScenes := TSceneDirector.Create(FLevel.Scenes, FLevel.Dynamics, FAudio,
-    FMessages);
+  FScenes := TSceneDirector.Create(FLevel.Scenes, FLevel.Dynamics, FPads,
+    FAudio, FMessages);
   FreeAndNil(FDirector);
   var Cues: TDirectorCues;
   Cues.ChangeMusic := ChangeMusic;
@@ -1646,8 +1646,8 @@ begin
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
     // A broken pad puts out its own rigs and lights those of its failing
-    // look
-    AStand.Alive := Pad.Failed = FailingLook;
+    // look; a dormant pad has none lit
+    AStand.Alive := (Pad.Failed = FailingLook) and not Pad.Dormant;
     // A pad working its jets lifts what hangs on it: flat out in a
     // flight and just before one, in fits when it is a pad that plunges;
     // a shelf lights it to warn that it is about to slide in

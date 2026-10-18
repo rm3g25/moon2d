@@ -28,6 +28,9 @@
   into a pad does. A loaded pad, with the front alone to look in, may
   wait longer for it.
 
+  A scene flies a single pad on its own (StraightFlight): one leg, from
+  where it stands to where the scene says, over the ticks the scene says.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Pads.Flights;
@@ -117,6 +120,11 @@ const
 // or in the depth.
 function TryPlanFlights(var ARandom: TXorShift; const ABrief: TFlightBrief;
   out AFlights: TPadFlights): Boolean;
+// A flight of a single leg, straight from one place to another, setting
+// off at once and in front: it speeds up and brakes as APace does, its
+// time stretched over ATicks. The places must differ; ATicks above zero.
+function StraightFlight(AFromX, AFromY, AToX, AToY: Double; ATicks: Integer;
+  const APace: TFlightPace): TPadFlight;
 
 implementation
 
@@ -304,6 +312,21 @@ begin
     Result.CornerTicks := APace.CornerPauseTicks;
   Result.Depart := 0;
   Result.Deep := False;
+end;
+
+function StraightFlight(AFromX, AFromY, AToX, AToY: Double; ATicks: Integer;
+  const APace: TFlightPace): TPadFlight;
+begin
+  Result := Default(TPadFlight);
+  Result.Pace := APace;
+  Result.FromX := AFromX;
+  Result.FromY := AFromY;
+  Result.CornerX := AToX;
+  Result.CornerY := AToY;
+  Result.ToX := AToX;
+  Result.ToY := AToY;
+  Result.FirstDistance := Hypot(AToX - AFromX, AToY - AFromY);
+  Result.FirstTicks := ATicks;
 end;
 
 // The space the pad holds at the tick, for the plan. A deep pad holds its

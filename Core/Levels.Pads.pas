@@ -56,6 +56,10 @@
   objects. It only names them here; Levels.Rigs holds them and hangs
   them.
 
+  A pad may be dormant: it is not there - not drawn, neither a floor nor
+  a body, its rigs out - until a scene wakes it (Levels.Scenes). A death
+  puts it to sleep again, and the scene's aftermath wakes it once more.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Pads;
@@ -206,6 +210,8 @@ type
     Stray: TPadStray;
     // The rigs it wears, by name, in the order they are hung
     Rigs: TArray<string>;
+    // Not there until a scene wakes it. JSON: "dormant": true.
+    Dormant: Boolean;
   end;
 
   // Pads rebuilt together: where they may stand and what a formation of
@@ -686,6 +692,7 @@ begin
     Pad.Shelf := ReadShelf(Obj, ALevelId, Pad.Sprite);
     Pad.Group := Obj.GetValue<string>('group', '');
     Pad.Rigs := ReadRigNames(Obj, ALevelId, PadRigName(Pad));
+    Pad.Dormant := Obj.GetValue<Boolean>('dormant', False);
 
     if Pad.Width <= 0 then
       raise EPadError.CreateFmt(SPadBadWidth, [ALevelId, Pad.Sprite, Pad.Width]);

@@ -36,7 +36,11 @@
 
   A scene (Scenes.Director, a 2026 addition) may hold a body's fire - it
   walks on and does not shoot - and smite it: it dies where it stands,
-  and nothing is paid for it.
+  and nothing is paid for it. It may bring a body of its own, standing
+  where it says and asleep - it neither walks nor shoots, its frame and
+  the eye of its hull stay still, while a deck and gravity take it as
+  ever - until the scene releases it. It may take a body away: gone, with
+  no death and nothing left of it.
 
   Boss extras carried over: minion requests on a timer, HENSHIN at 2/3
   lives (turns the HERO into ice form), rage (speed x2, music change, a
@@ -174,6 +178,7 @@ type
     FLanded: Boolean; // this tick, out of a fall
     FGone: Boolean; // weather the pit took: no longer in the world
     FHeld: Boolean; // a scene holds its fire
+    FDormant: Boolean; // a scene keeps it asleep
 
     function Solid(ACol, ARow: Integer): Boolean;
     function CellOfX(APixel: Integer): Integer;
@@ -233,6 +238,7 @@ type
     function FireStartOf(const APlacement: TEntityPlacement): Integer;
     function HeroInSentryStrip: Boolean;
     function SentrySleeps: Boolean;
+    procedure SetDormant(AValue: Boolean);
   public
     // ADiscArt, AHullArt - the layers of a disc or a hull monster, nil for
     // the rest; the caller keeps them and APads alive longer than the
@@ -276,6 +282,14 @@ type
     // The body is put at AX, AY as if just born there: falling, nothing
     // thrown
     procedure Reappear(AX, AY: Double);
+    // The body stands at AX, AY - the left edge of its cell and its feet -
+    // facing as told: nothing thrown, its wheels at rest
+    procedure Stand(AX, AY: Double; AFacesRight: Boolean);
+    // Gone from the world: dead, never drawn, never ticked, and no death
+    // to tell
+    procedure Vanish;
+    // The deck under its feet; nil when it stands on none
+    function DeckUnderFeet: TPad;
     // The side the body walks off to when it lands, as the dice pick
     procedure HeadRandomly;
     // The body comes in through the wall from the side of the screen and
@@ -337,6 +351,9 @@ type
     // A scene holds its fire: it walks as ever, its gun silent until let
     // go
     property Held: Boolean read FHeld write FHeld;
+    // A scene keeps it asleep: no step, no shot, no frame, the eye of its
+    // hull dark
+    property Dormant: Boolean read FDormant write SetDormant;
   end;
 
   TMonsterField = class
@@ -382,6 +399,11 @@ type
     // hero's hands - the contact of the same tick collects it
     procedure SpawnOn(const AMonsterId: string; AScreen: Integer;
       AX, AY: Double);
+    // A body tagged ATag standing at AX, AY - the left edge of its cell
+    // and its feet - facing as told; ASpriteList '' - the monster's own
+    function SpawnStanding(const AMonsterId, ASpriteList: string;
+      AScreen: Integer; AX, AY: Double; const ATag: string;
+      AFacesRight: Boolean): TMonster;
     // A body let in along a row: it comes in through the wall from one side
     function SpawnInLane(const AOrders: TSpawnOrders;
       AScreen: Integer): TMonster;
@@ -408,9 +430,12 @@ type
     function AnyTaggedEnraged(const ATag: string): Boolean;
     // The events' tactics action lands here
     procedure SetTaggedTactics(const ATag: string; ATactics: TPilotTactics);
-    // The scenes' hold and kill land here: every body carrying the tag
+    // The scenes' hold, kill, release and remove land here: every body
+    // carrying the tag
     procedure HoldTagged(const ATag: string; AHeld: Boolean);
     procedure SmiteTagged(const ATag: string; const AEnemyBullets: TBurst);
+    procedure ReleaseTagged(const ATag: string);
+    procedure RemoveTagged(const ATag: string);
     // The first live body carrying the placement tag; nil when none
     function FirstAliveTagged(const ATag: string): TMonster;
     // The first body carrying the placement tag, dead or alive; nil when
@@ -432,7 +457,7 @@ type
 implementation
 
 uses
-  Effects.Sparks;
+  Effects.Sparks, Levels.Scenes;
 
 const
   // The columns a body comes down from the sky over, as AddMonstOnBoss1
@@ -442,6 +467,8 @@ const
 resourcestring
   SFireOffsetOutOfRange = 'Level "%s", screen %d, cell %d,%d: fireOffset %d ' +
     'must be from 0 to below the interval of %d ticks';
+  SSceneSpawnNoArt = 'Level "%s": scene "%s" brings a "%s", which has no '
+    + 'spriteList of its own - the cue must name one';
 
 function RoundHalfUp(AValue: Double): Integer;
 begin
@@ -1591,7 +1618,7 @@ begin
   end;
 
   FFired := False;
-  FAsleep := SentrySleeps;
+  FAsleep := SentrySleeps or FDormant;
   // After a hold the aimed gun takes a whole interval to speak again
   if PilotHoldsGun then
     FTimeOfFire := 0
@@ -1625,10 +1652,11 @@ begin
   else
     case FAction of
       maWalkLeft, maWalkRight, maStand:
-        if FLife <> mlDead then
+        if (FLife <> mlDead) and not FDormant then
           MoveWalking
         else
-          // A corpse does not walk, but a deck that left it must not leave it hanging
+          // A corpse does not walk, nor does a sleeper, but a deck that
+          // left it must not leave it hanging
           FallIfUnsupported;
       maFalling:
         MoveFalling;
@@ -1801,6 +1829,49 @@ begin
   FAction := maFalling;
 end;
 
+procedure TMonster.Stand(AX, AY: Double; AFacesRight: Boolean);
+begin
+  FX := AX;
+  FY := AY;
+  FHullX := AX;
+  FAcceleration := 0;
+  FThrown := 0;
+  FFallDriftX := 0;
+  FDirection := AFacesRight;
+  if FAction = maFlying then
+    Exit;
+  if FDirection then
+    FAction := maWalkRight
+  else
+    FAction := maWalkLeft;
+end;
+
+procedure TMonster.Vanish;
+begin
+  FLife := mlDead;
+  FStep := 0;
+  FGone := True;
+end;
+
+function TMonster.DeckUnderFeet: TPad;
+begin
+  if (FAction in [maFlying, maFalling]) or not FDef.AffectedByGravity then
+    Exit(nil);
+  Result := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
+    FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
+end;
+
+// Asleep the eye is dark at once, with no ramp down: it never woke
+procedure TMonster.SetDormant(AValue: Boolean);
+begin
+  FDormant := AValue;
+  if not AValue then
+    Exit;
+  FAsleep := True;
+  if FHull <> nil then
+    FHull.Doze;
+end;
+
 procedure TMonster.HeadRandomly;
 begin
   FDirection := Random(2) = 0;
@@ -1964,6 +2035,26 @@ begin
   Born.FY := AY;
 end;
 
+function TMonsterField.SpawnStanding(const AMonsterId, ASpriteList: string;
+  AScreen: Integer; AX, AY: Double; const ATag: string;
+  AFacesRight: Boolean): TMonster;
+var
+  Placement: TEntityPlacement;
+begin
+  var Def := FRegistry.Find(AMonsterId);
+  Placement := Default(TEntityPlacement);
+  Placement.MonsterId := AMonsterId;
+  Placement.Screen := AScreen;
+  Placement.X := Round(AX / SpriteSize) + 1;
+  Placement.Y := Round(AY / SpriteSize);
+  Placement.SpriteList := ASpriteList;
+  if Placement.SpriteList = '' then
+    Placement.SpriteList := Def.SpriteList;
+  Placement.Tag := ATag;
+  Result := SpawnPlaced(Placement);
+  Result.Stand(AX, AY, AFacesRight);
+end;
+
 // In the cells a level places its entities by
 function TMonsterField.SpawnAt(const AMonsterId: string;
   AScreen, APlacementX, APlacementY: Integer): TMonster;
@@ -2009,6 +2100,16 @@ begin
   for var Trigger in FLevel.ScreenTriggers do
     if Trigger.Triggers.HasFinale then
       FRegistry.Find(Trigger.Triggers.Finale.MonsterId);
+  for var Scene in FLevel.Scenes do
+    for var Cue in Scene.Cues + Scene.Aftermath do
+    begin
+      if Cue.Kind <> ckSpawn then
+        Continue;
+      var Def := FRegistry.Find(Cue.Monster);
+      if (Cue.SpriteList = '') and (Def.SpriteList = '') then
+        raise ELevelError.CreateFmt(SSceneSpawnNoArt,
+          [FLevel.Id, Scene.Id, Cue.Monster]);
+    end;
 end;
 
 function TMonsterField.SpawnInLane(const AOrders: TSpawnOrders;
@@ -2158,6 +2259,23 @@ begin
   for var Monster in FMonsters do
     if Monster.Tag = ATag then
       Monster.Smite(AEnemyBullets);
+end;
+
+procedure TMonsterField.ReleaseTagged(const ATag: string);
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
+    begin
+      Monster.Held := False;
+      Monster.Dormant := False;
+    end;
+end;
+
+procedure TMonsterField.RemoveTagged(const ATag: string);
+begin
+  for var Monster in FMonsters do
+    if Monster.Tag = ATag then
+      Monster.Vanish;
 end;
 
 procedure TMonsterField.Tick(AScreen, AHeroX, AHeroY: Integer;

@@ -13,7 +13,8 @@
   A craft (TCraft) is the one kind that never moves by itself: it
   stands where the level file puts it until a scene (Levels.Scenes)
   moves it, and its parts follow only what a scene tells them to. A
-  beam (TBeam) points where a scene aims it.
+  beam (TBeam) points where a scene aims it: a scanner's cone, or the
+  column a craft lowers its cargo in.
 
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
@@ -891,23 +892,29 @@ type
     function HasFollower(const APartTag: string): Boolean;
   end;
 
+  // How a beam looks: a scanner's cone, or a tractor's column - as wide
+  // at the source as where it lands, rings of light running down it
+  TBeamLook = (blScan, blTractor);
+
   // A beam of light from its point to the point it is aimed at: a soft
   // cone, narrow at the source and Width units across where it lands,
   // with a glow at either end and a faint shimmer, as a scanner's - all
-  // of one color, the tint. Light does not stop on a body: the cone
-  // thins out from a little short of the mark to a little past it. The
-  // intensity is how bright it burns - 0 is out. Until a scene aims it (AimAt) the
-  // beam ends at its source; aimed, it swings onto the mark over the
-  // ticks given, then stays on it as long as the scene tells it where the
-  // mark is (Follow). A beam aimed while it is out has no end to swing
-  // from: it comes out of its source.
+  // of one color, the tint. A tractor's is a column of the same light,
+  // dimmer, with rings running from the source to the mark. Light does
+  // not stop on a body: the cone thins out from a little short of the
+  // mark to a little past it. The intensity is how bright it burns - 0 is
+  // out. Until a scene aims it (AimAt) the beam ends at its source;
+  // aimed, it swings onto the mark over the ticks given, then stays on it
+  // as long as the scene tells it where the mark is (Follow). A beam aimed
+  // while it is out has no end to swing from: it comes out of its source.
   // JSON:
   //   {"kind": "beam", "tag": "cordonScan", "parent": "cordon",
   //    "x": 1093.5, "y": 146.5, "tint": [100, 22, 14], "width": 14,
   //    "intensity": 0}
-  // Width 14 by default.
+  // Width 14 by default; "look" is "scan" by default, or "tractor".
   TBeam = class(TDynamicObject)
   private
+    FLook: TBeamLook;
     FWidth: Single;
     FTicks: Integer;
     FAimed: Boolean;
@@ -919,6 +926,13 @@ type
     procedure DrawCone(const ACanvas: TDynamicCanvas;
       const AFrom, ATo: TSdlFPoint; AFromWidth, AToWidth: Single;
       const AColor: TRgb; ALevel: Single);
+    procedure DrawRing(const ACanvas: TDynamicCanvas;
+      const AMiddle, AAlong: TSdlFPoint; const AColor: TRgb; ALevel: Single);
+    procedure DrawScan(const ACanvas: TDynamicCanvas;
+      const ASource, AMark: TSdlFPoint; const AColor: TRgb; ALevel: Single);
+    procedure DrawTractor(const ACanvas: TDynamicCanvas;
+      const ASource, AMark: TSdlFPoint; const AColor: TRgb; ALevel: Single;
+      AAlpha: Single);
   protected
     procedure Advance(AMotionX, AMotionY: Single;
       AParentAlive: Boolean); override;
@@ -981,6 +995,7 @@ const
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
     dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront);
   PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
+  BeamLookIds: array [TBeamLook] of string = ('scan', 'tractor');
   BlinkPatternIds: array [TBlinkPattern] of string = (
     'steady', 'pulse', 'flash', 'double', 'faulty', 'dying');
   SmokeFlowIds: array [TSmokeFlow] of string = ('steady', 'gusty', 'puffs');
@@ -3648,11 +3663,26 @@ const
   BeamShimmerRate = 0.6;
   // Shorter than this the cone is not drawn, the glow on the lens is
   BeamShortest = 1.0;
+  // A tractor's column: its light and that of its core, as shares of the
+  // beam's; the rings down it - how far apart, how thick, how bright at
+  // the brightest, units a tick they run; the glows at its ends, in its
+  // widths across and as shares of its light
+  TractorBodyLevel = 0.35;
+  TractorCoreLevel = 0.3;
+  TractorRingSpacing = 18.0;
+  TractorRingThickness = 3.0;
+  TractorRingLevel = 0.7;
+  TractorRingSpeed = 0.8;
+  TractorSourceGlow = 0.8;
+  TractorSpotScale = 1.2;
+  TractorSpotLevel = 0.4;
 
 constructor TBeam.Create(const APlacement: TDynamicPlacement;
   AObj: TJSONObject; const AOwner: string);
 begin
   inherited Create(APlacement, AObj, AOwner);
+  FLook := TBeamLook(ReadWord(AObj, 'look', BeamLookIds[blScan], BeamLookIds,
+    'look', AOwner));
   FWidth := ReadPositive(AObj, 'width', DefaultBeamWidth, AOwner);
 end;
 
@@ -3752,6 +3782,87 @@ begin
     Length(Corners), @Triangles[0], Length(Triangles));
 end;
 
+// A band of light across the beam at AMiddle, the full width of the beam
+// and TractorRingThickness along it; AAlong - a unit vector from the
+// source to the mark. The band texture lies along the beam, bright where
+// the band crosses its axis.
+procedure TBeam.DrawRing(const ACanvas: TDynamicCanvas;
+  const AMiddle, AAlong: TSdlFPoint; const AColor: TRgb; ALevel: Single);
+const
+  Triangles: array [0..5] of Integer = (0, 1, 2, 1, 3, 2);
+var
+  Corners: array [0..3] of TSdlVertex;
+begin
+  var Alpha: UInt8 := Round(255 * EnsureRange(ALevel, 0.0, 1.0));
+  for var Corner := 0 to 3 do
+  begin
+    var Side := Corner mod 2;
+    var Across: Single := (1 - 2 * Side) * FWidth / 2;
+    var Along: Single := (Corner div 2 - 0.5) * TractorRingThickness;
+    Corners[Corner].Position.X := AMiddle.X + AAlong.X * Along -
+      AAlong.Y * Across;
+    Corners[Corner].Position.Y := AMiddle.Y + AAlong.Y * Along +
+      AAlong.X * Across;
+    Corners[Corner].Color.R := AColor.R;
+    Corners[Corner].Color.G := AColor.G;
+    Corners[Corner].Color.B := AColor.B;
+    Corners[Corner].Color.A := Alpha;
+    Corners[Corner].TexCoord.X := 0.5;
+    Corners[Corner].TexCoord.Y := Side;
+  end;
+  SDL_RenderGeometry(ACanvas.Renderer, ACanvas.BeamGlow, @Corners[0],
+    Length(Corners), @Triangles[0], Length(Triangles));
+end;
+
+procedure TBeam.DrawScan(const ACanvas: TDynamicCanvas;
+  const ASource, AMark: TSdlFPoint; const AColor: TRgb; ALevel: Single);
+begin
+  if Hypot(AMark.X - ASource.X, AMark.Y - ASource.Y) >= BeamShortest then
+  begin
+    DrawCone(ACanvas, ASource, AMark, BeamSourceWidth, FWidth, AColor, ALevel);
+    DrawCone(ACanvas, ASource, AMark, BeamSourceWidth * BeamCoreShare,
+      FWidth * BeamCoreShare, AColor, ALevel * BeamCoreLevel);
+    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AMark.X, AMark.Y,
+      FWidth * BeamSpotScale, AColor, ALevel * BeamSpotLevel);
+  end;
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, ASource.X, ASource.Y,
+    BeamSourceGlow, AColor, ALevel);
+end;
+
+// The rings come out of the source and go out on the mark, faded in and
+// out along the way so none pops up or vanishes
+procedure TBeam.DrawTractor(const ACanvas: TDynamicCanvas;
+  const ASource, AMark: TSdlFPoint; const AColor: TRgb; ALevel: Single;
+  AAlpha: Single);
+var
+  Along, Middle: TSdlFPoint;
+begin
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, ASource.X, ASource.Y,
+    FWidth * TractorSourceGlow, AColor, ALevel);
+  var Span: Single := Hypot(AMark.X - ASource.X, AMark.Y - ASource.Y);
+  if Span < BeamShortest then
+    Exit;
+  DrawCone(ACanvas, ASource, AMark, FWidth, FWidth, AColor,
+    ALevel * TractorBodyLevel);
+  DrawCone(ACanvas, ASource, AMark, FWidth * BeamCoreShare,
+    FWidth * BeamCoreShare, AColor, ALevel * TractorCoreLevel);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AMark.X, AMark.Y,
+    FWidth * TractorSpotScale, AColor, ALevel * TractorSpotLevel);
+
+  Along.X := (AMark.X - ASource.X) / Span;
+  Along.Y := (AMark.Y - ASource.Y) / Span;
+  var Run: Single := (FTicks + AAlpha) * TractorRingSpeed / TractorRingSpacing;
+  var Reach: Single := (Run - Floor(Run)) * TractorRingSpacing;
+  while Reach < Span do
+  begin
+    var Fade: Single := Sin(Pi * Reach / Span);
+    Middle.X := ASource.X + Along.X * Reach;
+    Middle.Y := ASource.Y + Along.Y * Reach;
+    DrawRing(ACanvas, Middle, Along, AColor, ALevel * TractorRingLevel * Fade);
+    Reach := Reach + TractorRingSpacing;
+  end;
+end;
+
 // The source is drawn where the parent is between the ticks; the end
 // keeps its own point of the screen and is carried by the same shake
 procedure TBeam.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
@@ -3771,17 +3882,12 @@ begin
   var Breath: Single := 0.5 + 0.5 * Sin((FTicks + AAlpha) * BeamShimmerRate);
   var Level: Single := Light * (1 - BeamShimmer * Breath);
   var Color := TintColor(Placement.Tint);
-
-  if Hypot(Mark.X - Source.X, Mark.Y - Source.Y) >= BeamShortest then
-  begin
-    DrawCone(ACanvas, Source, Mark, BeamSourceWidth, FWidth, Color, Level);
-    DrawCone(ACanvas, Source, Mark, BeamSourceWidth * BeamCoreShare,
-      FWidth * BeamCoreShare, Color, Level * BeamCoreLevel);
-    DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, Mark.X, Mark.Y,
-      FWidth * BeamSpotScale, Color, Level * BeamSpotLevel);
+  case FLook of
+    blScan:
+      DrawScan(ACanvas, Source, Mark, Color, Level);
+    blTractor:
+      DrawTractor(ACanvas, Source, Mark, Color, Level, AAlpha);
   end;
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, Source.X, Source.Y,
-    BeamSourceGlow, Color, Level);
 end;
 
 function CreateDynamic(AKind: TDynamicKind;
