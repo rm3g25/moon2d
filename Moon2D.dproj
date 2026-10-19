@@ -239,6 +239,7 @@
         <DCCReference Include="Game\Scenes\Scenes.Director.pas"/>
         <DCCReference Include="Hud\Hud.Charge.pas"/>
         <DCCReference Include="Hud\Hud.Marks.pas"/>
+        <DCCReference Include="Hud\Hud.GoRight.pas"/>
         <DCCReference Include="Game\Audio.pas"/>
         <DCCReference Include="Core\Localization.pas"/>
         <DCCReference Include="Core\Render.Glow.pas"/>

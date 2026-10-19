@@ -35,15 +35,18 @@ type
   // waveKilled watches the wave the trial ends in, in its act "act": it
   // holds once count * part div of of its bodies are killed - half a wave
   // of 10 is the fifth - and stays true once the act is past. JSON as
-  // gravelDealt's.
+  // gravelDealt's. victoryEnds holds once the victory track of the trial
+  // has "lead" seconds left to play or fewer (0 by default - it is over)
+  // and stays true after its end; a restart, which stops the track,
+  // clears it.
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
-    ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled);
+    ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled, ecVictoryEnds);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
-    eaStraysLeave, eaPress, eaScene);
+    eaStraysLeave, eaPress, eaScene, eaGoRight);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -94,7 +97,11 @@ type
   TEventAction = record
     Kind: TEventActionKind;
     Text: TLocalizedText; // the message kinds; localized like the triggers
-    FileName: string; // eaMusic
+    // eaMusic: the track FileName loops from now on, coming in from
+    // silence over FadeSeconds. JSON: "file", "fade" (seconds, 0 by
+    // default - at once).
+    FileName: string;
+    FadeSeconds: Single;
     // eaIntensity: the dynamic objects tagged Target fade to Level
     // (0..1) over Ticks. JSON: "target", "value" (a percentage),
     // "ticks" (0 by default - at once).
@@ -153,6 +160,8 @@ type
     // until that act is over - so the event must wait for one. JSON:
     // "monster", "every" (seconds, above 0).
     // eaScene: the scene Target begins (Levels.Scenes). JSON: "target".
+    // eaGoRight: the go-right arrow blinks over the screen - the way on is
+    // open. JSON: nothing more.
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -184,7 +193,8 @@ type
   //     or "when": "actReached", "act": 2
   //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3
   //     or "when": "trialDone"
-  //     or "when": "waveKilled", "act": 6, "part": 1, "of": 2)
+  //     or "when": "waveKilled", "act": 6, "part": 1, "of": 2
+  //     or "when": "victoryEnds", "lead": 4)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -199,6 +209,7 @@ type
     Act: Integer; // ecActReached, ecGravelDealt, ecWaveKilled
     Part: Integer; // ecGravelDealt, ecWaveKilled
     Whole: Integer; // ecGravelDealt, ecWaveKilled, "of" in JSON
+    LeadSeconds: Single; // ecVictoryEnds
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -208,13 +219,13 @@ const
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
-    'gravelDealt', 'trialDone', 'waveKilled');
+    'gravelDealt', 'trialDone', 'waveKilled', 'victoryEnds');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene');
+    'scene', 'goRight');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -280,6 +291,10 @@ resourcestring
     'or more';
   SEventPressPace = 'Level "%s": event "%s": press takes "every" above 0 ' +
     'seconds, not %g';
+  SEventBadFade = 'Level "%s": event "%s": music takes "fade" of 0 seconds ' +
+    'or more, not %g';
+  SEventBadLead = 'Level "%s": event "%s": victoryEnds takes "lead" of 0 ' +
+    'seconds or more, not %g';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -552,6 +567,10 @@ begin
     ALevelId, AEventId);
   Result.Text := ReadLocalizedText(AObj, 'text');
   Result.FileName := AObj.GetValue<string>('file', '');
+  Result.FadeSeconds := AObj.GetValue<Double>('fade', 0);
+  if Result.FadeSeconds < 0 then
+    raise ELevelEventError.CreateFmt(SEventBadFade,
+      [ALevelId, AEventId, Result.FadeSeconds]);
   case Result.Kind of
     eaHint:
       ReadHint(AObj, ALevelId, AEventId, Result);
@@ -617,6 +636,10 @@ begin
     raise ELevelEventError.CreateFmt(SEventNoAct, [ALevelId, Result.Id]);
   if Result.Condition in [ecGravelDealt, ecWaveKilled] then
     ReadActShare(AObj, ALevelId, Result);
+  Result.LeadSeconds := AObj.GetValue<Double>('lead', 0);
+  if Result.LeadSeconds < 0 then
+    raise ELevelEventError.CreateFmt(SEventBadLead,
+      [ALevelId, Result.Id, Result.LeadSeconds]);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);

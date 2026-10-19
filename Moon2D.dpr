@@ -94,6 +94,7 @@ uses
   Scenes.Director in 'Game\Scenes\Scenes.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
+  Hud.GoRight in 'Hud\Hud.GoRight.pas',
   Audio in 'Game\Audio.pas',
   Localization in 'Core\Localization.pas',
   Render.Glow in 'Core\Render.Glow.pas',
@@ -149,6 +150,7 @@ const
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
   VictoryMusicFile = 'win.ogg';
+  NoVictoryLeft = -1;
   // 'ToEndLev := 400' of the boss handler (moon.dpr 949): the level is
   // won, the hero lingers this many ticks over the wreckage - about
   // twelve seconds at the real 33 Hz - then the campaign moves on
@@ -343,6 +345,7 @@ type
     FVitals: THudVitals; // the HUD is reborn with the level
     FCharge: THudCharge;
     FMarks: THudMarks;
+    FGoRight: THudGoRight;
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
@@ -411,6 +414,10 @@ type
     FWaveBank: string;
     // The trial of the screen is won: the events of the end wait for it
     FTrialDone: Boolean;
+    // The trial's victory track, played as a sound, and what is left of it
+    // in seconds: 0 once it is over, below 0 while there is none
+    FVictory: THeldSound;
+    FVictoryLeft: Double;
     // The press of the finale: the balconies ride down; shut outside it
     FPress: TPress;
     // What the open sky of the trial lets fall; '' - the sky is shut
@@ -486,6 +493,8 @@ type
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
+    procedure PlayVictoryTrack;
+    procedure StopVictoryTrack;
     function LetDownFromSky(const AMonsterId: string;
       ALook: TArrivalLook = alPlain): TMonster;
     procedure LetDownMedkit;
@@ -525,7 +534,7 @@ type
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
     procedure PreloadSounds;
-    procedure ChangeMusic(const AFileName: string);
+    procedure ChangeMusic(const AFileName: string; AFadeSeconds: Single = 0);
     function HeroRides(const APad: TPad): Boolean;
     function LocateParent(const ATag: string;
       out AStand: TParentStand): Boolean;
@@ -616,6 +625,8 @@ begin
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
+  FVictory.Channel := -1;
+  FVictoryLeft := NoVictoryLeft;
 
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet);
@@ -632,6 +643,7 @@ begin
   FScenes.Free;
   FAudio.Free;
   FMarks.Free;
+  FGoRight.Free;
   FShake.Free;
   FRain.Free;
   FBurstWounded.Free;
@@ -829,6 +841,17 @@ begin
     begin
       Result := FTrialDone;
     end;
+  Cues.VictoryLeft :=
+    function: Single
+    begin
+      Result := FVictoryLeft;
+    end;
+  // Through the field, not its method: the HUD is reborn with the level
+  Cues.GoRight :=
+    procedure
+    begin
+      FGoRight.Show;
+    end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -844,6 +867,7 @@ begin
   FBurstWounded.Clear;
   FRain.Clear;
   FMessages.Clear;
+  StopVictoryTrack;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
   FHurtCooldown := 0;
   FCheckpointX := FHero.X;
@@ -1013,17 +1037,23 @@ begin
   FHeldDown := False;
   FHeldFire := False;
   FMenu.ShowMain;
-  // Level music keeps playing under the menu - verbatim 2008 behavior
+  // Level music keeps playing under the menu - verbatim 2008 behavior.
+  // The victory track is a sound of the world: it waits, or the events
+  // timed to its end would come late
   if FScenes <> nil then
     FScenes.Pause;
+  FAudio.PauseHeld(FVictory);
 end;
 
 // Back from the menu to where Escape came from; a scene waits there
 procedure TMoonGame.ResumeGame;
 begin
   FState := FResumeState;
-  if (FState = gsPlaying) and (FScenes <> nil) then
+  if FState <> gsPlaying then
+    Exit;
+  if FScenes <> nil then
     FScenes.Resume;
+  FAudio.ResumeHeld(FVictory);
 end;
 
 procedure TMoonGame.SetFullscreen(AValue: Boolean);
@@ -1078,9 +1108,11 @@ begin
   FreeAndNil(FVitals);
   FreeAndNil(FCharge);
   FreeAndNil(FMarks);
+  FreeAndNil(FGoRight);
   FVitals := THudVitals.Create(FRenderer);
   FCharge := THudCharge.Create(FRenderer, FrameWidth);
   FMarks := THudMarks.Create(FRenderer);
+  FGoRight := THudGoRight.Create(FRenderer);
 end;
 
 // The level's respawn point of the hero's screen becomes the
@@ -1120,6 +1152,7 @@ begin
   FUptake.Settle;
   FShroud.LeaveMotes;
   FMessages.ClearPopups;
+  FGoRight.Hide;
   FireScreenTriggers;
   PinRespawnPoint;
 end;
@@ -1579,10 +1612,26 @@ begin
   if FHero.HeroForm <> hfNormal then
     FAudio.Play(BottleSoundFile);
   FHenshin.RemoveIceForm;
-  // The victory track of a boss, once; the level goes on, so no timer of
-  // its end - the room stays silent until a screen ahead changes the music.
-  // A restart brings back FCurrentMusic, the trial's own track.
-  FAudio.PlayMusic(VictoryMusicFile, mmOnce);
+  // The level goes on: no timer of its end, the events of the screen
+  // take over at the end of the track. A restart brings back
+  // FCurrentMusic, the trial's own track.
+  PlayVictoryTrack;
+end;
+
+// As a sound, not as music: the music channel is left free for the next
+// track to fade in over the end of this one
+procedure TMoonGame.PlayVictoryTrack;
+begin
+  FAudio.StopMusic;
+  FVictory := FAudio.PlayTrackHeld(VictoryMusicFile);
+  FVictoryLeft := FAudio.SecondsOf(FVictory);
+end;
+
+procedure TMoonGame.StopVictoryTrack;
+begin
+  FAudio.StopHeld(FVictory);
+  FVictory.Channel := -1;
+  FVictoryLeft := NoVictoryLeft;
 end;
 
 // Verbatim ladder of moon.dpr 826-864, quirks included: the 4th bonus
@@ -1618,12 +1667,12 @@ end;
 
 // A trigger's or an event's track: played now and remembered, so a
 // restart respawns into it. '' is a no-op.
-procedure TMoonGame.ChangeMusic(const AFileName: string);
+procedure TMoonGame.ChangeMusic(const AFileName: string; AFadeSeconds: Single);
 begin
   if AFileName = '' then
     Exit;
   FCurrentMusic := AFileName;
-  FAudio.PlayMusic(AFileName, mmLoop);
+  FAudio.PlayMusic(AFileName, mmLoop, AFadeSeconds);
 end;
 
 // The one rider a rebuild keeps out of the depth: monsters fall through
@@ -1732,6 +1781,8 @@ begin
   FAudio.Load(RicochetSoundFile);
   FAudio.Load(CannonShotSoundFile);
   FAudio.Load(TerminalKeySoundFile);
+  // Decoded whole at the trial's end it would stall the victory a frame
+  FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
     FAudio.Load(Name);
   for var Def in FMonsters.AllDefs do
@@ -2511,6 +2562,8 @@ begin
   FKillStreak := 0;
   FStreakBonusCount := 0;
   FMessages.Clear;
+  FGoRight.Hide;
+  StopVictoryTrack;
   // A fresh boss means a fresh ceremony (the new TMonster resets its
   // henshin flag too)
   FHenshin.Reset;
@@ -2873,6 +2926,12 @@ begin
   FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
   FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
   FCharge.Tick(FScore, FKillStreak, FBonus, not FBonusLearned);
+  FGoRight.Tick;
+  // Down to 0 and no further: below 0 is no victory at all
+  if FVictoryLeft > ADeltaSeconds then
+    FVictoryLeft := FVictoryLeft - ADeltaSeconds
+  else if FVictoryLeft > 0 then
+    FVictoryLeft := 0;
   FShake.Tick; // before the level switch: the boss's blast rides the walk-out
   // 'if EndLev then ToEndLev--' (moon.dpr 525-528): the level is won,
   // the hero lingers; when the timer dries up the campaign moves on.
@@ -3121,6 +3180,7 @@ begin
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
         FCharge.Draw;
+        FGoRight.Draw(AAlpha);
         FMessages.Draw(AAlpha);
         // Topmost: the ceremony outranks the news
         FHenshin.DrawCountdown(FFont, AAlpha);

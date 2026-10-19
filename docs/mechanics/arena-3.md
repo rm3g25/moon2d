@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), nothing built. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17); stage 1 built (2026-10-19, 3.0.63). Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form.
@@ -14,8 +14,7 @@ A false ending: arena 2 is won, the victory track plays, the player thinks the l
 
 ## Screens
 ### The false ending (screen 9, after the trial)
-- win.ogg plays (already built at 6.1). On the last chord it is cut off, a second of full silence, then the go-right arrow and an anxious retro ambient. (The chewed-tape slowdown was turned down - cannot be done.)
-- The ambient is a placeholder until he has the track.
+- win.ogg plays to its end; the anxious retro ambient, lunar.ogg ("Lunar Silence", made in Suno, 3 minutes - for the three tunnel screens before the boss), fades in under its last seconds; at its very end the go-right arrow. (The chewed-tape slowdown was turned down - cannot be done.) As built - see "Stage 1 as built".
 
 ### Screen 10 - the double-barrel
 - A room of lunar rock, the double-barrel on a pedestal, as the super shotgun in Doom 2. No monsters.
@@ -85,9 +84,20 @@ K is tuned so the turrets bring about 90-95% and the trickle the rest - a slow p
 ## The end
 - The blast. The form comes off (black orbs into the aura ring, as the ice form). The level ends - and version 3.0 with it.
 
+## Stage 1 as built (3.0.63)
+All of it is data on screen 9 plus a few words of the event vocabulary; no code knows the false ending.
+
+- **The victory track of the trial is a sound, not music** (TSoundBank.PlayTrackHeld: win.ogg decoded whole at startup, played on a sound channel and held). The music channel is free, so the next track fades in over the end of the victory with no conflict. The trial's own track stops at the victory. The game counts down what is left of it (from the decoded length, TSoundBank.SecondsOf); the menu pauses the track and the count with it, a restart and a new level stop it. The victory at the boss of level 1 is still music - it ends the level.
+- **Condition `victoryEnds`** (ecVictoryEnds), JSON "lead" in seconds (0 by default): holds once the victory track has "lead" seconds left or fewer, and after its end. A missing win.ogg is a track of 0 seconds - the events fire at once.
+- **`music` takes "fade"** (seconds, 0 by default): the track comes in from silence (Mix_FadeInMusic).
+- **Action `goRight`** (eaGoRight): the go-right arrow (Hud.GoRight) in the middle of the screen - a hollow arrow of neon tube, three strips of the band glow along its outline (halo, tube, white core), mitered at the corners, so it is sharp at any window size. Four slow blinks, 60 ticks each, every one a raised cosine from dark to full and back, then it is gone - about seven seconds. No sound: the arrow is big enough to be seen (a beep and a slide on each flash were tried and dropped). It also goes out when the hero leaves the screen, on a restart and with the level. The beat (TGoRightBeat) is apart from the picture. Reusable: any event can raise it.
+- **The events**: s09-tunnel-music (`victoryEnds`, lead 5: lunar.ogg with fade 5 - remembered as the track a restart plays) and s09-go-on (`victoryEnds` at the very end: `goRight`).
+- **The door is still a wall**: screen 9 is the last screen of level 2 until stage 2 adds screen 10. The arrow points at a closed door until then.
+- lunar.ogg is put in `bin/music/` by hand; without it the screen stays silent and the arrow shows anyway.
+
 ## Stages
 Each its own commit, each run live.
-1. **False ending.** The chord cut, a second of silence, the go-right arrow, the ambient (placeholder).
+1. **False ending.** Built (3.0.63), see "Stage 1 as built".
 2. **Screen 10 - the double-barrel room.** Lunar rock, the pedestal, no monsters.
 3. **The double-barrel as a weapon.** Huge, spread, damage, reload, sound; the size of the art against the hero.
 4. **Tunnel life.** Levitating dust, sand streams, tremors - once, for every tunnel screen.
@@ -107,8 +117,6 @@ Each its own commit, each run live.
 
 ## Open
 - The screen numbers (10-13 a guess).
-- The go-right arrow: what the game has for it already.
-- The ambient track.
 - The giant double-barrel after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.
 - What the black orb aura and the fire rain do in numbers against the ice form's.

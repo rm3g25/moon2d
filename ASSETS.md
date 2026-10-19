@@ -33,6 +33,8 @@ using Suno for version 2.1.0, replacing the third-party music the 2008 build
 shipped with. In the repository since the tracks settled: 17 MB is a real cost
 in a repository this size, but a clone that plays with sound beats a clone that
 needs a second download, and finished tracks do not churn the way drafts did.
+`lunar.ogg` ("Lunar Silence", the ambient of the tunnels after the gravel
+arena) joined them in 3.0.63, made the same way.
 
 ## Not made by the author
 
@@ -184,7 +186,6 @@ author (a take of three sounds; the first, a steel latch striking twice,
 is the one used) and cut by `tools/sounds/shelf.py`: averaged to mono,
 brought to 44.1 kHz, faded at both ends and leveled, nothing else. The
 take is not in the repository.
-
 ## Third-party runtime libraries
 
 `SDL2.dll`, `SDL2_mixer.dll` and `SDL2_image.dll` are redistributed under the

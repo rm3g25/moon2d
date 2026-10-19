@@ -31,7 +31,15 @@ const
 type
   EAudioError = class(Exception);
 
-  PMixChunk = Pointer;
+  // Mix_Chunk of SDL_mixer.h: the samples decoded whole, in the mixer's
+  // own format
+  TMixChunk = record
+    Allocated: Integer;
+    Samples: PByte;
+    ByteLength: UInt32;
+    Volume: Byte;
+  end;
+  PMixChunk = ^TMixChunk;
   PMixMusic = Pointer;
 
 // 'delayed' loads SDL2_mixer.dll on first call, not at startup - a
@@ -46,6 +54,10 @@ procedure Mix_CloseAudio; cdecl;
   external MixerLib name 'Mix_CloseAudio' delayed;
 function Mix_AllocateChannels(ACount: Integer): Integer; cdecl;
   external MixerLib name 'Mix_AllocateChannels' delayed;
+// The format the mixer was opened with; 0 when it is not open
+function Mix_QuerySpec(out AFrequency: Integer; out AFormat: UInt16;
+  out AChannels: Integer): Integer; cdecl;
+  external MixerLib name 'Mix_QuerySpec' delayed;
 
 // The C header wraps this into the Mix_LoadWAV macro; the macro does not
 // exist in the DLL, the _RW form does - in every SDL2_mixer version ever
@@ -76,6 +88,8 @@ procedure Mix_FreeMusic(AMusic: PMixMusic); cdecl;
   external MixerLib name 'Mix_FreeMusic' delayed;
 function Mix_PlayMusic(AMusic: PMixMusic; ALoops: Integer): Integer; cdecl;
   external MixerLib name 'Mix_PlayMusic' delayed;
+function Mix_FadeInMusic(AMusic: PMixMusic; ALoops, AMilliseconds: Integer):
+  Integer; cdecl; external MixerLib name 'Mix_FadeInMusic' delayed;
 function Mix_HaltMusic: Integer; cdecl;
   external MixerLib name 'Mix_HaltMusic' delayed;
 function Mix_VolumeMusic(AVolume: Integer): Integer; cdecl;
@@ -89,7 +103,7 @@ type
   // plays. Channel -1 - it never started.
   THeldSound = record
     Channel: Integer;
-    FileName: string;
+    Chunk: PMixChunk;
   end;
 
   // One instance owns the mixer for the whole game. Two loading creeds:
@@ -102,10 +116,14 @@ type
     FMusicMuted: Boolean;
     FMusicLevel: Single; // 0..1 of the full volume
     FSounds: TDictionary<string, PMixChunk>;
+    // Tracks of the music folder played as sounds; nil for a missing one
+    FTracks: TDictionary<string, PMixChunk>;
+    FBytesPerSecond: Integer; // of the decoded samples
     FMusic: PMixMusic;
     FSoundsDir: string;
     FMusicDir: string;
     function ChunkOf(const AFileName: string): PMixChunk;
+    function PlayChunkHeld(AChunk: PMixChunk): THeldSound;
     function StillHeld(const ASound: THeldSound): Boolean;
     procedure ApplyMusicVolume;
   public
@@ -121,10 +139,21 @@ type
     procedure StopHeld(const ASound: THeldSound);
     procedure PauseHeld(const ASound: THeldSound);
     procedure ResumeHeld(const ASound: THeldSound);
+    // How long a held sound plays from its start; 0 for one that never
+    // started
+    function SecondsOf(const ASound: THeldSound): Single;
+    // A track of the music folder decoded whole, to be played as a sound.
+    // It loads as music does, leniently: a missing track is no track.
+    procedure LoadTrack(const AFileName: string);
+    // The track once, on a sound channel and held: the music channel
+    // stays free for the next track to fade in over its end
+    function PlayTrackHeld(const AFileName: string): THeldSound;
     // The music at a share of its volume, 0..1; it stays at it through
     // track changes. Muting outranks it.
     procedure SetMusicLevel(ALevel: Single);
-    procedure PlayMusic(const AFileName: string; AMode: TMusicMode);
+    // AFadeSeconds above 0 brings the track in from silence
+    procedure PlayMusic(const AFileName: string; AMode: TMusicMode;
+      AFadeSeconds: Single = 0);
     procedure StopMusic;
     // Mutes the music channel at the mixer, effects untouched. The game
     // keeps switching tracks normally underneath - unmuting resumes
@@ -138,6 +167,19 @@ implementation
 
 resourcestring
   SSoundLoadFailed = 'Sound failed to load: %s (%s)';
+
+function MixerBytesPerSecond: Integer;
+const
+  FormatBitsMask = $FF; // SDL_AUDIO_BITSIZE
+var
+  Frequency: Integer;
+  Format: UInt16;
+  Channels: Integer;
+begin
+  if Mix_QuerySpec(Frequency, Format, Channels) = 0 then
+    Exit(0);
+  Result := Frequency * Channels * ((Format and FormatBitsMask) div 8);
+end;
 
 constructor TSoundBank.Create(const ASoundsDir, AMusicDir: string);
 const
@@ -155,6 +197,7 @@ begin
   FSoundsDir := IncludeTrailingPathDelimiter(ASoundsDir);
   FMusicDir := IncludeTrailingPathDelimiter(AMusicDir);
   FSounds := TDictionary<string, PMixChunk>.Create;
+  FTracks := TDictionary<string, PMixChunk>.Create;
   FMusicLevel := 1;
   try
     // Delay-loaded import: a missing SDL2_mixer.dll surfaces exactly
@@ -164,8 +207,10 @@ begin
   except
     FEnabled := False; // no DLL - the game plays on, silently
   end;
-  if FEnabled then
-    Mix_AllocateChannels(MixChannels);
+  if not FEnabled then
+    Exit;
+  Mix_AllocateChannels(MixChannels);
+  FBytesPerSecond := MixerBytesPerSecond;
 end;
 
 destructor TSoundBank.Destroy;
@@ -175,8 +220,12 @@ begin
     StopMusic;
     for var Chunk in FSounds.Values do
       Mix_FreeChunk(Chunk);
+    for var Chunk in FTracks.Values do
+      if Chunk <> nil then
+        Mix_FreeChunk(Chunk);
     Mix_CloseAudio;
   end;
+  FTracks.Free;
   FSounds.Free;
   inherited;
 end;
@@ -212,25 +261,58 @@ begin
   end;
 end;
 
-function TSoundBank.PlayHeld(const AFileName: string): THeldSound;
+function TSoundBank.PlayChunkHeld(AChunk: PMixChunk): THeldSound;
 const
   AnyFreeChannel = -1;
   PlayOnce = 0;
   NoTimeLimit = -1;
 begin
   Result.Channel := -1;
-  Result.FileName := AFileName;
+  Result.Chunk := AChunk;
+  if not FEnabled or (AChunk = nil) then
+    Exit;
+  Result.Channel := Mix_PlayChannelTimed(AnyFreeChannel, AChunk, PlayOnce,
+    NoTimeLimit);
+end;
+
+function TSoundBank.PlayHeld(const AFileName: string): THeldSound;
+begin
+  if FEnabled then
+    Result := PlayChunkHeld(ChunkOf(AFileName))
+  else
+    Result := PlayChunkHeld(nil);
+end;
+
+procedure TSoundBank.LoadTrack(const AFileName: string);
+begin
   if not FEnabled then
     Exit;
-  Result.Channel := Mix_PlayChannelTimed(AnyFreeChannel, ChunkOf(AFileName),
-    PlayOnce, NoTimeLimit);
+  if FTracks.ContainsKey(AFileName) then
+    Exit;
+  FTracks.Add(AFileName, Mix_LoadWAV_RW(
+    SDL_RWFromFile(PAnsiChar(SdlText(FMusicDir + AFileName)), 'rb'), 1));
+end;
+
+function TSoundBank.PlayTrackHeld(const AFileName: string): THeldSound;
+begin
+  LoadTrack(AFileName);
+  var Chunk: PMixChunk := nil;
+  FTracks.TryGetValue(AFileName, Chunk);
+  Result := PlayChunkHeld(Chunk);
+end;
+
+function TSoundBank.SecondsOf(const ASound: THeldSound): Single;
+begin
+  if (ASound.Channel < 0) or (FBytesPerSecond = 0) then
+    Exit(0);
+  Result := ASound.Chunk.ByteLength / FBytesPerSecond;
 end;
 
 function TSoundBank.StillHeld(const ASound: THeldSound): Boolean;
 begin
   Result := FEnabled and (ASound.Channel >= 0) and
     (Mix_Playing(ASound.Channel) <> 0) and
-    (Mix_GetChunk(ASound.Channel) = ChunkOf(ASound.FileName));
+    (Mix_GetChunk(ASound.Channel) = ASound.Chunk);
 end;
 
 procedure TSoundBank.StopHeld(const ASound: THeldSound);
@@ -273,10 +355,12 @@ begin
     Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel));
 end;
 
-procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode);
+procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode;
+  AFadeSeconds: Single);
 const
   LoopForever = -1;
   PlayThroughOnce = 1;
+  MillisecondsPerSecond = 1000;
 begin
   if not FEnabled then
     Exit;
@@ -288,10 +372,13 @@ begin
   if FMusic = nil then
     Exit; // a missing track must not kill the run - the game goes quiet
 
+  var Loops := PlayThroughOnce;
   if AMode = mmLoop then
-    Mix_PlayMusic(FMusic, LoopForever)
+    Loops := LoopForever;
+  if AFadeSeconds > 0 then
+    Mix_FadeInMusic(FMusic, Loops, Round(AFadeSeconds * MillisecondsPerSecond))
   else
-    Mix_PlayMusic(FMusic, PlayThroughOnce);
+    Mix_PlayMusic(FMusic, Loops);
 end;
 
 procedure TSoundBank.StopMusic;

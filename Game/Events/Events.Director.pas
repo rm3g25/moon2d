@@ -12,7 +12,8 @@
   and sent away; the trial's medkits and the bank its wave comes down
   onto; the wall cannons of the trial; the bodies an event lets in; the
   open sky of the trial; the press of its finale; the scene an event
-  begins; how far the gravel trial has come and whether it is won. The
+  begins; how far the gravel trial has come, whether it is won and how
+  much of its victory track is left; the go-right arrow. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -27,9 +28,11 @@ uses
   Levels.Events, Levels.Dynamics, Hud.Messages, Monsters, Game.Trial;
 
 type
-  // Plays a track and remembers it as the level's current one. A
-  // method of the game passed directly, no wrapper.
-  TChangeMusic = reference to procedure(const AFileName: string);
+  // Plays a track and remembers it as the level's current one, coming in
+  // from silence over AFadeSeconds. A method of the game passed directly,
+  // no wrapper.
+  TChangeMusic = reference to procedure(const AFileName: string;
+    AFadeSeconds: Single);
   // A word to the arena about the pad group tagged AGroup (Pads.Arena)
   TArenaCue = reference to procedure(const AGroup: string);
 
@@ -70,6 +73,11 @@ type
     AAct: Integer);
   // The scene AScene begins (Scenes.Director)
   TSceneStart = reference to procedure(const AScene: string);
+  // The seconds the trial's victory track has left to play: 0 once it is
+  // over, below 0 while there is none
+  TVictoryLeft = reference to function: Single;
+  // The go-right arrow shows over the screen
+  TGoRightCue = reference to procedure;
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -90,6 +98,8 @@ type
     SkyFall: TSkyFallCue;
     Press: TPressCue;
     StartScene: TSceneStart;
+    VictoryLeft: TVictoryLeft;
+    GoRight: TGoRightCue;
   end;
 
   TEventDirector = class
@@ -205,6 +215,11 @@ begin
       Result := FCues.TrialDone();
     ecWaveKilled:
       Result := WaveKilled(AEvent);
+    ecVictoryEnds:
+      begin
+        var Left := FCues.VictoryLeft();
+        Result := (Left >= 0) and (Left <= AEvent.LeadSeconds);
+      end;
   else
     Result := True;
   end;
@@ -235,7 +250,7 @@ begin
       eaHint:
         PlayHint(Action);
       eaMusic:
-        FCues.ChangeMusic(Action.FileName);
+        FCues.ChangeMusic(Action.FileName, Action.FadeSeconds);
       eaIntensity:
         FDynamics.FadeTagged(Action.Target, Action.Level, Action.Ticks);
       eaSun:
@@ -270,6 +285,8 @@ begin
         FCues.Press(Action.Press, AEvent.Act);
       eaScene:
         FCues.StartScene(Action.Target);
+      eaGoRight:
+        FCues.GoRight();
     end;
 end;
 

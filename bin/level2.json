@@ -3748,6 +3748,22 @@
         {"action": "shelvesSleep", "target": "s09-balcony", "order": "down", "step": 0.25, "spareHero": true},
         {"action": "straysLeave", "target": "s09-strays"}
       ]
+    },
+    {
+      "id": "s09-tunnel-music",
+      "screen": 9,
+      "when": "victoryEnds", "lead": 5,
+      "then": [
+        {"action": "music", "file": "lunar.ogg", "fade": 5}
+      ]
+    },
+    {
+      "id": "s09-go-on",
+      "screen": 9,
+      "when": "victoryEnds",
+      "then": [
+        {"action": "goRight"}
+      ]
     }
   ],
   "introText": "Транспортный узел пройден.\nСвязи по-прежнему нет - молчат\nдаже аварийные маяки.\n\nДальше путь один: служебные\nтуннели под базой. Здесь стоит\nкислородный цех и другие узлы,\nпитающие терраформирование\nЛуны.\n\nАвтоматика работает. Свет\nгорит. Конвейеры движутся.\nТолько людей нет. Нигде.\n\nА порода в глубине туннелей\nкак будто шевелится...\n",
