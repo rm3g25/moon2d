@@ -2356,7 +2356,9 @@ rebuilds new for the new try.
     at speed units a tick: the sag's speed takes speed * `SagGain` (0.6),
     no more than `SagMaxKick` (2.7 - about three units down at the
     deepest; a shelf does not give - it is bolted to its rails, `Press`
-    does nothing), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
+    does nothing; nor does a pad with no picture, a grid deck, since
+    3.0.62 - the level's art under it stands still and the riders would
+    sink into it), and a damped spring (`SagStiffness` 0.18, `SagDamping` 0.3)
     brings it back, at rest closer than `SagRest` (0.05). The physics deck
     stays on the path: the feet never feel the `Lift`.
   - The knock (3.0.28): `Knock(dx, dy, ticks)` - the pad goes dx, dy from

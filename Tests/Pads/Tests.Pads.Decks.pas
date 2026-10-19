@@ -42,6 +42,8 @@ type
     procedure TestDeckIsNoWallToTheLevel;
     [Test]
     procedure TestDeckIsNotUnderFeetBesideIt;
+    [Test]
+    procedure TestDeckDoesNotGiveUnderALanding;
   end;
 
 implementation
@@ -61,6 +63,8 @@ const
   // A hero's feet span this wide
   FeetWidth = 16;
   MiddleOfDeck = 176;
+  HardLandingSpeed = 5;
+  SpringTicks = 40;
 
 function DeckRows: TArray<string>;
 begin
@@ -134,6 +138,19 @@ begin
     FWorld.DeckUnder(Screen, DeckRight + 40, DeckRight + 40 + FeetWidth,
       DeckTop),
     'Feet off to the right of the run');
+end;
+
+procedure TDeckTests.TestDeckDoesNotGiveUnderALanding;
+begin
+  var Deck := FWorld.DeckUnder(Screen, MiddleOfDeck, MiddleOfDeck + FeetWidth,
+    DeckTop);
+  Deck.Press(HardLandingSpeed);
+  for var i := 1 to SpringTicks do
+  begin
+    FWorld.Tick(Screen, nil);
+    Assert.AreEqual(0.0, Deck.Lift(1), 0.0001,
+      Format('Tick %d: what stands on a deck sinks into the level art', [i]));
+  end;
 end;
 
 initialization

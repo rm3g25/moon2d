@@ -282,7 +282,9 @@ type
     // A pad that strays is sent away with its flock; nothing for any other
     procedure Dismiss;
     // Something has landed on the deck at ASpeed units a tick: the pad
-    // gives under it and springs back; a shelf does not
+    // gives under it and springs back; a shelf does not, nor a pad with no
+    // picture - the art of the level under it would stand still while the
+    // riders sank into it
     procedure Press(ASpeed: Double);
     // The hero stands on the deck this tick: a pad that plunges starts
     // to give way
@@ -1151,7 +1153,7 @@ end;
 
 procedure TPad.Press(ASpeed: Double);
 begin
-  if FShelf.Slides then
+  if FShelf.Slides or (FPlacement.Sprite = '') then
     Exit;
   FSagSpeed := FSagSpeed + Min(ASpeed * SagGain, SagMaxKick);
 end;
