@@ -87,6 +87,37 @@ and the shift are drawn, never read -; the beam's swing, its follow and
 its two looks; the craft as a parent (`Render.Dynamics`), whose renderer
 makes textures; the layer `aloft`.
 
+## Levels.Dynamics: the dust
+
+State: written, 10 tests (3.0.65). Needs no stage. Fixture `TDustTests`
+in `Tests\Levels\Tests.Levels.Dynamics.pas`. The light of a field
+(`TDustLight`) and a band (`TDustBand`) are records the test builds by
+hand and asks; the field itself is read by `ParseDynamic`.
+
+Shared: "the shaft" falls straight down from (100, 0) to (100, 400), 4
+units wide at its hole and 40 at its end, nothing else lit. "The glow"
+has its middle at the corner, its oval 100 across by 50 down. "The band"
+turns its art every 100 units, rolls 10 a second, sways 5 each way over
+20 seconds.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestShaftIsBrightestOnItsAxis` | at y 200: the axis brighter than 10 off, 10 off brighter than 60 off; the same 10 off either side | the shaft is drawn off its axis, or lopsided |
+| `TestShaftWidensAsItFalls` | 10 off the axis: brighter far below than near the hole | the shaft is a rod, or a cone the wrong way up |
+| `TestNothingIsLitAboveTheHole` | on the axis's line: lit just under the hole, dark just over it | the light runs up past the vault |
+| `TestGlowFadesFromItsMiddleAsAnOval` | the middle brighter than 60 aside, 60 aside brighter than 60 above; 600 away gone | the glow is a disc, or its reaches are swapped |
+| `TestAmbientLightsEverywhereAlike` | an ambient alone: the same level at four points far apart | the ambient leans on a place |
+| `TestSeamRollsWithTheSpeed` | the seam at the edge at the start; 25 after 2.5 s to the right, 75 to the left; a turn later where it was | the dust drifts the wrong way, or at the wrong pace |
+| `TestSeamStaysInTheArtAfterHours` | 1 to 6 hours on, both ways: the seam inside the art, and a second moves it by the speed | a long session makes the bands judder or stop |
+| `TestSwayStaysWithinItsReach` | over a cycle: never past the sway, nearly all the way both ways; a cycle later where it was | a band wanders off its line |
+| `TestDustReadsFromItsFile` | a field of one band reads as dust, on the layer `sky`; with "aloft" on `aloft` | the dust is drawn over the spurs it should hide behind |
+| `TestBadDustRaises` | no bands, an empty list, a band of no sprite, a density past 100, a shaft from a point to itself, a shaft of no width, a glow of no height: each raises `EDynamicError` | a typo in the file draws nothing and says nothing |
+
+Left to the eye: the drawing - the mesh, the runs at the seam, the
+additive light, the tint of the light -; the bands behind the static
+objects; the sway and the roll as they are seen; the art of
+`dust.mset`.
+
 ## Scenes.Director
 
 State: written, 16 tests, green on the first run (3.0.62). The unit is

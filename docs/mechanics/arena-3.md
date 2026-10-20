@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -159,7 +159,7 @@ Screen 10 of level 2 is all data: `bin/level2.json` and the two level sets. The 
 - **The door from screen 9** needed no code: with a tenth screen the right door of screen 9 leads on, closed while the trial runs. The ending titles moved with it: the right edge of screen 10 is now the last door of the campaign until screen 11 comes.
 - `lunar.ogg` plays on from screen 9; a restart on screen 10 plays it too.
 - **The End debug key** goes straight to this screen from anywhere, with the music a walk there would have brought (`DebugJumpToWork`, `TrackBefore`). Move its screen number on with the work.
-- Nothing moves on the screen yet: the haze is stage 4. No lamp-and-beacon of REPAINT here - on screen 10 only the dust moves.
+- Nothing moved on the screen at this stage; the haze came with stage 4. No lamp-and-beacon of REPAINT here - on screen 10 only the dust moves.
 
 ## Stage 3 as built (3.0.64)
 The look and the shot went in together, as one commit: 3a and 3b were one reason - the new gun.
@@ -174,12 +174,22 @@ The look and the shot went in together, as one commit: 3a and 3b were one reason
 - **The sound:** `bin/sounds/duplet.wav` by `tools/sounds/duplet.py` - the 2008 shotgun slowed to 0.8, fired twice 14 ms apart, over a thump sliding from 110 to 42 Hz, soft-clipped; 0.75 s.
 - First guesses for the live run: the muzzle reach, the recoil, the trauma, how red the shot reads.
 
+## Stage 4 as built (3.0.65)
+A new kind of the dynamics, `dust` (`TDust` in Levels.Dynamics), and one field of it on screen 10. No render code changed: the kind lives on the `sky` layer by default, drawn after the backdrop and before the static objects, so the spurs of `s10-depth`, the pedestal and the room stand in front of the dust by the order the game already draws in. The layer stands still while the world shakes, as the far wall does.
+
+- **Seen only where it is lit.** A field has one light (`TDustLight`): a shaft out of a hole - brightest on its axis, wider the farther it falls, dark above its source -, a glow off the lit floor (an oval fading from its middle) and an ambient. The light is reckoned at the corners of a mesh laid over each band (a corner every 4 units across at most, 8 rows down; `SDL_RenderGeometry`), its tint is the color of the light, and the band is added over what is behind it (`SdlBlendModeAdd`). There is no texture of a beam: in a vacuum the shaft is seen only where dust crosses it, so the dust draws it. The light stands still while the dust moves through it.
+- **The bands** (`TDustBand`) roll across at a steady speed and sway up and down, slow; each is stretched to its length (one turn of the art) and height. A band is drawn in runs, one for each turn of the art the field's width crosses, so no texture wrap is asked of the renderer. The sway of every band starts at a point of its own (`SlotRoll` of its index). Time counts from the level's load and a restart does not rewind it: the dust does not jump on a death.
+- **The art:** `bin/sprites/dust.mset`, three strips drawn by `tools/dust/build_dust.py` from wrapping value noise (fixed seeds, the same set every run): white, the dust in the alpha, seamless across, 1536 px wide - `dust-band-1` a thin torn thread, `dust-band-2` the wide even body, `dust-band-3` dense with gaps. `dust` joined the `objectSets` of level 2.
+- **Screen 10:** tag `s10-dust`, the light warm (tint 100/80/60); the shaft from the hole of the vault (341, 16 - measured on `screen10`) to (322, 470) under the bottom edge, 3 units wide at the hole and 48 below; the glow at (318, 430), reach 205 by 240, 75%; ambient 5%. Bands, top to bottom: `dust-band-1` at y 128, 40 high, 720 long, 6 units a second, 60%; `dust-band-2` at 205, 90 high, 900 long, 4 a second, 100%; `dust-band-3` at 282, 70 high, 800 long, 2.5 a second, 90%. All drift right, toward the city and the boss - the arrow has gone out, the dust keeps pointing. Sways 3, 4 and 2 units over 50, 70 and 90 seconds.
+- **Old cards:** three textures of 1536 px at most, six draw calls a frame at most, a few thousand corners.
+- First guesses for the live run: the speeds (a screen crossed in 1.5-3.5 minutes may read as nothing moving), the densities, the width of the shaft, how bright the glow lifts the low band.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
 2. **Screen 10 - the double-barrel room.** Built, see "Stage 2 as built".
 3. **The double-barrel as a weapon.** Built (3.0.64), see "Stage 3 as built".
-4. **The living backdrop.** The layered backdrop drawn behind the playfield, and the haze of screen 10. The rockfall and the far ledge come with their screens (stages 5 and 7).
+4. **The living backdrop.** Built (3.0.65), see "Stage 4 as built". The rockfall and the far ledge come with their screens (stages 5 and 7).
 5. **Screen 11 - jumping and the moon stone.** The black glow, the force field.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
@@ -200,7 +210,6 @@ Each its own commit, each run live.
 ## Open
 - The screen numbers 11-13 (10 is built).
 - The 4K room of screen 10: four objects of 256 units from an upscale.
-- The dust of screen 10 (stage 4): bands drawn by a script, not generated - soft alpha is where the generator leaves junk.
 - What sets off the rockfall on screen 11: taking the stone or a timer.
 - The Duplet after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.

@@ -950,6 +950,97 @@ type
     procedure Follow(const APoint: TSdlFPoint);
   end;
 
+  // The light that falls on a field of dust, in units from the field's
+  // corner: a shaft out of a hole, brightest on its axis, wider the
+  // farther it falls and dark above its source; a glow off a lit floor,
+  // an oval that fades from its middle; and what the darkness keeps
+  // everywhere. A width is the distance from the axis where the shaft
+  // has lost all but a third of itself (1/e), a glow's reach the same
+  // for the half sizes of its oval. A shaft or a glow at level 0 is none.
+  TDustLight = record
+    ShaftFrom, ShaftTo: TSdlFPoint;
+    ShaftFromWidth, ShaftToWidth: Single;
+    ShaftLevel: Single;
+    GlowAt: TSdlFPoint;
+    GlowReach: TSdlFPoint;
+    GlowLevel: Single;
+    Ambient: Single;
+    // From 0 up; above 1 where the shaft crosses the glow
+    function LevelAt(AX, AY: Single): Single;
+  end;
+
+  // One band of a field of dust: a strip of art rolled along at a steady
+  // speed and swaying up and down, slow. Y is its middle line in units
+  // from the field's corner; the art is stretched to Length across (one
+  // turn of it) and Height down. Speed in units a second, to the right
+  // above zero; sway in units each way over SwayTime seconds, starting
+  // SwayPhase (0..1) into its cycle; density 0..1.
+  TDustBand = record
+    Sprite: string;
+    Y, Height: Single;
+    Length: Single;
+    Speed: Single;
+    Sway, SwayTime, SwayPhase: Single;
+    Density: Single;
+    // Where a seam of the art stands at ASeconds, 0..Length from the
+    // field's left edge
+    function SeamAt(ASeconds: Double): Single;
+    // The band's middle line at ASeconds
+    function MiddleAt(ASeconds: Double): Single;
+  end;
+
+  // Levitating dust hanging in the depth of a giant tunnel: long bands
+  // that drift and sway, slow - no wind on the Moon, the dust is charged
+  // and hovers, it drifts, it does not billow. A band is seen only as the
+  // light finds it: the field's light (TDustLight) is reckoned at the
+  // corners of a mesh laid over the band, its tint is the color of the
+  // light, and the band is added over what is behind it - in a vacuum the
+  // shaft from a hole is seen only where dust crosses it. The light
+  // stands still while the dust moves through it.
+  // The bands span the field's width from its corner; each art is white,
+  // the dust in its alpha, seamless across (tools/dust/build_dust.py).
+  // Intensity scales every band. With no light the bands are lit evenly
+  // and in full; with one, what it does not say is dark.
+  // On the sky layer by default: in the depth, behind the static objects,
+  // standing while the world shakes.
+  // JSON:
+  //   {"kind": "dust", "screen": 10, "x": 0, "y": 0, "width": 512,
+  //    "tint": [100, 80, 60],
+  //    "light": {"shaft": {"from": [341, 16], "to": [322, 470],
+  //                        "width": [3, 48], "level": 100},
+  //              "glow": {"at": [318, 430], "reach": [205, 240],
+  //                       "level": 80},
+  //              "ambient": 6},
+  //    "bands": [{"sprite": "dust-band-2", "y": 205, "height": 80,
+  //               "length": 768, "speed": 4, "sway": 3, "swayTime": 60,
+  //               "density": 85}]}
+  TDust = class(TDynamicObject)
+  private
+    FWidth: Single;
+    FLight: TDustLight;
+    FLightColor: TRgb;
+    FBands: TArray<TDustBand>;
+    FTextures: TArray<PSdlTexture>; // the canvas art's, by band
+    FTicks: Integer;
+    FVertices: TArray<TSdlVertex>;
+    FIndices: TArray<Integer>;
+    procedure BuildIndices;
+    procedure DrawBand(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      ABand: Integer; ASeconds: Double);
+    procedure DrawRun(const ACanvas: TDynamicCanvas; AX, AY, ATop: Single;
+      ABand: Integer; AFrom, ATo, AFromU: Single);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+  end;
+
 const
   // The JSON vocabulary of an ease
   MotionEaseIds: array [TMotionEase] of string = ('linear', 'in', 'out',
@@ -975,7 +1066,7 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning, dkGraph, dkCraft, dkBeam);
+    dkLightning, dkGraph, dkCraft, dkBeam, dkDust);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -989,11 +1080,13 @@ const
   // The JSON vocabulary of "kind", "layer", "blink", "flow", "surface",
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
-    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft', 'beam');
+    'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft', 'beam',
+    'dust');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'aloft', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
-    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront);
+    dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront,
+    dlSky);
   PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
   BeamLookIds: array [TBeamLook] of string = ('scan', 'tractor');
   BlinkPatternIds: array [TBlinkPattern] of string = (
@@ -1046,6 +1139,14 @@ resourcestring
   SCraftTurnsLoose = '%s: part "%s" turns, so it hangs by its "pivot"';
   SCraftTurnsAndSlides = '%s: part "%s" both turns and slides - one of the '
     + 'two';
+  SDustNoBands = '%s: "bands" lists no band';
+  SDustNoSprite = '%s: band %d names no sprite';
+  SDustShaftNowhere = '%s: a shaft runs from one point to another, '
+    + '"from" and "to" are one point';
+  SDustBadWidths = '%s: "width" of a shaft takes two widths, at its source '
+    + 'and at its end, both above zero';
+  SDustBadReach = '%s: "reach" of a glow takes two half sizes, x and y, '
+    + 'both above zero';
 
 const
   // Beacon light, in shares of the halo size
@@ -3890,6 +3991,282 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// TDust
+// ---------------------------------------------------------------------------
+
+const
+  // A field of dust spans a screen across unless its file says otherwise
+  DefaultDustWidth = 512;
+  DefaultBandHeight = 64;
+  DefaultBandLength = 768;
+  DefaultBandSpeed = 4;
+  DefaultBandSway = 3;
+  DefaultBandSwayTime = 60;
+  DefaultShaftFromWidth = 4;
+  DefaultShaftToWidth = 40;
+  // The mesh over a band: a column of corners every this many units at
+  // most, rows down the band. The light between corners is drawn straight,
+  // and a shaft is a few units across where it leaves its hole.
+  DustColumnStep = 4;
+  DustRows = 8;
+
+procedure ReadDustShaft(AObj: TJSONObject; const AOwner: string;
+  var ALight: TDustLight);
+begin
+  ALight.ShaftFrom := ReadPoint(AObj, 'from', AOwner);
+  ALight.ShaftTo := ReadPoint(AObj, 'to', AOwner);
+  if (ALight.ShaftFrom.X = ALight.ShaftTo.X) and
+    (ALight.ShaftFrom.Y = ALight.ShaftTo.Y) then
+    raise EDynamicError.CreateFmt(SDustShaftNowhere, [AOwner]);
+
+  var Widths: TSdlFPoint;
+  Widths.X := DefaultShaftFromWidth;
+  Widths.Y := DefaultShaftToWidth;
+  if AObj.GetValue('width') <> nil then
+    Widths := ReadPoint(AObj, 'width', AOwner);
+  if (Widths.X <= 0) or (Widths.Y <= 0) then
+    raise EDynamicError.CreateFmt(SDustBadWidths, [AOwner]);
+  ALight.ShaftFromWidth := Widths.X;
+  ALight.ShaftToWidth := Widths.Y;
+  ALight.ShaftLevel := ReadShare(AObj, 'level', 100, AOwner);
+end;
+
+procedure ReadDustGlow(AObj: TJSONObject; const AOwner: string;
+  var ALight: TDustLight);
+begin
+  ALight.GlowAt := ReadPoint(AObj, 'at', AOwner);
+  ALight.GlowReach := ReadPoint(AObj, 'reach', AOwner);
+  if (ALight.GlowReach.X <= 0) or (ALight.GlowReach.Y <= 0) then
+    raise EDynamicError.CreateFmt(SDustBadReach, [AOwner]);
+  ALight.GlowLevel := ReadShare(AObj, 'level', 100, AOwner);
+end;
+
+// No "light" lights the bands evenly and in full; a "light" says all
+// there is, the rest is dark
+function ReadDustLight(AObj: TJSONObject;
+  const AOwner: string): TDustLight;
+begin
+  Result := Default(TDustLight);
+  var LightObj := AObj.GetValue<TJSONObject>('light', nil);
+  if LightObj = nil then
+  begin
+    Result.Ambient := 1;
+    Exit;
+  end;
+
+  Result.Ambient := ReadShare(LightObj, 'ambient', 0, AOwner);
+  var ShaftObj := LightObj.GetValue<TJSONObject>('shaft', nil);
+  if ShaftObj <> nil then
+    ReadDustShaft(ShaftObj, AOwner, Result);
+  var GlowObj := LightObj.GetValue<TJSONObject>('glow', nil);
+  if GlowObj <> nil then
+    ReadDustGlow(GlowObj, AOwner, Result);
+end;
+
+// AIndex counts from 0; the sway of every band starts at a point of its
+// own
+function ReadDustBand(AObj: TJSONObject; AIndex: Integer; ASeed: Cardinal;
+  const AOwner: string): TDustBand;
+begin
+  Result.Sprite := AObj.GetValue<string>('sprite', '');
+  if Result.Sprite = '' then
+    raise EDynamicError.CreateFmt(SDustNoSprite, [AOwner, AIndex + 1]);
+  Result.Y := AObj.GetValue<Double>('y');
+  Result.Height := ReadPositive(AObj, 'height', DefaultBandHeight, AOwner);
+  Result.Length := ReadPositive(AObj, 'length', DefaultBandLength, AOwner);
+  Result.Speed := AObj.GetValue<Double>('speed', DefaultBandSpeed);
+  Result.Sway := ReadReach(AObj, 'sway', DefaultBandSway, AOwner);
+  Result.SwayTime := ReadPositive(AObj, 'swayTime', DefaultBandSwayTime,
+    AOwner);
+  Result.SwayPhase := SlotRoll(AIndex + 1, ASeed);
+  Result.Density := ReadShare(AObj, 'density', 100, AOwner);
+end;
+
+function TDustLight.LevelAt(AX, AY: Single): Single;
+begin
+  Result := Ambient;
+
+  var AxisX: Single := ShaftTo.X - ShaftFrom.X;
+  var AxisY: Single := ShaftTo.Y - ShaftFrom.Y;
+  var Span: Single := Hypot(AxisX, AxisY);
+  if (ShaftLevel > 0) and (Span > 0) then
+  begin
+    var FromX: Single := AX - ShaftFrom.X;
+    var FromY: Single := AY - ShaftFrom.Y;
+    // Units down the axis from the source; above it the shaft is not yet
+    var Along: Single := (FromX * AxisX + FromY * AxisY) / Span;
+    if Along > 0 then
+    begin
+      var Share: Single := Along / Span;
+      if Share > 1 then
+        Share := 1;
+      var Width := Lerp(ShaftFromWidth, ShaftToWidth, Share);
+      var Across: Single := Abs(FromX * AxisY - FromY * AxisX) / Span;
+      Result := Result + ShaftLevel * Exp(-Sqr(Across / Width));
+    end;
+  end;
+
+  if (GlowLevel > 0) and (GlowReach.X > 0) and (GlowReach.Y > 0) then
+    Result := Result + GlowLevel * Exp(-(Sqr((AX - GlowAt.X) / GlowReach.X) +
+      Sqr((AY - GlowAt.Y) / GlowReach.Y)));
+end;
+
+function TDustBand.SeamAt(ASeconds: Double): Single;
+begin
+  // Double all the way: hours of play roll the art far past what a
+  // Single tells apart
+  var Turns: Double := Frac(Speed * ASeconds / Length);
+  if Turns < 0 then
+    Turns := Turns + 1;
+  Result := Turns * Length;
+end;
+
+function TDustBand.MiddleAt(ASeconds: Double): Single;
+begin
+  var Cycle: Double := Frac(ASeconds / SwayTime + SwayPhase);
+  Result := Y + Sway * Sin(2 * Pi * Cycle);
+end;
+
+constructor TDust.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FWidth := ReadPositive(AObj, 'width', DefaultDustWidth, AOwner);
+  FLight := ReadDustLight(AObj, AOwner);
+  FLightColor := TintColor(APlacement.Tint);
+
+  var BandsArr := AObj.GetValue<TJSONArray>('bands', nil);
+  if (BandsArr = nil) or (BandsArr.Count = 0) then
+    raise EDynamicError.CreateFmt(SDustNoBands, [AOwner]);
+  var Seed := PlacementSeed(APlacement);
+  SetLength(FBands, BandsArr.Count);
+  for var i := 0 to BandsArr.Count - 1 do
+    FBands[i] := ReadDustBand(BandsArr.Items[i] as TJSONObject, i, Seed,
+      AOwner);
+  SetLength(FTextures, Length(FBands));
+  BuildIndices;
+end;
+
+// The corners of a run go column by column, DustRows + 1 to a column, so
+// the triangles of a run narrower than the field are the first of these
+procedure TDust.BuildIndices;
+begin
+  var Columns := Ceil(FWidth / DustColumnStep);
+  SetLength(FVertices, (Columns + 1) * (DustRows + 1));
+  SetLength(FIndices, Columns * DustRows * 6);
+  var Next := 0;
+  for var Col := 0 to Columns - 1 do
+    for var Row := 0 to DustRows - 1 do
+    begin
+      var Corner := Col * (DustRows + 1) + Row;
+      var Beside := Corner + DustRows + 1;
+      FIndices[Next] := Corner;
+      FIndices[Next + 1] := Beside;
+      FIndices[Next + 2] := Corner + 1;
+      FIndices[Next + 3] := Beside;
+      FIndices[Next + 4] := Beside + 1;
+      FIndices[Next + 5] := Corner + 1;
+      Inc(Next, 6);
+    end;
+end;
+
+procedure TDust.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  for var i := 0 to High(FBands) do
+    FTextures[i] := ACanvas.Art.Get(FBands[i].Sprite);
+end;
+
+// The cache owns the textures
+procedure TDust.Release;
+begin
+  for var i := 0 to High(FTextures) do
+    FTextures[i] := nil;
+end;
+
+procedure TDust.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  Inc(FTicks);
+end;
+
+// One run of a band: the corners column by column from AFrom to ATo,
+// units across the field, the art from AFromU on. Every corner takes the
+// light where it stands in the field, whatever the sway has done.
+procedure TDust.DrawRun(const ACanvas: TDynamicCanvas; AX, AY, ATop: Single;
+  ABand: Integer; AFrom, ATo, AFromU: Single);
+begin
+  var Band := FBands[ABand];
+  var Columns := Max(1, Ceil((ATo - AFrom) / DustColumnStep));
+  var Alpha: UInt8 := Round(255 *
+    EnsureRange(Band.Density * Intensity, 0.0, 1.0));
+  for var Col := 0 to Columns do
+  begin
+    var Across: Single := AFrom + (ATo - AFrom) * Col / Columns;
+    var U: Single := AFromU + (Across - AFrom) / Band.Length;
+    for var Row := 0 to DustRows do
+    begin
+      var Down: Single := Row / DustRows;
+      var Y: Single := ATop + Band.Height * Down;
+      var Light: Single := FLight.LevelAt(Across, Y - AY);
+      if Light > 1 then
+        Light := 1;
+      var Corner := Col * (DustRows + 1) + Row;
+      FVertices[Corner].Position.X := AX + Across;
+      FVertices[Corner].Position.Y := Y;
+      FVertices[Corner].Color.R := Round(FLightColor.R * Light);
+      FVertices[Corner].Color.G := Round(FLightColor.G * Light);
+      FVertices[Corner].Color.B := Round(FLightColor.B * Light);
+      FVertices[Corner].Color.A := Alpha;
+      FVertices[Corner].TexCoord.X := U;
+      FVertices[Corner].TexCoord.Y := Down;
+    end;
+  end;
+  SDL_RenderGeometry(ACanvas.Renderer, FTextures[ABand], @FVertices[0],
+    (Columns + 1) * (DustRows + 1), @FIndices[0], Columns * DustRows * 6);
+end;
+
+// A band is drawn in runs, one for each turn of the art the field's width
+// crosses: a run ends at a seam, the next starts from the art's left edge
+procedure TDust.DrawBand(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  ABand: Integer; ASeconds: Double);
+var
+  BlendMode: Integer;
+begin
+  var Texture := FTextures[ABand];
+  if Texture = nil then
+    Exit;
+  var Band := FBands[ABand];
+  var Top: Single := AY + Band.MiddleAt(ASeconds) - Band.Height / 2;
+  // How far into the art the field's left edge is
+  var FromU: Single := 1 - Band.SeamAt(ASeconds) / Band.Length;
+  if FromU >= 1 then
+    FromU := 0;
+
+  BlendMode := SdlBlendModeBlend;
+  SDL_GetTextureBlendMode(Texture, @BlendMode);
+  SDL_SetTextureBlendMode(Texture, SdlBlendModeAdd);
+  var RunFrom: Single := 0;
+  while RunFrom < FWidth do
+  begin
+    var TurnEnd: Single := RunFrom + (1 - FromU) * Band.Length;
+    var RunTo := Min(FWidth, TurnEnd);
+    DrawRun(ACanvas, AX, AY, Top, ABand, RunFrom, RunTo, FromU);
+    RunFrom := RunTo;
+    FromU := 0;
+  end;
+  SDL_SetTextureBlendMode(Texture, BlendMode);
+end;
+
+procedure TDust.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  if Intensity < VisibleLevel then
+    Exit;
+  var Seconds: Double := (FTicks + AAlpha) / LogicTicksPerSecond;
+  for var i := 0 to High(FBands) do
+    DrawBand(ACanvas, AX, AY, i, Seconds);
+end;
+
 function CreateDynamic(AKind: TDynamicKind;
   const APlacement: TDynamicPlacement; AObj: TJSONObject;
   const AOwner: string): TDynamicObject;
@@ -3915,6 +4292,8 @@ begin
       Result := TCraft.Create(APlacement, AObj, AOwner);
     dkBeam:
       Result := TBeam.Create(APlacement, AObj, AOwner);
+    dkDust:
+      Result := TDust.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

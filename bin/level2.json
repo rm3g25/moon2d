@@ -15,7 +15,8 @@
     "sky",
     "level1-structures",
     "ventilation",
-    "pads"
+    "pads",
+    "dust"
   ],
   "music": "hallu.ogg",
   "henshinPattern": "vortex",
@@ -2941,6 +2942,24 @@
       "frequency": 1.1,
       "intensity": 90,
       "size": 30
+    },
+    {
+      "kind": "dust",
+      "screen": 10,
+      "x": 0,
+      "y": 0,
+      "tag": "s10-dust",
+      "tint": [100, 80, 60],
+      "light": {
+        "shaft": {"from": [341, 16], "to": [322, 470], "width": [3, 48], "level": 100},
+        "glow": {"at": [318, 430], "reach": [205, 240], "level": 75},
+        "ambient": 5
+      },
+      "bands": [
+        {"sprite": "dust-band-1", "y": 128, "height": 40, "length": 720, "speed": 6, "sway": 3, "swayTime": 50, "density": 60},
+        {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 4, "sway": 4, "swayTime": 70, "density": 100},
+        {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 2.5, "sway": 2, "swayTime": 90, "density": 90}
+      ]
     }
   ],
   "tilePalette": [

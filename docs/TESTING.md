@@ -73,7 +73,7 @@ Tests\
     Tests.Game.Uptake.pas
   Levels\
     Tests.Levels.Carousels.pas
-    Tests.Levels.Dynamics.pas  the craft and the looks of a beam
+    Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust
     Tests.Levels.Entities.pas
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
