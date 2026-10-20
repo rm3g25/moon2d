@@ -244,6 +244,7 @@ const
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
+  ScancodeEnd = 77; // straight to the screen being built, with its music
   ScancodeKp1 = 89;
   ScancodeKp2 = 90;
   ScancodeKp3 = 91;
@@ -482,6 +483,8 @@ type
     procedure NudgeCrosshair(ADX, ADY: Integer);
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
     procedure DebugBrowseScreen(ADelta: Integer);
+    procedure DebugShowScreen(AScreen: Integer);
+    procedure DebugJumpToWork;
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
     procedure DumpLevelScreens;
@@ -3261,12 +3264,86 @@ end;
 // covers that and the rest of the door ritual.
 procedure TMoonGame.DebugBrowseScreen(ADelta: Integer);
 begin
-  var Target := FHero.Screen + ADelta;
-  if (Target < 1) or (Target > FLevel.ScreenCount) then
+  DebugShowScreen(FHero.Screen + ADelta);
+end;
+
+procedure TMoonGame.DebugShowScreen(AScreen: Integer);
+begin
+  if (AScreen < 1) or (AScreen > FLevel.ScreenCount) then
     Exit;
-  FHero.Screen := Target;
+  FHero.Screen := AScreen;
   FHero.SetY(FHero.Y); // settles or falls, as any teleport
   ArriveOnScreen;
+end;
+
+type
+  // On one screen the triggers fire on arrival, the events after them
+  TMusicTurn = (mtTrigger, mtEvent);
+
+// The track a hero who walked in would hear on AScreen: the level's own,
+// then the last change the screens before it make. An event counts
+// whether or not its condition ever held.
+function TrackBefore(ALevel: TLevel; AScreen: Integer;
+  ADifficulty: TDifficulty): string;
+var
+  Chosen: string;
+  LastScreen: Integer;
+  LastTurn: TMusicTurn;
+
+  procedure Consider(const ATrack: string; ATrackScreen: Integer;
+    ATurn: TMusicTurn);
+  begin
+    if (ATrack = '') or (ATrackScreen >= AScreen) then
+      Exit;
+    var Later := (ATrackScreen > LastScreen) or
+      ((ATrackScreen = LastScreen) and (ATurn >= LastTurn));
+    if not Later then
+      Exit;
+    Chosen := ATrack;
+    LastScreen := ATrackScreen;
+    LastTurn := ATurn;
+  end;
+
+begin
+  Chosen := ALevel.Music;
+  LastScreen := 0;
+  LastTurn := mtTrigger;
+  for var Placement in ALevel.Entities do
+    if ADifficulty in Placement.Grades then
+      Consider(Placement.Triggers.ChangeMusic, Placement.Screen, mtTrigger);
+  for var Trigger in ALevel.ScreenTriggers do
+    if ADifficulty in Trigger.Grades then
+      Consider(Trigger.Triggers.ChangeMusic, Trigger.Screen, mtTrigger);
+  for var Event in ALevel.Events do
+    for var Action in Event.Actions do
+      if Action.Kind = eaMusic then
+        Consider(Action.FileName, Event.Screen, mtEvent);
+  Result := Chosen;
+end;
+
+// End: the screen being built now, from anywhere in the campaign. The
+// story is skipped, the hero stands on the screen's respawn point, and
+// the music becomes the one a walk there would have brought.
+procedure TMoonGame.DebugJumpToWork;
+const
+  WorkLevel = 2;
+  WorkScreen = 10;
+begin
+  var LevelFile := Format(LevelFilePattern, [WorkLevel]);
+  if not SameText(LevelFile, FLevelFile) then
+  begin
+    LoadLevel(LevelFile);
+    if FState = gsIntro then
+      StartPlaying;
+  end;
+
+  var Track := TrackBefore(FLevel, WorkScreen, FDifficulty);
+  if not SameText(Track, FCurrentMusic) then
+    ChangeMusic(Track);
+
+  DebugShowScreen(WorkScreen);
+  FHero.SetScreenX(FCheckpointX);
+  FHero.SetY(FCheckpointY);
 end;
 
 // N: the three ways to filter a redrawn font, compared live on the
@@ -3479,6 +3556,8 @@ begin
       DebugBrowseScreen(1);
     ScancodePageUp:
       DebugBrowseScreen(-1);
+    ScancodeEnd:
+      DebugJumpToWork;
   else
     Exit;
   end;
