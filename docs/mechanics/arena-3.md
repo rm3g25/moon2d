@@ -22,11 +22,22 @@ A false ending: arena 2 is won, the victory track plays, the player thinks the l
 - A room of lunar rock, the double-barrel on a pedestal, as the super shotgun in Doom 2. No monsters.
 - **The gun is huge, out of all proportion to the hero** (decided 2026-10-17). Reason: no close combat with small monsters ahead, and a big boss is hit for sure. A short-range wide spread is exactly the weapon for a 2x2 target.
 
-### Tunnel life (all tunnel screens)
-No wind on the Moon - no billowing dust. Instead:
-- Levitating dust: rare tiny particles drifting slowly and glinting (lunar regolith is charged and hovers - a real effect).
-- Thin straight streams of sand from the ceiling, slow, no clouds (low gravity).
-- Tremors: every N seconds the screen shakes slightly and more sand falls. That is the TeK machine somewhere ahead - the boss announces itself three screens early.
+### The tunnels are giant
+The hero walks along a ledge in a tunnel far bigger than the screen: the backdrop is far away - the opposite wall, the vault, the depth of the tunnel going off into the dark. The playfield (floor, ledges, the pedestal) is near and small against it. Scale is the point: a small hero in a huge empty place.
+
+### The living backdrop (all tunnel screens) - a new mechanic, not designed yet
+It is the backdrop itself that lives, not effects laid over the playfield. How - not decided. Ideas to choose from or mix:
+- **Depth by layers.** The backdrop in two or three layers (far wall, mid arches or pillars, haze) and a slight shift of each against the hero's position - a few units, the far layer least. A still screen gets depth without scrolling. The same layers then serve the belt of the boss arena, where they slide at different speeds (parallax for free).
+- **Moving light far away.** Shafts of light through cracks in the vault, crawling slowly as the sun moves; or a beam sweeping the far wall from deep in the tunnel - TeK searchlights at the city gate. A light texture over the backdrop with additive blend, turned or slid slowly.
+- **Distant TeK traffic.** Tiny lights or silhouettes crawling along a far ledge or rail - convoys going toward the city. The world beyond the hero's reach is busy; it also points the way.
+- **Haze bands.** Long bands of levitating dust hanging in the depth, drifting very slowly and lit where a shaft of light crosses them (no wind on the Moon: the dust is charged and hovers - it drifts, it does not billow).
+- **Distant rockfall.** On a tremor (the TeK machine somewhere ahead), far away a piece of the wall comes down slowly in a dust column, its rumble arriving late - the delay sells the distance.
+- **Pulsing veins.** Glowing seams in the far rock that breathe; now and then a wave of light runs along them to the right - toward the arena.
+- **The glow at the end.** The far end of the tunnel with a faint light that flickers - the city entrance. Grows a little from screen to screen.
+
+Earlier proposal, kept as ideas for the near plane, not as the plan: rare levitating dust specks glinting near the hero, thin slow streams of sand from the ceiling, and tremors - a slight shake every N seconds with more sand falling.
+
+Constraints for whichever is chosen: each layer within 2048 px (old cards); the art is cut into layers at generation time, not after; the layers must also loop for the belt of the boss arena.
 
 ### Screen 11 - jumping and the moon stone
 - Some jumping, then the moon stone: a big glowing oval, black inside. The "black glow" is an event horizon: the background darkens around the stone (SDL_BLENDMODE_MOD), a thin bright rim at its edge.
@@ -135,7 +146,7 @@ Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
 2. **Screen 10 - the double-barrel room.** Lunar rock, the pedestal, no monsters.
 3. **The double-barrel as a weapon.** Huge, spread, damage, reload, sound; the size of the art against the hero.
-4. **Tunnel life.** Levitating dust, sand streams, tremors - once, for every tunnel screen.
+4. **The living backdrop.** A new mechanic, design first: pick from the ideas in "The living backdrop", then build it once for every tunnel screen.
 5. **Screen 11 - jumping and the moon stone.** The black glow, the force field.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
@@ -155,6 +166,7 @@ Each its own commit, each run live.
 
 ## Open
 - The screen numbers (10-13 a guess).
+- How the backdrop lives: which of the ideas in "The living backdrop", and how many layers the generated backdrop is cut into.
 - The giant double-barrel after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.
 - What the black orb aura and the fire rain do in numbers against the ice form's.
