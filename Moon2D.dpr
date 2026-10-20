@@ -122,9 +122,10 @@ const
   SoundsDir = 'sounds';
   MusicDir = 'music';
   // Verbatim weapon->shot map of moon.dpr 1813-1817, including the
-  // quirk of weapon 3 borrowing the pistol bark
-  WeaponShotSounds: array [0..4] of string =
-    ('shoot.wav', 'shootgun.wav', 'granade.wav', 'shoot.wav', 'shoot2.wav');
+  // quirk of weapon 3 borrowing the pistol bark; the Duplet is not of 2008
+  WeaponShotSounds: array [0..DupletWeapon] of string =
+    ('shoot.wav', 'shootgun.wav', 'granade.wav', 'shoot.wav', 'shoot2.wav',
+    'duplet.wav');
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
@@ -286,6 +287,7 @@ const
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
   CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
+  DupletShotTrauma = 0.2; // every shot of the Duplet: the kick of the stock
   // The smoke of the cannons' blast hangs over the room about this long:
   // nothing flies in through it and no gravel falls into it
   CannonSmokeTicks = 50;
@@ -2611,10 +2613,10 @@ end;
 
 procedure TMoonGame.BeginUptake(const ALook: TUptakeLook; const AMonster: TMonster);
 begin
-  var Picture := FUptakePainter.PictureOf(AMonster.ArtSet);
+  var Picture := FUptakePainter.PictureOf(AMonster);
+  var Box := AMonster.PictureBox;
   FUptake.Start(ALook, Picture, FUptakePainter.ShapeOf(Picture),
-    Round(AMonster.X), Round(AMonster.Y) - SpriteSize, AMonster.Mirrored,
-    HeroCenter);
+    Box.X, Box.Y, AMonster.Mirrored, HeroCenter);
 end;
 
 // Built now, so that the first touch does not stop on loading a picture
@@ -2622,7 +2624,7 @@ procedure TMoonGame.WarmPickupPictures;
 begin
   for var Monster in FField.Monsters do
     if Monster.Def.Category = mcPickup then
-      FUptakePainter.PictureOf(Monster.ArtSet);
+      FUptakePainter.PictureOf(Monster);
 end;
 
 procedure TMoonGame.ResolveMonsterContact;
@@ -2988,7 +2990,11 @@ begin
     FAudio.Play(ShelfLatchSoundFile);
   FHero.Tick;
   if FHeldFire and FHero.Fire then
+  begin
     FAudio.Play(WeaponShotSounds[FHero.WeaponType]);
+    if FHero.WeaponType = DupletWeapon then
+      FShake.AddTrauma(DupletShotTrauma);
+  end;
 
   // The burst's inhale: the world stands, the hero, his arms and the pads
   // go on

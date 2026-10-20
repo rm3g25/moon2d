@@ -39,6 +39,9 @@ type
 
   TBulletStatus = (bsFlying, bsBursting, bsInactive);
 
+  // How a bullet is painted: as drawn, or red - the Duplet's shot
+  TBulletLook = (blPlain, blRed);
+
   TBullet = class
   private
     FX, FY: Double;
@@ -48,11 +51,13 @@ type
     FStatus: TBulletStatus;
     FBurstFrame: Double;   // 1 -> 8, +0.25 per draw, then inactive
     FContact: Boolean;     // participates in bullet-vs-bullet interception
+    FLook: TBulletLook;
   public
     // Parameter order matches TBurst.NewBullet - the one caller; two
     // different orders for the same six values was a transposition trap
     constructor Create(ASpeed: Integer; AX, AY: Double;
-      AAngleDegrees, AInfluence: Integer; AContact: Boolean);
+      AAngleDegrees, AInfluence: Integer; AContact: Boolean;
+      ALook: TBulletLook);
     procedure Move;        // one tick of flight
     procedure StartBurst;  // hit something: explode in place
     procedure StartBurstSliding; // hit a wall: explode, keep 1/8 inertia
@@ -65,6 +70,7 @@ type
     property DY: Double read FDY write FDY;
     property Status: TBulletStatus read FStatus write FStatus;
     property Contact: Boolean read FContact;
+    property Look: TBulletLook read FLook;
   end;
 
   TBurst = class
@@ -82,7 +88,8 @@ type
     destructor Destroy; override;
 
     procedure NewBullet(ASpeed: Integer; AX, AY: Double;
-      AAngleDegrees, AInfluence: Integer; AContact: Boolean);
+      AAngleDegrees, AInfluence: Integer; AContact: Boolean;
+      ALook: TBulletLook = blPlain);
     // Screen transition of 2008 wiped both bursts (moon.dpr 1089-1090):
     // bullets do not follow the hero through doors.
     procedure Clear;
@@ -105,13 +112,19 @@ implementation
 const
   BulletQuad = 32;    // a bullet draws as a full 32-unit sprite quad
   BurstFrameStep = 0.25;
+  // The red of the Duplet's shot, percent per channel over the white art
+  RedShotRed = 100;
+  RedShotGreen = 28;
+  RedShotBlue = 22;
+  AsPainted = 100;
 
 // ---------------------------------------------------------------------------
 // TBullet
 // ---------------------------------------------------------------------------
 
 constructor TBullet.Create(ASpeed: Integer; AX, AY: Double;
-  AAngleDegrees, AInfluence: Integer; AContact: Boolean);
+  AAngleDegrees, AInfluence: Integer; AContact: Boolean;
+  ALook: TBulletLook);
 begin
   inherited Create;
   FX := AX;
@@ -121,6 +134,7 @@ begin
   FStatus := bsFlying;
   FBurstFrame := 1;
   FContact := AContact;
+  FLook := ALook;
   // Verbatim 2008 trigonometry, including the /57 'radians'
   FDY := -Sin(AAngleDegrees / 57) * ASpeed;
   FDX := Cos(AAngleDegrees / 57) * ASpeed;
@@ -184,10 +198,11 @@ end;
 // ASpeed in units per tick; AInfluence is 2008 'influence' - the
 // gravity fed into DY += AInfluence/100; AContact - see the unit header
 procedure TBurst.NewBullet(ASpeed: Integer; AX, AY: Double;
-  AAngleDegrees, AInfluence: Integer; AContact: Boolean);
+  AAngleDegrees, AInfluence: Integer; AContact: Boolean;
+  ALook: TBulletLook);
 begin
   FBullets.Add(TBullet.Create(ASpeed, AX, AY, AAngleDegrees,
-    AInfluence, AContact));
+    AInfluence, AContact, ALook));
 end;
 
 procedure TBurst.Clear;
@@ -204,6 +219,18 @@ begin
       FBullets[i].Move;
 end;
 
+// The textures are shared by every bullet of the burst: a red one is
+// tinted for its own draw and put back
+procedure DrawBullet(const ASprites: TSpriteRenderer; ATexture: PSdlTexture;
+  const ADest: TSdlRect; ALook: TBulletLook);
+begin
+  if ALook = blRed then
+    TintTexture(ATexture, RedShotRed, RedShotGreen, RedShotBlue);
+  ASprites.DrawRect(ATexture, ADest);
+  if ALook = blRed then
+    TintTexture(ATexture, AsPainted, AsPainted, AsPainted);
+end;
+
 procedure TBurst.Draw(const ASprites: TSpriteRenderer);
 var
   Dest: TSdlRect;
@@ -218,16 +245,16 @@ begin
 
     case Bullet.Status of
       bsFlying:
-        ASprites.DrawRect(FFlightTexture, Dest);
+        DrawBullet(ASprites, FFlightTexture, Dest, Bullet.Look);
       bsBursting:
         begin
           if Round(Bullet.FBurstFrame) > High(FBurstTextures) then
             Bullet.FStatus := bsInactive
           else
-            ASprites.DrawRect(
+            DrawBullet(ASprites,
               FBurstTextures[EnsureRange(Round(Bullet.FBurstFrame),
                 Low(FBurstTextures), High(FBurstTextures))],
-              Dest);
+              Dest, Bullet.Look);
           Bullet.FBurstFrame := Bullet.FBurstFrame + BurstFrameStep;
         end;
     end;

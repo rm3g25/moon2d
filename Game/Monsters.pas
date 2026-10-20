@@ -331,6 +331,10 @@ type
     // Where a shot lands on the body, in screen units: a hull or a disc as
     // drawn and a little more, the column of the 2008 sprite for the rest
     function HitBox: TSdlFRect;
+    // Where the frame is drawn, in screen units, the deck's lift aside: the
+    // cell, or a picture of the def's own size standing on the feet line
+    // and centered on the cell
+    function PictureBox: TSdlFRect;
 
     property Def: TMonsterDef read FDef;
     property X: Double read FX;
@@ -896,6 +900,19 @@ begin
   Result.Y := FY - SpriteSize;
   Result.W := SpriteSize - 2 * MonsterBound;
   Result.H := SpriteSize;
+end;
+
+function TMonster.PictureBox: TSdlFRect;
+begin
+  Result.W := SpriteSize;
+  Result.H := SpriteSize;
+  if FDef.Picture.Enabled then
+  begin
+    Result.W := FDef.Picture.Width;
+    Result.H := FDef.Picture.Height;
+  end;
+  Result.X := Round(FX) + (SpriteSize - Result.W) / 2;
+  Result.Y := Round(FY) - Result.H;
 end;
 
 function TMonster.Wear(AWearFull: Double): Single;
@@ -1964,7 +1981,17 @@ begin
           Frame := EnsureRange(RoundHalfUp(FCurrentSprite), 1, 8);
         end;
         Mirrored := FacesRight;
-        ASprites.Draw(FAnim.Alive[Frame - 1], Round(FX), DrawY, Mirrored);
+        if FDef.Picture.Enabled then
+        begin
+          var Box := PictureBox;
+          var Middle: TSdlFPoint;
+          Middle.X := Box.X + Box.W / 2;
+          Middle.Y := Box.Y + Box.H / 2;
+          ASprites.DrawSized(FAnim.Alive[Frame - 1], Middle, Box.W, Box.H, 1,
+            Mirrored);
+        end
+        else
+          ASprites.Draw(FAnim.Alive[Frame - 1], Round(FX), DrawY, Mirrored);
       end;
 
     mlDying:

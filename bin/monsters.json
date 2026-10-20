@@ -440,6 +440,39 @@
       ]
     },
     {
+      "id": "weaponDuplet",
+      "displayName": "Дуплет",
+      "displayNameEn": "Double Tap",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 5,
+        "fireCooldown": 34,
+        "bulletSpeed": 8,
+        "bulletGravity": 1
+      },
+      "picture": {
+        "width": 42,
+        "height": 12
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Дуплет активирован",
+      "deathTextEn": "Double Tap acquired",
+      "deathSounds": [
+        "gun.wav"
+      ]
+    },
+    {
       "id": "weaponGrenade",
       "legacyName": "Оружие 2",
       "displayName": "Гранатомёт",

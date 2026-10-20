@@ -46,6 +46,9 @@ const
   HeroSize = 32;
   // The hero's 1..24: walk, then death, then the transformed frames
   HeroFrameSequences: array [0..2] of string = ('walk', 'death', 'henshin');
+  // The weapon type of the Duplet, the double-barrel of level 2: types 0..4
+  // are the 2008 guns
+  DupletWeapon = 5;
 
 type
   // What Draw puts on the screen this tick
@@ -86,6 +89,15 @@ type
     FWeaponSet: TSpriteSet;
     FFrames: array [1..24] of PSdlTexture;
     FWeaponFrames: array [1..7] of PSdlTexture;
+    // The Duplet in the hands: dense art with its own alpha, in a cache
+    // of its own
+    FDupletCache: TSpriteCache;
+    FDupletSet: TSpriteSet;
+    FDupletHeld: PSdlTexture;
+    // The recoil of the Duplet still to come, units along X, and the
+    // fraction of a unit it has paid and not yet moved
+    FRecoil: Double;
+    FRecoilCarry: Double;
 
     FAction: THeroAction;
     FDirection: Boolean; // walk direction, True = right ('direction' of 2008)
@@ -160,6 +172,9 @@ type
     procedure RideDeck;
     procedure LoseDeck;
     procedure CarryX(AWay: Double);
+    // --- the Duplet ---
+    procedure FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
+    procedure ApplyRecoil;
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
       const APads: TPadWorld);
@@ -172,7 +187,8 @@ type
     // Verbatim TWeapon.Fire: fires only when the cooldown has fully
     // elapsed; patterns per weapon type (0 pistol, 1 shotgun x5,
     // 2 grenade cloud x22, 3 chain x3, 4 minigun with alternating
-    // side shots). Poll while LMB is held, like everything in 2008.
+    // side shots; 5 the Duplet, two barrels of red shot and a recoil,
+    // not of 2008). Poll while LMB is held, like everything in 2008.
     // True when a shot actually left the barrel - the caller barks the
     // weapon sound then; held triggers on cooldown fire nothing
     function Fire: Boolean;
@@ -244,6 +260,13 @@ end;
 resourcestring
   SSetFrameCount =
     'Set "%s" sequences must supply exactly %d frames, got %d';
+
+const
+  DupletSetName = 'duplet';
+  DupletHeldSprite = 'held';
+  // The held frame's square, units: the gun is 32 long, twice a 2008 gun,
+  // and sticks out of the fist
+  DupletHeldSide = 48;
 
 const
   // Original constants, names preserved for archaeology
@@ -394,6 +417,13 @@ begin
   FBulletGravity := 1;
   PlaceAtCell(1, 11); // original start: SpriteToPixelX(1), SpriteToPixelY(11)
 
+  FDupletCache := TSpriteCache.Create(ARenderer);
+  FDupletCache.DisableColorKey;
+  FDupletCache.EnableLinearFilter;
+  FDupletSet := TSpriteSet.Create(SpriteSetsDir + DupletSetName + '.mset');
+  FDupletCache.AttachSpriteSet(FDupletSet);
+  FDupletHeld := FDupletCache.Get(DupletHeldSprite);
+
   // The hero's 1..24 is walk, then death, then the transformed frames -
   // named here rather than counted, as the 2008 list required.
   StoreFrames(FFrames, OpenFrames(FCache, FSkinSet, 'hero',
@@ -406,8 +436,10 @@ destructor THero.Destroy;
 begin
   FBullets.Free;
   // Caches before the sets they read from, mirroring the living order.
+  FDupletCache.Free;
   FWeaponCache.Free;
   FCache.Free;
+  FDupletSet.Free;
   FWeaponSet.Free;
   FSkinSet.Free;
   inherited;
@@ -447,6 +479,8 @@ procedure THero.Kill;
 begin
   FDead := True;
   FDeathFrame := 9;
+  FRecoil := 0;
+  FRecoilCarry := 0;
   // Frozen at the moment of death: the corpse must not track the cursor
   FDeathFacingRight := FacingMouseRight;
 end;
@@ -454,6 +488,8 @@ end;
 procedure THero.Revive;
 begin
   FDead := False;
+  FRecoil := 0;
+  FRecoilCarry := 0;
   FDropFrom := nil;
   FCorpseSettled := False;
   FDeathFrame := 9;
@@ -1110,6 +1146,7 @@ begin
   SetWeaponAngle;
   if FTimeOfFire < FFireCooldown then // TWeapon.Timer
     Inc(FTimeOfFire);
+  ApplyRecoil;
 
   if FDead then
   begin
@@ -1320,10 +1357,76 @@ begin
           BaseAngle - SideAngle, FBulletGravity, True);
         FMinigunUpDown := not FMinigunUpDown;
       end;
+
+    DupletWeapon:
+      begin
+        var Spawn: TSdlFPoint;
+        Spawn.X := SpawnX;
+        Spawn.Y := SpawnY;
+        FireDuplet(Spawn, BaseAngle);
+      end;
   end;
 
   FTimeOfFire := 0;
   Result := True;
+end;
+
+// Two barrels, a cloud of red shot out of each, born at the muzzle, and a
+// kick back against the shot. ASpawn - where the 2008 guns fire from, at
+// the hand.
+procedure THero.FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
+const
+  // From the hand to the muzzle along the shot, and the bores above it:
+  // the held frame's middle is 10 ahead of the arm, the muzzle 23.5 ahead
+  // of the middle and 4 above it
+  MuzzleReach = 32;
+  BoreLift = 2;
+  // Half the distance between the two bores, across the shot
+  BoreHalfGap = 1;
+  PelletsPerBarrel = 6;
+  // The shot of a barrel leaves from a square this many units across
+  PelletSpread = 6;
+  RecoilUnits = 6;
+begin
+  var Rad := ABaseAngle * Pi / 180;
+  var AlongX := Cos(Rad);
+  var AlongY := -Sin(Rad);
+  // The gun is mirrored when it points left: its top stays up
+  var Upright := IfThen(AlongX >= 0, 1, -1);
+  for var Barrel := 0 to 1 do
+  begin
+    var Across := BoreLift * Upright + IfThen(Barrel = 0, -BoreHalfGap,
+      BoreHalfGap);
+    var BoreX := ASpawn.X + MuzzleReach * AlongX + Across * AlongY;
+    var BoreY := ASpawn.Y + MuzzleReach * AlongY - Across * AlongX;
+    for var i := 1 to PelletsPerBarrel do
+      FBullets.NewBullet(FBulletSpeed,
+        BoreX + Random * PelletSpread - PelletSpread / 2,
+        BoreY + Random * PelletSpread - PelletSpread / 2,
+        ABaseAngle, FBulletGravity, True, blRed);
+  end;
+  FRecoil := FRecoil - RecoilUnits * AlongX;
+end;
+
+// The recoil is paid in halves, a tick at a time, and moved in whole units
+// through ShoveX: a wall stops it, a deck's edge drops the hero
+procedure THero.ApplyRecoil;
+const
+  RecoilShare = 0.5;
+  // Under this much the rest is paid at once
+  RecoilRest = 0.5;
+begin
+  if FRecoil = 0 then
+    Exit;
+  var Paid := FRecoil * RecoilShare;
+  if Abs(FRecoil) < RecoilRest then
+    Paid := FRecoil;
+  FRecoil := FRecoil - Paid;
+  FRecoilCarry := FRecoilCarry + Paid;
+  var Whole := Trunc(FRecoilCarry);
+  FRecoilCarry := FRecoilCarry - Whole;
+  if Whole <> 0 then
+    ShoveX(Whole);
 end;
 
 // ---------------------------------------------------------------------------
@@ -1471,10 +1574,14 @@ begin
   var Flip := not AMouseRight;
   ASprites.DrawRotated(FWeaponFrames[ArmFrame], ArmX, ArmY,
     AngleSign * DrawAngle, Flip);
-  ASprites.DrawRotated(FWeaponFrames[FWeaponType + 3],
-    ArmX + Round(BarrelReachX * Cos(BarrelRad)),
-    Round(FY) + Shift + GunOffsetY - Round(BarrelReachY * Sin(BarrelRad)),
-    AngleSign * DrawAngle, Flip);
+  var GunX := ArmX + Round(BarrelReachX * Cos(BarrelRad));
+  var GunY := Round(FY) + Shift + GunOffsetY - Round(BarrelReachY * Sin(BarrelRad));
+  if FWeaponType = DupletWeapon then
+    ASprites.DrawRotated(FDupletHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
+      DupletHeldSide)
+  else
+    ASprites.DrawRotated(FWeaponFrames[FWeaponType + 3], GunX, GunY,
+      AngleSign * DrawAngle, Flip);
 end;
 
 end.

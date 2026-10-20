@@ -3652,9 +3652,9 @@
       "seat": "s09-ride-07"
     },
     {
-      "monsterId": "weaponShotgun",
+      "monsterId": "weaponDuplet",
       "screen": 10,
-      "spriteList": "weapon1.mns",
+      "spriteList": "duplet.mns",
       "x": 11,
       "y": 9
     }

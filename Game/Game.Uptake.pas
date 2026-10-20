@@ -160,7 +160,7 @@ type
       FUptake: TUptake;
       FPictures: TList<TPicture>;
       FIndex: TDictionary<string, Integer>;
-    function BuildPicture(const AName: string): TPicture;
+    function BuildPicture(const AName: string; AWidth, AHeight: Single): TPicture;
     function MakeFrameTexture(ASurface: PSdlSurface): PSdlTexture;
     procedure PaintHalo(const APicture: TPicture; ALeft, ATop: Single;
       ATint: TRgb; ALevel: Single; AMirrored: Boolean);
@@ -182,9 +182,9 @@ type
   public
     constructor Create(ARenderer: PSdlRenderer; const AUptake: TUptake);
     destructor Destroy; override;
-    // The picture of a sprite set, built on the first ask; the number is
-    // what Start takes
-    function PictureOf(const ASetName: string): Integer;
+    // The picture of the pickup's sprite set at the size it is drawn,
+    // built on the first ask; the number is what Start takes
+    function PictureOf(const AMonster: TMonster): Integer;
     function ShapeOf(APicture: Integer): TUptakeShape;
     // Under the pickups: the halos of the weapons that lie and of the
     // pictures being filled
@@ -833,8 +833,9 @@ end;
 function LootCorner(const AMonster: TMonster; AOrigin: TSdlPoint;
   AAlpha: Single): TSdlFPoint;
 begin
-  Result.X := Round(AMonster.X) + AOrigin.X;
-  Result.Y := Round(AMonster.Y) - SpriteSize + AOrigin.Y + AMonster.DeckLift(AAlpha);
+  var Box := AMonster.PictureBox;
+  Result.X := Box.X + AOrigin.X;
+  Result.Y := Box.Y + AOrigin.Y + AMonster.DeckLift(AAlpha);
 end;
 
 function IsLying(const AMonster: TMonster; AScreen: Integer): Boolean;
@@ -891,12 +892,12 @@ begin
     raise EUptakeError.CreateFmt(SPictureFailed, [AName, SdlErrorText]);
 end;
 
-function ShapeOfSurface(ASurface: PSdlSurface): TUptakeShape;
+function ShapeOfSurface(ASurface: PSdlSurface; AWidth, AHeight: Single): TUptakeShape;
 begin
   Result.TexW := ASurface.W;
   Result.TexH := ASurface.H;
-  Result.Width := SpriteSize;
-  Result.Height := SpriteSize;
+  Result.Width := AWidth;
+  Result.Height := AHeight;
   SetLength(Result.Alpha, ASurface.W * ASurface.H);
   for var Row := 0 to ASurface.H - 1 do
   begin
@@ -946,7 +947,8 @@ begin
     SDL_SetTextureScaleMode(Result, SdlScaleModeLinear);
 end;
 
-function TUptakePainter.BuildPicture(const AName: string): TPicture;
+function TUptakePainter.BuildPicture(const AName: string;
+  AWidth, AHeight: Single): TPicture;
 begin
   Result := Default(TPicture);
   var SpriteSet := TSpriteSet.Create(SpriteSetsDir + AName + '.mset');
@@ -957,8 +959,8 @@ begin
 
     var Surface := LoadAbgrSurface(SpriteSet, Frames[0]);
     try
-      Result.Shape := ShapeOfSurface(Surface);
-      Result.Art := BuildSilhouette(FRenderer, Surface, SpriteSize, SpriteSize);
+      Result.Shape := ShapeOfSurface(Surface, AWidth, AHeight);
+      Result.Art := BuildSilhouette(FRenderer, Surface, AWidth, AHeight);
       Result.Frame := MakeFrameTexture(Surface);
     finally
       SDL_FreeSurface(Surface);
@@ -979,12 +981,13 @@ begin
   end;
 end;
 
-function TUptakePainter.PictureOf(const ASetName: string): Integer;
+function TUptakePainter.PictureOf(const AMonster: TMonster): Integer;
 begin
-  var Key := LowerCase(ASetName);
+  var Key := LowerCase(AMonster.ArtSet);
   if FIndex.TryGetValue(Key, Result) then
     Exit;
-  FPictures.Add(BuildPicture(ASetName));
+  var Box := AMonster.PictureBox;
+  FPictures.Add(BuildPicture(AMonster.ArtSet, Box.W, Box.H));
   Result := FPictures.Count - 1;
   FIndex.Add(Key, Result);
 end;
@@ -1043,7 +1046,7 @@ begin
   begin
     if not IsLying(Monster, AScreen) then
       Continue;
-    var Picture := FPictures[PictureOf(Monster.ArtSet)];
+    var Picture := FPictures[PictureOf(Monster)];
     if Picture.Light <> nil then
       Continue;
     var Corner := LootCorner(Monster, AOrigin, AAlpha);
@@ -1072,7 +1075,7 @@ begin
   begin
     if not IsLying(Monster, AScreen) then
       Continue;
-    var Picture := FPictures[PictureOf(Monster.ArtSet)];
+    var Picture := FPictures[PictureOf(Monster)];
     if Picture.Light = nil then
       Continue;
 

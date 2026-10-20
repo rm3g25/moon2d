@@ -196,6 +196,15 @@ type
     function Enabled: Boolean;
   end;
 
+  // A frame of its own size instead of the cell, standing on the feet
+  // line and centered on the cell's middle - a pickup wider than a cell.
+  // Screen units. JSON "picture": {"width": 42, "height": 12}
+  // Absent for a monster drawn in its cell.
+  TPictureDef = record
+    Width, Height: Double;
+    function Enabled: Boolean;
+  end;
+
   TMonsterDef = record
     Id: string;
     LegacyName: string;  // old level-file name; drop after level migration
@@ -227,6 +236,7 @@ type
     Boss: TBossDef;
     Disc: TDiscDef;
     Hull: THullDef;
+    Picture: TPictureDef;
   end;
 
   // Owns all definitions. Create once at startup, free at shutdown.
@@ -288,6 +298,9 @@ resourcestring
   SBadSentry = 'Monster "%s": a sentry needs a reach above 0';
   SWeatherFloats = 'Monster "%s": weather falls - it cannot be free of ' +
     'gravity';
+  SBadPicture = 'Monster "%s": a picture needs a positive width and height';
+  SPictureAndLayers = 'Monster "%s": a picture of its own is for a ' +
+    'monster drawn in frames, not as a disc or a hull';
 
 const
   // JSON protocol keys read in more than one place
@@ -409,6 +422,20 @@ end;
 function TBlastDef.Enabled: Boolean;
 begin
   Result := (Radius > 0) and (Lives > 0);
+end;
+
+function TPictureDef.Enabled: Boolean;
+begin
+  Result := Width > 0;
+end;
+
+function ParsePicture(const AObj: TJSONObject;
+  const AMonsterId: string): TPictureDef;
+begin
+  Result.Width := AObj.GetValue<Double>('width', 0);
+  Result.Height := AObj.GetValue<Double>('height', 0);
+  if (Result.Width <= 0) or (Result.Height <= 0) then
+    raise EMonsterDefError.CreateFmt(SBadPicture, [AMonsterId]);
 end;
 
 function ParsePortAngles(const AObj: TJSONObject;
@@ -746,6 +773,13 @@ begin
     Result.Hull := ParseHull(Hull, Result.Id);
   if Result.Disc.Enabled and Result.Hull.Enabled then
     raise EMonsterDefError.CreateFmt(SDiscAndHull, [Result.Id]);
+
+  var Picture := AObj.GetValue<TJSONObject>('picture', nil);
+  if Assigned(Picture) then
+    Result.Picture := ParsePicture(Picture, Result.Id);
+  var DrawnInLayers := Result.Disc.Enabled or Result.Hull.Enabled;
+  if Result.Picture.Enabled and DrawnInLayers then
+    raise EMonsterDefError.CreateFmt(SPictureAndLayers, [Result.Id]);
   var FiresFromMuzzle := Result.Attack.Pattern in
     [apStraightSingle, apStraightCluster5, apRainVolley];
   if Result.Hull.HasMuzzle and not FiresFromMuzzle then

@@ -177,8 +177,10 @@ type
     // center. Angle in degrees, clockwise, 0 = art's natural orientation.
     // The 2008 code drew bullets with a -90 offset because the art pointed
     // up; apply such offsets at the call site, not here.
+    // ASide - the square's side in units: a gun bigger than the 2008 frames
     procedure DrawRotated(ATexture: PSdlTexture; ACenterX, ACenterY: Integer;
-      AAngleDegrees: Double; AMirrored: Boolean = False);
+      AAngleDegrees: Double; AMirrored: Boolean = False;
+      ASide: Integer = SpriteSize);
     // A square ASide units across centered on the point, turned
     // AAngleDegrees clockwise, at ALevel opacity (0..1). Float all the
     // way: a logical unit is several screen pixels, and a mover drawn
@@ -534,14 +536,15 @@ begin
 end;
 
 procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;
-  ACenterX, ACenterY: Integer; AAngleDegrees: Double; AMirrored: Boolean);
+  ACenterX, ACenterY: Integer; AAngleDegrees: Double; AMirrored: Boolean;
+  ASide: Integer);
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := ACenterX - SpriteSize div 2 + FOrigin.X;
-  Dest.Y := ACenterY - SpriteSize div 2 + FOrigin.Y + FFineY;
-  Dest.W := SpriteSize;
-  Dest.H := SpriteSize;
+  Dest.X := ACenterX - ASide div 2 + FOrigin.X;
+  Dest.Y := ACenterY - ASide div 2 + FOrigin.Y + FFineY;
+  Dest.W := ASide;
+  Dest.H := ASide;
 
   // Center = nil rotates around Dest's middle - exactly what bullets need.
   SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
