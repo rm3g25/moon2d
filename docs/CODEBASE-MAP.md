@@ -5277,7 +5277,15 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     suit - the look, the world standing and the strikes only),
     `StartBurst(MoonBurstLook)` (U, `ScancodeU`, 3.0.61: the same in the
     moon's look, which no form wears yet), `NudgeCrosshair`,
-    `NudgeMinigunMuzzle`, `DebugBrowseScreen`, `CycleFontFiltering`,
+    `NudgeMinigunMuzzle`, `DebugBrowseScreen` (PgUp/PgDn, through
+    `DebugShowScreen`), `DebugJumpToWork` (End, `ScancodeEnd`: level 2
+    screen 10, the screen being built, from anywhere - another level is
+    loaded and its story skipped, the hero stands on the screen's respawn
+    point, and the music becomes the track a walk there would have
+    brought, by `TrackBefore`: the level's own, then the last
+    `changeMusic` or `music` event of the screens before it, events after
+    triggers on one screen; it is changed only if it differs),
+    `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave, no
     traffic: nil), `DebugRestorePads` (Y, `ScancodeY`, 3.0.39: the same

@@ -61,7 +61,8 @@ licensed for reuse.
 image model from the author's prompts, then cropped, hazed and packed by the
 author; the brightness is set per level in code. They replaced the 2008
 backgrounds, which were composited from stock photography of unrecorded
-origin. `_black` is a plain fill.
+origin. `_black` is a plain fill. `screen10` of level 2 (the far wall of
+the lava tube behind screen 10): one generation, resampled to 1440x1080.
 
 **Level objects** (`sprites/level1-objects.mset` - the ship;
 `sprites/sky.mset`, sprite `satellite`) - since 3.0.12, generated with
@@ -86,8 +87,15 @@ as generated, not resampled, nothing moved; it has no floor - the shelves
 are the floor and the back wall below them is the shaft. `s09-doorstep`:
 the left pit-lip slab of `s08-room`, cut out whole, so both sides of the
 flip show the same slab. `s09-lamp-off`: the glass of the room's wall
-lamp from its own pixels, dimmed by a mask, so a beacon can light it. They replaced the 2008 tiles of those screens, which stay in
-their sets unplaced. How such a screen is made: `docs/REPAINT.md`.
+lamp from its own pixels, dimmed by a mask, so a beacon can light it.
+`s10-depth`: the rock spurs of the middle distance of screen 10, kept as
+generated. `s10-room`: kept as generated, moved down as a whole onto the
+floor line. `s10-casing`: the concrete casing cut out of `s10-room` pixel
+for pixel, so the level can tint it apart. `s10-pedestal`: cut to its
+ink, its fringe cut off, scaled whole to 6 px per screen unit, rows
+inserted over its foot as a palindrome. They replaced the 2008 tiles of those screens, which stay in
+their sets unplaced. Screen 10 is new, not a repaint: no 2008 tiles stood
+there. How such a screen is made: `docs/REPAINT.md`.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
 generated with ChatGPT's image model to the author's direction (a clean and a

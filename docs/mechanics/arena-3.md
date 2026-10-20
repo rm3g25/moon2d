@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20). Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -20,10 +20,17 @@ A false ending: arena 2 is won, the victory track plays, the player thinks the l
 
 ### Screen 10 - the double-barrel
 - A room of lunar rock, the double-barrel on a pedestal, as the super shotgun in Doom 2. No monsters.
-- **The gun is huge, out of all proportion to the hero** (decided 2026-10-17). Reason: no close combat with small monsters ahead, and a big boss is hit for sure. A short-range wide spread is exactly the weapon for a 2x2 target.
+- **The gun is big against the hero, not monstrous** (decided 2026-10-17, size settled 2026-10-20). Reason: no close combat with small monsters ahead, and a big boss is hit for sure. A short-range wide spread is exactly the weapon for a 2x2 target. On the pedestal it is 42 units long (three cells and then two were too much); in the hands about twice an ordinary weapon.
+- The look: a modern, utilitarian combat double-barrel of a lunar expedition - black polymer and gunmetal, a perforated shroud over the barrels, no wood, no glow, nothing of TeK (the honeycomb is the enemy's language).
 
 ### The tunnels are giant
 The hero walks along a ledge in a tunnel far bigger than the screen: the backdrop is far away - the opposite wall, the vault, the depth of the tunnel going off into the dark. The playfield (floor, ledges, the pedestal) is near and small against it. Scale is the point: a small hero in a huge empty place.
+
+How the picture says it (learned on screen 10):
+- no near ceiling and no near wings: the top of the frame is black, the vault too high to be seen; the far wall rises out of the bottom edge and fades into the dark at the top, its foot never shown - the hero stands high over the floor of the tube;
+- the light has a story: sunlight through a small hole high in the vault falls on the floor of the tube far below, and the lit floor lights the wall from below, warm; in a vacuum the shadows are black and nothing glows in the air;
+- balance, not symmetry: the light and the interest on one side, the near matter (the TeK casing) on the other;
+- even flat light and an even rhythm make wallpaper, not a place.
 
 ### The living backdrop (tunnel screens 10-12) - a new mechanic
 It is the backdrop itself that lives, not effects laid over the playfield. The screens do not scroll and the backdrop never moves as a whole - no parallax anywhere, the boss arena included.
@@ -49,7 +56,7 @@ It is the backdrop itself that lives, not effects laid over the playfield. The s
 - The shuttle: another TeK robot seems to guard the entrance to the city; the ice form does not work yet - it was just used; fight bare-handed and watch the form charge indicator at the top.
 
 ### Screen 13 - the boss arena
-The end of the tunnels and the way out to the city. Flat tiled floor - a made road, the machine drives on it - closed on both sides. The backdrop is still: no events of its own (the foreground is full - napalm, pads, turrets) and no motion in the chase (see "The belt"). Three acts in three tempos: the machine standing its ground (turrets 1 and 2), the chase (turret 3), then the evolution and the air phase on a still screen again.
+The end of the tunnels and the way out to the city. The backdrop of screen 10 would not do for the chase: its basalt columns are verticals, and a vertical that does not ride past while the floor slides shows the belt for a treadmill. This one: horizontal strata only, no columns, cracks or stalactites running up and down; finer texture and lower contrast, farther than on screen 10; no bright spot in the middle - the light is a distant glow of the city along the horizon at the end of the tunnel. Screens 10-12 lead to it: each a little farther and more horizontal than the one before. Flat tiled floor - a made road, the machine drives on it - closed on both sides. The backdrop is still: no events of its own (the foreground is full - napalm, pads, turrets) and no motion in the chase (see "The belt"). Three acts in three tempos: the machine standing its ground (turrets 1 and 2), the chase (turret 3), then the evolution and the air phase on a still screen again.
 
 ## The boss: TeK machine
 - A big heavy TeK vehicle on two wheels, 2x2 cells, under the TeK shield - the double-barrel does not get through it. Drawn as a hull (Monsters.Hull: layers, wheels turned by how far the body has rolled).
@@ -141,11 +148,24 @@ All of it is data on screen 9 plus a few words of the event vocabulary; no code 
 - **The door is still a wall**: screen 9 is the last screen of level 2 until stage 2 adds screen 10. The arrow points at a closed door until then.
 - lunar.ogg is put in `bin/music/` by hand; without it the screen stays silent and the arrow shows anyway.
 
+## Stage 2 as built (data, no version)
+Screen 10 of level 2 is all data: `bin/level2.json` and the two level sets. The art is five ChatGPT generations; what was done to each is in its description in the set.
+
+- **The grid** (16x12, rows from the top): col 0 rows 0-9 the TeK casing; row 10 the slot out of screen 9 (open at col 0), under the casing column of screen 9's right edge; row 11 the ledge, floor line 352 as the shelves of screen 9, broken at cols 4-5 (two cells, jumped at one level); the pedestal - a step at (8, 10), the top at row 9 cols 9-11, a step at (12, 10); the right edge open from row 0 to 10.
+- **The layers, back to front:** `backgrounds` from screen 10, `screen10` (the far wall, 1440x1080, tint 75/75/80); `s10-depth` (two basalt spurs in the middle distance, tint 60/60/64, the space over the pedestal kept clear); `s10-pedestal` (columnar basalt, 176 units wide where the matter is 160 - seated by the height of its middle, set 2 units into the ledge so the ledge drawn over it hides the joint); `s10-room` (the ledge of solidified lava crust, the slot with a steel sill flush with the floor, the violet bar); `s10-casing` (the concrete casing cut out of the room's own pixels, tint 45/38/33, so it sits with the rock).
+- No 4K yet: the room is at backdrop density; a 4K room comes as four objects of 256 units once it is upscaled outside the session.
+- **The gun:** a placeholder until stage 3 - the 2008 `weaponShotgun` at cell 11, 9 (feet on 288, the top of the pedestal). Its picture waits for stage 3 at 42 units, 6 px a unit.
+- **The respawn point:** cell 2, 11 (as every placement here, counted from 1).
+- **The door from screen 9** needed no code: with a tenth screen the right door of screen 9 leads on, closed while the trial runs. The ending titles moved with it: the right edge of screen 10 is now the last door of the campaign until screen 11 comes.
+- `lunar.ogg` plays on from screen 9; a restart on screen 10 plays it too.
+- **The End debug key** goes straight to this screen from anywhere, with the music a walk there would have brought (`DebugJumpToWork`, `TrackBefore`). Move its screen number on with the work.
+- Nothing moves on the screen yet: the haze is stage 4. No lamp-and-beacon of REPAINT here - on screen 10 only the dust moves.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
-2. **Screen 10 - the double-barrel room.** Lunar rock, the pedestal, no monsters.
-3. **The double-barrel as a weapon.** Huge, spread, damage, reload, sound; the size of the art against the hero.
+2. **Screen 10 - the double-barrel room.** Built, see "Stage 2 as built".
+3. **The double-barrel as a weapon**, in two commits. 3a: the new gun looks new - on the pedestal (a pickup wider than its cell), in the uptake, in the hands - and fires as the old shotgun (weapon type 1). 3b: its own shot - a short wide spread, damage, reload, sound.
 4. **The living backdrop.** The layered backdrop drawn behind the playfield, and the haze of screen 10. The rockfall and the far ledge come with their screens (stages 5 and 7).
 5. **Screen 11 - jumping and the moon stone.** The black glow, the force field.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
@@ -165,8 +185,9 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
-- The screen numbers (10-13 a guess).
-- How many layers the tunnel backdrop is cut into (two or three) - settled with the first generation of screen 10.
+- The screen numbers 11-13 (10 is built).
+- The 4K room of screen 10: four objects of 256 units from an upscale.
+- The dust of screen 10 (stage 4): bands drawn by a script, not generated - soft alpha is where the generator leaves junk.
 - What sets off the rockfall on screen 11: taking the stone or a timer.
 - The giant double-barrel after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.
