@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -161,11 +161,24 @@ Screen 10 of level 2 is all data: `bin/level2.json` and the two level sets. The 
 - **The End debug key** goes straight to this screen from anywhere, with the music a walk there would have brought (`DebugJumpToWork`, `TrackBefore`). Move its screen number on with the work.
 - Nothing moves on the screen yet: the haze is stage 4. No lamp-and-beacon of REPAINT here - on screen 10 only the dust moves.
 
+## Stage 3 as built (3.0.64)
+The look and the shot went in together, as one commit: 3a and 3b were one reason - the new gun.
+
+- **The name: the Duplet** ("Дуплет", en "Double Tap") - a hunter's word for a shot from both barrels at once: the name says what the gun does. Pickup `weaponDuplet` in `bin/monsters.json`, weapon type 5 (`DupletWeapon` in Hero.pas; 0..4 are the 2008 guns).
+- **The art:** `bin/sprites/duplet.mset`, made by `tools/duplet/build_duplet.py` from one generation (the source is not kept): `lying` - the pickup, 42 x 12 units at 6 px a unit, the gun 11.2 units tall on the bottom edge (so it sits on the stone, drawn a unit under the matter); `held` - the gun in the hands, 32 units long (twice a 2008 gun) in a square of 48, the grip in the fist of the 2008 arm frame, so the gun sticks out ahead of the hero (decided: the shot leaves far from him - his target is a big TeK machine); `gone` - a clear frame.
+- **A picture wider than its cell:** `"picture": {"width", "height"}` in a monster's def (`TPictureDef`). `TMonster.PictureBox` - the frame's box: the cell, or the picture standing on the feet line, centered on the cell. The monster draws its frame there, and the uptake takes its corner, its size, its silhouette and its halo from it (`TUptakePainter.PictureOf` takes the monster now). The pickup's hit box and its contact stay the cell.
+- **In the hands:** `TSpriteRenderer.DrawRotated` takes the square's side (the 2008 32 by default); the held frame is dense art in a cache of its own (no color key, linear filter).
+- **The shot:** 12 pellets, six out of each barrel (bores 2 units apart across the shot), born at the muzzle, 32 units ahead of the hand and 2 over its line, each barrel's shot from a square 6 units across, all at the aim angle - the shotgun's pattern, doubled. Cooldown 34 ticks against the shotgun's 20, speed 8, gravity 1: 2.4 times the shotgun a shot, 1.7 times slower; 1.4 times the shotgun a second.
+- **Red shot:** `TBulletLook` (blPlain, blRed) on a bullet; a red one tints the shared texture for its own draw (100/28/22 percent) and puts it back - the flight and the burst frames alike.
+- **The recoil:** 6 units along X against the shot (the cosine of the aim: a shot straight down barely moves him), paid in halves a tick at a time through `ShoveX` - a wall stops it, a deck's edge drops him. Kill and Revive drop what is left. Plus a light shake, trauma 0.2 a shot.
+- **The sound:** `bin/sounds/duplet.wav` by `tools/sounds/duplet.py` - the 2008 shotgun slowed to 0.8, fired twice 14 ms apart, over a thump sliding from 110 to 42 Hz, soft-clipped; 0.75 s.
+- First guesses for the live run: the muzzle reach, the recoil, the trauma, how red the shot reads.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
 2. **Screen 10 - the double-barrel room.** Built, see "Stage 2 as built".
-3. **The double-barrel as a weapon**, in two commits. 3a: the new gun looks new - on the pedestal (a pickup wider than its cell), in the uptake, in the hands - and fires as the old shotgun (weapon type 1). 3b: its own shot - a short wide spread, damage, reload, sound.
+3. **The double-barrel as a weapon.** Built (3.0.64), see "Stage 3 as built".
 4. **The living backdrop.** The layered backdrop drawn behind the playfield, and the haze of screen 10. The rockfall and the far ledge come with their screens (stages 5 and 7).
 5. **Screen 11 - jumping and the moon stone.** The black glow, the force field.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
@@ -189,7 +202,7 @@ Each its own commit, each run live.
 - The 4K room of screen 10: four objects of 256 units from an upscale.
 - The dust of screen 10 (stage 4): bands drawn by a script, not generated - soft alpha is where the generator leaves junk.
 - What sets off the rockfall on screen 11: taking the stone or a timer.
-- The giant double-barrel after level 2: does the hero keep it on the next levels, where small monsters come close?
+- The Duplet after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.
 - What the black orb aura and the fire rain do in numbers against the ice form's.
 - How the random pad pattern is made. Two ways: a generator that shuffles hand-made chunks of three or four pads (each chunk passable by design, one of them always leading to the hatch height); or the carousels the game already has (Levels.Carousels, counter-clockwise, the track mostly off the screen), two or three at different heights and periods, so the pattern never quite repeats - no new pad code, but no guarantee of a way up either.
