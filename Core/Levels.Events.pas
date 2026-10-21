@@ -46,7 +46,7 @@ type
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
-    eaStraysLeave, eaPress, eaScene, eaGoRight);
+    eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -162,6 +162,10 @@ type
     // eaScene: the scene Target begins (Levels.Scenes). JSON: "target".
     // eaGoRight: the go-right arrow blinks over the screen - the way on is
     // open. JSON: nothing more.
+    // eaOpenDoor: the door the level shuts on the event's screen
+    // ("shutDoors" in Levels.Defs) opens, and the go-right arrow says so.
+    // A pickup taken is dead to the field, so "allDead" on its tag waits
+    // for the taking. JSON: nothing more.
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -225,7 +229,7 @@ const
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene', 'goRight');
+    'scene', 'goRight', 'openDoor');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');

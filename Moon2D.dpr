@@ -417,6 +417,9 @@ type
     FWaveBank: string;
     // The trial of the screen is won: the events of the end wait for it
     FTrialDone: Boolean;
+    // An event has opened the door the level shuts on the hero's screen;
+    // a new screen, a restart and a new level shut it again
+    FDoorOpened: Boolean;
     // The trial's victory track, played as a sound, and what is left of it
     // in seconds: 0 once it is over, below 0 while there is none
     FVictory: THeldSound;
@@ -857,6 +860,13 @@ begin
     begin
       FGoRight.Show;
     end;
+  // Open = the arrow: one action of the level says both
+  Cues.OpenDoor :=
+    procedure
+    begin
+      FDoorOpened := True;
+      FGoRight.Show;
+    end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -885,6 +895,7 @@ begin
   FWaveMonster := '';
   FWaveBank := '';
   FTrialDone := False;
+  FDoorOpened := False;
   FPress.Shut;
   FSkyMonster := '';
   FHeldFlyIns := [];
@@ -1158,6 +1169,7 @@ begin
   FShroud.LeaveMotes;
   FMessages.ClearPopups;
   FGoRight.Hide;
+  FDoorOpened := False;
   FireScreenTriggers;
   PinRespawnPoint;
 end;
@@ -1172,9 +1184,11 @@ begin
   if FHero.X <= RightDoorX then
     Exit;
 
-  // Transition blocked while the gravel trial runs and for the dead;
-  // land at x=4 - ArriveOnScreen pins the checkpoint
-  if not FTrial.Active and not FHero.Dead then
+  // Transition blocked while the gravel trial runs, while the level
+  // keeps the door shut and for the dead; land at x=4 - ArriveOnScreen
+  // pins the checkpoint
+  var DoorShut := FLevel.DoorShutOn(FHero.Screen) and not FDoorOpened;
+  if not FTrial.Active and not DoorShut and not FHero.Dead then
   begin
     if FHero.Screen < FLevel.ScreenCount then
     begin
@@ -2557,6 +2571,9 @@ begin
   FWaveMonster := '';
   FWaveBank := '';
   FTrialDone := False;
+  // What opened the door regrows with the field: the door waits for it
+  // again
+  FDoorOpened := False;
   FPress.Shut;
   FSkyMonster := '';
   FHeldFlyIns := [];

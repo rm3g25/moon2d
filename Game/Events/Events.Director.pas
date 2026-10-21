@@ -13,7 +13,8 @@
   onto; the wall cannons of the trial; the bodies an event lets in; the
   open sky of the trial; the press of its finale; the scene an event
   begins; how far the gravel trial has come, whether it is won and how
-  much of its victory track is left; the go-right arrow. The
+  much of its victory track is left; the go-right arrow; the door of
+  the screen, which the game keeps shut or open. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -78,6 +79,8 @@ type
   TVictoryLeft = reference to function: Single;
   // The go-right arrow shows over the screen
   TGoRightCue = reference to procedure;
+  // The door the level shuts on the hero's screen opens
+  TOpenDoorCue = reference to procedure;
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -100,6 +103,7 @@ type
     StartScene: TSceneStart;
     VictoryLeft: TVictoryLeft;
     GoRight: TGoRightCue;
+    OpenDoor: TOpenDoorCue;
   end;
 
   TEventDirector = class
@@ -287,6 +291,8 @@ begin
         FCues.StartScene(Action.Target);
       eaGoRight:
         FCues.GoRight();
+      eaOpenDoor:
+        FCues.OpenDoor();
     end;
 end;
 

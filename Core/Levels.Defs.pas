@@ -195,6 +195,7 @@ type
     FPadGroups: TArray<TPadGroup>;
     FCarousels: TArray<TCarousel>;
     FRespawns: TArray<TRespawnPoint>;
+    FShutDoors: TArray<Integer>; // 1-based screens
     FEntities: TArray<TEntityPlacement>;
     FScreenTriggers: TArray<TScreenTrigger>;
     FEvents: TArray<TLevelEvent>;
@@ -210,6 +211,8 @@ type
     procedure ParseObjects(const AArr: TJSONArray);
     procedure ParseRespawns(const AArr: TJSONArray);
     procedure CheckRespawns;
+    procedure ParseShutDoors(const AArr: TJSONArray);
+    procedure CheckShutDoors;
     function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
     procedure CheckPads;
     procedure CheckPadGroups;
@@ -262,6 +265,10 @@ type
     // The respawn point of a screen; False when the level names none
     function TryFindRespawn(AScreen: Integer;
       out APoint: TRespawnPoint): Boolean;
+    // The way on out of the screen is shut until an event of the screen
+    // opens it (the openDoor action); the door is not seen, the hero stops
+    // at the threshold. JSON: "shutDoors": [10, 11].
+    function DoorShutOn(AScreen: Integer): Boolean;
 
     property Id: string read FId;
     property Title: TLocalizedText read FTitle;
@@ -461,6 +468,12 @@ resourcestring
     + 'in a wall';
   SLevelRespawnOverPit = 'Level "%s": the respawn point of screen %d has no '
     + 'floor under it - a wall, or the deck of a pad that stands still';
+  SLevelDoorBadScreen = 'Level "%s": "shutDoors" names screen %d of %d';
+  SLevelDoorTwice = 'Level "%s": "shutDoors" names screen %d twice';
+  SLevelDoorNeverOpens = 'Level "%s": the door of screen %d is shut and no '
+    + 'event of the screen opens it';
+  SLevelDoorNotShut = 'Level "%s": event "%s" opens the door of screen %d, '
+    + 'which the level does not shut';
   SLevelFinaleNoTrial = 'Level "%s": %s names a finale but no gravelBoss';
   SLevelFinaleNoMonster = 'Level "%s": %s names a finale with no "monster"';
   SLevelFinaleBadCount = 'Level "%s": %s names a finale whose "count" is not '
@@ -716,6 +729,9 @@ begin
   // After the dynamics: an event may name a dynamic object's tag; after
   // the scenes: it may begin one
   CheckEvents;
+  // After the events: a shut door needs one to open it
+  ParseShutDoors(ARoot.GetValue<TJSONArray>('shutDoors', nil));
+  CheckShutDoors;
 end;
 
 function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;
@@ -1028,6 +1044,69 @@ begin
     Point.Y := Obj.GetValue<Integer>('y');
     FRespawns := FRespawns + [Point];
   end;
+end;
+
+function TLevel.DoorShutOn(AScreen: Integer): Boolean;
+begin
+  for var Screen in FShutDoors do
+    if Screen = AScreen then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TLevel.ParseShutDoors(const AArr: TJSONArray);
+begin
+  FShutDoors := [];
+  if AArr = nil then
+    Exit;
+  for var Item in AArr do
+    FShutDoors := FShutDoors + [Item.GetValue<Integer>];
+end;
+
+function OpensDoor(const AEvent: TLevelEvent): Boolean;
+begin
+  for var Action in AEvent.Actions do
+    if Action.Kind = eaOpenDoor then
+      Exit(True);
+  Result := False;
+end;
+
+function AnyEventOpensDoorOn(const AEvents: TArray<TLevelEvent>;
+  AScreen: Integer): Boolean;
+begin
+  for var Event in AEvents do
+    if (Event.Screen = AScreen) and OpensDoor(Event) then
+      Exit(True);
+  Result := False;
+end;
+
+function TimesNamed(const AScreens: TArray<Integer>; AScreen: Integer): Integer;
+begin
+  Result := 0;
+  for var Screen in AScreens do
+    if Screen = AScreen then
+      Inc(Result);
+end;
+
+// A door that nothing opens shuts the level for good, and an opening on a
+// screen with no shut door is a screen number gone astray: both die at
+// load, as a respawn point over a pit does
+procedure TLevel.CheckShutDoors;
+begin
+  for var Screen in FShutDoors do
+  begin
+    if (Screen < 1) or (Screen > FScreenCount) then
+      raise ELevelError.CreateFmt(SLevelDoorBadScreen,
+        [FId, Screen, FScreenCount]);
+    if TimesNamed(FShutDoors, Screen) > 1 then
+      raise ELevelError.CreateFmt(SLevelDoorTwice, [FId, Screen]);
+    if not AnyEventOpensDoorOn(FEvents, Screen) then
+      raise ELevelError.CreateFmt(SLevelDoorNeverOpens, [FId, Screen]);
+  end;
+  for var Event in FEvents do
+    if OpensDoor(Event) and not DoorShutOn(Event.Screen) then
+      raise ELevelError.CreateFmt(SLevelDoorNotShut,
+        [FId, Event.Id, Event.Screen]);
 end;
 
 function RespawnsOn(const APoints: TArray<TRespawnPoint>;

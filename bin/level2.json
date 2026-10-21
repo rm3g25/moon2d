@@ -3675,7 +3675,8 @@
       "screen": 10,
       "spriteList": "duplet.mns",
       "x": 11,
-      "y": 9
+      "y": 9,
+      "tag": "s10-duplet"
     }
   ],
   "screenTriggers": [
@@ -3713,6 +3714,7 @@
     {"screen": 9, "x": 2, "y": 11},
     {"screen": 10, "x": 2, "y": 11}
   ],
+  "shutDoors": [10],
   "events": [
     {
       "id": "breachWarning",
@@ -3864,6 +3866,15 @@
       "when": "victoryEnds",
       "then": [
         {"action": "goRight"}
+      ]
+    },
+    {
+      "id": "s10-door",
+      "screen": 10,
+      "when": "allDead",
+      "tag": "s10-duplet",
+      "then": [
+        {"action": "openDoor"}
       ]
     }
   ],
