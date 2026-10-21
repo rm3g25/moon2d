@@ -2,8 +2,9 @@
   Tests.Scenes.Director - a scene played against a world made by hand: when
   its cues play, what a wait holds up, when the scene is over, what is left
   when the hero leaves its screen, and what a death does to it - before
-  its end, after it, once a level and once a life. And what its cues do to
-  the bodies they tag and to the pads they name.
+  its end, after it, once a level and once a life; and how a scene started
+  while another plays takes over from it. And what its cues do to the
+  bodies they tag and to the pads they name.
 
   The stage is a one-screen room: a craft tagged "ship", a pad tagged
   "lift", a dormant pad tagged "sleeper" (a scene of the level wakes it, or
@@ -90,6 +91,10 @@ type
     [Test]
     procedure TestSceneOfALifeIsRewoundByADeathOnItsScreen;
     [Test]
+    procedure TestRewindOfALifeLeavesTheAftermathOfALevel;
+    [Test]
+    procedure TestSceneStartedMidAnotherTakesOverFromIt;
+    [Test]
     procedure TestShakeRunsFromItsCueToARewind;
     [Test]
     procedure TestJoltIsOneBlowTakenOnce;
@@ -133,6 +138,9 @@ const
   UnitSlack = 0.001;
   AftermathOfTheLift = '"aftermath":[{"do":"fly","target":"lift",' +
     '"x":64,"y":224}]';
+  // The scene of the stage that wakes the sleeper
+  WakingId = 'waking';
+  LifeSceneId = 'life';
 
 // The scene of the test: ACues on its timeline; AExtra more members, as
 // they stand in a file
@@ -156,7 +164,7 @@ begin
     '{"monsterId":"gravel","screen":1,"x":3,"y":11,"tag":"prey"},' +
     '{"monsterId":"gravel","screen":1,"x":12,"y":11,"tag":"rider"}],' +
     '"scenes":[' + AScene + ',' +
-    '{"id":"waking","screen":1,"cues":[' +
+    '{"id":"' + WakingId + '","screen":1,"cues":[' +
     '{"at":0,"do":"wake","target":"sleeper"}]}]';
 end;
 
@@ -572,6 +580,45 @@ begin
   Assert.IsTrue(IsNear(Sleeper.Left, SleeperX) and
     IsNear(Sleeper.Top, SleeperFlownY), Format('Not where it was flown: ' +
     'at %g, %g', [Sleeper.Left, Sleeper.Top]));
+end;
+
+procedure TSceneDirectorTests.TestRewindOfALifeLeavesTheAftermathOfALevel;
+begin
+  UseScene(SceneJson('{"at":0,"do":"move","target":"ship","x":200}',
+    '"aftermath":[{"do":"move","target":"ship","x":200}]') + ',' +
+    Format('{"id":"%s","screen":1,"once":"life","cues":[' +
+    '{"at":0,"do":"move","target":"ship","y":50}]}', [LifeSceneId]));
+  FDirector.Start(SceneId);
+  Play(3);
+  FDirector.Start(LifeSceneId);
+  Play(3);
+  Assert.IsTrue(IsNear(ShipY, 50), 'The scene of a life did not play');
+
+  FDirector.ReArm(1, Stage);
+
+  Assert.IsTrue(IsNear(ShipX, 200), Format('The rewind of the scene of a ' +
+    'life took back the aftermath of the scene once a level: the craft at ' +
+    '%g', [ShipX]));
+  Assert.IsTrue(IsNear(ShipY, ShipFileY), 'The scene of a life is not rewound');
+end;
+
+procedure TSceneDirectorTests.TestSceneStartedMidAnotherTakesOverFromIt;
+begin
+  UseScene(SceneJson(
+    '{"at":0,"do":"move","target":"ship","x":200,"ticks":50}',
+    AftermathOfTheLift));
+  FDirector.Start(SceneId);
+  Play(10);
+  Assert.IsTrue(ShipX < 200, 'Ten ticks into a move of fifty');
+
+  FDirector.Start(WakingId);
+  Play(1);
+
+  Assert.IsTrue(IsNear(ShipX, 200), Format('The scene taken over from did ' +
+    'not land: the craft at %g', [ShipX]));
+  Assert.IsTrue(IsNear(Pad('lift').Left, AwayX),
+    'The aftermath of the scene taken over from is not put');
+  Assert.IsFalse(Pad('sleeper').Dormant, 'The new scene did not take over');
 end;
 
 initialization

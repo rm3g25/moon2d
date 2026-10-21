@@ -24,6 +24,12 @@
   up - he rides it where it goes. The scene is over once every cue has
   played and run its ticks.
 
+  A scene started while another plays takes over from it on the next
+  tick, as a cut does: the old one's things land where they would have
+  and its world is put as its aftermath says, while its sounds play on
+  and the music, the shade and the rumble go on from where they are - the
+  cues of the new one lead them on.
+
   A scene the hero leaves its screen in the middle of ends at once: every
   cue of its own things lands where it would have, the sounds it still
   holds stop, no line is printed; the world it acts on is put as its
@@ -34,7 +40,9 @@
   played once a level stays played: every death after it puts its
   aftermath again, whatever screen the hero dies on, over the monsters
   reborn and the pads rewound. One played once a life is rewound by a
-  death on its screen and waits for its event again.
+  death on its screen and waits for its event again. The rewinds come
+  first: what a scene of a life set going goes back to the level file,
+  and what a scene once a level left stands over it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -64,6 +72,9 @@ type
     FMessages: TMessageBoard;
     FPlayed: TArray<Boolean>; // in step with FScenes
     FActive: Integer; // the scene under way; -1 - none
+    // A scene started while one was under way: it takes over on the next
+    // tick, where the stage is known; -1 - none
+    FNext: Integer;
     FTick: Integer; // of the scene under way
     // The tick each cue of the scene under way played at; NotPlayed yet
     FPlayedAt: TArray<Integer>;
@@ -97,6 +108,8 @@ type
     procedure Settle(const AScene: TLevelScene; const AStage: TSceneStage);
     procedure RewindTargets(const AScene: TLevelScene);
     procedure StopHeld;
+    procedure Open(AIndex: Integer);
+    procedure TakeOver(const AStage: TSceneStage);
     procedure Finish(const AStage: TSceneStage);
     procedure Rewind(AIndex: Integer);
   public
@@ -106,7 +119,8 @@ type
       const ADynamics: TDynamicObjects; const APads: TPadWorld;
       const AAudio: TSoundBank; const AMessages: TMessageBoard);
     destructor Destroy; override;
-    // The scene AId begins, unless one is under way or it has played
+    // The scene AId begins, unless it has played; one under way gives it
+    // way on the next tick
     procedure Start(const AId: string);
     // One logic tick with the hero on AScreen
     procedure Tick(AScreen: Integer; const AStage: TSceneStage);
@@ -141,6 +155,8 @@ const
   WholeFrame: PSdlFRect = nil;
   NotPlayed = -1;
   NoScene = -1;
+  // What a scene taking over carries on from where it is
+  CarriedCues = [ckMusic, ckShade, ckShake];
 
 constructor TSceneDirector.Create(const AScenes: TArray<TLevelScene>;
   const ADynamics: TDynamicObjects; const APads: TPadWorld;
@@ -154,6 +170,7 @@ begin
   FMessages := AMessages;
   SetLength(FPlayed, Length(FScenes));
   FActive := NoScene;
+  FNext := NoScene;
   FMusic.Settle(1);
 end;
 
@@ -178,23 +195,31 @@ end;
 
 procedure TSceneDirector.Start(const AId: string);
 begin
-  if FActive >= 0 then
-    Exit;
   var Index := IndexOf(AId);
   if (Index < 0) or FPlayed[Index] then
     Exit;
-  FActive := Index;
-  FPlayed[Index] := True;
-  FTick := 0;
-  SetLength(FPlayedAt, Length(FScenes[Index].Cues));
-  for var i := 0 to High(FPlayedAt) do
-    FPlayedAt[i] := NotPlayed;
+  if FActive >= 0 then
+  begin
+    FNext := Index;
+    Exit;
+  end;
+  Open(Index);
   FHeld := nil;
-  FPursuits := nil;
   FShade.Settle(0);
   FRumble.Settle(0);
   FJolt := 0;
   FMusic.Settle(1);
+end;
+
+procedure TSceneDirector.Open(AIndex: Integer);
+begin
+  FActive := AIndex;
+  FPlayed[AIndex] := True;
+  FTick := 0;
+  SetLength(FPlayedAt, Length(FScenes[AIndex].Cues));
+  for var i := 0 to High(FPlayedAt) do
+    FPlayedAt[i] := NotPlayed;
+  FPursuits := nil;
 end;
 
 procedure TSceneDirector.MoveCrafts(const ACue: TSceneCue; ATicks: Integer);
@@ -501,6 +526,17 @@ begin
     Play(Cue, True, AScene.Screen, AStage);
 end;
 
+procedure TSceneDirector.TakeOver(const AStage: TSceneStage);
+begin
+  var Scene := FScenes[FActive];
+  for var Cue in Scene.Cues do
+    if not (Cue.Kind in SceneWorldCues + CarriedCues) then
+      Play(Cue, True, Scene.Screen, AStage);
+  Settle(Scene, AStage);
+  Open(FNext);
+  FNext := NoScene;
+end;
+
 // Every cue of the scene's own things in order, at once: a later one
 // overrides an earlier one as it would have on the timeline. The world
 // is the aftermath's: replayed at once, a pad would leave before what it
@@ -522,6 +558,8 @@ end;
 
 procedure TSceneDirector.Tick(AScreen: Integer; const AStage: TSceneStage);
 begin
+  if FNext >= 0 then
+    TakeOver(AStage);
   if FActive < 0 then
     Exit;
   var Scene := FScenes[FActive];
@@ -575,21 +613,22 @@ begin
   FAudio.SetMusicLevel(1);
 end;
 
+// A scene waiting to take over is dropped: its event comes again
 procedure TSceneDirector.ReArm(AScreen: Integer; const AStage: TSceneStage);
 begin
+  FNext := NoScene;
   if (FActive >= 0) and (FScenes[FActive].Screen <> AScreen) then
     Finish(AStage);
   for var i := 0 to High(FScenes) do
   begin
-    var OnScreen := FScenes[i].Screen = AScreen;
-    var OfLife := FScenes[i].Once = soLife;
-    var LifeHere := OfLife and OnScreen;
-    var Replays := (i = FActive) or LifeHere;
-    if Replays then
-      Rewind(i)
-    else if FPlayed[i] and not OfLife then
-      Settle(FScenes[i], AStage);
+    var LifeHere := (FScenes[i].Once = soLife) and
+      (FScenes[i].Screen = AScreen);
+    if (i = FActive) or LifeHere then
+      Rewind(i);
   end;
+  for var i := 0 to High(FScenes) do
+    if FPlayed[i] and (FScenes[i].Once = soLevel) then
+      Settle(FScenes[i], AStage);
 end;
 
 procedure TSceneDirector.Pause;

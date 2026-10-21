@@ -4084,7 +4084,7 @@
       "tag": "s11-stone",
       "then": [
         {"action": "openDoor"},
-        {"action": "intensity", "target": "s11-void", "value": 0, "ticks": 20}
+        {"action": "scene", "target": "s11-fall"}
       ]
     },
     {
@@ -4154,6 +4154,36 @@
         {"do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 215},
         {"do": "wake", "target": "s11-rock-shard"},
         {"do": "fly", "target": "s11-rock-shard", "x": 470, "y": 70}
+      ]
+    },
+    {
+      "id": "s11-fall",
+      "screen": 11,
+      "once": "life",
+      "cues": [
+        {"at": 0, "do": "sound", "file": "stonefall.wav"},
+        {"at": 0, "do": "intensity", "target": "s11-void", "value": 0, "ticks": 20},
+        {"at": 0, "do": "music", "value": 15, "ticks": 20},
+        {"at": 0, "do": "shake", "value": 30, "ticks": 25},
+        {"at": 10, "do": "fly", "target": "s11-step", "x": 290, "y": 260, "ticks": 15, "ease": "out"},
+        {"at": 25, "do": "fly", "target": "s11-step", "x": 290, "y": 520, "ticks": 45, "ease": "in"},
+        {"at": 20, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 74, "ticks": 15, "ease": "out"},
+        {"at": 35, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 520, "ticks": 60, "ease": "in"},
+        {"at": 30, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 219, "ticks": 15, "ease": "out"},
+        {"at": 45, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 520, "ticks": 50, "ease": "in"},
+        {"at": 40, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 154, "ticks": 15, "ease": "out"},
+        {"at": 55, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 520, "ticks": 55, "ease": "in"},
+        {"at": 60, "do": "pace", "target": "s11-dust", "value": 100, "ticks": 90},
+        {"at": 100, "do": "jolt", "value": 25},
+        {"at": 110, "do": "shake", "value": 0, "ticks": 60},
+        {"at": 150, "do": "music", "value": 100, "ticks": 99}
+      ],
+      "aftermath": [
+        {"do": "fly", "target": "s11-step", "x": 290, "y": 520},
+        {"do": "fly", "target": "s11-rock-shard", "x": 470, "y": 520},
+        {"do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 520},
+        {"do": "fly", "target": "s11-rock-block", "x": 115, "y": 520},
+        {"do": "pace", "target": "s11-dust", "value": 100}
       ]
     }
   ],
