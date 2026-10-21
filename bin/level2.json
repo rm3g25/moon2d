@@ -74,6 +74,11 @@
         75,
         80
       ]
+    },
+    {
+      "fromScreen": 11,
+      "image": "screen11.png",
+      "tint": [75, 75, 80]
     }
   ],
   "objects": [
@@ -866,6 +871,100 @@
       "width": 512,
       "tint": [45, 38, 33],
       "tag": "s10-casing"
+    },
+    {
+      "sprite": "s11-fang-needle",
+      "screen": 11,
+      "x": 37,
+      "y": 152,
+      "width": 46,
+      "tint": [55, 52, 55],
+      "tag": "s11-fang-needle"
+    },
+    {
+      "sprite": "s11-fang-crown",
+      "screen": 11,
+      "x": 185,
+      "y": 272,
+      "width": 230,
+      "tint": [45, 43, 46],
+      "tag": "s11-fang-crown"
+    },
+    {
+      "sprite": "s11-fang-double",
+      "screen": 11,
+      "x": 436,
+      "y": 180,
+      "width": 107,
+      "tint": [40, 38, 42],
+      "tag": "s11-fang-double"
+    },
+    {
+      "sprite": "s11-rock-block",
+      "screen": 11,
+      "x": 115,
+      "y": 150,
+      "width": 110,
+      "tint": [55, 55, 62],
+      "tag": "s11-rock-block"
+    },
+    {
+      "sprite": "s11-rock-chunk",
+      "screen": 11,
+      "x": 230,
+      "y": 200,
+      "width": 40,
+      "tint": [70, 70, 78],
+      "tag": "s11-rock-chunk"
+    },
+    {
+      "sprite": "s11-rock-shard",
+      "screen": 11,
+      "x": 397,
+      "y": 120,
+      "width": 26,
+      "tint": [60, 60, 68],
+      "tag": "s11-rock-shard"
+    },
+    {
+      "sprite": "s11-column-a",
+      "screen": 11,
+      "x": 126,
+      "y": 319,
+      "width": 68,
+      "tag": "s11-column-a"
+    },
+    {
+      "sprite": "s11-column-b",
+      "screen": 11,
+      "x": 222,
+      "y": 255,
+      "width": 36,
+      "tag": "s11-column-b"
+    },
+    {
+      "sprite": "s11-column-c",
+      "screen": 11,
+      "x": 382,
+      "y": 191,
+      "width": 68,
+      "tag": "s11-column-c"
+    },
+    {
+      "sprite": "s11-way-in",
+      "screen": 11,
+      "x": 0,
+      "y": 330,
+      "width": 96,
+      "tag": "s11-way-in"
+    },
+    {
+      "sprite": "s11-way-out",
+      "screen": 11,
+      "x": 448,
+      "y": 330,
+      "width": 96,
+      "tag": "s11-way-out"
     }
   ],
   "pads": [
@@ -2005,6 +2104,15 @@
       "tag": "s09-stray-03",
       "rig": ["pad"],
       "stray": {"flock": "s09-strays", "zone": [4, 3, 11, 8], "wait": 3}
+    },
+    {
+      "sprite": "s11-rock-step",
+      "screen": 11,
+      "x": 290,
+      "y": 256,
+      "width": 60,
+      "bullets": "block",
+      "tag": "s11-step"
     }
   ],
   "carousels": [
@@ -2960,6 +3068,24 @@
         {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 8, "sway": 4, "swayTime": 35, "density": 100},
         {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 5, "sway": 2, "swayTime": 45, "density": 90}
       ]
+    },
+    {
+      "kind": "dust",
+      "screen": 11,
+      "x": 0,
+      "y": 0,
+      "tag": "s11-dust",
+      "tint": [100, 80, 60],
+      "light": {
+        "shaft": {"from": [161, 16], "to": [142, 470], "width": [3, 48], "level": 100},
+        "glow": {"at": [138, 430], "reach": [205, 240], "level": 75},
+        "ambient": 5
+      },
+      "bands": [
+        {"sprite": "dust-band-1", "y": 128, "height": 40, "length": 720, "speed": 12, "sway": 3, "swayTime": 25, "density": 60},
+        {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 8, "sway": 4, "swayTime": 35, "density": 100},
+        {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 5, "sway": 2, "swayTime": 45, "density": 90}
+      ]
     }
   ],
   "tilePalette": [
@@ -3312,6 +3438,37 @@
           "1000000001110000",
           "0000000011111000",
           "1111001111111111"
+        ]
+      },
+      {
+        "screen": 11,
+        "rows": [
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+        ],
+        "collision": [
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000001100",
+          "0000000000001100",
+          "0000000100001100",
+          "0000000100001100",
+          "0000110100001100",
+          "1110110100001111"
         ]
       }
     ]
@@ -3677,6 +3834,14 @@
       "x": 11,
       "y": 9,
       "tag": "s10-duplet"
+    },
+    {
+      "monsterId": "moonStone",
+      "screen": 11,
+      "spriteList": "moonstone.mns",
+      "x": 13,
+      "y": 6,
+      "tag": "s11-stone"
     }
   ],
   "screenTriggers": [
@@ -3712,9 +3877,10 @@
     {"screen": 7, "x": 8, "y": 3},
     {"screen": 8, "x": 1, "y": 4},
     {"screen": 9, "x": 2, "y": 11},
-    {"screen": 10, "x": 2, "y": 11}
+    {"screen": 10, "x": 2, "y": 11},
+    {"screen": 11, "x": 2, "y": 11}
   ],
-  "shutDoors": [10],
+  "shutDoors": [10, 11],
   "events": [
     {
       "id": "breachWarning",
@@ -3873,6 +4039,15 @@
       "screen": 10,
       "when": "allDead",
       "tag": "s10-duplet",
+      "then": [
+        {"action": "openDoor"}
+      ]
+    },
+    {
+      "id": "s11-door",
+      "screen": 11,
+      "when": "allDead",
+      "tag": "s11-stone",
       "then": [
         {"action": "openDoor"}
       ]

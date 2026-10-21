@@ -473,6 +473,29 @@
       ]
     },
     {
+      "id": "moonStone",
+      "displayName": "Лунный камень",
+      "displayNameEn": "Moon stone",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "picture": {
+        "width": 56,
+        "height": 29
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Лунный камень",
+      "deathTextEn": "Moon stone"
+    },
+    {
       "id": "weaponGrenade",
       "legacyName": "Оружие 2",
       "displayName": "Гранатомёт",
