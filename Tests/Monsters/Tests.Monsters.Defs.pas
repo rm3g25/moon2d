@@ -4,7 +4,9 @@
   attackers are not, and a sentry that watches a strip of no width is
   turned down at load. And of the weather word: the sky barrel is
   weather and pays nothing, the barrel is not, and weather free of
-  gravity is turned down.
+  gravity is turned down. And of a picture that turns and hovers: the
+  moon stone does, the Duplet does not, and a turn or a hover under
+  nothing is turned down.
 
   The words are tried on one-monster files of the test's own, beside the
   real one, which is read as the game reads it.
@@ -46,6 +48,10 @@ type
     procedure TestBodyWithNoWeatherWordIsNoWeather;
     [Test]
     procedure TestWeatherFreeOfGravityRaises;
+    [Test]
+    procedure TestMoonStoneTurnsAndHovers;
+    [Test]
+    procedure TestPictureTurningBackwardsRaises;
   end;
 
 implementation
@@ -182,6 +188,42 @@ begin
   finally
     Registry.Free;
   end;
+end;
+
+procedure TMonsterDefsTests.TestMoonStoneTurnsAndHovers;
+begin
+  UseGameRegistry;
+  var Stone := FRegistry.Find('moonStone').Picture;
+  Assert.IsTrue(Stone.TurnSeconds > 0, 'The stone turns');
+  Assert.IsTrue(Stone.Hover > 0, 'and hovers');
+  Assert.IsTrue(FRegistry.Find('moonStone').Anchored, 'and nothing moves it');
+  Assert.IsTrue(FRegistry.Find('moonStone').Invulnerable, 'or kills it');
+  Assert.IsFalse(FRegistry.Find('medkit').Anchored,
+    'A medkit is knocked about');
+  var Duplet := FRegistry.Find('weaponDuplet').Picture;
+  Assert.IsTrue((Duplet.TurnSeconds = 0) and (Duplet.Hover = 0),
+    'A gun lies still');
+end;
+
+// By value, not const: an anonymous method captures it
+procedure ExpectDropRefused(AWords: string);
+begin
+  var Registry := TMonsterRegistry.Create;
+  try
+    Assert.WillRaise(
+      procedure
+      begin
+        Registry.LoadFromString(DropJson(AWords));
+      end, EMonsterDefError, AWords);
+  finally
+    Registry.Free;
+  end;
+end;
+
+procedure TMonsterDefsTests.TestPictureTurningBackwardsRaises;
+begin
+  ExpectDropRefused(',"picture":{"width":10,"height":10,"turn":-1}');
+  ExpectDropRefused(',"picture":{"width":10,"height":10,"hover":-1}');
 end;
 
 initialization

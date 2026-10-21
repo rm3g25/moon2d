@@ -32,6 +32,7 @@ uses
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',
   Tests.Levels.Doors in 'Levels\Tests.Levels.Doors.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',
+  Tests.Levels.Events in 'Levels\Tests.Levels.Events.pas',
   Tests.Levels.Graph in 'Levels\Tests.Levels.Graph.pas',
   Tests.Levels.Dynamics in 'Levels\Tests.Levels.Dynamics.pas',
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',

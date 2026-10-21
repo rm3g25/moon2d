@@ -126,6 +126,10 @@ type
     Seat: string;
     SeatLeft: Double;
     SeatFeet: Double;
+    // Units the body stands right of its cell, below 0 left of it: a
+    // thing between two cells - the moon stone on a column two cells
+    // wide. JSON: "shiftX", 0 by default; not with a seat.
+    ShiftX: Integer;
   end;
 
   // Triggers of a screen that no body on it carries. JSON:
@@ -454,7 +458,7 @@ resourcestring
   SLevelCarouselCrowded = 'Level "%s": carousel "%s" takes the bodies of '
     + 'two of its pads into one another, the decks at (%g, %g)';
   SLevelEntitySeatPlaced = 'Level "%s": entity "%s" on screen %d sits on '
-    + '"%s" and is given an x or a y - the seat places it';
+    + '"%s" and is given an x, a y or a shiftX - the seat places it';
   SLevelEntitySeatUnknown = 'Level "%s": entity "%s" on screen %d sits on '
     + '"%s", which no pad carries';
   SLevelEntitySeatScreen = 'Level "%s": entity "%s" on screen %d sits on '
@@ -468,6 +472,8 @@ resourcestring
     + 'in a wall';
   SLevelRespawnOverPit = 'Level "%s": the respawn point of screen %d has no '
     + 'floor under it - a wall, or the deck of a pad that stands still';
+  SLevelEventCellOff = 'Level "%s": event "%s" waits for the hero in the '
+    + 'cell (%d, %d), off the grid';
   SLevelDoorBadScreen = 'Level "%s": "shutDoors" names screen %d of %d';
   SLevelDoorTwice = 'Level "%s": "shutDoors" names screen %d twice';
   SLevelDoorNeverOpens = 'Level "%s": the door of screen %d is shut and no '
@@ -811,6 +817,10 @@ begin
       not AnyPlacementTagged(FEntities, Event.Tag) then
       raise ELevelError.CreateFmt(SLevelEventTagUnknown,
         [FId, Event.Id, Event.Tag]);
+    var CellOff := (Event.CellX > FGridWidth) or (Event.CellY > FGridHeight);
+    if (Event.Condition = ecHeroStands) and CellOff then
+      raise ELevelError.CreateFmt(SLevelEventCellOff,
+        [FId, Event.Id, Event.CellX, Event.CellY]);
     CheckEventTargets(Event);
   end;
 end;
@@ -918,7 +928,7 @@ begin
         not FDynamics.AnyTagged(ACue.Target, TLightning) then
         raise ELevelError.CreateFmt(SLevelSceneBeamUnknown,
           [FId, AScene.Id, ACue.Target]);
-    ckIntensity:
+    ckIntensity, ckPace:
       if not FDynamics.AnyTagged(ACue.Target) then
         raise ELevelError.CreateFmt(SLevelSceneLightUnknown,
           [FId, AScene.Id, ACue.Target]);
@@ -1972,13 +1982,17 @@ begin
   AEntity.Y := 0;
   AEntity.SeatLeft := 0;
   AEntity.SeatFeet := 0;
+  AEntity.ShiftX := 0;
   if AEntity.Seat = '' then
   begin
     AEntity.X := AObj.GetValue<Integer>('x');
     AEntity.Y := AObj.GetValue<Integer>('y');
+    AEntity.ShiftX := AObj.GetValue<Integer>('shiftX', 0);
     Exit;
   end;
-  if (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil) then
+  var Placed := (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil) or
+    (AObj.GetValue('shiftX') <> nil);
+  if Placed then
     raise ELevelError.CreateFmt(SLevelEntitySeatPlaced,
       [ALevelId, AEntity.MonsterId, AEntity.Screen, AEntity.Seat]);
 end;

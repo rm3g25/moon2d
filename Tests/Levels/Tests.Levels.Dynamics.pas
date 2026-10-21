@@ -14,6 +14,9 @@
   JSON, and all that is seen of it is that it reads, and on which layer.
   Its drawing is never tried.
 
+  The eclipse: what its file says, as far as it is read. Its dark and its
+  wave are drawn, never read.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Levels.Dynamics;
@@ -45,6 +48,8 @@ type
     procedure TestCraftGetsThereByItsTicksAndStays;
     [Test]
     procedure TestEaseShapesTheWayNotTheEnd;
+    [Test]
+    procedure TestBackEaseRunsPastItsMarkAndSettles;
     [Test]
     procedure TestCornerBetweenTicksLiesBetweenThem;
     [Test]
@@ -82,6 +87,17 @@ type
     procedure TestBadDustRaises;
   end;
 
+  [TestFixture]
+  TEclipseTests = class
+  public
+    [Test]
+    procedure TestEclipseReadsFromItsFile;
+    [Test]
+    procedure TestWaveIsTheOtherLook;
+    [Test]
+    procedure TestBadEclipseRaises;
+  end;
+
 implementation
 
 uses
@@ -109,6 +125,10 @@ const
   // A field of one band; the format adds members after the bands
   DustJson = '{"kind":"dust","screen":1,"x":0,"y":0,' +
     '"bands":[{"sprite":"band","y":10}]%s}';
+  // The black glow of the moon stone; the format adds members
+  EclipseJson = '{"kind":"eclipse","screen":1,"x":416,"y":173%s}';
+  // A back ease runs past its mark by a few percent of the way, no more
+  BackPeakMost = 1.05;
   AmbientPoints: array [0..3] of Integer = (-300, 0, 77, 512);
   HourSpeeds: array [0..1] of Integer = (7, -7);
 
@@ -249,6 +269,30 @@ begin
     'Gathering speed, it has come less far');
   Assert.IsTrue(HalfWay[meInOut] < HalfWay[meOut],
     'Both ways, it lags the one that sets off at speed');
+end;
+
+procedure TCraftTests.TestBackEaseRunsPastItsMarkAndSettles;
+const
+  Ticks = 40;
+  Way = 100;
+begin
+  UseCraft;
+  FCraft.MoveX(FileX + Way, Ticks, meBack);
+  var Furthest: Single := FileX;
+  for var Tick := 1 to Ticks do
+  begin
+    TickCraft(1);
+    Furthest := Max(Furthest, FCraft.CornerAt(1).X);
+  end;
+
+  Assert.IsTrue(Furthest > FileX + Way,
+    Format('It runs past its mark: at most %g', [Furthest]));
+  Assert.IsTrue(Furthest < FileX + Way * BackPeakMost,
+    Format('A little past it, not a bounce: %g', [Furthest]));
+  Assert.IsTrue(IsNear(FCraft.CornerAt(1).X, FileX + Way),
+    'It settles onto its mark when its ticks are out');
+  TickCraft(10);
+  Assert.IsTrue(IsNear(FCraft.CornerAt(1).X, FileX + Way), 'and stays');
 end;
 
 procedure TCraftTests.TestCornerBetweenTicksLiesBetweenThem;
@@ -519,8 +563,59 @@ begin
     '"reach":[10,0]}}']), 'A glow of no height');
 end;
 
+procedure TEclipseTests.TestEclipseReadsFromItsFile;
+begin
+  var Parsed := DynamicOf(Format(EclipseJson,
+    [',"reach":70,"depth":75,"rim":34']));
+  try
+    Assert.IsTrue(Parsed is TEclipse, 'An eclipse');
+    var Eclipse := TEclipse(Parsed);
+    Assert.AreEqual<TEclipseLook>(elVoid, Eclipse.Look, 'The void by default');
+    Assert.IsTrue(IsNear(Eclipse.Reach, 70), 'reach');
+    Assert.IsTrue(IsNear(Eclipse.Depth, 0.75), 'depth, a percentage');
+    Assert.IsTrue(IsNear(Eclipse.Rim, 34), 'rim');
+    Assert.AreEqual<TDynamicLayer>(dlBack, Parsed.Placement.Layer,
+      'Over the objects and the pads, under the monsters');
+  finally
+    Parsed.Free;
+  end;
+
+  Parsed := DynamicOf(Format(EclipseJson, [',"reach":70']));
+  try
+    Assert.IsTrue(IsNear(TEclipse(Parsed).Rim, 0), 'No rim unless asked');
+    Assert.IsTrue(IsNear(TEclipse(Parsed).Depth, 0.8), 'Depth by default');
+  finally
+    Parsed.Free;
+  end;
+end;
+
+procedure TEclipseTests.TestWaveIsTheOtherLook;
+begin
+  var Parsed := DynamicOf(Format(EclipseJson,
+    [',"look":"wave","reach":340,"depth":60']));
+  try
+    Assert.AreEqual<TEclipseLook>(elWave, TEclipse(Parsed).Look);
+    Assert.IsTrue(IsNear(TEclipse(Parsed).Reach, 340), 'reach');
+  finally
+    Parsed.Free;
+  end;
+end;
+
+procedure TEclipseTests.TestBadEclipseRaises;
+begin
+  ExpectRaises(Format(EclipseJson, ['']), 'No reach');
+  ExpectRaises(Format(EclipseJson, [',"reach":0']), 'A reach of nothing');
+  ExpectRaises(Format(EclipseJson, [',"reach":70,"depth":120']),
+    'A depth past 100');
+  ExpectRaises(Format(EclipseJson, [',"reach":70,"rim":-1']),
+    'A rim under nothing');
+  ExpectRaises(Format(EclipseJson, [',"reach":70,"look":"hole"']),
+    'An unknown look');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TCraftTests);
   TDUnitX.RegisterTestFixture(TDustTests);
+  TDUnitX.RegisterTestFixture(TEclipseTests);
 
 end.

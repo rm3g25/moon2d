@@ -1,7 +1,9 @@
 ﻿{
   Tests.Pads.Flights - the flight a scene flies a single pad on
   (StraightFlight): one leg in front, from where the pad stands to where
-  it is sent, its time stretched over the ticks the scene gives it.
+  it is sent, its time stretched over the ticks the scene gives it. And
+  the same leg shaped by an ease (EasedFlight): a rock thrown up out of
+  the pit runs a little past its place and lands on it.
 
   The flights of a rebuild's plan are designed in the table of the unit
   and not written yet.
@@ -27,6 +29,8 @@ type
     procedure TestStraightFlightSetsOffAndStopsGently;
     [Test]
     procedure TestStraightFlightStaysInFront;
+    [Test]
+    procedure TestEasedFlightRunsPastItsPlaceAndLandsOnIt;
   end;
 
 implementation
@@ -34,6 +38,7 @@ implementation
 uses
   System.Math,
   System.SysUtils,
+  Levels.Dynamics,
   Pads.Flights;
 
 const
@@ -150,6 +155,34 @@ begin
     Assert.IsTrue(Flight.Depth(Tick) = 0,
       Format('Tick %d: gone into the depth', [Tick]));
   end;
+end;
+
+procedure TPadFlightsTests.TestEasedFlightRunsPastItsPlaceAndLandsOnIt;
+const
+  // The step of screen 11: from under the bottom edge up to row 8
+  PitY = 384.0;
+  StepY = 256.0;
+  // A few percent of the way past it, not a bounce
+  MostPast = 8.0;
+var
+  X, Y: Double;
+begin
+  var Flight := EasedFlight(FromX, PitY, FromX, StepY, FlightTicks, meBack);
+  var Highest := PitY;
+  for var Tick := 0 to FlightTicks do
+  begin
+    Flight.Place(Tick, X, Y);
+    Highest := Min(Highest, Y);
+  end;
+
+  Assert.IsTrue(Highest < StepY, Format('It runs past its place: %g', [Highest]));
+  Assert.IsTrue(StepY - Highest < MostPast,
+    Format('A little past, not a bounce: %g', [Highest]));
+  Flight.Place(FlightTicks, X, Y);
+  Assert.IsTrue(Abs(Y - StepY) < UnitSlack, 'It lands on its place');
+  Flight.Place(FlightTicks + Afterwards, X, Y);
+  Assert.IsTrue(Abs(Y - StepY) < UnitSlack, 'and stays');
+  Assert.IsTrue(Abs(X - FromX) < UnitSlack, 'straight up, never aside');
 end;
 
 initialization

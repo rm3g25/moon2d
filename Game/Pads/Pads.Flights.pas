@@ -30,6 +30,8 @@
 
   A scene flies a single pad on its own (StraightFlight): one leg, from
   where it stands to where the scene says, over the ticks the scene says.
+  It may follow an ease instead of the pace (EasedFlight): a rock thrown
+  up out of a pit runs a little past its place and settles onto it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -39,7 +41,7 @@ unit Pads.Flights;
 interface
 
 uses
-  Render.Brush, Pads.Formations;
+  Render.Brush, Levels.Dynamics, Pads.Formations;
 
 type
   // How briskly a plan is flown
@@ -68,6 +70,9 @@ type
     Depart: Integer;
     // Flown in the depth behind the others
     Deep: Boolean;
+    // The first leg goes the share of the way Ease gives, not the pace's
+    Eased: Boolean;
+    Ease: TMotionEase;
     // On the cell; a deep pad starts coming out of the depth
     function Arrive: Integer;
     // Over: on the cell and, for a deep pad, out of the depth
@@ -125,6 +130,9 @@ function TryPlanFlights(var ARandom: TXorShift; const ABrief: TFlightBrief;
 // time stretched over ATicks. The places must differ; ATicks above zero.
 function StraightFlight(AFromX, AFromY, AToX, AToY: Double; ATicks: Integer;
   const APace: TFlightPace): TPadFlight;
+// The same flight going the way AEase shapes, over ATicks
+function EasedFlight(AFromX, AFromY, AToX, AToY: Double; ATicks: Integer;
+  AEase: TMotionEase): TPadFlight;
 
 implementation
 
@@ -211,8 +219,12 @@ begin
     Exit;
   if Time < FirstTicks then
   begin
-    var Share := LegCovered(Pace, FirstDistance, Time, FirstTicks) /
-      FirstDistance;
+    var Share: Double;
+    if Eased then
+      Share := EasedShare(Ease, Time / FirstTicks)
+    else
+      Share := LegCovered(Pace, FirstDistance, Time, FirstTicks) /
+        FirstDistance;
     AX := FromX + (CornerX - FromX) * Share;
     AY := FromY + (CornerY - FromY) * Share;
     Exit;
@@ -327,6 +339,14 @@ begin
   Result.ToY := AToY;
   Result.FirstDistance := Hypot(AToX - AFromX, AToY - AFromY);
   Result.FirstTicks := ATicks;
+end;
+
+function EasedFlight(AFromX, AFromY, AToX, AToY: Double; ATicks: Integer;
+  AEase: TMotionEase): TPadFlight;
+begin
+  Result := StraightFlight(AFromX, AFromY, AToX, AToY, ATicks, CalmPace);
+  Result.Eased := True;
+  Result.Ease := AEase;
 end;
 
 // The space the pad holds at the tick, for the plan. A deep pad holds its

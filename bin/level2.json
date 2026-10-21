@@ -900,33 +900,6 @@
       "tag": "s11-fang-double"
     },
     {
-      "sprite": "s11-rock-block",
-      "screen": 11,
-      "x": 115,
-      "y": 150,
-      "width": 110,
-      "tint": [55, 55, 62],
-      "tag": "s11-rock-block"
-    },
-    {
-      "sprite": "s11-rock-chunk",
-      "screen": 11,
-      "x": 230,
-      "y": 200,
-      "width": 40,
-      "tint": [70, 70, 78],
-      "tag": "s11-rock-chunk"
-    },
-    {
-      "sprite": "s11-rock-shard",
-      "screen": 11,
-      "x": 397,
-      "y": 120,
-      "width": 26,
-      "tint": [60, 60, 68],
-      "tag": "s11-rock-shard"
-    },
-    {
       "sprite": "s11-column-a",
       "screen": 11,
       "x": 126,
@@ -2106,13 +2079,50 @@
       "stray": {"flock": "s09-strays", "zone": [4, 3, 11, 8], "wait": 3}
     },
     {
+      "sprite": "s11-rock-block",
+      "screen": 11,
+      "x": 115,
+      "y": 384,
+      "width": 110,
+      "tint": [55, 55, 62],
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s11-rock-block",
+      "dormant": true
+    },
+    {
+      "sprite": "s11-rock-chunk",
+      "screen": 11,
+      "x": 170,
+      "y": 384,
+      "width": 40,
+      "tint": [70, 70, 78],
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s11-rock-chunk",
+      "dormant": true
+    },
+    {
+      "sprite": "s11-rock-shard",
+      "screen": 11,
+      "x": 470,
+      "y": 384,
+      "width": 26,
+      "tint": [60, 60, 68],
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s11-rock-shard",
+      "dormant": true
+    },
+    {
       "sprite": "s11-rock-step",
       "screen": 11,
       "x": 290,
-      "y": 256,
+      "y": 384,
       "width": 60,
       "bullets": "block",
-      "tag": "s11-step"
+      "tag": "s11-step",
+      "dormant": true
     }
   ],
   "carousels": [
@@ -3086,6 +3096,29 @@
         {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 8, "sway": 4, "swayTime": 35, "density": 100},
         {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 5, "sway": 2, "swayTime": 45, "density": 90}
       ]
+    },
+    {
+      "kind": "eclipse",
+      "screen": 11,
+      "x": 416,
+      "y": 173,
+      "tag": "s11-void",
+      "intensity": 0,
+      "reach": 70,
+      "depth": 75,
+      "rim": 48,
+      "tint": [45, 50, 70]
+    },
+    {
+      "kind": "eclipse",
+      "look": "wave",
+      "screen": 11,
+      "x": 416,
+      "y": 173,
+      "tag": "s11-wave",
+      "intensity": 0,
+      "reach": 340,
+      "depth": 75
     }
   ],
   "tilePalette": [
@@ -3841,6 +3874,7 @@
       "spriteList": "moonstone.mns",
       "x": 13,
       "y": 6,
+      "shiftX": 16,
       "tag": "s11-stone"
     }
   ],
@@ -4049,7 +4083,77 @@
       "when": "allDead",
       "tag": "s11-stone",
       "then": [
-        {"action": "openDoor"}
+        {"action": "openDoor"},
+        {"action": "intensity", "target": "s11-void", "value": 0, "ticks": 20}
+      ]
+    },
+    {
+      "id": "s11-shuttle",
+      "screen": 11,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "hint",
+          "place": "top",
+          "header": "ЧЕЛНОК",
+          "headerEn": "SHUTTLE",
+          "text": "Мастер, это лунный камень. От него идут волны энергии.",
+          "textEn": "Master, this is a moon stone. Waves of energy are coming off it."
+        }
+      ]
+    },
+    {
+      "id": "s11-wake",
+      "screen": 11,
+      "when": "heroStands",
+      "x": 8,
+      "y": 8,
+      "then": [
+        {"action": "scene", "target": "s11-wake"}
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "s11-wake",
+      "screen": 11,
+      "once": "level",
+      "cues": [
+        {"at": 0, "do": "music", "value": 15, "ticks": 40},
+        {"at": 0, "do": "sound", "file": "stonewake.wav"},
+        {"at": 0, "do": "pace", "target": "s11-dust", "value": 0, "ticks": 30},
+        {"at": 25, "do": "intensity", "target": "s11-void", "value": 100, "ticks": 70},
+        {"at": 25, "do": "jolt", "value": 20},
+        {"at": 30, "do": "shake", "value": 40, "ticks": 30},
+        {"at": 35, "do": "intensity", "target": "s11-wave", "value": 100, "ticks": 90},
+        {"at": 60, "do": "wake", "target": "s11-rock-block"},
+        {"at": 60, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 150, "ticks": 140, "ease": "back"},
+        {"at": 60, "do": "jolt", "value": 45},
+        {"at": 85, "do": "wake", "target": "s11-step"},
+        {"at": 85, "do": "fly", "target": "s11-step", "x": 290, "y": 256, "ticks": 120, "ease": "back"},
+        {"at": 85, "do": "jolt", "value": 40},
+        {"at": 105, "do": "wake", "target": "s11-rock-chunk"},
+        {"at": 105, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 215, "ticks": 130, "ease": "back"},
+        {"at": 105, "do": "jolt", "value": 30},
+        {"at": 125, "do": "wake", "target": "s11-rock-shard"},
+        {"at": 125, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 70, "ticks": 150, "ease": "back"},
+        {"at": 125, "do": "jolt", "value": 30},
+        {"at": 60, "do": "shake", "value": 80, "ticks": 30},
+        {"at": 260, "do": "shake", "value": 0, "ticks": 80},
+        {"at": 340, "do": "music", "value": 100, "ticks": 99}
+      ],
+      "aftermath": [
+        {"do": "pace", "target": "s11-dust", "value": 0},
+        {"do": "intensity", "target": "s11-void", "value": 100},
+        {"do": "intensity", "target": "s11-wave", "value": 100},
+        {"do": "wake", "target": "s11-rock-block"},
+        {"do": "fly", "target": "s11-rock-block", "x": 115, "y": 150},
+        {"do": "wake", "target": "s11-step"},
+        {"do": "fly", "target": "s11-step", "x": 290, "y": 256},
+        {"do": "wake", "target": "s11-rock-chunk"},
+        {"do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 215},
+        {"do": "wake", "target": "s11-rock-shard"},
+        {"do": "fly", "target": "s11-rock-shard", "x": 470, "y": 70}
       ]
     }
   ],

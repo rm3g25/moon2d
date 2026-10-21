@@ -198,10 +198,15 @@ type
 
   // A frame of its own size instead of the cell, standing on the feet
   // line and centered on the cell's middle - a pickup wider than a cell.
-  // Screen units. JSON "picture": {"width": 42, "height": 12}
+  // Screen units. It may turn clockwise round its middle once in
+  // TurnSeconds (0 - it stands) and hover Hover units up and down - a
+  // thing of the void that does not lie as a stone does. JSON "picture":
+  // {"width": 42, "height": 12}, and "turn" and "hover", 0 by default.
   // Absent for a monster drawn in its cell.
   TPictureDef = record
     Width, Height: Double;
+    TurnSeconds: Double;
+    Hover: Double;
     function Enabled: Boolean;
   end;
 
@@ -213,6 +218,13 @@ type
     Category: TMonsterCategory;
     Dangerous: Boolean;
     AffectedByGravity: Boolean; // platforms, mounts and the boss ignore it
+    // Anchored: nothing moves the body - no blow, no blast, no deck under
+    // it. JSON "anchored", false by default; the moon stone.
+    Anchored: Boolean;
+    // Invulnerable: nothing takes a life of it - a shot still bursts on
+    // it. JSON "invulnerable", false by default; the moon stone, which
+    // only the hero's hand takes.
+    Invulnerable: Boolean;
     // Weather: a body the sky lets fall. It bursts where it lands, the
     // pit takes it without a blast, and its death pays the hero nothing -
     // neither shot down nor burst. JSON "weather", false by default; the
@@ -299,6 +311,7 @@ resourcestring
   SWeatherFloats = 'Monster "%s": weather falls - it cannot be free of ' +
     'gravity';
   SBadPicture = 'Monster "%s": a picture needs a positive width and height';
+  SBadPictureMotion = 'Monster "%s": a picture turns and hovers by 0 or more';
   SPictureAndLayers = 'Monster "%s": a picture of its own is for a ' +
     'monster drawn in frames, not as a disc or a hull';
 
@@ -436,6 +449,10 @@ begin
   Result.Height := AObj.GetValue<Double>('height', 0);
   if (Result.Width <= 0) or (Result.Height <= 0) then
     raise EMonsterDefError.CreateFmt(SBadPicture, [AMonsterId]);
+  Result.TurnSeconds := AObj.GetValue<Double>('turn', 0);
+  Result.Hover := AObj.GetValue<Double>('hover', 0);
+  if (Result.TurnSeconds < 0) or (Result.Hover < 0) then
+    raise EMonsterDefError.CreateFmt(SBadPictureMotion, [AMonsterId]);
 end;
 
 function ParsePortAngles(const AObj: TJSONObject;
@@ -672,6 +689,8 @@ begin
   Result.AffectedByGravity := AObj.GetValue<Boolean>('affectedByGravity',
     True);
   Result.Weather := AObj.GetValue<Boolean>('weather', False);
+  Result.Anchored := AObj.GetValue<Boolean>('anchored', False);
+  Result.Invulnerable := AObj.GetValue<Boolean>('invulnerable', False);
   if Result.Weather and not Result.AffectedByGravity then
     raise EMonsterDefError.CreateFmt(SWeatherFloats, [Result.Id]);
   var Blast := AObj.GetValue<TJSONObject>('blast', nil);

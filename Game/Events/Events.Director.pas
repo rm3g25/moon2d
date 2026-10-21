@@ -13,8 +13,8 @@
   onto; the wall cannons of the trial; the bodies an event lets in; the
   open sky of the trial; the press of its finale; the scene an event
   begins; how far the gravel trial has come, whether it is won and how
-  much of its victory track is left; the go-right arrow; the door of
-  the screen, which the game keeps shut or open. The
+  much of its victory track is left; where the hero stands; the go-right
+  arrow; the door of the screen, which the game keeps shut or open. The
   monster field is reborn on every restart, so it arrives with every tick
   instead of being kept: asked for the conditions, told the tactics.
 
@@ -81,6 +81,9 @@ type
   TGoRightCue = reference to procedure;
   // The door the level shuts on the hero's screen opens
   TOpenDoorCue = reference to procedure;
+  // The hero stands in the cell ACol, ARow of his screen, from 0, on his
+  // feet
+  THeroStandsCue = reference to function(ACol, ARow: Integer): Boolean;
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -104,6 +107,7 @@ type
     VictoryLeft: TVictoryLeft;
     GoRight: TGoRightCue;
     OpenDoor: TOpenDoorCue;
+    HeroStands: THeroStandsCue;
   end;
 
   TEventDirector = class
@@ -224,6 +228,8 @@ begin
         var Left := FCues.VictoryLeft();
         Result := (Left >= 0) and (Left <= AEvent.LeadSeconds);
       end;
+    ecHeroStands:
+      Result := FCues.HeroStands(AEvent.CellX - 1, AEvent.CellY - 1);
   else
     Result := True;
   end;

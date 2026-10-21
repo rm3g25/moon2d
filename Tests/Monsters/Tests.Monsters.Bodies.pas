@@ -18,6 +18,10 @@
   access violation, so a betoner that fires is a raise, and one held is
   none. The deck a body stands on is a pad of no picture in the room.
 
+  The moon stone is anchored: blows, throws and a deck flying up from
+  under it leave it where it lies - set against a medkit, which a blow
+  moves. And it is invulnerable: struck for all its lives, it lives.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Monsters.Bodies;
@@ -91,6 +95,10 @@ type
     procedure TestStoodBodyIsPutAtRest;
     [Test]
     procedure TestBodyStoodOnADeckHasItUnderItsFeet;
+    [Test]
+    procedure TestAnchoredStoneIsMovedByNothing;
+    [Test]
+    procedure TestInvulnerableStoneOutlivesAnyBlow;
   end;
 
 implementation
@@ -132,6 +140,11 @@ const
     '"width":32,"tag":"deck"}]';
   DeckLeft = 224;
   DeckTop = 224;
+  // A throw as a blast deals one, and the deck's flight up from under a
+  // body
+  ThrowWay = 40;
+  DeckRise = 64;
+  DeckRiseTicks = 10;
 
 function PlaceX(const AMonster: TMonster): Integer;
 begin
@@ -601,6 +614,47 @@ begin
 
   Body.Stand(64, FloorY, False);
   Assert.IsNull(Body.DeckUnderFeet, 'Stood on the floor');
+end;
+
+procedure TMonsterBodyTests.TestAnchoredStoneIsMovedByNothing;
+begin
+  FreeAndNil(FRoom);
+  FRoom := RoomFromRows(RoomRowsOf(0, 0, 0, 0), DeckSections);
+  var Medkit := FRoom.Place('medkit', 4, 11);
+  var MedkitX := PlaceX(Medkit);
+  Medkit.TakeDamage(Blow, 0, nil);
+  Assert.AreNotEqual(MedkitX, PlaceX(Medkit), 'A blow moves a pickup');
+
+  var Stone := FRoom.Place('moonStone', 2, 11);
+  var StoneX := PlaceX(Stone);
+  Stone.TakeDamage(Blow, 0, nil);
+  Stone.Throw(ThrowWay);
+  TickBody(Stone, DeckRiseTicks);
+  Assert.AreEqual(StoneX, PlaceX(Stone), 'A blow or a throw moved the stone');
+
+  var Deck := FRoom.Pads.FindTagged('deck');
+  Stone.Stand(DeckLeft, DeckTop, False);
+  Deck.FlyTo(DeckLeft, DeckTop - DeckRise, DeckRiseTicks);
+  for var i := 1 to 2 * DeckRiseTicks do
+  begin
+    FRoom.Pads.Tick(1, nil);
+    Stone.Tick(0, 0, nil);
+  end;
+  Assert.IsTrue(PlaceY(Stone) >= DeckTop, 'The deck carried the stone up');
+end;
+
+procedure TMonsterBodyTests.TestInvulnerableStoneOutlivesAnyBlow;
+begin
+  UseRoom(RoomRowsOf(0, 0, 0, 0));
+  var Stone := FRoom.Place('moonStone', 8, 11);
+  var Lives := Stone.Lives;
+
+  Stone.TakeDamage(0, Lives, nil);
+  Stone.TakeDamage(0, Lives, nil);
+
+  Assert.AreEqual<TMonsterLife>(mlAlive, Stone.Life, 'The stone was shot dead');
+  Assert.AreEqual(Lives, Stone.Lives, 'A blow took a life of it');
+  Assert.AreEqual<TMonsterEvent>(meNone, Stone.DrainEvent, 'It told a death');
 end;
 
 initialization

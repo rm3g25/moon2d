@@ -52,6 +52,12 @@ type
     [Test]
     procedure TestMoveReadsTheAxesItIsGiven;
     [Test]
+    procedure TestFlyEasesOnlyWhenTold;
+    [Test]
+    procedure TestPaceReadsItsTargetAndShare;
+    [Test]
+    procedure TestJoltReadsItsShare;
+    [Test]
     procedure TestWaitReadsItsCondition;
     [Test]
     procedure TestUnknownWordsRaise;
@@ -401,6 +407,40 @@ begin
   Assert.AreEqual<TMotionEase>(meLinear, Linear.Ease, 'Ease by default');
 end;
 
+procedure TLevelScenesTests.TestFlyEasesOnlyWhenTold;
+begin
+  var Paced := OneCue('{"at":0,"do":"fly","target":"lift","x":64,"y":96,' +
+    '"ticks":66}');
+  Assert.IsFalse(Paced.Eased, 'With no ease it brakes as a pad does');
+
+  var Thrown := OneCue('{"at":0,"do":"fly","target":"rock","x":290,' +
+    '"y":256,"ticks":70,"ease":"back"}');
+  Assert.IsTrue(Thrown.Eased, 'An ease named is followed');
+  Assert.AreEqual<TMotionEase>(meBack, Thrown.Ease);
+  Assert.IsTrue(IsNear(Thrown.X, 290) and IsNear(Thrown.Y, 256), 'x and y');
+end;
+
+procedure TLevelScenesTests.TestPaceReadsItsTargetAndShare;
+begin
+  var Cue := OneCue('{"at":0,"do":"pace","target":"dust","value":0,' +
+    '"ticks":15}');
+  Assert.AreEqual<TSceneCueKind>(ckPace, Cue.Kind);
+  Assert.AreEqual('dust', Cue.Target);
+  Assert.IsTrue(IsNear(Cue.Level, 0), 'Stilled');
+  Assert.AreEqual(15, Cue.Ticks, 'over its ticks');
+  Assert.IsTrue(IsNear(OneCue('{"at":0,"do":"pace","target":"dust",' +
+    '"value":50}').Level, 0.5), 'A share of the pace of the file');
+end;
+
+procedure TLevelScenesTests.TestJoltReadsItsShare;
+begin
+  var Cue := OneCue('{"at":60,"do":"jolt","value":40}');
+  Assert.AreEqual<TSceneCueKind>(ckJolt, Cue.Kind);
+  Assert.IsTrue(IsNear(Cue.Level, 0.4), 'A share of the hardest blow');
+  ExpectCuesRaise('{"at":0,"do":"jolt"}', 'A jolt of no value');
+  ExpectCuesRaise('{"at":0,"do":"jolt","value":120}', 'A jolt past 100');
+end;
+
 procedure TLevelScenesTests.TestWaitReadsItsCondition;
 begin
   var Scene := OneScene('{"id":"docked","at":5,"do":"shade","value":0},' +
@@ -441,6 +481,11 @@ begin
   ExpectCuesRaise('{"at":0,"do":"hint","text":"T"}', 'A hint of no header');
   ExpectCuesRaise('{"at":0,"do":"hint","header":"H"}', 'A hint of no text');
   ExpectCuesRaise('{"at":0,"do":"kill"}', 'A kill of no target');
+  ExpectCuesRaise('{"at":0,"do":"pace","value":0}', 'A pace of no target');
+  ExpectCuesRaise('{"at":0,"do":"pace","target":"dust","value":120}',
+    'A pace past 100');
+  ExpectCuesRaise('{"at":0,"do":"fly","target":"lift","x":64,"y":96,' +
+    '"ease":"bounce"}', 'A fly of an unknown ease');
   ExpectSectionRaises(SceneJson(''), 'A scene of no cues');
   ExpectSectionRaises('{"screen":1,"cues":[{"at":0,"do":"shade","value":0}]}',
     'A scene of no id');

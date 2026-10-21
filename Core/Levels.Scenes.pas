@@ -41,22 +41,24 @@ type
   // Sound: a sound of the sound folder plays from the cue on; the scene
   // stops it if it ends early. Music: the level's music fades to a share
   // of its volume. Shade: the world darkens by a share. Shake: the
-  // ground trembles, as a share of the scene's full rumble. Move: the
+  // ground trembles, as a share of the scene's full rumble. Jolt: one
+  // blow to the screen, a share of the hardest the game deals. Move: the
   // craft Target heads for x and/or y, each axis on its own. Track: the
   // parts tagged Part of the craft Target follow the mark. Aim: the beam
   // Target swings onto the mark and stays on it; lightning tagged Target
   // turns its bolts toward it. Intensity: the dynamic objects tagged
-  // Target fade to a share. Hint: the terminal prints a line in the name
+  // Target fade to a share. Pace: their clocks run at a share of the
+  // level file's - 0 stills them. Hint: the terminal prints a line in the name
   // of Header. Hold: the monsters tagged Target hold their fire from now
   // on. Kill: they die, and nobody is paid for it. Spawn: a monster is
   // born, standing, tagged Target - asleep, if told so. Release: the
   // monsters tagged Target wake and fire again. Remove: they are gone, as
   // if never there. Wake: the pad Target, asleep in the level file, is
-  // there. Fly: the pad Target flies to x, y. Wait: nothing, once its
-  // condition holds.
-  TSceneCueKind = (ckSound, ckMusic, ckShade, ckShake, ckMove, ckTrack,
-    ckAim, ckIntensity, ckHint, ckHold, ckKill, ckSpawn, ckRelease, ckRemove,
-    ckWake, ckFly, ckWait);
+  // there. Fly: the pad Target flies to x, y - braking as a pad does, or
+  // the way an ease shapes it. Wait: nothing, once its condition holds.
+  TSceneCueKind = (ckSound, ckMusic, ckShade, ckShake, ckJolt, ckMove,
+    ckTrack, ckAim, ckIntensity, ckPace, ckHint, ckHold, ckKill, ckSpawn,
+    ckRelease, ckRemove, ckWake, ckFly, ckWait);
 
   // What a part follows or a beam is aimed at: the hero, the monster
   // tagged MarkTag, a point of the screen, or nothing - a part goes back
@@ -79,6 +81,8 @@ type
   //    "ticks": 14}
   //   {"at": 495, "do": "intensity", "target": "cordonLensL", "value": 100,
   //    "ticks": 4}
+  //   {"at": 20, "do": "pace", "target": "s11-dust", "value": 0,
+  //    "ticks": 15}
   //   {"at": 545, "do": "hint", "header": "TEK-Q6", "text": "...",
   //    "textEn": "..."}
   //   {"at": 0, "do": "hold", "target": "cordonPrey"}
@@ -91,13 +95,16 @@ type
   //   {"at": 714, "do": "wake", "target": "s09-lift"}
   //   {"at": 714, "do": "fly", "target": "s09-lift", "x": 320, "y": 256,
   //    "ticks": 66}
+  //   {"at": 40, "do": "fly", "target": "s11-step", "x": 290, "y": 256,
+  //    "ticks": 70, "ease": "back"}
   //   {"id": "unloaded", "after": "docked", "do": "wait",
   //    "until": "deckEmpty", "target": "s09-lift"}
   // "at" - ticks from the start of the scene; or "after", the id of a cue
   // above it in the file, and "delay", ticks after that cue has played, 0
   // by default. "value" is a percentage; "ticks" 0 by default - at once;
   // "ease" one of "linear" (by default), "in", "out", "inOut". "on" is
-  // "hero", a monster's tag or, for a track alone, "none"; in place of
+  // "hero", a monster's tag or, for a track alone, "none"; a fly takes
+  // "ease" too, and without one brakes as a pad does; in place of
   // "on", "x" and "y" name a point of the screen. A hint takes a "header"
   // and a "text" (localized, "headerEn", "textEn") and "place" - "top" by
   // default, or "bottom". A spawn stands the body in the middle of the
@@ -124,6 +131,7 @@ type
     X, Y: Single; // a move's, a fly's, a spawn's, smPoint's
     Ticks: Integer;
     Ease: TMotionEase;
+    Eased: Boolean; // a fly that follows Ease, not a pad's pace
     Header: TLocalizedText;
     Text: TLocalizedText;
     AtBottom: Boolean;
@@ -153,8 +161,8 @@ const
   NotTimed = -1;
   SceneOnceIds: array [TSceneOnce] of string = ('level', 'life');
   SceneCueIds: array [TSceneCueKind] of string = ('sound', 'music', 'shade',
-    'shake', 'move', 'track', 'aim', 'intensity', 'hint', 'hold', 'kill',
-    'spawn', 'release', 'remove', 'wake', 'fly', 'wait');
+    'shake', 'jolt', 'move', 'track', 'aim', 'intensity', 'pace', 'hint',
+    'hold', 'kill', 'spawn', 'release', 'remove', 'wake', 'fly', 'wait');
   SceneWaitIds: array [TSceneWait] of string = ('deckEmpty');
   // The words of "on" that are not a tag
   SceneMarkHero = 'hero';
@@ -286,6 +294,9 @@ begin
   ReadAxes(AObj, ACue);
   if not (ACue.MovesX and ACue.MovesY) then
     raise ELevelSceneError.CreateFmt(SSceneFlyNowhere, [ALevelId, ASceneId]);
+  ACue.Eased := AObj.GetValue('ease') <> nil;
+  if ACue.Eased then
+    ReadEase(AObj, ALevelId, ASceneId, ACue);
 end;
 
 procedure ReadMark(const AObj: TJSONObject; const ALevelId,
@@ -374,8 +385,8 @@ begin
   if Result.Ticks < 0 then
     raise ELevelSceneError.CreateFmt(SSceneBadTick,
       [ALevelId, ASceneId, ANumber]);
-  if Result.Kind in [ckMove, ckTrack, ckAim, ckIntensity, ckHold, ckKill,
-    ckRelease, ckRemove, ckWake, ckFly, ckWait] then
+  if Result.Kind in [ckMove, ckTrack, ckAim, ckIntensity, ckPace, ckHold,
+    ckKill, ckRelease, ckRemove, ckWake, ckFly, ckWait] then
     ReadTarget(AObj, ALevelId, ASceneId, ANumber, Result);
   case Result.Kind of
     ckSound:
@@ -384,7 +395,7 @@ begin
         if Result.FileName = '' then
           raise ELevelSceneError.CreateFmt(SSceneNoFile, [ALevelId, ASceneId]);
       end;
-    ckMusic, ckShade, ckShake, ckIntensity:
+    ckMusic, ckShade, ckShake, ckJolt, ckIntensity, ckPace:
       ReadCueLevel(AObj, ALevelId, ASceneId, ANumber, Result);
     ckMove:
       ReadMove(AObj, ALevelId, ASceneId, Result);

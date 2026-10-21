@@ -92,6 +92,8 @@ type
     [Test]
     procedure TestShakeRunsFromItsCueToARewind;
     [Test]
+    procedure TestJoltIsOneBlowTakenOnce;
+    [Test]
     procedure TestCuesActOnTheBodiesTheyTag;
     [Test]
     procedure TestSpawnStandsTheBodyItsTagNames;
@@ -469,6 +471,22 @@ begin
   Assert.IsTrue(FDirector.Trauma > 0, 'The ground does not shake');
   FDirector.ReArm(1, Stage);
   Assert.IsTrue(FDirector.Trauma = 0, 'The ground shakes on after a death');
+end;
+
+procedure TSceneDirectorTests.TestJoltIsOneBlowTakenOnce;
+begin
+  UseScene(SceneJson(
+    '{"at":3,"do":"jolt","value":40},' +
+    '{"at":0,"do":"move","target":"ship","x":200,"ticks":100}'));
+  FDirector.Start(SceneId);
+
+  Play(3);
+  Assert.IsTrue(FDirector.TakeJolt = 0, 'The blow came before its cue');
+  Play(1);
+  Assert.IsTrue(IsNear(FDirector.TakeJolt, 0.4), 'The blow of the cue');
+  Assert.IsTrue(FDirector.TakeJolt = 0, 'Taken twice');
+  Play(1);
+  Assert.IsTrue(FDirector.TakeJolt = 0, 'It came again a tick later');
 end;
 
 procedure TSceneDirectorTests.TestCuesActOnTheBodiesTheyTag;

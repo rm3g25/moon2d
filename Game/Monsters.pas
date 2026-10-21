@@ -139,6 +139,7 @@ type
     FLivesAll: Integer;
     FCurrentSprite: Double;
     FStep: Integer;          // 'Shag', with placement override applied
+    FAgeTicks: Integer;      // ticks lived on the hero's screen: a picture's clock
     FAcceleration: Double;
     FTimeOfFire: Integer;
     FFireStart: Integer;
@@ -226,6 +227,8 @@ type
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure WreckIfCritical;
     procedure TickSmoke;
+    procedure DrawPicture(const ASprites: TSpriteRenderer;
+      ATexture: PSdlTexture; AMirrored: Boolean; AAlpha: Single);
     procedure TickSparks;
     procedure TickShort;
     procedure TickDisc;
@@ -489,6 +492,9 @@ const
   // units the two answers agree at a deck's ends too
   DeckEdgeInset = 0.5;
   ThrowStep = 12; // units a tick: a thrown body goes as fast as a bullet
+  // A picture's clock, as the logic runs, and one hover there and back
+  PictureTicksPerSecond = 33;
+  PictureHoverSeconds = 4;
   // A body let in along a lane slides in at LaneStep units a tick and
   // flies off the top at LaneLeaveStep
   LaneStep = 4;
@@ -603,7 +609,7 @@ begin
   FTag := APlacement.Tag;
   FArtSet := ChangeFileExt(APlacement.SpriteList, '');
   // Placement coordinates are sprite-grid cells, as FindMostersOnScreen read
-  FX := (APlacement.X - 1) * SpriteSize;
+  FX := (APlacement.X - 1) * SpriteSize + APlacement.ShiftX;
   FY := APlacement.Y * SpriteSize;
   if APlacement.Seat <> '' then
   begin
@@ -902,6 +908,23 @@ begin
   Result.H := SpriteSize;
 end;
 
+// The picture where the cell stands it, turned and lifted as its clock
+// says
+procedure TMonster.DrawPicture(const ASprites: TSpriteRenderer;
+  ATexture: PSdlTexture; AMirrored: Boolean; AAlpha: Single);
+begin
+  var Box := PictureBox;
+  var Seconds := (FAgeTicks + AAlpha) / PictureTicksPerSecond;
+  var Middle: TSdlFPoint;
+  Middle.X := Box.X + Box.W / 2;
+  Middle.Y := Box.Y + Box.H / 2 -
+    FDef.Picture.Hover * Sin(2 * Pi * Seconds / PictureHoverSeconds);
+  var Angle: Double := 0;
+  if FDef.Picture.TurnSeconds > 0 then
+    Angle := 360 * Frac(Seconds / FDef.Picture.TurnSeconds);
+  ASprites.DrawSized(ATexture, Middle, Box.W, Box.H, 1, AMirrored, Angle);
+end;
+
 function TMonster.PictureBox: TSdlFRect;
 begin
   Result.W := SpriteSize;
@@ -1087,7 +1110,8 @@ end;
 // over it and does not lie on it.
 procedure TMonster.RideDeck;
 begin
-  if (FAction in [maFlying, maFalling]) or not FDef.AffectedByGravity then
+  if (FAction in [maFlying, maFalling]) or not FDef.AffectedByGravity or
+    FDef.Anchored then
     Exit;
   var Deck := FPads.DeckCarrying(FScreen, FX + MonsterBound + DeckEdgeInset,
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
@@ -1243,7 +1267,8 @@ end;
 
 procedure TMonster.Throw(ADeltaX: Integer);
 begin
-  Inc(FThrown, ADeltaX);
+  if not FDef.Anchored then
+    Inc(FThrown, ADeltaX);
 end;
 
 function TMonster.InFlight: Boolean;
@@ -1612,6 +1637,7 @@ begin
   FLanded := False;
   FHeroX := AHeroX;
   FHeroY := AHeroY;
+  Inc(FAgeTicks);
   var BeforeRide := FX;
   RideDeck;
   FCarriedX := FX - BeforeRide;
@@ -1795,8 +1821,10 @@ begin
   // A boss in a maneuver holds its line: the wall oracle asks one row,
   // and a body between two rows would be shoved into the other one's
   // wall
-  if not PilotBusy then
+  if not PilotBusy and not FDef.Anchored then
     ShoveX(Round(AKnockDx / 2));
+  if FDef.Invulnerable then
+    Exit;
 
   var Landed := ALosses;
   if FDamageWindow <> nil then
@@ -1982,14 +2010,7 @@ begin
         end;
         Mirrored := FacesRight;
         if FDef.Picture.Enabled then
-        begin
-          var Box := PictureBox;
-          var Middle: TSdlFPoint;
-          Middle.X := Box.X + Box.W / 2;
-          Middle.Y := Box.Y + Box.H / 2;
-          ASprites.DrawSized(FAnim.Alive[Frame - 1], Middle, Box.W, Box.H, 1,
-            Mirrored);
-        end
+          DrawPicture(ASprites, FAnim.Alive[Frame - 1], Mirrored, AAlpha)
         else
           ASprites.Draw(FAnim.Alive[Frame - 1], Round(FX), DrawY, Mirrored);
       end;

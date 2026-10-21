@@ -556,6 +556,7 @@ type
     procedure StartBurst(const ALook: TBurstLook);
     procedure BurstSuit;
     function HeroCenter: TSdlFPoint;
+    function HeroStandsIn(ACol, ARow: Integer): Boolean;
     function HeroBodyPoints: TBodyPoints;
     function MatterAround: TMatter;
     procedure CastAura;
@@ -867,6 +868,7 @@ begin
       FDoorOpened := True;
       FGoRight.Show;
     end;
+  Cues.HeroStands := HeroStandsIn;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -1907,6 +1909,21 @@ function TMoonGame.HeroCenter: TSdlFPoint;
 begin
   Result.X := FHero.X + HeroSize / 2;
   Result.Y := FHero.Y - HeroSize / 2;
+end;
+
+// His middle over the column, his feet on the bottom line of the row, and
+// not on his way up or down: a jump that crosses the cell is no landing
+function TMoonGame.HeroStandsIn(ACol, ARow: Integer): Boolean;
+const
+  FeetSlack = 1;
+  Airborne = [haJump, haJumpLeft, haJumpRight, haFall, haFallLeft,
+    haFallRight];
+begin
+  if FHero.Dead or (FHero.Action in Airborne) then
+    Exit(False);
+  var Middle := FHero.X + HeroSize / 2;
+  var OnRow := Abs(FHero.Y - (ARow + 1) * TileSize) < FeetSlack;
+  Result := OnRow and (Trunc(Middle / TileSize) = ACol);
 end;
 
 // The opaque points of the frame the hero is in, where they stand on the
@@ -3069,6 +3086,7 @@ begin
   // Before the dynamics: a craft it moves moves this tick
   FScenes.Tick(FHero.Screen, SceneStage);
   FShake.AddTrauma(FScenes.Trauma);
+  FShake.AddTrauma(FScenes.TakeJolt);
   // After the monsters have moved: smoke must leave a monster where this
   // frame draws it, not a tick behind
   FDynamics.Tick(FHero.Screen);

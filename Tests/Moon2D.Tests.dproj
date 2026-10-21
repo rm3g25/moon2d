@@ -87,6 +87,7 @@
         <DCCReference Include="Levels\Tests.Levels.Carousels.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Doors.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Entities.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Events.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Graph.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Dynamics.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>

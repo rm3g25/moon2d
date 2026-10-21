@@ -187,12 +187,13 @@ type
     // between ticks must not snap to them.
     procedure DrawTurned(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       ASide: Single; AAngleDegrees: Double; ALevel: Single = 1);
-    // A rectangle AWidth by AHeight units centered on the point, unturned,
-    // at ALevel opacity (0..1), mirrored left to right on demand. Float
-    // all the way, as DrawTurned.
+    // A rectangle AWidth by AHeight units centered on the point, at
+    // ALevel opacity (0..1), mirrored left to right on demand and turned
+    // AAngleDegrees clockwise round the point. Float all the way, as
+    // DrawTurned.
     procedure DrawSized(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       AWidth, AHeight: Single; ALevel: Single = 1;
-      AMirrored: Boolean = False);
+      AMirrored: Boolean = False; AAngleDegrees: Double = 0);
   end;
 
 implementation
@@ -568,7 +569,7 @@ end;
 
 procedure TSpriteRenderer.DrawSized(ATexture: PSdlTexture;
   const ACenter: TSdlFPoint; AWidth, AHeight: Single; ALevel: Single;
-  AMirrored: Boolean);
+  AMirrored: Boolean; AAngleDegrees: Double);
 var
   Dest: TSdlFRect;
 begin
@@ -577,7 +578,7 @@ begin
   Dest.W := AWidth;
   Dest.H := AHeight;
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
-  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, 0.0, nil,
+  SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
     FlipOf(AMirrored));
 end;
 

@@ -479,13 +479,17 @@
       "category": "pickup",
       "spriteList": null,
       "dangerous": false,
+      "anchored": true,
+      "invulnerable": true,
       "movement": {
         "kind": "static"
       },
       "attack": null,
       "picture": {
-        "width": 56,
-        "height": 29
+        "width": 24,
+        "height": 37,
+        "turn": 20,
+        "hover": 1.5
       },
       "stats": {
         "lives": 300,

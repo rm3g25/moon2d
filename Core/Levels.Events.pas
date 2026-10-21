@@ -38,9 +38,13 @@ type
   // gravelDealt's. victoryEnds holds once the victory track of the trial
   // has "lead" seconds left to play or fewer (0 by default - it is over)
   // and stays true after its end; a restart, which stops the track,
-  // clears it.
+  // clears it. heroStands holds while the hero stands in the cell "x",
+  // "y", counted as a placement's - columns and rows from 1, the feet on
+  // the bottom line of the row: his middle over the column, on his feet,
+  // not in a jump or a fall.
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
-    ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled, ecVictoryEnds);
+    ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled, ecVictoryEnds,
+    ecHeroStands);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
@@ -198,7 +202,8 @@ type
   //     or "when": "gravelDealt", "act": 4, "part": 1, "of": 3
   //     or "when": "trialDone"
   //     or "when": "waveKilled", "act": 6, "part": 1, "of": 2
-  //     or "when": "victoryEnds", "lead": 4)
+  //     or "when": "victoryEnds", "lead": 4
+  //     or "when": "heroStands", "x": 8, "y": 8)
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -214,6 +219,7 @@ type
     Part: Integer; // ecGravelDealt, ecWaveKilled
     Whole: Integer; // ecGravelDealt, ecWaveKilled, "of" in JSON
     LeadSeconds: Single; // ecVictoryEnds
+    CellX, CellY: Integer; // ecHeroStands, from 1 as a placement's
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -223,7 +229,7 @@ const
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
-    'gravelDealt', 'trialDone', 'waveKilled', 'victoryEnds');
+    'gravelDealt', 'trialDone', 'waveKilled', 'victoryEnds', 'heroStands');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
@@ -299,6 +305,7 @@ resourcestring
     'or more, not %g';
   SEventBadLead = 'Level "%s": event "%s": victoryEnds takes "lead" of 0 ' +
     'seconds or more, not %g';
+  SEventNoCell = 'Level "%s": event "%s": heroStands takes "x" and "y" from 1';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -644,6 +651,13 @@ begin
   if Result.LeadSeconds < 0 then
     raise ELevelEventError.CreateFmt(SEventBadLead,
       [ALevelId, Result.Id, Result.LeadSeconds]);
+  if Result.Condition = ecHeroStands then
+  begin
+    Result.CellX := AObj.GetValue<Integer>('x', 0);
+    Result.CellY := AObj.GetValue<Integer>('y', 0);
+    if (Result.CellX < 1) or (Result.CellY < 1) then
+      raise ELevelEventError.CreateFmt(SEventNoCell, [ALevelId, Result.Id]);
+  end;
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);

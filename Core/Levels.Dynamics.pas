@@ -36,6 +36,11 @@
   hangs on it toward full, as far as the object's surge says: jets
   flare.
 
+  Pace is how fast an object's own clock runs, 1 as the level file has
+  it; a scene changes it as it changes the intensity. Only a kind that
+  lives by its clock minds it: the dust stops dead in the air when the
+  moon stone wakes.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Dynamics;
@@ -114,8 +119,9 @@ type
   end;
 
   // How a motion gathers and loses speed: evenly, gathering it, losing
-  // it, or both
-  TMotionEase = (meLinear, meIn, meOut, meInOut);
+  // it, or both; back - losing it a little past the mark and settling onto
+  // it, a thing thrown up that hangs
+  TMotionEase = (meLinear, meIn, meOut, meInOut, meBack);
 
   // One axis of a motion: where it is, where it heads, over how many
   // ticks and how far into them
@@ -152,9 +158,11 @@ type
     // and the parent's effort as the object has come to feel it
     FSurge: Single;
     FEffort: TValueFade;
+    FPace: TValueFade; // 1 - the clock runs as the level file has it
     FOrigin: TSdlFPoint;
     FOriginKnown: Boolean;
     function GetIntensity: Single;
+    function GetPace: Single;
   protected
     // AMotionX/AMotionY - how far the origin moved since the last tick
     procedure Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
@@ -164,6 +172,8 @@ type
     // What the level file and the events have set, lifted by the surge
     // while the parent works
     property Intensity: Single read GetIntensity;
+    // How far the object's own clock moves in a tick
+    property Pace: Single read GetPace;
   public
     // AIntensity 0..1
     constructor Create(const APlacement: TDynamicPlacement;
@@ -183,6 +193,9 @@ type
     procedure Tick(AOriginX, AOriginY: Single; AParentAlive: Boolean);
     // Heads for ALevel (0..1) over ATicks; 0 ticks = at once
     procedure FadeTo(ALevel: Single; ATicks: Integer);
+    // Its clock heads for APace (1 - as the level file has it, 0 -
+    // stopped) over ATicks
+    procedure PaceTo(APace: Single; ATicks: Integer);
     // The shake this tick's strokes give the screen, as a share of the room
     // its trauma has left; asking empties it. Only lightning shakes.
     function TakeJolt: Single; virtual;
@@ -213,6 +226,8 @@ type
   public
     // Every object carrying ATag heads for ALevel (0..1) over ATicks
     procedure FadeTagged(const ATag: string; ALevel: Single; ATicks: Integer);
+    // The clock of every object carrying ATag heads for APace over ATicks
+    procedure PaceTagged(const ATag: string; APace: Single; ATicks: Integer);
     procedure RewindTagged(const ATag: string);
     // Every globe carrying ATag turns its sun to ADegrees over ATicks
     procedure TurnSunTagged(const ATag: string; ADegrees: Single;
@@ -1000,7 +1015,8 @@ type
   // The bands span the field's width from its corner; each art is white,
   // the dust in its alpha, seamless across (tools/dust/build_dust.py).
   // Intensity scales every band. With no light the bands are lit evenly
-  // and in full; with one, what it does not say is dark.
+  // and in full; with one, what it does not say is dark. The bands drift
+  // and sway at the object's pace: a scene stills them.
   // On the sky layer by default: in the depth, behind the static objects,
   // standing while the world shakes.
   // JSON:
@@ -1021,7 +1037,7 @@ type
     FLightColor: TRgb;
     FBands: TArray<TDustBand>;
     FTextures: TArray<PSdlTexture>; // the canvas art's, by band
-    FTicks: Integer;
+    FClock: Double; // ticks of the dust's own time, at its pace
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure BuildIndices;
@@ -1041,10 +1057,62 @@ type
     procedure Release; override;
   end;
 
+  TEclipseLook = (elVoid, elWave);
+
+  // The dark a thing of the void spreads round itself - the black glow of
+  // the moon stone. Look void: the world darkens toward black in a soft
+  // disc Reach units from the heart, Depth deep at full intensity, and a
+  // soft cold halo Rim units across glows behind the heart (0 - none) -
+  // the thing's own picture draws its edge, so the halo is round and
+  // blurred, never a ring; the tint is the color of the halo. Look wave: the ring of dark the thing
+  // sends out as it wakes - it runs out from the heart to Reach as the
+  // intensity runs from 0 to 1, fading as it goes, and is not there at
+  // either end: a scene runs it up once. Depth and the intensity are
+  // percentages.
+  // On the back layer by default: over the static objects and the pads,
+  // under the monsters - the stone itself stays clear of its dark.
+  // JSON:
+  //   {"kind": "eclipse", "screen": 11, "x": 416, "y": 178,
+  //    "tag": "s11-void", "intensity": 0, "reach": 70, "depth": 75,
+  //    "rim": 34, "tint": [75, 80, 100]}
+  //   {"kind": "eclipse", "look": "wave", "screen": 11, "x": 416,
+  //    "y": 178, "tag": "s11-wave", "intensity": 0, "reach": 320,
+  //    "depth": 60}
+  TEclipse = class(TDynamicObject)
+  private
+    FLook: TEclipseLook;
+    FReach: Single;
+    FDepth: Single;
+    FRim: Single;
+    FRimColor: TRgb;
+    // Owned: the dark drawn black over the world, a disc and a ring, and
+    // the disc once more, added in light
+    FDark: PSdlTexture;
+    FDarkRing: PSdlTexture;
+    FHalo: PSdlTexture;
+    procedure DrawVoid(const ACanvas: TDynamicCanvas; AX, AY: Single);
+    procedure DrawWave(const ACanvas: TDynamicCanvas; AX, AY: Single);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    procedure Acquire(const ACanvas: TDynamicCanvas); override;
+    procedure Release; override;
+    property Look: TEclipseLook read FLook;
+    property Reach: Single read FReach;
+    property Depth: Single read FDepth;
+    property Rim: Single read FRim;
+  end;
+
 const
   // The JSON vocabulary of an ease
   MotionEaseIds: array [TMotionEase] of string = ('linear', 'in', 'out',
-    'inOut');
+    'inOut', 'back');
+  EclipseLookIds: array [TEclipseLook] of string = ('void', 'wave');
 
 // Reads the "dynamics" array of a level; an absent section is an empty
 // list. The caller owns the result. ALevelId names the level in errors.
@@ -1058,6 +1126,8 @@ function ParseDynamic(AObj: TJSONObject;
 // 0..1 by a name, the 1 left out: the same at every load, another name -
 // another roll
 function NameRoll(const AName: string): Single;
+// The share of the way a motion has come at AShare (0..1) of its ticks
+function EasedShare(AEase: TMotionEase; AShare: Single): Single;
 
 implementation
 
@@ -1066,7 +1136,7 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning, dkGraph, dkCraft, dkBeam, dkDust);
+    dkLightning, dkGraph, dkCraft, dkBeam, dkDust, dkEclipse);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -1081,12 +1151,12 @@ const
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
     'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft', 'beam',
-    'dust');
+    'dust', 'eclipse');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'aloft', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
     dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront,
-    dlSky);
+    dlSky, dlBack);
   PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
   BeamLookIds: array [TBeamLook] of string = ('scan', 'tractor');
   BlinkPatternIds: array [TBlinkPattern] of string = (
@@ -1106,6 +1176,15 @@ const
   // An object comes to feel its parent's effort, and to forget it, over
   // this many ticks: a jet spools up, it does not switch
   EffortEaseTicks = 6;
+  // How far a back ease runs past its mark: 1 puts the peak about 4% of
+  // the way beyond it, at a third of the motion from its end
+  BackOvershoot = 1.0;
+  // The pictures of an eclipse: a disc and a ring, in a square of this
+  // many pixels; the ring at this share of the half side, this thick
+  EclipseImageSide = 128;
+  EclipseRingRadius = 0.8;
+  EclipseRingWidth = 0.09;
+  EclipseDarkDefault = 80;
 
 resourcestring
   SDynamicBadKind = 'Level "%s": dynamic object %s: unknown kind "%s"';
@@ -1613,6 +1692,12 @@ begin
       Result := 1 - Power(1 - AShare, 3);
     meInOut:
       Result := AShare * AShare * (3 - 2 * AShare);
+    meBack:
+      begin
+        var Left := AShare - 1;
+        Result := 1 + (BackOvershoot + 1) * Left * Left * Left +
+          BackOvershoot * Left * Left;
+      end;
   else
     Result := AShare;
   end;
@@ -1718,6 +1803,8 @@ begin
   FPlacement := APlacement;
   FIntensity.Initial := AIntensity;
   FIntensity.Settle(AIntensity);
+  FPace.Initial := 1;
+  FPace.Settle(1);
 end;
 
 constructor TDynamicObject.Create(const APlacement: TDynamicPlacement;
@@ -1731,6 +1818,11 @@ function TDynamicObject.GetIntensity: Single;
 begin
   var Level := FIntensity.Current;
   Result := Level + (1 - Level) * FSurge * FEffort.Current;
+end;
+
+function TDynamicObject.GetPace: Single;
+begin
+  Result := FPace.Current;
 end;
 
 procedure TDynamicObject.FollowEffort(AEffort: Single);
@@ -1755,12 +1847,18 @@ begin
 
   FIntensity.Tick;
   FEffort.Tick;
+  FPace.Tick;
   Advance(MotionX, MotionY, AParentAlive);
 end;
 
 procedure TDynamicObject.FadeTo(ALevel: Single; ATicks: Integer);
 begin
   FIntensity.HeadFor(ALevel, ATicks);
+end;
+
+procedure TDynamicObject.PaceTo(APace: Single; ATicks: Integer);
+begin
+  FPace.HeadFor(APace, ATicks);
 end;
 
 function TDynamicObject.TakeJolt: Single;
@@ -1777,6 +1875,7 @@ procedure TDynamicObject.Rewind;
 begin
   FIntensity.Settle(FIntensity.Initial);
   FEffort.Settle(0);
+  FPace.Settle(FPace.Initial);
   ForgetOrigin;
 end;
 
@@ -1811,6 +1910,14 @@ begin
   for var DynamicObject in Self do
     if DynamicObject.Placement.Tag = ATag then
       DynamicObject.FadeTo(ALevel, ATicks);
+end;
+
+procedure TDynamicObjects.PaceTagged(const ATag: string; APace: Single;
+  ATicks: Integer);
+begin
+  for var DynamicObject in Self do
+    if DynamicObject.Placement.Tag = ATag then
+      DynamicObject.PaceTo(APace, ATicks);
 end;
 
 procedure TDynamicObjects.RewindTagged(const ATag: string);
@@ -4186,7 +4293,7 @@ end;
 
 procedure TDust.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
 begin
-  Inc(FTicks);
+  FClock := FClock + Pace;
 end;
 
 // One run of a band: the corners column by column from AFrom to ATo,
@@ -4262,9 +4369,128 @@ procedure TDust.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
 begin
   if Intensity < VisibleLevel then
     Exit;
-  var Seconds: Double := (FTicks + AAlpha) / LogicTicksPerSecond;
+  var Seconds: Double := (FClock + AAlpha * Pace) / LogicTicksPerSecond;
   for var i := 0 to High(FBands) do
     DrawBand(ACanvas, AX, AY, i, Seconds);
+end;
+
+// ---------------------------------------------------------------------------
+// TEclipse
+// ---------------------------------------------------------------------------
+
+const
+  EclipseBlack: TRgb = (R: 0; G: 0; B: 0);
+
+// Levels over a square of EclipseImageSide pixels, by the distance from its
+// middle as a share of the half side
+type
+  TRadialLevel = function(ADistance: Single): Single;
+
+function RadialImage(ALevelAt: TRadialLevel): TArray<Single>;
+begin
+  SetLength(Result, EclipseImageSide * EclipseImageSide);
+  var Half := EclipseImageSide / 2;
+  for var Row := 0 to EclipseImageSide - 1 do
+    for var Col := 0 to EclipseImageSide - 1 do
+    begin
+      var Distance := Hypot(Col + 0.5 - Half, Row + 0.5 - Half) / Half;
+      Result[Row * EclipseImageSide + Col] := ALevelAt(Distance);
+    end;
+end;
+
+// Full in the middle, nothing at the edge, smooth both ways
+function DiscLevel(ADistance: Single): Single;
+begin
+  if ADistance >= 1 then
+    Exit(0);
+  var Inside := 1 - ADistance * ADistance;
+  Result := Inside * Inside;
+end;
+
+function RingLevel(ADistance: Single): Single;
+begin
+  var Off := (ADistance - EclipseRingRadius) / EclipseRingWidth;
+  Result := Exp(-Off * Off);
+end;
+
+// Drawn black at the alpha the glow gives it: the world under it darkens
+function CreateDarkTexture(ARenderer: PSdlRenderer;
+  const AImage: TArray<Single>): PSdlTexture;
+begin
+  Result := CreateGlowFromImage(ARenderer, AImage, EclipseImageSide,
+    EclipseImageSide);
+  SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
+end;
+
+constructor TEclipse.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FLook := TEclipseLook(ReadWord(AObj, 'look', EclipseLookIds[elVoid],
+    EclipseLookIds, 'look', AOwner));
+  FReach := ReadPositive(AObj, 'reach', 0, AOwner);
+  FDepth := ReadShare(AObj, 'depth', EclipseDarkDefault, AOwner);
+  FRim := ReadReach(AObj, 'rim', 0, AOwner);
+  FRimColor := TintColor(APlacement.Tint);
+end;
+
+procedure TEclipse.Acquire(const ACanvas: TDynamicCanvas);
+begin
+  var Disc := RadialImage(DiscLevel);
+  FDark := CreateDarkTexture(ACanvas.Renderer, Disc);
+  FDarkRing := CreateDarkTexture(ACanvas.Renderer, RadialImage(RingLevel));
+  FHalo := CreateGlowFromImage(ACanvas.Renderer, Disc, EclipseImageSide,
+    EclipseImageSide);
+end;
+
+procedure DestroyTexture(var ATexture: PSdlTexture);
+begin
+  if ATexture <> nil then
+    SDL_DestroyTexture(ATexture);
+  ATexture := nil;
+end;
+
+procedure TEclipse.Release;
+begin
+  DestroyTexture(FDark);
+  DestroyTexture(FDarkRing);
+  DestroyTexture(FHalo);
+end;
+
+procedure TEclipse.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  // The intensity is all that moves, and the ancestor moves it
+end;
+
+procedure TEclipse.DrawVoid(const ACanvas: TDynamicCanvas; AX, AY: Single);
+begin
+  var Level := Intensity;
+  if Level < VisibleLevel then
+    Exit;
+  DrawGlow(ACanvas.Renderer, FDark, AX, AY, 2 * FReach, EclipseBlack, FDepth * Level);
+  if FRim > 0 then
+    DrawGlow(ACanvas.Renderer, FHalo, AX, AY, FRim, FRimColor, Level);
+end;
+
+procedure TEclipse.DrawWave(const ACanvas: TDynamicCanvas; AX, AY: Single);
+begin
+  var Level := Intensity;
+  if (Level < VisibleLevel) or (Level > 1 - VisibleLevel) then
+    Exit;
+  var Across := 2 * FReach * Level / EclipseRingRadius;
+  DrawGlow(ACanvas.Renderer, FDarkRing, AX, AY, Across, EclipseBlack,
+    FDepth * (1 - Level));
+end;
+
+procedure TEclipse.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  case FLook of
+    elVoid:
+      DrawVoid(ACanvas, AX, AY);
+    elWave:
+      DrawWave(ACanvas, AX, AY);
+  end;
 end;
 
 function CreateDynamic(AKind: TDynamicKind;
@@ -4294,6 +4520,8 @@ begin
       Result := TBeam.Create(APlacement, AObj, AOwner);
     dkDust:
       Result := TDust.Create(APlacement, AObj, AOwner);
+    dkEclipse:
+      Result := TEclipse.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);

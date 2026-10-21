@@ -36,6 +36,8 @@ type
     [Test]
     procedure TestOverridesLandEachInItsOwnField;
     [Test]
+    procedure TestShiftMovesTheBodyOffItsCell;
+    [Test]
     procedure TestSpawnedBodyWearsTheRigsOfItsTag;
     [Test]
     procedure TestSpawnedBodyWithoutATagWearsNoRig;
@@ -127,6 +129,19 @@ begin
   Assert.IsTrue(Overrides.HasCanShoot, 'canShoot is set');
   Assert.IsFalse(Overrides.CanShoot, 'and false');
   Assert.AreEqual(7, Overrides.FireOffset, 'fireOffset');
+end;
+
+procedure TLevelEntitiesTests.TestShiftMovesTheBodyOffItsCell;
+begin
+  FreeAndNil(FLevel);
+  FLevel := LevelFromRows(RoomRowsOf(0, 0, 0, 0),
+    '"entities":[{"monsterId":"medkit","screen":1,"x":4,"y":11,"shiftX":16}]');
+  Assert.AreEqual(16, FLevel.Entities[0].ShiftX, 'Read as written');
+  Assert.AreEqual(4, FLevel.Entities[0].X, 'The cell stays the cell');
+
+  FreeAndNil(FLevel);
+  FLevel := LevelFromRows(RoomRowsOf(0, 0, 0, 0), EntitiesJson(''));
+  Assert.AreEqual(0, FLevel.Entities[0].ShiftX, 'None unless asked');
 end;
 
 procedure TLevelEntitiesTests.TestSpawnedBodyWearsTheRigsOfItsTag;

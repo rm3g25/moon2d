@@ -72,6 +72,7 @@ type
     FPursuits: TArray<TSceneCue>;
     FShade: TValueFade; // 0..1
     FRumble: TValueFade; // 0..1
+    FJolt: Single; // trauma of the jolts since the game last took it
     FMusic: TValueFade; // 0..1 of the music's volume
     function IndexOf(const AId: string): Integer;
     function Due(const AScene: TLevelScene; AIndex: Integer;
@@ -119,6 +120,8 @@ type
     procedure Resume;
     // What the rumble adds to the screen's trauma this tick
     function Trauma: Single;
+    // What the jolts add to it, once: taken, they are gone
+    function TakeJolt: Single;
     // The shade over the world: over all of it, under the marks over the
     // figures and the HUD
     procedure DrawShade(ARenderer: PSdlRenderer);
@@ -190,6 +193,7 @@ begin
   FPursuits := nil;
   FShade.Settle(0);
   FRumble.Settle(0);
+  FJolt := 0;
   FMusic.Settle(1);
 end;
 
@@ -350,7 +354,11 @@ end;
 procedure TSceneDirector.FlyPad(const ACue: TSceneCue; ATicks: Integer);
 begin
   var Pad := FPads.FindTagged(ACue.Target);
-  if Pad <> nil then
+  if Pad = nil then
+    Exit;
+  if ACue.Eased then
+    Pad.FlyEased(ACue.X, ACue.Y, ATicks, ACue.Ease)
+  else
     Pad.FlyTo(ACue.X, ACue.Y, ATicks);
 end;
 
@@ -372,6 +380,9 @@ begin
       FShade.HeadFor(ACue.Level, Ticks);
     ckShake:
       FRumble.HeadFor(ACue.Level, Ticks);
+    ckJolt:
+      if not AAtOnce then
+        FJolt := FJolt + ACue.Level;
     ckMove:
       MoveCrafts(ACue, Ticks);
     ckTrack:
@@ -380,6 +391,8 @@ begin
       Aim(ACue, Ticks, AStage);
     ckIntensity:
       FDynamics.FadeTagged(ACue.Target, ACue.Level, Ticks);
+    ckPace:
+      FDynamics.PaceTagged(ACue.Target, ACue.Level, Ticks);
     ckHint:
       if not AAtOnce then
         Speak(ACue);
@@ -539,7 +552,7 @@ end;
 procedure TSceneDirector.RewindTargets(const AScene: TLevelScene);
 begin
   for var Cue in AScene.Cues do
-    if Cue.Kind in [ckMove, ckTrack, ckAim, ckIntensity] then
+    if Cue.Kind in [ckMove, ckTrack, ckAim, ckIntensity, ckPace] then
       FDynamics.RewindTagged(Cue.Target);
 end;
 
@@ -557,6 +570,7 @@ begin
   RewindTargets(FScenes[AIndex]);
   FShade.Settle(0);
   FRumble.Settle(0);
+  FJolt := 0;
   FMusic.Settle(1);
   FAudio.SetMusicLevel(1);
 end;
@@ -599,6 +613,12 @@ end;
 function TSceneDirector.Trauma: Single;
 begin
   Result := FRumble.Current * RumbleTraumaPerTick;
+end;
+
+function TSceneDirector.TakeJolt: Single;
+begin
+  Result := FJolt;
+  FJolt := 0;
 end;
 
 procedure TSceneDirector.DrawShade(ARenderer: PSdlRenderer);

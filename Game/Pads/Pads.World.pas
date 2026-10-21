@@ -131,8 +131,8 @@ interface
 uses
   System.Generics.Collections,
   Sdl2.Core, Render.Sprites, Render.Brush, Levels.Pads, Levels.Defs,
-  Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf, Pads.Stray,
-  Levels.Carousels;
+  Levels.Dynamics, Pads.Formations, Pads.Flights, Pads.Plunge, Pads.Shelf,
+  Pads.Stray, Levels.Carousels;
 
 const
   // A pad all the way into the depth: its size and its light
@@ -302,6 +302,8 @@ type
     // and stays there; 0 ticks - it is there at once, and whatever stood
     // on it is left in the air
     procedure FlyTo(AX, AY: Double; ATicks: Integer);
+    // The same, the way AEase shapes it
+    procedure FlyEased(AX, AY: Double; ATicks: Integer; AEase: TMotionEase);
     function Flying: Boolean;
     // In no flight, or its flight is over
     function Settled: Boolean;
@@ -1062,6 +1064,17 @@ begin
   FPrevLeft := AX;
   FPrevTop := AY;
   FBobX := AX;
+end;
+
+procedure TPad.FlyEased(AX, AY: Double; ATicks: Integer; AEase: TMotionEase);
+begin
+  var Distance := Hypot(AX - FPathLeft, AY - FPathTop);
+  if (ATicks > 0) and (Distance > 0) then
+  begin
+    Fly(EasedFlight(FPathLeft, FPathTop, AX, AY, ATicks, AEase));
+    Exit;
+  end;
+  FlyTo(AX, AY, 0);
 end;
 
 function TPad.Flying: Boolean;
