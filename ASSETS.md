@@ -93,7 +93,9 @@ generated. `s10-room`: kept as generated, moved down as a whole onto the
 floor line. `s10-casing`: the concrete casing cut out of `s10-room` pixel
 for pixel, so the level can tint it apart. `s10-pedestal`: cut to its
 ink, its fringe cut off, scaled whole to 6 px per screen unit, rows
-inserted over its foot as a palindrome. They replaced the 2008 tiles of those screens, which stay in
+inserted over its foot as a palindrome, then re-cut onto its matter: a
+column cut out of each step, the parts resampled a few percent, the rows
+over the steps stretched, so steps, top and walls stand on the grid. They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. Screen 10 is new, not a repaint: no 2008 tiles stood
 there. How such a screen is made: `docs/REPAINT.md`.
 

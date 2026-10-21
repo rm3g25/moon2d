@@ -850,9 +850,9 @@
     {
       "sprite": "s10-pedestal",
       "screen": 10,
-      "x": 248,
-      "y": 288,
-      "width": 176,
+      "x": 256,
+      "y": 287,
+      "width": 160,
       "tag": "s10-pedestal"
     },
     {
@@ -2077,6 +2077,15 @@
       "tag": "s09-stray-03",
       "rig": ["pad"],
       "stray": {"flock": "s09-strays", "zone": [4, 3, 11, 8], "wait": 3}
+    },
+    {
+      "sprite": "",
+      "screen": 10,
+      "x": 128,
+      "y": 352,
+      "width": 8,
+      "bullets": "pass",
+      "tag": "s10-pit-lip"
     },
     {
       "sprite": "s11-rock-block",
