@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -59,16 +59,17 @@ The stone builds its own way to the hero - and takes it back once it is in his h
 
 **The grid** (16x12, rows from the top, cells counted from 0):
 - the way in: the ledge of screen 10 going on, cols 0-2 on row 11 (floor line 352) - cut out of `s10-room`, so the ledge runs on through the door with no seam;
-- column A, cols 4-5, top on row 10; column B, col 7, top on row 8; column C, cols 11-12, top on row 6 - the stone on it; the way out, cols 13-15 on row 11, right against C, cut out of `s10-room` too; the right edge open from row 0 to 10;
+- column A, cols 4-5, top on row 10; column B, col 7, top on row 8; column C, cols 12-13, top on row 6 - the stone on it; the way out, cols 14-15 on row 11, right against C, cut out of `s10-room` too; the right edge open from row 0 to 10;
 - the columns are columnar basalt, as the pedestal of screen 10, rising out of the dark of the pit; a fall into the pit is the 2008 pit (a life, back to the respawn point at cell 2, 11);
-- by the hero's arc (`JumpReach`): in to A a gap of one up 1, A to B a gap of one up 2, C to the way out a step off its edge, a drop of 5 with no gap - all pass. No gap at the way out on purpose: once the stone is taken the rocks are gone, and a hero dropped into the pit there would come back at the way in with no way up to C and the door - a softlock; B to C is three cells up 2, out of reach - the stone cannot be reached without the rocks. Nothing goes round C: it is a wall;
+- by the hero's own arc, not the table of `JumpReach`: in to A a gap of one up 1, A to B a gap of one up 2, C to the way out a step off its edge, a drop of 5 with no gap - all pass. No gap at the way out on purpose: once the stone is taken the rocks are gone, and a hero dropped into the pit there would come back at the way in with no way up to C and the door - a softlock. B to C is four cells (128 units) up 2, out of reach - the stone cannot be reached without the rocks. Nothing goes round C: it is a wall;
+- **`JumpReach` is the safe reach, not the longest** (found on the first live run, 2026-10-21): it keeps the hero's middle a Bound inside both decks, so a gap it calls out of reach may be crossed from the very edge. The arc itself carries the middle 120 units up 0-1 rows, 102 up 2 and 72 up 3 (peak 100 units over the start). C stood three cells (96 units) from B and was jumped without the step; a gap that must not be crossed is checked against the arc.
 - the stone stands high and in the dark at the right, away from the shaft: the black glow reads where there is no light.
 
 **The stone wakes** (on the hero landing on B - a new condition, the hero on a cell):
 1. half a second of nothing - no sound, the dust stops dead and settles a little;
 2. the stone wakes: its rim brightens, the dark thickens round it (SDL_BLENDMODE_MOD), and a ring of darkness runs out over the room - seen where it crosses the lit wall;
 3. grit rises out of the pit first - the warning;
-4. the rocks rise out of the pit, each at its own delay and pace, to its own height: an ease-out with a slight overshoot, the tilt dying away, grit falling off their undersides. One rock is the step: it stops with its top on row 8 at col 9 (B to it a gap of one at one level, it to C a gap of one up 2). The others are decoration at different depths, slowly bobbing; one or two big blocks deep behind, so the rocks do not read as rubble against the giant tunnel. The step does not bob;
+4. the rocks rise out of the pit, each at its own delay and pace, to its own height: an ease-out with a slight overshoot, the tilt dying away, grit falling off their undersides. One rock is the step: it stops with its top on row 8 between B and C, 34 units from each (B to it at one level, it to C up 2). The others are decoration at different depths, slowly bobbing; one or two big blocks deep behind, so the rocks do not read as rubble against the giant tunnel. The step does not bob;
 5. a low hum grows under it all; the crack of stone as the rocks come free.
 
 The rocks are pads (Levels.Pads): a path from under the bottom edge to their place, one stop, no way back; the ease is the one new thing in their motion. Steps 1.5-2 cells across.
@@ -230,6 +231,15 @@ Closed doors, a mechanic of any level; on level 2 it shuts screen 10 until the D
 - **Screen 10:** the Duplet carries the tag `s10-duplet`; the event `s10-door` waits for `allDead` on it and opens the door. Until a screen 11 comes, the door it opens is the last door of the campaign (the ending titles).
 - **Tests:** `Tests.Levels.Doors` - the list read, the action read, the four refusals at load.
 
+## Stages 5b and 5c as built (data, no version)
+Screen 11 of level 2 is all data, the rocks standing in their places; the stone's waking and its taking are 5d and 5e.
+
+- **The art: one ChatGPT generation an element**, each on a clear ground (real alpha) with a silhouette of its geometry and the screen 10 composite for its style; what was done to each is in its description in the set. In `level2-objects.mset`: four fangs (`s11-fang-needle`, `-crown`, `-double`, `-leaning` - the last kept for the chase), three columns (`s11-column-a`, `-b`, `-c`, drawn 2 units past each edge of their cells), four rocks (`s11-rock-step`, `-block`, `-chunk`, `-shard`), the ledges in and out (`s11-way-in`, `s11-way-out`, cut pixel for pixel from `s10-room`). Near objects at 6 px a unit for the width they are drawn at, never above the generation's own pixels; every texture within 2048 px. In `level2-backdrops.mset`: `screen11`, the outpaint.
+- **The moon stone is a broken lump, not an oval** (decided 2026-10-21): the first generation, an upright oval with a rim, read as a portal - its own file was named "black portal". The lump, 24 units wide (smaller than the hero, decided on the first look), in `moonstone.mset`: `lying` is a picture 56 units wide with the stone's middle 44 units from its left, so that the picture, centred on the cell of column 12, puts the stone on the middle of column C; `gone` is clear. The pickup `moonStone` (`bin/monsters.json`): no effect yet, no sound; taking it is what counts.
+- **The level** (`bin/level2.json`): the grid of "Screen 11"; the backdrop from screen 11, tint 75/75/80; the objects back to front - the fangs tinted to their depth (needle 55/52/55, crown 45/43/46, double 40/38/42), the rocks of decoration (55/55/62, 70/70/78, 60/60/68), the columns, the ledges; the step as a still pad (`s11-step`, 290, deck on 256, 60 wide, blocks bullets); the dust of screen 10 with the shaft moved with the hole (from 161, 16 to 142, 470, the glow at 138, 430); the respawn point at cell 2, 11; `"shutDoors": [10, 11]` and the event `s11-door` (`allDead` on `s11-stone` -> `openDoor`).
+- **The End debug key** stays on screen 10: the whole way from the Duplet on is seen in one walk.
+- Until 5d the rocks stand risen from the start, and the step is a plain floor. Until a screen 12 comes, the door of screen 11 is the last door of the campaign.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
@@ -238,9 +248,9 @@ Each its own commit, each run live.
 4. **The living backdrop.** Built (3.0.65), see "Stage 4 as built". The far ledge comes with its screen (stage 7).
 5. **Screen 11.** In steps, each its own commit:
    - 5a. **Closed doors.** Built (3.0.66), see "Stage 5a as built".
-   - 5b. **The art of screen 11** (ChatGPT, one prompt per element): the backdrop (done - the outpaint), the fang kit, the rock kit, the moon stone. The ledges in and out are cut from `s10-room`.
-   - 5c. **Screen 11 as data.** The grid, the layers, the dust with the shaft moved, the respawn point, the stone as a placeholder pickup, the door shut.
-   - 5d. **The stone wakes.** The condition of the hero on a cell; the black glow and the ring of darkness; the dust stopping; the rocks rising (pads with an ease); the sound.
+   - 5b. **The art of screen 11.** Built, see "Stages 5b and 5c as built".
+   - 5c. **Screen 11 as data.** Built, see "Stages 5b and 5c as built".
+   - 5d. **The stone wakes.** The condition of the hero on a cell; the black glow and the ring of darkness; the dust stopping; the rocks rising (pads with an ease); the stone turning slowly about itself (decided 2026-10-21); the sound.
    - 5e. **The stone is taken.** The rocks fall back, the door opens with the arrow.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
