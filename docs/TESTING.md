@@ -76,6 +76,7 @@ Tests\
     Tests.Levels.Doors.pas     the doors a level shuts
     Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust
     Tests.Levels.Entities.pas
+    Tests.Levels.Events.pas    the events: heroStands
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
     Tests.Levels.Scenes.pas    the parser of the scenes, and the load

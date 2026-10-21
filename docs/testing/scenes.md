@@ -156,6 +156,7 @@ to (64, 224) at once.
 | `TestDeathAfterTheEndPutsTheAftermathOnAnyScreen` | a scene played to its end, `ReArm` elsewhere: the lift flown, `prey` dead; the pads rewound and `ReArm` on its screen: flown again; started again: nothing moves | the betoner of 9999 lives is back as a shooter after a death on another screen, or the cordon comes again |
 | `TestSceneOfALifeIsRewoundByADeathOnItsScreen` | once a life, played: `ReArm` elsewhere, the craft put back, started - nothing moves; `ReArm` on its screen, started - it plays; the lift never flown | a scene of a life replays after a death anywhere, or never, or puts an aftermath |
 | `TestShakeRunsFromItsCueToARewind` | a shake at 3: `Trauma` 0 after 3 ticks, above 0 after 4; `ReArm` on its screen: 0 | the ground shakes before the cordon is heard, or on after a death |
+| `TestJoltIsOneBlowTakenOnce` | a jolt of 40 at 3: `TakeJolt` 0 after 3 ticks; 0.4 after 4, then 0 taken again; 0 a tick later | the rocks of screen 11 come free without a blow, or every tick after deals one |
 | `TestCuesActOnTheBodiesTheyTag` | hold, release, kill and remove at 0, 2, 4 and 6: `prey` held and `rider` not; `prey` released - neither held nor asleep; `rider` dying, `meDied` and nothing more; `prey` dead, no event | a scene's kill pays a burst, a release leaves a tank asleep, a hold holds every body |
 | `TestSpawnStandsTheBodyItsTagNames` | a spawn of `rider` seated on `lift`, facing right, asleep: no body more; `rider` at (224, 224), the deck under its feet, facing right, asleep | a death past the cordon's end puts a second tank on the roof, or one that falls through the pad |
 | `TestSpawnLeavesADeadBodyWhereItLies` | `prey` killed, then a spawn of it: no body more, it stays dead where it lay | the scene raises the dead it has just burnt |
@@ -176,3 +177,40 @@ Left to the eye and to the ear:
 - The order the game ticks the director in (`Update` of `Moon2D.dpr`), the
   pause under the menu, and the scene a death interrupts while the hero
   falls into the pit: the cordon's live run.
+
+## Levels.Dynamics: the back ease and the eclipse (3.0.67)
+
+State: written, 4 tests. Needs no stage. `TestBackEaseRunsPastItsMarkAndSettles` joins `TCraftTests`; fixture `TEclipseTests` in `Tests\Levels\Tests.Levels.Dynamics.pas` reads an eclipse from JSON (`ParseDynamic`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBackEaseRunsPastItsMarkAndSettles` | a craft sent 100 units over 40 ticks by `back`: its corner goes past the mark, by under 5%, and stands on the mark when the ticks are out and 10 after | the rocks of screen 11 stop short, bounce, or never settle |
+| `TestEclipseReadsFromItsFile` | reach 70, depth 75, rim 34: the void look, 70, 0.75, 34, on the back layer; with reach alone: no rim, depth 0.8 | the black glow reads its numbers from other keys, or covers the stone (a layer over the monsters) |
+| `TestWaveIsTheOtherLook` | `"look": "wave"`, reach 340: the wave, 340 | the wave is read as a second void |
+| `TestBadEclipseRaises` | no reach, a reach of 0, a depth of 120, a rim of -1, the look "hole": each raises `EDynamicError` | an eclipse of no size loads and draws nothing |
+
+Left to the eye: the dark, the halo and the wave as they are drawn, and the pace of a dynamic object - only the dust minds it, and its drawing is not tried.
+
+## Levels.Scenes: the pace and the eased fly (3.0.67)
+
+State: written, 2 tests and 3 more refusals in `TestCueWithoutWhatItNeedsRaises`. Needs no stage. They join `TLevelScenesTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFlyEasesOnlyWhenTold` | a fly with no ease is not eased; one with `"ease": "back"` is, with `meBack`, x 290, y 256 | the cordon's lift loses its pad's braking, or the rocks of screen 11 fly as a pad brakes |
+| `TestPaceReadsItsTargetAndShare` | `pace` of "dust" to 0 over 15: `ckPace`, the target, 0, 15; to 50: 0.5 | the dust is told another share, or never stilled |
+| `TestJoltReadsItsShare` | `jolt` of 40: `ckJolt`, 0.4; no value, a value of 120 - refused | a blow of screen 11 lands at another strength, or a jolt of nothing loads |
+
+Refusals added: a pace with no target, a pace past 100, a fly of an unknown ease.
+
+## Levels.Events: heroStands (3.0.67)
+
+State: written, 3 tests. Needs no stage. Fixture `TLevelEventsTests` in `Tests\Levels\Tests.Levels.Events.pas`: the parser over a root of the test's events (`ParseLevelEvents`, `ELevelEventError`), the grid through `LevelFromRows` (`ELevelError`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestHeroStandsReadsItsCell` | `"x": 8, "y": 8`: `ecHeroStands`, cell 8, 8 | the stone wakes for a hero in another cell |
+| `TestHeroStandsWithoutACellRaises` | no cell, no y, a column of 0: each raises | an event of no cell loads and never fires |
+| `TestHeroStandsOffTheGridFailsToLoad` | column 17 on a grid of 16 raises | a cell nobody can stand in loads |
+
+Left to the eye: whether the hero stands in the cell - his middle, his feet, not in a jump - is the game's (`HeroStandsIn` of `Moon2D.dpr`).

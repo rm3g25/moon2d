@@ -175,6 +175,8 @@ nothing.
 | `TestRemovedBodyIsGoneWithNoDeath` | a gravel in the air, `Vanish`: `mlDead`, no event, and 150 ticks on it has not fallen | a removed body plays its death sound, is paid for, or goes on falling |
 | `TestStoodBodyIsPutAtRest` | a gravel thrown in the air, `Stand(160, floor, right)`: there, facing right, not `InFlight`; a tick on it walks right | the tank stood on the roof keeps its throw or its fall, or faces the wrong way |
 | `TestBodyStoodOnADeckHasItUnderItsFeet` | stood on the deck: `DeckUnderFeet` is the deck; stood on the floor: none | the wait for an empty deck never sees the tank on it |
+| `TestInvulnerableStoneOutlivesAnyBlow` | the moon stone struck twice for all its lives: alive, every life kept, no event | the stone is shot down, and the door opens without it taken |
+| `TestAnchoredStoneIsMovedByNothing` | a blow moves a medkit; a blow and a throw of 40 leave the moon stone's x; stood on a deck that flies 64 up from under it, the stone is no higher than the deck's first line | a shot knocks the stone off column C and leaves its halo behind, or a rising rock carries it up |
 
 Left to the eye: the eye of a hull dark at once in its sleep (`Doze`,
 `Monsters.Hull` above) on a body that needs its art; the wheels at rest
@@ -378,3 +380,14 @@ and on a one-monster file of the test's own (`drop`, a static prop).
 | `TestSkyBarrelIsWeatherThatPaysNothing` | `skyBarrel` of `monsters.json`: weather, a score of 0, a blast; `barrel` is not weather | the sky barrel stands where it lands, pays a score, or does not blow up; the barrel of the levels bursts on landing |
 | `TestBodyWithNoWeatherWordIsNoWeather` | a body with no weather word is no weather | weather becomes a default: every body bursts where it lands |
 | `TestWeatherFreeOfGravityRaises` | `"weather":true` with `"affectedByGravity":false` raises `EMonsterDefError` | weather that never falls loads, and never lands to burst |
+
+## Monsters.Defs: a picture that turns (3.0.67)
+
+State: written, 2 tests. Needs no stage. They join `TMonsterDefsTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestMoonStoneTurnsAndHovers` | in the game's monsters.json the moon stone turns and hovers and is anchored and invulnerable, a medkit is not anchored, the Duplet neither turns nor hovers | the stone lies dead on its column, or the gun spins on its pedestal |
+| `TestPictureTurningBackwardsRaises` | a turn of -1, a hover of -1: each raises `EMonsterDefError` | a typo turns a picture the wrong way |
+
+Left to the eye: the turn and the hover as they are drawn (`TMonster.DrawPicture`).

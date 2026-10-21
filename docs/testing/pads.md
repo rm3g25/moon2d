@@ -906,3 +906,21 @@ Left to the eye and to the ear:
   a boss that flies, and a boss needs the textures of its disc.
 - `CornerTurned` and `PairDocked`: a tick each, voiced by the game.
 - The picture of a pad going into the depth.
+
+## Pads.Flights: the eased flight (3.0.67)
+
+State: written, 1 test. Needs no stage. It joins `TPadFlightsTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestEasedFlightRunsPastItsPlaceAndLandsOnIt` | `EasedFlight` by `back` from 384 up to 256 over 66 ticks: it goes above 256 by under 8 units, stands on 256 at its last tick and 50 after, and never moves aside | the step of screen 11 overshoots into a bounce, stops short, or drifts off its column |
+
+## Levels.Entities: the shift (3.0.67)
+
+State: written, 1 test. Needs no stage. It joins `TLevelEntitiesTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestShiftMovesTheBodyOffItsCell` | a medkit with `"shiftX": 16`: 16, its cell still 4; a mount with none: 0 | the moon stone stands a half cell off the middle of its column, or the cell itself moves |
+
+Left to the eye: the body born 16 units right of its cell (`TMonster.Create`).
