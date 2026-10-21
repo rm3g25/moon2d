@@ -561,6 +561,30 @@ one beacon, "lamp".
 | `TestSpawnedBodyWithoutATagWearsNoRig` | a spawn with no tag carries none and wears nothing; the same spawn wearing "lamp" raises `ERigError` | a rig with nothing to hang on loads and hangs at (0, 0) |
 | `TestSpawnedBodyTakesNoTagOfAPlacement` | a mount placed with tag "guest" and a rigged spawn tagged "guest" raise `ELevelError` | a lamp hangs on whichever of the two the game finds first |
 
+## Levels.Defs: the doors (3.0.66)
+
+State: written, 7 tests. Needs no stage. Fixture `TLevelDoorsTests` in
+`Tests\Levels\Tests.Levels.Doors.pas`, through `TLevel.LoadFromFile`:
+the screens a level shuts (`"shutDoors"`, `TLevel.DoorShutOn`), the
+`openDoor` action, and what the load turns down.
+
+Shared: `PickupJson` - a medkit tagged "key" on screen 1;
+`OpenOnTakingJson` - the event that waits for `allDead` on "key" and opens
+the door; `ShutJson(Screens)` - the list.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestShutDoorIsShutOnItsScreenAlone` | `[1]` with its opening: screen 1 shut, screen 2 not | the list is not read, or shuts every screen |
+| `TestLevelWithoutShutDoorsShutsNone` | no list: screen 1 not shut | a level of 2008 holds the hero at its first door |
+| `TestOpenDoorIsReadAsItsAction` | the event's action is `eaOpenDoor` | the word is read as another action, or the parser turns it down |
+| `TestShutDoorThatNothingOpensFailsToLoad` | `[1]` with no event to open it raises `ELevelError` | a level loads with a door shut for good - a softlock found only by playing |
+| `TestOpeningOnAnOpenScreenFailsToLoad` | the opening with no list raises `ELevelError` | an event on a mistyped screen loads and opens nothing |
+| `TestShutDoorOffTheLevelFailsToLoad` | `[1,2]` on a level of one screen raises `ELevelError` | a door of a screen the level has not got loads |
+| `TestScreenShutTwiceFailsToLoad` | `[1,1]` raises `ELevelError` | a copied line in the list passes |
+
+Left to the eye: the hero held at the threshold, the arrow on the opening
+and the door shut again after a restart - the game's (`Moon2D.dpr`).
+
 ## Pads.World
 
 State: designed, not written - needs the stage. The first suite over

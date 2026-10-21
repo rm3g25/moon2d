@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -21,6 +21,7 @@ A false ending: arena 2 is won, the victory track plays, the player thinks the l
 ### Screen 10 - the double-barrel
 - A room of lunar rock, the double-barrel on a pedestal, as the super shotgun in Doom 2. No monsters.
 - **The gun is big against the hero, not monstrous** (decided 2026-10-17, size settled 2026-10-20). Reason: no close combat with small monsters ahead, and a big boss is hit for sure. A short-range wide spread is exactly the weapon for a 2x2 target. On the pedestal it is 42 units long (three cells and then two were too much); in the hands about twice an ordinary weapon.
+- **The door is shut until the gun is taken** (see "Closed doors"): taking it opens the door, and the arrow says so.
 - The look: a modern, utilitarian combat double-barrel of a lunar expedition - black polymer and gunmetal, a perforated shroud over the barrels, no wood, no glow, nothing of TeK (the honeycomb is the enemy's language).
 
 ### The tunnels are giant
@@ -39,16 +40,52 @@ It is the backdrop itself that lives, not effects laid over the playfield. The s
 
 **One event per screen, growing toward the boss** (decided 2026-10-20) - silence, one blow, then a busy world:
 - **Screen 10 (the double-barrel) - haze only.** Long bands of levitating dust hanging in the depth, drifting very slowly, lit where a shaft of light crosses them (no wind on the Moon: the dust is charged and hovers - it drifts, it does not billow). Nothing else moves: the first screen after the false ending says "you are tiny and it is empty".
-- **Screen 11 (the moon stone) - a distant rockfall.** Once, on a tremor (taking the stone, or a timer): far away, behind the arches, a piece of the wall comes down slowly in a dust column; the shake is slight (Render.Shake) and the rumble arrives a second or so late - the delay sells the distance. The TeK machine announces itself. Not often: one rockfall is a blow, five are weather.
+- **Screen 11 (the moon stone) - the stone wakes.** The event of this screen is the stone itself (decided 2026-10-21, in place of the distant rockfall): the dust of the screen stops dead and settles a little when the stone wakes - the stone stops even the air - and the rocks it raises are the motion. See "Screen 11".
 - **Screen 12 (ORB, the shuttle about the TeK robot) - the far ledge is busy.** Tiny lights of TeK convoys crawl right along a far ledge, hiding behind the pillars; a searchlight from the city gate at the far end of the tunnel sweeps the far wall (a light texture with additive blend). The shuttle says the entrance is guarded - the backdrop shows it.
 
 **Dropped** (2026-10-20): pulsing veins in the rock (glowing things are the hero's language - orbs, the stone); sunlight crawling through cracks (a lunar day is two weeks long, and the tunnels are dark); the near-plane dust specks, sand streams and periodic tremors of the first proposal (noise next to a living backdrop).
 
+### Closed doors (decided 2026-10-21)
+A common mechanic, not a feature of the tunnels: a screen whose way on is shut until something happens on it. The train level will use it too (no way on while a monster lives).
+- **Shut** is a list of the level (`"shutDoors": [10, 11]`). The door is invisible, as the 2008 breakthrough: the hero stops at the threshold, as at the door of the trial.
+- **Open** is an action of the events (`openDoor`), and it raises the go-right arrow itself: open = the arrow, one action, never two. No sound, as the arrow of stage 1.
+- **What opens it** is any condition of the events. A pickup taken is dead to the field, so `allDead` on the pickup's tag is the taking (the Duplet, the moon stone) - no word of its own was needed; `allDead` on the monsters is the train; `trialDone` is there too.
+- A restart shuts the door again if the thing is not done (a pickup not taken comes back with the screen).
+
 ### Screen 11 - jumping and the moon stone
-- Some jumping, then the moon stone: a big glowing oval, black inside. The "black glow" is an event horizon: the background darkens around the stone (SDL_BLENDMODE_MOD), a thin bright rim at its edge.
-- The way on is closed by the same force field while the stone is not taken; taking it puts the field out.
-- The shuttle: the moon stone can be used in place of the ice stone, it seems powerful, a strong energy comes off it.
-- The energy bar appears the moment the stone is taken, at 5%: the 5% is the stone's own charge.
+The stone builds its own way to the hero - and takes it back once it is in his hands. Seen as a sketch (2026-10-21) and accepted.
+
+**The backdrop is screen 10's far wall, slid left** (decided 2026-10-21). A screen to the right, the far wall moves a third of a screen: the hole of the vault and its shaft now stand at the left (about x 160). The scale is sold by the step between two screens, with no parallax at run time. The new right third (outpainted in ChatGPT from the shifted wall; the original pixels kept on the left, the seam blended over 120 px) is darker and turns from basalt columns to horizontal strata - the way to screen 13 begins here. 1440x1080, as screen 10. The dust of screen 10 again, its shaft moved with the hole.
+
+**The grid** (16x12, rows from the top, cells counted from 0):
+- the way in: the ledge of screen 10 going on, cols 0-2 on row 11 (floor line 352) - cut out of `s10-room`, so the ledge runs on through the door with no seam;
+- column A, cols 4-5, top on row 10; column B, col 7, top on row 8; column C, cols 11-12, top on row 6 - the stone on it; the way out, cols 13-15 on row 11, right against C, cut out of `s10-room` too; the right edge open from row 0 to 10;
+- the columns are columnar basalt, as the pedestal of screen 10, rising out of the dark of the pit; a fall into the pit is the 2008 pit (a life, back to the respawn point at cell 2, 11);
+- by the hero's arc (`JumpReach`): in to A a gap of one up 1, A to B a gap of one up 2, C to the way out a step off its edge, a drop of 5 with no gap - all pass. No gap at the way out on purpose: once the stone is taken the rocks are gone, and a hero dropped into the pit there would come back at the way in with no way up to C and the door - a softlock; B to C is three cells up 2, out of reach - the stone cannot be reached without the rocks. Nothing goes round C: it is a wall;
+- the stone stands high and in the dark at the right, away from the shaft: the black glow reads where there is no light.
+
+**The stone wakes** (on the hero landing on B - a new condition, the hero on a cell):
+1. half a second of nothing - no sound, the dust stops dead and settles a little;
+2. the stone wakes: its rim brightens, the dark thickens round it (SDL_BLENDMODE_MOD), and a ring of darkness runs out over the room - seen where it crosses the lit wall;
+3. grit rises out of the pit first - the warning;
+4. the rocks rise out of the pit, each at its own delay and pace, to its own height: an ease-out with a slight overshoot, the tilt dying away, grit falling off their undersides. One rock is the step: it stops with its top on row 8 at col 9 (B to it a gap of one at one level, it to C a gap of one up 2). The others are decoration at different depths, slowly bobbing; one or two big blocks deep behind, so the rocks do not read as rubble against the giant tunnel. The step does not bob;
+5. a low hum grows under it all; the crack of stone as the rocks come free.
+
+The rocks are pads (Levels.Pads): a path from under the bottom edge to their place, one stop, no way back; the ease is the one new thing in their motion. Steps 1.5-2 cells across.
+
+**The stone is taken:**
+- the rocks lose their strength and fall back into the pit - the step too: there is no way back;
+- the shuttle's line and the energy bar at 5% (stage 6);
+- the door opens and the arrow comes (`allDead` on the stone's tag -> `openDoor`).
+- **In reserve** (decided 2026-10-21): the eclipse - on taking, the stone drinks the light: the shaft of the vault goes out, the dust sinks into the dark, the backdrop goes black but for the rim of the stone and the bar. The same tools as the waking at full strength; kept for the finale if the taking needs more.
+
+**Dropped** (2026-10-21): the force field over the way out (a TeK field on natural rock is out of place - the closed door is invisible); the distant rockfall (the stone is the event); a fang shot down by the Duplet into a bridge, and a fang broken by a falling rock (a believable fall needs drawn animation; rigid motion, light and sound are what this game does well).
+
+### The fangs (decided 2026-10-21)
+The basalt spurs of `s10-depth` - the "fangs" - are kept and multiplied:
+- a kit: one ChatGPT sheet of four or five fangs of different heights and outlines on black, cut by script into separate sprites, each within 2048 px (old cards); neutral rim light, tinted per screen;
+- screen 11: two or three fangs at the depth of `s10-depth`, the rocks rise in front of them;
+- the chase (stage 11): the fangs ride through from right to left at random, the "posts by the road" that sell the speed. A fang is a separate sprite, nothing to loop. Their speed is tuned live: slower than the floor (they stand deeper - discrete objects need no seamless backdrop) or with it.
 
 ### Screen 12 - bumps and ORB 100%
 - Jumping over bumps (a warm-up, not a lesson - the arena floor is flat).
@@ -77,7 +114,7 @@ Turret 2 dies: turret 3 comes out, a napalm launcher opens on the stern, and the
 - everything that belongs to the world - the hero, the napalm puddles, the pads, the medkits - is carried left at the belt's speed, in the air as on the floor (otherwise a jump would be a free way to stand still);
 - an idle hero drifts back to the left wall, so the hero has to run to keep up. The machine is slow, the hero is faster: running, he gains on the belt at about the belt's own speed;
 - the collision grid does not move: the floor is flat and the same along its length, so only the picture slides. The floor is a row of tiles - a classic square sprite, so sliding it is a tile offset that wraps, nothing to stitch;
-- an idea, not decided: once or twice in the chase a near-plane object (a pillar, a stalactite, a wreck) rides through from right to left - a separate sprite, nothing to loop - "a post by the road" that sells the speed;
+- the fangs ride through from right to left at random - separate sprites, nothing to loop - "posts by the road" that sell the speed (decided 2026-10-21, see "The fangs");
 - the belt comes up to speed from a standstill and runs down to one at the end - no jerk either way.
 
 **The napalm launcher - why the hero runs.** An unkillable launcher on the machine's stern (part of the armoured hull: hits on it flare the honeycomb):
@@ -184,13 +221,27 @@ A new kind of the dynamics, `dust` (`TDust` in Levels.Dynamics), and one field o
 - **Old cards:** three textures of 1536 px at most, six draw calls a frame at most, a few thousand corners.
 - First guesses for the live run: the densities, the width of the shaft, how bright the glow lifts the low band.
 
+## Stage 5a as built (3.0.66)
+Closed doors, a mechanic of any level; on level 2 it shuts screen 10 until the Duplet is taken.
+
+- **The level** (Levels.Defs): `"shutDoors": [10]` in the root, a list of screens (`TLevel.DoorShutOn`). The load turns down a door that no event of its screen opens (`SLevelDoorNeverOpens` - a softlock caught at load), an opening on a screen whose door is not shut (`SLevelDoorNotShut` - a screen number gone astray), a screen off the level (`SLevelDoorBadScreen`) and one named twice (`SLevelDoorTwice`).
+- **The action** `openDoor` (`eaOpenDoor`, Levels.Events), JSON nothing more; the director calls the cue `OpenDoor` (`TOpenDoorCue`, Events.Director).
+- **The game** (Moon2D.dpr): `FDoorOpened`, raised by the cue, which shows the go-right arrow in the same breath - open = the arrow, one action. `HandleScreenTransitions` lets the hero through the right door only when `not (FLevel.DoorShutOn(screen) and not FDoorOpened)`, as it does while the trial runs: a shut door is the wall the trial's door already was. `FDoorOpened` drops with every arrival on a screen, every restart (the pickup grows back with the field, and the door waits for it again) and every new level.
+- **Screen 10:** the Duplet carries the tag `s10-duplet`; the event `s10-door` waits for `allDead` on it and opens the door. Until a screen 11 comes, the door it opens is the last door of the campaign (the ending titles).
+- **Tests:** `Tests.Levels.Doors` - the list read, the action read, the four refusals at load.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
 2. **Screen 10 - the double-barrel room.** Built, see "Stage 2 as built".
 3. **The double-barrel as a weapon.** Built (3.0.64), see "Stage 3 as built".
-4. **The living backdrop.** Built (3.0.65), see "Stage 4 as built". The rockfall and the far ledge come with their screens (stages 5 and 7).
-5. **Screen 11 - jumping and the moon stone.** The black glow, the force field.
+4. **The living backdrop.** Built (3.0.65), see "Stage 4 as built". The far ledge comes with its screen (stage 7).
+5. **Screen 11.** In steps, each its own commit:
+   - 5a. **Closed doors.** Built (3.0.66), see "Stage 5a as built".
+   - 5b. **The art of screen 11** (ChatGPT, one prompt per element): the backdrop (done - the outpaint), the fang kit, the rock kit, the moon stone. The ledges in and out are cut from `s10-room`.
+   - 5c. **Screen 11 as data.** The grid, the layers, the dust with the shaft moved, the respawn point, the stone as a placeholder pickup, the door shut.
+   - 5d. **The stone wakes.** The condition of the hero on a cell; the black glow and the ring of darkness; the dust stopping; the rocks rising (pads with an ease); the sound.
+   - 5e. **The stone is taken.** The rocks fall back, the door opens with the arrow.
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
 8. **Screen 13 - the arena and the hull.** Flat floor, closed on both sides; the 2x2 machine on two wheels drives, stops, crushes; the TeK shield; death restarts the fight.
@@ -208,9 +259,10 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
-- The screen numbers 11-13 (10 is built).
+- The screen numbers 12-13 (10 is built, 11 is designed).
 - The 4K room of screen 10: four objects of 256 units from an upscale.
-- What sets off the rockfall on screen 11: taking the stone or a timer.
+- The speed of the fangs in the chase: slower than the floor or with it.
+- The eclipse on taking the stone: kept in reserve.
 - The Duplet after level 2: does the hero keep it on the next levels, where small monsters come close?
 - Turret patterns and the numbers of the charge (K, drain, trickle) - first guesses, tuned live.
 - What the black orb aura and the fire rain do in numbers against the ice form's.
