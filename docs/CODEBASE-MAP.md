@@ -4517,7 +4517,7 @@ of being kept: asked for the conditions, told the tactics.
   (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
 
-### `Game/Scenes/Scenes.Director.pas` (~615 lines)
+### `Game/Scenes/Scenes.Director.pas` (~650 lines)
 Plays the level's scenes (`Levels.Scenes`) against the live game, one at
 a time, cue by cue on its timeline (3.0.62). **`TSceneDirector`** takes
 the scenes, the level's dynamic objects, the pads, the sound bank and
@@ -4526,9 +4526,15 @@ reborn on every restart, so it comes with every tick in a
 **`TSceneStage`** (record: `Hero` - his middle in screen units -,
 `Field`, `Bullets` - the monsters' burst), as the event director's does.
 - `Start(id)` - the scene begins (its id in any case, as the load finds
-  it), unless one is under way or it has played (`FPlayed`); the clock
-  to 0, every cue `NotPlayed`, the shade and the rumble to 0, the music
-  to full.
+  it), unless it has played (`FPlayed`): `Open` - the clock to 0, every
+  cue `NotPlayed` -, then the shade and the rumble to 0, the music to
+  full. With one under way it waits in `FNext` (3.0.69).
+- **`TakeOver`** (3.0.69) - the first thing of a tick with `FNext`: the
+  scene under way lands every cue of its own things but the music, the
+  shade and the shake (`CarriedCues`) at once, its world is put as its
+  aftermath says (`Settle`), and the waiting one is `Open`ed - the held
+  sounds stay held, the music, the shade and the rumble go on from where
+  they are.
 - `Tick(screen, stage)` - the hero off the scene's screen: `Finish`.
   Else `PlayDue` - every cue not yet played whose tick has come (`Due`:
   from its `At`, or from the tick the cue it counts from played plus its
@@ -4561,14 +4567,15 @@ reborn on every restart, so it comes with every tick in a
   one as it would have), then the world is put as its aftermath says
   (`Settle`) - replayed at once, the pad would leave before the tank got
   off it; the held sounds stop, the music stays where it was.
-- **`ReArm(screen, stage)`** - a death: a scene under way on another
-  screen is finished; the one under way, and every scene once a life of
-  the death's screen, is rewound (`Rewind`: its held sounds stop, what
+- **`ReArm(screen, stage)`** - a death: a scene waiting to take over is
+  dropped; a scene under way on another screen is finished; the one under
+  way, and every scene once a life of the death's screen, is rewound (`Rewind`: its held sounds stop, what
   its move, track, aim and intensity cues set going goes back to the
   level file - `RewindTagged` -, the shade and the rumble to 0, the music
-  to full, and it waits for its event again); every other scene once a
-  level that has played puts its aftermath, whatever the screen, over
-  the monsters reborn and the pads rewound.
+  to full, and it waits for its event again); then, every rewind done
+  (3.0.69), every scene once a level that has played puts its
+  aftermath, whatever the screen, over the monsters reborn and the pads
+  rewound.
 - `Pause` / `Resume` - the menu: the held sounds wait with the timeline,
   the music under the menu at full volume. `Trauma` - what the rumble
   adds to the screen's shake a tick (`RumbleTraumaPerTick` 0.05 at the
@@ -5659,11 +5666,12 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
     **`TMonsterBodyTests`**: asleep, held (seen through the `nil` burst:
     a shot is an access violation), smitten, removed, stood, on a deck.
   - **`Scenes/Tests.Scenes.Director.pas`** - **`TSceneDirectorTests`**
-    (16): a scene played over a stage made by hand - bodies from the
+    (19): a scene played over a stage made by hand - bodies from the
     level's entities put in a field of no art, pads of no sprite, a
     craft - the ticks of its cues, the wait, the end, leaving and dying
-    before and after the end, once a life, the shake, the tagged hands,
-    the spawn, the sleeping pad. The bank is opened once, on the dummy
+    before and after the end, once a life, the order of the rewinds, the
+    takeover, the shake, the jolt, the tagged hands, the spawn, the
+    sleeping pad. The bank is opened once, on the dummy
     audio driver.
   - `Tests.Rooms` grows `RoomFromRows(rows, sections)` (pads of no
     sprite in the room's level) and shows `Level` and `Pads`.

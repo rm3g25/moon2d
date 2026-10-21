@@ -214,3 +214,14 @@ State: written, 3 tests. Needs no stage. Fixture `TLevelEventsTests` in `Tests\L
 | `TestHeroStandsOffTheGridFailsToLoad` | column 17 on a grid of 16 raises | a cell nobody can stand in loads |
 
 Left to the eye: whether the hero stands in the cell - his middle, his feet, not in a jump - is the game's (`HeroStandsIn` of `Moon2D.dpr`).
+
+## Scenes.Director: the takeover and the order of the rewinds (3.0.69)
+
+State: written, 2 tests. They join `TSceneDirectorTests` and its stage; the stage's scene that wakes the sleeper is `WakingId` now.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSceneStartedMidAnotherTakesOverFromIt` | ten ticks into a move of fifty, the waking is started: a tick later the craft is at 200, the lift where the aftermath flies it, the sleeper awake | the stone taken before the waking is over leaves the rocks standing |
+| `TestRewindOfALifeLeavesTheAftermathOfALevel` | a scene once a level moves the craft to x 200 (its aftermath too), one of a life to y 50; a death: x 200, y back to the file | a death after the fall leaves the dust of screen 11 running over the stone that waits again |
+
+Left to the eye: that the old scene's sounds play on and the music, the shade and the rumble carry over - the volume and the shade are not seen here.

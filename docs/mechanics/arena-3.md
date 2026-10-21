@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11; stage 5d built (2026-10-21, 3.0.67): the stone wakes. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11; stage 5d built (2026-10-21, 3.0.67): the stone wakes; stage 5e built (2026-10-21, 3.0.69): the rocks fall back. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -75,7 +75,7 @@ The stone builds its own way to the hero - and takes it back once it is in his h
 The rocks are pads (Levels.Pads): a path from under the bottom edge to their place, one stop, no way back; the ease is the one new thing in their motion. Steps 1.5-2 cells across.
 
 **The stone is taken:**
-- the rocks lose their strength and fall back into the pit - the step too: there is no way back;
+- the rocks lose their strength and fall back into the pit - the step too: there is no way back; the dust comes back to life;
 - the shuttle's line and the energy bar at 5% (stage 6);
 - the door opens and the arrow comes (`allDead` on the stone's tag -> `openDoor`).
 - **In reserve** (decided 2026-10-21): the eclipse - on taking, the stone drinks the light: the shaft of the vault goes out, the dust sinks into the dark, the backdrop goes black but for the rim of the stone and the bar. The same tools as the waking at full strength; kept for the finale if the taking needs more.
@@ -258,6 +258,18 @@ The waking is a scene (Levels.Scenes) - `s11-wake`, once a level - started by an
 - **Left out:** the grit falling off the rocks' undersides and the rocks' tilt dying away - a pad neither sheds nor turns; worth it only if the live run asks.
 - First guesses for the live run: the depth of the dark (in the dark corner of the stone it shows little; the wave shows over the lit wall), the halo's size and color, the overshoot, the music's dip, how loud the hum is.
 
+## Stage 5e as built (3.0.69)
+Taking the stone starts a second scene, `s11-fall`: the event `s11-door` (`allDead` on `s11-stone`) opens the door and starts it.
+
+- **A scene takes over** (Scenes.Director): a scene started while another plays used to be dropped, and the waking runs about 13 seconds - longer than the way from B over the step to the stone. Now the new one takes over on the next tick, as a cut: the old one's things land (`TakeOver`), its world is put as its aftermath says - a rock still rising snaps to its place, to fall from there -, its sounds play on, still held, and the music, the shade and the rumble go on from where they are; the new scene's cues lead them on.
+- **The rewinds before the aftermaths** (`ReArm`): a death rewinds the scenes it rewinds first, then puts the aftermath of every scene once a level that has played. Before, they went in the order of the file, and the fall - a scene of a life after the waking - took the dust back to the level file over the waking's aftermath, which stills it.
+- **Once a life:** the field is reborn on a death, and the stone with it - the rocks must stand again for it to be taken. A death on screen 11 rewinds the fall, the waking's aftermath raises the rocks, the event waits for the stone again. A death elsewhere puts the waking's aftermath and leaves the fall alone: the stone is back on its column, the rocks are up under it.
+- **The halo** fades in the fall (the void to 0 over 20), not in the event: the takeover lands the waking's own cues, the void at full among them, a tick after the event, and would have lit it again.
+- **The fall** (33 ticks a second): the music ducks to 15% over 20 ticks and comes back over 99 from 150; the rumble to 30% over 25, gone from 110 over 60; `stonefall.wav` from 0. Each rock first sags 4 units over 15 ticks (`out`) - the strength going out of it -, then drops to y 520, under the pit line (450) with its deck, so a hero falling into the pit never lands on it, by the cubic `in`: the step from 10 (falls from 25 over 45), the shard from 20 (35, 60), the chunk from 30 (45, 50), the block from 40 (55, 55) - nearest to the stone first. A jolt of 25 at 100 as they come down far below; the dust back to its pace over 90 from 60. The aftermath: every rock at y 520, the dust at its pace.
+- **The sound:** `bin/sounds/stonefall.wav` by `tools/sounds/stonefall.py` - the drone of the waking powering down: the same two stacks at 41 Hz, the pitch sinking an octave over 3 seconds as the level dies by 3.2; a dull blow at 3 seconds (noise and a 30 Hz thump under a low-pass at 90 Hz, a 30 ms attack, 0.8 s decay); 7 seconds. No clicks.
+- **A hero on the step** when it sags rides it down into the pit, as a pad carries him: the step goes first but 10 ticks after the stone is taken, by when he stands on C.
+- **Tests:** two in `Tests.Scenes.Director` - the takeover, and the rewind of a scene of a life under the aftermath of a scene once a level.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
@@ -269,7 +281,7 @@ Each its own commit, each run live.
    - 5b. **The art of screen 11.** Built, see "Stages 5b and 5c as built".
    - 5c. **Screen 11 as data.** Built, see "Stages 5b and 5c as built".
    - 5d. **The stone wakes.** Built (3.0.67), see "Stage 5d as built".
-   - 5e. **The stone is taken.** The rocks fall back, the door opens with the arrow.
+   - 5e. **The stone is taken.** Built (3.0.69), see "Stage 5e as built".
 6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
 8. **Screen 13 - the arena and the hull.** Flat floor, closed on both sides; the 2x2 machine on two wheels drives, stops, crushes; the TeK shield; death restarts the fight.
