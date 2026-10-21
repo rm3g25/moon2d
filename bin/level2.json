@@ -2956,9 +2956,9 @@
         "ambient": 5
       },
       "bands": [
-        {"sprite": "dust-band-1", "y": 128, "height": 40, "length": 720, "speed": 6, "sway": 3, "swayTime": 50, "density": 60},
-        {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 4, "sway": 4, "swayTime": 70, "density": 100},
-        {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 2.5, "sway": 2, "swayTime": 90, "density": 90}
+        {"sprite": "dust-band-1", "y": 128, "height": 40, "length": 720, "speed": 12, "sway": 3, "swayTime": 25, "density": 60},
+        {"sprite": "dust-band-2", "y": 205, "height": 90, "length": 900, "speed": 8, "sway": 4, "swayTime": 35, "density": 100},
+        {"sprite": "dust-band-3", "y": 282, "height": 70, "length": 800, "speed": 5, "sway": 2, "swayTime": 45, "density": 90}
       ]
     }
   ],
