@@ -18,7 +18,10 @@ pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
 `v3.0.52`, the gravel arena of level 2's screen 9 at `v3.0.53` to
 `v3.0.59`, the collision decks at `v3.0.60`, the burst of the henshin
 suit at `v3.0.61` and the scenes - the cordon over level 1's screen 9 - at
-`v3.0.62` (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
+`v3.0.62`, then for the way on after arena 2 at `v3.0.63`, the Duplet at
+`v3.0.64`, the tunnel dust at `v3.0.65`, the shut doors at `v3.0.66`,
+the moon stone at `v3.0.67` and the fall of the rocks at `v3.0.69`, with
+the lightning of `v3.0.34` caught up (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
 ## Source layout
@@ -232,7 +235,7 @@ the editor and the packer read the same syntax.
   Validates duplicate names and sequences pointing at absent frames.
 - Format spec: `docs/MSET-FORMAT.md`.
 
-### `Core/Render.Sprites.pas` (~555 lines)
+### `Core/Render.Sprites.pas` (~585 lines)
 Texture cache + low-level sprite drawing. Owns the unit-size constants.
 - **Constants**: `SpriteSetsDir` ('sprites\'), `SpriteSize=32`, `TileSize=32`
   (game units!), `TileArtSize=64` (texture px!), `FramesAlive=8`,
@@ -305,6 +308,10 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   nothing here resets it either. The
   constructor takes the logical size and sets it on the renderer
   (`SDL_RenderSetLogicalSize` - the dpr passes the frame of `Game.Space`).
+- 3.0.64: `DrawRotated` takes the square's side (`ASide`, `SpriteSize`
+  by default) - a gun bigger than the 2008 frames, the Duplet's 48. 3.0.67:
+  `DrawSized` turns the rectangle `AAngleDegrees` clockwise round its
+  middle - a picture that turns, the moon stone.
 
 ### `Core/Sdl2.Image.pas` (~70 lines)
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
@@ -472,7 +479,7 @@ side divides by 16 - the cell size is read from the image at load.
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
 
-### `Game/Audio.pas` (~315 lines)
+### `Game/Audio.pas` (~405 lines)
 SDL2_mixer bindings (`delayed` imports - the game survives a missing DLL) plus
 the sound bank.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
@@ -487,13 +494,22 @@ the sound bank.
   sixteen.
 - Held sounds (3.0.62, for the scenes): **`PlayHeld(file)`** plays as
   `Play` does and gives back a **`THeldSound`** (the channel and the
-  file); `StopHeld`, `PauseHeld`, `ResumeHeld` act on it only while that
+  chunk - 3.0.63, was the file name); `StopHeld`, `PauseHeld`, `ResumeHeld` act on it only while that
   channel still plays that chunk (`StillHeld`) - a sound that has ended,
   and whose channel another sound has taken, is left alone.
   **`SetMusicLevel(level)`** - the music at a share of its volume, 0..1,
   kept through track changes; muting outranks it (`ApplyMusicVolume`). A
   scene's own music plays as a held sound: the music stream is one, the
   level's track fades under it.
+- 3.0.63, for the end of arena 2: `PlayMusic(file, mode, fadeSeconds)` -
+  above 0 the track comes in from silence (`Mix_FadeInMusic`). Tracks of
+  the music folder played as sounds: `LoadTrack(file)` decodes one whole
+  (lenient, as music: a missing track is none; `FTracks`),
+  **`PlayTrackHeld(file)`** plays it once on a sound channel, held, so the
+  music channel stays free for the next track to fade in over its end;
+  **`SecondsOf(held)`** - how long it plays from its start, by the
+  chunk's bytes over `FBytesPerSecond` (`MixerBytesPerSecond`,
+  `Mix_QuerySpec`). `PMixChunk` is a typed `TMixChunk` now.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -533,7 +549,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~1770 lines)
+### `Core/Levels.Defs.pas` (~2035 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -591,7 +607,10 @@ Level data model + JSON parser. No game logic.
   placement and whatever counts cells still have one. A seat no pad
   carries (`SLevelEntitySeatUnknown`) or a pad of another screen
   (`SLevelEntitySeatScreen`) is refused. `TMonster.Create` puts a seated
-  monster on the seat, not on its cell.
+  monster on the seat, not on its cell. `ShiftX` (3.0.67) - units the
+  body stands right of its cell (below 0 - left): a thing between two
+  cells, the moon stone on a column two cells wide; JSON `"shiftX"`, 0 by
+  default, refused beside a seat as `x` and `y` are.
   `SpriteList` still carries the 2008 `.mns` spelling (`gravel.mns`); the stem
   names the `.mset` set and the extension is dropped at load. Renaming the
   field is a data change and waits for its own step.
@@ -784,7 +803,17 @@ Level data model + JSON parser. No game logic.
   `CheckDynamicParent` counts a craft among the kinds that carry a tag,
   and `CheckCraftAhead` refuses an object that hangs on a craft standing
   after it in the file (`SLevelDynamicCraftBehind`): it would trail the
-  hull by a tick.
+  hull by a tick. A pace cue (3.0.67) is checked as an intensity is.
+- The shut doors (3.0.66): **`DoorShutOn(screen)`** - the way on out of
+  the screen is shut until an event of the screen opens it (the action
+  `openDoor` of `Levels.Events`); the door is not seen, the hero stops at
+  the threshold. JSON: `"shutDoors": [10, 11]` (`ParseShutDoors`, after
+  the events). Private `CheckShutDoors` refuses a screen off the list
+  (`SLevelDoorBadScreen`), one named twice (`SLevelDoorTwice`), a shut
+  door no event of its screen opens (`SLevelDoorNeverOpens`,
+  `AnyEventOpensDoorOn`) and an openDoor on a screen with no shut door
+  (`SLevelDoorNotShut`). `CheckEvents` also refuses a heroStands cell off
+  the grid (`SLevelEventCellOff`, 3.0.67).
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -861,7 +890,26 @@ color and no size. Users: `TGraph` in `Levels.Dynamics`.
   roll the same numbers less a constant, and a second noise is the first
   one mirrored. `Levels.Dynamics` keeps a `SlotRoll` of its own.
 
-### `Core/Effects.Debris.pas` (~560 lines)
+### `Core/Effects.Lightning.pas` (~790 lines, 3.0.34)
+The bolt engine under the `lightning` kind of `Levels.Dynamics`; no level
+JSON of its own.
+- **`TBoltLimb`** / **`TBoltShape`** - the trunk and its branches as
+  offsets across their axes (both ends zero, a channel never turns back);
+  **`BuildBoltShape(length, jag, fork, coarseSeed, fineSeed, tapers)`** -
+  the same seeds, the same shape.
+- **`TBoltEnd`** = (`beBridge`, `beStrike` - the end stays put while the
+  frame moves, `beStreamer`); **`TBoltLook`** (widths, jag, fork, flash,
+  jolt, life, leader, strokes, tint); **`TBoltShot`** (root, end, ending,
+  seed); **`TBoltBrush`** / `BoltBrush` - the `gsBeam` band and the
+  `gsPoint` glow of `Render.Glow`.
+- **`TBoltField`** - `Create(capacity, seed)` (past it the oldest bolt
+  goes), `Shoot(shot, look)`, `ShiftFrame(dx, dy)`, `Tick`, `TakeJolt`
+  (the strokes since the last ask), `Draw(brush, origin, alpha)`,
+  `Clear`, `Count`. A bolt: the leader feels its way, then up to
+  `MaxBoltStrokes` (8) strokes along one channel.
+- Tests: `Tests.Effects.Lightning`.
+
+### `Core/Effects.Debris.pas` (~635 lines)
 What an explosion throws. Decoration, unless a burst is born live
 (3.0.44): then each shard carries the lives it takes off a body until it
 strikes one or touches a floor - `LandShard` blunts it. The field only
@@ -930,7 +978,7 @@ wider than it is tall. `FreePuffTextures`. `EPuffError`.
   (`Levels.Dynamics`) - and `Levels.Defs` uses `Levels.Dynamics`, so the
   tint could live in neither.
 
-### `Core/Levels.Dynamics.pas` (~3950 lines)
+### `Core/Levels.Dynamics.pas` (~4560 lines)
 The `dynamics` section of level JSON: things placed like the static
 objects, but alive. **Every kind lives in this unit**: a new kind is a class
 here, a word in `DynamicKindIds`, its layer in `DefaultLayers` and a branch
@@ -956,9 +1004,12 @@ in `CreateDynamic`.
   initial, current, target, step; `Settle`, `HeadFor(target, ticks)`,
   `Tick`. The intensity of every object, the sun of a sky globe; the
   shade, the rumble and the music of a scene (`Scenes.Director`).
-- **`TMotionEase`** (3.0.62) = (`meLinear`, `meIn`, `meOut`, `meInOut`) -
-  how a motion gathers and loses speed (`EasedShare`: cubic in, cubic
-  out, smoothstep); `MotionEaseIds` - its JSON words. **`TAxisMotion`**
+- **`TMotionEase`** (3.0.62) = (`meLinear`, `meIn`, `meOut`, `meInOut`,
+  `meBack` - 3.0.67) - how a motion gathers and loses speed
+  (**`EasedShare(ease, share)`**, public since 3.0.67: cubic in, cubic
+  out, smoothstep; back runs a little past the mark and settles onto it,
+  `BackOvershoot` 1.0 - a thing thrown up that hangs); `MotionEaseIds` -
+  its JSON words. **`TAxisMotion`**
   (record) - one axis of a motion: `Current`, `From`, `Target`, `Ticks`,
   `Elapsed`, `Ease`; `Settle(value)`, `HeadFor(target, ticks, ease)` (0
   ticks - there at once), `Tick`. A craft's two axes and a beam's swing.
@@ -980,14 +1031,17 @@ in `CreateDynamic`.
   game makes itself). `Draw(canvas, originX, originY, alpha)` adds X/Y to
   the origin and calls the protected abstract `DrawAt`. Virtual
   `Acquire(canvas)` / `Release` - what a kind makes for itself to draw with
-  (empty in the ancestor). Virtual `GoesOutWithParent` - True for a kind
+  (empty in the ancestor). The pace (3.0.67): `Pace` - how far the
+  object's own clock moves in a tick (a `TValueFade`, 1 - as the level
+  file has it, 0 - stopped), `PaceTo(pace, ticks)`; the scene cue `pace`
+  stills the dust with it. Virtual `GoesOutWithParent` - True for a kind
   that leaves nothing in the air, a beacon and a haze (False in the
   ancestor): `Render.Dynamics` does not draw such an object while its
   parent monster is dead or gone, so the lamps and the haze of a dead
   monster go out with it. The parent is coordinates only,
   VCL-style: it owns nothing.
 - **`TDynamicObjects`** (`TObjectList<TDynamicObject>`) - `FadeTagged(tag,
-  level, ticks)`, `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
+  level, ticks)`, `PaceTagged(tag, pace, ticks)` (3.0.67), `RewindTagged(tag)`, `TurnSunTagged(tag, degrees,
   ticks)`, `AnyTagged(tag, kind = nil)` (the kind is a
   `TDynamicObjectClass`, nil = any): what the events and the level
   checks ask.
@@ -1209,6 +1263,22 @@ in `CreateDynamic`.
   tint `ETintError`. Back layer by default; goes out with its parent
   (`GoesOutWithParent`). Hangs on the monitor of the med lab (`s12-monitor`
   of level 1).
+- **`TLightning`** (kind `lightning`, 3.0.34) - now and then a crooked
+  bolt strikes within `reach` of the point, throws branches and fades -
+  a short in a panel, a wire gone live; pure decoration, a bolt wounds
+  nobody. The root rolls in a box (`spread`) round the point, the bolt
+  leaves along `angle` within `cone`, 55-100% of reach long.
+  **`TLightningCollide`**: `lcNone` - it spans the two points and lights
+  both (back layer); `lcStrike` - it marches through the solid layer
+  (`UseSolid`, `FindMatter`) and ends on matter with a flash and a light
+  over the room, or goes out as a short streamer (front layer).
+  **`TLightningLook`** - the JSON words (size, jag, fork, frequency,
+  strokes, life, leader, spell, pause, flash, jolt) as shares;
+  `BoltLook` turns it into the engine's `TBoltLook` at the intensity.
+  The bolts live in a `TBoltField` of `Effects.Lightning`; `TakeJolt`
+  (virtual on the ancestor) hands the game the shake of the strokes;
+  `PointAt` - see `TBeam`. Intensity scales the frequency, the length,
+  the width and the strokes; 0 - silent.
 - **`TCraft`** (kind `craft`, 3.0.62) - a machine built of the pictures
   of one set of the level's object art (`set`): a body (`body`, `width` in
   units, the height from the picture) and its parts (**`TCraftPart`**:
@@ -1254,6 +1324,36 @@ in `CreateDynamic`.
   aim turns lightning too: **`TLightning.PointAt(point)`** heads the
   angle of its look there from then on, the cone round it - the arcs run
   down the burning beam.
+- **`TDust`** (kind `dust`, 3.0.65) - levitating dust in the depth of
+  the tunnel screens of level 2: long bands (**`TDustBand`**: `Sprite`,
+  `Y` - the middle line -, `Height`, `Length` - one turn of the art, 768
+  by default -, `Speed` units a second, `Sway` units each way over
+  `SwayTime` seconds from a phase of its own, `Density`; `SeamAt`,
+  `MiddleAt`) that drift and sway, slow - no wind on the Moon. A band is
+  seen only as the light finds it: **`TDustLight`** - a shaft out of a
+  hole (`from`, `to`, `width` at both ends, `level`), a glow off a lit
+  floor (`at`, `reach`, `level`) and `ambient`; `LevelAt(x, y)` is
+  reckoned at the corners of a mesh over the band (`DustColumnStep` 4,
+  `DustRows` 8, `DrawBand` -> `DrawRun`), tinted by the light and added
+  over what is behind. No `light` lights the bands evenly and in full.
+  The art is white, the dust in its alpha, seamless across (`dust.mset`,
+  `tools/dust/build_dust.py`). Sky layer by default; the bands move by
+  the object's clock (`FClock`, at its pace - 3.0.67), so a scene stills
+  them. `SDustNoBands`, `SDustNoSprite`, `SDustShaftNowhere`,
+  `SDustBadWidths`, `SDustBadReach`.
+- **`TEclipse`** (kind `eclipse`, 3.0.67) - the dark a thing of the void
+  spreads round itself, the moon stone's black glow. **`TEclipseLook`**
+  (JSON `look`, `EclipseLookIds`): `elVoid` (by default) - the world
+  darkens toward black in a soft disc `reach` units from the heart,
+  `depth` deep at full intensity (80 by default), and a soft cold halo
+  `rim` units across glows behind the heart in the tint (0 - none);
+  `elWave` - the ring of dark it sends out as it wakes: out from the heart
+  to `reach` as the intensity runs 0 to 1, fading as it goes, not there
+  at either end - a scene runs it up once. Owned textures, a disc and a
+  ring of `EclipseImageSide` (128) px (`RadialImage`, `DiscLevel`,
+  `RingLevel`, `CreateDarkTexture`), made in `Acquire`. Back layer by
+  default: over the static objects and the pads, under the monsters - the
+  stone stays clear of its dark.
 - **`ParseDynamic(obj, levelId, where)`** - one object, written as an item
   of the section is; `where` names it in errors after its kind ("#2" makes
   "beacon #2"). The section and the rigs (`Levels.Rigs`) both read through
@@ -1268,14 +1368,15 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~650 lines)
+### `Core/Levels.Events.pas` (~695 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
 2's screen 9 (`docs/mechanics/arena-2.md`).
 - **`TEventCondition`** = (`ecEnterScreen`, `ecAllDead`, `ecLivesBelow`,
   `ecEnraged`, `ecActReached`, `ecGravelDealt`, `ecTrialDone`,
-  `ecWaveKilled`) - what the event waits for. The hero must be on the
+  `ecWaveKilled`, `ecVictoryEnds` (3.0.63), `ecHeroStands` (3.0.67)) -
+  what the event waits for. The hero must be on the
   event's screen for any of them; enterScreen asks nothing more; the
   tagged ones (`TaggedConditions`) watch the monsters carrying the tag:
   allDead - none alive, livesBelow - one alive with fewer lives than
@@ -1292,14 +1393,20 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   won (cleared by a restart); waveKilled (3.0.59) - `count * part div of`
   bodies of the wave are killed in act `act`, true once the act is past
   (`"act": 6, "part": 1, "of": 2` - half the wave). `ReadActShare` reads
-  the act and the share of the last two.
+  the act and the share of the last two. victoryEnds (3.0.63) - the
+  trial's victory track has `lead` seconds left or fewer (`LeadSeconds`,
+  0 by default - it is over, `SEventBadLead` below 0), true after its
+  end, cleared by a restart. heroStands (3.0.67) - the hero stands in the
+  cell `x`, `y` (`CellX`, `CellY`, counted as a placement's, from 1 -
+  `SEventNoCell`): his middle over the column, his feet on the row's
+  bottom line, not in a jump or a fall.
 - **`TEventActionKind`** = (`eaBigMessage`, `eaSmallMessage`, `eaHint`,
   `eaMusic`, `eaIntensity`, `eaSun`, `eaTactics`, `eaRebuild`, `eaRestore`
   (3.0.39), `eaShelvesWake`, `eaShelvesSleep`, `eaShelvesProgram`,
   `eaFlyIn`, `eaMedkitsOnto` (3.0.54), `eaCannons` (3.0.56), `eaSpawn`
   (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
   `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59), `eaScene`
-  (3.0.62)). **`TEventAction`**
+  (3.0.62), `eaGoRight` (3.0.63), `eaOpenDoor` (3.0.66)). **`TEventAction`**
   (record) - kind and what the kind reads:
   - the messages: localized `Text`; a hint also `Header` (who speaks,
     localized as the text; empty - the channel itself, `STerminalHeader`)
@@ -1307,7 +1414,9 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     comm box on the bottom edge for a screen where the hero comes in at
     the top; `SEventBadPlace` for another word; `ReadHint`; added for the
     transmission of level 2's screen 7, between 3.0.52 and 3.0.53);
-  - music: `FileName`; intensity: `Target`, `Level` (0..1, JSON `value`
+  - music: `FileName`, `FadeSeconds` (3.0.63, JSON `fade`, 0 by
+    default - at once; `SEventBadFade` below 0: the track comes in from
+    silence); intensity: `Target`, `Level` (0..1, JSON `value`
     a percentage), `Ticks`; sun: `Target`, `Angle` (JSON `value` in
     degrees), `Ticks`; tactics: `Target`, `Tactics` (a word of
     `EventTacticsIds`: laps / dives / rams / hunts, see
@@ -1358,7 +1467,13 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     (above 0 - `SEventPressPace`): `Game.Press`;
   - scene (3.0.62): `Target` - the id of a scene of the level
     (`Levels.Scenes`); the director's cue `StartScene` begins it. The
-    scene has no condition of its own: an event is its start.
+    scene has no condition of its own: an event is its start;
+  - goRight (3.0.63): nothing more - the go-right arrow blinks over the
+    screen (`Hud.GoRight`), the way on is open;
+  - openDoor (3.0.66): nothing more - the door the level shuts on the
+    event's screen (`shutDoors`, `Levels.Defs`) opens, and the arrow says
+    so. A pickup taken is dead to the field, so allDead on its tag waits
+    for the taking.
   spawn, skyFall and press need an event that waits for an act
   (`SEventSpawnNoAct`, `SEventActOnly`): what they bring belongs to that
   act alone.
@@ -1410,9 +1525,14 @@ journal of the first one, the cordon over level 1's screen 9, are in
   start, a death after it finds its end standing (the aftermath); once a
   life: a death on its screen rewinds it and it plays again.
 - **`TSceneCueKind`** = (`ckSound`, `ckMusic`, `ckShade`, `ckShake`,
-  `ckMove`, `ckTrack`, `ckAim`, `ckIntensity`, `ckHint`, `ckHold`,
-  `ckKill`, `ckSpawn`, `ckRelease`, `ckRemove`, `ckWake`, `ckFly`,
-  `ckWait`); `SceneCueIds` its words (JSON `do`). **`TSceneMark`** =
+  `ckJolt` (3.0.67), `ckMove`, `ckTrack`, `ckAim`, `ckIntensity`,
+  `ckPace` (3.0.67), `ckHint`, `ckHold`, `ckKill`, `ckSpawn`,
+  `ckRelease`, `ckRemove`, `ckWake`, `ckFly`, `ckWait`); `SceneCueIds` its
+  words (JSON `do`). Jolt - one blow to the screen, a share of the
+  hardest the game deals; pace - the clocks of the dynamic objects of
+  `target` run at a share of the level file's over `ticks` (0 stills
+  them); a fly takes `ease` too (`Eased`; without one it brakes as a pad
+  does), `back` for the moon stone's step. **`TSceneMark`** =
   (`smHero`, `smMonster`, `smPoint`, `smNothing`) - what a track or an
   aim follows (JSON `on`: `hero`, a monster's tag, `none` - a track only
   -, or `x` and `y` in its place, a point of the screen).
@@ -1426,7 +1546,7 @@ journal of the first one, the cordon over level 1's screen 9, are in
   `FileName`, `Level` (0..1, JSON `value` a percentage), `MovesX` /
   `MovesY` / `X` / `Y` (a move's, a fly's, a spawn's, a point mark's),
   `Ticks` (0 - at once), `Ease` (`TMotionEase`, linear by default),
-  `Header` / `Text` (localized; a hint needs both - the header is the
+  `Eased` (a fly that follows `Ease`, 3.0.67), `Header` / `Text` (localized; a hint needs both - the header is the
   voice: a scene has no channel of its own), `AtBottom` (JSON `place`),
   `Monster`, `SpriteList` ('' - the monster's own), `Seat` (a pad: the
   body stands in the middle of its deck; or `x`/`y` - the left edge of
@@ -1803,7 +1923,7 @@ that of a monster's cell. The unit knows neither a pad nor a placement:
   "y": 27, "angle": 270}]}`; a pad: `"rig": ["pad"]`; a monster:
   `"tag": "s07-tek-01", "rig": ["tekPlatform"]`.
 
-### `Core/Monsters.Defs.pas` (~815 lines)
+### `Core/Monsters.Defs.pas` (~870 lines)
 Monster definition model + registry (parses monsters.json). No behavior.
 - **Enums**: `TMonsterCategory` (mcEnemy/Pickup/Prop/Boss), `TMovementKind`
   (mkStatic/Patrol/PatrolNoEdgeCheck/ChaseHero/BossFly), `TAttackPattern`
@@ -1880,8 +2000,20 @@ Monster definition model + registry (parses monsters.json). No behavior.
 - **`TMonsterRegistry`** (class) - owns all defs; `LoadFromFile/String`,
   `Find`, `FindByLegacyName`, `TryFind`, `Count`, `AllDefs` (the sound bank
   warms its cache from here), spawn-table and dodge-prize validation.
+- **`TPictureDef`** (3.0.64; `Picture`, JSON `"picture": {"width": 42,
+  "height": 12}`) - a frame of its own size in place of the cell,
+  standing on the feet line and centered on the cell's middle: a pickup
+  wider than a cell, the Duplet. `Enabled` - a width above 0;
+  `SBadPicture` for a size not above 0, `SPictureAndLayers` beside a disc
+  or a hull. 3.0.67: `TurnSeconds` (`turn` - once round clockwise, 0
+  stands) and `Hover` (`hover` - units up and down), `SBadPictureMotion`
+  below 0: a thing of the void that does not lie as a stone does.
+- **`Anchored`** (3.0.67, JSON `anchored`) - nothing moves the body: no
+  blow, no blast, no deck under it. **`Invulnerable`** (`invulnerable`) -
+  nothing takes a life of it, a shot still bursts on it. Both the moon
+  stone's, which only the hero's hand takes.
 
-### `Game/Bullets.pas` (~255 lines)
+### `Game/Bullets.pas` (~280 lines)
 Projectiles + the one 2008 particle-hack spawner that is left.
 - **`TFanShape`** (record) - rows/cols/baseSpeed/speedSpread of the k/t fan
   formula (the travel-test record: one template, four shapes -
@@ -1911,6 +2043,10 @@ Projectiles + the one 2008 particle-hack spawner that is left.
 - Known wart: `TBurst.Draw` advances burst animation frames - it mutates
   simulation state from the render path, and that is what blocks render
   interpolation for the game world.
+- **`TBulletLook`** (3.0.64) = (`blPlain`, `blRed`) - `NewBullet` takes
+  it (plain by default), `Look` reads it back; a red one is the Duplet's
+  shot: `DrawBullet` tints the shared texture (`RedShotRed/Green/Blue`
+  100/28/22 percent) for its own draw and puts it back.
 
 ### `Game/Pads/Pads.Formations.pas` (~450 lines)
 The dice, the judge and the assignment of a pad group's rebuild
@@ -1950,7 +2086,7 @@ the pads `Pads.World`'s. A 2026 addition.
   flights are the longest wins (`SortedFlights`, `ShortestLonger`).
   `FlightCells(from, to)` - the cells of an L: across plus down.
 
-### `Game/Pads/Pads.Flights.pas` (~470 lines)
+### `Game/Pads/Pads.Flights.pas` (~515 lines)
 The flights of a rebuild: every pad from its cell to the cell the
 assignment gave it, and when it sets off. Pure functions; `Pads.World`
 flies the pads along them. A 2026 addition.
@@ -2009,6 +2145,10 @@ flies the pads along them. A 2026 addition.
   pace does, its time stretched over the ticks given (`LegCovered` takes
   the leg's own time over them). No corner, never deep; the places must
   differ and the ticks be above zero (`TPad.FlyTo` sees to both).
+- **`EasedFlight(fromX, fromY, toX, toY, ticks, ease)`** (3.0.67) - the
+  same straight flight going the way a `TMotionEase` shapes it, over the
+  ticks: the first leg is `Eased` and goes the share `EasedShare` gives,
+  not the pace's. The scene's fly with an ease (the moon stone's step).
 
 ### `Game/Pads/Pads.Plunge.pas` (~305 lines)
 The cycle of a pad that plunges under the hero (`Levels.Pads`, `plunge`;
@@ -2590,8 +2730,10 @@ rebuilds new for the new try.
   flock `Launch`es, each with its own seed off the world's dice, new for
   every try; `TryDismissFlock(flock)` - every one `Dismiss`es; both False
   for a flock no pad strays in.
+- `TPad.FlyEased(x, y, ticks, ease)` (3.0.67) - `Fly` over an
+  `EasedFlight`: a scene's fly with an ease.
 
-### `Game/Pads/Pads.Arena.pas` (~350 lines)
+### `Game/Pads/Pads.Arena.pas` (~370 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
 pads fly, and in step with whom; since 3.0.39 also the calm flight home
 after it. A 2026 addition (3.0.29).
@@ -2648,7 +2790,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1475 lines)
+### `Game/Hero.pas` (~1585 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -2754,6 +2896,16 @@ moves in comes from `Game.Space`.
   against 96), down 1-4 rows - 4. `Pads.Formations` judges a formation by it
   (`TJumpReach`): the table is the hero's own constants, not a copy.
   `DeckUnderFeet` is public: the game asks which pad the hero rides.
+- The Duplet (3.0.64), weapon **`DupletWeapon`** = 5 (0..4 are the 2008
+  guns): two barrels, `PelletsPerBarrel` (6) red pellets each from a
+  square `PelletSpread` (6) across at the muzzle (`FireDuplet`:
+  `MuzzleReach` 32 along the shot, `BoreLift`, `BoreHalfGap`), and a kick
+  back of `RecoilUnits` (6) - `FRecoil`, paid by halves a tick in whole
+  units through `ShoveX` (`ApplyRecoil`, `FRecoilCarry`): a wall stops
+  it, a deck's edge drops the hero. In the hands: `duplet.mset`, sprite
+  `held`, its own cache with alpha and linear filtering
+  (`FDupletCache`, `FDupletSet`, `FDupletHeld`), drawn `DupletHeldSide`
+  (48) square by `DrawRotated`.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -2791,7 +2943,7 @@ the `death` frames of its own set, as every monster does.
   `TSpriteRenderer.DrawTurned`, so they shake with the monsters' channel;
   the glow adds the renderer's `Origin` itself.
 
-### `Game/Monsters.Hull.pas` (~230 lines)
+### `Game/Monsters.Hull.pas` (~255 lines)
 A monster drawn as a hull out of layers instead of its `alive` frames -
 the TeK platform, the TeK tank (3.0.45), the TeK mount (3.0.48). The disc's
 twin without the iris:
@@ -2950,7 +3102,7 @@ besides taking lives is the monster's.
   ticks in a row take at most `Lives` lives, and a gun that fires less than
   that is never touched.
 
-### `Game/Monsters.pas` (~2225 lines)
+### `Game/Monsters.pas` (~2430 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -3234,6 +3386,15 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   set's name, by which `TUptakePainter.PictureOf` finds the picture.
   `Mirrored` - whether the picture is drawn turned over: `FacesRight`,
   what `Draw` hands the sprites for a living body.
+- 3.0.64: **`PictureBox`** - where the frame is drawn, in screen units,
+  the deck's lift aside: the cell, or the def's `Picture` standing on the
+  feet line and centered on the cell (drawn through `DrawSized`); the
+  uptake and the hit tests of a picture read it. 3.0.67: `DrawPicture` -
+  the picture turned and lifted by its clock (`FAgeTicks`, ticks lived on
+  the hero's screen; `PictureHoverSeconds` 4 for one hover there and
+  back); an `Anchored` def is moved by no blow, blast, deck or pilot, an
+  `Invulnerable` one loses no life; an entity's `ShiftX` moves it off its
+  cell.
 
 ### `Hud/Hud.Messages.pas` (~335 lines)
 - **`TMessageBoard`** - the 2008 message system: ticker lines (slide-in,
@@ -3361,6 +3522,20 @@ per logic tick, `Draw`.
   once on a cure, red frame on a
   hit, white blink of the cells during the mercy window).
 
+### `Hud/Hud.GoRight.pas` (~235 lines, 3.0.63)
+The go-right arrow: the way on is open. A tube of light along an arrow's
+outline, blinking a few beats, then gone.
+- **`TGoRightBeat`** - the blink: `Show` (from the first blink), `Hide`,
+  `Tick` (after the last blink it hides itself), `LevelAt(phase)` - how
+  lit, 0..1, between ticks; `Shown`.
+- **`THudGoRight`** - `Create(renderer)`, `Show`, `Hide`, `Tick`,
+  `Draw(alpha)`; drawn as passes of **`TTubePass`** (width, level,
+  whiteness, miter limit) along the outline through a beam texture
+  (`DrawTube`, vertices and indices of its own).
+- Who shows it: the events' `goRight` and `openDoor`
+  (`TDirectorCues.GoRight` / `OpenDoor`); the game hides it on a new
+  screen. Tests: `Tests.Hud.GoRight`.
+
 ### `Hud/Hud.Charge.pas` (~460 lines)
 The score display: the bonus charge in the top-right corner, the twin of the
 heart monitor, widened on the left by the reward slot (150 units against the
@@ -3409,7 +3584,7 @@ the dpr with the corner HUDs. **`THudMarks`**.
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
-### `Game/Game.Explosions.pas` (~300 lines)
+### `Game/Game.Explosions.pas` (~400 lines)
 The one home of "something blew up" - the look, not the mechanics (the
 wave that wounds is `Game.Blasts`). **`TExplosions`**, made once
 with the game (renderer + the solid probe + the aftershock echo), cleared
@@ -3478,7 +3653,7 @@ in the dpr). A 2026 mechanic: 2008 wounded with a fan of 180 bullets.
   (4) units from `from` up to, not at, `to`: a body stands flush against
   matter, and its own edge must not hide it.
 
-### `Game/Game.Impacts.pas` (~350 lines)
+### `Game/Game.Impacts.pas` (~410 lines)
 What a bullet throws off the armor it strikes - the look only; the wound,
 the knockback and the sound stay with the dpr. **`TImpacts`**, made once
 with the game (the solid probe), cleared on a door, a death and a level
@@ -4229,6 +4404,10 @@ model: `docs/mechanics/pickups.md` (the project's storage, not the repository).
     stands on the screen where the pickup was.
 - Tests: `Tests/Game/Tests.Game.Uptake.pas` - `CutCrumbs` and the counting
   class (the painter draws, so it is judged by eye): see Tests below.
+- 3.0.64: `PictureOf(monster)` (was a set name) - the picture is built at
+  the size the body is drawn (`PictureBox`; `BuildPicture(name, width,
+  height)`, `ShapeOfSurface` likewise), so a wide pickup - the Duplet -
+  is taken as it is seen.
 
 ### `Game/Game.Henshin.pas` (~335 lines)
 The transformation ceremony as one automaton, lifted out of the dpr (3.0.2)
@@ -4480,7 +4659,7 @@ shelves. A 2026 addition.
   **`PressBeatTicks(seconds)`** - the level file's seconds in ticks, a
   tick at least.
 
-### `Game/Events/Events.Director.pas` (~295 lines)
+### `Game/Events/Events.Director.pas` (~330 lines)
 Runs the level's events (`Levels.Events`) against the live game.
 **`TEventDirector`** takes the events, the message board, the level's
 dynamic objects and the cues (3.0.54: one record, **`TDirectorCues`**, in
@@ -4495,7 +4674,12 @@ trial's act, 0 while it does not run), `TrialDone` (`TTrialDone`),
 `Game.Trial`), `Cannons` (`TCannonsCue`), `Spawn` (`TSpawnCue`),
 `SkyFall` (`TSkyFallCue`), `Press` (`TPressCue`); the last four take the
 act the event waits for, 0 for one that waits for none; `StartScene`
-(`TSceneStart`, 3.0.62 - the scene director's `Start`). The director
+(`TSceneStart`, 3.0.62 - the scene director's `Start`); `VictoryLeft`
+(`TVictoryLeft`, 3.0.63 - the seconds the trial's victory track has left,
+0 once over, below 0 while there is none), `GoRight` (`TGoRightCue`),
+`OpenDoor` (`TOpenDoorCue`, 3.0.66), `HeroStands` (`THeroStandsCue`,
+3.0.67 - the cell from 0; the game's `HeroStandsIn`). `TChangeMusic`
+takes the fade seconds too (3.0.63). The director
 pulls the trial's state through these, it does not push. The monster
 field is reborn on every restart, so it arrives with every tick instead
 of being kept: asked for the conditions, told the tactics.
@@ -4504,7 +4688,8 @@ of being kept: asked for the conditions, told the tactics.
   (`ConditionHolds`: actReached - `TrialAct() >= act`; gravelDealt -
   `GravelDealt`, `Dealt >= batch * part div of + 1`; waveKilled -
   `WaveKilled`, `WaveKilled >= batch * part div of`; both true once the
-  act is past; trialDone - `TrialDone()`); while it holds the delay
+  act is past; trialDone - `TrialDone()`; victoryEnds - `VictoryLeft()`
+  from 0 to lead; heroStands - `HeroStands(x - 1, y - 1)`); while it holds the delay
   counts down, a lapse starts the count over; at zero the actions play
   once (`Play`: `ShowBig`, `AddTicker`, a hint through `PlayHint` -
   `StartTerminal` with the event's header or the channel's own and its
@@ -4582,6 +4767,10 @@ reborn on every restart, so it comes with every tick in a
   full). `DrawShade(renderer)` - the shade, black over the whole frame.
 - Reborn with the level (`LoadLevel`); the destructor stops what it holds
   and, with a scene under way, gives the music back its volume.
+- 3.0.67: the cue jolt adds to `FJolt`, **`TakeJolt`** hands it to the
+  game once a tick (`FShake.AddTrauma`), and it is gone; pace -
+  `PaceTagged` on the dynamics (rewound as intensity is); a fly with an
+  ease - `TPad.FlyEased`.
 
 ### `Core/Render.Glow.pas` (~315 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
@@ -4793,7 +4982,7 @@ Host: window and renderer plus the fixed-timestep loop.
   under `TITLESTATS`, off in `Moon2D.inc`. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~3630 lines - NOT a stub, always grep it too)
+### `Moon2D.dpr` (~3845 lines - NOT a stub, always grep it too)
 Composition root plus the whole game-flow state machine (`TMoonGame`).
 - **Top constants**: the level discovery pattern, config file name, asset dir
   names (`SoundsDir`, `MusicDir`), the weapon->shot sound map, named one-shot
@@ -4994,7 +5183,30 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     back pause and resume it; `Render` draws its shade right after the
     burst's glass, over the world and under the marks and the HUD.
     `LocateParent` gives a dormant pad no life (`Alive` = the look fits
-    and not `Dormant`): its rigs are out while it sleeps.
+    and not `Dormant`): its rigs are out while it sleeps. Since 3.0.67
+    the scene's jolts join the shake once a tick (`FScenes.TakeJolt`).
+  - After arena 2 (3.0.63, `docs/mechanics/arena-3.md`): the trial's
+    victory track plays as a held sound, not as music
+    (`PlayVictoryTrack`: `FAudio.StopMusic`, `PlayTrackHeld(VictoryMusicFile)`,
+    preloaded by `LoadTrack` in `LoadLevel`), so the music channel is free
+    for the next track to fade in over its end (`ChangeMusic(file,
+    fadeSeconds)`); `FVictory`, `FVictoryLeft` (seconds left, counted down
+    in `Update`, `NoVictoryLeft` -1 while none) - the events' victoryEnds
+    reads it (cue `VictoryLeft`). `StopVictoryTrack` on a restart and a new
+    level; the menu pauses and resumes it with the scenes. `FGoRight` - a
+    `THudGoRight`, made in `LoadLevel`, hidden on a new screen, shown by
+    the cues `GoRight` and `OpenDoor`, ticked in `Update`, drawn with the
+    HUD.
+  - The shut doors (3.0.66): `FDoorOpened` - an event has opened the door
+    the level shuts on the hero's screen (`FLevel.DoorShutOn`); a new
+    screen, a restart and a new level shut it again. `HandleScreenTransitions`
+    lets the hero through the right edge only while no trial runs, the
+    door is not shut and he is alive. `HeroStandsIn(col, row)` (3.0.67) -
+    the cue `HeroStands`: his middle over the column, his feet on the
+    row's bottom line, not on his way up or down.
+  - The Duplet (3.0.64): `WeaponShotSounds` reaches `DupletWeapon`
+    (`duplet.wav`), every shot adds `DupletShotTrauma` (0.2) - the kick of
+    the stock; the uptake asks `PictureOf(monster)` and `PictureBox`.
   - The gravel arena (3.0.53-3.0.59; rules in `Game.Trial`, `Game.Press`,
     `Game.Cannons`, the design in `docs/mechanics/arena-2.md`): `TickGravelAttack` -
     every tick while the trial runs, even over the corpse: the gravels
@@ -5490,6 +5702,20 @@ is `gone` eight times, the 2008 ones stay under `alive-2008` and
 the cross in screen units. The source picture is not in the repository.
 numpy, scipy, Pillow.
 
+### `tools/duplet/build_duplet.py` (3.0.64)
+Builds `duplet.mset` from one generated side view of the gun: `lying`
+(the pickup's `picture` box) and `held` (the grip in the fist of the 2008
+arm frame, a 48-unit square).
+
+### `tools/dust/build_dust.py` (3.0.65)
+Builds `dust.mset` from noise, not generated: long white strips, the dust
+in the alpha, seamless across, clear at top and bottom.
+
+### `tools/sounds/duplet.py`, `stonewake.py`, `stonefall.py`
+The Duplet's shot (the 2008 shotgun slowed, doubled, over a sliding
+thump); the moon stone's waking drone and its power-down with the rocks'
+far blow - built as the cordon's hum is. Need numpy and `armor.py`.
+
 ### `tools/cannon/build_cannon.py`
 Builds `bin/sprites/tek-cannon.mset`, the art of the TeK wall cannon of the
 gravel arena (`Game.Cannons`), from one generated picture - the cannon
@@ -5515,7 +5741,16 @@ brought 8 - six in `Tests.Pads.Decks`, two in `Tests.Levels.Pads` (a run
 of decks loads as one pad with no picture and is no wall; a bad collision
 letter raises); the burst of the suit (3.0.61) brought 23 in
 `Tests.Orbs.Burst` - 519; the scenes (3.0.62) brought 67, green on the
-first run - 586, see below. Not every test unit has its
+first run - 586, see below. After 3.0.62 (counted by `[Test]` methods
+added): 3.0.63 - 13 in the new `Hud/Tests.Hud.GoRight` (the beat and the
+arrow); 3.0.64 - the Duplet's picture in `Tests.Monsters.Defs`,
+`Tests.Monsters.Bodies`; 3.0.65 - the dust in `Tests.Levels.Dynamics`;
+3.0.66 - 8 in the new `Levels/Tests.Levels.Doors` (shutDoors refused or
+kept, openDoor); 3.0.67 - the eclipse, the pace and the back ease in
+`Tests.Levels.Dynamics`, heroStands in `Tests.Levels.Events`, jolt and
+pace in `Tests.Levels.Scenes`, `shiftX` in `Tests.Levels.Entities`, the
+eased flight in `Tests.Pads.Flights`, a grid deck in `Tests.Pads.Decks`;
+3.0.69 - the takeover in `Tests.Scenes.Director`. 54 in all. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -5695,12 +5930,15 @@ new release is unpacked over the old one.
 
 ### `monsters.json` (~15 KB)
 Keys: `version`, `comment`, `defaults` (bound, spritesToDeath, animFreq, score,
-dangerous - inherited by monsters), `monsters` array. 16 ids: `gravel`,
+dangerous - inherited by monsters), `monsters` array. The 16 ids to 3.0.63: `gravel`,
 `gravelFemale`, `winter`, `zombieShooter`, `betoner`, `platform`, `tank`,
 `mount`, `barrel`, `skyBarrel` (3.0.58: the barrel's art, lives, blast
 and explosion, score 0, `weather` - the sky barrel of the gravel arena's
 act 5), `medkit`, `weaponShotgun`, `weaponGrenade`, `weapon3`,
-`weapon4`, `boss1`. Parsed by `TMonsterRegistry` into `TMonsterDef` (see
+`weapon4`, `boss1`; since 3.0.64 `weaponDuplet` (a pickup giving weapon
+type 5, `picture` 42 x 12) and since 3.0.67 `moonStone` (a pickup,
+`anchored`, `invulnerable`, `picture` 24 x 37 turning in 20 s and
+hovering 1.5) - 18 ids. Parsed by `TMonsterRegistry` into `TMonsterDef` (see
 Monsters.Defs above for the full field sheet). Nine of the fifteen carry no
 `spriteList` - theirs comes from the level placement instead. `explosion`
 names the look of a death: `barrel` (the barrel), `machine` (the tank, the
@@ -5728,7 +5966,7 @@ limits the lives he may lose: `lives` 30 in any `ticks` 33, a second - see
 `TDamageCap`. The cap does not grow with the difficulty, as the lives do:
 the hero's guns do not either.
 
-### `level1.json` (~107 KB) / `level2.json` (~84 KB)
+### `level1.json` (~107 KB) / `level2.json` (~97 KB)
 The unified level format, parsed by `TLevel`. Keys: `version`, `id`,
 `title`/`titleEn`, `assetsDir`, **`spriteSets`** (the environment sets, in resolution order),
 **`objectSets`** (optional: shared object art searched after the level's own
@@ -5992,8 +6230,29 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   sparing the hero, the strays leave). There is no boss monster; the
   victory track plays at the end and the level goes on - the second boss
   of level 2 comes on the screens after it (not yet built).
+- After the arena (3.0.63-3.0.69, `docs/mechanics/arena-3.md`): `"shutDoors":
+  [9, 10, 11]`. Screen 9: `s09-tunnel-music` (victoryEnds, lead 5: music
+  `lunar.ogg` fading in over 5 s) and `s09-go-on` (victoryEnds: openDoor).
+  Screen 10 - a layered tunnel with `dust` and a pedestal (`s10-pit-lip`):
+  the Duplet lies on it (`weaponDuplet`, tag `s10-duplet`), `s10-door`
+  opens on its taking (allDead). Screen 11 - the moon stone (`moonStone`,
+  tag `s11-stone`, `shiftX` 16) over `dust` and two `eclipse`s (`s11-void`,
+  `s11-wave`); `s11-shuttle` (enterScreen: the shuttle's hint),
+  `s11-wake` (heroStands 8, 8: scene `s11-wake`, once a level - the music,
+  the hum, the dust stilled, the dark wave, the rocks `s11-rock-block`,
+  `-chunk`, `-shard`, `s11-step` woken and flown up with jolts),
+  `s11-door` (allDead on the stone: openDoor and scene `s11-fall`, once a
+  life - the risen rocks drop back, 3.0.69). Respawns on 9, 10 and 11 at
+  column 2, row 11.
 
-### `sprites\*.mset` (45 sets)
+### `sprites\*.mset` (48 sets)
+Since 3.0.62: `duplet` (3.0.64 - `lying`, the pickup on its pedestal, and
+`held`, the gun in the hero's hands; `tools/duplet/build_duplet.py`),
+`dust` (3.0.65 - the white bands of the tunnel dust;
+`tools/dust/build_dust.py`), `moonstone` (3.0.67 - the moon stone; no
+build script in the repository); `level2-backdrops` and
+`level2-objects` grew the tunnel screens 10 and 11.
+
 - **Hero and weapons**: `hero` (the walk/death/henshin sequences),
   `weapon` (held gun frames, bullets, crosshair),
   `weapon1`-`weapon4` (the pickups: 2008 frames; since 3.0.50 their
@@ -6098,7 +6357,7 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (30 WAV, 1 OGG) and `music/` (OGG)
+### `sounds/` (33 WAV, 1 OGG) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
 music loads leniently. Four one-shots are synthesised by
 `tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`; a fifth,
@@ -6112,7 +6371,12 @@ fades under it. Tracks named by code: `moon.ogg` (menu,
 `MenuMusicFile`), `win.ogg` (`VictoryMusicFile`). By data:
 `moon_surface.ogg` (level 1), `underground.ogg`, `moon_surface2.ogg`,
 `boss1.ogg`, `boss1b.ogg` (the boss's `rageMusic`), `hallu.ogg` (level 2),
-`under01.ogg`, `boss2.ogg`. Ten OGG files, all used.
+`under01.ogg`, `boss2.ogg`, `lunar.ogg` (3.0.63 - the tunnel's, fading
+in as the victory track ends; `win.ogg` is decoded whole and played as a
+held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
+(`tools/sounds/duplet.py`, from the 2008 shotgun); 3.0.67:
+`stonewake.wav`, `stonefall.wav` (`tools/sounds/stonewake.py`,
+`stonefall.py` - the drone of the stone waking and powering down).
 
 ---
 
@@ -6121,6 +6385,12 @@ fades under it. Tracks named by code: `moon.ogg` (menu,
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
+| The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Moon2D.dpr (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
+| A screen whose way on is shut until an event opens it | `shutDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Moon2D.dpr (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
+| The Duplet: the double-barrel, its red shot, its recoil, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
+| The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
+| The moon stone: its picture that turns and hovers, its dark, its waking and the fall of the rocks | monsters.json `moonStone` (`anchored`, `invulnerable`, `picture` turn / hover) + `eclipse` in `dynamics` + scenes `s11-wake`, `s11-fall` of level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, fly `ease`) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Moon2D.dpr (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
+| Lightning: bolts that short across panels, wrecks and the satellite | `lightning` in `dynamics` + Levels.Dynamics.pas (`TLightning`) + Effects.Lightning.pas (`TBoltField`) + Tests.Effects.Lightning.pas (+docs/mechanics/lightning.md) |
 | Pads - platforms apart from the grid: decks, the drop through one (S/Down), what a body stops, a lamp hung on one; paths, the bob and the sag, riding; the ram's knock; the collision decks ('2' in `collision`) | `pads` in levelN.json + Levels.Pads.pas (model, parser) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (decks, bodies, picture; paths, bob and sag - `Tick`, `Lift`, `Press`; riding - `DeckCarrying`; the knock - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/mechanics/pads.md for the plan) |
 | A pad that plunges under the hero: how long it holds, how it falls, lies below and climbs back; its twitch, its uneven jets and the red lamp; where it may stand | `plunge` on a pad + the rig `padFailing` in levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` and the constants) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/mechanics/pads.md, stage 8) |
 | A shelf that slides out of its wall and back in: its program, the slide, the warning lamp, the latch's sound, the hero falling off it; where it may stand | `shelf` on a pad + the object `s07-shelf-dock` + the rig `shelfDock` in level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/mechanics/pads.md, stage 9) |
