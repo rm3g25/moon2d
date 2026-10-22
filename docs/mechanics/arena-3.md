@@ -173,7 +173,7 @@ K is tuned so the turrets bring about 90-95% and the trickle the rest - a slow p
 - The hero shoots the machine itself - the orbs pierce the armour.
 
 ## The end
-- The blast. The form comes off (black orbs into the aura ring, as the ice form). The level ends - and version 3.0 with it.
+- The blast. The form comes off (black orbs into the aura ring, as the ice form). No victory track (decided 2026-10-22: win.ogg already lied once, at the end of arena 2); the boss track falls silent, and the titles close the level - and version 3.0 with it. See docs/mechanics/finale.md.
 
 ## Stage 1 as built (3.0.63)
 All of it is data on screen 9 plus a few words of the event vocabulary; no code knows the false ending.
@@ -295,7 +295,7 @@ Each its own commit, each run live.
 16. **Evolution.** The rite with black orbs, the eclipse pattern.
 17. **The moon form.** Orb gun piercing armour, jump +25%, fire rain, black orb aura.
 18. **Air phase.** Nozzles, grenades, guns, the hull open to orbs.
-19. **The blast.** The explosion, the form off, the end of the level and of 3.0.
+19. **The blast.** The explosion, the form off, silence instead of the victory track, the hand-over to the titles (docs/mechanics/finale.md, stage F7; the titles themselves, F1-F6, can be built before the boss).
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
