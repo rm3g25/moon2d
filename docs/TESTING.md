@@ -71,6 +71,9 @@ Tests\
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
+  Hud\
+    Tests.Hud.GoRight.pas
+    Tests.Hud.Energy.pas   the reading of the gauge, and the energy action
   Levels\
     Tests.Levels.Carousels.pas
     Tests.Levels.Doors.pas     the doors a level shuts
@@ -93,6 +96,7 @@ Tests\
     Tests.Orbs.Patterns.pas
     Tests.Orbs.Rite.pas
     Tests.Orbs.Burst.pas
+    Tests.Orbs.Feed.pas
   Pads\
     Tests.Pads.Decks.pas
     Tests.Pads.Flights.pas
@@ -216,7 +220,7 @@ a console: started from the IDE, its window closes with the last line.
 The table of every unit under test lives in `testing/`, one file per
 namespace: `testing/orbs.md`, `testing/monsters.md`, `testing/game.md`,
 `testing/effects.md`, `testing/pads.md`, `testing/sprites.md`,
-`testing/scenes.md`. A new unit's table goes into the file of its
+`testing/scenes.md`, `testing/hud.md`. A new unit's table goes into the file of its
 namespace; a new namespace gets a new file and a line here.
 ## The stage
 

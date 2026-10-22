@@ -351,3 +351,25 @@ Left to the eye:
 - What the game does along a stretch: the bullets put out, a monster
   wounded once a burst, the world standing for the inhale. That is
   `Moon2D.dpr`'s and waits for the scene tests with the hero.
+
+## Orbs.Feed
+
+State: written, 12 tests. Fixture `TOrbFeedTests` in `Tests\Orbs\Tests.Orbs.Feed.pas`: a feed of the moon tint, the hero at 300, 300, the gauge at 140, 20, ticked once before each test. The timings spelled are the decided ones of the design (a beat of 15 ticks, 9 between orbs, 30 to rise, 60 of hanging at least); the curve and the sway are bounded loosely.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNoChargeNoOrbs` | a start of 0: nothing on its way, no orb | an empty charge sends orbs |
+| `TestChargeIsOnItsWayAtOnce` | 5 pending at the start, before any orb is out | a door crossed in the beat loses the charge |
+| `TestOrbsComeOutOneAfterAnother` | none until tick 15, one at 15, two 9 ticks on | the orbs come out together or before the beat |
+| `TestChargeSplitsAmongFiveOrbsAtMost` | 12 makes five orbs, 3 makes three | a charge of a hundred makes a hundred orbs, or a small one fewer than its points |
+| `TestEveryBitOfChargeLands` | 12 lands as 12 in all, no orb left after | the split loses its remainder, or an orb is never dropped |
+| `TestNothingLandsBeforeOrbsHaveHung` | at 15 + 30 + 60 ticks nothing has landed, all 5 pending | an orb flies before it has hung |
+| `TestOrbsHangOverTheHero` | every orb out and risen is above the hero's center and within 40 units of him | the orbs hang under him or far off |
+| `TestHangingOrbKeepsToTheHero` | the hero steps 100 units: a hanging orb goes along to 5 units | the orbs stay behind where he took the stone |
+| `TestOrbGoesIntoTheGauge` | the orb that lands is within 3 units of the gauge's middle | the orbs land short of the disc |
+| `TestLandedIsTakenOnce` | the landed charge is taken once | the gauge counts a landing twice |
+| `TestCollapseTakesTheChargeAlong` | a collapse: nothing pending, the orbs out implode, nothing lands after, all dropped | a dead hero's orbs still bring the charge |
+| `TestOrbsAreDarkAndStrikeNothing` | the moon tint is dark, no orb armed | an orb of the feed strikes a monster |
+
+Left to the eye: the bowed curve and its pace, the sway, the size as an orb grows and goes in, the look of a dark orb (`DrawDarkBody` of `Orbs.Flock`), and that the first orb goes in as the slot opens.
+

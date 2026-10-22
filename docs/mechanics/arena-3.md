@@ -3,7 +3,7 @@
 Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11; stage 5d built (2026-10-21, 3.0.67): the stone wakes; stage 5e built (2026-10-21, 3.0.69): the rocks fall back. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
-A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy bar at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
+A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy gauge at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
 
 ## Rules of the finale
 - No monsters on the tunnel screens. The emptiness is the threat.
@@ -76,9 +76,9 @@ The rocks are pads (Levels.Pads): a path from under the bottom edge to their pla
 
 **The stone is taken:**
 - the rocks lose their strength and fall back into the pit - the step too: there is no way back; the dust comes back to life;
-- the shuttle's line and the energy bar at 5% (stage 6);
+- the energy gauge at 5% (stage 6);
 - the door opens and the arrow comes (`allDead` on the stone's tag -> `openDoor`).
-- **In reserve** (decided 2026-10-21): the eclipse - on taking, the stone drinks the light: the shaft of the vault goes out, the dust sinks into the dark, the backdrop goes black but for the rim of the stone and the bar. The same tools as the waking at full strength; kept for the finale if the taking needs more.
+- **In reserve** (decided 2026-10-21): the eclipse - on taking, the stone drinks the light: the shaft of the vault goes out, the dust sinks into the dark, the backdrop goes black but for the rim of the stone and the gauge. The same tools as the waking at full strength; kept for the finale if the taking needs more.
 
 **Dropped** (2026-10-21): the force field over the way out (a TeK field on natural rock is out of place - the closed door is invisible); the distant rockfall (the stone is the event); a fang shot down by the Duplet into a bridge, and a fang broken by a falling rock (a believable fall needs drawn animation; rigid motion, light and sound are what this game does well).
 
@@ -141,22 +141,24 @@ Turret 2 dies: turret 3 comes out, a napalm launcher opens on the stern, and the
 Turret 3 dies: the launcher folds into the hull, the belt runs down to a standstill, the machine stops. The energy reaches 100% - the evolution. The rest of the fight is on a still screen.
 
 ## Energy (the form charge)
+How it looks and where it stands - "Stage 6 as built".
+
 The charge is tied to the lives of the three turrets, but with a delay, so the dependence is not obvious:
-- **Hidden tank.** Damage to a turret goes into a tank, not into the bar. The bar drinks from the tank at its own pace - the bar keeps growing a couple of seconds after the hit.
-- **Trickle.** The stone charges by itself, about 0.5% a second - the bar lives even with no hits.
-- **Ceiling.** While the third turret lives, the bar stops at 95%. 100% comes only with the death of the last turret; the evolution follows at once.
+- **Hidden tank.** Damage to a turret goes into a tank, not into the gauge. The gauge drinks from the tank at its own pace - it keeps growing a couple of seconds after the hit.
+- **Trickle.** The stone charges by itself, about 0.5% a second - the gauge lives even with no hits.
+- **Ceiling.** While the third turret lives, the gauge stops at 95%. 100% comes only with the death of the last turret; the evolution follows at once.
 
 ```pascal
-// turret damage - into the tank, not the bar
+// turret damage - into the tank, not the gauge
 Pool := Pool + Damage * K;
 
-// every tick: the bar drinks from the tank
+// every tick: the gauge drinks from the tank
 Take := Min(Pool, DrainPerSec * Dt);
 Pool := Pool - Take;
 Energy := Min(Energy + Take + TricklePerSec * Dt, CapBeforeLast);
 
 // third turret dies
-CapBeforeLast := 100;  // the bar runs to 100 -> Evolution
+CapBeforeLast := 100;  // the gauge runs to 100 -> Evolution
 ```
 
 K is tuned so the turrets bring about 90-95% and the trickle the rest - a slow player never sticks at 94%.
@@ -254,7 +256,7 @@ The waking is a scene (Levels.Scenes) - `s11-wake`, once a level - started by an
 - **The sound:** `bin/sounds/stonewake.wav` by `tools/sounds/stonewake.py` - a drone made as the cordon's hum is (`cordon.py`): two stacks of 12 overtones at 41 Hz, half a hertz apart, the pitch settling from 6% above over the first 4 seconds and drifting a little, soft-clipped, then low-passed at 260 Hz; under it noise low-passed at 70 Hz. Half a second of nothing, awake by 4 seconds, held to 8.5, gone by 12.5 as the music comes back; 13 seconds. No cracks: clicks and a bright hum over noise sounded like a vacuum cleaner, not a ship's bulk.
 - **The stone is anchored** (`"anchored": true` in monsters.json, Monsters.Defs `Anchored`, 3.0.68): no blow, no blast's throw and no deck moves it. A pickup of 2008 is knocked about by shots; the stone was shot off its column and left its halo hanging where it had lain. It is invulnerable too (`"invulnerable": true`, `Invulnerable`): a shot bursts on it and takes nothing - shot down, it would have opened the door without being taken.
 - **The halo goes with the stone:** taking it (event `s11-door`) fades the void to nothing over 20 ticks. The wave is left alone - at full it is not seen, and faded back it would run in.
-- **The shuttle** speaks as the hero comes onto the screen (event `s11-shuttle`, `enterScreen`): a hint at the top, header ЧЕЛНОК - "Мастер, это лунный камень. От него идут волны энергии." That the stone fits the suit is for stage 6, with the energy bar.
+- **The shuttle** speaks as the hero comes onto the screen (event `s11-shuttle`, `enterScreen`): a hint at the top, header ЧЕЛНОК - "Мастер, это лунный камень. От него идут волны энергии." That the stone fits the suit is said later.
 - **Left out:** the grit falling off the rocks' undersides and the rocks' tilt dying away - a pad neither sheds nor turns; worth it only if the live run asks.
 - First guesses for the live run: the depth of the dark (in the dark corner of the stone it shows little; the wave shows over the lit wall), the halo's size and color, the overshoot, the music's dip, how loud the hum is.
 
@@ -270,6 +272,18 @@ Taking the stone starts a second scene, `s11-fall`: the event `s11-door` (`allDe
 - **A hero on the step** when it sags rides it down into the pit, as a pad carries him: the step goes first but 10 ticks after the stone is taken, by when he stands on C.
 - **Tests:** two in `Tests.Scenes.Director` - the takeover, and the rewind of a scene of a life under the aftermath of a scene once a level.
 
+## Stage 6 as built (3.0.70)
+Not a bar: a small eclipse. Three bars were tried on demo stands (2026-10-22) - hollow, filled with a light edge, filled light - and dropped: a bar is the language of a loading screen, and the HUD already has two rectangles. The charge is the moon stone's, so it looks like the stone.
+
+- **The gauge** (Hud.Energy): a black disc 20 units across in a pale halo, in a slot the heart monitor's panel grows on its right, 32 units wide - the twin of the reward slot on the left of the charge panel, so the two corner panels mirror each other. The charge runs round the rim as an arc of light from the top, clockwise, over a faint ring of the whole rim; a white point at its head. The number stands in the middle of the disc with a percent sign - "5" alone did not say five of what: the 3x5 digits at a pixel of 1.4 units (1.2 for "100", or its corners touch the rim), the sign a glyph of the same kind at 1.0, standing on the line. A rise eases the arc in and flashes the halo and the number; a fall (a death) is shown at once. Full, the ring breathes faster. No slot until the first of the charge comes; with the charge gone, it folds back over 8 ticks. Centered was tried and looked lost between the corners; the right panel was tried and crowded the reward slot.
+- **The panel's wing** (Hud.Vitals `Wing`): the monitor draws its fill and frame that many units wider, with a divider where its own width ends; what is in the wing is not its business. The game passes the gauge's `WingWidth` every tick.
+- **The arc** is drawn as strips of light along the circle (the band glow of the go-right arrow, `SDL_RenderGeometry` over `gsBeam`): round at any size of the window. The disc is a new glow shape, `gsDisc` (Render.Glow) - a disc with a crisp edge, two texels of a 64-pixel texture - drawn black through `CreateShadeShape` (the same shape blended, not added).
+- **The orbs** (Orbs.Feed): taking the stone sends the charge out of the hero as black orbs - five at most, the charge split among them, so the stone's 5 is five orbs of 1 and the number counts up as they land. A beat after the taking (15 ticks) they come out of him one after another, 9 ticks apart, growing out of a point over 30 ticks to spots over his head (an arc of 70% of a half-circle, 22-30 units out), hang there 60-85 ticks swaying and keeping to him as he walks, then fly to the middle of the disc in 40 ticks, each on its own bowed curve, gathering speed (cubic), and go into it a little smaller. The first lands about 4.8 seconds after the taking, the last about 6. They strike nothing, and are drawn over the HUD with no shake, so they go into the gauge.
+- **The dark orb** (Orbs.Flock, `TOrbTint.Dark`, `MoonOrbTint` - the colors of the moon burst): two units bigger than an ice orb - the halo 15 across, its thick part 10, a white rim 9.2 and a black body 7.6 over it, drawn last; an implosion flashes in the glow color, the black core would add nothing. The canvas of the dynamics has the disc twice now: `DiscGlow` added, `DiscShade` blended. The moon form will fly the same orbs.
+- **The event:** the action `energy` (`eaEnergy`, Levels.Events), `"value"` 1..100; the director asks the game (`TEnergyCue`). Screen 11: `s11-door` gives 5 with the door and the fall. The game caps what it starts at what the gauge has room for.
+- **A death gives back the charge the hero had on coming onto his screen** (`FEnergyAtEntry`): what a screen gave regrows with its field. Taken on screen 11 and died there - the stone is back, the gauge folds, the stone gives again. The orbs still on their way when he goes through the door count as the charge's already. The dead hero's orbs draw into their points and bring nothing. A new level starts at 0.
+- **Not yet:** the tank, the trickle and the ceiling of the charge (stage 15) - the gauge only shows what it is given; the shuttle's line that the stone fits the suit.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
@@ -282,7 +296,7 @@ Each its own commit, each run live.
    - 5c. **Screen 11 as data.** Built, see "Stages 5b and 5c as built".
    - 5d. **The stone wakes.** Built (3.0.67), see "Stage 5d as built".
    - 5e. **The stone is taken.** Built (3.0.69), see "Stage 5e as built".
-6. **The shuttle and the energy bar.** The stone line; the bar at 5% on taking the stone.
+6. **The energy gauge.** Built (3.0.70), see "Stage 6 as built". The stone line was built with stage 5d.
 7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
 8. **Screen 13 - the arena and the hull.** Flat floor, closed on both sides; the 2x2 machine on two wheels drives, stops, crushes; the TeK shield; death restarts the fight.
 9. **Turret 1** - aimed bursts.
@@ -312,7 +326,7 @@ Each its own commit, each run live.
 
 ## Risks
 - The giant double-barrel's spread meets the honeycomb before the turrets: a lot of flares and no damage until the player understands the turrets are the target. Probably fine - arena 2 taught the honeycomb.
-- The charge must never stall: the trickle plus the ceiling guarantee 100% at the third turret's death; check live that the bar does not read as "it fills by itself, the turrets do not matter".
+- The charge must never stall: the trickle plus the ceiling guarantee 100% at the third turret's death; check live that the gauge does not read as "it fills by itself, the turrets do not matter".
 - The air phase with grenades and guns after a long fight - one death replays the whole fight. Keep the fight short.
 - The belt and the plain jump: the hatch height must be reachable from the pads with the plain jump - the +25% comes only with the evolution.
 - The pads and the belt: a pad that leaves the screen on the left must be allowed to (the pad code may assume pads stay on the screen); and a hero on a pad that the belt carries and a shot or the lurch shoves must never be left hanging in the air.

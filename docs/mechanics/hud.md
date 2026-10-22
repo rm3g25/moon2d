@@ -1,9 +1,10 @@
-# HUD: the health monitor, the health rows, the bonus slot
+# HUD: the health monitor, the health rows, the bonus slot, the energy gauge
 
 The HUD drawn with primitives instead of the 2008 sprites: the heart
 monitor in the corner (`Hud.Vitals`), the health rows over the hero and
-the monsters, the bonus slot in the charge panel. The 2008 mode that
-lived alongside it (2.5.x) and its removal in 3.0.0 are recorded here too.
+the monsters, the bonus slot in the charge panel, the energy gauge in the
+monitor's wing (`Hud.Energy`, 3.0.70). The 2008 mode that lived alongside
+it (2.5.x) and its removal in 3.0.0 are recorded here too.
 
 ## Journal
 
@@ -268,3 +269,30 @@ pack-sets отдельным (Drop the pack-sets migration script), доки с�
 #### Тег
 Коммиты серии: Show the bonus in a slot, not a caption (3.0.5); Update
 the docs for 3.0.5. **3.0.5** - тег на последнем.
+
+### Сессия: заряд формы - затмение в крыле монитора, v3.0.70 (2026-10-22)
+
+Этап 6 арены 3 (`mechanics/arena-3.md`, раздел "Stage 6 as built" - там
+всё в цифрах). Здесь - как выбирали.
+
+#### Решения (аргументы в скобках)
+- Не полоска, а затмение: чёрный диск в ореоле, заряд - дуга света по
+  ободу с верха по часовой, число в центре диска. Три полоски на стендах
+  (полая, залитая с кромкой, светлая) отвергнуты: полоска - язык экрана
+  загрузки, а прямоугольников в HUD уже два. Заряд - камня, и выглядит
+  он как камень; на 100% - полное кольцо, то есть само затмение, имя
+  третьего узора обряда.
+- Место - слот справа у панели монитора, панель растёт на 32 (зеркало
+  слота бонуса слева у правой панели). По центру смотрелось потерянным,
+  у правой панели - толкучка у слота бонуса. Энергия формы - состояние
+  тела героя, ей место рядом с пульсом.
+- Не искры, а орбы нового типа: медленно выходят из героя сразу после
+  взятия камня, пару секунд висят, улетают к слоту и уходят в диск в
+  момент его появления. Первый стенд читался как улетающий камень.
+- Чёрные орбы на 2 единицы больше белых по диаметру (тело 7.6 против
+  5.6, ореол 15 против 11), ореол гуще у тела, белая кромка - "сочные".
+  +1 рядом с белым читался как тот же орб, только грустный.
+
+#### Тег
+Коммит: Gauge the charge of the stone (3.0.70). **3.0.70** - тег на
+последнем коммите серии, после доков.
