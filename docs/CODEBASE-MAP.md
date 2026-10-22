@@ -20,7 +20,8 @@ pickups at `v3.0.50`, the shelf at `v3.0.51`, the carousel at
 suit at `v3.0.61` and the scenes - the cordon over level 1's screen 9 - at
 `v3.0.62`, then for the way on after arena 2 at `v3.0.63`, the Duplet at
 `v3.0.64`, the tunnel dust at `v3.0.65`, the shut doors at `v3.0.66`,
-the moon stone at `v3.0.67` and the fall of the rocks at `v3.0.69`, with
+the moon stone at `v3.0.67`, the fall of the rocks at `v3.0.69` and the
+charge of the stone at `v3.0.70`, with
 the lightning of `v3.0.34` caught up (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -110,6 +111,8 @@ the sizes) -> `Pads.World`
 `Levels.Defs`,
 `Render.Sprites`,
 `Render.Brush`, `Game.Space` and `Sdl2.Core`) / `Hud.Vitals` / `Hud.Charge` /
+`Hud.Energy` (3.0.70: over `Render.Brush` and `Sdl2.Core`, drawn through
+`Render.Glow`) /
 `Hud.Typewriter` ->
 `Hud.Terminal` / `Hud.Briefing` ->
 `Bullets` / `Monsters.Disc` (the boss's disc: over `Render.Sprites` and
@@ -148,6 +151,8 @@ probe, `Orbs.Harvest` for the matter, `Effects.Emitter` for its swarms,
 `Render.Brush`, `Game.Space`, the cell size of `Render.Sprites` and the
 canvas of `Levels.Dynamics`, drawn through `Render.Glow`) /
 `Game.Henshin` (over `Game.Shroud`, `Orbs.Rite` and `Orbs.Burst` too) /
+`Orbs.Feed` (3.0.70, the orbs that carry a charge into its gauge: over
+`Orbs.Flock`, `Render.Brush` and the canvas of `Levels.Dynamics`) /
 `Game.Trial`
 (the rules of the gravel trial: over no unit of the game) / `Game.Press`
 (the press of its finale: over no unit of the game either) /
@@ -1045,7 +1050,8 @@ in `CreateDynamic`.
   ticks)`, `AnyTagged(tag, kind = nil)` (the kind is a
   `TDynamicObjectClass`, nil = any): what the events and the level
   checks ask.
-- **`TDynamicCanvas`** (record) - renderer + the glow textures + the puff
+- **`TDynamicCanvas`** (record) - renderer + the glow textures (since
+  3.0.70 the disc twice: `DiscGlow` added, `DiscShade` blended) + the puff
   textures every kind draws with + `Art` (the cache of the level's object
   art - its own set and the declared shared ones);
   the textures are made and freed by `Render.Dynamics`, `Art` is handed to
@@ -1368,7 +1374,7 @@ in `CreateDynamic`.
 - `LogicTicksPerSecond = 33` - frequencies are per second; the logic runs
   33 ticks a second.
 
-### `Core/Levels.Events.pas` (~695 lines)
+### `Core/Levels.Events.pas` (~710 lines)
 The `events` section of level JSON: model and parser, no game logic (the
 game runs them through `Events.Director`; the editor will write them).
 Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
@@ -1406,7 +1412,8 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   `eaFlyIn`, `eaMedkitsOnto` (3.0.54), `eaCannons` (3.0.56), `eaSpawn`
   (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
   `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59), `eaScene`
-  (3.0.62), `eaGoRight` (3.0.63), `eaOpenDoor` (3.0.66)). **`TEventAction`**
+  (3.0.62), `eaGoRight` (3.0.63), `eaOpenDoor` (3.0.66), `eaEnergy`
+  (3.0.70)). **`TEventAction`**
   (record) - kind and what the kind reads:
   - the messages: localized `Text`; a hint also `Header` (who speaks,
     localized as the text; empty - the channel itself, `STerminalHeader`)
@@ -1473,7 +1480,10 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   - openDoor (3.0.66): nothing more - the door the level shuts on the
     event's screen (`shutDoors`, `Levels.Defs`) opens, and the arrow says
     so. A pickup taken is dead to the field, so allDead on its tag waits
-    for the taking.
+    for the taking;
+  - energy (3.0.70): `Amount` - `"value"`, 1..100 (`SEventBadEnergy`
+    otherwise, `ReadEnergy`): that many percent of the form's charge come
+    out of the hero as orbs and fly into its gauge (the cue `Energy`).
   spawn, skyFall and press need an event that waits for an act
   (`SEventSpawnNoAct`, `SEventActOnly`): what they bring belongs to that
   act alone.
@@ -3476,7 +3486,7 @@ screen size follows the level. Every reader of either must survive the two
 diverging. Replaced `GameWidth`/`GameHeight` of `Hero` and the literal
 512/384 of `Monsters`, `Bullets` and the dpr (3.0.1).
 
-### `Core/Render.Brush.pas` (~215 lines)
+### `Core/Render.Brush.pas` (~235 lines)
 The brush the primitive-drawn panels share - the HUD units and the menu's
 difficulty cells - plus the color and random vocabulary of the whole
 renderer: `TRgb`, `Mix` and `TXorShift` serve `Render.Glow`, `Render.Globe`,
@@ -3495,16 +3505,19 @@ started drawing with it; the class inside still carries the old name,
   sets a non-zero `Seed` - xorshift never leaves zero.
 - **`THudBrush`** - `Fill` (alpha blended rect in game units), `Glow`
   (additive), `Frame` (a one-unit outline from four rects), `DrawNumber` (3x5
-  pixel digits; `NumberWidth` measures), the cells every health row is made
+  pixel digits; `NumberWidth` measures; since 3.0.70 both take the size of
+  a pixel, `DigitPixel` 3 by default), `DrawPercent` (3.0.70, a 3x5 percent
+  sign; digits and sign go through `DrawGlyph`), the cells every health row is made
   of - `FullCell` (fill + top sheen), `EmptyCell` (dim outline), `BonusCell`
   (lime with a shaded foot), all with an alpha so a row can fade -
   `BeginDraw`/`EndDraw` (blend mode on and off again - the rest of the game
   draws opaque).
 - Panel geometry constants shared by both corners: `PanelMargin=6`,
   `PanelY=4`, `PanelH=32`, `PanelW=118`, `ReadoutY`, the cell row (`CellY`,
-  `CellW=7`, `CellH=4`, `CellGap=1`), `DigitPixel=3`.
+  `CellW=7`, `CellH=4`, `CellGap=1`); `DigitPixel=3` (at the top of the
+  interface since 3.0.70: it is a default of `DrawNumber`).
 
-### `Hud/Hud.Vitals.pas` (~355 lines)
+### `Hud/Hud.Vitals.pas` (~365 lines)
 The hero's health display: a heart monitor in the top-left corner, drawn
 with the brush alone. **`THudVitals`** - `Tick(health, invulnerable)` once
 per logic tick, `Draw`.
@@ -3521,6 +3534,10 @@ per logic tick, `Draw`.
   (lost cell flash, grown cell glow, the trace flashing white with a beat at
   once on a cure, red frame on a
   hit, white blink of the cells during the mercy window).
+- **`Wing`** (3.0.70, units) - the panel reaches that far past its own width,
+  inside its frame, with a divider where its width ends: the slot of the
+  form's charge. What is in it is `Hud.Energy`'s; the game passes
+  `THudEnergy.WingWidth` every tick.
 
 ### `Hud/Hud.GoRight.pas` (~235 lines, 3.0.63)
 The go-right arrow: the way on is open. A tube of light along an arrow's
@@ -3535,6 +3552,26 @@ outline, blinking a few beats, then gone.
 - Who shows it: the events' `goRight` and `openDoor`
   (`TDirectorCues.GoRight` / `OpenDoor`); the game hides it on a new
   screen. Tests: `Tests.Hud.GoRight`.
+
+### `Hud/Hud.Energy.pas` (~340 lines, 3.0.70)
+The charge of the form: a small eclipse in the slot the heart monitor's
+panel grows on its right (`docs/mechanics/arena-3.md`, stage 6).
+- `FullEnergy=100` (interface const).
+- **`TEnergyReading`** - `Tick(charge)`; `Charge`; `Wing` (how open the
+  slot is, 0..1: up over `WingTicks` 8 once there is a charge, down again
+  without one); `Arc` (the charge the arc shows: a rise eased in,
+  `ArcPull` 0.12 a tick, standing on it within `ArcSnap`; a fall - a death
+  - at once); `Flash` (1 at a rise, out over 14 ticks); `Age`.
+- **`THudEnergy`** - `Create(renderer)`, `Tick(charge)`, `Draw(alpha)`,
+  `WingWidth` (32 units as open as it is), `Heart` (class function: the
+  middle of the disc - where the orbs fly), `Reading`. Draws a halo
+  (`gsPoint`, breathing, flashing, faster when full), the black disc 20
+  across (`gsDisc` through `CreateShadeShape`), a faint ring of the whole
+  rim, the arc from the top clockwise in two strips (`DrawRim`:
+  `SDL_RenderGeometry` over `gsBeam`, up to 64 segments a circle) and a
+  white head, the number with a percent sign in the middle (pixel 1.4,
+  1.2 for 100; the sign at 1.0 on the line).
+- Tests: `Tests.Hud.Energy`.
 
 ### `Hud/Hud.Charge.pas` (~460 lines)
 The score display: the bonus charge in the top-right corner, the twin of the
@@ -3691,13 +3728,19 @@ load.
   bullets, on the monsters' shake channel; the textures come from
   `FDynamics.Canvas`.
 
-### `Game/Orbs/Orbs.Flock.pas` (~480 lines)
+### `Game/Orbs/Orbs.Flock.pas` (~525 lines)
 The orbs: small lights that fly by a formula, not by ballistics, and take
 no notice of matter - no wall stops one. The look and the life of an orb
 only: where it is, its owner decides tick by tick; what it strikes, and
 what that costs, the game does (`ResolveOrbHits` in the dpr).
-- **`TOrbTint`** (record) - `Core` (the white-hot point) and `Glow`.
-  `IceOrbTint` is the one tint so far: the hero's element on levels 1-2.
+- **`TOrbTint`** (record) - `Core` (the white-hot point; the body of a dark
+  orb), `Glow` and (3.0.70) `Dark` - the body is drawn over the world, not
+  added: a black hole. `IceOrbTint` - the hero's element on levels 1-2;
+  `MoonOrbTint` (3.0.70, dark, the colors of the moon burst) - the stone's
+  charge, and the moon form's to come. A dark orb (`DrawDarkBody`) is two
+  units bigger: the halo 15 across, its thick part 10, a white rim 9.2
+  (`DiscGlow`) and the black body 7.6 (`DiscShade`) drawn last; its
+  implosion flashes in the glow color.
 - **`TOrbState`** = (`osAlive`, `osImploding`, `osGone`).
 - **`TOrbLayer`** = (`olBehind`, `olInFront`) (3.0.49) - the two passes of
   a flock's drawing about the hero.
@@ -4170,6 +4213,23 @@ stages 8-10.
 - Tests: `Tests/Orbs/Tests.Orbs.Burst.pas` - see Tests below; the look is
   for the eye, and what the game does along a stretch waits for the scene
   tests.
+
+### `Game/Orbs/Orbs.Feed.pas` (~275 lines, 3.0.70)
+The orbs that carry a charge into its gauge. **`TOrbFeed`** owns a flock
+(`Create(tint)`; the game's is `MoonOrbTint`) and a `TXorShift` of its own.
+- `Start(amount, target)` - the charge is split among `FeedOrbs` 5 orbs at
+  most (the remainder to the first); a feed under way goes on.
+- `Tick(heroCenter)` - every tick, a feed or none. An orb comes out of the
+  hero 15 ticks after the start and 9 after the one before, grows out of a
+  point over 30 ticks to a spot over his head (an arc of 70% of a
+  half-circle, 22-30 out, 4 higher), hangs there 60-85 ticks swaying and
+  keeping to him (`MoveBeside`), then flies to the target in 40 ticks on a
+  bowed curve, cubic, a little smaller, and is released into it.
+- `TakeLanded` (the charge landed since the last call), `Pending` (on its
+  way, the landed not yet taken among it), `Collapse` (the hero is dead:
+  the orbs out implode, the charge with them), `Clear`, `Draw`, `Flock`.
+  The orbs are not armed.
+- Tests: `Tests.Orbs.Feed`.
 
 ### `Game/Game.Shroud.pas` (~980 lines)
 The hero's shroud (3.0.47): smoke and light that gather round him when he
@@ -4659,7 +4719,7 @@ shelves. A 2026 addition.
   **`PressBeatTicks(seconds)`** - the level file's seconds in ticks, a
   tick at least.
 
-### `Game/Events/Events.Director.pas` (~330 lines)
+### `Game/Events/Events.Director.pas` (~340 lines)
 Runs the level's events (`Levels.Events`) against the live game.
 **`TEventDirector`** takes the events, the message board, the level's
 dynamic objects and the cues (3.0.54: one record, **`TDirectorCues`**, in
@@ -4678,7 +4738,8 @@ act the event waits for, 0 for one that waits for none; `StartScene`
 (`TVictoryLeft`, 3.0.63 - the seconds the trial's victory track has left,
 0 once over, below 0 while there is none), `GoRight` (`TGoRightCue`),
 `OpenDoor` (`TOpenDoorCue`, 3.0.66), `HeroStands` (`THeroStandsCue`,
-3.0.67 - the cell from 0; the game's `HeroStandsIn`). `TChangeMusic`
+3.0.67 - the cell from 0; the game's `HeroStandsIn`), `Energy`
+(`TEnergyCue`, 3.0.70 - the game's `FeedEnergy`). `TChangeMusic`
 takes the fade seconds too (3.0.63). The director
 pulls the trial's state through these, it does not push. The monster
 field is reborn on every restart, so it arrives with every tick instead
@@ -4772,10 +4833,12 @@ reborn on every restart, so it comes with every tick in a
   `PaceTagged` on the dynamics (rewound as intensity is); a fly with an
   ease - `TPad.FlyEased`.
 
-### `Core/Render.Glow.pas` (~315 lines)
+### `Core/Render.Glow.pas` (~345 lines)
 Light drawn instead of loaded: white textures with the shape in their alpha,
 additive, linear-filtered, so one texture serves every tint and level.
-- **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`, `gsStreak`) - a
+- **`TGlowShape`** = (`gsPoint`, `gsFlare`, `gsStarburst`, `gsStreak`,
+  `gsBeam`, `gsDisc` (3.0.70: a disc with a crisp edge, `DiscEdge` 0.06 of
+  the half-side)) - a
   Gaussian point, a four-spike flare, the long thin cross of a starburst
   (rays thinner than a flare spike and slower to fade) and the streak of a
   spark (it lies along X: full at the hot end by the right edge, rounded
@@ -4783,6 +4846,8 @@ additive, linear-filtered, so one texture serves every tint and level.
   `StreakTailPower`), analytic (`PointSigma`, `Flare*`, `StarburstRayWidth`,
   `Streak*` metrics in half-sides).
 - Free functions: `CreateGlowShape(renderer, shape, side)`,
+  `CreateShadeShape(renderer, shape, side)` (3.0.70: the same blended, not
+  added - drawn black, a hole),
   `CreateGlowTexture(renderer, surface)` (a shape computed elsewhere - the
   logo halo - arrives as a surface and leaves with the same settings),
   `DrawGlow(renderer, texture, cx, cy, size, tint, level)` (centered
@@ -5197,6 +5262,20 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     `THudGoRight`, made in `LoadLevel`, hidden on a new screen, shown by
     the cues `GoRight` and `OpenDoor`, ticked in `Update`, drawn with the
     HUD.
+  - The charge of the form (3.0.70): `FEnergy` (0..`FullEnergy`) and
+    `FEnergyAtEntry` - the charge on coming onto the screen
+    (`ArriveOnScreen`: `FEnergy` + `FFeed.Pending`, the orbs on their way
+    are the charge's already); `RestartLevel` gives that back, `LoadLevel`
+    zeroes both. `FFeed` (`TOrbFeed` of `MoonOrbTint`, made in the
+    constructor) - `FeedEnergy(amount)` (the cue `Energy`; nothing over
+    the corpse; capped at what the gauge has room for) starts it at
+    `THudEnergy.Heart`; `TickEnergy` in `Update` after the rain - the
+    feed ticks with `HeroCenter`, `TakeLanded` goes into `FEnergy`, the
+    gauge ticks, `FVitals.Wing` takes its `WingWidth`; `HurtHero`
+    collapses it, `LoadLevel` and `RestartLevel` clear it. `FEnergyGauge`
+    (`THudEnergy`) is made in `CreateHud`; `Render` draws it after
+    `FVitals.Draw` and the feed over it, unshaken, so the orbs go into
+    the disc.
   - The shut doors (3.0.66): `FDoorOpened` - an event has opened the door
     the level shuts on the hero's screen (`FLevel.DoorShutOn`); a new
     screen, a restart and a new level shut it again. `HandleScreenTransitions`
@@ -5750,7 +5829,10 @@ kept, openDoor); 3.0.67 - the eclipse, the pace and the back ease in
 `Tests.Levels.Dynamics`, heroStands in `Tests.Levels.Events`, jolt and
 pace in `Tests.Levels.Scenes`, `shiftX` in `Tests.Levels.Entities`, the
 eased flight in `Tests.Pads.Flights`, a grid deck in `Tests.Pads.Decks`;
-3.0.69 - the takeover in `Tests.Scenes.Director`. 54 in all. Not every test unit has its
+3.0.69 - the takeover in `Tests.Scenes.Director`. 54 in all. 3.0.70 - 9 in
+the new `Hud/Tests.Hud.Energy` (the reading of the gauge, the energy
+action, the moon stone's 5) and 12 in the new `Orbs/Tests.Orbs.Feed`; their
+tables are in `docs/testing/hud.md` and `docs/testing/orbs.md`. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -6242,7 +6324,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   the hum, the dust stilled, the dark wave, the rocks `s11-rock-block`,
   `-chunk`, `-shard`, `s11-step` woken and flown up with jolts),
   `s11-door` (allDead on the stone: openDoor and scene `s11-fall`, once a
-  life - the risen rocks drop back, 3.0.69). Respawns on 9, 10 and 11 at
+  life - the risen rocks drop back, 3.0.69; energy 5, 3.0.70). Respawns on 9, 10 and 11 at
   column 2, row 11.
 
 ### `sprites\*.mset` (48 sets)
@@ -6442,6 +6524,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks, its depth and the two layers about the hero; what an orb strikes and what that costs | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
+| The charge of the form: the eclipse gauge in the monitor's wing, the black orbs that bring it, what a death gives back | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + the `energy` action (Levels.Events.pas, Events.Director.pas) + Moon2D.dpr (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, stage 6) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
 | Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`) + `respawns` in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`) |
 | A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Moon2D.dpr `LocateParent` |
