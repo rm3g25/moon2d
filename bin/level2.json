@@ -4094,7 +4094,8 @@
       "then": [
         {"action": "openDoor"},
         {"action": "scene", "target": "s11-fall"},
-        {"action": "energy", "value": 5}
+        {"action": "energy", "value": 5},
+        {"action": "respawn", "x": 13, "y": 6}
       ]
     },
     {
@@ -4173,16 +4174,11 @@
       "cues": [
         {"at": 0, "do": "sound", "file": "stonefall.wav"},
         {"at": 0, "do": "intensity", "target": "s11-void", "value": 0, "ticks": 20},
-        {"at": 0, "do": "music", "value": 15, "ticks": 20},
         {"at": 0, "do": "shake", "value": 30, "ticks": 25},
-        {"at": 10, "do": "fly", "target": "s11-step", "x": 290, "y": 260, "ticks": 15, "ease": "out"},
-        {"at": 25, "do": "fly", "target": "s11-step", "x": 290, "y": 520, "ticks": 45, "ease": "in"},
-        {"at": 20, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 74, "ticks": 15, "ease": "out"},
-        {"at": 35, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 520, "ticks": 60, "ease": "in"},
-        {"at": 30, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 219, "ticks": 15, "ease": "out"},
-        {"at": 45, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 520, "ticks": 50, "ease": "in"},
-        {"at": 40, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 154, "ticks": 15, "ease": "out"},
-        {"at": 55, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 520, "ticks": 55, "ease": "in"},
+        {"at": 10, "do": "fly", "target": "s11-step", "x": 290, "y": 520, "ticks": 61, "ease": "fall"},
+        {"at": 20, "do": "fly", "target": "s11-rock-shard", "x": 470, "y": 520, "ticks": 79, "ease": "fall"},
+        {"at": 30, "do": "fly", "target": "s11-rock-chunk", "x": 170, "y": 520, "ticks": 65, "ease": "fall"},
+        {"at": 40, "do": "fly", "target": "s11-rock-block", "x": 115, "y": 520, "ticks": 72, "ease": "fall"},
         {"at": 60, "do": "pace", "target": "s11-dust", "value": 100, "ticks": 90},
         {"at": 100, "do": "jolt", "value": 25},
         {"at": 110, "do": "shake", "value": 0, "ticks": 60},

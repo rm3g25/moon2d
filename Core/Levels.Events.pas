@@ -50,7 +50,8 @@ type
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
-    eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor, eaEnergy);
+    eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor, eaEnergy,
+    eaRespawn);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -172,6 +173,9 @@ type
     // for the taking. JSON: nothing more.
     // eaEnergy: Amount percent of the form's charge come out of the hero
     // as orbs and fly into its gauge. JSON: "value" (1..100).
+    // eaRespawn: the hero's checkpoint moves to the cell CellX, CellY of
+    // the event's screen, counted as a respawn point's - columns and rows
+    // from 1. JSON: "x", "y".
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -193,6 +197,7 @@ type
     SkyFall: TSkyFall;
     Press: TPressOrders;
     Amount: Integer;
+    CellX, CellY: Integer;
   end;
 
   // One event in level JSON:
@@ -238,7 +243,7 @@ const
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene', 'goRight', 'openDoor', 'energy');
+    'scene', 'goRight', 'openDoor', 'energy', 'respawn');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -310,6 +315,7 @@ resourcestring
     'seconds or more, not %g';
   SEventNoCell = 'Level "%s": event "%s": heroStands takes "x" and "y" from 1';
   SEventBadEnergy = 'Level "%s": event "%s": energy takes a "value", 1..100';
+  SEventBadRespawn = 'Level "%s": event "%s": respawn takes "x" and "y" from 1';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -357,6 +363,15 @@ begin
   AAction.Amount := AObj.GetValue<Integer>('value', 0);
   if (AAction.Amount < 1) or (AAction.Amount > 100) then
     raise ELevelEventError.CreateFmt(SEventBadEnergy, [ALevelId, AEventId]);
+end;
+
+procedure ReadRespawn(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.CellX := AObj.GetValue<Integer>('x', 0);
+  AAction.CellY := AObj.GetValue<Integer>('y', 0);
+  if (AAction.CellX < 1) or (AAction.CellY < 1) then
+    raise ELevelEventError.CreateFmt(SEventBadRespawn, [ALevelId, AEventId]);
 end;
 
 procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
@@ -620,6 +635,8 @@ begin
       ReadPress(AObj, ALevelId, AEventId, Result);
     eaEnergy:
       ReadEnergy(AObj, ALevelId, AEventId, Result);
+    eaRespawn:
+      ReadRespawn(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

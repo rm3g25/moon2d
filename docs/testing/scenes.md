@@ -225,3 +225,19 @@ State: written, 2 tests. They join `TSceneDirectorTests` and its stage; the stag
 | `TestRewindOfALifeLeavesTheAftermathOfALevel` | a scene once a level moves the craft to x 200 (its aftermath too), one of a life to y 50; a death: x 200, y back to the file | a death after the fall leaves the dust of screen 11 running over the stone that waits again |
 
 Left to the eye: that the old scene's sounds play on and the music, the shade and the rumble carry over - the volume and the shade are not seen here.
+
+## Levels.Events: respawn, Levels.Dynamics: the ease fall (3.0.71)
+
+State: written, 7 tests. Needs no stage. `TestFallEaseIsFreeFall` joins `TCraftTests`; six join `TLevelEventsTests`: the parser over a root of the test's events, the grid through `LevelFromRows` - a room whose floor is its last row, and `RoomWithPit`, the same with a hole at column 5.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFallEaseIsFreeFall` | `EasedShare(meFall, ...)`: a quarter of the way at half the time, 0 at the start, 1 at the end, ahead of "in" at a quarter of the time; the word of the file is `fall` | the rocks of screen 11 fall by the cube again and linger at the start, or the word is lost |
+| `TestRespawnActionReadsItsCell` | `"x": 13, "y": 6`: `eaRespawn`, cell 13, 6 | the checkpoint moves to another cell |
+| `TestRespawnActionWithoutACellRaises` | no cell, no y, a column of 0: each raises | an action of no cell loads and puts the hero in a corner of the screen |
+| `TestRespawnActionOnAFloorLoads` | cell 3, 11 over the floor of the room loads | the check is so strict that no cell passes |
+| `TestRespawnActionOffTheGridFailsToLoad` | column 17 and row 13 each raise | a cell nobody can stand in loads |
+| `TestRespawnActionInAWallFailsToLoad` | a cell in the floor raises | the hero comes back inside a wall |
+| `TestRespawnActionOverAPitFailsToLoad` | a cell over a hole in the floor raises | the hero comes back to a fall - the very loop a respawn point is there to break |
+
+Left to the eye: the fall of the rocks of screen 11 itself - its pace, the music left alone - and that a hero who falls into the pit after taking the stone comes back on the stone's column (`MoveCheckpoint` of `Moon2D.dpr`).

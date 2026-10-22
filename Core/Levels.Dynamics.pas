@@ -123,8 +123,9 @@ type
 
   // How a motion gathers and loses speed: evenly, gathering it, losing
   // it, or both; back - losing it a little past the mark and settling onto
-  // it, a thing thrown up that hangs
-  TMotionEase = (meLinear, meIn, meOut, meInOut, meBack);
+  // it, a thing thrown up that hangs; fall - a thing let go, pulled at a
+  // steady rate from its first tick
+  TMotionEase = (meLinear, meIn, meOut, meInOut, meBack, meFall);
 
   // One axis of a motion: where it is, where it heads, over how many
   // ticks and how far into them
@@ -1114,7 +1115,7 @@ type
 const
   // The JSON vocabulary of an ease
   MotionEaseIds: array [TMotionEase] of string = ('linear', 'in', 'out',
-    'inOut', 'back');
+    'inOut', 'back', 'fall');
   EclipseLookIds: array [TEclipseLook] of string = ('void', 'wave');
 
 // Reads the "dynamics" array of a level; an absent section is an empty
@@ -1685,7 +1686,8 @@ end;
 // ---------------------------------------------------------------------------
 
 // The share of the way a motion has come at AShare of its ticks: the
-// cubes - a heavy thing gathers and loses speed slowly
+// cubes - a heavy thing gathers and loses speed slowly -, and for a fall
+// the square, the way of a constant pull
 function EasedShare(AEase: TMotionEase; AShare: Single): Single;
 begin
   case AEase of
@@ -1701,6 +1703,8 @@ begin
         Result := 1 + (BackOvershoot + 1) * Left * Left * Left +
           BackOvershoot * Left * Left;
       end;
+    meFall:
+      Result := AShare * AShare;
   else
     Result := AShare;
   end;

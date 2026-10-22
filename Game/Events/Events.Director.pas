@@ -88,6 +88,9 @@ type
   // AAmount percent of the form's charge come out of the hero for its
   // gauge
   TEnergyCue = reference to procedure(AAmount: Integer);
+  // The hero's checkpoint moves to the cell ACol, ARow of his screen,
+  // counted as a respawn point's: from 1
+  TRespawnCue = reference to procedure(ACol, ARow: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -113,6 +116,7 @@ type
     OpenDoor: TOpenDoorCue;
     HeroStands: THeroStandsCue;
     Energy: TEnergyCue;
+    Respawn: TRespawnCue;
   end;
 
   TEventDirector = class
@@ -306,6 +310,8 @@ begin
         FCues.OpenDoor();
       eaEnergy:
         FCues.Energy(Action.Amount);
+      eaRespawn:
+        FCues.Respawn(Action.CellX, Action.CellY);
     end;
 end;
 

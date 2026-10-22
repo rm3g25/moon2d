@@ -455,6 +455,7 @@ type
     procedure HandleScreenTransitions;
     procedure HandlePitFall;
     procedure ArriveOnScreen;
+    procedure MoveCheckpoint(ACol, ARow: Integer);
     procedure PinRespawnPoint;
     function BulletStruckWall(const ABullet: TBullet): Boolean;
     function HeroBulletTarget(const ABullet: TBullet): TMonster;
@@ -884,6 +885,7 @@ begin
     end;
   Cues.HeroStands := HeroStandsIn;
   Cues.Energy := FeedEnergy;
+  Cues.Respawn := MoveCheckpoint;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -1153,6 +1155,15 @@ begin
   FEnergyGauge := THudEnergy.Create(FRenderer);
 end;
 
+// The checkpoint on the cell ACol, ARow, columns and rows from 1 as a
+// placement's: the hero's corner and feet line, as THero.PlaceAtCell
+// puts the start. The hero himself is not moved.
+procedure TMoonGame.MoveCheckpoint(ACol, ARow: Integer);
+begin
+  FCheckpointX := (ACol - 1) * TileSize;
+  FCheckpointY := ARow * TileSize;
+end;
+
 // The level's respawn point of the hero's screen becomes the
 // checkpoint: it has the last word, over the entry point of 2008 and
 // over what a heroX / heroY trigger wrote. A screen without one keeps
@@ -1163,10 +1174,7 @@ var
 begin
   if not FLevel.TryFindRespawn(FHero.Screen, Point) then
     Exit;
-  // A cell to the hero's corner and feet line, as THero.PlaceAtCell
-  // puts the start
-  FCheckpointX := (Point.X - 1) * TileSize;
-  FCheckpointY := Point.Y * TileSize;
+  MoveCheckpoint(Point.X, Point.Y);
 end;
 
 // The hero has just landed on a new screen: pin the checkpoint - the

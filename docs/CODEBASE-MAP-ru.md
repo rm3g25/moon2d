@@ -23,7 +23,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 `v3.0.62`, затем по пути дальше после арены 2 на `v3.0.63`, по Дуплету на
 `v3.0.64`, по пыли туннеля на `v3.0.65`, по запертым дверям на
 `v3.0.66`, по лунному камню на `v3.0.67`, по падению камней на
-`v3.0.69` и по заряду камня на `v3.0.70`, заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
+`v3.0.69`, по заряду камня на `v3.0.70` и по свободному падению камней с
+чекпойнтом у камня на `v3.0.71`, заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -803,7 +804,10 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   пути, без группы, без падения, не полки и не на карусели: платформы,
   которая ездит, перестраивается, падает, уезжает в стену или летит по
   кругу, там
-  может не оказаться). Проход через дверь никого к точке не переносит;
+  может не оказаться). Проверки клетки - `CheckRespawnCell` (3.0.71), и
+  `CheckEventRespawns` держит им клетку каждого действия respawn события
+  (`Levels.Events`) на экране события.
+  Проход через дверь никого к точке не переносит;
   названное отступление от 2008, где чекпойнтом была точка входа и то,
   что записал триггер heroX / heroY.
 - Сцены (3.0.62): **`Scenes`** - сцены уровня в порядке файла
@@ -1029,11 +1033,13 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   Интенсивность любого объекта, солнце небесного глобуса; тень, дрожь и
   музыка сцены (`Scenes.Director`).
 - **`TMotionEase`** (3.0.62) = (`meLinear`, `meIn`, `meOut`, `meInOut`,
-  `meBack` - 3.0.67) - как движение набирает и теряет ход
-  (**`EasedShare(ease, share)`**, публичная с 3.0.67: кубический вход,
-  кубический выход, smoothstep; back чуть проскакивает отметку и
-  оседает на неё, `BackOvershoot` 1.0 - подброшенная вещь, которая
-  зависает); `MotionEaseIds` - его слова в JSON.
+  `meBack` - 3.0.67, `meFall` - 3.0.71) - как движение набирает и
+  теряет ход (**`EasedShare(ease, share)`**, публичная с 3.0.67:
+  кубический вход, кубический выход, smoothstep; back чуть проскакивает
+  отметку и оседает на неё, `BackOvershoot` 1.0 - подброшенная вещь,
+  которая зависает; fall - квадрат, отпущенная вещь под ровным
+  притяжением, так что падение на d юнитов при притяжении g длится
+  `sqrt(2 d / g)` тиков); `MotionEaseIds` - его слова в JSON.
   **`TAxisMotion`** (запись) - одна ось движения: `Current`, `From`,
   `Target`, `Ticks`, `Elapsed`, `Ease`; `Settle(value)`, `HeadFor(target,
   ticks, ease)` (0 тиков - сразу там), `Tick`. Две оси корабля и поворот
@@ -1428,7 +1434,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
   `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59), `eaScene`
   (3.0.62), `eaGoRight` (3.0.63), `eaOpenDoor` (3.0.66), `eaEnergy`
-  (3.0.70)). **`TEventAction`**
+  (3.0.70), `eaRespawn` (3.0.71)). **`TEventAction`**
   (запись) - вид и то, что вид читает:
   - сообщения: локализованный `Text`; у подсказки ещё `Header` (кто
     говорит, локализован как текст; пусто - сам канал, `STerminalHeader`)
@@ -1498,7 +1504,12 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     allDead по его тегу ждёт, пока его возьмут;
   - energy (3.0.70): `Amount` - `"value"`, 1..100 (иначе `SEventBadEnergy`,
     `ReadEnergy`): столько процентов заряда формы выходят из героя орбами
-    и летят в его шкалу (сигнал `Energy`).
+    и летят в его шкалу (сигнал `Energy`);
+  - respawn (3.0.71): `CellX`, `CellY` - `"x"`, `"y"` с 1, как у точки
+    возрождения (иначе `SEventBadRespawn`, `ReadRespawn`; на загрузке -
+    правила точки возрождения, `Levels.Defs`): чекпойнт героя переезжает
+    на эту клетку экрана события (сигнал `Respawn`); сам герой не
+    переносится.
   spawn, skyFall и press требуют события, которое ждёт акта
   (`SEventSpawnNoAct`, `SEventActOnly`): то, что они приносят, принадлежит
   только этому акту.
@@ -4733,7 +4744,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 осталось победному треку испытания, 0 - кончился, меньше 0 - его нет),
 `GoRight` (`TGoRightCue`), `OpenDoor` (`TOpenDoorCue`, 3.0.66),
 `HeroStands` (`THeroStandsCue`, 3.0.67 - клетка с нуля; `HeroStandsIn`
-игры), `Energy` (`TEnergyCue`, 3.0.70 - `FeedEnergy` игры). `TChangeMusic` берёт ещё и секунды нарастания (3.0.63). Директор тянет состояние испытания через них, а не
+игры), `Energy` (`TEnergyCue`, 3.0.70 - `FeedEnergy` игры), `Respawn`
+(`TRespawnCue`, 3.0.71 - клетка с 1; `MoveCheckpoint` игры). `TChangeMusic` берёт ещё и секунды нарастания (3.0.63). Директор тянет состояние испытания через них, а не
 толкает. Поле монстров рождается заново на каждом рестарте, поэтому
 приходит с каждым тиком, а не хранится: у него спрашивают условия, ему
 говорят тактику.
@@ -5210,9 +5222,12 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     монстра-диска - две последние позы диска с осью в середине спрайта;
     тег на тех и других `Levels.Defs` уже отверг).
   - Мир: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
-    `PinRespawnPoint` (точка возрождения уровня для экрана героя
-    становится чекпойнтом - клетка переводится в угол героя и линию ног
-    так, как это делает `THero.PlaceAtCell`; зовётся после
+    `MoveCheckpoint(col, row)` (3.0.71: клетка с 1 становится
+    чекпойнтом - переводится в угол героя и линию ног так, как это
+    делает `THero.PlaceAtCell`; сам герой не переносится; сигнал
+    `Respawn` директора), `PinRespawnPoint` (точка возрождения уровня
+    для экрана героя становится чекпойнтом через `MoveCheckpoint`;
+    зовётся после
     `FireScreenTriggers` в `ArriveOnScreen`, `StartPlaying` и
     `RestartLevel`, так что за точкой последнее слово - и над точкой
     входа, и над триггерами; сам герой не переносится),
@@ -5806,7 +5821,9 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 3.0.69 - перехват в `Tests.Scenes.Director`. Всего 54. 3.0.70 - 9 в новом
 `Hud/Tests.Hud.Energy` (чтение шкалы, действие energy, 5 от лунного камня)
 и 12 в новом `Orbs/Tests.Orbs.Feed`; их таблицы - в `docs/testing/hud.md` и
-`docs/testing/orbs.md`.
+`docs/testing/orbs.md`. 3.0.71 - падение (ease fall) в
+`Tests.Levels.Dynamics` и 6 на действие respawn в `Tests.Levels.Events`;
+их таблица - в `docs/testing/scenes.md`.
 Не у каждого тестового юнита уже есть запись
 ниже: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
@@ -5936,9 +5953,10 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
     after только вверх, aftermath, spawn, метки, оси move, ожидание,
     каждое слово и поле, которое не грузится; **`TSceneLoadTests`** (7):
     проверки загрузки через `LevelFromRows` и кордон из `level1.json`.
-  - **`Levels/Tests.Levels.Dynamics.pas`** - **`TCraftTests`** (10):
+  - **`Levels/Tests.Levels.Dynamics.pas`** - **`TCraftTests`** (12):
     корабль, прочитанный `ParseDynamic` и тикаемый руками, виден только
-    по `CornerAt` - его место, оси, плавности, угол между тиками,
+    по `CornerAt` - его место, оси, плавности (back и, 3.0.71, fall
+    через `EasedShare`), угол между тиками,
     `Rewind`, `HasFollower`, части, которые не грузятся; облики луча.
   - **`Pads/Tests.Pads.Flights.pas`** - **`TPadFlightsTests`** (4):
     прямой перелёт сцены; тесты плана только спроектированы.
@@ -6286,8 +6304,10 @@ press - см. `Levels.Events`; подсказка медлаба, `labHint`, - �
   за уровень - музыка, гул, остановленная пыль, тёмная волна, камни
   `s11-rock-block`, `-chunk`, `-shard`, `s11-step` просыпаются и
   взлетают с толчками), `s11-door` (allDead по камню: openDoor и сцена
-  `s11-fall`, раз за жизнь - поднятые камни падают обратно, 3.0.69;
-  energy 5, 3.0.70).
+  `s11-fall`, раз за жизнь - поднятые камни падают обратно, 3.0.69, с
+  3.0.71 свободным падением с притяжением героя и без второго
+  приглушения музыки; energy 5, 3.0.70; respawn 13, 6 - чекпойнт у
+  камня, 3.0.71).
   Точки возрождения на 9, 10 и 11 - столбец 2, строка 11.
 
 ### `sprites\*.mset` (48 наборов)
@@ -6490,7 +6510,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Панели кардиомонитора / заряда бонуса: вид, цвета, тайминги | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas - кисть и палитра) |
 | Заряд формы: шкала-затмение в крыле монитора, чёрные орбы, которые его приносят, что возвращает смерть | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + действие `energy` (Levels.Events.pas, Events.Director.pas) + Moon2D.dpr (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, этап 6) |
 | Ряды здоровья над героем / монстрами; трети прицела | Hud.Marks.pas (+Render.Brush.pas - ячейки) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
-| Переходы между экранами / чекпойнты; куда яма или смерть возвращает героя на экране | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`) + `respawns` в levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`) |
+| Переходы между экранами / чекпойнты; куда яма или смерть возвращает героя на экране | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` и действие `respawn` в levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
 | Струя под платформой: её цвет, длина и сила, разгорание вокруг перелёта, кашляющий двигатель | дымовая деталь обвеса в levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Moon2D.dpr `LocateParent` |
 | Экраны меню / вёрстка / переключение языка / кадры трейлера | Menu.pas + Localization.pas |
 | Небо меню: звёзды, вращающаяся луна, наезд в подменю | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |

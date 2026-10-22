@@ -51,6 +51,8 @@ type
     [Test]
     procedure TestBackEaseRunsPastItsMarkAndSettles;
     [Test]
+    procedure TestFallEaseIsFreeFall;
+    [Test]
     procedure TestCornerBetweenTicksLiesBetweenThem;
     [Test]
     procedure TestRewindPutsTheCraftBackAtOnce;
@@ -293,6 +295,20 @@ begin
     'It settles onto its mark when its ticks are out');
   TickCraft(10);
   Assert.IsTrue(IsNear(FCraft.CornerAt(1).X, FileX + Way), 'and stays');
+end;
+
+// A thing let go is pulled at a steady rate from its first tick: the way
+// grows as the square of the time, and the thing sets off at once, where
+// the cube of "in" lingers
+procedure TCraftTests.TestFallEaseIsFreeFall;
+begin
+  Assert.IsTrue(IsNear(EasedShare(meFall, 0.5), 0.25),
+    'Half the time, a quarter of the way');
+  Assert.IsTrue(IsNear(EasedShare(meFall, 1), 1), 'Out of time, there');
+  Assert.IsTrue(IsNear(EasedShare(meFall, 0), 0), 'At the start, not off it');
+  Assert.IsTrue(EasedShare(meFall, 0.25) > EasedShare(meIn, 0.25),
+    'Sooner under way than the cube');
+  Assert.AreEqual('fall', MotionEaseIds[meFall], 'The word of the file');
 end;
 
 procedure TCraftTests.TestCornerBetweenTicksLiesBetweenThem;

@@ -21,7 +21,8 @@ suit at `v3.0.61` and the scenes - the cordon over level 1's screen 9 - at
 `v3.0.62`, then for the way on after arena 2 at `v3.0.63`, the Duplet at
 `v3.0.64`, the tunnel dust at `v3.0.65`, the shut doors at `v3.0.66`,
 the moon stone at `v3.0.67`, the fall of the rocks at `v3.0.69` and the
-charge of the stone at `v3.0.70`, with
+charge of the stone at `v3.0.70` and the free fall of the rocks with
+the checkpoint on the stone at `v3.0.71`, with
 the lightning of `v3.0.34` caught up (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -783,7 +784,9 @@ Level data model + JSON parser. No game logic.
   or under the cell's middle the deck of a pad that stands still, one with
   no path, no group, no plunge, no shelf and no carousel: a pad that
   travels, is rebuilt, plunges, slides in or flies round may not be
-  there).
+  there). The checks of the cell are `CheckRespawnCell` (3.0.71), and
+  `CheckEventRespawns` holds the cell of every respawn action of an event
+  (`Levels.Events`) to them, on the event's screen.
   Coming through a door moves nobody to the point; a named deviation from
   2008, whose checkpoint was the entry point and what a heroX / heroY
   trigger wrote.
@@ -1010,10 +1013,12 @@ in `CreateDynamic`.
   `Tick`. The intensity of every object, the sun of a sky globe; the
   shade, the rumble and the music of a scene (`Scenes.Director`).
 - **`TMotionEase`** (3.0.62) = (`meLinear`, `meIn`, `meOut`, `meInOut`,
-  `meBack` - 3.0.67) - how a motion gathers and loses speed
-  (**`EasedShare(ease, share)`**, public since 3.0.67: cubic in, cubic
-  out, smoothstep; back runs a little past the mark and settles onto it,
-  `BackOvershoot` 1.0 - a thing thrown up that hangs); `MotionEaseIds` -
+  `meBack` - 3.0.67, `meFall` - 3.0.71) - how a motion gathers and loses
+  speed (**`EasedShare(ease, share)`**, public since 3.0.67: cubic in,
+  cubic out, smoothstep; back runs a little past the mark and settles
+  onto it, `BackOvershoot` 1.0 - a thing thrown up that hangs; fall is
+  the square, a thing let go under a steady pull, so the ticks of a fall
+  of d units at a pull g are `sqrt(2 d / g)`); `MotionEaseIds` -
   its JSON words. **`TAxisMotion`**
   (record) - one axis of a motion: `Current`, `From`, `Target`, `Ticks`,
   `Elapsed`, `Ease`; `Settle(value)`, `HeadFor(target, ticks, ease)` (0
@@ -1413,7 +1418,7 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   (3.0.57), `eaBreakCarousel`, `eaStrays`, `eaSkyFall` (3.0.58),
   `eaWaveOnto`, `eaStraysLeave`, `eaPress` (3.0.59), `eaScene`
   (3.0.62), `eaGoRight` (3.0.63), `eaOpenDoor` (3.0.66), `eaEnergy`
-  (3.0.70)). **`TEventAction`**
+  (3.0.70), `eaRespawn` (3.0.71)). **`TEventAction`**
   (record) - kind and what the kind reads:
   - the messages: localized `Text`; a hint also `Header` (who speaks,
     localized as the text; empty - the channel itself, `STerminalHeader`)
@@ -1483,7 +1488,12 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     for the taking;
   - energy (3.0.70): `Amount` - `"value"`, 1..100 (`SEventBadEnergy`
     otherwise, `ReadEnergy`): that many percent of the form's charge come
-    out of the hero as orbs and fly into its gauge (the cue `Energy`).
+    out of the hero as orbs and fly into its gauge (the cue `Energy`);
+  - respawn (3.0.71): `CellX`, `CellY` - `"x"`, `"y"` from 1, as a
+    respawn point's (`SEventBadRespawn` otherwise, `ReadRespawn`; the
+    rules of a respawn point at load, `Levels.Defs`): the hero's
+    checkpoint moves to that cell of the event's screen (the cue
+    `Respawn`); the hero himself is not moved.
   spawn, skyFall and press need an event that waits for an act
   (`SEventSpawnNoAct`, `SEventActOnly`): what they bring belongs to that
   act alone.
@@ -4739,7 +4749,9 @@ act the event waits for, 0 for one that waits for none; `StartScene`
 0 once over, below 0 while there is none), `GoRight` (`TGoRightCue`),
 `OpenDoor` (`TOpenDoorCue`, 3.0.66), `HeroStands` (`THeroStandsCue`,
 3.0.67 - the cell from 0; the game's `HeroStandsIn`), `Energy`
-(`TEnergyCue`, 3.0.70 - the game's `FeedEnergy`). `TChangeMusic`
+(`TEnergyCue`, 3.0.70 - the game's `FeedEnergy`), `Respawn`
+(`TRespawnCue`, 3.0.71 - the cell from 1; the game's `MoveCheckpoint`).
+`TChangeMusic`
 takes the fade seconds too (3.0.63). The director
 pulls the trial's state through these, it does not push. The monster
 field is reborn on every restart, so it arrives with every tick instead
@@ -5224,9 +5236,12 @@ Composition root plus the whole game-flow state machine (`TMoonGame`).
     disc's last two poses with the axis in the middle of the sprite;
     `Levels.Defs` has refused a tag both carry).
   - World: `HandleScreenTransitions`, `ArriveOnScreen`, `HandlePitFall`,
-    `PinRespawnPoint` (the level's respawn point of the hero's screen
-    becomes the checkpoint - the cell taken to the hero's corner and feet
-    line as `THero.PlaceAtCell` does; called after `FireScreenTriggers` in
+    `MoveCheckpoint(col, row)` (3.0.71: a cell from 1 becomes the
+    checkpoint - taken to the hero's corner and feet line as
+    `THero.PlaceAtCell` does; the hero himself is not moved; the cue
+    `Respawn` of the director), `PinRespawnPoint` (the level's respawn
+    point of the hero's screen becomes the checkpoint through
+    `MoveCheckpoint`; called after `FireScreenTriggers` in
     `ArriveOnScreen`, `StartPlaying` and `RestartLevel`, so the point has
     the last word over the entry point and over the triggers; the hero
     himself is not moved),
@@ -5832,7 +5847,9 @@ eased flight in `Tests.Pads.Flights`, a grid deck in `Tests.Pads.Decks`;
 3.0.69 - the takeover in `Tests.Scenes.Director`. 54 in all. 3.0.70 - 9 in
 the new `Hud/Tests.Hud.Energy` (the reading of the gauge, the energy
 action, the moon stone's 5) and 12 in the new `Orbs/Tests.Orbs.Feed`; their
-tables are in `docs/testing/hud.md` and `docs/testing/orbs.md`. Not every test unit has its
+tables are in `docs/testing/hud.md` and `docs/testing/orbs.md`. 3.0.71 -
+the fall ease in `Tests.Levels.Dynamics` and 6 for the respawn action in
+`Tests.Levels.Events`; their table is in `docs/testing/scenes.md`. Not every test unit has its
 entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Monsters.Hull`, `Tests.Monsters.Mount`, `Tests.Levels.Entities`,
 `Tests.Levels.Pads`, `Tests.Levels.Carousels`, `Tests.Effects.Lightning`,
@@ -5968,9 +5985,10 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
     marks, the axes of a move, the wait, every word and member that does
     not load; **`TSceneLoadTests`** (7): the checks of the load through
     `LevelFromRows` and the cordon of `level1.json`.
-  - **`Levels/Tests.Levels.Dynamics.pas`** - **`TCraftTests`** (10): a
+  - **`Levels/Tests.Levels.Dynamics.pas`** - **`TCraftTests`** (12): a
     craft read by `ParseDynamic` and ticked by hand, seen by `CornerAt`
-    alone - its place, its axes, the eases, the corner between the
+    alone - its place, its axes, the eases (the back and, 3.0.71, the
+    fall by `EasedShare`), the corner between the
     ticks, `Rewind`, `HasFollower`, the parts that do not load; the
     looks of a beam.
   - **`Pads/Tests.Pads.Flights.pas`** - **`TPadFlightsTests`** (4): the
@@ -6324,8 +6342,10 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   the hum, the dust stilled, the dark wave, the rocks `s11-rock-block`,
   `-chunk`, `-shard`, `s11-step` woken and flown up with jolts),
   `s11-door` (allDead on the stone: openDoor and scene `s11-fall`, once a
-  life - the risen rocks drop back, 3.0.69; energy 5, 3.0.70). Respawns on 9, 10 and 11 at
-  column 2, row 11.
+  life - the risen rocks drop back, 3.0.69, in a free fall at the hero's
+  pull since 3.0.71, the music no longer ducked; energy 5, 3.0.70; respawn
+  13, 6 - the checkpoint by the stone, 3.0.71). Respawns on 9, 10 and 11
+  at column 2, row 11.
 
 ### `sprites\*.mset` (48 sets)
 Since 3.0.62: `duplet` (3.0.64 - `lying`, the pickup on its pedestal, and
@@ -6526,7 +6546,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
 | The charge of the form: the eclipse gauge in the monitor's wing, the black orbs that bring it, what a death gives back | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + the `energy` action (Levels.Events.pas, Events.Director.pas) + Moon2D.dpr (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, stage 6) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
-| Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`) + `respawns` in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`) |
+| Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` and the `respawn` action in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
 | A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Moon2D.dpr `LocateParent` |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |

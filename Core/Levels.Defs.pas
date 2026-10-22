@@ -215,6 +215,8 @@ type
     procedure ParseObjects(const AArr: TJSONArray);
     procedure ParseRespawns(const AArr: TJSONArray);
     procedure CheckRespawns;
+    procedure CheckRespawnCell(const APoint: TRespawnPoint);
+    procedure CheckEventRespawns(const AEvent: TLevelEvent);
     procedure ParseShutDoors(const AArr: TJSONArray);
     procedure CheckShutDoors;
     function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
@@ -822,6 +824,7 @@ begin
       raise ELevelError.CreateFmt(SLevelEventCellOff,
         [FId, Event.Id, Event.CellX, Event.CellY]);
     CheckEventTargets(Event);
+    CheckEventRespawns(Event);
   end;
 end;
 
@@ -1155,6 +1158,20 @@ begin
   Result := False;
 end;
 
+// A cell off the grid, in a wall or over a pit
+procedure TLevel.CheckRespawnCell(const APoint: TRespawnPoint);
+begin
+  var OnGrid := InRange(APoint.X, 1, FGridWidth) and
+    InRange(APoint.Y, 1, FGridHeight);
+  if not OnGrid then
+    raise ELevelError.CreateFmt(SLevelRespawnOffGrid,
+      [FId, APoint.Screen, APoint.X, APoint.Y]);
+  if SolidAt(APoint.Screen, APoint.X - 1, APoint.Y - 1) then
+    raise ELevelError.CreateFmt(SLevelRespawnInWall, [FId, APoint.Screen]);
+  if not RespawnHasFloor(APoint) then
+    raise ELevelError.CreateFmt(SLevelRespawnOverPit, [FId, APoint.Screen]);
+end;
+
 // A point off the screen list or off the grid, two on one screen, one
 // in a wall, one over a pit - the very loop a respawn point is there to
 // break: typos all, they die at load
@@ -1167,15 +1184,23 @@ begin
         [FId, Point.Screen, FScreenCount]);
     if RespawnsOn(FRespawns, Point.Screen) > 1 then
       raise ELevelError.CreateFmt(SLevelRespawnTwice, [FId, Point.Screen]);
-    var OnGrid := InRange(Point.X, 1, FGridWidth) and
-      InRange(Point.Y, 1, FGridHeight);
-    if not OnGrid then
-      raise ELevelError.CreateFmt(SLevelRespawnOffGrid,
-        [FId, Point.Screen, Point.X, Point.Y]);
-    if SolidAt(Point.Screen, Point.X - 1, Point.Y - 1) then
-      raise ELevelError.CreateFmt(SLevelRespawnInWall, [FId, Point.Screen]);
-    if not RespawnHasFloor(Point) then
-      raise ELevelError.CreateFmt(SLevelRespawnOverPit, [FId, Point.Screen]);
+    CheckRespawnCell(Point);
+  end;
+end;
+
+// A respawn action puts the checkpoint where a respawn point would stand:
+// the cell it names is held to the same rules
+procedure TLevel.CheckEventRespawns(const AEvent: TLevelEvent);
+begin
+  for var Action in AEvent.Actions do
+  begin
+    if Action.Kind <> eaRespawn then
+      Continue;
+    var Point := Default(TRespawnPoint);
+    Point.Screen := AEvent.Screen;
+    Point.X := Action.CellX;
+    Point.Y := Action.CellY;
+    CheckRespawnCell(Point);
   end;
 end;
 
