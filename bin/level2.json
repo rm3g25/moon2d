@@ -4093,7 +4093,8 @@
       "tag": "s11-stone",
       "then": [
         {"action": "openDoor"},
-        {"action": "scene", "target": "s11-fall"}
+        {"action": "scene", "target": "s11-fall"},
+        {"action": "energy", "value": 5}
       ]
     },
     {

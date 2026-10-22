@@ -15,6 +15,10 @@ interface
 uses
   Sdl2.Core;
 
+const
+  // Units on a side of a pixel of the 3x5 digits
+  DigitPixel = 3;
+
 type
   TRgb = record
     R, G, B: Byte;
@@ -31,7 +35,10 @@ type
   private
     FRenderer: PSdlRenderer;
     procedure DrawDigit(ADigit: Integer; AX, AY: Single; AColor: TRgb;
-      AAlpha: Single);
+      AAlpha, APixel: Single);
+    // A 3x5 glyph as the digits are kept: rows of '0' and '1'
+    procedure DrawGlyph(const AGlyph: string; AX, AY: Single; AColor: TRgb;
+      AAlpha, APixel: Single);
   public
     constructor Create(ARenderer: PSdlRenderer);
     // Alpha blending on, and off again: the rest of the game draws
@@ -42,7 +49,10 @@ type
     procedure Glow(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
     procedure Frame(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
     procedure DrawNumber(AValue: Integer; AX, AY: Single; AColor: TRgb;
-      AAlpha: Single = 1);
+      AAlpha: Single = 1; APixel: Single = DigitPixel);
+    // A percent sign in the manner of the digits, as wide as one of them
+    procedure DrawPercent(AX, AY: Single; AColor: TRgb; AAlpha: Single = 1;
+      APixel: Single = DigitPixel);
     // The cells of a health row: full with a sheen along the top, empty
     // as a dim outline, bonus in its own color with a shaded foot
     procedure FullCell(AX, AY, AW, AH: Single; AColor: TRgb; AAlpha: Single);
@@ -51,7 +61,7 @@ type
   end;
 
 function Mix(AFrom, ATo: TRgb; AAmount: Single): TRgb;
-function NumberWidth(AValue: Integer): Integer;
+function NumberWidth(AValue: Integer; APixel: Single = DigitPixel): Single;
 // The hero's color by health: red at the last point, amber at two, calm
 // above - the crosshair's language
 function HealthColor(AHealth: Integer): TRgb;
@@ -78,7 +88,6 @@ const
   CellW = 7;
   CellH = 4;
   CellGap = 1;
-  DigitPixel = 3;
 
 implementation
 
@@ -88,13 +97,15 @@ uses
 const
   DigitCols = 3;
   DigitRows = 5;
-  DigitAdvance = (DigitCols + 1) * DigitPixel;
+  // In pixels of a digit: the digit and the air after it
+  DigitAdvance = DigitCols + 1;
   // 3x5 pixel digits, row by row
   DigitGlyphs: array [0..9] of string = (
     '111101101101111', '010110010010111', '111001111100111',
     '111001111001111', '101101111001001', '111100111001111',
     '111100111101111', '111001001001001', '111101111101111',
     '111101111001111');
+  PercentGlyph = '101001010100101';
 
 function Mix(AFrom, ATo: TRgb; AAmount: Single): TRgb;
 begin
@@ -111,9 +122,9 @@ begin
   Result := (Seed and $FFFF) / $10000;
 end;
 
-function NumberWidth(AValue: Integer): Integer;
+function NumberWidth(AValue: Integer; APixel: Single): Single;
 begin
-  Result := Length(IntToStr(AValue)) * DigitAdvance - DigitPixel;
+  Result := (Length(IntToStr(AValue)) * DigitAdvance - 1) * APixel;
 end;
 
 function HealthColor(AHealth: Integer): TRgb;
@@ -170,24 +181,35 @@ begin
 end;
 
 procedure THudBrush.DrawNumber(AValue: Integer; AX, AY: Single; AColor: TRgb;
-  AAlpha: Single);
+  AAlpha, APixel: Single);
 begin
   var Text := IntToStr(AValue);
   for var i := 1 to Length(Text) do
-    DrawDigit(Ord(Text[i]) - Ord('0'), AX + (i - 1) * DigitAdvance, AY,
-      AColor, AAlpha);
+    DrawDigit(Ord(Text[i]) - Ord('0'), AX + (i - 1) * DigitAdvance * APixel,
+      AY, AColor, AAlpha, APixel);
 end;
 
 procedure THudBrush.DrawDigit(ADigit: Integer; AX, AY: Single; AColor: TRgb;
-  AAlpha: Single);
+  AAlpha, APixel: Single);
 begin
-  var Glyph := DigitGlyphs[ADigit];
+  DrawGlyph(DigitGlyphs[ADigit], AX, AY, AColor, AAlpha, APixel);
+end;
+
+procedure THudBrush.DrawPercent(AX, AY: Single; AColor: TRgb;
+  AAlpha, APixel: Single);
+begin
+  DrawGlyph(PercentGlyph, AX, AY, AColor, AAlpha, APixel);
+end;
+
+procedure THudBrush.DrawGlyph(const AGlyph: string; AX, AY: Single;
+  AColor: TRgb; AAlpha, APixel: Single);
+begin
   for var i := 0 to DigitCols * DigitRows - 1 do
   begin
-    if Glyph[i + 1] = '0' then
+    if AGlyph[i + 1] = '0' then
       Continue;
-    Fill(AX + (i mod DigitCols) * DigitPixel, AY + (i div DigitCols) * DigitPixel,
-      DigitPixel, DigitPixel, AColor, AAlpha);
+    Fill(AX + (i mod DigitCols) * APixel, AY + (i div DigitCols) * APixel,
+      APixel, APixel, AColor, AAlpha);
   end;
 end;
 

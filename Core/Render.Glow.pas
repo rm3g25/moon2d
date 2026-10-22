@@ -10,9 +10,10 @@
 
   The shapes here are analytic (a Gaussian point, a spiked flare, the
   long thin cross of a starburst, the streak of a spark, the band a
-  bolt of lightning is drawn on); a shape computed elsewhere - a
-  blurred logo, say - comes in as a surface through CreateGlowTexture
-  and leaves with the same blend and filter settings.
+  bolt of lightning is drawn on, a disc with a crisp edge); a shape
+  computed elsewhere - a blurred logo, say - comes in as a surface
+  through CreateGlowTexture and leaves with the same blend and filter
+  settings.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -30,11 +31,17 @@ type
   // gsStreak lies along X: the hot end at the right edge, the tail
   // thinning out to the left. gsBeam is a Gaussian across Y and flat
   // along X: a strip of triangles laid along a path shows its middle
-  // bright and its edges clear.
-  TGlowShape = (gsPoint, gsFlare, gsStarburst, gsStreak, gsBeam);
+  // bright and its edges clear. gsDisc fills the square's circle and
+  // fades out over its last texels only: a body, not a light - drawn
+  // black over the world, it is a hole.
+  TGlowShape = (gsPoint, gsFlare, gsStarburst, gsStreak, gsBeam, gsDisc);
 
 // A square texture of ASide pixels with the shape in its alpha
 function CreateGlowShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
+  ASide: Integer): PSdlTexture;
+// The same shape blended, not added: drawn in black, it darkens what is
+// beneath it
+function CreateShadeShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
   ASide: Integer): PSdlTexture;
 // A texture from a surface the caller filled (ABGR8888, white pixels,
 // the shape in alpha): additive, linear-filtered. The surface stays
@@ -76,6 +83,8 @@ const
   StreakSigma = 0.45;
   // Small enough that the band is clear at its edges
   BeamSigma = 0.4;
+  // Two texels of a 64-pixel disc: smooth at any scale, never soft
+  DiscEdge = 0.06;
   // Typed: Power has three overloads
   StreakTailPower: Single = 1.5;
   // The hot end rounds off over this share of the length, so a streak
@@ -129,6 +138,13 @@ begin
   Result := Exp(-Sqr(ADY / BeamSigma));
 end;
 
+function DiscAlpha(ADX, ADY: Single): Single;
+begin
+  var Radius: Single := Sqrt(ADX * ADX + ADY * ADY);
+  var Inside: Single := (1 - Radius) / DiscEdge;
+  Result := EnsureRange(Inside, 0, 1);
+end;
+
 function FlareAlpha(ADX, ADY: Single): Single;
 begin
   var Radius: Single := Sqrt(ADX * ADX + ADY * ADY);
@@ -152,6 +168,8 @@ begin
       Result := StreakAlpha(ADX, ADY);
     gsBeam:
       Result := BeamAlpha(ADY);
+    gsDisc:
+      Result := DiscAlpha(ADX, ADY);
   else
     Result := FlareAlpha(ADX, ADY);
   end;
@@ -194,6 +212,13 @@ begin
   finally
     SDL_FreeSurface(Surface);
   end;
+end;
+
+function CreateShadeShape(ARenderer: PSdlRenderer; AShape: TGlowShape;
+  ASide: Integer): PSdlTexture;
+begin
+  Result := CreateGlowShape(ARenderer, AShape, ASide);
+  SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
 end;
 
 function CreateGlowTexture(ARenderer: PSdlRenderer;

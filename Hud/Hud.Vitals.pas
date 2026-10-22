@@ -14,6 +14,10 @@
   tick and reacts to the difference itself, so the damage and cure
   sites of the game carry no hooks.
 
+  The panel may carry a wing on its right, inside its frame - the slot
+  of the form's charge (Hud.Energy). The wing's own picture is not the
+  monitor's.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hud.Vitals;
@@ -49,6 +53,7 @@ type
     FLostTicks: Integer;
     FGrownCell: Integer;
     FGrownTicks: Integer;
+    FWing: Single;
     function BaseColor: TRgb;
     function BeatsPerMinute: Integer;
     function BeatPeriod: Integer;
@@ -75,6 +80,8 @@ type
     // or a rise against the last call is what the monitor animates.
     procedure Tick(AHealth: Integer; AInvulnerable: Boolean);
     procedure Draw;
+    // Units the panel reaches past its own width; 0 - no wing
+    property Wing: Single read FWing write FWing;
   end;
 
 implementation
@@ -231,17 +238,20 @@ end;
 procedure THudVitals.DrawPanel;
 begin
   var Tint := BaseColor;
-  FBrush.Fill(PanelX, PanelY, PanelW, PanelH, PanelColor, 0.72);
+  var FullWidth := PanelW + FWing;
+  FBrush.Fill(PanelX, PanelY, FullWidth, PanelH, PanelColor, 0.72);
   for var i := 1 to (TraceSamples - 1) div GridStep do
     FBrush.Fill(TraceX + i * GridStep, TraceTop, 1, TraceHeight, Tint, 0.07);
   FBrush.Fill(TraceX + 1, CellY - 2, TraceSamples - 2, 1, Tint, 0.12);
   FBrush.Fill(PanelX + TraceSamples + 2, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
+  if FWing > 0 then
+    FBrush.Fill(PanelX + PanelW - 1, PanelY + 3, 1, PanelH - 6, Tint, 0.2);
 
   if FHurtTicks > 0 then
-    FBrush.Frame(PanelX, PanelY, PanelW, PanelH, AlarmColor,
+    FBrush.Frame(PanelX, PanelY, FullWidth, PanelH, AlarmColor,
       0.4 + 0.6 * FHurtTicks / HurtFlashTicks)
   else
-    FBrush.Frame(PanelX, PanelY, PanelW, PanelH, Tint, 0.3);
+    FBrush.Frame(PanelX, PanelY, FullWidth, PanelH, Tint, 0.3);
 end;
 
 procedure THudVitals.DrawTrace;

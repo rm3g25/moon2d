@@ -50,7 +50,7 @@ type
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
-    eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor);
+    eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor, eaEnergy);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -170,6 +170,8 @@ type
     // ("shutDoors" in Levels.Defs) opens, and the go-right arrow says so.
     // A pickup taken is dead to the field, so "allDead" on its tag waits
     // for the taking. JSON: nothing more.
+    // eaEnergy: Amount percent of the form's charge come out of the hero
+    // as orbs and fly into its gauge. JSON: "value" (1..100).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -190,6 +192,7 @@ type
     Breakdown: TCarouselBreak;
     SkyFall: TSkyFall;
     Press: TPressOrders;
+    Amount: Integer;
   end;
 
   // One event in level JSON:
@@ -235,7 +238,7 @@ const
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene', 'goRight', 'openDoor');
+    'scene', 'goRight', 'openDoor', 'energy');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -306,6 +309,7 @@ resourcestring
   SEventBadLead = 'Level "%s": event "%s": victoryEnds takes "lead" of 0 ' +
     'seconds or more, not %g';
   SEventNoCell = 'Level "%s": event "%s": heroStands takes "x" and "y" from 1';
+  SEventBadEnergy = 'Level "%s": event "%s": energy takes a "value", 1..100';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -345,6 +349,14 @@ begin
     raise ELevelEventError.CreateFmt(SEventBadLevel, [ALevelId, AEventId]);
   AAction.Level := Percent / 100;
   AAction.Ticks := AObj.GetValue<Integer>('ticks', 0);
+end;
+
+procedure ReadEnergy(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.Amount := AObj.GetValue<Integer>('value', 0);
+  if (AAction.Amount < 1) or (AAction.Amount > 100) then
+    raise ELevelEventError.CreateFmt(SEventBadEnergy, [ALevelId, AEventId]);
 end;
 
 procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
@@ -606,6 +618,8 @@ begin
       ReadSkyFall(AObj, ALevelId, AEventId, Result);
     eaPress:
       ReadPress(AObj, ALevelId, AEventId, Result);
+    eaEnergy:
+      ReadEnergy(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

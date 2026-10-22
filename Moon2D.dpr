@@ -90,11 +90,13 @@ uses
   Orbs.Patterns in 'Game\Orbs\Orbs.Patterns.pas',
   Orbs.Rite in 'Game\Orbs\Orbs.Rite.pas',
   Orbs.Burst in 'Game\Orbs\Orbs.Burst.pas',
+  Orbs.Feed in 'Game\Orbs\Orbs.Feed.pas',
   Events.Director in 'Game\Events\Events.Director.pas',
   Scenes.Director in 'Game\Scenes\Scenes.Director.pas',
   Hud.Charge in 'Hud\Hud.Charge.pas',
   Hud.Marks in 'Hud\Hud.Marks.pas',
   Hud.GoRight in 'Hud\Hud.GoRight.pas',
+  Hud.Energy in 'Hud\Hud.Energy.pas',
   Audio in 'Game\Audio.pas',
   Localization in 'Core\Localization.pas',
   Render.Glow in 'Core\Render.Glow.pas',
@@ -349,6 +351,7 @@ type
     FCharge: THudCharge;
     FMarks: THudMarks;
     FGoRight: THudGoRight;
+    FEnergyGauge: THudEnergy;
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
@@ -373,6 +376,12 @@ type
     // What the burst under way has wounded: none loses more than a life
     FBurstWounded: TList<TMonster>;
     FRain: TOrbRain; // the fire rain of orbs
+    FFeed: TOrbFeed; // the charge of the form on its way to the gauge
+    // The charge of the form, 0..FullEnergy, and what it was when the hero
+    // came onto his screen: a death gives that back - what the screen gave
+    // regrows with the field
+    FEnergy: Integer;
+    FEnergyAtEntry: Integer;
     FArmorPings: TArmorPings;
     FScore: Integer;
     // Kill-streak achievement of 2008 (moon.dpr 826-864): kills without
@@ -555,6 +564,8 @@ type
     procedure ShedSuit;
     procedure StartBurst(const ALook: TBurstLook);
     procedure BurstSuit;
+    procedure FeedEnergy(AAmount: Integer);
+    procedure TickEnergy;
     function HeroCenter: TSdlFPoint;
     function HeroStandsIn(ACol, ARow: Integer): Boolean;
     function HeroBodyPoints: TBodyPoints;
@@ -631,6 +642,7 @@ begin
   FBurst := TOrbBurst.Create(HeroBodyPoints);
   FBurstWounded := TList<TMonster>.Create;
   FRain := TOrbRain.Create(IceOrbTint);
+  FFeed := TOrbFeed.Create(MoonOrbTint);
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
   PreloadSounds;
@@ -653,7 +665,9 @@ begin
   FAudio.Free;
   FMarks.Free;
   FGoRight.Free;
+  FEnergyGauge.Free;
   FShake.Free;
+  FFeed.Free;
   FRain.Free;
   FBurstWounded.Free;
   FBurst.Free;
@@ -869,6 +883,7 @@ begin
       FGoRight.Show;
     end;
   Cues.HeroStands := HeroStandsIn;
+  Cues.Energy := FeedEnergy;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -883,6 +898,9 @@ begin
   FBurst.Clear;
   FBurstWounded.Clear;
   FRain.Clear;
+  FFeed.Clear;
+  FEnergy := 0;
+  FEnergyAtEntry := 0;
   FMessages.Clear;
   StopVictoryTrack;
   FHeroHealth := DifficultyHeroHealth[FDifficulty]; // moon.dpr 1714-1716
@@ -1127,10 +1145,12 @@ begin
   FreeAndNil(FCharge);
   FreeAndNil(FMarks);
   FreeAndNil(FGoRight);
+  FreeAndNil(FEnergyGauge);
   FVitals := THudVitals.Create(FRenderer);
   FCharge := THudCharge.Create(FRenderer, FrameWidth);
   FMarks := THudMarks.Create(FRenderer);
   FGoRight := THudGoRight.Create(FRenderer);
+  FEnergyGauge := THudEnergy.Create(FRenderer);
 end;
 
 // The level's respawn point of the hero's screen becomes the
@@ -1159,6 +1179,9 @@ procedure TMoonGame.ArriveOnScreen;
 begin
   FCheckpointX := FHero.X;
   FCheckpointY := FHero.Y;
+  // The orbs still on their way are the charge's already: a death here
+  // must not take back what the screen before gave
+  FEnergyAtEntry := FEnergy + FFeed.Pending;
   FHero.Bullets.Clear;
   FMonsterBullets.Clear;
   FExplosions.Clear;
@@ -1870,6 +1893,29 @@ begin
   StartBurst(IceBurstLook);
 end;
 
+// The charge is the living hero's, like the rite's; what would run the
+// gauge past full stays where it came from
+procedure TMoonGame.FeedEnergy(AAmount: Integer);
+begin
+  if FHero.Dead then
+    Exit;
+  var Amount := AAmount;
+  var Room := FullEnergy - FEnergy - FFeed.Pending;
+  if Amount > Room then
+    Amount := Room;
+  FFeed.Start(Amount, THudEnergy.Heart);
+end;
+
+// The orbs fly, the charge they bring in is the hero's, and the gauge
+// opens the monitor's panel as far as it shows
+procedure TMoonGame.TickEnergy;
+begin
+  FFeed.Tick(HeroCenter);
+  Inc(FEnergy, FFeed.TakeLanded);
+  FEnergyGauge.Tick(FEnergy);
+  FVitals.Wing := FEnergyGauge.WingWidth;
+end;
+
 // ---------------------------------------------------------------------------
 // BONUSES - the reward roulette of moon.dpr 531-543 / 565-602. Every 50
 // points buys one random reward; it sits in the slot (the charge HUD
@@ -2534,6 +2580,7 @@ begin
     FShroud.Clear;
     FUptake.Drop;
     FRain.Collapse;
+    FFeed.Collapse;
     FGameOverTimer := GameOverDelayTicks;
     // Dying cancels the pending exit: the door reopens when the reborn
     // hero kills the reborn boss. (2008 raced its GameOver timer against
@@ -2572,6 +2619,8 @@ begin
   FBurst.Clear;
   FBurstWounded.Clear;
   FRain.Clear;
+  FFeed.Clear;
+  FEnergy := FEnergyAtEntry;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
@@ -3059,6 +3108,7 @@ begin
   FUptake.Tick(HeroPose, HeroSeeds);
   FShroud.Tick(HeroPose, HeroSeeds);
   FRain.Tick;
+  TickEnergy;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -3223,6 +3273,9 @@ begin
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
+        FEnergyGauge.Draw(AAlpha);
+        // Over the gauge: the orbs go into it
+        FFeed.Draw(FDynamics.Canvas, NoShake, AAlpha);
         FCharge.Draw;
         FGoRight.Draw(AAlpha);
         FMessages.Draw(AAlpha);

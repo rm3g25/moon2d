@@ -14,9 +14,10 @@
   open sky of the trial; the press of its finale; the scene an event
   begins; how far the gravel trial has come, whether it is won and how
   much of its victory track is left; where the hero stands; the go-right
-  arrow; the door of the screen, which the game keeps shut or open. The
-  monster field is reborn on every restart, so it arrives with every tick
-  instead of being kept: asked for the conditions, told the tactics.
+  arrow; the door of the screen, which the game keeps shut or open; the
+  charge of the form the hero takes in. The monster field is reborn on
+  every restart, so it arrives with every tick instead of being kept:
+  asked for the conditions, told the tactics.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -84,6 +85,9 @@ type
   // The hero stands in the cell ACol, ARow of his screen, from 0, on his
   // feet
   THeroStandsCue = reference to function(ACol, ARow: Integer): Boolean;
+  // AAmount percent of the form's charge come out of the hero for its
+  // gauge
+  TEnergyCue = reference to procedure(AAmount: Integer);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -108,6 +112,7 @@ type
     GoRight: TGoRightCue;
     OpenDoor: TOpenDoorCue;
     HeroStands: THeroStandsCue;
+    Energy: TEnergyCue;
   end;
 
   TEventDirector = class
@@ -299,6 +304,8 @@ begin
         FCues.GoRight();
       eaOpenDoor:
         FCues.OpenDoor();
+      eaEnergy:
+        FCues.Energy(Action.Amount);
     end;
 end;
 

@@ -194,6 +194,7 @@ const
   StarburstGlowSide = 256;
   StreakGlowSide = 64;
   BeamGlowSide = 64;
+  DiscSide = 64;
   PuffSide = 64;
 
 function TParentDepth.SunkAt(AAlpha: Single): Single;
@@ -219,6 +220,8 @@ begin
     StarburstGlowSide);
   FCanvas.StreakGlow := CreateGlowShape(ARenderer, gsStreak, StreakGlowSide);
   FCanvas.BeamGlow := CreateGlowShape(ARenderer, gsBeam, BeamGlowSide);
+  FCanvas.DiscGlow := CreateGlowShape(ARenderer, gsDisc, DiscSide);
+  FCanvas.DiscShade := CreateShadeShape(ARenderer, gsDisc, DiscSide);
   FCanvas.Puffs := CreatePuffTextures(ARenderer, PuffSide);
 
   for var DynamicObject in ALevel.Dynamics do
@@ -234,6 +237,10 @@ begin
   for var Place in FPlaces do
     Place.DynamicObject.Release;
   FreePuffTextures(FCanvas.Puffs);
+  if Assigned(FCanvas.DiscShade) then
+    SDL_DestroyTexture(FCanvas.DiscShade);
+  if Assigned(FCanvas.DiscGlow) then
+    SDL_DestroyTexture(FCanvas.DiscGlow);
   if Assigned(FCanvas.BeamGlow) then
     SDL_DestroyTexture(FCanvas.BeamGlow);
   if Assigned(FCanvas.StreakGlow) then

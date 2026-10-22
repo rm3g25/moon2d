@@ -74,6 +74,9 @@ type
     StarburstGlow: PSdlTexture;
     StreakGlow: PSdlTexture;
     BeamGlow: PSdlTexture;
+    // One disc twice: added in light, and blended - drawn black, a hole
+    DiscGlow: PSdlTexture;
+    DiscShade: PSdlTexture;
     Puffs: TPuffTextures;
     // In screen units; an object away from the hero's screen meets no
     // walls

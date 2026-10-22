@@ -2,7 +2,9 @@
   Orbs.Flock - the orbs: small lights that fly by a formula, not by
   ballistics, and take no notice of matter - no wall stops one, no floor
   bursts it. An orb is a white-hot point in a glow of its element's
-  color, breathing; it is drawn in code, there is no picture of it.
+  color, breathing; it is drawn in code, there is no picture of it. The
+  orb of a dark element is the negative: a black hole a little bigger
+  than a light orb, with a light rim and a thick halo about it.
 
   The flock keeps the orbs in the order their owner gave them and knows
   the three ways an orb ends: it implodes when its time is up, goes to
@@ -33,8 +35,10 @@ uses
 type
   // The element the orbs are made of
   TOrbTint = record
-    Core: TRgb; // the white-hot point
+    Core: TRgb; // the white-hot point; the body of a dark orb
     Glow: TRgb;
+    // The body is drawn over the world, not added to it: a black hole
+    Dark: Boolean;
   end;
 
   // Imploding: drawing into its point. Gone: dropped at the flock's next
@@ -98,6 +102,8 @@ type
     procedure ThrowDust(AX, AY: Single);
     procedure DrawOrb(const ACanvas: TDynamicCanvas; const AOrb: TOrb;
       AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawDarkBody(const ACanvas: TDynamicCanvas; ACenterX, ACenterY,
+      ASize, ABreath, ALevel: Single);
     procedure DrawDust(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     procedure DrawMarks(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
@@ -142,7 +148,10 @@ type
 
 const
   IceOrbTint: TOrbTint = (Core: (R: 238; G: 250; B: 255);
-    Glow: (R: 88; G: 200; B: 255));
+    Glow: (R: 88; G: 200; B: 255); Dark: False);
+  // The colors of the moon burst (Orbs.Burst)
+  MoonOrbTint: TOrbTint = (Core: (R: 6; G: 0; B: 14);
+    Glow: (R: 225; G: 212; B: 255); Dark: True);
 
 implementation
 
@@ -157,6 +166,14 @@ const
   CoreAcross = 3.6;
   HaloLevel = 0.5;
   BodyLevel = 0.9;
+  // A dark orb, two units bigger across: the halo, the thick of it at the
+  // body, the light rim and the black body
+  DarkHaloAcross = 15;
+  DarkThickAcross = 10;
+  DarkRimAcross = 9.2;
+  DarkBodyAcross = 7.6;
+  DarkHaloLevel = 0.6;
+  DarkThickLevel = 0.9;
   // The halo swells and shrinks by this share of its size
   BreathDepth = 0.12;
   BreathTicks = 57;
@@ -381,20 +398,44 @@ begin
 
   if Imploded > 0 then
   begin
+    // The core of a dark orb is black: added, it would be no flash
+    var FlashTint := FTint.Core;
+    if FTint.Dark then
+      FlashTint := FTint.Glow;
     var Height: Single := Sin(Pi * Imploded);
     DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY,
-      ImplodeFlashAcross + ImplodeFlashSwell * Height, FTint.Core,
+      ImplodeFlashAcross + ImplodeFlashSwell * Height, FlashTint,
       ImplodeFlashLevel * Height * AOrb.FLevel);
   end;
 
   var Breath: Single := 1 + BreathDepth *
     Sin(2 * Pi * ((AOrb.FAge + AAlpha) / BreathTicks + AOrb.FBreath));
+  if FTint.Dark then
+  begin
+    DrawDarkBody(ACanvas, CenterX, CenterY, Size, Breath, Level);
+    Exit;
+  end;
   DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY,
     HaloAcross * Size * Breath, FTint.Glow, HaloLevel * Level);
   DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY,
     BodyAcross * Size, FTint.Glow, BodyLevel * Level);
   DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, CenterX, CenterY,
     CoreAcross * Size, FTint.Core, Level);
+end;
+
+// The halo first, the black body last: the body is drawn over its own
+// light, and the rim is what of the light disc it leaves
+procedure TOrbFlock.DrawDarkBody(const ACanvas: TDynamicCanvas; ACenterX,
+  ACenterY, ASize, ABreath, ALevel: Single);
+begin
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, ACenterX, ACenterY,
+    DarkHaloAcross * ASize * ABreath, FTint.Glow, DarkHaloLevel * ALevel);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, ACenterX, ACenterY,
+    DarkThickAcross * ASize, FTint.Glow, DarkThickLevel * ALevel);
+  DrawGlow(ACanvas.Renderer, ACanvas.DiscGlow, ACenterX, ACenterY,
+    DarkRimAcross * ASize, White, ALevel);
+  DrawGlow(ACanvas.Renderer, ACanvas.DiscShade, ACenterX, ACenterY,
+    DarkBodyAcross * ASize, FTint.Core, ALevel);
 end;
 
 procedure TOrbFlock.DrawDust(const ACanvas: TDynamicCanvas;
