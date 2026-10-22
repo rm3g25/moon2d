@@ -28,7 +28,7 @@
   "bonusAura": "Защитная аура",
   "bonusExplosion": "Взрыв",
   "bonusAwardFmt": "БОНУС: %s",
-  "brokeThrough": "Вы прорвались! Вперёд!",
+  "brokeThrough": "Вы закрыли прорыв!",
   "bonusHudHint": "Правая кнопка мыши для активации",
   "terminalHeader": "СВЯЗЬ",
   "briefingHeader": "ЖУРНАЛ МИССИИ",
