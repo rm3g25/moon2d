@@ -47,7 +47,7 @@ It is the backdrop itself that lives, not effects laid over the playfield. The s
 
 ### Closed doors (decided 2026-10-21)
 A common mechanic, not a feature of the tunnels: a screen whose way on is shut until something happens on it. The train level will use it too (no way on while a monster lives).
-- **Shut** is a list of the level (`"shutDoors": [10, 11]`). The door is invisible, as the 2008 breakthrough: the hero stops at the threshold, as at the door of the trial.
+- **Shut** is a list of the level (`"shutDoors": [9, 10, 11]`). The door is invisible, as the 2008 breakthrough: the hero stops at the threshold, as at the door of the trial.
 - **Open** is an action of the events (`openDoor`), and it raises the go-right arrow itself: open = the arrow, one action, never two. No sound, as the arrow of stage 1.
 - **What opens it** is any condition of the events. A pickup taken is dead to the field, so `allDead` on the pickup's tag is the taking (the Duplet, the moon stone) - no word of its own was needed; `allDead` on the monsters is the train; `trialDone` is there too.
 - A restart shuts the door again if the thing is not done (a pickup not taken comes back with the screen).
@@ -182,7 +182,7 @@ All of it is data on screen 9 plus a few words of the event vocabulary; no code 
 - **Condition `victoryEnds`** (ecVictoryEnds), JSON "lead" in seconds (0 by default): holds once the victory track has "lead" seconds left or fewer, and after its end. A missing win.ogg is a track of 0 seconds - the events fire at once.
 - **`music` takes "fade"** (seconds, 0 by default): the track comes in from silence (Mix_FadeInMusic).
 - **Action `goRight`** (eaGoRight): the go-right arrow (Hud.GoRight) in the middle of the screen - a hollow arrow of neon tube, three strips of the band glow along its outline (halo, tube, white core), mitered at the corners, so it is sharp at any window size. Four slow blinks, 60 ticks each, every one a raised cosine from dark to full and back, then it is gone - about seven seconds. No sound: the arrow is big enough to be seen (a beep and a slide on each flash were tried and dropped). It also goes out when the hero leaves the screen, on a restart and with the level. The beat (TGoRightBeat) is apart from the picture. Reusable: any event can raise it.
-- **The events**: s09-tunnel-music (`victoryEnds`, lead 5: lunar.ogg with fade 5 - remembered as the track a restart plays) and s09-go-on (`victoryEnds` at the very end: `goRight`).
+- **The events**: s09-tunnel-music (`victoryEnds`, lead 5: lunar.ogg with fade 5 - remembered as the track a restart plays) and s09-go-on (`victoryEnds` at the very end: `openDoor`). Screen 9 is a shut door too: the trial over, the hero still waits at the threshold until the victory track ends and the arrow lights - the way on opens with the arrow, never before it.
 - **The door is still a wall**: screen 9 is the last screen of level 2 until stage 2 adds screen 10. The arrow points at a closed door until then.
 - lunar.ogg is put in `bin/music/` by hand; without it the screen stays silent and the arrow shows anyway.
 

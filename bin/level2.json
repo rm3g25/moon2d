@@ -3923,7 +3923,7 @@
     {"screen": 10, "x": 2, "y": 11},
     {"screen": 11, "x": 2, "y": 11}
   ],
-  "shutDoors": [10, 11],
+  "shutDoors": [9, 10, 11],
   "events": [
     {
       "id": "breachWarning",
@@ -4074,7 +4074,7 @@
       "screen": 9,
       "when": "victoryEnds",
       "then": [
-        {"action": "goRight"}
+        {"action": "openDoor"}
       ]
     },
     {

@@ -206,7 +206,8 @@ begin
 end;
 
 // The tunnels' ambient fades in under the end of the victory track, the
-// arrow comes at its very end - both on the arena's screen
+// arrow comes at its very end and opens the arena's door - all on the
+// arena's screen
 procedure TGoRightLevelTests.TestLevelTwoGoesOnOverTheVictoryTrack;
 const
   LevelTwoFile = 'level2.json';
@@ -233,13 +234,15 @@ begin
           MusicLead := Event.LeadSeconds;
           MusicFade := Action.FadeSeconds;
         end;
-        if Action.Kind = eaGoRight then
+        if Action.Kind = eaOpenDoor then
           ArrowLead := Event.LeadSeconds;
       end;
     end;
     Assert.IsTrue(MusicLead > 0, 'The ambient comes before the end');
     Assert.IsTrue(MusicFade > 0, 'From silence');
     Assert.AreEqual<Single>(0, ArrowLead, 'The arrow at the very end');
+    Assert.IsTrue(Level.DoorShutOn(LevelTwoArenaScreen),
+      'The way on stays shut until the arrow');
   finally
     Level.Free;
   end;
