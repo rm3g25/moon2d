@@ -1,6 +1,6 @@
 # Level 2 finale: the tunnels and the TeK machine (second of the two level 2 bosses, end of 3.0)
 
-Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11; stage 5d built (2026-10-21, 3.0.67): the stone wakes; stage 5e built (2026-10-21, 3.0.69): the rocks fall back; the fall retuned as a free fall, the music left alone in it and the checkpoint moved to the stone (2026-10-22, 3.0.71). Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
+Status: designed (2026-10-17), the boss fight reworked around a chase (2026-10-19); stage 1 built (2026-10-19, 3.0.63); the tunnels made giant with a living backdrop, the chase on a tiled floor under a still backdrop (2026-10-20); stage 2 built (2026-10-20, data, no version): screen 10 stands on a layered tunnel; stage 3 built (2026-10-20, 3.0.64): the Duplet; stage 4 built (2026-10-21, 3.0.65): the dust of screen 10; screen 11 designed (2026-10-21): the stone that wakes and builds its own way, closed doors as a common mechanic, the fang kit; stage 5a built (2026-10-21, 3.0.66): closed doors; stages 5b and 5c built (2026-10-21, data, no version): the art and the data of screen 11; stage 5d built (2026-10-21, 3.0.67): the stone wakes; stage 5e built (2026-10-21, 3.0.69): the rocks fall back; the fall retuned as a free fall, the music left alone in it and the checkpoint moved to the stone (2026-10-22, 3.0.71); screen 12 designed and its art made (2026-10-23): the far ledge with convoys and a searchlight, the sphere of 200%, two lines of the shuttle. Many small stages, each its own commit and live run. The screen numbers 10-13 are a guess (arena 2 is screen 9) - shift them if the layout differs.
 
 ## The idea in one line
 A false ending: arena 2 is won, the victory track plays, the player thinks the level is over - and the arrow points right. Tunnels of lunar rock, a giant double-barrel, the moon stone, an energy gauge at 5%, and a TeK machine that cannot be hurt until the hero becomes the moon form - and that runs away from him in the middle of the fight.
@@ -41,7 +41,7 @@ It is the backdrop itself that lives, not effects laid over the playfield. The s
 **One event per screen, growing toward the boss** (decided 2026-10-20) - silence, one blow, then a busy world:
 - **Screen 10 (the double-barrel) - haze only.** Long bands of levitating dust hanging in the depth, drifting very slowly, lit where a shaft of light crosses them (no wind on the Moon: the dust is charged and hovers - it drifts, it does not billow). Nothing else moves: the first screen after the false ending says "you are tiny and it is empty".
 - **Screen 11 (the moon stone) - the stone wakes.** The event of this screen is the stone itself (decided 2026-10-21, in place of the distant rockfall): the dust of the screen stops dead and settles a little when the stone wakes - the stone stops even the air - and the rocks it raises are the motion. See "Screen 11".
-- **Screen 12 (ORB, the shuttle about the TeK robot) - the far ledge is busy.** Tiny lights of TeK convoys crawl right along a far ledge, hiding behind the pillars; a searchlight from the city gate at the far end of the tunnel sweeps the far wall (a light texture with additive blend). The shuttle says the entrance is guarded - the backdrop shows it.
+- **Screen 12 (the sphere, the shuttle) - the far ledge is busy.** Tiny lights of TeK convoys crawl right along a far ledge, hiding behind the pillars; a searchlight from the city gate at the far end of the tunnel sweeps the far wall (a light texture with additive blend). The shuttle says the entrance is guarded - the backdrop shows it.
 
 **Dropped** (2026-10-20): pulsing veins in the rock (glowing things are the hero's language - orbs, the stone); sunlight crawling through cracks (a lunar day is two weeks long, and the tunnels are dark); the near-plane dust specks, sand streams and periodic tremors of the first proposal (noise next to a living backdrop).
 
@@ -89,10 +89,30 @@ The basalt spurs of `s10-depth` - the "fangs" - are kept and multiplied:
 - screen 11: two or three fangs at the depth of `s10-depth`, the rocks rise in front of them;
 - the chase (stage 11): the fangs ride through from right to left at random, the "posts by the road" that sell the speed. A fang is a separate sprite, nothing to loop. Their speed is tuned live: slower than the floor (they stand deeper - discrete objects need no seamless backdrop) or with it.
 
-### Screen 12 - bumps and ORB 100%
-- Jumping over bumps (a warm-up, not a lesson - the arena floor is flat).
-- New object: ORB, restores 100% health.
-- The shuttle: another TeK robot seems to guard the entrance to the city; the ice form does not work yet - it was just used; fight bare-handed and watch the form charge indicator at the top.
+### Screen 12 - the far ledge and the sphere (designed 2026-10-23)
+A pause before the fight: flat floor, nothing to jump, the shuttle speaks, the far ledge comes alive, and the way on opens only with the sphere. The bumps of the first plan are dropped - a flat screen lets the player look at the tunnel while the shuttle talks.
+
+**The backdrop is screen 11's far wall, slid left again** - the same step of a third (480 px of 1440), the new right third outpainted in ChatGPT: horizontal strata only, the warm light of the vault dies on the left, and at the right edge, at the far end of the tunnel, a small lit gate building on a natural stratum - the brightest point at (472, 217). The word "city" is not said on this level: the gate is "the end of the tunnel", what lies behind it is the next level's first frame. `level2-backdrops.mset`: `screen12`, 1440x1080 (the generation came 1448x1086 and was scaled).
+
+**The far ledge** - one object, `s12-far-ledge`, a thin level shelf the full width of the backdrop, its top on 217 (611 px), running into the base of the gate. The convoys ride on it. The same sprite, at the same y, stands on screens 10 and 11 at x -341 and -171 (the step of a third): the walls are one wall, so the ledge was always there - empty on 10 and 11, alive on 12.
+
+**The pillars** - a kit of four, one generation each from a silhouette, neutral light, tinted per place: `s12-pillar-needle` (A, 43 units tall), `-twin` (C, 38), `-block` (B, 30), `-stump` (D, 23), feet on the ledge. Screen 12 has five: needle at 50, twin at 153, block at 256, stump at 331, the needle mirrored at 395 - each about 20% darker than the wall behind it, so it reads as a silhouette; at the gate end they all but vanish until a convoy light goes out behind them or the searchlight passes. They are what the convoy lights hide behind.
+
+**The convoys** (code, `Beacon` lights in a row): columns of 3-5 lights - a warm headlight in front, a red tail light at the back, an orange flasher now and then - crawling right along the ledge at 8 units a second, two lanes a little apart, the second 20% slower. Drawn under the pillars, over the wall. A column that reaches the gate fades out there. **The start:** on 10 and 11 the ledge is empty; on 12 the first column comes in from the left alone, on the shuttle's first line; then the gap between columns narrows from half the ledge to dense traffic over 45 seconds; the second lane joins from the second column. The clock starts when the hero comes onto the screen, and a death restarts it.
+
+**The searchlight** (code, a new dynamic): a cone of light out of the gate (additive, over `gsBeam` like the go-right arrow) and a spot on the far wall that walks a figure of eight over the left two thirds of the wall in 11 seconds; a pillar under the spot lights up. It lights with the shuttle's first line. It never touches the playfield.
+
+**The playfield:** row 11 is the floor, the floor line 352, flat from wall to wall; the rest is air. Cols 0-9 - lava crust (`s12-crust`, one object, joins `s11-way-out` with no seam, its broken lip 8 units over col 10); cols 10-15 - the made road of TeK: one square tile, `s12-road-tile`, 32 by 32 units, a self-contained plate with a frame on all four sides and a hazard stripe under its rim, repeated six times - a brick, not a seamless strip. The same tile is the floor of the boss arena. The respawn point at cell 1, 11. `"shutDoors": [12]`, the door opens with the sphere.
+
+**The order of events:**
+1. The hero comes onto the screen. Half a second later the shuttle's first line; on the same beat the first convoy comes in from the left and the searchlight lights.
+2. The second line; the energy gauge blinks.
+3. When the second line is typed out the sphere forms.
+4. The sphere is taken - health to 10, the door opens, the go-right arrow lights.
+
+**The shuttle** - two lines, header ЧЕЛНОК: "Мастер! В конце тоннеля что-то большое." and "Лёд не ответит. Бей и следи за зарядом камня." - the threat without a name (the machine is the answer to "something"), why henshin does nothing, and that the fight is what charges the gauge (not "hold out": the charge comes from hitting the turrets). The moon form is not named before it happens. The line "the stone fits the suit" of screen 11 is covered by the second line.
+
+**The sphere** (`TLifeSphere`, drawn in code, no art) - the soulsphere of Doom: 200%, health to 10, the five past the divider green. 16 units across by default. A green body (a light spot upper left, dark at the rim) in a soft green halo, breathing (8%), three bands of light running round it inside, two sparks orbiting, a slow sway up and down. **Forming:** about 26 green sparks spiral in from 40-100 units over 1.6 seconds, the sphere grows out of them and flashes. **Taken:** it bursts, the sparks fly into the hero along curves, a flash on him, the pips fill to 10 (the green ones past the divider). The green is the HUD's bonus green. Not an orb: orbs are the hero's projectiles, the sphere is a pickup.
 
 ### Screen 13 - the boss arena
 The end of the tunnels and the way out to the city. The backdrop of screen 10 would not do for the chase: its basalt columns are verticals, and a vertical that does not ride past while the floor slides shows the belt for a treadmill. This one: horizontal strata only, no columns, cracks or stalactites running up and down; finer texture and lower contrast, farther than on screen 10; no bright spot in the middle - the light is a distant glow of the city along the horizon at the end of the tunnel. Screens 10-12 lead to it: each a little farther and more horizontal than the one before. Flat tiled floor - a made road, the machine drives on it - closed on both sides. The backdrop is still: no events of its own (the foreground is full - napalm, pads, turrets) and no motion in the chase (see "The belt"). Three acts in three tempos: the machine standing its ground (turrets 1 and 2), the chase (turret 3), then the evolution and the air phase on a still screen again.
@@ -299,7 +319,7 @@ Each its own commit, each run live.
    - 5d. **The stone wakes.** Built (3.0.67), see "Stage 5d as built".
    - 5e. **The stone is taken.** Built (3.0.69), see "Stage 5e as built".
 6. **The energy gauge.** Built (3.0.70), see "Stage 6 as built". The stone line was built with stage 5d.
-7. **Screen 12 - bumps and ORB 100%.** The new healing object; the shuttle's line about the TeK robot.
+7. **Screen 12.** Designed (2026-10-23), see "Screen 12"; the art is made. In steps: 7a the sphere (`TLifeSphere`, the pickup, its forming and its taking); 7b the convoys and the searchlight (the far ledge as a living backdrop); 7c screen 12 as data (the objects, the ledge on 10 and 11, the floor, the events, the shut door).
 8. **Screen 13 - the arena and the hull.** Flat floor, closed on both sides; the 2x2 machine on two wheels drives, stops, crushes; the TeK shield; death restarts the fight.
 9. **Turret 1** - aimed bursts.
 10. **Turret 2** - the sweep, with the warning at the muzzle.
@@ -315,7 +335,10 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
-- The screen numbers 12-13 (10 is built, 11 is designed).
+- The screen number 13 (10 and 11 are built, 12 is designed).
+- Screen 13's backdrop: one more step of a third (the gate near x 300 units, the ledge running to it) or a generation of its own - decided after screen 12 is played.
+- The road tile may be redrawn - one sprite, swapped any time.
+- The crust of screen 12 is below 6 px a unit (1527 px for 328 units): regenerate in two halves for 4K.
 - The 4K room of screen 10: four objects of 256 units from an upscale.
 - The speed of the fangs in the chase: slower than the floor or with it.
 - The eclipse on taking the stone: kept in reserve.
