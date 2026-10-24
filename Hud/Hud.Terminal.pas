@@ -10,6 +10,11 @@
   monitor, or along the bottom edge on a screen where the hero comes
   in at the top and the monitor corner would sit on him.
 
+  One text at a time: a newcomer waits in line until the text in the box
+  has been typed and read, then takes the box in place of its fade. A
+  caller that wants to know when its text is out keeps the ticket Start
+  gives it.
+
   The typing itself is Hud.Typewriter's. The terminal makes no sound of
   its own: KeyStruck goes up on the ticks a key should click, and the
   game plays the click.
@@ -28,6 +33,14 @@ type
   TTerminalPhase = (tpOff, tpTyping, tpHolding, tpFading);
   TTerminalPlace = (tlTop, tlBottom);
 
+  // A text for the box, and the ticket its caller holds
+  TTerminalText = record
+    Header: string;
+    Lines: TArray<string>;
+    Place: TTerminalPlace;
+    Ticket: Integer;
+  end;
+
   THudTerminal = class
   private
     FFont: TMoonFont;
@@ -38,6 +51,13 @@ type
     FPlace: TTerminalPlace;
     FPhaseTicksLeft: Integer;
     FKeyStruck: Boolean;
+    FWaiting: TArray<TTerminalText>;
+    FTicket: Integer; // of the text in the box
+    FLastTicket: Integer;
+    FTypedTicket: Integer; // of the last text typed out
+    FFirstLive: Integer; // a clear forgets every ticket below it
+    procedure Show(const AText: TTerminalText);
+    procedure LeaveHolding;
     procedure EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
     procedure CountDown(ANextPhase: TTerminalPhase; ANextTicks: Integer);
     function BoxHeight: Single;
@@ -51,12 +71,13 @@ type
   public
     constructor Create(const AFont: TMoonFont; ARenderer: PSdlRenderer);
     destructor Destroy; override;
-    // A newcomer replaces the message mid-way: a hint belongs to the
-    // screen that fired it, and takes its place with it. A text with no
-    // words is ignored.
-    procedure Start(const AHeader, AText: string;
-      APlace: TTerminalPlace = tlTop);
+    // The text's ticket, 0 for a text with no words, which is ignored
+    function Start(const AHeader, AText: string;
+      APlace: TTerminalPlace = tlTop): Integer;
+    // Drops the box and the line, and forgets every ticket given so far
     procedure Clear;
+    // The text of the ticket has been typed to its end
+    function Typed(ATicket: Integer): Boolean;
     procedure Tick;
     procedure Draw;
     function Visible: Boolean;
@@ -122,6 +143,7 @@ begin
   FFont := AFont;
   FBrush := THudBrush.Create(ARenderer);
   FTypewriter := TTypewriter.Create;
+  FFirstLive := 1;
 end;
 
 destructor THudTerminal.Destroy;
@@ -131,15 +153,32 @@ begin
   inherited;
 end;
 
-procedure THudTerminal.Start(const AHeader, AText: string;
-  APlace: TTerminalPlace);
+function THudTerminal.Start(const AHeader, AText: string;
+  APlace: TTerminalPlace): Integer;
 begin
   var Lines := WrapWords(AText, MaxLineChars);
   if Lines = nil then
-    Exit;
-  FHeader := AHeader;
-  FPlace := APlace;
-  FTypewriter.Start(Lines);
+    Exit(0);
+  Inc(FLastTicket);
+  var Text: TTerminalText;
+  Text.Header := AHeader;
+  Text.Lines := Lines;
+  Text.Place := APlace;
+  Text.Ticket := FLastTicket;
+  Result := FLastTicket;
+
+  if FPhase in [tpTyping, tpHolding] then
+    FWaiting := FWaiting + [Text]
+  else
+    Show(Text);
+end;
+
+procedure THudTerminal.Show(const AText: TTerminalText);
+begin
+  FHeader := AText.Header;
+  FPlace := AText.Place;
+  FTicket := AText.Ticket;
+  FTypewriter.Start(AText.Lines);
   EnterPhase(tpTyping, 0);
 end;
 
@@ -147,6 +186,13 @@ procedure THudTerminal.Clear;
 begin
   FPhase := tpOff;
   FKeyStruck := False;
+  FWaiting := nil;
+  FFirstLive := FLastTicket + 1;
+end;
+
+function THudTerminal.Typed(ATicket: Integer): Boolean;
+begin
+  Result := (ATicket >= FFirstLive) and (ATicket <= FTypedTicket);
 end;
 
 procedure THudTerminal.EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
@@ -166,13 +212,33 @@ begin
   case FPhase of
     tpTyping:
       if FTypewriter.Done then
+      begin
+        FTypedTicket := FTicket;
         EnterPhase(tpHolding,
           ReadBaseTicks + FTypewriter.CharCount * ReadTicksPerChar);
+      end;
     tpHolding:
-      CountDown(tpFading, FadeTicks);
+      begin
+        Dec(FPhaseTicksLeft);
+        if FPhaseTicksLeft <= 0 then
+          LeaveHolding;
+      end;
     tpFading:
       CountDown(tpOff, 0);
   end;
+end;
+
+// The next in line takes the box as it is, with no fade between
+procedure THudTerminal.LeaveHolding;
+begin
+  if FWaiting = nil then
+  begin
+    EnterPhase(tpFading, FadeTicks);
+    Exit;
+  end;
+  var Next := FWaiting[0];
+  Delete(FWaiting, 0, 1);
+  Show(Next);
 end;
 
 procedure THudTerminal.CountDown(ANextPhase: TTerminalPhase;

@@ -97,10 +97,14 @@ type
     // ANote is a small line under it, gone with the headline.
     procedure ShowBig(const AText: string; ATicks: Integer;
       const ANote: string = '');
-    // A long text for the comm terminal under AHeader; replaces the one
-    // being typed. '' is ignored. APlace says where the box stands.
-    procedure StartTerminal(const AHeader, AText: string;
-      APlace: TTerminalPlace = tlTop);
+    // A long text for the comm terminal under AHeader; it waits in line
+    // while another is typed and read. '' is ignored. APlace says where
+    // the box stands. The result is the text's ticket for TerminalTyped,
+    // 0 for an ignored one.
+    function StartTerminal(const AHeader, AText: string;
+      APlace: TTerminalPlace = tlTop): Integer;
+    // The text of the ticket has been typed to its end
+    function TerminalTyped(ATicket: Integer): Boolean;
     // True on a tick the terminal typed a clicking key - the game owns
     // the sound
     function TerminalKeyStruck: Boolean;
@@ -206,10 +210,15 @@ begin
   FBigTicksLeft := ATicks;
 end;
 
-procedure TMessageBoard.StartTerminal(const AHeader, AText: string;
-  APlace: TTerminalPlace);
+function TMessageBoard.StartTerminal(const AHeader, AText: string;
+  APlace: TTerminalPlace): Integer;
 begin
-  FTerminal.Start(AHeader, AText, APlace);
+  Result := FTerminal.Start(AHeader, AText, APlace);
+end;
+
+function TMessageBoard.TerminalTyped(ATicket: Integer): Boolean;
+begin
+  Result := FTerminal.Typed(ATicket);
 end;
 
 function TMessageBoard.TerminalKeyStruck: Boolean;

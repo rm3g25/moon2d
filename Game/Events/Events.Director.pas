@@ -15,7 +15,9 @@
   begins; how far the gravel trial has come, whether it is won and how
   much of its victory track is left; where the hero stands; the go-right
   arrow; the door of the screen, which the game keeps shut or open; the
-  charge of the form the hero takes in. The monster field is reborn on
+  charge of the form the hero takes in; the life sphere it forms and
+  whether the hero has taken it. Which hint is typed out the director
+  keeps itself, by the tickets of the terminal. The monster field is reborn on
   every restart, so it arrives with every tick instead of being kept:
   asked for the conditions, told the tactics.
 
@@ -91,6 +93,11 @@ type
   // The hero's checkpoint moves to the cell ACol, ARow of his screen,
   // counted as a respawn point's: from 1
   TRespawnCue = reference to procedure(ACol, ARow: Integer);
+  // The life sphere forms on the cell ACol, ARow of the hero's screen,
+  // counted as a placement's - from 1 -, ASize units across
+  TSphereCue = reference to procedure(ACol, ARow: Integer; ASize: Single);
+  // The hero has taken the life sphere of his screen
+  TSphereTakenCue = reference to function: Boolean;
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -117,6 +124,8 @@ type
     HeroStands: THeroStandsCue;
     Energy: TEnergyCue;
     Respawn: TRespawnCue;
+    Sphere: TSphereCue;
+    SphereTaken: TSphereTakenCue;
   end;
 
   TEventDirector = class
@@ -127,14 +136,21 @@ type
     FCues: TDirectorCues;
     FFired: TArray<Boolean>; // in step with FEvents
     FTicksLeft: TArray<Integer>; // of the delay, once the condition holds
+    // In step with FEvents: the terminal's ticket of the hint the event
+    // typed, 0 for none; and the event whose hint a hintTyped one waits
+    // for, -1 for none
+    FHintTickets: TArray<Integer>;
+    FHintSources: TArray<Integer>;
     procedure Arm(AIndex: Integer);
+    procedure FindHintSources;
+    function HintTyped(AIndex: Integer): Boolean;
     procedure RewindTargets(const AEvent: TLevelEvent);
     function GravelDealt(const AEvent: TLevelEvent): Boolean;
     function WaveKilled(const AEvent: TLevelEvent): Boolean;
-    function ConditionHolds(const AEvent: TLevelEvent;
+    function ConditionHolds(AIndex: Integer;
       const AField: TMonsterField): Boolean;
-    procedure Play(const AEvent: TLevelEvent; const AField: TMonsterField);
-    procedure PlayHint(const AAction: TEventAction);
+    procedure Play(AIndex: Integer; const AField: TMonsterField);
+    procedure PlayHint(AIndex: Integer; const AAction: TEventAction);
   public
     constructor Create(const AEvents: TArray<TLevelEvent>;
       const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
@@ -151,7 +167,7 @@ type
 implementation
 
 uses
-  Localization, Hud.Terminal;
+  System.SysUtils, Localization, Hud.Terminal;
 
 constructor TEventDirector.Create(const AEvents: TArray<TLevelEvent>;
   const AMessages: TMessageBoard; const ADynamics: TDynamicObjects;
@@ -164,14 +180,38 @@ begin
   FCues := ACues;
   SetLength(FFired, Length(FEvents));
   SetLength(FTicksLeft, Length(FEvents));
+  SetLength(FHintTickets, Length(FEvents));
+  FindHintSources;
   for var i := 0 to High(FEvents) do
     Arm(i);
+end;
+
+// The level has checked at load that the event named is there
+procedure TEventDirector.FindHintSources;
+begin
+  SetLength(FHintSources, Length(FEvents));
+  for var i := 0 to High(FEvents) do
+  begin
+    FHintSources[i] := -1;
+    if FEvents[i].Condition <> ecHintTyped then
+      Continue;
+    for var j := 0 to High(FEvents) do
+      if SameText(FEvents[j].Id, FEvents[i].HintEvent) then
+        FHintSources[i] := j;
+  end;
 end;
 
 procedure TEventDirector.Arm(AIndex: Integer);
 begin
   FFired[AIndex] := False;
   FTicksLeft[AIndex] := FEvents[AIndex].DelayTicks;
+  FHintTickets[AIndex] := 0;
+end;
+
+function TEventDirector.HintTyped(AIndex: Integer): Boolean;
+begin
+  var Source := FHintSources[AIndex];
+  Result := (Source >= 0) and FMessages.TerminalTyped(FHintTickets[Source]);
 end;
 
 procedure TEventDirector.ReArm(AScreen: Integer);
@@ -213,32 +253,37 @@ begin
   Result := Progress.WaveKilled >= Count;
 end;
 
-function TEventDirector.ConditionHolds(const AEvent: TLevelEvent;
+function TEventDirector.ConditionHolds(AIndex: Integer;
   const AField: TMonsterField): Boolean;
 begin
+  var Event := FEvents[AIndex];
   // ecEnterScreen asks nothing beyond the screen the caller has checked
-  case AEvent.Condition of
+  case Event.Condition of
     ecAllDead:
-      Result := not AField.AnyAliveTagged(AEvent.Tag);
+      Result := not AField.AnyAliveTagged(Event.Tag);
     ecLivesBelow:
-      Result := AField.AnyTaggedLivesBelow(AEvent.Tag, AEvent.Lives);
+      Result := AField.AnyTaggedLivesBelow(Event.Tag, Event.Lives);
     ecEnraged:
-      Result := AField.AnyTaggedEnraged(AEvent.Tag);
+      Result := AField.AnyTaggedEnraged(Event.Tag);
     ecActReached:
-      Result := FCues.TrialAct() >= AEvent.Act;
+      Result := FCues.TrialAct() >= Event.Act;
     ecGravelDealt:
-      Result := GravelDealt(AEvent);
+      Result := GravelDealt(Event);
     ecTrialDone:
       Result := FCues.TrialDone();
     ecWaveKilled:
-      Result := WaveKilled(AEvent);
+      Result := WaveKilled(Event);
     ecVictoryEnds:
       begin
         var Left := FCues.VictoryLeft();
-        Result := (Left >= 0) and (Left <= AEvent.LeadSeconds);
+        Result := (Left >= 0) and (Left <= Event.LeadSeconds);
       end;
     ecHeroStands:
-      Result := FCues.HeroStands(AEvent.CellX - 1, AEvent.CellY - 1);
+      Result := FCues.HeroStands(Event.CellX - 1, Event.CellY - 1);
+    ecHintTyped:
+      Result := HintTyped(AIndex);
+    ecSphereTaken:
+      Result := FCues.SphereTaken();
   else
     Result := True;
   end;
@@ -246,7 +291,7 @@ end;
 
 // A hint speaks in the voice its event gives it, the channel's own when
 // the event gives none
-procedure TEventDirector.PlayHint(const AAction: TEventAction);
+procedure TEventDirector.PlayHint(AIndex: Integer; const AAction: TEventAction);
 begin
   var Header := AAction.Header.Current;
   if Header = '' then
@@ -254,20 +299,21 @@ begin
   var Place := tlTop;
   if AAction.AtBottom then
     Place := tlBottom;
-  FMessages.StartTerminal(Header, AAction.Text.Current, Place);
+  FHintTickets[AIndex] := FMessages.StartTerminal(Header, AAction.Text.Current,
+    Place);
 end;
 
-procedure TEventDirector.Play(const AEvent: TLevelEvent;
-  const AField: TMonsterField);
+procedure TEventDirector.Play(AIndex: Integer; const AField: TMonsterField);
 begin
-  for var Action in AEvent.Actions do
+  var Event := FEvents[AIndex];
+  for var Action in Event.Actions do
     case Action.Kind of
       eaBigMessage:
         FMessages.ShowBig(Action.Text.Current, BigMessageTicks);
       eaSmallMessage:
         FMessages.AddTicker(Action.Text.Current, TickerNoticeTicks);
       eaHint:
-        PlayHint(Action);
+        PlayHint(AIndex, Action);
       eaMusic:
         FCues.ChangeMusic(Action.FileName, Action.FadeSeconds);
       eaIntensity:
@@ -289,9 +335,9 @@ begin
       eaWaveOnto:
         FCues.WaveOnto(Action.Target);
       eaCannons:
-        FCues.Cannons(Action.Cannons, AEvent.Act);
+        FCues.Cannons(Action.Cannons, Event.Act);
       eaSpawn:
-        FCues.Spawn(Action.Spawn, AEvent.Act);
+        FCues.Spawn(Action.Spawn, Event.Act);
       eaBreakCarousel:
         FCues.BreakCarousel(Action.Target, Action.Breakdown);
       eaStrays:
@@ -299,9 +345,9 @@ begin
       eaStraysLeave:
         FCues.StraysLeave(Action.Target);
       eaSkyFall:
-        FCues.SkyFall(Action.SkyFall, AEvent.Act);
+        FCues.SkyFall(Action.SkyFall, Event.Act);
       eaPress:
-        FCues.Press(Action.Press, AEvent.Act);
+        FCues.Press(Action.Press, Event.Act);
       eaScene:
         FCues.StartScene(Action.Target);
       eaGoRight:
@@ -312,6 +358,8 @@ begin
         FCues.Energy(Action.Amount);
       eaRespawn:
         FCues.Respawn(Action.CellX, Action.CellY);
+      eaSphere:
+        FCues.Sphere(Action.CellX, Action.CellY, Action.Size);
     end;
 end;
 
@@ -323,7 +371,7 @@ begin
   begin
     if FFired[i] or (FEvents[i].Screen <> AScreen) then
       Continue;
-    if not ConditionHolds(FEvents[i], AField) then
+    if not ConditionHolds(i, AField) then
     begin
       FTicksLeft[i] := FEvents[i].DelayTicks;
       Continue;
@@ -335,7 +383,7 @@ begin
     end;
 
     FFired[i] := True;
-    Play(FEvents[i], AField);
+    Play(i, AField);
   end;
 end;
 

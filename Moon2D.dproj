@@ -220,6 +220,7 @@
         <DCCReference Include="Game\Game.Henshin.pas"/>
         <DCCReference Include="Game\Game.Shroud.pas"/>
         <DCCReference Include="Game\Game.Uptake.pas"/>
+        <DCCReference Include="Game\Game.Sphere.pas"/>
         <DCCReference Include="Game\Game.Trial.pas"/>
         <DCCReference Include="Game\Game.Press.pas"/>
         <DCCReference Include="Game\Game.Arrivals.pas"/>

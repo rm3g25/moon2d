@@ -75,6 +75,7 @@ uses
   Game.Henshin in 'Game\Game.Henshin.pas',
   Game.Shroud in 'Game\Game.Shroud.pas',
   Game.Uptake in 'Game\Game.Uptake.pas',
+  Game.Sphere in 'Game\Game.Sphere.pas',
   Game.Trial in 'Game\Game.Trial.pas',
   Game.Press in 'Game\Game.Press.pas',
   Game.Arrivals in 'Game\Game.Arrivals.pas',
@@ -149,6 +150,9 @@ const
   // a few rounds
   CannonShotSoundFile = 'shoot2.wav';
   TerminalKeySoundFile = 'terminal.wav';
+  // The life sphere: its sparks spiral in; it bursts into the hero
+  SphereFormSoundFile = 'sphereform.wav';
+  SphereTakeSoundFile = 'spheretake.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -397,6 +401,8 @@ type
     FShroudPainter: TShroudPainter;
     FUptake: TUptake; // what the hero takes in; reborn with the level
     FUptakePainter: TUptakePainter;
+    FSphere: TLifeSphere; // the sphere of 200% a level forms; reborn with the level
+    FSpherePainter: TLifeSpherePainter;
     FDirector: TEventDirector; // the level's events; reborn with the level
     FScenes: TSceneDirector; // the level's scenes; reborn with the level
     FArena: TPadArena; // the rebuilds of the boss fight; reborn with the level
@@ -474,6 +480,10 @@ type
     function ShardStruck(const AShard: TLiveShard): Boolean;
     procedure ResolveMonsterContact;
     procedure TakeLoot(const AMonster: TMonster);
+    procedure FormSphere(ACol, ARow: Integer; ASize: Single);
+    procedure ResolveSphereContact;
+    procedure GiveSpherePip;
+    procedure SettleSphere;
     procedure BeginUptake(const ALook: TUptakeLook; const AMonster: TMonster);
     procedure WarmPickupPictures;
     procedure SpendBullet(const ABullet: TBullet; const AMonster: TMonster);
@@ -689,6 +699,9 @@ begin
   FHenshin.Free;
   FTrial.Free;
   FPress.Free;
+  // Before the shroud, which they feed
+  FSpherePainter.Free;
+  FSphere.Free;
   FUptakePainter.Free;
   FUptake.Free;
   FShroudPainter.Free;
@@ -798,6 +811,8 @@ begin
     World);
 
   FHero := THero.Create(FRenderer, FLevel, FPads);
+  FreeAndNil(FSpherePainter);
+  FreeAndNil(FSphere);
   FreeAndNil(FUptakePainter);
   FreeAndNil(FUptake);
   FreeAndNil(FShroudPainter);
@@ -806,6 +821,8 @@ begin
   FShroudPainter := TShroudPainter.Create(FRenderer, FHero, FShroud);
   FUptake := TUptake.Create(SolidUnderPoint, FShroud.Feed, RollDiceSeed);
   FUptakePainter := TUptakePainter.Create(FRenderer, FUptake);
+  FSphere := TLifeSphere.Create(FShroud.Feed, RollDiceSeed);
+  FSpherePainter := TLifeSpherePainter.Create(FSphere);
   FreeAndNil(FHenshin);
   var Stage: THenshinStage;
   Stage.Hero := FHero;
@@ -886,6 +903,12 @@ begin
   Cues.HeroStands := HeroStandsIn;
   Cues.Energy := FeedEnergy;
   Cues.Respawn := MoveCheckpoint;
+  Cues.Sphere := FormSphere;
+  Cues.SphereTaken :=
+    function: Boolean
+    begin
+      Result := FSphere.Taken;
+    end;
   FDirector := TEventDirector.Create(FLevel.Events, FMessages,
     FLevel.Dynamics, Cues);
 
@@ -1199,6 +1222,7 @@ begin
   FCannons.Clear;
   FRain.Clear;
   FUptake.Settle;
+  SettleSphere;
   FShroud.LeaveMotes;
   FMessages.ClearPopups;
   FGoRight.Hide;
@@ -1833,6 +1857,8 @@ begin
   FAudio.Load(RicochetSoundFile);
   FAudio.Load(CannonShotSoundFile);
   FAudio.Load(TerminalKeySoundFile);
+  FAudio.Load(SphereFormSoundFile);
+  FAudio.Load(SphereTakeSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -2587,6 +2613,7 @@ begin
     FBurst.Clear;
     FShroud.Clear;
     FUptake.Drop;
+    FSphere.Drop;
     FRain.Collapse;
     FFeed.Collapse;
     FGameOverTimer := GameOverDelayTicks;
@@ -2633,6 +2660,7 @@ begin
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY); // drops into a fall: no standing on air
   FUptake.Clear;
+  FSphere.Clear;
   FShroud.Clear;
   FShroud.Start(ReviveLook);
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
@@ -2787,6 +2815,38 @@ begin
       end;
     end;
   end;
+end;
+
+// The sphere forms with its middle on the middle of the cell
+procedure TMoonGame.FormSphere(ACol, ARow: Integer; ASize: Single);
+begin
+  FSphere.Form(FHero.Screen, (ACol - 0.5) * TileSize, (ARow - 0.5) * TileSize,
+    ASize);
+  FAudio.Play(SphereFormSoundFile);
+end;
+
+// The burst and the first pip are in the tick of the touch; the rest of
+// the pips follow the sphere's clock
+procedure TMoonGame.ResolveSphereContact;
+begin
+  if FHero.Dead or not FSphere.Touches(HeroBody(FHero), FHero.Screen) then
+    Exit;
+  FSphere.Take;
+  FAudio.Play(SphereTakeSoundFile);
+end;
+
+procedure TMoonGame.GiveSpherePip;
+begin
+  if FSphere.PipDue and (FHeroHealth < SphereHealth) then
+    Inc(FHeroHealth);
+end;
+
+// Through a door the pips still due are his at once, as the light is
+procedure TMoonGame.SettleSphere;
+begin
+  if FSphere.Filling then
+    FHeroHealth := SphereHealth;
+  FSphere.Settle;
 end;
 
 // A cannon is no bunker: its body wounds, and shoves the hero off the wall
@@ -3114,6 +3174,7 @@ begin
   // The uptake first: what comes in feeds the shroud's light, and the
   // light then fades by a tick
   FUptake.Tick(HeroPose, HeroSeeds);
+  FSphere.Tick(HeroCenter);
   FShroud.Tick(HeroPose, HeroSeeds);
   FRain.Tick;
   TickEnergy;
@@ -3129,6 +3190,8 @@ begin
   FExplosions.StrikeShards(ShardStruck);
   ResolveMonsterBulletHits;
   ResolveMonsterContact;
+  ResolveSphereContact;
+  GiveSpherePip;
   if not WorldStands then
     TickCannons;
   ResolveCannonContact;
@@ -3245,6 +3308,8 @@ begin
         FField.Draw(FSprites, FHero.Screen, AAlpha);
         FUptakePainter.DrawLoot(FDynamics.Canvas, FField, FHero.Screen,
           FSprites.Origin, AAlpha);
+        FSpherePainter.DrawSphere(FDynamics.Canvas, FHero.Screen,
+          FSprites.Origin, AAlpha);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
@@ -3262,6 +3327,7 @@ begin
           DrawHeroInShroud(HeroShake, HeroLift, AAlpha);
         FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
           AAlpha);
+        FSpherePainter.DrawOver(FDynamics.Canvas, HeroCenter, HeroShake, AAlpha);
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);

@@ -217,6 +217,7 @@ type
     procedure CheckRespawns;
     procedure CheckRespawnCell(const APoint: TRespawnPoint);
     procedure CheckEventRespawns(const AEvent: TLevelEvent);
+    procedure CheckEventSphere(const AEvent: TLevelEvent);
     procedure ParseShutDoors(const AArr: TJSONArray);
     procedure CheckShutDoors;
     function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
@@ -476,6 +477,12 @@ resourcestring
     + 'floor under it - a wall, or the deck of a pad that stands still';
   SLevelEventCellOff = 'Level "%s": event "%s" waits for the hero in the '
     + 'cell (%d, %d), off the grid';
+  SLevelEventSphereOff = 'Level "%s": event "%s" forms the sphere in the '
+    + 'cell (%d, %d), off the grid';
+  SLevelEventNoSphere = 'Level "%s": event "%s" waits for the sphere of '
+    + 'screen %d, which no event of the screen forms';
+  SLevelEventHintUnknown = 'Level "%s": event "%s" waits for the hint of '
+    + '"%s", which no event of screen %d types';
   SLevelDoorBadScreen = 'Level "%s": "shutDoors" names screen %d of %d';
   SLevelDoorTwice = 'Level "%s": "shutDoors" names screen %d twice';
   SLevelDoorNeverOpens = 'Level "%s": the door of screen %d is shut and no '
@@ -825,7 +832,67 @@ begin
         [FId, Event.Id, Event.CellX, Event.CellY]);
     CheckEventTargets(Event);
     CheckEventRespawns(Event);
+    CheckEventSphere(Event);
   end;
+end;
+
+function FormsSphere(const AEvent: TLevelEvent): Boolean;
+begin
+  for var Action in AEvent.Actions do
+    if Action.Kind = eaSphere then
+      Exit(True);
+  Result := False;
+end;
+
+function AnyEventFormsSphereOn(const AEvents: TArray<TLevelEvent>;
+  AScreen: Integer): Boolean;
+begin
+  for var Event in AEvents do
+    if (Event.Screen = AScreen) and FormsSphere(Event) then
+      Exit(True);
+  Result := False;
+end;
+
+function TypesHint(const AEvent: TLevelEvent): Boolean;
+begin
+  for var Action in AEvent.Actions do
+    if Action.Kind = eaHint then
+      Exit(True);
+  Result := False;
+end;
+
+// The event AId of the screen puts a hint in the terminal
+function AnyEventTypesHint(const AEvents: TArray<TLevelEvent>;
+  const AId: string; AScreen: Integer): Boolean;
+begin
+  for var Event in AEvents do
+    if (Event.Screen = AScreen) and SameText(Event.Id, AId) and TypesHint(Event) then
+      Exit(True);
+  Result := False;
+end;
+
+// A sphere off the grid is never reached, a sphere waited for that no
+// event forms keeps its door shut for good, and a hint waited for that no
+// event of the screen types is a typo: all die at load
+procedure TLevel.CheckEventSphere(const AEvent: TLevelEvent);
+begin
+  for var Action in AEvent.Actions do
+  begin
+    if Action.Kind <> eaSphere then
+      Continue;
+    if (Action.CellX > FGridWidth) or (Action.CellY > FGridHeight) then
+      raise ELevelError.CreateFmt(SLevelEventSphereOff,
+        [FId, AEvent.Id, Action.CellX, Action.CellY]);
+  end;
+  var SphereMissing := not AnyEventFormsSphereOn(FEvents, AEvent.Screen);
+  if (AEvent.Condition = ecSphereTaken) and SphereMissing then
+    raise ELevelError.CreateFmt(SLevelEventNoSphere,
+      [FId, AEvent.Id, AEvent.Screen]);
+  var HintMissing := not AnyEventTypesHint(FEvents, AEvent.HintEvent,
+    AEvent.Screen);
+  if (AEvent.Condition = ecHintTyped) and HintMissing then
+    raise ELevelError.CreateFmt(SLevelEventHintUnknown,
+      [FId, AEvent.Id, AEvent.HintEvent, AEvent.Screen]);
 end;
 
 function AnySceneCalled(const AScenes: TArray<TLevelScene>;

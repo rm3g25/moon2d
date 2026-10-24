@@ -41,17 +41,21 @@ type
   // clears it. heroStands holds while the hero stands in the cell "x",
   // "y", counted as a placement's - columns and rows from 1, the feet on
   // the bottom line of the row: his middle over the column, on his feet,
-  // not in a jump or a fall.
+  // not in a jump or a fall. hintTyped holds once the hint of the event
+  // "event" has been typed to its end in the terminal, and stays true; a
+  // text that never gets the box - wiped by a death first - never makes it
+  // hold. sphereTaken holds once the hero has taken the life sphere of
+  // the screen.
   TEventCondition = (ecEnterScreen, ecAllDead, ecLivesBelow, ecEnraged,
     ecActReached, ecGravelDealt, ecTrialDone, ecWaveKilled, ecVictoryEnds,
-    ecHeroStands);
+    ecHeroStands, ecHintTyped, ecSphereTaken);
 
   TEventActionKind = (eaBigMessage, eaSmallMessage, eaHint, eaMusic,
     eaIntensity, eaSun, eaTactics, eaRebuild, eaRestore, eaShelvesWake,
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
     eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor, eaEnergy,
-    eaRespawn);
+    eaRespawn, eaSphere);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -176,6 +180,9 @@ type
     // eaRespawn: the hero's checkpoint moves to the cell CellX, CellY of
     // the event's screen, counted as a respawn point's - columns and rows
     // from 1. JSON: "x", "y".
+    // eaSphere: the life sphere forms with its middle on the middle of the
+    // cell CellX, CellY of the event's screen, counted as a placement's,
+    // Size units across. JSON: "x", "y", "size" (16 by default).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -198,6 +205,7 @@ type
     Press: TPressOrders;
     Amount: Integer;
     CellX, CellY: Integer;
+    Size: Single;
   end;
 
   // One event in level JSON:
@@ -211,7 +219,9 @@ type
   //     or "when": "trialDone"
   //     or "when": "waveKilled", "act": 6, "part": 1, "of": 2
   //     or "when": "victoryEnds", "lead": 4
-  //     or "when": "heroStands", "x": 8, "y": 8)
+  //     or "when": "heroStands", "x": 8, "y": 8
+  //     or "when": "hintTyped", "event": "labHint"
+  //     or "when": "sphereTaken")
   //     "delay": 33,
   //     "then": [
   //       {"action": "hint", "text": "...", "textEn": "..."}
@@ -228,6 +238,7 @@ type
     Whole: Integer; // ecGravelDealt, ecWaveKilled, "of" in JSON
     LeadSeconds: Single; // ecVictoryEnds
     CellX, CellY: Integer; // ecHeroStands, from 1 as a placement's
+    HintEvent: string; // ecHintTyped, the id of the event whose hint it waits for
     DelayTicks: Integer; // between the condition and the actions
     Actions: TArray<TEventAction>;
   end;
@@ -237,13 +248,14 @@ const
   // tactics action takes
   EventConditionIds: array [TEventCondition] of string = (
     'enterScreen', 'allDead', 'livesBelow', 'enraged', 'actReached',
-    'gravelDealt', 'trialDone', 'waveKilled', 'victoryEnds', 'heroStands');
+    'gravelDealt', 'trialDone', 'waveKilled', 'victoryEnds', 'heroStands',
+    'hintTyped', 'sphereTaken');
   EventActionIds: array [TEventActionKind] of string = (
     'bigMessage', 'smallMessage', 'hint', 'music', 'intensity', 'sun',
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene', 'goRight', 'openDoor', 'energy', 'respawn');
+    'scene', 'goRight', 'openDoor', 'energy', 'respawn', 'sphere');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -316,6 +328,9 @@ resourcestring
   SEventNoCell = 'Level "%s": event "%s": heroStands takes "x" and "y" from 1';
   SEventBadEnergy = 'Level "%s": event "%s": energy takes a "value", 1..100';
   SEventBadRespawn = 'Level "%s": event "%s": respawn takes "x" and "y" from 1';
+  SEventBadSphere = 'Level "%s": event "%s": sphere takes "x" and "y" from 1 ' +
+    'and a "size" above 0, not %g';
+  SEventNoHintEvent = 'Level "%s": event "%s": hintTyped names no "event"';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -324,6 +339,8 @@ const
   DefaultTurnIn = 1.5;
   DefaultBlinkOut = 0.6;
   DefaultBlinkIn = 0.5;
+  // The life sphere across, units: half a cell
+  DefaultSphereSize = 16;
 
 // A typo raises, as a difficulty grade does in Levels.Defs: an event
 // that never fires is a debugging season, not a feature
@@ -372,6 +389,18 @@ begin
   AAction.CellY := AObj.GetValue<Integer>('y', 0);
   if (AAction.CellX < 1) or (AAction.CellY < 1) then
     raise ELevelEventError.CreateFmt(SEventBadRespawn, [ALevelId, AEventId]);
+end;
+
+procedure ReadSphere(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+begin
+  AAction.CellX := AObj.GetValue<Integer>('x', 0);
+  AAction.CellY := AObj.GetValue<Integer>('y', 0);
+  AAction.Size := AObj.GetValue<Double>('size', DefaultSphereSize);
+  var CellOff := (AAction.CellX < 1) or (AAction.CellY < 1);
+  if CellOff or (AAction.Size <= 0) then
+    raise ELevelEventError.CreateFmt(SEventBadSphere,
+      [ALevelId, AEventId, AAction.Size]);
 end;
 
 procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
@@ -637,6 +666,8 @@ begin
       ReadEnergy(AObj, ALevelId, AEventId, Result);
     eaRespawn:
       ReadRespawn(AObj, ALevelId, AEventId, Result);
+    eaSphere:
+      ReadSphere(AObj, ALevelId, AEventId, Result);
   end;
 end;
 
@@ -689,6 +720,9 @@ begin
     if (Result.CellX < 1) or (Result.CellY < 1) then
       raise ELevelEventError.CreateFmt(SEventNoCell, [ALevelId, Result.Id]);
   end;
+  Result.HintEvent := AObj.GetValue<string>('event', '');
+  if (Result.Condition = ecHintTyped) and (Result.HintEvent = '') then
+    raise ELevelEventError.CreateFmt(SEventNoHintEvent, [ALevelId, Result.Id]);
   Result.DelayTicks := AObj.GetValue<Integer>('delay', 0);
 
   var ActionsArr := AObj.GetValue<TJSONArray>('then', nil);
