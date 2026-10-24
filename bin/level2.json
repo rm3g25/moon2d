@@ -79,6 +79,11 @@
       "fromScreen": 11,
       "image": "screen11.png",
       "tint": [75, 75, 80]
+    },
+    {
+      "fromScreen": 12,
+      "image": "screen12.png",
+      "tint": [75, 75, 80]
     }
   ],
   "objects": [
@@ -938,6 +943,62 @@
       "y": 330,
       "width": 96,
       "tag": "s11-way-out"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 320,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-1"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 352,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-2"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 384,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-3"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 416,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-4"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 448,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-5"
+    },
+    {
+      "sprite": "s12-road-tile",
+      "screen": 12,
+      "x": 480,
+      "y": 352,
+      "width": 32,
+      "tag": "s12-road-6"
+    },
+    {
+      "sprite": "s12-crust",
+      "screen": 12,
+      "x": 0,
+      "y": 353,
+      "width": 328,
+      "tag": "s12-crust"
     }
   ],
   "pads": [
@@ -3071,6 +3132,71 @@
       "size": 30
     },
     {
+      "kind": "craft",
+      "tag": "s12-far-lip",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-far-lip",
+      "width": 512,
+      "x": 0,
+      "y": 215.2
+    },
+    {
+      "kind": "craft",
+      "tag": "s12-pillar-a",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-pillar-needle",
+      "width": 6,
+      "x": 47.0,
+      "y": 175,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s12-pillar-c",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-pillar-twin",
+      "width": 16,
+      "x": 145.0,
+      "y": 180,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s12-pillar-b",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-pillar-block",
+      "width": 17,
+      "x": 247.5,
+      "y": 188,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s12-pillar-d",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-pillar-stump",
+      "width": 16,
+      "x": 323.0,
+      "y": 195,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s12-pillar-e",
+      "screen": 12,
+      "layer": "sky",
+      "body": "s12-pillar-needle-mirrored",
+      "width": 6,
+      "x": 392.0,
+      "y": 175,
+      "tint": [60, 60, 64]
+    },
+    {
       "kind": "dust",
       "screen": 10,
       "x": 0,
@@ -3512,6 +3638,37 @@
           "0000110100001100",
           "1110110100001111"
         ]
+      },
+      {
+        "screen": 12,
+        "rows": [
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+        ],
+        "collision": [
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "1111111111111111"
+        ]
       }
     ]
   },
@@ -3921,9 +4078,10 @@
     {"screen": 8, "x": 1, "y": 4},
     {"screen": 9, "x": 2, "y": 11},
     {"screen": 10, "x": 2, "y": 11},
-    {"screen": 11, "x": 2, "y": 11}
+    {"screen": 11, "x": 2, "y": 11},
+    {"screen": 12, "x": 1, "y": 11}
   ],
-  "shutDoors": [9, 10, 11],
+  "shutDoors": [9, 10, 11, 12],
   "events": [
     {
       "id": "breachWarning",
@@ -4121,6 +4279,55 @@
       "y": 8,
       "then": [
         {"action": "scene", "target": "s11-wake"}
+      ]
+    },
+    {
+      "id": "s12-shuttle-1",
+      "screen": 12,
+      "when": "enterScreen",
+      "delay": 16,
+      "then": [
+        {
+          "action": "hint",
+          "place": "top",
+          "header": "ЧЕЛНОК",
+          "headerEn": "SHUTTLE",
+          "text": "Мастер! В конце тоннеля что-то большое.",
+          "textEn": "Master! Something big at the end of the tunnel."
+        }
+      ]
+    },
+    {
+      "id": "s12-shuttle-2",
+      "screen": 12,
+      "when": "hintTyped",
+      "event": "s12-shuttle-1",
+      "then": [
+        {
+          "action": "hint",
+          "place": "top",
+          "header": "ЧЕЛНОК",
+          "headerEn": "SHUTTLE",
+          "text": "Лёд не ответит. Бей и следи за зарядом камня.",
+          "textEn": "The ice will not answer. Strike, and watch the charge of the stone."
+        }
+      ]
+    },
+    {
+      "id": "s12-sphere",
+      "screen": 12,
+      "when": "hintTyped",
+      "event": "s12-shuttle-2",
+      "then": [
+        {"action": "sphere", "x": 12, "y": 10}
+      ]
+    },
+    {
+      "id": "s12-door",
+      "screen": 12,
+      "when": "sphereTaken",
+      "then": [
+        {"action": "openDoor"}
       ]
     }
   ],
