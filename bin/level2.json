@@ -3142,6 +3142,31 @@
       "y": 215.2
     },
     {
+      "kind": "convoy",
+      "tag": "s12-convoys",
+      "screen": 12,
+      "layer": "sky",
+      "x": 0,
+      "y": 0,
+      "intensity": 0,
+      "tint": [100, 86, 62],
+      "tail": [100, 16, 10],
+      "flasher": [100, 52, 8],
+      "size": 3,
+      "gap": [72, 34],
+      "ramp": 25,
+      "jitter": 25,
+      "lights": [3, 5],
+      "pitch": 3.2,
+      "flashers": 35,
+      "fade": 20,
+      "lanes": [
+        {"from": [-16, 216.4], "to": [458, 216], "speed": 8, "far": 70},
+        {"from": [-16, 214.9], "to": [458, 215.2], "speed": 6.4, "far": 70,
+         "scale": 80, "joins": 2}
+      ]
+    },
+    {
       "kind": "craft",
       "tag": "s12-pillar-a",
       "screen": 12,
@@ -3195,6 +3220,23 @@
       "x": 392.0,
       "y": 175,
       "tint": [60, 60, 64]
+    },
+    {
+      "kind": "searchlight",
+      "tag": "s12-searchlight",
+      "screen": 12,
+      "layer": "sky",
+      "x": 0,
+      "y": 0,
+      "intensity": 0,
+      "tint": [88, 94, 100],
+      "source": [462, 216],
+      "sweep": {"center": [190, 200], "reach": [150, 75], "period": 11,
+                "phase": 25},
+      "spot": [90, 54],
+      "catch": 60,
+      "catches": ["s12-pillar-a", "s12-pillar-c", "s12-pillar-b",
+                  "s12-pillar-d", "s12-pillar-e"]
     },
     {
       "kind": "dust",
@@ -4294,7 +4336,10 @@
           "headerEn": "SHUTTLE",
           "text": "Мастер! В конце тоннеля что-то большое.",
           "textEn": "Master! Something big at the end of the tunnel."
-        }
+        },
+        {"action": "intensity", "target": "s12-convoys", "value": 100},
+        {"action": "intensity", "target": "s12-searchlight", "value": 100,
+         "ticks": 20}
       ]
     },
     {
