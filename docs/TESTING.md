@@ -77,7 +77,8 @@ Tests\
   Levels\
     Tests.Levels.Carousels.pas
     Tests.Levels.Doors.pas     the doors a level shuts
-    Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust
+    Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust,
+                               the convoy, the searchlight
     Tests.Levels.Entities.pas
     Tests.Levels.Events.pas    the events: heroStands, respawn
     Tests.Levels.Graph.pas

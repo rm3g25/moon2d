@@ -61,6 +61,14 @@ procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   ACenterX, ACenterY, ASize: Single; ATint: TRgb; ALevel: Single);
 procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   const ADest: TSdlFRect; ATint: TRgb; ALevel: Single);
+// The texture centered on the point, AWidth units along its own X and
+// AHeight across it, turned AAngle degrees clockwise about its middle
+procedure DrawGlowTurned(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  ACenterX, ACenterY, AWidth, AHeight, AAngle: Single; ATint: TRgb;
+  ALevel: Single);
+// How bright a point glow (gsPoint) is at a point counted in half sides
+// from its middle: 1 there, all but nothing at its edge
+function PointGlowLevel(ADX, ADY: Single): Single;
 
 implementation
 
@@ -333,6 +341,26 @@ begin
   SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
   SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
   SDL_RenderCopyF(ARenderer, ATexture, nil, @ADest);
+end;
+
+procedure DrawGlowTurned(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
+  ACenterX, ACenterY, AWidth, AHeight, AAngle: Single; ATint: TRgb;
+  ALevel: Single);
+var
+  Dest: TSdlFRect;
+begin
+  Dest.X := ACenterX - AWidth / 2;
+  Dest.Y := ACenterY - AHeight / 2;
+  Dest.W := AWidth;
+  Dest.H := AHeight;
+  SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
+  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_RenderCopyExF(ARenderer, ATexture, nil, @Dest, AAngle, nil, SdlFlipNone);
+end;
+
+function PointGlowLevel(ADX, ADY: Single): Single;
+begin
+  Result := PointAlpha(ADX, ADY);
 end;
 
 end.

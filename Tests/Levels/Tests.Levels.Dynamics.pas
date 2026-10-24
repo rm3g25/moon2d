@@ -17,6 +17,12 @@
   The eclipse: what its file says, as far as it is read. Its dark and its
   wave are drawn, never read.
 
+  The convoy and the searchlight: the gap of the traffic, the line of a
+  lane and the figure of eight of a sweep are records a test builds by
+  hand and asks; the objects are read from JSON - a searchlight with the
+  crafts it catches from a list, as a level reads them. Their columns and
+  their spot are drawn, never read.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Levels.Dynamics;
@@ -100,6 +106,40 @@ type
     procedure TestBadEclipseRaises;
   end;
 
+  [TestFixture]
+  TConvoyTests = class
+  public
+    [Test]
+    procedure TestGapNarrowsOverTheRampAndStays;
+    [Test]
+    procedure TestLaneRunsFromItsStartToItsFinish;
+    [Test]
+    procedure TestLightsKeepLessOfThemselvesDownTheLane;
+    [Test]
+    procedure TestConvoyReadsFromItsFile;
+    [Test]
+    procedure TestBadConvoyRaises;
+  end;
+
+  [TestFixture]
+  TSearchlightTests = class
+  public
+    [Test]
+    procedure TestSweepStartsAtItsPhaseAndComesBackInAPeriod;
+    [Test]
+    procedure TestSweepStaysWithinItsReach;
+    [Test]
+    procedure TestSweepGoesAcrossOnceAndUpAndDownTwice;
+    [Test]
+    procedure TestSearchlightReadsFromItsFile;
+    [Test]
+    procedure TestBadSearchlightRaises;
+    [Test]
+    procedure TestCatchesAreFoundAmongTheObjects;
+    [Test]
+    procedure TestCatchesThatStandApartRaise;
+  end;
+
 implementation
 
 uses
@@ -133,6 +173,20 @@ const
   BackPeakMost = 1.05;
   AmbientPoints: array [0..3] of Integer = (-300, 0, 77, 512);
   HourSpeeds: array [0..1] of Integer = (7, -7);
+  // A convoy of one lane; the format adds members after the lanes
+  ConvoyJson = '{"kind":"convoy","screen":12,"x":0,"y":0,' +
+    '"lanes":[{"from":[-16,216],"to":[458,216]}]%s}';
+  // A searchlight; the format adds members
+  SearchlightJson = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"source":[462,216],"sweep":{"center":[190,200],"reach":[150,75]}%s}';
+  // A pillar it may catch; the format puts its screen and its layer
+  PillarJson = '{"kind":"craft","tag":"pillar","screen":%d,"layer":"%s",' +
+    '"body":"needle","width":6,"x":47,"y":175}';
+  CatchingJson = '{"kind":"searchlight","screen":12,"layer":"sky","x":0,' +
+    '"y":0,"source":[462,216],"sweep":{"center":[190,200],' +
+    '"reach":[150,75]},"catches":["pillar"]}';
+  // Samples of a sweep over one period
+  SweepSamples = 1000;
 
 function IsNear(AValue: Single; AExpected: Double): Boolean;
 begin
@@ -156,6 +210,28 @@ begin
     procedure
     begin
       DynamicOf(AJson).Free;
+    end, EDynamicError, AWhat);
+end;
+
+// A "dynamics" section of the objects AItems lists, read as a level reads it
+function DynamicsOf(const AItems: string): TDynamicObjects;
+begin
+  var Root := TJSONObject.ParseJSONValue('{"dynamics":[' + AItems + ']}') as
+    TJSONObject;
+  try
+    Result := ParseDynamics(Root, LevelId);
+  finally
+    Root.Free;
+  end;
+end;
+
+// By value, not const: an anonymous method captures it
+procedure ExpectListRaises(AItems, AWhat: string);
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      DynamicsOf(AItems).Free;
     end, EDynamicError, AWhat);
 end;
 
@@ -629,9 +705,271 @@ begin
     'An unknown look');
 end;
 
+// The traffic of screen 12: half the ledge at the start, dense in 45
+// seconds
+function ScreenTwelveTraffic: TConvoyTraffic;
+begin
+  Result := Default(TConvoyTraffic);
+  Result.GapFirst := 237;
+  Result.GapLast := 44;
+  Result.Ramp := 45;
+  Result.Jitter := 0.25;
+end;
+
+// 100 units to the right along y 10; at its finish a light keeps 70% of
+// what it has, and it has 80% all along
+function ShortLane: TConvoyLane;
+begin
+  Result := Default(TConvoyLane);
+  Result.Start.X := 0;
+  Result.Start.Y := 10;
+  Result.Finish.X := 100;
+  Result.Finish.Y := 10;
+  Result.Speed := 8;
+  Result.FarShare := 0.7;
+  Result.Scale := 0.8;
+  Result.Joins := 1;
+end;
+
+// The sweep of screen 12, starting at the right end of the eight
+function ScreenTwelveSweep: TSweep;
+begin
+  Result := Default(TSweep);
+  Result.Center.X := 190;
+  Result.Center.Y := 200;
+  Result.Reach.X := 150;
+  Result.Reach.Y := 75;
+  Result.Period := 11;
+  Result.Phase := 0.25;
+end;
+
+// How many times ASide changes sign over the samples of a period
+function SignChanges(const ASide: TArray<Single>): Integer;
+begin
+  Result := 0;
+  for var i := 1 to High(ASide) do
+    if (ASide[i - 1] < 0) <> (ASide[i] < 0) then
+      Inc(Result);
+end;
+
+procedure TConvoyTests.TestGapNarrowsOverTheRampAndStays;
+begin
+  var Traffic := ScreenTwelveTraffic;
+
+  Assert.IsTrue(IsNear(Traffic.GapAt(0), 237), 'Half the ledge at the start');
+  Assert.IsTrue(IsNear(Traffic.GapAt(22.5), 140.5),
+    Format('Half way through the ramp: %g', [Traffic.GapAt(22.5)]));
+  Assert.IsTrue(IsNear(Traffic.GapAt(45), 44), 'Dense at the end of the ramp');
+  Assert.IsTrue(IsNear(Traffic.GapAt(600), 44), 'And dense from then on');
+  Assert.IsTrue(Traffic.GapAt(10) > Traffic.GapAt(20),
+    'Narrower the later it is');
+end;
+
+procedure TConvoyTests.TestLaneRunsFromItsStartToItsFinish;
+begin
+  var Lane := ShortLane;
+
+  Assert.IsTrue(IsNear(Lane.Span, 100), 'From its start to its finish');
+  var Middle := Lane.PointAt(50);
+  Assert.IsTrue(IsNear(Middle.X, 50) and IsNear(Middle.Y, 10),
+    Format('Half way down: %g, %g', [Middle.X, Middle.Y]));
+  var Finish := Lane.PointAt(100);
+  Assert.IsTrue(IsNear(Finish.X, 100) and IsNear(Finish.Y, 10),
+    'All the way down: on the finish');
+end;
+
+procedure TConvoyTests.TestLightsKeepLessOfThemselvesDownTheLane;
+begin
+  var Lane := ShortLane;
+
+  Assert.IsTrue(IsNear(Lane.DepthAt(0), 0.8), 'At the start: the lane''s own');
+  Assert.IsTrue(IsNear(Lane.DepthAt(100), 0.56),
+    Format('At the finish: 70%% of it, %g', [Lane.DepthAt(100)]));
+  Assert.IsTrue((Lane.DepthAt(50) < 0.8) and (Lane.DepthAt(50) > 0.56),
+    'Between them on the way');
+  Assert.IsTrue(IsNear(Lane.DepthAt(-20), 0.8) and
+    IsNear(Lane.DepthAt(130), 0.56), 'Off the lane: as at its ends');
+end;
+
+procedure TConvoyTests.TestConvoyReadsFromItsFile;
+begin
+  var Parsed := DynamicOf(Format(ConvoyJson, ['']));
+  try
+    Assert.IsTrue(Parsed is TConvoy, 'A convoy');
+    Assert.AreEqual<TDynamicLayer>(dlSky, Parsed.Placement.Layer,
+      'In the depth by default');
+  finally
+    Parsed.Free;
+  end;
+
+  Parsed := DynamicOf(Format(ConvoyJson, [',"gap":[237,44],"ramp":45,' +
+    '"jitter":25,"lights":[3,5],"tail":[100,16,10],"flasher":[100,52,8]']));
+  Parsed.Free;
+end;
+
+procedure TConvoyTests.TestBadConvoyRaises;
+const
+  Head = '{"kind":"convoy","screen":12,"x":0,"y":0%s}';
+  Lane = '{"from":[0,10],"to":[100,10]}';
+begin
+  ExpectRaises(Format(Head, ['']), 'No lanes');
+  ExpectRaises(Format(Head, [',"lanes":[]']), 'An empty list of lanes');
+  ExpectRaises(Format(Head, [',"lanes":[{"from":[5,5],"to":[5,5]}]']),
+    'A lane from a point to the same point');
+  ExpectRaises(Format(Head, [',"lanes":[{"from":[0,10],"to":[100,10],' +
+    '"joins":2}]']), 'A first lane that joins another');
+  ExpectRaises(Format(Head, [',"lanes":[' + Lane + ',{"from":[0,8],' +
+    '"to":[100,8],"joins":0}]']), 'A lane that joins column 0');
+  ExpectRaises(Format(Head, [',"lanes":[{"from":[0,10],"to":[100,10],' +
+    '"speed":0}]']), 'A lane that does not move');
+  ExpectRaises(Format(ConvoyJson, [',"gap":[0,44]']), 'A gap of nothing');
+  ExpectRaises(Format(ConvoyJson, [',"jitter":100']),
+    'A jitter of a whole gap');
+  ExpectRaises(Format(ConvoyJson, [',"lights":[1,3]']),
+    'A column of one light');
+  ExpectRaises(Format(ConvoyJson, [',"lights":[5,3]']),
+    'The most before the fewest');
+  ExpectRaises(Format(ConvoyJson, [',"ramp":0']), 'A ramp of no time');
+end;
+
+procedure TSearchlightTests.TestSweepStartsAtItsPhaseAndComesBackInAPeriod;
+begin
+  var Sweep := ScreenTwelveSweep;
+
+  var First := Sweep.SpotAt(0);
+  Assert.IsTrue(IsNear(First.X, 340) and IsNear(First.Y, 200),
+    Format('A quarter in: at the right end, %g, %g', [First.X, First.Y]));
+  var Again := Sweep.SpotAt(11);
+  Assert.IsTrue(IsNear(Again.X, First.X) and IsNear(Again.Y, First.Y),
+    'A period later the spot is where it was');
+  var Later := Sweep.SpotAt(3 * 3600 + 11);
+  var Before := Sweep.SpotAt(3 * 3600);
+  Assert.IsTrue(IsNear(Later.X, Before.X) and IsNear(Later.Y, Before.Y),
+    'Hours on, still a period to a turn');
+end;
+
+procedure TSearchlightTests.TestSweepStaysWithinItsReach;
+begin
+  var Sweep := ScreenTwelveSweep;
+
+  var Left: Single := Sweep.Center.X;
+  var Right: Single := Sweep.Center.X;
+  var Top: Single := Sweep.Center.Y;
+  var Bottom: Single := Sweep.Center.Y;
+  for var i := 0 to SweepSamples do
+  begin
+    var Spot := Sweep.SpotAt(i * Sweep.Period / SweepSamples);
+    Assert.IsTrue((Abs(Spot.X - Sweep.Center.X) <= Sweep.Reach.X +
+      SingleSlack) and (Abs(Spot.Y - Sweep.Center.Y) <= Sweep.Reach.Y +
+      SingleSlack), Format('Sample %d: the spot at %g, %g', [i, Spot.X,
+      Spot.Y]));
+    Left := Min(Left, Spot.X);
+    Right := Max(Right, Spot.X);
+    Top := Min(Top, Spot.Y);
+    Bottom := Max(Bottom, Spot.Y);
+  end;
+  Assert.IsTrue((Right - Left > 1.99 * Sweep.Reach.X) and
+    (Bottom - Top > 1.99 * Sweep.Reach.Y),
+    'Over a period it goes all the way, across and up and down');
+end;
+
+procedure TSearchlightTests.TestSweepGoesAcrossOnceAndUpAndDownTwice;
+var
+  Across, Down: TArray<Single>;
+begin
+  var Sweep := ScreenTwelveSweep;
+  // Neither side starts on the middle: the first sample is on a side
+  Sweep.Phase := 0.1;
+
+  SetLength(Across, SweepSamples);
+  SetLength(Down, SweepSamples);
+  for var i := 0 to SweepSamples - 1 do
+  begin
+    var Spot := Sweep.SpotAt(i * Sweep.Period / SweepSamples);
+    Across[i] := Spot.X - Sweep.Center.X;
+    Down[i] := Spot.Y - Sweep.Center.Y;
+  end;
+  // Over a period, the ends left out: a swing to each side and back
+  Assert.AreEqual(1, SignChanges(Across) div 2,
+    'Across: once to each side');
+  Assert.AreEqual(2, SignChanges(Down) div 2,
+    'Up and down: twice to each side - a figure of eight');
+end;
+
+procedure TSearchlightTests.TestSearchlightReadsFromItsFile;
+begin
+  var Parsed := DynamicOf(Format(SearchlightJson, ['']));
+  try
+    Assert.IsTrue(Parsed is TSearchlight, 'A searchlight');
+    Assert.AreEqual<TDynamicLayer>(dlSky, Parsed.Placement.Layer,
+      'In the depth by default');
+  finally
+    Parsed.Free;
+  end;
+
+  Parsed := DynamicOf(Format(SearchlightJson, [',"spot":[90,54],' +
+    '"catch":60,"catches":[]']));
+  Parsed.Free;
+end;
+
+procedure TSearchlightTests.TestBadSearchlightRaises;
+const
+  NoSweep = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"source":[462,216]}';
+  NoSource = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"sweep":{"center":[190,200],"reach":[150,75]}}';
+  OnTheSource = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"source":[190,200],"sweep":{"center":[190,200],"reach":[150,75]}}';
+  BackwardReach = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"source":[462,216],"sweep":{"center":[190,200],"reach":[-1,75]}}';
+  NoPeriod = '{"kind":"searchlight","screen":12,"x":0,"y":0,' +
+    '"source":[462,216],"sweep":{"center":[190,200],"reach":[150,75],' +
+    '"period":0}}';
+begin
+  ExpectRaises(NoSweep, 'No sweep');
+  ExpectRaises(NoSource, 'No source');
+  ExpectRaises(OnTheSource, 'The middle of the sweep on the source');
+  ExpectRaises(BackwardReach, 'A reach under nothing');
+  ExpectRaises(NoPeriod, 'A sweep of no time');
+  ExpectRaises(Format(SearchlightJson, [',"spot":[0,54]']),
+    'A spot of no length');
+  ExpectRaises(Format(SearchlightJson, [',"catch":120']),
+    'A catch past 100');
+  ExpectRaises(Format(SearchlightJson, [',"catches":[1]']),
+    'A catch that is no tag');
+  ExpectRaises('{"kind":"searchlight","parent":"ship","x":0,"y":0,' +
+    '"source":[462,216],"sweep":{"center":[190,200],"reach":[150,75]},' +
+    '"catches":["pillar"]}', 'A searchlight that catches, hung on a parent');
+end;
+
+procedure TSearchlightTests.TestCatchesAreFoundAmongTheObjects;
+begin
+  var Objects := DynamicsOf(Format(PillarJson, [12, 'sky']) + ',' +
+    CatchingJson);
+  try
+    Assert.AreEqual(2, Objects.Count, 'The pillar and the searchlight');
+    Assert.IsTrue(Objects[1] is TSearchlight, 'The searchlight, after it');
+  finally
+    Objects.Free;
+  end;
+end;
+
+procedure TSearchlightTests.TestCatchesThatStandApartRaise;
+begin
+  ExpectListRaises(CatchingJson, 'A catch no craft carries');
+  ExpectListRaises(CatchingJson + ',' + Format(PillarJson, [12, 'sky']),
+    'A craft after the searchlight: drawn over its own light');
+  ExpectListRaises(Format(PillarJson, [11, 'sky']) + ',' + CatchingJson,
+    'A craft on another screen');
+  ExpectListRaises(Format(PillarJson, [12, 'aloft']) + ',' + CatchingJson,
+    'A craft on another layer');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TCraftTests);
   TDUnitX.RegisterTestFixture(TDustTests);
   TDUnitX.RegisterTestFixture(TEclipseTests);
+  TDUnitX.RegisterTestFixture(TConvoyTests);
+  TDUnitX.RegisterTestFixture(TSearchlightTests);
 
 end.

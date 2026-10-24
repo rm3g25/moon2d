@@ -16,6 +16,11 @@
   beam (TBeam) points where a scene aims it: a scanner's cone, or the
   column a craft lowers its cargo in.
 
+  A convoy and a searchlight live in the depth of a screen: lights
+  crawling along a far ledge, a spot of light walking the far wall. A
+  searchlight lights the crafts it names - the pillars it passes over -,
+  found among the objects once the whole list is read.
+
   The parent works as in the VCL, for coordinates only: without one an
   object is nailed to a point of its screen; with one, x and y count
   from the parent's top-left corner and the object shows wherever the
@@ -873,6 +878,9 @@ type
   //       "width": 17.3, "anchor": "center", "reach": 3}]}
   // Anchor is "top" by default. A part that turns hangs by its pivot.
   TCraft = class(TDynamicObject)
+  private type
+    // Drawn as painted, or added once more in the light of a lamp
+    TPieceLook = (plPainted, plLit);
   private
     FSetName: string;
     FBody: TCraftPart;
@@ -883,7 +891,12 @@ type
       var APart: TCraftPart);
     procedure FollowWatch(var APart: TCraftPart);
     procedure DrawPart(const ACanvas: TDynamicCanvas; const APart: TCraftPart;
-      ALeft, ATop, AOpacity, AAlpha: Single);
+      ALeft, ATop: Single; const ATint: TColorTint; AOpacity, AAlpha: Single;
+      ALook: TPieceLook);
+    // AFrameX, AFrameY - the corner of the frame the placement counts from
+    procedure DrawPieces(const ACanvas: TDynamicCanvas;
+      AFrameX, AFrameY: Single; const ATint: TColorTint;
+      AOpacity, AAlpha: Single; ALook: TPieceLook);
   protected
     procedure Advance(AMotionX, AMotionY: Single;
       AParentAlive: Boolean); override;
@@ -909,6 +922,15 @@ type
     procedure Unwatch(const APartTag: string);
     // Some part tagged APartTag turns or slides
     function HasFollower(const APartTag: string): Boolean;
+    // The box of the body in screen units, AAlpha of the way from the last
+    // tick to this one
+    function BodyAt(AAlpha: Single): TSdlFRect;
+    // The machine once more, added over what is drawn in the light of
+    // ATint at ALevel (0..1): lit by a lamp outside it, as far as it is
+    // there to be lit. AFrameX, AFrameY - the corner of the frame its
+    // placement counts from, shake included.
+    procedure DrawLit(const ACanvas: TDynamicCanvas; AFrameX, AFrameY: Single;
+      const ATint: TColorTint; ALevel, AAlpha: Single);
   end;
 
   // How a beam looks: a scanner's cone, or a tractor's column - as wide
@@ -942,9 +964,6 @@ type
     FFrom: TSdlFPoint; // where the end was when the aim began
     FMark: TSdlFPoint; // where the mark is, as last told
     FSwing: TAxisMotion; // 0..1 of the way from FFrom to FMark
-    procedure DrawCone(const ACanvas: TDynamicCanvas;
-      const AFrom, ATo: TSdlFPoint; AFromWidth, AToWidth: Single;
-      const AColor: TRgb; ALevel: Single);
     procedure DrawRing(const ACanvas: TDynamicCanvas;
       const AMiddle, AAlong: TSdlFPoint; const AColor: TRgb; ALevel: Single);
     procedure DrawScan(const ACanvas: TDynamicCanvas;
@@ -1112,6 +1131,205 @@ type
     property Rim: Single read FRim;
   end;
 
+  // One lane of a convoy: the line its columns crawl along, from Start to
+  // Finish in units from the object's corner, Speed units a second. The
+  // lane runs into the depth: at Finish a light keeps FarShare (0..1) of
+  // its size and its light. Scale is what the lights of the lane keep all
+  // along it - a lane farther back. Joins is the column of the first lane
+  // this one comes in with, counted from 1: the first lane's own is 1.
+  TConvoyLane = record
+    Start, Finish: TSdlFPoint;
+    Speed: Single;
+    FarShare: Single;
+    Scale: Single;
+    Joins: Integer;
+    // Units from Start to Finish
+    function Span: Single;
+    // The point AAlong units down the lane, from the object's corner
+    function PointAt(AAlong: Single): TSdlFPoint;
+    // The share of its size and light a light keeps AAlong units down the
+    // lane: Scale at Start, FarShare of that at Finish
+    function DepthAt(AAlong: Single): Single;
+  end;
+
+  // How often the columns of a convoy come: the gap from one head to the
+  // next is GapFirst units when the convoy starts and narrows to GapLast
+  // over Ramp seconds; each gap is off by up to Jitter (0..1) of itself
+  // either way
+  TConvoyTraffic = record
+    GapFirst, GapLast: Single;
+    Ramp: Single;
+    Jitter: Single;
+    // The gap after a column that comes in ASeconds after the start,
+    // before the jitter
+    function GapAt(ASeconds: Double): Single;
+  end;
+
+  // A column on its way: its lane, the second of the convoy's clock it
+  // came in at and its lights. One of them, between the head and the
+  // tail, may flash, FlashPhase (0..1) into its beat when the clock starts.
+  TConvoyColumn = record
+    Lane: Integer;
+    Entered: Double;
+    Lights: Integer;
+    HasFlasher: Boolean;
+    Flasher: Integer; // counted from the head, which is 0
+    FlashPhase: Single;
+  end;
+
+  // The tiny lights of TeK columns crawling along a far ledge: a warm
+  // headlight in front, dim running lights, a red tail light at the back,
+  // and on some columns an orange flasher between them. The tint is the
+  // color of the headlights, size their halo across in units; the other
+  // lights are smaller. A column comes in at the start of its lane and
+  // goes out at its finish, every light fading over "fade" units at either
+  // end. The first lane starts with one column alone; the gap between
+  // columns narrows as TConvoyTraffic says, "gap" giving its first and its
+  // last size; a lane after the first comes in with the column of the
+  // first its "joins" names. How many lights a column has and which of
+  // them flashes follows from the column's number: the same traffic after
+  // every rewind.
+  // The convoy starts the tick it is first lit - an event lights it -, and
+  // a rewind puts it out and empties the ledge. Its clock runs at its pace.
+  // On the sky layer by default: in the depth, standing while the world
+  // shakes. A layer is drawn in the order of the file: a convoy listed
+  // after its ledge and before the pillars on it rides on the ledge and
+  // behind the pillars.
+  // JSON:
+  //   {"kind": "convoy", "tag": "s12-convoys", "screen": 12, "x": 0,
+  //    "y": 0, "intensity": 0, "tint": [100, 86, 62],
+  //    "tail": [100, 16, 10], "flasher": [100, 52, 8], "size": 3,
+  //    "gap": [237, 44], "ramp": 45, "jitter": 25, "lights": [3, 5],
+  //    "pitch": 3.2, "flashers": 35, "fade": 20,
+  //    "lanes": [{"from": [-16, 216.4], "to": [458, 216], "speed": 8,
+  //               "far": 70},
+  //              {"from": [-16, 214.9], "to": [458, 215.2], "speed": 6.4,
+  //               "far": 70, "scale": 80, "joins": 2}]}
+  TConvoy = class(TDynamicObject)
+  private type
+    // How one light of a column is drawn: its color, its size and its
+    // light as shares of a headlight's, how far it is into its flash
+    TColumnLight = record
+      Color: TRgb;
+      SizeShare: Single;
+      Level: Single;
+      Flash: Single;
+    end;
+  private
+    FLanes: TArray<TConvoyLane>;
+    FTraffic: TConvoyTraffic;
+    FHeadColor, FTailColor, FFlasherColor: TRgb;
+    FSize: Single;
+    FFewestLights, FMostLights: Integer;
+    FPitch: Single;
+    FFlashers: Single; // 0..1 of the columns
+    FFade: Single;
+    FSeed: Cardinal;
+    FRunning: Boolean;
+    FClock: Double; // ticks of the convoy's own time, at its pace
+    FLaneOpen: TArray<Boolean>;
+    FNextEntry: TArray<Double>; // seconds of its clock, by lane
+    FMade: Integer; // columns made since the start, every lane
+    FFirstLaneMade: Integer;
+    FColumns: TList<TConvoyColumn>;
+    procedure Start;
+    procedure Enter(ALane: Integer; ASeconds: Double);
+    procedure DropGone(ASeconds: Double);
+    function LightOf(const AColumn: TConvoyColumn; AIndex: Integer;
+      ASeconds: Double): TColumnLight;
+    procedure DrawColumn(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      const AColumn: TConvoyColumn; ASeconds: Double);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    destructor Destroy; override;
+    // Dark, the ledge empty, the clock at its start
+    procedure Rewind; override;
+  end;
+
+  // Where the spot of a searchlight is: it walks a figure of eight about
+  // Center, Reach units each way across and up and down - across once and
+  // up and down twice in Period seconds -, starting Phase (0..1) into it
+  TSweep = record
+    Center: TSdlFPoint;
+    Reach: TSdlFPoint;
+    Period: Single;
+    Phase: Single;
+    function SpotAt(ASeconds: Double): TSdlFPoint;
+  end;
+
+  // A searchlight sweeping a far wall: a lamp at its source, a faint cone
+  // - in a vacuum light is seen where it lands - and a spot on the wall
+  // that walks a figure of eight (TSweep). The spot is a soft oval, long
+  // along the beam, drawn "spot" units along it and across it where the
+  // beam falls on the middle of the eight - the light itself is a good
+  // deal smaller than the picture; it grows as it goes away from the
+  // source and dims as it grows. The crafts named in "catches" light up in
+  // their own shape as the spot touches them, "catch" of the spot's light
+  // at most: the searchlight draws them once more, added in its light.
+  // They stand nailed on its screens and its layer, as it does, and before
+  // it in the file - drawn after it, they would cover their own light. The
+  // tint is the color of the light; the points count from the object's
+  // corner.
+  // The sweep starts the tick it is first lit; a rewind puts it out and
+  // takes the spot back to its start. Its clock runs at its pace.
+  // On the sky layer by default.
+  // JSON:
+  //   {"kind": "searchlight", "tag": "s12-searchlight", "screen": 12,
+  //    "x": 0, "y": 0, "intensity": 0, "tint": [88, 94, 100],
+  //    "source": [462, 216],
+  //    "sweep": {"center": [190, 200], "reach": [150, 75], "period": 11,
+  //              "phase": 25},
+  //    "spot": [90, 54], "catch": 60,
+  //    "catches": ["s12-pillar-a", "s12-pillar-b"]}
+  TSearchlight = class(TDynamicObject)
+  private type
+    // The spot at one moment, in units from the object's corner: where
+    // its middle is, which way the beam comes in (degrees clockwise, as SDL
+    // turns), how long and how wide it is, how bright against its light in
+    // the middle of the eight
+    TSpotPose = record
+      Middle: TSdlFPoint;
+      Angle: Single;
+      Along, Across: Single;
+      Strength: Single;
+    end;
+  private
+    FOwner: string;
+    FSource: TSdlFPoint;
+    FSweep: TSweep;
+    FSpot: TSdlFPoint; // along the beam and across it
+    FReference: Single; // units from the source to the middle of the eight
+    FCatch: Single;
+    FCatchTags: TArray<string>;
+    FCatches: TArray<TCraft>;
+    FColor: TRgb;
+    FRunning: Boolean;
+    FClock: Double; // ticks of the sweep's own time, at its pace
+    function PoseAt(ASeconds: Double): TSpotPose;
+    function StandsBeside(const APlacement: TDynamicPlacement): Boolean;
+    procedure DrawCatches(const ACanvas: TDynamicCanvas;
+      AFrameX, AFrameY: Single; const APose: TSpotPose; AAlpha: Single);
+  protected
+    procedure Advance(AMotionX, AMotionY: Single;
+      AParentAlive: Boolean); override;
+    procedure DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+      AAlpha: Single); override;
+  public
+    constructor Create(const APlacement: TDynamicPlacement;
+      AObj: TJSONObject; const AOwner: string);
+    // Dark, the spot back at the start of its sweep
+    procedure Rewind; override;
+    // The crafts "catches" names, found in AObjects - the list it was read
+    // into -, once the whole list is read
+    procedure FindCatches(AObjects: TDynamicObjects);
+  end;
+
 const
   // The JSON vocabulary of an ease
   MotionEaseIds: array [TMotionEase] of string = ('linear', 'in', 'out',
@@ -1140,7 +1358,8 @@ uses
 
 type
   TDynamicKind = (dkBeacon, dkSmoke, dkGlobe, dkSparks, dkFan, dkHaze,
-    dkLightning, dkGraph, dkCraft, dkBeam, dkDust, dkEclipse);
+    dkLightning, dkGraph, dkCraft, dkBeam, dkDust, dkEclipse, dkConvoy,
+    dkSearchlight);
 
   // Where and how a fan's layers land in one frame
   TFanPose = record
@@ -1155,12 +1374,12 @@ const
   // "collide" and "run"
   DynamicKindIds: array [TDynamicKind] of string = ('beacon', 'smoke',
     'globe', 'sparks', 'fan', 'haze', 'lightning', 'graph', 'craft', 'beam',
-    'dust', 'eclipse');
+    'dust', 'eclipse', 'convoy', 'searchlight');
   DynamicLayerIds: array [TDynamicLayer] of string = ('backdrop', 'sky',
     'aloft', 'back', 'front');
   DefaultLayers: array [TDynamicKind] of TDynamicLayer = (dlBack, dlBack,
     dlSky, dlBack, dlBack, dlBackdrop, dlBack, dlBack, dlAloft, dlFront,
-    dlSky, dlBack);
+    dlSky, dlBack, dlSky, dlSky);
   PartAnchorIds: array [TPartAnchor] of string = ('top', 'center', 'pivot');
   BeamLookIds: array [TBeamLook] of string = ('scan', 'tractor');
   BlinkPatternIds: array [TBlinkPattern] of string = (
@@ -1230,6 +1449,31 @@ resourcestring
     + 'and at its end, both above zero';
   SDustBadReach = '%s: "reach" of a glow takes two half sizes, x and y, '
     + 'both above zero';
+  SConvoyNoLanes = '%s: "lanes" lists no lane';
+  SConvoyLaneNowhere = '%s: lane %d runs from a point to the same point';
+  SConvoyBadJoins = '%s: lane %d: "joins" counts the columns of the first '
+    + 'lane, from 1';
+  SConvoyFirstJoins = '%s: the first lane is the one the others join - its '
+    + '"joins" is 1';
+  SConvoyBadGap = '%s: "gap" takes two gaps, when the convoy starts and at '
+    + 'the end of its ramp, both above zero';
+  SConvoyBadJitter = '%s: "jitter" takes a percentage under 100';
+  SConvoyBadLights = '%s: "lights" takes the fewest and the most lights of '
+    + 'a column, %d or more, the fewest first';
+  SSearchlightNoSweep = '%s: "sweep" says how the spot walks - its "center" '
+    + 'and its "reach"';
+  SSearchlightBadReach = '%s: "reach" of a sweep takes two reaches, across '
+    + 'and up and down, neither below zero';
+  SSearchlightOnItsSource = '%s: the middle of the sweep is the source - '
+    + 'the beam has nowhere to go';
+  SSearchlightBadSpot = '%s: "spot" takes two sizes, along the beam and '
+    + 'across it, both above zero';
+  SSearchlightBadCatches = '%s: "catches" lists the tags of crafts';
+  SSearchlightNoCatch = '%s: "catches" names "%s", and no craft carries it';
+  SSearchlightCatchesLoose = '%s: a searchlight that catches crafts stands '
+    + 'nailed, with no parent';
+  SSearchlightCatchApart = '%s: the craft "%s" it catches must stand nailed '
+    + 'on its screens and its layer, as it stands, and before it in the list';
 
 const
   // Beacon light, in shares of the halo size
@@ -1985,6 +2229,21 @@ begin
     Result := 1;
 end;
 
+// A signal lamp's light: a spill on what is around it while it flashes,
+// a colored halo ASize units across and a hot core. AFlash 0..1 is how far
+// it is into its flash, ALight how bright it burns.
+procedure DrawLamp(const ACanvas: TDynamicCanvas; AX, AY, ASize: Single;
+  const AColor: TRgb; ALight, AFlash: Single);
+begin
+  var Lit := EmberLevel + (1 - EmberLevel) * AFlash;
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, ASize * SpillScale,
+    AColor, ALight * SpillLevel * AFlash);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, ASize,
+    AColor, ALight * Lit);
+  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, ASize * CoreScale,
+    Mix(AColor, White, CoreWhiteness), ALight * Lit);
+end;
+
 constructor TBeacon.Create(const APlacement: TDynamicPlacement;
   AObj: TJSONObject; const AOwner: string);
 begin
@@ -2041,18 +2300,12 @@ procedure TBeacon.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
   AAlpha: Single);
 begin
   var Flash := BlinkLevel(AAlpha);
-  var Lit := EmberLevel + (1 - EmberLevel) * Flash;
   var Color := TintColor(Placement.Tint);
   // In the depth the lamp is smaller and dimmer, as its pad is
   var Size: Single := FSize * ACanvas.Scale;
   var Light: Single := Intensity * ACanvas.Tone;
 
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size * SpillScale,
-    Color, Light * SpillLevel * Flash);
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size,
-    Color, Light * Lit);
-  DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AX, AY, Size * CoreScale,
-    Mix(Color, White, CoreWhiteness), Light * Lit);
+  DrawLamp(ACanvas, AX, AY, Size, Color, Light, Flash);
   if FGlint > 0 then
     DrawGlow(ACanvas.Renderer, ACanvas.FlareGlow, AX, AY,
       Size * GlintScale, Color, Light * FGlint * Flash * Flash * Flash);
@@ -3793,10 +4046,12 @@ begin
 end;
 
 procedure TCraft.DrawPart(const ACanvas: TDynamicCanvas;
-  const APart: TCraftPart; ALeft, ATop, AOpacity, AAlpha: Single);
+  const APart: TCraftPart; ALeft, ATop: Single; const ATint: TColorTint;
+  AOpacity, AAlpha: Single; ALook: TPieceLook);
 var
   Dest: TSdlFRect;
   Pivot: TSdlFPoint;
+  BlendMode: Integer;
 begin
   if APart.Texture = nil then
     Exit;
@@ -3804,11 +4059,16 @@ begin
   Dest.Y := ATop;
   Dest.W := APart.Width;
   Dest.H := APart.Height;
-  // The pictures are shared with the static objects, which set no tint
-  // and no alpha: both go back once drawn
-  TintTexture(APart.Texture, Placement.Tint.R, Placement.Tint.G,
-    Placement.Tint.B);
+  // The pictures are shared with the static objects, which set no tint,
+  // no alpha and no blend of their own: all go back once drawn
+  TintTexture(APart.Texture, ATint.R, ATint.G, ATint.B);
   SDL_SetTextureAlphaMod(APart.Texture, Round(255 * AOpacity));
+  BlendMode := SdlBlendModeBlend;
+  if ALook = plLit then
+  begin
+    SDL_GetTextureBlendMode(APart.Texture, @BlendMode);
+    SDL_SetTextureBlendMode(APart.Texture, SdlBlendModeAdd);
+  end;
   if APart.Turns > 0 then
   begin
     Pivot := APart.Pivot;
@@ -3817,22 +4077,50 @@ begin
   end
   else
     SDL_RenderCopyF(ACanvas.Renderer, APart.Texture, nil, @Dest);
+  if ALook = plLit then
+    SDL_SetTextureBlendMode(APart.Texture, BlendMode);
   SDL_SetTextureAlphaMod(APart.Texture, 255);
   TintTexture(APart.Texture, 100, 100, 100);
 end;
 
-// AX, AY count from the placement; the craft is wherever its motion has
-// taken it, AAlpha of the way between the ticks
 procedure TCraft.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
   AAlpha: Single);
 begin
   var Opacity := Intensity;
   if Opacity < VisibleLevel then
     Exit;
+  DrawPieces(ACanvas, AX - Placement.X, AY - Placement.Y, Placement.Tint,
+    Opacity, AAlpha, plPainted);
+end;
+
+procedure TCraft.DrawLit(const ACanvas: TDynamicCanvas;
+  AFrameX, AFrameY: Single; const ATint: TColorTint; ALevel, AAlpha: Single);
+begin
+  var Level := ALevel * Intensity;
+  if Level < VisibleLevel then
+    Exit;
+  DrawPieces(ACanvas, AFrameX, AFrameY, ATint, Level, AAlpha, plLit);
+end;
+
+function TCraft.BodyAt(AAlpha: Single): TSdlFRect;
+begin
   var Corner := CornerAt(AAlpha);
-  var Left := AX - Placement.X + Corner.X;
-  var Top := AY - Placement.Y + Corner.Y;
-  DrawPart(ACanvas, FBody, Left, Top, Opacity, AAlpha);
+  Result.X := Corner.X;
+  Result.Y := Corner.Y;
+  Result.W := FBody.Width;
+  Result.H := FBody.Height;
+end;
+
+// The craft is wherever its motion has taken it, AAlpha of the way between
+// the ticks
+procedure TCraft.DrawPieces(const ACanvas: TDynamicCanvas;
+  AFrameX, AFrameY: Single; const ATint: TColorTint;
+  AOpacity, AAlpha: Single; ALook: TPieceLook);
+begin
+  var Corner := CornerAt(AAlpha);
+  var Left := AFrameX + Corner.X;
+  var Top := AFrameY + Corner.Y;
+  DrawPart(ACanvas, FBody, Left, Top, ATint, AOpacity, AAlpha, ALook);
   for var Part in FParts do
   begin
     var PartLeft := Left + Part.At.X - Part.Width / 2;
@@ -3848,7 +4136,7 @@ begin
     end;
     PartLeft := PartLeft + Lerp(Part.LastShift.X, Part.Shift.X, AAlpha);
     PartTop := PartTop + Lerp(Part.LastShift.Y, Part.Shift.Y, AAlpha);
-    DrawPart(ACanvas, Part, PartLeft, PartTop, Opacity, AAlpha);
+    DrawPart(ACanvas, Part, PartLeft, PartTop, ATint, AOpacity, AAlpha, ALook);
   end;
 end;
 
@@ -3950,7 +4238,7 @@ end;
 // AToWidth at the mark, widening on past it: full light to the knee a
 // little short of the mark, then out to nothing a little past it. The
 // band texture lies across the strip, bright down the middle.
-procedure TBeam.DrawCone(const ACanvas: TDynamicCanvas;
+procedure DrawLightCone(const ACanvas: TDynamicCanvas;
   const AFrom, ATo: TSdlFPoint; AFromWidth, AToWidth: Single;
   const AColor: TRgb; ALevel: Single);
 const
@@ -4034,8 +4322,9 @@ procedure TBeam.DrawScan(const ACanvas: TDynamicCanvas;
 begin
   if Hypot(AMark.X - ASource.X, AMark.Y - ASource.Y) >= BeamShortest then
   begin
-    DrawCone(ACanvas, ASource, AMark, BeamSourceWidth, FWidth, AColor, ALevel);
-    DrawCone(ACanvas, ASource, AMark, BeamSourceWidth * BeamCoreShare,
+    DrawLightCone(ACanvas, ASource, AMark, BeamSourceWidth, FWidth, AColor,
+      ALevel);
+    DrawLightCone(ACanvas, ASource, AMark, BeamSourceWidth * BeamCoreShare,
       FWidth * BeamCoreShare, AColor, ALevel * BeamCoreLevel);
     DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AMark.X, AMark.Y,
       FWidth * BeamSpotScale, AColor, ALevel * BeamSpotLevel);
@@ -4057,9 +4346,9 @@ begin
   var Span: Single := Hypot(AMark.X - ASource.X, AMark.Y - ASource.Y);
   if Span < BeamShortest then
     Exit;
-  DrawCone(ACanvas, ASource, AMark, FWidth, FWidth, AColor,
+  DrawLightCone(ACanvas, ASource, AMark, FWidth, FWidth, AColor,
     ALevel * TractorBodyLevel);
-  DrawCone(ACanvas, ASource, AMark, FWidth * BeamCoreShare,
+  DrawLightCone(ACanvas, ASource, AMark, FWidth * BeamCoreShare,
     FWidth * BeamCoreShare, AColor, ALevel * TractorCoreLevel);
   DrawGlow(ACanvas.Renderer, ACanvas.PointGlow, AMark.X, AMark.Y,
     FWidth * TractorSpotScale, AColor, ALevel * TractorSpotLevel);
@@ -4500,6 +4789,545 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// TConvoy
+// ---------------------------------------------------------------------------
+
+const
+  DefaultConvoySize = 3.0;
+  DefaultConvoyPitch = 3.2;
+  DefaultConvoyFade = 20;
+  DefaultConvoySpeed = 8;
+  DefaultConvoyGapFirst = 256;
+  DefaultConvoyGapLast = 48;
+  DefaultConvoyRamp = 45;
+  DefaultConvoyJitter = 25;
+  DefaultConvoyFlashers = 35;
+  DefaultFewestLights = 3;
+  DefaultMostLights = 5;
+  // A head and a tail
+  FewestConvoyLights = 2;
+  ConvoyTailTint: TColorTint = (R: 100; G: 16; B: 10);
+  ConvoyFlasherTint: TColorTint = (R: 100; G: 52; B: 8);
+  // The lights of a column, across and bright: the headlight's light, and
+  // the others as shares of the headlight
+  HeadLevel = 0.9;
+  RunningSizeShare = 0.55;
+  RunningLevel = 0.3;
+  TailSizeShare = 0.75;
+  TailLevel = 0.7;
+  FlasherSizeShare = 0.9;
+  FlasherLevel = 1.0;
+  FlasherBeatsPerSecond = 1.6;
+  // The rolls of a column, one slot each: how many lights, whether one
+  // flashes, which one, its beat, the gap after the column
+  ColumnRolls = 5;
+
+function TConvoyLane.Span: Single;
+begin
+  Result := Hypot(Finish.X - Start.X, Finish.Y - Start.Y);
+end;
+
+function TConvoyLane.PointAt(AAlong: Single): TSdlFPoint;
+begin
+  var Share: Single := AAlong / Span;
+  Result.X := Start.X + (Finish.X - Start.X) * Share;
+  Result.Y := Start.Y + (Finish.Y - Start.Y) * Share;
+end;
+
+function TConvoyLane.DepthAt(AAlong: Single): Single;
+begin
+  var Share: Single := EnsureRange(AAlong / Span, 0.0, 1.0);
+  Result := Scale * Lerp(1, FarShare, Share);
+end;
+
+function TConvoyTraffic.GapAt(ASeconds: Double): Single;
+begin
+  var Share: Single := EnsureRange(ASeconds / Ramp, 0.0, 1.0);
+  Result := Lerp(GapFirst, GapLast, Share);
+end;
+
+function ReadConvoyLane(AObj: TJSONObject; AIndex: Integer;
+  const AOwner: string): TConvoyLane;
+begin
+  Result.Start := ReadPoint(AObj, 'from', AOwner);
+  Result.Finish := ReadPoint(AObj, 'to', AOwner);
+  if Result.Span <= 0 then
+    raise EDynamicError.CreateFmt(SConvoyLaneNowhere, [AOwner, AIndex + 1]);
+  Result.Speed := ReadPositive(AObj, 'speed', DefaultConvoySpeed, AOwner);
+  Result.FarShare := ReadShare(AObj, 'far', 100, AOwner);
+  Result.Scale := ReadShare(AObj, 'scale', 100, AOwner);
+  Result.Joins := AObj.GetValue<Integer>('joins', 1);
+  if Result.Joins < 1 then
+    raise EDynamicError.CreateFmt(SConvoyBadJoins, [AOwner, AIndex + 1]);
+end;
+
+function ReadConvoyLanes(AObj: TJSONObject;
+  const AOwner: string): TArray<TConvoyLane>;
+begin
+  var LanesArr := AObj.GetValue<TJSONArray>('lanes', nil);
+  if (LanesArr = nil) or (LanesArr.Count = 0) then
+    raise EDynamicError.CreateFmt(SConvoyNoLanes, [AOwner]);
+  SetLength(Result, LanesArr.Count);
+  for var i := 0 to LanesArr.Count - 1 do
+    Result[i] := ReadConvoyLane(LanesArr.Items[i] as TJSONObject, i, AOwner);
+  if Result[0].Joins <> 1 then
+    raise EDynamicError.CreateFmt(SConvoyFirstJoins, [AOwner]);
+end;
+
+function ReadConvoyTraffic(AObj: TJSONObject;
+  const AOwner: string): TConvoyTraffic;
+begin
+  var Gaps: TSdlFPoint;
+  Gaps.X := DefaultConvoyGapFirst;
+  Gaps.Y := DefaultConvoyGapLast;
+  if AObj.GetValue('gap') <> nil then
+    Gaps := ReadPoint(AObj, 'gap', AOwner);
+  if (Gaps.X <= 0) or (Gaps.Y <= 0) then
+    raise EDynamicError.CreateFmt(SConvoyBadGap, [AOwner]);
+  Result.GapFirst := Gaps.X;
+  Result.GapLast := Gaps.Y;
+  Result.Ramp := ReadPositive(AObj, 'ramp', DefaultConvoyRamp, AOwner);
+  // A whole gap off would bring two columns in on one point
+  Result.Jitter := ReadShare(AObj, 'jitter', DefaultConvoyJitter, AOwner);
+  if Result.Jitter >= 1 then
+    raise EDynamicError.CreateFmt(SConvoyBadJitter, [AOwner]);
+end;
+
+procedure ReadConvoyLights(AObj: TJSONObject; const AOwner: string;
+  out AFewest, AMost: Integer);
+begin
+  AFewest := DefaultFewestLights;
+  AMost := DefaultMostLights;
+  if AObj.GetValue('lights') = nil then
+    Exit;
+  var Counts := ReadPoint(AObj, 'lights', AOwner);
+  AFewest := Round(Counts.X);
+  AMost := Round(Counts.Y);
+  if (AFewest < FewestConvoyLights) or (AMost < AFewest) then
+    raise EDynamicError.CreateFmt(SConvoyBadLights,
+      [AOwner, FewestConvoyLights]);
+end;
+
+constructor TConvoy.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FHeadColor := TintColor(APlacement.Tint);
+  FTailColor := TintColor(ReadTintOrDefault(AObj, 'tail', ConvoyTailTint,
+    AOwner));
+  FFlasherColor := TintColor(ReadTintOrDefault(AObj, 'flasher',
+    ConvoyFlasherTint, AOwner));
+  FSize := ReadPositive(AObj, 'size', DefaultConvoySize, AOwner);
+  FPitch := ReadPositive(AObj, 'pitch', DefaultConvoyPitch, AOwner);
+  FFade := ReadReach(AObj, 'fade', DefaultConvoyFade, AOwner);
+  FFlashers := ReadShare(AObj, 'flashers', DefaultConvoyFlashers, AOwner);
+  ReadConvoyLights(AObj, AOwner, FFewestLights, FMostLights);
+  FTraffic := ReadConvoyTraffic(AObj, AOwner);
+  FLanes := ReadConvoyLanes(AObj, AOwner);
+  FSeed := PlacementSeed(APlacement);
+  SetLength(FLaneOpen, Length(FLanes));
+  SetLength(FNextEntry, Length(FLanes));
+  FColumns := TList<TConvoyColumn>.Create;
+end;
+
+destructor TConvoy.Destroy;
+begin
+  FColumns.Free;
+  inherited;
+end;
+
+procedure TConvoy.Rewind;
+begin
+  inherited;
+  FRunning := False;
+  FClock := 0;
+  FMade := 0;
+  FFirstLaneMade := 0;
+  for var Lane := 0 to High(FLaneOpen) do
+    FLaneOpen[Lane] := False;
+  FColumns.Clear;
+end;
+
+// The first lane comes in with a column at once; the others wait for the
+// column of the first they join
+procedure TConvoy.Start;
+begin
+  FRunning := True;
+  FLaneOpen[0] := True;
+  FNextEntry[0] := 0;
+end;
+
+// A column of ALane comes in at ASeconds of the convoy's clock; a lane
+// that joins the first comes in with the column of the first it names
+procedure TConvoy.Enter(ALane: Integer; ASeconds: Double);
+var
+  Column: TConvoyColumn;
+begin
+  var Slot := FMade * ColumnRolls;
+  Column.Lane := ALane;
+  Column.Entered := ASeconds;
+  var Spread := FMostLights - FFewestLights + 1;
+  Column.Lights := FFewestLights +
+    Min(Spread - 1, Trunc(SlotRoll(Slot, FSeed) * Spread));
+  // Between the head and the tail: a column of two has no room for one
+  Column.HasFlasher := (Column.Lights > FewestConvoyLights) and
+    (SlotRoll(Slot + 1, FSeed) < FFlashers);
+  var Between := Column.Lights - FewestConvoyLights;
+  Column.Flasher := 1 + Min(Between - 1,
+    Trunc(SlotRoll(Slot + 2, FSeed) * Between));
+  Column.FlashPhase := SlotRoll(Slot + 3, FSeed);
+  FColumns.Add(Column);
+  Inc(FMade);
+
+  var Swing: Single := FTraffic.Jitter * (2 * SlotRoll(Slot + 4, FSeed) - 1);
+  var Gap: Single := FTraffic.GapAt(ASeconds) * (1 + Swing);
+  FNextEntry[ALane] := ASeconds + Gap / FLanes[ALane].Speed;
+
+  if ALane <> 0 then
+    Exit;
+  Inc(FFirstLaneMade);
+  for var Lane := 1 to High(FLanes) do
+    if not FLaneOpen[Lane] and (FLanes[Lane].Joins = FFirstLaneMade) then
+    begin
+      FLaneOpen[Lane] := True;
+      FNextEntry[Lane] := ASeconds;
+    end;
+end;
+
+// A column is gone once its tail is past the finish of its lane
+procedure TConvoy.DropGone(ASeconds: Double);
+begin
+  for var i := FColumns.Count - 1 downto 0 do
+  begin
+    var Column := FColumns[i];
+    var Lane := FLanes[Column.Lane];
+    var Tail: Double := Lane.Speed * (ASeconds - Column.Entered) -
+      (Column.Lights - 1) * FPitch;
+    if Tail > Lane.Span then
+      FColumns.Delete(i);
+  end;
+end;
+
+// The lanes are told in order: a lane the first opens this tick lets its
+// column in on the same tick
+procedure TConvoy.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);
+begin
+  if not FRunning then
+  begin
+    if Intensity < VisibleLevel then
+      Exit;
+    Start;
+  end;
+  var Seconds: Double := FClock / LogicTicksPerSecond;
+  for var Lane := 0 to High(FLanes) do
+    while FLaneOpen[Lane] and (FNextEntry[Lane] <= Seconds) do
+      Enter(Lane, FNextEntry[Lane]);
+  DropGone(Seconds);
+  FClock := FClock + Pace;
+end;
+
+// AIndex counts from the head
+function TConvoy.LightOf(const AColumn: TConvoyColumn; AIndex: Integer;
+  ASeconds: Double): TColumnLight;
+begin
+  Result.Flash := 1;
+  if AIndex = 0 then
+  begin
+    Result.Color := FHeadColor;
+    Result.SizeShare := 1;
+    Result.Level := HeadLevel;
+  end
+  else if AIndex = AColumn.Lights - 1 then
+  begin
+    Result.Color := FTailColor;
+    Result.SizeShare := TailSizeShare;
+    Result.Level := TailLevel;
+  end
+  else if AColumn.HasFlasher and (AIndex = AColumn.Flasher) then
+  begin
+    Result.Color := FFlasherColor;
+    Result.SizeShare := FlasherSizeShare;
+    Result.Level := FlasherLevel;
+    var Beats: Double := ASeconds * FlasherBeatsPerSecond + AColumn.FlashPhase;
+    Result.Flash := FlashLevel(Frac(Beats), FlashDecay);
+  end
+  else
+  begin
+    Result.Color := FHeadColor;
+    Result.SizeShare := RunningSizeShare;
+    Result.Level := RunningLevel;
+  end;
+end;
+
+procedure TConvoy.DrawColumn(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  const AColumn: TConvoyColumn; ASeconds: Double);
+begin
+  var Lane := FLanes[AColumn.Lane];
+  var Span := Lane.Span;
+  var Head: Single := Lane.Speed * (ASeconds - AColumn.Entered);
+  for var i := 0 to AColumn.Lights - 1 do
+  begin
+    var Along: Single := Head - i * FPitch;
+    if (Along < 0) or (Along > Span) then
+      Continue;
+    var Fade: Single := 1;
+    if FFade > 0 then
+      Fade := EnsureRange(Min(Along, Span - Along) / FFade, 0.0, 1.0);
+    var Depth := Lane.DepthAt(Along);
+    var Place := Lane.PointAt(Along);
+    var Light := LightOf(AColumn, i, ASeconds);
+    DrawLamp(ACanvas, AX + Place.X, AY + Place.Y,
+      FSize * Light.SizeShare * Depth, Light.Color,
+      Intensity * Light.Level * Depth * Fade, Light.Flash);
+  end;
+end;
+
+procedure TConvoy.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+begin
+  if Intensity < VisibleLevel then
+    Exit;
+  var Seconds: Double := (FClock + AAlpha * Pace) / LogicTicksPerSecond;
+  for var Column in FColumns do
+    DrawColumn(ACanvas, AX, AY, Column, Seconds);
+end;
+
+// ---------------------------------------------------------------------------
+// TSearchlight
+// ---------------------------------------------------------------------------
+
+const
+  DefaultSweepPeriod = 11;
+  DefaultSpotAlong = 90;
+  DefaultSpotAcross = 54;
+  DefaultSearchlightCatch = 60;
+  // Across the lens, in units: the cone leaves a lens, not a point
+  SearchlightLens = 2.5;
+  SearchlightLampSize = 9.0;
+  SearchlightLampLevel = 0.9;
+  // In a vacuum the cone is all but unseen: light shows where it lands
+  SearchlightConeLevel = 0.1;
+  SearchlightSpotLevel = 0.45;
+  // The hot middle of the spot: its size and its light as shares of the
+  // spot's
+  SpotCoreShare = 0.45;
+  SpotCoreLevel = 0.35;
+  // The spot dims as it grows and brightens as it shrinks, within these
+  // shares of its light in the middle of the eight
+  SpotDimmest = 0.65;
+  SpotBrightest = 1.3;
+
+function TSweep.SpotAt(ASeconds: Double): TSdlFPoint;
+begin
+  // Double all the way: hours of play run the clock past what a Single
+  // tells apart
+  var Turn: Double := Frac(ASeconds / Period + Phase);
+  Result.X := Center.X + Reach.X * Sin(2 * Pi * Turn);
+  Result.Y := Center.Y + Reach.Y * Sin(4 * Pi * Turn);
+end;
+
+function ReadSweep(AObj: TJSONObject; const AOwner: string): TSweep;
+begin
+  var SweepObj := AObj.GetValue<TJSONObject>('sweep', nil);
+  if SweepObj = nil then
+    raise EDynamicError.CreateFmt(SSearchlightNoSweep, [AOwner]);
+  Result.Center := ReadPoint(SweepObj, 'center', AOwner);
+  Result.Reach := ReadPoint(SweepObj, 'reach', AOwner);
+  if (Result.Reach.X < 0) or (Result.Reach.Y < 0) then
+    raise EDynamicError.CreateFmt(SSearchlightBadReach, [AOwner]);
+  Result.Period := ReadPositive(SweepObj, 'period', DefaultSweepPeriod,
+    AOwner);
+  Result.Phase := ReadShare(SweepObj, 'phase', 0, AOwner);
+end;
+
+function ReadSpot(AObj: TJSONObject; const AOwner: string): TSdlFPoint;
+begin
+  Result.X := DefaultSpotAlong;
+  Result.Y := DefaultSpotAcross;
+  if AObj.GetValue('spot') <> nil then
+    Result := ReadPoint(AObj, 'spot', AOwner);
+  if (Result.X <= 0) or (Result.Y <= 0) then
+    raise EDynamicError.CreateFmt(SSearchlightBadSpot, [AOwner]);
+end;
+
+function ReadCatchTags(AObj: TJSONObject;
+  const AOwner: string): TArray<string>;
+begin
+  Result := nil;
+  var CatchesArr := AObj.GetValue<TJSONArray>('catches', nil);
+  if CatchesArr = nil then
+    Exit;
+  SetLength(Result, CatchesArr.Count);
+  for var i := 0 to CatchesArr.Count - 1 do
+  begin
+    // A number is a TJSONString too
+    if not (CatchesArr.Items[i] is TJSONString) or
+      (CatchesArr.Items[i] is TJSONNumber) then
+      raise EDynamicError.CreateFmt(SSearchlightBadCatches, [AOwner]);
+    Result[i] := CatchesArr.Items[i].Value;
+  end;
+end;
+
+// The index of the craft carrying ATag in AObjects; -1 when none does
+function CraftIndex(AObjects: TDynamicObjects; const ATag: string): Integer;
+begin
+  for var i := 0 to AObjects.Count - 1 do
+    if (AObjects[i] is TCraft) and (AObjects[i].Placement.Tag = ATag) then
+      Exit(i);
+  Result := -1;
+end;
+
+constructor TSearchlight.Create(const APlacement: TDynamicPlacement;
+  AObj: TJSONObject; const AOwner: string);
+begin
+  inherited Create(APlacement, AObj, AOwner);
+  FOwner := AOwner;
+  FColor := TintColor(APlacement.Tint);
+  FSource := ReadPoint(AObj, 'source', AOwner);
+  FSweep := ReadSweep(AObj, AOwner);
+  FReference := Hypot(FSweep.Center.X - FSource.X,
+    FSweep.Center.Y - FSource.Y);
+  if FReference <= 0 then
+    raise EDynamicError.CreateFmt(SSearchlightOnItsSource, [AOwner]);
+  FSpot := ReadSpot(AObj, AOwner);
+  FCatch := ReadShare(AObj, 'catch', DefaultSearchlightCatch, AOwner);
+  FCatchTags := ReadCatchTags(AObj, AOwner);
+  if (Length(FCatchTags) > 0) and (APlacement.Parent <> '') then
+    raise EDynamicError.CreateFmt(SSearchlightCatchesLoose, [AOwner]);
+end;
+
+procedure TSearchlight.Rewind;
+begin
+  inherited;
+  FRunning := False;
+  FClock := 0;
+end;
+
+// Both nailed, on the same run of screens and the same layer: the craft
+// is drawn from the same corner of the frame
+function TSearchlight.StandsBeside(
+  const APlacement: TDynamicPlacement): Boolean;
+begin
+  Result := (Placement.Parent = '') and (APlacement.Parent = '') and
+    (APlacement.Screen = Placement.Screen) and
+    (APlacement.LastScreen = Placement.LastScreen) and
+    (APlacement.Layer = Placement.Layer);
+end;
+
+procedure TSearchlight.FindCatches(AObjects: TDynamicObjects);
+begin
+  SetLength(FCatches, Length(FCatchTags));
+  var Own := AObjects.IndexOf(Self);
+  for var i := 0 to High(FCatchTags) do
+  begin
+    var Found := CraftIndex(AObjects, FCatchTags[i]);
+    if Found < 0 then
+      raise EDynamicError.CreateFmt(SSearchlightNoCatch,
+        [FOwner, FCatchTags[i]]);
+    var Craft := TCraft(AObjects[Found]);
+    if not StandsBeside(Craft.Placement) or (Found > Own) then
+      raise EDynamicError.CreateFmt(SSearchlightCatchApart,
+        [FOwner, FCatchTags[i]]);
+    FCatches[i] := Craft;
+  end;
+end;
+
+procedure TSearchlight.Advance(AMotionX, AMotionY: Single;
+  AParentAlive: Boolean);
+begin
+  if not FRunning then
+  begin
+    if Intensity < VisibleLevel then
+      Exit;
+    FRunning := True;
+  end;
+  FClock := FClock + Pace;
+end;
+
+// The spot grows with the way from the source and dims as it grows; on the
+// source itself it would be a point
+function TSearchlight.PoseAt(ASeconds: Double): TSpotPose;
+begin
+  Result.Middle := FSweep.SpotAt(ASeconds);
+  var AwayX: Single := Result.Middle.X - FSource.X;
+  var AwayY: Single := Result.Middle.Y - FSource.Y;
+  var Growth: Single := Hypot(AwayX, AwayY) / FReference;
+  Result.Angle := RadToDeg(ArcTan2(AwayY, AwayX));
+  Result.Along := FSpot.X * Growth;
+  Result.Across := FSpot.Y * Growth;
+  Result.Strength := SpotBrightest;
+  if Growth * SpotBrightest > 1 then
+    Result.Strength := 1 / Growth;
+  if Result.Strength < SpotDimmest then
+    Result.Strength := SpotDimmest;
+end;
+
+// A craft is as lit as the spot is on the point of its body nearest the
+// middle of the spot: a tall pillar lights up as soon as the spot touches
+// it. The spot's level there is counted in half sizes of the oval, along
+// the beam and across it.
+procedure TSearchlight.DrawCatches(const ACanvas: TDynamicCanvas;
+  AFrameX, AFrameY: Single; const APose: TSpotPose; AAlpha: Single);
+begin
+  var Turn := DegToRad(APose.Angle);
+  var Cosine: Single := Cos(Turn);
+  var Sine: Single := Sin(Turn);
+  var Light: Single := Intensity * FCatch * APose.Strength;
+  var SpotX: Single := Placement.X + APose.Middle.X;
+  var SpotY: Single := Placement.Y + APose.Middle.Y;
+  for var Craft in FCatches do
+  begin
+    var Body := Craft.BodyAt(AAlpha);
+    var NearX: Single := EnsureRange(SpotX, Body.X, Body.X + Body.W);
+    var NearY: Single := EnsureRange(SpotY, Body.Y, Body.Y + Body.H);
+    var OffX: Single := NearX - SpotX;
+    var OffY: Single := NearY - SpotY;
+    var AlongShare: Single := (OffX * Cosine + OffY * Sine) /
+      (APose.Along / 2);
+    var AcrossShare: Single := (OffY * Cosine - OffX * Sine) /
+      (APose.Across / 2);
+    var Level: Single := EnsureRange(Light * PointGlowLevel(AlongShare,
+      AcrossShare), 0.0, 1.0);
+    if Level >= VisibleLevel then
+      Craft.DrawLit(ACanvas, AFrameX, AFrameY, Placement.Tint, Level, AAlpha);
+  end;
+end;
+
+// All of it is added light, so the order of drawing is free; a spot on
+// the source itself has nothing to show but the lamp
+procedure TSearchlight.DrawAt(const ACanvas: TDynamicCanvas; AX, AY: Single;
+  AAlpha: Single);
+var
+  Source, Mark: TSdlFPoint;
+begin
+  var Light := Intensity;
+  if Light < VisibleLevel then
+    Exit;
+  Source.X := AX + FSource.X;
+  Source.Y := AY + FSource.Y;
+  DrawLamp(ACanvas, Source.X, Source.Y, SearchlightLampSize, FColor,
+    Light * SearchlightLampLevel, 1);
+
+  var Clock: Double := FClock;
+  if FRunning then
+    Clock := Clock + AAlpha * Pace;
+  var Pose := PoseAt(Clock / LogicTicksPerSecond);
+  if (Pose.Along < BeamShortest) or (Pose.Across < BeamShortest) then
+    Exit;
+  Mark.X := AX + Pose.Middle.X;
+  Mark.Y := AY + Pose.Middle.Y;
+  DrawLightCone(ACanvas, Source, Mark, SearchlightLens, Pose.Across, FColor,
+    Light * SearchlightConeLevel);
+  DrawGlowTurned(ACanvas.Renderer, ACanvas.PointGlow, Mark.X, Mark.Y,
+    Pose.Along, Pose.Across, Pose.Angle, FColor,
+    EnsureRange(Light * SearchlightSpotLevel * Pose.Strength, 0.0, 1.0));
+  DrawGlowTurned(ACanvas.Renderer, ACanvas.PointGlow, Mark.X, Mark.Y,
+    Pose.Along * SpotCoreShare, Pose.Across * SpotCoreShare, Pose.Angle,
+    FColor, EnsureRange(Light * SpotCoreLevel * Pose.Strength, 0.0, 1.0));
+  DrawCatches(ACanvas, AX - Placement.X, AY - Placement.Y, Pose, AAlpha);
+end;
+
 function CreateDynamic(AKind: TDynamicKind;
   const APlacement: TDynamicPlacement; AObj: TJSONObject;
   const AOwner: string): TDynamicObject;
@@ -4529,6 +5357,10 @@ begin
       Result := TDust.Create(APlacement, AObj, AOwner);
     dkEclipse:
       Result := TEclipse.Create(APlacement, AObj, AOwner);
+    dkConvoy:
+      Result := TConvoy.Create(APlacement, AObj, AOwner);
+    dkSearchlight:
+      Result := TSearchlight.Create(APlacement, AObj, AOwner);
   else
     raise EDynamicError.CreateFmt(SDynamicKindUnbuilt,
       [DynamicKindIds[AKind]]);
@@ -4557,6 +5389,9 @@ begin
     for var i := 0 to DynamicsArr.Count - 1 do
       Result.Add(ParseDynamic(DynamicsArr.Items[i] as TJSONObject, ALevelId,
         Format('#%d', [i + 1])));
+    for var DynamicObject in Result do
+      if DynamicObject is TSearchlight then
+        TSearchlight(DynamicObject).FindCatches(Result);
   except
     Result.Free;
     raise;
