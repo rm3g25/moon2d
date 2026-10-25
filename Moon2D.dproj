@@ -253,7 +253,7 @@
         <DCCReference Include="Menu\Menu.Embers.pas"/>
         <DCCReference Include="Menu\Menu.Logo.pas"/>
         <DCCReference Include="Menu\Menu.pas"/>
-        <DCCReference Include="Game\Game.HeroForm.pas"/>
+        <DCCReference Include="Game\Game.HeroOrbs.pas"/>
         <DCCReference Include="Game\Game.Moon.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

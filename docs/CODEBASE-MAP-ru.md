@@ -25,7 +25,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 `v3.0.66`, по лунному камню на `v3.0.67`, по падению камней на
 `v3.0.69`, по заряду камня на `v3.0.70` и по свободному падению камней с
 чекпойнтом у камня на `v3.0.71`, затем по переезду `TMoonGame` из
-`Moon2D.dpr` в `Game.Moon` после `v3.0.73` (сами `v3.0.72` и `v3.0.73`
+`Moon2D.dpr` в `Game.Moon` после `v3.0.73` и орбов героя из него в
+`Game.HeroOrbs` (сами `v3.0.72` и `v3.0.73`
 ещё не догнаны), заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
@@ -49,7 +50,7 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   по броне, звук, хост
   цикла, словарь бонуса,
   церемония хеншина, покров героя, вбирание предмета (`Game.Uptake`),
-  версия, а ещё арена грейвелов второго уровня: правила испытания
+  орбы героя и заряд формы (`Game.HeroOrbs`), версия, а ещё арена грейвелов второго уровня: правила испытания
   (`Game.Trial`), фиолетовый свет, в котором спускаются её тела
   (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
   (`Game.Shield`), пресс финала (`Game.Press`). `Game/Events/` исполняет
@@ -170,7 +171,10 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Render.Brush`, `Game.Space` и канвой из `Levels.Dynamics`) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
-двумя и `Game.Space`) / `Pads.Arena` (директор перестроек:
+двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
+`Orbs.Rite`, `Orbs.Burst`, `Orbs.Rain`, `Orbs.Feed`, `Monsters` ради
+типа того, кого ранит, и `Hud.Energy` ради полной шкалы и её сердца) /
+`Pads.Arena` (директор перестроек:
 над `Pads.World`, `Pads.Formations`, `Monsters`, `Monsters.Pilot`,
 `Levels.Pads`, `Levels.Dynamics` и `Render.Sprites`) / `Scenes.Director`
 (сцены: над `Levels.Scenes`, `Levels.Dynamics`, `Audio`, `Hud.Messages`,
@@ -3788,8 +3792,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 ### `Game/Orbs/Orbs.Flock.pas` (~525 строк)
 Орбы: огоньки, которые летают по формуле, а не по баллистике, и материю
 не замечают - стена орб не остановит. Только вид и жизнь орба: где он,
-каждый тик решает хозяин; обо что он бьётся и чего это стоит - игра
-(`ResolveOrbHits` в `Game.Moon`).
+каждый тик решает хозяин; обо что он бьётся, решает `Game.HeroOrbs`
+(`Strike`), чего это стоит - игра (`WoundByOrb` в `Game.Moon`).
 - **`TOrbTint`** (запись) - `Core` (раскалённая точка; тело тёмного
   орба), `Glow` и (3.0.70) `Dark` - тело рисуется поверх мира, а не
   складывается с ним: чёрная дыра. `IceOrbTint` - стихия героя на уровнях
@@ -3970,8 +3974,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 Огненный дождь (3.0.33): завеса орбов, пролитая на экран героя. Хореограф
 стаи, как аура, но без состояния от тика к тику: где капля, - формула
 времени с её рождения. Формулы - со стенда (артефакт "Орбы Moon2D":
-скрипт дождя, `pour` и шаг дождя). Обо что капля бьётся, решает игра через
-`Flock` (`ResolveOrbHits` в `Game.Moon`), как у ауры.
+скрипт дождя, `pour` и шаг дождя). Обо что капля бьётся, решает
+`Game.HeroOrbs` через `Flock` (`Strike`), как у ауры.
 - **`TDropSeed`** (запись) - из чего рождается капля: `StartX`, `Birth`
   (тик дождя), `Sway` (с какой точки качания она начинает, радианы),
   `Floor` (где её забирает материя столбца). **`TRainDrop`** (`TOrb`) -
@@ -4050,8 +4054,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 замирает и вспыхивает, а потом каждый орб втягивается в героя, каждый в
 своё время и в свою точку его тела. Тот же класс снимает костюм: орбы
 выходят из тела в кольцо, которое недолго служит щитом. Только где орбы
-и когда они приходят и уходят: обо что орб бьётся, решает игра через
-`Flock` (`ResolveOrbHits` в `Game.Moon`), что всё это значит для героя -
+и когда они приходят и уходят: обо что орб бьётся, решает
+`Game.HeroOrbs` через `Flock` (`Strike`), что всё это значит для героя -
 лечение, пощада, костюм, - решает слушатель (`Game.Henshin`). Управление
 у героя не отбирается; узор стоит в его системе, без поводка. Устроен
 как аура: своя стая, потомок `TOrb`, свой `TXorShift` (не `Random`: тот
@@ -4084,7 +4088,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   **`TRiteBirth`** - орб, которого обряд позвал и ещё не видит
   рождённым. **`TBodyProbe`** (`reference to function: TBodyPoints`) -
   точки тела героя там, где оно стоит на экране; игра передаёт
-  `HeroBodyPoints`, и сброс (`Orbs.Burst`) спрашивает ту же.
+  `HeroBodyPoints` через `Game.HeroOrbs`, и сброс (`Orbs.Burst`) спрашивает ту же.
 - **`TOrbRite`**:
   - `Create(tint, body)`. `Start(pattern, score, center, matter)` -
     идущий обряд бросается (`Clear`); точки всех волн берутся разом
@@ -4179,7 +4183,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 (24 луча из груди, кольцо бежит по комнате, вспышка), полёт (лучи
 проходят сквозь материю и уходят за экран, оставляя след там, где входят
 в грань), эхо (пылинки из точек тела; следы тают). Только вид и время:
-что луч бьёт, решает игра по `Stretches` (`ResolveBurstHits` в `Game.Moon`), а
+что луч бьёт, решает `Game.HeroOrbs` по `Stretches` (`Strike`), а
 что значит удар - костюм надет - решает церемония (`Game.Henshin`).
 Сброс один на все формы, форма отдаёт ему только цвета. Свой
 `TXorShift` (зерно `$42757273`), числа - константы в начале
@@ -4499,9 +4503,10 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 тряски, (3.0.47) покрова, (3.0.49) обряда и (3.0.61) сброса - и то, что
 она просит у игры, - **`THenshinCalls`**, запись из пяти колбэков
 (`reference to procedure`;
-игра передаёт свои методы напрямую): `Cure` (`TCureHero`: +1 здоровья),
+игра передаёт напрямую свои методы и методы своих орбов): `Cure` (`TCureHero`: +1 здоровья),
 `GrantMercy` (`TGrantMercy`: пощада герою на число тиков), `BeginRite`
-(`TBeginRite`: обряд начинается вокруг героя - игра знает его центр,
+(`TBeginRite`: обряд начинается вокруг героя - его орбы (`Game.HeroOrbs`)
+знают его центр,
 материю его экрана и узор уровня), `ShedSuit` (`TShedSuit`: орбы костюма
 выходят вокруг него) и (3.0.61) `Burst` (`TBurstSuit`: сброс начинается
 вокруг героя - с его центром, материей его экрана и закруткой по узору
@@ -4677,7 +4682,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (`cbNone`, `cbShield`, `cbHull`) - во что упёрлась пуля героя;
   **`TRoundCatch`** - `reference to function(fromX, toX, y): Boolean`:
   слово игры об отрезке снаряда за тик (его забрал орб -
-  `TMoonGame.OrbTakes`, 3.0.57); **`TCannonCue`** (запись) - `Hum`,
+  `THeroOrbs.TakesAt`, 3.0.57); **`TCannonCue`** (запись) - `Hum`,
   `Shot` (один звук выстрела за несколько снарядов,
   `ShotSoundEveryTicks` 4), `HeroHit`, `YieldSleep`, `YieldWake`,
   `Strikes` (снаряды по голой стали в сцене: искры, без раны), `Blast` и
@@ -4748,7 +4753,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 осталось победному треку испытания, 0 - кончился, меньше 0 - его нет),
 `GoRight` (`TGoRightCue`), `OpenDoor` (`TOpenDoorCue`, 3.0.66),
 `HeroStands` (`THeroStandsCue`, 3.0.67 - клетка с нуля; `HeroStandsIn`
-игры), `Energy` (`TEnergyCue`, 3.0.70 - `FeedEnergy` игры), `Respawn`
+игры), `Energy` (`TEnergyCue`, 3.0.70 - `THeroOrbs.FeedEnergy`), `Respawn`
 (`TRespawnCue`, 3.0.71 - клетка с 1; `MoveCheckpoint` игры). `TChangeMusic` берёт ещё и секунды нарастания (3.0.63). Директор тянет состояние испытания через них, а не
 толкает. Поле монстров рождается заново на каждом рестарте, поэтому
 приходит с каждым тиком, а не хранится: у него спрашивают условия, ему
@@ -5053,7 +5058,70 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Game/Game.Moon.pas` (~3810 строк)
+### `Game/Game.HeroOrbs.pas` (~450 строк)
+Орбы героя и заряд формы, вынесенные из `TMoonGame` перед этапом 8 арены
+3 (без версии): аура, обряд хеншина, сброс костюма, огненный дождь и
+орбы, несущие заряд в шкалу. Игру не знает: о герое спрашивает пробами,
+а обо что бьёт орб, решается через цели, которые отдаёт игра, - юнит
+решает, когда бьёт орб или луч, игра - что там стоит и чего стоит рана.
+Какую форму носит герой, здесь не живёт: это `THero.HeroForm`
+(`hfNormal`, `hfIce`).
+- **`OrbReach`** (6, в `interface` - его читает и `EnemyBulletNear` игры:
+  с какого расстояния орб берёт вражескую пулю); `BurstHitStep` (4, в
+  `implementation`: как часто сброс бьёт по пути луча - меньше досягаемости
+  орба, чтобы ни одна пуля не проскочила).
+- **`TOrbProbes`** (запись) - `Alive` (`THeroAlive`), `Center`
+  (`THeroCenter`, единицы экрана), `Body` (`TBodyProbe` из `Orbs.Rite`),
+  `Matter` (`TMatterProbe`). **`TOrbTargets`** (запись) - `PopBullet`
+  (`TBulletPop`: гасит вражескую пулю ближе `OrbReach` к точке, True, если
+  она была), `MonsterAt` (`TMonsterProbe`: опасный монстр, в чьём теле
+  точка, nil, если такого нет), `Wound` (`TOrbWound`: минус жизнь,
+  убийство награждается).
+- **`THeroOrbs`** - создаётся один раз с игрой (`CreateOrbs`), умирает с
+  ней; владеет `FAura` (`TAura` из `IceOrbTint`), `FRite` (`TOrbRite` из
+  `IceOrbTint`, проба `Body`), `FPattern` (фигура, которую обряд строит на
+  этом уровне), `FBurst` (`TOrbBurst`, та же проба), `FBurstWounded`
+  (больше одной жизни за сброс никто не теряет), `FRain` (`TOrbRain` из
+  `IceOrbTint`), `FFeed` (`TOrbFeed` из `MoonOrbTint`), `FEnergy`
+  (0..`FullEnergy` из `Hud.Energy`) и `FEnergyAtEntry`.
+  - Перемотки - игра только говорит, какая: `BeginLevel(pattern)` (все
+    стаи чистятся, заряд и заряд входа обнуляются, узор уровня берётся);
+    `Rewind` (все стаи чистятся, заряд возвращается к заряду входа);
+    `Arrive` (заряд входа = заряд + `FFeed.Pending` - орбы в пути уже
+    заряд; дождь гаснет, как дверь гасит пули); `Fall` (смерть героя:
+    аура, обряд, дождь и подача схлопываются - заряд подачи вместе с
+    ними; сброс чистится, ни удара, ни костюма). Дверь: `CarryRite(step)`
+    до `ArriveOnScreen`, только на шаг двери - триггер нового экрана может
+    начать свой обряд, а тот ничего не переходил; `CarryAura(step)` после
+    него, вместе с рывком триггера. Сброс не переносится: его следы, лучи и
+    пылинки стоят в единицах экрана.
+  - Вызовы, над трупом ничего (`Alive`): `BeginRite`
+    (`FRite.Start(FPattern, IceRiteScore, center, matter)`), `ShedSuit`
+    (`FRite.Shed(IceRiteScore, center)`), `StartBurst(look)`
+    (`FBurstWounded` пустеет, `FBurst.Start(look, узор = 'vortex',
+    center, matter)`), `BurstSuit` (ледяной облик, как просит церемония),
+    `FeedEnergy(amount)` (урезан до места в шкале, с учётом того, что в
+    пути; летит в `THudEnergy.Heart`), `CastAura` (True, если вызвана:
+    тогда игра даёт пощаду после ранения), `PourRain`.
+  - Тик: `Tick` (аура, обряд и сброс с центром героя - до тика церемонии,
+    которая слышит, что они сказали), `TickAfterCeremony` (дождь, затем
+    подача; `TakeLanded` уходит в `FEnergy`), `Strike` (аура, обряд, сброс,
+    дождь: живой взведённый орб тратится на погашенную там пулю, иначе на
+    монстра там, которого ранит; каждый отрезок `FBurst.Stretches`
+    проходится шагами не длиннее `BurstHitStep`, на каждой точке гаснет
+    пуля, монстр ранится раз за сброс - за стенами тоже, и за экраном).
+    `TakesAt(fromX, toX, y)` (3.0.57) - первый вооружённый орб ауры, обряда
+    или дождя ближе `OrbReach` к отрезку тратится на то, что там летит:
+    снаряд пушки, живой осколок. `Holding` / `Inhaling` - вдох сброса: мир
+    стоит, герой - голый силуэт.
+  - Отрисовка, слоями, которые игра перемежает с героем: `DrawBehind`
+    (обряд за ним), `DrawVeil`, `DrawSilhouette(figure)`, `DrawOrbs`
+    (аура, обряд спереди, мировой слой сброса, дождь), `DrawGlass`,
+    `DrawFeed` (поверх шкалы). `Energy`; `Rite` и `Burst` - за ними следит
+    сцена церемонии.
+- Тесты: `Tests/Game/Tests.Game.HeroOrbs.pas`.
+
+### `Game/Game.Moon.pas` (~3640 строк)
 Вся машина состояний игрового потока (`TMoonGame`) - игра, которую
 запускает программа. Вынесена из `Moon2D.dpr` слово в слово перед этапом 8
 арены 3, чтобы до неё дотянулся юнит (а потом и тест). В `interface` -
@@ -5072,9 +5140,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   следующий акт пережидает после их взрыва (`CannonSmokeTicks` 50),
   длительности тикера, учёт
   урона (`HurtMercyTicks`,
-  `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (с какого расстояния орб
-  берёт вражескую пулю), `BurstHitStep` (3.0.61: как часто сброс бьёт по
-  пути луча, 4 ед), выбор шрифта (`FontFileName`,
+  `GameOverDelayTicks`, `PitDepthY`), выбор шрифта (`FontFileName`,
   `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`,
   дополнительные сканкоды (среди них `ScancodeS` - спрыгнуть; дебажные -
   под DEBUGKEYS), дозы тряски экрана
@@ -5098,12 +5164,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   то, что нужно арене грейвелов (3.0.53-3.0.59, по одному на запуск,
   делается в конструкторе): правила испытания (`FTrial: TGravelTrial`),
   фиолетовый свет (`FArrivals: TArrivals`), настенные пушки (`FCannons:
-  TCannonPair` над `FCannonArt`), пресс финала (`FPress: TPress`), аура героя (`FAura: TAura`, тоже одна на запуск), обряд хеншина
-  (`FRite: TOrbRite`, тоже один на запуск; его проба тела -
-  `HeroBodyPoints`), узор, который он строит на этом уровне (`FPattern:
-  TOrbPattern`), сброс костюма (`FBurst: TOrbBurst`, 3.0.61, один на
-  запуск, с той же пробой) и кого ранил идущий сброс (`FBurstWounded`),
-  церемония (`THenshin`), вбирание предметов (`FUptake:
+  TCannonPair` над `FCannonArt`), пресс финала (`FPress: TPress`), орбы
+  героя и заряд формы (`FOrbs: THeroOrbs`, `Game.HeroOrbs`, тоже один на
+  запуск), церемония (`THenshin`), вбирание предметов (`FUptake:
   TUptake` и `FUptakePainter`, 3.0.50; рождаются заново с уровнем, сразу
   после покрова), директор событий
   (`TEventDirector`), арена
@@ -5153,8 +5216,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     после пуль, затем попадания (на канале монстров - они сидят на броне),
     затем ряды здоровья (`FMarks`, каждый на канале своей
     фигуры), - герой на своём (перед ним, ещё на канале мира, - задний
-    слой обряда, `FRite.DrawBehind`: следы граней и орбы за героем; затем
-    вуаль сброса, `FBurst.DrawVeil`, 3.0.61, и - пока сброс делает вдох -
+    слой обряда, `FOrbs.DrawBehind`; затем вуаль сброса,
+    `FOrbs.DrawVeil`, и - пока сброс делает вдох -
     один голый силуэт героя (`DrawHeroSilhouette`) вместо всего, что идёт
     дальше до вбирания; иначе `DrawHeroInShroud` (с 3.0.61 эти строки
     живут в нём): `FineY` = `FHero.DeckLift(alpha)`: покров
@@ -5162,7 +5225,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     пока `FShroud.Assembling`), свет на его теле (`DrawBody`), одна его рука,
     пока он собирается (`FHero.DrawArm`), затем `FineY` снова 0, покров над
     ним (`DrawOver`) и вбирание поверх покрова (`FUptakePainter.DrawOver`)),
-    вспышка сброса поверх мира и под HUD (`FBurst.DrawGlass`, сразу после
+    вспышка сброса поверх мира и под HUD (`FOrbs.DrawGlass`, сразу после
     прибытий, без тряски), курсор и HUD стоят; `Update` тикает платформы прямо перед героем
     (`FPads.Tick(FHero.Screen)`, затем `FHero.Tick` - седоки едут со своими
     настилами, потом двигаются сами; сразу после тика платформ он
@@ -5178,8 +5241,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `Warned`), а `FDynamics` - после монстров и
     директора, чтобы
     клубы дымящего монстра выходили оттуда, где его рисует этот кадр),
-    `LoadLevel` (`HenshinPattern` уровня становится `FPattern`, как только
-    файл прочитан: `FindPattern` от слова, для пустого -
+    `LoadLevel` (`HenshinPattern` уровня ищется, как только файл
+    прочитан, и уходит в `FOrbs.BeginLevel` вместе с перемотками:
+    `FindPattern` от слова, для пустого -
     `DefaultPatternName`; имя, которого игра не знает, поднимает
     `EOrbPatternError` здесь, а не посреди босса; кэш тайлов отказывает
     имени палитры, которое несут два
@@ -5272,18 +5336,12 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     сценами. `FGoRight` - `THudGoRight`, создаётся в `LoadLevel`,
     прячется на новом экране, показывается сигналами `GoRight` и
     `OpenDoor`, тикает в `Update`, рисуется с HUD.
-  - Заряд формы (3.0.70): `FEnergy` (0..`FullEnergy`) и `FEnergyAtEntry` -
-    заряд при входе на экран (`ArriveOnScreen`: `FEnergy` +
-    `FFeed.Pending`, орбы в пути - уже заряд); `RestartLevel` его
-    возвращает, `LoadLevel` обнуляет оба. `FFeed` (`TOrbFeed` из
-    `MoonOrbTint`, создаётся в конструкторе) - `FeedEnergy(amount)`
-    (сигнал `Energy`; над трупом ничего; урезан до места в шкале)
-    запускает его в `THudEnergy.Heart`; `TickEnergy` в `Update` после
-    дождя - подача тикает с `HeroCenter`, `TakeLanded` уходит в `FEnergy`,
-    шкала тикает, `FVitals.Wing` берёт её `WingWidth`; `HurtHero` её
-    схлопывает, `LoadLevel` и `RestartLevel` чистят. `FEnergyGauge`
-    (`THudEnergy`) создаётся в `CreateHud`; `Render` рисует её после
-    `FVitals.Draw`, а подачу поверх, без тряски, чтобы орбы уходили в диск.
+  - Заряд формы (3.0.70) живёт в `FOrbs` (`Game.HeroOrbs`); сигнал
+    `Energy` - это `FOrbs.FeedEnergy`. Шкала - игры: `FEnergyGauge`
+    (`THudEnergy`) создаётся в `CreateHud`, тикает в `Update` сразу после
+    `FOrbs.TickAfterCeremony` с `FOrbs.Energy`, `FVitals.Wing` берёт её
+    `WingWidth`; `Render` рисует её после `FVitals.Draw`, а подачу поверх
+    (`FOrbs.DrawFeed`), без тряски, чтобы орбы уходили в диск.
   - Запертые двери (3.0.66): `FDoorOpened` - событие открыло дверь,
     которую уровень запирает на экране героя (`FLevel.DoorShutOn`); новый
     экран, рестарт и новый уровень запирают её снова.
@@ -5327,17 +5385,15 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `TrialProgress`, `TrialDone`. Пресс: `TellPress` -> `TellPressRow`
     (`TellBank` сон или пробуждение с hold; без spareHero - пресс не
     щадит). Пушки: `TickCannons` (`FCannons.Tick` с `TrialAct`, телом
-    живого героя и `OrbTakes`; реплика: гул, выстрел, банк уступки через
+    живого героя и `FOrbs.TakesAt`; реплика: гул, выстрел, банк уступки через
     `TellYieldBank`, искры от стали через `LandCannonStrike`,
     `SHitByBullet` и `HurtHero` под окном милосердия, `BlowCannons` - два
     взрыва `ekMachine`, `platform.wav`, `CannonBlastTrauma`, дым),
     `ResolveCannonContact` (касание ранит, `SHurtByMonster`, и отталкивает
     героя на `CannonShove` 4 от стены), `BulletStruckCannon` (в
     `ResolveHeroBulletHits`: щит съедает пулю, голая сталь даёт искры и
-    звон, без урона). `OrbTakes(fromX, toX, y)` (3.0.57) - первый
-    вооружённый орб ауры, обряда или дождя в пределах `OrbReach` от
-    отрезка тратится на то, что там летит: снаряды пушек и, через
-    `ShardStruck`, живой осколок. Погода (3.0.58): `ResolveMonsterContact`
+    звон, без урона). `FOrbs.TakesAt` берёт снаряды пушек и, через
+    `ShardStruck`, живой осколок раньше того, во что они попали бы. Погода (3.0.58): `ResolveMonsterContact`
     лопает её на герое (`Monster.Burst`), `meBurst` выпускает её взрыв
     (`RewardMonsterKill`), а `RewardMonsterKill` ничего за неё не платит -
     ни очков, ни тикера, ни всплывашки, ни серии. `DrainMonsterEvents`
@@ -5425,85 +5481,42 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `CureHero`; `GrantMercy(ticks)` - `FHurtCooldown` становится не
     меньше `ticks`: пощада не укорачивает более длинную, и через неё же
     идут окно после ранения (`HurtHero`) и окно ауры (`CastAura`);
-    `BeginRite` - `FRite.Start(FPattern, IceRiteScore, HeroCenter,
-    MatterAround)`; `ShedSuit` - `FRite.Shed(IceRiteScore, HeroCenter)`;
-    (3.0.61) `BurstSuit` - `StartBurst(IceBurstLook)`; последние три над
-    трупом не делают ничего.
-  - Орбы: `CastAura` (награда-аура и отладочная клавиша G: `FAura.Cast`
-    вокруг `HeroCenter`, середины тела героя, из `MatterAround` - твёрдых
-    клеток экрана героя и тел его платформ, `FPads.Bodies`; следом окно
-    пощады после ранения, `GrantMercy(HurtMercyTicks)`, потому что
-    кольцо не щит, пока орбы в него не сели, - HUD мигает как после
-    ранения, яма ранит как раньше; над трупом не делает ничего).
-    `Update` тикает ауру сразу после попаданий
-    (`FAura.Tick(HeroCenter)`) и зовёт `ResolveOrbHits(FAura.Flock)` между
-    `ResolveHeroBulletHits` и `ResolveMonsterBulletHits`, так что орб
-    берёт пулю раньше, чем она дойдёт до героя. Для каждого живого и
-    взведённого орба (орб, ещё стоящий на грани, не взведён):
-    вражеская пуля в полёте ближе `OrbReach` к нему по обеим осям
-    (`EnemyBulletNear`; точка пули - на её Y - `SpriteSize`) разрывается,
-    орб тратится; иначе живой опасный монстр экрана героя, в чьём теле
-    лежит орб (`DangerousMonsterAt` над `HitBox` монстра - тот же
-    ящик берёт `ArmorStrike` - и `BoxHolds`), теряет жизнь (`TakeDamage`,
-    при смерти - `RewardMonsterKill`), орб тратится. Не через
-    `SpendBullet`: броня отвечает орбу без искр и без звона. `Render`
-    рисует ауру после пуль, на канале мира. `HandleScreenTransitions`
-    проводит её через дверь на полный шаг героя, включая телепорт
-    триггера нового экрана (`FAura.Carry`), - `ArriveOnScreen` её не
-    трогает; `HurtHero` схлопывает её при смерти героя; `LoadLevel` и
-    `RestartLevel` чистят.
-    Обряд (3.0.49): `FRite`, орбы хеншина, начинается и снимает костюм
-    через колбэки церемонии выше. `HeroBodyPoints` - его проба тела:
-    непрозрачные точки кадра, в котором стоит герой
-    (`FShroudPainter.SeedsOf`), зеркально вместе с ним, там, где они
-    стоят на экране. `Update` тикает его сразу после ауры
-    (`FRite.Tick(HeroCenter)`), следом церемонию (`FHenshin.Tick`: что
-    обряд сказал в этот тик, церемония в этот же тик и слышит), и зовёт
-    `ResolveOrbHits(FRite.Flock)` после аурного. `Render` рисует его в
-    два слоя вокруг героя, оба на канале мира: `DrawBehind` прямо перед
-    покровом под героем, `DrawInFront` сразу после ауры.
-    `HandleScreenTransitions` проводит его через дверь (`FRite.Carry`) на
-    шаг двери и до `ArriveOnScreen`: триггер нового экрана может начать
-    свой обряд - испытание грейвелов так и делает, - а тот ничего не
-    переходил; триггер, который там переносит героя, для обряда рывок.
-    `HurtHero` схлопывает его при смерти героя (`FRite.Collapse`);
-    `LoadLevel` и `RestartLevel` чистят.
-    Сброс (3.0.61): `FBurst`, начинается колбэком церемонии `BurstSuit` и
-    отладочными клавишами L и U - `StartBurst(look)`: над трупом ничего,
-    иначе `FBurstWounded` пустеет и `FBurst.Start(look, FPattern.Name =
-    'vortex', HeroCenter, MatterAround)`. `Update` берёт `FBurst.Holding`
-    раз за тик, до поля, в `WorldStands`: пока идёт вдох, не идут
-    `FField.Tick` с `DrainMonsterEvents`, `FMonsterBullets.Update` и
-    `TickCannons` - герой, его пули, платформы и орбы идут дальше; удар
-    внутри `FBurst.Tick` пушки того же тика не будит.
-    `FBurst.Tick(HeroCenter)` сразу после обряда, до церемонии.
-    `ResolveBurstHits` сразу после `ResolveOrbHits(FRite.Flock)`: каждый
-    отрезок `FBurst.Stretches` проходится шагами не длиннее
-    `BurstHitStep`, на каждой точке `StrikeWithBurst` - вражеская пуля
-    ближе `OrbReach` гаснет (`EnemyBulletNear`), опасный монстр там
-    (`DangerousMonsterAt`) теряет жизнь (`TakeDamage(0, 1, ...)`,
-    `RewardMonsterKill`, если умер) и идёт в `FBurstWounded`: больше одной
-    жизни за сброс никто не теряет, сколько бы лучей через него ни
-    прошло. За стенами тоже, и за экраном; не через `SpendBullet`.
-    `Render`: `DrawVeil` после `FRite.DrawBehind`, силуэт вместо героя,
-    пока `Inhaling` (`DrawHeroSilhouette`: `FShroudPainter.MaskOf` его
-    кадра там, где его ставит `Pose`, с его тряской и `DeckLift`,
-    зеркально вместе с ним), `DrawWorld` сразу после `FRite.DrawInFront`,
-    `DrawGlass` после `FArrivals.Draw`. `HurtHero` чистит его при смерти
-    героя - ни удара, ни костюма; `LoadLevel` и `RestartLevel` чистят его
-    и `FBurstWounded`. Дверь его не переносит: следы, лучи и пылинки
-    стоят в единицах экрана, а у двери в игре сброса не бывает.
-    Дождь: `PourRain` (награда-огненный дождь - `bkFireRain` в
-    `ActivateQueuedBonus` - и отладочная клавиша H: `FRain.Pour` над
-    `MatterAround`; над трупом не делает ничего; тряски нет, окна пощады
-    тоже). `Update` тикает его после ауры, обряда, церемонии и покрова
-    (`FRain.Tick`) и зовёт
-    `ResolveOrbHits(FRain.Flock)` после аурного и обрядового - один
-    вердикт на три стаи; `Render` рисует его сразу после переднего слоя
-    обряда (`FRain.Draw`). `HurtHero`
-    схлопывает его (`FRain.Collapse`); `LoadLevel`, `RestartLevel` и
-    `ArriveOnScreen` чистят - дверь гасит дождь, как пули, а аура уходит
-    через неё с героем.
+    `BeginRite`, `ShedSuit` и `Burst` - это `FOrbs.BeginRite`,
+    `FOrbs.ShedSuit` и `FOrbs.BurstSuit`, а `Rite` и `Burst` сцены -
+    `FOrbs.Rite` и `FOrbs.Burst`.
+  - Орбы (`FOrbs: THeroOrbs`, `Game.HeroOrbs`): что делают орбы и сброс,
+    живёт там. `CreateOrbs` в конструкторе отдаёт ему пробы - `Alive`
+    (не `FHero.Dead`), `HeroCenter` (середина тела героя),
+    `HeroBodyPoints` (непрозрачные точки кадра, в котором он стоит,
+    `FShroudPainter.SeedsOf`, зеркально вместе с ним, там, где они стоят на
+    экране), `MatterAround` (твёрдые клетки его экрана и тела его
+    платформ, `FPads.Bodies`), каждая в анонимной функции, - и цели,
+    боевую половину: `PopEnemyBullet` (вражеская пуля в полёте ближе
+    `OrbReach` к точке по обеим осям, `EnemyBulletNear` - точка пули на
+    её Y - `SpriteSize`, - гаснет), `DangerousMonsterAt` (живой опасный
+    монстр экрана героя, в чьём `HitBox` точка, - тот же ящик берёт
+    `ArmorStrike`, - через `BoxHolds`), `WoundByOrb` (`TakeDamage(0, 1,
+    ...)`, при смерти `RewardMonsterKill`; не через `SpendBullet` - броня
+    отвечает орбу без искр и без звона). `CastAura` (награда-аура и
+    отладочная клавиша G) - это `FOrbs.CastAura`, затем окно пощады после
+    ранения, `GrantMercy(HurtMercyTicks)`, потому что кольцо не щит, пока
+    орбы в него не сели, - HUD мигает как после ранения, яма ранит как
+    раньше. Награда-огненный дождь (`bkFireRain`) и клавиша H зовут
+    `FOrbs.PourRain`. `Update`: `FOrbs.Holding` в `WorldStands` раз за
+    тик, до поля - пока сброс делает вдох, не идут `FField.Tick` с
+    `DrainMonsterEvents`, `FMonsterBullets.Update` и `TickCannons`, а удар
+    пушки того же тика не будит; `FOrbs.Tick` сразу после прибытий, до
+    `FHenshin.Tick`; `FOrbs.TickAfterCeremony` после покрова, следом
+    шкала; `FOrbs.Strike` между `ResolveHeroBulletHits` и
+    `ResolveBlasts`, так что орб берёт пулю раньше героя. Перемотки:
+    `FOrbs.BeginLevel` в `LoadLevel`, `FOrbs.Rewind` в `RestartLevel`,
+    `FOrbs.Arrive` в `ArriveOnScreen`, `FOrbs.Fall` в `HurtHero`;
+    `HandleScreenTransitions` зовёт `FOrbs.CarryRite` до `ArriveOnScreen`
+    и `FOrbs.CarryAura` после. `Render`: `FOrbs.DrawOrbs` после света
+    пушек; пока `FOrbs.Inhaling`, вместо героя `DrawHeroSilhouette`
+    (`FShroudPainter.MaskOf` его кадра там, где его ставит `Pose`, с его
+    тряской и `DeckLift`, зеркально вместе с ним, рисует
+    `FOrbs.DrawSilhouette`).
   - Покров (3.0.47): `FShroud` (`THeroShroud`; проба - `SolidUnderPoint`,
     зерно кубиков - `RollDiceSeed`) и `FShroudPainter` рождаются заново в
     `LoadLevel` вместе с героем, до церемонии, которая получает покров в
@@ -5564,14 +5577,14 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `DrawAtlasOverlay` - четыре двери, через которые ходит отладочная
     клавиатура, и больше никаких. Все четыре существуют в любой сборке, их тела
     компилируются в ничто, поэтому ни одному вызывающему не нужен ifdef. За
-    ними: `CastAura` (G: аура прямо на героя, слот не тронут), `PourRain`
-    (H: огненный дождь на экран героя, слот не тронут), `FHenshin.Start`
+    ними: `CastAura` (G: аура прямо на героя, слот не тронут),
+    `FOrbs.PourRain` (H: огненный дождь на экран героя, слот не тронут), `FHenshin.Start`
     (J, `ScancodeJ`, 3.0.49: хеншин сразу, без босса и без отсчёта),
-    `ShedSuit` с `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
+    `FOrbs.ShedSuit` с `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
     3.0.49: кольцо орбов и его пощада, как их даёт смерть босса, без
-    костюма, который надо снимать), `StartBurst(IceBurstLook)` (L,
+    костюма, который надо снимать), `FOrbs.StartBurst(IceBurstLook)` (L,
     `ScancodeL`, 3.0.61: сброс на героя сразу, без обряда и костюма -
-    только вид, замирание мира и удары), `StartBurst(MoonBurstLook)` (U,
+    только вид, замирание мира и удары), `FOrbs.StartBurst(MoonBurstLook)` (U,
     `ScancodeU`, 3.0.61: то же в облике луны, который пока не носит ни
     одна форма),
     `NudgeCrosshair`, `NudgeMinigunMuzzle`, `DebugBrowseScreen` (PgUp/PgDn,
@@ -5909,6 +5922,21 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
   радиусом - никого, укрытие стеной, жизни и толчок по расстоянию и
   сложности, и бочка из monsters.json против стрелка с 50 жизнями со
   второго уровня.
+- **`Game/Tests.Game.HeroOrbs.pas`** (~430 строк) - **`THeroOrbsTests`**
+  (20 тестов): `THeroOrbs` на его границе, без SDL - герой точка в
+  комнате со стенами (`Tests.Rooms`, `Tests.Matter`), у тела нет точек,
+  цели - фикстуры (пуля или монстр везде или нигде, каждый вызов
+  считается); `Setup` обнуляет состояние фикстуры, потому что одна
+  фикстура гоняет все тесты. Труп ничего не вызывает и ничего не получает,
+  `CastAura` говорит, вызвана ли; заряд садится, останавливается на
+  полной с учётом того, что в пути, перемотка возвращает заряд входа и
+  сохраняет то, что было в пути у двери, новый уровень обнуляет оба,
+  падение забирает то, что в пути, и оставляет остальное; падение и
+  перемотка не оставляют взведённых орбов, дверь гасит дождь и оставляет
+  ауру; `TakesAt` тратит взведённый орб в досягаемости и ни одного вне её;
+  орб, потраченный на пулю, никого не ранит, орб на монстре ранит его;
+  сброс держит мир во время вдоха и ранит монстра раз за сброс, и снова -
+  следующим.
 - **`Monsters/Tests.Monsters.Damage.pas`** (~235 строк) -
   **`TDamageWindowTests`**: окно само по себе - срез на потолке, скольжение
   окна, ни один отрезок из `Ticks` тиков не берёт больше потолка, цепной
@@ -6496,11 +6524,11 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Дым и искры подбитых машин | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; точки корпуса: `hull` в monsters.json) |
 | Дым бочки; ещё одно дымящее тело | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD-арт в наборе монстра: фильтр, цветовой ключ | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
-| Церемония хеншина: отсчёт, что каждое событие обряда и сброса значит для героя (лечение, пощада, свет на теле, костюм), костюм надеть и снять | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Game.Moon.pas (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; отладочные клавиши J и K) + docs/mechanics/henshin.md |
-| Сброс костюма: вдох (мир стоит, вуаль, голый силуэт), лучи (число, скорость, хвост, закрутка вихря, сквозь стены), следы, кольцо, вспышка, пылинки, тёмный облик луны; что бьёт луч, жизнь за сброс | Orbs.Burst.pas (формулы, числа, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Game.Moon.pas (`StartBurst`, `BurstSuit`, `WorldStands` в `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; отладочные клавиши L и U) + Tests.Orbs.Burst.pas + docs/mechanics/henshin.md |
-| Обряд из орбов в хеншине: расписание (`IceRiteScore`), волны и откуда они добываются, полёт к месту, когда орб взведён, замены и их запас, замирание и вспышка, схлопывание по телу, дверь, рывок, смерть героя | Orbs.Rite.pas (формулы и числа) + Orbs.Harvest.pas (`HarvestAround`) + Game.Moon.pas (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, два слоя в `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/mechanics/henshin.md |
+| Церемония хеншина: отсчёт, что каждое событие обряда и сброса значит для героя (лечение, пощада, свет на теле, костюм), костюм надеть и снять | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Game.HeroOrbs.pas (`BeginRite`, `ShedSuit`, `BurstSuit`) + Game.Moon.pas (`GrantMercy`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; отладочные клавиши J и K) + docs/mechanics/henshin.md |
+| Сброс костюма: вдох (мир стоит, вуаль, голый силуэт), лучи (число, скорость, хвост, закрутка вихря, сквозь стены), следы, кольцо, вспышка, пылинки, тёмный облик луны; что бьёт луч, жизнь за сброс | Orbs.Burst.pas (формулы, числа, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Game.HeroOrbs.pas (`StartBurst`, `BurstSuit`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`) + Game.Moon.pas (`WorldStands` в `Update`, `DrawHeroSilhouette`, `DrawHeroInShroud`; отладочные клавиши L и U) + Tests.Orbs.Burst.pas / Tests.Game.HeroOrbs.pas + docs/mechanics/henshin.md |
+| Обряд из орбов в хеншине: расписание (`IceRiteScore`), волны и откуда они добываются, полёт к месту, когда орб взведён, замены и их запас, замирание и вспышка, схлопывание по телу, дверь, рывок, смерть героя | Orbs.Rite.pas (формулы и числа) + Orbs.Harvest.pas (`HarvestAround`) + Game.HeroOrbs.pas (`BeginRite`, `ResolveOrbHits`, `CarryRite`, `Fall`, `DrawBehind` / `DrawOrbs`) + Game.Moon.pas (`HeroBodyPoints`, `HandleScreenTransitions`, `HurtHero`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/mechanics/henshin.md |
 | Узор хеншина: снежинка, вихрь, новый; какой уровень строит какой | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, таблица `Patterns`) + `henshinPattern` в levelN.json + Levels.Defs.pas (`HenshinPattern`) + Game.Moon.pas `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (место, которое перескакивает) + Tests.Orbs.Patterns.pas |
-| Снятие костюма: кольцо орбов, сколько оно стоит, пощада | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` партитуры) + Game.Henshin.pas `RemoveIceForm` + Game.Moon.pas (`ShedSuit`, `GrantMercy`) |
+| Снятие костюма: кольцо орбов, сколько оно стоит, пощада | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` партитуры) + Game.Henshin.pas `RemoveIceForm` + Game.HeroOrbs.pas `ShedSuit` + Game.Moon.pas `GrantMercy` |
 | Покров героя: когда играет и с каким обликом, что говорит облик (полосы, ломтики, ореол, частицы, туман), что и в каком порядке рисует художник, свет ледяного костюма | Game.Shroud.pas (`TShroudLook` и облики, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Game.Moon.pas (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (маски, ореолы, точки) + Tests.Game.Shroud.pas (+docs/mechanics/hero-shroud.md, в хранилище проекта) |
 | Подбор предмета: заливка, крошки, их полёт в тело героя и свет на нём; предмет, который вместо этого уничтожен; свет лежащей аптечки и лежащего оружия; дверь, смерть героя и рестарт посреди сцены; ещё один вид предмета | Game.Uptake.pas (`TUptakeLook` и три облика, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Game.Moon.pas (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; их делает tools/medkit/build_medkit.py) + Tests.Game.Uptake.pas (+docs/mechanics/pickups.md, в хранилище проекта) |
 | То, что делается из альфы картинки, - маска, ореол, точки: для ещё одной вещи, которая светится по своей форме | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
@@ -6517,13 +6545,13 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
 | Блуждающие платформы: когда приходят, где висят, как озоруют, как их отсылают | Pads.Stray.pas + `stray` у платформы и действия `strays` / `straysLeave` в level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
 | Погода: тело, которое лопается там, где приземлилось (небесная бочка) | `weather` в monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Game.Moon.pas (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
-| Аура героя из орбов: кольцо, течение, как оно идёт за героем (поводок, нитка рывка), сроки, вплетение второго вызова, потолок кольца, дверь, смерть героя | Orbs.Aura.pas (формулы и числа) + Game.Moon.pas (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/mechanics/orbs.md |
-| Вызов ауры: где проступают орбы (грани клеток и платформ, воздух), ожидание над гранью, полёт, когда орб взведён, окно пощады | Orbs.Harvest.pas (точки) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Game.Moon.pas (`MatterAround`, `CastAura`, `GrantMercy`) |
-| Огненный дождь из орбов: волны, формула капли, пол столбца (материя, яма), посадка, второй вызов, смерть героя | Orbs.Rain.pas (формулы и числа) + Game.Moon.pas (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/mechanics/orbs.md |
-| Орб: облик, три конца (схлопывание, пыль, отпуск), след на грани, как он рисуется между тиками, его глубина и два слоя вокруг героя; обо что орб бьётся и чего это стоит | Orbs.Flock.pas + Game.Moon.pas (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` в monsters.json |
+| Аура героя из орбов: кольцо, течение, как оно идёт за героем (поводок, нитка рывка), сроки, вплетение второго вызова, потолок кольца, дверь, смерть героя | Orbs.Aura.pas (формулы и числа) + Game.HeroOrbs.pas (`CastAura`, `CarryAura`, `Fall`) + Game.Moon.pas (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/mechanics/orbs.md |
+| Вызов ауры: где проступают орбы (грани клеток и платформ, воздух), ожидание над гранью, полёт, когда орб взведён, окно пощады | Orbs.Harvest.pas (точки) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Game.HeroOrbs.pas `CastAura` + Game.Moon.pas (`MatterAround`, `CastAura`, `GrantMercy`) |
+| Огненный дождь из орбов: волны, формула капли, пол столбца (материя, яма), посадка, второй вызов, смерть героя | Orbs.Rain.pas (формулы и числа) + Game.HeroOrbs.pas (`PourRain`, `ResolveOrbHits`, `Arrive`, `Fall`) + Game.Moon.pas (`HurtHero`, `ArriveOnScreen`) + docs/mechanics/orbs.md |
+| Орб: облик, три конца (схлопывание, пыль, отпуск), след на грани, как он рисуется между тиками, его глубина и два слоя вокруг героя; обо что орб бьётся и чего это стоит | Orbs.Flock.pas + Game.HeroOrbs.pas (`ResolveOrbHits`, `TakesAt`, `OrbReach`) + Game.Moon.pas (`PopEnemyBullet`, `EnemyBulletNear`, `DangerousMonsterAt`, `WoundByOrb`) + `dangerous` в monsters.json |
 | Размер экрана против размера кадра; всё для широкого экрана | Game.Space.pas (дальше - каждый читатель `Frame*` / `Screen*`) |
 | Панели кардиомонитора / заряда бонуса: вид, цвета, тайминги | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas - кисть и палитра) |
-| Заряд формы: шкала-затмение в крыле монитора, чёрные орбы, которые его приносят, что возвращает смерть | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + действие `energy` (Levels.Events.pas, Events.Director.pas) + Game.Moon.pas (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, этап 6) |
+| Заряд формы: шкала-затмение в крыле монитора, чёрные орбы, которые его приносят, что возвращает смерть | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + действие `energy` (Levels.Events.pas, Events.Director.pas) + Game.HeroOrbs.pas (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickAfterCeremony`, `Arrive`, `Rewind`) + Game.Moon.pas (`FEnergyGauge` в `Update`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas, Tests.Game.HeroOrbs.pas (+docs/mechanics/arena-3.md, этап 6) |
 | Ряды здоровья над героем / монстрами; трети прицела | Hud.Marks.pas (+Render.Brush.pas - ячейки) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Game.Moon.pas `CrosshairFrame` |
 | Переходы между экранами / чекпойнты; куда яма или смерть возвращает героя на экране | Game.Moon.pas (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` и действие `respawn` в levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
 | Струя под платформой: её цвет, длина и сила, разгорание вокруг перелёта, кашляющий двигатель | дымовая деталь обвеса в levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Game.Moon.pas `LocateParent` |

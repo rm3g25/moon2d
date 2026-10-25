@@ -379,11 +379,14 @@ PgUp/PgDn - экраны, End - сразу на экран, который ст�
        FHeldFlyIns, FCannonSmoke, FAimedColumn и их методы
        (TickGravelAttack, LetDown*, *Press*, *Cannons*, OpenSky,
        SpawnGuest, Send*Onto);
-     - форма и орбы: FAura, FRite, FPattern, FBurst, FBurstWounded, FRain,
-       FFeed, FEnergy* и BeginRite, ShedSuit, StartBurst, BurstSuit,
-       FeedEnergy, TickEnergy, CastAura, PourRain, ResolveOrbHits,
-       ResolveBurstHits; выгоднее до этапа 8 арены 3 - эволюция и лунная
-       форма въедут уже в свой юнит;
+     - форма и орбы - сделано 2026-10-25: Game/Game.HeroOrbs.pas
+       (THeroOrbs) - аура, обряд, узор, сброс и его раненые, дождь,
+       подача, заряд формы; пробы героя и цели удара вместо TMoonGame,
+       перематывается сам (BeginLevel, Rewind, Arrive, Fall), 20 тестов
+       на границе (Tests.Game.HeroOrbs); без версии. Шов боя:
+       PopEnemyBullet, DangerousMonsterAt и WoundByOrb остались в
+       Game.Moon и уйдут вместе с боем. Имя THeroForm занято: это форма
+       героя в Hero (hfNormal/hfIce), лунная форма станет её значением;
      - бой: Resolve*, Strike*, BlastStoppedAt, ShardStruck, SpendBullet,
        RewardMonsterKill, серия убийств;
      - загрузка уровня последней (LoadLevel 234 строки, OpenSpriteSet,

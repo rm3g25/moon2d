@@ -101,7 +101,7 @@ uses
   Menu.Embers in 'Menu\Menu.Embers.pas',
   Menu.Logo in 'Menu\Menu.Logo.pas',
   Menu in 'Menu\Menu.pas',
-  Game.HeroForm in 'Game\Game.HeroForm.pas',
+  Game.HeroOrbs in 'Game\Game.HeroOrbs.pas',
   Game.Moon in 'Game\Game.Moon.pas';
 
 const

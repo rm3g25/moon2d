@@ -46,12 +46,12 @@ type
   TCureHero = reference to procedure;
   // Mercy for the hero for ATicks, owned by the game
   TGrantMercy = reference to procedure(ATicks: Integer);
-  // The rite begins about the hero, owned by the form (Game.HeroForm): it
+  // The rite begins about the hero, owned by his orbs (Game.HeroOrbs): it
   // knows his center, the matter of his screen and the level's pattern
   TBeginRite = reference to procedure;
-  // The suit's orbs come out about the hero, owned by the form
+  // The suit's orbs come out about the hero, owned by his orbs
   TShedSuit = reference to procedure;
-  // The burst of the suit begins about the hero, owned by the form: it
+  // The burst of the suit begins about the hero, owned by his orbs: it
   // knows his center, the matter of his screen and the level's pattern
   TBurstSuit = reference to procedure;
 
@@ -66,8 +66,8 @@ type
     Burst: TOrbBurst;
   end;
 
-  // What the ceremony asks the game and the form for: their methods passed
-  // directly, no wrappers
+  // What the ceremony asks the game and the hero's orbs for: their methods
+  // passed directly, no wrappers
   THenshinCalls = record
     Cure: TCureHero;
     GrantMercy: TGrantMercy;
