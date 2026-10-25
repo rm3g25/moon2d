@@ -84,6 +84,11 @@
       "fromScreen": 12,
       "image": "screen12.png",
       "tint": [75, 75, 80]
+    },
+    {
+      "fromScreen": 13,
+      "image": "screen13.png",
+      "tint": [75, 75, 80]
     }
   ],
   "objects": [
@@ -945,7 +950,7 @@
       "tag": "s11-way-out"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 320,
       "y": 352,
@@ -953,7 +958,7 @@
       "tag": "s12-road-1"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 352,
       "y": 352,
@@ -961,7 +966,7 @@
       "tag": "s12-road-2"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 384,
       "y": 352,
@@ -969,7 +974,7 @@
       "tag": "s12-road-3"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 416,
       "y": 352,
@@ -977,7 +982,7 @@
       "tag": "s12-road-4"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 448,
       "y": 352,
@@ -985,7 +990,7 @@
       "tag": "s12-road-5"
     },
     {
-      "sprite": "s12-road-tile",
+      "sprite": "tek-road-tile",
       "screen": 12,
       "x": 480,
       "y": 352,
@@ -999,6 +1004,134 @@
       "y": 353,
       "width": 328,
       "tag": "s12-crust"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 0,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-1"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 32,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-2"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 64,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-3"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 96,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-4"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 128,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-5"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 160,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-6"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 192,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-7"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 224,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-8"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 256,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-9"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 288,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-10"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 320,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-11"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 352,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-12"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 384,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-13"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 416,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-14"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 448,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-15"
+    },
+    {
+      "sprite": "tek-road-tile",
+      "screen": 13,
+      "x": 480,
+      "y": 352,
+      "width": 32,
+      "tag": "s13-road-16"
     }
   ],
   "pads": [
@@ -3239,6 +3372,88 @@
                   "s12-pillar-d", "s12-pillar-e"]
     },
     {
+      "kind": "craft",
+      "tag": "s13-far-lip",
+      "screen": 13,
+      "layer": "sky",
+      "body": "s12-far-lip",
+      "width": 512,
+      "x": -208,
+      "y": 212.9
+    },
+    {
+      "kind": "convoy",
+      "tag": "s13-convoys",
+      "screen": 13,
+      "layer": "sky",
+      "x": 0,
+      "y": 0,
+      "tint": [100, 86, 62],
+      "tail": [100, 16, 10],
+      "flasher": [100, 52, 8],
+      "size": 3,
+      "gap": [72, 34],
+      "ramp": 25,
+      "jitter": 25,
+      "lights": [3, 5],
+      "pitch": 3.2,
+      "flashers": 35,
+      "fade": 20,
+      "lanes": [
+        {"from": [-16, 214.1], "to": [250, 213.7], "speed": 8, "far": 70},
+        {"from": [-16, 212.6], "to": [250, 212.9], "speed": 6.4, "far": 70,
+         "scale": 80, "joins": 2}
+      ]
+    },
+    {
+      "kind": "craft",
+      "tag": "s13-pillar-b",
+      "screen": 13,
+      "layer": "sky",
+      "body": "s12-pillar-block",
+      "width": 17,
+      "x": 39.5,
+      "y": 185.7,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s13-pillar-d",
+      "screen": 13,
+      "layer": "sky",
+      "body": "s12-pillar-stump",
+      "width": 16,
+      "x": 115.0,
+      "y": 192.7,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "craft",
+      "tag": "s13-pillar-e",
+      "screen": 13,
+      "layer": "sky",
+      "body": "s12-pillar-needle-mirrored",
+      "width": 6,
+      "x": 184.0,
+      "y": 172.7,
+      "tint": [60, 60, 64]
+    },
+    {
+      "kind": "searchlight",
+      "tag": "s13-searchlight",
+      "screen": 13,
+      "layer": "sky",
+      "x": 0,
+      "y": 0,
+      "tint": [88, 94, 100],
+      "source": [254, 213.7],
+      "sweep": {"center": [256, 170], "reach": [236, 70], "period": 16,
+                "phase": 25},
+      "spot": [90, 54],
+      "catch": 60,
+      "catches": ["s13-pillar-b", "s13-pillar-d", "s13-pillar-e"]
+    },
+    {
       "kind": "dust",
       "screen": 10,
       "x": 0,
@@ -3711,6 +3926,37 @@
           "0000000000000000",
           "1111111111111111"
         ]
+      },
+      {
+        "screen": 13,
+        "rows": [
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+          "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+        ],
+        "collision": [
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "0000000000000000",
+          "1111111111111111"
+        ]
       }
     ]
   },
@@ -4121,9 +4367,10 @@
     {"screen": 9, "x": 2, "y": 11},
     {"screen": 10, "x": 2, "y": 11},
     {"screen": 11, "x": 2, "y": 11},
-    {"screen": 12, "x": 1, "y": 11}
+    {"screen": 12, "x": 1, "y": 11},
+    {"screen": 13, "x": 2, "y": 11}
   ],
-  "shutDoors": [9, 10, 11, 12],
+  "shutDoors": [9, 10, 11, 12, 13],
   "events": [
     {
       "id": "breachWarning",
@@ -4371,6 +4618,22 @@
       "id": "s12-door",
       "screen": 12,
       "when": "sphereTaken",
+      "then": [
+        {"action": "openDoor"}
+      ]
+    },
+    {
+      "id": "s13-music",
+      "screen": 13,
+      "when": "enterScreen",
+      "then": [
+        {"action": "music", "file": "boss3.ogg", "fadeOut": 2.5}
+      ]
+    },
+    {
+      "id": "s13-door",
+      "screen": 13,
+      "when": "enterScreen",
       "then": [
         {"action": "openDoor"}
       ]
