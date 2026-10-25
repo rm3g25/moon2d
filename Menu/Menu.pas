@@ -19,7 +19,7 @@
   units, 1 NDC-y = 192 units) and frozen as constants.
 
   The menu produces TMenuResult commands; it never touches the game -
-  the composition root (Moon2D.dpr) decides what starting a level means.
+  TMoonGame (Game.Moon) decides what starting a level means.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }

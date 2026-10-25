@@ -8,7 +8,7 @@
   The parser is tried over a root of JSON with the events of the test and
   nothing else; the grid is the load's, tried through a one-screen room
   (LevelFromRows). Whether the hero stands in the cell, and where a fall
-  brings him back, are the game's (Moon2D.dpr) and are seen live.
+  brings him back, are the game's (Game.Moon) and are seen live.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
