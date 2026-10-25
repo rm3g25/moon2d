@@ -137,7 +137,8 @@ Good places to start:
   abuses of the projectile list. A 180-fragment explosion fan; 768 slow bullets
   raining on a grid; a motionless cloud of them used as a shield. All still
   hacks. All now named.
-- **`Moon2D.dpr`** — composition root and game-flow state machine. Not a stub.
+- **`Game/Game.Moon.pas`** - the game-flow state machine (`TMoonGame`), the
+  game the program runs; `Moon2D.dpr` is the start-up alone.
 - **`docs/CODEBASE-MAP.md`** — the whole layout, unit by unit, if you would
   rather orient before diving.
 
@@ -199,10 +200,11 @@ repository already.
 ## Layout
 
 ```
-Moon2D.dpr, .dproj     composition root and the project
+Moon2D.dpr, .dproj     the start-up and the project
 Core/                  shared with the tools and the level editor: SDL,
                        sprite sets, rendering, level and monster models
-Game/                  hero, monsters, bullets, sound, the game loop
+Game/                  the game (Game.Moon), hero, monsters, bullets, sound,
+                       the game loop
 Hud/                   everything drawn over the playfield, the story screen
 Menu/                  the main menu and its sky
 bin/                   everything the game reads at runtime, and nothing else

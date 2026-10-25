@@ -146,7 +146,7 @@ put at row 2, in the air.
 
 Left to the eye: the burst on the hero (`ResolveMonsterContact`) and the
 blast, the shards and the score the game gives a burst body, in
-`Moon2D.dpr`.
+`Game.Moon`.
 
 ### What a scene does to a body (3.0.62)
 

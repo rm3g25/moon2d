@@ -369,9 +369,9 @@ Each its own commit, each run live.
 7. **Screen 12.** Designed (2026-10-23), see "Screen 12"; the art is made. 7a built (3.0.72), see "Stage 7a as built"; 7b built (3.0.73), see "Stage 7b as built"; 7c built, see "Stage 7c as built". In steps: 7a the sphere (`TLifeSphere`, the pickup, its forming and its taking); 7b the convoys and the searchlight (the far ledge as a living backdrop); 7c screen 12 as data (the objects, the far lip, the floor, the events, the shut door).
    **Before stage 8 (decided 2026-10-25): two steps out of Moon2D.dpr.** The boss, the chase, the evolution and the moon form would all land in `TMoonGame`, which lives in the program file, where no test can reach it. So, in order, each in a new chat:
    - 7b closed first: its commits, the live run, the tag 3.0.73.
-   - Step 0: `TMoonGame` moves out of `Moon2D.dpr` into a unit of its own, not a line of code changed; the unit joins `Moon2D.dproj`. One commit, no version.
+   - Step 0: done (2026-10-25). `TMoonGame` moved out of `Moon2D.dpr` into `Game/Game.Moon.pas` word for word, the unit joined `Moon2D.dproj`; the program keeps `RunGame`, the discovery of the levels and its uses. One commit, no version; the maps and PORTING-NOTES followed in a commit of their own.
    - The form and the orbs move out of `TMoonGame` into a unit of their own: design first, then code. The piece takes the cues of the events and the scenes and rewinds itself on a restart; it does not know the game. No version: no behaviour changes.
-   - Then stage 8. The rest of the split of `Moon2D.dpr` (debug, the gravel trial, combat, level loading) is the debt of version 3.0, paid after the release and before 3.1: PORTING-NOTES, "ДОЛГ ВЕРСИИ 3.0", item д).
+   - Then stage 8. The rest of the split of `TMoonGame` (debug, the gravel trial, combat, level loading) is the debt of version 3.0, paid after the release and before 3.1: PORTING-NOTES, "ДОЛГ ВЕРСИИ 3.0", item д).
    - Alongside, not touching the code: the art of screen 13 - its backdrop drawn on to the right with room to spare for the chase.
 8. **Screen 13 - the arena and the hull.** Flat floor, closed on both sides; the 2x2 machine on two wheels drives, stops, crushes; the TeK shield; death restarts the fight.
 9. **Turret 1** - aimed bursts.

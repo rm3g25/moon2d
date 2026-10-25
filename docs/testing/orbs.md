@@ -350,7 +350,7 @@ Left to the eye:
 - Whether a mark is the size and light of the design.
 - What the game does along a stretch: the bullets put out, a monster
   wounded once a burst, the world standing for the inhale. That is
-  `Moon2D.dpr`'s and waits for the scene tests with the hero.
+  `Game.Moon`'s and waits for the scene tests with the hero.
 
 ## Orbs.Feed
 

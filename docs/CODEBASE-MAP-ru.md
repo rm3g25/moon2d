@@ -24,7 +24,9 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 `v3.0.64`, по пыли туннеля на `v3.0.65`, по запертым дверям на
 `v3.0.66`, по лунному камню на `v3.0.67`, по падению камней на
 `v3.0.69`, по заряду камня на `v3.0.70` и по свободному падению камней с
-чекпойнтом у камня на `v3.0.71`, заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
+чекпойнтом у камня на `v3.0.71`, затем по переезду `TMoonGame` из
+`Moon2D.dpr` в `Game.Moon` после `v3.0.73` (сами `v3.0.72` и `v3.0.73`
+ещё не догнаны), заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -41,7 +43,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   пространство кадра и экрана. **Core не использует ни одного юнита вне
   Core** - инструмент или редактор, ссылающийся только на `Core/`, перестаёт
   собираться в тот же день, когда правило нарушено.
-- `Game/` - сама игра: герой, монстры, диск босса и его пилот, пули, взрывы,
+- `Game/` - сама игра: `TMoonGame` (`Game.Moon`), герой, монстры, диск
+  босса и его пилот, пули, взрывы,
   попадания
   по броне, звук, хост
   цикла, словарь бонуса,
@@ -172,7 +175,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Levels.Pads`, `Levels.Dynamics` и `Render.Sprites`) / `Scenes.Director`
 (сцены: над `Levels.Scenes`, `Levels.Dynamics`, `Audio`, `Hud.Messages`,
 `Monsters`, `Bullets` и `Pads.World`; место строки - из `Hud.Terminal`) ->
-`Moon2D.dpr`, который ведёт и
+`Game.Moon` (игра: над всеми ними, `Menu` и `Game.Loop`) ->
+`Moon2D.dpr` (старт), который ведёт и
 `Game.Loop` (хост: только над `Sdl2.Core` и `Game.Config`, ни одного
 игрового юнита не знает). Небесная установка меню
 сбоку: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
@@ -194,7 +198,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   последний для бликов HUD), режимы масштабирования
   (`SdlScaleModeNearest`/`Linear` - фильтр на текстуру), базовые сканкоды
   (Return, Escape, Ctrl/Alt, Space, стрелки; буквы, нумпад и дебажные
-  клавиши - константы в dpr).
+  клавиши - константы в `Game.Moon`).
 - **Записи**: `TSdlRect`, `TSdlFRect`, `TSdlPoint`, `TSdlFPoint`,
   `TSdlColor`, `TSdlVertex` (угол треугольника: куда он ложится, чем
   тонирован, какую точку текстуры показывает - 0..1 поперёк и вниз),
@@ -318,7 +322,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   качается вместе с ней, а не целыми единицами. Вызывающий ставит его
   вокруг отрисовки одной фигуры и возвращает в 0; здесь его тоже никто
   не сбрасывает. Конструктор берёт логический размер и ставит его
-  рендереру (`SDL_RenderSetLogicalSize` - dpr передаёт кадр из
+  рендереру (`SDL_RenderSetLogicalSize` - `Game.Moon` передаёт кадр из
   `Game.Space`).
 - 3.0.64: `DrawRotated` берёт сторону квадрата (`ASide`, по умолчанию
   `SpriteSize`) - ружьё больше кадров 2008, у Дуплета 48. 3.0.67:
@@ -330,7 +334,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 заменил `SDL_LoadBMP_RW` во всех точках загрузки. `EnsureImageLib` вызывается на
 старте и падает внятным сообщением, если DLL нет: в отличие от опционального
 миксера, отсутствие графики фатально. `IMG_SavePNG` - единственная запись:
-отладочный дамп экранов в dpr.
+отладочный дамп экранов в `Game.Moon`.
 
 ### `Core/Render.Tiles.pas` (~115 строк)
 - **`TTileScreenRenderer`** - рисует один экран двумя слоями в порядке,
@@ -464,7 +468,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   xorshift, не `Random`: тот кормит спавн-таблицу босса. `NoShake` - константа
   нулевого сдвига.
 - Дозы живут у того, кто трясёт (константы `*Trauma`: взрывы и бонусы - в
-  dpr, надевание костюма - в `Game.Henshin`), не здесь: что и насколько
+  `Game.Moon`, надевание костюма - в `Game.Henshin`), не здесь: что и насколько
   трясёт - политика игрового потока, этот юнит - механизм.
 
 ### `Core/Render.Font.pas` (~405 строк)
@@ -482,7 +486,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   атласа.
 - **`TFontFiltering`** = (`ffLinear`, `ffNearest`, `ffLinearSmallOnly`) - как
   фильтруется перерисованный атлас; ставится через `TMoonFont.Filtering`
-  (dpr выбирает `ffNearest`; N листает его в сборке с DEBUGKEYS).
+  (`Game.Moon` выбирает `ffNearest`; N листает его в сборке с DEBUGKEYS).
   Перерисованный атлас (клетки больше `FontCellPx`) хранится двумя
   текстурами, nearest и linear; у атласа 2008 линейной копии нет, он всегда
   nearest. `TTextSize` = (`tsSmall`, `tsLarge`) говорит `ffLinearSmallOnly`,
@@ -501,7 +505,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
 - **`TSoundBank`** - словарь WAV-чанков и один слот музыки. `Load`/`Play`
   (`sounds\`, строго: отсутствующий файл поднимает `EAudioError` - на старте
-  для того, что dpr прогревает, на первом `Play` для имени, которого он не
+  для того, что `Game.Moon` прогревает, на первом `Play` для имени, которого он не
   прогревал),
   `PlayMusic`/`StopMusic` (`music\`, OGG, мягко: отсутствующий трек пропускается
   молча), `ToggleMusicMuted` (читается обратно через `MusicMuted`),
@@ -654,7 +658,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   число экранов. `HenshinPattern` (3.0.49) - слово `henshinPattern` из
   корня файла: узор, который орбы хеншина строят на этом уровне; '',
   когда слова в файле нет. `Core` не знает игровых юнитов, поэтому
-  умолчание и отказ неизвестному слову - дело игры (`LoadLevel` в dpr).
+  умолчание и отказ неизвестному слову - дело игры (`LoadLevel` в `Game.Moon`).
   `SpriteSets` - наборы окружения в порядке разрешения, только
   тайлы; задники экранов идут по соглашению `<assetsDir>-backdrops` и там не
   появляются. `Objects` - свободный арт в порядке файла (поздний рисуется
@@ -2058,7 +2062,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 - **`TFanShape`** (запись) - rows/cols/baseSpeed/speedSpread формулы веера k/t
   (тот самый travel-тест: один шаблон, четыре формы -
   `RageWave` / `FastFragments` / `SlowFragments` в `Monsters`,
-  `ExplosionFan` в Moon2D.dpr).
+  `ExplosionFan` в `Game.Moon`).
 - **`TBulletStatus`** = (`bsFlying`, `bsBursting`, `bsInactive`).
 - **`TBullet`** - позиция (`X`, `Y`), скорость (`DX`, `DY`, с записью),
   гравитация ('dyy'), кадр анимации взрыва, `Status` (с записью),
@@ -2574,7 +2578,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     глубиной - `ScreenHeight` + `PlungeDepth` минус Y расстановки:
     платформа останавливается на `PlungeDepth` (3 клетки) под экраном,
     за линией, на которой игра забирает упавшего из ямы (`PitDepthY` в
-    dpr, 66 единиц под экраном), так что герой, который едет на ней вниз,
+    `Game.Moon`, 66 единиц под экраном), так что герой, который едет на ней вниз,
     оказывается в яме раньше, чем она встанет, - и зерном `PlungeSeed`
     (X, экран и Y расстановки). `Tread` - герой в этот тик стоит на
     настиле (`THero.LandOnDeck`); платформа начинает поддаваться.
@@ -3655,7 +3659,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   ячейкам).
 
 ### `Hud/Hud.Marks.pas` (~290 строк)
-Ряды здоровья над фигурами, нарисованные кистью; строится в `CreateHud` в dpr
+Ряды здоровья над фигурами, нарисованные кистью; строится в `CreateHud` в `Game.Moon`
 вместе с угловыми HUD. **`THudMarks`**.
 - Ряд героя: ячейки 4x4 с зазором 2, по центру над головой (на 9 юнитов выше
   верха спрайта), грамматика монитора - `HealthyHealth` ячеек нормы, пустые
@@ -3725,7 +3729,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 Что взрыв делает, как `Game.Explosions` - как он выглядит: волна из сердца
 взорвавшегося тела, которая ранит всё, до чего дошла. Юнит не знает ни
 монстра, ни героя - игра показывает ему тела объектами и точками и сама
-раздаёт жизни и толчок (`ResolveBlasts` в dpr). Механика 2026: в 2008
+раздаёт жизни и толчок (`ResolveBlasts` в `Game.Moon`). Механика 2026: в 2008
 ранил веер из 180 пуль.
 - **`TBlast`** - `Create(heart, def)` (`TBlastDef` из `Monsters.Defs`).
   `Spread` - тик волны, `WaveSpeed` (8) единиц; `Spent` - волна прошла
@@ -3746,12 +3750,12 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 
 ### `Game/Game.Impacts.pas` (~410 строк)
 Что пуля выбивает из брони, в которую попала, - только вид; рана, отброс и
-звук остаются за dpr. **`TImpacts`** создаётся один раз с игрой (щуп
+звук остаются за `Game.Moon`. **`TImpacts`** создаётся один раз с игрой (щуп
 твёрдого), чистится на двери, смерти и загрузке уровня.
 - **`TStrike`** (запись) - пуля встретила броню: точка, скорость пули,
   нормаль (куда смотрит броня в этой точке), `Rapid` (по броне только что
   уже попали), `ExtraSparks` (искры сверх веера - удар тяжелее выбивает
-  больше; у пули 0 - оба места в dpr, где он собирается, начинают с
+  больше; у пули 0 - оба места в `Game.Moon`, где он собирается, начинают с
   `Default(TStrike)`).
 - `TraceEntry(strike, box)` - пуля уже внутри хитбокса: отводит попадание
   назад по её пути до грани, через которую она вошла (не дальше одного
@@ -3785,7 +3789,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 Орбы: огоньки, которые летают по формуле, а не по баллистике, и материю
 не замечают - стена орб не остановит. Только вид и жизнь орба: где он,
 каждый тик решает хозяин; обо что он бьётся и чего это стоит - игра
-(`ResolveOrbHits` в dpr).
+(`ResolveOrbHits` в `Game.Moon`).
 - **`TOrbTint`** (запись) - `Core` (раскалённая точка; тело тёмного
   орба), `Glow` и (3.0.70) `Dark` - тело рисуется поверх мира, а не
   складывается с ним: чёрная дыра. `IceOrbTint` - стихия героя на уровнях
@@ -3967,7 +3971,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 стаи, как аура, но без состояния от тика к тику: где капля, - формула
 времени с её рождения. Формулы - со стенда (артефакт "Орбы Moon2D":
 скрипт дождя, `pour` и шаг дождя). Обо что капля бьётся, решает игра через
-`Flock` (`ResolveOrbHits` в dpr), как у ауры.
+`Flock` (`ResolveOrbHits` в `Game.Moon`), как у ауры.
 - **`TDropSeed`** (запись) - из чего рождается капля: `StartX`, `Birth`
   (тик дождя), `Sway` (с какой точки качания она начинает, радианы),
   `Floor` (где её забирает материя столбца). **`TRainDrop`** (`TOrb`) -
@@ -4047,7 +4051,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 своё время и в свою точку его тела. Тот же класс снимает костюм: орбы
 выходят из тела в кольцо, которое недолго служит щитом. Только где орбы
 и когда они приходят и уходят: обо что орб бьётся, решает игра через
-`Flock` (`ResolveOrbHits` в dpr), что всё это значит для героя -
+`Flock` (`ResolveOrbHits` в `Game.Moon`), что всё это значит для героя -
 лечение, пощада, костюм, - решает слушатель (`Game.Henshin`). Управление
 у героя не отбирается; узор стоит в его системе, без поводка. Устроен
 как аура: своя стая, потомок `TOrb`, свой `TXorShift` (не `Random`: тот
@@ -4175,7 +4179,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 (24 луча из груди, кольцо бежит по комнате, вспышка), полёт (лучи
 проходят сквозь материю и уходят за экран, оставляя след там, где входят
 в грань), эхо (пылинки из точек тела; следы тают). Только вид и время:
-что луч бьёт, решает игра по `Stretches` (`ResolveBurstHits` в dpr), а
+что луч бьёт, решает игра по `Stretches` (`ResolveBurstHits` в `Game.Moon`), а
 что значит удар - костюм надет - решает церемония (`Game.Henshin`).
 Сброс один на все формы, форма отдаёт ему только цвета. Свой
 `TXorShift` (зерно `$42757273`), числа - константы в начале
@@ -4543,9 +4547,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `countdown.wav`, `bottle.wav`) - грузятся строго в конструкторе.
   Чисел обряда здесь нет: `IceRiteScore` живёт в `Orbs.Rite`, числа
   сброса - в `Orbs.Burst`.
-  `Reset` покров не трогает (его чистит dpr).
+  `Reset` покров не трогает (его чистит `Game.Moon`).
   `BottleSoundFile` публична: бочечный взрыв служит и взрывом бонуса, и
-  хлопками обломков босса, и dpr берёт имя отсюда.
+  хлопками обломков босса, и `Game.Moon` берёт имя отсюда.
 
 ### `Game/Game.Trial.pas` (~400 строк)
 Правила испытания грейвелами на экране 9 второго уровня (3.0.53,
@@ -4918,7 +4922,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 больше высоты), необязательную ночную карту того же размера и
 **`TGlobeLook`** (сторона текстуры, поверхность - **`TGlobeSurface`** =
 (`gsRegolith`, `gsMatte`); префикс `gs` общий с `TGlowShape` и `TGameState`
-из dpr, - крен и наклон оси,
+из `Game.Moon`, - крен и наклон оси,
 ночной фон, тинт, экспозиция, затухание лимба реголита, атмосфера 0..1,
 цвет воздуха, яркость ночной карты; ночной фон, тинт и цвет воздуха -
 `TGlobeChannels`: красный, зелёный, синий).
@@ -5049,10 +5053,14 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Moon2D.inc` он выключен. `EGameHostError`.
   `TKeyAction` = (kaDown, kaUp).
 
-### `Moon2D.dpr` (~3845 строк - НЕ заглушка, всегда грепать вместе с .pas)
-Композиционный корень плюс вся машина состояний игрового потока (`TMoonGame`).
-- **Константы вверху**: шаблон поиска уровней, имя файла конфигурации, имена
-  папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
+### `Game/Game.Moon.pas` (~3810 строк)
+Вся машина состояний игрового потока (`TMoonGame`) - игра, которую
+запускает программа. Вынесена из `Moon2D.dpr` слово в слово перед этапом 8
+арены 3, чтобы до неё дотянулся юнит (а потом и тест). В `interface` -
+`LevelFilePattern`, `TGameState`, `TArmorPings` и класс; остальное - в
+`implementation`.
+- **Константы вверху**: шаблон имени файла уровня (`LevelFilePattern`, в
+  `interface` - его читает и поиск уровней программы), имена папок ассетов (`SoundsDir`, `MusicDir`), карта "оружие -> звук выстрела",
   именованные одиночные звуки (цена бонуса живёт в `Game.Bonus`; три
   звука перестройки арены - `PadHumSoundFile`, `PadClickSoundFile`,
   `PadClackSoundFile`; защёлка полки - `ShelfLatchSoundFile`, 3.0.51;
@@ -5067,18 +5075,18 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `GameOverDelayTicks`, `PitDepthY`), `OrbReach` (с какого расстояния орб
   берёт вражескую пулю), `BurstHitStep` (3.0.61: как часто сброс бьёт по
   пути луча, 4 ед), выбор шрифта (`FontFileName`,
-  `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`, `MaxLevelSlots`,
+  `FontOrientation`, `FontFiltering`), `AuthorLinkedInUrl`,
   дополнительные сканкоды (среди них `ScancodeS` - спрыгнуть; дебажные -
   под DEBUGKEYS), дозы тряски экрана
   (`ExploderTrauma`, `BossBlastTrauma`, `BonusExplosionTrauma`,
   `AftershockTrauma`, `BossCrashTrauma`, `CannonBlastTrauma` -
   добавление 2026; дозы
-  церемонии живут в `Game.Henshin`), строки макета финального экрана. Три
-  ошибки для разработчика - resourcestring на английском, вне словарей
-  (`SNoLevelsFound`, `SSpriteSetMissing`, `SAmbiguousSprites`).
+  церемонии живут в `Game.Henshin`), строки макета финального экрана.
+  Ошибки уровня для разработчика - resourcestring на английском, вне
+  словарей (`SSpriteSetMissing`, `SAmbiguousSprites`).
 - **Типы**: `TGameState` (gsMenu/gsIntro/gsPlaying/gsEnding).
 - **`TMoonGame`** (наследует `TGameApp`) - держит реестр (владеет им
-  `RunGame`) и владеет остальным: уровень, наборы
+  `RunGame` из `Moon2D.dpr`) и владеет остальным: уровень, наборы
   спрайтов уровня и три его кэша (тайлы, задники, объекты), наборы ui и
   оружия, рендереры спрайтов, тайлов, объектов и динамических объектов
   (`FDynamics`, рождается с уровнем, освобождается до него), мир платформ
@@ -5589,9 +5597,16 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 - **Свободные функции**: `OpenWebPage`, `BonusDisplayName`, хелперы клеток пуль
   и выхода за экран, `BulletStretch` (последний тик полёта пули в честных
   экранных единицах) и `BoxHolds` (лежит ли в ящике точка), `SaveTargetAsPng` (под DEBUGKEYS: текущая цель
-  рендера в PNG через `IMG_SavePNG`), `ReadLevelTitle`, `DiscoverLevels`,
-  `RollDiceSeed`, `RunGame` (настоящий
-  main: конфиг -> язык -> поиск уровней -> реестр -> хост -> игра).
+  рендера в PNG через `IMG_SavePNG`), `RollDiceSeed`.
+
+### `Moon2D.dpr` (~200 строк)
+Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
+язык -> поиск уровней -> реестр -> хост -> игра), `DiscoverLevels`
+(`LevelFilePattern` от 1 до `MaxLevelSlots`, первый пропуск обрывает
+список), `ReadLevelTitle` (заголовок файла уровня без сборки уровня),
+`ConfigFileName`, `SNoLevelsFound`; ошибка старта уходит в окно
+сообщения. В его uses - каждый юнит игры с путём: так юниты находят друг
+друга, поэтому новый юнит идёт туда и в `Moon2D.dproj`.
 
 ---
 
@@ -6451,67 +6466,67 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Задача пахнет как... | Смотреть |
 | --- | --- |
 | Движение героя / коллизии / ощущение прыжка | Hero.pas |
-| Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Moon2D.dpr (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| Экран, выход с которого заперт, пока его не откроет событие | `shutDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Moon2D.dpr (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
+| Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
+| Экран, выход с которого заперт, пока его не откроет событие | `shutDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | Дуплет: двустволка, красная дробь, отдача, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | Пыль туннеля и её свет | `dust` в `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
-| Лунный камень: картинка, которая вращается и парит, его тьма, пробуждение и падение камней | monsters.json `moonStone` (`anchored`, `invulnerable`, turn / hover у `picture`) + `eclipse` в `dynamics` + сцены `s11-wake`, `s11-fall` из level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, `ease` у fly) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Moon2D.dpr (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
+| Лунный камень: картинка, которая вращается и парит, его тьма, пробуждение и падение камней | monsters.json `moonStone` (`anchored`, `invulnerable`, turn / hover у `picture`) + `eclipse` в `dynamics` + сцены `s11-wake`, `s11-fall` из level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, `ease` у fly) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Game.Moon.pas (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
 | Молния: разряды по панелям, обломкам и спутнику | `lightning` в `dynamics` + Levels.Dynamics.pas (`TLightning`) + Effects.Lightning.pas (`TBoltField`) + Tests.Effects.Lightning.pas (+docs/mechanics/lightning.md) |
-| Платформы отдельно от сетки: настилы, спрыгнуть сквозь (S/Down), что останавливает тело, лампа на платформе; пути, покачивание и проседание, езда на платформе; сбой тараном; настилы сетки ('2' в `collision`) | `pads` в levelN.json + Levels.Pads.pas (модель, парсер) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (настилы, тела, картинка; пути, покачивание и проседание - `Tick`, `Lift`, `Press`; езда - `DeckCarrying`; сбой - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Moon2D.dpr `BulletStruckWall` / `LocateParent` (+docs/mechanics/pads.md - план) |
-| Платформа, которая падает под героем: сколько она держит, как падает, лежит внизу и лезет обратно; её рывки, неровные сопла и красная лампа; где ей можно стоять | `plunge` у платформы + обвес `padFailing` в levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` и константы) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/mechanics/pads.md, этап 8) |
-| Полка, которая выдвигается из своей стены и убирается обратно: программа, езда, лампа предупреждения, звук защёлки, герой, который с неё падает; где она может стоять | `shelf` у платформы + объект `s07-shelf-dock` + обвес `shelfDock` в level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Moon2D.dpr (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/mechanics/pads.md, этап 9) |
-| Сцена - постановка на одном экране, пока управление у игрока: её шкала (at, after, delay, wait), шаги (sound, music, shade, shake, move, track, aim, intensity, hint, hold, kill, spawn, release, remove, wake, fly), конечное состояние, раз за уровень или за жизнь, что с ней делают смерть и дверь; корабль и его лучи; кордон над экраном 9 первого уровня | `scenes` + `dynamics` (`craft`, `beam`) + `dormant` у платформы + действие `scene` события в level1.json + Levels.Scenes.pas (модель, парсер) + Levels.Defs.pas (`CheckScenes`, `CheckSceneCue`, `CheckDormantPads`, `CheckCraftAhead`) + Scenes.Director.pas (`Start`, `Tick`, `PlayDue`, `Due`, `Play`, `Finish`, `ReArm`, `Rewind`) + Levels.Dynamics.pas (`TCraft`, `TBeam`, `TAxisMotion`, `TLightning.PointAt`) + Render.Dynamics.pas (`TPlace.Craft`, `OriginOf`) + Pads.World.pas (`Wake`, `FlyTo`, `Dormant`) + Pads.Flights.pas (`StraightFlight`) + Monsters.pas (`Held`, `Dormant`, `Smite`, `Stand`, `Vanish`, руки поля по тегу, `SpawnStanding`) + Audio.pas (`PlayHeld`, `SetMusicLevel`) + Moon2D.dpr (`FScenes`, `SceneStage`, `LocateParent`) + cordon.mset (tools/cordon/build_cordon.py) + tools/sounds/cordon.py, cordonburn.py + Tests.Scenes.Director.pas, Tests.Levels.Scenes.pas (+docs/mechanics/scenes.md) |
+| Платформы отдельно от сетки: настилы, спрыгнуть сквозь (S/Down), что останавливает тело, лампа на платформе; пути, покачивание и проседание, езда на платформе; сбой тараном; настилы сетки ('2' в `collision`) | `pads` в levelN.json + Levels.Pads.pas (модель, парсер) + Levels.Defs.pas (`AddCollisionDecks`) + Pads.World.pas (настилы, тела, картинка; пути, покачивание и проседание - `Tick`, `Lift`, `Press`; езда - `DeckCarrying`; сбой - `Shove`, `RoomFor`, `Knock`, `Tilt`) + Monsters.Pilot.pas (`TPilotCrash.Blow`, `LapHolds`) + Hero.pas (`DeckUnderFeet`, `RideDeck`, `LandOnDeck`, `DropThroughDeck`, `DeckLift`) + Monsters.pas (`FloorAhead`, `StandsOnDeck`, `RideDeck`, `MoveFalling`, `DeckLift`) + Monsters.Pilot.pas `Walled` + Game.Moon.pas `BulletStruckWall` / `LocateParent` (+docs/mechanics/pads.md - план) |
+| Платформа, которая падает под героем: сколько она держит, как падает, лежит внизу и лезет обратно; её рывки, неровные сопла и красная лампа; где ей можно стоять | `plunge` у платформы + обвес `padFailing` в levelN.json + Levels.Pads.pas (`TPadPlunge`, `ReadPlunge`) + Pads.Plunge.pas (`TPlungeCycle`: `Tread`, `Tick`, `Fall`, `Climb`, `TickTwitch`, `Effort` и константы) + Pads.World.pas (`FPlunge`, `Tread`, `Effort`, `PlungeDepth`, `Lift`) + Hero.pas `LandOnDeck` + Levels.Defs.pas (`CheckPadPlunge`, `RespawnHasFloor`) + Game.Moon.pas (`LocateParent`, `HandlePitFall`, `PitDepthY`) (+docs/mechanics/pads.md, этап 8) |
+| Полка, которая выдвигается из своей стены и убирается обратно: программа, езда, лампа предупреждения, звук защёлки, герой, который с неё падает; где она может стоять | `shelf` у платформы + объект `s07-shelf-dock` + обвес `shelfDock` в level2.json + Levels.Pads.pas (`TPadShelf`, `TShelfStep`, `TPadDeepLook`, `ReadShelf`) + Pads.Shelf.pas (`TShelfCycle`: `Build`, `Holds`, `Warns`, `Latches`, `Depth`) + Pads.World.pas (`FShelf`, `Behind`, `Depth`, `RigDepth`, `Effort`, `Press`, `FBodyDepth`, `DeckWithdrawn`, `HearShelves`, `Draw`) + Hero.pas (`RideDeck`, `LoseDeck`, `ShoveX`) + Levels.Defs.pas (`CheckPadShelf`, `RespawnHasFloor`) + Game.Moon.pas (`LocateParent`, `ShelfLatchSoundFile`) + pads.mset + tools/sounds/shelf.py (+docs/mechanics/pads.md, этап 9) |
+| Сцена - постановка на одном экране, пока управление у игрока: её шкала (at, after, delay, wait), шаги (sound, music, shade, shake, move, track, aim, intensity, hint, hold, kill, spawn, release, remove, wake, fly), конечное состояние, раз за уровень или за жизнь, что с ней делают смерть и дверь; корабль и его лучи; кордон над экраном 9 первого уровня | `scenes` + `dynamics` (`craft`, `beam`) + `dormant` у платформы + действие `scene` события в level1.json + Levels.Scenes.pas (модель, парсер) + Levels.Defs.pas (`CheckScenes`, `CheckSceneCue`, `CheckDormantPads`, `CheckCraftAhead`) + Scenes.Director.pas (`Start`, `Tick`, `PlayDue`, `Due`, `Play`, `Finish`, `ReArm`, `Rewind`) + Levels.Dynamics.pas (`TCraft`, `TBeam`, `TAxisMotion`, `TLightning.PointAt`) + Render.Dynamics.pas (`TPlace.Craft`, `OriginOf`) + Pads.World.pas (`Wake`, `FlyTo`, `Dormant`) + Pads.Flights.pas (`StraightFlight`) + Monsters.pas (`Held`, `Dormant`, `Smite`, `Stand`, `Vanish`, руки поля по тегу, `SpawnStanding`) + Audio.pas (`PlayHeld`, `SetMusicLevel`) + Game.Moon.pas (`FScenes`, `SceneStage`, `LocateParent`) + cordon.mset (tools/cordon/build_cordon.py) + tools/sounds/cordon.py, cordonburn.py + Tests.Scenes.Director.pas, Tests.Levels.Scenes.pas (+docs/mechanics/scenes.md) |
 | Карусель: платформы, летящие по дорожке, - её форма, размер и ход, места её платформ, откуда каждая стартует; монстр, посаженный на платформу; где карусель может крутиться | `carousels` + `carousel` у платформы + `seat` у сущности в levelN.json + Levels.Carousels.pas (`TCarousel`, `TCarouselTrack`: `BuildOval`, `BuildBox`, `PointAt`; `TCarouselOrbit`: `Build`, `Place`; `OrbitOf`, `LapTicks`, `ParseCarousels`) + Levels.Pads.pas (`TPadPlacement.Carousel`, `ReadPlace`) + Levels.Defs.pas (`PlaceCarouselPads`, `CheckCarousels`, `CheckCarouselPad`, `CheckCarouselPair`, `RoomClear`, `SeatEntity`, `ReadEntityCell`, `RespawnHasFloor`) + Pads.World.pas (`FOrbit`, `PlaceOnOrbit`, `Rewind`, `Travels`) + Monsters.pas (`TMonster.Create`) (+docs/mechanics/pads.md, этап 10) |
-| Перестройка арены в бою с боссом: какие раскладки годятся, как платформы летят и избегают друг друга (и тела дирижёра, и земли вне зоны), глубина, волна за боссом, предупреждение, как часто, звуки; спокойное восстановление платформ после смерти босса и его волна | `padGroups` + события `rebuild` / `restore` + маячки тревоги в levelN.json + Pads.Formations.pas (кости, судья, назначение) + Pads.Flights.pas (буква Г, `TFlightPace`, `TFlightBrief`, `TFlightBar`, план, перелёты в глубине) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (фазы, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Moon2D.dpr (`FArena`, `HeroRides`, `DebugRebuildPads` - отладочная клавиша R, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/mechanics/pads.md) |
+| Перестройка арены в бою с боссом: какие раскладки годятся, как платформы летят и избегают друг друга (и тела дирижёра, и земли вне зоны), глубина, волна за боссом, предупреждение, как часто, звуки; спокойное восстановление платформ после смерти босса и его волна | `padGroups` + события `rebuild` / `restore` + маячки тревоги в levelN.json + Pads.Formations.pas (кости, судья, назначение) + Pads.Flights.pas (буква Г, `TFlightPace`, `TFlightBrief`, `TFlightBar`, план, перелёты в глубине) + Pads.World.pas (`RequestRebuild`, `RequestRestore`, `TryPlanRebuild`, `TryPlanRestore`, `FlightBarOf`, `TickFlight`, `Depth`, `HearFlights`) + Pads.Arena.pas (фазы, `ReleaseOf`, `LapBars`, `RippleOf`, `WarningTicks`) + Monsters.Pilot.pas (`HoldLap`, `LapAhead`) + Hero.pas `JumpReach` + Events.Director.pas (`TArenaCues`) + Game.Moon.pas (`FArena`, `HeroRides`, `DebugRebuildPads` - отладочная клавиша R, `DebugRestorePads` - Y) + tools/sounds/pads.py (+docs/mechanics/pads.md) |
 | Ярость босса: когда начинается, как быстро в ней стреляет пушка; когда прицельная пушка молчит | Monsters.pas (`BossRageLives`, `BossRageFireRate`, `ProcessBossThresholds`, `AnyTaggedLivesBelow`) + Monsters.Pilot.pas `GunHeld` + события `livesBelow` / `enraged` в level1.json |
 | Паттерны оружия / прицел | Hero.pas (+Bullets.pas) |
 | Поведение монстров / ИИ / босс | Monsters.pas + Monsters.Defs.pas + monsters.json |
-| Полёт босса: круг, манёвры (раздумье, нырок, таран, оглушение), их числа | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; события `tactics` в level1.json; `portAngles` / `dodgePrize` в monsters.json; Moon2D.dpr `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
+| Полёт босса: круг, манёвры (раздумье, нырок, таран, оглушение), их числа | Monsters.Pilot.pas (+Monsters.pas `MoveFlying`, `FirePorts`, `EyeTarget`; события `tactics` в level1.json; `portAngles` / `dodgePrize` в monsters.json; Game.Moon.pas `ThrowCrashSparks`, `PayDodgePrize`; tools/sounds/crash.py) |
 | Диск босса: слои, вращение, глаз, износ, выстрел с кромки | Monsters.Disc.pas + `disc` в monsters.json + `boss1-disc.mset` (+Monsters.pas `TickDisc`, `FireAt`) |
 | Корпуса платформы и танка: слои, износ, глаз, колёса, отражение, где корпус стоит, откуда выходит прямой выстрел, точки подбитой машины | Monsters.Hull.pas + `hull` в monsters.json + `platform-hull.mset`, `tank-hull.mset` (+Monsters.pas `TickHull`, `HullStand`, `BodyPoint`, `FireAt`; Render.Sprites.pas `DrawSized`; набор танка собирает tools/tank/build_tank.py) |
-| Лампы летающей платформы и марево под её соплами; что гаснет, когда монстр убит | обвес `tekPlatform` + `"tag"` и `"rig"` у летающих платформ в levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` у `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Moon2D.dpr `LocateParent` |
-| Лампы, едущие на диске босса | маячки с `turns` в level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Moon2D.dpr `LocateParent` |
+| Лампы летающей платформы и марево под её соплами; что гаснет, когда монстр убит | обвес `tekPlatform` + `"tag"` и `"rig"` у летающих платформ в levelN.json + Levels.Rigs.pas + Levels.Dynamics.pas (`GoesOutWithParent` у `TBeacon`, `THaze`) + Render.Dynamics.pas `DrawStands` + Game.Moon.pas `LocateParent` |
+| Лампы, едущие на диске босса | маячки с `turns` в level1.json + Render.Dynamics.pas (`OriginOf`, `TParentSpin`) + Game.Moon.pas `LocateParent` |
 | Новый монстр (только данные) | monsters.json + набор `.mset` (spriteList хранит написание `.mns`) |
-| Механика взрыва: волна, которая ранит, её скорость, спад, толчок и укрытие; кого бьёт взрыв; осколки, которые ранят стоящих ниже (Effects.Debris.pas `Strike`, Moon2D.dpr `ShardStruck`) | Game.Blasts.pas + Moon2D.dpr (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` в monsters.json (`TBlastDef` в Monsters.Defs.pas) |
+| Механика взрыва: волна, которая ранит, её скорость, спад, толчок и укрытие; кого бьёт взрыв; осколки, которые ранят стоящих ниже (Effects.Debris.pas `Strike`, Game.Moon.pas `ShardStruck`) | Game.Blasts.pas + Game.Moon.pas (`ResolveBlasts`, `StrikeMonsters`, `StrikeHero`, `RewardMonsterKill`) + `blast` в monsters.json (`TBlastDef` в Monsters.Defs.pas) |
 | Вид взрыва: вспышка, обломки, плюм; размеры; новый вид | Game.Explosions.pas (+Effects.Debris.pas - физика осколков, `explosion` в monsters.json, `TExplosionKind` в Monsters.Defs.pas) |
 | Искры: как летят, отскакивают, ветвятся и рисуются | Effects.Sparks.pas (+Render.Glow.pas `gsStreak`) |
 | Источник искр в уровне (спутник, босс) | `sparks` в `dynamics` levelN.json + Levels.Dynamics.pas `TSparks` (+Render.Dynamics.pas `SolidInView`) |
 | Вентилятор в уровне: размер, скорость, направление, размытие, умирающий мотор; новый ротор, решётка или подложка; жалюзи рядом | `fan` в `dynamics` levelN.json (жалюзи - в `objects`) + Levels.Dynamics.pas `TFan` + `ventilation.mset` (объявлен в `objectSets`; картинки делает tools/fans/build_fans.py) |
-| Искры из брони под огнём; какие монстры из металла; звон и визг | Game.Impacts.pas + Moon2D.dpr `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` в monsters.json (+tools/sounds/armor.py) |
+| Искры из брони под огнём; какие монстры из металла; звон и визг | Game.Impacts.pas + Game.Moon.pas `SpendBullet` / `ArmorStrike` / `SoundArmorHit` + `material` в monsters.json (+tools/sounds/armor.py) |
 | Дым и искры подбитых машин | Monsters.pas (`WreckIfCritical`, `WreckSmoke`, `WreckSparks`, `BodyPoint`; точки корпуса: `hull` в monsters.json) |
 | Дым бочки; ещё одно дымящее тело | Monsters.pas (`BarrelSmoke`, `TBodySmoke`, `IsExplosiveProp`, `CreateSmoke`) |
 | HD-арт в наборе монстра: фильтр, цветовой ключ | Monsters.pas `AnimFor` + Render.Sprites.pas `ExpectDenseArtAbove` |
-| Церемония хеншина: отсчёт, что каждое событие обряда и сброса значит для героя (лечение, пощада, свет на теле, костюм), костюм надеть и снять | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Moon2D.dpr (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; отладочные клавиши J и K) + docs/mechanics/henshin.md |
-| Сброс костюма: вдох (мир стоит, вуаль, голый силуэт), лучи (число, скорость, хвост, закрутка вихря, сквозь стены), следы, кольцо, вспышка, пылинки, тёмный облик луны; что бьёт луч, жизнь за сброс | Orbs.Burst.pas (формулы, числа, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Moon2D.dpr (`StartBurst`, `BurstSuit`, `WorldStands` в `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; отладочные клавиши L и U) + Tests.Orbs.Burst.pas + docs/mechanics/henshin.md |
-| Обряд из орбов в хеншине: расписание (`IceRiteScore`), волны и откуда они добываются, полёт к месту, когда орб взведён, замены и их запас, замирание и вспышка, схлопывание по телу, дверь, рывок, смерть героя | Orbs.Rite.pas (формулы и числа) + Orbs.Harvest.pas (`HarvestAround`) + Moon2D.dpr (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, два слоя в `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/mechanics/henshin.md |
-| Узор хеншина: снежинка, вихрь, новый; какой уровень строит какой | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, таблица `Patterns`) + `henshinPattern` в levelN.json + Levels.Defs.pas (`HenshinPattern`) + Moon2D.dpr `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (место, которое перескакивает) + Tests.Orbs.Patterns.pas |
-| Снятие костюма: кольцо орбов, сколько оно стоит, пощада | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` партитуры) + Game.Henshin.pas `RemoveIceForm` + Moon2D.dpr (`ShedSuit`, `GrantMercy`) |
-| Покров героя: когда играет и с каким обликом, что говорит облик (полосы, ломтики, ореол, частицы, туман), что и в каком порядке рисует художник, свет ледяного костюма | Game.Shroud.pas (`TShroudLook` и облики, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Moon2D.dpr (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (маски, ореолы, точки) + Tests.Game.Shroud.pas (+docs/mechanics/hero-shroud.md, в хранилище проекта) |
-| Подбор предмета: заливка, крошки, их полёт в тело героя и свет на нём; предмет, который вместо этого уничтожен; свет лежащей аптечки и лежащего оружия; дверь, смерть героя и рестарт посреди сцены; ещё один вид предмета | Game.Uptake.pas (`TUptakeLook` и три облика, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Moon2D.dpr (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; их делает tools/medkit/build_medkit.py) + Tests.Game.Uptake.pas (+docs/mechanics/pickups.md, в хранилище проекта) |
+| Церемония хеншина: отсчёт, что каждое событие обряда и сброса значит для героя (лечение, пощада, свет на теле, костюм), костюм надеть и снять | Game.Henshin.pas (`HearRite`, `HearBurst`, `Finish`, `RemoveIceForm`, `ChargeLook`) + Game.Moon.pas (`GrantMercy`, `BeginRite`, `ShedSuit`, `BurstSuit`, `DrainMonsterEvents`, `FireScreenTriggers`, `TickGravelAttack`; отладочные клавиши J и K) + docs/mechanics/henshin.md |
+| Сброс костюма: вдох (мир стоит, вуаль, голый силуэт), лучи (число, скорость, хвост, закрутка вихря, сквозь стены), следы, кольцо, вспышка, пылинки, тёмный облик луны; что бьёт луч, жизнь за сброс | Orbs.Burst.pas (формулы, числа, `IceBurstLook`, `MoonBurstLook`) + Game.Henshin.pas (`HearBurst`, `Finish`) + Game.Shroud.pas `MaskOf` + Game.Moon.pas (`StartBurst`, `BurstSuit`, `WorldStands` в `Update`, `ResolveBurstHits`, `StrikeWithBurst`, `BurstHitStep`, `DrawHeroSilhouette`, `DrawHeroInShroud`; отладочные клавиши L и U) + Tests.Orbs.Burst.pas + docs/mechanics/henshin.md |
+| Обряд из орбов в хеншине: расписание (`IceRiteScore`), волны и откуда они добываются, полёт к месту, когда орб взведён, замены и их запас, замирание и вспышка, схлопывание по телу, дверь, рывок, смерть героя | Orbs.Rite.pas (формулы и числа) + Orbs.Harvest.pas (`HarvestAround`) + Game.Moon.pas (`BeginRite`, `HeroBodyPoints`, `ResolveOrbHits`, `HandleScreenTransitions`, `HurtHero`, два слоя в `Render`) + Tests.Orbs.Rite.pas / Tests.Orbs.Harvest.pas + docs/mechanics/henshin.md |
+| Узор хеншина: снежинка, вихрь, новый; какой уровень строит какой | Orbs.Patterns.pas (`SnowflakeSeat`, `VortexSeat`, таблица `Patterns`) + `henshinPattern` в levelN.json + Levels.Defs.pas (`HenshinPattern`) + Game.Moon.pas `LoadLevel` + Orbs.Rite.pas `SeatLeapt` (место, которое перескакивает) + Tests.Orbs.Patterns.pas |
+| Снятие костюма: кольцо орбов, сколько оно стоит, пощада | Orbs.Rite.pas (`Shed`, `Shield`, `RingSeat`; `ShedOrbs` / `ShedTicks` / `ShedSpread` партитуры) + Game.Henshin.pas `RemoveIceForm` + Game.Moon.pas (`ShedSuit`, `GrantMercy`) |
+| Покров героя: когда играет и с каким обликом, что говорит облик (полосы, ломтики, ореол, частицы, туман), что и в каком порядке рисует художник, свет ледяного костюма | Game.Shroud.pas (`TShroudLook` и облики, `THeroShroud`, `TShroudPainter`) + Hero.pas (`Pose`, `DrawArm`, `SkinSet`) + Game.Henshin.pas (`Finish`, `RemoveIceForm`, `ChargeLook`) + Render.Glow.pas / Render.Puff.pas (`DrawGlowRect`, `DrawPuffRect`) + Game.Moon.pas (`LoadLevel`, `HandlePitFall`, `StartPlaying`, `RestartLevel`, `HurtHero`, `ArriveOnScreen`, `Update`, `Render`) + Render.Silhouette.pas (маски, ореолы, точки) + Tests.Game.Shroud.pas (+docs/mechanics/hero-shroud.md, в хранилище проекта) |
+| Подбор предмета: заливка, крошки, их полёт в тело героя и свет на нём; предмет, который вместо этого уничтожен; свет лежащей аптечки и лежащего оружия; дверь, смерть героя и рестарт посреди сцены; ещё один вид предмета | Game.Uptake.pas (`TUptakeLook` и три облика, `CutCrumbs`, `TUptake`, `TUptakePainter`) + Game.Shroud.pas (`Feed`, `DrawFedUnder`, `DrawFedBody`) + Render.Silhouette.pas + Monsters.pas (`Collect`, `ArtSet`, `Mirrored`, `Draw`) + Game.Moon.pas (`TakeLoot`, `BeginUptake`, `BurstPickup`, `WarmPickupPictures`, `ResolveMonsterContact`, `RewardMonsterKill`, `ArriveOnScreen`, `HurtHero`, `RestartLevel`, `Update`, `Render`) + `medic.mset` (`medkit`, `light`; их делает tools/medkit/build_medkit.py) + Tests.Game.Uptake.pas (+docs/mechanics/pickups.md, в хранилище проекта) |
 | То, что делается из альфы картинки, - маска, ореол, точки: для ещё одной вещи, которая светится по своей форме | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Контент уровня / триггеры / экраны | levelN.json + Levels.Defs.pas |
 | Событие уровня: когда срабатывает, что делает; новое условие или действие | `events` в levelN.json + Levels.Events.pas (модель) + Events.Director.pas (исполнитель) |
-| Игровой поток / машина состояний / очки / бонусы | Moon2D.dpr (+Game.Bonus.pas) |
-| Испытание грейвелами: акты и пачки, ворота, передышка между актами, вестник, прицельный дождь, возвраты из ямы и сбоку, аптечки (на 15 убийств, в середине акта), открытое небо, волна финала и её предел; где спускается тело | Game.Trial.pas (правила) + Moon2D.dpr (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) в level2.json + docs/mechanics/arena-2.md |
+| Игровой поток / машина состояний / очки / бонусы | Game.Moon.pas (+Game.Bonus.pas) |
+| Испытание грейвелами: акты и пачки, ворота, передышка между актами, вестник, прицельный дождь, возвраты из ямы и сбоку, аптечки (на 15 убийств, в середине акта), открытое небо, волна финала и её предел; где спускается тело | Game.Trial.pas (правила) + Game.Moon.pas (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) в level2.json + docs/mechanics/arena-2.md |
 | Комната арены грейвелов акт за актом: какие полки просыпаются, засыпают или мигают, в каком порядке, щадя героя или нет | `events` экрана 9 в level2.json (`s09-act1`..`s09-done`) + банки тамошних полок + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/mechanics/arena-2.md |
-| Фиолетовый свет прибытия; свет вестника | Game.Arrivals.pas (+Moon2D.dpr `LetDownFromSky`, `ArriveAgain`) |
-| Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Moon2D.dpr (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
+| Фиолетовый свет прибытия; свет вестника | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
+| Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
-| Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Moon2D.dpr (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
-| Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Moon2D.dpr `SpawnGuest` |
-| Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Moon2D.dpr (`FlyInParked`, `ReleaseHeldFlyIns`) |
+| Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
+| Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
+| Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
 | Блуждающие платформы: когда приходят, где висят, как озоруют, как их отсылают | Pads.Stray.pas + `stray` у платформы и действия `strays` / `straysLeave` в level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
-| Погода: тело, которое лопается там, где приземлилось (небесная бочка) | `weather` в monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Moon2D.dpr (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
-| Аура героя из орбов: кольцо, течение, как оно идёт за героем (поводок, нитка рывка), сроки, вплетение второго вызова, потолок кольца, дверь, смерть героя | Orbs.Aura.pas (формулы и числа) + Moon2D.dpr (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/mechanics/orbs.md |
-| Вызов ауры: где проступают орбы (грани клеток и платформ, воздух), ожидание над гранью, полёт, когда орб взведён, окно пощады | Orbs.Harvest.pas (точки) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Moon2D.dpr (`MatterAround`, `CastAura`, `GrantMercy`) |
-| Огненный дождь из орбов: волны, формула капли, пол столбца (материя, яма), посадка, второй вызов, смерть героя | Orbs.Rain.pas (формулы и числа) + Moon2D.dpr (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/mechanics/orbs.md |
-| Орб: облик, три конца (схлопывание, пыль, отпуск), след на грани, как он рисуется между тиками, его глубина и два слоя вокруг героя; обо что орб бьётся и чего это стоит | Orbs.Flock.pas + Moon2D.dpr (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` в monsters.json |
+| Погода: тело, которое лопается там, где приземлилось (небесная бочка) | `weather` в monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Game.Moon.pas (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |
+| Аура героя из орбов: кольцо, течение, как оно идёт за героем (поводок, нитка рывка), сроки, вплетение второго вызова, потолок кольца, дверь, смерть героя | Orbs.Aura.pas (формулы и числа) + Game.Moon.pas (`CastAura`, `HandleScreenTransitions`, `HurtHero`) + docs/mechanics/orbs.md |
+| Вызов ауры: где проступают орбы (грани клеток и платформ, воздух), ожидание над гранью, полёт, когда орб взведён, окно пощады | Orbs.Harvest.pas (точки) + Orbs.Aura.pas (`Cast`, `Emerge`, `Hover`, `Fly`) + Pads.World.pas (`Bodies`) + Game.Moon.pas (`MatterAround`, `CastAura`, `GrantMercy`) |
+| Огненный дождь из орбов: волны, формула капли, пол столбца (материя, яма), посадка, второй вызов, смерть героя | Orbs.Rain.pas (формулы и числа) + Game.Moon.pas (`PourRain`, `ResolveOrbHits`, `HurtHero`, `ArriveOnScreen`) + docs/mechanics/orbs.md |
+| Орб: облик, три конца (схлопывание, пыль, отпуск), след на грани, как он рисуется между тиками, его глубина и два слоя вокруг героя; обо что орб бьётся и чего это стоит | Orbs.Flock.pas + Game.Moon.pas (`ResolveOrbHits`, `EnemyBulletNear`, `DangerousMonsterAt`, `OrbReach`) + `dangerous` в monsters.json |
 | Размер экрана против размера кадра; всё для широкого экрана | Game.Space.pas (дальше - каждый читатель `Frame*` / `Screen*`) |
 | Панели кардиомонитора / заряда бонуса: вид, цвета, тайминги | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas - кисть и палитра) |
-| Заряд формы: шкала-затмение в крыле монитора, чёрные орбы, которые его приносят, что возвращает смерть | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + действие `energy` (Levels.Events.pas, Events.Director.pas) + Moon2D.dpr (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, этап 6) |
-| Ряды здоровья над героем / монстрами; трети прицела | Hud.Marks.pas (+Render.Brush.pas - ячейки) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Moon2D.dpr `CrosshairFrame` |
-| Переходы между экранами / чекпойнты; куда яма или смерть возвращает героя на экране | Moon2D.dpr (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` и действие `respawn` в levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
-| Струя под платформой: её цвет, длина и сила, разгорание вокруг перелёта, кашляющий двигатель | дымовая деталь обвеса в levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Moon2D.dpr `LocateParent` |
+| Заряд формы: шкала-затмение в крыле монитора, чёрные орбы, которые его приносят, что возвращает смерть | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + действие `energy` (Levels.Events.pas, Events.Director.pas) + Game.Moon.pas (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickEnergy`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas (+docs/mechanics/arena-3.md, этап 6) |
+| Ряды здоровья над героем / монстрами; трети прицела | Hud.Marks.pas (+Render.Brush.pas - ячейки) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Game.Moon.pas `CrosshairFrame` |
+| Переходы между экранами / чекпойнты; куда яма или смерть возвращает героя на экране | Game.Moon.pas (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` и действие `respawn` в levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
+| Струя под платформой: её цвет, длина и сила, разгорание вокруг перелёта, кашляющий двигатель | дымовая деталь обвеса в levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Game.Moon.pas `LocateParent` |
 | Экраны меню / вёрстка / переключение языка / кадры трейлера | Menu.pas + Localization.pas |
 | Небо меню: звёзды, вращающаяся луна, наезд в подменю | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | Освещённая сфера: свет, терминатор, атмосфера, ночные огни | Render.Globe.pas |
@@ -6520,18 +6535,18 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Всё, что светится аддитивно | Render.Glow.pas |
 | Марево от жара - под струёй, над турбиной: плюм, его сила, зерно и поток | `haze` в `dynamics` или в обвесе в levelN.json + Levels.Dynamics.pas (`THaze`, `HazeLayers`, `TNoiseWindow`) + Render.Dynamics.pas (слой задника, `BackdropOf`) + Render.Tiles.pas `Backdrop` + Sdl2.Core.pas `SDL_RenderGeometry` |
 | То, что носят платформы и монстры, - лампы, марева, струи: один список на много носителей, число, брошенное для каждого носителя своё | `rigs` + `"rig"` у платформ и у сущностей в levelN.json + Levels.Rigs.pas (`WearRigs`, `ReadRigNames`, `TRigWearer`) + Levels.Defs.pas `RigWearersOf` + Levels.Dynamics.pas (`ParseDynamic`, `NameRoll`, `PlacementSeed`) |
-| То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Moon2D.dpr (`LocateParent`, порядок в `Render`) |
+| То, что висит на платформе, уходит в глубину вместе с ней: меньше, темнее, за платформами спереди | Render.Dynamics.pas (`TParentDepth`, `OriginOf`, `DrawSunk`) + Levels.Dynamics.pas (`Scale` / `Tone` канвы в `TBeacon`, `THaze`, `TSmoke`) + Pads.World.pas (`DeepScale`, `DeepTone`, `Middle`) + Game.Moon.pas (`LocateParent`, порядок в `Render`) |
 | Динамический объект (маячок, его мигание, лучи; график на экране - его форма, рамка, сетка); новый вид; подвесить к статическому объекту | `dynamics` в levelN.json + Levels.Dynamics.pas (виды, парсер) + Effects.Traces.pas (что отвечает трасса) + Render.Dynamics.pas (где стоит, слой) (+`tag` у `objects`) |
 | Отрисовка текста / новые подписи | Render.Font.pas + Hud.Messages.pas + ключ `S*` в Localization.pas + оба JSON языков |
 | Подсказки уровня / терминал связи; голос и место подсказки | Hud.Terminal.pas (+Hud.Messages.pas - дорожка тикера, `hintText` в JSON уровня, `header` / `place` события-подсказки) |
 | Экран рассказа перед уровнем / ритм печати | Hud.Briefing.pas / Hud.Typewriter.pas (+`introText` в JSON уровня) |
 | Ритм кадров / окно / vsync | Game.Loop.pas (+Sdl2.Core.pas) |
-| Звук / музыка | Audio.pas (+константы звуков и `PreloadSounds` в Moon2D.dpr, звуки церемонии в Game.Henshin.pas, поля данных в JSON) |
+| Звук / музыка | Audio.pas (+константы звуков и `PreloadSounds` в Game.Moon.pas, звуки церемонии в Game.Henshin.pas, поля данных в JSON) |
 | Отрисовка тайлов и фонов | Render.Tiles.pas + Render.Sprites.pas |
 | Перерисовка экрана 2008: что становится падом, объектом, вентилятором; блокаут и промпт; посадка картинки на сетку; что можно делать с готовой картинкой | docs/REPAINT.md + levelN.json (`objects`, `pads`, `dynamics`, `tiles`) + `<assetsDir>-objects.mset` |
-| Картинки экранов для перерисовки арта (отладочная клавиша P) | Moon2D.dpr (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
+| Картинки экранов для перерисовки арта (отладочная клавиша P) | Game.Moon.pas (`DumpLevelScreens`, `SaveScreenPictures`, `SaveTargetAsPng`) + Sdl2.Image.pas (`IMG_SavePNG`) |
 | Свободный арт поверх задника (корабль, спутник): место, размер, тинт | `objects` в levelN.json + `<assetsDir>-objects.mset` или общий набор из `objectSets` (`sky.mset`) + Render.Objects.pas (+Levels.Defs.pas `TLevelObject`) |
-| Тряска экрана: дозы, что трясётся, что стоит | Moon2D.dpr (константы `*Trauma`, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`FinishTrauma`) + Render.Shake.pas |
+| Тряска экрана: дозы, что трясётся, что стоит | Game.Moon.pas (константы `*Trauma`, `Render`, `DrainMonsterEvents`, `EchoAftershock`, `ActivateQueuedBonus`) + Game.Henshin.pas (`FinishTrauma`) + Render.Shake.pas |
 | Имя спрайта разрешается не в ту картинку | Render.Sprites.pas (Get, AmbiguousNames) + порядок `spriteSets` уровня |
 | Монстр или герой грузит не те кадры из набора | Monsters.pas AnimFor / Hero.pas OpenFrames |
 | Наборы спрайтов / формат `.mset` | Sprites.Sets.pas + docs/MSET-FORMAT.md |

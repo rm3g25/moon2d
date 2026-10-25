@@ -111,7 +111,7 @@ Left to the eye and to the ear, for the shelf as a whole:
   just out is a trap for the late; if the live run calls it a cheat, the
   stand gets longer).
 - The latch's sound as heard: `ShelfLatchSoundFile` and the call that plays
-  it live in `Moon2D.dpr` and are tried in a live run. The unit's side is
+  it live in `Game.Moon` and are tried in a live run. The unit's side is
   the table (once per lap, on the tick it is out, only on the hero's
   screen).
 - `LocateParent` of the dock's lamp to the shelf: a wrong tag stops the
@@ -583,7 +583,7 @@ the door; `ShutJson(Screens)` - the list.
 | `TestScreenShutTwiceFailsToLoad` | `[1,1]` raises `ELevelError` | a copied line in the list passes |
 
 Left to the eye: the hero held at the threshold, the arrow on the opening
-and the door shut again after a restart - the game's (`Moon2D.dpr`).
+and the door shut again after a restart - the game's (`Game.Moon`).
 
 ## Pads.World
 
@@ -697,7 +697,7 @@ are 16 units wide, 8 in from its left edge.
 
 Left to the eye: the pad drawn at all only once awake, and the rigs it
 wears going out while it sleeps - the parent the game finds for them
-(`LocateParent` in `Moon2D.dpr`) is not alive while the pad is dormant.
+(`LocateParent` in `Game.Moon`) is not alive while the pad is dormant.
 
 ## Hero.Pads
 
@@ -760,7 +760,7 @@ Open:
 Left to the eye and outside the suite:
 
 - The monster's touch itself and the pit that takes a faller out
-  (`ResolveMonsterContact`, `HandlePitFall`) live in `Moon2D.dpr`. The
+  (`ResolveMonsterContact`, `HandlePitFall`) live in `Game.Moon`. The
   hero's side is in the table: what a shove of 4 units does, and that he
   is past y = 450 before the pad stops.
 - The picture of the hero on a deck: he is drawn with the `Lift` of his

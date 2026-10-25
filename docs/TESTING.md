@@ -276,7 +276,7 @@ Shared setup on the stage, `Tests.Rooms` grown:
   screen 1. `Room.PutHero(AX, AY)` is `SetScreenX` and `SetY`: his left
   edge and his feet. Put at a pad's `Left` and `Top`, he stands on it.
 - `Room.Tick(ACommands)`: a tick of the game in the game's order (`Update`
-  of `Moon2D.dpr`) - the commands to the hero, `Pads.Tick(1)`,
+  of `Game.Moon`) - the commands to the hero, `Pads.Tick(1)`,
   `Hero.Tick`, then every monster of the room. A key held is its command
   on every tick, as the game polls it; a key let go is its `hcStop...`.
 - Rooms: "open" is the floor alone, feet on it at y = 352. "Gap" is solid
@@ -292,7 +292,7 @@ the line of the pit, y = 450.
 
 ## Outside the suite
 
-- What an orb strikes and what that costs lives in `Moon2D.dpr`
+- What an orb strikes and what that costs lives in `Game.Moon`
   (`ResolveOrbHits`) and is tried in a live run. The orb's side of that
   contract is in the tables: when it is armed, and that a spent orb is
   gone on the next tick.

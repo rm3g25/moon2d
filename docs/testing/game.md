@@ -33,7 +33,7 @@ reads the real barrel from `monsters.json` beside the executable.
 Left to the eye:
 
 - Who the game strikes and with what: `ResolveBlasts`, `StrikeMonsters`
-  and `StrikeHero` live in the dpr, out of the suite's reach. A barrel
+  and `StrikeHero` live in `Game.Moon`, not under tests yet. A barrel
   among monsters, a chain of barrels, the hero in the wave and in the
   mercy window, a pad as a shelter - by a live run.
 - The feel: the wave's speed against the picture of `Game.Explosions`,
@@ -249,7 +249,7 @@ Left to the eye:
   alike, not how the burst looks.
 - `TMonster.ArtSet` and `TMonster.Mirrored`: the game starts a scene by
   them, and a wrong name stops the level's load at once.
-- What the game does around the uptake lives in `Moon2D.dpr` and is tried
+- What the game does around the uptake lives in `Game.Moon` and is tried
   in a live run: `TakeLoot` and `BurstPickup`, the tick order with the
   shroud, `Settle` at a door, `Drop` at the death, `Clear` at a restart.
 
@@ -388,7 +388,7 @@ with 6.2 it asks the wave onto `s09-press-1` and the end to sleep
 | `TestSkyFallNeedsAnEventThatWaitsForAnAct` | a `skyFall` on `enterScreen` raises `ELevelEventError` | a sky with no act to shut it loads and never shuts |
 | `TestLevelTwoArenaSkyOpensInActFive` | `level2.json`: one `skyFall`, on screen 9, in act 5, of `skyBarrel` | the sky opens in another act, twice, or drops another body |
 
-Left to the eye: what the game does with a cue, in `Moon2D.dpr` - which
+Left to the eye: what the game does with a cue, in `Game.Moon` - which
 body falls from the sky and where, the side a betoner of the wave is let
 down on, the tanks along their lane, the violet glow of an arrival,
 `win.ogg` on `Finished`.

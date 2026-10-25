@@ -20,4 +20,4 @@ State: written, 9 tests. Fixtures `TEnergyReadingTests` and `TEnergyLevelTests` 
 | `TestEnergyOutsideOneToHundredRaises` | no value, 0 and 101 each raise | a typo gives nothing, or runs past full |
 | `TestMoonStoneGivesFive` | on screen 11 the event that waits for `s11-stone` gives 5 and opens the door | the stone gives nothing, or gives it apart from the taking |
 
-Left to the eye: the disc, the halo, the arc and its head, the number in the disc, the breath of a full ring, the wing in the monitor's frame - all drawn. That a death gives back the charge of the screen's entry is the game's (`Moon2D.dpr`).
+Left to the eye: the disc, the halo, the arc and its head, the number in the disc, the breath of a full ring, the wing in the monitor's frame - all drawn. That a death gives back the charge of the screen's entry is the game's (`Game.Moon`).

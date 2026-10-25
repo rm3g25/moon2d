@@ -173,8 +173,8 @@ Left to the eye and to the ear:
 - A `spawn` that brings a body nobody carries: the field asks the
   renderer for its art (`SpawnStanding`), which waits for the stage.
 - That a scene's kill pays nobody: `RewardMonsterKill` is the game's
-  (`Moon2D.dpr`); the body's side - no `meBurst` - is above.
-- The order the game ticks the director in (`Update` of `Moon2D.dpr`), the
+  (`Game.Moon`); the body's side - no `meBurst` - is above.
+- The order the game ticks the director in (`Update` of `Game.Moon`), the
   pause under the menu, and the scene a death interrupts while the hero
   falls into the pit: the cordon's live run.
 
@@ -213,7 +213,7 @@ State: written, 3 tests. Needs no stage. Fixture `TLevelEventsTests` in `Tests\L
 | `TestHeroStandsWithoutACellRaises` | no cell, no y, a column of 0: each raises | an event of no cell loads and never fires |
 | `TestHeroStandsOffTheGridFailsToLoad` | column 17 on a grid of 16 raises | a cell nobody can stand in loads |
 
-Left to the eye: whether the hero stands in the cell - his middle, his feet, not in a jump - is the game's (`HeroStandsIn` of `Moon2D.dpr`).
+Left to the eye: whether the hero stands in the cell - his middle, his feet, not in a jump - is the game's (`HeroStandsIn` of `Game.Moon`).
 
 ## Scenes.Director: the takeover and the order of the rewinds (3.0.69)
 
@@ -240,4 +240,4 @@ State: written, 7 tests. Needs no stage. `TestFallEaseIsFreeFall` joins `TCraftT
 | `TestRespawnActionInAWallFailsToLoad` | a cell in the floor raises | the hero comes back inside a wall |
 | `TestRespawnActionOverAPitFailsToLoad` | a cell over a hole in the floor raises | the hero comes back to a fall - the very loop a respawn point is there to break |
 
-Left to the eye: the fall of the rocks of screen 11 itself - its pace, the music left alone - and that a hero who falls into the pit after taking the stone comes back on the stone's column (`MoveCheckpoint` of `Moon2D.dpr`).
+Left to the eye: the fall of the rocks of screen 11 itself - its pace, the music left alone - and that a hero who falls into the pit after taking the stone comes back on the stone's column (`MoveCheckpoint` of `Game.Moon`).
