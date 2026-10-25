@@ -3,7 +3,9 @@
   named in "shutDoors" is shut and no other is, the openDoor action is
   read, and the load turns down a door that nothing opens, an opening on
   a screen whose door is not shut and a list that names a screen twice
-  or off the level.
+  or off the level. A screen named in "sealedDoors" is shut with nothing
+  to open it, and the load turns down an opening of it and a screen both
+  shut and sealed.
 
   The level is loaded from a one-screen room with the doors and the events
   of the test in its root. What the game does with a shut door (the hero
@@ -43,6 +45,12 @@ type
     procedure TestShutDoorOffTheLevelFailsToLoad;
     [Test]
     procedure TestScreenShutTwiceFailsToLoad;
+    [Test]
+    procedure TestSealedDoorIsShutWithNothingToOpenIt;
+    [Test]
+    procedure TestOpeningASealedDoorFailsToLoad;
+    [Test]
+    procedure TestDoorShutAndSealedFailsToLoad;
   end;
 
 implementation
@@ -63,6 +71,11 @@ const
 function ShutJson(const AScreens: string): string;
 begin
   Result := Format('"shutDoors":[%s]', [AScreens]);
+end;
+
+function SealedJson(const AScreens: string): string;
+begin
+  Result := Format('"sealedDoors":[%s]', [AScreens]);
 end;
 
 function EmptyRoom: TArray<string>;
@@ -130,6 +143,25 @@ procedure TLevelDoorsTests.TestScreenShutTwiceFailsToLoad;
 begin
   ExpectLoadFails(PickupJson + ',' + OpenOnTakingJson + ',' + ShutJson('1,1'),
     'A screen named twice');
+end;
+
+procedure TLevelDoorsTests.TestSealedDoorIsShutWithNothingToOpenIt;
+begin
+  FLevel := LevelFromRows(EmptyRoom, PickupJson + ',' + SealedJson('1'));
+  Assert.IsTrue(FLevel.DoorShutOn(1),
+    'A sealed door is shut, and no event has to open it');
+end;
+
+procedure TLevelDoorsTests.TestOpeningASealedDoorFailsToLoad;
+begin
+  ExpectLoadFails(PickupJson + ',' + OpenOnTakingJson + ',' + SealedJson('1'),
+    'An opening of a door sealed for good');
+end;
+
+procedure TLevelDoorsTests.TestDoorShutAndSealedFailsToLoad;
+begin
+  ExpectLoadFails(PickupJson + ',' + OpenOnTakingJson + ',' + ShutJson('1') +
+    ',' + SealedJson('1'), 'A screen both shut and sealed');
 end;
 
 initialization

@@ -855,12 +855,16 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 - Запертые двери (3.0.66): **`DoorShutOn(screen)`** - выход с экрана
   заперт, пока событие этого экрана его не откроет (действие `openDoor`
   из `Levels.Events`); двери не видно, герой останавливается на пороге.
-  JSON: `"shutDoors": [10, 11]` (`ParseShutDoors`, после событий).
-  Приватный `CheckShutDoors` отказывает экрану вне списка
-  (`SLevelDoorBadScreen`), экрану, названному дважды (`SLevelDoorTwice`),
-  запертой двери, которую не открывает ни одно событие её экрана
-  (`SLevelDoorNeverOpens`, `AnyEventOpensDoorOn`), и openDoor на экране
-  без запертой двери (`SLevelDoorNotShut`). `CheckEvents` ещё отказывает
+  JSON: `"shutDoors": [10, 11]` (читает `ReadScreens`, после событий).
+  Запечатанные двери (3.0.74): `"sealedDoors": [13]` - заперты навсегда,
+  ни одно событие не может их открыть: уровень кончается на этом экране
+  своими событиями (арена босса второго уровня); `DoorShutOn` верен и для
+  них. Приватный `CheckShutDoors` отказывает экрану вне списков
+  (`SLevelDoorBadScreen`), экрану, названному дважды в них вместе
+  (`SLevelDoorTwice`), запертой двери, которую не открывает ни одно
+  событие её экрана (`SLevelDoorNeverOpens`, `AnyEventOpensDoorOn`),
+  openDoor запечатанной двери (`SLevelDoorSealedOpens`) и openDoor на
+  экране без запертой двери (`SLevelDoorNotShut`). `CheckEvents` ещё отказывает
   клетке heroStands вне сетки (`SLevelEventCellOff`, 3.0.67).
 
 ### `Core/Effects.Emitter.pas` (~105 строк)
@@ -6516,8 +6520,8 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | --- | --- |
 | Движение героя / коллизии / ощущение прыжка | Hero.pas |
 | Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| Арена босса второго уровня (экран 13): трек босса после затухания музыки туннеля, рестарт в него, городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (music с fadeOut, s13-door) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas (+docs/mechanics/arena-3.md) |
-| Экран, выход с которого заперт, пока его не откроет событие | `shutDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
+| Арена босса второго уровня (экран 13): трек босса после затухания музыки туннеля, рестарт в него, городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (music с fadeOut) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
+| Экран, выход с которого заперт, пока его не откроет событие, или запечатан навсегда | `shutDoors` / `sealedDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | Дуплет: двустволка, красная дробь, отдача, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | Пыль туннеля и её свет | `dust` в `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
 | Лунный камень: картинка, которая вращается и парит, его тьма, пробуждение и падение камней | monsters.json `moonStone` (`anchored`, `invulnerable`, turn / hover у `picture`) + `eclipse` в `dynamics` + сцены `s11-wake`, `s11-fall` из level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, `ease` у fly) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Game.Moon.pas (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |

@@ -200,6 +200,7 @@ type
     FCarousels: TArray<TCarousel>;
     FRespawns: TArray<TRespawnPoint>;
     FShutDoors: TArray<Integer>; // 1-based screens
+    FSealedDoors: TArray<Integer>; // 1-based screens
     FEntities: TArray<TEntityPlacement>;
     FScreenTriggers: TArray<TScreenTrigger>;
     FEvents: TArray<TLevelEvent>;
@@ -218,7 +219,6 @@ type
     procedure CheckRespawnCell(const APoint: TRespawnPoint);
     procedure CheckEventRespawns(const AEvent: TLevelEvent);
     procedure CheckEventSphere(const AEvent: TLevelEvent);
-    procedure ParseShutDoors(const AArr: TJSONArray);
     procedure CheckShutDoors;
     function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
     procedure CheckPads;
@@ -274,7 +274,9 @@ type
       out APoint: TRespawnPoint): Boolean;
     // The way on out of the screen is shut until an event of the screen
     // opens it (the openDoor action); the door is not seen, the hero stops
-    // at the threshold. JSON: "shutDoors": [10, 11].
+    // at the threshold. JSON: "shutDoors": [10, 11]. A sealed door is shut
+    // for good and no event may open it: the level ends on that screen by
+    // its own events. JSON: "sealedDoors": [13].
     function DoorShutOn(AScreen: Integer): Boolean;
 
     property Id: string read FId;
@@ -483,8 +485,12 @@ resourcestring
     + 'screen %d, which no event of the screen forms';
   SLevelEventHintUnknown = 'Level "%s": event "%s" waits for the hint of '
     + '"%s", which no event of screen %d types';
-  SLevelDoorBadScreen = 'Level "%s": "shutDoors" names screen %d of %d';
-  SLevelDoorTwice = 'Level "%s": "shutDoors" names screen %d twice';
+  SLevelDoorBadScreen = 'Level "%s": "shutDoors" or "sealedDoors" names '
+    + 'screen %d of %d';
+  SLevelDoorTwice = 'Level "%s": "shutDoors" and "sealedDoors" name screen '
+    + '%d twice';
+  SLevelDoorSealedOpens = 'Level "%s": event "%s" opens the door of screen '
+    + '%d, which the level seals for good';
   SLevelDoorNeverOpens = 'Level "%s": the door of screen %d is shut and no '
     + 'event of the screen opens it';
   SLevelDoorNotShut = 'Level "%s": event "%s" opens the door of screen %d, '
@@ -687,6 +693,16 @@ begin
         Result := Result + [SpawnWearer(Event.Id, Action.Spawn)];
 end;
 
+// A list of screens, 1-based; none for a list the level leaves out
+function ReadScreens(const AArr: TJSONArray): TArray<Integer>;
+begin
+  Result := [];
+  if AArr = nil then
+    Exit;
+  for var Item in AArr do
+    Result := Result + [Item.GetValue<Integer>];
+end;
+
 procedure TLevel.ParseRoot(const ARoot: TJSONObject);
 begin
   FId := ARoot.GetValue<string>('id');
@@ -745,7 +761,8 @@ begin
   // the scenes: it may begin one
   CheckEvents;
   // After the events: a shut door needs one to open it
-  ParseShutDoors(ARoot.GetValue<TJSONArray>('shutDoors', nil));
+  FShutDoors := ReadScreens(ARoot.GetValue<TJSONArray>('shutDoors', nil));
+  FSealedDoors := ReadScreens(ARoot.GetValue<TJSONArray>('sealedDoors', nil));
   CheckShutDoors;
 end;
 
@@ -1126,21 +1143,17 @@ begin
   end;
 end;
 
-function TLevel.DoorShutOn(AScreen: Integer): Boolean;
+function TimesNamed(const AScreens: TArray<Integer>; AScreen: Integer): Integer;
 begin
-  for var Screen in FShutDoors do
+  Result := 0;
+  for var Screen in AScreens do
     if Screen = AScreen then
-      Exit(True);
-  Result := False;
+      Inc(Result);
 end;
 
-procedure TLevel.ParseShutDoors(const AArr: TJSONArray);
+function TLevel.DoorShutOn(AScreen: Integer): Boolean;
 begin
-  FShutDoors := [];
-  if AArr = nil then
-    Exit;
-  for var Item in AArr do
-    FShutDoors := FShutDoors + [Item.GetValue<Integer>];
+  Result := TimesNamed(FShutDoors + FSealedDoors, AScreen) > 0;
 end;
 
 function OpensDoor(const AEvent: TLevelEvent): Boolean;
@@ -1160,33 +1173,35 @@ begin
   Result := False;
 end;
 
-function TimesNamed(const AScreens: TArray<Integer>; AScreen: Integer): Integer;
-begin
-  Result := 0;
-  for var Screen in AScreens do
-    if Screen = AScreen then
-      Inc(Result);
-end;
-
 // A door that nothing opens shuts the level for good, and an opening on a
 // screen with no shut door is a screen number gone astray: both die at
-// load, as a respawn point over a pit does
+// load, as a respawn point over a pit does. A sealed door is shut for
+// good on purpose, so an opening of it is the number gone astray.
 procedure TLevel.CheckShutDoors;
 begin
-  for var Screen in FShutDoors do
+  var AllDoors := FShutDoors + FSealedDoors;
+  for var Screen in AllDoors do
   begin
     if (Screen < 1) or (Screen > FScreenCount) then
       raise ELevelError.CreateFmt(SLevelDoorBadScreen,
         [FId, Screen, FScreenCount]);
-    if TimesNamed(FShutDoors, Screen) > 1 then
+    if TimesNamed(AllDoors, Screen) > 1 then
       raise ELevelError.CreateFmt(SLevelDoorTwice, [FId, Screen]);
+  end;
+  for var Screen in FShutDoors do
     if not AnyEventOpensDoorOn(FEvents, Screen) then
       raise ELevelError.CreateFmt(SLevelDoorNeverOpens, [FId, Screen]);
-  end;
   for var Event in FEvents do
-    if OpensDoor(Event) and not DoorShutOn(Event.Screen) then
+  begin
+    if not OpensDoor(Event) then
+      Continue;
+    if TimesNamed(FSealedDoors, Event.Screen) > 0 then
+      raise ELevelError.CreateFmt(SLevelDoorSealedOpens,
+        [FId, Event.Id, Event.Screen]);
+    if not DoorShutOn(Event.Screen) then
       raise ELevelError.CreateFmt(SLevelDoorNotShut,
         [FId, Event.Id, Event.Screen]);
+  end;
 end;
 
 function RespawnsOn(const APoints: TArray<TRespawnPoint>;

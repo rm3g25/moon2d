@@ -2326,6 +2326,61 @@
       "bullets": "block",
       "tag": "s11-step",
       "dormant": true
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "x": 16,
+      "y": 280,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s13-pad-1",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "x": 72,
+      "y": 188,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s13-pad-2",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "x": 352,
+      "y": 200,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s13-pad-3",
+      "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "x": 464,
+      "y": 280,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s13-pad-4",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "x": 200,
+      "y": 160,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "tag": "s13-pad-5",
+      "rig": ["cityPadLong"]
     }
   ],
   "carousels": [
@@ -2401,6 +2456,145 @@
         "size": 6,
         "endSize": 11,
         "opacity": 80,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 50,
+        "surge": 100
+      }
+    ],
+    "cityPad": [
+      {
+        "kind": "beacon",
+        "x": 16,
+        "y": 15.5,
+        "tint": [88, 94, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.27, 0.45]},
+        "intensity": 40,
+        "size": 14
+      },
+      {
+        "kind": "haze",
+        "x": 16,
+        "y": 17,
+        "angle": 270,
+        "length": 40,
+        "mouth": 8,
+        "width": 30,
+        "shift": 4,
+        "grain": 6,
+        "speed": 84,
+        "shade": 14
+      },
+      {
+        "kind": "smoke",
+        "x": 16,
+        "y": 18,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.25,
+        "size": 5,
+        "endSize": 9,
+        "opacity": 70,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 50,
+        "surge": 100
+      }
+    ],
+    "cityPadLong": [
+      {
+        "kind": "beacon",
+        "x": 16.7,
+        "y": 15.5,
+        "tint": [88, 94, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.27, 0.45]},
+        "intensity": 40,
+        "size": 14
+      },
+      {
+        "kind": "beacon",
+        "x": 47,
+        "y": 15.5,
+        "tint": [88, 94, 100],
+        "blink": "pulse",
+        "frequency": {"spread": [0.27, 0.45]},
+        "intensity": 40,
+        "size": 14
+      },
+      {
+        "kind": "haze",
+        "x": 16.7,
+        "y": 17,
+        "angle": 270,
+        "length": 40,
+        "mouth": 8,
+        "width": 30,
+        "shift": 4,
+        "grain": 6,
+        "speed": 84,
+        "shade": 14
+      },
+      {
+        "kind": "haze",
+        "x": 47,
+        "y": 17,
+        "angle": 270,
+        "length": 40,
+        "mouth": 8,
+        "width": 30,
+        "shift": 4,
+        "grain": 6,
+        "speed": 84,
+        "shade": 14
+      },
+      {
+        "kind": "smoke",
+        "x": 16.7,
+        "y": 18,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.25,
+        "size": 5,
+        "endSize": 9,
+        "opacity": 70,
+        "angle": 270,
+        "cone": 10,
+        "speed": {"spread": [135, 165]},
+        "drag": 20,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [60, 85, 100],
+        "intensity": 50,
+        "surge": 100
+      },
+      {
+        "kind": "smoke",
+        "x": 47,
+        "y": 18,
+        "tint": [30, 55, 95],
+        "endTint": [18, 32, 66],
+        "rate": 120,
+        "life": 0.25,
+        "size": 5,
+        "endSize": 9,
+        "opacity": 70,
         "angle": 270,
         "cone": 10,
         "speed": {"spread": [135, 165]},
@@ -4370,7 +4564,8 @@
     {"screen": 12, "x": 1, "y": 11},
     {"screen": 13, "x": 2, "y": 11}
   ],
-  "shutDoors": [9, 10, 11, 12, 13],
+  "shutDoors": [9, 10, 11, 12],
+  "sealedDoors": [13],
   "events": [
     {
       "id": "breachWarning",
@@ -4628,14 +4823,6 @@
       "when": "enterScreen",
       "then": [
         {"action": "music", "file": "boss3.ogg", "fadeOut": 2.5}
-      ]
-    },
-    {
-      "id": "s13-door",
-      "screen": 13,
-      "when": "enterScreen",
-      "then": [
-        {"action": "openDoor"}
       ]
     }
   ],

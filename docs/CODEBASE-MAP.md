@@ -835,11 +835,15 @@ Level data model + JSON parser. No game logic.
 - The shut doors (3.0.66): **`DoorShutOn(screen)`** - the way on out of
   the screen is shut until an event of the screen opens it (the action
   `openDoor` of `Levels.Events`); the door is not seen, the hero stops at
-  the threshold. JSON: `"shutDoors": [10, 11]` (`ParseShutDoors`, after
-  the events). Private `CheckShutDoors` refuses a screen off the list
-  (`SLevelDoorBadScreen`), one named twice (`SLevelDoorTwice`), a shut
-  door no event of its screen opens (`SLevelDoorNeverOpens`,
-  `AnyEventOpensDoorOn`) and an openDoor on a screen with no shut door
+  the threshold. JSON: `"shutDoors": [10, 11]` (read by `ReadScreens`,
+  after the events). Sealed doors (3.0.74): `"sealedDoors": [13]` - shut
+  for good, no event may open them: the level ends on that screen by its
+  own events (level 2's boss arena); `DoorShutOn` is true for them too.
+  Private `CheckShutDoors` refuses a screen off the lists
+  (`SLevelDoorBadScreen`), one named twice in them together
+  (`SLevelDoorTwice`), a shut door no event of its screen opens
+  (`SLevelDoorNeverOpens`, `AnyEventOpensDoorOn`), an openDoor on a sealed
+  door (`SLevelDoorSealedOpens`) and one on a screen with no shut door
   (`SLevelDoorNotShut`). `CheckEvents` also refuses a heroStands cell off
   the grid (`SLevelEventCellOff`, 3.0.67).
 
@@ -6554,8 +6558,8 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
 | The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| The boss arena of level 2 (screen 13): the boss track handed over after the tunnel music fades out, a restart into it, the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (music with fadeOut, s13-door) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas (+docs/mechanics/arena-3.md) |
-| A screen whose way on is shut until an event opens it | `shutDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
+| The boss arena of level 2 (screen 13): the boss track handed over after the tunnel music fades out, a restart into it, the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (music with fadeOut) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
+| A screen whose way on is shut until an event opens it, or sealed for good | `shutDoors` / `sealedDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | The Duplet: the double-barrel, its red shot, its recoil, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
 | The moon stone: its picture that turns and hovers, its dark, its waking and the fall of the rocks | monsters.json `moonStone` (`anchored`, `invulnerable`, `picture` turn / hover) + `eclipse` in `dynamics` + scenes `s11-wake`, `s11-fall` of level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, fly `ease`) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Game.Moon.pas (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
