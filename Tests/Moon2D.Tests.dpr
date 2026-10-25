@@ -28,6 +28,7 @@ uses
   Tests.Game.Trial in 'Game\Tests.Game.Trial.pas',
   Tests.Game.Press in 'Game\Tests.Game.Press.pas',
   Tests.Game.Uptake in 'Game\Tests.Game.Uptake.pas',
+  Tests.Game.HeroForm in 'Game\Tests.Game.HeroForm.pas',
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',
