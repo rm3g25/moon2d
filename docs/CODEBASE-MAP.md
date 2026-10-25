@@ -494,7 +494,7 @@ side divides by 16 - the cell size is read from the image at load.
   width measurers (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`),
   `DrawAtlas` (debug view, F key).
 
-### `Game/Audio.pas` (~405 lines)
+### `Game/Audio.pas` (~470 lines)
 SDL2_mixer bindings (`delayed` imports - the game survives a missing DLL) plus
 the sound bank.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
@@ -525,6 +525,17 @@ the sound bank.
   **`SecondsOf(held)`** - how long it plays from its start, by the
   chunk's bytes over `FBytesPerSecond` (`MixerBytesPerSecond`,
   `Mix_QuerySpec`). `PMixChunk` is a typed `TMixChunk` now.
+- 3.0.74, for the boss arena of level 2: **`HandOverMusic(file, mode,
+  fadeOutSeconds, fadeInSeconds)`** - the track that plays fades out
+  (`Mix_FadeOutMusic`) and the new one waits in **`TQueuedTrack`**
+  (`FNextTrack`) until **`Tick`** - called by the game every tick, in
+  every state - finds the music silent (`Mix_PlayingMusic`) and starts it
+  as `PlayMusic` would, with its fade-in. Nothing playing - it starts at
+  once; the track already playing (`FMusicName`, the file `FMusic` holds)
+  is left alone, so an event fired again after a restart does not fade
+  the track the restart has just started. `PlayMusic` and `StopMusic`
+  drop a track that waits: a restart, the boss's rage, the menu cut
+  through a fade.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -1437,7 +1448,9 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     transmission of level 2's screen 7, between 3.0.52 and 3.0.53);
   - music: `FileName`, `FadeSeconds` (3.0.63, JSON `fade`, 0 by
     default - at once; `SEventBadFade` below 0: the track comes in from
-    silence); intensity: `Target`, `Level` (0..1, JSON `value`
+    silence), `FadeOutSeconds` (3.0.74, JSON `fadeOut`, 0 by default - the
+    track before is cut; `SEventBadFadeOut` below 0: the track that plays
+    fades out first, then this one starts); intensity: `Target`, `Level` (0..1, JSON `value`
     a percentage), `Ticks`; sun: `Target`, `Angle` (JSON `value` in
     degrees), `Ticks`; tactics: `Target`, `Tactics` (a word of
     `EventTacticsIds`: laps / dives / rams / hunts, see
@@ -4764,7 +4777,7 @@ act the event waits for, 0 for one that waits for none; `StartScene`
 (`TEnergyCue`, 3.0.70 - `THeroOrbs.FeedEnergy`), `Respawn`
 (`TRespawnCue`, 3.0.71 - the cell from 1; the game's `MoveCheckpoint`).
 `TChangeMusic`
-takes the fade seconds too (3.0.63). The director
+takes the fade seconds too (3.0.63), and the fade-out seconds (3.0.74). The director
 pulls the trial's state through these, it does not push. The monster
 field is reborn on every restart, so it arrives with every tick instead
 of being kept: asked for the conditions, told the tactics.
@@ -5294,7 +5307,9 @@ so a unit (and later a test) can reach it. `interface` holds
     fullscreen for the browser through it, unremembered), `PreloadSounds`,
     `CreateHud` (builds the three HUD objects afresh on every level load),
     `ChangeMusic` (a trigger's or an event's track: played and remembered
-    for restarts; '' is a no-op), `HeroRides(pad)` (the `TPadLoad` of the
+    for restarts; '' is a no-op; with a fade-out - 3.0.74 - handed over
+    by `HandOverMusic` and remembered at once, so a death in the fade
+    restarts into the new track), `HeroRides(pad)` (the `TPadLoad` of the
     rebuilds: the pad under the hero - monsters are no riders, they fall
     through a pad that goes deep), `LocateParent` (the `TLocateParent` of
     `Render.Dynamics`: a pad first (`FindWearer` since 3.0.58: a pad's
@@ -5615,13 +5630,17 @@ so a unit (and later a test) can reach it. `interface` holds
     `FOrbs.StartBurst(MoonBurstLook)` (U, `ScancodeU`, 3.0.61: the same in the
     moon's look, which no form wears yet), `NudgeCrosshair`,
     `NudgeMinigunMuzzle`, `DebugBrowseScreen` (PgUp/PgDn, through
-    `DebugShowScreen`), `DebugJumpToWork` (End, `ScancodeEnd`: level 2
-    screen 10, the screen being built, from anywhere - another level is
-    loaded and its story skipped, the hero stands on the screen's respawn
-    point, and the music becomes the track a walk there would have
-    brought, by `TrackBefore`: the level's own, then the last
-    `changeMusic` or `music` event of the screens before it, events after
-    triggers on one screen; it is changed only if it differs),
+    `DebugShowScreen`), `DebugJumpToWork` (End, `ScancodeEnd`, since 3.0.74:
+    the false ending of level 2 from anywhere - another level is loaded
+    and its story skipped, the gravel trial's screen 9 is entered with its
+    triggers spent (`DebugSpendTriggers`: counted as fired, their track
+    changed to, so a restart plays what a walk in would have), the hero
+    stands on the screen's respawn point, its events are re-armed and the
+    trial is won at once (`CelebrateBreakthrough`, the end of
+    `TickGravelAttack` taken out for the two): the victory track, the
+    tunnel music under its end, the arrow, the whole way on; every press
+    plays it anew. Before, it took the hero to screen 10 with the music a
+    walk there would have brought - `TrackBefore`, gone with it),
     `CycleFontFiltering`,
     `DebugRebuildPads` (R: the pad group of the hero's screen is rebuilt at
     once, every pad free to set off - no lap held, no warning, no wave, no
@@ -6535,6 +6554,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
 | The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
+| The boss arena of level 2 (screen 13): the boss track handed over after the tunnel music fades out, a restart into it, the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (music with fadeOut, s13-door) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas (+docs/mechanics/arena-3.md) |
 | A screen whose way on is shut until an event opens it | `shutDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | The Duplet: the double-barrel, its red shot, its recoil, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |

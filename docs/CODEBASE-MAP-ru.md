@@ -503,7 +503,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   (`SmallTextWidth`, `BigTextWidth`, `ScaledTextWidth`), `DrawAtlas`
   (отладочный просмотр, клавиша F).
 
-### `Game/Audio.pas` (~405 строк)
+### `Game/Audio.pas` (~470 строк)
 Биндинги SDL2_mixer (импорты `delayed` - игра переживает отсутствие DLL) плюс
 банк звуков.
 - **`TMusicMode`** = (`mmLoop`, `mmOnce`).
@@ -535,6 +535,17 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   играет от начала, по байтам звука и `FBytesPerSecond`
   (`MixerBytesPerSecond`, `Mix_QuerySpec`). `PMixChunk` теперь
   типизированный `TMixChunk`.
+- 3.0.74, для арены босса второго уровня: **`HandOverMusic(file, mode,
+  fadeOutSeconds, fadeInSeconds)`** - играющий трек гаснет
+  (`Mix_FadeOutMusic`), а новый ждёт в **`TQueuedTrack`** (`FNextTrack`),
+  пока **`Tick`** - его игра зовёт каждый тик, в любом состоянии - не
+  застанет музыку замолчавшей (`Mix_PlayingMusic`) и не запустит его, как
+  запустил бы `PlayMusic`, со своим нарастанием. Ничего не играет -
+  стартует сразу; трек, который уже играет (`FMusicName`, файл в
+  `FMusic`), не трогается, так что событие, сработавшее заново после
+  рестарта, не гасит трек, только что запущенный рестартом. `PlayMusic` и
+  `StopMusic` сбрасывают ждущий трек: рестарт, ярость босса, меню режут
+  затухание.
 
 ### `Game/Game.Version.pas` (~20 строк)
 Одна константа, `GameVersion` - единственное место, где игра знает свою
@@ -1451,7 +1462,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     `SEventBadPlace` для другого слова; `ReadHint`; добавлено ради
     передачи на экране 7 второго уровня, между 3.0.52 и 3.0.53);
   - музыка: `FileName`, `FadeSeconds` (3.0.63, JSON `fade`, по умолчанию
-    0 - сразу; меньше 0 - `SEventBadFade`: трек входит из тишины);
+    0 - сразу; меньше 0 - `SEventBadFade`: трек входит из тишины),
+    `FadeOutSeconds` (3.0.74, JSON `fadeOut`, по умолчанию 0 - прежний
+    трек обрывается; меньше 0 - `SEventBadFadeOut`: играющий трек сначала
+    гаснет, потом стартует этот);
     intensity: `Target`, `Level` (0..1, JSON
     `value` - процент), `Ticks`; sun: `Target`, `Angle` (JSON `value` в
     градусах), `Ticks`; tactics: `Target`, `Tactics` (слово из
@@ -4754,7 +4768,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
 `GoRight` (`TGoRightCue`), `OpenDoor` (`TOpenDoorCue`, 3.0.66),
 `HeroStands` (`THeroStandsCue`, 3.0.67 - клетка с нуля; `HeroStandsIn`
 игры), `Energy` (`TEnergyCue`, 3.0.70 - `THeroOrbs.FeedEnergy`), `Respawn`
-(`TRespawnCue`, 3.0.71 - клетка с 1; `MoveCheckpoint` игры). `TChangeMusic` берёт ещё и секунды нарастания (3.0.63). Директор тянет состояние испытания через них, а не
+(`TRespawnCue`, 3.0.71 - клетка с 1; `MoveCheckpoint` игры). `TChangeMusic` берёт ещё и секунды нарастания (3.0.63) и секунды затухания (3.0.74). Директор тянет состояние испытания через них, а не
 толкает. Поле монстров рождается заново на каждом рестарте, поэтому
 приходит с каждым тиком, а не хранится: у него спрашивают условия, ему
 говорят тактику.
@@ -5273,7 +5287,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     финальный экран сбрасывает полный экран перед браузером, без записи),
     `PreloadSounds`, `CreateHud` (строит три объекта HUD заново при каждой
     загрузке уровня), `ChangeMusic` (трек триггера или события: играет и
-    запоминается для рестартов; '' - пустая операция), `HeroRides(pad)`
+    запоминается для рестартов; '' - пустая операция; с затуханием -
+    3.0.74 - передаётся через `HandOverMusic` и запоминается сразу, так
+    что смерть во время затухания перезапускает уже новый трек), `HeroRides(pad)`
     (`TPadLoad` перестроек: платформа под героем - монстры не седоки, они
     проваливаются сквозь платформу, уходящую в глубину), `LocateParent`
     (`TLocateParent` из `Render.Dynamics`: сначала платформа
@@ -5588,13 +5604,18 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
     `ScancodeU`, 3.0.61: то же в облике луны, который пока не носит ни
     одна форма),
     `NudgeCrosshair`, `NudgeMinigunMuzzle`, `DebugBrowseScreen` (PgUp/PgDn,
-    через `DebugShowScreen`), `DebugJumpToWork` (End, `ScancodeEnd`:
-    экран 10 уровня 2, тот, что строится, откуда угодно - другой уровень
-    загружается без брифинга, герой встаёт на точку возрождения экрана, а
-    музыка становится той, что принесла бы туда дорога, по `TrackBefore`:
-    трек уровня, потом последний `changeMusic` или событие `music` экранов
-    до него, на одном экране события после триггеров; меняется, только
-    если другая),
+    через `DebugShowScreen`), `DebugJumpToWork` (End, `ScancodeEnd`, с 3.0.74:
+    ложный финал второго уровня откуда угодно - другой уровень
+    загружается без брифинга, герой входит на экран 9 испытания грейвелов
+    с потраченными триггерами (`DebugSpendTriggers`: считаются
+    сработавшими, их трек включён, так что рестарт играет то, что принёс
+    бы проход), встаёт на точку возрождения экрана, события экрана
+    взводятся заново, и испытание тут же выиграно
+    (`CelebrateBreakthrough`, конец `TickGravelAttack`, вынесенный для
+    обоих): победный трек, музыка туннеля под его концом, стрелка, весь
+    путь дальше; каждое нажатие проигрывает это заново. Раньше клавиша
+    вела на экран 10 с музыкой, которую принесла бы туда дорога -
+    `TrackBefore`, ушедший вместе с этим),
     `CycleFontFiltering`, `DebugRebuildPads` (R: группа платформ экрана
     героя перестраивается сразу, каждая платформа вольна трогаться - без
     удержания круга, без предупреждения, без волны, без движения: nil),
@@ -6495,6 +6516,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | --- | --- |
 | Движение героя / коллизии / ощущение прыжка | Hero.pas |
 | Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
+| Арена босса второго уровня (экран 13): трек босса после затухания музыки туннеля, рестарт в него, городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (music с fadeOut, s13-door) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas (+docs/mechanics/arena-3.md) |
 | Экран, выход с которого заперт, пока его не откроет событие | `shutDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | Дуплет: двустволка, красная дробь, отдача, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | Пыль туннеля и её свет | `dust` в `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
