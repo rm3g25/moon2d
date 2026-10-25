@@ -19,7 +19,9 @@
 
   The convoy and the searchlight: the gap of the traffic, the line of a
   lane and the figure of eight of a sweep are records a test builds by
-  hand and asks; the objects are read from JSON - a searchlight with the
+  hand and asks; the schedule of a convoy is built from them and told the
+  seconds, and which columns it has let in is all that is seen of it; the
+  objects are read from JSON - a searchlight with the
   crafts it catches from a list, as a level reads them. Their columns and
   their spot are drawn, never read.
 
@@ -119,6 +121,18 @@ type
     procedure TestConvoyReadsFromItsFile;
     [Test]
     procedure TestBadConvoyRaises;
+    [Test]
+    procedure TestNothingComesBeforeTheStart;
+    [Test]
+    procedure TestFirstColumnComesInAlone;
+    [Test]
+    procedure TestSecondLaneComesInWithTheSecondColumn;
+    [Test]
+    procedure TestRewindBringsTheSameColumnsBack;
+    [Test]
+    procedure TestColumnPastTheFinishIsLetGo;
+    [Test]
+    procedure TestColumnsAreMadeAsTheMakeupSays;
   end;
 
   [TestFixture]
@@ -187,6 +201,9 @@ const
     '"reach":[150,75]},"catches":["pillar"]}';
   // Samples of a sweep over one period
   SweepSamples = 1000;
+  ScheduleSeed = 12345;
+  // Seconds into the traffic of screen 12: well past its ramp
+  ScheduleSeconds = 60;
 
 function IsNear(AValue: Single; AExpected: Double): Boolean;
 begin
@@ -731,6 +748,41 @@ begin
   Result.Joins := 1;
 end;
 
+// The ledge of screen 12, drawn out ten times: nothing reaches its finish
+// in the minutes a test runs, unless ALength says otherwise. The second
+// lane comes in with the second column of the first.
+function ScheduleOf(ALength: Single = 1000): TConvoySchedule;
+var
+  Lanes: TArray<TConvoyLane>;
+  Makeup: TColumnMakeup;
+begin
+  SetLength(Lanes, 2);
+  Lanes[0] := ShortLane;
+  Lanes[0].Finish.X := ALength;
+  Lanes[1] := Lanes[0];
+  Lanes[1].Speed := 6.4;
+  Lanes[1].Joins := 2;
+  var Traffic := ScreenTwelveTraffic;
+  Traffic.GapFirst := 72;
+  Traffic.GapLast := 34;
+  Traffic.Ramp := 25;
+  Makeup.FewestLights := 3;
+  Makeup.MostLights := 5;
+  Makeup.Pitch := 3.2;
+  Makeup.Flashers := 0.35;
+  Result := TConvoySchedule.Create(Lanes, Traffic, Makeup, ScheduleSeed);
+end;
+
+// The columns of ALane, in the order they came in
+function ColumnsOf(ASchedule: TConvoySchedule;
+  ALane: Integer): TArray<TConvoyColumn>;
+begin
+  Result := nil;
+  for var Column in ASchedule.Columns do
+    if Column.Lane = ALane then
+      Result := Result + [Column];
+end;
+
 // The sweep of screen 12, starting at the right end of the eight
 function ScreenTwelveSweep: TSweep;
 begin
@@ -830,6 +882,131 @@ begin
   ExpectRaises(Format(ConvoyJson, [',"lights":[5,3]']),
     'The most before the fewest');
   ExpectRaises(Format(ConvoyJson, [',"ramp":0']), 'A ramp of no time');
+end;
+
+procedure TConvoyTests.TestNothingComesBeforeTheStart;
+begin
+  var Schedule := ScheduleOf;
+  try
+    Schedule.Advance(ScheduleSeconds);
+    Assert.AreEqual(0, Schedule.Columns.Count, 'Not started: an empty ledge');
+    Assert.IsFalse(Schedule.Started);
+  finally
+    Schedule.Free;
+  end;
+end;
+
+procedure TConvoyTests.TestFirstColumnComesInAlone;
+begin
+  var Schedule := ScheduleOf;
+  try
+    Schedule.Start;
+    Schedule.Advance(0);
+    Assert.AreEqual(1, Schedule.Columns.Count, 'One column at once');
+    Assert.AreEqual(0, Schedule.Columns[0].Lane, 'On the first lane');
+    // The first gap is 72 units at 8 a second, a quarter off at most
+    Schedule.Advance(6.5);
+    Assert.AreEqual(1, Schedule.Columns.Count, 'Still alone 6.5 seconds in');
+  finally
+    Schedule.Free;
+  end;
+end;
+
+procedure TConvoyTests.TestSecondLaneComesInWithTheSecondColumn;
+begin
+  var Schedule := ScheduleOf;
+  try
+    Schedule.Start;
+    Schedule.Advance(ScheduleSeconds);
+    var First := ColumnsOf(Schedule, 0);
+    var Second := ColumnsOf(Schedule, 1);
+    Assert.IsTrue((Length(First) > 2) and (Length(Second) > 1),
+      Format('Both lanes run: %d and %d columns', [Length(First),
+      Length(Second)]));
+    Assert.AreEqual(First[1].Entered, Second[0].Entered, SingleSlack,
+      'The second lane comes in with the second column of the first');
+    for var i := 1 to High(First) do
+      Assert.IsTrue(First[i].Entered > First[i - 1].Entered,
+        Format('Column %d comes after the one before', [i]));
+  finally
+    Schedule.Free;
+  end;
+end;
+
+procedure TConvoyTests.TestRewindBringsTheSameColumnsBack;
+begin
+  var Schedule := ScheduleOf;
+  try
+    Schedule.Start;
+    Schedule.Advance(ScheduleSeconds);
+    var Before := Schedule.Columns.ToArray;
+
+    Schedule.Rewind;
+    Assert.AreEqual(0, Schedule.Columns.Count, 'Rewound: an empty ledge');
+    Assert.IsFalse(Schedule.Started, 'Rewound: not started');
+    Schedule.Start;
+    Schedule.Advance(ScheduleSeconds);
+
+    Assert.AreEqual(Length(Before), Schedule.Columns.Count, 'As many again');
+    for var i := 0 to High(Before) do
+    begin
+      var Again := Schedule.Columns[i];
+      Assert.IsTrue((Again.Lane = Before[i].Lane) and
+        (Again.Entered = Before[i].Entered) and
+        (Again.Lights = Before[i].Lights) and
+        (Again.HasFlasher = Before[i].HasFlasher) and
+        (Again.Flasher = Before[i].Flasher),
+        Format('Column %d is the one it was', [i]));
+    end;
+  finally
+    Schedule.Free;
+  end;
+end;
+
+procedure TConvoyTests.TestColumnPastTheFinishIsLetGo;
+begin
+  // 100 units: at 8 a second the first column's tail, 12.8 units at most
+  // behind its head, is past the finish 14.1 seconds in
+  var Schedule := ScheduleOf(100);
+  try
+    Schedule.Start;
+    Schedule.Advance(0);
+    Schedule.Advance(12);
+    Assert.AreEqual<Double>(0, Schedule.Columns[0].Entered,
+      'On the ledge while its head is still short of the finish');
+    Schedule.Advance(15);
+    for var Column in Schedule.Columns do
+      Assert.IsTrue(Column.Entered > 0, 'The first column is gone');
+  finally
+    Schedule.Free;
+  end;
+end;
+
+procedure TConvoyTests.TestColumnsAreMadeAsTheMakeupSays;
+begin
+  var Schedule := ScheduleOf;
+  try
+    Schedule.Start;
+    Schedule.Advance(ScheduleSeconds);
+    var Flashing := 0;
+    for var Column in Schedule.Columns do
+    begin
+      Assert.IsTrue((Column.Lights >= 3) and (Column.Lights <= 5),
+        Format('%d lights', [Column.Lights]));
+      if not Column.HasFlasher then
+        Continue;
+      Inc(Flashing);
+      Assert.IsTrue((Column.Flasher >= 1) and
+        (Column.Flasher <= Column.Lights - 2),
+        Format('The flasher is light %d of %d: between the head and the tail',
+        [Column.Flasher, Column.Lights]));
+    end;
+    Assert.IsTrue((Flashing > 0) and (Flashing < Schedule.Columns.Count),
+      Format('Some columns flash, not all: %d of %d', [Flashing,
+      Schedule.Columns.Count]));
+  finally
+    Schedule.Free;
+  end;
 end;
 
 procedure TSearchlightTests.TestSweepStartsAtItsPhaseAndComesBackInAPeriod;

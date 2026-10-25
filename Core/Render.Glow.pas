@@ -56,7 +56,8 @@ procedure BlurImage(var AImage: TArray<Single>; AWidth, AHeight, ARadius,
 // with the levels in alpha
 function CreateGlowFromImage(ARenderer: PSdlRenderer;
   const AImage: TArray<Single>; AWidth, AHeight: Integer): PSdlTexture;
-// The texture centered on the point, ASize units on a side
+// The texture centered on the point, ASize units on a side. In all three
+// drawers ALevel is held to 0..1: light added past full is still full.
 procedure DrawGlow(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   ACenterX, ACenterY, ASize: Single; ATint: TRgb; ALevel: Single);
 procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
@@ -339,7 +340,8 @@ procedure DrawGlowRect(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
   const ADest: TSdlFRect; ATint: TRgb; ALevel: Single);
 begin
   SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
-  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_SetTextureAlphaMod(ATexture,
+    Round(255 * EnsureRange(ALevel, 0.0, 1.0)));
   SDL_RenderCopyF(ARenderer, ATexture, nil, @ADest);
 end;
 
@@ -354,7 +356,8 @@ begin
   Dest.W := AWidth;
   Dest.H := AHeight;
   SDL_SetTextureColorMod(ATexture, ATint.R, ATint.G, ATint.B);
-  SDL_SetTextureAlphaMod(ATexture, Round(255 * ALevel));
+  SDL_SetTextureAlphaMod(ATexture,
+    Round(255 * EnsureRange(ALevel, 0.0, 1.0)));
   SDL_RenderCopyExF(ARenderer, ATexture, nil, @Dest, AAngle, nil, SdlFlipNone);
 end;
 
