@@ -33,10 +33,11 @@ uses
 
 type
   // Plays a track and remembers it as the level's current one, coming in
-  // from silence over AFadeSeconds. A method of the game passed directly,
-  // no wrapper.
+  // from silence over AFadeSeconds; with AFadeOutSeconds above 0 the track
+  // that plays fades out first. A method of the game passed directly, no
+  // wrapper.
   TChangeMusic = reference to procedure(const AFileName: string;
-    AFadeSeconds: Single);
+    AFadeSeconds, AFadeOutSeconds: Single);
   // A word to the arena about the pad group tagged AGroup (Pads.Arena)
   TArenaCue = reference to procedure(const AGroup: string);
 
@@ -315,7 +316,8 @@ begin
       eaHint:
         PlayHint(AIndex, Action);
       eaMusic:
-        FCues.ChangeMusic(Action.FileName, Action.FadeSeconds);
+        FCues.ChangeMusic(Action.FileName, Action.FadeSeconds,
+          Action.FadeOutSeconds);
       eaIntensity:
         FDynamics.FadeTagged(Action.Target, Action.Level, Action.Ticks);
       eaSun:

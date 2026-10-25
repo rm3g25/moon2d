@@ -94,6 +94,12 @@ function Mix_HaltMusic: Integer; cdecl;
   external MixerLib name 'Mix_HaltMusic' delayed;
 function Mix_VolumeMusic(AVolume: Integer): Integer; cdecl;
   external MixerLib name 'Mix_VolumeMusic' delayed;
+// Halts the music once it has faded out
+function Mix_FadeOutMusic(AMilliseconds: Integer): Integer; cdecl;
+  external MixerLib name 'Mix_FadeOutMusic' delayed;
+// Non-zero while the music plays, a fade-out included
+function Mix_PlayingMusic: Integer; cdecl;
+  external MixerLib name 'Mix_PlayingMusic' delayed;
 {$WARN SYMBOL_PLATFORM DEFAULT}
 
 type
@@ -104,6 +110,13 @@ type
   THeldSound = record
     Channel: Integer;
     Chunk: PMixChunk;
+  end;
+
+  // A track waiting for the one before it to fade out; FileName '' - none
+  TQueuedTrack = record
+    FileName: string;
+    Mode: TMusicMode;
+    FadeSeconds: Single;
   end;
 
   // One instance owns the mixer for the whole game. Two loading creeds:
@@ -120,6 +133,8 @@ type
     FTracks: TDictionary<string, PMixChunk>;
     FBytesPerSecond: Integer; // of the decoded samples
     FMusic: PMixMusic;
+    FMusicName: string; // the track FMusic holds; '' with none
+    FNextTrack: TQueuedTrack;
     FSoundsDir: string;
     FMusicDir: string;
     function ChunkOf(const AFileName: string): PMixChunk;
@@ -154,6 +169,16 @@ type
     // AFadeSeconds above 0 brings the track in from silence
     procedure PlayMusic(const AFileName: string; AMode: TMusicMode;
       AFadeSeconds: Single = 0);
+    // The track that plays fades out over AFadeOutSeconds, then AFileName
+    // starts as PlayMusic starts it. With nothing playing it starts at
+    // once; a track already playing is left alone - there is nothing to
+    // hand over.
+    procedure HandOverMusic(const AFileName: string; AMode: TMusicMode;
+      AFadeOutSeconds, AFadeInSeconds: Single);
+    // Starts the handed-over track once the one before it is silent; the
+    // game calls it every tick
+    procedure Tick;
+    // Drops a track waiting for a fade-out as well
     procedure StopMusic;
     // Mutes the music channel at the mixer, effects untouched. The game
     // keeps switching tracks normally underneath - unmuting resumes
@@ -167,6 +192,9 @@ implementation
 
 resourcestring
   SSoundLoadFailed = 'Sound failed to load: %s (%s)';
+
+const
+  MillisecondsPerSecond = 1000;
 
 function MixerBytesPerSecond: Integer;
 const
@@ -360,7 +388,6 @@ procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode;
 const
   LoopForever = -1;
   PlayThroughOnce = 1;
-  MillisecondsPerSecond = 1000;
 begin
   if not FEnabled then
     Exit;
@@ -372,6 +399,7 @@ begin
   if FMusic = nil then
     Exit; // a missing track must not kill the run - the game goes quiet
 
+  FMusicName := AFileName;
   var Loops := PlayThroughOnce;
   if AMode = mmLoop then
     Loops := LoopForever;
@@ -381,15 +409,50 @@ begin
     Mix_PlayMusic(FMusic, Loops);
 end;
 
+procedure TSoundBank.HandOverMusic(const AFileName: string;
+  AMode: TMusicMode; AFadeOutSeconds, AFadeInSeconds: Single);
+begin
+  if not FEnabled then
+    Exit;
+  if AFileName = '' then
+    Exit;
+
+  var Playing := (FMusic <> nil) and (Mix_PlayingMusic <> 0);
+  if not Playing then
+  begin
+    PlayMusic(AFileName, AMode, AFadeInSeconds);
+    Exit;
+  end;
+  if (FNextTrack.FileName = '') and SameText(AFileName, FMusicName) then
+    Exit;
+
+  FNextTrack.FileName := AFileName;
+  FNextTrack.Mode := AMode;
+  FNextTrack.FadeSeconds := AFadeInSeconds;
+  Mix_FadeOutMusic(Round(AFadeOutSeconds * MillisecondsPerSecond));
+end;
+
+procedure TSoundBank.Tick;
+begin
+  if FNextTrack.FileName = '' then
+    Exit;
+  if Mix_PlayingMusic <> 0 then
+    Exit;
+  var Next := FNextTrack;
+  PlayMusic(Next.FileName, Next.Mode, Next.FadeSeconds);
+end;
+
 procedure TSoundBank.StopMusic;
 begin
   if not FEnabled then
     Exit;
+  FNextTrack := Default(TQueuedTrack);
   if FMusic = nil then
     Exit;
   Mix_HaltMusic;
   Mix_FreeMusic(FMusic);
   FMusic := nil;
+  FMusicName := '';
 end;
 
 procedure TSoundBank.ToggleMusicMuted;

@@ -107,10 +107,12 @@ type
     Kind: TEventActionKind;
     Text: TLocalizedText; // the message kinds; localized like the triggers
     // eaMusic: the track FileName loops from now on, coming in from
-    // silence over FadeSeconds. JSON: "file", "fade" (seconds, 0 by
-    // default - at once).
+    // silence over FadeSeconds. With FadeOutSeconds the track that plays
+    // fades out over them first, and FileName starts once it is silent.
+    // JSON: "file", "fade", "fadeOut" (seconds, 0 by default - at once).
     FileName: string;
     FadeSeconds: Single;
+    FadeOutSeconds: Single;
     // eaIntensity: the dynamic objects tagged Target fade to Level
     // (0..1) over Ticks. JSON: "target", "value" (a percentage),
     // "ticks" (0 by default - at once).
@@ -323,6 +325,8 @@ resourcestring
     'seconds, not %g';
   SEventBadFade = 'Level "%s": event "%s": music takes "fade" of 0 seconds ' +
     'or more, not %g';
+  SEventBadFadeOut = 'Level "%s": event "%s": music takes "fadeOut" of 0 ' +
+    'seconds or more, not %g';
   SEventBadLead = 'Level "%s": event "%s": victoryEnds takes "lead" of 0 ' +
     'seconds or more, not %g';
   SEventNoCell = 'Level "%s": event "%s": heroStands takes "x" and "y" from 1';
@@ -638,6 +642,10 @@ begin
   if Result.FadeSeconds < 0 then
     raise ELevelEventError.CreateFmt(SEventBadFade,
       [ALevelId, AEventId, Result.FadeSeconds]);
+  Result.FadeOutSeconds := AObj.GetValue<Double>('fadeOut', 0);
+  if Result.FadeOutSeconds < 0 then
+    raise ELevelEventError.CreateFmt(SEventBadFadeOut,
+      [ALevelId, AEventId, Result.FadeOutSeconds]);
   case Result.Kind of
     eaHint:
       ReadHint(AObj, ALevelId, AEventId, Result);

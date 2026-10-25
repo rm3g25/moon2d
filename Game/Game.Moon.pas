@@ -233,6 +233,7 @@ type
     procedure DebugBrowseScreen(ADelta: Integer);
     procedure DebugShowScreen(AScreen: Integer);
     procedure DebugJumpToWork;
+    procedure DebugSpendTriggers(AScreen: Integer);
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
     procedure DumpLevelScreens;
@@ -244,6 +245,7 @@ type
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
     procedure TickGravelAttack;
+    procedure CelebrateBreakthrough;
     procedure PlayVictoryTrack;
     procedure StopVictoryTrack;
     function LetDownFromSky(const AMonsterId: string;
@@ -285,7 +287,8 @@ type
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
     procedure PreloadSounds;
-    procedure ChangeMusic(const AFileName: string; AFadeSeconds: Single = 0);
+    procedure ChangeMusic(const AFileName: string; AFadeSeconds: Single = 0;
+      AFadeOutSeconds: Single = 0);
     function HeroRides(const APad: TPad): Boolean;
     function LocateParent(const ATag: string;
       out AStand: TParentStand): Boolean;
@@ -461,7 +464,7 @@ const
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
-  ScancodeEnd = 77; // straight to the screen being built, with its music
+  ScancodeEnd = 77; // the gravel trial just won: the false ending and on
   ScancodeKp1 = 89;
   ScancodeKp2 = 90;
   ScancodeKp3 = 91;
@@ -1552,6 +1555,13 @@ begin
   if not Cue.Finished then
     Exit;
 
+  CelebrateBreakthrough;
+end;
+
+// The trial is won: the breakthrough's caption and ring, the suit off,
+// the victory track
+procedure TMoonGame.CelebrateBreakthrough;
+begin
   FTrialDone := True;
   FMessages.ShowBig(Tr(SBrokeThrough), BigMessageTicks);
   // The breakthrough shatter RINGS, unlike the silent level-complete
@@ -1617,13 +1627,18 @@ begin
 end;
 
 // A trigger's or an event's track: played now and remembered, so a
-// restart respawns into it. '' is a no-op.
-procedure TMoonGame.ChangeMusic(const AFileName: string; AFadeSeconds: Single);
+// restart respawns into it. '' is a no-op. A track handed over after a
+// fade-out is remembered at once: a death in the fade restarts into it.
+procedure TMoonGame.ChangeMusic(const AFileName: string; AFadeSeconds,
+  AFadeOutSeconds: Single);
 begin
   if AFileName = '' then
     Exit;
   FCurrentMusic := AFileName;
-  FAudio.PlayMusic(AFileName, mmLoop, AFadeSeconds);
+  if AFadeOutSeconds > 0 then
+    FAudio.HandOverMusic(AFileName, mmLoop, AFadeOutSeconds, AFadeSeconds)
+  else
+    FAudio.PlayMusic(AFileName, mmLoop, AFadeSeconds);
 end;
 
 // The one rider a rebuild keeps out of the depth: monsters fall through
@@ -2819,6 +2834,8 @@ end;
 
 procedure TMoonGame.Update(ADeltaSeconds: Double);
 begin
+  // In every state: a fade-out runs on under the menu
+  FAudio.Tick;
   if FState in [gsMenu, gsIntro] then
   begin
     // Only the sky moves; the world below is frozen. The story screen
@@ -3194,58 +3211,16 @@ begin
   ArriveOnScreen;
 end;
 
-type
-  // On one screen the triggers fire on arrival, the events after them
-  TMusicTurn = (mtTrigger, mtEvent);
-
-// The track a hero who walked in would hear on AScreen: the level's own,
-// then the last change the screens before it make. An event counts
-// whether or not its condition ever held.
-function TrackBefore(ALevel: TLevel; AScreen: Integer;
-  ADifficulty: TDifficulty): string;
-var
-  Chosen: string;
-  LastScreen: Integer;
-  LastTurn: TMusicTurn;
-
-  procedure Consider(const ATrack: string; ATrackScreen: Integer;
-    ATurn: TMusicTurn);
-  begin
-    if (ATrack = '') or (ATrackScreen >= AScreen) then
-      Exit;
-    var Later := (ATrackScreen > LastScreen) or
-      ((ATrackScreen = LastScreen) and (ATurn >= LastTurn));
-    if not Later then
-      Exit;
-    Chosen := ATrack;
-    LastScreen := ATrackScreen;
-    LastTurn := ATurn;
-  end;
-
-begin
-  Chosen := ALevel.Music;
-  LastScreen := 0;
-  LastTurn := mtTrigger;
-  for var Placement in ALevel.Entities do
-    if ADifficulty in Placement.Grades then
-      Consider(Placement.Triggers.ChangeMusic, Placement.Screen, mtTrigger);
-  for var Trigger in ALevel.ScreenTriggers do
-    if ADifficulty in Trigger.Grades then
-      Consider(Trigger.Triggers.ChangeMusic, Trigger.Screen, mtTrigger);
-  for var Event in ALevel.Events do
-    for var Action in Event.Actions do
-      if Action.Kind = eaMusic then
-        Consider(Action.FileName, Event.Screen, mtEvent);
-  Result := Chosen;
-end;
-
-// End: the screen being built now, from anywhere in the campaign. The
-// story is skipped, the hero stands on the screen's respawn point, and
-// the music becomes the one a walk there would have brought.
+// End: the false ending of level 2 from anywhere in the campaign - the
+// hero stands on the screen of the gravel trial the moment it is won:
+// the victory track, the tunnel music coming in under its end, the arrow,
+// and the whole way on from there. The trial itself is skipped: its
+// trigger counts as fired, its track as played. Every press plays the
+// ending anew.
 procedure TMoonGame.DebugJumpToWork;
 const
   WorkLevel = 2;
-  WorkScreen = 10;
+  TrialScreen = 9;
 begin
   var LevelFile := Format(LevelFilePattern, [WorkLevel]);
   if not SameText(LevelFile, FLevelFile) then
@@ -3255,13 +3230,37 @@ begin
       StartPlaying;
   end;
 
-  var Track := TrackBefore(FLevel, WorkScreen, FDifficulty);
-  if not SameText(Track, FCurrentMusic) then
-    ChangeMusic(Track);
-
-  DebugShowScreen(WorkScreen);
+  FTrial.Stop;
+  StopVictoryTrack;
+  DebugSpendTriggers(TrialScreen);
+  DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY);
+  FDirector.ReArm(TrialScreen);
+  CelebrateBreakthrough;
+end;
+
+// The triggers of AScreen count as fired, and their track as changed to:
+// the arrival fires none of them, and a restart plays what a hero who
+// walked in would have heard
+procedure TMoonGame.DebugSpendTriggers(AScreen: Integer);
+
+  procedure Spend(AIndex, ATriggerScreen: Integer;
+    AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
+  begin
+    if (ATriggerScreen <> AScreen) or not (FDifficulty in AGrades) then
+      Exit;
+    FTriggerFired[AIndex] := True;
+    ChangeMusic(ATriggers.ChangeMusic);
+  end;
+
+begin
+  for var i := 0 to High(FLevel.Entities) do
+    Spend(i, FLevel.Entities[i].Screen, FLevel.Entities[i].Grades,
+      FLevel.Entities[i].Triggers);
+  for var i := 0 to High(FLevel.ScreenTriggers) do
+    Spend(Length(FLevel.Entities) + i, FLevel.ScreenTriggers[i].Screen,
+      FLevel.ScreenTriggers[i].Grades, FLevel.ScreenTriggers[i].Triggers);
 end;
 
 // N: the three ways to filter a redrawn font, compared live on the

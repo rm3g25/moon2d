@@ -3,7 +3,8 @@
   the level's load (Levels.Defs) make of the condition heroStands: the
   cell it waits on, a cell missing or under 1, a cell off the grid. And of
   the action respawn: the cell it moves the checkpoint to, held to the
-  rules of a respawn point - on the grid, out of a wall, over a floor.
+  rules of a respawn point - on the grid, out of a wall, over a floor. And
+  of the action music: its fade-out, none by default, never below 0.
 
   The parser is tried over a root of JSON with the events of the test and
   nothing else; the grid is the load's, tried through a one-screen room
@@ -42,6 +43,12 @@ type
     procedure TestRespawnActionInAWallFailsToLoad;
     [Test]
     procedure TestRespawnActionOverAPitFailsToLoad;
+    [Test]
+    procedure TestMusicReadsItsFadeOut;
+    [Test]
+    procedure TestMusicWithoutFadeOutCutsAtOnce;
+    [Test]
+    procedure TestMusicFadeOutBelowZeroRaises;
   end;
 
 implementation
@@ -60,6 +67,9 @@ const
   // One event that moves the checkpoint; the format puts its cell
   RespawnJson = '"events":[{"id":"safe","screen":1,"when":"enterScreen",' +
     '"then":[{"action":"respawn"%s}]}]';
+  // One event that changes the track; the format puts its fades
+  MusicJson = '"events":[{"id":"boss","screen":1,"when":"enterScreen",' +
+    '"then":[{"action":"music","file":"boss.ogg"%s}]}]';
   PitCol = 5;
 
 function EventsOf(const ASection: string): TArray<TLevelEvent>;
@@ -178,6 +188,33 @@ procedure TLevelEventsTests.TestRespawnActionOverAPitFailsToLoad;
 begin
   ExpectRespawnLoadFails(RoomWithPit, Format(',"x":%d,"y":11', [PitCol]),
     'A cell over a hole in the floor');
+end;
+
+procedure TLevelEventsTests.TestMusicReadsItsFadeOut;
+begin
+  var Events := EventsOf(Format(MusicJson, [',"fade":1,"fadeOut":2.5']));
+  var Action := Events[0].Actions[0];
+  Assert.AreEqual<TEventActionKind>(eaMusic, Action.Kind);
+  Assert.AreEqual('boss.ogg', Action.FileName);
+  Assert.AreEqual(2.5, Action.FadeOutSeconds, 0.0001, 'fadeOut');
+  Assert.AreEqual(1.0, Action.FadeSeconds, 0.0001,
+    'The fade-in is read beside it');
+end;
+
+procedure TLevelEventsTests.TestMusicWithoutFadeOutCutsAtOnce;
+begin
+  var Events := EventsOf(Format(MusicJson, ['']));
+  Assert.AreEqual(0.0, Events[0].Actions[0].FadeOutSeconds, 0.0001,
+    'No fadeOut - the track before is cut, as before');
+end;
+
+procedure TLevelEventsTests.TestMusicFadeOutBelowZeroRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      EventsOf(Format(MusicJson, [',"fadeOut":-1']));
+    end, ELevelEventError, 'A fade-out below 0');
 end;
 
 initialization
