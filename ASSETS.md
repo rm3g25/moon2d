@@ -178,6 +178,17 @@ the barrels cut out as a heat layer and packed by
 `tools/cannon/build_cannon.py`. It is new art for the gravel arena of level 2;
 no 2008 frame stands behind it.
 
+**The TeK machine** (`sprites/tek-machine.mset`) - generated with ChatGPT's
+image model to the author's direction, with the game's TeK machines as the
+style references (the machine whole from a blockout, the same machine
+battle-worn, one wheel, the mast kit, the turret heads), then cut into
+layers and packed by `tools/machine/build_machine.py`: the hull scaled by
+its height to 6 px per screen unit - 1014x768 -, the worn hull fitted to
+the whole one's frame, the parts cut by their boxes, the sweeper's barrels
+taken out as a heat layer, the bunker's lid lifted off, everything mirrored
+to face left and given a bled edge. It is new art for the second level 2
+boss; no 2008 frame stands behind it.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.
