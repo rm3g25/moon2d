@@ -5879,6 +5879,26 @@ measured points of the source are constants at the top. No text and no
 emblem on the art: the right gun is the left one mirrored. The source is
 not in the repository. numpy, scipy, Pillow.
 
+### `tools/machine/build_machine.py`
+Builds `bin/sprites/tek-machine.mset`, the art of the TeK machine, the
+second level 2 boss (stage 8b of arena 3; nothing draws it yet), from five
+generated pictures found in a sources folder under the names in
+`WHOLE_FILE`, `DAMAGED_FILE`, `WHEEL_FILE`, `MAST_FILE` and `HEADS_FILE`:
+`build <sources dir> <set>`. The hull is scaled by its height to 128
+units (169 long), standing on the tip of the ram; the worn hull is mapped
+onto the whole one's box and cut by its silhouette; the back half of the
+mast well's dark is lifted into a layer of its own, and the dark of the
+arches is laid behind the wheels; the wheel is resampled about the middle
+of its box to the wheel's radius; the mast sections, the mortar and the
+heads are cut by their boxes at their own scales (the widest section fills
+the well, a head's socket sits on the top collar of `mast3`); the
+sweeper's barrels are taken out white as a heat layer and the bunker's lid
+is lifted off it. Everything is mirrored at the end - the machine faces
+left and never turns - and the points are written into the descriptions
+after the mirror. The measured points of the sources are constants at the
+top of the file; the sources are not in the repository. numpy, scipy,
+Pillow.
+
 ---
 
 ## Tests
@@ -6469,6 +6489,15 @@ build script in the repository); `level2-backdrops` and
   white, their shape in alpha), 384x192 each, 6 px a unit, a 64 x 32 unit
   gun; built by `tools/cannon/build_cannon.py`, read by `TCannonArt` of
   `Game.Cannons` (no monster, so no `hull` entry in monsters.json).
+- **The TeK machine** (2026-10-26, art only): `tek-machine` - the second
+  level 2 boss, 6 px a unit, facing left for good (mirrored when packed).
+  Back to front: `well`, `chassis`, `wheel` (twice, radius 20.5), `mortar`,
+  `mast3`, `mast2`, `mast1`, `hull`, `hullDamaged` (each hull layer
+  1014x768, a 169 x 128 unit machine), then a head on `mast3`: `hunter`
+  with `hunterBarrel`, `sweeper` with `sweeperHeat`, `bunker` with
+  `bunkerLid`. The points are in the descriptions. Built by
+  `tools/machine/build_machine.py`; the plan is in
+  docs/mechanics/arena-3.md.
 - **Death frames of what blows up** (3.0.42): in `barrel`, `tank`,
   `platform`, `krep` and `boss1` the `death` sequence is the empty frame
   `e8` eight times - the body vanishes in the tick it dies, and what the
