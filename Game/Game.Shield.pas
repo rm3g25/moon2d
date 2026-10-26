@@ -9,6 +9,12 @@
   not come back by itself. The rules and the look of one shield; the
   machine says where its middle is.
 
+  A shield is an ellipse about a small machine (the cannons), or it lies
+  over the body of a big one (the Ram) a little past its outline: the rim
+  is then the outline itself, and an ellipse round a long low hull would
+  hang its cells in the air over the hull and leave its corners bare. A
+  body that stands on the floor shows no rim along the floor.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Shield;
@@ -33,6 +39,16 @@ type
 
   TShieldState = (sdUp, sdFalling, sdDown);
 
+  // The body of a machine on a grid of units, row by row from its top-left
+  // corner, and where its middle is on that grid
+  TShieldMask = record
+    Width, Height: Integer;
+    Solid: TArray<Boolean>; // Width * Height
+    Middle: TSdlFPoint;
+    // False off the grid
+    function At(ACol, ARow: Integer): Boolean;
+  end;
+
   TTekShield = class
   private type
     // From the middle of the machine, screen units
@@ -47,16 +63,24 @@ type
     end;
   private
     FRadiusX, FRadiusY: Single;
+    // Over a body: the body a margin wider, its corner from the middle
+    FOverBody: Boolean;
+    FField: TShieldMask;
+    FFieldX, FFieldY: Single;
     FCells: TArray<TCell>;
     FFlares: TList<TFlare>;
     FState: TShieldState;
     FFallAge: Integer;
     procedure LayCells;
+    procedure LayCellsOverBody;
     function FlareShare(const ACell: TCell; AAlpha: Single): Single;
     function FallLevel(AAlpha: Single): Single;
   public
     // An ellipse of these half-axes about the middle of the machine
     constructor Create(ARadiusX, ARadiusY: Single);
+    // Over the body, a margin past its outline; the middle of the machine
+    // is the body's
+    constructor CreateOver(const ABody: TShieldMask);
     destructor Destroy; override;
     // Up again, with no flare on it
     procedure Rise;
@@ -79,7 +103,7 @@ type
 implementation
 
 uses
-  System.Math, Render.Brush, Render.Glow;
+  System.Types, System.Math, Render.Brush, Render.Glow;
 
 const
   // From the middle of a cell to a corner; the cells are pointy-topped
@@ -108,6 +132,11 @@ const
   FlareColor: TRgb = (R: 255; G: 244; B: 206);
   // Along a stretch the shield is looked for this often
   EntryStep = 1.0;
+  // Over a body: units the shield stands past its outline, and the depth
+  // under the outline that counts as the whole of the rim - about what
+  // the rim of a cannon's ellipse is across, so the two look alike
+  BodyMargin = 2;
+  RimDepth = 28.0;
 
 // 1 on the edge of a pointy-topped hexagon whose corners are a unit out
 function HexNorm(AX, AY: Single): Single;
@@ -158,6 +187,87 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TShieldMask
+// ---------------------------------------------------------------------------
+
+function TShieldMask.At(ACol, ARow: Integer): Boolean;
+begin
+  if (ACol < 0) or (ARow < 0) or (ACol >= Width) or (ARow >= Height) then
+    Exit(False);
+  Result := Solid[ARow * Width + ACol];
+end;
+
+// The body a margin wider on every side but the floor
+function Widen(const ABody: TShieldMask; AMargin: Integer): TShieldMask;
+begin
+  Result.Width := ABody.Width + 2 * AMargin;
+  Result.Height := ABody.Height + AMargin;
+  Result.Middle.X := ABody.Middle.X + AMargin;
+  Result.Middle.Y := ABody.Middle.Y + AMargin;
+  SetLength(Result.Solid, Result.Width * Result.Height);
+  for var Row := 0 to Result.Height - 1 do
+    for var Col := 0 to Result.Width - 1 do
+    begin
+      var Near := False;
+      for var dy := -AMargin to AMargin do
+        for var dx := -AMargin to AMargin do
+          if (Sqr(dx) + Sqr(dy) <= Sqr(AMargin)) and
+            ABody.At(Col - AMargin + dx, Row - AMargin + dy) then
+            Near := True;
+      Result.Solid[Row * Result.Width + Col] := Near;
+    end;
+end;
+
+// How deep under the outline every cell of the field lies, in units:
+// a chamfer of two passes. Off the grid is open to the sides and above,
+// and solid below - the floor the body stands on is no outline.
+function DepthsOf(const AField: TShieldMask): TArray<Single>;
+const
+  Diagonal = 1.414;
+  Deep = 1E6;
+var
+  Depths: TArray<Single>;
+
+  function DepthAt(ACol, ARow: Integer): Single;
+  begin
+    if ARow >= AField.Height then
+      Exit(Deep);
+    if (ACol < 0) or (ARow < 0) or (ACol >= AField.Width) then
+      Exit(0);
+    Result := Depths[ARow * AField.Width + ACol];
+  end;
+
+  procedure Relax(ACol, ARow: Integer; const ASteps: array of TPoint);
+  begin
+    var Index := ARow * AField.Width + ACol;
+    for var Step in ASteps do
+    begin
+      var Cost: Single := 1;
+      if (Step.X <> 0) and (Step.Y <> 0) then
+        Cost := Diagonal;
+      Depths[Index] := Min(Depths[Index],
+        DepthAt(ACol + Step.X, ARow + Step.Y) + Cost);
+    end;
+  end;
+
+begin
+  SetLength(Depths, Length(AField.Solid));
+  for var i := 0 to High(Depths) do
+    if AField.Solid[i] then
+      Depths[i] := Deep
+    else
+      Depths[i] := 0;
+  for var Row := 0 to AField.Height - 1 do
+    for var Col := 0 to AField.Width - 1 do
+      Relax(Col, Row, [Point(-1, 0), Point(0, -1), Point(-1, -1),
+        Point(1, -1)]);
+  for var Row := AField.Height - 1 downto 0 do
+    for var Col := AField.Width - 1 downto 0 do
+      Relax(Col, Row, [Point(1, 0), Point(0, 1), Point(1, 1), Point(-1, 1)]);
+  Result := Depths;
+end;
+
+// ---------------------------------------------------------------------------
 // TShieldArt
 // ---------------------------------------------------------------------------
 
@@ -197,6 +307,17 @@ begin
   LayCells;
 end;
 
+constructor TTekShield.CreateOver(const ABody: TShieldMask);
+begin
+  inherited Create;
+  FOverBody := True;
+  FField := Widen(ABody, BodyMargin);
+  FFieldX := -FField.Middle.X;
+  FFieldY := -FField.Middle.Y;
+  FFlares := TList<TFlare>.Create;
+  LayCellsOverBody;
+end;
+
 destructor TTekShield.Destroy;
 begin
   FFlares.Free;
@@ -223,6 +344,36 @@ begin
       Cell.Rim := Sqrt(Sqr(Cell.X / FRadiusX) + Sqr(Cell.Y / FRadiusY));
       if Cell.Rim <= 1 then
         FCells := FCells + [Cell];
+    end;
+end;
+
+// The same honeycomb, kept where it lies over the body; the rim share is
+// how close to the outline a cell lies
+procedure TTekShield.LayCellsOverBody;
+begin
+  var Depths := DepthsOf(FField);
+  var StepX := Sqrt(3) * HexSize;
+  var StepY := 1.5 * HexSize;
+  var Rows := Ceil(FField.Height / StepY);
+  var Cols := Ceil(FField.Width / StepX) + 1;
+  FCells := nil;
+  for var Row := 0 to Rows do
+    for var Col := 0 to Cols do
+    begin
+      var AcrossX := Col * StepX;
+      if Odd(Row) then
+        AcrossX := AcrossX + StepX / 2;
+      var DownY := Row * StepY;
+      var FieldCol := Trunc(AcrossX);
+      var FieldRow := Trunc(DownY);
+      if not FField.At(FieldCol, FieldRow) then
+        Continue;
+      var Cell: TCell;
+      Cell.X := AcrossX + FFieldX;
+      Cell.Y := DownY + FFieldY;
+      var Depth := Depths[FieldRow * FField.Width + FieldCol];
+      Cell.Rim := 1 - Min(Depth, RimDepth) / RimDepth;
+      FCells := FCells + [Cell];
     end;
 end;
 
@@ -254,6 +405,8 @@ end;
 
 function TTekShield.Holds(const APoint: TSdlFPoint): Boolean;
 begin
+  if FOverBody then
+    Exit(FField.At(Floor(APoint.X - FFieldX), Floor(APoint.Y - FFieldY)));
   Result := Sqr(APoint.X / FRadiusX) + Sqr(APoint.Y / FRadiusY) <= 1;
 end;
 

@@ -29,6 +29,7 @@ uses
   Tests.Game.Press in 'Game\Tests.Game.Press.pas',
   Tests.Game.Uptake in 'Game\Tests.Game.Uptake.pas',
   Tests.Game.HeroOrbs in 'Game\Tests.Game.HeroOrbs.pas',
+  Tests.Game.Ram in 'Game\Tests.Game.Ram.pas',
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',

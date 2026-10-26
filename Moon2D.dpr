@@ -74,6 +74,7 @@ uses
   Game.Arrivals in 'Game\Game.Arrivals.pas',
   Game.Shield in 'Game\Game.Shield.pas',
   Game.Cannons in 'Game\Game.Cannons.pas',
+  Game.Ram in 'Game\Game.Ram.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',

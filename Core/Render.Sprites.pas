@@ -144,6 +144,7 @@ type
     FRenderer: PSdlRenderer;
     FOrigin: TSdlPoint;
     FFineY: Single;
+    FWidth: Integer;
   public
     constructor Create(const ARenderer: PSdlRenderer;
       ALogicalWidth, ALogicalHeight: Integer);
@@ -194,6 +195,11 @@ type
     procedure DrawSized(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       AWidth, AHeight: Single; ALevel: Single = 1;
       AMirrored: Boolean = False; AAngleDegrees: Double = 0);
+    // Every draw from here on lands only above the line AY units down,
+    // shifted by Origin as the draws are; ClearClip lets them land
+    // anywhere again. A line is whole units: the renderer clips no finer.
+    procedure ClipAbove(AY: Single);
+    procedure ClearClip;
   end;
 
 implementation
@@ -464,6 +470,7 @@ constructor TSpriteRenderer.Create(const ARenderer: PSdlRenderer;
 begin
   inherited Create;
   FRenderer := ARenderer;
+  FWidth := ALogicalWidth;
   // The game thinks in a fixed pixel resolution; SDL letterboxes and
   // scales it to whatever window the player actually has.
   SDL_RenderSetLogicalSize(ARenderer, ALogicalWidth, ALogicalHeight);
@@ -580,6 +587,23 @@ begin
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
   SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
     FlipOf(AMirrored));
+end;
+
+procedure TSpriteRenderer.ClipAbove(AY: Single);
+var
+  Clip: TSdlRect;
+begin
+  // As wide as a shake can throw a picture either way
+  Clip.X := -FWidth;
+  Clip.Y := 0;
+  Clip.W := 3 * FWidth;
+  Clip.H := Max(0, Round(AY + FOrigin.Y));
+  SDL_RenderSetClipRect(FRenderer, @Clip);
+end;
+
+procedure TSpriteRenderer.ClearClip;
+begin
+  SDL_RenderSetClipRect(FRenderer, nil);
 end;
 
 end.

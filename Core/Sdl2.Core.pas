@@ -362,6 +362,11 @@ function SDL_RenderGeometry(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
 function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
   AW, AH: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderSetLogicalSize';
+// ARect in logical units, as a copy's destination; nil lets the drawing
+// land anywhere again
+function SDL_RenderSetClipRect(ARenderer: PSdlRenderer;
+  const ARect: PSdlRect): Integer; cdecl;
+  external SdlLib name 'SDL_RenderSetClipRect';
 function SDL_SetRenderDrawBlendMode(ARenderer: PSdlRenderer;
   ABlendMode: Integer): Integer; cdecl;
   external SdlLib name 'SDL_SetRenderDrawBlendMode';

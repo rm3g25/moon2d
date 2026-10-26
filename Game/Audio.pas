@@ -138,7 +138,8 @@ type
     FSoundsDir: string;
     FMusicDir: string;
     function ChunkOf(const AFileName: string): PMixChunk;
-    function PlayChunkHeld(AChunk: PMixChunk): THeldSound;
+    function PlayChunkHeld(AChunk: PMixChunk; ALooped: Boolean = False):
+      THeldSound;
     function StillHeld(const ASound: THeldSound): Boolean;
     procedure ApplyMusicVolume;
   public
@@ -149,6 +150,8 @@ type
     // Plays as Play does and keeps hold of the channel, so the sound can
     // be paused and stopped before its end
     function PlayHeld(const AFileName: string): THeldSound;
+    // Held as PlayHeld holds it, and over and over until it is stopped
+    function PlayLooped(const AFileName: string): THeldSound;
     // A held sound that has ended, and whose channel another sound has
     // taken since, is left alone by all three
     procedure StopHeld(const ASound: THeldSound);
@@ -178,6 +181,12 @@ type
     // Starts the handed-over track once the one before it is silent; the
     // game calls it every tick
     procedure Tick;
+    // AFileName is the track that plays, fading in or out included, and
+    // no other waits to follow it
+    function Plays(const AFileName: string): Boolean;
+    // The track that plays fades out to silence over ASeconds, and nothing
+    // follows it: a track waiting to is dropped
+    procedure FadeOutMusic(ASeconds: Single);
     // Drops a track waiting for a fade-out as well
     procedure StopMusic;
     // Mutes the music channel at the mixer, effects untouched. The game
@@ -289,17 +298,22 @@ begin
   end;
 end;
 
-function TSoundBank.PlayChunkHeld(AChunk: PMixChunk): THeldSound;
+function TSoundBank.PlayChunkHeld(AChunk: PMixChunk;
+  ALooped: Boolean): THeldSound;
 const
   AnyFreeChannel = -1;
   PlayOnce = 0;
+  LoopForever = -1;
   NoTimeLimit = -1;
 begin
   Result.Channel := -1;
   Result.Chunk := AChunk;
   if not FEnabled or (AChunk = nil) then
     Exit;
-  Result.Channel := Mix_PlayChannelTimed(AnyFreeChannel, AChunk, PlayOnce,
+  var Loops := PlayOnce;
+  if ALooped then
+    Loops := LoopForever;
+  Result.Channel := Mix_PlayChannelTimed(AnyFreeChannel, AChunk, Loops,
     NoTimeLimit);
 end;
 
@@ -307,6 +321,14 @@ function TSoundBank.PlayHeld(const AFileName: string): THeldSound;
 begin
   if FEnabled then
     Result := PlayChunkHeld(ChunkOf(AFileName))
+  else
+    Result := PlayChunkHeld(nil);
+end;
+
+function TSoundBank.PlayLooped(const AFileName: string): THeldSound;
+begin
+  if FEnabled then
+    Result := PlayChunkHeld(ChunkOf(AFileName), True)
   else
     Result := PlayChunkHeld(nil);
 end;
@@ -440,6 +462,26 @@ begin
     Exit;
   var Next := FNextTrack;
   PlayMusic(Next.FileName, Next.Mode, Next.FadeSeconds);
+end;
+
+function TSoundBank.Plays(const AFileName: string): Boolean;
+begin
+  Result := FEnabled and (AFileName <> '') and (FMusic <> nil) and
+    SameText(AFileName, FMusicName) and (FNextTrack.FileName = '') and
+    (Mix_PlayingMusic <> 0);
+end;
+
+// A track fading to silence is no longer the one that plays: asked for
+// again, it waits for the silence and comes back from the start
+procedure TSoundBank.FadeOutMusic(ASeconds: Single);
+begin
+  if not FEnabled then
+    Exit;
+  FNextTrack := Default(TQueuedTrack);
+  if (FMusic = nil) or (Mix_PlayingMusic = 0) then
+    Exit;
+  FMusicName := '';
+  Mix_FadeOutMusic(Round(ASeconds * MillisecondsPerSecond));
 end;
 
 procedure TSoundBank.StopMusic;

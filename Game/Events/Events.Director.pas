@@ -16,7 +16,7 @@
   much of its victory track is left; where the hero stands; the go-right
   arrow; the door of the screen, which the game keeps shut or open; the
   charge of the form the hero takes in; the life sphere it forms and
-  whether the hero has taken it. Which hint is typed out the director
+  whether the hero has taken it; the Ram of the boss arena. Which hint is typed out the director
   keeps itself, by the tickets of the terminal. The monster field is reborn on
   every restart, so it arrives with every tick instead of being kept:
   asked for the conditions, told the tactics.
@@ -99,6 +99,8 @@ type
   TSphereCue = reference to procedure(ACol, ARow: Integer; ASize: Single);
   // The hero has taken the life sphere of his screen
   TSphereTakenCue = reference to function: Boolean;
+  // TeK-R13, the Ram, comes onto the hero's screen (Game.Ram)
+  TRamStartCue = reference to procedure(const AOrders: TRamOrders);
 
   TDirectorCues = record
     ChangeMusic: TChangeMusic;
@@ -127,6 +129,7 @@ type
     Respawn: TRespawnCue;
     Sphere: TSphereCue;
     SphereTaken: TSphereTakenCue;
+    Ram: TRamStartCue;
   end;
 
   TEventDirector = class
@@ -362,6 +365,8 @@ begin
         FCues.Respawn(Action.CellX, Action.CellY);
       eaSphere:
         FCues.Sphere(Action.CellX, Action.CellY, Action.Size);
+      eaRam:
+        FCues.Ram(Action.Ram);
     end;
 end;
 

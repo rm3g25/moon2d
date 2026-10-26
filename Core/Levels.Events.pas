@@ -55,7 +55,7 @@ type
     eaShelvesSleep, eaShelvesProgram, eaFlyIn, eaMedkitsOnto, eaCannons,
     eaSpawn, eaBreakCarousel, eaStrays, eaSkyFall, eaWaveOnto,
     eaStraysLeave, eaPress, eaScene, eaGoRight, eaOpenDoor, eaEnergy,
-    eaRespawn, eaSphere);
+    eaRespawn, eaSphere, eaRam);
 
   // The wall cannons of the gravel trial: the rows they stop at to fire,
   // the bank of shelves in their way and the rows that bank stands in the
@@ -65,6 +65,15 @@ type
     Rows: TArray<Integer>;
     YieldBank: string;
     YieldRows: TArray<Integer>;
+  end;
+
+  // TeK-R13, the Ram, of the boss arena (Game.Ram): where its ram stops
+  // after the drive-in, the track that starts as its head locks and the
+  // seconds the track before it takes to fade out to silence
+  TRamOrders = record
+    Stop: Single; // the tip of the ram, units from the left edge
+    Track: string;
+    SilenceSeconds: Single;
   end;
 
   // A body let in along a row of the screen: which monster, the sprite list
@@ -185,6 +194,11 @@ type
     // eaSphere: the life sphere forms with its middle on the middle of the
     // cell CellX, CellY of the event's screen, counted as a placement's,
     // Size units across. JSON: "x", "y", "size" (16 by default).
+    // eaRam: TeK-R13, the Ram, comes onto the screen (Game.Ram): the whole
+    // entrance the first time on the level, from its stop on after a death.
+    // JSON: "stop" (units, the tip of the ram after the drive-in), "file"
+    // (the track of the fight) and "fadeOut" (the music before it fades to
+    // silence over that many seconds).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -205,6 +219,7 @@ type
     Breakdown: TCarouselBreak;
     SkyFall: TSkyFall;
     Press: TPressOrders;
+    Ram: TRamOrders;
     Amount: Integer;
     CellX, CellY: Integer;
     Size: Single;
@@ -257,7 +272,7 @@ const
     'tactics', 'rebuild', 'restore', 'shelvesWake', 'shelvesSleep',
     'shelvesProgram', 'flyIn', 'medkitsOnto', 'cannons', 'spawn',
     'breakCarousel', 'strays', 'skyFall', 'waveOnto', 'straysLeave', 'press',
-    'scene', 'goRight', 'openDoor', 'energy', 'respawn', 'sphere');
+    'scene', 'goRight', 'openDoor', 'energy', 'respawn', 'sphere', 'ram');
   EventTacticsIds: array [TPilotTactics] of string = (
     'laps', 'dives', 'rams', 'hunts');
   EventLaneSideIds: array [TLaneSide] of string = ('left', 'right');
@@ -335,6 +350,9 @@ resourcestring
   SEventBadSphere = 'Level "%s": event "%s": sphere takes "x" and "y" from 1 ' +
     'and a "size" above 0, not %g';
   SEventNoHintEvent = 'Level "%s": event "%s": hintTyped names no "event"';
+  SEventBadRamStop = 'Level "%s": event "%s": ram takes a "stop" on the ' +
+    'screen, not %g';
+  SEventNoRamTrack = 'Level "%s": event "%s": ram names no "file"';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -405,6 +423,21 @@ begin
   if CellOff or (AAction.Size <= 0) then
     raise ELevelEventError.CreateFmt(SEventBadSphere,
       [ALevelId, AEventId, AAction.Size]);
+end;
+
+procedure ReadRam(const AObj: TJSONObject;
+  const ALevelId, AEventId: string; var AAction: TEventAction);
+const
+  NoStop = -1;
+begin
+  AAction.Ram.Stop := AObj.GetValue<Double>('stop', NoStop);
+  if (AAction.Ram.Stop < 0) or (AAction.Ram.Stop >= ScreenWidth) then
+    raise ELevelEventError.CreateFmt(SEventBadRamStop,
+      [ALevelId, AEventId, AAction.Ram.Stop]);
+  if AAction.FileName = '' then
+    raise ELevelEventError.CreateFmt(SEventNoRamTrack, [ALevelId, AEventId]);
+  AAction.Ram.Track := AAction.FileName;
+  AAction.Ram.SilenceSeconds := AAction.FadeOutSeconds;
 end;
 
 procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
@@ -676,6 +709,8 @@ begin
       ReadRespawn(AObj, ALevelId, AEventId, Result);
     eaSphere:
       ReadSphere(AObj, ALevelId, AEventId, Result);
+    eaRam:
+      ReadRam(AObj, ALevelId, AEventId, Result);
   end;
 end;
 

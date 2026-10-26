@@ -34,7 +34,8 @@ shipped with. In the repository since the tracks settled: 17 MB is a real cost
 in a repository this size, but a clone that plays with sound beats a clone that
 needs a second download, and finished tracks do not churn the way drafts did.
 `lunar.ogg` ("Lunar Silence", the ambient of the tunnels after the gravel
-arena) joined them in 3.0.63, made the same way.
+arena) joined them in 3.0.63, made the same way; `boss3.ogg`, the fight
+with the Ram at the end of level 2, in 3.0.75.
 
 ## Not made by the author
 

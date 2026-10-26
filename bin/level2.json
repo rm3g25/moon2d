@@ -4818,11 +4818,11 @@
       ]
     },
     {
-      "id": "s13-music",
+      "id": "s13-ram",
       "screen": 13,
       "when": "enterScreen",
       "then": [
-        {"action": "music", "file": "boss3.ogg", "fadeOut": 2.5}
+        {"action": "ram", "stop": 260, "file": "boss3.ogg", "fadeOut": 2.5}
       ]
     }
   ],

@@ -98,6 +98,8 @@ type
     // fraction of a unit it has paid and not yet moved
     FRecoil: Double;
     FRecoilCarry: Double;
+    // Ticks left of a throw, with the controls out of his hands
+    FThrownTicks: Integer;
 
     FAction: THeroAction;
     FDirection: Boolean; // walk direction, True = right ('direction' of 2008)
@@ -207,6 +209,12 @@ type
     // stops at the first wall - the hero cannot be shoved into geometry.
     // Pushed off the edge of a deck, he falls.
     procedure ShoveX(ADeltaX: Integer);
+    // Thrown off a machine he touched: up and to the side of ASide (below 0
+    // to the left), as a jump, the controls out of his hands for a moment.
+    // Nothing for the dead, nor for one still flying from the last throw.
+    procedure Throw(ASide: Integer);
+    // On his way up or down
+    function InAir: Boolean;
     procedure SetY(AY: Double);
     // The deck under the hero's middle; nil when there is none
     function DeckUnderFeet: TPad;
@@ -283,6 +291,11 @@ const
                            // in 2008 - same digit as JumpDel, presumed
                            // coincidence, kept separate)
   IceJumpBoost = 1.25;     // the 'прыжок +25%' perk of the ice form
+  // A throw climbs about 75 units - over a low pad from the floor, under
+  // the 100 of a jump - and takes the controls for its first 14 ticks:
+  // the jump key the player does not hold would cut its rise short
+  ThrowBoost = 7.0;
+  ThrowLockTicks = 14;
   DeathFrameAdvance = 0.6; // frames 9 -> 16 in ~12 ticks
 
   // SDL rotates clockwise, the OpenGL original counter-clockwise.
@@ -481,6 +494,7 @@ begin
   FDeathFrame := 9;
   FRecoil := 0;
   FRecoilCarry := 0;
+  FThrownTicks := 0;
   // Frozen at the moment of death: the corpse must not track the cursor
   FDeathFacingRight := FacingMouseRight;
 end;
@@ -490,6 +504,7 @@ begin
   FDead := False;
   FRecoil := 0;
   FRecoilCarry := 0;
+  FThrownTicks := 0;
   FDropFrom := nil;
   FCorpseSettled := False;
   FDeathFrame := 9;
@@ -540,6 +555,26 @@ begin
   end;
   if StoodOnDeck and (DeckUnderFeet = nil) then
     LoseDeck;
+end;
+
+procedure THero.Throw(ASide: Integer);
+begin
+  if FDead or (FThrownTicks > 0) then
+    Exit;
+  FPending := psNone;
+  FDirection := ASide > 0;
+  if FDirection then
+    FAction := haJumpRight
+  else
+    FAction := haJumpLeft;
+  FAcceleration := ThrowBoost;
+  FThrownTicks := ThrowLockTicks;
+end;
+
+function THero.InAir: Boolean;
+begin
+  Result := FAction in [haJump, haJumpLeft, haJumpRight, haFall, haFallLeft,
+    haFallRight];
 end;
 
 procedure THero.NudgeMinigun(ADeltaX, ADeltaY, ADeltaLen: Integer);
@@ -795,7 +830,7 @@ end;
 
 procedure THero.Command(ACmd: THeroCommand);
 begin
-  if FDead then
+  if FDead or (FThrownTicks > 0) then
     Exit;
 
   if ACmd = hcDrop then
@@ -1147,6 +1182,8 @@ begin
   if FTimeOfFire < FFireCooldown then // TWeapon.Timer
     Inc(FTimeOfFire);
   ApplyRecoil;
+  if FThrownTicks > 0 then
+    Dec(FThrownTicks);
 
   if FDead then
   begin

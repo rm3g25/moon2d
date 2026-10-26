@@ -10,7 +10,8 @@
   and behind the hull, whose fenders shade it.
 
   The hull stands on whole units like a frame; only the eye and the wheels
-  draw between ticks. The platform and the mount are never mirrored: their
+  draw between ticks. A machine that puts something between its wheels and
+  its body - the mast of the Ram - draws the two halves itself, in turn. The platform and the mount are never mirrored: their
   art is symmetric, and the torn panel of the worn layer would jump from
   side to side at every turn. The tank faces left and is mirrored whole
   while it heads right.
@@ -86,8 +87,15 @@ type
     // tick, to the right above zero.
     procedure Tick(AWear, ACharge, ARolled: Single);
     // AAlpha - how far toward the next tick, which the eye and the wheels
-    // are drawn between
+    // are drawn between. DrawUnder and then DrawBody.
     procedure Draw(const ASprites: TSpriteRenderer;
+      const AStand: THullStand; AAlpha: Single);
+    // The dark of the wheel wells and the wheels; nothing for a hull
+    // without wheels
+    procedure DrawUnder(const ASprites: TSpriteRenderer;
+      const AStand: THullStand; AAlpha: Single);
+    // The hull, its worn copy and the eye
+    procedure DrawBody(const ASprites: TSpriteRenderer;
       const AStand: THullStand; AAlpha: Single);
     // Where a point of the art falls on the screen
     function Spot(const AStand: THullStand;
@@ -100,6 +108,7 @@ uses
   System.Math, Render.Brush, Render.Glow;
 
 const
+  Opaque = 1.0;
   // The eye dims by this share a tick after a shot
   EyeFade = 0.85;
   EyeRestLevel = 0.3;
@@ -227,17 +236,26 @@ end;
 
 procedure THull.Draw(const ASprites: TSpriteRenderer;
   const AStand: THullStand; AAlpha: Single);
-const
-  Opaque = 1.0;
+begin
+  DrawUnder(ASprites, AStand, AAlpha);
+  DrawBody(ASprites, AStand, AAlpha);
+end;
+
+procedure THull.DrawUnder(const ASprites: TSpriteRenderer;
+  const AStand: THullStand; AAlpha: Single);
+begin
+  if not FDef.Wheels.Enabled then
+    Exit;
+  ASprites.DrawSized(FArt.FChassis, AStand.Center, FDef.Width, FDef.Height,
+    Opaque, AStand.Mirrored);
+  DrawWheels(ASprites, AStand, AAlpha);
+end;
+
+procedure THull.DrawBody(const ASprites: TSpriteRenderer;
+  const AStand: THullStand; AAlpha: Single);
 begin
   var Width: Single := FDef.Width;
   var Height: Single := FDef.Height;
-  if FDef.Wheels.Enabled then
-  begin
-    ASprites.DrawSized(FArt.FChassis, AStand.Center, Width, Height, Opaque,
-      AStand.Mirrored);
-    DrawWheels(ASprites, AStand, AAlpha);
-  end;
   ASprites.DrawSized(FArt.FWhole, AStand.Center, Width, Height, Opaque,
     AStand.Mirrored);
   if FWear > 0 then

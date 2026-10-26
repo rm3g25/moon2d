@@ -25,7 +25,8 @@ uses
   Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Arena, Render.Font,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
-  Game.Arrivals, Game.Cannons, Game.Explosions, Game.Blasts, Game.Impacts,
+  Game.Arrivals, Game.Cannons, Game.Ram, Game.Explosions, Game.Blasts,
+  Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
   Hud.Marks, Hud.GoRight, Hud.Energy, Audio, Menu;
@@ -110,6 +111,10 @@ type
     FArrivals: TArrivals; // the violet light of the trial's arrivals
     FCannonArt: TCannonArt;
     FCannons: TCannonPair; // the wall cannons of the trial
+    FRamArt: TRamArt;
+    FRam: TRam; // TeK-R13 of the boss arena
+    FRamPainter: TRamPainter;
+    FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
     FScore: Integer;
@@ -278,6 +283,11 @@ type
     procedure BlowCannons(const ACue: TCannonCue);
     procedure ResolveCannonContact;
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
+    procedure StartRam(const AOrders: TRamOrders);
+    procedure TickRam;
+    procedure StopRamRumble;
+    procedure ResolveRamContact;
+    function BulletStruckRam(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -368,6 +378,11 @@ const
   // A burst of the wall cannons: the hero's own chain gun, one sound for
   // a few rounds
   CannonShotSoundFile = 'shoot2.wav';
+  // The Ram: the engine and the cleats on the road while it drives, the
+  // brake as it stops, the mast rising out of its well
+  RamRumbleSoundFile = 'ramrumble.wav';
+  RamHissSoundFile = 'ramhiss.wav';
+  RamWhineSoundFile = 'ramwhine.wav';
   TerminalKeySoundFile = 'terminal.wav';
   // The life sphere: its sparks spiral in; it bursts into the hero
   SphereFormSoundFile = 'sphereform.wav';
@@ -428,6 +443,7 @@ const
   // The pings roll dice of their own: Random feeds the game
   ArmorPingSeed = $50696E67; // "Ping"
   CannonSeed = $43616E6E; // "Cann"
+  RamSeed = $52616D20; // "Ram "
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -544,6 +560,9 @@ begin
   FArrivals := TArrivals.Create;
   FCannonArt := TCannonArt.Create(ARenderer);
   FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
+  FRamArt := TRamArt.Create(ARenderer);
+  FRam := TRam.Create(FRamArt.Body, RamSeed);
+  FRamPainter := TRamPainter.Create(FRamArt, FRam);
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -552,6 +571,7 @@ begin
   PreloadSounds;
   FVictory.Channel := -1;
   FVictoryLeft := NoVictoryLeft;
+  FRamRumble.Channel := -1;
 
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet);
@@ -577,6 +597,9 @@ begin
   // The pair before its art
   FCannons.Free;
   FCannonArt.Free;
+  FRamPainter.Free;
+  FRam.Free;
+  FRamArt.Free;
   FBlasts.Free;
   FExplosions.Free;
   FMessages.Free;
@@ -792,6 +815,7 @@ begin
   Cues.Energy := FOrbs.FeedEnergy;
   Cues.Respawn := MoveCheckpoint;
   Cues.Sphere := FormSphere;
+  Cues.Ram := StartRam;
   Cues.SphereTaken :=
     function: Boolean
     begin
@@ -806,6 +830,8 @@ begin
   FImpacts.Clear;
   FArrivals.Clear;
   FCannons.Clear;
+  FRam.Reset;
+  StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
   StopVictoryTrack;
@@ -985,6 +1011,7 @@ begin
   if FScenes <> nil then
     FScenes.Pause;
   FAudio.PauseHeld(FVictory);
+  FAudio.PauseHeld(FRamRumble);
 end;
 
 // Back from the menu to where Escape came from; a scene waits there
@@ -996,6 +1023,7 @@ begin
   if FScenes <> nil then
     FScenes.Resume;
   FAudio.ResumeHeld(FVictory);
+  FAudio.ResumeHeld(FRamRumble);
 end;
 
 procedure TMoonGame.SetFullscreen(AValue: Boolean);
@@ -1099,6 +1127,8 @@ begin
   FImpacts.Clear;
   FArrivals.Clear;
   FCannons.Clear;
+  FRam.Clear;
+  StopRamRumble;
   FUptake.Settle;
   SettleSphere;
   FShroud.LeaveMotes;
@@ -1746,6 +1776,9 @@ begin
     FAudio.Load(Name);
   FAudio.Load(RicochetSoundFile);
   FAudio.Load(CannonShotSoundFile);
+  FAudio.Load(RamRumbleSoundFile);
+  FAudio.Load(RamHissSoundFile);
+  FAudio.Load(RamWhineSoundFile);
   FAudio.Load(TerminalKeySoundFile);
   FAudio.Load(SphereFormSoundFile);
   FAudio.Load(SphereTakeSoundFile);
@@ -1830,10 +1863,8 @@ end;
 function TMoonGame.HeroStandsIn(ACol, ARow: Integer): Boolean;
 const
   FeetSlack = 1;
-  Airborne = [haJump, haJumpLeft, haJumpRight, haFall, haFallLeft,
-    haFallRight];
 begin
-  if FHero.Dead or (FHero.Action in Airborne) then
+  if FHero.Dead or FHero.InAir then
     Exit(False);
   var Middle := FHero.X + HeroSize / 2;
   var OnRow := Abs(FHero.Y - (ARow + 1) * TileSize) < FeetSlack;
@@ -2069,7 +2100,8 @@ begin
     else if BulletStruckWall(Own) then
       Own.StartBurstSliding;
 
-    if (Own.Status <> bsFlying) or BulletStruckCannon(Own) then
+    if (Own.Status <> bsFlying) or BulletStruckCannon(Own) or
+      BulletStruckRam(Own) then
       Continue;
 
     // Hit a monster: knockback dx/2; a death that blows up sends its
@@ -2427,6 +2459,8 @@ begin
   FImpacts.Clear;
   FArrivals.Clear;
   FCannons.Clear;
+  FRam.Clear;
+  StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
   FHero.SetScreenX(FCheckpointX);
@@ -2469,8 +2503,10 @@ begin
   // The boss regrows calm, so his rage track must not outlive him -
   // and win.ogg dies with the cancelled exit. FCurrentMusic covers the
   // screens that have no changeMusic trigger of their own (most of
-  // them); a screen that HAS one replays it via the re-arm below.
-  FAudio.PlayMusic(FCurrentMusic, mmLoop);
+  // them); a screen that HAS one replays it via the re-arm below. The
+  // track that already plays plays on: a death does not start it over.
+  if not FAudio.Plays(FCurrentMusic) then
+    FAudio.PlayMusic(FCurrentMusic, mmLoop);
   // Death re-enters the screen: its one-shot triggers re-arm and fire
   // again - teleports are idempotent while the level keeps the screen's
   // respawn point on their target, as both levels do,
@@ -2642,6 +2678,79 @@ begin
     FHero.ShoveX(CannonShove)
   else
     FHero.ShoveX(-CannonShove);
+end;
+
+// ---------------------------------------------------------------------------
+// THE RAM - TeK-R13 of the boss arena; the rules are Game.Ram's
+// ---------------------------------------------------------------------------
+
+// The whole entrance begins in silence: the track before it fades out and
+// is no longer the one a restart brings back
+procedure TMoonGame.StartRam(const AOrders: TRamOrders);
+begin
+  if not FRam.Start(AOrders) then
+    Exit;
+  FCurrentMusic := '';
+  FAudio.FadeOutMusic(AOrders.SilenceSeconds);
+end;
+
+// A tick of the Ram, carried out. The boss track starts as the head locks,
+// unless it already plays - after a death it plays on.
+procedure TMoonGame.TickRam;
+begin
+  var Cue := FRam.Tick;
+  FRamPainter.Tick;
+  if Cue.Rumble then
+  begin
+    StopRamRumble;
+    FRamRumble := FAudio.PlayLooped(RamRumbleSoundFile);
+  end;
+  if Cue.Hiss then
+  begin
+    StopRamRumble;
+    FAudio.Play(RamHissSoundFile);
+  end;
+  if Cue.Whine then
+    FAudio.Play(RamWhineSoundFile);
+  if Cue.Jolt > 0 then
+    FShake.AddTrauma(Cue.Jolt);
+  if Cue.Locked and not FAudio.Plays(FRam.Track) then
+    ChangeMusic(FRam.Track);
+end;
+
+procedure TMoonGame.StopRamRumble;
+begin
+  FAudio.StopHeld(FRamRumble);
+  FRamRumble.Channel := -1;
+end;
+
+// Any touch wounds and throws the hero off - but a hero on a pad is out of
+// its way (Game.Ram)
+procedure TMoonGame.ResolveRamContact;
+begin
+  if FHero.Dead then
+    Exit;
+  var OnDeck := not FHero.InAir and (FHero.DeckUnderFeet <> nil);
+  var Away: Integer;
+  if not FRam.Contact(HeroBody(FHero), OnDeck, FHero.InAir, Away) then
+    Exit;
+  if FHurtCooldown = 0 then
+  begin
+    FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
+    FAudio.Play(PainSoundFile);
+    HurtHero;
+  end;
+  FHero.Throw(Away);
+end;
+
+// The shield takes the bullet into its light; the hull loses nothing
+function TMoonGame.BulletStruckRam(const ABullet: TBullet): Boolean;
+begin
+  var Stretch := BulletStretch(ABullet);
+  var At: TSdlFPoint;
+  Result := FRam.Block(Stretch.Start, Stretch.Finish, At);
+  if Result then
+    ABullet.Status := bsInactive;
 end;
 
 // A tick of the wall cannons, carried out: the rules are Game.Cannons'
@@ -2963,8 +3072,12 @@ begin
   ResolveSphereContact;
   GiveSpherePip;
   if not WorldStands then
+  begin
     TickCannons;
+    TickRam;
+  end;
   ResolveCannonContact;
+  ResolveRamContact;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
@@ -3064,6 +3177,8 @@ begin
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
+        // On the road, behind the pads: it drives behind them
+        FRamPainter.DrawBody(FSprites, AAlpha);
         // The pads in the depth with what hangs on them, then the pads
         // in front, which pass before both
         FPads.Draw(FHero.Screen, AAlpha, plDeep);
@@ -3102,6 +3217,7 @@ begin
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
         FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FRamPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FOrbs.DrawOrbs(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
@@ -3232,6 +3348,8 @@ begin
 
   FTrial.Stop;
   StopVictoryTrack;
+  // The whole entrance of the Ram again at the end of the walk
+  FRam.Reset;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);
