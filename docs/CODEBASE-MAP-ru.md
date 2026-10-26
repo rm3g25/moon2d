@@ -4773,11 +4773,12 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~845 строк, 3.0.75)
+### `Game/Game.Ram.pas` (~1120 строк, 3.0.75)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этап 8b): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с охотником наверху,
-глаз, стоп-сигналы, щит TeK по телу. Юнит игры, как пушки, а не монстр.
+глаз, стоп-сигналы, два дымящих выхлопа, щит TeK по телу. Юнит игры, как
+пушки, а не монстр.
 Игра исполняет cue.
 - **`TRamCue`** (запись) - `Rumble` (мотор завёлся: петля), `Hiss`
   (встал: петля рвётся в тормоз), `Whine` (мачта пошла), `Locked` (голова
@@ -4791,7 +4792,7 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   `SilenceBeatTicks` 16, потом езда от `EnterFromX` (40 за правым краем)
   сразу на `EnterSpeed` 2.8 до стопа; False после этого: стоит на стопе,
   `rpBreathing`. `Clear` (дверь, смерть), `Reset` (новый уровень: въезд
-  не видан). `Tick` - фаза, качание, стоп-сигналы, щит. Езда
+  не видан). `Tick` - фаза, качание, стоп-сигналы, глаз, линза, щит. Езда
   (`TickDrive`): разгон и торможение по `Brake` 0.2 за тик, тормоз
   начинается там, где остаток пути - это то, что нужно скорости, чтобы
   погаснуть, не ниже `CreepSpeed`, прибытие ровно на отметку (`Arrive`:
@@ -4799,33 +4800,54 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   `EntranceStopJolt` 0.25 или `PatrolStopJolt` 0.12; въезд делает вдох
   `BreathTicks` 16, плечо патруля отдыхает 50-100 тиков). После вдоха
   загорается глаз и мачта поднимается за `RiseTicks` 50 (smoothstep) от
-  `MastRest` -20 до `HunterMast` 48: `Locked`, отдых `LockRestTicks` 33,
-  потом плечи (`BeginPatrolLeg`: отметка в `PatrolMargin` 8 от стен, не
-  ближе `PatrolMinLeg` 48, на `PatrolSpeed` 1.4; свой `TXorShift`).
+  `MastRest` -20 до `HunterMast` 48: `Locked` (голова на взводе), отдых
+  `LockRestTicks` 33, потом плечи (`BeginPatrolLeg`: одно из трёх,
+  `WallLegShare`, - к дальней стене, пол у стены не убежище; иначе
+  отметка где угодно между стенами, не ближе `PatrolMinLeg` 48; на
+  `PatrolSpeed` 1.4; свой `TXorShift`). Глаз (`TickEye`): тёмный, пока не
+  зажёгся; пока поднимается голова - мигает, это предупреждение
+  (`EyeBlinkTicks` 3 на половину, 1 против `EyeBlinkLow` 0.1); в
+  остальное время дышит между `EyeBreathLow` 0.3 и `EyeBreathHigh` 0.55
+  за `EyeBreathTicks` 83. Линза (`TickLens`): тёмная до фиксации головы,
+  потом подмигивание `LensWinkTicks` 4 каждые `LensPeriodTicks` 33 поверх
+  тления `LensEmber` 0.15.
   Качание (`TickSway`): пружина к своему медленному качанию (`IdleSway`
   0.6 градуса за `IdleSwayTicks` 150), которую толкает перемена скорости
   (`SwayInertia`), в пределах `SwayMax` 8. `Block(from, to, at)` - отрезок
   пули против щита, который там вспыхивает. `Contact(body, onDeck, inAir,
   away)` - тело героя против тела машины (`Overlaps`); герой на деке
   стоит перед ней (`FHeroInFront`) и остаётся так в воздухе, пока над
-  ней; `away` - сторона прочь от её середины. `Present` (видна и
-  осязаема: не отсутствует и не ждёт), `LeftAt`, `MastAt`, `SwayAt`,
-  `LampsAt` (между двумя тиками), `Rolled`, `Body`, `Shield`, `Phase`,
-  `EyeLit`, `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
+  ней; брошенный ею герой вне её пути, пока не приземлится
+  (`FHeroThrown`); `away` (`ThrowSide`) - сторона прочь от её середины,
+  0 - прямо вверх, - когда с той стороны до края экрана меньше места, чем
+  ширина его тела (`SpanAcross`: колонки тела на его строках), так что
+  прижатый к стене герой уходит вверх к низкому паду у стены. `Present`
+  (видна и осязаема: не отсутствует и не ждёт), `LeftAt`, `MastAt`,
+  `SwayAt`, `LampsAt`, `EyeAt`, `LensAt` (между двумя тиками), `Rolled`,
+  `Body`, `Shield`, `Phase`, `EyeLit`, `Eye`, `Lens`, `Arrivals` (счёт
+  стартов), `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
   `RamFloorY` 352 (дорога), `RamTop`.
 - **`TRamArt`** - набор `tek-machine` через свой кэш (без ключа,
   линейный): `well`, `mast1`..`mast3`, `hunter`, `hunterBarrel`;
   `THullArt` для корпуса, его износа, арок и колеса (`RamHullDef`: глаз
   22.2, 54.8, оси 61.1 и 133.2 на 107.5, радиус 20.5); `TShieldArt` щита;
-  блик стоп-сигналов. `Body` - снят с арта при загрузке (`ReadBody`):
+  точечный блик для стоп-сигналов, глаза и линзы. `Body` - снят с арта при загрузке (`ReadBody`):
   единица сплошная, где `hull` или `chassis` наполовину непрозрачен в её
   середине, или внутри колеса.
-- **`TRamPainter`** - `Create(art, ram)` (свой `THull`, спящий); `Tick`
-  после тика Тарана (глаз бодрствует, пока горит, иначе тёмный сразу;
-  колёса катятся по `Rolled`); `DrawBody(sprites, alpha)` - колодец,
-  `DrawUnder` корпуса, мачта с клипом выше `MastHiddenBelow` 90 корпуса
-  (ниже она светилась бы в открытой передней арке), `DrawBody` корпуса,
-  мачта снова с клипом выше линии колодца, стоп-сигналы; `DrawMast` -
+- **`TRamPainter`** - `Create(art, ram)` (свой `THull`, спящий навсегда -
+  глаз у Тарана свой, рисуется здесь; два `TSmoke` из `ExhaustSmoke`, дым
+  тела, как у монстров: струя из срезов труб на x 167.3, y 14.9 и 28.5,
+  угол 8, без подъёма, клубы 4 раза в секунду в такт гулу); `Tick` после
+  тика Тарана (колёса катятся по `Rolled`; выхлоп на `ExhaustIdle` 0.3,
+  в езде полный, переход `ExhaustRampTicks` 8, откат при смене
+  `Arrivals`); `DrawSmoke(canvas, origin, alpha)` - выхлоп до корпуса,
+  так что машина пятится в своё облако; `DrawBody(sprites, alpha)` -
+  колодец, `DrawUnder` корпуса, мачта с клипом выше `MastHiddenBelow` 90
+  корпуса (ниже она светилась бы в открытой передней арке), `DrawBody`
+  корпуса, глаз (`DrawEye`, размер растёт с квадратом уровня), мачта
+  снова с клипом выше линии колодца и линза на голове (`DrawLens`,
+  повёрнута качанием; бледная - красный у машины значит предупреждение),
+  стоп-сигналы; `DrawMast` -
   секции с узкой, верх каждой поднят на её долю подъёма, гнездо головы на
   верхнем воротнике, ствол на своей втулке, всё повёрнуто качанием вокруг
   середины колодца (`Turned`); `DrawLight(canvas, origin, alpha)` - щит.
@@ -6029,9 +6051,10 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 `Tests.Pads.Plunge`, `Tests.Pads.Shelf` и новые юниты арены
 `Tests.Game.Trial` (небо, волна и аптечки середины испытания; финал и
 события неба на уровне), `Tests.Game.Press` и `Tests.Pads.Stray` описаны
-только в `docs/TESTING.md`. 3.0.75 - 16 в новом `Game/Tests.Game.Ram`
-(въезд целиком и со стопа, плечи, контакт и его правило пада, щит, щит
-по телу, действие `ram`, Таран второго уровня).
+только в `docs/TESTING.md`. 3.0.75 - 22 в новом `Game/Tests.Game.Ram`
+(въезд целиком и со стопа, плечи и плечи к стене, мигание и дыхание
+глаза, линза, контакт, его правило пада, бросок вверх у стены и брошенный
+герой вне пути, щит, щит по телу, действие `ram`, Таран второго уровня).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6723,7 +6746,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Фиолетовый свет прибытия; свет вестника | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
 | Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
-| Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз и стоп-сигналы, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз, линза и стоп-сигналы, дым выхлопа, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, отрисовка дыма) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |

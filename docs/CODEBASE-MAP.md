@@ -4782,11 +4782,12 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~845 lines, 3.0.75)
+### `Game/Game.Ram.pas` (~1120 lines, 3.0.75)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stage 8b): a hull on two wheels that faces left for good and drives back
 and forth, a mast of three sections in a well on its roof with the hunter
-on top, an eye, brake lamps, the TeK shield over its body. A unit of the
+on top, an eye, brake lamps, two smoking exhausts, the TeK shield over
+its body. A unit of the
 game as the cannons are, not a monster. The game carries out the cue.
 - **`TRamCue`** (record) - `Rumble` (the engine starts: the loop),
   `Hiss` (stopped: the loop cuts to the brake), `Whine` (the mast starts
@@ -4801,7 +4802,7 @@ game as the cannons are, not a monster. The game carries out the cue.
   (40 beyond the right edge) already at `EnterSpeed` 2.8 to the stop;
   False after that: placed at the stop, `rpBreathing`. `Clear` (a door, a
   death), `Reset` (a new level: the entrance not seen). `Tick` - the
-  phase, the sway, the lamps, the shield. The drive (`TickDrive`): up to
+  phase, the sway, the lamps, the eye, the lens, the shield. The drive (`TickDrive`): up to
   speed and down by `Brake` 0.2 a tick, the brake beginning where the way
   left is what the speed needs to die out, never below `CreepSpeed`, the
   arrival on the mark exactly (`Arrive`: the hiss, the lamps held
@@ -4809,33 +4810,55 @@ game as the cannons are, not a monster. The game carries out the cue.
   0.12; the entrance breathes `BreathTicks` 16, a leg rests 50-100
   ticks). The breath over, the eye lights and the mast rises over
   `RiseTicks` 50 (smoothstep) from `MastRest` -20 to `HunterMast` 48:
-  `Locked`, a rest of `LockRestTicks` 33, then the legs
-  (`BeginPatrolLeg`: a mark `PatrolMargin` 8 off the walls, `PatrolMinLeg`
-  48 at least, at `PatrolSpeed` 1.4; its own `TXorShift`). The sway
+  `Locked` (the head armed), a rest of `LockRestTicks` 33, then the legs
+  (`BeginPatrolLeg`: one in three, `WallLegShare`, to the far wall - no
+  floor by a wall is safe; else a mark anywhere between the walls,
+  `PatrolMinLeg` 48 at least; at `PatrolSpeed` 1.4; its own `TXorShift`).
+  The eye (`TickEye`): dark until lit; while a head rises it blinks -
+  the warning, `EyeBlinkTicks` 3 a half, 1 against `EyeBlinkLow` 0.1;
+  otherwise it breathes between `EyeBreathLow` 0.3 and `EyeBreathHigh`
+  0.55 over `EyeBreathTicks` 83. The lens (`TickLens`): dark until the
+  head locks, then a wink of `LensWinkTicks` 4 every `LensPeriodTicks` 33
+  over an ember of `LensEmber` 0.15. The sway
   (`TickSway`): a spring toward a slow sway of its own (`IdleSway` 0.6
   degrees over `IdleSwayTicks` 150) that the change of the speed kicks
   (`SwayInertia`), held to `SwayMax` 8. `Block(from, to, at)` - a bullet's
   stretch against the shield, which flares there. `Contact(body, onDeck,
   inAir, away)` - the hero's body against the body (`Overlaps`); a hero on
   a deck is in front of it (`FHeroInFront`) and stays so in the air while
-  over it; `away` - the side away from its middle. `Present` (seen and
-  touched: not absent, not waiting), `LeftAt`, `MastAt`, `SwayAt`,
-  `LampsAt` (between two ticks), `Rolled`, `Body`, `Shield`, `Phase`,
-  `EyeLit`, `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
+  over it; a hero it threw is out of its way until he lands
+  (`FHeroThrown`); `away` (`ThrowSide`) - the side away from its middle,
+  0 - straight up - when that side leaves less room to the screen's edge
+  than his body's width (`SpanAcross`: the body's columns on his rows), so
+  a hero pinned at a wall goes up toward the low pad there. `Present`
+  (seen and touched: not absent, not waiting), `LeftAt`, `MastAt`,
+  `SwayAt`, `LampsAt`, `EyeAt`, `LensAt` (between two ticks), `Rolled`,
+  `Body`, `Shield`, `Phase`, `EyeLit`, `Eye`, `Lens`, `Arrivals` (counts
+  the starts), `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
   `RamFloorY` 352 (the road), `RamTop`.
 - **`TRamArt`** - the set `tek-machine` through a cache of its own (no
   color key, linear): `well`, `mast1`..`mast3`, `hunter`,
   `hunterBarrel`; a `THullArt` for the hull, its worn copy, the chassis and
   the wheel (`RamHullDef`: eye 22.2, 54.8, axles 61.1 and 133.2 at 107.5,
-  radius 20.5); the shield's `TShieldArt`; the lamps' glow. `Body` - read
+  radius 20.5); the shield's `TShieldArt`; a point glow for the lamps,
+  the eye and the lens. `Body` - read
   off the art at load (`ReadBody`): a unit solid where `hull` or `chassis`
   is half opaque at its middle, or inside a wheel.
-- **`TRamPainter`** - `Create(art, ram)` (a `THull` of its own, dozing);
-  `Tick` after the Ram's (the eye awake while lit, else dark at once; the
-  wheels roll by `Rolled`); `DrawBody(sprites, alpha)` - the well, the
+- **`TRamPainter`** - `Create(art, ram)` (a `THull` of its own, dozing for
+  good - its eye is the Ram's, drawn here; two `TSmoke` of `ExhaustSmoke`,
+  a body smoke as the monsters' are: a jet from the pipes' mouths at x
+  167.3, y 14.9 and 28.5, angle 8, no lift, puffs at 4 a second as the
+  rumble throbs); `Tick` after the Ram's (the wheels roll by `Rolled`; the
+  exhausts at `ExhaustIdle` 0.3, full while it drives, `ExhaustRampTicks`
+  8 between, rewound when `Arrivals` changes); `DrawSmoke(canvas, origin,
+  alpha)` - the exhausts, before the body, so the machine backs into its
+  own cloud; `DrawBody(sprites, alpha)` - the well, the
   hull's `DrawUnder`, the mast clipped above `MastHiddenBelow` 90 of the
   hull (lower, it would show through the open front arch), the hull's
-  `DrawBody`, the mast again clipped above the well line, the brake lamps;
+  `DrawBody`, the eye (`DrawEye`, its size growing with the square of its
+  level), the mast again clipped above the well line with the lens on the
+  head (`DrawLens`, turned with the sway; pale - red is the machine's
+  warning), the brake lamps;
   `DrawMast` - the sections narrowest first, each top raised by its share
   of the rise, the head's socket on the top collar, the barrel on its
   sleeve, all turned with the sway about the middle of the well (`Turned`);
@@ -6066,10 +6089,12 @@ entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Pads.Plunge`, `Tests.Pads.Shelf`, and the arena's new units
 `Tests.Game.Trial` (the trial's sky, wave and middle medkits; the finale
 and the sky events of the level), `Tests.Game.Press` and
-`Tests.Pads.Stray` are told in `docs/TESTING.md` alone. 3.0.75 - 16 in the
-new `Game/Tests.Game.Ram` (the entrance whole and from the stop, the legs,
-the contact and its pad rule, the shield, the shield over a body, the ram
-action, the Ram of level 2).
+`Tests.Pads.Stray` are told in `docs/TESTING.md` alone. 3.0.75 - 22 in the
+new `Game/Tests.Game.Ram` (the entrance whole and from the stop, the legs
+and the legs to a wall, the eye's blink and breath, the lens, the contact,
+its pad rule, the throw straight up at a wall and the thrown hero out of
+its way, the shield, the shield over a body, the ram action, the Ram of
+level 2).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -6774,7 +6799,7 @@ twelve OGG files.
 | The violet light of an arrival; the herald's | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
 | The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
-| The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye and the lamps, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
