@@ -3,12 +3,15 @@
   silence, drives in and stops at its mark, breathes, lights its eye and
   locks its head; a second start after a death begins at the stop; a new
   level sees the whole entrance again; after the lock it drives legs of
-  its own between the walls. A touch on the floor wounds and throws away
-  from the middle; a hero on a pad is out of its way, in the air over it
-  too, until he comes down onto the floor; a fall onto it from above
-  wounds. The shield takes a bullet, an absent machine nothing. And the
-  shield over a body, and the ram action of a level's events, and the Ram
-  of level 2's boss arena.
+  its own between the walls, now and then to a wall. The eye blinks while
+  the head rises and breathes after; the lens winks once the head locks.
+  A touch on the floor wounds and throws away from the middle, straight
+  up at a wall; a thrown hero is out of its way until he comes down; a
+  hero on a pad is out of its way, in the air over it too, until he comes
+  down onto the floor; a fall onto it from above wounds. The shield takes
+  a bullet, an absent machine nothing. And the shield over a body, and
+  the ram action of a level's events, and the Ram of level 2's boss
+  arena.
 
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
@@ -35,6 +38,7 @@ type
     function TicksUntil(ALimit: Integer;
       const AHeard: TFunc<TRamCue, Boolean>): Integer;
     procedure StandAtTheStop;
+    procedure StandAt(AStop: Single);
   public
     [Setup]
     procedure Setup;
@@ -54,6 +58,14 @@ type
     [Test]
     procedure TestAfterTheLockItDrivesLegsBetweenTheWalls;
     [Test]
+    procedure TestSomeLegsEndAtAWall;
+    [Test]
+    procedure TestEyeBlinksWhileTheHeadRises;
+    [Test]
+    procedure TestEyeBreathesAtRest;
+    [Test]
+    procedure TestLensWinksOnceTheHeadLocks;
+    [Test]
     procedure TestTouchOnTheFloorWounds;
     [Test]
     procedure TestHeroOnAPadIsOutOfItsWay;
@@ -61,6 +73,10 @@ type
     procedure TestFallOntoItWounds;
     [Test]
     procedure TestThrownAwayFromTheMiddle;
+    [Test]
+    procedure TestPinnedAtAWallThrownStraightUp;
+    [Test]
+    procedure TestThrownHeroIsOutOfItsWayTillHeLands;
     [Test]
     procedure TestShieldTakesABullet;
     [Test]
@@ -90,6 +106,7 @@ implementation
 uses
   System.IOUtils,
   System.JSON,
+  System.Math,
   Sdl2.Core,
   Game.Space,
   Levels.Defs;
@@ -117,11 +134,16 @@ begin
     Result.Solid[i] := True;
 end;
 
-function Orders: TRamOrders;
+function OrdersAt(AStop: Single): TRamOrders;
 begin
-  Result.Stop := Stop;
+  Result.Stop := AStop;
   Result.Track := 'boss.ogg';
   Result.SilenceSeconds := SilenceSeconds;
+end;
+
+function Orders: TRamOrders;
+begin
+  Result := OrdersAt(Stop);
 end;
 
 function Box(AX, AY, AW, AH: Single): TSdlFRect;
@@ -168,9 +190,14 @@ end;
 // The whole entrance seen, then a death: the Ram stands at its mark
 procedure TRamTests.StandAtTheStop;
 begin
-  FRam.Start(Orders);
+  StandAt(Stop);
+end;
+
+procedure TRamTests.StandAt(AStop: Single);
+begin
+  FRam.Start(OrdersAt(AStop));
   FRam.Clear;
-  FRam.Start(Orders);
+  FRam.Start(OrdersAt(AStop));
 end;
 
 function HeardRumble(ACue: TRamCue): Boolean;
@@ -275,7 +302,7 @@ begin
     begin
       var Cue := FRam.Tick;
       Assert.IsTrue((FRam.Left >= 0) and (FRam.Left + RamWidth <= ScreenWidth),
-        Format('Leg %d keeps off the walls', [Leg]));
+        Format('Leg %d stays between the walls', [Leg]));
       if Cue.Hiss then
         Break;
     end;
@@ -283,6 +310,87 @@ begin
       Format('Leg %d goes somewhere', [Leg]));
     Last := FRam.Left;
   end;
+end;
+
+procedure TRamTests.TestSomeLegsEndAtAWall;
+const
+  Legs = 6;
+begin
+  StandAtTheStop;
+  TicksUntil(ManyTicks, HeardLock);
+  var AtAWall := 0;
+  for var Leg := 1 to Legs do
+  begin
+    TicksUntil(ManyTicks, HeardHiss);
+    if (FRam.Left = 0) or (FRam.Left + RamWidth = ScreenWidth) then
+      Inc(AtAWall);
+  end;
+  Assert.IsTrue(AtAWall > 0, 'No floor by a wall is safe from it');
+  Assert.IsTrue(AtAWall < Legs, 'Not every leg goes to a wall');
+end;
+
+procedure TRamTests.TestEyeBlinksWhileTheHeadRises;
+const
+  Watched = 30;
+begin
+  StandAtTheStop;
+  TicksUntil(ManyTicks, HeardWhine);
+  var Brightest: Single := 0;
+  var Dimmest: Single := 1;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick;
+    Brightest := Max(Brightest, FRam.Eye);
+    Dimmest := Min(Dimmest, FRam.Eye);
+  end;
+  Assert.IsTrue(Brightest >= 0.9, 'Flashes');
+  Assert.IsTrue(Dimmest <= 0.2, 'And all but goes out between');
+end;
+
+procedure TRamTests.TestEyeBreathesAtRest;
+const
+  Watched = 100;
+begin
+  StandAtTheStop;
+  Assert.AreEqual(0.0, FRam.Eye, 0.001, 'Dark before it wakes');
+  TicksUntil(ManyTicks, HeardLock);
+  var Brightest: Single := 0;
+  var Dimmest: Single := 1;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick;
+    Brightest := Max(Brightest, FRam.Eye);
+    Dimmest := Min(Dimmest, FRam.Eye);
+  end;
+  Assert.IsTrue(Dimmest > 0, 'Lit all the time');
+  Assert.IsTrue(Brightest < 0.9, 'No flash: a blink is a warning');
+  Assert.IsTrue(Brightest - Dimmest > 0.1, 'It breathes');
+end;
+
+procedure TRamTests.TestLensWinksOnceTheHeadLocks;
+const
+  Watched = 40;
+begin
+  StandAtTheStop;
+  for var i := 1 to ManyTicks do
+  begin
+    if FRam.Tick.Locked then
+      Break;
+    Assert.AreEqual(0.0, FRam.Lens, 0.001, 'Dark until the head locks');
+  end;
+  var Winks := 0;
+  var Dimmest: Single := 1;
+  for var i := 1 to Watched do
+  begin
+    if FRam.Lens >= 1 then
+      Inc(Winks);
+    Dimmest := Min(Dimmest, FRam.Lens);
+    FRam.Tick;
+  end;
+  Assert.IsTrue(Winks > 0, 'Winks');
+  Assert.IsTrue((Dimmest > 0) and (Dimmest < 0.5), 'Over a faint ember');
+  FRam.Clear;
+  Assert.AreEqual(0.0, FRam.Lens, 0.001, 'Out when the machine is gone');
 end;
 
 procedure TRamTests.TestTouchOnTheFloorWounds;
@@ -328,6 +436,35 @@ begin
   Assert.AreEqual(-1, Away, 'Left of the middle - to the left');
   FRam.Contact(OnTheRoad(Stop + RamWidth - 26), False, False, Away);
   Assert.AreEqual(1, Away, 'Right of the middle - to the right');
+end;
+
+// A machine at the right wall and one at the left: a hero between it and
+// the wall has no room to be thrown to
+procedure TRamTests.TestPinnedAtAWallThrownStraightUp;
+begin
+  var Away: Integer;
+  StandAt(ScreenWidth - RamWidth);
+  Assert.IsTrue(FRam.Contact(OnTheRoad(ScreenWidth - 24), False, False, Away),
+    'Touched at the right wall');
+  Assert.AreEqual(0, Away, 'Straight up at the right wall');
+
+  FRam.Reset;
+  StandAt(0);
+  Assert.IsTrue(FRam.Contact(OnTheRoad(8), False, False, Away),
+    'Touched at the left wall');
+  Assert.AreEqual(0, Away, 'Straight up at the left wall');
+end;
+
+procedure TRamTests.TestThrownHeroIsOutOfItsWayTillHeLands;
+begin
+  StandAtTheStop;
+  var Away: Integer;
+  var Hero := OnTheRoad(Stop + 10);
+  Assert.IsTrue(FRam.Contact(Hero, False, False, Away), 'Touched');
+  Assert.IsFalse(FRam.Contact(Hero, False, True, Away),
+    'Flying from the throw, still over the hull');
+  Assert.IsTrue(FRam.Contact(Hero, False, False, Away),
+    'Down in its way again');
 end;
 
 procedure TRamTests.TestShieldTakesABullet;

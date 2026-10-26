@@ -3,7 +3,13 @@
   hull on two wheels that faces left for good and drives back and forth,
   backward when it goes right; a mast of three sections in a well on its
   roof, with a head on the top of it; an eye that lights when the machine
-  wakes, and brake lamps that burn as it brakes.
+  wakes, and brake lamps that burn as it brakes. Its two exhausts smoke a
+  little at rest and hard while it drives, the jet thrown back off the
+  stern.
+
+  The eye is its telegraph: lit, it breathes slowly, and it blinks fast
+  only as a warning - while a head rises. The head's lens winks once a
+  second while the head is up and locked.
 
   The entrance is the machine's own: the music before it fades out, it
   drives in from beyond the right edge in the silence and brakes at its
@@ -16,10 +22,14 @@
   honeycomb and does nothing. Any touch of the hull or a wheel wounds the
   hero and throws him off - but the machine drives behind the pads: a hero
   who stands on one is out of its way, and stays so while he is over it in
-  the air, until he comes down onto the floor.
+  the air, until he comes down onto the floor. The throw goes away from
+  its middle - straight up when that side leaves him no room to the wall
+  (the screen's edge), so a hero pinned at a wall goes up toward the low
+  pad there - and a thrown hero is out of its way until he comes down.
 
   After the lock the machine drives to a mark of its own, stands, drives
-  again. The head does not shoot yet, and bullets pass the mast and the
+  again; one leg in three ends at the far wall, so no floor is safe from
+  it. The head does not shoot yet, and bullets pass the mast and the
   head: the heads become targets with their own stage.
 
   TRam is the rules; TRamPainter draws them with TRamArt. The game carries
@@ -85,7 +95,14 @@ type
     FLamps, FLastLamps: Single;
     FLampHold: Integer;
     FEyeLit: Boolean;
+    FEye, FLastEye: Single;
+    FBreathTicks: Integer;
+    FArmed: Boolean; // the head is up and locked
+    FArmedTicks: Integer;
+    FLens, FLastLens: Single;
     FHeroInFront: Boolean;
+    FHeroThrown: Boolean; // flying from a throw: out of its way till he lands
+    FArrivals: Integer;
     FDice: TXorShift;
     FCue: TRamCue;
     procedure Place(AX: Single);
@@ -97,7 +114,12 @@ type
     procedure Arrive(AOldSpeed: Single);
     procedure TickSway;
     procedure TickLamps;
+    procedure TickEye;
+    procedure TickLens;
     function Overlaps(const ABox: TSdlFRect): Boolean;
+    function SpanAcross(const ABox: TSdlFRect; out AFirst,
+      ALast: Integer): Boolean;
+    function ThrowSide(const AHeroBody: TSdlFRect): Integer;
   public
     // ABody - the hull and the wheels on a grid of units (TRamArt.Body)
     constructor Create(const ABody: TShieldMask; ASeed: Cardinal);
@@ -116,7 +138,8 @@ type
     function Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
     // The hero's body touches the hull or a wheel and he is in the
     // machine's way: AOnDeck - he stands on a pad, AInAir - on his way up
-    // or down. AAway - the side to throw him to, away from its middle.
+    // or down. AAway - the side to throw him to, away from its middle; 0 -
+    // straight up, pinned against a wall.
     function Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
       out AAway: Integer): Boolean;
     // On the screen to be seen and touched
@@ -126,12 +149,21 @@ type
     function MastAt(AAlpha: Single): Single;
     function SwayAt(AAlpha: Single): Single;
     function LampsAt(AAlpha: Single): Single;
+    function EyeAt(AAlpha: Single): Single;
+    function LensAt(AAlpha: Single): Single;
     // Units the hull has rolled this tick, to the right above zero
     function Rolled: Single;
     property Body: TShieldMask read FBody;
     property Shield: TTekShield read FShield;
     property Phase: TRamPhase read FPhase;
     property EyeLit: Boolean read FEyeLit;
+    // How bright the eye burns, 0 dark to 1 the flash of a blink
+    property Eye: Single read FEye;
+    // How bright the head's lens burns, 0 dark to 1 a wink
+    property Lens: Single read FLens;
+    // Counts the starts: a painter that sees it change knows the machine
+    // came anew, and what it left in the air is gone
+    property Arrivals: Integer read FArrivals;
     // The mast's height: units the socket of the head stands over the
     // middle line of the well
     property Mast: Single read FMast;
@@ -153,7 +185,8 @@ type
     FHunterBarrel: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
-    FLampGlow: PSdlTexture;
+    // A point of light: the brake lamps, the eye, the lens
+    FGlow: PSdlTexture;
     FBody: TShieldMask;
   public
     constructor Create(ARenderer: PSdlRenderer);
@@ -167,15 +200,25 @@ type
     FArt: TRamArt;
     FRam: TRam;
     FHull: THull;
+    FExhausts: array [0..1] of TSmoke;
+    FExhaustDriving: Boolean;
+    FArrivals: Integer;
+    procedure TickExhausts;
     procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
       ASway: Single);
     procedure DrawLamps(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
+    procedure DrawEye(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
+    procedure DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+      AAlpha: Single);
   public
     // Both belong to the caller and must outlive the painter
     constructor Create(AArt: TRamArt; ARam: TRam);
     destructor Destroy; override;
-    // After the Ram's tick: the wheels roll, the eye follows
+    // After the Ram's tick: the wheels roll, the exhausts smoke
     procedure Tick;
+    // The exhausts' smoke, before the body: the machine backs into it
+    procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
     // The shield
@@ -186,7 +229,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math, Render.Glow, Game.Space;
+  System.SysUtils, System.Math, Render.Glow, Levels.Tint, Game.Space;
 
 resourcestring
   SRamArtFailed = 'Cannot read the Ram''s body off "%s": %s';
@@ -213,11 +256,12 @@ const
   LockRestTicks = 33;
   EntranceStopJolt = 0.25;
 
-  // The fight: a mark anywhere the hull fits a little off the walls, a leg
-  // of a cell and a half at least, a rest of 1.5 to 3 s between legs
+  // The fight: a mark anywhere the hull fits between the walls, a leg of a
+  // cell and a half at least, a rest of 1.5 to 3 s between legs; now and
+  // then a leg to the far wall
   PatrolSpeed = 1.4;
-  PatrolMargin = 8;
   PatrolMinLeg = 48;
+  WallLegShare = 1 / 3;
   PatrolRestMinTicks = 50;
   PatrolRestMaxTicks = 100;
   PatrolStopJolt = 0.12;
@@ -244,6 +288,8 @@ const
   HunterSocketY = 18.7;
   HunterSleeveX = 1.9;
   HunterSleeveY = 7.1;
+  HunterLensX = 17.1;
+  HunterLensY = 8.8;
   BarrelWidth = 33.3;
   BarrelHeight = 9.3;
   BarrelPivotX = 30.9;
@@ -264,7 +310,43 @@ const
     (X: 160.9; Y: 51.2));
   LampSize = 8.0;
   LampColor: TRgb = (R: 255; G: 48; B: 32);
-  LampGlowSide = 64;
+  GlowSide = 64;
+
+  // The eye, lit: a slow breath between two dim levels; a warning is a
+  // fast blink between a flash and next to nothing. Its size grows with
+  // the square of the level, so the breath barely swells it.
+  EyeBreathLow = 0.3;
+  EyeBreathHigh = 0.55;
+  EyeBreathTicks = 83;
+  EyeBlinkLow = 0.1;
+  EyeBlinkTicks = 3; // each half of a blink
+  EyeRestSize = 4.0;
+  EyeFlashSize = 9.0;
+  EyeColor: TRgb = (R: 255; G: 36; B: 20);
+
+  // The lens of the head, armed: a wink a second over a faint ember. Pale,
+  // not red: red on this machine is a warning, and a light that burns red
+  // all the time would teach the player to ignore it.
+  LensPeriodTicks = 33;
+  LensWinkTicks = 4;
+  LensEmber = 0.15;
+  LensEmberSize = 2.5;
+  LensWinkSize = 7.0;
+  LensColor: TRgb = (R: 220; G: 236; B: 255);
+
+  // The exhausts: where the jet leaves the mouths of the two pipes on the
+  // stern. It flies back on its own speed and does not rise - no air to
+  // lift it - and comes in puffs at the rate the rumble throbs.
+  ExhaustPoints: array [0..1] of THullPoint = ((X: 167.3; Y: 14.9),
+    (X: 167.3; Y: 28.5));
+  ExhaustSmoke: TSmokeLook = (Rate: 30; Life: 1.3; Size: 3; EndSize: 20;
+    Opacity: 0.55; Angle: 8; Cone: 24; Speed: 34; Drag: 0.6; Lift: 0;
+    Wind: 0; Turbulence: 3; Spin: 40; Flow: sfPuffs; Frequency: 4;
+    Heat: 0; EndTint: (R: 46; G: 46; B: 50));
+  ExhaustTint: TColorTint = (R: 62; G: 62; B: 64);
+  ExhaustIdle = 0.3;
+  ExhaustRampTicks = 8;
+  ExhaustSeeds: array [0..1] of Cardinal = ($45786831, $45786832); // "Exh1"
 
   // Read off the art: a unit of the grid is solid where the art is this
   // opaque at its middle
@@ -333,7 +415,14 @@ begin
   FLastLamps := 0;
   FLampHold := 0;
   FEyeLit := False;
+  FEye := 0;
+  FLastEye := 0;
+  FBreathTicks := 0;
+  FArmed := False;
+  FLens := 0;
+  FLastLens := 0;
   FHeroInFront := False;
+  FHeroThrown := False;
 end;
 
 function TRam.Start(const AOrders: TRamOrders): Boolean;
@@ -341,6 +430,7 @@ begin
   FOrders := AOrders;
   Result := not FEntered;
   FEntered := True;
+  Inc(FArrivals);
   FShield.Rise;
   if Result then
   begin
@@ -362,7 +452,11 @@ begin
   FPhase := rpAbsent;
   FSpeed := 0;
   FEyeLit := False;
+  FEye := 0;
+  FArmed := False;
+  FLens := 0;
   FHeroInFront := False;
+  FHeroThrown := False;
 end;
 
 procedure TRam.Reset;
@@ -391,17 +485,26 @@ begin
   FPhaseTicks := ATicks;
 end;
 
-// Somewhere the hull fits a little off the walls, far enough to be a leg
+// The far wall now and then, so no floor by a wall is safe from it; else
+// somewhere the hull fits, far enough to be a leg
 procedure TRam.BeginPatrolLeg;
 const
   Tries = 8;
 begin
-  var Lowest: Single := PatrolMargin;
-  var Highest: Single := ScreenWidth - RamWidth - PatrolMargin;
+  var Highest: Single := ScreenWidth - RamWidth;
+  if FDice.NextUnit < WallLegShare then
+  begin
+    var Wall: Single := 0;
+    if FX < Highest / 2 then
+      Wall := Highest;
+    BeginDrive(Wall, PatrolSpeed, False);
+    Exit;
+  end;
+
   var Target := FX;
   for var i := 1 to Tries do
   begin
-    Target := Lerp(Lowest, Highest, FDice.NextUnit);
+    Target := Highest * FDice.NextUnit;
     if Abs(Target - FX) >= PatrolMinLeg then
       Break;
   end;
@@ -419,10 +522,14 @@ begin
   FLastMast := FMast;
   FLastSway := FSway;
   FLastLamps := FLamps;
+  FLastEye := FEye;
+  FLastLens := FLens;
   FAccel := 0;
   TickPhase;
   TickSway;
   TickLamps;
+  TickEye;
+  TickLens;
   FShield.Tick;
   Result := FCue;
 end;
@@ -459,6 +566,8 @@ begin
         if Share >= 1 then
         begin
           FCue.Locked := True;
+          FArmed := True;
+          FArmedTicks := 0;
           BeginRest(LockRestTicks);
         end;
       end;
@@ -533,6 +642,39 @@ begin
     FLamps := Max(0, FLamps - LampFade);
 end;
 
+// Lit, it breathes; while a head rises it blinks - the warning
+procedure TRam.TickEye;
+begin
+  if not FEyeLit then
+    FEye := 0
+  else if FPhase = rpRising then
+  begin
+    FEye := EyeBlinkLow;
+    if (FPhaseTicks div EyeBlinkTicks) mod 2 = 0 then
+      FEye := 1;
+  end
+  else
+  begin
+    var Breath: Single := 0.5 - 0.5 * Cos(2 * Pi * FBreathTicks / EyeBreathTicks);
+    FEye := Lerp(EyeBreathLow, EyeBreathHigh, Breath);
+    Inc(FBreathTicks);
+  end;
+end;
+
+// The first wink comes the tick the head locks
+procedure TRam.TickLens;
+begin
+  if not FArmed then
+  begin
+    FLens := 0;
+    Exit;
+  end;
+  FLens := LensEmber;
+  if FArmedTicks mod LensPeriodTicks < LensWinkTicks then
+    FLens := 1;
+  Inc(FArmedTicks);
+end;
+
 function TRam.Overlaps(const ABox: TSdlFRect): Boolean;
 begin
   var FirstCol := Floor(ABox.X - FX);
@@ -546,10 +688,50 @@ begin
   Result := False;
 end;
 
+// The columns of the body that the rows of ABox meet, the whole width of
+// the hull; False when the box is above or below it
+function TRam.SpanAcross(const ABox: TSdlFRect; out AFirst,
+  ALast: Integer): Boolean;
+begin
+  AFirst := FBody.Width;
+  ALast := -1;
+  var FirstRow := Max(Floor(ABox.Y - RamTop), 0);
+  var LastRow := Min(Ceil(ABox.Y + ABox.H - RamTop) - 1, FBody.Height - 1);
+  for var Row := FirstRow to LastRow do
+    for var Col := 0 to FBody.Width - 1 do
+      if FBody.At(Col, Row) then
+      begin
+        AFirst := Min(AFirst, Col);
+        ALast := Max(ALast, Col);
+      end;
+  Result := ALast >= 0;
+end;
+
+// Away from the middle - but straight up when that side leaves less room
+// to the wall than his body needs: a throw into the wall would land him
+// in the hull again, and again, while it stands there
+function TRam.ThrowSide(const AHeroBody: TSdlFRect): Integer;
+begin
+  Result := 1;
+  if AHeroBody.X + AHeroBody.W / 2 < FX + RamWidth / 2 then
+    Result := -1;
+  var First, Last: Integer;
+  if not SpanAcross(AHeroBody, First, Last) then
+    Exit;
+  var Room: Single := FX + First;
+  if Result > 0 then
+    Room := ScreenWidth - (FX + Last + 1);
+  if Room < AHeroBody.W then
+    Result := 0;
+end;
+
 function TRam.Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
   out AAway: Integer): Boolean;
 begin
   AAway := 0;
+  if FHeroThrown and AInAir then
+    Exit(False);
+  FHeroThrown := False;
   if not Present or not Overlaps(AHeroBody) then
   begin
     FHeroInFront := False;
@@ -564,9 +746,8 @@ begin
     Exit(False);
 
   FHeroInFront := False;
-  AAway := 1;
-  if AHeroBody.X + AHeroBody.W / 2 < FX + RamWidth / 2 then
-    AAway := -1;
+  FHeroThrown := True;
+  AAway := ThrowSide(AHeroBody);
   Result := True;
 end;
 
@@ -610,6 +791,16 @@ end;
 function TRam.LampsAt(AAlpha: Single): Single;
 begin
   Result := Lerp(FLastLamps, FLamps, AAlpha);
+end;
+
+function TRam.EyeAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastEye, FEye, AAlpha);
+end;
+
+function TRam.LensAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastLens, FLens, AAlpha);
 end;
 
 function TRam.Rolled: Single;
@@ -701,15 +892,15 @@ begin
   FHunterBarrel := FCache.Get('hunterBarrel');
   FHullArt := THullArt.Create(ARenderer, RamHullDef);
   FShield := TShieldArt.Create(ARenderer);
-  FLampGlow := CreateGlowShape(ARenderer, gsPoint, LampGlowSide);
+  FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
   FBody := ReadBody(FSpriteSet);
 end;
 
 // The cache before the set: it reads from the set, never the reverse
 destructor TRamArt.Destroy;
 begin
-  if Assigned(FLampGlow) then
-    SDL_DestroyTexture(FLampGlow);
+  if Assigned(FGlow) then
+    SDL_DestroyTexture(FGlow);
   FShield.Free;
   FHullArt.Free;
   FCache.Free;
@@ -726,23 +917,58 @@ begin
   inherited Create;
   FArt := AArt;
   FRam := ARam;
+  // The hull's own eye stays dark: the Ram lights its eye itself, and
+  // the hull's fades too slowly for a blink to read
   FHull := THull.Create(RamHullDef, AArt.FHullArt);
   FHull.Doze;
+  var Placement := Default(TDynamicPlacement);
+  Placement.Tint := ExhaustTint;
+  for var i := Low(FExhausts) to High(FExhausts) do
+    FExhausts[i] := TSmoke.CreateLook(Placement, ExhaustSmoke, ExhaustIdle,
+      ExhaustSeeds[i]);
 end;
 
 destructor TRamPainter.Destroy;
 begin
+  for var Exhaust in FExhausts do
+    Exhaust.Free;
   FHull.Free;
   inherited;
 end;
 
 procedure TRamPainter.Tick;
 begin
-  if FRam.EyeLit then
-    FHull.Awake := True
-  else
-    FHull.Doze;
   FHull.Tick(0, 0, FRam.Rolled);
+  TickExhausts;
+end;
+
+// A machine come anew left nothing in the air; one that drives smokes
+// hard
+procedure TRamPainter.TickExhausts;
+begin
+  if FRam.Arrivals <> FArrivals then
+  begin
+    FArrivals := FRam.Arrivals;
+    FExhaustDriving := False;
+    for var Exhaust in FExhausts do
+      Exhaust.Rewind;
+  end;
+  if not FRam.Present then
+    Exit;
+
+  var Driving := FRam.Phase = rpDriving;
+  if Driving <> FExhaustDriving then
+  begin
+    FExhaustDriving := Driving;
+    var Level: Single := ExhaustIdle;
+    if Driving then
+      Level := 1;
+    for var Exhaust in FExhausts do
+      Exhaust.FadeTo(Level, ExhaustRampTicks);
+  end;
+  for var i := Low(FExhausts) to High(FExhausts) do
+    FExhausts[i].Tick(FRam.Left + ExhaustPoints[i].X,
+      RamTop + ExhaustPoints[i].Y, True);
 end;
 
 // APoint turned ADegrees clockwise about APivot, on the screen
@@ -761,6 +987,18 @@ begin
   Result.Y := AY;
 end;
 
+// The middle of the well, which the mast turns about with the sway
+function MastPivot(ALeft: Single): TSdlFPoint;
+begin
+  Result := UnitPoint(ALeft + WellX, RamTop + WellY);
+end;
+
+// The top-left corner of the head, upright, its socket on the top collar
+function HeadCorner(const APivot: TSdlFPoint; AMast: Single): TSdlFPoint;
+begin
+  Result := UnitPoint(APivot.X - HunterSocketX, APivot.Y - AMast - HunterSocketY);
+end;
+
 // The sections back to front - the narrowest rides out of the wider ones
 // - each top raised by its share of the mast's rise; the head on the top
 // collar, the barrel over the head on its sleeve. All of it turned with
@@ -768,7 +1006,7 @@ end;
 procedure TRamPainter.DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
   ASway: Single);
 begin
-  var Pivot := UnitPoint(ALeft + WellX, RamTop + WellY);
+  var Pivot := MastPivot(ALeft);
   var Rise := AMast - MastRest;
   for var Section := High(FArt.FMasts) downto Low(FArt.FMasts) do
   begin
@@ -778,14 +1016,13 @@ begin
       MastWidths[Section], MastLengths[Section], 1, False, ASway);
   end;
 
-  var HeadLeft := Pivot.X - HunterSocketX;
-  var HeadTop := Pivot.Y - MastRest - Rise - HunterSocketY;
-  var Head := UnitPoint(HeadLeft + HunterWidth / 2, HeadTop + HunterHeight / 2);
+  var Corner := HeadCorner(Pivot, AMast);
+  var Head := UnitPoint(Corner.X + HunterWidth / 2, Corner.Y + HunterHeight / 2);
   ASprites.DrawSized(FArt.FHunter, Turned(Head, Pivot, ASway), HunterWidth,
     HunterHeight, 1, False, ASway);
   var Barrel := UnitPoint(
-    HeadLeft + HunterSleeveX - BarrelPivotX + BarrelWidth / 2,
-    HeadTop + HunterSleeveY - BarrelPivotY + BarrelHeight / 2);
+    Corner.X + HunterSleeveX - BarrelPivotX + BarrelWidth / 2,
+    Corner.Y + HunterSleeveY - BarrelPivotY + BarrelHeight / 2);
   ASprites.DrawSized(FArt.FHunterBarrel, Turned(Barrel, Pivot, ASway),
     BarrelWidth, BarrelHeight, 1, False, ASway);
 end;
@@ -797,15 +1034,42 @@ begin
   if Level <= 0 then
     Exit;
   for var Lamp in LampPoints do
-    DrawGlow(FArt.FRenderer, FArt.FLampGlow,
+    DrawGlow(FArt.FRenderer, FArt.FGlow,
       ALeft + Lamp.X + ASprites.Origin.X, RamTop + Lamp.Y + ASprites.Origin.Y,
       LampSize, LampColor, Level);
 end;
 
+procedure TRamPainter.DrawEye(const ASprites: TSpriteRenderer;
+  ALeft, AAlpha: Single);
+begin
+  var Level := FRam.EyeAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  DrawGlow(FArt.FRenderer, FArt.FGlow, ALeft + EyePoint.X + ASprites.Origin.X,
+    RamTop + EyePoint.Y + ASprites.Origin.Y,
+    Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)), EyeColor, Level);
+end;
+
+// On the head, turned with the sway as the head is
+procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast,
+  ASway, AAlpha: Single);
+begin
+  var Level := FRam.LensAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  var Pivot := MastPivot(ALeft);
+  var Corner := HeadCorner(Pivot, AMast);
+  var Lens := Turned(UnitPoint(Corner.X + HunterLensX, Corner.Y + HunterLensY),
+    Pivot, ASway);
+  DrawGlow(FArt.FRenderer, FArt.FGlow, Lens.X + ASprites.Origin.X,
+    Lens.Y + ASprites.Origin.Y, Lerp(LensEmberSize, LensWinkSize, Level),
+    LensColor, Level);
+end;
+
 // Back to front: the dark of the well, the arches and the wheels, the
 // mast as far as it stays in the hull, the hull with its eye, and what of
-// the mast and the head stands over the middle line of the well once more,
-// over the hull
+// the mast and the head - and the lens - stands over the middle line of
+// the well once more, over the hull
 procedure TRamPainter.DrawBody(const ASprites: TSpriteRenderer;
   AAlpha: Single);
 begin
@@ -824,10 +1088,22 @@ begin
   DrawMast(ASprites, Left, Mast, Sway);
   ASprites.ClearClip;
   FHull.DrawBody(ASprites, Stand, AAlpha);
+  DrawEye(ASprites, Left, AAlpha);
   ASprites.ClipAbove(RamTop + WellY);
   DrawMast(ASprites, Left, Mast, Sway);
+  DrawLens(ASprites, Left, Mast, Sway, AAlpha);
   ASprites.ClearClip;
   DrawLamps(ASprites, Left, AAlpha);
+end;
+
+procedure TRamPainter.DrawSmoke(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  if not FRam.Present then
+    Exit;
+  for var Exhaust in FExhausts do
+    Exhaust.Draw(ACanvas, Exhaust.Origin.X + AOrigin.X,
+      Exhaust.Origin.Y + AOrigin.Y, AAlpha);
 end;
 
 procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;

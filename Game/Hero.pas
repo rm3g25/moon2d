@@ -210,8 +210,9 @@ type
     // Pushed off the edge of a deck, he falls.
     procedure ShoveX(ADeltaX: Integer);
     // Thrown off a machine he touched: up and to the side of ASide (below 0
-    // to the left), as a jump, the controls out of his hands for a moment.
-    // Nothing for the dead, nor for one still flying from the last throw.
+    // to the left, 0 straight up), as a jump, the controls out of his hands
+    // for a moment. Nothing for the dead, nor for one still flying from the
+    // last throw.
     procedure Throw(ASide: Integer);
     // On his way up or down
     function InAir: Boolean;
@@ -562,11 +563,13 @@ begin
   if FDead or (FThrownTicks > 0) then
     Exit;
   FPending := psNone;
-  FDirection := ASide > 0;
-  if FDirection then
+  FAction := haJump;
+  if ASide > 0 then
     FAction := haJumpRight
-  else
+  else if ASide < 0 then
     FAction := haJumpLeft;
+  if ASide <> 0 then
+    FDirection := ASide > 0;
   FAcceleration := ThrowBoost;
   FThrownTicks := ThrowLockTicks;
 end;

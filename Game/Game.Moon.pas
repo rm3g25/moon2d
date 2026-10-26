@@ -3178,6 +3178,7 @@ begin
         // ship over a shaking floor would float
         FObjects.Draw(FHero.Screen);
         // On the road, behind the pads: it drives behind them
+        FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawBody(FSprites, AAlpha);
         // The pads in the depth with what hangs on them, then the pads
         // in front, which pass before both
