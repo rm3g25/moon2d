@@ -24,8 +24,9 @@ the moon stone at `v3.0.67`, the fall of the rocks at `v3.0.69` and the
 charge of the stone at `v3.0.70` and the free fall of the rocks with
 the checkpoint on the stone at `v3.0.71`, then for `TMoonGame` moving
 out of `Moon2D.dpr` into `Game.Moon` after `v3.0.73` and the hero's orbs
-moving out of it into `Game.HeroOrbs` (`v3.0.72` and
-`v3.0.73` themselves are not caught up yet), with
+moving out of it into `Game.HeroOrbs` (`v3.0.72` to
+`v3.0.74` themselves are not caught up yet), then for the Ram at
+`v3.0.75`, with
 the lightning of `v3.0.34` caught up (the folder layout came between 3.0.8 and 3.0.9) and checked against the code section by section at
 `v3.0.19`. Where the map and the code disagree, the code is right.
 
@@ -53,7 +54,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   2: the rules of the trial (`Game.Trial`), the violet light its bodies
   come down in (`Game.Arrivals`), the TeK wall cannons (`Game.Cannons`)
   and the shield they wear (`Game.Shield`), the press of the finale
-  (`Game.Press`). `Game/Events/`
+  (`Game.Press`); and TeK-R13, the Ram of level 2's boss arena
+  (`Game.Ram`, 3.0.75). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
   (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
@@ -169,6 +171,10 @@ canvas of `Levels.Dynamics`, drawn through `Render.Glow`) ->
 `Game.Cannons` (the wall cannons: over `Game.Shield`, `Levels.Events`
 for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Render.Brush`, `Game.Space` and the canvas of `Levels.Dynamics`) /
+`Game.Ram` (the Ram: over `Game.Shield`, `Monsters.Hull` and
+`Monsters.Defs` for its hull, `Levels.Events` for its orders,
+`Sprites.Sets` and `Render.Sprites` for its art, `Render.Brush`,
+`Game.Space` and the canvas of `Levels.Dynamics`) /
 `Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Game.HeroOrbs` (the hero's orbs: over
@@ -226,6 +232,8 @@ declarations against `SDL2.dll`.
 - **Helpers**: `SdlText(string)->UTF8String`, `SdlErrorText`.
 - Touch this file when: a new SDL function is needed, event handling, ABI
   questions.
+- 3.0.75: `SDL_RenderSetClipRect` - the clip of the drawing, in logical
+  units as a copy's destination; nil lets it land anywhere again.
 
 ### `Core/Sprites.Sets.pas` (~445 lines)
 The `.mset` sprite set container: a JSON manifest followed by every image
@@ -327,6 +335,12 @@ Texture cache + low-level sprite drawing. Owns the unit-size constants.
   by default) - a gun bigger than the 2008 frames, the Duplet's 48. 3.0.67:
   `DrawSized` turns the rectangle `AAngleDegrees` clockwise round its
   middle - a picture that turns, the moon stone.
+- 3.0.75: `ClipAbove(y)` - every draw from then on lands only above the
+  line `y` units down, shifted by `Origin` as the draws are (the logical
+  width is kept from the constructor, `FWidth`, and the clip reaches a
+  width past either side for a shake); `ClearClip` lets them land anywhere
+  again. Whole units: the renderer clips no finer. The Ram's mast is drawn
+  through it.
 
 ### `Core/Sdl2.Image.pas` (~70 lines)
 SDL2_image bindings, delayed imports in the shape of `Audio.pas`.
@@ -536,6 +550,15 @@ the sound bank.
   the track the restart has just started. `PlayMusic` and `StopMusic`
   drop a track that waits: a restart, the boss's rage, the menu cut
   through a fade.
+- 3.0.75: `PlayLooped(file)` - a held sound over and over until it is
+  stopped (`PlayChunkHeld` takes `ALooped`: the loops of
+  `Mix_PlayChannelTimed` -1); the Ram's rumble. `Plays(file)` - that track
+  is the music that plays, a fade included, and none waits to follow it.
+  `FadeOutMusic(seconds)` - the music fades out to silence and nothing
+  follows: a waiting track is dropped, and the fading one is no longer the
+  one that plays (`FMusicName` emptied), so asked for again it waits for
+  the silence and starts over. The game's restart asks `Plays` before it
+  plays its track: a death no longer starts the track that plays over.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -1554,6 +1577,10 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   and a branch in the director's `ConditionHolds`; an action the same with
   `EventActionIds` and `Play`, and a cue of `TDirectorCues` when the game
   has to carry it out.
+- 3.0.75: the action `ram` (`eaRam`, `ReadRam`): `TRamOrders` - `Stop`
+  (JSON `"stop"`, units, the tip of the ram after the drive-in, on the
+  screen, `SEventBadRamStop`), `Track` (`"file"`, `SEventNoRamTrack`),
+  `SilenceSeconds` (`"fadeOut"`).
 
 ### `Core/Levels.Scenes.pas` (~565 lines)
 The `scenes` section of level JSON (3.0.62): model and parser, no game
@@ -2952,6 +2979,14 @@ moves in comes from `Game.Space`.
   `held`, its own cache with alpha and linear filtering
   (`FDupletCache`, `FDupletSet`, `FDupletHeld`), drawn `DupletHeldSide`
   (48) square by `DrawRotated`.
+- 3.0.75: `Throw(side)` - thrown off a machine he touched: a jump to the
+  side (`haJumpLeft` / `haJumpRight`) at `ThrowBoost` 7, about 75 units up,
+  with the controls out of his hands for `ThrowLockTicks` 14
+  (`FThrownTicks`; `Command` ignores everything meanwhile - the
+  `hcStopJump` the game sends every tick would cut the rise short); nothing
+  for the dead or for one still flying from the last throw; `Kill` and
+  `Revive` drop it. `InAir` - in a jump or a fall (the game's
+  `HeroStandsIn` asks it).
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -3038,6 +3073,11 @@ every monster does.
   screen, mirrored across the hull with the stand: the eye, the axles, and
   for the monster the
   smoke, the sparks and the short of a wreck.
+- 3.0.75: `Draw` is `DrawUnder` (the chassis and the wheels; nothing
+  without wheels) then `DrawBody` (the hull, the worn copy, the eye): a
+  machine that puts something between its wheels and its body - the
+  Ram's mast - draws the two in turn. `Opaque` is a constant of the
+  unit.
 
 ### `Game/Monsters.Pilot.pas` (~1075 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
@@ -4672,6 +4712,15 @@ addition.
   looked for every `EntryStep` unit; False outside it or when it is not
   up; `Tick`, `Draw(canvas, art, center, alpha)`, `State`. Points are
   from the machine's middle.
+- 3.0.75: **a shield over a body** - `TShieldMask` (a grid of units row
+  by row from the top-left corner, `Solid`, `Middle`, `At` - False off the
+  grid) and `CreateOver(body)`: the body two units wider on every side but
+  the floor (`Widen`, `BodyMargin`), its depth under the outline by a
+  chamfer of two passes (`DepthsOf`; off the grid is open to the sides and
+  above, solid below - no rim along the floor), the honeycomb kept over it
+  with the rim share `1 - depth / RimDepth` (28 units - about a cannon's
+  rim across) (`LayCellsOverBody`); `Holds` asks the grid. The cannons'
+  ellipse is unchanged.
 
 ### `Game/Game.Cannons.pas` (~900 lines)
 The two TeK cannons of the gravel arena (3.0.56, act 3): guns clamped to
@@ -4732,6 +4781,65 @@ and the blast. A 2026 addition.
   `DrawLight(canvas, origin, alpha)` (rounds, muzzles, lens, shields);
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
+
+### `Game/Game.Ram.pas` (~845 lines, 3.0.75)
+TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
+stage 8b): a hull on two wheels that faces left for good and drives back
+and forth, a mast of three sections in a well on its roof with the hunter
+on top, an eye, brake lamps, the TeK shield over its body. A unit of the
+game as the cannons are, not a monster. The game carries out the cue.
+- **`TRamCue`** (record) - `Rumble` (the engine starts: the loop),
+  `Hiss` (stopped: the loop cuts to the brake), `Whine` (the mast starts
+  up), `Locked` (the head locked: the boss track), `Jolt` (trauma shares).
+- **`TRamPhase`** = (`rpAbsent`, `rpWaiting` - the music fades, the
+  machine not on the screen yet, `rpDriving`, `rpBreathing` - at the
+  entrance's mark, the eye dark, `rpRising`, `rpResting`).
+- **`TRam`** - `Create(body, seed)` (the body - `TRamArt.Body` - and the
+  shield `CreateOver` it); `Start(orders)` - True for the whole entrance
+  (the first on the level, `FEntered`): `rpWaiting` for the fade-out
+  seconds and `SilenceBeatTicks` 16, then the drive from `EnterFromX`
+  (40 beyond the right edge) already at `EnterSpeed` 2.8 to the stop;
+  False after that: placed at the stop, `rpBreathing`. `Clear` (a door, a
+  death), `Reset` (a new level: the entrance not seen). `Tick` - the
+  phase, the sway, the lamps, the shield. The drive (`TickDrive`): up to
+  speed and down by `Brake` 0.2 a tick, the brake beginning where the way
+  left is what the speed needs to die out, never below `CreepSpeed`, the
+  arrival on the mark exactly (`Arrive`: the hiss, the lamps held
+  `LampHoldTicks`, a jolt - `EntranceStopJolt` 0.25 or `PatrolStopJolt`
+  0.12; the entrance breathes `BreathTicks` 16, a leg rests 50-100
+  ticks). The breath over, the eye lights and the mast rises over
+  `RiseTicks` 50 (smoothstep) from `MastRest` -20 to `HunterMast` 48:
+  `Locked`, a rest of `LockRestTicks` 33, then the legs
+  (`BeginPatrolLeg`: a mark `PatrolMargin` 8 off the walls, `PatrolMinLeg`
+  48 at least, at `PatrolSpeed` 1.4; its own `TXorShift`). The sway
+  (`TickSway`): a spring toward a slow sway of its own (`IdleSway` 0.6
+  degrees over `IdleSwayTicks` 150) that the change of the speed kicks
+  (`SwayInertia`), held to `SwayMax` 8. `Block(from, to, at)` - a bullet's
+  stretch against the shield, which flares there. `Contact(body, onDeck,
+  inAir, away)` - the hero's body against the body (`Overlaps`); a hero on
+  a deck is in front of it (`FHeroInFront`) and stays so in the air while
+  over it; `away` - the side away from its middle. `Present` (seen and
+  touched: not absent, not waiting), `LeftAt`, `MastAt`, `SwayAt`,
+  `LampsAt` (between two ticks), `Rolled`, `Body`, `Shield`, `Phase`,
+  `EyeLit`, `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
+  `RamFloorY` 352 (the road), `RamTop`.
+- **`TRamArt`** - the set `tek-machine` through a cache of its own (no
+  color key, linear): `well`, `mast1`..`mast3`, `hunter`,
+  `hunterBarrel`; a `THullArt` for the hull, its worn copy, the chassis and
+  the wheel (`RamHullDef`: eye 22.2, 54.8, axles 61.1 and 133.2 at 107.5,
+  radius 20.5); the shield's `TShieldArt`; the lamps' glow. `Body` - read
+  off the art at load (`ReadBody`): a unit solid where `hull` or `chassis`
+  is half opaque at its middle, or inside a wheel.
+- **`TRamPainter`** - `Create(art, ram)` (a `THull` of its own, dozing);
+  `Tick` after the Ram's (the eye awake while lit, else dark at once; the
+  wheels roll by `Rolled`); `DrawBody(sprites, alpha)` - the well, the
+  hull's `DrawUnder`, the mast clipped above `MastHiddenBelow` 90 of the
+  hull (lower, it would show through the open front arch), the hull's
+  `DrawBody`, the mast again clipped above the well line, the brake lamps;
+  `DrawMast` - the sections narrowest first, each top raised by its share
+  of the rise, the head's socket on the top collar, the barrel on its
+  sleeve, all turned with the sway about the middle of the well (`Turned`);
+  `DrawLight(canvas, origin, alpha)` - the shield.
 
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
@@ -4803,6 +4911,8 @@ of being kept: asked for the conditions, told the tactics.
   and the dynamic objects their intensity actions turned are rewound
   (`RewindTargets` -> `RewindTagged`) - the boss stops smoking again.
 - Reborn with the level (`LoadLevel`), like the ceremony and the HUD.
+- 3.0.75: the cue `Ram` (`TRamStartCue`, the orders of the `ram`
+  action; the game's `StartRam`).
 
 ### `Game/Scenes/Scenes.Director.pas` (~650 lines)
 Plays the level's scenes (`Levels.Scenes`) against the live game, one at
@@ -5663,6 +5773,23 @@ so a unit (and later a test) can reach it. `interface` holds
   honest screen units) and `BoxHolds` (whether a box holds a point),
   `SaveTargetAsPng` (under DEBUGKEYS: the current
   render target into a PNG through `IMG_SavePNG`), `RollDiceSeed`.
+- 3.0.75, **the Ram**: `FRamArt`, `FRam`, `FRamPainter` (made with the
+  game, freed after the cannons), `FRamRumble` (the held loop). `StartRam`
+  (the cue of the `ram` action) - the whole entrance clears `FCurrentMusic`
+  and fades the music out to silence. `TickRam` (with the cannons, not
+  while the world stands): the Ram's tick and its painter's, the rumble
+  started over (`PlayLooped`) and cut by the hiss (`StopRamRumble`), the
+  whine, the jolt, and on `Locked` the track - `ChangeMusic` unless it
+  already plays. `ResolveRamContact` after the cannons': a touch wounds as
+  a monster does, under the mercy, and throws (`THero.Throw`); the hero
+  is on a deck when he stands on one. `BulletStruckRam` beside
+  `BulletStruckCannon`. Drawn after the static objects and before the
+  pads (`DrawBody`), its shield with the cannons' light (`DrawLight`).
+  `LoadLevel` resets it, `ArriveOnScreen` and `RestartLevel` clear it,
+  stopping the rumble; the menu pauses and resumes the rumble;
+  `DebugJumpToWork` resets it, so the End key sees the whole entrance.
+  `RestartLevel` plays its track only when `Plays` says it does not play
+  already. `HeroStandsIn` asks `THero.InAir`.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -5865,6 +5992,14 @@ The Duplet's shot (the 2008 shotgun slowed, doubled, over a sliding
 thump); the moon stone's waking drone and its power-down with the rocks'
 far blow - built as the cordon's hum is. Need numpy and `armor.py`.
 
+### `tools/sounds/ram.py` (3.0.75)
+The Ram's three sounds: `ramrumble.wav` - a 2 s loop with no seam (every
+period a whole number of times in it, its noise shaped round the loop in
+the frequency domain): the engine at 31 Hz, a 4 Hz throb, the cleats 13
+times a second, the road; `ramhiss.wav` - the brake's clunk and the air;
+`ramwhine.wav` - the pump of the mast climbing for 1.5 s and the clank of
+the lock. Needs numpy, scipy and `armor.py`.
+
 ### `tools/cannon/build_cannon.py`
 Builds `bin/sprites/tek-cannon.mset`, the art of the TeK wall cannon of the
 gravel arena (`Game.Cannons`), from one generated picture - the cannon
@@ -5931,7 +6066,10 @@ entry below yet: `Tests.Rooms`, `Tests.Monsters`, `Tests.Monsters.Defs`,
 `Tests.Pads.Plunge`, `Tests.Pads.Shelf`, and the arena's new units
 `Tests.Game.Trial` (the trial's sky, wave and middle medkits; the finale
 and the sky events of the level), `Tests.Game.Press` and
-`Tests.Pads.Stray` are told in `docs/TESTING.md` alone.
+`Tests.Pads.Stray` are told in `docs/TESTING.md` alone. 3.0.75 - 16 in the
+new `Game/Tests.Game.Ram` (the entrance whole and from the stop, the legs,
+the contact and its pad rule, the shield, the shield over a body, the ram
+action, the Ram of level 2).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -6558,7 +6696,7 @@ Flat key->string dictionaries for UI and gameplay text (every `S*` key of
 menu vocabulary. Level and monster content is NOT here - it is localized in
 place in the level and monster JSONs via the base-field + `En`-sibling pattern.
 
-### `sounds/` (33 WAV, 1 OGG) and `music/` (OGG)
+### `sounds/` (36 WAV, 1 OGG) and `music/` (OGG)
 One-shots are preloaded at startup and fail loudly when a file is missing;
 music loads leniently. Four one-shots are synthesised by
 `tools/sounds/armor.py`: `armor1..3.wav` and `ricochet.wav`; a fifth,
@@ -6577,7 +6715,10 @@ in as the victory track ends; `win.ogg` is decoded whole and played as a
 held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 (`tools/sounds/duplet.py`, from the 2008 shotgun); 3.0.67:
 `stonewake.wav`, `stonefall.wav` (`tools/sounds/stonewake.py`,
-`stonefall.py` - the drone of the stone waking and powering down).
+`stonefall.py` - the drone of the stone waking and powering down);
+3.0.75: `ramrumble.wav`, `ramhiss.wav`, `ramwhine.wav`
+(`tools/sounds/ram.py`) and `boss3.ogg`, the track of the Ram's fight -
+twelve OGG files.
 
 ---
 
@@ -6587,7 +6728,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
 | The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| The boss arena of level 2 (screen 13): the boss track handed over after the tunnel music fades out, a restart into it, the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (music with fadeOut) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
+| The boss arena of level 2 (screen 13): the tunnel music faded to silence and the boss track on the Ram's lock (3.0.75; the hand-over of 3.0.74 before it), the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (the `ram` action with fadeOut and file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
 | A screen whose way on is shut until an event opens it, or sealed for good | `shutDoors` / `sealedDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | The Duplet: the double-barrel, its red shot, its recoil, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
@@ -6633,6 +6774,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 | The violet light of an arrival; the herald's | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
 | The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
+| The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye and the lamps, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |

@@ -439,3 +439,48 @@ Left to the eye: what the shelves do with a call (`TellPress`: a wake
 that holds, no mercy on the press) and the body that falls a row; whether
 `PressArrivalTicks` and `PressRewakeTicks` fit the fall of a betoner and
 a shelf's warning and slide - they are the game's, judged in a live run.
+
+## Game.Ram
+
+State: written, 16 tests (3.0.75). Needs no stage: `TRam` only counts -
+the drive, the mast, the contact, the shield. The unit is tried by
+`Tests\Game\Tests.Game.Ram.pas`, fixtures `TRamTests` (the Ram),
+`TBodyShieldTests` (the shield over a body, `Game.Shield`) and
+`TRamLevelTests` (the ram action and the Ram of level 2).
+
+Shared in the unit: the body is the hull's whole box solid (`SolidBody`),
+its middle in its middle; the orders stop the ram at 260 after a silence
+of 1 s. `TicksUntil` ticks the Ram until a cue of the kind asked comes,
+and gives that tick, counted from 1. `StandAtTheStop` sees the whole
+entrance and a death: the Ram stands at its mark. `OnTheRoad` is a hero's
+body 16 by 32 with his feet on the road. `RamEvents` parses a ram action of
+the test's own; one test loads `level2.json`.
+
+Numbers spelled, as decided: 33 ticks a second; about 3 s from the rumble
+to the stop; a breath of a second at most; about 1.5 s of the mast; the
+stop 260 and the track `boss3.ogg` of level 2. Not spelled: the speeds,
+the brake, the patrol's marks.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestWholeEntranceWaitsOutTheSilence` | the first `Start` is True and not `Present`; the rumble comes after the 33 ticks of the fade-out and before 66; the hull is beyond the right edge | the machine drives into the music, waits too long, or appears on the screen |
+| `TestDrivesInAndStopsAtItsMark` | the hiss after 2.5-4 s of drive; the left edge exactly at the stop; the eye dark | the ram stops short or past its mark, or the drive-in is too fast or slow |
+| `TestHeadLocksAfterTheBreath` | the whine within a second of the stop, the eye lit with it; the lock 1-2 s later, the mast a cell higher than at rest | the mast rises with no breath, the eye stays dark, the head never locks or never comes up |
+| `TestDeathReplaysFromTheStop` | after `Clear`, `Start` is False, `Present` at once at the stop; no rumble and no hiss before the lock | a death replays the whole drive-in |
+| `TestNewLevelSeesTheWholeEntranceAgain` | after `Reset`, `Start` is True | a new level or the End key gets the short entrance |
+| `TestAfterTheLockItDrivesLegsBetweenTheWalls` | six legs: each starts with the rumble, stays inside the screen every tick and goes a cell at least | the machine stands for good, drives through a wall, or twitches on the spot |
+| `TestTouchOnTheFloorWounds` | a hero on the road over the hull is touched, one clear of it not | the ram drives through the hero, or wounds from afar |
+| `TestHeroOnAPadIsOutOfItsWay` | on a deck over it - no touch; off it in the air - none; down on the road - a touch | a hero on a pad is crushed by a machine behind it, or the pad shields him on the floor too |
+| `TestFallOntoItWounds` | over the roof - none; dropped onto it in the air - a touch | the roof is a safe place to land |
+| `TestThrownAwayFromTheMiddle` | left of the middle - thrown left, right of it - right | the throw pulls the hero into the machine |
+| `TestShieldTakesABullet` | a bullet into the hull meets the shield within the margin before the outline; one over the machine flies on | bullets pass the hull, or the shield hangs in the air over it |
+| `TestAbsentMeetsNothing` | before a start, and while the music fades, no touch and no block | an unseen machine wounds or stops bullets |
+| `TestHoldsTheBodyAndAMarginPastIt` | a body 10 by 10: the middle, a unit and a half past the side and over the top are held; past the margin, and under its foot, not | the shield is no wider than the body, or reaches into the floor |
+| `TestRamIsRead` | a ram action: `eaRam`, its stop, track and fade-out | a member is read from another key |
+| `TestBadRamRaises` | each raises `ELevelEventError`: no stop, a stop off either edge, no track | a Ram with nowhere to stop or no track loads |
+| `TestLevelTwoArenaBringsTheRam` | `level2.json`: on screen 13 one ram action, on arrival, stop 260, `boss3.ogg`, and no music action | the arena's music is started by an event again, or the Ram is lost |
+
+Left to the eye: the picture - the mast between the hull's halves, the
+clips, the sway, the lamps, the honeycomb along the outline; the throw
+(`THero` needs a renderer); the sounds and the music handed over; the
+numbers of the entrance and the patrol.

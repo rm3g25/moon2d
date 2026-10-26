@@ -26,8 +26,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
 `v3.0.69`, по заряду камня на `v3.0.70` и по свободному падению камней с
 чекпойнтом у камня на `v3.0.71`, затем по переезду `TMoonGame` из
 `Moon2D.dpr` в `Game.Moon` после `v3.0.73` и орбов героя из него в
-`Game.HeroOrbs` (сами `v3.0.72` и `v3.0.73`
-ещё не догнаны), заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
+`Game.HeroOrbs` (сами `v3.0.72`-`v3.0.74`
+ещё не догнаны), затем по Тарану на `v3.0.75`, заодно догнана молния `v3.0.34` (раскладка по папкам случилась между 3.0.8 и 3.0.9) и на `v3.0.19` сверено с кодом посекционно.
 Где карта и код расходятся, прав код.
 
 ## Раскладка исходников
@@ -53,7 +53,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   орбы героя и заряд формы (`Game.HeroOrbs`), версия, а ещё арена грейвелов второго уровня: правила испытания
   (`Game.Trial`), фиолетовый свет, в котором спускаются её тела
   (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
-  (`Game.Shield`), пресс финала (`Game.Press`). `Game/Events/` исполняет
+  (`Game.Shield`), пресс финала (`Game.Press`); и TeK-R13, Таран арены
+  босса второго уровня (`Game.Ram`, 3.0.75). `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
@@ -169,6 +170,10 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Game.Cannons` (настенные пушки: над `Game.Shield`, `Levels.Events` ради
 их приказов, `Sprites.Sets` и `Render.Sprites` ради их арта,
 `Render.Brush`, `Game.Space` и канвой из `Levels.Dynamics`) /
+`Game.Ram` (Таран: над `Game.Shield`, `Monsters.Hull` и `Monsters.Defs`
+ради корпуса, `Levels.Events` ради приказов, `Sprites.Sets` и
+`Render.Sprites` ради арта, `Render.Brush`, `Game.Space` и канвой из
+`Levels.Dynamics`) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -227,6 +232,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 - **Хелперы**: `SdlText(string)->UTF8String`, `SdlErrorText`.
 - Лезть сюда, если: нужна новая функция SDL, вопросы по обработке событий или
   по ABI.
+- 3.0.75: `SDL_RenderSetClipRect` - клип рисования, в логических
+  единицах, как место копии; nil снова пускает рисование куда угодно.
 
 ### `Core/Sprites.Sets.pas` (~445 строк)
 Контейнер наборов спрайтов `.mset`: JSON-манифест, за ним все картинки подряд.
@@ -332,6 +339,12 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `SpriteSize`) - ружьё больше кадров 2008, у Дуплета 48. 3.0.67:
   `DrawSized` поворачивает прямоугольник на `AAngleDegrees` по часовой
   вокруг его середины - вращающаяся картинка, лунный камень.
+- 3.0.75: `ClipAbove(y)` - всё, что рисуется дальше, ложится только выше
+  линии в `y` единиц от верха, со сдвигом `Origin`, как сами рисунки
+  (логическая ширина запомнена из конструктора, `FWidth`, клип выходит на
+  ширину за каждый край - под тряску); `ClearClip` снова пускает куда
+  угодно. Целые единицы: рендер не клипует мельче. Через него рисуется
+  мачта Тарана.
 
 ### `Core/Sdl2.Image.pas` (~70 строк)
 Биндинги SDL2_image, delayed-импорты по образцу `Audio.pas`. `IMG_Load_RW`
@@ -546,6 +559,15 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   рестарта, не гасит трек, только что запущенный рестартом. `PlayMusic` и
   `StopMusic` сбрасывают ждущий трек: рестарт, ярость босса, меню режут
   затухание.
+- 3.0.75: `PlayLooped(file)` - удерживаемый звук по кругу, пока его не
+  остановят (`PlayChunkHeld` берёт `ALooped`: циклы `Mix_PlayChannelTimed`
+  -1); рокот Тарана. `Plays(file)` - этот трек и есть играющая музыка,
+  затухание включительно, и следом никто не ждёт. `FadeOutMusic(seconds)`
+  - музыка гаснет в тишину и ничего за ней: ждущий трек выброшен, а
+  гаснущий больше не считается играющим (`FMusicName` очищен), так что
+  попрошенный снова он дождётся тишины и начнётся с начала. Рестарт игры
+  спрашивает `Plays`, прежде чем играть свой трек: смерть больше не
+  начинает играющий трек сначала.
 
 ### `Game/Game.Version.pas` (~20 строк)
 Одна константа, `GameVersion` - единственное место, где игра знает свою
@@ -1568,6 +1590,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 - Расширение: условие - член перечисления, слово в `EventConditionIds` и
   ветка в `ConditionHolds` директора; действие - то же с `EventActionIds` и
   `Play`, плюс реплика в `TDirectorCues`, когда исполнять его должна игра.
+- 3.0.75: действие `ram` (`eaRam`, `ReadRam`): `TRamOrders` - `Stop`
+  (JSON `"stop"`, единицы, кончик тарана после въезда, на экране,
+  `SEventBadRamStop`), `Track` (`"file"`, `SEventNoRamTrack`),
+  `SilenceSeconds` (`"fadeOut"`).
 
 ### `Core/Levels.Scenes.pas` (~565 строк)
 Секция `scenes` JSON уровня (3.0.62): модель и парсер, без игровой
@@ -3003,6 +3029,13 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   спрайт `held`, свой кеш с альфой и линейной фильтрацией
   (`FDupletCache`, `FDupletSet`, `FDupletHeld`), рисуется квадратом
   `DupletHeldSide` (48) через `DrawRotated`.
+- 3.0.75: `Throw(side)` - брошен машиной, которой коснулся: прыжок вбок
+  (`haJumpLeft` / `haJumpRight`) с разгоном `ThrowBoost` 7, вверх около 75
+  единиц, управление отнято на `ThrowLockTicks` 14 (`FThrownTicks`;
+  `Command` в это время глух ко всему - `hcStopJump`, который игра шлёт
+  каждый тик, срезал бы взлёт); мёртвому и ещё летящему от прошлого
+  броска - ничего; `Kill` и `Revive` его сбрасывают. `InAir` - в прыжке
+  или падении (его спрашивает `HeroStandsIn` игры).
 
 ### `Game/Monsters.Disc.pas` (~250 строк)
 Монстр, нарисованный вращающимся диском из слоёв вместо кадров `alive`, -
@@ -3086,6 +3119,10 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   отражённая поперёк корпуса вместе со стойкой: глаз, оси, а для монстра -
   дым, искры и замыкание
   подбитой машины.
+- 3.0.75: `Draw` - это `DrawUnder` (арки и колёса; без колёс ничего), а
+  потом `DrawBody` (корпус, изношенная копия, глаз): машина, которая
+  кладёт что-то между колёсами и корпусом - мачту Тарана, - рисует их по
+  очереди сама. `Opaque` - константа юнита.
 
 ### `Game/Monsters.Damage.pas` (~65 строк)
 Окно потолка урона монстра (`TDamageCap`, JSON `stats.damageCap`): сколько
@@ -4667,6 +4704,14 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   через каждую `EntryStep` единицу; False вне его или когда он не поднят;
   `Tick`, `Draw(canvas, art, center, alpha)`, `State`. Точки - от
   середины машины.
+- 3.0.75: **щит по телу** - `TShieldMask` (сетка единиц построчно от
+  левого верхнего угла, `Solid`, `Middle`, `At` - вне сетки False) и
+  `CreateOver(body)`: тело шире на две единицы со всех сторон, кроме пола
+  (`Widen`, `BodyMargin`), глубина под контуром - фаской в два прохода
+  (`DepthsOf`; вне сетки открыто по бокам и сверху, снизу сплошь - обода
+  по полу нет), соты оставлены над ним с долей обода `1 - depth /
+  RimDepth` (28 единиц - примерно ширина обода пушки) (`LayCellsOverBody`);
+  `Holds` спрашивает сетку. Эллипс пушек не тронут.
 
 ### `Game/Game.Cannons.pas` (~900 строк)
 Две пушки TeK арены грейвелов (3.0.56, акт 3): пушки, прижатые к боковым
@@ -4727,6 +4772,63 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `DrawBodies(sprites, alpha)`, `DrawLight(canvas, origin, alpha)`
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
+
+### `Game/Game.Ram.pas` (~845 строк, 3.0.75)
+TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
+этап 8b): корпус на двух колёсах, всегда носом влево, ездит туда и
+обратно, мачта из трёх секций в колодце на крыше с охотником наверху,
+глаз, стоп-сигналы, щит TeK по телу. Юнит игры, как пушки, а не монстр.
+Игра исполняет cue.
+- **`TRamCue`** (запись) - `Rumble` (мотор завёлся: петля), `Hiss`
+  (встал: петля рвётся в тормоз), `Whine` (мачта пошла), `Locked` (голова
+  встала: трек босса), `Jolt` (доли травмы).
+- **`TRamPhase`** = (`rpAbsent`, `rpWaiting` - музыка гаснет, машины на
+  экране ещё нет, `rpDriving`, `rpBreathing` - на отметке въезда, глаз
+  тёмный, `rpRising`, `rpResting`).
+- **`TRam`** - `Create(body, seed)` (тело - `TRamArt.Body` - и щит
+  `CreateOver` по нему); `Start(orders)` - True для въезда целиком
+  (первого на уровне, `FEntered`): `rpWaiting` на секунды затухания и
+  `SilenceBeatTicks` 16, потом езда от `EnterFromX` (40 за правым краем)
+  сразу на `EnterSpeed` 2.8 до стопа; False после этого: стоит на стопе,
+  `rpBreathing`. `Clear` (дверь, смерть), `Reset` (новый уровень: въезд
+  не видан). `Tick` - фаза, качание, стоп-сигналы, щит. Езда
+  (`TickDrive`): разгон и торможение по `Brake` 0.2 за тик, тормоз
+  начинается там, где остаток пути - это то, что нужно скорости, чтобы
+  погаснуть, не ниже `CreepSpeed`, прибытие ровно на отметку (`Arrive`:
+  шипение, стоп-сигналы держатся `LampHoldTicks`, толчок -
+  `EntranceStopJolt` 0.25 или `PatrolStopJolt` 0.12; въезд делает вдох
+  `BreathTicks` 16, плечо патруля отдыхает 50-100 тиков). После вдоха
+  загорается глаз и мачта поднимается за `RiseTicks` 50 (smoothstep) от
+  `MastRest` -20 до `HunterMast` 48: `Locked`, отдых `LockRestTicks` 33,
+  потом плечи (`BeginPatrolLeg`: отметка в `PatrolMargin` 8 от стен, не
+  ближе `PatrolMinLeg` 48, на `PatrolSpeed` 1.4; свой `TXorShift`).
+  Качание (`TickSway`): пружина к своему медленному качанию (`IdleSway`
+  0.6 градуса за `IdleSwayTicks` 150), которую толкает перемена скорости
+  (`SwayInertia`), в пределах `SwayMax` 8. `Block(from, to, at)` - отрезок
+  пули против щита, который там вспыхивает. `Contact(body, onDeck, inAir,
+  away)` - тело героя против тела машины (`Overlaps`); герой на деке
+  стоит перед ней (`FHeroInFront`) и остаётся так в воздухе, пока над
+  ней; `away` - сторона прочь от её середины. `Present` (видна и
+  осязаема: не отсутствует и не ждёт), `LeftAt`, `MastAt`, `SwayAt`,
+  `LampsAt` (между двумя тиками), `Rolled`, `Body`, `Shield`, `Phase`,
+  `EyeLit`, `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
+  `RamFloorY` 352 (дорога), `RamTop`.
+- **`TRamArt`** - набор `tek-machine` через свой кэш (без ключа,
+  линейный): `well`, `mast1`..`mast3`, `hunter`, `hunterBarrel`;
+  `THullArt` для корпуса, его износа, арок и колеса (`RamHullDef`: глаз
+  22.2, 54.8, оси 61.1 и 133.2 на 107.5, радиус 20.5); `TShieldArt` щита;
+  блик стоп-сигналов. `Body` - снят с арта при загрузке (`ReadBody`):
+  единица сплошная, где `hull` или `chassis` наполовину непрозрачен в её
+  середине, или внутри колеса.
+- **`TRamPainter`** - `Create(art, ram)` (свой `THull`, спящий); `Tick`
+  после тика Тарана (глаз бодрствует, пока горит, иначе тёмный сразу;
+  колёса катятся по `Rolled`); `DrawBody(sprites, alpha)` - колодец,
+  `DrawUnder` корпуса, мачта с клипом выше `MastHiddenBelow` 90 корпуса
+  (ниже она светилась бы в открытой передней арке), `DrawBody` корпуса,
+  мачта снова с клипом выше линии колодца, стоп-сигналы; `DrawMast` -
+  секции с узкой, верх каждой поднят на её долю подъёма, гнездо головы на
+  верхнем воротнике, ствол на своей втулке, всё повёрнуто качанием вокруг
+  середины колодца (`Turned`); `DrawLight(canvas, origin, alpha)` - щит.
 
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
@@ -4794,6 +4896,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   динамические объекты, которые крутили их действия intensity, откатываются
   (`RewindTargets` -> `RewindTagged`) - босс снова перестаёт дымить.
 - Рождается с уровнем (`LoadLevel`), как церемония и HUD.
+- 3.0.75: cue `Ram` (`TRamStartCue`, приказы действия `ram`; `StartRam`
+  игры).
 
 ### `Game/Scenes/Scenes.Director.pas` (~650 строк)
 Играет сцены уровня (`Levels.Scenes`) на живой игре, по одной, шаг за
@@ -5636,6 +5740,22 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   и выхода за экран, `BulletStretch` (последний тик полёта пули в честных
   экранных единицах) и `BoxHolds` (лежит ли в ящике точка), `SaveTargetAsPng` (под DEBUGKEYS: текущая цель
   рендера в PNG через `IMG_SavePNG`), `RollDiceSeed`.
+- 3.0.75, **Таран**: `FRamArt`, `FRam`, `FRamPainter` (рождаются с
+  игрой, освобождаются после пушек), `FRamRumble` (удерживаемая петля).
+  `StartRam` (cue действия `ram`) - въезд целиком очищает
+  `FCurrentMusic` и гасит музыку в тишину. `TickRam` (вместе с пушками, не
+  пока мир стоит): тик Тарана и его рисовальщика, рокот заново
+  (`PlayLooped`) и обрыв шипением (`StopRamRumble`), вой, толчок, а на
+  `Locked` - трек: `ChangeMusic`, если он ещё не играет.
+  `ResolveRamContact` после пушечного: касание ранит, как монстр, под
+  милосердием, и бросает (`THero.Throw`); герой на деке - когда стоит на
+  ней. `BulletStruckRam` рядом с `BulletStruckCannon`. Рисуется после
+  статических объектов и до падов (`DrawBody`), щит - вместе со светом
+  пушек (`DrawLight`). `LoadLevel` его сбрасывает, `ArriveOnScreen` и
+  `RestartLevel` убирают, глуша рокот; меню паузит и возобновляет рокот;
+  `DebugJumpToWork` сбрасывает, так что клавиша End видит въезд целиком.
+  `RestartLevel` играет свой трек, только если `Plays` говорит, что он ещё
+  не играет. `HeroStandsIn` спрашивает `THero.InAir`.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -5838,6 +5958,13 @@ numpy, scipy, Pillow.
 далёким ударом камней - собраны, как гул кордона. Нужны numpy и
 `armor.py`.
 
+### `tools/sounds/ram.py` (3.0.75)
+Три звука Тарана: `ramrumble.wav` - петля 2 с без шва (каждый период
+укладывается в неё целое число раз, шум сформирован по кругу в частотной
+области): мотор на 31 Гц, пульс 4 Гц, грунтозацепы 13 раз в секунду,
+дорога; `ramhiss.wav` - стук тормоза и воздух; `ramwhine.wav` - насос
+мачты, растущий 1.5 с, и лязг защёлки. Нужны numpy, scipy и `armor.py`.
+
 ### `tools/cannon/build_cannon.py`
 Собирает `bin/sprites/tek-cannon.mset`, арт настенной пушки TeK арены
 грейвелов (`Game.Cannons`), из одной сгенерированной картинки - пушки
@@ -5902,7 +6029,9 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 `Tests.Pads.Plunge`, `Tests.Pads.Shelf` и новые юниты арены
 `Tests.Game.Trial` (небо, волна и аптечки середины испытания; финал и
 события неба на уровне), `Tests.Game.Press` и `Tests.Pads.Stray` описаны
-только в `docs/TESTING.md`.
+только в `docs/TESTING.md`. 3.0.75 - 16 в новом `Game/Tests.Game.Ram`
+(въезд целиком и со стопа, плечи, контакт и его правило пада, щит, щит
+по телу, действие `ram`, Таран второго уровня).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6516,7 +6645,7 @@ press - см. `Levels.Events`; подсказка медлаба, `labHint`, - �
 словарь меню. Контента уровней и монстров здесь НЕТ - он локализован на месте, в
 JSON уровней и монстров, по схеме "базовое поле + сосед `En`".
 
-### `sounds/` (33 WAV, 1 OGG) и `music/` (OGG)
+### `sounds/` (36 WAV, 1 OGG) и `music/` (OGG)
 Одиночные звуки прогреваются на старте и громко падают, если файла нет;
 музыка грузится мягко. Четыре звука синтезирует `tools/sounds/armor.py`:
 `armor1..3.wav` и `ricochet.wav`; пятый, `crash.wav`, -
@@ -6536,7 +6665,9 @@ JSON уровней и монстров, по схеме "базовое пол�
 OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 дробовика 2008); 3.0.67: `stonewake.wav`, `stonefall.wav`
 (`tools/sounds/stonewake.py`, `stonefall.py` - гул пробуждения камня и
-его затухание).
+его затухание); 3.0.75: `ramrumble.wav`, `ramhiss.wav`, `ramwhine.wav`
+(`tools/sounds/ram.py`) и `boss3.ogg`, трек боя с Тараном - двенадцать
+файлов OGG.
 
 ---
 
@@ -6546,7 +6677,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | --- | --- |
 | Движение героя / коллизии / ощущение прыжка | Hero.pas |
 | Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| Арена босса второго уровня (экран 13): трек босса после затухания музыки туннеля, рестарт в него, городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (music с fadeOut) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
+| Арена босса второго уровня (экран 13): музыка туннеля гаснет в тишину и трек босса на защёлке головы Тарана (3.0.75; до того передача 3.0.74), городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (действие `ram` с fadeOut и file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
 | Экран, выход с которого заперт, пока его не откроет событие, или запечатан навсегда | `shutDoors` / `sealedDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | Дуплет: двустволка, красная дробь, отдача, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | Пыль туннеля и её свет | `dust` в `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
@@ -6592,6 +6723,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Фиолетовый свет прибытия; свет вестника | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
 | Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
+| Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз и стоп-сигналы, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
