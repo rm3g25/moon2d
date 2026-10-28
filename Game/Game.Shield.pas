@@ -15,6 +15,9 @@
   hang its cells in the air over the hull and leave its corners bare. A
   body that stands on the floor shows no rim along the floor.
 
+  Or it is a strip: a short row of small cells, every one of them rim -
+  a plate that guards one side of a gun (the Ram's sweeper from below).
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Game.Shield;
@@ -67,12 +70,17 @@ type
     FOverBody: Boolean;
     FField: TShieldMask;
     FFieldX, FFieldY: Single;
+    // A strip: a row of cells along X, its half-length and half-height in
+    // FRadiusX, FRadiusY; the cells this much of their full size
+    FStrip: Boolean;
+    FScale: Single;
     FCells: TArray<TCell>;
     FFlares: TList<TFlare>;
     FState: TShieldState;
     FFallAge: Integer;
     procedure LayCells;
     procedure LayCellsOverBody;
+    procedure LayStrip(ACells: Integer);
     function FlareShare(const ACell: TCell; AAlpha: Single): Single;
     function FallLevel(AAlpha: Single): Single;
   public
@@ -81,6 +89,8 @@ type
     // Over the body, a margin past its outline; the middle of the machine
     // is the body's
     constructor CreateOver(const ABody: TShieldMask);
+    // ACells in a row about the middle, at AScale of the full cell
+    constructor CreateStrip(ACells: Integer; AScale: Single);
     destructor Destroy; override;
     // Up again, with no flare on it
     procedure Rise;
@@ -303,6 +313,7 @@ begin
   inherited Create;
   FRadiusX := ARadiusX;
   FRadiusY := ARadiusY;
+  FScale := 1;
   FFlares := TList<TFlare>.Create;
   LayCells;
 end;
@@ -311,11 +322,23 @@ constructor TTekShield.CreateOver(const ABody: TShieldMask);
 begin
   inherited Create;
   FOverBody := True;
+  FScale := 1;
   FField := Widen(ABody, BodyMargin);
   FFieldX := -FField.Middle.X;
   FFieldY := -FField.Middle.Y;
   FFlares := TList<TFlare>.Create;
   LayCellsOverBody;
+end;
+
+constructor TTekShield.CreateStrip(ACells: Integer; AScale: Single);
+begin
+  inherited Create;
+  FStrip := True;
+  FScale := AScale;
+  FRadiusX := ACells * Sqrt(3) * HexSize * AScale / 2;
+  FRadiusY := HexSize * AScale;
+  FFlares := TList<TFlare>.Create;
+  LayStrip(ACells);
 end;
 
 destructor TTekShield.Destroy;
@@ -377,6 +400,21 @@ begin
     end;
 end;
 
+// Side by side about the middle; a strip is all rim
+procedure TTekShield.LayStrip(ACells: Integer);
+begin
+  var StepX := Sqrt(3) * HexSize * FScale;
+  FCells := nil;
+  for var i := 0 to ACells - 1 do
+  begin
+    var Cell: TCell;
+    Cell.X := (i - (ACells - 1) / 2) * StepX;
+    Cell.Y := 0;
+    Cell.Rim := 1;
+    FCells := FCells + [Cell];
+  end;
+end;
+
 procedure TTekShield.Rise;
 begin
   FState := sdUp;
@@ -407,6 +445,8 @@ function TTekShield.Holds(const APoint: TSdlFPoint): Boolean;
 begin
   if FOverBody then
     Exit(FField.At(Floor(APoint.X - FFieldX), Floor(APoint.Y - FFieldY)));
+  if FStrip then
+    Exit((Abs(APoint.X) <= FRadiusX) and (Abs(APoint.Y) <= FRadiusY));
   Result := Sqr(APoint.X / FRadiusX) + Sqr(APoint.Y / FRadiusY) <= 1;
 end;
 
@@ -489,7 +529,7 @@ begin
   var Whole := FallLevel(AAlpha);
   if Whole <= 0 then
     Exit;
-  var CellSize: Single := 2 * HexSize * CellSpan;
+  var CellSize: Single := 2 * HexSize * CellSpan * FScale;
   for var Cell in FCells do
   begin
     var Flare := FlareShare(Cell, AAlpha) * RimBand(Cell.Rim, FlareRimFrom);

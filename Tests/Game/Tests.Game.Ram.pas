@@ -98,6 +98,8 @@ type
   public
     [Test]
     procedure TestHoldsTheBodyAndAMarginPastIt;
+    [Test]
+    procedure TestAStripHoldsItsRow;
   end;
 
   [TestFixture]
@@ -154,6 +156,53 @@ type
     procedure TestTheRowFollowsTheLives;
     [Test]
     procedure TestADeadHeadsRowFades;
+  end;
+
+  [TestFixture]
+  TRamSweeperTests = class
+  private type
+    TFired = record
+      Tick: Integer;
+      Cue: TRamCue;
+    end;
+    TBurstRow = record
+      FirstTick, LastTick: Integer;
+      LowestY, HighestY: Single;
+    end;
+  private
+    FRam: TRam;
+    procedure ArmTheSweeper(const ATarget: TRamTarget; ALivesShare: Single = 1);
+    procedure StrikeThePack(ATimes: Integer);
+    function Shots(const ATarget: TRamTarget; ATicks: Integer): TArray<TFired>;
+    function Bursts(const AShots: TArray<TFired>): TArray<TBurstRow>;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestLivesFollowTheGrade;
+    [Test]
+    procedure TestRidesToTheHerosRow;
+    [Test]
+    procedure TestHeroLowClosesTheCeiling;
+    [Test]
+    procedure TestTheBarrelsBurnBeforeASweep;
+    [Test]
+    procedure TestASweepIsLevelAlongHisRow;
+    [Test]
+    procedure TestTheWholePackTakesAHit;
+    [Test]
+    procedure TestThePlatesTakeABulletFromBelow;
+    [Test]
+    procedure TestTheMiddleThirdForks;
+    [Test]
+    procedure TestTheLastThirdClimbsALadder;
+    [Test]
+    procedure TestTurnsToAHeroOnItsOtherSide;
+    [Test]
+    procedure TestTheLastLifeLeavesTheMastEmpty;
   end;
 
 implementation
@@ -559,6 +608,21 @@ begin
     Assert.IsFalse(Shield.Holds(At(8, 0)), 'Past the margin');
     Assert.IsTrue(Shield.Holds(At(0, -6.5)), 'Over the top');
     Assert.IsFalse(Shield.Holds(At(0, 5.5)), 'Under the foot: the floor');
+  finally
+    Shield.Free;
+  end;
+end;
+
+procedure TBodyShieldTests.TestAStripHoldsItsRow;
+begin
+  // Two cells at 0.6: about 7 units long, 4 high
+  var Shield := TTekShield.CreateStrip(2, 0.6);
+  try
+    Shield.Rise;
+    Assert.IsTrue(Shield.Holds(At(0, 0)), 'The middle');
+    Assert.IsTrue(Shield.Holds(At(3.4, 0)), 'Near an end');
+    Assert.IsFalse(Shield.Holds(At(4, 0)), 'Past an end');
+    Assert.IsFalse(Shield.Holds(At(0, 2.5)), 'Under it');
   finally
     Shield.Free;
   end;
@@ -982,9 +1046,293 @@ begin
   Assert.IsFalse(FRam.Row.Shown, 'Gone');
 end;
 
+// ---------------------------------------------------------------------------
+// The sweeper
+// ---------------------------------------------------------------------------
+
+const
+  // The high pad left of the gate, its deck, and a hero standing on it
+  LeftDeckY = 188.0;
+  LeftHeroX = 80.0;
+  // A burst's shots stand this far apart at most
+  SweepGapTicks = 5;
+  // The row, the four barrels about it and the sway: this near the hero
+  RowTolerance = 12.0;
+  // The fork's second sweep comes sooner than a rest, a cell away
+  ForkWithinTicks = 45;
+  ForkCell = 32.0;
+  ForkTolerance = 8.0;
+  // A ladder rides this far at least through its sweep
+  LadderClimb = 20.0;
+  ShortestHeatTicks = 15;
+
+procedure TRamSweeperTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamSweeperTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+// From the stop after a death the hunter locks; its eye shot out, the
+// sweeper rises and locks with its row coming up
+procedure TRamSweeperTests.ArmTheSweeper(const ATarget: TRamTarget;
+  ALivesShare: Single);
+begin
+  FRam.Start(Orders, ALivesShare);
+  FRam.Clear;
+  FRam.Start(Orders, ALivesShare);
+  var Locked := False;
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(ATarget).Locked then
+    begin
+      Locked := True;
+      Break;
+    end;
+  Assert.IsTrue(Locked, 'The hunter locks');
+  for var i := 1 to FRam.Lives do
+  begin
+    var Lens := FRam.LensPoint;
+    var Struck: TSdlFPoint;
+    FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
+  end;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if (FRam.Head = rhSweeper) and FRam.Row.Shown then
+      Exit;
+  end;
+  Assert.Fail('The sweeper never locked');
+end;
+
+// Level, left to right through the middle of the pack
+procedure TRamSweeperTests.StrikeThePack(ATimes: Integer);
+begin
+  for var i := 1 to ATimes do
+  begin
+    var Pack := FRam.BarrelsPoint;
+    var Struck: TSdlFPoint;
+    var Guarded: Boolean;
+    Assert.IsTrue(FRam.StrikeBarrels(At(Pack.X - 30, Pack.Y), At(Pack.X + 30, Pack.Y),
+      Struck, Guarded) and not Guarded, Format('Strike %d meets the pack', [i]));
+  end;
+end;
+
+function TRamSweeperTests.Shots(const ATarget: TRamTarget;
+  ATicks: Integer): TArray<TFired>;
+begin
+  Result := [];
+  for var i := 1 to ATicks do
+  begin
+    var Fired: TFired;
+    Fired.Cue := FRam.Tick(ATarget);
+    Fired.Tick := i;
+    if Fired.Cue.Shot then
+      Result := Result + [Fired];
+  end;
+end;
+
+// The shots gathered into sweeps: their first and last tick, the rows
+// they flew along
+function TRamSweeperTests.Bursts(const AShots: TArray<TFired>): TArray<TBurstRow>;
+begin
+  Result := [];
+  for var i := 0 to High(AShots) do
+  begin
+    var Y := AShots[i].Cue.ShotFrom.Y;
+    if (i = 0) or (AShots[i].Tick - AShots[i - 1].Tick > SweepGapTicks) then
+    begin
+      var Burst: TBurstRow;
+      Burst.FirstTick := AShots[i].Tick;
+      Burst.LowestY := Y;
+      Burst.HighestY := Y;
+      Result := Result + [Burst];
+    end;
+    var Last := High(Result);
+    Result[Last].LastTick := AShots[i].Tick;
+    Result[Last].LowestY := Max(Result[Last].LowestY, Y);
+    Result[Last].HighestY := Min(Result[Last].HighestY, Y);
+  end;
+end;
+
+function MiddleOf(const ABurst: TRamSweeperTests.TBurstRow): Single;
+begin
+  Result := (ABurst.LowestY + ABurst.HighestY) / 2;
+end;
+
+procedure TRamSweeperTests.TestLivesFollowTheGrade;
+begin
+  ArmTheSweeper(HeroOnAPad(LeftHeroX, LeftDeckY), 1.5);
+  Assert.AreEqual(210, FRam.FullLives, 'Half as many again');
+  Assert.AreEqual(FRam.FullLives, FRam.Lives, 'All of them to start with');
+end;
+
+procedure TRamSweeperTests.TestRidesToTheHerosRow;
+const
+  Watched = 100;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  ArmTheSweeper(Hero);
+  for var i := 1 to Watched do
+    FRam.Tick(Hero);
+  Assert.AreEqual(CenterOf(Hero).Y, FRam.BarrelsPoint.Y, RowTolerance,
+    'The barrels stand on his row');
+end;
+
+procedure TRamSweeperTests.TestHeroLowClosesTheCeiling;
+const
+  Watched = 150;
+begin
+  var Hero := HeroOnTheRoad(20);
+  ArmTheSweeper(Hero);
+  for var i := 1 to Watched do
+    FRam.Tick(Hero);
+  Assert.IsTrue(FRam.Pressing, 'The ram presses him');
+  var Pack := FRam.BarrelsPoint;
+  Assert.IsTrue(Pack.Y < RamTop, 'Never under its roof');
+  Assert.IsTrue(Pack.Y > RamTop - RowTolerance - 6,
+    Format('At the bottom of its mast, over his jump: %g', [Pack.Y]));
+end;
+
+procedure TRamSweeperTests.TestTheBarrelsBurnBeforeASweep;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero);
+  var Burning := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    if FRam.Tick(Hero).Shot then
+      Break;
+    if FRam.HeatAt(1) > 0 then
+      Inc(Burning)
+    else
+      Burning := 0;
+  end;
+  Assert.IsTrue(Burning >= ShortestHeatTicks,
+    Format('The barrels burned %d ticks before the first shot', [Burning]));
+end;
+
+procedure TRamSweeperTests.TestASweepIsLevelAlongHisRow;
+const
+  Watched = 300;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero);
+  var Fired := Shots(Hero, Watched);
+  Assert.IsTrue(Length(Fired) > 0, 'It sweeps');
+  var First := Fired[0].Cue;
+  var Toward := 0;
+  if CenterOf(Hero).X < First.ShotFrom.X then
+    Toward := 180;
+  Assert.AreEqual(Toward, First.ShotAngle, 'Toward him');
+  for var Shot in Fired do
+  begin
+    Assert.IsTrue(Shot.Cue.ShotAngle mod 180 = 0, 'Level');
+    Assert.AreEqual(SweeperBulletSpeed, Shot.Cue.ShotSpeed, 'The sweeper''s pace');
+    Assert.AreEqual(CenterOf(Hero).Y, Shot.Cue.ShotFrom.Y, RowTolerance,
+      'Along his row');
+  end;
+end;
+
+procedure TRamSweeperTests.TestTheWholePackTakesAHit;
+begin
+  ArmTheSweeper(HeroOnAPad(LeftHeroX, LeftDeckY));
+  var Pack := FRam.BarrelsPoint;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsTrue(FRam.StrikeBarrels(At(Pack.X - 7, Pack.Y - 30),
+    At(Pack.X - 7, Pack.Y), Struck, Guarded) and not Guarded,
+    'From above, near the muzzles');
+  Assert.IsTrue(FRam.StrikeBarrels(At(Pack.X - 30, Pack.Y + 3),
+    At(Pack.X + 30, Pack.Y + 3), Struck, Guarded) and not Guarded, 'Level');
+  Assert.AreEqual(FRam.FullLives - 2, FRam.Lives, 'Two lives gone');
+  Assert.IsFalse(FRam.StrikeBarrels(At(Pack.X - 30, Pack.Y - 20),
+    At(Pack.X + 30, Pack.Y - 20), Struck, Guarded), 'Over the pack');
+end;
+
+procedure TRamSweeperTests.TestThePlatesTakeABulletFromBelow;
+begin
+  ArmTheSweeper(HeroOnAPad(LeftHeroX, LeftDeckY));
+  var Pack := FRam.BarrelsPoint;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsTrue(FRam.StrikeBarrels(At(Pack.X, Pack.Y + 40), At(Pack.X, Pack.Y - 10),
+    Struck, Guarded) and Guarded, 'Straight up: a plate');
+  Assert.IsTrue(Struck.Y > Pack.Y, 'Met under the barrels');
+  Assert.IsTrue(FRam.StrikeBarrels(At(Pack.X - 40, Pack.Y + 10), At(Pack.X, Pack.Y),
+    Struck, Guarded) and Guarded, 'Climbing into the muzzles: a plate');
+  Assert.AreEqual(FRam.FullLives, FRam.Lives, 'Nothing lost');
+end;
+
+procedure TRamSweeperTests.TestTheMiddleThirdForks;
+const
+  Watched = 400;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero);
+  StrikeThePack(FRam.FullLives - 2 * FRam.FullLives div 3);
+  var Sweeps := Bursts(Shots(Hero, Watched));
+  for var i := 1 to High(Sweeps) do
+  begin
+    if Sweeps[i].FirstTick - Sweeps[i - 1].LastTick >= ForkWithinTicks then
+      Continue;
+    Assert.AreEqual(ForkCell, Abs(MiddleOf(Sweeps[i]) - MiddleOf(Sweeps[i - 1])),
+      ForkTolerance, 'The second sweep a row away');
+    Exit;
+  end;
+  Assert.Fail('No sweep followed another at once');
+end;
+
+procedure TRamSweeperTests.TestTheLastThirdClimbsALadder;
+const
+  Watched = 300;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  ArmTheSweeper(Hero);
+  StrikeThePack(FRam.FullLives - FRam.FullLives div 3);
+  var Sweeps := Bursts(Shots(Hero, Watched));
+  Assert.IsTrue(Length(Sweeps) > 0, 'It sweeps');
+  Assert.IsTrue(Sweeps[0].LowestY - Sweeps[0].HighestY >= LadderClimb,
+    Format('The row rode %g through the sweep',
+    [Sweeps[0].LowestY - Sweeps[0].HighestY]));
+end;
+
+procedure TRamSweeperTests.TestTurnsToAHeroOnItsOtherSide;
+begin
+  var Hero := HeroOnAPad(RightHeroX, RightDeckY);
+  ArmTheSweeper(Hero);
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    if FRam.Facing > 0 then
+      Exit;
+  end;
+  Assert.Fail('Never turned to the hero on its right');
+end;
+
+procedure TRamSweeperTests.TestTheLastLifeLeavesTheMastEmpty;
+const
+  LivesShare = 0.02;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero, LivesShare);
+  StrikeThePack(FRam.Lives);
+  Assert.IsTrue(FRam.Tick(Hero).Blast, 'The head blows up');
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Whine or Cue.Shot, 'No head comes up, nothing fires');
+  end;
+  Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
+  Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TRamTests);
   TDUnitX.RegisterTestFixture(TRamHunterTests);
+  TDUnitX.RegisterTestFixture(TRamSweeperTests);
   TDUnitX.RegisterTestFixture(TBodyShieldTests);
   TDUnitX.RegisterTestFixture(TRamLevelTests);
 

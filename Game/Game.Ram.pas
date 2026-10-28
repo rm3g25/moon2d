@@ -51,7 +51,18 @@
   - this is what has lives - and only then the first burst. The last of
   its lives blows the head up, the empty row fades; the
   empty mast sinks into the well, the eye blinks, and the next head - the
-  sweeper - rises and stands silent for now.
+  sweeper - rises.
+
+  The sweeper: four level barrels that do not tilt. The head rides the
+  mast to the hero's row - never under its own roof - stops, its barrels
+  redden, and it sweeps the row in a stream. A hero on the road is the
+  ram's: the sweeper sinks to the bottom of its mast and sweeps the row
+  just over his jump - the closed ceiling. By the thirds of its lives: one
+  sweep; the fork - his row, then at once the row he is likely to jump
+  to; the ladder - it rides the mast while it fires. The target is the
+  whole barrel pack, but two honeycomb plates under it take every bullet
+  that climbs: the floor does it no harm. Its last life blows the head up
+  and the empty mast sinks; there is no third head yet.
 
   TRam is the rules; TRamPainter draws them with TRamArt. The game carries
   out the cue of a tick: the sounds, the shake and the boss track, and the
@@ -76,8 +87,10 @@ const
   RamTop = RamFloorY - RamHeight;
   // The hunter's eye on the first grade; the game scales them by its own
   HunterLives = 100;
+  SweeperLives = 140;
   // Units a tick, as TBurst.NewBullet takes them
   HunterBulletSpeed = 6;
+  SweeperBulletSpeed = 5;
   // The head's row of lives: three thirds of four cells
   HeadRowCells = 12;
 
@@ -91,13 +104,13 @@ type
 
   TRamHead = (rhNone, rhHunter, rhSweeper);
 
-  // The hunter's gun: idle (aiming, resting), the lens burning red before
-  // a burst, the burst
+  // The gun: idle (aiming or riding, resting), the warning before a burst
+  // - the hunter's lens, the sweeper's barrels burning red - the burst
   TRamFire = (rfIdle, rfFlare, rfBurst);
 
   // The head's row of lives as the HUD draws it
   TRamRow = record
-    // A hunter up, or one blown up a moment ago
+    // A head up, or one blown up a moment ago
     Shown: Boolean;
     // Cells lit so far as the row comes up after the lock
     Lit: Integer;
@@ -128,11 +141,12 @@ type
     Locked: Boolean;
     // A shake, in trauma shares; 0 - none
     Jolt: Single;
-    // The hunter fires a bullet from ShotFrom along ShotAngle, degrees
-    // counter-clockwise from the right
+    // The head fires a bullet from ShotFrom along ShotAngle, degrees
+    // counter-clockwise from the right, at ShotSpeed
     Shot: Boolean;
     ShotFrom: TSdlFPoint;
     ShotAngle: Integer;
+    ShotSpeed: Integer;
     // The head has lost its last life: it blows up at BlastAt
     Blast: Boolean;
     BlastAt: TSdlFPoint;
@@ -183,7 +197,9 @@ type
     // The head, its lives and its facing: -1 left, as the art is drawn
     FHead: TRamHead;
     FLives, FFullLives: Integer;
+    FLivesShare: Single; // the grade's
     FHeadKilled: Boolean; // the last life is gone; it blows up next tick
+    FKilled: TRamHead; // the head the change of heads began with
     FChangePending: Boolean; // braking to stand for the change of heads
     FChangeFrom: Single; // the mast's height as the change began
     FFacing: Integer;
@@ -206,6 +222,16 @@ type
     FRowTicks: Integer;
     FHitTicks: Integer;
     FGoneTicks: Integer;
+    // The sweeper: the row its barrels go to and sweep, a sweep of the
+    // fork still to come, the way a ladder rides, the barrel that fires
+    // next, how red the barrels burn
+    FRowY: Single;
+    FForkLeft: Boolean;
+    FLadderWay: Integer;
+    FNextBarrel: Integer;
+    FHeat, FLastHeat: Single;
+    FHeatTicks: Integer; // the whole of the burning before this sweep
+    FPlates: array [0..1] of TTekShield;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
     procedure BeginDrive(ATarget, ACruise: Single; AEntering: Boolean);
@@ -228,8 +254,18 @@ type
     procedure Arrive(AOldSpeed: Single);
     procedure TickSway;
     procedure TickAim;
+    procedure TickRide;
     procedure TickFire;
+    procedure TickSweep;
+    procedure BeginSweep(AFlareTicks: Integer);
+    function ForkRow: Single;
     procedure Shoot;
+    procedure ShootBarrel;
+    procedure TickHeat;
+    procedure LockSweeper;
+    function SweeperMastFor(ARowY: Single): Single;
+    function SweeperRowY(AMast: Single): Single;
+    function ToHead(const APoint: TSdlFPoint): TSdlFPoint;
     function Tier: Integer;
     function CanShoot: Boolean;
     procedure TickRow;
@@ -263,8 +299,15 @@ type
     // Where a bullet's stretch of this tick meets the hunter's eye, which
     // loses a life; False when it misses
     function StrikeEye(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    // Where a bullet's stretch of this tick meets the sweeper's barrel
+    // pack: AGuarded - a climbing bullet, taken by a plate under it, which
+    // flares; otherwise the pack loses a life. False when it misses.
+    function StrikeBarrels(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
+      out AGuarded: Boolean): Boolean;
     // The hunter's lens on the screen now
     function LensPoint: TSdlFPoint;
+    // The middle of the sweeper's barrel pack on the screen now
+    function BarrelsPoint: TSdlFPoint;
     // The hero's body touches the hull or a wheel and he is in the
     // machine's way: AOnDeck - he stands on a pad, AInAir - on his way up
     // or down. AAway - the side to throw him to, away from its middle; 0 -
@@ -281,14 +324,18 @@ type
     function EyeAt(AAlpha: Single): Single;
     function LensAt(AAlpha: Single): Single;
     function AimAt(AAlpha: Single): Single;
+    // How red the sweeper's barrels burn, 0 cold to 1 the sweep
+    function HeatAt(AAlpha: Single): Single;
     // Units the hull has rolled this tick, to the right above zero
     function Rolled: Single;
     // The head's width as a share of its own: 1 but in the middle of a turn
     function TurnSquash: Single;
     // At the last third of its lives
     function Wounded: Boolean;
-    // The eye was struck a moment ago
+    // The eye or the barrels were struck a moment ago
     function Hurt: Boolean;
+    // The row of lives is still coming up: the target burns white
+    function Booting: Boolean;
     function Row: TRamRow;
     // The middle of the top of the head, between two ticks
     function HeadTopAt(AAlpha: Single): TSdlFPoint;
@@ -297,11 +344,18 @@ type
     property Lives: Integer read FLives;
     property FullLives: Integer read FFullLives;
     property Pressing: Boolean read FPressing;
+    // The whole entrance has begun on this level: the hero has come to the
+    // fight, and a death brings him back to it
+    property Entered: Boolean read FEntered;
+    // The head is up and locked
+    property Armed: Boolean read FArmed;
     property Fire: TRamFire read FFire;
     // The lens burns red: a burst is coming or under way
     property LensHot: Boolean read FLensHot;
     property Body: TShieldMask read FBody;
     property Shield: TTekShield read FShield;
+    // The sweeper's plates, under its barrels
+    function Plate(AIndex: Integer): TTekShield;
     property Phase: TRamPhase read FPhase;
     property EyeLit: Boolean read FEyeLit;
     // How bright the eye burns, 0 dark to 1 the flash of a blink
@@ -331,6 +385,7 @@ type
     FHunter: PSdlTexture;
     FHunterBarrel: PSdlTexture;
     FSweeper: PSdlTexture;
+    FSweeperHeat: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
@@ -363,6 +418,8 @@ type
     procedure DrawLamps(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
     procedure DrawEye(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
     procedure DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+      AAlpha: Single);
+    procedure DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
       AAlpha: Single);
   public
     // Both belong to the caller and must outlive the painter
@@ -401,11 +458,25 @@ type
     Width, Height, SocketX, SocketY: Single;
   end;
 
+  // A third of the sweeper's lives: how long the barrels burn before the
+  // sweep, how many shots and how far apart, the rest after; Fork - a
+  // second sweep at once, a row over or under; Ladder - it rides the mast
+  // while it sweeps
+  TSweepPattern = record
+    HeatTicks, Shots, GapTicks, RestTicks: Integer;
+    Fork, Ladder: Boolean;
+  end;
+
 const
   FirePatterns: array [0..2] of TFirePattern = (
     (FlareTicks: 20; Shots: 3; GapTicks: 4; RestTicks: 50; Lead: False; Hose: False),
     (FlareTicks: 16; Shots: 3; GapTicks: 4; RestTicks: 40; Lead: True; Hose: False),
     (FlareTicks: 14; Shots: 6; GapTicks: 5; RestTicks: 45; Lead: False; Hose: True));
+
+  SweepPatterns: array [0..2] of TSweepPattern = (
+    (HeatTicks: 22; Shots: 8; GapTicks: 3; RestTicks: 55; Fork: False; Ladder: False),
+    (HeatTicks: 18; Shots: 8; GapTicks: 3; RestTicks: 50; Fork: True; Ladder: False),
+    (HeatTicks: 16; Shots: 12; GapTicks: 3; RestTicks: 50; Fork: False; Ladder: True));
 
   // The heads as the art draws them, facing left; the socket at the bottom
   HeadShapes: array [TRamHead] of THeadShape = (
@@ -495,6 +566,45 @@ const
   ChangeRiseTicks = 30;
   SweeperMast = 48.0;
   HeadBlastJolt = 0.5;
+
+  // The sweeper rides the mast between its roof and three cells: its
+  // barrels' bottom never under the roof line. It follows the hero's row
+  // this fast and sweeps once it stands this near it; a fork's second row
+  // is a cell away, and a ladder rides this fast while it sweeps.
+  SweeperMastLowest = 12.0;
+  SweeperMastHighest = 96.0;
+  RideRate = 1.5;
+  RowSlack = 4.0;
+  ForkStep = 32.0;
+  ForkHeatTicks = 10;
+  LadderRate = 1.3;
+  // The hero stands this far past the socket on the other side for
+  // TurnHoldTicks, and the sweeper turns to him
+  SweeperTurnPast = 8.0;
+  // On the sweeper, facing left: the barrel pack, its four muzzles, the
+  // plates under it (their middles; strips of two small cells)
+  BarrelsLeft = 0.0;
+  BarrelsRight = 17.5;
+  BarrelsTop = 2.0;
+  BarrelsBottom = 14.0;
+  MuzzleX = 0.2;
+  MuzzleYs: array [0..3] of Single = (3.4, 6.4, 9.4, 12.6);
+  PlateCells = 2;
+  PlateScale = 0.6;
+  PlateMiddles: array [0..1] of THullPoint = ((X: 4.5; Y: 16.0),
+    (X: 13.0; Y: 16.0));
+  PlateBottom = 18.0;
+  // A bullet that climbs steeper than this comes from below: the plates
+  // take it
+  PlateCover = 6.0;
+  // A turn this far squashed leaves no pack to hit
+  ThinHeadSquash = 0.5;
+  // Along a stretch the pack is looked for this often, head units
+  StrikeStep = 0.5;
+  // The barrels' white while its row comes up, and their red
+  HeatWhite: TRgb = (R: 255; G: 255; B: 255);
+  HeatRed: TRgb = (R: 255; G: 48; B: 28);
+  HeatFrom = 0.4;
 
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
@@ -719,11 +829,15 @@ begin
   inherited Create;
   FBody := ABody;
   FShield := TTekShield.CreateOver(ABody);
+  for var i := Low(FPlates) to High(FPlates) do
+    FPlates[i] := TTekShield.CreateStrip(PlateCells, PlateScale);
   FDice.Seed := ASeed;
 end;
 
 destructor TRam.Destroy;
 begin
+  for var Plate in FPlates do
+    Plate.Free;
   FShield.Free;
   inherited;
 end;
@@ -759,6 +873,8 @@ end;
 procedure TRam.Arm(ALivesShare: Single);
 begin
   FHead := rhHunter;
+  FKilled := rhNone;
+  FLivesShare := ALivesShare;
   FFullLives := Max(1, Round(HunterLives * ALivesShare));
   FLives := FFullLives;
   FHeadKilled := False;
@@ -782,6 +898,11 @@ begin
   FAboveTicks := 0;
   FDeckTicks := 0;
   FHeroSeen := False;
+  FForkLeft := False;
+  FLadderWay := 0;
+  FNextBarrel := 0;
+  FHeat := 0;
+  FLastHeat := 0;
 end;
 
 function TRam.Start(const AOrders: TRamOrders; ALivesShare: Single): Boolean;
@@ -791,6 +912,8 @@ begin
   FEntered := True;
   Inc(FArrivals);
   FShield.Rise;
+  for var Plate in FPlates do
+    Plate.Rise;
   Arm(ALivesShare);
   if Result then
   begin
@@ -944,9 +1067,11 @@ begin
 end;
 
 // Standing at ALeft, could the hunter's barrel reach him - is he no
-// lower than its lowest
+// lower than its lowest. The sweeper rides to his row from anywhere.
 function TRam.InSightsFrom(ALeft: Single): Boolean;
 begin
+  if FHead <> rhHunter then
+    Exit(True);
   var Facing := -1;
   if FHeroCenter.X > ALeft + WellX then
     Facing := 1;
@@ -974,6 +1099,7 @@ begin
   FLastEye := FEye;
   FLastLens := FLens;
   FLastAim := FAim;
+  FLastHeat := FHeat;
   FAccel := 0;
   SeeHero(ATarget);
   if FHeadKilled then
@@ -987,7 +1113,10 @@ begin
   TickLamps;
   TickEye;
   TickLens;
+  TickHeat;
   FShield.Tick;
+  for var Plate in FPlates do
+    Plate.Tick;
   Result := FCue;
 end;
 
@@ -1076,6 +1205,7 @@ begin
   FCue.BlastAt := HeadPoint(FX, FMast, FSway, FHead, FFacing, TurnSquash,
     Shape.Width / 2, Shape.Height / 2);
   FCue.Jolt := Max(FCue.Jolt, HeadBlastJolt);
+  FKilled := FHead;
   FHead := rhNone;
   FArmed := False;
   FFire := rfIdle;
@@ -1105,8 +1235,8 @@ begin
   FChangeFrom := FMast;
 end;
 
-// The empty mast sinks, a beat, the sweeper rises - silent until its own
-// stage - and the fight goes on
+// The empty mast sinks, a beat, the sweeper rises and the fight goes on.
+// After the sweeper the mast stays down: the next head is not built yet.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1118,6 +1248,11 @@ begin
   var Rising := FPhaseTicks - SinkTicks - EmptyTicks;
   if Rising < 0 then
     Exit;
+  if FKilled = rhSweeper then
+  begin
+    BeginRest(LockRestTicks);
+    Exit;
+  end;
   if Rising = 0 then
   begin
     FHead := rhSweeper;
@@ -1128,10 +1263,29 @@ begin
   FMast := Lerp(MastRest, SweeperMast, SmoothStep(Rising / ChangeRiseTicks));
   if Rising >= ChangeRiseTicks then
   begin
-    FArmed := True;
-    FArmedTicks := 0;
+    LockSweeper;
     BeginRest(LockRestTicks);
   end;
+end;
+
+// Locked on the mast with all its lives; the row comes up and the first
+// sweep waits for it
+procedure TRam.LockSweeper;
+begin
+  FArmed := True;
+  FArmedTicks := 0;
+  FFullLives := Max(1, Round(SweeperLives * FLivesShare));
+  FLives := FFullLives;
+  FHurtTicks := 0;
+  FHitTicks := NoHitTicks;
+  FGoneTicks := -1;
+  FRowTicks := 0;
+  FFire := rfIdle;
+  FFireTicks := FirstBurstTicks;
+  FPastTicks := 0;
+  FForkLeft := False;
+  FLadderWay := 0;
+  FRowY := SweeperRowY(FMast);
 end;
 
 procedure TRam.TickPhase;
@@ -1290,7 +1444,7 @@ function TRam.Row: TRamRow;
 begin
   Result := Default(TRamRow);
   Result.HitTicks := FHitTicks;
-  if Present and (FHead = rhHunter) and (FRowTicks >= 0) then
+  if Present and (FHead <> rhNone) and (FRowTicks >= 0) then
   begin
     Result.Shown := True;
     Result.Lit := RowLit;
@@ -1325,7 +1479,7 @@ end;
 
 function TRam.CanShoot: Boolean;
 begin
-  Result := (FHead = rhHunter) and FArmed and FHero.Alive and
+  Result := (FHead <> rhNone) and FArmed and FHero.Alive and
     (FTurnTicks = 0) and (FPhase in [rpDriving, rpResting, rpRevving]) and
     not ((FPhase = rpDriving) and FEntering);
 end;
@@ -1335,7 +1489,7 @@ end;
 // barrel holds on the point it took - or, the hose, follows him slower.
 procedure TRam.TickAim;
 begin
-  if (FHead <> rhHunter) or not FHero.Alive then
+  if (FHead = rhNone) or not FHero.Alive then
   begin
     FPastTicks := 0;
     FInSights := False;
@@ -1351,6 +1505,11 @@ begin
       FAim := 180 - FAim;
       FLastAim := FAim;
     end;
+    Exit;
+  end;
+  if FHead = rhSweeper then
+  begin
+    TickRide;
     Exit;
   end;
 
@@ -1395,7 +1554,14 @@ begin
     begin
       FFire := rfIdle;
       FFireTicks := FirePatterns[Tier].RestTicks;
+      if FHead = rhSweeper then
+        FFireTicks := SweepPatterns[Tier].RestTicks;
     end;
+    Exit;
+  end;
+  if FHead = rhSweeper then
+  begin
+    TickSweep;
     Exit;
   end;
 
@@ -1465,6 +1631,167 @@ begin
   FCue.ShotFrom := UnitPoint(Sleeve.X + Barrel.X * Reach,
     Sleeve.Y + Barrel.Y * Reach);
   FCue.ShotAngle := Round(Along);
+  FCue.ShotSpeed := HunterBulletSpeed;
+end;
+
+// The barrels' middle row on the screen with the mast at AMast, the sway
+// left out
+function TRam.SweeperRowY(AMast: Single): Single;
+begin
+  Result := RamTop + WellY - AMast - HeadShapes[rhSweeper].SocketY +
+    (BarrelsTop + BarrelsBottom) / 2;
+end;
+
+function TRam.SweeperMastFor(ARowY: Single): Single;
+begin
+  Result := EnsureRange(RamTop + WellY - ARowY -
+    HeadShapes[rhSweeper].SocketY + (BarrelsTop + BarrelsBottom) / 2,
+    SweeperMastLowest, SweeperMastHighest);
+end;
+
+// Turns to a hero on its other side; idle, follows his row - the bottom
+// of the mast while the ram presses him, the closed ceiling; a ladder
+// rides its row through the sweep. The mast goes after the row.
+procedure TRam.TickRide;
+begin
+  if not FArmed then
+    Exit;
+  var OtherSide := (FHeroCenter.X - MastPivot(FX).X) * -FFacing;
+  if OtherSide > SweeperTurnPast then
+    Inc(FPastTicks)
+  else
+    FPastTicks := 0;
+  if (FPastTicks >= TurnHoldTicks) and (FFire = rfIdle) then
+  begin
+    FPastTicks := 0;
+    FTurnTicks := TurnTicks;
+    Exit;
+  end;
+
+  var Highest := SweeperRowY(SweeperMastHighest);
+  var Lowest := SweeperRowY(SweeperMastLowest);
+  case FFire of
+    rfIdle:
+      if FPressing then
+        FRowY := Lowest
+      else
+        FRowY := FHeroCenter.Y;
+    rfBurst:
+      FRowY := FRowY + FLadderWay * LadderRate;
+  end;
+  FRowY := EnsureRange(FRowY, Highest, Lowest);
+  var Goal := SweeperMastFor(FRowY);
+  FMast := FMast + EnsureRange(Goal - FMast, -RideRate, RideRate);
+end;
+
+// Rest; on its row, with him in front, the barrels burn red; the sweep.
+// The fork sweeps once more at once a row away; the ladder rides through
+// its sweep toward the side with more room.
+procedure TRam.TickSweep;
+begin
+  var Pattern := SweepPatterns[Tier];
+  var OnRow := Abs(SweeperRowY(FMast) - FRowY) <= RowSlack;
+  case FFire of
+    rfIdle:
+      if FFireTicks > 0 then
+        Dec(FFireTicks)
+      else if OnRow and
+        ((FHeroCenter.X - MastPivot(FX).X) * -FFacing <= SweeperTurnPast) then
+      begin
+        FForkLeft := Pattern.Fork;
+        BeginSweep(Pattern.HeatTicks);
+      end;
+    rfFlare:
+      if not OnRow then
+        Exit
+      else if FFireTicks > 1 then
+        Dec(FFireTicks)
+      else
+      begin
+        FFire := rfBurst;
+        FShotsLeft := Pattern.Shots;
+        FFireTicks := 0;
+        FLadderWay := 0;
+        if Pattern.Ladder then
+        begin
+          FLadderWay := 1;
+          if FRowY - SweeperRowY(SweeperMastHighest) >
+            SweeperRowY(SweeperMastLowest) - FRowY then
+            FLadderWay := -1;
+        end;
+      end;
+    rfBurst:
+      if FFireTicks > 0 then
+        Dec(FFireTicks)
+      else
+      begin
+        ShootBarrel;
+        Dec(FShotsLeft);
+        FFireTicks := Pattern.GapTicks;
+        if FShotsLeft > 0 then
+          Exit;
+        FLadderWay := 0;
+        if FForkLeft then
+        begin
+          FForkLeft := False;
+          FRowY := ForkRow;
+          BeginSweep(ForkHeatTicks);
+        end
+        else
+        begin
+          FFire := rfIdle;
+          FFireTicks := Pattern.RestTicks;
+        end;
+      end;
+  end;
+end;
+
+procedure TRam.BeginSweep(AFlareTicks: Integer);
+begin
+  FFire := rfFlare;
+  FFireTicks := AFlareTicks;
+  FHeatTicks := AFlareTicks;
+end;
+
+// A cell up - the jump is the way out of a row - or down when he is
+// already falling, or when up is past the mast
+function TRam.ForkRow: Single;
+const
+  Falling = 0.5;
+begin
+  var Way := -1;
+  if FHeroPace.Y > Falling then
+    Way := 1;
+  Result := FRowY + Way * ForkStep;
+  if (Result < SweeperRowY(SweeperMastHighest)) or
+    (Result > SweeperRowY(SweeperMastLowest)) then
+    Result := FRowY - Way * ForkStep;
+end;
+
+// Level out of the next of the four muzzles in turn
+procedure TRam.ShootBarrel;
+begin
+  FCue.Shot := True;
+  FCue.ShotFrom := HeadPoint(FX, FMast, FSway, rhSweeper, FFacing, 1, MuzzleX,
+    MuzzleYs[FNextBarrel]);
+  FCue.ShotAngle := 180;
+  if FFacing > 0 then
+    FCue.ShotAngle := 0;
+  FCue.ShotSpeed := SweeperBulletSpeed;
+  FNextBarrel := (FNextBarrel + 1) mod Length(MuzzleYs);
+end;
+
+procedure TRam.TickHeat;
+begin
+  FHeat := 0;
+  if (FHead <> rhSweeper) or not FArmed then
+    Exit;
+  case FFire of
+    rfFlare:
+      FHeat := Lerp(HeatFrom, 1, 1 - FFireTicks / FHeatTicks);
+    rfBurst:
+      FHeat := 1;
+  end;
 end;
 
 procedure TRam.TickLamps;
@@ -1685,6 +2012,90 @@ begin
   Result := True;
 end;
 
+// A point of the screen in the sweeper's own units, as its art is drawn
+// facing left: the sway, the facing and the squash of a turn undone
+function TRam.ToHead(const APoint: TSdlFPoint): TSdlFPoint;
+begin
+  var Shape := HeadShapes[rhSweeper];
+  var Pivot := MastPivot(FX);
+  var Upright := Turned(APoint, Pivot, -FSway);
+  Result := UnitPoint(Shape.SocketX - (Upright.X - Pivot.X) / (FFacing * TurnSquash),
+    Upright.Y - Pivot.Y + FMast + Shape.SocketY);
+end;
+
+// The first point of the stretch on the pack or under it. Under it, or
+// climbing into it, the bullet comes from below: a plate takes it.
+function TRam.StrikeBarrels(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
+  out AGuarded: Boolean): Boolean;
+begin
+  AAt := ATo;
+  AGuarded := False;
+  if not Present or (FHead <> rhSweeper) or not FArmed or FHeadKilled or
+    (TurnSquash < ThinHeadSquash) then
+    Exit(False);
+  var From := ToHead(AFrom);
+  var Till := ToHead(ATo);
+  var Steps := Max(1, Ceil(Hypot(Till.X - From.X, Till.Y - From.Y) / StrikeStep));
+  var Met := -1;
+  var Under := False;
+  for var i := 0 to Steps do
+  begin
+    var Point := UnitPoint(Lerp(From.X, Till.X, i / Steps),
+      Lerp(From.Y, Till.Y, i / Steps));
+    if not InRange(Point.X, BarrelsLeft, BarrelsRight) or
+      not InRange(Point.Y, BarrelsTop, PlateBottom) then
+      Continue;
+    Met := i;
+    Under := Point.Y > BarrelsBottom;
+    Break;
+  end;
+  if Met < 0 then
+    Exit(False);
+
+  AAt := UnitPoint(Lerp(AFrom.X, ATo.X, Met / Steps),
+    Lerp(AFrom.Y, ATo.Y, Met / Steps));
+  var Climbs := AFrom.Y - ATo.Y > Abs(ATo.X - AFrom.X) * Tan(DegToRad(PlateCover));
+  if Under or Climbs then
+  begin
+    AGuarded := True;
+    var Local := ToHead(AAt);
+    var Nearest := 0;
+    if Abs(Local.X - PlateMiddles[1].X) < Abs(Local.X - PlateMiddles[0].X) then
+      Nearest := 1;
+    FPlates[Nearest].Strike(UnitPoint(
+      -FFacing * (Local.X - PlateMiddles[Nearest].X) * TurnSquash, 0));
+    Exit(True);
+  end;
+
+  FHurtTicks := HurtFlashTicks;
+  FHitTicks := 0;
+  Dec(FLives);
+  if FLives <= 0 then
+    FHeadKilled := True;
+  Result := True;
+end;
+
+function TRam.BarrelsPoint: TSdlFPoint;
+begin
+  Result := HeadPoint(FX, FMast, FSway, rhSweeper, FFacing, TurnSquash,
+    (BarrelsLeft + BarrelsRight) / 2, (BarrelsTop + BarrelsBottom) / 2);
+end;
+
+function TRam.Plate(AIndex: Integer): TTekShield;
+begin
+  Result := FPlates[AIndex];
+end;
+
+function TRam.HeatAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastHeat, FHeat, AAlpha);
+end;
+
+function TRam.Booting: Boolean;
+begin
+  Result := (FHead <> rhNone) and FArmed and (RowLit < HeadRowCells);
+end;
+
 function TRam.AimAt(AAlpha: Single): Single;
 begin
   Result := Lerp(FLastAim, FAim, AAlpha);
@@ -1825,6 +2236,7 @@ begin
   FHunter := FCache.Get('hunter');
   FHunterBarrel := FCache.Get('hunterBarrel');
   FSweeper := FCache.Get('sweeper');
+  FSweeperHeat := FCache.Get('sweeperHeat');
   FHullArt := THullArt.Create(ARenderer, RamHullDef);
   FShield := TShieldArt.Create(ARenderer);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
@@ -1987,6 +2399,28 @@ begin
     Sleeve.Y + Barrel.Y * Reach), BarrelWidth, BarrelHeight, 1, Mirrored, Turn);
 end;
 
+// The barrels in white over the sweeper: red as they burn before and
+// through a sweep, white while its row comes up and for a moment when they
+// are struck
+procedure TRamPainter.DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast,
+  ASway, AAlpha: Single);
+begin
+  var Level := FRam.HeatAt(AAlpha);
+  var Color := HeatRed;
+  if (Level <= 0) and (FRam.Booting or FRam.Hurt) then
+  begin
+    Level := 1;
+    Color := HeatWhite;
+  end;
+  if Level <= 0 then
+    Exit;
+  var Shape := HeadShapes[rhSweeper];
+  SDL_SetTextureColorMod(FArt.FSweeperHeat, Color.R, Color.G, Color.B);
+  ASprites.DrawSized(FArt.FSweeperHeat, HeadPoint(ALeft, AMast, ASway,
+    rhSweeper, FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2),
+    Shape.Width * FRam.TurnSquash, Shape.Height, Level, FRam.Facing > 0, ASway);
+end;
+
 procedure TRamPainter.DrawLamps(const ASprites: TSpriteRenderer;
   ALeft, AAlpha: Single);
 begin
@@ -2061,6 +2495,9 @@ begin
   ASprites.ClipAbove(RamTop + WellY);
   DrawMast(ASprites, Left, Mast, Sway, AAlpha);
   DrawLens(ASprites, Left, Mast, Sway, AAlpha);
+  // Once: the mast is drawn twice, and the heat is see-through
+  if FRam.Head = rhSweeper then
+    DrawHeat(ASprites, Left, Mast, Sway, AAlpha);
   ASprites.ClearClip;
   DrawLamps(ASprites, Left, AAlpha);
 end;
@@ -2082,9 +2519,21 @@ procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;
 begin
   if not FRam.Present then
     Exit;
-  var Middle := UnitPoint(FRam.LeftAt(AAlpha) + FRam.Body.Middle.X + AOrigin.X,
+  var Left := FRam.LeftAt(AAlpha);
+  var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,
     RamTop + FRam.Body.Middle.Y + AOrigin.Y);
   FRam.Shield.Draw(ACanvas, FArt.FShield, Middle, AAlpha);
+  if (FRam.Head <> rhSweeper) or not FRam.Armed then
+    Exit;
+  var Mast := FRam.MastAt(AAlpha);
+  var Sway := FRam.SwayAt(AAlpha);
+  for var i := Low(PlateMiddles) to High(PlateMiddles) do
+  begin
+    var Plate := HeadPoint(Left, Mast, Sway, rhSweeper, FRam.Facing,
+      FRam.TurnSquash, PlateMiddles[i].X, PlateMiddles[i].Y);
+    FRam.Plate(i).Draw(ACanvas, FArt.FShield,
+      UnitPoint(Plate.X + AOrigin.X, Plate.Y + AOrigin.Y), AAlpha);
+  end;
 end;
 
 end.

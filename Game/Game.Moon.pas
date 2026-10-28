@@ -289,6 +289,7 @@ type
     procedure ResolveRamContact;
     function BulletStruckRam(const ABullet: TBullet): Boolean;
     function BulletStruckRamEye(const ABullet: TBullet): Boolean;
+    function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -402,6 +403,9 @@ const
   // FindMostersOnScreen (1092-1094). AddGravel(0/1/3) joins in the
   // gravel-trial chapter.
   DifficultyHeroHealth: array [TDifficulty] of Integer = (5, 4, 2);
+  // A death in the Ram's fight restarts the whole fight: the hero comes
+  // back to it whole, bonus and all
+  RamRestartHealth = 10;
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
@@ -2102,7 +2106,8 @@ begin
       Own.StartBurstSliding;
 
     if (Own.Status <> bsFlying) or BulletStruckCannon(Own) or
-      BulletStruckRamEye(Own) or BulletStruckRam(Own) then
+      BulletStruckRamEye(Own) or BulletStruckRamBarrels(Own) or
+      BulletStruckRam(Own) then
       Continue;
 
     // Hit a monster: knockback dx/2; a death that blows up sends its
@@ -2471,6 +2476,8 @@ begin
   FShroud.Clear;
   FShroud.Start(ReviveLook);
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
+  if FRam.Entered then
+    FHeroHealth := RamRestartHealth;
   FHurtCooldown := 0;
   // See the LoadLevel comment: 2008 never cleared this flag, here it
   // would softlock the reborn screen. The screen trigger of the trial
@@ -2696,7 +2703,7 @@ begin
 end;
 
 // A tick of the Ram, carried out. The boss track starts as the head locks,
-// unless it already plays - after a death it plays on. The hunter's
+// unless it already plays - after a death it plays on. The heads'
 // bullets are the monsters' own: they wound as theirs do, and the hero's
 // shots can meet them.
 procedure TMoonGame.TickRam;
@@ -2726,7 +2733,7 @@ begin
   if Cue.Shot then
   begin
     // A bullet's picture hangs a sprite over its point (BulletStretch)
-    FMonsterBullets.NewBullet(HunterBulletSpeed, Cue.ShotFrom.X,
+    FMonsterBullets.NewBullet(Cue.ShotSpeed, Cue.ShotFrom.X,
       Cue.ShotFrom.Y + SpriteSize, Cue.ShotAngle, 0, True);
     FAudio.Play(CannonShotSoundFile);
   end;
@@ -2781,6 +2788,28 @@ begin
   Strike.SpeedX := ABullet.DX;
   Strike.SpeedY := ABullet.DY;
   FaceFromCenter(Strike, FRam.LensPoint);
+  SoundArmorHit(FImpacts.Land(Strike));
+end;
+
+// The sweeper's barrels take the bullet - sparks, a ping, a life gone -
+// or, climbing, a plate under them takes it into its light
+function TMoonGame.BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
+begin
+  var Stretch := BulletStretch(ABullet);
+  var At: TSdlFPoint;
+  var Guarded: Boolean;
+  Result := FRam.StrikeBarrels(Stretch.Start, Stretch.Finish, At, Guarded);
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
+  if Guarded then
+    Exit;
+  var Strike := Default(TStrike);
+  Strike.X := At.X;
+  Strike.Y := At.Y;
+  Strike.SpeedX := ABullet.DX;
+  Strike.SpeedY := ABullet.DY;
+  FaceFromCenter(Strike, FRam.BarrelsPoint);
   SoundArmorHit(FImpacts.Land(Strike));
 end;
 

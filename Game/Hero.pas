@@ -94,10 +94,6 @@ type
     FDupletCache: TSpriteCache;
     FDupletSet: TSpriteSet;
     FDupletHeld: PSdlTexture;
-    // The recoil of the Duplet still to come, units along X, and the
-    // fraction of a unit it has paid and not yet moved
-    FRecoil: Double;
-    FRecoilCarry: Double;
     // Ticks left of a throw, with the controls out of his hands
     FThrownTicks: Integer;
 
@@ -176,7 +172,6 @@ type
     procedure CarryX(AWay: Double);
     // --- the Duplet ---
     procedure FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
-    procedure ApplyRecoil;
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
       const APads: TPadWorld);
@@ -189,8 +184,7 @@ type
     // Verbatim TWeapon.Fire: fires only when the cooldown has fully
     // elapsed; patterns per weapon type (0 pistol, 1 shotgun x5,
     // 2 grenade cloud x22, 3 chain x3, 4 minigun with alternating
-    // side shots; 5 the Duplet, two barrels of red shot and a recoil,
-    // not of 2008). Poll while LMB is held, like everything in 2008.
+    // side shots; 5 the Duplet, two barrels of red shot, not of 2008). Poll while LMB is held, like everything in 2008.
     // True when a shot actually left the barrel - the caller barks the
     // weapon sound then; held triggers on cooldown fire nothing
     function Fire: Boolean;
@@ -493,8 +487,6 @@ procedure THero.Kill;
 begin
   FDead := True;
   FDeathFrame := 9;
-  FRecoil := 0;
-  FRecoilCarry := 0;
   FThrownTicks := 0;
   // Frozen at the moment of death: the corpse must not track the cursor
   FDeathFacingRight := FacingMouseRight;
@@ -503,8 +495,6 @@ end;
 procedure THero.Revive;
 begin
   FDead := False;
-  FRecoil := 0;
-  FRecoilCarry := 0;
   FThrownTicks := 0;
   FDropFrom := nil;
   FCorpseSettled := False;
@@ -1184,7 +1174,6 @@ begin
   SetWeaponAngle;
   if FTimeOfFire < FFireCooldown then // TWeapon.Timer
     Inc(FTimeOfFire);
-  ApplyRecoil;
   if FThrownTicks > 0 then
     Dec(FThrownTicks);
 
@@ -1411,8 +1400,7 @@ begin
   Result := True;
 end;
 
-// Two barrels, a cloud of red shot out of each, born at the muzzle, and a
-// kick back against the shot. ASpawn - where the 2008 guns fire from, at
+// Two barrels, a cloud of red shot out of each, born at the muzzle. ASpawn - where the 2008 guns fire from, at
 // the hand.
 procedure THero.FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
 const
@@ -1426,7 +1414,6 @@ const
   PelletsPerBarrel = 6;
   // The shot of a barrel leaves from a square this many units across
   PelletSpread = 6;
-  RecoilUnits = 6;
 begin
   var Rad := ABaseAngle * Pi / 180;
   var AlongX := Cos(Rad);
@@ -1445,28 +1432,6 @@ begin
         BoreY + Random * PelletSpread - PelletSpread / 2,
         ABaseAngle, FBulletGravity, True, blRed);
   end;
-  FRecoil := FRecoil - RecoilUnits * AlongX;
-end;
-
-// The recoil is paid in halves, a tick at a time, and moved in whole units
-// through ShoveX: a wall stops it, a deck's edge drops the hero
-procedure THero.ApplyRecoil;
-const
-  RecoilShare = 0.5;
-  // Under this much the rest is paid at once
-  RecoilRest = 0.5;
-begin
-  if FRecoil = 0 then
-    Exit;
-  var Paid := FRecoil * RecoilShare;
-  if Abs(FRecoil) < RecoilRest then
-    Paid := FRecoil;
-  FRecoil := FRecoil - Paid;
-  FRecoilCarry := FRecoilCarry + Paid;
-  var Whole := Trunc(FRecoilCarry);
-  FRecoilCarry := FRecoilCarry - Whole;
-  if Whole <> 0 then
-    ShoveX(Whole);
 end;
 
 // ---------------------------------------------------------------------------
