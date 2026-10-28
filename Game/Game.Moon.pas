@@ -288,6 +288,7 @@ type
     procedure StopRamRumble;
     procedure ResolveRamContact;
     function BulletStruckRam(const ABullet: TBullet): Boolean;
+    function BulletStruckRamEye(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -2101,7 +2102,7 @@ begin
       Own.StartBurstSliding;
 
     if (Own.Status <> bsFlying) or BulletStruckCannon(Own) or
-      BulletStruckRam(Own) then
+      BulletStruckRamEye(Own) or BulletStruckRam(Own) then
       Continue;
 
     // Hit a monster: knockback dx/2; a death that blows up sends its
@@ -2688,17 +2689,23 @@ end;
 // is no longer the one a restart brings back
 procedure TMoonGame.StartRam(const AOrders: TRamOrders);
 begin
-  if not FRam.Start(AOrders) then
+  if not FRam.Start(AOrders, DifficultyMonsterLives[FDifficulty]) then
     Exit;
   FCurrentMusic := '';
   FAudio.FadeOutMusic(AOrders.SilenceSeconds);
 end;
 
 // A tick of the Ram, carried out. The boss track starts as the head locks,
-// unless it already plays - after a death it plays on.
+// unless it already plays - after a death it plays on. The hunter's
+// bullets are the monsters' own: they wound as theirs do, and the hero's
+// shots can meet them.
 procedure TMoonGame.TickRam;
 begin
-  var Cue := FRam.Tick;
+  var Target := Default(TRamTarget);
+  Target.Alive := not FHero.Dead;
+  Target.Body := HeroBody(FHero);
+  Target.OnDeck := not FHero.InAir and (FHero.DeckUnderFeet <> nil);
+  var Cue := FRam.Tick(Target);
   FRamPainter.Tick;
   if Cue.Rumble then
   begin
@@ -2716,6 +2723,21 @@ begin
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
     ChangeMusic(FRam.Track);
+  if Cue.Shot then
+  begin
+    // A bullet's picture hangs a sprite over its point (BulletStretch)
+    FMonsterBullets.NewBullet(HunterBulletSpeed, Cue.ShotFrom.X,
+      Cue.ShotFrom.Y + SpriteSize, Cue.ShotAngle, 0, True);
+    FAudio.Play(CannonShotSoundFile);
+  end;
+  if Cue.Blast then
+  begin
+    FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
+    FAudio.Play(RageBlastSoundFile);
+  end;
+  // The row of the head's lives comes up with the terminal's key
+  if Cue.RowCell then
+    FAudio.Play(TerminalKeySoundFile);
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -2741,6 +2763,25 @@ begin
     HurtHero;
   end;
   FHero.Throw(Away);
+end;
+
+// The hunter's eye takes the bullet: sparks off the lens, a ping, a life
+// gone - the only wound the machine takes before the evolution
+function TMoonGame.BulletStruckRamEye(const ABullet: TBullet): Boolean;
+begin
+  var Stretch := BulletStretch(ABullet);
+  var At: TSdlFPoint;
+  Result := FRam.StrikeEye(Stretch.Start, Stretch.Finish, At);
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
+  var Strike := Default(TStrike);
+  Strike.X := At.X;
+  Strike.Y := At.Y;
+  Strike.SpeedX := ABullet.DX;
+  Strike.SpeedY := ABullet.DY;
+  FaceFromCenter(Strike, FRam.LensPoint);
+  SoundArmorHit(FImpacts.Land(Strike));
 end;
 
 // The shield takes the bullet into its light; the hull loses nothing
@@ -3228,6 +3269,7 @@ begin
         FScenes.DrawShade(ARenderer);
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
+        FMarks.DrawRam(FRam, FShake.Offset(scWorld), AAlpha);
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;

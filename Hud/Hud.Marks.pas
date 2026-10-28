@@ -6,6 +6,12 @@
   thirds - a pair empties in the tick the color turns, so the two say the
   same thing about the same target.
 
+  The head of the Ram - a boss - has a longer row of its own over the
+  head: twelve cells, four a third, in the same colors, which are also
+  how it fires. It does not fade while the head is up: it comes up a
+  cell at a time as the head locks, flashes as the eye is struck, and
+  only a dead head's row fades.
+
   A row shows for a while after a change and fades; the hero's stays
   while he is down to his last point. The hero's health arrives every
   tick and the difference is what animates; a monster carries its own
@@ -19,7 +25,7 @@ unit Hud.Marks;
 interface
 
 uses
-  Sdl2.Core, Render.Brush, Hero, Monsters;
+  Sdl2.Core, Render.Brush, Hero, Monsters, Game.Ram;
 
 type
   THudMarks = class
@@ -39,6 +45,8 @@ type
     procedure DrawPlate(AX, AY, AWidth, AAlpha: Single);
     procedure DrawHeroRow(const AHero: THero; AShift: TSdlPoint);
     procedure DrawMonsterRow(const AMonster: TMonster; AShift: TSdlPoint);
+    procedure DrawCells(AX, AY: Single; ACount, AFull: Integer; ATint: TRgb;
+      AAlpha: Single);
   public
     constructor Create(ARenderer: PSdlRenderer);
     destructor Destroy; override;
@@ -49,6 +57,9 @@ type
     // The rows ride their figures' shake channels, not the world's
     procedure Draw(const AHero: THero; const AField: TMonsterField;
       AHeroShift, AMonsterShift: TSdlPoint);
+    // The row of the Ram's head, on the world's shake channel the machine
+    // stands at
+    procedure DrawRam(const ARam: TRam; AShift: TSdlPoint; AAlpha: Single);
   end;
 
 implementation
@@ -70,6 +81,12 @@ const
   HurtFlashTicks = 12;
   LostCellTicks = 14;
   GrownCellTicks = 8;
+  // The Ram's head: its row stands this far over the top of the head; a
+  // hit reddens the plate and whitens the cell it emptied into
+  HeadRowLift = 6;
+  HeadHitTicks = 8;
+  // The newest cell of a row coming up glows
+  BootGlow = 0.8;
 
 function TierColor(ATier: TMonsterHealthTier): TRgb;
 begin
@@ -277,14 +294,61 @@ begin
   var FullCells := MonsterFullCells(AMonster);
 
   DrawPlate(X, Y, Width, Alpha);
-  for var i := 0 to MonsterCells - 1 do
+  DrawCells(X, Y, MonsterCells, FullCells, Tint, Alpha);
+end;
+
+procedure THudMarks.DrawCells(AX, AY: Single; ACount, AFull: Integer;
+  ATint: TRgb; AAlpha: Single);
+begin
+  for var i := 0 to ACount - 1 do
   begin
-    var CellX := X + i * (MarkCell + MarkGap);
-    if i < FullCells then
-      FBrush.FullCell(CellX, Y, MarkCell, MarkCell, Tint, Alpha)
+    var CellX := AX + i * (MarkCell + MarkGap);
+    if i < AFull then
+      FBrush.FullCell(CellX, AY, MarkCell, MarkCell, ATint, AAlpha)
     else
-      FBrush.EmptyCell(CellX, Y, MarkCell, MarkCell, Tint, Alpha);
+      FBrush.EmptyCell(CellX, AY, MarkCell, MarkCell, ATint, AAlpha);
   end;
+end;
+
+// The thirds' colors as the lives' share says them; a living head keeps
+// at least one cell, and its row comes up a cell at a time after the lock
+procedure THudMarks.DrawRam(const ARam: TRam; AShift: TSdlPoint;
+  AAlpha: Single);
+begin
+  var Row := ARam.Row;
+  if not Row.Shown then
+    Exit;
+  var Width := HeadRowCells * (MarkCell + MarkGap) - MarkGap;
+  var Top := ARam.HeadTopAt(AAlpha);
+  var X: Single := Round(Top.X - Width / 2) + AShift.X;
+  var Y: Single := Round(Top.Y) - HeadRowLift - MarkCell + AShift.Y;
+
+  var Tint := HaleColor;
+  if Row.Share * 3 <= 2 then
+    Tint := WaryColor;
+  if Row.Share * 3 <= 1 then
+    Tint := AlarmColor;
+  var Full := 0;
+  if Row.Share > 0 then
+    Full := Max(1, Ceil(HeadRowCells * Row.Share));
+  var Alpha := Row.Fade;
+
+  FBrush.BeginDraw;
+  DrawPlate(X, Y, Width, Alpha);
+  if Row.HitTicks < HeadHitTicks then
+  begin
+    var Hit := 1 - Row.HitTicks / HeadHitTicks;
+    FBrush.Frame(X - PlatePad, Y - PlatePad, Width + 2 * PlatePad,
+      MarkCell + 2 * PlatePad, AlarmColor, Hit * Alpha);
+    if Full < HeadRowCells then
+      FBrush.Fill(X + Full * (MarkCell + MarkGap), Y, MarkCell, MarkCell,
+        White, Hit * Alpha);
+  end;
+  DrawCells(X, Y, Row.Lit, Min(Full, Row.Lit), Tint, Alpha);
+  if (Row.Lit > 0) and (Row.Lit < HeadRowCells) then
+    FBrush.Glow(X + (Row.Lit - 1) * (MarkCell + MarkGap) - 1, Y - 1,
+      MarkCell + 2, MarkCell + 2, White, BootGlow * Alpha);
+  FBrush.EndDraw;
 end;
 
 end.

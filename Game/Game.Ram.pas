@@ -8,8 +8,9 @@
   stern.
 
   The eye is its telegraph: lit, it breathes slowly, and it blinks fast
-  only as a warning - while a head rises. The head's lens winks once a
-  second while the head is up and locked.
+  only as a warning - while a head rises or the heads change. The head's
+  lens winks once a second while the head is up and locked, and burns red
+  before and through a burst.
 
   The entrance is the machine's own: the music before it fades out, it
   drives in from beyond the right edge in the silence and brakes at its
@@ -27,10 +28,30 @@
   (the screen's edge), so a hero pinned at a wall goes up toward the low
   pad there - and a thrown hero is out of its way until he comes down.
 
-  After the lock the machine drives to a mark of its own, stands, drives
-  again; one leg in three ends at the far wall, so no floor is safe from
-  it. The head does not shoot yet, and bullets pass the mast and the
-  head: the heads become targets with their own stage.
+  After the lock it watches the hero. Low - on the road, or in a jump off
+  it under the low pads, where it can crush him - it presses: a rev, and
+  to the wall on his side at a run a little slower than his. Higher -
+  on a pad - it is out of reach of the ram but not of the gun: the
+  machine roams in short legs, keeping him in the barrel's sights, and the
+  hunter fires. With no hero to watch it roams the whole floor, one leg in
+  three to the far wall.
+
+  The hunter: its barrel turns on the sleeve within its own half, from
+  straight up to a little under level, and follows the hero; past the
+  vertical the head turns by squashing across its socket and opening
+  mirrored. A burst comes after the lens has burned red for a while, and
+  a rest comes after the burst - something to see coming and a gap to
+  get out of the way. It grows harder by the thirds of its lives: three
+  shots where the hero stood; three where he will be if he keeps going;
+  a hose of six that keeps following him.
+
+  The only target is the hunter's eye - its lens. Bullets pass the mast,
+  the head and the barrel. Its lives show as a row of cells over the head:
+  as the head locks the row lights cell by cell while the lens burns white
+  - this is what has lives - and only then the first burst. The last of
+  its lives blows the head up, the empty row fades; the
+  empty mast sinks into the well, the eye blinks, and the next head - the
+  sweeper - rises and stands silent for now.
 
   TRam is the rules; TRamPainter draws them with TRamArt. The game carries
   out the cue of a tick: the sounds, the shake and the boss track, and the
@@ -53,12 +74,48 @@ const
   // The road of the boss arena: the top of row 11
   RamFloorY = 352.0;
   RamTop = RamFloorY - RamHeight;
+  // The hunter's eye on the first grade; the game scales them by its own
+  HunterLives = 100;
+  // Units a tick, as TBurst.NewBullet takes them
+  HunterBulletSpeed = 6;
+  // The head's row of lives: three thirds of four cells
+  HeadRowCells = 12;
 
 type
   // rpWaiting - the music fades out, the machine is not on the screen yet;
-  // rpBreathing - stopped at the mark of the entrance, the eye still dark
+  // rpBreathing - stopped at the mark of the entrance, the eye still dark;
+  // rpRevving - the engine roars before it presses the hero; rpChanging -
+  // a head is dead: the empty mast sinks and the next head rises
   TRamPhase = (rpAbsent, rpWaiting, rpDriving, rpBreathing, rpRising,
-    rpResting);
+    rpResting, rpRevving, rpChanging);
+
+  TRamHead = (rhNone, rhHunter, rhSweeper);
+
+  // The hunter's gun: idle (aiming, resting), the lens burning red before
+  // a burst, the burst
+  TRamFire = (rfIdle, rfFlare, rfBurst);
+
+  // The head's row of lives as the HUD draws it
+  TRamRow = record
+    // A hunter up, or one blown up a moment ago
+    Shown: Boolean;
+    // Cells lit so far as the row comes up after the lock
+    Lit: Integer;
+    // Lives left of the full
+    Share: Single;
+    // Ticks since the eye was last struck
+    HitTicks: Integer;
+    // 1, going to 0 as the row of a dead head fades
+    Fade: Single;
+  end;
+
+  // What the machine sees of the hero this tick
+  TRamTarget = record
+    Alive: Boolean;
+    Body: TSdlFRect;
+    // Stands on a pad
+    OnDeck: Boolean;
+  end;
 
   TRamCue = record
     // The engine runs: the rumble loops from now on
@@ -71,6 +128,16 @@ type
     Locked: Boolean;
     // A shake, in trauma shares; 0 - none
     Jolt: Single;
+    // The hunter fires a bullet from ShotFrom along ShotAngle, degrees
+    // counter-clockwise from the right
+    Shot: Boolean;
+    ShotFrom: TSdlFPoint;
+    ShotAngle: Integer;
+    // The head has lost its last life: it blows up at BlastAt
+    Blast: Boolean;
+    BlastAt: TSdlFPoint;
+    // One more cell of the head's row lit
+    RowCell: Boolean;
   end;
 
   TRam = class
@@ -105,14 +172,68 @@ type
     FArrivals: Integer;
     FDice: TXorShift;
     FCue: TRamCue;
+    // The hero as it sees him, and how he moves: units a tick, smoothed
+    FHero: TRamTarget;
+    FHeroSeen: Boolean;
+    FHeroCenter: TSdlFPoint;
+    FHeroPace: TSdlFPoint;
+    // Pressing a hero low on the road; the ticks that decide it
+    FPressing: Boolean;
+    FLowTicks, FAboveTicks, FDeckTicks: Integer;
+    // The head, its lives and its facing: -1 left, as the art is drawn
+    FHead: TRamHead;
+    FLives, FFullLives: Integer;
+    FHeadKilled: Boolean; // the last life is gone; it blows up next tick
+    FChangePending: Boolean; // braking to stand for the change of heads
+    FChangeFrom: Single; // the mast's height as the change began
+    FFacing: Integer;
+    FTurnTicks: Integer; // a turn of the head under way, ticks left
+    FPastTicks: Integer; // the hero has stood past the vertical
+    // The barrel: its angle before the sway, degrees counter-clockwise from
+    // the right, and the one it wants
+    FAim, FLastAim: Single;
+    FWant: Single;
+    FInSights: Boolean; // the hero is within the barrel's half
+    FFire: TRamFire;
+    FFireTicks: Integer;
+    FShotsLeft: Integer;
+    // Where a burst goes, held from the moment the lens lights
+    FFrozenAt: TSdlFPoint;
+    FLensHot: Boolean;
+    FHurtTicks: Integer;
+    // The row of lives: ticks since the lock (-1 - none), since the last
+    // hit, since the blast (-1 - none)
+    FRowTicks: Integer;
+    FHitTicks: Integer;
+    FGoneTicks: Integer;
     procedure Place(AX: Single);
+    procedure Arm(ALivesShare: Single);
     procedure BeginDrive(ATarget, ACruise: Single; AEntering: Boolean);
     procedure BeginRest(ATicks: Integer);
+    procedure BeginLeg;
     procedure BeginPatrolLeg;
+    procedure BeginHuntLeg;
+    procedure BeginRev;
+    procedure BeginChange;
+    procedure SeeHero(const ATarget: TRamTarget);
+    procedure TickMode;
+    procedure PressNow;
+    function PressWall: Single;
+    function StopAhead: Single;
+    function InSightsFrom(ALeft: Single): Boolean;
+    procedure KillHead;
     procedure TickPhase;
+    procedure TickChange;
     procedure TickDrive;
     procedure Arrive(AOldSpeed: Single);
     procedure TickSway;
+    procedure TickAim;
+    procedure TickFire;
+    procedure Shoot;
+    function Tier: Integer;
+    function CanShoot: Boolean;
+    procedure TickRow;
+    function RowLit: Integer;
     procedure TickLamps;
     procedure TickEye;
     procedure TickLens;
@@ -126,16 +247,24 @@ type
     destructor Destroy; override;
     // Comes onto the screen as AOrders say: the whole entrance the first
     // time on the level - True, and the music must go silent - from the
-    // stop on after that
-    function Start(const AOrders: TRamOrders): Boolean;
+    // stop on after that. The hunter comes with HunterLives times
+    // ALivesShare.
+    function Start(const AOrders: TRamOrders; ALivesShare: Single = 1): Boolean;
     // Gone from the screen: a door, a death
     procedure Clear;
     // A new level: gone, and the entrance not seen
     procedure Reset;
-    function Tick: TRamCue;
+    function Tick(const ATarget: TRamTarget): TRamCue; overload;
+    // No hero to watch: it roams and holds its fire
+    function Tick: TRamCue; overload;
     // Where a bullet's stretch of this tick first meets the shield, which
     // flares there; False when it meets nothing
     function Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    // Where a bullet's stretch of this tick meets the hunter's eye, which
+    // loses a life; False when it misses
+    function StrikeEye(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    // The hunter's lens on the screen now
+    function LensPoint: TSdlFPoint;
     // The hero's body touches the hull or a wheel and he is in the
     // machine's way: AOnDeck - he stands on a pad, AInAir - on his way up
     // or down. AAway - the side to throw him to, away from its middle; 0 -
@@ -151,8 +280,26 @@ type
     function LampsAt(AAlpha: Single): Single;
     function EyeAt(AAlpha: Single): Single;
     function LensAt(AAlpha: Single): Single;
+    function AimAt(AAlpha: Single): Single;
     // Units the hull has rolled this tick, to the right above zero
     function Rolled: Single;
+    // The head's width as a share of its own: 1 but in the middle of a turn
+    function TurnSquash: Single;
+    // At the last third of its lives
+    function Wounded: Boolean;
+    // The eye was struck a moment ago
+    function Hurt: Boolean;
+    function Row: TRamRow;
+    // The middle of the top of the head, between two ticks
+    function HeadTopAt(AAlpha: Single): TSdlFPoint;
+    property Head: TRamHead read FHead;
+    property Facing: Integer read FFacing;
+    property Lives: Integer read FLives;
+    property FullLives: Integer read FFullLives;
+    property Pressing: Boolean read FPressing;
+    property Fire: TRamFire read FFire;
+    // The lens burns red: a burst is coming or under way
+    property LensHot: Boolean read FLensHot;
     property Body: TShieldMask read FBody;
     property Shield: TTekShield read FShield;
     property Phase: TRamPhase read FPhase;
@@ -183,6 +330,7 @@ type
     FMasts: array [1..3] of PSdlTexture;
     FHunter: PSdlTexture;
     FHunterBarrel: PSdlTexture;
+    FSweeper: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
@@ -202,10 +350,16 @@ type
     FHull: THull;
     FExhausts: array [0..1] of TSmoke;
     FExhaustDriving: Boolean;
+    // From a wounded head, or from the top of an empty mast
+    FHeadSmoke: TSmoke;
+    FHeadSmoking: Boolean;
     FArrivals: Integer;
     procedure TickExhausts;
+    procedure TickHeadSmoke;
     procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
-      ASway: Single);
+      ASway, AAlpha: Single);
+    procedure DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
+      ASway, AAlpha: Single);
     procedure DrawLamps(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
     procedure DrawEye(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
     procedure DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
@@ -233,6 +387,31 @@ uses
 
 resourcestring
   SRamArtFailed = 'Cannot read the Ram''s body off "%s": %s';
+
+type
+  // A third of the hunter's lives: how long the lens burns before the
+  // burst, how many shots and how far apart, the rest after; Lead - it
+  // aims where he will be; Hose - it keeps following him through the burst
+  TFirePattern = record
+    FlareTicks, Shots, GapTicks, RestTicks: Integer;
+    Lead, Hose: Boolean;
+  end;
+
+  THeadShape = record
+    Width, Height, SocketX, SocketY: Single;
+  end;
+
+const
+  FirePatterns: array [0..2] of TFirePattern = (
+    (FlareTicks: 20; Shots: 3; GapTicks: 4; RestTicks: 50; Lead: False; Hose: False),
+    (FlareTicks: 16; Shots: 3; GapTicks: 4; RestTicks: 40; Lead: True; Hose: False),
+    (FlareTicks: 14; Shots: 6; GapTicks: 5; RestTicks: 45; Lead: False; Hose: True));
+
+  // The heads as the art draws them, facing left; the socket at the bottom
+  HeadShapes: array [TRamHead] of THeadShape = (
+    (Width: 0; Height: 0; SocketX: 0; SocketY: 0),
+    (Width: 27.7; Height: 18.8; SocketX: 16.6; SocketY: 18.7),
+    (Width: 42.1; Height: 18.7; SocketX: 29.2; SocketY: 18.7));
 
 const
   LogicTicksPerSecond = 33;
@@ -266,6 +445,69 @@ const
   PatrolRestMaxTicks = 100;
   PatrolStopJolt = 0.12;
 
+  // Low is where the ram can crush him: feet under the line two cells over
+  // the road - the road and a jump off it, not the low pads (their decks
+  // stand at 280). It presses once he has been low this long; it lets go
+  // once he has stood on a pad, or kept above the line, this long.
+  LowLine = RamFloorY - 64;
+  PressAfterTicks = 10;
+  LeaveOnDeckTicks = 6;
+  LeaveAboveTicks = 33;
+  // The press: a rev, then to the wall on his side a little slower than he
+  // runs (2 a tick); at the last third a little faster. A short rest at the
+  // wall, then it looks again.
+  RevTicks = 8;
+  RevJolt = 0.06;
+  PressSpeeds: array [0..2] of Single = (1.9, 1.9, 2.1);
+  PressRestTicks = 13;
+  // The hunt: short legs that keep the hero in the barrel's sights
+  HuntSpeed = 1.1;
+  HuntMinLeg = 32;
+  HuntMaxLeg = 96;
+  HuntRestMinTicks = 15;
+  HuntRestMaxTicks = 40;
+  // Out of its sights it does not stand long
+  HuntBlindRestTicks = 5;
+
+  // The barrel aims within its half, from straight up to this far under
+  // level; it turns this fast following the hero, and the hose of the last
+  // third follows him slower through its burst
+  AimBelow = 25.0;
+  TrackRate = 3.0;
+  HoseRate = 2.0;
+  // A burst begins once the barrel is this close to where it wants to be
+  AimSlack = 3.0;
+  // The head turns once the hero has stood past the vertical this far, this
+  // long; the turn itself, squashed across the socket and opened mirrored
+  TurnPast = 15.0;
+  TurnHoldTicks = 10;
+  TurnTicks = 10;
+  // The lead of the second third: so far ahead at most
+  LeadMax = 80.0;
+  // How fast the eye learns how the hero moves
+  PaceLearn = 0.3;
+  // From the lock to the first burst
+  FirstBurstTicks = 33;
+
+  // The change of heads: the empty mast sinks, a beat, the next head rises
+  SinkTicks = 25;
+  EmptyTicks = 5;
+  ChangeRiseTicks = 30;
+  SweeperMast = 48.0;
+  HeadBlastJolt = 0.5;
+
+  // The eye: a circle around the lens; a hit flashes it white
+  EyeRadius = 5.0;
+  HurtFlashTicks = 4;
+  LensFlareFrom = 0.4;
+
+  // The row of lives comes up a cell at a time after the lock, under a
+  // second - before the first burst; a dead head's row fades
+  RowBootTicks = 30;
+  RowFadeTicks = 20;
+  // Long enough ago to be no hit at all
+  NoHitTicks = 10000;
+
   // The mast. Its height is how far the socket of the head stands over the
   // middle line of the well: at rest the head lies under the opening, out
   // of sight; three cells is the most. The hunter stands at a cell and a
@@ -280,12 +522,8 @@ const
   // Widest first; the art's sizes, units
   MastWidths: array [1..3] of Single = (31.4, 22.6, 16.8);
   MastLengths: array [1..3] of Single = (78.0, 69.6, 65.9);
-  // The head: its size and its socket (bottom centre); the sleeve the
-  // barrel turns on; the barrel's size and its pivot
-  HunterWidth = 27.7;
-  HunterHeight = 18.8;
-  HunterSocketX = 16.6;
-  HunterSocketY = 18.7;
+  // On the hunter: the sleeve the barrel turns on, the lens; the barrel's
+  // size, its pivot on the sleeve and its muzzle, lying level to the left
   HunterSleeveX = 1.9;
   HunterSleeveY = 7.1;
   HunterLensX = 17.1;
@@ -293,7 +531,7 @@ const
   BarrelWidth = 33.3;
   BarrelHeight = 9.3;
   BarrelPivotX = 30.9;
-  BarrelPivotY = 4.3;
+  BarrelMuzzleX = 0.2;
 
   // The mast sways: a spring that the drive's starts and stops kick, over
   // a slow sway of its own. A brake leans its top forward about 4 degrees.
@@ -333,6 +571,19 @@ const
   LensEmberSize = 2.5;
   LensWinkSize = 7.0;
   LensColor: TRgb = (R: 220; G: 236; B: 255);
+  // Before and through a burst: bigger and red, held
+  LensHotSize = 10.0;
+  LensHotColor: TRgb = (R: 255; G: 40; B: 24);
+  LensHurtSize = 9.0;
+
+  // A wounded head smokes, and so does an empty mast going down: thin,
+  // slow, no air to lift it
+  HeadSmokeLook: TSmokeLook = (Rate: 12; Life: 1.6; Size: 3; EndSize: 16;
+    Opacity: 0.5; Angle: 90; Cone: 50; Speed: 10; Drag: 0.5; Lift: 0;
+    Wind: 0; Turbulence: 4; Spin: 30; Flow: sfGusty; Frequency: 1;
+    Heat: 0; EndTint: (R: 40; G: 40; B: 44));
+  HeadSmokeSeed = $48656164; // "Head"
+  HeadSmokeRampTicks = 10;
 
   // The exhausts: where the jet leaves the mouths of the two pipes on the
   // stern. It flies back on its own speed and does not rise - no air to
@@ -366,6 +617,84 @@ function SmoothStep(AShare: Single): Single;
 begin
   var Share := EnsureRange(AShare, 0.0, 1.0);
   Result := Share * Share * (3 - 2 * Share);
+end;
+
+// APoint turned ADegrees clockwise about APivot, on the screen
+function Turned(const APoint, APivot: TSdlFPoint; ADegrees: Single): TSdlFPoint;
+begin
+  var Angle := DegToRad(ADegrees);
+  var AcrossX := APoint.X - APivot.X;
+  var DownY := APoint.Y - APivot.Y;
+  Result.X := APivot.X + AcrossX * Cos(Angle) - DownY * Sin(Angle);
+  Result.Y := APivot.Y + AcrossX * Sin(Angle) + DownY * Cos(Angle);
+end;
+
+function UnitPoint(AX, AY: Single): TSdlFPoint;
+begin
+  Result.X := AX;
+  Result.Y := AY;
+end;
+
+// The middle of the well, which the mast turns about with the sway
+function MastPivot(ALeft: Single): TSdlFPoint;
+begin
+  Result := UnitPoint(ALeft + WellX, RamTop + WellY);
+end;
+
+// A point of a head's art, AX, AY units from its corner as drawn facing
+// left, on the screen: the head on the top of the mast, facing AFacing,
+// squashed to ASquash of its width about the socket, all of it turned with
+// the sway
+function HeadPoint(ALeft, AMast, ASway: Single; AHead: TRamHead;
+  AFacing: Integer; ASquash, AX, AY: Single): TSdlFPoint;
+begin
+  var Shape := HeadShapes[AHead];
+  var Pivot := MastPivot(ALeft);
+  var Upright := UnitPoint(Pivot.X - AFacing * (AX - Shape.SocketX) * ASquash,
+    Pivot.Y - AMast + AY - Shape.SocketY);
+  Result := Turned(Upright, Pivot, ASway);
+end;
+
+// Along ADegrees counter-clockwise from the right, a unit long, on the
+// screen
+function Heading(ADegrees: Single): TSdlFPoint;
+begin
+  var Angle := DegToRad(ADegrees);
+  Result := UnitPoint(Cos(Angle), -Sin(Angle));
+end;
+
+// Degrees counter-clockwise from the right, from AFrom toward ATo
+function Bearing(const AFrom, ATo: TSdlFPoint): Single;
+begin
+  Result := RadToDeg(ArcTan2(AFrom.Y - ATo.Y, ATo.X - AFrom.X));
+end;
+
+// The bearing as the barrel of a head facing AFacing can take it: within
+// its half, from straight up to AimBelow under level. A hero on the other
+// side holds it straight up, waiting for the head to turn; one too low
+// holds it at its lowest. AReached - no limit held it.
+function AimWithin(ABearing: Single; AFacing: Integer;
+  out AReached: Boolean): Single;
+begin
+  AReached := False;
+  Result := ABearing;
+  if AFacing < 0 then
+  begin
+    if Result < 0 then
+      Result := Result + 360;
+    if (Result < 90) or (Result > 270) then
+      Exit(90);
+    if Result > 180 + AimBelow then
+      Exit(180 + AimBelow);
+  end
+  else
+  begin
+    if (Result > 90) or (Result < -90) then
+      Exit(90);
+    if Result < -AimBelow then
+      Exit(-AimBelow);
+  end;
+  AReached := True;
 end;
 
 function RamHullDef: THullDef;
@@ -425,13 +754,44 @@ begin
   FHeroThrown := False;
 end;
 
-function TRam.Start(const AOrders: TRamOrders): Boolean;
+// A fight from its start: the hunter on the mast with all its lives,
+// facing left, the barrel level, the gun quiet, nobody pressed
+procedure TRam.Arm(ALivesShare: Single);
+begin
+  FHead := rhHunter;
+  FFullLives := Max(1, Round(HunterLives * ALivesShare));
+  FLives := FFullLives;
+  FHeadKilled := False;
+  FChangePending := False;
+  FFacing := -1;
+  FTurnTicks := 0;
+  FPastTicks := 0;
+  FAim := 180;
+  FLastAim := 180;
+  FWant := 180;
+  FInSights := False;
+  FFire := rfIdle;
+  FFireTicks := FirstBurstTicks;
+  FLensHot := False;
+  FHurtTicks := 0;
+  FRowTicks := -1;
+  FHitTicks := NoHitTicks;
+  FGoneTicks := -1;
+  FPressing := False;
+  FLowTicks := 0;
+  FAboveTicks := 0;
+  FDeckTicks := 0;
+  FHeroSeen := False;
+end;
+
+function TRam.Start(const AOrders: TRamOrders; ALivesShare: Single): Boolean;
 begin
   FOrders := AOrders;
   Result := not FEntered;
   FEntered := True;
   Inc(FArrivals);
   FShield.Rise;
+  Arm(ALivesShare);
   if Result then
   begin
     Place(EnterFromX);
@@ -455,6 +815,9 @@ begin
   FEye := 0;
   FArmed := False;
   FLens := 0;
+  FLensHot := False;
+  FFire := rfIdle;
+  FPressing := False;
   FHeroInFront := False;
   FHeroThrown := False;
 end;
@@ -511,7 +874,93 @@ begin
   BeginDrive(Target, PatrolSpeed, False);
 end;
 
+// With no hero it roams; a hero low it presses, a hero high it hunts
+procedure TRam.BeginLeg;
+begin
+  if not FHero.Alive then
+    BeginPatrolLeg
+  else if FPressing then
+    BeginRev
+  else
+    BeginHuntLeg;
+end;
+
+// A short leg either way from where he stays in its sights; when no such
+// leg comes up, the one farthest from him
+procedure TRam.BeginHuntLeg;
+const
+  Tries = 8;
+begin
+  var Highest: Single := ScreenWidth - RamWidth;
+  var Farthest := FX;
+  var FarthestGap: Single := -1;
+  for var i := 1 to Tries do
+  begin
+    var Way := HuntMinLeg + FDice.NextUnit * (HuntMaxLeg - HuntMinLeg);
+    if FDice.NextUnit < 0.5 then
+      Way := -Way;
+    var Target := EnsureRange(FX + Way, 0, Highest);
+    if Abs(Target - FX) < HuntMinLeg / 2 then
+      Continue;
+    if InSightsFrom(Target) then
+    begin
+      BeginDrive(Target, HuntSpeed, False);
+      Exit;
+    end;
+    var Gap := Abs(Target + RamWidth / 2 - FHeroCenter.X);
+    if Gap > FarthestGap then
+    begin
+      FarthestGap := Gap;
+      Farthest := Target;
+    end;
+  end;
+  if FarthestGap < 0 then
+  begin
+    Farthest := 0;
+    if FX < Highest / 2 then
+      Farthest := Highest;
+  end;
+  BeginDrive(Farthest, HuntSpeed, False);
+end;
+
+// The engine roars and the exhausts puff before the press
+procedure TRam.BeginRev;
+begin
+  FPhase := rpRevving;
+  FPhaseTicks := RevTicks;
+  FCue.Rumble := True;
+  FCue.Jolt := Max(FCue.Jolt, RevJolt);
+end;
+
+// The wall on the hero's side; the other one when it already stands there
+function TRam.PressWall: Single;
+begin
+  var Highest: Single := ScreenWidth - RamWidth;
+  Result := 0;
+  if FHeroCenter.X > FX + RamWidth / 2 then
+    Result := Highest;
+  if Abs(Result - FX) < PatrolMinLeg then
+    Result := Highest - Result;
+end;
+
+// Standing at ALeft, could the hunter's barrel reach him - is he no
+// lower than its lowest
+function TRam.InSightsFrom(ALeft: Single): Boolean;
+begin
+  var Facing := -1;
+  if FHeroCenter.X > ALeft + WellX then
+    Facing := 1;
+  var Sleeve := HeadPoint(ALeft, HunterMast, 0, rhHunter, Facing, 1,
+    HunterSleeveX, HunterSleeveY);
+  AimWithin(Bearing(Sleeve, FHeroCenter), Facing, Result);
+end;
+
 function TRam.Tick: TRamCue;
+begin
+  Result := Tick(Default(TRamTarget));
+end;
+
+function TRam.Tick(const ATarget: TRamTarget): TRamCue;
 begin
   FCue := Default(TRamCue);
   if FPhase = rpAbsent then
@@ -524,14 +973,165 @@ begin
   FLastLamps := FLamps;
   FLastEye := FEye;
   FLastLens := FLens;
+  FLastAim := FAim;
   FAccel := 0;
+  SeeHero(ATarget);
+  if FHeadKilled then
+    KillHead;
+  TickMode;
   TickPhase;
+  TickRow;
   TickSway;
+  TickAim;
+  TickFire;
   TickLamps;
   TickEye;
   TickLens;
   FShield.Tick;
   Result := FCue;
+end;
+
+// Where he is and how he moves, learnt over a few ticks
+procedure TRam.SeeHero(const ATarget: TRamTarget);
+begin
+  FHero := ATarget;
+  if not ATarget.Alive then
+  begin
+    FHeroSeen := False;
+    FHeroPace := UnitPoint(0, 0);
+    Exit;
+  end;
+  var Center := UnitPoint(ATarget.Body.X + ATarget.Body.W / 2,
+    ATarget.Body.Y + ATarget.Body.H / 2);
+  if FHeroSeen then
+  begin
+    FHeroPace.X := Lerp(FHeroPace.X, Center.X - FHeroCenter.X, PaceLearn);
+    FHeroPace.Y := Lerp(FHeroPace.Y, Center.Y - FHeroCenter.Y, PaceLearn);
+  end;
+  FHeroCenter := Center;
+  FHeroSeen := True;
+end;
+
+// Low long enough - the press; on a pad, or high, long enough - the hunt
+procedure TRam.TickMode;
+begin
+  var Low := FHero.Alive and not FHero.OnDeck and
+    (FHero.Body.Y + FHero.Body.H > LowLine);
+  FLowTicks := IfThen(Low, FLowTicks + 1, 0);
+  FAboveTicks := IfThen(FHero.Alive and not Low, FAboveTicks + 1, 0);
+  FDeckTicks := IfThen(FHero.Alive and FHero.OnDeck, FDeckTicks + 1, 0);
+
+  if FPressing then
+  begin
+    if not FHero.Alive or (FDeckTicks >= LeaveOnDeckTicks) or
+      (FAboveTicks >= LeaveAboveTicks) then
+      FPressing := False;
+    Exit;
+  end;
+  if FLowTicks >= PressAfterTicks then
+  begin
+    FPressing := True;
+    PressNow;
+  end;
+end;
+
+// The press begins: a rest ends at once; a hunting leg toward him runs on
+// at the press's pace, one away from him brakes first
+procedure TRam.PressNow;
+begin
+  case FPhase of
+    rpResting:
+      FPhaseTicks := 0;
+    rpDriving:
+      if not FEntering and not FChangePending then
+      begin
+        var Wall := PressWall;
+        var Way := Sign(FSpeed);
+        if (Way = 0) or (Sign(Wall - FX) = Way) then
+        begin
+          FTarget := Wall;
+          FCruise := PressSpeeds[Tier];
+        end
+        else
+          FTarget := StopAhead;
+      end;
+  end;
+end;
+
+// Where it comes to rest braking from now on, short of the walls
+function TRam.StopAhead: Single;
+begin
+  var Pace := Abs(FSpeed);
+  Result := EnsureRange(FX + Sign(FSpeed) * (Sqr(Pace) / (2 * Brake) + Pace / 2),
+    0, ScreenWidth - RamWidth);
+end;
+
+// The last life gone: the head blows up, and the machine stands for the
+// change - at once, or once it has braked
+procedure TRam.KillHead;
+begin
+  FHeadKilled := False;
+  FCue.Blast := True;
+  var Shape := HeadShapes[FHead];
+  FCue.BlastAt := HeadPoint(FX, FMast, FSway, FHead, FFacing, TurnSquash,
+    Shape.Width / 2, Shape.Height / 2);
+  FCue.Jolt := Max(FCue.Jolt, HeadBlastJolt);
+  FHead := rhNone;
+  FArmed := False;
+  FFire := rfIdle;
+  FLensHot := False;
+  FTurnTicks := 0;
+  FPressing := False;
+  FRowTicks := -1;
+  FGoneTicks := 0;
+  case FPhase of
+    rpDriving:
+      begin
+        FChangePending := True;
+        FTarget := StopAhead;
+      end;
+    rpResting, rpRevving:
+      BeginChange;
+  else
+    FChangePending := True;
+  end;
+end;
+
+procedure TRam.BeginChange;
+begin
+  FChangePending := False;
+  FPhase := rpChanging;
+  FPhaseTicks := 0;
+  FChangeFrom := FMast;
+end;
+
+// The empty mast sinks, a beat, the sweeper rises - silent until its own
+// stage - and the fight goes on
+procedure TRam.TickChange;
+begin
+  Inc(FPhaseTicks);
+  if FPhaseTicks <= SinkTicks then
+  begin
+    FMast := Lerp(FChangeFrom, MastRest, SmoothStep(FPhaseTicks / SinkTicks));
+    Exit;
+  end;
+  var Rising := FPhaseTicks - SinkTicks - EmptyTicks;
+  if Rising < 0 then
+    Exit;
+  if Rising = 0 then
+  begin
+    FHead := rhSweeper;
+    FFacing := -1;
+    FCue.Whine := True;
+    Exit;
+  end;
+  FMast := Lerp(MastRest, SweeperMast, SmoothStep(Rising / ChangeRiseTicks));
+  if Rising >= ChangeRiseTicks then
+  begin
+    FArmed := True;
+    FArmedTicks := 0;
+    BeginRest(LockRestTicks);
+  end;
 end;
 
 procedure TRam.TickPhase;
@@ -568,14 +1168,36 @@ begin
           FCue.Locked := True;
           FArmed := True;
           FArmedTicks := 0;
+          FRowTicks := 0;
           BeginRest(LockRestTicks);
         end;
       end;
     rpResting:
+      begin
+        if FChangePending then
+        begin
+          BeginChange;
+          Exit;
+        end;
+        if FHero.Alive and not FPressing and (FHead = rhHunter) and
+          not InSightsFrom(FX) then
+          FPhaseTicks := Min(FPhaseTicks, HuntBlindRestTicks);
+        if FPhaseTicks > 0 then
+          Dec(FPhaseTicks)
+        else
+          BeginLeg;
+      end;
+    rpRevving:
       if FPhaseTicks > 0 then
         Dec(FPhaseTicks)
       else
-        BeginPatrolLeg;
+      begin
+        BeginDrive(PressWall, PressSpeeds[Tier], False);
+        // The rumble has run since the rev
+        FCue.Rumble := False;
+      end;
+    rpChanging:
+      TickChange;
   end;
 end;
 
@@ -617,9 +1239,17 @@ begin
     FPhaseTicks := BreathTicks;
     Exit;
   end;
-  FCue.Jolt := PatrolStopJolt;
-  BeginRest(PatrolRestMinTicks +
-    Round(FDice.NextUnit * (PatrolRestMaxTicks - PatrolRestMinTicks)));
+  FCue.Jolt := Max(FCue.Jolt, PatrolStopJolt);
+  if FChangePending then
+    BeginChange
+  else if not FHero.Alive then
+    BeginRest(PatrolRestMinTicks +
+      Round(FDice.NextUnit * (PatrolRestMaxTicks - PatrolRestMinTicks)))
+  else if FPressing then
+    BeginRest(PressRestTicks)
+  else
+    BeginRest(HuntRestMinTicks +
+      Round(FDice.NextUnit * (HuntRestMaxTicks - HuntRestMinTicks)));
 end;
 
 // The top keeps going as the hull speeds up or brakes: it leans against
@@ -632,6 +1262,211 @@ begin
   FSway := EnsureRange(FSway + FSwaySpeed, -SwayMax, SwayMax);
 end;
 
+// The row lights a cell at a time after the lock; the clocks of the hit
+// and the blast run on
+procedure TRam.TickRow;
+begin
+  if FHitTicks < NoHitTicks then
+    Inc(FHitTicks);
+  if FGoneTicks >= 0 then
+    Inc(FGoneTicks);
+  if FRowTicks < 0 then
+    Exit;
+  var Before := RowLit;
+  if FRowTicks < RowBootTicks then
+    Inc(FRowTicks);
+  if RowLit > Before then
+    FCue.RowCell := True;
+end;
+
+function TRam.RowLit: Integer;
+begin
+  Result := 0;
+  if FRowTicks > 0 then
+    Result := Min(HeadRowCells, FRowTicks * HeadRowCells div RowBootTicks);
+end;
+
+function TRam.Row: TRamRow;
+begin
+  Result := Default(TRamRow);
+  Result.HitTicks := FHitTicks;
+  if Present and (FHead = rhHunter) and (FRowTicks >= 0) then
+  begin
+    Result.Shown := True;
+    Result.Lit := RowLit;
+    Result.Share := FLives / FFullLives;
+    Result.Fade := 1;
+  end
+  else if Present and (FGoneTicks >= 0) and (FGoneTicks < RowFadeTicks) then
+  begin
+    Result.Shown := True;
+    Result.Lit := HeadRowCells;
+    Result.Fade := 1 - FGoneTicks / RowFadeTicks;
+  end;
+end;
+
+function TRam.HeadTopAt(AAlpha: Single): TSdlFPoint;
+begin
+  var Head := FHead;
+  if Head = rhNone then
+    Head := rhHunter;
+  Result := HeadPoint(LeftAt(AAlpha), MastAt(AAlpha), SwayAt(AAlpha), Head,
+    FFacing, 1, HeadShapes[Head].Width / 2, 0);
+end;
+
+function TRam.Tier: Integer;
+begin
+  Result := 0;
+  if FLives * 3 <= FFullLives * 2 then
+    Result := 1;
+  if FLives * 3 <= FFullLives then
+    Result := 2;
+end;
+
+function TRam.CanShoot: Boolean;
+begin
+  Result := (FHead = rhHunter) and FArmed and FHero.Alive and
+    (FTurnTicks = 0) and (FPhase in [rpDriving, rpResting, rpRevving]) and
+    not ((FPhase = rpDriving) and FEntering);
+end;
+
+// The barrel follows the hero within its half; past the vertical the
+// head turns, never in the middle of a burst. While the lens burns the
+// barrel holds on the point it took - or, the hose, follows him slower.
+procedure TRam.TickAim;
+begin
+  if (FHead <> rhHunter) or not FHero.Alive then
+  begin
+    FPastTicks := 0;
+    FInSights := False;
+    Exit;
+  end;
+
+  if FTurnTicks > 0 then
+  begin
+    Dec(FTurnTicks);
+    if FTurnTicks = TurnTicks div 2 then
+    begin
+      FFacing := -FFacing;
+      FAim := 180 - FAim;
+      FLastAim := FAim;
+    end;
+    Exit;
+  end;
+
+  var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+    HunterSleeveX, HunterSleeveY);
+  FWant := AimWithin(Bearing(Sleeve, FHeroCenter), FFacing, FInSights) + FSway;
+
+  var OtherSide := (FHeroCenter.X - Sleeve.X) * -FFacing;
+  var OffVertical := RadToDeg(ArcTan2(OtherSide, Sleeve.Y - FHeroCenter.Y));
+  if (OtherSide > 0) and (OffVertical > TurnPast) then
+    Inc(FPastTicks)
+  else
+    FPastTicks := 0;
+  if (FPastTicks >= TurnHoldTicks) and FArmed and (FFire = rfIdle) then
+  begin
+    FPastTicks := 0;
+    FTurnTicks := TurnTicks;
+    Exit;
+  end;
+
+  var Goal := FWant;
+  var Rate := TrackRate;
+  if FFire <> rfIdle then
+    if FirePatterns[Tier].Hose then
+      Rate := HoseRate
+    else
+    begin
+      var Reached: Boolean;
+      Goal := AimWithin(Bearing(Sleeve, FFrozenAt), FFacing, Reached) + FSway;
+    end;
+  FAim := FAim + EnsureRange(Goal - FAim, -Rate, Rate);
+end;
+
+// Rest, the lens burning red, the burst, rest again. A press holds the
+// fire: no new burst, and a lens that burns goes out; a burst under way
+// is let out.
+procedure TRam.TickFire;
+begin
+  if not CanShoot then
+  begin
+    if FFire <> rfIdle then
+    begin
+      FFire := rfIdle;
+      FFireTicks := FirePatterns[Tier].RestTicks;
+    end;
+    Exit;
+  end;
+
+  var Pattern := FirePatterns[Tier];
+  case FFire of
+    rfIdle:
+      if FFireTicks > 0 then
+        Dec(FFireTicks)
+      else if not FPressing and FInSights and
+        (Abs(FWant - FAim) <= AimSlack) then
+      begin
+        FFire := rfFlare;
+        FFireTicks := Pattern.FlareTicks;
+        FFrozenAt := FHeroCenter;
+        if Pattern.Lead then
+        begin
+          // Where he will be when the bullet gets there, if he keeps going
+          var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+            HunterSleeveX, HunterSleeveY);
+          var Flight := Hypot(FHeroCenter.X - Sleeve.X,
+            FHeroCenter.Y - Sleeve.Y) / HunterBulletSpeed + Pattern.FlareTicks;
+          FFrozenAt := UnitPoint(
+            FHeroCenter.X + EnsureRange(FHeroPace.X * Flight, -LeadMax, LeadMax),
+            FHeroCenter.Y + EnsureRange(FHeroPace.Y * Flight, -LeadMax, LeadMax));
+        end;
+      end;
+    rfFlare:
+      if FPressing then
+      begin
+        FFire := rfIdle;
+        FFireTicks := Pattern.RestTicks div 2;
+      end
+      else if FFireTicks > 1 then
+        Dec(FFireTicks)
+      else
+      begin
+        FFire := rfBurst;
+        FShotsLeft := Pattern.Shots;
+        FFireTicks := 0;
+      end;
+    rfBurst:
+      if FFireTicks > 0 then
+        Dec(FFireTicks)
+      else
+      begin
+        Shoot;
+        Dec(FShotsLeft);
+        FFireTicks := Pattern.GapTicks;
+        if FShotsLeft <= 0 then
+        begin
+          FFire := rfIdle;
+          FFireTicks := Pattern.RestTicks;
+        end;
+      end;
+  end;
+end;
+
+// A bullet out of the muzzle, along the barrel as the sway has it
+procedure TRam.Shoot;
+begin
+  var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+    HunterSleeveX, HunterSleeveY);
+  var Along := FAim - FSway;
+  var Barrel := Heading(Along);
+  var Reach := BarrelPivotX - BarrelMuzzleX;
+  FCue.Shot := True;
+  FCue.ShotFrom := UnitPoint(Sleeve.X + Barrel.X * Reach,
+    Sleeve.Y + Barrel.Y * Reach);
+  FCue.ShotAngle := Round(Along);
+end;
+
 procedure TRam.TickLamps;
 begin
   if FBraking then
@@ -642,12 +1477,13 @@ begin
     FLamps := Max(0, FLamps - LampFade);
 end;
 
-// Lit, it breathes; while a head rises it blinks - the warning
+// Lit, it breathes; while a head rises, and through a change of heads, it
+// blinks - the warning
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
-  else if FPhase = rpRising then
+  else if FPhase in [rpRising, rpChanging] then
   begin
     FEye := EyeBlinkLow;
     if (FPhaseTicks div EyeBlinkTicks) mod 2 = 0 then
@@ -661,12 +1497,44 @@ begin
   end;
 end;
 
-// The first wink comes the tick the head locks
+// The first wink comes the tick the head locks. The lens burns red,
+// brighter and brighter, before a burst and through it - the warning
+// comes first, a struck eye only flashes when the lens is not burning.
 procedure TRam.TickLens;
 begin
-  if not FArmed then
+  FLensHot := False;
+  var Struck := FHurtTicks > 0;
+  if Struck then
+    Dec(FHurtTicks);
+  if not FArmed or (FHead <> rhHunter) then
   begin
     FLens := 0;
+    Exit;
+  end;
+  // The row comes up: the eye burns white with it - this is what has lives
+  if RowLit < HeadRowCells then
+  begin
+    FLens := 1;
+    Exit;
+  end;
+  case FFire of
+    rfFlare:
+      begin
+        FLensHot := True;
+        FLens := Lerp(LensFlareFrom, 1,
+          1 - FFireTicks / FirePatterns[Tier].FlareTicks);
+        Exit;
+      end;
+    rfBurst:
+      begin
+        FLensHot := True;
+        FLens := 1;
+        Exit;
+      end;
+  end;
+  if Struck then
+  begin
+    FLens := 1;
     Exit;
   end;
   FLens := LensEmber;
@@ -771,6 +1639,72 @@ begin
   FShield.Strike(Entry);
   AAt.X := MiddleX + Entry.X;
   AAt.Y := MiddleY + Entry.Y;
+end;
+
+function TRam.LensPoint: TSdlFPoint;
+begin
+  Result := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, TurnSquash,
+    HunterLensX, HunterLensY);
+end;
+
+// The stretch against a circle about the lens: the first point of it
+// within the circle. Only a hunter up and locked has an eye to hit.
+function TRam.StrikeEye(const AFrom, ATo: TSdlFPoint;
+  out AAt: TSdlFPoint): Boolean;
+begin
+  AAt := ATo;
+  if not Present or (FHead <> rhHunter) or not FArmed or FHeadKilled then
+    Exit(False);
+  var Lens := LensPoint;
+  var AlongX := ATo.X - AFrom.X;
+  var AlongY := ATo.Y - AFrom.Y;
+  var FromX := AFrom.X - Lens.X;
+  var FromY := AFrom.Y - Lens.Y;
+  // |From + Along t| = EyeRadius, the smaller t in 0..1
+  var A := Sqr(AlongX) + Sqr(AlongY);
+  var B := 2 * (FromX * AlongX + FromY * AlongY);
+  var C := Sqr(FromX) + Sqr(FromY) - Sqr(EyeRadius);
+  var Share: Single;
+  if C <= 0 then
+    Share := 0
+  else
+  begin
+    var Discriminant := Sqr(B) - 4 * A * C;
+    if (A = 0) or (Discriminant < 0) then
+      Exit(False);
+    Share := (-B - Sqrt(Discriminant)) / (2 * A);
+    if (Share < 0) or (Share > 1) then
+      Exit(False);
+  end;
+  AAt := UnitPoint(AFrom.X + AlongX * Share, AFrom.Y + AlongY * Share);
+  FHurtTicks := HurtFlashTicks;
+  FHitTicks := 0;
+  Dec(FLives);
+  if FLives <= 0 then
+    FHeadKilled := True;
+  Result := True;
+end;
+
+function TRam.AimAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastAim, FAim, AAlpha);
+end;
+
+function TRam.TurnSquash: Single;
+begin
+  Result := 1;
+  if FTurnTicks > 0 then
+    Result := Abs(2 * FTurnTicks / TurnTicks - 1);
+end;
+
+function TRam.Wounded: Boolean;
+begin
+  Result := (FHead = rhHunter) and (Tier = 2);
+end;
+
+function TRam.Hurt: Boolean;
+begin
+  Result := FHurtTicks > 0;
 end;
 
 function TRam.LeftAt(AAlpha: Single): Single;
@@ -890,6 +1824,7 @@ begin
     FMasts[i] := FCache.Get('mast' + IntToStr(i));
   FHunter := FCache.Get('hunter');
   FHunterBarrel := FCache.Get('hunterBarrel');
+  FSweeper := FCache.Get('sweeper');
   FHullArt := THullArt.Create(ARenderer, RamHullDef);
   FShield := TShieldArt.Create(ARenderer);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
@@ -926,10 +1861,12 @@ begin
   for var i := Low(FExhausts) to High(FExhausts) do
     FExhausts[i] := TSmoke.CreateLook(Placement, ExhaustSmoke, ExhaustIdle,
       ExhaustSeeds[i]);
+  FHeadSmoke := TSmoke.CreateLook(Placement, HeadSmokeLook, 0, HeadSmokeSeed);
 end;
 
 destructor TRamPainter.Destroy;
 begin
+  FHeadSmoke.Free;
   for var Exhaust in FExhausts do
     Exhaust.Free;
   FHull.Free;
@@ -940,6 +1877,7 @@ procedure TRamPainter.Tick;
 begin
   FHull.Tick(0, 0, FRam.Rolled);
   TickExhausts;
+  TickHeadSmoke;
 end;
 
 // A machine come anew left nothing in the air; one that drives smokes
@@ -952,11 +1890,13 @@ begin
     FExhaustDriving := False;
     for var Exhaust in FExhausts do
       Exhaust.Rewind;
+    FHeadSmoking := False;
+    FHeadSmoke.Rewind;
   end;
   if not FRam.Present then
     Exit;
 
-  var Driving := FRam.Phase = rpDriving;
+  var Driving := FRam.Phase in [rpDriving, rpRevving];
   if Driving <> FExhaustDriving then
   begin
     FExhaustDriving := Driving;
@@ -971,40 +1911,34 @@ begin
       RamTop + ExhaustPoints[i].Y, True);
 end;
 
-// APoint turned ADegrees clockwise about APivot, on the screen
-function Turned(const APoint, APivot: TSdlFPoint; ADegrees: Single): TSdlFPoint;
+// A wounded hunter smokes from its head; an empty mast from its top while
+// it goes down and until the next head comes up
+procedure TRamPainter.TickHeadSmoke;
 begin
-  var Angle := DegToRad(ADegrees);
-  var AcrossX := APoint.X - APivot.X;
-  var DownY := APoint.Y - APivot.Y;
-  Result.X := APivot.X + AcrossX * Cos(Angle) - DownY * Sin(Angle);
-  Result.Y := APivot.Y + AcrossX * Sin(Angle) + DownY * Cos(Angle);
-end;
-
-function UnitPoint(AX, AY: Single): TSdlFPoint;
-begin
-  Result.X := AX;
-  Result.Y := AY;
-end;
-
-// The middle of the well, which the mast turns about with the sway
-function MastPivot(ALeft: Single): TSdlFPoint;
-begin
-  Result := UnitPoint(ALeft + WellX, RamTop + WellY);
-end;
-
-// The top-left corner of the head, upright, its socket on the top collar
-function HeadCorner(const APivot: TSdlFPoint; AMast: Single): TSdlFPoint;
-begin
-  Result := UnitPoint(APivot.X - HunterSocketX, APivot.Y - AMast - HunterSocketY);
+  if not FRam.Present then
+    Exit;
+  var Smoking := FRam.Wounded or (FRam.Head = rhNone);
+  if Smoking <> FHeadSmoking then
+  begin
+    FHeadSmoking := Smoking;
+    FHeadSmoke.FadeTo(Ord(Smoking), HeadSmokeRampTicks);
+  end;
+  var Source := MastPivot(FRam.Left);
+  Source.Y := Source.Y - FRam.Mast;
+  if FRam.Head <> rhNone then
+  begin
+    var Shape := HeadShapes[FRam.Head];
+    Source := HeadPoint(FRam.Left, FRam.Mast, FRam.SwayAt(1), FRam.Head,
+      FRam.Facing, 1, Shape.Width / 2, Shape.Height / 2);
+  end;
+  FHeadSmoke.Tick(Source.X, Source.Y, True);
 end;
 
 // The sections back to front - the narrowest rides out of the wider ones
-// - each top raised by its share of the mast's rise; the head on the top
-// collar, the barrel over the head on its sleeve. All of it turned with
-// the sway about the middle of the well.
+// - each top raised by its share of the mast's rise, then the head on the
+// top collar. All of it turned with the sway about the middle of the well.
 procedure TRamPainter.DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
-  ASway: Single);
+  ASway, AAlpha: Single);
 begin
   var Pivot := MastPivot(ALeft);
   var Rise := AMast - MastRest;
@@ -1015,16 +1949,42 @@ begin
     ASprites.DrawSized(FArt.FMasts[Section], Turned(Middle, Pivot, ASway),
       MastWidths[Section], MastLengths[Section], 1, False, ASway);
   end;
+  DrawHead(ASprites, ALeft, AMast, ASway, AAlpha);
+end;
 
-  var Corner := HeadCorner(Pivot, AMast);
-  var Head := UnitPoint(Corner.X + HunterWidth / 2, Corner.Y + HunterHeight / 2);
-  ASprites.DrawSized(FArt.FHunter, Turned(Head, Pivot, ASway), HunterWidth,
-    HunterHeight, 1, False, ASway);
-  var Barrel := UnitPoint(
-    Corner.X + HunterSleeveX - BarrelPivotX + BarrelWidth / 2,
-    Corner.Y + HunterSleeveY - BarrelPivotY + BarrelHeight / 2);
-  ASprites.DrawSized(FArt.FHunterBarrel, Turned(Barrel, Pivot, ASway),
-    BarrelWidth, BarrelHeight, 1, False, ASway);
+// The head facing its way, squashed in a turn; the hunter's barrel over it
+// on the sleeve, along its aim. The art faces left; facing right it is
+// mirrored, and so is the barrel, which then lies along the aim from the
+// other end.
+procedure TRamPainter.DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
+  ASway, AAlpha: Single);
+begin
+  var Head := FRam.Head;
+  if Head = rhNone then
+    Exit;
+  var Shape := HeadShapes[Head];
+  var Facing := FRam.Facing;
+  var Squash := FRam.TurnSquash;
+  var Mirrored := Facing > 0;
+  var Texture := FArt.FHunter;
+  if Head = rhSweeper then
+    Texture := FArt.FSweeper;
+  ASprites.DrawSized(Texture, HeadPoint(ALeft, AMast, ASway, Head, Facing,
+    Squash, Shape.Width / 2, Shape.Height / 2), Shape.Width * Squash,
+    Shape.Height, 1, Mirrored, ASway);
+  if Head <> rhHunter then
+    Exit;
+
+  var Sleeve := HeadPoint(ALeft, AMast, ASway, rhHunter, Facing, Squash,
+    HunterSleeveX, HunterSleeveY);
+  var Along := FRam.AimAt(AAlpha) - ASway;
+  var Barrel := Heading(Along);
+  var Reach := BarrelPivotX - BarrelWidth / 2;
+  var Turn := 180 - Along;
+  if Mirrored then
+    Turn := -Along;
+  ASprites.DrawSized(FArt.FHunterBarrel, UnitPoint(Sleeve.X + Barrel.X * Reach,
+    Sleeve.Y + Barrel.Y * Reach), BarrelWidth, BarrelHeight, 1, Mirrored, Turn);
 end;
 
 procedure TRamPainter.DrawLamps(const ASprites: TSpriteRenderer;
@@ -1050,20 +2010,29 @@ begin
     Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)), EyeColor, Level);
 end;
 
-// On the head, turned with the sway as the head is
+// On the hunter's head, turned and squashed as the head is: pale and
+// winking, red and bigger while it burns, a flash when it is struck
 procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast,
   ASway, AAlpha: Single);
 begin
+  if FRam.Head <> rhHunter then
+    Exit;
   var Level := FRam.LensAt(AAlpha);
   if Level <= 0 then
     Exit;
-  var Pivot := MastPivot(ALeft);
-  var Corner := HeadCorner(Pivot, AMast);
-  var Lens := Turned(UnitPoint(Corner.X + HunterLensX, Corner.Y + HunterLensY),
-    Pivot, ASway);
+  var Lens := HeadPoint(ALeft, AMast, ASway, rhHunter, FRam.Facing,
+    FRam.TurnSquash, HunterLensX, HunterLensY);
+  var Size := Lerp(LensEmberSize, LensWinkSize, Level);
+  var Color := LensColor;
+  if FRam.LensHot then
+  begin
+    Size := Lerp(LensEmberSize, LensHotSize, Level);
+    Color := LensHotColor;
+  end
+  else if FRam.Hurt then
+    Size := LensHurtSize;
   DrawGlow(FArt.FRenderer, FArt.FGlow, Lens.X + ASprites.Origin.X,
-    Lens.Y + ASprites.Origin.Y, Lerp(LensEmberSize, LensWinkSize, Level),
-    LensColor, Level);
+    Lens.Y + ASprites.Origin.Y, Size, Color, Level);
 end;
 
 // Back to front: the dark of the well, the arches and the wheels, the
@@ -1085,12 +2054,12 @@ begin
   ASprites.DrawSized(FArt.FWell, Stand.Center, RamWidth, RamHeight);
   FHull.DrawUnder(ASprites, Stand, AAlpha);
   ASprites.ClipAbove(RamTop + MastHiddenBelow);
-  DrawMast(ASprites, Left, Mast, Sway);
+  DrawMast(ASprites, Left, Mast, Sway, AAlpha);
   ASprites.ClearClip;
   FHull.DrawBody(ASprites, Stand, AAlpha);
   DrawEye(ASprites, Left, AAlpha);
   ASprites.ClipAbove(RamTop + WellY);
-  DrawMast(ASprites, Left, Mast, Sway);
+  DrawMast(ASprites, Left, Mast, Sway, AAlpha);
   DrawLens(ASprites, Left, Mast, Sway, AAlpha);
   ASprites.ClearClip;
   DrawLamps(ASprites, Left, AAlpha);
@@ -1104,6 +2073,8 @@ begin
   for var Exhaust in FExhausts do
     Exhaust.Draw(ACanvas, Exhaust.Origin.X + AOrigin.X,
       Exhaust.Origin.Y + AOrigin.Y, AAlpha);
+  FHeadSmoke.Draw(ACanvas, FHeadSmoke.Origin.X + AOrigin.X,
+    FHeadSmoke.Origin.Y + AOrigin.Y, AAlpha);
 end;
 
 procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;

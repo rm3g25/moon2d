@@ -13,6 +13,16 @@
   the ram action of a level's events, and the Ram of level 2's boss
   arena.
 
+  The hunter: its lives follow the grade; only its eye takes a hit, and
+  the last life blows the head up, the eye blinks through the change and
+  the sweeper rises. A hero low on the road is pressed to the wall on his
+  side and not shot at; one on a pad is not pressed but shot at, the lens
+  burning red before every burst and a rest between bursts; the first
+  shots fly at him, a hero past the vertical turns the head, and the last
+  third fires a hose of six. The head's row of lives: none before the
+  lock; it comes up a cell at a time after it, the lens burning white,
+  before the first shot; it follows the lives; a dead head's row fades.
+
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
   executable.
@@ -99,6 +109,51 @@ type
     procedure TestBadRamRaises;
     [Test]
     procedure TestLevelTwoArenaBringsTheRam;
+  end;
+
+  [TestFixture]
+  TRamHunterTests = class
+  private
+    FRam: TRam;
+    procedure LockWith(const ATarget: TRamTarget; ALivesShare: Single = 1);
+    procedure StrikeTheEye(ATimes: Integer);
+    function ShotTicks(const ATarget: TRamTarget; ATicks: Integer): TArray<Integer>;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestLivesFollowTheGrade;
+    [Test]
+    procedure TestOnlyTheEyeTakesAHit;
+    [Test]
+    procedure TestTheLastLifeBlowsTheHeadUp;
+    [Test]
+    procedure TestHeroLowIsPressedToHisWall;
+    [Test]
+    procedure TestHeroOnAPadIsNotPressed;
+    [Test]
+    procedure TestAPressHoldsTheFire;
+    [Test]
+    procedure TestTheLensBurnsBeforeABurst;
+    [Test]
+    procedure TestBurstsAreSeparatedByARest;
+    [Test]
+    procedure TestTheFirstShotsFlyAtTheHero;
+    [Test]
+    procedure TestHeadTurnsToAHeroPastTheVertical;
+    [Test]
+    procedure TestTheLastThirdFiresAHose;
+    [Test]
+    procedure TestNoRowBeforeTheLock;
+    [Test]
+    procedure TestTheRowComesUpAfterTheLock;
+    [Test]
+    procedure TestTheRowFollowsTheLives;
+    [Test]
+    procedure TestADeadHeadsRowFades;
   end;
 
 implementation
@@ -581,8 +636,355 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// The hunter
+// ---------------------------------------------------------------------------
+
+const
+  // The middle city pad of the arena: its deck, and a hero standing on it
+  MiddleDeckY = 160.0;
+  MiddleHeroX = 220.0;
+  // The long pad right of the gate, over the right part of the floor
+  RightDeckY = 200.0;
+  RightHeroX = 380.0;
+  // A burst's shots stand at most this far apart
+  BurstGapTicks = 6;
+  // The shortest the lens burns, and the shortest rest after a burst
+  ShortestFlareTicks = 14;
+  ShortestRestTicks = 40;
+  AimToleranceDegrees = 8.0;
+
+function HeroOnAPad(AX, ADeckY: Single): TRamTarget;
+begin
+  Result := Default(TRamTarget);
+  Result.Alive := True;
+  Result.OnDeck := True;
+  Result.Body := Box(AX, ADeckY - HeroSide, 16, HeroSide);
+end;
+
+function HeroOnTheRoad(AX: Single): TRamTarget;
+begin
+  Result := Default(TRamTarget);
+  Result.Alive := True;
+  Result.Body := OnTheRoad(AX);
+end;
+
+function CenterOf(const ATarget: TRamTarget): TSdlFPoint;
+begin
+  Result := At(ATarget.Body.X + ATarget.Body.W / 2,
+    ATarget.Body.Y + ATarget.Body.H / 2);
+end;
+
+// Degrees counter-clockwise from the right, from AFrom toward ATo
+function BearingOf(const AFrom, ATo: TSdlFPoint): Single;
+begin
+  Result := RadToDeg(ArcTan2(AFrom.Y - ATo.Y, ATo.X - AFrom.X));
+end;
+
+function AngleGap(A, B: Single): Single;
+begin
+  Result := Abs(A - B);
+  while Result > 180 do
+    Result := Abs(Result - 360);
+end;
+
+procedure TRamHunterTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamHunterTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+// From the stop after a death, watching ATarget, until the head locks
+procedure TRamHunterTests.LockWith(const ATarget: TRamTarget;
+  ALivesShare: Single);
+begin
+  FRam.Start(Orders, ALivesShare);
+  FRam.Clear;
+  FRam.Start(Orders, ALivesShare);
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(ATarget).Locked then
+      Exit;
+  Assert.Fail('The head never locked');
+end;
+
+// Straight through the lens, left to right
+procedure TRamHunterTests.StrikeTheEye(ATimes: Integer);
+begin
+  for var i := 1 to ATimes do
+  begin
+    var Lens := FRam.LensPoint;
+    var Struck: TSdlFPoint;
+    Assert.IsTrue(FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
+      Struck), Format('Strike %d meets the eye', [i]));
+  end;
+end;
+
+// The ticks of ATicks on which the hunter fired, ATarget watched
+function TRamHunterTests.ShotTicks(const ATarget: TRamTarget;
+  ATicks: Integer): TArray<Integer>;
+begin
+  Result := [];
+  for var i := 1 to ATicks do
+    if FRam.Tick(ATarget).Shot then
+      Result := Result + [i];
+end;
+
+procedure TRamHunterTests.TestLivesFollowTheGrade;
+begin
+  FRam.Start(Orders);
+  Assert.AreEqual(HunterLives, FRam.FullLives, 'The first grade');
+  FRam.Reset;
+  FRam.Start(Orders, 1.5);
+  Assert.AreEqual(150, FRam.FullLives, 'Half as many again');
+  Assert.AreEqual(FRam.FullLives, FRam.Lives, 'All of them to start with');
+end;
+
+procedure TRamHunterTests.TestOnlyTheEyeTakesAHit;
+begin
+  LockWith(HeroOnAPad(MiddleHeroX, MiddleDeckY));
+  var Lens := FRam.LensPoint;
+  var Struck: TSdlFPoint;
+  Assert.IsFalse(FRam.StrikeEye(At(Lens.X - 12, Lens.Y - 15),
+    At(Lens.X - 12, Lens.Y + 15), Struck), 'Through the head beside the eye');
+  Assert.IsFalse(FRam.StrikeEye(At(Lens.X - 20, Lens.Y + 30),
+    At(Lens.X + 20, Lens.Y + 30), Struck), 'Through the mast under the head');
+  Assert.AreEqual(FRam.FullLives, FRam.Lives, 'Nothing lost yet');
+  Assert.IsTrue(FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
+    Struck), 'Through the eye');
+  Assert.IsTrue(Struck.X < Lens.X, 'Met on its near side');
+  Assert.AreEqual(FRam.FullLives - 1, FRam.Lives, 'A life gone');
+end;
+
+procedure TRamHunterTests.TestTheLastLifeBlowsTheHeadUp;
+const
+  LivesShare = 0.02;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero, LivesShare);
+  StrikeTheEye(FRam.Lives);
+  var Cue := FRam.Tick(Hero);
+  Assert.IsTrue(Cue.Blast, 'The head blows up');
+  Assert.IsTrue(FRam.Head = rhNone, 'Gone off the mast');
+  var Struck: TSdlFPoint;
+  Assert.IsFalse(FRam.StrikeEye(At(Cue.BlastAt.X - 20, Cue.BlastAt.Y),
+    At(Cue.BlastAt.X + 20, Cue.BlastAt.Y), Struck), 'No eye left to hit');
+
+  var Brightest: Single := 0;
+  var Rose := False;
+  for var i := 1 to ManyTicks do
+  begin
+    Cue := FRam.Tick(Hero);
+    Brightest := Max(Brightest, FRam.Eye);
+    Assert.IsFalse(Cue.Shot, 'Nothing fires through the change');
+    if Cue.Whine then
+    begin
+      Rose := True;
+      Break;
+    end;
+  end;
+  Assert.IsTrue(Rose, 'The next head comes up');
+  Assert.IsTrue(FRam.Head = rhSweeper, 'The sweeper');
+  Assert.IsTrue(Brightest >= 0.9, 'The eye blinks through the change');
+end;
+
+procedure TRamHunterTests.TestHeroLowIsPressedToHisWall;
+begin
+  var Hero := HeroOnTheRoad(20);
+  LockWith(Hero);
+  Assert.IsTrue(FRam.Pressing, 'A hero on the road is pressed');
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(Hero).Hiss then
+      Break;
+  Assert.AreEqual(0.0, FRam.Left, 0.001, 'All the way to the wall on his side');
+end;
+
+procedure TRamHunterTests.TestHeroOnAPadIsNotPressed;
+const
+  Watched = 300;
+begin
+  var Hero := HeroOnAPad(16, 280);
+  LockWith(Hero);
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick(Hero);
+    Assert.IsFalse(FRam.Pressing, Format('Not pressed on a low pad, tick %d', [i]));
+  end;
+end;
+
+procedure TRamHunterTests.TestAPressHoldsTheFire;
+const
+  Watched = 300;
+begin
+  LockWith(HeroOnTheRoad(20));
+  Assert.AreEqual(0, Length(ShotTicks(HeroOnTheRoad(20), Watched)),
+    'No shot while it presses');
+end;
+
+procedure TRamHunterTests.TestTheLensBurnsBeforeABurst;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  var Burning := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Shot then
+      Break;
+    if FRam.LensHot then
+      Inc(Burning)
+    else
+      Burning := 0;
+  end;
+  Assert.IsTrue(Burning >= ShortestFlareTicks - 1,
+    Format('The lens burned red %d ticks before the first shot', [Burning]));
+end;
+
+procedure TRamHunterTests.TestBurstsAreSeparatedByARest;
+const
+  Watched = 600;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  var Shots := ShotTicks(Hero, Watched);
+  var Bursts := 0;
+  for var i := 0 to High(Shots) do
+  begin
+    if (i > 0) and (Shots[i] - Shots[i - 1] <= BurstGapTicks) then
+      Continue;
+    Inc(Bursts);
+    if i > 0 then
+      Assert.IsTrue(Shots[i] - Shots[i - 1] >= ShortestRestTicks,
+        Format('A rest of %d ticks before burst %d', [Shots[i] - Shots[i - 1],
+        Bursts]));
+  end;
+  Assert.IsTrue(Bursts >= 3, Format('It keeps firing: %d bursts', [Bursts]));
+end;
+
+procedure TRamHunterTests.TestTheFirstShotsFlyAtTheHero;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Shot then
+      Continue;
+    var Toward := BearingOf(Cue.ShotFrom, CenterOf(Hero));
+    Assert.IsTrue(AngleGap(Toward, Cue.ShotAngle) <= AimToleranceDegrees,
+      Format('Fired along %d, the hero lies along %g', [Cue.ShotAngle, Toward]));
+    Exit;
+  end;
+  Assert.Fail('Never fired');
+end;
+
+procedure TRamHunterTests.TestHeadTurnsToAHeroPastTheVertical;
+begin
+  var Hero := HeroOnAPad(RightHeroX, RightDeckY);
+  LockWith(Hero);
+  Assert.AreEqual(-1, FRam.Facing, 'Locks facing left');
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    if FRam.Facing > 0 then
+      Exit;
+  end;
+  Assert.Fail('Never turned to the hero on its right');
+end;
+
+procedure TRamHunterTests.TestTheLastThirdFiresAHose;
+const
+  Watched = 600;
+  HoseShots = 6;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  StrikeTheEye(FRam.FullLives - FRam.FullLives div 3);
+  Assert.IsTrue(FRam.Wounded, 'At the last third');
+  var Shots := ShotTicks(Hero, Watched);
+  var Longest := 0;
+  var Run := 0;
+  for var i := 0 to High(Shots) do
+  begin
+    if (i > 0) and (Shots[i] - Shots[i - 1] <= BurstGapTicks) then
+      Inc(Run)
+    else
+      Run := 1;
+    Longest := Max(Longest, Run);
+  end;
+  Assert.AreEqual(HoseShots, Longest, 'A burst of six');
+end;
+
+procedure TRamHunterTests.TestNoRowBeforeTheLock;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  FRam.Start(Orders);
+  FRam.Clear;
+  FRam.Start(Orders);
+  for var i := 1 to ManyTicks do
+  begin
+    Assert.IsFalse(FRam.Row.Shown, Format('No row before the lock, tick %d', [i]));
+    if FRam.Tick(Hero).Locked then
+      Exit;
+  end;
+end;
+
+procedure TRamHunterTests.TestTheRowComesUpAfterTheLock;
+const
+  // Under a second and a half: the row is up before the first burst
+  Watched = 50;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  Assert.IsTrue(FRam.Row.Shown, 'The row shows with the lock');
+  Assert.AreEqual(0, FRam.Row.Lit, 'Not a cell lit yet');
+  var Cells := 0;
+  for var i := 1 to Watched do
+  begin
+    if FRam.Row.Lit < HeadRowCells then
+      Assert.IsTrue(FRam.Lens >= 1, 'The eye burns white while the row comes up');
+    var Cue := FRam.Tick(Hero);
+    if Cue.RowCell then
+      Inc(Cells);
+    Assert.IsFalse(Cue.Shot and (FRam.Row.Lit < HeadRowCells),
+      'No shot before the row is up');
+  end;
+  Assert.AreEqual(HeadRowCells, Cells, 'A cue for every cell');
+  Assert.AreEqual(HeadRowCells, FRam.Row.Lit, 'The row is up');
+  Assert.AreEqual(1.0, FRam.Row.Share, 0.001, 'Full');
+end;
+
+procedure TRamHunterTests.TestTheRowFollowsTheLives;
+begin
+  LockWith(HeroOnAPad(MiddleHeroX, MiddleDeckY));
+  StrikeTheEye(FRam.FullLives div 2);
+  Assert.AreEqual(0.5, FRam.Row.Share, 0.01, 'Half the lives, half the row');
+  Assert.AreEqual(0, FRam.Row.HitTicks, 'Struck this moment');
+end;
+
+procedure TRamHunterTests.TestADeadHeadsRowFades;
+const
+  LivesShare = 0.02;
+  Faded = 25;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero, LivesShare);
+  StrikeTheEye(FRam.Lives);
+  FRam.Tick(Hero);
+  Assert.IsTrue(FRam.Row.Shown, 'The dead head''s row still shows');
+  Assert.AreEqual(0.0, FRam.Row.Share, 0.001, 'Empty');
+  Assert.IsTrue(FRam.Row.Fade < 1, 'And fades');
+  for var i := 1 to Faded do
+    FRam.Tick(Hero);
+  Assert.IsFalse(FRam.Row.Shown, 'Gone');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TRamTests);
+  TDUnitX.RegisterTestFixture(TRamHunterTests);
   TDUnitX.RegisterTestFixture(TBodyShieldTests);
   TDUnitX.RegisterTestFixture(TRamLevelTests);
 
