@@ -2972,10 +2972,8 @@ moves in comes from `Game.Space`.
 - The Duplet (3.0.64), weapon **`DupletWeapon`** = 5 (0..4 are the 2008
   guns): two barrels, `PelletsPerBarrel` (6) red pellets each from a
   square `PelletSpread` (6) across at the muzzle (`FireDuplet`:
-  `MuzzleReach` 32 along the shot, `BoreLift`, `BoreHalfGap`), and a kick
-  back of `RecoilUnits` (6) - `FRecoil`, paid by halves a tick in whole
-  units through `ShoveX` (`ApplyRecoil`, `FRecoilCarry`): a wall stops
-  it, a deck's edge drops the hero. In the hands: `duplet.mset`, sprite
+  `MuzzleReach` 32 along the shot, `BoreLift`, `BoreHalfGap`); no kick
+  back since 3.0.77 (it threw the hero off his pads). In the hands: `duplet.mset`, sprite
   `held`, its own cache with alpha and linear filtering
   (`FDupletCache`, `FDupletSet`, `FDupletHeld`), drawn `DupletHeldSide`
   (48) square by `DrawRotated`.
@@ -4695,7 +4693,7 @@ its own, not the hero's shroud (decided). A 2026 addition.
   `Render.Glow`, on the monsters' channel), `Clear` (a door or a death:
   nothing follows the hero to the next screen).
 
-### `Game/Game.Shield.pas` (~355 lines)
+### `Game/Game.Shield.pas` (~545 lines)
 The shield of a TeK machine while it cannot be hit (3.0.56): a pale gold
 honeycomb about it, always seen, on its rim alone - the machine inside
 stays in plain view (asked after the first look: a full honeycomb hid the
@@ -4731,6 +4729,12 @@ addition.
   rim across) (`LayCellsOverBody`); `Holds` asks the grid. The cannons'
   ellipse is unchanged.
 
+- 3.0.77: **a strip** - `CreateStrip(cells, scale)`: a short row of
+  cells about the middle at `scale` of the full cell (`FScale`, also the
+  size `Draw` gives them), every one of them rim (`LayStrip`), held as a
+  box of the row's half-length and a cell's half-height. A plate that
+  guards one side of a gun: the Ram's sweeper wears two under its
+  barrels.
 ### `Game/Game.Cannons.pas` (~900 lines)
 The two TeK cannons of the gravel arena (3.0.56, act 3): guns clamped to
 the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
@@ -4791,7 +4795,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~2090 lines, 3.0.76)
+### `Game/Game.Ram.pas` (~2530 lines, 3.0.77)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -4935,6 +4939,32 @@ monster. The game carries out the cue.
   (`TickHeadSmoke`, drawn with the exhausts); the exhausts full in a rev
   too.
 
+- 3.0.77, **the sweeper** (stage 10a). `LockSweeper` at the end of the
+  change: `SweeperLives` 140 times the grade's share (`FLivesShare`), the
+  row from 0, the first sweep after `FirstBurstTicks`. `TickRide` (from
+  `TickAim` for the sweeper): the turn to a hero past the socket by
+  `SweeperTurnPast` 8; the row `FRowY` - the hero's idle, the lowest while
+  pressing (the closed ceiling), a ladder's through a burst at
+  `LadderRate` 1.3 - between `SweeperRowY(SweeperMastHighest` 96) and
+  `SweeperRowY(SweeperMastLowest` 12); the mast after it at `RideRate`
+  1.5 (`SweeperMastFor`). `TickSweep` (from `TickFire`) by
+  `SweepPatterns`: on the row within `RowSlack` 4 with the hero in front,
+  `BeginSweep` - the barrels burn (`TickHeat`, `HeatAt`; the countdown
+  waits for the row) - then `ShootBarrel` out of `MuzzleYs` in turn, level,
+  `ShotSpeed` = `SweeperBulletSpeed` 5; the fork (`ForkRow`, `ForkStep`
+  32, `ForkHeatTicks` 10) and the ladder (`FLadderWay` toward more room).
+  `StrikeBarrels(from, to, at, guarded)`: the stretch in head units
+  (`ToHead`), walked by `StrikeStep` 0.5 against the pack (`BarrelsLeft`..
+  `BarrelsRight`, `BarrelsTop`..`BarrelsBottom`) and the room under it to
+  `PlateBottom`; under it, or climbing past `PlateCover` 6 degrees -
+  guarded, the nearer `Plate` flares (`PlateMiddles`, strips of
+  `PlateCells` 2 at `PlateScale` 0.6); else a life and `Hurt`. Not hit
+  squashed under `ThinHeadSquash`. `BarrelsPoint`, `Booting` (the row
+  still coming up). `FKilled`: after the sweeper the mast sinks and stays
+  down. `TRamPainter.DrawHeat`: `sweeperHeat` over the head, `HeatRed`
+  by its heat, `HeatWhite` while booting or struck; `DrawLight` draws the
+  plates under the head. `CanShoot` and `Row` take any head now; the
+  hunter's `Shoot` sets `ShotSpeed` too.
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -6172,7 +6202,13 @@ fire, no press on a pad, the red lens before a burst, the rests between
 bursts, the first shots at the hero, the turn past the vertical, the
 hose of the last third), and 4 on the row of lives (none before the lock,
 up a cell at a time before the first shot, following the lives, fading
-with a dead head).
+with a dead head). 3.0.77 - 11 more, `TRamSweeperTests` (the lives by
+the grade, the ride to the hero's row, the closed ceiling at the bottom
+of the mast, the red barrels before a sweep, a sweep level along his row,
+the whole pack hit from above and level, the plates taking a bullet from
+below and a climbing one, the fork a cell away, the ladder, the turn, the
+empty mast after the last life), and one in `TBodyShieldTests` (a strip
+holds its row).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -6833,7 +6869,7 @@ twelve OGG files.
 | The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
 | The boss arena of level 2 (screen 13): the tunnel music faded to silence and the boss track on the Ram's lock (3.0.75; the hand-over of 3.0.74 before it), the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (the `ram` action with fadeOut and file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
 | A screen whose way on is shut until an event opens it, or sealed for good | `shutDoors` / `sealedDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
-| The Duplet: the double-barrel, its red shot, its recoil, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
+| The Duplet: the double-barrel, its red shot, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
 | The moon stone: its picture that turns and hovers, its dark, its waking and the fall of the rocks | monsters.json `moonStone` (`anchored`, `invulnerable`, `picture` turn / hover) + `eclipse` in `dynamics` + scenes `s11-wake`, `s11-fall` of level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, fly `ease`) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Game.Moon.pas (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
 | Lightning: bolts that short across panels, wrecks and the satellite | `lightning` in `dynamics` + Levels.Dynamics.pas (`TLightning`) + Effects.Lightning.pas (`TBoltField`) + Tests.Effects.Lightning.pas (+docs/mechanics/lightning.md) |
@@ -6878,6 +6914,7 @@ twelve OGG files.
 | The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
 | The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| The Ram's sweeper (3.0.77): the ride to the hero's row, the red barrels and the sweep, the closed ceiling, the fork and the ladder by the thirds, the barrel pack as the target and the plates under it, the empty mast after it | Game.Ram.pas (`TickRide`, `TickSweep`, `ForkRow`, `ShootBarrel`, `TickHeat`, `LockSweeper`, `StrikeBarrels`, `ToHead`; `TRamPainter.DrawHeat`, `DrawLight` - the plates) + Game.Shield.pas (`CreateStrip`) + Game.Moon.pas (`BulletStruckRamBarrels`; `TickRam` - `ShotSpeed`) + Tests.Game.Ram.pas (`TRamSweeperTests`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |

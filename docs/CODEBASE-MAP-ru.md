@@ -3022,10 +3022,8 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
 - Дуплет (3.0.64), оружие **`DupletWeapon`** = 5 (0..4 - ружья 2008):
   два ствола, из каждого `PelletsPerBarrel` (6) красных дробин из
   квадрата `PelletSpread` (6) у дула (`FireDuplet`: `MuzzleReach` 32
-  вдоль выстрела, `BoreLift`, `BoreHalfGap`), и отдача назад на
-  `RecoilUnits` (6) - `FRecoil`, выплачивается половинами за тик целыми
-  единицами через `ShoveX` (`ApplyRecoil`, `FRecoilCarry`): стена её
-  останавливает, край настила роняет героя. В руках: `duplet.mset`,
+  вдоль выстрела, `BoreLift`, `BoreHalfGap`); отдачи с 3.0.77 нет (она
+  сбрасывала героя с падов). В руках: `duplet.mset`,
   спрайт `held`, свой кеш с альфой и линейной фильтрацией
   (`FDupletCache`, `FDupletSet`, `FDupletHeld`), рисуется квадратом
   `DupletHeldSide` (48) через `DrawRotated`.
@@ -4688,7 +4686,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   `Render.Glow`, на канале монстров), `Clear` (дверь или смерть: за героем
   на следующий экран ничего не идёт).
 
-### `Game/Game.Shield.pas` (~355 строк)
+### `Game/Game.Shield.pas` (~545 строк)
 Щит машины TeK, пока её нельзя ранить (3.0.56): бледно-золотые соты
 вокруг неё, видные всегда, только по ободу - машина внутри остаётся на
 виду (попросили после первого просмотра: полные соты прятали пушку).
@@ -4722,6 +4720,11 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   RimDepth` (28 единиц - примерно ширина обода пушки) (`LayCellsOverBody`);
   `Holds` спрашивает сетку. Эллипс пушек не тронут.
 
+- 3.0.77: **полоска** - `CreateStrip(cells, scale)`: короткий ряд ячеек
+  вокруг середины в `scale` от полной (`FScale`, им же `Draw` даёт
+  размер), каждая - обод (`LayStrip`); держит прямоугольник в
+  полудлину ряда и полвысоты ячейки. Щиток, закрывающий одну сторону
+  оружия: свипер Тарана носит два под стволами.
 ### `Game/Game.Cannons.pas` (~900 строк)
 Две пушки TeK арены грейвелов (3.0.56, акт 3): пушки, прижатые к боковым
 граням столбов стены (столбцы 1-2 и 13-14, дуло на две клетки от стены;
@@ -4782,7 +4785,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~2090 строк, 3.0.76)
+### `Game/Game.Ram.pas` (~2530 строк, 3.0.77)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -4922,6 +4925,31 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   пустой мачты (`TickHeadSmoke`, рисуется с выхлопом); выхлоп полный и в
   рыке.
 
+- 3.0.77, **свипер** (этап 10a). `LockSweeper` в конце смены голов:
+  `SweeperLives` 140 на долю сложности (`FLivesShare`), ряд с нуля,
+  первый проход через `FirstBurstTicks`. `TickRide` (из `TickAim` для
+  свипера): разворот к герою за гнездом дальше `SweeperTurnPast` 8; ряд
+  `FRowY` - в покое героя, в давке самый нижний (закрытый потолок), в
+  очереди лестницы едет на `LadderRate` 1.3 - между
+  `SweeperRowY(SweeperMastHighest` 96) и `SweeperRowY(SweeperMastLowest`
+  12); мачта за ним на `RideRate` 1.5 (`SweeperMastFor`). `TickSweep` (из
+  `TickFire`) по `SweepPatterns`: на ряду в пределах `RowSlack` 4 и герой
+  спереди - `BeginSweep`, стволы горят (`TickHeat`, `HeatAt`; отсчёт ждёт
+  ряда), потом `ShootBarrel` из `MuzzleYs` по очереди, ровно,
+  `ShotSpeed` = `SweeperBulletSpeed` 5; вилка (`ForkRow`, `ForkStep` 32,
+  `ForkHeatTicks` 10) и лестница (`FLadderWay` туда, где больше места).
+  `StrikeBarrels(from, to, at, guarded)`: отрезок в единицах головы
+  (`ToHead`), шагом `StrikeStep` 0.5 против блока (`BarrelsLeft`..
+  `BarrelsRight`, `BarrelsTop`..`BarrelsBottom`) и места под ним до
+  `PlateBottom`; под ним или вверх круче `PlateCover` 6 градусов - щиток,
+  вспыхивает ближний `Plate` (`PlateMiddles`, полоски по `PlateCells` 2
+  в `PlateScale` 0.6); иначе жизнь и `Hurt`. Сплющенный в развороте под
+  `ThinHeadSquash` не бьётся. `BarrelsPoint`, `Booting` (ряд ещё
+  встаёт). `FKilled`: после свипера мачта уходит и остаётся внизу.
+  `TRamPainter.DrawHeat`: `sweeperHeat` поверх головы, `HeatRed` по
+  накалу, `HeatWhite` на загрузке ряда и при попадании; `DrawLight`
+  рисует щитки под головой. `CanShoot` и `Row` берут любую голову;
+  `Shoot` охотника тоже ставит `ShotSpeed`.
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -6131,7 +6159,12 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 очередью, отдых между очередями, первые выстрелы в героя, разворот за
 вертикаль, шланг последней трети) и 4 на ряд жизней (до защёлки нет,
 встаёт по ячейке до первого выстрела, идёт за жизнями, тает с мёртвой
-головой).
+головой). 3.0.77 - ещё 11, `TRamSweeperTests` (жизни по сложности, езда к
+ряду героя, закрытый потолок внизу мачты, красные стволы перед проходом,
+проход ровно по его ряду, весь блок бьётся сверху и в лоб, щитки берут
+пулю снизу и лезущую вверх, вилка через клетку, лестница, разворот,
+пустая мачта после последней жизни) и одна в `TBodyShieldTests` (полоска
+держит свой ряд).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6779,7 +6812,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Путь дальше после арены 2: конец победного трека, нарастающая музыка туннеля, стрелка "вправо" | `events` экрана 9 в level2.json (victoryEnds, music с fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, fade у `PlayMusic`) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
 | Арена босса второго уровня (экран 13): музыка туннеля гаснет в тишину и трек босса на защёлке головы Тарана (3.0.75; до того передача 3.0.74), городская дорога на 12 и 13, дальний уступ, конвои и прожектор 13, городские пады в наборе | `events` экрана 13 в level2.json (действие `ram` с fadeOut и file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
 | Экран, выход с которого заперт, пока его не откроет событие, или запечатан навсегда | `shutDoors` / `sealedDoors` + событие `openDoor` в JSON уровня + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
-| Дуплет: двустволка, красная дробь, отдача, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`, `ApplyRecoil`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
+| Дуплет: двустволка, красная дробь, подбираемое шире клетки | Hero.pas (`DupletWeapon`, `FireDuplet`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (сторона у `DrawRotated`) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | Пыль туннеля и её свет | `dust` в `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
 | Лунный камень: картинка, которая вращается и парит, его тьма, пробуждение и падение камней | monsters.json `moonStone` (`anchored`, `invulnerable`, turn / hover у `picture`) + `eclipse` в `dynamics` + сцены `s11-wake`, `s11-fall` из level2.json + Levels.Dynamics.pas (`TEclipse`, `PaceTo`, `meBack`) + Levels.Scenes.pas (`ckJolt`, `ckPace`, `ease` у fly) + Scenes.Director.pas (`TakeJolt`, `TakeOver`) + Pads.Flights.pas (`EasedFlight`) + Monsters.pas (`DrawPicture`) + Game.Moon.pas (`HeroStandsIn`) + tools/sounds/stonewake.py, stonefall.py |
 | Молния: разряды по панелям, обломкам и спутнику | `lightning` в `dynamics` + Levels.Dynamics.pas (`TLightning`) + Effects.Lightning.pas (`TBoltField`) + Tests.Effects.Lightning.pas (+docs/mechanics/lightning.md) |
@@ -6824,6 +6857,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
 | Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз, линза и стоп-сигналы, дым выхлопа, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, отрисовка дыма) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| Свипер Тарана (3.0.77): езда к ряду героя, красные стволы и проход, закрытый потолок, вилка и лестница по третям, блок стволов как мишень и щитки под ним, пустая мачта после него | Game.Ram.pas (`TickRide`, `TickSweep`, `ForkRow`, `ShootBarrel`, `TickHeat`, `LockSweeper`, `StrikeBarrels`, `ToHead`; `TRamPainter.DrawHeat`, `DrawLight` - щитки) + Game.Shield.pas (`CreateStrip`) + Game.Moon.pas (`BulletStruckRamBarrels`; `TickRam` - `ShotSpeed`) + Tests.Game.Ram.pas (`TRamSweeperTests`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |

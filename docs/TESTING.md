@@ -68,7 +68,7 @@ Tests\
   Game\
     Tests.Game.Blasts.pas
     Tests.Game.Press.pas
-    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter, and the shield over a body
+    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter and sweeper, the shield over a body and a strip
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
