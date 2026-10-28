@@ -3673,9 +3673,18 @@ per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
   kill paid out (white flash), reset without = a hit (red flash on the lost
   cells).
 
-### `Hud/Hud.Marks.pas` (~290 lines)
+### `Hud/Hud.Marks.pas` (~350 lines)
 Health rows over the figures, drawn with the brush; built by `CreateHud` in
 `Game.Moon` with the corner HUDs. **`THudMarks`**.
+- The Ram's head (3.0.76, `DrawRam(ram, shift, alpha)` on the world's
+  channel, after `Draw`): `HeadRowCells` 12 cells, four a third, colored
+  by the share of its lives in the thirds' colors (they are also how it
+  fires), `HeadRowLift` 6 over `TRam.HeadTopAt`; it does not fade while
+  the head is up. `TRam.Row` tells it all: `Lit` - the cells come up one
+  by one after the lock, the newest glowing; a hit reddens the frame and
+  whitens the cell it emptied into for `HeadHitTicks` 8; a dead head's
+  row, empty, fades. `DrawCells` - the row of full and empty cells,
+  shared with the monsters' rows.
 - The hero's row: 4x4 cells with a gap of 2, centered over the head (9 units
   above the sprite's top), the monitor's grammar - `HealthyHealth` cells of
   norm with the empty ones as outlines, bonus cells past a divider, on a dark
@@ -4782,19 +4791,28 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~1120 lines, 3.0.75)
+### `Game/Game.Ram.pas` (~2090 lines, 3.0.76)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
-stage 8b): a hull on two wheels that faces left for good and drives back
-and forth, a mast of three sections in a well on its roof with the hunter
-on top, an eye, brake lamps, two smoking exhausts, the TeK shield over
-its body. A unit of the
-game as the cannons are, not a monster. The game carries out the cue.
+stages 8b and 9): a hull on two wheels that faces left for good and
+drives back and forth, a mast of three sections in a well on its roof
+with a head on top - the hunter, then the sweeper -, an eye, brake lamps,
+two smoking exhausts, the TeK shield over its body. It presses a hero
+low on the road and hunts one on the pads; the hunter fires bursts and
+its eye is the only target. A unit of the game as the cannons are, not a
+monster. The game carries out the cue.
 - **`TRamCue`** (record) - `Rumble` (the engine starts: the loop),
   `Hiss` (stopped: the loop cuts to the brake), `Whine` (the mast starts
-  up), `Locked` (the head locked: the boss track), `Jolt` (trauma shares).
+  up), `Locked` (the head locked: the boss track), `Jolt` (trauma shares),
+  `Shot`/`ShotFrom`/`ShotAngle` (the hunter fires), `Blast`/`BlastAt`
+  (the head blows up).
 - **`TRamPhase`** = (`rpAbsent`, `rpWaiting` - the music fades, the
   machine not on the screen yet, `rpDriving`, `rpBreathing` - at the
-  entrance's mark, the eye dark, `rpRising`, `rpResting`).
+  entrance's mark, the eye dark, `rpRising`, `rpResting`, `rpRevving` -
+  the rev before a press, `rpChanging` - the change of heads).
+  **`TRamHead`** = (`rhNone`, `rhHunter`, `rhSweeper`); **`TRamFire`** =
+  (`rfIdle`, `rfFlare` - the lens burns red, `rfBurst`); **`TRamTarget`**
+  (record: `Alive`, `Body`, `OnDeck`) - the hero as the machine sees him.
+  `HunterLives` 100, `HunterBulletSpeed` 6.
 - **`TRam`** - `Create(body, seed)` (the body - `TRamArt.Body` - and the
   shield `CreateOver` it); `Start(orders)` - True for the whole entrance
   (the first on the level, `FEntered`): `rpWaiting` for the fade-out
@@ -4836,9 +4854,54 @@ game as the cannons are, not a monster. The game carries out the cue.
   `Body`, `Shield`, `Phase`, `EyeLit`, `Eye`, `Lens`, `Arrivals` (counts
   the starts), `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
   `RamFloorY` 352 (the road), `RamTop`.
+  **The fight (stage 9).** `Start(orders, livesShare)` arms the hunter
+  (`Arm`: `HunterLives` times the share, facing left, the gun quiet) on
+  every start. `Tick(target)` - the hero seen (`SeeHero`: his centre and
+  pace), the mode (`TickMode`: feet under `LowLine` 288 and off a pad for
+  `PressAfterTicks` 10 - `FPressing`; let go after `LeaveOnDeckTicks` 6
+  on a pad or `LeaveAboveTicks` 33 above the line; `PressNow` cuts a rest,
+  speeds a leg toward him or brakes one away, `StopAhead`), the phase,
+  the sway, the aim, the fire; `Tick` with no hero - the old roam.
+  `BeginLeg`: no hero - `BeginPatrolLeg`; pressing - `BeginRev`
+  (`rpRevving` `RevTicks` 8) and then to `PressWall` at `PressSpeeds`
+  (1.9, 1.9, 2.1 by the third), resting `PressRestTicks` 13; else
+  `BeginHuntLeg` (32-96 units at `HuntSpeed` 1.1 where `InSightsFrom`
+  holds, else the farthest from him; rests 15-40, at most 5 out of his
+  sights). `TickAim`: the barrel's angle `FAim` (before the sway, degrees
+  counter-clockwise) toward him within `AimWithin` (straight up to
+  `AimBelow` 25 under level on its side) at `TrackRate` 3; past the
+  vertical by `TurnPast` 15 for `TurnHoldTicks` 10 the head turns over
+  `TurnTicks` 10 (`TurnSquash`, mirrored at the middle), never in a burst;
+  in a burst the barrel keeps on the point it took (`FFrozenAt`) or, the
+  hose, follows at `HoseRate` 2. `TickFire` by `FirePatterns` (`Tier` - the
+  third of its lives): rest, `rfFlare` (20/16/14 ticks; the lead of the
+  second third, at most `LeadMax` 80), `rfBurst` (3/3/6 shots, `Shoot`:
+  from the muzzle 30.7 along the barrel), rest (50/40/45); `CanShoot` -
+  a hunter up, a hero alive, no turn, a fight phase; a press starts no
+  burst and puts out a flare. `StrikeEye(from, to, at)` - a stretch
+  against a circle of `EyeRadius` 5 about `LensPoint`: a life, a white
+  flash of `HurtFlashTicks` 4; the last one sets `FHeadKilled`, and the
+  next tick `KillHead` gives the `Blast` and stands the machine (braking
+  first, `FChangePending`) for `BeginChange`/`TickChange`: the mast sinks
+  `SinkTicks` 25, `EmptyTicks` 5, the sweeper rises `ChangeRiseTicks` 30
+  to `SweeperMast` 48 with the whine. The eye blinks through `rpRising`
+  and `rpChanging`; the lens (`TickLens`) burns red (`LensHot`) through a
+  flare and a burst, flashes when struck, otherwise winks. `AimAt`,
+  `TurnSquash`, `Wounded` (a hunter at its last third), `Hurt`, `Head`,
+  `Facing`, `Lives`, `FullLives`, `Pressing`, `Fire`, `LensHot`. The
+  geometry of a head is one function for the rules and the painter:
+  `HeadPoint(left, mast, sway, head, facing, squash, x, y)` over
+  `HeadShapes` (hunter 27.7 by 18.8, socket 16.6, 18.7; sweeper 42.1 by
+  18.7, socket 29.2, 18.7), with `Turned`, `MastPivot`, `Bearing`,
+  `Heading`. The row of lives: `Row` (`TRamRow`: `Shown`, `Lit`, `Share`,
+  `HitTicks`, `Fade`) - from the lock `TickRow` lights a cell of
+  `HeadRowCells` 12 every `RowBootTicks` 30 / 12 ticks (the cue
+  `RowCell`), the lens burning white meanwhile; the first burst comes
+  after; a dead head's row fades over `RowFadeTicks` 20. `HeadTopAt` -
+  the middle of the top of the head, for the row.
 - **`TRamArt`** - the set `tek-machine` through a cache of its own (no
   color key, linear): `well`, `mast1`..`mast3`, `hunter`,
-  `hunterBarrel`; a `THullArt` for the hull, its worn copy, the chassis and
+  `hunterBarrel`, `sweeper`; a `THullArt` for the hull, its worn copy, the chassis and
   the wheel (`RamHullDef`: eye 22.2, 54.8, axles 61.1 and 133.2 at 107.5,
   radius 20.5); the shield's `TShieldArt`; a point glow for the lamps,
   the eye and the lens. `Body` - read
@@ -4862,7 +4925,15 @@ game as the cannons are, not a monster. The game carries out the cue.
   `DrawMast` - the sections narrowest first, each top raised by its share
   of the rise, the head's socket on the top collar, the barrel on its
   sleeve, all turned with the sway about the middle of the well (`Turned`);
-  `DrawLight(canvas, origin, alpha)` - the shield.
+  `DrawLight(canvas, origin, alpha)` - the shield. Stage 9: `DrawMast`
+  ends in `DrawHead` - the head by `HeadPoint`, its width squashed in a
+  turn and mirrored facing right, and the hunter's barrel from the sleeve
+  along `AimAt` (turned 180 less the angle, or less the angle mirrored);
+  `DrawLens` - pale and winking, red and up to `LensHotSize` 10 while it
+  burns, `LensHurtSize` 9 when struck; a third `TSmoke`, `HeadSmokeLook`,
+  from the head of a wounded hunter and from the top of an empty mast
+  (`TickHeadSmoke`, drawn with the exhausts); the exhausts full in a rev
+  too.
 
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
@@ -6094,7 +6165,14 @@ new `Game/Tests.Game.Ram` (the entrance whole and from the stop, the legs
 and the legs to a wall, the eye's blink and breath, the lens, the contact,
 its pad rule, the throw straight up at a wall and the thrown hero out of
 its way, the shield, the shield over a body, the ram action, the Ram of
-level 2).
+level 2). 3.0.76 - 11 more there, a fixture of their own
+(`TRamHunterTests`: the lives by the grade, the eye the only target, the
+head blown up and the sweeper rising, the press to the wall and its held
+fire, no press on a pad, the red lens before a burst, the rests between
+bursts, the first shots at the hero, the turn past the vertical, the
+hose of the last third), and 4 on the row of lives (none before the lock,
+up a cell at a time before the first shot, following the lives, fading
+with a dead head).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -6800,6 +6878,7 @@ twelve OGG files.
 | The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
 | The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |

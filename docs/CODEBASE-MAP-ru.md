@@ -3717,9 +3717,18 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (белая вспышка), сброс без очков = удар (красная вспышка по потерянным
   ячейкам).
 
-### `Hud/Hud.Marks.pas` (~290 строк)
+### `Hud/Hud.Marks.pas` (~350 строк)
 Ряды здоровья над фигурами, нарисованные кистью; строится в `CreateHud` в `Game.Moon`
 вместе с угловыми HUD. **`THudMarks`**.
+- Голова Тарана (3.0.76, `DrawRam(ram, shift, alpha)` на канале мира,
+  после `Draw`): `HeadRowCells` 12 ячеек, по четыре на треть, цвет - по
+  доле жизней в цветах третей (они же говорят, как она стреляет),
+  `HeadRowLift` 6 над `TRam.HeadTopAt`; пока голова наверху, ряд не
+  тает. Всё говорит `TRam.Row`: `Lit` - ячейки после защёлки встают по
+  одной, новая светится; попадание краснит рамку и белит ячейку, в
+  которую опустел ряд, на `HeadHitTicks` 8; ряд мёртвой головы, пустой,
+  тает. `DrawCells` - ряд полных и пустых ячеек, общий с рядами
+  монстров.
 - Ряд героя: ячейки 4x4 с зазором 2, по центру над головой (на 9 юнитов выше
   верха спрайта), грамматика монитора - `HealthyHealth` ячеек нормы, пустые
   контуром, бонус за засечкой, на тёмной подложке. Появляется на любое
@@ -4773,19 +4782,27 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~1120 строк, 3.0.75)
+### `Game/Game.Ram.pas` (~2090 строк, 3.0.76)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
-этап 8b): корпус на двух колёсах, всегда носом влево, ездит туда и
-обратно, мачта из трёх секций в колодце на крыше с охотником наверху,
-глаз, стоп-сигналы, два дымящих выхлопа, щит TeK по телу. Юнит игры, как
+этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
+обратно, мачта из трёх секций в колодце на крыше с головой наверху -
+охотником, потом свипером, - глаз, стоп-сигналы, два дымящих выхлопа,
+щит TeK по телу. Героя внизу на дороге давит, на падах - охотится;
+охотник бьёт очередями, и его глаз - единственная мишень. Юнит игры, как
 пушки, а не монстр.
 Игра исполняет cue.
 - **`TRamCue`** (запись) - `Rumble` (мотор завёлся: петля), `Hiss`
   (встал: петля рвётся в тормоз), `Whine` (мачта пошла), `Locked` (голова
-  встала: трек босса), `Jolt` (доли травмы).
+  встала: трек босса), `Jolt` (доли травмы), `Shot`/`ShotFrom`/
+  `ShotAngle` (охотник стреляет), `Blast`/`BlastAt` (голова взрывается).
 - **`TRamPhase`** = (`rpAbsent`, `rpWaiting` - музыка гаснет, машины на
   экране ещё нет, `rpDriving`, `rpBreathing` - на отметке въезда, глаз
-  тёмный, `rpRising`, `rpResting`).
+  тёмный, `rpRising`, `rpResting`, `rpRevving` - рык перед давкой,
+  `rpChanging` - смена голов). **`TRamHead`** = (`rhNone`, `rhHunter`,
+  `rhSweeper`); **`TRamFire`** = (`rfIdle`, `rfFlare` - линза горит
+  красным, `rfBurst`); **`TRamTarget`** (запись: `Alive`, `Body`,
+  `OnDeck`) - герой, каким его видит машина. `HunterLives` 100,
+  `HunterBulletSpeed` 6.
 - **`TRam`** - `Create(body, seed)` (тело - `TRamArt.Body` - и щит
   `CreateOver` по нему); `Start(orders)` - True для въезда целиком
   (первого на уровне, `FEntered`): `rpWaiting` на секунды затухания и
@@ -4827,8 +4844,53 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   `Body`, `Shield`, `Phase`, `EyeLit`, `Eye`, `Lens`, `Arrivals` (счёт
   стартов), `Mast`, `Left`, `Track`. `RamWidth` 169, `RamHeight` 128,
   `RamFloorY` 352 (дорога), `RamTop`.
+  **Бой (этап 9).** `Start(orders, livesShare)` на каждом старте
+  вооружает охотника (`Arm`: `HunterLives` на долю, носом влево, ствол
+  молчит). `Tick(target)` - герой увиден (`SeeHero`: центр и темп), режим
+  (`TickMode`: ноги ниже `LowLine` 288 и не на паде `PressAfterTicks` 10
+  тиков - `FPressing`; отпускает после `LeaveOnDeckTicks` 6 на паде или
+  `LeaveAboveTicks` 33 над линией; `PressNow` обрывает отдых, ускоряет
+  плечо к нему или тормозит плечо от него, `StopAhead`), фаза, качание,
+  прицел, огонь; `Tick` без героя - прежний патруль. `BeginLeg`: героя
+  нет - `BeginPatrolLeg`; давка - `BeginRev` (`rpRevving` `RevTicks` 8),
+  потом к `PressWall` на `PressSpeeds` (1.9, 1.9, 2.1 по трети), отдых
+  `PressRestTicks` 13; иначе `BeginHuntLeg` (32-96 единиц на `HuntSpeed`
+  1.1 туда, где держит `InSightsFrom`, иначе дальше всего от него; отдых
+  15-40, вне прицела не дольше 5). `TickAim`: угол ствола `FAim` (до
+  качания, градусы против часовой) к нему в пределах `AimWithin` (от
+  вертикали до `AimBelow` 25 ниже горизонта на своей стороне) на
+  `TrackRate` 3; за вертикалью на `TurnPast` 15 дольше `TurnHoldTicks` 10
+  голова разворачивается за `TurnTicks` 10 (`TurnSquash`, зеркало в
+  середине), не посреди очереди; в очереди ствол держит взятую точку
+  (`FFrozenAt`) или, шланг, ведёт на `HoseRate` 2. `TickFire` по
+  `FirePatterns` (`Tier` - треть жизней): отдых, `rfFlare` (20/16/14
+  тиков; упреждение второй трети, не больше `LeadMax` 80), `rfBurst`
+  (3/3/6 выстрелов, `Shoot`: из дула в 30.7 по стволу), отдых (50/40/45);
+  `CanShoot` - охотник наверху, герой жив, нет разворота, фаза боя; давка
+  не начинает очередь и гасит горящую линзу. `StrikeEye(from, to, at)` -
+  отрезок против круга `EyeRadius` 5 у `LensPoint`: минус жизнь, белая
+  вспышка `HurtFlashTicks` 4; последняя ставит `FHeadKilled`, и на
+  следующем тике `KillHead` даёт `Blast` и ставит машину (сперва
+  тормозом, `FChangePending`) на `BeginChange`/`TickChange`: мачта уходит
+  за `SinkTicks` 25, `EmptyTicks` 5, свипер поднимается за
+  `ChangeRiseTicks` 30 до `SweeperMast` 48 под вой. Глаз мигает в
+  `rpRising` и `rpChanging`; линза (`TickLens`) горит красным (`LensHot`)
+  во вспышке и очереди, при попадании вспыхивает, иначе подмигивает.
+  `AimAt`, `TurnSquash`, `Wounded` (охотник на последней трети), `Hurt`,
+  `Head`, `Facing`, `Lives`, `FullLives`, `Pressing`, `Fire`, `LensHot`.
+  Геометрия головы - одна функция для правил и для художника:
+  `HeadPoint(left, mast, sway, head, facing, squash, x, y)` по
+  `HeadShapes` (охотник 27.7 на 18.8, гнездо 16.6, 18.7; свипер 42.1 на
+  18.7, гнездо 29.2, 18.7), с `Turned`, `MastPivot`, `Bearing`,
+  `Heading`. Ряд жизней: `Row` (`TRamRow`: `Shown`, `Lit`, `Share`,
+  `HitTicks`, `Fade`) - от защёлки `TickRow` зажигает ячейку из
+  `HeadRowCells` 12 каждые `RowBootTicks` 30 / 12 тиков (cue `RowCell`),
+  линза тем временем горит белым; первая очередь - после; ряд мёртвой
+  головы тает за `RowFadeTicks` 20. `HeadTopAt` - середина верха головы,
+  для ряда.
 - **`TRamArt`** - набор `tek-machine` через свой кэш (без ключа,
-  линейный): `well`, `mast1`..`mast3`, `hunter`, `hunterBarrel`;
+  линейный): `well`, `mast1`..`mast3`, `hunter`, `hunterBarrel`,
+  `sweeper`;
   `THullArt` для корпуса, его износа, арок и колеса (`RamHullDef`: глаз
   22.2, 54.8, оси 61.1 и 133.2 на 107.5, радиус 20.5); `TShieldArt` щита;
   точечный блик для стоп-сигналов, глаза и линзы. `Body` - снят с арта при загрузке (`ReadBody`):
@@ -4851,6 +4913,14 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   секции с узкой, верх каждой поднят на её долю подъёма, гнездо головы на
   верхнем воротнике, ствол на своей втулке, всё повёрнуто качанием вокруг
   середины колодца (`Turned`); `DrawLight(canvas, origin, alpha)` - щит.
+  Этап 9: `DrawMast` кончается `DrawHead` - голова по `HeadPoint`, её
+  ширина сплющена в развороте и зеркальна носом вправо, и ствол охотника
+  от втулки по `AimAt` (поворот 180 минус угол, или минус угол в
+  зеркале); `DrawLens` - бледная и подмигивает, красная и до
+  `LensHotSize` 10, пока горит, `LensHurtSize` 9 при попадании; третий
+  `TSmoke`, `HeadSmokeLook`, - из головы раненого охотника и с верха
+  пустой мачты (`TickHeadSmoke`, рисуется с выхлопом); выхлоп полный и в
+  рыке.
 
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
@@ -6055,6 +6125,13 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 (въезд целиком и со стопа, плечи и плечи к стене, мигание и дыхание
 глаза, линза, контакт, его правило пада, бросок вверх у стены и брошенный
 герой вне пути, щит, щит по телу, действие `ram`, Таран второго уровня).
+3.0.76 - ещё 11 там же, своей фикстурой (`TRamHunterTests`: жизни по
+сложности, глаз - единственная мишень, голова взорвана и встаёт свипер,
+давка к стене и её молчащий ствол, на паде не давит, красная линза перед
+очередью, отдых между очередями, первые выстрелы в героя, разворот за
+вертикаль, шланг последней трети) и 4 на ряд жизней (до защёлки нет,
+встаёт по ячейке до первого выстрела, идёт за жизнями, тает с мёртвой
+головой).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6747,6 +6824,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Настенные пушки TeK: езда, предупреждение, очередь, строки, полки, которые уступают, касание, сценарный конец; их арт | Game.Cannons.pas + действие `cannons` в level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
 | Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз, линза и стоп-сигналы, дым выхлопа, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, отрисовка дыма) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | Запаркованная карусель влетает, её разгон; карусель, которая ломается на падающие платформы | `parked`, `speedUp`, `failing` карусели в level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
