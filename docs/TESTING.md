@@ -69,6 +69,7 @@ Tests\
     Tests.Game.Blasts.pas
     Tests.Game.Press.pas
     Tests.Game.Ram.pas     the Ram of the boss arena, its hunter and sweeper, the shield over a body and a strip
+    Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
@@ -105,7 +106,7 @@ Tests\
     Tests.Pads.Plunge.pas
     Tests.Pads.Shelf.pas
     Tests.Pads.Stray.pas
-    Tests.Pads.World.pas    the dormant pad, for now
+    Tests.Pads.World.pas    the dormant pad, and the pad the game puts to sleep
   Scenes\
     Tests.Scenes.Director.pas
   Sprites\

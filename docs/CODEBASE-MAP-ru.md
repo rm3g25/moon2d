@@ -54,7 +54,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   (`Game.Trial`), фиолетовый свет, в котором спускаются её тела
   (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
   (`Game.Shield`), пресс финала (`Game.Press`); и TeK-R13, Таран арены
-  босса второго уровня (`Game.Ram`, 3.0.75). `Game/Events/` исполняет
+  босса второго уровня (`Game.Ram`, 3.0.75) и пады, которые сбивает волна
+  его свипера (`Game.Wrecks`, 3.0.81). `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
@@ -174,6 +175,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 ради корпуса, `Levels.Events` ради приказов, `Sprites.Sets` и
 `Render.Sprites` ради арта, `Render.Brush`, `Game.Space` и канвой из
 `Levels.Dynamics`) /
+`Game.Wrecks` (сбитые пады: над `Pads.World` ради чьей картинки,
+`Levels.Dynamics` ради огня, искр и молний, `Render.Sprites`, `Render.Glow`
+и `Game.Space`) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -2694,6 +2698,10 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     (`TPadPlacement.Dormant`): `Behind` (ни пол, ни тело), не рисуется, а
     то, что на ней висит, погашено (`LocateParent` игры не даёт ей жизни);
     **`Wake`** - с этого момента она есть; `Rewind` усыпляет снова.
+    **`Doze`** (3.0.81) - игра усыпляет бодрствующую платформу (волна
+    свипера); `Rewind` возвращает её такой, как в файле. `Texture`,
+    `PictureHeight` - её картинка, для обломка, нарисованного в ней.
+    **`TPadWorld.Standing(screen)`** - платформы экрана, что не спят.
     **`FlyTo(x, y, ticks)`** - сцена ведёт платформу прямо оттуда, где её
     оставил путь или прошлый перелёт (толчок не учитывается), в x, y -
     левый верхний угол - за данные тики (`StraightFlight` на `CalmPace`;
@@ -4785,7 +4793,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~2530 строк, 3.0.77)
+### `Game/Game.Ram.pas` (~3050 строк, 3.0.81)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -4950,6 +4958,75 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   накалу, `HeatWhite` на загрузке ряда и при попадании; `DrawLight`
   рисует щитки под головой. `CanShoot` и `Row` берут любую голову;
   `Shoot` охотника тоже ставит `ShotSpeed`.
+- 3.0.78, **замыкание** (этап 10b). `TRam.ShortLevel`: 0, пока у головы
+  на мачте больше половины жизней, иначе от `ShortFloor` 0.35 на
+  половине до 1 на последней жизни (`ShortSpan` 0.65) - числа обломка
+  танка; без головы 0. `TRamPainter.FShorts` - по `TLightning` на голову
+  (`HeadShorts`: `WreckShort` танка с коробкой по ширине головы,
+  `ShortSeeds`), тикается над серединой головы с `ShortLevel`
+  (`TickShorts`; у другой головы 0, её молнии догорают), рисуется первым
+  в `DrawLight`. `TickArrival` - перемотка машины, пришедшей заново,
+  вынесена из `TickExhausts`, замыкание с ней. Дым охотника на последней
+  трети остаётся.
+- 3.0.79, **перегруз и взрыв** (этап 10c-1). `TickKill` вместо голого
+  `KillHead`: охотник взрывается на следующий тик, как раньше; свипер
+  сперва перегружается `OverloadTicks` 20 (`BeginOverload`: огонь в
+  покой, разворот обрезан, давка отпущена, езда тормозится `StopAhead`,
+  рык становится отдыхом; `CanShoot`, `TickAim` и `TickMode` стоят, пока
+  `FHeadKilled`; отдых держит машину; глаз мигает по `FOverloadTicks`).
+  `KillHead` свипера: cue `Shock`, `SweeperBlastJolt` 0.8, `FFlash` 1 с
+  угасанием за `BlastFlashTicks` 6, `FBlastAt`. Наружу: `Overloading`,
+  `Overload`, `FlashAt`, `BlastAt`. `TRamPainter`: `FOverloadShort`
+  (`OverloadShortLook`, тикается с замыканием свипера по `Overload`),
+  `DrawOverload` (арт головы ещё раз, аддитивно, на `OverloadWhite` 0.9
+  перегруза), `DrawHeat` белый в перегрузе, `DrawFlash` (весь кадр на
+  `FlashScreen` 0.85 по квадрату вспышки, свечение `FlashGlowSize` 160 у
+  `BlastAt`) последним в `DrawLight`. Игра: `Cue.Shock` играет
+  `SweeperBlastSoundFile` (`sweeperblast.wav`) вместо `RageBlastSoundFile`.
+- 3.0.80, **ударная волна** (этап 10c-2). Её запускает `KillHead`
+  свипера: `FWaveTicks` 0, `FWaveReach` до дальнего из `ScreenCorners`;
+  `TickWave` гонит её `WaveTicks` 33 и гасит (`NoWave`); `Arm` и `Clear`
+  убирают. Наружу: `WaveFrontAt`, `WaveReach`, `WaveStrikes(body, away)` -
+  раз за волну, когда фронт дошёл до середины тела, ставит `FHeroThrown`,
+  сторона по `WaveSide` (от корпуса, над ним - туда, где больше дороги).
+  `TRamArt.FWaveBand` (`CreateWaveBand`, кольцо со смешиванием,
+  `WaveBandSide` 256); `TRamPainter.DrawWave` - полоса чёрным на
+  `WaveBandDepth` 0.6, фронт - кольцо из треугольников (`WaveFrontWidth`
+  1.2, `WaveFrontLevel` 0.85, `WaveFrontSegments` 96) через
+  `SDL_RenderGeometry`, оба по `1 - фронт / дальность`; `TickWaveDust` -
+  два `TSmoke` (`WaveDustLook`, `WaveDustTint`) едут по двум точкам
+  фронта на дороге. Игра: `ResolveRamWave` после `ResolveRamContact` -
+  `GrantMercy(HurtMercyTicks)` и `FHero.Throw`, без раны.
+- 3.0.81: поля волны собраны в **`TShockWave`** (запись: `Reach`,
+  `Ticks`, `Threw`; `Start`, `Stop`, `Tick`, `Running`, `FrontOf`),
+  `FWave`; **`WaveReaches(point)`** - фронт дошёл до точки к этому тику -
+  для падов; `WaveStrikes` спрашивает его.
+### `Game/Game.Wrecks.pas` (~330 строк, 3.0.81)
+Пады, сбитые ударной волной свипера (`docs/mechanics/arena-3.md`, этап
+10c-3): обломок улетает в картинке пада, а сам пад усыплён (`TPad.Doze`).
+Декорация - ни пол, ни тело, ни рана.
+- **`TPadWreck`** (запись) - `Pad` (чья картинка; в тестах nil), `Width`,
+  `Height`, `Middle`/`LastMiddle`, `Speed`, `Heading` (радианы над
+  горизонтом, наружу), `Side` (-1, 1), `Spin`/`LastSpin`/`SpinRate`
+  (градусы по часовой), `Gone`.
+- **`TPadWrecks`** - правила. `Launch(pad, middle, width, height, from)`:
+  прочь от взрыва на `WreckLaunchSpeed` 2, не ниже `WreckLeastLift` 40
+  градусов. `Tick`: курс плавно (`WreckHeadingEase` 0.05) идёт к
+  `WreckClimb` 30 градусам наружу, тяга `WreckThrust` 0.2 по нему,
+  притяжение `WreckGravity` 1/7, сопротивление `WreckDrag` 0.03; вращение
+  с `WreckSpinStart` 18 за тик, быстрее на `WreckSpinGain` 0.4 за тик до
+  `WreckSpinMost` 45; ушёл - на `WreckOffMargin` 60 за левым, правым или
+  верхним краем. `Clear` (`Clears` считает), `Count`, `Flying`, `MiddleAt`,
+  `SpinAt`, свойство по умолчанию `Wrecks[i]`.
+- **`TPadWreckPainter`** - на каждый обломок `TSmoke` огня (`WreckFire`,
+  жар 1, остывает в `WreckFireTint`), `TSparks` (`WreckSparkLook`) и
+  `TLightning` (`WreckBoltLook`), растут по мере обломков (`Grow`),
+  перематываются на очистке; огонь и искры из сопла (`JetPoint`,
+  `WreckJetDown` 6 под серединой, повёрнуто с вращением), молнии над
+  серединой; у ушедшего обломка гаснут и догорают. `DrawFire` (под
+  картинками), `DrawBodies` (текстура пада, тон его размещения,
+  `DrawSized` по вращению), `DrawLight` (оранжевое зарево `WreckGlowSize`
+  36, дышит около `WreckGlowLevel` 0.45, искры, молнии).
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -6085,6 +6162,12 @@ numpy, scipy, Pillow.
 дорога; `ramhiss.wav` - стук тормоза и воздух; `ramwhine.wav` - насос
 мачты, растущий 1.5 с, и лязг защёлки. Нужны numpy, scipy и `armor.py`.
 
+### `tools/sounds/sweeperblast.py` (3.0.79)
+`sweeperblast.wav`, 3.8 с: взрыв свипера Тарана - удар с 70 вниз до
+32 Гц поверх низкого шума, потом гул `stonewake.py`, уходящий с 44 до
+24 Гц и затихающий; низкочастотный фильтр 240 Гц на всём, без треска.
+Нужны numpy, scipy и `armor.py`.
+
 ### `tools/cannon/build_cannon.py`
 Собирает `bin/sprites/tek-cannon.mset`, арт настенной пушки TeK арены
 грейвелов (`Game.Cannons`), из одной сгенерированной картинки - пушки
@@ -6164,7 +6247,18 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 проход ровно по его ряду, весь блок бьётся сверху и в лоб, щитки берут
 пулю снизу и лезущую вверх, вилка через клетку, лестница, разворот,
 пустая мачта после последней жизни) и одна в `TBodyShieldTests` (полоска
-держит свой ряд).
+держит свой ряд). 3.0.78 - ещё 2, `TestShortsOutFromHalfItsLives` в обеих
+фикстурах (выше половины нет, на половине есть, на последней жизни
+сильнее, у взорванной головы нет). 3.0.79 - ещё 2, `TRamSweeperTests`
+(последняя жизнь перегружается до взрыва; машина стоит в перегрузе), и
+взрыв охотника без ударной волны. 3.0.80 - ещё 3, `TRamSweeperTests`
+(волна проходит все углы примерно за секунду, смерть её убирает; бросает
+героя один раз, от корпуса; с корпуса - туда, где больше дороги). 3.0.81 - ещё 1, волна доходит до
+ближнего раньше дальнего (`TestTheWaveReachesTheNearFirst`);
+`Tests.Game.Wrecks` (4: прочь от взрыва и вверх; ни один из пяти падов
+арены не падает на дорогу ни от какого взрыва над крышей, все уходят за
+пять секунд; вращение быстрее до предела; очистка); `Tests.Pads.World` ещё
+2 (усыплённый пад исчез; перемотка его возвращает).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6800,7 +6894,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 (`tools/sounds/stonewake.py`, `stonefall.py` - гул пробуждения камня и
 его затухание); 3.0.75: `ramrumble.wav`, `ramhiss.wav`, `ramwhine.wav`
 (`tools/sounds/ram.py`) и `boss3.ogg`, трек боя с Тараном - двенадцать
-файлов OGG.
+файлов OGG; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`).
 
 ---
 
@@ -6858,6 +6952,10 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Щит TeK: соты, их обод, вспышка, падение | Game.Shield.pas (+Game.Cannons.pas, которые его носят) |
 | Таран (TeK-R13): въезд, езда и тормоз, мачта, глаз, линза и стоп-сигналы, дым выхлопа, патруль, контакт и бросок, щит по телу; его звуки и трек босса | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + действие `ram` в level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, отрисовка дыма) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | Свипер Тарана (3.0.77): езда к ряду героя, красные стволы и проход, закрытый потолок, вилка и лестница по третям, блок стволов как мишень и щитки под ним, пустая мачта после него | Game.Ram.pas (`TickRide`, `TickSweep`, `ForkRow`, `ShootBarrel`, `TickHeat`, `LockSweeper`, `StrikeBarrels`, `ToHead`; `TRamPainter.DrawHeat`, `DrawLight` - щитки) + Game.Shield.pas (`CreateStrip`) + Game.Moon.pas (`BulletStruckRamBarrels`; `TickRam` - `ShotSpeed`) + Tests.Game.Ram.pas (`TRamSweeperTests`) |
+| Замыкание голов Тарана (3.0.78): молнии над головой ниже половины жизней, чем меньше жизней - тем чаще | Game.Ram.pas (`ShortLevel`; `TRamPainter.TickShorts`, `TickArrival`, `DrawLight`) + Levels.Dynamics.pas (`TLightning.CreateLook`) + Tests.Game.Ram.pas (`TestShortsOutFromHalfItsLives`) |
+| Перегруз и взрыв свипера (3.0.79): умолкает и белеет, машина тормозит до стоянки, голова лопается с белой вспышкой, тяжёлым толчком и низким ударом | Game.Ram.pas (`TickKill`, `BeginOverload`, `Overloading`, `Overload`, `FlashAt`, cue `Shock`; `TRamPainter.DrawOverload`, `DrawFlash`, `FOverloadShort`) + Game.Moon.pas (`TickRam` - `SweeperBlastSoundFile`) + tools/sounds/sweeperblast.py + Tests.Game.Ram.pas (`TestTheLastLifeOverloadsBeforeTheBlast`, `TestTheMachineStandsThroughTheOverload`) |
+| Ударная волна свипера (3.0.80): тёмная полоса за тонким белым фронтом по всему экрану, пыль дороги под ним, герой отброшен без раны | Game.Ram.pas (`TickWave`, `WaveFrontAt`, `WaveStrikes`, `WaveSide`; `CreateWaveBand`; `TRamPainter.DrawWave`, `TickWaveDust`) + Game.Moon.pas (`ResolveRamWave`) + Hero.pas (`Throw`) + Tests.Game.Ram.pas (`TestTheBlastSendsAWave`, `TestTheWaveThrowsTheHeroOnceAwayFromTheHull`, `TestTheWaveThrowsFromOverTheHullTowardMoreRoad`) |
+| Пады, сбитые волной свипера (3.0.81): каждый пад, до которого дошёл фронт, исчезает, обломок в его картинке летит медленно и крутится быстро, с огнём, заревом, искрами и молниями; на смерти всё возвращается | Game.Wrecks.pas (`TPadWrecks`, `TPadWreckPainter`) + Pads.World.pas (`Doze`, `Texture`, `PictureHeight`, `Standing`) + Game.Ram.pas (`TShockWave`, `WaveReaches`) + Game.Moon.pas (`KnockOffPads` между тиком падов и героя, `TickRam` - тик обломков, рисование, `FWrecks.Clear` вместе с `FRam`) + Tests.Game.Wrecks.pas + Tests.Pads.World.pas (`TestDozedPadIsGone`, `TestRewindGivesBackADozedPad`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |

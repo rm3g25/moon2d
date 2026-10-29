@@ -55,7 +55,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   come down in (`Game.Arrivals`), the TeK wall cannons (`Game.Cannons`)
   and the shield they wear (`Game.Shield`), the press of the finale
   (`Game.Press`); and TeK-R13, the Ram of level 2's boss arena
-  (`Game.Ram`, 3.0.75). `Game/Events/`
+  (`Game.Ram`, 3.0.75) and the pads its sweeper's wave knocks off
+  (`Game.Wrecks`, 3.0.81). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
   (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
@@ -175,6 +176,9 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Monsters.Defs` for its hull, `Levels.Events` for its orders,
 `Sprites.Sets` and `Render.Sprites` for its art, `Render.Brush`,
 `Game.Space` and the canvas of `Levels.Dynamics`) /
+`Game.Wrecks` (the pads knocked off: over `Pads.World` for whose picture,
+`Levels.Dynamics` for their fire, sparks and bolts, `Render.Sprites`,
+`Render.Glow` and `Game.Space`) /
 `Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Game.HeroOrbs` (the hero's orbs: over
@@ -2656,7 +2660,10 @@ rebuilds new for the new try.
     (`TPadPlacement.Dormant`): `Behind` (neither a floor nor a body), not
     drawn, and what hangs on it out (`LocateParent` of the game gives it
     no life); **`Wake`** - there from now on; `Rewind` puts it to sleep
-    again. **`FlyTo(x, y, ticks)`** - a scene flies the pad straight from
+    again. **`Doze`** (3.0.81) - the game puts an awake pad to sleep (the
+    sweeper's wave); `Rewind` gives it back as the file has it. `Texture`,
+    `PictureHeight` - its picture, for the wreck drawn in it.
+    **`TPadWorld.Standing(screen)`** - the screen's pads not dormant. **`FlyTo(x, y, ticks)`** - a scene flies the pad straight from
     where its path or its last flight left it (a knock is not minded) to
     x, y, its top-left corner, over the ticks (`StraightFlight` at
     `CalmPace`; `Thrusting` while it goes, so its jets burn); 0 ticks or no
@@ -4795,7 +4802,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~2530 lines, 3.0.77)
+### `Game/Game.Ram.pas` (~3050 lines, 3.0.81)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -4965,6 +4972,78 @@ monster. The game carries out the cue.
   by its heat, `HeatWhite` while booting or struck; `DrawLight` draws the
   plates under the head. `CanShoot` and `Row` take any head now; the
   hunter's `Shoot` sets `ShotSpeed` too.
+- 3.0.78, **the shorts** (stage 10b). `TRam.ShortLevel`: 0 while the
+  head on the mast has over half its lives, else `ShortFloor` 0.35 at
+  half up to 1 at its last life (`ShortSpan` 0.65) - the tank's wreck
+  numbers; 0 with no head. `TRamPainter.FShorts` - a `TLightning` a head
+  (`HeadShorts`: the tank's `WreckShort` with a box about the head's
+  width, `ShortSeeds`), ticked over the head's middle at `ShortLevel`
+  (`TickShorts`; the other head's at 0, its bolts die out), drawn first
+  in `DrawLight`. `TickArrival` - the rewind of a machine come anew, out
+  of `TickExhausts`, the shorts with it. The hunter's smoke at its last
+  third stays.
+- 3.0.79, **the overload and the blast** (stage 10c-1). `TickKill` in
+  place of the bare `KillHead`: the hunter blows up on the next tick as
+  before; the sweeper overloads `OverloadTicks` 20 first (`BeginOverload`:
+  the fire idle, the turn cut, the press let go, a drive braked by
+  `StopAhead`, a rev turned to a rest; `CanShoot`, `TickAim` and
+  `TickMode` hold while `FHeadKilled`; the rest holds the machine; the eye
+  blinks on `FOverloadTicks`). `KillHead` of the sweeper: the cue `Shock`,
+  `SweeperBlastJolt` 0.8, `FFlash` 1 fading over `BlastFlashTicks` 6,
+  `FBlastAt`. Public: `Overloading`, `Overload`, `FlashAt`, `BlastAt`.
+  `TRamPainter`: `FOverloadShort` (`OverloadShortLook`, ticked with the
+  sweeper's shorts at `Overload`), `DrawOverload` (the head's art once
+  more, added, at `OverloadWhite` 0.9 of the overload), `DrawHeat` white
+  through it, `DrawFlash` (the frame at `FlashScreen` 0.85 squared by the
+  flash, a glow of `FlashGlowSize` 160 at `BlastAt`) last in `DrawLight`.
+  The game: `Cue.Shock` plays `SweeperBlastSoundFile` (`sweeperblast.wav`)
+  in place of `RageBlastSoundFile`.
+- 3.0.80, **the shock wave** (stage 10c-2). `KillHead` of the sweeper
+  starts it: `FWaveTicks` 0, `FWaveReach` to the farthest of
+  `ScreenCorners`; `TickWave` runs it `WaveTicks` 33 and ends it (`NoWave`);
+  `Arm` and `Clear` take it away. Public: `WaveFrontAt`, `WaveReach`,
+  `WaveStrikes(body, away)` - once a wave, as the front reaches the body's
+  middle, `FHeroThrown` set, the side by `WaveSide` (away from the hull,
+  over it toward more road). `TRamArt.FWaveBand` (`CreateWaveBand`, a
+  blended ring, `WaveBandSide` 256); `TRamPainter.DrawWave` - the band
+  black at `WaveBandDepth` 0.6, the front a ring of triangles
+  (`WaveFrontWidth` 1.2, `WaveFrontLevel` 0.85, `WaveFrontSegments` 96)
+  through `SDL_RenderGeometry`, both by `1 - front / reach`;
+  `TickWaveDust` - two `TSmoke` (`WaveDustLook`, `WaveDustTint`) riding
+  the front's two points on the road. The game: `ResolveRamWave` after
+  `ResolveRamContact` - `GrantMercy(HurtMercyTicks)` and `FHero.Throw`,
+  no wound.
+- 3.0.81: the wave's fields folded into **`TShockWave`** (record:
+  `Reach`, `Ticks`, `Threw`; `Start`, `Stop`, `Tick`, `Running`,
+  `FrontOf`), `FWave`; **`WaveReaches(point)`** - the front has reached
+  the point by this tick - for the pads; `WaveStrikes` asks it.
+### `Game/Game.Wrecks.pas` (~330 lines, 3.0.81)
+The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
+stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
+to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
+- **`TPadWreck`** (record) - `Pad` (whose picture; nil in the tests),
+  `Width`, `Height`, `Middle`/`LastMiddle`, `Speed`, `Heading` (radians
+  over the level, outward), `Side` (-1, 1), `Spin`/`LastSpin`/`SpinRate`
+  (degrees clockwise), `Gone`.
+- **`TPadWrecks`** - the rules. `Launch(pad, middle, width, height,
+  from)`: away from the blast at `WreckLaunchSpeed` 2, at least
+  `WreckLeastLift` 40 degrees up. `Tick`: the heading eases
+  (`WreckHeadingEase` 0.05) to `WreckClimb` 30 degrees outward, the
+  thrust `WreckThrust` 0.2 along it, the pull `WreckGravity` 1/7, the
+  drag `WreckDrag` 0.03; the spin from `WreckSpinStart` 18 a tick, faster
+  by `WreckSpinGain` 0.4 a tick up to `WreckSpinMost` 45; gone
+  `WreckOffMargin` 60 past the left, the right or the top edge. `Clear`
+  (`Clears` counts), `Count`, `Flying`, `MiddleAt`, `SpinAt`, the default
+  `Wrecks[i]`.
+- **`TPadWreckPainter`** - a `TSmoke` of fire (`WreckFire`, heat 1,
+  cooling to `WreckFireTint`), a `TSparks` (`WreckSparkLook`) and a
+  `TLightning` (`WreckBoltLook`) a wreck, grown as wrecks come (`Grow`),
+  rewound on a clear; fire and sparks at the jet (`JetPoint`, `WreckJetDown`
+  6 under the middle, turned with the spin), bolts at the middle; they
+  stop with a gone wreck and burn out. `DrawFire` (under the pictures),
+  `DrawBodies` (the pad's texture, its placement's tint, `DrawSized` at
+  the spin), `DrawLight` (an orange glow `WreckGlowSize` 36 breathing
+  about `WreckGlowLevel` 0.45, the sparks, the bolts).
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -6124,6 +6203,12 @@ times a second, the road; `ramhiss.wav` - the brake's clunk and the air;
 `ramwhine.wav` - the pump of the mast climbing for 1.5 s and the clank of
 the lock. Needs numpy, scipy and `armor.py`.
 
+### `tools/sounds/sweeperblast.py` (3.0.79)
+`sweeperblast.wav`, 3.8 s: the blast of the Ram's sweeper - a thump from
+70 down to 32 Hz over a floor of low noise, then the drone of
+`stonewake.py` sinking from 44 to 24 Hz as it fades; a low-pass at 240 Hz
+over it all, no crack. Needs numpy, scipy and `armor.py`.
+
 ### `tools/cannon/build_cannon.py`
 Builds `bin/sprites/tek-cannon.mset`, the art of the TeK wall cannon of the
 gravel arena (`Game.Cannons`), from one generated picture - the cannon
@@ -6208,7 +6293,19 @@ of the mast, the red barrels before a sweep, a sweep level along his row,
 the whole pack hit from above and level, the plates taking a bullet from
 below and a climbing one, the fork a cell away, the ladder, the turn, the
 empty mast after the last life), and one in `TBodyShieldTests` (a strip
-holds its row).
+holds its row). 3.0.78 - 2 more, `TestShortsOutFromHalfItsLives` in both
+fixtures (none over half, some at half, harder at the last life, none
+from a head blown up). 3.0.79 - 2 more, `TRamSweeperTests` (the last life
+overloads before the blast; the machine stands through the overload), and
+the hunter's blast carries no shock. 3.0.80 - 3 more, `TRamSweeperTests`
+(the wave runs past every corner in about a second and a death takes it
+away; it throws the hero once, away from the hull; from over the hull
+toward more road). 3.0.81 - 1 more, the wave reaches the near before the
+far (`TestTheWaveReachesTheNearFirst`); `Tests.Game.Wrecks` (4: away from
+the blast and up; none of the arena's five down on the road from any
+blast over the roof, all gone in five seconds; the spin faster up to its
+most; a clear); `Tests.Pads.World` 2 more (a dozed pad is gone; a rewind
+gives it back).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -6857,7 +6954,7 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 `stonefall.py` - the drone of the stone waking and powering down);
 3.0.75: `ramrumble.wav`, `ramhiss.wav`, `ramwhine.wav`
 (`tools/sounds/ram.py`) and `boss3.ogg`, the track of the Ram's fight -
-twelve OGG files.
+twelve OGG files; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`).
 
 ---
 
@@ -6915,6 +7012,10 @@ twelve OGG files.
 | The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
 | The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | The Ram's sweeper (3.0.77): the ride to the hero's row, the red barrels and the sweep, the closed ceiling, the fork and the ladder by the thirds, the barrel pack as the target and the plates under it, the empty mast after it | Game.Ram.pas (`TickRide`, `TickSweep`, `ForkRow`, `ShootBarrel`, `TickHeat`, `LockSweeper`, `StrikeBarrels`, `ToHead`; `TRamPainter.DrawHeat`, `DrawLight` - the plates) + Game.Shield.pas (`CreateStrip`) + Game.Moon.pas (`BulletStruckRamBarrels`; `TickRam` - `ShotSpeed`) + Tests.Game.Ram.pas (`TRamSweeperTests`) |
+| The Ram's heads short out (3.0.78): bolts over a head under half its lives, more often the fewer are left | Game.Ram.pas (`ShortLevel`; `TRamPainter.TickShorts`, `TickArrival`, `DrawLight`) + Levels.Dynamics.pas (`TLightning.CreateLook`) + Tests.Game.Ram.pas (`TestShortsOutFromHalfItsLives`) |
+| The sweeper's overload and blast (3.0.79): it falls silent and whitens, the machine brakes to a stand, the head bursts with a white flash, a heavy jolt and a low blow | Game.Ram.pas (`TickKill`, `BeginOverload`, `Overloading`, `Overload`, `FlashAt`, the cue `Shock`; `TRamPainter.DrawOverload`, `DrawFlash`, `FOverloadShort`) + Game.Moon.pas (`TickRam` - `SweeperBlastSoundFile`) + tools/sounds/sweeperblast.py + Tests.Game.Ram.pas (`TestTheLastLifeOverloadsBeforeTheBlast`, `TestTheMachineStandsThroughTheOverload`) |
+| The sweeper's shock wave (3.0.80): a dark band behind a thin white front over the whole screen, the road's dust under it, the hero thrown clear with no wound | Game.Ram.pas (`TickWave`, `WaveFrontAt`, `WaveStrikes`, `WaveSide`; `CreateWaveBand`; `TRamPainter.DrawWave`, `TickWaveDust`) + Game.Moon.pas (`ResolveRamWave`) + Hero.pas (`Throw`) + Tests.Game.Ram.pas (`TestTheBlastSendsAWave`, `TestTheWaveThrowsTheHeroOnceAwayFromTheHull`, `TestTheWaveThrowsFromOverTheHullTowardMoreRoad`) |
+| The pads knocked off by the sweeper's wave (3.0.81): each pad the front reaches gone, a wreck in its picture flying slow and spinning fast, with fire, a glow, sparks and bolts; all back on a death | Game.Wrecks.pas (`TPadWrecks`, `TPadWreckPainter`) + Pads.World.pas (`Doze`, `Texture`, `PictureHeight`, `Standing`) + Game.Ram.pas (`TShockWave`, `WaveReaches`) + Game.Moon.pas (`KnockOffPads` between the pads' tick and the hero's, `TickRam` - the wrecks' tick, the draw, `FWrecks.Clear` with `FRam`) + Tests.Game.Wrecks.pas + Tests.Pads.World.pas (`TestDozedPadIsGone`, `TestRewindGivesBackADozedPad`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
