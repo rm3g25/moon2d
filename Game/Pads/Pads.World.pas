@@ -117,6 +117,9 @@
   A dormant pad is not there until a scene wakes it: neither a floor nor
   a body, as a pad in the depth, and not drawn at all. Awake, the scene
   may fly it straight to a place of its screen (FlyTo); it stays there.
+  A pad the game puts to sleep (Doze) is gone the same way - a wreck of
+  the game's own flies off in its picture - until a rewind gives it back
+  as the level file has it.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -298,6 +301,8 @@ type
     procedure Fly(const AFlight: TPadFlight);
     // A dormant pad is there from now on
     procedure Wake;
+    // The pad is gone from now on, as a dormant one, until a rewind
+    procedure Doze;
     // The pad flies straight to AX, AY (its top-left corner) over ATicks
     // and stays there; 0 ticks - it is there at once, and whatever stood
     // on it is left in the air
@@ -348,6 +353,10 @@ type
     property Tag: string read FPlacement.Tag;
     // Not there until a scene wakes it
     property Dormant: Boolean read FDormant;
+    // Its picture as the level file names it, nil for none, and its height
+    // in units - the width is the placement's
+    property Texture: PSdlTexture read FTexture;
+    property PictureHeight: Integer read FPictureHeight;
     property Bullets: TPadBullets read FPlacement.Bullets;
     property Group: string read FPlacement.Group;
     property Placement: TPadPlacement read FPlacement;
@@ -555,6 +564,9 @@ type
     function FindWearer(const ATag: string; out AFailingLook: Boolean): TPad;
     // The pad tagged ATag; nil when none
     function FindTagged(const ATag: string): TPad;
+    // The pads of AScreen that are there: not dormant, in the order of the
+    // level file
+    function Standing(AScreen: Integer): TArray<TPad>;
     // The boss's body struck: the pad it struck, if one, is knocked the
     // way the body went - a cell, or as far as the walls, AFence and the
     // other pads let it; on a screen whose group is being rebuilt it only
@@ -1044,6 +1056,11 @@ end;
 procedure TPad.Wake;
 begin
   FDormant := False;
+end;
+
+procedure TPad.Doze;
+begin
+  FDormant := True;
 end;
 
 // From where the path or the last flight left it; a knock is not minded,
@@ -1568,6 +1585,14 @@ begin
     if Pad.Tag = ATag then
       Exit(Pad);
   Result := nil;
+end;
+
+function TPadWorld.Standing(AScreen: Integer): TArray<TPad>;
+begin
+  Result := [];
+  for var Pad in FPads do
+    if (Pad.Screen = AScreen) and not Pad.Dormant then
+      Result := Result + [Pad];
 end;
 
 // ---------------------------------------------------------------------------

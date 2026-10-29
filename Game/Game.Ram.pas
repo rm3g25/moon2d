@@ -61,8 +61,20 @@
   sweep; the fork - his row, then at once the row he is likely to jump
   to; the ladder - it rides the mast while it fires. The target is the
   whole barrel pack, but two honeycomb plates under it take every bullet
-  that climbs: the floor does it no harm. Its last life blows the head up
-  and the empty mast sinks; there is no third head yet.
+  that climbs: the floor does it no harm. Its last life does not blow it
+  up at once: the head overloads for a moment - it holds its fire, heats
+  to white, its bolts thicken, the eye blinks and the machine brakes to a
+  stand - then bursts with a white flash and a heavier jolt than the
+  hunter's. A shock wave runs out of the burst over the whole screen in
+  about a second - a dark band behind a thin white front, dust kicked up
+  where it runs along the road - and throws the hero clear, as a touch of
+  the hull does but with no wound: away from the hull, or from over it
+  toward the side with more road. The empty mast sinks; there is no third
+  head yet.
+
+  Under half its lives either head shorts out: small bolts over it, the
+  more often the fewer lives are left. The hunter smokes too at its last
+  third.
 
   TRam is the rules; TRamPainter draws them with TRamArt. The game carries
   out the cue of a tick: the sounds, the shake and the boss track, and the
@@ -123,6 +135,24 @@ type
   end;
 
   // What the machine sees of the hero this tick
+  // The shock wave of the sweeper's blast: its front runs out at an even
+  // pace to the farthest corner of the screen and is gone
+  TShockWave = record
+    // How far the front runs, units
+    Reach: Single;
+    // Ticks since the blast; below 0 - no wave
+    Ticks: Integer;
+    // The hero has been thrown by it
+    Threw: Boolean;
+    // From AFrom, the front at nothing
+    procedure Start(const AFrom: TSdlFPoint);
+    procedure Stop;
+    procedure Tick;
+    function Running: Boolean;
+    // The front ATicks after the blast, units from it
+    function FrontOf(ATicks: Single): Single;
+  end;
+
   TRamTarget = record
     Alive: Boolean;
     Body: TSdlFRect;
@@ -150,6 +180,9 @@ type
     // The head has lost its last life: it blows up at BlastAt
     Blast: Boolean;
     BlastAt: TSdlFPoint;
+    // The blast is the sweeper's: an overload, not a hit - the low blow,
+    // the flash, and the shock wave it sends out
+    Shock: Boolean;
     // One more cell of the head's row lit
     RowCell: Boolean;
   end;
@@ -232,6 +265,15 @@ type
     FHeat, FLastHeat: Single;
     FHeatTicks: Integer; // the whole of the burning before this sweep
     FPlates: array [0..1] of TTekShield;
+    // The sweeper's last life gone: ticks of its overload so far
+    FOverloadTicks: Integer;
+    // The white of the sweeper's blast, 1 the tick it bursts, and where
+    FFlash, FLastFlash: Single;
+    FBlastAt: TSdlFPoint;
+    FWave: TShockWave;
+    procedure TickKill;
+    procedure BeginOverload;
+    function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
     procedure BeginDrive(ATarget, ACruise: Single; AEntering: Boolean);
@@ -332,6 +374,29 @@ type
     function TurnSquash: Single;
     // At the last third of its lives
     function Wounded: Boolean;
+    // How hard the head shorts out: 0 over half its lives, from the
+    // tank's floor at half up to 1 as the last of them goes
+    function ShortLevel: Single;
+    // The sweeper has lost its last life and has not burst yet
+    function Overloading: Boolean;
+    // How far the overload has gone, 0 none to 1 the burst
+    function Overload: Single;
+    // The white of the sweeper's blast between two ticks, 0 none to 1 the
+    // tick it bursts
+    function FlashAt(AAlpha: Single): Single;
+    property BlastAt: TSdlFPoint read FBlastAt;
+    // The shock wave's front between two ticks: units from BlastAt; below
+    // 0 when there is no wave
+    function WaveFrontAt(AAlpha: Single): Single;
+    // How far the front runs: to the farthest corner of the screen
+    property WaveReach: Single read FWave.Reach;
+    // The front has reached APoint by this tick
+    function WaveReaches(const APoint: TSdlFPoint): Boolean;
+    // The front has reached the middle of the hero's body this tick, once a
+    // wave: he is thrown to AAway, with no wound, and is out of the
+    // machine's way until he comes down
+    function WaveStrikes(const AHeroBody: TSdlFRect;
+      out AAway: Integer): Boolean;
     // The eye or the barrels were struck a moment ago
     function Hurt: Boolean;
     // The row of lives is still coming up: the target burns white
@@ -390,6 +455,9 @@ type
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
     FGlow: PSdlTexture;
+    // The dark band of the shock wave: a ring just inside the edge of its
+    // square, drawn black
+    FWaveBand: PSdlTexture;
     FBody: TShieldMask;
   public
     constructor Create(ARenderer: PSdlRenderer);
@@ -408,9 +476,19 @@ type
     // From a wounded head, or from the top of an empty mast
     FHeadSmoke: TSmoke;
     FHeadSmoking: Boolean;
+    // The bolts over a head under half its lives, one source a head
+    FShorts: array [rhHunter..rhSweeper] of TLightning;
+    // The thick bolts of the sweeper's overload
+    FOverloadShort: TLightning;
+    // The dust the wave kicks up where its front runs along the road, one
+    // a side of the blast
+    FWaveDust: array [0..1] of TSmoke;
     FArrivals: Integer;
+    procedure TickArrival;
     procedure TickExhausts;
     procedure TickHeadSmoke;
+    procedure TickShorts;
+    procedure TickWaveDust;
     procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
       ASway, AAlpha: Single);
     procedure DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
@@ -421,6 +499,10 @@ type
       AAlpha: Single);
     procedure DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
       AAlpha: Single);
+    procedure DrawOverload(const ASprites: TSpriteRenderer; ALeft, AMast,
+      ASway: Single);
+    procedure DrawFlash(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawWave(AOrigin: TSdlPoint; AAlpha: Single);
   public
     // Both belong to the caller and must outlive the painter
     constructor Create(AArt: TRamArt; ARam: TRam);
@@ -432,7 +514,8 @@ type
       AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
-    // The shield
+    // The dust of the wave, the bolts of a head, the shield, the sweeper's
+    // plates, the wave itself and the white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
   end;
@@ -566,6 +649,17 @@ const
   ChangeRiseTicks = 30;
   SweeperMast = 48.0;
   HeadBlastJolt = 0.5;
+  // The sweeper's end: about 0.6 s of overload, then a blast that shakes
+  // harder than the hunter's and whites the screen out for a few ticks
+  OverloadTicks = 20;
+  SweeperBlastJolt = 0.8;
+  BlastFlashTicks = 6;
+  // The shock wave crosses the screen to its farthest corner in a second
+  WaveTicks = 33;
+  NoWave = -1;
+  ScreenCorners: array [0..3] of TSdlFPoint = ((X: 0; Y: 0),
+    (X: ScreenWidth; Y: 0), (X: 0; Y: ScreenHeight),
+    (X: ScreenWidth; Y: ScreenHeight));
 
   // The sweeper rides the mast between its roof and three cells: its
   // barrels' bottom never under the roof line. It follows the hero's row
@@ -695,6 +789,57 @@ const
   HeadSmokeSeed = $48656164; // "Head"
   HeadSmokeRampTicks = 10;
 
+  // Under half its lives a head shorts out as the tank's wreck does, and
+  // from the wreck's floor: the bolts of a head just under half come
+  // about once a second, of one at its last life twice
+  ShortFloor = 0.35;
+  ShortSpan = 0.65;
+  // Over the middle of the head, in a box about its width
+  HeadShorts: array [rhHunter..rhSweeper] of TLightningLook = (
+    (Reach: 14; Spread: (X: 10; Y: 6); Angle: 90; Cone: 360; Collide: lcNone;
+    Size: 0.9; Jag: 0.26; Fork: 0.18; Frequency: 2.2; Strokes: 2; Life: 0.11;
+    Leader: 0; Spell: 0; Pause: 0; Flash: 0.55; Jolt: 0;
+    Tint: (R: 66; G: 74; B: 100)),
+    (Reach: 16; Spread: (X: 16; Y: 6); Angle: 90; Cone: 360; Collide: lcNone;
+    Size: 1; Jag: 0.26; Fork: 0.18; Frequency: 2.2; Strokes: 2; Life: 0.11;
+    Leader: 0; Spell: 0; Pause: 0; Flash: 0.55; Jolt: 0;
+    Tint: (R: 66; G: 74; B: 100)));
+  ShortSeeds: array [rhHunter..rhSweeper] of Cardinal = ($53687431,
+    $53687432); // "Sht1", "Sht2"
+  // The overload over its shorts: longer, thicker, many times as often
+  OverloadShortLook: TLightningLook = (Reach: 24; Spread: (X: 16; Y: 6);
+    Angle: 90; Cone: 360; Collide: lcNone; Size: 1.8; Jag: 0.3; Fork: 0.3;
+    Frequency: 9; Strokes: 3; Life: 0.09; Leader: 0; Spell: 0; Pause: 0;
+    Flash: 0.8; Jolt: 0; Tint: (R: 80; G: 88; B: 100));
+  OverloadShortSeed = $4F766C64; // "Ovld"
+  // The head whitening: its art once more over itself, added
+  OverloadWhite = 0.9;
+  // The blast's white: the whole frame, and a light about the head
+  FlashScreen = 0.85;
+  FlashGlowSize = 160.0;
+  FlashColor: TRgb = (R: 255; G: 255; B: 255);
+  // The shock wave as in film, with no color: a dark band just behind a
+  // thin white front, both fading as it runs out. The band is a ring of
+  // its square at WaveBandRadius of the half side, WaveBandWidth across.
+  WaveBandSide = 256;
+  WaveBandRadius = 0.93;
+  WaveBandWidth = 0.05;
+  WaveBandDepth = 0.6;
+  WaveFrontWidth = 1.2;
+  WaveFrontLevel = 0.85;
+  WaveFrontSegments = 96;
+  WaveBlack: TRgb = (R: 0; G: 0; B: 0);
+  // The road's dust where the front runs along it: thrown up a little,
+  // no air to carry it, settling as it fades
+  WaveDustLook: TSmokeLook = (Rate: 70; Life: 1.1; Size: 3; EndSize: 14;
+    Opacity: 0.45; Angle: 90; Cone: 70; Speed: 14; Drag: 0.4; Lift: 0;
+    Wind: 0; Turbulence: 2; Spin: 20; Flow: sfGusty; Frequency: 1;
+    Heat: 0; EndTint: (R: 50; G: 48; B: 45));
+  WaveDustTint: TColorTint = (R: 70; G: 68; B: 64);
+  WaveDustSeeds: array [0..1] of Cardinal = ($44737431, $44737432); // "Dst1"
+  // Its puffs rise off the road, not out of it
+  WaveDustOverRoad = 1.0;
+
   // The exhausts: where the jet leaves the mouths of the two pipes on the
   // stern. It flies back on its own speed and does not rise - no air to
   // lift it - and comes in puffs at the rate the rumble throbs.
@@ -821,6 +966,45 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TShockWave
+// ---------------------------------------------------------------------------
+
+procedure TShockWave.Start(const AFrom: TSdlFPoint);
+begin
+  Ticks := 0;
+  Threw := False;
+  Reach := 0;
+  for var Corner in ScreenCorners do
+    Reach := Max(Reach, Hypot(Corner.X - AFrom.X, Corner.Y - AFrom.Y));
+end;
+
+procedure TShockWave.Stop;
+begin
+  Ticks := NoWave;
+  Threw := False;
+end;
+
+// Gone once past the farthest corner
+procedure TShockWave.Tick;
+begin
+  if not Running then
+    Exit;
+  Inc(Ticks);
+  if Ticks > WaveTicks then
+    Stop;
+end;
+
+function TShockWave.Running: Boolean;
+begin
+  Result := Ticks <> NoWave;
+end;
+
+function TShockWave.FrontOf(ATicks: Single): Single;
+begin
+  Result := Reach * EnsureRange(ATicks / WaveTicks, 0, 1);
+end;
+
+// ---------------------------------------------------------------------------
 // TRam
 // ---------------------------------------------------------------------------
 
@@ -832,6 +1016,7 @@ begin
   for var i := Low(FPlates) to High(FPlates) do
     FPlates[i] := TTekShield.CreateStrip(PlateCells, PlateScale);
   FDice.Seed := ASeed;
+  FWave.Stop;
 end;
 
 destructor TRam.Destroy;
@@ -903,6 +1088,10 @@ begin
   FNextBarrel := 0;
   FHeat := 0;
   FLastHeat := 0;
+  FOverloadTicks := 0;
+  FFlash := 0;
+  FLastFlash := 0;
+  FWave.Stop;
 end;
 
 function TRam.Start(const AOrders: TRamOrders; ALivesShare: Single): Boolean;
@@ -943,6 +1132,9 @@ begin
   FPressing := False;
   FHeroInFront := False;
   FHeroThrown := False;
+  FFlash := 0;
+  FLastFlash := 0;
+  FWave.Stop;
 end;
 
 procedure TRam.Reset;
@@ -1100,10 +1292,12 @@ begin
   FLastLens := FLens;
   FLastAim := FAim;
   FLastHeat := FHeat;
+  FLastFlash := FFlash;
+  FFlash := Max(0, FFlash - 1 / BlastFlashTicks);
   FAccel := 0;
   SeeHero(ATarget);
-  if FHeadKilled then
-    KillHead;
+  TickKill;
+  FWave.Tick;
   TickMode;
   TickPhase;
   TickRow;
@@ -1141,9 +1335,47 @@ begin
   FHeroSeen := True;
 end;
 
-// Low long enough - the press; on a pad, or high, long enough - the hunt
+// The last life gone: the hunter blows up at once; the sweeper overloads
+// first and bursts at the end of it
+procedure TRam.TickKill;
+begin
+  if not FHeadKilled then
+    Exit;
+  if (FHead = rhSweeper) and (FOverloadTicks < OverloadTicks) then
+  begin
+    if FOverloadTicks = 0 then
+      BeginOverload;
+    Inc(FOverloadTicks);
+    Exit;
+  end;
+  KillHead;
+end;
+
+// The gun falls silent and the head stands where it is; a machine that
+// drives brakes to a stand, one that revs or rests stays standing
+procedure TRam.BeginOverload;
+begin
+  FFire := rfIdle;
+  FTurnTicks := 0;
+  FPressing := False;
+  case FPhase of
+    rpDriving:
+      if not FEntering then
+        FTarget := StopAhead;
+    rpRevving:
+      BeginRest(0);
+  end;
+end;
+
+// Low long enough - the press; on a pad, or high, long enough - the hunt.
+// An overloading head presses nobody.
 procedure TRam.TickMode;
 begin
+  if FHeadKilled then
+  begin
+    FPressing := False;
+    Exit;
+  end;
   var Low := FHero.Alive and not FHero.OnDeck and
     (FHero.Body.Y + FHero.Body.H > LowLine);
   FLowTicks := IfThen(Low, FLowTicks + 1, 0);
@@ -1205,6 +1437,15 @@ begin
   FCue.BlastAt := HeadPoint(FX, FMast, FSway, FHead, FFacing, TurnSquash,
     Shape.Width / 2, Shape.Height / 2);
   FCue.Jolt := Max(FCue.Jolt, HeadBlastJolt);
+  FBlastAt := FCue.BlastAt;
+  if FHead = rhSweeper then
+  begin
+    FCue.Shock := True;
+    FCue.Jolt := Max(FCue.Jolt, SweeperBlastJolt);
+    FFlash := 1;
+    FOverloadTicks := 0;
+    FWave.Start(FBlastAt);
+  end;
   FKilled := FHead;
   FHead := rhNone;
   FArmed := False;
@@ -1333,6 +1574,9 @@ begin
           BeginChange;
           Exit;
         end;
+        // An overloading head holds the machine still till it bursts
+        if FHeadKilled then
+          Exit;
         if FHero.Alive and not FPressing and (FHead = rhHunter) and
           not InSightsFrom(FX) then
           FPhaseTicks := Min(FPhaseTicks, HuntBlindRestTicks);
@@ -1479,7 +1723,7 @@ end;
 
 function TRam.CanShoot: Boolean;
 begin
-  Result := (FHead <> rhNone) and FArmed and FHero.Alive and
+  Result := (FHead <> rhNone) and FArmed and not FHeadKilled and FHero.Alive and
     (FTurnTicks = 0) and (FPhase in [rpDriving, rpResting, rpRevving]) and
     not ((FPhase = rpDriving) and FEntering);
 end;
@@ -1489,7 +1733,7 @@ end;
 // barrel holds on the point it took - or, the hose, follows him slower.
 procedure TRam.TickAim;
 begin
-  if (FHead = rhNone) or not FHero.Alive then
+  if (FHead = rhNone) or FHeadKilled or not FHero.Alive then
   begin
     FPastTicks := 0;
     FInSights := False;
@@ -1810,10 +2054,13 @@ procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
-  else if FPhase in [rpRising, rpChanging] then
+  else if (FPhase in [rpRising, rpChanging]) or Overloading then
   begin
+    var Clock := FPhaseTicks;
+    if Overloading then
+      Clock := FOverloadTicks;
     FEye := EyeBlinkLow;
-    if (FPhaseTicks div EyeBlinkTicks) mod 2 = 0 then
+    if (Clock div EyeBlinkTicks) mod 2 = 0 then
       FEye := 1;
   end
   else
@@ -2113,6 +2360,70 @@ begin
   Result := (FHead = rhHunter) and (Tier = 2);
 end;
 
+function TRam.Overloading: Boolean;
+begin
+  Result := FHeadKilled and (FHead = rhSweeper);
+end;
+
+function TRam.Overload: Single;
+begin
+  Result := 0;
+  if Overloading then
+    Result := FOverloadTicks / OverloadTicks;
+end;
+
+function TRam.FlashAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastFlash, FFlash, AAlpha);
+end;
+
+function TRam.WaveFrontAt(AAlpha: Single): Single;
+begin
+  if not FWave.Running then
+    Exit(NoWave);
+  Result := FWave.FrontOf(FWave.Ticks - 1 + AAlpha);
+end;
+
+function TRam.WaveReaches(const APoint: TSdlFPoint): Boolean;
+begin
+  Result := FWave.Running and (Hypot(APoint.X - FBlastAt.X,
+    APoint.Y - FBlastAt.Y) <= FWave.FrontOf(FWave.Ticks));
+end;
+
+// Away from the hull; from over it, toward the side with more road
+function TRam.WaveSide(const AHeroBody: TSdlFRect): Integer;
+begin
+  var Middle := AHeroBody.X + AHeroBody.W / 2;
+  if Middle < FX then
+    Exit(-1);
+  if Middle > FX + RamWidth then
+    Exit(1);
+  Result := 1;
+  if FX > ScreenWidth - (FX + RamWidth) then
+    Result := -1;
+end;
+
+function TRam.WaveStrikes(const AHeroBody: TSdlFRect;
+  out AAway: Integer): Boolean;
+begin
+  AAway := 0;
+  if FWave.Threw or not WaveReaches(UnitPoint(AHeroBody.X + AHeroBody.W / 2,
+    AHeroBody.Y + AHeroBody.H / 2)) then
+    Exit(False);
+  FWave.Threw := True;
+  FHeroThrown := True;
+  FHeroInFront := False;
+  AAway := WaveSide(AHeroBody);
+  Result := True;
+end;
+
+function TRam.ShortLevel: Single;
+begin
+  if (FHead = rhNone) or not FArmed or (FLives * 2 > FFullLives) then
+    Exit(0);
+  Result := ShortFloor + ShortSpan * (1 - FLives * 2 / FFullLives);
+end;
+
 function TRam.Hurt: Boolean;
 begin
   Result := FHurtTicks > 0;
@@ -2221,6 +2532,24 @@ begin
   end;
 end;
 
+// A ring just inside the edge of its square, soft both ways; blended, not
+// added, so drawn black it darkens what lies under it
+function CreateWaveBand(ARenderer: PSdlRenderer): PSdlTexture;
+begin
+  var Image: TArray<Single>;
+  SetLength(Image, WaveBandSide * WaveBandSide);
+  var Half := WaveBandSide / 2;
+  for var Row := 0 to WaveBandSide - 1 do
+    for var Col := 0 to WaveBandSide - 1 do
+    begin
+      var Off := (Hypot(Col + 0.5 - Half, Row + 0.5 - Half) / Half -
+        WaveBandRadius) / WaveBandWidth;
+      Image[Row * WaveBandSide + Col] := Exp(-Off * Off);
+    end;
+  Result := CreateGlowFromImage(ARenderer, Image, WaveBandSide, WaveBandSide);
+  SDL_SetTextureBlendMode(Result, SdlBlendModeBlend);
+end;
+
 constructor TRamArt.Create(ARenderer: PSdlRenderer);
 begin
   inherited Create;
@@ -2240,12 +2569,15 @@ begin
   FHullArt := THullArt.Create(ARenderer, RamHullDef);
   FShield := TShieldArt.Create(ARenderer);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
+  FWaveBand := CreateWaveBand(ARenderer);
   FBody := ReadBody(FSpriteSet);
 end;
 
 // The cache before the set: it reads from the set, never the reverse
 destructor TRamArt.Destroy;
 begin
+  if Assigned(FWaveBand) then
+    SDL_DestroyTexture(FWaveBand);
   if Assigned(FGlow) then
     SDL_DestroyTexture(FGlow);
   FShield.Free;
@@ -2274,10 +2606,25 @@ begin
     FExhausts[i] := TSmoke.CreateLook(Placement, ExhaustSmoke, ExhaustIdle,
       ExhaustSeeds[i]);
   FHeadSmoke := TSmoke.CreateLook(Placement, HeadSmokeLook, 0, HeadSmokeSeed);
+  for var Head := Low(FShorts) to High(FShorts) do
+    FShorts[Head] := TLightning.CreateLook(Default(TDynamicPlacement),
+      HeadShorts[Head], 0, ShortSeeds[Head]);
+  FOverloadShort := TLightning.CreateLook(Default(TDynamicPlacement),
+    OverloadShortLook, 0, OverloadShortSeed);
+  var DustPlacement := Default(TDynamicPlacement);
+  DustPlacement.Tint := WaveDustTint;
+  for var i := Low(FWaveDust) to High(FWaveDust) do
+    FWaveDust[i] := TSmoke.CreateLook(DustPlacement, WaveDustLook, 0,
+      WaveDustSeeds[i]);
 end;
 
 destructor TRamPainter.Destroy;
 begin
+  for var Dust in FWaveDust do
+    Dust.Free;
+  FOverloadShort.Free;
+  for var Short in FShorts do
+    Short.Free;
   FHeadSmoke.Free;
   for var Exhaust in FExhausts do
     Exhaust.Free;
@@ -2288,23 +2635,34 @@ end;
 procedure TRamPainter.Tick;
 begin
   FHull.Tick(0, 0, FRam.Rolled);
+  TickArrival;
   TickExhausts;
   TickHeadSmoke;
+  TickShorts;
+  TickWaveDust;
 end;
 
-// A machine come anew left nothing in the air; one that drives smokes
-// hard
+// A machine come anew left nothing in the air
+procedure TRamPainter.TickArrival;
+begin
+  if FRam.Arrivals = FArrivals then
+    Exit;
+  FArrivals := FRam.Arrivals;
+  FExhaustDriving := False;
+  for var Exhaust in FExhausts do
+    Exhaust.Rewind;
+  FHeadSmoking := False;
+  FHeadSmoke.Rewind;
+  for var Short in FShorts do
+    Short.Rewind;
+  FOverloadShort.Rewind;
+  for var Dust in FWaveDust do
+    Dust.Rewind;
+end;
+
+// One that drives smokes hard
 procedure TRamPainter.TickExhausts;
 begin
-  if FRam.Arrivals <> FArrivals then
-  begin
-    FArrivals := FRam.Arrivals;
-    FExhaustDriving := False;
-    for var Exhaust in FExhausts do
-      Exhaust.Rewind;
-    FHeadSmoking := False;
-    FHeadSmoke.Rewind;
-  end;
   if not FRam.Present then
     Exit;
 
@@ -2344,6 +2702,54 @@ begin
       FRam.Facing, 1, Shape.Width / 2, Shape.Height / 2);
   end;
   FHeadSmoke.Tick(Source.X, Source.Y, True);
+end;
+
+// The head on the mast shorts out as hard as its lives say, the
+// overloading sweeper thicker and thicker over that; the bolts of a head
+// blown up die out where they struck
+procedure TRamPainter.TickShorts;
+begin
+  if not FRam.Present then
+    Exit;
+  for var Head := Low(FShorts) to High(FShorts) do
+  begin
+    var OnTheMast := FRam.Head = Head;
+    var Level: Single := 0;
+    if OnTheMast then
+      Level := FRam.ShortLevel;
+    FShorts[Head].FadeTo(Level, 0);
+    var Shape := HeadShapes[Head];
+    var Middle := HeadPoint(FRam.Left, FRam.Mast, FRam.SwayAt(1), Head,
+      FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2);
+    FShorts[Head].Tick(Middle.X, Middle.Y, OnTheMast);
+    if Head = rhSweeper then
+    begin
+      FOverloadShort.FadeTo(FRam.Overload, 0);
+      FOverloadShort.Tick(Middle.X, Middle.Y, FRam.Overloading);
+    end;
+  end;
+end;
+
+// Where the front runs along the road - one point each side of the blast
+// - the dust is kicked up; off the screen, or with no wave, none
+procedure TRamPainter.TickWaveDust;
+begin
+  if not FRam.Present then
+    Exit;
+  var Front := FRam.WaveFrontAt(1);
+  var Below := RamFloorY - FRam.BlastAt.Y;
+  var Crossing := Front > Below;
+  var Along: Single := 0;
+  if Crossing then
+    Along := Sqrt(Sqr(Front) - Sqr(Below));
+  for var i := Low(FWaveDust) to High(FWaveDust) do
+  begin
+    var Side := 2 * i - 1;
+    var X := FRam.BlastAt.X + Side * Along;
+    var Kicking := Crossing and (X >= 0) and (X <= ScreenWidth);
+    FWaveDust[i].FadeTo(Ord(Kicking), 0);
+    FWaveDust[i].Tick(X, RamFloorY - WaveDustOverRoad, Kicking);
+  end;
 end;
 
 // The sections back to front - the narrowest rides out of the wider ones
@@ -2400,14 +2806,19 @@ begin
 end;
 
 // The barrels in white over the sweeper: red as they burn before and
-// through a sweep, white while its row comes up and for a moment when they
-// are struck
+// through a sweep, white while its row comes up, for a moment when they
+// are struck, and as the overload whitens the head
 procedure TRamPainter.DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast,
   ASway, AAlpha: Single);
 begin
   var Level := FRam.HeatAt(AAlpha);
   var Color := HeatRed;
-  if (Level <= 0) and (FRam.Booting or FRam.Hurt) then
+  if FRam.Overloading then
+  begin
+    Level := FRam.Overload;
+    Color := HeatWhite;
+  end
+  else if (Level <= 0) and (FRam.Booting or FRam.Hurt) then
   begin
     Level := 1;
     Color := HeatWhite;
@@ -2419,6 +2830,87 @@ begin
   ASprites.DrawSized(FArt.FSweeperHeat, HeadPoint(ALeft, AMast, ASway,
     rhSweeper, FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2),
     Shape.Width * FRam.TurnSquash, Shape.Height, Level, FRam.Facing > 0, ASway);
+end;
+
+// The whole head whitening as the overload goes on: its art added over
+// itself, brighter and brighter
+procedure TRamPainter.DrawOverload(const ASprites: TSpriteRenderer; ALeft,
+  AMast, ASway: Single);
+begin
+  var Level := FRam.Overload;
+  if Level <= 0 then
+    Exit;
+  var Shape := HeadShapes[rhSweeper];
+  var Texture := FArt.FSweeper;
+  SDL_SetTextureBlendMode(Texture, SdlBlendModeAdd);
+  ASprites.DrawSized(Texture, HeadPoint(ALeft, AMast, ASway, rhSweeper,
+    FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2),
+    Shape.Width * FRam.TurnSquash, Shape.Height, OverloadWhite * Level,
+    FRam.Facing > 0, ASway);
+  SDL_SetTextureBlendMode(Texture, SdlBlendModeBlend);
+end;
+
+// The white of the blast: the whole frame for a moment, and a light about
+// where the head burst
+procedure TRamPainter.DrawFlash(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Level := FRam.FlashAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  var Renderer := FArt.FRenderer;
+  SDL_SetRenderDrawBlendMode(Renderer, SdlBlendModeBlend);
+  SDL_SetRenderDrawColor(Renderer, FlashColor.R, FlashColor.G, FlashColor.B,
+    Round(255 * FlashScreen * Sqr(Level)));
+  SDL_RenderFillRectF(Renderer, nil);
+  DrawGlow(Renderer, FArt.FGlow, FRam.BlastAt.X + AOrigin.X,
+    FRam.BlastAt.Y + AOrigin.Y, FlashGlowSize * Level, FlashColor, Level);
+end;
+
+// The dark band behind, then the thin white front over it as a ring of
+// triangles, both fading as the wave runs out
+procedure TRamPainter.DrawWave(AOrigin: TSdlPoint; AAlpha: Single);
+var
+  Vertices: array [0..2 * WaveFrontSegments + 1] of TSdlVertex;
+  Indices: array [0..6 * WaveFrontSegments - 1] of Integer;
+begin
+  var Front := FRam.WaveFrontAt(AAlpha);
+  if Front <= 0 then
+    Exit;
+  var Fade := 1 - Front / FRam.WaveReach;
+  var CenterX := FRam.BlastAt.X + AOrigin.X;
+  var CenterY := FRam.BlastAt.Y + AOrigin.Y;
+  var Renderer := FArt.FRenderer;
+  DrawGlow(Renderer, FArt.FWaveBand, CenterX, CenterY, 2 * Front, WaveBlack,
+    WaveBandDepth * Fade);
+
+  var Color := Default(TSdlColor);
+  Color.R := 255;
+  Color.G := 255;
+  Color.B := 255;
+  Color.A := Round(255 * WaveFrontLevel * Fade);
+  var Inner := Max(0, Front - WaveFrontWidth);
+  for var i := 0 to WaveFrontSegments do
+  begin
+    var Angle := 2 * Pi * i / WaveFrontSegments;
+    Vertices[2 * i].Position := UnitPoint(CenterX + Front * Cos(Angle),
+      CenterY + Front * Sin(Angle));
+    Vertices[2 * i + 1].Position := UnitPoint(CenterX + Inner * Cos(Angle),
+      CenterY + Inner * Sin(Angle));
+    Vertices[2 * i].Color := Color;
+    Vertices[2 * i + 1].Color := Color;
+  end;
+  for var i := 0 to WaveFrontSegments - 1 do
+  begin
+    Indices[6 * i] := 2 * i;
+    Indices[6 * i + 1] := 2 * i + 1;
+    Indices[6 * i + 2] := 2 * i + 2;
+    Indices[6 * i + 3] := 2 * i + 1;
+    Indices[6 * i + 4] := 2 * i + 3;
+    Indices[6 * i + 5] := 2 * i + 2;
+  end;
+  SDL_SetRenderDrawBlendMode(Renderer, SdlBlendModeBlend);
+  SDL_RenderGeometry(Renderer, nil, @Vertices[0], Length(Vertices),
+    @Indices[0], Length(Indices));
 end;
 
 procedure TRamPainter.DrawLamps(const ASprites: TSpriteRenderer;
@@ -2497,7 +2989,10 @@ begin
   DrawLens(ASprites, Left, Mast, Sway, AAlpha);
   // Once: the mast is drawn twice, and the heat is see-through
   if FRam.Head = rhSweeper then
+  begin
+    DrawOverload(ASprites, Left, Mast, Sway);
     DrawHeat(ASprites, Left, Mast, Sway, AAlpha);
+  end;
   ASprites.ClearClip;
   DrawLamps(ASprites, Left, AAlpha);
 end;
@@ -2519,21 +3014,32 @@ procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;
 begin
   if not FRam.Present then
     Exit;
+  for var Dust in FWaveDust do
+    Dust.Draw(ACanvas, Dust.Origin.X + AOrigin.X, Dust.Origin.Y + AOrigin.Y,
+      AAlpha);
+  for var Short in FShorts do
+    Short.Draw(ACanvas, Short.Origin.X + AOrigin.X, Short.Origin.Y + AOrigin.Y,
+      AAlpha);
+  FOverloadShort.Draw(ACanvas, FOverloadShort.Origin.X + AOrigin.X,
+    FOverloadShort.Origin.Y + AOrigin.Y, AAlpha);
   var Left := FRam.LeftAt(AAlpha);
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,
     RamTop + FRam.Body.Middle.Y + AOrigin.Y);
   FRam.Shield.Draw(ACanvas, FArt.FShield, Middle, AAlpha);
-  if (FRam.Head <> rhSweeper) or not FRam.Armed then
-    Exit;
-  var Mast := FRam.MastAt(AAlpha);
-  var Sway := FRam.SwayAt(AAlpha);
-  for var i := Low(PlateMiddles) to High(PlateMiddles) do
+  if (FRam.Head = rhSweeper) and FRam.Armed then
   begin
-    var Plate := HeadPoint(Left, Mast, Sway, rhSweeper, FRam.Facing,
-      FRam.TurnSquash, PlateMiddles[i].X, PlateMiddles[i].Y);
-    FRam.Plate(i).Draw(ACanvas, FArt.FShield,
-      UnitPoint(Plate.X + AOrigin.X, Plate.Y + AOrigin.Y), AAlpha);
+    var Mast := FRam.MastAt(AAlpha);
+    var Sway := FRam.SwayAt(AAlpha);
+    for var i := Low(PlateMiddles) to High(PlateMiddles) do
+    begin
+      var Plate := HeadPoint(Left, Mast, Sway, rhSweeper, FRam.Facing,
+        FRam.TurnSquash, PlateMiddles[i].X, PlateMiddles[i].Y);
+      FRam.Plate(i).Draw(ACanvas, FArt.FShield,
+        UnitPoint(Plate.X + AOrigin.X, Plate.Y + AOrigin.Y), AAlpha);
+    end;
   end;
+  DrawWave(AOrigin, AAlpha);
+  DrawFlash(AOrigin, AAlpha);
 end;
 
 end.

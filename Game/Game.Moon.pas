@@ -25,7 +25,7 @@ uses
   Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Arena, Render.Font,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
-  Game.Arrivals, Game.Cannons, Game.Ram, Game.Explosions, Game.Blasts,
+  Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -114,6 +114,9 @@ type
     FRamArt: TRamArt;
     FRam: TRam; // TeK-R13 of the boss arena
     FRamPainter: TRamPainter;
+    // The pads the sweeper's wave knocks off, flying away in flames
+    FWrecks: TPadWrecks;
+    FWreckPainter: TPadWreckPainter;
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -287,6 +290,8 @@ type
     procedure TickRam;
     procedure StopRamRumble;
     procedure ResolveRamContact;
+    procedure ResolveRamWave;
+    procedure KnockOffPads;
     function BulletStruckRam(const ABullet: TBullet): Boolean;
     function BulletStruckRamEye(const ABullet: TBullet): Boolean;
     function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
@@ -385,6 +390,8 @@ const
   RamRumbleSoundFile = 'ramrumble.wav';
   RamHissSoundFile = 'ramhiss.wav';
   RamWhineSoundFile = 'ramwhine.wav';
+  // The sweeper's overload bursts: a low blow and a drone sinking away
+  SweeperBlastSoundFile = 'sweeperblast.wav';
   TerminalKeySoundFile = 'terminal.wav';
   // The life sphere: its sparks spiral in; it bursts into the hero
   SphereFormSoundFile = 'sphereform.wav';
@@ -568,6 +575,8 @@ begin
   FRamArt := TRamArt.Create(ARenderer);
   FRam := TRam.Create(FRamArt.Body, RamSeed);
   FRamPainter := TRamPainter.Create(FRamArt, FRam);
+  FWrecks := TPadWrecks.Create;
+  FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -602,6 +611,9 @@ begin
   // The pair before its art
   FCannons.Free;
   FCannonArt.Free;
+  // The painter before the wrecks it draws
+  FWreckPainter.Free;
+  FWrecks.Free;
   FRamPainter.Free;
   FRam.Free;
   FRamArt.Free;
@@ -836,6 +848,7 @@ begin
   FArrivals.Clear;
   FCannons.Clear;
   FRam.Reset;
+  FWrecks.Clear;
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
@@ -1133,6 +1146,7 @@ begin
   FArrivals.Clear;
   FCannons.Clear;
   FRam.Clear;
+  FWrecks.Clear;
   StopRamRumble;
   FUptake.Settle;
   SettleSphere;
@@ -1784,6 +1798,7 @@ begin
   FAudio.Load(RamRumbleSoundFile);
   FAudio.Load(RamHissSoundFile);
   FAudio.Load(RamWhineSoundFile);
+  FAudio.Load(SweeperBlastSoundFile);
   FAudio.Load(TerminalKeySoundFile);
   FAudio.Load(SphereFormSoundFile);
   FAudio.Load(SphereTakeSoundFile);
@@ -2466,6 +2481,7 @@ begin
   FArrivals.Clear;
   FCannons.Clear;
   FRam.Clear;
+  FWrecks.Clear;
   StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
@@ -2740,11 +2756,16 @@ begin
   if Cue.Blast then
   begin
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
-    FAudio.Play(RageBlastSoundFile);
+    if Cue.Shock then
+      FAudio.Play(SweeperBlastSoundFile)
+    else
+      FAudio.Play(RageBlastSoundFile);
   end;
   // The row of the head's lives comes up with the terminal's key
   if Cue.RowCell then
     FAudio.Play(TerminalKeySoundFile);
+  FWrecks.Tick;
+  FWreckPainter.Tick;
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -2770,6 +2791,36 @@ begin
     HurtHero;
   end;
   FHero.Throw(Away);
+end;
+
+// The sweeper's shock wave throws the hero clear as a touch does, but
+// takes no life: only the moment of mercy and the throw (Game.Ram)
+procedure TMoonGame.ResolveRamWave;
+begin
+  if FHero.Dead then
+    Exit;
+  var Away: Integer;
+  if not FRam.WaveStrikes(HeroBody(FHero), Away) then
+    Exit;
+  GrantMercy(HurtMercyTicks);
+  FHero.Throw(Away);
+end;
+
+// Every pad of the screen the sweeper's wave has reached is gone, and a
+// wreck flies off in its picture; a death rewinds the pads
+procedure TMoonGame.KnockOffPads;
+begin
+  for var Pad in FPads.Standing(FHero.Screen) do
+  begin
+    var Middle := Pad.Middle;
+    Middle.X := Middle.X + Pad.Left;
+    Middle.Y := Middle.Y + Pad.Top;
+    if not FRam.WaveReaches(Middle) then
+      Continue;
+    Pad.Doze;
+    FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
+      FRam.BlastAt);
+  end;
 end;
 
 // The hunter's eye takes the bullet: sparks off the lens, a ping, a life
@@ -3092,6 +3143,9 @@ begin
     FAudio.Play(PadClackSoundFile);
   if FPads.ShelfLatched then
     FAudio.Play(ShelfLatchSoundFile);
+  // After the pads' tick, before the hero's: one gone from under him this
+  // tick drops him
+  KnockOffPads;
   FHero.Tick;
   if FHeldFire and FHero.Fire then
   begin
@@ -3148,6 +3202,7 @@ begin
   end;
   ResolveCannonContact;
   ResolveRamContact;
+  ResolveRamWave;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
@@ -3255,6 +3310,9 @@ begin
         FPads.Draw(FHero.Screen, AAlpha, plDeep);
         FDynamics.DrawSunk(FHero.Screen, FSprites.Origin, AAlpha);
         FPads.Draw(FHero.Screen, AAlpha, plFront);
+        // The pads knocked off, before the pads in front of them no more
+        FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FWreckPainter.DrawBodies(FSprites, AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
@@ -3288,6 +3346,7 @@ begin
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
         FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        FWreckPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FOrbs.DrawOrbs(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
@@ -3422,6 +3481,7 @@ begin
   StopVictoryTrack;
   // The whole entrance of the Ram again at the end of the walk
   FRam.Reset;
+  FWrecks.Clear;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);

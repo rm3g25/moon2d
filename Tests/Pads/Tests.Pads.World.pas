@@ -1,7 +1,9 @@
 ﻿{
   Tests.Pads.World - the pad a scene keeps asleep and wakes: neither a
   floor nor a body while it sleeps, both once awake, flown straight to a
-  place of its screen, and asleep again after a rewind.
+  place of its screen, and asleep again after a rewind. A pad the game
+  puts to sleep is gone the same way, from among the screen's standing
+  pads too, and a rewind gives it back as the file has it.
 
   The pad names no sprite, so the world asks no art for it, as for a deck
   of the collision grid: no stage is needed. The level wakes a dormant
@@ -48,6 +50,10 @@ type
     procedure TestFlyingPadCarriesWhatStandsOnIt;
     [Test]
     procedure TestRewindPutsTheWokenPadBackToSleep;
+    [Test]
+    procedure TestDozedPadIsGone;
+    [Test]
+    procedure TestRewindGivesBackADozedPad;
   end;
 
 implementation
@@ -74,6 +80,9 @@ const
     '"tag":"sleeper","dormant":true}],' +
     '"scenes":[{"id":"waking","screen":1,"cues":[' +
     '{"at":0,"do":"wake","target":"sleeper"}]}]';
+  // A pad the file keeps awake, for the game to put to sleep
+  StanderSections = '"pads":[{"sprite":"","screen":1,"x":96,"y":224,' +
+    '"width":32,"tag":"stander"}]';
 
 procedure TPadWorldTests.Setup;
 begin
@@ -264,6 +273,41 @@ begin
   Assert.IsTrue(IsAt(Pad, HomeX, HomeY),
     'Back where the file puts it');
   ExpectThere(FWorld, Pad, False, 'Rewound');
+end;
+
+procedure TPadWorldTests.TestDozedPadIsGone;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  Assert.AreEqual(1, Integer(Length(FWorld.Standing(Screen))), 'Standing awake');
+
+  Pad.Doze;
+
+  Assert.IsTrue(Pad.Dormant, 'Asleep');
+  ExpectThere(FWorld, Pad, False, 'Dozed');
+  Assert.AreEqual(0, Integer(Length(FWorld.Standing(Screen))),
+    'Not among the standing');
+end;
+
+procedure TPadWorldTests.TestRewindGivesBackADozedPad;
+begin
+  var Level := LevelFromRows(RoomRowsOf(0, 0, 0, 0), StanderSections);
+  var World := TPadWorld.Create(nil, nil, Level, nil, 1);
+  try
+    var Pad := World.FindTagged('stander');
+    Assert.IsNotNull(Pad, 'The world finds the pad by its tag');
+    ExpectThere(World, Pad, True, 'Born');
+
+    Pad.Doze;
+    ExpectThere(World, Pad, False, 'Dozed');
+    World.Rewind(1);
+
+    Assert.IsFalse(Pad.Dormant, 'Awake again');
+    ExpectThere(World, Pad, True, 'Rewound');
+  finally
+    World.Free;
+    Level.Free;
+  end;
 end;
 
 initialization
