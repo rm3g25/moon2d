@@ -1,8 +1,9 @@
 ﻿{
   Tests.Game.HeroOrbs - the hero's orbs at their border: what they call
   up for the living and refuse the dead, the charge a new level, a new
-  screen, a death and a restart leave, and what its orbs and its burst
-  strike through the targets the game hands in.
+  screen, a death and a restart leave, the charge that rises with no orb
+  to carry it, and what its orbs and its burst strike through the targets
+  the game hands in.
 
   The hero is a point in a walled room, his body has no points, and the
   targets are the fixture's: a bullet or a monster stands everywhere or
@@ -56,6 +57,12 @@ type
     procedure TestFeedLandsAsEnergy;
     [Test]
     procedure TestFeedStopsAtFullCountingOrbsOnTheirWay;
+    [Test]
+    procedure TestChargeRisesAtOnce;
+    [Test]
+    procedure TestChargeStopsAtFullCountingOrbsOnTheirWay;
+    [Test]
+    procedure TestCorpseIsChargedNothing;
     [Test]
     procedure TestRewindGivesBackChargeOfEntry;
     [Test]
@@ -259,6 +266,28 @@ begin
   FOrbs.FeedEnergy(50);
   RunUntilFed;
   Assert.AreEqual(FullEnergy, FOrbs.Energy);
+end;
+
+procedure THeroOrbsTests.TestChargeRisesAtOnce;
+begin
+  FOrbs.Charge(2);
+  Assert.AreEqual(2, FOrbs.Energy, 'No orb carries it');
+end;
+
+procedure THeroOrbsTests.TestChargeStopsAtFullCountingOrbsOnTheirWay;
+begin
+  FOrbs.FeedEnergy(FullEnergy - 10);
+  FOrbs.Charge(25);
+  Assert.AreEqual(10, FOrbs.Energy, 'Up to what the orbs leave room for');
+  RunUntilFed;
+  Assert.AreEqual(FullEnergy, FOrbs.Energy, 'Full, never past it');
+end;
+
+procedure THeroOrbsTests.TestCorpseIsChargedNothing;
+begin
+  FAlive := False;
+  FOrbs.Charge(5);
+  Assert.AreEqual(0, FOrbs.Energy);
 end;
 
 procedure THeroOrbsTests.TestRewindGivesBackChargeOfEntry;

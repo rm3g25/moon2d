@@ -103,6 +103,9 @@ type
     // The ice suit's burst, as the ceremony asks for it
     procedure BurstSuit;
     procedure FeedEnergy(AAmount: Integer);
+    // The charge rises in the gauge by itself, no orb carries it: the
+    // stone charging as the fight goes
+    procedure Charge(AAmount: Integer);
     // False over the corpse: nothing was cast
     function CastAura: Boolean;
     procedure PourRain;
@@ -148,7 +151,7 @@ type
 implementation
 
 uses
-  Hud.Energy;
+  System.Math, Hud.Energy;
 
 const
   // A burst strikes along the way a ray's head has passed every this many
@@ -276,6 +279,17 @@ begin
   if Amount > Room then
     Amount := Room;
   FFeed.Start(Amount, THudEnergy.Heart);
+end;
+
+// The living hero's, as the feed is; what would run the gauge past full -
+// the orbs still on their way counted - is not taken
+procedure THeroOrbs.Charge(AAmount: Integer);
+begin
+  if not FProbes.Alive() then
+    Exit;
+  var Amount := Min(AAmount, FullEnergy - FEnergy - FFeed.Pending);
+  if Amount > 0 then
+    Inc(FEnergy, Amount);
 end;
 
 // The aura rings the living: called over the corpse, it is spent on

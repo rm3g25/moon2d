@@ -229,6 +229,7 @@
         <DCCReference Include="Game\Game.Ram.pas"/>
         <DCCReference Include="Game\Game.Wrecks.pas"/>
         <DCCReference Include="Game\Game.Capsules.pas"/>
+        <DCCReference Include="Game\Game.StoneTank.pas"/>
         <DCCReference Include="Game\Game.Explosions.pas"/>
         <DCCReference Include="Game\Game.Blasts.pas"/>
         <DCCReference Include="Game\Game.Impacts.pas"/>

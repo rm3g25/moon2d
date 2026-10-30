@@ -26,6 +26,7 @@ uses
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
+  Game.StoneTank,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
@@ -122,6 +123,8 @@ type
     FCapsules: TShuttleCapsules;
     FCapsulePainter: TCapsulePainter;
     FRamMedkitPads: TArray<string>; // tags of the hunter's
+    // Between the heads' wounds and the gauge of the form's charge
+    FStoneTank: TStoneTank;
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -470,6 +473,7 @@ const
   ArmorPingSeed = $50696E67; // "Ping"
   CannonSeed = $43616E6E; // "Cann"
   RamSeed = $52616D20; // "Ram "
+  StoneTankSeed = $546E6B20; // "Tnk "
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -593,6 +597,7 @@ begin
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
   FCapsules := TShuttleCapsules.Create;
   FCapsulePainter := TCapsulePainter.Create(FCapsules);
+  FStoneTank := TStoneTank.Create(StoneTankSeed);
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -632,6 +637,7 @@ begin
   FWrecks.Free;
   FCapsulePainter.Free;
   FCapsules.Free;
+  FStoneTank.Free;
   FRamPainter.Free;
   FRam.Free;
   FRamArt.Free;
@@ -868,6 +874,7 @@ begin
   FRam.Reset;
   FWrecks.Clear;
   FCapsules.Clear;
+  FStoneTank.Clear;
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
@@ -1167,6 +1174,7 @@ begin
   FRam.Clear;
   FWrecks.Clear;
   FCapsules.Clear;
+  FStoneTank.Clear;
   StopRamRumble;
   FUptake.Settle;
   SettleSphere;
@@ -2503,6 +2511,7 @@ begin
   FRam.Clear;
   FWrecks.Clear;
   FCapsules.Clear;
+  FStoneTank.Clear;
   StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
@@ -2770,6 +2779,9 @@ begin
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
     ChangeMusic(FRam.Track);
+  // The stone wakes to the fight as the first head locks
+  if Cue.Locked then
+    FStoneTank.Start;
   if Cue.Shot then
   begin
     // A bullet's picture hangs a sprite over its point (BulletStretch)
@@ -2779,6 +2791,7 @@ begin
   end;
   if Cue.Blast then
   begin
+    FStoneTank.HeadDown(FOrbs.Energy);
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
     if Cue.Shock then
     begin
@@ -2797,6 +2810,7 @@ begin
   FWrecks.Tick;
   FWreckPainter.Tick;
   TickCapsules;
+  FOrbs.Charge(FStoneTank.Tick(FOrbs.Energy));
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -2919,6 +2933,7 @@ begin
   if not Result then
     Exit;
   ABullet.Status := bsInactive;
+  FStoneTank.Wound(1 / FRam.FullLives);
   var Strike := Default(TStrike);
   Strike.X := At.X;
   Strike.Y := At.Y;
@@ -2941,6 +2956,7 @@ begin
   ABullet.Status := bsInactive;
   if Guarded then
     Exit;
+  FStoneTank.Wound(1 / FRam.FullLives);
   var Strike := Default(TStrike);
   Strike.X := At.X;
   Strike.Y := At.Y;
@@ -3570,6 +3586,7 @@ begin
   FRam.Reset;
   FWrecks.Clear;
   FCapsules.Clear;
+  FStoneTank.Clear;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);
