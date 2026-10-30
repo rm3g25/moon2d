@@ -71,6 +71,7 @@ Tests\
     Tests.Game.Ram.pas     the Ram of the boss arena, its hunter and sweeper, the shield over a body and a strip
     Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
+    Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas

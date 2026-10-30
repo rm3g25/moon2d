@@ -56,8 +56,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   and the shield they wear (`Game.Shield`), the press of the finale
   (`Game.Press`); and TeK-R13, the Ram of level 2's boss arena
   (`Game.Ram`, 3.0.75), the pads its sweeper's wave knocks off
-  (`Game.Wrecks`, 3.0.81) and the shuttle's medkits in its fight
-  (`Game.Capsules`, 3.0.84). `Game/Events/`
+  (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
+  (`Game.Capsules`, 3.0.84) and the hidden tank of the form's charge in
+  it (`Game.StoneTank`, 3.0.85). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
   (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
@@ -182,6 +183,8 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Render.Glow` and `Game.Space`) /
 `Game.Capsules` (the shuttle's medkits: over the canvas of
 `Levels.Dynamics`, `Render.Brush` and `Render.Glow`) /
+`Game.StoneTank` (the tank of the charge: over `Render.Brush` for its
+dice) /
 `Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Game.HeroOrbs` (the hero's orbs: over
@@ -5096,6 +5099,22 @@ body, no wound.
   `DrawJet` (`JetHot` glow growing with `JetLevel`, a white core),
   `DrawHalves` (out by `HalfSpread` 9, leaning `HalfLean` 35, fading; a
   green `OutFlashSize` 36 breath). `Tick` counts the blink.
+### `Game/Game.StoneTank.pas` (~180 lines, 3.0.85)
+The hidden tank between the Ram's heads and the gauge of the form's
+charge (`docs/mechanics/arena-3.md`, stage 15a): the charge grows with
+the fight, never read as a hit. Knows neither the Ram nor the gauge, no
+SDL.
+- **`TStoneTank`** - `Start` (the fight is on; once), `Clear` (stopped,
+  no head down, nothing on its way), `Wound(share)` (`share` of a head's
+  full lives times `HeadShare` 20 into the newest of `LateTicks` 50 slots
+  - it reaches the tank when its slot comes round), `HeadDown(energy)`
+  (`EmptyTheWay`, then what is left up to the head's ceiling into the
+  newest slot; the next ceiling), `Tick(energy)` (the oldest slot and
+  `TricklePerTick` 0.1/33 into the tank, the tank held to the room under
+  the ceiling - spilt, not kept; a pulse every `PulseGapLeast` 8 +
+  `PulseGapSpan` 22 ticks, rolled each time, of 1, or 2 at
+  `DoublePulseShare` 0.3 when the tank holds them; returns the percent to
+  add), `Ceiling` (`Ceilings` 30, 55 by heads down), `Running`.
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -5513,7 +5532,9 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     aura, the rite or the rain within `OrbReach` of the stretch is spent on
     what flies there: a cannon's round, a live shard. `Holding` /
     `Inhaling` - the burst's inhale: the world stands, the hero is a bare
-    figure.
+    figure. `Charge(amount)` (3.0.85) - the charge rises in the gauge
+    with no orb, held to full with the feed's `Pending` counted; nothing
+    to a corpse.
   - The draw, in layers the game interleaves with the hero: `DrawBehind`
     (the rite behind him), `DrawVeil`, `DrawSilhouette(figure)`,
     `DrawOrbs` (the aura, the rite in front, the burst's world layer, the
@@ -6053,6 +6074,11 @@ so a unit (and later a test) can reach it. `interface` holds
   (`padclack.wav` on `Landed`, `SpawnStanding` of `MedkitMonsterId` on
   each mark `Opened`). Drawn after the sphere; cleared where the wrecks
   are.
+- 3.0.85, **the stone's charge in the fight**: `FStoneTank`
+  (`StoneTankSeed`). `TickRam`: `Start` on `Locked`, `HeadDown` with
+  `FOrbs.Energy` on `Blast`, and last `FOrbs.Charge(FStoneTank.Tick(...))`.
+  `BulletStruckRamEye` and `BulletStruckRamBarrels` (not a plate's
+  catch) - `Wound(1 / FRam.FullLives)`. Cleared with the capsules.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6384,6 +6410,12 @@ and `TRamSweeperTests` (a call a third, none for the last life);
 `Tests.Game.Capsules` (7: onto its mark, never past it, down within two
 seconds; braking; lands once, opens once; the medkit on the mark after
 the landing; the shell gone after; two each on its own; a clear).
+3.0.85 - 12 more: `Tests.Game.StoneTank` (9: nothing before the fight;
+a wound reaches the gauge late; uneven pulses of one or two; never past
+the hunter's ceiling; a death pours up to its ceiling, late; nothing
+spills into the next quarter; the second ceiling; the trickle; a clear);
+`Tests.Game.HeroOrbs` 3 (the direct charge at once, held to full with the
+orbs on their way, nothing to a corpse).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7098,6 +7130,7 @@ made again in 3.0.83).
 | The wrecks and the sweeper's blast retuned (3.0.83): each wreck kicked off hard by the blast, the harder the nearer, then slowed, a climb and a spin of its own, one in five against the others; the sweeper bursts with the tank's death and its drone under it | Game.Wrecks.pas (`Launch` with the reach, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` on `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | The Ram backs off before the sweeper bursts (3.0.82): a stand, the drive to the right wall with its barrels red, the eye blinking and the alarm, the overload there; spent, it stands at the wall; a hero thrown down inside the hull walks out unhurt, for 60 ticks at most, through the whole fight | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` on `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | The shuttle's medkits on the thirds (3.0.84): a capsule falls onto a high pad (the hunter's) or the road at the far wall (the sweeper's), brakes, lands, parts and leaves a medkit | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` of the `ram` action in level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |

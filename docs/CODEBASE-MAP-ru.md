@@ -55,8 +55,9 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
   (`Game.Shield`), пресс финала (`Game.Press`); и TeK-R13, Таран арены
   босса второго уровня (`Game.Ram`, 3.0.75), пады, которые сбивает волна
-  его свипера (`Game.Wrecks`, 3.0.81), и аптечки шаттла в его бою
-  (`Game.Capsules`, 3.0.84). `Game/Events/` исполняет
+  его свипера (`Game.Wrecks`, 3.0.81), аптечки шаттла в его бою
+  (`Game.Capsules`, 3.0.84) и скрытый бак заряда формы в нём
+  (`Game.StoneTank`, 3.0.85). `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
@@ -181,6 +182,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 и `Game.Space`) /
 `Game.Capsules` (аптечки шаттла: над канвой `Levels.Dynamics`,
 `Render.Brush` и `Render.Glow`) /
+`Game.StoneTank` (бак заряда: над `Render.Brush` ради костей) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -5079,6 +5081,21 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   с `JetLevel`, белое ядро), `DrawHalves` (наружу на `HalfSpread` 9,
   наклон `HalfLean` 35, гаснут; зелёный выдох `OutFlashSize` 36). `Tick`
   считает мигание.
+### `Game/Game.StoneTank.pas` (~180 строк, 3.0.85)
+Скрытый бак между головами Тарана и шкалой заряда формы
+(`docs/mechanics/arena-3.md`, этап 15a): заряд растёт с боем, но не
+читается как попадание. Не знает ни Тарана, ни шкалы, без SDL.
+- **`TStoneTank`** - `Start` (бой начался; один раз), `Clear` (стоп,
+  голов не сбито, в пути ничего), `Wound(share)` (`share` полных жизней
+  головы на `HeadShare` 20 - в новейшую из `LateTicks` 50 ячеек; в бак
+  попадает, когда ячейка придёт по кругу), `HeadDown(energy)`
+  (`EmptyTheWay`, затем остаток до потолка головы в новейшую ячейку;
+  следующий потолок), `Tick(energy)` (старейшая ячейка и `TricklePerTick`
+  0.1/33 в бак, бак обрезан до места под потолком - проливается, а не
+  копится; толчок раз в `PulseGapLeast` 8 + `PulseGapSpan` 22 тиков,
+  каждый раз заново, по 1, или по 2 с долей `DoublePulseShare` 0.3, когда
+  в баке есть; возвращает проценты прибавки), `Ceiling` (`Ceilings` 30, 55
+  по числу сбитых голов), `Running`.
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -5484,7 +5501,9 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
     `TakesAt(fromX, toX, y)` (3.0.57) - первый вооружённый орб ауры, обряда
     или дождя ближе `OrbReach` к отрезку тратится на то, что там летит:
     снаряд пушки, живой осколок. `Holding` / `Inhaling` - вдох сброса: мир
-    стоит, герой - голый силуэт.
+    стоит, герой - голый силуэт. `Charge(amount)` (3.0.85) - заряд растёт
+    в шкале без орбов, не выше полной с учётом `Pending` подачи; трупу -
+    ничего.
   - Отрисовка, слоями, которые игра перемежает с героем: `DrawBehind`
     (обряд за ним), `DrawVeil`, `DrawSilhouette(figure)`, `DrawOrbs`
     (аура, обряд спереди, мировой слой сброса, дождь), `DrawGlass`,
@@ -6013,6 +6032,11 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   (`padclack.wav` на `Landed`, `SpawnStanding` из `MedkitMonsterId` на
   каждую метку `Opened`). Рисуется после сферы; убирается там же, где
   обломки.
+- 3.0.85, **заряд камня в бою**: `FStoneTank` (`StoneTankSeed`).
+  `TickRam`: `Start` на `Locked`, `HeadDown` с `FOrbs.Energy` на `Blast`,
+  последним - `FOrbs.Charge(FStoneTank.Tick(...))`. `BulletStruckRamEye`
+  и `BulletStruckRamBarrels` (не перехват пластиной) - `Wound(1 /
+  FRam.FullLives)`. Убирается вместе с капсулами.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -6337,6 +6361,12 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 `Tests.Game.Capsules` (7: на метку и не ниже, вниз за две секунды;
 тормозит; садится раз, раскрывается раз; аптечка на метке после посадки;
 скорлупа потом исчезает; две - каждая на свою; очистка).
+3.0.85 - ещё 12: `Tests.Game.StoneTank` (9: ничего до боя; рана доходит
+до шкалы поздно; неровные толчки по одному-два; не выше потолка
+охотника; смерть доливает до своего потолка, поздно; ничего не
+перетекает в следующую четверть; второй потолок; капля; очистка);
+`Tests.Game.HeroOrbs` 3 (прямой заряд сразу, не выше полной с орбами в
+пути, трупу ничего).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7038,6 +7068,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Обломки и взрыв свипера после прогона (3.0.83): каждый обломок отрывает взрывом, тем сильнее, чем ближе, потом он замедляется, свой подъём и своё вращение, каждый пятый против остальных; свипер взрывается смертью танка, под ней его гул | Game.Wrecks.pas (`Launch` с дальностью, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` на `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | Таран отъезжает перед взрывом свипера (3.0.82): стоянка, отъезд к правой стене с красными стволами, мигающим глазом и тревогой, перегруз там; пустой стоит у стены; герой, брошенный внутрь корпуса, выходит без раны, не дольше 60 тиков, весь бой | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` на `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | Аптечки шаттла на третях (3.0.84): капсула падает на высокий пад (охотника) или на дорогу у дальней стены (свипера), тормозит, садится, раскрывается и оставляет аптечку | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` действия `ram` в level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| Заряд формы в бою Тарана (3.0.85): шкала растёт от попаданий по охотнику и свиперу, поздно и неровными толчками, до 30% и 55%; смерть головы доливает остаток | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
