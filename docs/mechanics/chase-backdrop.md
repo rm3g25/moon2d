@@ -137,8 +137,11 @@ code's sun.
 3. The ridge, the floor, the sand. **In the set.** The ridge's own
    foothills were tried as the floor: they read as one land but carry 1.6 px
    a unit - soft even at 1080p - so the floor got its own generation.
-4. The monorail. **In the set.** The satellite dome - next.
-5. The hangar, the landing ring, the dish.
+4. The monorail, the satellite dome. **In the set** (the dome is 320 x 93
+   units, its picture set by its width; of two takes the backlit one).
+5. The hangar, the landing ring, the dish. **In the set** (96 x 15, 90 x 13
+   and 50 x 52 units: the dish is set by its height, the other two by their
+   width).
 6. Then: the stand judged whole, the speeds tuned on it, and the backdrop
    handed to the code of the chase (arena-3.md, stages 11-14).
 
