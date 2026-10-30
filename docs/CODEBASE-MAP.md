@@ -4802,7 +4802,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3050 lines, 3.0.81)
+### `Game/Game.Ram.pas` (~3130 lines, 3.0.82)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -5017,6 +5017,19 @@ monster. The game carries out the cue.
   `Reach`, `Ticks`, `Threw`; `Start`, `Stop`, `Tick`, `Running`,
   `FrontOf`), `FWave`; **`WaveReaches(point)`** - the front has reached
   the point by this tick - for the pads; `WaveStrikes` asks it.
+- 3.0.82, **the retreat** (stage 10c-4). The sweeper's last life sets
+  **`FRetreating`** (`StrikeBarrels`); **`TickRetreat`** in `TickKill`:
+  `BeginRetreat` (the old `BeginOverload`: silent, no press, brake), a
+  stand of `RetreatStandTicks` 16, then `BeginDrive` to the right wall at
+  `RetreatSpeed` 2.5; at the wall `FRetreating` falls and the overload
+  begins (`Overloading` excludes the retreat). Cue **`Alarm`** every
+  `AlarmEveryTicks` 50 - the game plays `padhum.wav`; `TickHeat` throbs
+  the barrels red (`RetreatHeatLow` 0.6, `RetreatThrobTicks` 16);
+  `TickEye` blinks. **`Spent`** (no head, the sweeper last killed) holds
+  the machine at the wall for good: no press, no legs. **`FClearTicks`**
+  (set by every throw, `Contact` and `WaveStrikes`; counted down in
+  `Tick` from his landing): `Contact` lets a hero inside the hull be for
+  `ClearTicks` 60 or until he is clear of it.
 ### `Game/Game.Wrecks.pas` (~330 lines, 3.0.81)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -6305,7 +6318,13 @@ far (`TestTheWaveReachesTheNearFirst`); `Tests.Game.Wrecks` (4: away from
 the blast and up; none of the arena's five down on the road from any
 blast over the roof, all gone in five seconds; the spin faster up to its
 most; a clear); `Tests.Pads.World` 2 more (a dozed pad is gone; a rewind
-gives it back).
+gives it back). 3.0.82 - 1 more, `TRamSweeperTests`:
+`TestBacksToTheRightWallBeforeTheOverload` in place of the stand through
+the overload (a stand, back to the right wall, red, the alarm, then the
+overload there), `TestTheWaveLeavesHimInFrontTillHeIsClear` new; the
+empty mast stands at the right wall after. And 1 more, `TRamTests`:
+`TestTheWayOutOfTheHullCloses` (unhurt inside at least 45 ticks, touched
+within 90); `TestThrownHeroIsOutOfItsWayTillHeLands` now walks out first.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7016,6 +7035,7 @@ twelve OGG files; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`).
 | The sweeper's overload and blast (3.0.79): it falls silent and whitens, the machine brakes to a stand, the head bursts with a white flash, a heavy jolt and a low blow | Game.Ram.pas (`TickKill`, `BeginOverload`, `Overloading`, `Overload`, `FlashAt`, the cue `Shock`; `TRamPainter.DrawOverload`, `DrawFlash`, `FOverloadShort`) + Game.Moon.pas (`TickRam` - `SweeperBlastSoundFile`) + tools/sounds/sweeperblast.py + Tests.Game.Ram.pas (`TestTheLastLifeOverloadsBeforeTheBlast`, `TestTheMachineStandsThroughTheOverload`) |
 | The sweeper's shock wave (3.0.80): a dark band behind a thin white front over the whole screen, the road's dust under it, the hero thrown clear with no wound | Game.Ram.pas (`TickWave`, `WaveFrontAt`, `WaveStrikes`, `WaveSide`; `CreateWaveBand`; `TRamPainter.DrawWave`, `TickWaveDust`) + Game.Moon.pas (`ResolveRamWave`) + Hero.pas (`Throw`) + Tests.Game.Ram.pas (`TestTheBlastSendsAWave`, `TestTheWaveThrowsTheHeroOnceAwayFromTheHull`, `TestTheWaveThrowsFromOverTheHullTowardMoreRoad`) |
 | The pads knocked off by the sweeper's wave (3.0.81): each pad the front reaches gone, a wreck in its picture flying slow and spinning fast, with fire, a glow, sparks and bolts; all back on a death | Game.Wrecks.pas (`TPadWrecks`, `TPadWreckPainter`) + Pads.World.pas (`Doze`, `Texture`, `PictureHeight`, `Standing`) + Game.Ram.pas (`TShockWave`, `WaveReaches`) + Game.Moon.pas (`KnockOffPads` between the pads' tick and the hero's, `TickRam` - the wrecks' tick, the draw, `FWrecks.Clear` with `FRam`) + Tests.Game.Wrecks.pas + Tests.Pads.World.pas (`TestDozedPadIsGone`, `TestRewindGivesBackADozedPad`) |
+| The Ram backs off before the sweeper bursts (3.0.82): a stand, the drive to the right wall with its barrels red, the eye blinking and the alarm, the overload there; spent, it stands at the wall; a hero thrown down inside the hull walks out unhurt, for 60 ticks at most, through the whole fight | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` on `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
