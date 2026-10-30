@@ -54,8 +54,9 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   (`Game.Trial`), фиолетовый свет, в котором спускаются её тела
   (`Game.Arrivals`), настенные пушки TeK (`Game.Cannons`) и щит на них
   (`Game.Shield`), пресс финала (`Game.Press`); и TeK-R13, Таран арены
-  босса второго уровня (`Game.Ram`, 3.0.75) и пады, которые сбивает волна
-  его свипера (`Game.Wrecks`, 3.0.81). `Game/Events/` исполняет
+  босса второго уровня (`Game.Ram`, 3.0.75), пады, которые сбивает волна
+  его свипера (`Game.Wrecks`, 3.0.81), и аптечки шаттла в его бою
+  (`Game.Capsules`, 3.0.84). `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
@@ -178,6 +179,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Game.Wrecks` (сбитые пады: над `Pads.World` ради чьей картинки,
 `Levels.Dynamics` ради огня, искр и молний, `Render.Sprites`, `Render.Glow`
 и `Game.Space`) /
+`Game.Capsules` (аптечки шаттла: над канвой `Levels.Dynamics`,
+`Render.Brush` и `Render.Glow`) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -1598,6 +1601,8 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   (JSON `"stop"`, единицы, кончик тарана после въезда, на экране,
   `SEventBadRamStop`), `Track` (`"file"`, `SEventNoRamTrack`),
   `SilenceSeconds` (`"fadeOut"`).
+- 3.0.84: `TRamOrders.MedkitPads` (`"medkitPads"`, список тегов падов -
+  на один из них падают аптечки охотника; `SEventBadRamPads`).
 
 ### `Core/Levels.Scenes.pas` (~565 строк)
 Секция `scenes` JSON уровня (3.0.62): модель и парсер, без игровой
@@ -4793,7 +4798,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3130 строк, 3.0.82)
+### `Game/Game.Ram.pas` (~3170 строк, 3.0.84)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -5016,6 +5021,10 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   **`FClearTicks`** (ставит любой бросок, `Contact` и `WaveStrikes`;
   убывает в `Tick` с момента приземления): `Contact` не трогает героя
   внутри корпуса `ClearTicks` 60 тиков или пока он не вышел.
+- 3.0.84, **трети** (этап 10d). Cue **`Third`**: **`TickThirds`** (до
+  `TickKill`) сообщает каждую ушедшую треть жизней головы (`Tier` сверх
+  `FThirds`), по одной за тик, последнюю жизнь - нет; `FThirds` 0 в `Arm`
+  и `LockSweeper`. Игра сбрасывает за неё аптечку.
 ### `Game/Game.Wrecks.pas` (~440 строк, 3.0.83)
 Пады, сбитые ударной волной свипера (`docs/mechanics/arena-3.md`, этап
 10c-3): обломок улетает в картинке пада, а сам пад усыплён (`TPad.Doze`).
@@ -5048,6 +5057,28 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   картинками), `DrawBodies` (текстура пада, тон его размещения,
   `DrawSized` по вращению), `DrawLight` (оранжевое зарево `WreckGlowSize`
   36, дышит около `WreckGlowLevel` 0.45, искры, молнии).
+### `Game/Game.Capsules.pas` (~340 строк, 3.0.84)
+Аптечки шаттла в бою Тарана (`docs/mechanics/arena-3.md`, этап 10d):
+капсула падает на метку, приземляется, раскрывается и оставляет там
+аптечку; куда и за что - решает игра. Декорация - ни пол, ни тело, ни
+рана.
+- **`TCapsule`** (запись) - `X`, `LandY` (середина её дна при посадке),
+  `Bottom`/`LastBottom`, `Phase` (`cpFalling`, `cpOpening`), `Ticks` в
+  фазе. **`TCapsuleCue`** - `Landed`, `Opened` (метки, на которых с этого
+  тика стоят аптечки: середина их ног).
+- **`TShuttleCapsules`** - правила. `Drop(x, landY)`: от `StartBottom` -4
+  (не видно) вниз за `FallTicks` 33 по ease-out (`FallBottom`,
+  `EaseOutCubic`), с любой высоты; потом `OpenTicks` 27, метка наружу на
+  `MedkitOutTicks` 5, и всё. `Tick` возвращает cue. `Clear`, `Count`,
+  `BottomAt`, `OpenShare`, `JetLevel` (с `JetFrom` 0.4 падения до 1 на
+  посадке), свойство по умолчанию `Capsules[i]`. `CapsuleWidth` 18,
+  `CapsuleHeight` 24.
+- **`TCapsulePainter`** - канвой: `DrawHull` (два диска `DiscShade`,
+  `HullDark` под `HullLight`, зелёный крест из двух тонких дисков, маячок
+  мигает каждые `BeaconBlinkTicks` 8), `DrawJet` (зарево `JetHot` растёт
+  с `JetLevel`, белое ядро), `DrawHalves` (наружу на `HalfSpread` 9,
+  наклон `HalfLean` 35, гаснут; зелёный выдох `OutFlashSize` 36). `Tick`
+  считает мигание.
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -5974,6 +6005,14 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   `DebugJumpToWork` сбрасывает, так что клавиша End видит въезд целиком.
   `RestartLevel` играет свой трек, только если `Plays` говорит, что он ещё
   не играет. `HeroStandsIn` спрашивает `THero.InAir`.
+- 3.0.84, **аптечки шаттла**: `FCapsules`, `FCapsulePainter`,
+  `FRamMedkitPads` (ставит `StartRam`). `TickRam`: на `Third` -
+  **`CallTheShuttle`** (охотникова - на пад дальше от героя,
+  `TryPickMedkitPad`; иначе дорога у стены, дальней от Тарана,
+  `MedkitWallMark`, `MedkitWallGap` 16), потом **`TickCapsules`**
+  (`padclack.wav` на `Landed`, `SpawnStanding` из `MedkitMonsterId` на
+  каждую метку `Opened`). Рисуется после сферы; убирается там же, где
+  обломки.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -6291,6 +6330,13 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 сначала выходит. 3.0.83 - ещё 3, `Tests.Game.Wrecks` (7): тест вращения
 по всем пяти - не медленнее и не выше потолка - вместо разгона до 45;
 ближний бьёт сильнее; пинок гаснет; нет двух одинаковых вращений.
+3.0.84 - ещё 10: `TestEachThirdCallsTheShuttle` в `TRamHunterTests` и
+`TRamSweeperTests` (вызов на треть, на последнюю жизнь - нет);
+`TRamLevelTests.TestMedkitPadsAreRead` (и ещё два отказа в
+`TestBadRamRaises`, пады арены второго уровня стоят на ней);
+`Tests.Game.Capsules` (7: на метку и не ниже, вниз за две секунды;
+тормозит; садится раз, раскрывается раз; аптечка на метке после посадки;
+скорлупа потом исчезает; две - каждая на свою; очистка).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -6991,6 +7037,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Пады, сбитые волной свипера (3.0.81): каждый пад, до которого дошёл фронт, исчезает, обломок в его картинке летит медленно и крутится быстро, с огнём, заревом, искрами и молниями; на смерти всё возвращается | Game.Wrecks.pas (`TPadWrecks`, `TPadWreckPainter`) + Pads.World.pas (`Doze`, `Texture`, `PictureHeight`, `Standing`) + Game.Ram.pas (`TShockWave`, `WaveReaches`) + Game.Moon.pas (`KnockOffPads` между тиком падов и героя, `TickRam` - тик обломков, рисование, `FWrecks.Clear` вместе с `FRam`) + Tests.Game.Wrecks.pas + Tests.Pads.World.pas (`TestDozedPadIsGone`, `TestRewindGivesBackADozedPad`) |
 | Обломки и взрыв свипера после прогона (3.0.83): каждый обломок отрывает взрывом, тем сильнее, чем ближе, потом он замедляется, свой подъём и своё вращение, каждый пятый против остальных; свипер взрывается смертью танка, под ней его гул | Game.Wrecks.pas (`Launch` с дальностью, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` на `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | Таран отъезжает перед взрывом свипера (3.0.82): стоянка, отъезд к правой стене с красными стволами, мигающим глазом и тревогой, перегруз там; пустой стоит у стены; герой, брошенный внутрь корпуса, выходит без раны, не дольше 60 тиков, весь бой | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` на `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
+| Аптечки шаттла на третях (3.0.84): капсула падает на высокий пад (охотника) или на дорогу у дальней стены (свипера), тормозит, садится, раскрывается и оставляет аптечку | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` действия `ram` в level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Тела, которые событие впускает по строке (платформы TeK-K10, танки финала): как они входят, их обвесы, как держат ворота | действие `spawn` в level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
