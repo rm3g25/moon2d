@@ -96,6 +96,8 @@ type
     [Test]
     procedure TestThrownHeroIsOutOfItsWayTillHeLands;
     [Test]
+    procedure TestTheWayOutOfTheHullCloses;
+    [Test]
     procedure TestShieldTakesABullet;
     [Test]
     procedure TestAbsentMeetsNothing;
@@ -220,7 +222,9 @@ type
     [Test]
     procedure TestTheLastLifeOverloadsBeforeTheBlast;
     [Test]
-    procedure TestTheMachineStandsThroughTheOverload;
+    procedure TestBacksToTheRightWallBeforeTheOverload;
+    [Test]
+    procedure TestTheWaveLeavesHimInFrontTillHeIsClear;
     [Test]
     procedure TestTheBlastSendsAWave;
     [Test]
@@ -564,6 +568,8 @@ begin
   var Away: Integer;
   FRam.Contact(OnTheRoad(Stop + 10), False, False, Away);
   Assert.AreEqual(-1, Away, 'Left of the middle - to the left');
+  // Out of the hull, so the next touch is a touch
+  FRam.Contact(OnTheRoad(Stop - 40), False, False, Away);
   FRam.Contact(OnTheRoad(Stop + RamWidth - 26), False, False, Away);
   Assert.AreEqual(1, Away, 'Right of the middle - to the right');
 end;
@@ -593,8 +599,36 @@ begin
   Assert.IsTrue(FRam.Contact(Hero, False, False, Away), 'Touched');
   Assert.IsFalse(FRam.Contact(Hero, False, True, Away),
     'Flying from the throw, still over the hull');
+  Assert.IsFalse(FRam.Contact(Hero, False, False, Away),
+    'Down inside the hull: walking out of it');
+  Assert.IsFalse(FRam.Contact(OnTheRoad(Stop - 40), False, False, Away),
+    'Clear of it');
   Assert.IsTrue(FRam.Contact(Hero, False, False, Away),
-    'Down in its way again');
+    'Back into it: a touch again');
+end;
+
+// Down inside the hull he walks out unhurt, but not for ever: the hull is
+// no shelter
+procedure TRamTests.TestTheWayOutOfTheHullCloses;
+const
+  WayOutTicks = 45;
+  ShelterTicks = 90;
+begin
+  StandAtTheStop;
+  var Away: Integer;
+  Assert.IsTrue(FRam.Contact(OnTheRoad(FRam.Left + 10), False, False, Away),
+    'Touched');
+  var Inside := 0;
+  for var i := 1 to ShelterTicks do
+  begin
+    FRam.Tick;
+    if FRam.Contact(OnTheRoad(FRam.Left + RamWidth / 2), False, False, Away) then
+      Break;
+    Inc(Inside);
+  end;
+  Assert.IsTrue(Inside >= WayOutTicks,
+    Format('Unhurt inside for %d ticks', [Inside]));
+  Assert.IsTrue(Inside < ShelterTicks, 'Then a touch again');
 end;
 
 procedure TRamTests.TestShieldTakesABullet;
@@ -1109,8 +1143,12 @@ const
   // A ladder rides this far at least through its sweep
   LadderClimb = 20.0;
   ShortestHeatTicks = 15;
-  // The overload lasts about 0.6 s: the blast within this many ticks
-  OverloadLimit = 30;
+  // The sweeper's end - a stand, the drive to the right wall from as far
+  // as the left one, the overload of about 0.6 s: the blast within this
+  // many ticks
+  EndLimit = 300;
+  // The stand before it backs off
+  ShortestStandTicks = 10;
   // The wave crosses the screen in about a second
   ShortestWaveTicks = 25;
   LongestWaveTicks = 40;
@@ -1227,7 +1265,7 @@ const
 begin
   ArmTheSweeper(ATarget, LivesShare);
   StrikeThePack(FRam.Lives);
-  Assert.IsTrue(BlastWithin(ATarget, OverloadLimit) > 0, 'The head blows up');
+  Assert.IsTrue(BlastWithin(ATarget, EndLimit) > 0, 'The head blows up');
 end;
 
 // A hero's body of the usual size, its middle at AX, AY
@@ -1398,14 +1436,17 @@ begin
   var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
   ArmTheSweeper(Hero, LivesShare);
   StrikeThePack(FRam.Lives);
-  Assert.IsTrue(BlastWithin(Hero, OverloadLimit) > 0, 'The head blows up');
+  Assert.IsTrue(BlastWithin(Hero, EndLimit) > 0, 'The head blows up');
   for var i := 1 to ManyTicks do
   begin
     var Cue := FRam.Tick(Hero);
     Assert.IsFalse(Cue.Whine or Cue.Shot, 'No head comes up, nothing fires');
+    Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'It stands');
   end;
   Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
   Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
+  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+    'At the right wall, where the chase begins');
 end;
 
 procedure TRamSweeperTests.TestShortsOutFromHalfItsLives;
@@ -1431,9 +1472,15 @@ begin
   var Overloaded := 0;
   var Brightest: Single := 0;
   var Last: Single := 0;
-  for var i := 1 to OverloadLimit do
+  for var i := 1 to EndLimit do
   begin
     var Cue := FRam.Tick(Hero);
+    if FRam.Retreating then
+    begin
+      Assert.IsFalse(Cue.Shot, 'No fire as it backs off');
+      Assert.IsFalse(FRam.Overloading, 'No overload before the wall');
+      Continue;
+    end;
     if Cue.Blast then
     begin
       Assert.IsTrue(Overloaded >= ShortestOverloadTicks,
@@ -1554,34 +1601,84 @@ begin
   Assert.IsFalse(FRam.WaveReaches(NearPoint), 'No wave, nothing reached');
 end;
 
-procedure TRamSweeperTests.TestTheMachineStandsThroughTheOverload;
+procedure TRamSweeperTests.TestBacksToTheRightWallBeforeTheOverload;
 const
   LivesShare = 0.02;
 begin
   var Hero := HeroOnTheRoad(20);
   ArmTheSweeper(Hero, LivesShare);
-  // Pressing him: under way to his wall at speed when the last life goes
+  // Pressing him: under way to his wall, the left, when the last life goes
   var UnderWay := False;
   for var i := 1 to ManyTicks do
   begin
     FRam.Tick(Hero);
-    UnderWay := (FRam.Phase = rpDriving) and (Abs(FRam.Rolled) > 1);
+    UnderWay := (FRam.Phase = rpDriving) and (FRam.Rolled < -1);
     if UnderWay then
       Break;
   end;
   Assert.IsTrue(UnderWay, 'It drives at him');
   StrikeThePack(FRam.Lives);
-  for var i := 1 to OverloadLimit do
+  var Wall: Double := ScreenWidth - RamWidth;
+  var Alarmed := False;
+  var Stood := 0;
+  var Backing := False;
+  var Reddest: Single := 0;
+  for var i := 1 to EndLimit do
   begin
     var Cue := FRam.Tick(Hero);
-    Assert.IsFalse(Cue.Rumble, 'No new drive through the overload');
+    Assert.IsFalse(Cue.Shot, 'No fire');
+    Alarmed := Alarmed or Cue.Alarm;
+    if FRam.Retreating then
+    begin
+      Assert.IsFalse(FRam.Overloading, 'No overload on the way');
+      Assert.IsFalse(FRam.Pressing, 'Nobody pressed');
+      Reddest := Max(Reddest, FRam.HeatAt(1));
+      if FRam.Rolled > 0 then
+        Backing := True
+      else if Backing then
+        Assert.IsTrue(FRam.Rolled >= 0, 'Never forward once it backs')
+      else if FRam.Rolled = 0 then
+        Inc(Stood);
+      Continue;
+    end;
+    Assert.AreEqual(Wall, Double(FRam.Left), 0.001, 'Overloads at the wall');
     if Cue.Blast then
     begin
-      Assert.AreEqual(0.0, FRam.Rolled, 0.001, 'Braked to a stand');
+      Assert.IsTrue(Alarmed, 'The alarm sounded');
+      Assert.IsTrue(Stood >= ShortestStandTicks,
+        Format('Stood %d ticks before it backed', [Stood]));
+      Assert.IsTrue(Backing, 'It backed off to the right');
+      Assert.IsTrue(Reddest >= 0.9, 'Its barrels burned red');
+      Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'Standing');
       Exit;
     end;
+    Assert.IsFalse(Cue.Rumble, 'No new drive through the overload');
   end;
   Assert.Fail('Never burst');
+end;
+
+procedure TRamSweeperTests.TestTheWaveLeavesHimInFrontTillHeIsClear;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  BlowTheSweeper(Hero);
+  var InFront := OnTheRoad(FRam.Left + RamWidth / 2);
+  var Away: Integer;
+  var Struck := False;
+  for var i := 1 to LongestWaveTicks do
+  begin
+    Struck := FRam.WaveStrikes(InFront, Away);
+    if Struck then
+      Break;
+    FRam.Tick(Hero);
+  end;
+  Assert.IsTrue(Struck, 'The wave reaches him');
+  Assert.AreEqual(-1, Away, 'Thrown left, the only road');
+  Assert.IsFalse(FRam.Contact(InFront, False, False, Away),
+    'Down inside the hull: still in front of it');
+  Assert.IsFalse(FRam.Contact(OnTheRoad(FRam.Left - 40), False, False, Away),
+    'Clear of it');
+  Assert.IsTrue(FRam.Contact(InFront, False, False, Away),
+    'Back into it: a touch as ever');
 end;
 
 initialization

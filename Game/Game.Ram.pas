@@ -27,6 +27,8 @@
   its middle - straight up when that side leaves him no room to the wall
   (the screen's edge), so a hero pinned at a wall goes up toward the low
   pad there - and a thrown hero is out of its way until he comes down.
+  Come down inside the hull, he has a moment to walk out of it unhurt;
+  once he is clear, or the moment is over, a touch is a touch again.
 
   After the lock it watches the hero. Low - on the road, or in a jump off
   it under the low pads, where it can crush him - it presses: a rev, and
@@ -62,14 +64,19 @@
   to; the ladder - it rides the mast while it fires. The target is the
   whole barrel pack, but two honeycomb plates under it take every bullet
   that climbs: the floor does it no harm. Its last life does not blow it
-  up at once: the head overloads for a moment - it holds its fire, heats
-  to white, its bolts thicken, the eye blinks and the machine brakes to a
-  stand - then bursts with a white flash and a heavier jolt than the
-  hunter's. A shock wave runs out of the burst over the whole screen in
-  about a second - a dark band behind a thin white front, dust kicked up
-  where it runs along the road - and throws the hero clear, as a touch of
-  the hull does but with no wound: away from the hull, or from over it
-  toward the side with more road. The empty mast sinks; there is no third
+  up at once. The gun falls silent and its barrels burn red, the eye
+  blinks, the alarm of an arena rebuild sounds; the machine brakes to a
+  stand, holds a moment, then backs off to the right wall - a hero in its
+  way is touched as ever. Only there the head overloads: it heats from
+  red to white, its bolts thicken - then bursts with a white flash and a
+  heavier jolt than the hunter's. A shock wave runs out of the burst over
+  the whole screen in about a second - a dark band behind a thin white
+  front, dust kicked up where it runs along the road - and throws the
+  hero clear, as a touch of the hull does but with no wound: away from
+  the hull, or from over it toward the side with more road - and with the
+  hull at the wall that is always the left: the chase that follows starts
+  from there; come down inside the hull, he walks out of it as after any
+  throw. The empty mast sinks and the machine stands at the wall; there is no third
   head yet.
 
   Under half its lives either head shorts out: small bolts over it, the
@@ -185,6 +192,8 @@ type
     Shock: Boolean;
     // One more cell of the head's row lit
     RowCell: Boolean;
+    // The sweeper backs off to the wall: the alarm of an arena rebuild
+    Alarm: Boolean;
   end;
 
   TRam = class
@@ -216,6 +225,9 @@ type
     FLens, FLastLens: Single;
     FHeroInFront: Boolean;
     FHeroThrown: Boolean; // flying from a throw: out of its way till he lands
+    // Thrown, by a touch or the wave: ticks left to walk out of the hull
+    // unhurt, if he comes down inside it
+    FClearTicks: Integer;
     FArrivals: Integer;
     FDice: TXorShift;
     FCue: TRamCue;
@@ -265,14 +277,21 @@ type
     FHeat, FLastHeat: Single;
     FHeatTicks: Integer; // the whole of the burning before this sweep
     FPlates: array [0..1] of TTekShield;
-    // The sweeper's last life gone: ticks of its overload so far
+    // The sweeper's last life gone: backing off to the right wall, ticks
+    // since, ticks it has stood before the drive
+    FRetreating: Boolean;
+    FRetreatTicks: Integer;
+    FStoodTicks: Integer;
+    // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
     FFlash, FLastFlash: Single;
     FBlastAt: TSdlFPoint;
     FWave: TShockWave;
     procedure TickKill;
-    procedure BeginOverload;
+    procedure BeginRetreat;
+    procedure TickRetreat;
+    function Spent: Boolean;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -353,7 +372,9 @@ type
     // The hero's body touches the hull or a wheel and he is in the
     // machine's way: AOnDeck - he stands on a pad, AInAir - on his way up
     // or down. AAway - the side to throw him to, away from its middle; 0 -
-    // straight up, pinned against a wall.
+    // straight up, pinned against a wall. A thrown hero who comes down
+    // inside the hull is out of its way until he is clear of it, for
+    // ClearTicks at most.
     function Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
       out AAway: Integer): Boolean;
     // On the screen to be seen and touched
@@ -377,7 +398,9 @@ type
     // How hard the head shorts out: 0 over half its lives, from the
     // tank's floor at half up to 1 as the last of them goes
     function ShortLevel: Single;
-    // The sweeper has lost its last life and has not burst yet
+    // The sweeper has lost its last life and backs off to the right wall
+    property Retreating: Boolean read FRetreating;
+    // The sweeper, at the wall, overloads and has not burst yet
     function Overloading: Boolean;
     // How far the overload has gone, 0 none to 1 the burst
     function Overload: Single;
@@ -649,8 +672,20 @@ const
   ChangeRiseTicks = 30;
   SweeperMast = 48.0;
   HeadBlastJolt = 0.5;
-  // The sweeper's end: about 0.6 s of overload, then a blast that shakes
-  // harder than the hunter's and whites the screen out for a few ticks
+  // A hero thrown, by a touch or the wave, who comes down inside the hull
+  // walks out of it unhurt for this long after he lands: from its middle
+  // at a run, half its length, is about 45 ticks
+  ClearTicks = 60;
+  // The sweeper's end. First it backs off to the right wall: a stand of
+  // half a second, then the drive, the alarm every 1.5 s (the hum lasts
+  // 1.2), the barrels throbbing red. From the far wall about 4.5 s.
+  RetreatStandTicks = 16;
+  RetreatSpeed = 2.5;
+  AlarmEveryTicks = 50;
+  RetreatHeatLow = 0.6;
+  RetreatThrobTicks = 16;
+  // At the wall about 0.6 s of overload, then a blast that shakes harder
+  // than the hunter's and whites the screen out for a few ticks
   OverloadTicks = 20;
   SweeperBlastJolt = 0.8;
   BlastFlashTicks = 6;
@@ -1051,6 +1086,7 @@ begin
   FLastLens := 0;
   FHeroInFront := False;
   FHeroThrown := False;
+  FClearTicks := 0;
 end;
 
 // A fight from its start: the hunter on the mast with all its lives,
@@ -1088,6 +1124,9 @@ begin
   FNextBarrel := 0;
   FHeat := 0;
   FLastHeat := 0;
+  FRetreating := False;
+  FRetreatTicks := 0;
+  FStoodTicks := 0;
   FOverloadTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
@@ -1132,6 +1171,7 @@ begin
   FPressing := False;
   FHeroInFront := False;
   FHeroThrown := False;
+  FClearTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
   FWave.Stop;
@@ -1294,6 +1334,9 @@ begin
   FLastHeat := FHeat;
   FLastFlash := FFlash;
   FFlash := Max(0, FFlash - 1 / BlastFlashTicks);
+  // The way out counts from the moment he lands
+  if (FClearTicks > 0) and not FHeroThrown then
+    Dec(FClearTicks);
   FAccel := 0;
   SeeHero(ATarget);
   TickKill;
@@ -1335,16 +1378,26 @@ begin
   FHeroSeen := True;
 end;
 
-// The last life gone: the hunter blows up at once; the sweeper overloads
-// first and bursts at the end of it
+// The last life gone: the hunter blows up at once; the sweeper backs off
+// to the right wall, overloads there and bursts at the end of it
 procedure TRam.TickKill;
 begin
   if not FHeadKilled then
     Exit;
-  if (FHead = rhSweeper) and (FOverloadTicks < OverloadTicks) then
+  if FHead <> rhSweeper then
   begin
-    if FOverloadTicks = 0 then
-      BeginOverload;
+    KillHead;
+    Exit;
+  end;
+  // The tick it stands at the wall the overload begins
+  if FRetreating then
+  begin
+    TickRetreat;
+    if FRetreating then
+      Exit;
+  end;
+  if FOverloadTicks < OverloadTicks then
+  begin
     Inc(FOverloadTicks);
     Exit;
   end;
@@ -1353,7 +1406,7 @@ end;
 
 // The gun falls silent and the head stands where it is; a machine that
 // drives brakes to a stand, one that revs or rests stays standing
-procedure TRam.BeginOverload;
+procedure TRam.BeginRetreat;
 begin
   FFire := rfIdle;
   FTurnTicks := 0;
@@ -1367,11 +1420,40 @@ begin
   end;
 end;
 
+// A stand first, then back to the right wall; standing there, it is done
+// and the overload begins
+procedure TRam.TickRetreat;
+begin
+  if FRetreatTicks = 0 then
+    BeginRetreat;
+  if FRetreatTicks mod AlarmEveryTicks = 0 then
+    FCue.Alarm := True;
+  Inc(FRetreatTicks);
+  if FPhase = rpDriving then
+    Exit;
+  if FStoodTicks < RetreatStandTicks then
+  begin
+    Inc(FStoodTicks);
+    Exit;
+  end;
+  var Wall: Single := ScreenWidth - RamWidth;
+  if FX < Wall then
+    BeginDrive(Wall, RetreatSpeed, False)
+  else
+    FRetreating := False;
+end;
+
+// Both heads gone: it stands at the wall, where the chase will begin
+function TRam.Spent: Boolean;
+begin
+  Result := (FHead = rhNone) and (FKilled = rhSweeper);
+end;
+
 // Low long enough - the press; on a pad, or high, long enough - the hunt.
 // An overloading head presses nobody.
 procedure TRam.TickMode;
 begin
-  if FHeadKilled then
+  if FHeadKilled or Spent then
   begin
     FPressing := False;
     Exit;
@@ -1477,7 +1559,8 @@ begin
 end;
 
 // The empty mast sinks, a beat, the sweeper rises and the fight goes on.
-// After the sweeper the mast stays down: the next head is not built yet.
+// After the sweeper the mast stays down and the machine stands at the
+// wall: the next head is not built yet.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1574,8 +1657,9 @@ begin
           BeginChange;
           Exit;
         end;
-        // An overloading head holds the machine still till it bursts
-        if FHeadKilled then
+        // A dying head holds the machine as its end says; a spent one
+        // stands for good
+        if FHeadKilled or Spent then
           Exit;
         if FHero.Alive and not FPressing and (FHead = rhHunter) and
           not InSightsFrom(FX) then
@@ -2030,6 +2114,12 @@ begin
   FHeat := 0;
   if (FHead <> rhSweeper) or not FArmed then
     Exit;
+  if FRetreating then
+  begin
+    FHeat := Lerp(RetreatHeatLow, 1,
+      0.5 - 0.5 * Cos(2 * Pi * FRetreatTicks / RetreatThrobTicks));
+    Exit;
+  end;
   case FFire of
     rfFlare:
       FHeat := Lerp(HeatFrom, 1, 1 - FFireTicks / FHeatTicks);
@@ -2048,16 +2138,18 @@ begin
     FLamps := Max(0, FLamps - LampFade);
 end;
 
-// Lit, it breathes; while a head rises, and through a change of heads, it
-// blinks - the warning
+// Lit, it breathes; while a head rises, through a change of heads and
+// through the sweeper's end, it blinks - the warning
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
-  else if (FPhase in [rpRising, rpChanging]) or Overloading then
+  else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading then
   begin
     var Clock := FPhaseTicks;
-    if Overloading then
+    if FRetreating then
+      Clock := FRetreatTicks
+    else if Overloading then
       Clock := FOverloadTicks;
     FEye := EyeBlinkLow;
     if (Clock div EyeBlinkTicks) mod 2 = 0 then
@@ -2177,8 +2269,11 @@ begin
   if not Present or not Overlaps(AHeroBody) then
   begin
     FHeroInFront := False;
+    FClearTicks := 0;
     Exit(False);
   end;
+  if FClearTicks > 0 then
+    Exit(False);
   if AOnDeck then
   begin
     FHeroInFront := True;
@@ -2189,6 +2284,7 @@ begin
 
   FHeroInFront := False;
   FHeroThrown := True;
+  FClearTicks := ClearTicks;
   AAway := ThrowSide(AHeroBody);
   Result := True;
 end;
@@ -2318,7 +2414,10 @@ begin
   FHitTicks := 0;
   Dec(FLives);
   if FLives <= 0 then
+  begin
     FHeadKilled := True;
+    FRetreating := True;
+  end;
   Result := True;
 end;
 
@@ -2362,7 +2461,7 @@ end;
 
 function TRam.Overloading: Boolean;
 begin
-  Result := FHeadKilled and (FHead = rhSweeper);
+  Result := FHeadKilled and (FHead = rhSweeper) and not FRetreating;
 end;
 
 function TRam.Overload: Single;
@@ -2413,6 +2512,7 @@ begin
   FWave.Threw := True;
   FHeroThrown := True;
   FHeroInFront := False;
+  FClearTicks := ClearTicks;
   AAway := WaveSide(AHeroBody);
   Result := True;
 end;

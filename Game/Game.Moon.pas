@@ -372,7 +372,8 @@ const
   RageBlastSoundFile = 'platform.wav';
   BossCrashSoundFile = 'crash.wav';
   // An arena rebuild: the warning, a pad turning the corner of its
-  // flight, two pads docking side by side
+  // flight, two pads docking side by side. The warning is also the Ram's
+  // alarm as it backs off before the sweeper bursts.
   PadHumSoundFile = 'padhum.wav';
   PadClickSoundFile = 'padclick.wav';
   PadClackSoundFile = 'padclack.wav';
@@ -2742,6 +2743,8 @@ begin
   end;
   if Cue.Whine then
     FAudio.Play(RamWhineSoundFile);
+  if Cue.Alarm then
+    FAudio.Play(PadHumSoundFile);
   if Cue.Jolt > 0 then
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
