@@ -190,6 +190,15 @@ taken out as a heat layer, the bunker's lid lifted off, everything mirrored
 to face left and given a bled edge. It is new art for the second level 2
 boss; no 2008 frame stands behind it.
 
+**The chase backdrop** (`sprites/chase-backdrop.mset`) - generated with
+ChatGPT's image model to the author's direction, one generation per object
+on a clear ground with one style reference for all: the end of the tunnel
+(the cliff), the city under its dome, the monorail, and the crater's far
+ridge, floor and near sand as bands. Checked, trimmed and scaled by
+`tools/chase/check_element.py`; the bands levelled, evened in light and
+made seamless by `tools/chase/make_seamless.py`; packed by
+`tools/chase/pack_set.py`. New art for the chase of the level 2 finale.
+
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine
 of a ricochet, from noise and sine partials alone.

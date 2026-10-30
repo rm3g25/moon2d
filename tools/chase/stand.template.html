@@ -1,0 +1,506 @@
+<title>Chase Backdrop Stand</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Layout: one wide stage on top, a strip of controls and the timeline of events under it. Single dark look: the Moon's sky is black. */
+:root {
+  --bg: #0b0c10;
+  --panel: #14161d;
+  --line: #262a35;
+  --fg: #d9dbe2;
+  --dim: #8a90a0;
+  --accent: #ff8a70;
+  --cyan: #6fd8e8;
+  --display: "Chakra Petch", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--body); }
+.wrap { max-width: 1480px; margin: 0 auto; padding-block: 16px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font: 600 22px/1.1 var(--display); letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--dim); }
+.stage { position: relative; width: 100%; aspect-ratio: 4 / 3; max-width: 100%; background: #000; border: 1px solid var(--line); }
+.stage.real { aspect-ratio: auto; overflow: auto; max-height: 80vh; }
+.stage.real canvas { width: auto; height: auto; }
+.stage canvas { width: 100%; height: 100%; display: block; image-rendering: auto; }
+.hud { position: absolute; left: 10px; top: 8px; font: 12px/1.5 var(--mono); color: var(--fg);
+  background: rgba(0,0,0,0.55); padding: 6px 9px; pointer-events: none; font-variant-numeric: tabular-nums; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+.bar label { display: inline-flex; gap: 6px; align-items: center; color: var(--dim); font-size: 13px; }
+button { font: 500 13px var(--body); color: var(--fg); background: #1e222c; border: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--dim); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+button.on { border-color: var(--accent); color: var(--accent); }
+input[type=range] { width: min(520px, 100%); accent-color: var(--accent); }
+input[type=number] { width: 64px; font: 13px var(--mono); background: #0f1116; color: var(--fg); border: 1px solid var(--line); padding: 3px 5px; }
+.time { flex: 1 1 320px; display: flex; gap: 10px; align-items: center; min-width: 0; }
+.time input { flex: 1; min-width: 0; }
+.time output { font: 13px var(--mono); min-width: 64px; font-variant-numeric: tabular-nums; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+section { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; min-width: 0; }
+h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 0 0 8px; }
+.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.events button { width: 100%; text-align: left; display: grid; grid-template-columns: 64px 1fr; gap: 10px; background: transparent; border-color: transparent; padding: 4px 6px; }
+.events button:hover { background: #1b1e27; }
+.events .t { font: 12px var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.slot { font: 12px var(--mono); padding: 6px 8px; border: 1px dashed var(--line); color: var(--dim); }
+.slot.real { border-style: solid; border-color: var(--cyan); color: var(--cyan); }
+.drop { margin-top: 10px; color: var(--dim); font-size: 13px; }
+.drop input { font-size: 12px; color: var(--dim); max-width: 100%; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Chase Backdrop Stand</h1>
+    <p>Screen 13, act 2: the tunnel ends, the city rides past. Placeholders until the generations come in.</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="view" width="1440" height="1080"></canvas>
+    <div class="hud" id="hud"></div>
+  </div>
+
+  <div class="bar">
+    <button id="play" class="on">Pause</button>
+    <label>Rate
+      <button data-rate="1" class="rate on">1x</button>
+      <button data-rate="4" class="rate">4x</button>
+      <button data-rate="16" class="rate">16x</button>
+    </label>
+    <div class="time"><input id="scrub" type="range" min="0" max="420" step="0.1" value="0" aria-label="Time"><output id="clock">0.0 s</output></div>
+  </div>
+
+  <div class="bar">
+    <label><input id="g-play" type="checkbox" checked> play layer guides</label>
+    <label><input id="g-spans" type="checkbox"> dome spans</label>
+    <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
+    <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
+    <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
+    <label>tunnel cruise <input id="p-tunnelCruise" type="number" step="1"></label>
+    <label>city cruise <input id="p-cityCruise" type="number" step="0.5"></label>
+    <label>city share in tunnel <input id="p-cityShareInTunnel" type="number" step="0.05"></label>
+    <span style="color: var(--dim); font-size: 12px">units a second</span>
+  </div>
+
+  <div class="cols">
+    <section>
+      <h2>Timeline</h2>
+      <ul class="events" id="events"></ul>
+    </section>
+    <section>
+      <h2>Elements</h2>
+      <div class="slots" id="slots"></div>
+      <div class="drop">Pick the checked PNGs (named by id: cliff.png, dome-main.png, ridge-tex.png...) or drop them on the stage; each replaces its placeholder. They stay on this page only.
+        <br><input id="files" type="file" accept="image/png" multiple></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const Layout = /*LAYOUT*/null;
+const Screen13Src = /*SCREEN13*/'';
+
+const View = document.getElementById('view');
+const Ctx = View.getContext('2d');
+let Px = View.width / Layout.screen.w;
+const Sp = Layout.speeds;
+const Sun = Layout.sun;
+const Tick = 1 / 33;
+const SimSeconds = 420;
+
+const LayerById = Object.fromEntries(Layout.layers.map(L => [L.id, L]));
+const Elements = {};
+for (const L of Layout.layers) for (const E of (L.elements || [])) Elements[E.id] = E;
+const Cliff = Elements['cliff'];
+const CityLength = LayerById.city.length;
+const Images = {};
+const Screen13 = new Image();
+Screen13.src = Screen13Src;
+// The generations already checked ride with the stand; a file picked below replaces one.
+// The checked elements of chase-backdrop.mset, put in by build_stand.py;
+// a file picked below replaces one.
+const Shipped = /*SHIPPED*/{};
+for (const [Id, Src] of Object.entries(Shipped)) {
+  const Img = new Image();
+  Img.onload = () => { Images[Id] = Img; if (Id === 'cliff') buildCliff(); listSlots(); };
+  Img.src = Src;
+}
+
+// ---- the speeds, simulated once per change ----
+let Track = [];
+function smooth(k) { k = Math.min(1, Math.max(0, k)); return k * k * (3 - 2 * k); }
+function simulate() {
+  Track = [];
+  let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oRoad = 0, phase = 'tunnel', eased = 0;
+  const cliffRight = Cliff.x + Cliff.w;
+  for (let i = 0; i <= SimSeconds * 33; i++) {
+    const t = i * Tick;
+    const ramp = smooth(t / Sp.rampSec);
+    if (phase === 'tunnel') {
+      T = Sp.tunnelPeak * ramp;
+      C = Sp.cityShareInTunnel * T;
+      if (cliffRight - oT < -16) { phase = 'ease'; eased = t; }
+    } else {
+      const k = smooth((t - eased) / Sp.easeSec);
+      T = Sp.tunnelPeak + (Sp.tunnelCruise - Sp.tunnelPeak) * k;
+      C = Sp.cityShareInTunnel * Sp.tunnelPeak + (Sp.cityCruise - Sp.cityShareInTunnel * Sp.tunnelPeak) * k;
+    }
+    const rem = CityLength - Layout.screen.w - oC;
+    if (rem < Sp.cityBrakeZone) C = rem > 0 ? Math.max(Sp.cityLeast, C * rem / Sp.cityBrakeZone) : 0;
+    Track.push({ t, oT, oC, oR, oRoad, T, C });
+    oT += T * Tick; oC += C * Tick; oR += C * Sp.ridgeShareOfCity * Tick; oRoad += Sp.road * ramp * Tick;
+  }
+  listEvents();
+}
+
+function listEvents() {
+  const Checks = [
+    ['the city opens on the right', s => (Cliff.edgeLeast ?? Cliff.edgeAt) - s.oT < 400],
+    ['the sun comes out from behind the cliff', s => Cliff.edgeAt - s.oT < Sun.x],
+    ['the main dome takes the sun', s => Elements['dome-main'].x - s.oC < Sun.x],
+    ['the cliff is gone, speeds ease to cruise', s => Cliff.x + Cliff.w - s.oT < 0],
+    ['the main dome leaves the sun', s => Elements['dome-main'].x + Elements['dome-main'].w - s.oC < Sun.x],
+    ['the satellite dome takes the sun', s => Elements['dome-sat'].x - s.oC < Sun.x],
+    ['the satellite dome leaves the sun', s => Elements['dome-sat'].x + Elements['dome-sat'].w - s.oC < Sun.x],
+    ['the brake zone begins', s => CityLength - Layout.screen.w - s.oC < Sp.cityBrakeZone],
+  ];
+  const List = document.getElementById('events');
+  List.innerHTML = '';
+  for (const [Name, Test] of Checks) {
+    const Hit = Track.find(Test);
+    const Item = document.createElement('li');
+    const B = document.createElement('button');
+    B.innerHTML = `<span class="t">${Hit ? Hit.t.toFixed(1) + ' s' : 'never'}</span><span>${Name}</span>`;
+    if (Hit) B.onclick = () => { Now = Hit.t - 1; Playing = false; syncPlay(); };
+    Item.appendChild(B);
+    List.appendChild(Item);
+  }
+}
+
+// ---- deterministic noise for the placeholders ----
+function hash(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
+function wave(x, seed) {
+  return Math.sin(x * 0.031 + seed) * 0.5 + Math.sin(x * 0.073 + seed * 2.1) * 0.3 + Math.sin(x * 0.17 + seed * 3.7) * 0.2;
+}
+const U = v => v * Px;
+
+// ---- the sun ----
+function sunCover(oC) {
+  let Cover = 0;
+  for (const E of LayerById.city.elements) {
+    if (!E.tintsSun) continue;
+    const X0 = E.x - oC, X1 = E.x + E.w - oC;
+    const Inside = Math.min(Sun.x - X0, X1 - Sun.x);
+    Cover = Math.max(Cover, Math.min(1, Math.max(0, Inside / Sun.tintRamp)));
+  }
+  return Cover;
+}
+function drawSun(oC) {
+  const k = sunCover(oC);
+  const Col = Sun.white.map((v, i) => Math.round(v + (Sun.tint[i] - v) * k));
+  const X = U(Sun.x), Y = U(Sun.y);
+  Ctx.save();
+  Ctx.globalCompositeOperation = 'lighter';
+  const Halo = Ctx.createRadialGradient(X, Y, U(Sun.disc), X, Y, U(Sun.halo));
+  Halo.addColorStop(0, `rgba(${Col},0.55)`);
+  Halo.addColorStop(0.25, `rgba(${Col},0.16)`);
+  Halo.addColorStop(1, `rgba(${Col},0)`);
+  Ctx.fillStyle = Halo;
+  Ctx.fillRect(X - U(Sun.halo), Y - U(Sun.halo), U(Sun.halo * 2), U(Sun.halo * 2));
+  Ctx.fillStyle = `rgb(${Col})`;
+  Ctx.beginPath(); Ctx.arc(X, Y, U(Sun.disc), 0, Math.PI * 2); Ctx.fill();
+  Ctx.restore();
+  return k;
+}
+
+// ---- bands: a real seamless texture repeated, or a placeholder ----
+// A band may take part of a texture (crop, fractions of its height) and
+// fade its top in; the strip is cut once per image, not every frame.
+const Strips = new Map();
+function bandStrip(Img, Band) {
+  const Key = Img.src.length + ':' + JSON.stringify(Band);
+  if (Strips.has(Key)) return Strips.get(Key);
+  const [From, To] = Band.crop || [0, 1];
+  const Strip = document.createElement('canvas');
+  Strip.width = Img.width; Strip.height = Math.round(Img.height * (To - From));
+  const C = Strip.getContext('2d');
+  C.drawImage(Img, 0, -Img.height * From);
+  if (Band.fadeTop) {
+    const Fade = Strip.height * Band.fadeTop / (Band.bottom - Band.top);
+    C.globalCompositeOperation = 'destination-in';
+    const G = C.createLinearGradient(0, 0, 0, Strip.height);
+    G.addColorStop(0, 'rgba(0,0,0,0)'); G.addColorStop(Fade / Strip.height, 'rgba(0,0,0,1)'); G.addColorStop(1, 'rgba(0,0,0,1)');
+    C.fillStyle = G; C.fillRect(0, 0, Strip.width, Strip.height);
+  }
+  Strips.set(Key, Strip);
+  return Strip;
+}
+function drawTexBand(Img, Band, Offset) {
+  const Strip = bandStrip(Img, Band);
+  const H = U(Band.bottom - Band.top);
+  const W = Strip.width * H / Strip.height;
+  let X = -((U(Offset) % W) + W) % W;
+  for (; X < View.width; X += W) Ctx.drawImage(Strip, X, U(Band.top), W, H);
+}
+function drawRidge(oR) {
+  const Band = LayerById.ridge.band;
+  if (Images['ridge-tex']) return drawTexBand(Images['ridge-tex'], Band, oR);
+  Ctx.beginPath();
+  Ctx.moveTo(0, U(Band.bottom));
+  for (let x = 0; x <= Layout.screen.w; x += 2) Ctx.lineTo(U(x), U(207 + wave(x + oR, 1.3) * 7));
+  Ctx.lineTo(View.width, U(Band.bottom)); Ctx.closePath();
+  const G = Ctx.createLinearGradient(0, U(Band.top), 0, U(Band.bottom));
+  G.addColorStop(0, '#2b3140'); G.addColorStop(1, '#161a22');
+  Ctx.fillStyle = G; Ctx.fill();
+  Ctx.strokeStyle = 'rgba(255,236,210,0.55)'; Ctx.lineWidth = 1.5;
+  Ctx.beginPath();
+  for (let x = 0; x <= Layout.screen.w; x += 2) Ctx.lineTo(U(x), U(207 + wave(x + oR, 1.3) * 7));
+  Ctx.stroke();
+}
+function drawFloor(oC) {
+  const Band = LayerById.city.band;
+  const Tex = Images[Band.texture];
+  if (Tex) return drawTexBand(Tex, Band, oC);
+  const G = Ctx.createLinearGradient(0, U(Band.top), 0, U(Band.bottom));
+  G.addColorStop(0, '#1d2028'); G.addColorStop(1, '#2a2622');
+  Ctx.fillStyle = G; Ctx.fillRect(0, U(Band.top), View.width, U(Band.bottom - Band.top));
+  Ctx.strokeStyle = 'rgba(255,220,180,0.06)';
+  for (let r = 0; r < 9; r++) {
+    const Y = Band.top + 4 + r * r * 0.9;
+    Ctx.beginPath();
+    for (let x = 0; x <= Layout.screen.w; x += 4) Ctx.lineTo(U(x), U(Y + wave(x + oC, r) * 0.8));
+    Ctx.stroke();
+  }
+}
+function drawSand(oT) {
+  const Band = LayerById.tunnel.band;
+  const From = U(Band.from - oT);
+  if (From > View.width) return;
+  Ctx.save();
+  Ctx.beginPath(); Ctx.rect(Math.max(0, From), 0, View.width, View.height); Ctx.clip();
+  if (Images['sand-tex']) drawTexBand(Images['sand-tex'], Band, oT);
+  else {
+    Ctx.beginPath(); Ctx.moveTo(0, View.height);
+    for (let x = 0; x <= Layout.screen.w; x += 2) Ctx.lineTo(U(x), U(300 + wave(x + oT, 4.2) * 9));
+    Ctx.lineTo(View.width, View.height); Ctx.closePath();
+    const G = Ctx.createLinearGradient(0, U(288), 0, View.height);
+    G.addColorStop(0, '#3a3029'); G.addColorStop(0.3, '#1c1916'); G.addColorStop(1, '#0d0c0b');
+    Ctx.fillStyle = G; Ctx.fill();
+  }
+  Ctx.restore();
+}
+
+// ---- elements: a real picture with its feet on y, or a placeholder ----
+function drawElement(E, Offset) {
+  const X = E.x - Offset;
+  if (X > Layout.screen.w || X + E.w < 0) return;
+  const Img = Images[E.id];
+  if (Img) {
+    const W = U(E.w), H = W * Img.height / Img.width;
+    Ctx.drawImage(Img, U(X), U(E.y) - H, W, H);
+    return;
+  }
+  Placeholders[E.id]?.(E, X);
+}
+const Gold = '#cdbb98', GoldDim = '#6f6452', Rim = 'rgba(255,244,225,0.8)';
+function domePh(E, X, Seed, Industry) {
+  const Cx = U(X + E.w / 2), Base = U(E.y), Rx = U(E.w / 2), Ry = U(E.h);
+  // the city or the plant inside first, the frame over it
+  for (let i = 0; i < (Industry ? 14 : 26); i++) {
+    const Hx = hash(i + Seed), Hh = hash(i * 3.3 + Seed);
+    const Bx = X + E.w * (0.1 + 0.8 * Hx);
+    const Top = Math.min(1, 1 - Math.abs(Bx - X - E.w / 2) / (E.w / 2)) ;
+    const Hgt = E.h * (0.15 + 0.55 * Hh * Top);
+    const Wd = Industry ? 6 + 10 * hash(i + 9) : 3 + 6 * hash(i + 7);
+    Ctx.fillStyle = Industry && i % 3 === 0 ? '#585148' : '#8a7f6c';
+    if (Industry && i % 3 === 0) { Ctx.beginPath(); Ctx.ellipse(U(Bx), Base - U(Wd), U(Wd), U(Wd), 0, 0, Math.PI * 2); Ctx.fill(); continue; }
+    Ctx.fillRect(U(Bx - Wd / 2), Base - U(Hgt), U(Wd), U(Hgt));
+    Ctx.beginPath(); Ctx.moveTo(U(Bx - Wd / 2), Base - U(Hgt)); Ctx.lineTo(U(Bx), Base - U(Hgt + Wd)); Ctx.lineTo(U(Bx + Wd / 2), Base - U(Hgt)); Ctx.fill();
+    Ctx.fillStyle = Rim; Ctx.fillRect(U(Bx - Wd / 2), Base - U(Hgt + 0.5), U(Wd), 2);
+    if (hash(i + 21 + Seed) > (Industry ? 0.93 : 0.8)) {
+      Ctx.fillStyle = hash(i + 4) > 0.5 ? '#ff5fb3' : '#5fe6ff';
+      Ctx.fillRect(U(Bx - 1), Base - U(Hgt * 0.6), U(2), U(1.2));
+    }
+  }
+  Ctx.strokeStyle = Gold; Ctx.lineWidth = U(Industry ? 2.4 : 1.6);
+  const Ribs = Industry ? 3 : 5;
+  for (let k = -Ribs; k <= Ribs; k++) {
+    Ctx.beginPath(); Ctx.ellipse(Cx, Base, Math.abs(k) / Ribs * Rx + 0.5, Ry, 0, Math.PI, Math.PI * 2); Ctx.stroke();
+  }
+  for (const Level of Industry ? [0.55] : [0.35, 0.7]) {
+    const Yr = Base - Ry * Level, Wr = Rx * Math.sqrt(1 - Level * Level);
+    Ctx.beginPath(); Ctx.ellipse(Cx, Yr, Wr, U(3), 0, Math.PI, Math.PI * 2); Ctx.stroke();
+  }
+  Ctx.fillStyle = GoldDim; Ctx.fillRect(Cx - Rx, Base - U(3), Rx * 2, U(3));
+}
+const Placeholders = {
+  'dome-main': (E, X) => domePh(E, X, 11, false),
+  'dome-sat': (E, X) => domePh(E, X, 47, true),
+  'monorail': (E, X) => {
+    const Rail = U(E.y - E.h + 6);
+    Ctx.fillStyle = GoldDim;
+    for (let i = 0; i < 8; i++) Ctx.fillRect(U(X + 12 + i * (E.w - 24) / 7) - U(1.5), Rail, U(3), U(E.y) - Rail);
+    Ctx.fillStyle = Gold; Ctx.fillRect(U(X), Rail - U(4), U(E.w), U(4));
+    Ctx.fillStyle = '#5fe6ff'; Ctx.fillRect(U(X), Rail - U(1.5), U(E.w), 1.5);
+  },
+  'hangar': (E, X) => {
+    Ctx.fillStyle = '#7b715f';
+    Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y), U(E.w / 2), U(E.h), 0, Math.PI, Math.PI * 2); Ctx.fill();
+    Ctx.fillStyle = '#5fe6ff'; Ctx.fillRect(U(X + E.w * 0.4), U(E.y - 6), 3, 3);
+  },
+  'landing-ring': (E, X) => {
+    Ctx.fillStyle = GoldDim;
+    for (const f of [0.2, 0.5, 0.8]) Ctx.fillRect(U(X + E.w * f), U(E.y - E.h * 0.7), U(2), U(E.h * 0.7));
+    Ctx.fillStyle = Gold; Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y - E.h * 0.75), U(E.w / 2), U(E.h * 0.25), 0, 0, Math.PI * 2); Ctx.fill();
+  },
+  'dish': (E, X) => {
+    Ctx.strokeStyle = GoldDim; Ctx.lineWidth = U(2);
+    Ctx.beginPath(); Ctx.moveTo(U(X + E.w / 2), U(E.y)); Ctx.lineTo(U(X + E.w / 2), U(E.y - E.h * 0.5)); Ctx.stroke();
+    Ctx.fillStyle = '#d8ccb4';
+    Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y - E.h * 0.62), U(E.w / 2), U(E.h * 0.38), -0.6, 0, Math.PI); Ctx.fill();
+  },
+};
+
+// ---- the cliff: rock over the wall of 13, its left end faded into it ----
+const CliffCanvas = document.createElement('canvas');
+function buildCliff() {
+  const W = Math.round(U(Cliff.w)), H = View.height;
+  CliffCanvas.width = W; CliffCanvas.height = H;
+  const C = CliffCanvas.getContext('2d');
+  const Img = Images['cliff'];
+  if (Img) C.drawImage(Img, 0, H - W * Img.height / Img.width, W, W * Img.height / Img.width);
+  else {
+    const Edge = Cliff.edgeAt - Cliff.x;
+    // steps everywhere but the shoulder at the sun's height: a slope that
+    // descends to the right, so the sun comes out top first
+    const ShoulderTop = 184, ShoulderBottom = 230, ShoulderFrom = 128, ShoulderTo = 218;
+    const Points = [];
+    for (let y = 0; y < ShoulderTop; y += 12) {
+      const X = Edge + (hash(y) - 0.5) * 34 + (y < 120 ? 18 : 0);
+      Points.push([X, y], [X, Math.min(y + 12, ShoulderTop)]);
+    }
+    Points.push([ShoulderFrom, ShoulderTop], [ShoulderTo, ShoulderBottom]);
+    for (let y = ShoulderBottom; y <= 384; y += 12) {
+      const X = Edge + (hash(y) - 0.5) * 34;
+      Points.push([X, y], [X, y + 12]);
+    }
+    C.beginPath(); C.moveTo(0, 0);
+    for (const [x, y] of Points) C.lineTo(U(x), U(y));
+    C.lineTo(0, H); C.closePath();
+    const G = C.createLinearGradient(0, 0, W, 0);
+    G.addColorStop(0, '#120e0b'); G.addColorStop(0.75, '#2c2219'); G.addColorStop(1, '#5a4430');
+    C.fillStyle = G; C.fill();
+    C.save(); C.clip();
+    C.strokeStyle = 'rgba(0,0,0,0.5)';
+    for (let y = 6; y < 384; y += 9 + hash(y) * 8) { C.beginPath(); C.moveTo(0, U(y)); C.lineTo(W, U(y + 2)); C.stroke(); }
+    const Vault = C.createLinearGradient(0, 0, 0, U(70));
+    Vault.addColorStop(0, '#000'); Vault.addColorStop(1, 'rgba(0,0,0,0)');
+    C.fillStyle = Vault; C.fillRect(0, 0, W, U(70));
+    C.restore();
+    C.strokeStyle = 'rgba(255,214,170,0.7)'; C.lineWidth = 2;
+    C.beginPath(); for (const [x, y] of Points) C.lineTo(U(x), U(y)); C.stroke();
+  }
+  // destination-in clears whatever the mask does not cover, so the mask is
+  // one rectangle over the whole width: faded at the left, solid after
+  C.globalCompositeOperation = 'destination-in';
+  const F = C.createLinearGradient(0, 0, W, 0);
+  F.addColorStop(0, 'rgba(0,0,0,0)'); F.addColorStop(Cliff.featherLeft / Cliff.w, 'rgba(0,0,0,1)'); F.addColorStop(1, 'rgba(0,0,0,1)');
+  C.fillStyle = F; C.fillRect(0, 0, W, H);
+}
+
+// ---- the play layer, as guides only ----
+function drawGuides(oRoad) {
+  const Floor = U(Layout.screen.floorLine);
+  Ctx.fillStyle = '#262830'; Ctx.fillRect(0, Floor, View.width, View.height - Floor);
+  Ctx.fillStyle = '#e2b13a';
+  const Tile = U(32);
+  for (let X = -((U(oRoad) % Tile) + Tile) % Tile; X < View.width; X += Tile) {
+    Ctx.fillRect(X + 2, Floor + 3, Tile - 4, 3);
+    Ctx.strokeStyle = '#3a3d47'; Ctx.strokeRect(X + 1, Floor + 1, Tile - 2, View.height - Floor - 2);
+  }
+  Ctx.strokeStyle = 'rgba(111,216,232,0.8)'; Ctx.lineWidth = 2; Ctx.setLineDash([8, 6]);
+  Ctx.strokeRect(U(343), U(224), U(169), U(128));
+  Ctx.strokeRect(U(80), U(320), U(16), U(32));
+  Ctx.setLineDash([]);
+  Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
+  Ctx.fillText('the Ram', U(347), U(234)); Ctx.fillText('hero', U(78), U(316));
+}
+function drawSpans(oC) {
+  Ctx.fillStyle = 'rgba(255,138,112,0.18)';
+  for (const E of LayerById.city.elements) if (E.tintsSun) Ctx.fillRect(U(E.x - oC), U(16), U(E.w), U(6));
+  Ctx.fillStyle = '#ff8a70'; Ctx.fillRect(U(Sun.x) - 1, U(12), 2, U(14));
+}
+
+// ---- the frame ----
+let Now = 0, Playing = true, Rate = 1, Last = performance.now();
+function frame(Stamp) {
+  const Dt = Math.min(0.1, (Stamp - Last) / 1000); Last = Stamp;
+  if (Playing) Now = Math.min(SimSeconds, Now + Dt * Rate);
+  const S = Track[Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)))];
+  Ctx.fillStyle = '#000'; Ctx.fillRect(0, 0, View.width, View.height);
+  const Cover = drawSun(S.oC);
+  drawRidge(S.oR);
+  drawFloor(S.oC);
+  for (const E of LayerById.city.elements) drawElement(E, S.oC);
+  drawSand(S.oT);
+  if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
+  if (Cliff.x + Cliff.w - S.oT > 0) Ctx.drawImage(CliffCanvas, U(Cliff.x - S.oT), 0);
+  if (document.getElementById('g-play').checked) drawGuides(S.oRoad);
+  if (document.getElementById('g-spans').checked) drawSpans(S.oC);
+  document.getElementById('hud').innerHTML =
+    `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>sun tint ${(Cover * 100).toFixed(0)}%`;
+  document.getElementById('scrub').value = Now;
+  document.getElementById('clock').textContent = Now.toFixed(1) + ' s';
+  requestAnimationFrame(frame);
+}
+
+// ---- controls ----
+const PlayButton = document.getElementById('play');
+function syncPlay() { PlayButton.textContent = Playing ? 'Pause' : 'Play'; PlayButton.classList.toggle('on', Playing); }
+PlayButton.onclick = () => { if (Now >= SimSeconds) Now = 0; Playing = !Playing; syncPlay(); };
+document.querySelectorAll('.rate').forEach(B => B.onclick = () => {
+  Rate = +B.dataset.rate; document.querySelectorAll('.rate').forEach(O => O.classList.toggle('on', O === B));
+});
+document.getElementById('scrub').oninput = Ev => { Now = +Ev.target.value; };
+for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunnel']) {
+  const Input = document.getElementById('p-' + Key);
+  Input.value = Sp[Key];
+  Input.onchange = () => { const V = parseFloat(Input.value); if (V > 0) { Sp[Key] = V; simulate(); } };
+}
+
+const Ids = [...Object.keys(Elements).filter(I => I !== 'screen13'), 'ridge-tex', 'floor-tex', 'sand-tex'];
+function listSlots() {
+  const Box = document.getElementById('slots'); Box.innerHTML = '';
+  for (const Id of Ids) {
+    const D = document.createElement('div'); D.className = 'slot' + (Images[Id] ? ' real' : '');
+    D.textContent = Id + (Images[Id] ? ` - ${Images[Id].width}x${Images[Id].height}` : ' - placeholder');
+    Box.appendChild(D);
+  }
+}
+function takeFiles(Files) {
+  for (const F of Files) {
+    const Id = F.name.replace(/\.(checked|seamless)?\.?png$/i, '').replace(/\.$/, '');
+    if (!Ids.includes(Id)) continue;
+    const Img = new Image();
+    Img.onload = () => { Images[Id] = Img; if (Id === 'cliff') buildCliff(); listSlots(); };
+    Img.src = URL.createObjectURL(F);
+  }
+}
+document.getElementById('files').onchange = Ev => takeFiles(Ev.target.files);
+const Stage = document.querySelector('.stage');
+Stage.addEventListener('dragover', Ev => Ev.preventDefault());
+Stage.addEventListener('drop', Ev => { Ev.preventDefault(); takeFiles(Ev.dataTransfer.files); });
+
+simulate();
+Ctx.imageSmoothingQuality = 'high';
+buildCliff();
+listSlots();
+requestAnimationFrame(frame);
+</script>
