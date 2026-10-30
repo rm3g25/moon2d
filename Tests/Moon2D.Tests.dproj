@@ -84,6 +84,7 @@
         <DCCReference Include="Game\Tests.Game.Press.pas"/>
         <DCCReference Include="Game\Tests.Game.Ram.pas"/>
         <DCCReference Include="Game\Tests.Game.Wrecks.pas"/>
+        <DCCReference Include="Game\Tests.Game.Capsules.pas"/>
         <DCCReference Include="Game\Tests.Game.Uptake.pas"/>
         <DCCReference Include="Game\Tests.Game.HeroOrbs.pas"/>
         <DCCReference Include="Hud\Tests.Hud.GoRight.pas"/>

@@ -10,8 +10,8 @@
   hero on a pad is out of its way, in the air over it too, until he comes
   down onto the floor; a fall onto it from above wounds. The shield takes
   a bullet, an absent machine nothing. And the shield over a body, and
-  the ram action of a level's events, and the Ram of level 2's boss
-  arena.
+  the ram action of a level's events with the pads of its medkits, and
+  the Ram of level 2's boss arena.
 
   The hunter: its lives follow the grade; only its eye takes a hit, and
   the last life blows the head up, the eye blinks through the change and
@@ -29,7 +29,9 @@
   shock wave runs out over the screen in about a second and is gone, a
   death takes it away; it throws the hero once, away from the hull, or
   from over it toward the side with more road; it reaches a point near
-  the blast before one far from it.
+  the blast before one far from it. Either head's lives passing into
+  their next third call the shuttle, once a third; the last life does
+  not.
 
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
@@ -118,6 +120,8 @@ type
     [Test]
     procedure TestRamIsRead;
     [Test]
+    procedure TestMedkitPadsAreRead;
+    [Test]
     procedure TestBadRamRaises;
     [Test]
     procedure TestLevelTwoArenaBringsTheRam;
@@ -168,6 +172,8 @@ type
     procedure TestADeadHeadsRowFades;
     [Test]
     procedure TestShortsOutFromHalfItsLives;
+    [Test]
+    procedure TestEachThirdCallsTheShuttle;
   end;
 
   [TestFixture]
@@ -233,6 +239,8 @@ type
     procedure TestTheWaveThrowsFromOverTheHullTowardMoreRoad;
     [Test]
     procedure TestTheWaveReachesTheNearFirst;
+    [Test]
+    procedure TestEachThirdCallsTheShuttle;
   end;
 
 implementation
@@ -719,6 +727,16 @@ begin
   Assert.AreEqual('b.ogg', Action.Ram.Track, 'Its track');
   Assert.AreEqual(2.5, Action.Ram.SilenceSeconds, 0.001,
     'The fade-out to silence');
+  Assert.AreEqual(0, Length(Action.Ram.MedkitPads), 'No medkit pads named');
+end;
+
+procedure TRamLevelTests.TestMedkitPadsAreRead;
+begin
+  var Action := RamEvents(
+    ',"stop":260,"file":"b.ogg","medkitPads":["p-1","p-2"]')[0].Actions[0];
+  Assert.AreEqual(2, Length(Action.Ram.MedkitPads), 'Two pads');
+  Assert.AreEqual('p-1', Action.Ram.MedkitPads[0], 'The first');
+  Assert.AreEqual('p-2', Action.Ram.MedkitPads[1], 'The second');
 end;
 
 procedure TRamLevelTests.TestBadRamRaises;
@@ -727,11 +745,23 @@ begin
   ExpectRamRefused(',"stop":-1,"file":"b.ogg"', 'A stop off the left edge');
   ExpectRamRefused(',"stop":512,"file":"b.ogg"', 'A stop off the right edge');
   ExpectRamRefused(',"stop":260', 'No track');
+  ExpectRamRefused(',"stop":260,"file":"b.ogg","medkitPads":"p-1"',
+    'Medkit pads not a list');
+  ExpectRamRefused(',"stop":260,"file":"b.ogg","medkitPads":[1]',
+    'A medkit pad not a tag');
+end;
+
+function ArenaHasPad(const ALevel: TLevel; const ATag: string): Boolean;
+begin
+  for var Pad in ALevel.Pads do
+    if (Pad.Screen = LevelTwoArenaScreen) and (Pad.Tag = ATag) then
+      Exit(True);
+  Result := False;
 end;
 
 // The arena of level 2 brings the Ram, its ram stopping at 260, clear of
 // the pads on the right; the Ram starts the boss track, no event of the
-// screen does
+// screen does; the hunter's medkits come down onto pads of the arena
 procedure TRamLevelTests.TestLevelTwoArenaBringsTheRam;
 begin
   var Level := TLevel.Create;
@@ -753,6 +783,10 @@ begin
           'On arrival');
         Assert.AreEqual(260.0, Action.Ram.Stop, 0.001, 'Its stop');
         Assert.AreEqual('boss3.ogg', Action.Ram.Track, 'The boss track');
+        Assert.IsTrue(Length(Action.Ram.MedkitPads) > 0, 'Medkit pads named');
+        for var Tag in Action.Ram.MedkitPads do
+          Assert.IsTrue(ArenaHasPad(Level, Tag),
+            Format('Pad "%s" stands in the arena', [Tag]));
       end;
     Assert.AreEqual(1, Rams, 'One Ram');
   finally
@@ -763,6 +797,22 @@ end;
 // ---------------------------------------------------------------------------
 // The hunter
 // ---------------------------------------------------------------------------
+
+// A third of its lives, then another: the shuttle is called once for
+// each, the tick after; the rest of them and the last call it no more
+procedure CountShuttleCalls(ARam: TRam; const ATarget: TRamTarget;
+  const AStrike: TProc<Integer>; out AFirst, ASecond, ARest: Integer);
+begin
+  var Third := ARam.FullLives div 3 + 1;
+  AStrike(Third);
+  AFirst := Ord(ARam.Tick(ATarget).Third) + Ord(ARam.Tick(ATarget).Third);
+  AStrike(Third);
+  ASecond := Ord(ARam.Tick(ATarget).Third) + Ord(ARam.Tick(ATarget).Third);
+  ARest := 0;
+  AStrike(ARam.Lives);
+  for var i := 1 to ManyTicks do
+    Inc(ARest, Ord(ARam.Tick(ATarget).Third));
+end;
 
 const
   // The middle city pad of the arena: its deck, and a hero standing on it
@@ -1122,6 +1172,17 @@ begin
   StrikeTheEye(1);
   FRam.Tick(Hero);
   Assert.AreEqual(0.0, FRam.ShortLevel, 0.001, 'Blown up: nothing to short');
+end;
+
+procedure TRamHunterTests.TestEachThirdCallsTheShuttle;
+begin
+  var Hero := HeroOnAPad(MiddleHeroX, MiddleDeckY);
+  LockWith(Hero);
+  var First, Second, Rest: Integer;
+  CountShuttleCalls(FRam, Hero, StrikeTheEye, First, Second, Rest);
+  Assert.AreEqual(1, First, 'A third gone: one call');
+  Assert.AreEqual(1, Second, 'Two thirds gone: one more');
+  Assert.AreEqual(0, Rest, 'The last third and the blast: none');
 end;
 
 // ---------------------------------------------------------------------------
@@ -1679,6 +1740,17 @@ begin
     'Clear of it');
   Assert.IsTrue(FRam.Contact(InFront, False, False, Away),
     'Back into it: a touch as ever');
+end;
+
+procedure TRamSweeperTests.TestEachThirdCallsTheShuttle;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero);
+  var First, Second, Rest: Integer;
+  CountShuttleCalls(FRam, Hero, StrikeThePack, First, Second, Rest);
+  Assert.AreEqual(1, First, 'A third gone: one call');
+  Assert.AreEqual(1, Second, 'Two thirds gone: one more');
+  Assert.AreEqual(0, Rest, 'The last third, the retreat and the blast: none');
 end;
 
 initialization

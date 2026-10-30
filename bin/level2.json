@@ -4822,7 +4822,8 @@
       "screen": 13,
       "when": "enterScreen",
       "then": [
-        {"action": "ram", "stop": 260, "file": "boss3.ogg", "fadeOut": 2.5}
+        {"action": "ram", "stop": 260, "file": "boss3.ogg", "fadeOut": 2.5,
+         "medkitPads": ["s13-pad-2", "s13-pad-3"]}
       ]
     }
   ],

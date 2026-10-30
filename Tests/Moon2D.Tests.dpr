@@ -31,6 +31,7 @@ uses
   Tests.Game.HeroOrbs in 'Game\Tests.Game.HeroOrbs.pas',
   Tests.Game.Ram in 'Game\Tests.Game.Ram.pas',
   Tests.Game.Wrecks in 'Game\Tests.Game.Wrecks.pas',
+  Tests.Game.Capsules in 'Game\Tests.Game.Capsules.pas',
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',

@@ -25,7 +25,8 @@ uses
   Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Arena, Render.Font,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
-  Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Explosions, Game.Blasts,
+  Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
+  Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -117,6 +118,10 @@ type
     // The pads the sweeper's wave knocks off, flying away in flames
     FWrecks: TPadWrecks;
     FWreckPainter: TPadWreckPainter;
+    // The shuttle's medkits on the thirds of the heads' lives
+    FCapsules: TShuttleCapsules;
+    FCapsulePainter: TCapsulePainter;
+    FRamMedkitPads: TArray<string>; // tags of the hunter's
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -292,6 +297,10 @@ type
     procedure ResolveRamContact;
     procedure ResolveRamWave;
     procedure KnockOffPads;
+    procedure CallTheShuttle;
+    function TryPickMedkitPad(out AMark: TSdlFPoint): Boolean;
+    function MedkitWallMark: TSdlFPoint;
+    procedure TickCapsules;
     function BulletStruckRam(const ABullet: TBullet): Boolean;
     function BulletStruckRamEye(const ABullet: TBullet): Boolean;
     function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
@@ -415,6 +424,9 @@ const
   // A death in the Ram's fight restarts the whole fight: the hero comes
   // back to it whole, bonus and all
   RamRestartHealth = 10;
+  // The sweeper's medkits stand on the road this far from the wall away
+  // from the Ram: the middle of a cell
+  MedkitWallGap = 16;
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
@@ -579,6 +591,8 @@ begin
   FRamPainter := TRamPainter.Create(FRamArt, FRam);
   FWrecks := TPadWrecks.Create;
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
+  FCapsules := TShuttleCapsules.Create;
+  FCapsulePainter := TCapsulePainter.Create(FCapsules);
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -613,9 +627,11 @@ begin
   // The pair before its art
   FCannons.Free;
   FCannonArt.Free;
-  // The painter before the wrecks it draws
+  // The painters before what they draw
   FWreckPainter.Free;
   FWrecks.Free;
+  FCapsulePainter.Free;
+  FCapsules.Free;
   FRamPainter.Free;
   FRam.Free;
   FRamArt.Free;
@@ -851,6 +867,7 @@ begin
   FCannons.Clear;
   FRam.Reset;
   FWrecks.Clear;
+  FCapsules.Clear;
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
@@ -1149,6 +1166,7 @@ begin
   FCannons.Clear;
   FRam.Clear;
   FWrecks.Clear;
+  FCapsules.Clear;
   StopRamRumble;
   FUptake.Settle;
   SettleSphere;
@@ -2484,6 +2502,7 @@ begin
   FCannons.Clear;
   FRam.Clear;
   FWrecks.Clear;
+  FCapsules.Clear;
   StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
@@ -2714,6 +2733,7 @@ end;
 // is no longer the one a restart brings back
 procedure TMoonGame.StartRam(const AOrders: TRamOrders);
 begin
+  FRamMedkitPads := AOrders.MedkitPads;
   if not FRam.Start(AOrders, DifficultyMonsterLives[FDifficulty]) then
     Exit;
   FCurrentMusic := '';
@@ -2772,8 +2792,11 @@ begin
   // The row of the head's lives comes up with the terminal's key
   if Cue.RowCell then
     FAudio.Play(TerminalKeySoundFile);
+  if Cue.Third then
+    CallTheShuttle;
   FWrecks.Tick;
   FWreckPainter.Tick;
+  TickCapsules;
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -2829,6 +2852,61 @@ begin
     FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
       FRam.BlastAt, FRam.WaveReach);
   end;
+end;
+
+// A head's lives have passed into their next third: the shuttle drops a
+// medkit - the hunter's onto whichever of its pads stands farther from
+// the hero, in the gun's sights; the sweeper's onto the road at the wall
+// away from the Ram, under its closed ceiling
+procedure TMoonGame.CallTheShuttle;
+begin
+  var Mark: TSdlFPoint;
+  if (FRam.Head <> rhHunter) or not TryPickMedkitPad(Mark) then
+    Mark := MedkitWallMark;
+  FCapsules.Drop(Mark.X, Mark.Y);
+end;
+
+// The middle of the deck of the hunter's pad farther from the hero; False
+// when the level names none still standing
+function TMoonGame.TryPickMedkitPad(out AMark: TSdlFPoint): Boolean;
+begin
+  Result := False;
+  var HeroX := HeroCenter.X;
+  var Farthest: Single := -1;
+  for var Tag in FRamMedkitPads do
+  begin
+    var Pad := FPads.FindTagged(Tag);
+    if (Pad = nil) or Pad.Dormant then
+      Continue;
+    var MiddleX: Single := Pad.Left + Pad.Placement.Width / 2;
+    if Abs(MiddleX - HeroX) <= Farthest then
+      Continue;
+    Farthest := Abs(MiddleX - HeroX);
+    AMark.X := MiddleX;
+    AMark.Y := Pad.Top;
+    Result := True;
+  end;
+end;
+
+function TMoonGame.MedkitWallMark: TSdlFPoint;
+begin
+  Result.X := MedkitWallGap;
+  if FRam.Left + RamWidth / 2 < ScreenWidth / 2 then
+    Result.X := ScreenWidth - MedkitWallGap;
+  Result.Y := RamFloorY;
+end;
+
+// A capsule lands with the clack of a pad; the medkit it opens on stands
+// in the field from now on, a pickup like any other
+procedure TMoonGame.TickCapsules;
+begin
+  var Cue := FCapsules.Tick;
+  FCapsulePainter.Tick;
+  if Cue.Landed then
+    FAudio.Play(PadClackSoundFile);
+  for var Mark in Cue.Opened do
+    FField.SpawnStanding(MedkitMonsterId, '', FHero.Screen,
+      Mark.X - SpriteSize / 2, Mark.Y, '', False);
 end;
 
 // The hunter's eye takes the bullet: sparks off the lens, a ping, a life
@@ -3332,6 +3410,7 @@ begin
           FSprites.Origin, AAlpha);
         FSpherePainter.DrawSphere(FDynamics.Canvas, FHero.Screen,
           FSprites.Origin, AAlpha);
+        FCapsulePainter.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
@@ -3490,6 +3569,7 @@ begin
   // The whole entrance of the Ram again at the end of the walk
   FRam.Reset;
   FWrecks.Clear;
+  FCapsules.Clear;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);

@@ -83,6 +83,9 @@
   more often the fewer lives are left. The hunter smokes too at its last
   third.
 
+  As either head's lives pass into their next third the machine tells it:
+  the shuttle pays for a third with a medkit, two a head.
+
   TRam is the rules; TRamPainter draws them with TRamArt. The game carries
   out the cue of a tick: the sounds, the shake and the boss track, and the
   wound and the throw of a touch.
@@ -194,6 +197,8 @@ type
     RowCell: Boolean;
     // The sweeper backs off to the wall: the alarm of an arena rebuild
     Alarm: Boolean;
+    // The head's lives have passed into their next third
+    Third: Boolean;
   end;
 
   TRam = class
@@ -243,6 +248,7 @@ type
     FHead: TRamHead;
     FLives, FFullLives: Integer;
     FLivesShare: Single; // the grade's
+    FThirds: Integer; // the thirds of the head's lives told so far
     FHeadKilled: Boolean; // the last life is gone; it blows up next tick
     FKilled: TRamHead; // the head the change of heads began with
     FChangePending: Boolean; // braking to stand for the change of heads
@@ -289,6 +295,7 @@ type
     FBlastAt: TSdlFPoint;
     FWave: TShockWave;
     procedure TickKill;
+    procedure TickThirds;
     procedure BeginRetreat;
     procedure TickRetreat;
     function Spent: Boolean;
@@ -1098,6 +1105,7 @@ begin
   FLivesShare := ALivesShare;
   FFullLives := Max(1, Round(HunterLives * ALivesShare));
   FLives := FFullLives;
+  FThirds := 0;
   FHeadKilled := False;
   FChangePending := False;
   FFacing := -1;
@@ -1339,6 +1347,7 @@ begin
     Dec(FClearTicks);
   FAccel := 0;
   SeeHero(ATarget);
+  TickThirds;
   TickKill;
   FWave.Tick;
   TickMode;
@@ -1376,6 +1385,16 @@ begin
   end;
   FHeroCenter := Center;
   FHeroSeen := True;
+end;
+
+// One third a tick: a volley that crosses two is told over two ticks. The
+// last life is a blast, not a third.
+procedure TRam.TickThirds;
+begin
+  if (FHead = rhNone) or FHeadKilled or (Tier <= FThirds) then
+    Exit;
+  Inc(FThirds);
+  FCue.Third := True;
 end;
 
 // The last life gone: the hunter blows up at once; the sweeper backs off
@@ -1600,6 +1619,7 @@ begin
   FArmedTicks := 0;
   FFullLives := Max(1, Round(SweeperLives * FLivesShare));
   FLives := FFullLives;
+  FThirds := 0;
   FHurtTicks := 0;
   FHitTicks := NoHitTicks;
   FGoneTicks := -1;

@@ -68,12 +68,14 @@ type
   end;
 
   // TeK-R13, the Ram, of the boss arena (Game.Ram): where its ram stops
-  // after the drive-in, the track that starts as its head locks and the
-  // seconds the track before it takes to fade out to silence
+  // after the drive-in, the track that starts as its head locks, the
+  // seconds the track before it takes to fade out to silence, and the
+  // pads the shuttle drops the hunter's medkits onto
   TRamOrders = record
     Stop: Single; // the tip of the ram, units from the left edge
     Track: string;
     SilenceSeconds: Single;
+    MedkitPads: TArray<string>; // tags
   end;
 
   // A body let in along a row of the screen: which monster, the sprite list
@@ -197,8 +199,9 @@ type
     // eaRam: TeK-R13, the Ram, comes onto the screen (Game.Ram): the whole
     // entrance the first time on the level, from its stop on after a death.
     // JSON: "stop" (units, the tip of the ram after the drive-in), "file"
-    // (the track of the fight) and "fadeOut" (the music before it fades to
-    // silence over that many seconds).
+    // (the track of the fight), "fadeOut" (the music before it fades to
+    // silence over that many seconds) and "medkitPads" (tags of the pads
+    // the hunter's medkits come down onto; none - the road).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
     // heart monitor, for a screen where the hero comes in at the top.
@@ -353,6 +356,8 @@ resourcestring
   SEventBadRamStop = 'Level "%s": event "%s": ram takes a "stop" on the ' +
     'screen, not %g';
   SEventNoRamTrack = 'Level "%s": event "%s": ram names no "file"';
+  SEventBadRamPads = 'Level "%s": event "%s": ram takes "medkitPads" as ' +
+    'a list of pad tags';
 
 const
   // What a shelf program takes for the seconds it leaves out: the turns
@@ -438,6 +443,18 @@ begin
     raise ELevelEventError.CreateFmt(SEventNoRamTrack, [ALevelId, AEventId]);
   AAction.Ram.Track := AAction.FileName;
   AAction.Ram.SilenceSeconds := AAction.FadeOutSeconds;
+  AAction.Ram.MedkitPads := [];
+  var Pads := AObj.GetValue('medkitPads');
+  if Pads = nil then
+    Exit;
+  if not (Pads is TJSONArray) then
+    raise ELevelEventError.CreateFmt(SEventBadRamPads, [ALevelId, AEventId]);
+  for var Pad in TJSONArray(Pads) do
+  begin
+    if not (Pad is TJSONString) then
+      raise ELevelEventError.CreateFmt(SEventBadRamPads, [ALevelId, AEventId]);
+    AAction.Ram.MedkitPads := AAction.Ram.MedkitPads + [Pad.Value];
+  end;
 end;
 
 procedure ReadSun(const AObj: TJSONObject; const ALevelId, AEventId: string;
