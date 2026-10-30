@@ -391,7 +391,8 @@ const
   RamRumbleSoundFile = 'ramrumble.wav';
   RamHissSoundFile = 'ramhiss.wav';
   RamWhineSoundFile = 'ramwhine.wav';
-  // The sweeper's overload bursts: a low blow and a drone sinking away
+  // The sweeper's overload bursts as the tank dies, then this low blow
+  // and a drone sinking away under it
   SweeperBlastSoundFile = 'sweeperblast.wav';
   TerminalKeySoundFile = 'terminal.wav';
   // The life sphere: its sparks spiral in; it bursts into the hero
@@ -2760,7 +2761,11 @@ begin
   begin
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
     if Cue.Shock then
-      FAudio.Play(SweeperBlastSoundFile)
+    begin
+      FAudio.Play(BottleSoundFile);
+      FAudio.Play(RageBlastSoundFile);
+      FAudio.Play(SweeperBlastSoundFile);
+    end
     else
       FAudio.Play(RageBlastSoundFile);
   end;
@@ -2822,7 +2827,7 @@ begin
       Continue;
     Pad.Doze;
     FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
-      FRam.BlastAt);
+      FRam.BlastAt, FRam.WaveReach);
   end;
 end;
 

@@ -6,11 +6,16 @@
   nor a wound - and a death rewinds the pads and takes the wrecks away.
 
   The flight and the spin are apart. The wreck flies along a heading of
-  its own: thrown off slow, a thrust that eases the heading outward and
-  a little up, the moon's pull and a drag that keep it from running
-  away - so it never comes down onto the road, wherever the Ram stood.
-  Its picture spins on its own, fast and faster: the torn-off firework
-  is in the picture, not in the path.
+  its own: kicked off hard by the blast - the harder the nearer - then
+  the drag takes the kick away and the jet's thrust holds what is left,
+  easing the heading outward and a little up, the moon's pull on it - so
+  it never comes down onto the road, wherever the Ram stood. Its picture
+  spins on its own: the torn-off firework is in the picture, not in the
+  path.
+
+  No two wrecks of a blast alike: each takes its own climb, its own spin
+  and its own way of spinning up, and one in a few spins against the
+  others.
 
   TPadWrecks is the rules, TPadWreckPainter draws them: the picture of
   the pad turned with the spin, fire and smoke out of its jet, sparks
@@ -35,13 +40,14 @@ type
     Middle, LastMiddle: TSdlFPoint;
     // Units a tick
     Speed: TSdlFPoint;
-    // Radians over the level, outward
-    Heading: Single;
+    // Radians over the level, outward; the heading eases to the climb
+    Heading, Climb: Single;
     // -1 off to the left, 1 to the right
     Side: Integer;
-    // Degrees clockwise, this tick and the last, and how fast it spins
+    // Degrees clockwise, this tick and the last, how fast it spins and
+    // how much faster every tick
     Spin, LastSpin: Single;
-    SpinRate: Single;
+    SpinRate, SpinGain: Single;
     // Off the screen: it flies no more
     Gone: Boolean;
   end;
@@ -53,9 +59,9 @@ type
     function GetWreck(AIndex: Integer): TPadWreck;
   public
     // APad's picture, AWidth by AHeight about AMiddle, thrown away from
-    // AFrom - the blast
+    // AFrom - the blast, whose wave dies AReach units off it
     procedure Launch(const APad: TPad; const AMiddle: TSdlFPoint;
-      AWidth, AHeight: Single; const AFrom: TSdlFPoint);
+      AWidth, AHeight: Single; const AFrom: TSdlFPoint; AReach: Single);
     procedure Tick;
     // A death, a new level: none in the air
     procedure Clear;
@@ -107,23 +113,38 @@ uses
   Game.Space;
 
 const
-  // Thrown off slow, at least this steep, away from the blast
-  WreckLaunchSpeed = 2.0;
+  // Kicked off this fast next to the blast, this fast where the wave dies;
+  // at least this steep, away from it
+  WreckKickNear = 7.0;
+  WreckKickFar = 3.5;
   WreckLeastLift = 40.0;
-  // The jet keeps pushing: its heading eases this much a tick toward this
-  // far over the level, outward
-  WreckThrust = 0.2;
-  WreckClimb = 30.0;
+  // The jet keeps pushing, weaker than the drag takes off a near kick: the
+  // wreck slows down, then the jet holds it. Its heading eases this much a
+  // tick toward a climb of its own, outward
+  WreckThrust = 0.15;
   WreckHeadingEase = 0.05;
+  // Steeper than 40 and the slowest wreck stays on the screen about five
+  // seconds
+  WreckClimbLeast = 20.0;
+  WreckClimbSpan = 20.0;
   // The moon's pull, as on the hero's fall, and the share of the speed
   // lost a tick
   WreckGravity = 2 / 14;
   WreckDrag = 0.03;
-  // The picture's spin: from this many degrees a tick, faster every tick,
-  // no faster than the most
-  WreckSpinStart = 18.0;
-  WreckSpinGain = 0.4;
-  WreckSpinMost = 45.0;
+  // The picture's spin, degrees a tick at a full kick; at the wave's far
+  // edge this share of it
+  WreckSpinLeast = 5.0;
+  WreckSpinSpan = 9.0;
+  WreckSpinFarShare = 0.5;
+  WreckSpinGainMost = 0.3;
+  // Past about 30 a tick the pad's picture, alike every half turn, reads
+  // as a propeller, not a tumble
+  WreckSpinMost = 24.0;
+  WreckCounterSpinShare = 0.2;
+  WreckClimbSalt = 1;
+  WreckCounterSpinSalt = 8;
+  WreckSpinSalt = 3;
+  WreckSpinGainSalt = 4;
   // Gone this far past the left, the right or the top edge; the flight
   // never reaches the road, so the bottom is not one of them
   WreckOffMargin = 60.0;
@@ -169,13 +190,21 @@ begin
   Result := AFrom + (ATo - AFrom) * AAmount;
 end;
 
+// A steady pick in [0, 1) for the wreck of this turn: the same blast throws
+// the same wrecks every time, no two alike
+function WreckVariety(ATurn, ASalt: Integer): Single;
+begin
+  Result := Frac(Abs(Sin(ATurn * 12.9898 + ASalt * 78.233) * 43758.5453));
+end;
+
 // ---------------------------------------------------------------------------
 // TPadWrecks
 // ---------------------------------------------------------------------------
 
 procedure TPadWrecks.Launch(const APad: TPad; const AMiddle: TSdlFPoint;
-  AWidth, AHeight: Single; const AFrom: TSdlFPoint);
+  AWidth, AHeight: Single; const AFrom: TSdlFPoint; AReach: Single);
 begin
+  var Turn := Length(FWrecks);
   var Wreck := Default(TPadWreck);
   Wreck.Pad := APad;
   Wreck.Width := AWidth;
@@ -188,9 +217,22 @@ begin
     Wreck.Side := -1;
   Wreck.Heading := Max(ArcTan2(AFrom.Y - AMiddle.Y, Abs(AwayX)),
     DegToRad(WreckLeastLift));
-  Wreck.Speed := UnitPoint(Wreck.Side * WreckLaunchSpeed * Cos(Wreck.Heading),
-    -WreckLaunchSpeed * Sin(Wreck.Heading));
-  Wreck.SpinRate := Wreck.Side * WreckSpinStart;
+  Wreck.Climb := DegToRad(WreckClimbLeast +
+    WreckClimbSpan * WreckVariety(Turn, WreckClimbSalt));
+
+  var Strength: Single := 0;
+  if AReach > 0 then
+    Strength := EnsureRange(1 - Hypot(AwayX, AMiddle.Y - AFrom.Y) / AReach, 0, 1);
+  var Kick := Lerp(WreckKickFar, WreckKickNear, Strength);
+  Wreck.Speed := UnitPoint(Wreck.Side * Kick * Cos(Wreck.Heading),
+    -Kick * Sin(Wreck.Heading));
+
+  var SpinSide := Wreck.Side;
+  if WreckVariety(Turn, WreckCounterSpinSalt) < WreckCounterSpinShare then
+    SpinSide := -SpinSide;
+  Wreck.SpinRate := SpinSide * Lerp(WreckSpinFarShare, 1, Strength) *
+    (WreckSpinLeast + WreckSpinSpan * WreckVariety(Turn, WreckSpinSalt));
+  Wreck.SpinGain := WreckSpinGainMost * WreckVariety(Turn, WreckSpinGainSalt);
   FWrecks := FWrecks + [Wreck];
 end;
 
@@ -207,7 +249,7 @@ begin
       Continue;
     end;
 
-    Wreck.Heading := Lerp(Wreck.Heading, DegToRad(WreckClimb), WreckHeadingEase);
+    Wreck.Heading := Lerp(Wreck.Heading, Wreck.Climb, WreckHeadingEase);
     Wreck.Speed.X := (Wreck.Speed.X + Wreck.Side * WreckThrust * Cos(Wreck.Heading)) *
       (1 - WreckDrag);
     Wreck.Speed.Y := (Wreck.Speed.Y - WreckThrust * Sin(Wreck.Heading) +
@@ -216,8 +258,8 @@ begin
     Wreck.Middle.Y := Wreck.Middle.Y + Wreck.Speed.Y;
 
     Wreck.Spin := Wreck.Spin + Wreck.SpinRate;
-    Wreck.SpinRate := Wreck.Side * Min(Abs(Wreck.SpinRate) + WreckSpinGain,
-      WreckSpinMost);
+    Wreck.SpinRate := Sign(Wreck.SpinRate) *
+      Min(Abs(Wreck.SpinRate) + Wreck.SpinGain, WreckSpinMost);
 
     Wreck.Gone := (Wreck.Middle.X < -WreckOffMargin) or
       (Wreck.Middle.X > ScreenWidth + WreckOffMargin) or

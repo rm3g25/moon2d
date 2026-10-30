@@ -3,9 +3,10 @@
   flies away from the blast and up, whichever side of it the pad stood;
   from any point over the Ram's roof the head may burst at, none of the
   five pads of the boss arena comes down onto the road, and every one is
-  off the screen within a few seconds; its picture spins faster and
-  faster while it flies, no faster than its most, the way it flies; a
-  clear takes the wrecks away.
+  off the screen within a few seconds; the nearer to the blast, the
+  harder the kick, and the kick dies down; its picture never spins
+  slower, never faster than its most, and no two wrecks of a blast spin
+  alike; a clear takes the wrecks away.
 
   The wrecks fly in no picture here: the rules need none.
 
@@ -35,7 +36,13 @@ type
     [Test]
     procedure TestNoneComesDownOntoTheRoad;
     [Test]
-    procedure TestSpinsFasterUpToItsMost;
+    procedure TestNearerKickedHarder;
+    [Test]
+    procedure TestKickDiesDown;
+    [Test]
+    procedure TestSpinsNoSlowerUpToItsMost;
+    [Test]
+    procedure TestNoTwoSpinAlike;
     [Test]
     procedure TestClearTakesThemAway;
   end;
@@ -45,7 +52,8 @@ implementation
 uses
   System.Math,
   System.SysUtils,
-  Sdl2.Core;
+  Sdl2.Core,
+  Game.Space;
 
 type
   TPadBox = record
@@ -70,8 +78,8 @@ const
   // Off the screen in five seconds at the most
   LongestFlightTicks = 165;
   WatchedTicks = 40;
-  SpinStart = 18.0;
-  SpinMost = 45.0;
+  SpinMost = 24.0;
+  KickDiesTicks = 30;
 
 function At(AX, AY: Single): TSdlFPoint;
 begin
@@ -82,6 +90,19 @@ end;
 function MiddleOf(const ABox: TPadBox): TSdlFPoint;
 begin
   Result := At(ABox.X + ABox.W / 2, ABox.Y + PadHeight / 2);
+end;
+
+// As the shock wave measures it: out to the farthest corner of the screen
+function ReachOf(const ABlast: TSdlFPoint): Single;
+begin
+  Result := Max(Max(Hypot(ABlast.X, ABlast.Y), Hypot(ScreenWidth - ABlast.X,
+    ABlast.Y)), Max(Hypot(ABlast.X, ScreenHeight - ABlast.Y),
+    Hypot(ScreenWidth - ABlast.X, ScreenHeight - ABlast.Y)));
+end;
+
+function SpeedOf(const AWreck: TPadWreck): Single;
+begin
+  Result := Hypot(AWreck.Speed.X, AWreck.Speed.Y);
 end;
 
 procedure TPadWreckTests.Setup;
@@ -97,8 +118,8 @@ end;
 procedure TPadWreckTests.TestFliesAwayFromTheBlastAndUp;
 begin
   var Blast := At(250, 180);
-  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast);
-  FWrecks.Launch(nil, At(150, 120), 32, PadHeight, Blast);
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  FWrecks.Launch(nil, At(150, 120), 32, PadHeight, Blast, ReachOf(Blast));
   for var i := 1 to WatchedTicks do
     FWrecks.Tick;
   Assert.IsTrue(FWrecks[0].Middle.X > 300, 'Right of the blast: to the right');
@@ -116,8 +137,9 @@ begin
     while BlastY <= BlastBottom do
     begin
       FWrecks.Clear;
+      var Blast := At(BlastX, BlastY);
       for var Pad in ArenaPads do
-        FWrecks.Launch(nil, MiddleOf(Pad), Pad.W, PadHeight, At(BlastX, BlastY));
+        FWrecks.Launch(nil, MiddleOf(Pad), Pad.W, PadHeight, Blast, ReachOf(Blast));
       var Ticks := 0;
       while FWrecks.Flying do
       begin
@@ -137,31 +159,62 @@ begin
   end;
 end;
 
-procedure TPadWreckTests.TestSpinsFasterUpToItsMost;
+procedure TPadWreckTests.TestNearerKickedHarder;
 begin
-  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, At(250, 180));
-  FWrecks.Launch(nil, At(150, 200), 32, PadHeight, At(250, 180));
-  FWrecks.Tick;
-  var Last := FWrecks[0].Spin - FWrecks[0].LastSpin;
-  Assert.AreEqual(SpinStart, Double(Last), 0.001, 'It starts at its start');
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(280, 190), 32, PadHeight, Blast, ReachOf(Blast));
+  FWrecks.Launch(nil, At(450, 190), 32, PadHeight, Blast, ReachOf(Blast));
+  Assert.IsTrue(SpeedOf(FWrecks[0]) > SpeedOf(FWrecks[1]), 'Near and far alike');
+end;
+
+procedure TPadWreckTests.TestKickDiesDown;
+begin
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(270, 190), 32, PadHeight, Blast, ReachOf(Blast));
+  var Kick := SpeedOf(FWrecks[0]);
+  for var i := 1 to KickDiesTicks do
+    FWrecks.Tick;
+  Assert.IsTrue(SpeedOf(FWrecks[0]) < Kick, 'The jet outruns the kick');
+end;
+
+procedure TPadWreckTests.TestSpinsNoSlowerUpToItsMost;
+begin
+  var Blast := At(250, 180);
+  for var Pad in ArenaPads do
+    FWrecks.Launch(nil, MiddleOf(Pad), Pad.W, PadHeight, Blast, ReachOf(Blast));
+  var Last: TArray<Single>;
+  SetLength(Last, FWrecks.Count);
   for var i := 1 to LongestFlightTicks do
   begin
     FWrecks.Tick;
-    if FWrecks[0].Gone then
-      Break;
-    var Turn := FWrecks[0].Spin - FWrecks[0].LastSpin;
-    Assert.IsTrue(Turn > Last - 0.001, 'Slower');
-    Assert.IsTrue(Turn <= SpinMost + 0.001, 'Too fast');
-    Last := Turn;
+    for var j := 0 to FWrecks.Count - 1 do
+    begin
+      if FWrecks[j].Gone then
+        Continue;
+      var Turn := Abs(FWrecks[j].Spin - FWrecks[j].LastSpin);
+      Assert.IsTrue(Turn > 0, Format('Wreck %d does not spin', [j + 1]));
+      Assert.IsTrue(Turn > Last[j] - 0.001, Format('Wreck %d slower', [j + 1]));
+      Assert.IsTrue(Turn <= SpinMost + 0.001, Format('Wreck %d too fast', [j + 1]));
+      Last[j] := Turn;
+    end;
   end;
-  Assert.IsTrue(Last > SpinStart, 'Faster by the time it leaves');
-  Assert.IsTrue(FWrecks[0].Spin > 0, 'Off to the right: clockwise');
-  Assert.IsTrue(FWrecks[1].Spin < 0, 'Off to the left: the other way');
+end;
+
+procedure TPadWreckTests.TestNoTwoSpinAlike;
+begin
+  var Blast := At(250, 180);
+  for var Pad in ArenaPads do
+    FWrecks.Launch(nil, MiddleOf(Pad), Pad.W, PadHeight, Blast, ReachOf(Blast));
+  for var i := 0 to FWrecks.Count - 1 do
+    for var j := i + 1 to FWrecks.Count - 1 do
+      Assert.IsTrue(Abs(Abs(FWrecks[i].SpinRate) - Abs(FWrecks[j].SpinRate)) > 0.1,
+        Format('Wrecks %d and %d spin alike', [i + 1, j + 1]));
 end;
 
 procedure TPadWreckTests.TestClearTakesThemAway;
 begin
-  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, At(250, 180));
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
   var Clears := FWrecks.Clears;
   FWrecks.Clear;
   Assert.AreEqual(0, FWrecks.Count, 'None');

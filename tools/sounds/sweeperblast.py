@@ -9,6 +9,13 @@ under it; the drone is the same two dark stacks of overtones beating
 slowly, the pitch falling to its floor as it fades. All of it under a
 low-pass: no crack, no crackle, nothing that hisses.
 
+The blow and the drone sit under 100 Hz, where laptop speakers and most
+headphones give nothing back, so the low-pass stands high enough to let
+the drone's overtones through - the ear rebuilds the low pitch from them
+- and a dull body of noise in the low mids carries the blow: a whump,
+still no crack. A soft clip over the whole lifts it to the loudness of
+the hunter's blast, its new overtones under the same low-pass.
+
   python sweeperblast.py [path/to/bin/sounds]
 
 Needs numpy, scipy and armor.py beside it.
@@ -34,6 +41,11 @@ ThumpLevel = 1.0
 NoiseCutoff = 160.0 # Hz: a floor of noise, not a crack
 NoiseDecay = 0.25
 NoiseLevel = 0.6
+# The body of the blow, heard where the thump is not
+BodyLow = 90.0 # Hz
+BodyHigh = 450.0
+BodyDecay = 0.2
+BodyLevel = 1.5
 
 # The drone: it starts where the stone's settles and sinks an octave
 DroneFrom = 44.0 # Hz
@@ -43,8 +55,9 @@ Beat = 0.6 # Hz between the two stacks
 Overtones = 12 # of each stack, the n-th at 1/n^1.5 of its level
 OvertoneFall = 1.5
 Drive = 1.4 # into the soft clip
-ToneCutoff = 240.0 # Hz: the low-pass over everything
+ToneCutoff = 700.0 # Hz: the low-pass over everything
 DroneLevel = 0.7
+BlastDrive = 3.0 # into the soft clip over the whole blast
 
 # The drone's level, in seconds: (time, level) knots joined by straight
 # lines - in under the blow, held a moment, gone as the screen clears
@@ -60,6 +73,10 @@ def low_pass(sound, cutoff):
     return sosfilt(butter(4, cutoff, fs=SampleRate, output='sos'), sound)
 
 
+def band_pass(sound, low, high):
+    return sosfilt(butter(2, [low, high], btype='bandpass', fs=SampleRate, output='sos'), sound)
+
+
 def sinking(time, start, floor, rate):
     return floor + (start - floor) * np.exp(-time / rate)
 
@@ -70,7 +87,9 @@ def thump(time, random):
     tone = np.sin(phase) * np.exp(-time / ThumpDecay)
     noise = low_pass(random.standard_normal(time.size), NoiseCutoff)
     noise = noise / np.abs(noise).max() * np.exp(-time / NoiseDecay)
-    return ThumpLevel * tone + NoiseLevel * noise
+    body = band_pass(random.standard_normal(time.size), BodyLow, BodyHigh)
+    body = body / np.abs(body).max() * np.exp(-time / BodyDecay)
+    return ThumpLevel * tone + NoiseLevel * noise + BodyLevel * body
 
 
 def drone(time):
@@ -91,6 +110,7 @@ def blast():
     random = np.random.default_rng(BlastSeed)
     time = np.arange(int(BlastSeconds * SampleRate)) / SampleRate
     sound = thump(time, random) + DroneLevel * drone(time)
+    sound = np.tanh(BlastDrive * sound / np.abs(sound).max())
     return low_pass(sound, ToneCutoff)
 
 
