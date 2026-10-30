@@ -89,6 +89,11 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <span style="color: var(--dim); font-size: 12px">units a second</span>
   </div>
 
+  <div class="bar" id="shades">
+    <span style="color: var(--dim); font-size: 12px">shade, 1 = as generated</span>
+  </div>
+  <div class="bar"><output id="shade-line" style="font: 12px var(--mono); color: var(--dim)"></output></div>
+
   <div class="cols">
     <section>
       <h2>Timeline</h2>
@@ -304,7 +309,10 @@ function drawElement(E, Offset) {
   const Img = Images[E.id];
   if (Img) {
     const W = U(E.w), H = W * Img.height / Img.width;
+    // brightness() scales the colour linearly, as SDL_SetTextureColorMod will in the game
+    Ctx.filter = `brightness(${shadeOf(E)})`;
     Ctx.drawImage(Img, U(X), U(E.y) - H, W, H);
+    Ctx.filter = 'none';
     return;
   }
   Placeholders[E.id]?.(E, X);
@@ -474,6 +482,23 @@ for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunne
   Input.value = Sp[Key];
   Input.onchange = () => { const V = parseFloat(Input.value); if (V > 0) { Sp[Key] = V; simulate(); } };
 }
+
+function shadeOf(AElement) { return AElement.shade ?? 1; }
+function showShades() {
+  document.getElementById('shade-line').textContent = LayerById.city.elements
+    .filter(E => shadeOf(E) !== 1).map(E => `${E.id} "shade": ${shadeOf(E)}`).join(',  ') || 'no shade set';
+}
+for (const E of LayerById.city.elements) {
+  const Label = document.createElement('label');
+  Label.textContent = E.id + ' ';
+  const Input = document.createElement('input');
+  Input.type = 'number'; Input.step = '0.05'; Input.min = '0'; Input.max = '1';
+  Input.value = shadeOf(E);
+  Input.oninput = () => { const V = parseFloat(Input.value); if (V >= 0 && V <= 1) { E.shade = V; showShades(); } };
+  Label.appendChild(Input);
+  document.getElementById('shades').appendChild(Label);
+}
+showShades();
 
 const Ids = [...Object.keys(Elements).filter(I => I !== 'screen13'), 'ridge-tex', 'floor-tex', 'sand-tex'];
 function listSlots() {

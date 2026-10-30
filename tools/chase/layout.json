@@ -14,8 +14,8 @@
       "band": { "texture": "floor-tex", "fadeTop": 16, "top": 238, "bottom": 320, "seamless": true },
       "elements": [
         { "id": "monorail", "x": 920, "y": 262, "w": 440, "h": 44 },
-        { "id": "dome-main", "x": 468, "y": 266, "w": 512, "h": 170, "tintsSun": true },
-        { "id": "dome-sat", "x": 1300, "y": 262, "w": 320, "h": 93, "tintsSun": true },
+        { "id": "dome-main", "x": 468, "y": 266, "w": 512, "h": 170, "tintsSun": true, "shade": 0.7 },
+        { "id": "dome-sat", "x": 1300, "y": 262, "w": 320, "h": 93, "tintsSun": true, "shade": 0.7 },
         { "id": "hangar", "x": 1700, "y": 258, "w": 96, "h": 15 },
         { "id": "landing-ring", "x": 1880, "y": 256, "w": 90, "h": 13 },
         { "id": "dish", "x": 2060, "y": 254, "w": 50, "h": 52 }

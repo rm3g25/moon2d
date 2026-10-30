@@ -129,6 +129,14 @@ and behind, as in the reference.
 No haze, fog, god rays or bloom in any element: vacuum. The glow is the
 code's sun.
 
+**The shade.** The generations come out brighter than the night around
+them, the domes most of all. An element's `shade` in the layout (0 to 1, 1
+when absent) scales its colour as drawn - in the game
+`SDL_SetTextureColorMod` with 255 times it, on the stand `brightness()` - so
+the pictures stay as generated and the level is set on the stand by eye. It
+dims the neon with the rest; the flickering sign is an additive spot of its
+own over it.
+
 ## The order of work
 
 1. The cliff - it joins screen 13 and sets the tone. **In the set.**
