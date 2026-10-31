@@ -65,7 +65,7 @@ of them, and its stop stands them.
 | city | crater floor band (`floor-tex`, y 238-320, its top faded over 16 units, its foot under the hills), the domes, the rail, the outskirts | 0.5 of the tunnel while the cliff is in sight, then 3 |
 | tunnel | screen 13 and its far ledge, the cliff | 6 |
 | ground | the near hills (`sand-tex`, seamless, y 276 down), in front of the tunnel | 14 |
-| fangs | behind the play layer | 20 |
+| fangs | spurs of basalt at random, behind the play layer, from the start (`Game.Fangs`, arena-3.md "Stage 11b-2 as built") | 20 |
 | road | the floor tile | 33 |
 
 - **Depth sets the speed.** The far wall carries tiny convoys - far off, as
