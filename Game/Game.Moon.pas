@@ -500,6 +500,7 @@ const
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
+  ScancodeI = 12; // a point of health, up to the cure's cap
   ScancodeJ = 13; // the henshin at once: no boss, no countdown
   ScancodeK = 14; // the suit shed at once: the ring of orbs, suit or none
   ScancodeL = 15; // the burst at once on the hero: no rite, no suit
@@ -3795,6 +3796,9 @@ begin
       CastAura;
     ScancodeH:
       FOrbs.PourRain;
+    ScancodeI:
+      // A long fight replayed from its start costs lives to tune against
+      CureHero;
     ScancodeJ:
       // The boss gives the ceremony once a fight, at two thirds of his
       // lives - too far to tune against
