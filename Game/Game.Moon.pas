@@ -27,7 +27,7 @@ uses
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
-  Game.StoneTank, Game.Belt, Game.FarPlane, Render.FarPlane,
+  Game.StoneTank, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
@@ -75,6 +75,9 @@ type
     // painter that draws them in place of the screen's backdrop
     FFarPlane: TFarPlane;
     FFarPlanePainter: TFarPlanePainter;
+    // The fangs riding by between the far plane and the play layer
+    FFangs: TFangRow;
+    FFangPainter: TFangPainter;
     FDynamics: TDynamicScreenRenderer;
     FPads: TPadWorld;
     // The pads of a chase, sent in from beyond the right edge as the road
@@ -350,6 +353,7 @@ type
     procedure DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
     procedure DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
     procedure DrawBackdrop(AAlpha: Single);
+    procedure DrawFangs(AAlpha: Single);
     function SkyOrigin(AAlpha: Single): TSdlFPoint;
     function HazeBackdrop(AScreen: Integer): TBackdropView;
     procedure LoadLevel(const AFileName: string);
@@ -682,6 +686,8 @@ begin
   FMonsterBullets.Free;
   FHero.Free;
   FDynamics.Free;
+  FFangPainter.Free;
+  FFangs.Free;
   FFarPlanePainter.Free;
   FFarPlane.Free;
   FObjects.Free;
@@ -716,6 +722,8 @@ begin
   FField.Free;
   FHero.Free;
   FDynamics.Free;
+  FFangPainter.Free;
+  FFangs.Free;
   FFarPlanePainter.Free;
   FFarPlane.Free;
   FObjects.Free;
@@ -729,6 +737,8 @@ begin
   FField := nil;
   FHero := nil;
   FDynamics := nil;
+  FFangPainter := nil;
+  FFangs := nil;
   FFarPlanePainter := nil;
   FFarPlane := nil;
   FObjects := nil;
@@ -782,6 +792,8 @@ begin
   FFarPlane := TFarPlane.Create(FLevel.FarPlane);
   FFarPlanePainter := TFarPlanePainter.Create(FRenderer, FObjectCache,
     FLevel.FarPlane);
+  FFangs := TFangRow.Create(FLevel.FarPlane, RollDiceSeed);
+  FFangPainter := TFangPainter.Create(FRenderer, FObjectCache, FFangs);
   // Before the dynamics: their parents may be pads
   FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel, JumpReach,
     RollDiceSeed);
@@ -908,6 +920,7 @@ begin
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
+  FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
@@ -1211,6 +1224,7 @@ begin
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
+  FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FUptake.Settle;
@@ -2551,6 +2565,7 @@ begin
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
+  FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.Rewind;
@@ -3302,6 +3317,7 @@ begin
     FBelt.Tick;
     BeltWay := -FBelt.Speed;
     FFarPlane.Tick(FBelt.Speed / BeltCruise);
+    FFangs.Tick(FFarPlane.Offsets[fmFangs]);
   end;
 
   // The pads go first: their riders move with them, then by themselves.
@@ -3471,6 +3487,7 @@ begin
         FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
           dlBackdrop);
         FDynamics.Draw(FHero.Screen, SkyOrigin(AAlpha), AAlpha, dlSky);
+        DrawFangs(AAlpha);
         FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha, dlAloft);
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
@@ -3558,6 +3575,14 @@ begin
     FFarPlanePainter.Draw(FFarPlane.OffsetsAt(AAlpha), FTiles.Backdrop(FHero.Screen))
   else
     FTiles.DrawBackground(FHero.Screen);
+end;
+
+// In front of the far ledge, behind the shuttle and the play layer; they
+// stand while the world shakes, as the far plane does
+procedure TMoonGame.DrawFangs(AAlpha: Single);
+begin
+  if FHero.Screen = FLevel.FarPlane.Screen then
+    FFangPainter.Draw(FFarPlane.OffsetsAt(AAlpha));
 end;
 
 // The far ledge stands on the backdrop, so on the screen of a chase it
@@ -3690,6 +3715,7 @@ begin
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
+  FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);

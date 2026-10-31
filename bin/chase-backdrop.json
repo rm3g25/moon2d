@@ -8,6 +8,18 @@
     "cityShareInTunnel": 0.5, "cityCruise": 3, "cityBrakeZone": 512, "cityLeast": 0.3,
     "ridgeShareOfCity": 0.35, "ground": 14, "fangs": 20
   },
+  "fangs": {
+    "about": "Spurs of basalt riding by behind the play layer, rising from below the bottom edge. w and h - a picture's size in units at the scale of 1. A low one's top stands where the near ground hides the city's feet; a tall one (only the kinds marked tall) over the city, never two on the screen. The game only, the stand does not play them.",
+    "kit": [
+      { "sprite": "level2-objects:s11-fang-needle", "w": 46, "h": 248, "tall": true },
+      { "sprite": "level2-objects:s11-fang-crown", "w": 230, "h": 128 },
+      { "sprite": "level2-objects:s11-fang-double", "w": 107, "h": 230, "tall": true },
+      { "sprite": "level2-objects:s11-fang-leaning", "w": 97, "h": 240, "tall": true }
+    ],
+    "scale": [0.5, 0.8], "gap": [60, 240],
+    "lowTop": [250, 310], "tallTop": [140, 200], "tallShare": 0.25,
+    "tintInTunnel": [35, 33, 37], "tint": [55, 52, 56], "tintJitter": 4
+  },
   "layers": [
     { "id": "ridge", "speed": "ridge", "band": { "texture": "ridge-tex", "top": 202, "bottom": 262, "seamless": true } },
     { "id": "city", "speed": "city", "length": 2688,

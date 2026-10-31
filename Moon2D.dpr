@@ -83,6 +83,7 @@ uses
   Game.StoneTank in 'Game\Game.StoneTank.pas',
   Game.Belt in 'Game\Game.Belt.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
+  Game.Fangs in 'Game\Game.Fangs.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',

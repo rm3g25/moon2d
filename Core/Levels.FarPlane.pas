@@ -19,6 +19,15 @@
   own backdrop, riding with its layer. The keys only the stand reads (the
   road's speed and ramp, the cliff's edge marks) are let be.
 
+  The fangs are no layer: separate pictures of basalt rising from below
+  the bottom edge, riding by on a motion of their own between the near
+  ground and the road, behind the play layer. The "fangs" section gives
+  their kit and the numbers of their scatter - scale, the road between
+  two, where the top of a low one and of a tall one stands, how many are
+  tall, their tint in the tunnel and outside; the speed is the "fangs" of
+  the speeds. Where each one stands is Game.Fangs' business. A layout
+  without the section has no fangs.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.FarPlane;
@@ -27,12 +36,12 @@ unit Levels.FarPlane;
 interface
 
 uses
-  System.SysUtils, System.JSON, Render.Brush;
+  System.SysUtils, System.JSON, Render.Brush, Levels.Tint;
 
 type
   EFarPlaneError = class(Exception);
 
-  TFarPlaneMotion = (fmRidge, fmCity, fmTunnel, fmGround);
+  TFarPlaneMotion = (fmRidge, fmCity, fmTunnel, fmGround, fmFangs);
 
   // How far each motion has taken its layers to the left, in units
   TFarPlaneOffsets = array [TFarPlaneMotion] of Double;
@@ -57,6 +66,7 @@ type
     CityLeast: Single;
     RidgeShareOfCity: Single;
     Ground: Single;
+    Fangs: Single;
   end;
 
   TFarPlaneBand = record
@@ -97,6 +107,30 @@ type
     Elements: TArray<TFarPlaneElement>;
   end;
 
+  // A picture of the fangs' kit: its size in units at the scale of 1
+  TFangKind = record
+    Sprite: string;
+    W, H: Single;
+    // May stand as a tall one, its top over the city
+    Tall: Boolean;
+  end;
+
+  TFarPlaneFangs = record
+    Kinds: TArray<TFangKind>;
+    ScaleLeast, ScaleMost: Single;
+    // The road between two fangs along their layer, edge to edge
+    GapLeast, GapMost: Single;
+    // Where the top of a low one and of a tall one may stand, y down
+    LowTopHighest, LowTopLowest: Single;
+    TallTopHighest, TallTopLowest: Single;
+    // 0..1, of the fangs the dice make tall
+    TallShare: Single;
+    TintInTunnel, Tint: TColorTint;
+    // How far a fang's tint may stray from the common one, percent
+    TintJitter: Integer;
+    function Present: Boolean;
+  end;
+
   TFarPlaneDef = record
     // 1-based; 0 - the level has no far plane
     Screen: Integer;
@@ -106,6 +140,7 @@ type
     Speeds: TFarPlaneSpeeds;
     // Back to front
     Layers: TArray<TFarPlaneLayer>;
+    Fangs: TFarPlaneFangs;
     function Present: Boolean;
     // The length of the city's layer: where the strip ends
     function CityLength: Single;
@@ -121,12 +156,16 @@ type
       const AOffsets: TFarPlaneOffsets): Single;
     // The sprite of the set a picture is drawn from
     function SpriteName(const AId: string): string;
+    // A fang's tint where the offsets have taken it: as dark as in the
+    // tunnel while the tunnel is all on the screen, the common one once it
+    // has left; AJitter percent off it
+    function FangTint(AJitter: Integer; const AOffsets: TFarPlaneOffsets): TColorTint;
   end;
 
 // The "farPlane" section of a level and its layout; absent = no far plane.
 // ALevelDir - where the layout lies. A layout that is missing or does not
-// read, a layer of an unknown speed, an element without width and a city
-// without length raise.
+// read, a layer of an unknown speed, an element without width, a city
+// without length and fangs that cannot be scattered raise.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -143,6 +182,10 @@ resourcestring
   SFarPlaneBadElement = 'Level "%s": far plane element "%s" is %g units wide';
   SFarPlaneNoCity = 'Level "%s": its far plane has no city layer with a length';
   SFarPlaneBadColor = 'Level "%s": far plane sun colour "%s" is not three bytes';
+  SFarPlaneNoFangs = 'Level "%s": the fangs of its far plane have an empty kit';
+  SFarPlaneBadFang = 'Level "%s": fang "%s" is %g by %g units';
+  SFarPlaneBadRange = 'Level "%s": fangs "%s" takes two numbers, the least first';
+  SFarPlaneBadScale = 'Level "%s": fangs "scale" must be above zero';
 
 const
   FullShade = 1.0;
@@ -212,6 +255,27 @@ begin
   Result := SetName + ':' + AId;
 end;
 
+function TFarPlaneDef.FangTint(AJitter: Integer;
+  const AOffsets: TFarPlaneOffsets): TColorTint;
+
+  function Channel(AInTunnel, AOutside: Byte; APassed: Single): Byte;
+  begin
+    var Level: Integer := Round(AInTunnel + (AOutside - AInTunnel) * APassed) + AJitter;
+    Result := EnsureRange(Level, 0, 100);
+  end;
+
+begin
+  var Passed := TunnelPassed(AOffsets);
+  Result.R := Channel(Fangs.TintInTunnel.R, Fangs.Tint.R, Passed);
+  Result.G := Channel(Fangs.TintInTunnel.G, Fangs.Tint.G, Passed);
+  Result.B := Channel(Fangs.TintInTunnel.B, Fangs.Tint.B, Passed);
+end;
+
+function TFarPlaneFangs.Present: Boolean;
+begin
+  Result := Length(Kinds) > 0;
+end;
+
 function ParseMotion(const AWord, ALevelId, ALayerId: string): TFarPlaneMotion;
 begin
   if AWord = 'ridge' then
@@ -259,6 +323,7 @@ begin
   Result.CityLeast := AObj.GetValue<Double>('cityLeast');
   Result.RidgeShareOfCity := AObj.GetValue<Double>('ridgeShareOfCity');
   Result.Ground := AObj.GetValue<Double>('ground', 0);
+  Result.Fangs := AObj.GetValue<Double>('fangs', 0);
 end;
 
 function ReadBand(const ALayer: TJSONObject): TFarPlaneBand;
@@ -310,6 +375,57 @@ begin
       Result.Elements := Result.Elements + [ReadElement(Item as TJSONObject, ALevelId)];
 end;
 
+procedure ReadRange(const AObj: TJSONObject; const AKey, ALevelId: string;
+  out ALeast, AMost: Single);
+var
+  Pair: TJSONArray;
+begin
+  if not AObj.TryGetValue<TJSONArray>(AKey, Pair) or (Pair.Count <> 2) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadRange, [ALevelId, AKey]);
+  ALeast := Pair.Items[0].GetValue<Double>;
+  AMost := Pair.Items[1].GetValue<Double>;
+  if ALeast > AMost then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadRange, [ALevelId, AKey]);
+end;
+
+function ReadFangKind(const AObj: TJSONObject; const ALevelId: string): TFangKind;
+begin
+  Result.Sprite := AObj.GetValue<string>('sprite');
+  Result.W := AObj.GetValue<Double>('w', 0);
+  Result.H := AObj.GetValue<Double>('h', 0);
+  Result.Tall := AObj.GetValue<Boolean>('tall', False);
+  if (Result.W <= 0) or (Result.H <= 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadFang,
+      [ALevelId, Result.Sprite, Result.W, Result.H]);
+end;
+
+function ReadFangs(const ARoot: TJSONObject; const ALevelId: string): TFarPlaneFangs;
+var
+  Obj: TJSONObject;
+  Kit: TJSONArray;
+begin
+  Result := Default(TFarPlaneFangs);
+  if not ARoot.TryGetValue<TJSONObject>('fangs', Obj) then
+    Exit;
+  if Obj.TryGetValue<TJSONArray>('kit', Kit) then
+    for var Item in Kit do
+      Result.Kinds := Result.Kinds + [ReadFangKind(Item as TJSONObject, ALevelId)];
+  if not Result.Present then
+    raise EFarPlaneError.CreateFmt(SFarPlaneNoFangs, [ALevelId]);
+  ReadRange(Obj, 'scale', ALevelId, Result.ScaleLeast, Result.ScaleMost);
+  if Result.ScaleLeast <= 0 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadScale, [ALevelId]);
+  ReadRange(Obj, 'gap', ALevelId, Result.GapLeast, Result.GapMost);
+  if Result.GapLeast < 0 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadRange, [ALevelId, 'gap']);
+  ReadRange(Obj, 'lowTop', ALevelId, Result.LowTopHighest, Result.LowTopLowest);
+  ReadRange(Obj, 'tallTop', ALevelId, Result.TallTopHighest, Result.TallTopLowest);
+  Result.TallShare := EnsureRange(Obj.GetValue<Double>('tallShare', 0), 0.0, 1.0);
+  Result.TintInTunnel := ReadTint(Obj, 'fangs', 'tintInTunnel');
+  Result.Tint := ReadTint(Obj, 'fangs');
+  Result.TintJitter := Obj.GetValue<Integer>('tintJitter', 0);
+end;
+
 function ReadLayout(const AFileName, ALevelId: string): TFarPlaneDef;
 begin
   Result := Default(TFarPlaneDef);
@@ -327,6 +443,7 @@ begin
     Result.Speeds := ReadSpeeds(Root.GetValue<TJSONObject>('speeds'));
     for var Item in Root.GetValue<TJSONArray>('layers') do
       Result.Layers := Result.Layers + [ReadLayer(Item as TJSONObject, ALevelId)];
+    Result.Fangs := ReadFangs(Root, ALevelId);
   finally
     Root.Free;
   end;

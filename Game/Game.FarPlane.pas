@@ -8,9 +8,10 @@
   element is past the left edge both ease to their cruise. The city brakes
   within the last stretch of its strip in proportion to what is left, to a
   floor, so its end never comes into sight; the ridge runs at a share of
-  the city. The near ground runs at its own speed, no end to it. All of it
-  runs at the belt's share of its cruise - the road's ramp starts the far
-  plane and its stop stands it, brake floor included.
+  the city. The near ground and the fangs run at speeds of their own, no
+  end to them. All of it runs at the belt's share of its cruise - the
+  road's ramp starts the far plane and its stop stands it, brake floor
+  included.
   The rules are those of the stand (tools/chase), tick for tick.
 
   It does not know the belt, the hero or SDL: the game hands in the belt's
@@ -140,6 +141,8 @@ begin
     FCitySpeed * FDef.Speeds.RidgeShareOfCity / FarPlaneTicksPerSecond;
   FOffsets[fmGround] := FOffsets[fmGround] +
     FDef.Speeds.Ground * ABeltShare / FarPlaneTicksPerSecond;
+  FOffsets[fmFangs] := FOffsets[fmFangs] +
+    FDef.Speeds.Fangs * ABeltShare / FarPlaneTicksPerSecond;
 end;
 
 function TFarPlane.OffsetsAt(AAlpha: Single): TFarPlaneOffsets;
