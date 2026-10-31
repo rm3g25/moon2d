@@ -78,6 +78,7 @@ uses
   Game.Wrecks in 'Game\Game.Wrecks.pas',
   Game.Capsules in 'Game\Game.Capsules.pas',
   Game.StoneTank in 'Game\Game.StoneTank.pas',
+  Game.Belt in 'Game\Game.Belt.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',
   Game.Blasts in 'Game\Game.Blasts.pas',
   Game.Impacts in 'Game\Game.Impacts.pas',

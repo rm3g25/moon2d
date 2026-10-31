@@ -26,7 +26,7 @@ uses
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
-  Game.StoneTank,
+  Game.StoneTank, Game.Belt,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
@@ -125,6 +125,8 @@ type
     FRamMedkitPads: TArray<string>; // tags of the hunter's
     // Between the heads' wounds and the gauge of the form's charge
     FStoneTank: TStoneTank;
+    // The road of the chase, sliding under the Ram
+    FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -296,6 +298,7 @@ type
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
     procedure StartRam(const AOrders: TRamOrders);
     procedure TickRam;
+    procedure TickBelt;
     procedure StopRamRumble;
     procedure ResolveRamContact;
     procedure ResolveRamWave;
@@ -598,6 +601,7 @@ begin
   FCapsules := TShuttleCapsules.Create;
   FCapsulePainter := TCapsulePainter.Create(FCapsules);
   FStoneTank := TStoneTank.Create(StoneTankSeed);
+  FBelt := TBelt.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -638,6 +642,7 @@ begin
   FCapsulePainter.Free;
   FCapsules.Free;
   FStoneTank.Free;
+  FBelt.Free;
   FRamPainter.Free;
   FRam.Free;
   FRamArt.Free;
@@ -875,6 +880,7 @@ begin
   FWrecks.Clear;
   FCapsules.Clear;
   FStoneTank.Clear;
+  FBelt.Clear;
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
@@ -1175,6 +1181,7 @@ begin
   FWrecks.Clear;
   FCapsules.Clear;
   FStoneTank.Clear;
+  FBelt.Clear;
   StopRamRumble;
   FUptake.Settle;
   SettleSphere;
@@ -2512,6 +2519,7 @@ begin
   FWrecks.Clear;
   FCapsules.Clear;
   FStoneTank.Clear;
+  FBelt.Clear;
   StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
@@ -2760,7 +2768,9 @@ begin
   Target.Body := HeroBody(FHero);
   Target.OnDeck := not FHero.InAir and (FHero.DeckUnderFeet <> nil);
   var Cue := FRam.Tick(Target);
-  FRamPainter.Tick;
+  FRamPainter.Tick(FBelt.Speed);
+  if Cue.Chase then
+    FBelt.Start;
   if Cue.Rumble then
   begin
     StopRamRumble;
@@ -2811,6 +2821,19 @@ begin
   FWreckPainter.Tick;
   TickCapsules;
   FOrbs.Charge(FStoneTank.Tick(FOrbs.Energy));
+end;
+
+// The chase: the road slides left under the Ram, and the world on it -
+// the hero, in the air too, and the loot - rides along
+procedure TMoonGame.TickBelt;
+begin
+  FBelt.Tick;
+  if FBelt.Speed = 0 then
+    Exit;
+  var Way := -FBelt.Speed;
+  if not FHero.Dead then
+    FHero.RideBelt(Way);
+  FField.CarryLoot(FHero.Screen, Way);
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -3300,6 +3323,7 @@ begin
   if not WorldStands then
   begin
     TickCannons;
+    TickBelt;
     TickRam;
   end;
   ResolveCannonContact;
@@ -3403,7 +3427,7 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
-        FObjects.Draw(FHero.Screen);
+        FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha));
         // On the road, behind the pads: it drives behind them
         FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawBody(FSprites, AAlpha);
@@ -3587,6 +3611,7 @@ begin
   FWrecks.Clear;
   FCapsules.Clear;
   FStoneTank.Clear;
+  FBelt.Clear;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);

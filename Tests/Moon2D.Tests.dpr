@@ -33,6 +33,7 @@ uses
   Tests.Game.Wrecks in 'Game\Tests.Game.Wrecks.pas',
   Tests.Game.Capsules in 'Game\Tests.Game.Capsules.pas',
   Tests.Game.StoneTank in 'Game\Tests.Game.StoneTank.pas',
+  Tests.Game.Belt in 'Game\Tests.Game.Belt.pas',
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',

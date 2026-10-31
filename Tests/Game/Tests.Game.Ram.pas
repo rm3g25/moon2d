@@ -31,7 +31,8 @@
   from over it toward the side with more road; it reaches a point near
   the blast before one far from it. Either head's lives passing into
   their next third call the shuttle, once a third; the last life does
-  not.
+  not. After the sweeper, not the hunter, the machine drives off into the
+  chase, once, standing at the wall.
 
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
@@ -241,6 +242,8 @@ type
     procedure TestTheWaveReachesTheNearFirst;
     [Test]
     procedure TestEachThirdCallsTheShuttle;
+    [Test]
+    procedure TestDrivesOffIntoTheChaseOnce;
   end;
 
 implementation
@@ -955,6 +958,7 @@ begin
     Cue := FRam.Tick(Hero);
     Brightest := Max(Brightest, FRam.Eye);
     Assert.IsFalse(Cue.Shot, 'Nothing fires through the change');
+    Assert.IsFalse(Cue.Chase, 'No chase after the hunter');
     if Cue.Whine then
     begin
       Rose := True;
@@ -1751,6 +1755,36 @@ begin
   Assert.AreEqual(1, First, 'A third gone: one call');
   Assert.AreEqual(1, Second, 'Two thirds gone: one more');
   Assert.AreEqual(0, Rest, 'The last third, the retreat and the blast: none');
+end;
+
+// After the blast: the mast sinks, the time the third head would take to
+// rise and light its row, a breath - about three and a half seconds - and
+// it drives off, once, to the roar of its engine, standing at the wall
+procedure TRamSweeperTests.TestDrivesOffIntoTheChaseOnce;
+const
+  LivesShare = 0.02;
+begin
+  var Hero := HeroOnAPad(LeftHeroX, LeftDeckY);
+  ArmTheSweeper(Hero, LivesShare);
+  StrikeThePack(FRam.Lives);
+  Assert.IsTrue(BlastWithin(Hero, EndLimit) > 0, 'The head blows up');
+  var Chases := 0;
+  var ChaseTick := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Chase then
+      Continue;
+    Inc(Chases);
+    ChaseTick := i;
+    Assert.IsTrue(Cue.Rumble, 'The engine roars as it drives off');
+    Assert.IsTrue(FRam.Mast < 0, 'The empty mast is down');
+    Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+      'At the right wall');
+  end;
+  Assert.AreEqual(1, Chases, 'Drives off once');
+  Assert.IsTrue(ChaseTick > 3 * TicksPerSecond, 'Not before three seconds');
+  Assert.IsTrue(ChaseTick < 4 * TicksPerSecond, 'Within four');
 end;
 
 initialization

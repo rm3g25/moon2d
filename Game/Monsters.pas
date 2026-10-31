@@ -291,6 +291,10 @@ type
     // Gone from the world: dead, never drawn, never ticked, and no death
     // to tell
     procedure Vanish;
+    // The road of a chase has slid AWay under it, below 0 to the left: it
+    // goes with it, unless a deck carries it - the road has no walls - and
+    // once wholly past the left edge it is gone from the world
+    procedure RideBelt(AWay: Double);
     // The deck under its feet; nil when it stands on none
     function DeckUnderFeet: TPad;
     // The side the body walks off to when it lands, as the dice pick
@@ -416,6 +420,9 @@ type
       AScreen: Integer): TMonster;
     // Every body that came in along a lane flies off the top
     procedure DepartGuests(AScreen: Integer);
+    // The road of a chase has slid AWay under the screen: the loot on it
+    // rides along
+    procedure CarryLoot(AScreen: Integer; AWay: Double);
     // The live bodies of one kind on the screen
     function CountAliveOf(const AMonsterId: string; AScreen: Integer): Integer;
     // The live bodies on the screen that came in along a lane
@@ -1898,6 +1905,15 @@ begin
   FGone := True;
 end;
 
+procedure TMonster.RideBelt(AWay: Double);
+begin
+  if DeckUnderFeet <> nil then
+    Exit;
+  FX := FX + AWay;
+  if FX + SpriteSize <= 0 then
+    Vanish;
+end;
+
 function TMonster.DeckUnderFeet: TPad;
 begin
   if (FAction in [maFlying, maFalling]) or not FDef.AffectedByGravity then
@@ -2338,6 +2354,13 @@ end;
 function IsLoot(const AMonster: TMonster): Boolean;
 begin
   Result := (AMonster.Def.Category = mcPickup) and (AMonster.Life = mlAlive);
+end;
+
+procedure TMonsterField.CarryLoot(AScreen: Integer; AWay: Double);
+begin
+  for var Monster in FMonsters do
+    if (Monster.Screen = AScreen) and IsLoot(Monster) then
+      Monster.RideBelt(AWay);
 end;
 
 procedure TMonsterField.Draw(const ASprites: TSpriteRenderer;

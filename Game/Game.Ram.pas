@@ -77,7 +77,9 @@
   hull at the wall that is always the left: the chase that follows starts
   from there; come down inside the hull, he walks out of it as after any
   throw. The empty mast sinks and the machine stands at the wall; there is no third
-  head yet.
+  head yet. After the time the third would take to rise and light its
+  row, and a breath, the machine drives off and the chase begins: it
+  does not leave the screen, the road slides under it (Game.Belt).
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -199,6 +201,8 @@ type
     Alarm: Boolean;
     // The head's lives have passed into their next third
     Third: Boolean;
+    // It drives off: the chase begins, the road slides under it
+    Chase: Boolean;
   end;
 
   TRam = class
@@ -288,6 +292,8 @@ type
     FRetreating: Boolean;
     FRetreatTicks: Integer;
     FStoodTicks: Integer;
+    // Both heads gone, it has driven off into the chase
+    FChased: Boolean;
     // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
@@ -299,6 +305,7 @@ type
     procedure BeginRetreat;
     procedure TickRetreat;
     function Spent: Boolean;
+    procedure TickSpent;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -515,8 +522,8 @@ type
     FWaveDust: array [0..1] of TSmoke;
     FArrivals: Integer;
     procedure TickArrival;
-    procedure TickExhausts;
-    procedure TickHeadSmoke;
+    procedure TickExhausts(ABeltShift: Single);
+    procedure TickHeadSmoke(ABeltShift: Single);
     procedure TickShorts;
     procedure TickWaveDust;
     procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
@@ -537,8 +544,11 @@ type
     // Both belong to the caller and must outlive the painter
     constructor Create(AArt: TRamArt; ARam: TRam);
     destructor Destroy; override;
-    // After the Ram's tick: the wheels roll, the exhausts smoke
-    procedure Tick;
+    // After the Ram's tick: the wheels roll, the exhausts smoke.
+    // ABeltShift - units the road has gone left under it this tick: the
+    // wheels roll by it too, the exhausts work as in a drive, and the
+    // smoke in the air rides away with the road.
+    procedure Tick(ABeltShift: Single);
     // The exhausts' smoke, before the body: the machine backs into it
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -678,6 +688,9 @@ const
   EmptyTicks = 5;
   ChangeRiseTicks = 30;
   SweeperMast = 48.0;
+  // After the sweeper, the breath between the third head's row lit and
+  // the chase: within 0.5-1 s
+  ChaseBreathTicks = 25;
   HeadBlastJolt = 0.5;
   // A hero thrown, by a touch or the wave, who comes down inside the hull
   // walks out of it unhurt for this long after he lands: from its middle
@@ -1135,6 +1148,7 @@ begin
   FRetreating := False;
   FRetreatTicks := 0;
   FStoodTicks := 0;
+  FChased := False;
   FOverloadTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
@@ -1468,6 +1482,21 @@ begin
   Result := (FHead = rhNone) and (FKilled = rhSweeper);
 end;
 
+// Standing at the wall it waits out its rest, then drives off - once
+procedure TRam.TickSpent;
+begin
+  if FChased then
+    Exit;
+  if FPhaseTicks > 0 then
+  begin
+    Dec(FPhaseTicks);
+    Exit;
+  end;
+  FChased := True;
+  FCue.Chase := True;
+  FCue.Rumble := True;
+end;
+
 // Low long enough - the press; on a pad, or high, long enough - the hunt.
 // An overloading head presses nobody.
 procedure TRam.TickMode;
@@ -1579,7 +1608,10 @@ end;
 
 // The empty mast sinks, a beat, the sweeper rises and the fight goes on.
 // After the sweeper the mast stays down and the machine stands at the
-// wall: the next head is not built yet.
+// wall as long as the third head would take to rise and light its row,
+// then a breath before the chase.
+// TODO: the bunker rises here, and the breath counts from its row lit
+// (tracked: arena-3.md, stage 14)
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1593,7 +1625,7 @@ begin
     Exit;
   if FKilled = rhSweeper then
   begin
-    BeginRest(LockRestTicks);
+    BeginRest(ChangeRiseTicks + RowBootTicks + ChaseBreathTicks);
     Exit;
   end;
   if Rising = 0 then
@@ -1678,9 +1710,14 @@ begin
           Exit;
         end;
         // A dying head holds the machine as its end says; a spent one
-        // stands for good
-        if FHeadKilled or Spent then
+        // stands at the wall, and the road runs under it
+        if FHeadKilled then
           Exit;
+        if Spent then
+        begin
+          TickSpent;
+          Exit;
+        end;
         if FHero.Alive and not FPressing and (FHead = rhHunter) and
           not InSightsFrom(FX) then
           FPhaseTicks := Min(FPhaseTicks, HuntBlindRestTicks);
@@ -2752,12 +2789,12 @@ begin
   inherited;
 end;
 
-procedure TRamPainter.Tick;
+procedure TRamPainter.Tick(ABeltShift: Single);
 begin
-  FHull.Tick(0, 0, FRam.Rolled);
+  FHull.Tick(0, 0, FRam.Rolled + ABeltShift);
   TickArrival;
-  TickExhausts;
-  TickHeadSmoke;
+  TickExhausts(ABeltShift);
+  TickHeadSmoke(ABeltShift);
   TickShorts;
   TickWaveDust;
 end;
@@ -2780,13 +2817,13 @@ begin
     Dust.Rewind;
 end;
 
-// One that drives smokes hard
-procedure TRamPainter.TickExhausts;
+// One that drives smokes hard, on the road or on the belt
+procedure TRamPainter.TickExhausts(ABeltShift: Single);
 begin
   if not FRam.Present then
     Exit;
 
-  var Driving := FRam.Phase in [rpDriving, rpRevving];
+  var Driving := (FRam.Phase in [rpDriving, rpRevving]) or (ABeltShift > 0);
   if Driving <> FExhaustDriving then
   begin
     FExhaustDriving := Driving;
@@ -2797,13 +2834,16 @@ begin
       Exhaust.FadeTo(Level, ExhaustRampTicks);
   end;
   for var i := Low(FExhausts) to High(FExhausts) do
+  begin
+    FExhausts[i].Drift(-ABeltShift, 0);
     FExhausts[i].Tick(FRam.Left + ExhaustPoints[i].X,
       RamTop + ExhaustPoints[i].Y, True);
+  end;
 end;
 
 // A wounded hunter smokes from its head; an empty mast from its top while
 // it goes down and until the next head comes up
-procedure TRamPainter.TickHeadSmoke;
+procedure TRamPainter.TickHeadSmoke(ABeltShift: Single);
 begin
   if not FRam.Present then
     Exit;
@@ -2821,6 +2861,7 @@ begin
     Source := HeadPoint(FRam.Left, FRam.Mast, FRam.SwayAt(1), FRam.Head,
       FRam.Facing, 1, Shape.Width / 2, Shape.Height / 2);
   end;
+  FHeadSmoke.Drift(-ABeltShift, 0);
   FHeadSmoke.Tick(Source.X, Source.Y, True);
 end;
 

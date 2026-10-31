@@ -367,6 +367,9 @@ type
     destructor Destroy; override;
     // What was in the air goes too: the world restarts in full
     procedure Rewind; override;
+    // What is in the air moves by (ADX, ADY) with the world under it,
+    // the source where it is: a road that slides carries off the puffs
+    procedure Drift(ADX, ADY: Single);
     // The source is off and the last puff is gone
     function Exhausted: Boolean;
   end;
@@ -2538,6 +2541,11 @@ begin
     Particle.SpeedX := Particle.SpeedX + FlowX * FTurbulence * Grip;
     Particle.SpeedY := Particle.SpeedY + FlowY * FTurbulence * Grip;
   end;
+end;
+
+procedure TSmoke.Drift(ADX, ADY: Single);
+begin
+  FSwarm.ShiftFrame(-ADX, -ADY);
 end;
 
 procedure TSmoke.Advance(AMotionX, AMotionY: Single; AParentAlive: Boolean);

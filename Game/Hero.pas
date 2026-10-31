@@ -208,6 +208,10 @@ type
     // for a moment. Nothing for the dead, nor for one still flying from the
     // last throw.
     procedure Throw(ASide: Integer);
+    // The road of a chase has slid AWay under him, below 0 to the left:
+    // on the floor and in the air he goes with it, as far as no wall
+    // stops him; standing on a deck, the deck carries him
+    procedure RideBelt(AWay: Double);
     // On his way up or down
     function InAir: Boolean;
     procedure SetY(AY: Double);
@@ -546,6 +550,13 @@ begin
   end;
   if StoodOnDeck and (DeckUnderFeet = nil) then
     LoseDeck;
+end;
+
+procedure THero.RideBelt(AWay: Double);
+begin
+  if not InAir and (DeckUnderFeet <> nil) then
+    Exit;
+  CarryX(AWay);
 end;
 
 procedure THero.Throw(ASide: Integer);

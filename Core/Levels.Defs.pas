@@ -163,6 +163,10 @@ type
     // '' = none. One picture drawn on several screens carries the same
     // tag on each.
     Tag: string;
+    // Lies on the road of a chase: "belt": true. It slides left as the
+    // road runs and comes in again on the right, wrapped round the width
+    // of the screen - the pictures of a belt cover the width whole.
+    Belt: Boolean;
   end;
 
   // Where a pit and death return the hero on a screen: a cell, counted
@@ -2007,6 +2011,7 @@ begin
     Placed.Width := Obj.GetValue<Integer>('width');
     Placed.Tint := ReadTint(Obj, Placed.Sprite);
     Placed.Tag := Obj.GetValue<string>('tag', '');
+    Placed.Belt := Obj.GetValue<Boolean>('belt', False);
 
     if (Placed.Screen < 1) or (Placed.Screen > FScreenCount) then
       raise ELevelError.CreateFmt(SLevelObjectBadScreen,

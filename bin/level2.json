@@ -1011,7 +1011,8 @@
       "x": 0,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-1"
+      "tag": "s13-road-1",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1019,7 +1020,8 @@
       "x": 32,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-2"
+      "tag": "s13-road-2",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1027,7 +1029,8 @@
       "x": 64,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-3"
+      "tag": "s13-road-3",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1035,7 +1038,8 @@
       "x": 96,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-4"
+      "tag": "s13-road-4",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1043,7 +1047,8 @@
       "x": 128,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-5"
+      "tag": "s13-road-5",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1051,7 +1056,8 @@
       "x": 160,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-6"
+      "tag": "s13-road-6",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1059,7 +1065,8 @@
       "x": 192,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-7"
+      "tag": "s13-road-7",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1067,7 +1074,8 @@
       "x": 224,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-8"
+      "tag": "s13-road-8",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1075,7 +1083,8 @@
       "x": 256,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-9"
+      "tag": "s13-road-9",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1083,7 +1092,8 @@
       "x": 288,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-10"
+      "tag": "s13-road-10",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1091,7 +1101,8 @@
       "x": 320,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-11"
+      "tag": "s13-road-11",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1099,7 +1110,8 @@
       "x": 352,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-12"
+      "tag": "s13-road-12",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1107,7 +1119,8 @@
       "x": 384,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-13"
+      "tag": "s13-road-13",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1115,7 +1128,8 @@
       "x": 416,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-14"
+      "tag": "s13-road-14",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1123,7 +1137,8 @@
       "x": 448,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-15"
+      "tag": "s13-road-15",
+      "belt": true
     },
     {
       "sprite": "tek-road-tile",
@@ -1131,7 +1146,8 @@
       "x": 480,
       "y": 352,
       "width": 32,
-      "tag": "s13-road-16"
+      "tag": "s13-road-16",
+      "belt": true
     }
   ],
   "pads": [
