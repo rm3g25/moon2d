@@ -65,6 +65,7 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Pads.World`), the cycle of a pad that plunges under the hero
   (`Pads.Plunge`), the cycle of a shelf that slides in and out of its
   wall (`Pads.Shelf`), the cycle of a pad that strays (`Pads.Stray`),
+  the pads of a chase sent in as its road runs (`Pads.Drift`, 3.0.87),
   the rebuild of a pad group (`Pads.Formations`,
   `Pads.Flights`) and the director of the boss fight over one and of the
   restore after it (`Pads.Arena`); `Game/Orbs/` holds the orbs - the flock
@@ -615,7 +616,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~2035 lines)
+### `Core/Levels.Defs.pas` (~2165 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -779,7 +780,10 @@ Level data model + JSON parser. No game logic.
   deck included (`SLevelPadStrayRowShut` - the way in, out and across), a
   column of it a wall crosses from the top of the room to the bottom of
   the screen (`SLevelPadStrayColumnShut` - the way down, the fall); all
-  through `RoomClear`. A parked carousel (3.0.57) seats an entity over the
+  through `RoomClear`. A pad that drifts (3.0.87, `CheckPadDrift`): one
+  that also travels a path, plunges, is a shelf, joins a group, rides a
+  carousel, strays or sleeps for a scene (`SLevelPadDriftBusy` - the game
+  alone sends it). A parked carousel (3.0.57) seats an entity over the
   park: `SeatEntity` takes `PadParkedTop` for the deck when the orbit is
   `Parked`, and the body rides its pad down.
   `Events` - the level's events (`Levels.Events`), in
@@ -1675,7 +1679,7 @@ journal of the first one, the cordon over level 1's screen 9, are in
   an aftermath cue that is timed or a sound, hint or wait. What needs the
   level is `Levels.Defs`' (`CheckScenes`).
 
-### `Core/Levels.Pads.pas` (~745 lines)
+### `Core/Levels.Pads.pas` (~775 lines)
 The `pads` section of level JSON: platforms apart from the collision grid.
 Model and parser, no game logic (the game runs them in `Pads.World`; the
 editor will write them). A pad holds from above only: its deck, the top
@@ -1708,7 +1712,10 @@ screen until an event flies them in. A pad may stray (3.0.58,
 `Pads.Stray`): once an event lets its flock go it flies in from beyond an
 edge to points of its zone and out again, misbehaving now and then; its
 cycle places it, so it takes no `x` or `y` and does nothing else. A plunge
-may stay down for good (3.0.58). A 2026 addition.
+may stay down for good (3.0.58). A pad may drift (3.0.87, `Pads.Drift`):
+it sleeps in the pool of a chase until the game sends it in from beyond
+the right edge to ride the road left; the game places it, so it takes no
+`x` or `y` (`SPadDriftPlaced`) and does nothing else. A 2026 addition.
 - **`TPadPlacement`** (record) - `Sprite` (in the level's object art, as a
   static object's), `Screen` (1-based), `X`/`Y` (the top-left corner in
   screen units, as a static object's; Y is the deck), `Width` (screen
@@ -1726,7 +1733,9 @@ may stay down for good (3.0.58). A 2026 addition.
   by name, in the order they are hung - `Levels.Rigs` holds them and hangs
   them), `Dormant` (3.0.62, JSON `"dormant": true`: the pad is not there -
   not drawn, neither a floor nor a body - until a scene wakes it; one no
-  scene wakes does not load).
+  scene wakes does not load), `Drift` (3.0.87, JSON `"drift": true`: in
+  the pool of a chase, asleep until the game sends it; `ReadPlace` puts it
+  where a stray waits, `PadStrayWaitLeft`, `PadParkedTop`).
 - **`TPadPlunge`** (record, 3.0.46) - a pad that gives way under the
   hero: `Plunges`, `Delay` (seconds it holds after he stands on it),
   `Rest` (seconds it lies under the screen), `Rise` (units a second it
@@ -2418,7 +2427,7 @@ draws it. No SDL and no level in it - a record a test drives alone
     `Dismissed`, `Left`, `Top` (the top-left corner of the deck; the fall
     adds its depth).
 
-### `Game/Pads/Pads.World.pas` (~2070 lines)
+### `Game/Pads/Pads.World.pas` (~2230 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -2682,7 +2691,19 @@ rebuilds new for the new try.
     again. **`Doze`** (3.0.81) - the game puts an awake pad to sleep (the
     sweeper's wave); `Rewind` gives it back as the file has it. `Texture`,
     `PictureHeight` - its picture, for the wreck drawn in it.
-    **`TPadWorld.Standing(screen)`** - the screen's pads not dormant. **`FlyTo(x, y, ticks)`** - a scene flies the pad straight from
+    **`TPadWorld.Standing(screen)`** - the screen's pads not dormant.
+  - The drifting pad (3.0.87, `Drifts` - `TPadPlacement.Drift`): asleep in
+    the pool of a chase, as a dormant pad, until **`SetAdrift(x, y)`**
+    sends it - awake, there at once (`FlyTo` of 0 ticks); from then on its
+    `Tick` takes it left by the road's way (`beltWay`, the third argument)
+    on the hero's screen, and its riders with it, as any path does. It
+    travels (`Travels`), so a ram only rocks it. **`TPadWorld`**:
+    `Drifters` (the pads that drift, of every screen), `FreeDrifter(screen,
+    width)` (one of the pool asleep, nil when none), `LetGoDrifters` (all
+    of them to sleep - the dispatcher's `Clear`); the world's `Tick` lets
+    go every pad wholly past the left edge (`LetGoPastLeft`: asleep, back
+    in the pool) - nobody stands on it there, the screen's edge holds the
+    hero. **`FlyTo(x, y, ticks)`** - a scene flies the pad straight from
     where its path or its last flight left it (a knock is not minded) to
     x, y, its top-left corner, over the ticks (`StraightFlight` at
     `CalmPace`; `Thrusting` while it goes, so its jets burn); 0 ticks or no
@@ -2711,13 +2732,16 @@ rebuilds new for the new try.
   asks the cache for nothing and gets no texture); every
   pad gets its orbit here (`OrbitOf` over the level's `Carousels`,
   3.0.52) and its failing look (3.0.58); a parked group is parked
-  (`ParkGroups`, after every rewind too). `Tick(screen, heroDeck)` - before
+  (`ParkGroups`, after every rewind too). `Tick(screen, heroDeck,
+  beltWay)` (`beltWay`, 3.0.87: how far the road of a chase went this
+  tick, below 0 to the left; 0 by default) - before
   the riders move (`heroDeck`, 3.0.57: the pad the hero stands on, nil
   while he is dead; every pad is told whether it is that one): a rebuild asked for may start (`StartAskedRebuild`),
   then every pad's `Tick`, on view for the pads of that screen alone - a
   pad elsewhere keeps its `Prev*` caught up and goes nowhere -, then
   `HearFlights` and `HearShelves`, then `TurnLandedCarousels` (3.0.57: a
-  carousel every pad of which is on its slot starts to turn).
+  carousel every pad of which is on its slot starts to turn), and
+  `LetGoPastLeft` (3.0.87) right after the pads' ticks.
   `Rewind(seed)` - every pad back to where the level file puts it, no
   rebuild asked for or flying, the dice seeded anew (`seed or 1`: an
   xorshift seeded with zero stays at zero). The deck and body queries
@@ -2832,6 +2856,44 @@ rebuilds new for the new try.
 - `TPad.FlyEased(x, y, ticks, ease)` (3.0.67) - `Fly` over an
   `EasedFlight`: a scene's fly with an ease.
 
+### `Game/Pads/Pads.Drift.pas` (~350 lines, 3.0.87)
+The pads of the chase (`docs/mechanics/arena-3.md`, stages 13 and 13b):
+as the road runs, pads of the screen's pool are sent in from beyond the
+right edge, in groups along the road with empty road between - a lone pad
+(any width, any deck from `HighestDeck` 120 to `LowestDeck` 288) or a
+climb: a foot the plain jump from the road reaches (deck 272-288,
+`ClimbFootHighest`), then pads a jump higher each (`ClimbStepLeast` 48 -
+`ClimbStepMost` 80) a short gap across (`ClimbGapLeast` 16 -
+`ClimbGapMost` 40, edge to edge) until one stands at `WayUpDeck` 144 or
+higher, where a shot down reaches the bunker's hatch; it rises toward the
+machine or away from it (`AwayShare` 0.5). The dice give every number:
+`ClimbShare` 0.6 of the groups climb, `LongShare` 0.3 of the pads are
+the long ones, `GroupGapLeast` 48 - `GroupGapMost` 112 of empty road
+after a group. A guard: no climb ended for `GuardUnits` 198 of road (6 s
+at cruise) - the next group is one; the chase opens with a climb. A group
+comes only when the screen has room for all of it (`MostAdrift` 10 pads
+at once), at the right edge. 13b: one climb in `MedkitClimbs` 3 carries a
+medkit, which of the three the dice's - a new round every three climbs,
+`Clear` starts one; it stands on the middle pad by height - of the pads
+between the foot and the top the one whose deck is nearest halfway
+between theirs, of two as near the lower (`PutMedkitMidway`,
+`NearerHalfway`). The dispatcher knows neither the belt, the hero, the
+bunker nor the monsters: the game tells it how far the road has run and
+stands the medkits it tells back. No SDL.
+- **`TDriftStep`** (record) - a pad as planned: `Width`, `Deck`,
+  `GapAfter` (the road after it), `Medkit`.
+- **`TDriftCue`** (record, 13b) - `Medkits`: where the medkits stand from
+  this tick, the middle of their feet on the deck of a pad just sent.
+- **`TPadDrift`** - `Create(world, levelId, seed)` (raises `EPadError` on
+  a pool of a screen smaller than `MostAdrift`, `SDriftPoolShort`, or a
+  pad of it neither `StepWidth` 32 nor `HighWidth` 64 wide,
+  `SDriftBadWidth`); `Clear(seed)` (a death, a door, a new level: the
+  pool asleep, nothing planned, the round of the medkits anew, the dice
+  new); `Tick(screen, travel): TDriftCue` - every pad due by the road's
+  run is sent (`SetAdrift`); a width the pool has run out of is made up
+  with the other, and a screen with no pool is a road with no pads - and
+  no medkits.
+
 ### `Game/Pads/Pads.Arena.pas` (~370 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
 pads fly, and in step with whom; since 3.0.39 also the calm flight home
@@ -2889,7 +2951,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1585 lines)
+### `Game/Hero.pas` (~1615 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -3015,6 +3077,12 @@ moves in comes from `Game.Space`.
   the floor and in the air he goes with it by `CarryX` (fractions of a
   unit, the wall asked at every one); standing on a deck, the deck carries
   him.
+- 3.0.87: a deck a wall has pulled from under him leaves a walking hero
+  too (`RideDeck` -> `LoseDeck`; a walk into that wall sees no ledge).
+  `CarryX` never takes him left of `LeftDoorStop` 2, the line the 2008
+  left door puts him back on after the tick: a deck is judged under the
+  feet he keeps, or a pad of the chase carried off from under them at the
+  left edge is never seen to go.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -3216,7 +3284,7 @@ besides taking lives is the monster's.
   ticks in a row take at most `Lives` lives, and a gun that fires less than
   that is never touched.
 
-### `Game/Monsters.pas` (~2430 lines)
+### `Game/Monsters.pas` (~2460 lines)
 Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
 - **Enums**: `TMonsterAction` (stand/walk/fall/flying), `TMonsterLife`
   (mlAlive/Dying/Dead), `TMonsterHealthTier` (htHale/Wounded/Critical - the
@@ -3263,8 +3331,12 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   walking the way it faces; `DeckUnderFeet` - the deck under it, nil for
   one falling, flying or that ignores gravity (a scene's wait reads it);
   `RideBelt(way)` (3.0.86) - the road of the chase has slid under it: it
-  goes along, unless a deck carries it (the road has no walls), and
-  vanishes once wholly past the left edge.
+  goes along (the road has no walls), and vanishes once wholly past the
+  left edge; on a deck (3.0.87) the deck carried it in `RideDeck`, but
+  `CarryX` stops a body at the screen's edge - `RideBelt` gives the rest of
+  the deck's way (`MotionX` less `FCarriedX`), so the loot rides its pad
+  out instead of hanging at the edge and dropping off it. After `Tick` of
+  the same tick, which tells what the deck carried.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
   lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
@@ -5582,7 +5654,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     `Burst` - the ceremony's stage watches them.
 - Tests: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~3640 lines)
+### `Game/Game.Moon.pas` (~4050 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -6127,6 +6199,15 @@ so a unit (and later a test) can reach it. `interface` holds
   `-Speed`. `TickRam`: `FRamPainter.Tick(FBelt.Speed)`, `Start` on
   `Chase`. `FObjects.Draw(screen, FBelt.TravelAt(alpha))`. Cleared with
   the capsules.
+- 3.0.87, **the pads of the chase**: `FDrift` (`TPadDrift`, born with the
+  pads, its pools theirs). The road ticks at the head of the tick, before
+  the pads (`BeltWay`; 0 in the burst's inhale, when the road stands with
+  the world): `FPads.Tick(screen, heroDeck, BeltWay)`, then, while the
+  belt runs, `FDrift.Tick(screen, FBelt.Travel)`; `TickBelt(way)` takes
+  the way it found. `FDrift.Clear` beside every `FBelt.Clear`. 13b: each
+  medkit of the cue goes to **`StandMedkitOn(mark)`** - its feet on the
+  mark, `SpawnStanding` of `MedkitMonsterId`; `TickCapsules` stands the
+  capsules' medkits through it too.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6471,6 +6552,20 @@ the travel the sum of the speeds; between ticks between them; a clear;
 `TBeltRoadTests` 4: `BeltX` in place, left, off the left onto the right,
 a whole span back); `TRamSweeperTests.TestDrivesOffIntoTheChaseOnce`;
 and no chase after the hunter in `TestTheLastLifeBlowsTheHeadUp`.
+3.0.87 - 23 more, all in `Tests.Pads.Drift`: `TPadDriftTests` 21 - the
+pool of the level's chase in the empty room, the road run by hand
+(nothing before the road runs; the chase opens with a climb beyond the
+right edge; every group a lone pad or a passable climb; a climb never
+far behind the last; never more pads than the screen takes; no two across
+each other; the dice give every number; the pads ride the road; a still
+road, still pads; a pad adrift carries its rider; past the left edge let
+go and sent again; a clear puts the pool to sleep; a short pool and a pad
+of another width raise; a pad that drifts takes no place and does nothing
+else; 13b - a medkit only on the middle pad of a climb; one climb in three
+carries one; the dice pick the climb of the three; the medkit stands on
+the pad sent with it; a clear starts the three anew); `TDriftLootTests` 2
+(a medkit rides its pad out past the left edge and is gone, as one on
+the road).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7185,6 +7280,7 @@ made again in 3.0.83).
 | The wrecks and the sweeper's blast retuned (3.0.83): each wreck kicked off hard by the blast, the harder the nearer, then slowed, a climb and a spin of its own, one in five against the others; the sweeper bursts with the tank's death and its drone under it | Game.Wrecks.pas (`Launch` with the reach, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` on `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | The Ram backs off before the sweeper bursts (3.0.82): a stand, the drive to the right wall with its barrels red, the eye blinking and the alarm, the overload there; spent, it stands at the wall; a hero thrown down inside the hull walks out unhurt, for 60 ticks at most, through the whole fight | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` on `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | The shuttle's medkits on the thirds (3.0.84): a capsule falls onto a high pad (the hunter's) or the road at the far wall (the sweeper's), brakes, lands, parts and leaves a medkit | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` of the `ram` action in level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
