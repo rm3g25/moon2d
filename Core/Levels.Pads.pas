@@ -60,6 +60,12 @@
   a body, its rigs out - until a scene wakes it (Levels.Scenes). A death
   puts it to sleep again, and the scene's aftermath wakes it once more.
 
+  A pad may drift: it waits in the pool of a chase, asleep, until the game
+  sends it in from beyond the right edge to ride the road left (Pads.Drift
+  sends it, Pads.World lets it go past the left edge). The game places it,
+  so it takes no x or y and does nothing else: no path, no plunge, no
+  shelf, no group, no carousel, no stray, no sleep of a scene's.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Pads;
@@ -212,6 +218,9 @@ type
     Rigs: TArray<string>;
     // Not there until a scene wakes it. JSON: "dormant": true.
     Dormant: Boolean;
+    // In the pool of a chase, asleep until the game sends it. JSON:
+    // "drift": true.
+    Drift: Boolean;
   end;
 
   // Pads rebuilt together: where they may stand and what a formation of
@@ -264,8 +273,8 @@ const
 // out of 0..1, a bank that is neither a name nor a list of names, a
 // shelf held but in no bank or held neither out nor in.
 // A pad on a carousel that is given an x or a y raises too: the carousel
-// places it. So does a pad that strays, and one that strays with no flock,
-// a zone that is not four numbers or a wait below zero.
+// places it. So does a pad that strays or drifts, and one that strays with
+// no flock, a zone that is not four numbers or a wait below zero.
 function ParsePads(const ARoot: TJSONObject;
   const ALevelId: string): TArray<TPadPlacement>;
 // The "plunge" of AObj, as a pad reads it; absent = no plunge. A delay or
@@ -311,6 +320,8 @@ resourcestring
     + '[left, top, right, bottom]';
   SPadStrayPlaced = 'Level "%s": pad "%s" strays and is given an x or a y - '
     + 'its cycle places it';
+  SPadDriftPlaced = 'Level "%s": pad "%s" drifts and is given an x or a y - '
+    + 'the game places it';
   SPadStrayNoFlock = 'Level "%s": pad "%s" strays in no flock - no event '
     + 'could ever let it go';
   SPadGroupBadNumber = 'Level "%s": pad group "%s" takes %s %d';
@@ -638,13 +649,22 @@ begin
 end;
 
 // A pad on a carousel is placed by it: Levels.Defs puts its X and Y. A pad
-// that strays waits out of sight until its cycle flies it in.
+// that strays waits out of sight until its cycle flies it in, and so does
+// a pad that drifts, until the game sends it.
 procedure ReadPlace(const AObj: TJSONObject; const ALevelId: string;
   var APad: TPadPlacement);
 begin
   APad.X := 0;
   APad.Y := 0;
   var Given := (AObj.GetValue('x') <> nil) or (AObj.GetValue('y') <> nil);
+  if APad.Drift then
+  begin
+    if Given then
+      raise EPadError.CreateFmt(SPadDriftPlaced, [ALevelId, APad.Sprite]);
+    APad.X := PadStrayWaitLeft;
+    APad.Y := PadParkedTop;
+    Exit;
+  end;
   if APad.Stray.Strays then
   begin
     if Given then
@@ -681,6 +701,7 @@ begin
     Pad.Screen := Obj.GetValue<Integer>('screen');
     Pad.Carousel := Obj.GetValue<string>('carousel', '');
     Pad.Stray := ReadStray(Obj, ALevelId, Pad.Sprite);
+    Pad.Drift := Obj.GetValue<Boolean>('drift', False);
     ReadPlace(Obj, ALevelId, Pad);
     Pad.Width := Obj.GetValue<Integer>('width');
     Pad.Tint := ReadTint(Obj, Pad.Sprite);

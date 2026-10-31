@@ -2397,6 +2397,126 @@
       "bob": 1,
       "tag": "s13-pad-5",
       "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-01",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-02",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-03",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-04",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-05",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-06",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-07",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad",
+      "screen": 13,
+      "width": 32,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-step-08",
+      "rig": ["cityPad"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-high-01",
+      "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-high-02",
+      "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-high-03",
+      "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "city-pad-long",
+      "screen": 13,
+      "width": 64,
+      "bullets": "pass",
+      "bob": 1,
+      "drift": true,
+      "tag": "s13-drift-high-04",
+      "rig": ["cityPadLong"]
     }
   ],
   "carousels": [

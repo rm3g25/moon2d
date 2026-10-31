@@ -22,7 +22,8 @@ uses
   System.Generics.Collections, Sdl2.Core, Sprites.Sets, Game.Config, Game.Loop,
   Monsters.Defs, Render.Sprites, Levels.Defs, Levels.Events, Render.Tiles,
   Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero, Bullets,
-  Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Arena, Render.Font,
+  Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
+  Render.Font,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
@@ -72,6 +73,9 @@ type
     FObjects: TObjectScreenRenderer;
     FDynamics: TDynamicScreenRenderer;
     FPads: TPadWorld;
+    // The pads of a chase, sent in from beyond the right edge as the road
+    // runs; born with the pads, its pools are theirs
+    FDrift: TPadDrift;
     FHero: THero;
     FState: TGameState;
     // Original input model: keyboard.pas kept a Key[] state array and the
@@ -298,7 +302,7 @@ type
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
     procedure StartRam(const AOrders: TRamOrders);
     procedure TickRam;
-    procedure TickBelt;
+    procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
     procedure ResolveRamContact;
     procedure ResolveRamWave;
@@ -671,6 +675,7 @@ begin
   FHero.Free;
   FDynamics.Free;
   FObjects.Free;
+  FDrift.Free;
   FPads.Free;
   FTiles.Free;
   FSprites.Free;
@@ -702,6 +707,7 @@ begin
   FHero.Free;
   FDynamics.Free;
   FObjects.Free;
+  FDrift.Free;
   FPads.Free;
   FTiles.Free;
   FObjectCache.Free;
@@ -712,6 +718,7 @@ begin
   FHero := nil;
   FDynamics := nil;
   FObjects := nil;
+  FDrift := nil;
   FPads := nil;
   FTiles := nil;
   FObjectCache := nil;
@@ -761,6 +768,7 @@ begin
   // Before the dynamics: their parents may be pads
   FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel, JumpReach,
     RollDiceSeed);
+  FDrift := TPadDrift.Create(FPads, FLevel.Id, RollDiceSeed);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -882,6 +890,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
   FMessages.Clear;
@@ -1183,6 +1192,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FUptake.Settle;
   SettleSphere;
@@ -2521,6 +2531,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.Rewind;
   FHero.Revive;
@@ -2825,16 +2836,15 @@ begin
 end;
 
 // The chase: the road slides left under the Ram, and the world on it -
-// the hero, in the air too, and the loot - rides along
-procedure TMoonGame.TickBelt;
+// the hero, in the air too, and the loot - rides along. The road went AWay
+// at the head of the tick, before the pads, which carry what stands on them
+procedure TMoonGame.TickBelt(AWay: Double);
 begin
-  FBelt.Tick;
-  if FBelt.Speed = 0 then
+  if AWay = 0 then
     Exit;
-  var Way := -FBelt.Speed;
   if not FHero.Dead then
-    FHero.RideBelt(Way);
-  FField.CarryLoot(FHero.Screen, Way);
+    FHero.RideBelt(AWay);
+  FField.CarryLoot(FHero.Screen, AWay);
 end;
 
 procedure TMoonGame.StopRamRumble;
@@ -3257,12 +3267,25 @@ begin
   if FHeldDown then
     FHero.Command(hcDrop);
 
+  // The burst's inhale: the world stands, the hero, his arms and the pads
+  // go on - but the road of a chase stands with the world
+  var WorldStands := FOrbs.Holding;
+  // The road before the pads: the pads of a chase ride it
+  var BeltWay: Double := 0;
+  if not WorldStands then
+  begin
+    FBelt.Tick;
+    BeltWay := -FBelt.Speed;
+  end;
+
   // The pads go first: their riders move with them, then by themselves.
   // A shelf told to spare the hero asks where he stands.
   var HeroDeck: TPad := nil;
   if not FHero.Dead then
     HeroDeck := FHero.DeckUnderFeet;
-  FPads.Tick(FHero.Screen, HeroDeck);
+  FPads.Tick(FHero.Screen, HeroDeck, BeltWay);
+  if FBelt.Running then
+    FDrift.Tick(FHero.Screen, FBelt.Travel);
   if FPads.CornerTurned then
     FAudio.Play(PadClickSoundFile);
   if FPads.PairDocked then
@@ -3280,9 +3303,6 @@ begin
       FShake.AddTrauma(DupletShotTrauma);
   end;
 
-  // The burst's inhale: the world stands, the hero, his arms and the pads
-  // go on
-  var WorldStands := FOrbs.Holding;
   if not WorldStands then
   begin
     FField.Tick(FHero.Screen, Round(FHero.X), Round(FHero.Y),
@@ -3324,7 +3344,7 @@ begin
   if not WorldStands then
   begin
     TickCannons;
-    TickBelt;
+    TickBelt(BeltWay);
     TickRam;
   end;
   ResolveCannonContact;
@@ -3613,6 +3633,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FDrift.Clear(RollDiceSeed);
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);

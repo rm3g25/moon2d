@@ -57,6 +57,7 @@ uses
   Tests.Orbs.Burst in 'Orbs\Tests.Orbs.Burst.pas',
   Tests.Orbs.Feed in 'Orbs\Tests.Orbs.Feed.pas',
   Tests.Pads.Decks in 'Pads\Tests.Pads.Decks.pas',
+  Tests.Pads.Drift in 'Pads\Tests.Pads.Drift.pas',
   Tests.Pads.Flights in 'Pads\Tests.Pads.Flights.pas',
   Tests.Pads.Plunge in 'Pads\Tests.Pads.Plunge.pas',
   Tests.Pads.Shelf in 'Pads\Tests.Pads.Shelf.pas',

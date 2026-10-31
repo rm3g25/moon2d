@@ -112,6 +112,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Burst.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Feed.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Decks.pas"/>
+        <DCCReference Include="Pads\Tests.Pads.Drift.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Flights.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Plunge.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Shelf.pas"/>

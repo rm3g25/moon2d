@@ -207,6 +207,7 @@
         <DCCReference Include="Game\Pads\Pads.Shelf.pas"/>
         <DCCReference Include="Game\Pads\Pads.Stray.pas"/>
         <DCCReference Include="Game\Pads\Pads.World.pas"/>
+        <DCCReference Include="Game\Pads\Pads.Drift.pas"/>
         <DCCReference Include="Game\Pads\Pads.Arena.pas"/>
         <DCCReference Include="Core\Render.Font.pas"/>
         <DCCReference Include="Hud\Hud.Typewriter.pas"/>

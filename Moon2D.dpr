@@ -55,6 +55,7 @@ uses
   Pads.Shelf in 'Game\Pads\Pads.Shelf.pas',
   Pads.Stray in 'Game\Pads\Pads.Stray.pas',
   Pads.World in 'Game\Pads\Pads.World.pas',
+  Pads.Drift in 'Game\Pads\Pads.Drift.pas',
   Pads.Arena in 'Game\Pads\Pads.Arena.pas',
   Render.Font in 'Core\Render.Font.pas',
   Hud.Typewriter in 'Hud\Hud.Typewriter.pas',

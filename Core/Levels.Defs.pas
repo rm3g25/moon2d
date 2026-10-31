@@ -236,6 +236,7 @@ type
     procedure CheckPadPlunge(const APad: TPadPlacement);
     procedure CheckPadShelf(const APad: TPadPlacement);
     procedure CheckPadStray(const APad: TPadPlacement);
+    procedure CheckPadDrift(const APad: TPadPlacement);
     procedure PlaceCarouselPads;
     procedure CheckCarousels;
     procedure CheckCarouselPad(AIndex: Integer);
@@ -421,6 +422,9 @@ resourcestring
   SLevelPadStrayBusy = 'Level "%s": pad "%s" strays and travels a path, '
     + 'plunges, is a shelf, joins a group or rides a carousel - its cycle '
     + 'alone moves it';
+  SLevelPadDriftBusy = 'Level "%s": pad "%s" drifts and travels a path, '
+    + 'plunges, is a shelf, joins a group, rides a carousel, strays or '
+    + 'sleeps for a scene - the game alone sends it';
   SLevelPadStrayOutOfRoom = 'Level "%s": pad "%s" strays in a zone outside '
     + 'its room - the screen less a cell at the left, the right and the top';
   SLevelPadStrayRowShut = 'Level "%s": pad "%s" strays along row %d, which '
@@ -1432,7 +1436,21 @@ begin
     CheckPadPlunge(Pad);
     CheckPadShelf(Pad);
     CheckPadStray(Pad);
+    CheckPadDrift(Pad);
   end;
+end;
+
+// The pool of a chase sleeps until the game sends a pad of it, which then
+// rides the road alone
+procedure TLevel.CheckPadDrift(const APad: TPadPlacement);
+begin
+  if not APad.Drift then
+    Exit;
+  var Busy := (APad.Path.Route <> prNone) or APad.Plunge.Plunges or
+    APad.Shelf.Slides or (APad.Group <> '') or (APad.Carousel <> '') or
+    APad.Stray.Strays or APad.Dormant;
+  if Busy then
+    raise ELevelError.CreateFmt(SLevelPadDriftBusy, [FId, APad.Sprite]);
 end;
 
 // The deck of a carousel pad as it starts out, rounded to whole units:

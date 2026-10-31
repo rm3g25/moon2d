@@ -296,6 +296,8 @@ const
   ThrowBoost = 7.0;
   ThrowLockTicks = 14;
   DeathFrameAdvance = 0.6; // frames 9 -> 16 in ~12 ticks
+  // Left of this the one-way door of 2008 puts him back after every tick
+  LeftDoorStop = 2;
 
   // SDL rotates clockwise, the OpenGL original counter-clockwise.
   // Confirmed on screen: the sign must flip. Barrel offsets keep the
@@ -1072,8 +1074,9 @@ end;
 // it went - across while no wall stands in the way, up while the head is
 // clear. A deck that would crush the hero into the ceiling rises through
 // him instead, and he falls; one a wall has pulled from under him leaves
-// him to the ground below, the corpse too. So does a shelf that has slid
-// into its wall.
+// him to the ground below, standing or walking - a walk into that wall
+// sees no ledge, the way is shut - and the corpse too. So does a shelf
+// that has slid into its wall.
 procedure THero.RideDeck;
 begin
   var Middle := FX + HeroSize / 2;
@@ -1101,7 +1104,9 @@ begin
     Exit;
   FCorpseSettled := False;
   if FAction = haStand then
-    SettleOnGround;
+    SettleOnGround
+  else
+    LoseDeck;
 end;
 
 // The deck is underfoot no more: it slid into its wall, or the hero was
@@ -1139,7 +1144,12 @@ begin
       Exit;
     if (Step > 0) and WallBlocksRight then
       Exit;
+    // Never past the line the left door puts him back on after the tick:
+    // a deck is judged under the feet he keeps, or one carried off from
+    // under them is never seen to go
     FX := FX + Step;
+    if FX < LeftDoorStop then
+      FX := LeftDoorStop;
     Rest := Rest - Step;
   end;
 end;

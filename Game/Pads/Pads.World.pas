@@ -121,6 +121,12 @@
   the game's own flies off in its picture - until a rewind gives it back
   as the level file has it.
 
+  A pad that drifts sleeps in the pool of a chase until the game sends it
+  in from beyond the right edge (SetAdrift). From then on it goes left by
+  the road's way every tick it is on the hero's screen, and the riders go
+  with it as with any path; once wholly past the left edge it is let go -
+  asleep again, back in the pool. It travels, so a ram only rocks it.
+
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
 
@@ -260,8 +266,9 @@ type
     // The body as a box, in screen units
     function Body: TSdlFRect;
     // A step of the path; AOnView - the pad is on the hero's screen,
-    // AHeroAboard - he stands on its deck
-    procedure Tick(AOnView, AHeroAboard: Boolean);
+    // AHeroAboard - he stands on its deck, ABeltWay - how far the road of
+    // a chase went this tick, below 0 to the left: a pad adrift goes as far
+    procedure Tick(AOnView, AHeroAboard: Boolean; ABeltWay: Double = 0);
     procedure Rewind;
     // A shelf takes up ACommand ADelayTicks after the next tick of its
     // clock; a command told before replaces one that has not come yet
@@ -303,6 +310,9 @@ type
     procedure Wake;
     // The pad is gone from now on, as a dormant one, until a rewind
     procedure Doze;
+    // A pad of a chase's pool is there from now on at AX, AY (its top-left
+    // corner) and rides the road; nothing for one that does not drift
+    procedure SetAdrift(AX, AY: Double);
     // The pad flies straight to AX, AY (its top-left corner) over ATicks
     // and stays there; 0 ticks - it is there at once, and whatever stood
     // on it is left in the air
@@ -353,6 +363,8 @@ type
     property Tag: string read FPlacement.Tag;
     // Not there until a scene wakes it
     property Dormant: Boolean read FDormant;
+    // Of a chase's pool: asleep in it, or sent and riding the road
+    property Drifts: Boolean read FPlacement.Drift;
     // Its picture as the level file names it, nil for none, and its height
     // in units - the width is the placement's
     property Texture: PSdlTexture read FTexture;
@@ -448,6 +460,7 @@ type
     function RidersOf(const ACarousel: string): TArray<TPad>;
     function Shuffled(const APads: TArray<TPad>): TArray<TPad>;
     procedure TurnLandedCarousels;
+    procedure LetGoPastLeft;
     function BankOf(const ABank: string): TArray<TPad>;
     function OrderedBank(const ABank: string; AOrder: TBankOrder;
       AHeroX: Double): TArray<TPad>;
@@ -465,9 +478,11 @@ type
     destructor Destroy; override;
 
     // Before the riders move: a rebuild asked for may start, the pads of
-    // AScreen go on along their paths and flights. AHeroDeck - the pad the
-    // hero stands on, nil when none.
-    procedure Tick(AScreen: Integer; const AHeroDeck: TPad);
+    // AScreen go on along their paths and flights, the pads adrift ABeltWay
+    // with the road of a chase, and those past the left edge are let go.
+    // AHeroDeck - the pad the hero stands on, nil when none.
+    procedure Tick(AScreen: Integer; const AHeroDeck: TPad;
+      ABeltWay: Double = 0);
     // Back to where the level file puts them, no rebuild asked for or
     // flying; ASeed - the dice of the new try
     procedure Rewind(ASeed: Cardinal);
@@ -564,6 +579,13 @@ type
     function FindWearer(const ATag: string; out AFailingLook: Boolean): TPad;
     // The pad tagged ATag; nil when none
     function FindTagged(const ATag: string): TPad;
+    // The pads that drift, asleep or sent, in the order of the level file
+    function Drifters: TArray<TPad>;
+    // A pad of the pool of AScreen, AWidth units wide, asleep in it; nil
+    // when every such pad is sent
+    function FreeDrifter(AScreen, AWidth: Integer): TPad;
+    // Every pad that drifts back to sleep in its pool
+    procedure LetGoDrifters;
     // The pads of AScreen that are there: not dormant, in the order of the
     // level file
     function Standing(AScreen: Integer): TArray<TPad>;
@@ -715,7 +737,7 @@ end;
 
 procedure TPad.Rewind;
 begin
-  FDormant := FPlacement.Dormant;
+  FDormant := FPlacement.Dormant or FPlacement.Drift;
   FShelf.Build(FPlacement.Shelf);
   FShelfCommandAt := NoCommand;
   FShelfTold := False;
@@ -971,7 +993,7 @@ begin
     FKnockClock := NoKnock;
 end;
 
-procedure TPad.Tick(AOnView, AHeroAboard: Boolean);
+procedure TPad.Tick(AOnView, AHeroAboard: Boolean; ABeltWay: Double);
 begin
   FPrevLeft := FLeft;
   FPrevTop := FTop;
@@ -998,6 +1020,8 @@ begin
   if FPlacement.Stray.Strays then
     FStray.Tick(AHeroAboard);
   PlaceOnPath;
+  if FPlacement.Drift and not FDormant then
+    FPathLeft := FPathLeft + ABeltWay;
   if FClock = FBreakAt then
     Fail;
   TickFlight;
@@ -1039,7 +1063,8 @@ end;
 
 function TPad.Travels: Boolean;
 begin
-  Result := (Length(FStops) >= 2) or FOrbit.Rides or FPlacement.Stray.Strays;
+  Result := (Length(FStops) >= 2) or FOrbit.Rides or
+    FPlacement.Stray.Strays or FPlacement.Drift;
 end;
 
 function TPad.Knocked: Boolean;
@@ -1061,6 +1086,14 @@ end;
 procedure TPad.Doze;
 begin
   FDormant := True;
+end;
+
+procedure TPad.SetAdrift(AX, AY: Double);
+begin
+  if not FPlacement.Drift then
+    Exit;
+  FDormant := False;
+  FlyTo(AX, AY, 0);
 end;
 
 // From where the path or the last flight left it; a knock is not minded,
@@ -1325,11 +1358,13 @@ begin
   inherited;
 end;
 
-procedure TPadWorld.Tick(AScreen: Integer; const AHeroDeck: TPad);
+procedure TPadWorld.Tick(AScreen: Integer; const AHeroDeck: TPad;
+  ABeltWay: Double);
 begin
   StartAskedRebuild(AScreen);
   for var Pad in FPads do
-    Pad.Tick(Pad.Screen = AScreen, Pad = AHeroDeck);
+    Pad.Tick(Pad.Screen = AScreen, Pad = AHeroDeck, ABeltWay);
+  LetGoPastLeft;
   TurnLandedCarousels;
   HearFlights;
   HearShelves;
@@ -1593,6 +1628,39 @@ begin
   for var Pad in FPads do
     if (Pad.Screen = AScreen) and not Pad.Dormant then
       Result := Result + [Pad];
+end;
+
+function TPadWorld.Drifters: TArray<TPad>;
+begin
+  Result := [];
+  for var Pad in FPads do
+    if Pad.Drifts then
+      Result := Result + [Pad];
+end;
+
+function TPadWorld.FreeDrifter(AScreen, AWidth: Integer): TPad;
+begin
+  for var Pad in FPads do
+    if Pad.Drifts and Pad.Dormant and (Pad.Screen = AScreen) and
+      (Pad.Placement.Width = AWidth) then
+      Exit(Pad);
+  Result := nil;
+end;
+
+procedure TPadWorld.LetGoDrifters;
+begin
+  for var Pad in FPads do
+    if Pad.Drifts then
+      Pad.Doze;
+end;
+
+// Wholly past the left edge nobody stands on it: the screen's edge holds
+// the hero
+procedure TPadWorld.LetGoPastLeft;
+begin
+  for var Pad in FPads do
+    if Pad.Drifts and not Pad.Dormant and (Pad.Right < 0) then
+      Pad.Doze;
 end;
 
 // ---------------------------------------------------------------------------
