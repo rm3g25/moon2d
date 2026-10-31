@@ -72,6 +72,7 @@ Tests\
     Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
+    Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas

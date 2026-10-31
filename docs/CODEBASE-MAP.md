@@ -57,8 +57,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Press`); and TeK-R13, the Ram of level 2's boss arena
   (`Game.Ram`, 3.0.75), the pads its sweeper's wave knocks off
   (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
-  (`Game.Capsules`, 3.0.84) and the hidden tank of the form's charge in
-  it (`Game.StoneTank`, 3.0.85). `Game/Events/`
+  (`Game.Capsules`, 3.0.84), the hidden tank of the form's charge in
+  it (`Game.StoneTank`, 3.0.85) and the road of its chase
+  (`Game.Belt`, 3.0.86). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
   (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
@@ -185,6 +186,7 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Levels.Dynamics`, `Render.Brush` and `Render.Glow`) /
 `Game.StoneTank` (the tank of the charge: over `Render.Brush` for its
 dice) /
+`Game.Belt` (the road of the chase: over nothing) /
 `Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Game.HeroOrbs` (the hero's orbs: over
@@ -374,7 +376,7 @@ screen dump of `Game.Moon`.
   `DrawBackground` draws what it says, and the game hands it to the dynamic
   objects - a haze bends the backdrop.
 
-### `Core/Render.Objects.pas` (~80 lines)
+### `Core/Render.Objects.pas` (~125 lines)
 - **`TObjectScreenRenderer`** - draws a screen's level objects (free-form
   art, `TLevelObject`) in file order, each at its rectangle with its tint.
   The constructor resolves every sprite and measures every rectangle up
@@ -384,6 +386,11 @@ screen dump of `Game.Moon`.
   (honest PNG alpha: black glass and shadows would vanish through a key),
   linear filter, fed from the level's own `<assetsDir>-objects.mset` (when
   the level ships one) and the shared sets of `objectSets`; not owned here.
+  3.0.86: `Draw(screen, beltTravel)` - an object marked `Belt` is drawn
+  by `DrawOnBelt` in fractions of a unit (`DrawRectF`) at
+  **`BeltX(x, travel, span)`** - left by what the road of the chase has
+  run, wrapped round the screen's width - and once more a screen to the
+  left when it hangs over the right edge.
 
 ### `Core/Render.Dynamics.pas` (~495 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
@@ -679,7 +686,9 @@ Level data model + JSON parser. No game logic.
   `<assetsDir>-objects.mset` or a shared set of `objectSets`), screen
   (1-based), x/y (top-left) and width in
   screen units, tint, `Tag` (names it for the dynamic objects hung on it;
-  one picture on several screens carries the same tag on each). No height:
+  one picture on several screens carries the same tag on each), `Belt`
+  (3.0.86, JSON `"belt": true`: it lies on the road of a chase and slides
+  with it, wrapped round the screen's width). No height:
   it follows the art's aspect, so a picture is never stretched. No
   collision - the grid and the pads (`Levels.Pads`) decide where the hero
   stands.
@@ -1165,7 +1174,9 @@ in `CreateDynamic`.
   density (fixed at birth, so smoke already out fades on its own when the
   events turn the source off). No emission while the parent monster is
   dead or nowhere. `Rewind` also clears the swarm (a death restarts the
-  world in full). Particles: `TParticleSwarm` of `Effects.Emitter`, drawn
+  world in full). `Drift(dx, dy)` (3.0.86) - what is in the air moves with
+  the world under it, the source where it is: the road of the chase
+  carries off the Ram's smoke. Particles: `TParticleSwarm` of `Effects.Emitter`, drawn
   through `DrawPuff`; units per second in JSON, per tick in the code. The
   look is a **`TSmokeLook`** record in JSON units (`ReadSmokeLook` fills it
   from the level file, `TakeLook` turns it into ticks); `CreateLook(
@@ -3000,6 +3011,10 @@ moves in comes from `Game.Space`.
   for the dead or for one still flying from the last throw; `Kill` and
   `Revive` drop it. `InAir` - in a jump or a fall (the game's
   `HeroStandsIn` asks it).
+- 3.0.86: `RideBelt(way)` - the road of the chase has slid under him: on
+  the floor and in the air he goes with it by `CarryX` (fractions of a
+  unit, the wall asked at every one); standing on a deck, the deck carries
+  him.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -3246,7 +3261,10 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   facesRight)` - stands there, the left edge of its cell and its feet,
   facing as told: nothing thrown, no drift, the wheels of a hull at rest,
   walking the way it faces; `DeckUnderFeet` - the deck under it, nil for
-  one falling, flying or that ignores gravity (a scene's wait reads it).
+  one falling, flying or that ignores gravity (a scene's wait reads it);
+  `RideBelt(way)` (3.0.86) - the road of the chase has slid under it: it
+  goes along, unless a deck carries it (the road has no walls), and
+  vanishes once wholly past the left edge.
 - **`TMonster`** - position, screen, the placement's `Tag`, direction, `Life`,
   lives (+`LivesAll`), anim frame, step, fire timer, enrage flag (`Enraged`), boss minion timer, a one-shot henshin
   flag, the event list, for a disc monster its `TDisc` (`Disc`, nil
@@ -3380,7 +3398,9 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   over a shelf), `SpawnInLane(orders, screen)` (3.0.57: the body of a
   spawn action, made in column 1 of the row's feet line with the orders'
   tag and sprite list, then `EnterFrom`), `DepartGuests(screen)` (every
-  body that came along a lane flies off the top), `CountAliveOf(monsterId,
+  body that came along a lane flies off the top), `CarryLoot(screen,
+  way)` (3.0.86: the live pickups of the screen `RideBelt`),
+  `CountAliveOf(monsterId,
   screen)`, `CountAliveGuests(screen)` (the gate of the trial counts
   them), `ReturnSideStrays(monsterId, screen)` (the live bodies of that
   kind gone out of the side come back from the sky, each over a column of
@@ -4810,7 +4830,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3170 lines, 3.0.84)
+### `Game/Game.Ram.pas` (~3205 lines, 3.0.86)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -4930,9 +4950,11 @@ monster. The game carries out the cue.
   good - its eye is the Ram's, drawn here; two `TSmoke` of `ExhaustSmoke`,
   a body smoke as the monsters' are: a jet from the pipes' mouths at x
   167.3, y 14.9 and 28.5, angle 8, no lift, puffs at 4 a second as the
-  rumble throbs); `Tick` after the Ram's (the wheels roll by `Rolled`; the
-  exhausts at `ExhaustIdle` 0.3, full while it drives, `ExhaustRampTicks`
-  8 between, rewound when `Arrivals` changes); `DrawSmoke(canvas, origin,
+  rumble throbs); `Tick(beltShift)` after the Ram's (the wheels roll by
+  `Rolled` and, 3.0.86, by what the road ran under it; the exhausts at
+  `ExhaustIdle` 0.3, full while it drives or the road runs,
+  `ExhaustRampTicks` 8 between, rewound when `Arrivals` changes; the
+  exhausts' and the head's smoke `Drift` left with the road); `DrawSmoke(canvas, origin,
   alpha)` - the exhausts, before the body, so the machine backs into its
   own cloud; `DrawBody(sprites, alpha)` - the well, the
   hull's `DrawUnder`, the mast clipped above `MastHiddenBelow` 90 of the
@@ -5044,6 +5066,13 @@ monster. The game carries out the cue.
   (before `TickKill`) tells each third of a head's lives gone (`Tier`
   over `FThirds`), one a tick, not for the last life; `FThirds` 0 in
   `Arm` and `LockSweeper`. The game drops a medkit for it.
+- 3.0.86, **the chase** (stage 11a). After the sweeper `TickChange` rests
+  the spent machine at the wall for `ChangeRiseTicks` 30 +
+  `RowBootTicks` 30 - the time the third head will take to rise and
+  light its row - and `ChaseBreathTicks` 25; then **`TickSpent`** gives
+  the cue **`Chase`** with `Rumble`, once (`FChased`, false in `Arm`): the
+  game starts the road. The machine itself stays at the wall; the road
+  is `Game.Belt`.
 ### `Game/Game.Wrecks.pas` (~440 lines, 3.0.83)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -5115,6 +5144,17 @@ SDL.
   `PulseGapSpan` 22 ticks, rolled each time, of 1, or 2 at
   `DoublePulseShare` 0.3 when the tank holds them; returns the percent to
   add), `Ceiling` (`Ceilings` 30, 55 by heads down), `Running`.
+### `Game/Game.Belt.pas` (~125 lines, 3.0.86)
+The treadmill of the chase (`docs/mechanics/arena-3.md`, stage 11a):
+only the road's motion. Knows neither the Ram, the hero nor the road's
+picture; no SDL.
+- **`TBelt`** - `Start` (to `BeltCruise` 1 unit a tick, 33 a second),
+  `Stop` (to a standstill), each over `BeltRampTicks` 66 by a smooth step
+  from the speed it finds (`RampTo`) - no jerk, a stop in the climb
+  included; a second `Start` or `Stop` changes nothing; `Clear` (standing,
+  nothing run); `Tick` (the ramp, then `Travel` grows by `Speed`);
+  `Speed` (units the road went left this tick), `Travel`,
+  `TravelAt(alpha)` (between the ticks), `Running`.
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -6010,7 +6050,9 @@ so a unit (and later a test) can reach it. `interface` holds
     else. All four exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `CastAura` (G: the aura straight
     onto the hero, the slot untouched), `FOrbs.PourRain` (H: the fire rain over
-    the hero's screen, the slot untouched), `FHenshin.Start` (J,
+    the hero's screen, the slot untouched), `CureHero` (I, `ScancodeI`,
+    3.0.86: a point of health, up to the cure's 10 - something to spend
+    tuning a long fight), `FHenshin.Start` (J,
     `ScancodeJ`, 3.0.49: the henshin at once, no boss and no countdown),
     `FOrbs.ShedSuit` with `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
     3.0.49: the ring of orbs and its mercy as the boss's death gives
@@ -6079,6 +6121,12 @@ so a unit (and later a test) can reach it. `interface` holds
   `FOrbs.Energy` on `Blast`, and last `FOrbs.Charge(FStoneTank.Tick(...))`.
   `BulletStruckRamEye` and `BulletStruckRamBarrels` (not a plate's
   catch) - `Wound(1 / FRam.FullLives)`. Cleared with the capsules.
+- 3.0.86, **the road of the chase**: `FBelt`. **`TickBelt`** before
+  `TickRam` (both stand for the burst's inhale): `FBelt.Tick`, and while
+  it runs `FHero.RideBelt` (not the dead) and `FField.CarryLoot` by
+  `-Speed`. `TickRam`: `FRamPainter.Tick(FBelt.Speed)`, `Start` on
+  `Chase`. `FObjects.Draw(screen, FBelt.TravelAt(alpha))`. Cleared with
+  the capsules.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6416,6 +6464,13 @@ the hunter's ceiling; a death pours up to its ceiling, late; nothing
 spills into the next quarter; the second ceiling; the trickle; a clear);
 `Tests.Game.HeroOrbs` 3 (the direct charge at once, held to full with the
 orbs on their way, nothing to a corpse).
+3.0.86 - 14 more: `Tests.Game.Belt` (`TBeltTests` 9: stands before the
+start; cruise at the end of its ramp; down to a standstill; no jerk up
+or down; a stop in the climb smooth; a second start changes nothing;
+the travel the sum of the speeds; between ticks between them; a clear;
+`TBeltRoadTests` 4: `BeltX` in place, left, off the left onto the right,
+a whole span back); `TRamSweeperTests.TestDrivesOffIntoTheChaseOnce`;
+and no chase after the hunter in `TestTheLastLifeBlowsTheHeadUp`.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7130,6 +7185,7 @@ made again in 3.0.83).
 | The wrecks and the sweeper's blast retuned (3.0.83): each wreck kicked off hard by the blast, the harder the nearer, then slowed, a climb and a spin of its own, one in five against the others; the sweeper bursts with the tank's death and its drone under it | Game.Wrecks.pas (`Launch` with the reach, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` on `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | The Ram backs off before the sweeper bursts (3.0.82): a stand, the drive to the right wall with its barrels red, the eye blinking and the alarm, the overload there; spent, it stands at the wall; a hero thrown down inside the hull walks out unhurt, for 60 ticks at most, through the whole fight | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` on `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | The shuttle's medkits on the thirds (3.0.84): a capsule falls onto a high pad (the hunter's) or the road at the far wall (the sweeper's), brakes, lands, parts and leaves a medkit | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` of the `ram` action in level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |

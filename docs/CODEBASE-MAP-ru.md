@@ -56,8 +56,9 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   (`Game.Shield`), пресс финала (`Game.Press`); и TeK-R13, Таран арены
   босса второго уровня (`Game.Ram`, 3.0.75), пады, которые сбивает волна
   его свипера (`Game.Wrecks`, 3.0.81), аптечки шаттла в его бою
-  (`Game.Capsules`, 3.0.84) и скрытый бак заряда формы в нём
-  (`Game.StoneTank`, 3.0.85). `Game/Events/` исполняет
+  (`Game.Capsules`, 3.0.84), скрытый бак заряда формы в нём
+  (`Game.StoneTank`, 3.0.85) и дорога его погони (`Game.Belt`, 3.0.86).
+  `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
   `Game/Pads/` - платформы в игре (`Pads.World`), цикл платформы,
@@ -183,6 +184,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Game.Capsules` (аптечки шаттла: над канвой `Levels.Dynamics`,
 `Render.Brush` и `Render.Glow`) /
 `Game.StoneTank` (бак заряда: над `Render.Brush` ради костей) /
+`Game.Belt` (дорога погони: ни над чем) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -378,7 +380,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `DrawBackground` рисует то, что он говорит, а игра отдаёт его
   динамическим объектам - марево искривляет задник.
 
-### `Core/Render.Objects.pas` (~80 строк)
+### `Core/Render.Objects.pas` (~125 строк)
 - **`TObjectScreenRenderer`** - рисует объекты уровня на экране (свободный
   арт, `TLevelObject`) в порядке файла, каждый в своём прямоугольнике со своим
   тинтом. Конструктор заранее разрешает все спрайты и считает все
@@ -388,7 +390,11 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   корень: без color key (честная альфа PNG - чёрное стекло и тени пропали бы
   через ключ), с линейным фильтром, из собственного
   `<assetsDir>-objects.mset` уровня (когда уровень его поставляет) и общих
-  наборов `objectSets`; юнит им не владеет.
+  наборов `objectSets`; юнит им не владеет. 3.0.86: `Draw(screen,
+  beltTravel)` - объект с пометкой `Belt` рисует `DrawOnBelt`, в долях
+  единицы (`DrawRectF`), в **`BeltX(x, travel, span)`** - левее на
+  столько, сколько пробежала дорога погони, по кругу ширины экрана, - и
+  ещё раз на экран левее, если он свисает за правый край.
 
 ### `Core/Render.Dynamics.pas` (~495 строк)
 - **`TDynamicScreenRenderer`** - выводит динамические объекты уровня
@@ -692,7 +698,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   единицы), x/y (левый верхний угол) и
   ширина в единицах экрана, tint, `Tag` (имя для динамических объектов,
   подвешенных к нему; одна картинка на нескольких экранах несёт один тег на
-  каждом). Высоты нет: она следует пропорциям арта,
+  каждом), `Belt` (3.0.86, в JSON `"belt": true`: лежит на дороге погони
+  и едет с ней, по кругу ширины экрана). Высоты нет: она следует пропорциям арта,
   так что картинка никогда не растягивается. Коллизий нет - где стоит герой,
   решают сетка и платформы (`Levels.Pads`).
 - **`TLevel`** (класс) - разобранный уровень: тайлы `[экран][строка][столбец]`,
@@ -1184,7 +1191,9 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   темп и, корнем, плотность клуба (фиксируется при рождении - когда события
   выключают источник, вылетевший дым гаснет сам). Пока родитель-монстр
   мёртв или пропал, выброса нет. `Rewind` ещё и чистит рой (смерть
-  перезапускает мир целиком). Частицы - `TParticleSwarm` из
+  перезапускает мир целиком). `Drift(dx, dy)` (3.0.86) - то, что в воздухе,
+  сдвигается с миром под ним, источник на месте: дорога погони уносит дым
+  Тарана. Частицы - `TParticleSwarm` из
   `Effects.Emitter`, рисуются через `DrawPuff`; в JSON единицы в секунду, в
   коде - за тик. Вид дыма - запись **`TSmokeLook`** в единицах JSON
   (`ReadSmokeLook` заполняет её из файла уровня, `TakeLook` переводит в
@@ -3049,6 +3058,9 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   каждый тик, срезал бы взлёт); мёртвому и ещё летящему от прошлого
   броска - ничего; `Kill` и `Revive` его сбрасывают. `InAir` - в прыжке
   или падении (его спрашивает `HeroStandsIn` игры).
+- 3.0.86: `RideBelt(way)` - под ним проехала дорога погони: на полу и в
+  воздухе он едет с ней через `CarryX` (в долях единицы, стену
+  спрашивают на каждой); стоящего на палубе везёт палуба.
 
 ### `Game/Monsters.Disc.pas` (~250 строк)
 Монстр, нарисованный вращающимся диском из слоёв вместо кадров `alive`, -
@@ -3291,7 +3303,9 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   там - левый край клетки и ноги - лицом куда сказано: ничего не брошено,
   без сноса, колёса корпуса в покое, идёт туда, куда смотрит;
   `DeckUnderFeet` - палуба под ним, nil у падающего, летящего или того,
-  кому гравитация не указ (её читает ожидание сцены).
+  кому гравитация не указ (её читает ожидание сцены); `RideBelt(way)`
+  (3.0.86) - под ним проехала дорога погони: едет с ней, если его не везёт
+  палуба (у дороги нет стен), и исчезает, целиком уйдя за левый край.
 - **`TMonster`** - позиция, экран, `Tag` расстановки, направление, `Life`,
   жизни (+`LivesAll`), кадр анимации, шаг, таймер огня, флаг ярости (`Enraged`), таймер миньонов босса, одноразовый
   флаг хеншина, список событий, у монстра-диска - его `TDisc` (`Disc`, у
@@ -3427,7 +3441,8 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   или тело волны над полкой), `SpawnInLane(orders, screen)` (3.0.57: тело
   действия spawn, сделанное в колонке 1 на линии ног строки с тегом и
   списком спрайтов из приказа, потом `EnterFrom`), `DepartGuests(screen)`
-  (каждое тело, которое пришло по дорожке, улетает вверх),
+  (каждое тело, которое пришло по дорожке, улетает вверх), `CarryLoot(screen,
+  way)` (3.0.86: живые пикапы экрана - `RideBelt`),
   `CountAliveOf(monsterId, screen)`, `CountAliveGuests(screen)` (их
   считают ворота испытания), `ReturnSideStrays(monsterId, screen)` (живые
   тела этого вида, ушедшие за бок, возвращаются с неба, каждое над своей
@@ -4800,7 +4815,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3170 строк, 3.0.84)
+### `Game/Game.Ram.pas` (~3205 строк, 3.0.86)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -4917,10 +4932,12 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
 - **`TRamPainter`** - `Create(art, ram)` (свой `THull`, спящий навсегда -
   глаз у Тарана свой, рисуется здесь; два `TSmoke` из `ExhaustSmoke`, дым
   тела, как у монстров: струя из срезов труб на x 167.3, y 14.9 и 28.5,
-  угол 8, без подъёма, клубы 4 раза в секунду в такт гулу); `Tick` после
-  тика Тарана (колёса катятся по `Rolled`; выхлоп на `ExhaustIdle` 0.3,
-  в езде полный, переход `ExhaustRampTicks` 8, откат при смене
-  `Arrivals`); `DrawSmoke(canvas, origin, alpha)` - выхлоп до корпуса,
+  угол 8, без подъёма, клубы 4 раза в секунду в такт гулу);
+  `Tick(beltShift)` после тика Тарана (колёса катятся по `Rolled` и, с
+  3.0.86, по тому, что пробежала под ним дорога; выхлоп на `ExhaustIdle`
+  0.3, полный в езде и пока бежит дорога, переход `ExhaustRampTicks` 8,
+  откат при смене `Arrivals`; дым выхлопа и головы `Drift` влево с
+  дорогой); `DrawSmoke(canvas, origin, alpha)` - выхлоп до корпуса,
   так что машина пятится в своё облако; `DrawBody(sprites, alpha)` -
   колодец, `DrawUnder` корпуса, мачта с клипом выше `MastHiddenBelow` 90
   корпуса (ниже она светилась бы в открытой передней арке), `DrawBody`
@@ -5027,6 +5044,12 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   `TickKill`) сообщает каждую ушедшую треть жизней головы (`Tier` сверх
   `FThirds`), по одной за тик, последнюю жизнь - нет; `FThirds` 0 в `Arm`
   и `LockSweeper`. Игра сбрасывает за неё аптечку.
+- 3.0.86, **погоня** (этап 11a). После свипера `TickChange` ставит
+  выдохшуюся машину на отдых у стены на `ChangeRiseTicks` 30 +
+  `RowBootTicks` 30 - столько третья голова будет подниматься и зажигать
+  ряд - и `ChaseBreathTicks` 25; потом **`TickSpent`** даёт cue
+  **`Chase`** с `Rumble`, один раз (`FChased`, false в `Arm`): игра
+  запускает дорогу. Сама машина стоит у стены; дорога - `Game.Belt`.
 ### `Game/Game.Wrecks.pas` (~440 строк, 3.0.83)
 Пады, сбитые ударной волной свипера (`docs/mechanics/arena-3.md`, этап
 10c-3): обломок улетает в картинке пада, а сам пад усыплён (`TPad.Doze`).
@@ -5096,6 +5119,17 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   каждый раз заново, по 1, или по 2 с долей `DoublePulseShare` 0.3, когда
   в баке есть; возвращает проценты прибавки), `Ceiling` (`Ceilings` 30, 55
   по числу сбитых голов), `Running`.
+### `Game/Game.Belt.pas` (~125 строк, 3.0.86)
+Беговая дорожка погони (`docs/mechanics/arena-3.md`, этап 11a): только
+движение дороги. Не знает ни Тарана, ни героя, ни картинки дороги; без
+SDL.
+- **`TBelt`** - `Start` (до `BeltCruise` 1 единица за тик, 33 в секунду),
+  `Stop` (до остановки), каждый за `BeltRampTicks` 66 плавной ступенькой
+  от той скорости, что застал (`RampTo`), - без рывка, и стоп посреди
+  разгона тоже; второй `Start` или `Stop` ничего не меняет; `Clear`
+  (стоит, ничего не пробежано); `Tick` (рампа, потом `Travel` растёт на
+  `Speed`); `Speed` (сколько дорога ушла влево за тик), `Travel`,
+  `TravelAt(alpha)` (между тиками), `Running`.
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -5970,7 +6004,9 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
     клавиатура, и больше никаких. Все четыре существуют в любой сборке, их тела
     компилируются в ничто, поэтому ни одному вызывающему не нужен ifdef. За
     ними: `CastAura` (G: аура прямо на героя, слот не тронут),
-    `FOrbs.PourRain` (H: огненный дождь на экран героя, слот не тронут), `FHenshin.Start`
+    `FOrbs.PourRain` (H: огненный дождь на экран героя, слот не тронут),
+    `CureHero` (I, `ScancodeI`, 3.0.86: очко здоровья, до 10 лечения -
+    чтобы было что тратить, настраивая долгий бой), `FHenshin.Start`
     (J, `ScancodeJ`, 3.0.49: хеншин сразу, без босса и без отсчёта),
     `FOrbs.ShedSuit` с `GrantMercy(IceRiteScore.ShedTicks)` (K, `ScancodeK`,
     3.0.49: кольцо орбов и его пощада, как их даёт смерть босса, без
@@ -6037,6 +6073,12 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   последним - `FOrbs.Charge(FStoneTank.Tick(...))`. `BulletStruckRamEye`
   и `BulletStruckRamBarrels` (не перехват пластиной) - `Wound(1 /
   FRam.FullLives)`. Убирается вместе с капсулами.
+- 3.0.86, **дорога погони**: `FBelt`. **`TickBelt`** до `TickRam` (оба
+  замирают на вдохе сброса): `FBelt.Tick`, и пока бежит -
+  `FHero.RideBelt` (не мёртвому) и `FField.CarryLoot` на `-Speed`.
+  `TickRam`: `FRamPainter.Tick(FBelt.Speed)`, `Start` на `Chase`.
+  `FObjects.Draw(screen, FBelt.TravelAt(alpha))`. Убирается вместе с
+  капсулами.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -6367,6 +6409,13 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 перетекает в следующую четверть; второй потолок; капля; очистка);
 `Tests.Game.HeroOrbs` 3 (прямой заряд сразу, не выше полной с орбами в
 пути, трупу ничего).
+3.0.86 - ещё 14: `Tests.Game.Belt` (`TBeltTests` 9: стоит до старта;
+круиз к концу рампы; до остановки; без рывка вверх и вниз; стоп посреди
+разгона плавный; второй старт ничего не меняет; путь - сумма скоростей;
+между тиками - между ними; очистка; `TBeltRoadTests` 4: `BeltX` на месте,
+левее, с левого края на правый, целый пролёт - обратно);
+`TRamSweeperTests.TestDrivesOffIntoTheChaseOnce`; и никакой погони после
+охотника в `TestTheLastLifeBlowsTheHeadUp`.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7068,6 +7117,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Обломки и взрыв свипера после прогона (3.0.83): каждый обломок отрывает взрывом, тем сильнее, чем ближе, потом он замедляется, свой подъём и своё вращение, каждый пятый против остальных; свипер взрывается смертью танка, под ней его гул | Game.Wrecks.pas (`Launch` с дальностью, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` на `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | Таран отъезжает перед взрывом свипера (3.0.82): стоянка, отъезд к правой стене с красными стволами, мигающим глазом и тревогой, перегруз там; пустой стоит у стены; герой, брошенный внутрь корпуса, выходит без раны, не дольше 60 тиков, весь бой | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` на `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | Аптечки шаттла на третях (3.0.84): капсула падает на высокий пад (охотника) или на дорогу у дальней стены (свипера), тормозит, садится, раскрывается и оставляет аптечку | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` действия `ram` в level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Заряд формы в бою Тарана (3.0.85): шкала растёт от попаданий по охотнику и свиперу, поздно и неровными толчками, до 30% и 55%; смерть головы доливает остаток | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
