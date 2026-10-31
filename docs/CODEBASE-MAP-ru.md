@@ -57,7 +57,8 @@ SDL2, Win32. Логика в пространстве 512x384 игровых е�
   босса второго уровня (`Game.Ram`, 3.0.75), пады, которые сбивает волна
   его свипера (`Game.Wrecks`, 3.0.81), аптечки шаттла в его бою
   (`Game.Capsules`, 3.0.84), скрытый бак заряда формы в нём
-  (`Game.StoneTank`, 3.0.85) и дорога его погони (`Game.Belt`, 3.0.86).
+  (`Game.StoneTank`, 3.0.85), дорога его погони (`Game.Belt`, 3.0.86) и
+  то, сколько проехал дальний план за дорогой (`Game.FarPlane`, 3.0.88).
   `Game/Events/` исполняет
   события уровня; `Game/Scenes/` играет сцены уровня (`Scenes.Director`,
   3.0.62); в
@@ -99,7 +100,9 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 Направление зависимостей (примерно снизу вверх):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (над `Monsters.Defs`
+`Monsters.Defs` -> `Levels.Tint` / `Levels.FarPlane` (дальний план погони
+данными: над `Render.Brush` ради цветов его солнца) /
+`Levels.Events` (над `Monsters.Defs`
 ради тактики, которую ставит событие, и стороны, с которой входит тело, и
 над `Levels.Pads` ради программ полок и порядков банков, которые
 отдаёт событие) / `Effects.Emitter` / `Render.Puff` /
@@ -138,6 +141,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 монстра: над `Monsters.Defs`) -> `Hero` /
 `Monsters` (оба тоже над `Pads.World`; `Monsters` - над `Levels.Events`
 ради приказов телу, которое впускает событие) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+`Render.FarPlane` (над `Levels.FarPlane`, видом задника из
+`Levels.Dynamics` и `Render.Sprites`; солнце через `Render.Glow`) /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
 `Levels.Dynamics` и `Monsters.Defs`) / `Game.Blasts` (волна взрыва: над
 `Monsters.Defs`, `Effects.Sparks` ради типа щупа и `Sdl2.Core`) /
@@ -187,6 +192,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Render.Brush` и `Render.Glow`) /
 `Game.StoneTank` (бак заряда: над `Render.Brush` ради костей) /
 `Game.Belt` (дорога погони: ни над чем) /
+`Game.FarPlane` (сколько проехал её дальний план: только над
+`Levels.FarPlane`) /
 `Events.Director` (над `Game.Trial` ради хода, который он читает) / `Orbs.Aura` (аура героя: над
 `Orbs.Flock` и `Orbs.Harvest`) / `Orbs.Rain` (огненный дождь: над теми же
 двумя и `Game.Space`) / `Game.HeroOrbs` (орбы героя: над `Orbs.Aura`,
@@ -398,7 +405,37 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   столько, сколько пробежала дорога погони, по кругу ширины экрана, - и
   ещё раз на экран левее, если он свисает за правый край.
 
-### `Core/Render.Dynamics.pas` (~495 строк)
+### `Core/Render.FarPlane.pas` (~395 строк, 3.0.88)
+- **`TFarPlanePainter`** - рисует дальний план погони (`Levels.FarPlane`)
+  там, куда его увели смещения, вместо задника экрана: чёрное небо,
+  солнце, потом слои от дальнего к ближнему - у каждого своя полоса,
+  повторённая поперёк, и элементы на ней. `Create(renderer, cache, def)`
+  сразу разрешает все картинки (спрайт, которого нет в наборе, падает на
+  загрузке уровня) и делает два свечения (`gsPoint` 128, `gsDisc` 64 -
+  деструктор их освобождает, с проверкой на nil ради конструктора,
+  остановленного недостающим спрайтом); текстуре полосы ставится blend,
+  чтобы её углы могли её гасить. `Draw(offsets, backdrop)` - задник свой у
+  экрана (`TTileScreenRenderer.Backdrop`), рисуется там, где едет его
+  элемент (`existing`). Пока задник какого-то слоя закрывает весь экран
+  (`FirstSeenLayer`), всё за этим слоем не рисуется, ни небо, ни солнце:
+  арена до погони стоит конца скалы и ближних холмов поверх стены.
+- Каждая картинка - лента треугольников (`SDL_RenderGeometry`, `AddQuad`
+  / `Flush`). Альфа углов (`TQuadAlpha` - доля каждого края, угол -
+  произведение своих двух) проявляет верх полосы (`fadeTop`), её начало
+  (`featherLeft` от её `from`) и левый конец скалы в стену; цвет углов -
+  `shade` элемента, тинт задника или тень полосы (`BandShade`) - его несут
+  вершины, colorMod общего кэша не трогается. Полоса идёт витками своей
+  текстуры от левее экрана (`DrawBand`, `TBandTurn`), обрезанная на своём
+  начале и ещё раз там, где кончается растушёвка (`AddBandPiece`).
+  Элемент с `mirror` читается справа (`Across`).
+- Солнце (`DrawSun`), сложением поверх чёрного: засветка
+  (`HaloGlareSize` 3.1 радиуса ореола на `HaloGlareLevel` 0.19) и ядро
+  (0.92 на 0.38) - два точечных свечения, подогнанных под радиальный
+  градиент стенда, и диск, всё цветом, который даёт `SunCover` между
+  `white` и `tint`. Небо (`DrawSky`) - чёрная заливка с blend рисования
+  none.
+
+### `Core/Render.Dynamics.pas` (~515 строк)
 - **`TDynamicScreenRenderer`** - выводит динамические объекты уровня
   (`Levels.Dynamics`) на экран. Владеет текстурами `TDynamicCanvas`
   (свечения точка, флейр, старбёрст, штрих и луч - `Render.Glow`, луч
@@ -479,13 +516,18 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   Конструктор получает **`TDynamicWorld`** (запись) - то, что объекты
   спрашивают у игры: `LocateParent`, `BackdropOf` (`TBackdropOf`,
   `reference to function(screen): TBackdropView` - задник, нарисованный
-  за экраном; игра даёт `Backdrop` рендерера тайлов) и `Solid`, игровой
+  за экраном; игра даёт `HazeBackdrop` - `Backdrop` рендерера тайлов, а на
+  экране дальнего плана погони ничего, 3.0.88) и `Solid`, игровой
   `TSolidProbe`,
   отвечающий за экран героя. Объектам канва отдаёт вместо него
   `SolidInView`: щуп игры, пока тикающий объект стоит на экране героя
   (`FInView`, выставляется на каждое место в `Tick`), и никаких стен в
   остальное время - объект с другого экрана не должен звенеть о чужую
   сетку.
+- 3.0.88: `Draw` берёт угол и в долях единицы (`TSdlFPoint`; вариант с
+  `TSdlPoint` передаёт его дальше, `FineOrigin`): дальний уступ экрана 13
+  едет со слоем тоннеля дальнего плана вместе со стеной, а не целыми
+  единицами.
 
 ### `Core/Render.Shake.pas` (~110 строк)
 Тряска экрана как один метр травмы на всю игру, читаемый обратно как сдвиг
@@ -625,7 +667,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   lang\en.json / ru.json, сверяясь с полным реестром ключей), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~2165 строк)
+### `Core/Levels.Defs.pas` (~2190 строк)
 Модель данных уровня + JSON-парсер. Игровой логики нет.
 - **`EmptyTile = 0`** - значение сетки 0 это ничего; N >= 1 отображается в
   `TilePalette[N - 1]`.
@@ -909,6 +951,48 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   openDoor запечатанной двери (`SLevelDoorSealedOpens`) и openDoor на
   экране без запертой двери (`SLevelDoorNotShut`). `CheckEvents` ещё отказывает
   клетке heroStands вне сетки (`SLevelEventCellOff`, 3.0.67).
+- Дальний план (3.0.88): **`FarPlane`** - `TFarPlaneDef` из
+  `Levels.FarPlane`, читается последним в `ParseRoot` (теперь он берёт
+  папку файла уровня - ради layout рядом с ним). Приватный
+  `CheckFarPlane` отказывает экрану за пределами уровня
+  (`SLevelFarPlaneBadScreen`) и набору, которого нет в `objectSets`
+  уровня (`SLevelFarPlaneNoSet`).
+
+### `Core/Levels.FarPlane.pas` (~350 строк, 3.0.88)
+Дальний план погони данными (`docs/mechanics/chase-backdrop.md`): лента
+слоёв, уезжающих влево за игровым слоем каждый со своей скоростью, и
+солнце под ними всеми. Уровень называет экран и layout в секции
+`farPlane` (`"screen"`, `"layout"`); layout лежит рядом с файлом уровня
+(`bin/chase-backdrop.json` у уровня 2) и его же проигрывает на стенде
+`tools/chase/build_stand.py`. Картинки - из набора с именем файла layout
+без расширения. Ключи, которые читает только стенд (`road`, `rampSec`,
+`fangs`, отметки края скалы), не трогаются. Без SDL.
+- **`TFarPlaneMotion`** - `fmRidge`, `fmCity`, `fmTunnel`, `fmGround`
+  (`"speed"` слоя: `ridge`, `city`, `tunnel`, `ground`).
+  **`TFarPlaneOffsets`** - насколько каждое движение увело свои слои
+  влево, в единицах.
+- **`TFarPlaneSun`** - `X`, `Y`, `Disc`, `Halo`, `White`, `Tint` (`TRgb`),
+  `TintRamp`. **`TFarPlaneSpeeds`** - единицы в секунду: `TunnelPeak`,
+  `TunnelCruise`, `EaseSec`, `CityShareInTunnel`, `CityCruise`,
+  `CityBrakeZone`, `CityLeast`, `RidgeShareOfCity`, `Ground`.
+- **`TFarPlaneBand`** - `Texture`, `Top`, `Bottom`, `FadeTop`, `From` (-1:
+  на всю ширину), `FeatherLeft`, `ShadeInTunnel` (сколько своего цвета
+  держит, пока весь тоннель на экране; 1, если не задано).
+  **`TFarPlaneElement`** - `Id` (его спрайт), `X` (левый край по слою), `Y`
+  (ступни), `W` (высота - по картинке), `Shade`, `TintsSun`,
+  `FeatherLeft`, `Mirror`, `Backdrop` (`"existing"`: свой задник экрана).
+  **`TFarPlaneLayer`** - `Id`, `Motion`, `Length`, `Band`, `Elements`.
+- **`TFarPlaneDef`** - `Screen` (0 - нет, `Present`), `SetName`,
+  `ScreenWidth`, `ScreenHeight`, `Sun`, `Speeds`, `Layers` (от дальнего к
+  ближнему); `CityLength`, `TunnelEnd` (правый край последнего элемента
+  тоннеля по его слою), `SunCover(offsets)` (0 белое .. 1: самый глубокий
+  из куполов перед солнцем, с рампой `TintRamp`), `TunnelPassed(offsets)`
+  (0..1), `BandShade(band, offsets)` (`ShadeInTunnel` до 1 по мере ухода
+  тоннеля), `SpriteName(id)` (`set:id`).
+- **`ReadFarPlane(root, levelId, levelDir)`** - нет секции - нет дальнего
+  плана; `EFarPlaneError` на layout, которого нет или который не
+  читается, слой неизвестной скорости, элемент без ширины, город без
+  длины и цвет солнца не из трёх чисел.
 
 ### `Core/Effects.Emitter.pas` (~105 строк)
 - **`TParticle`** (запись) - место, скорость (единиц за тик), угол и
@@ -5205,6 +5289,24 @@ SDL.
   (стоит, ничего не пробежано); `Tick` (рампа, потом `Travel` растёт на
   `Speed`); `Speed` (сколько дорога ушла влево за тик), `Travel`,
   `TravelAt(alpha)` (между тиками), `Running`.
+
+### `Game/Game.FarPlane.pas` (~150 строк, 3.0.88)
+Сколько проехал каждый слой дальнего плана погони
+(`docs/mechanics/chase-backdrop.md`), по правилам стенда, тик в тик. Не
+знает ни ленты, ни героя, ни SDL.
+- **`TFarPlane`** - `Create(def)` (без экрана не двигается никогда),
+  `Clear` (обратно на старт погони), `Tick(beltShare)` - скорость ленты
+  долей её круиза. Тоннель идёт на `TunnelPeak`, город на
+  `CityShareInTunnel` от него, пока последний элемент тоннеля не ушёл за
+  левый край на `TunnelGoneMargin` 16 (`TunnelGone`); потом оба плавной
+  ступенькой за `EaseSec` уходят на свой круиз. Город тормозит в
+  последних `CityBrakeZone` пропорционально остатку, до `CityLeast`, и
+  никогда не заезжает за свой конец (`BrakeCity`); хребет идёт на
+  `RidgeShareOfCity` от города, земля - на `Ground`. Каждая скорость
+  умножается на долю ленты после тормоза: разгон дороги трогает дальний
+  план, её стоп его ставит, вместе с полом тормоза. Единицы в секунду
+  делятся на `FarPlaneTicksPerSecond` 33. `Offsets`, `OffsetsAt(alpha)`,
+  `TunnelSpeed`, `CitySpeed`.
 ### `Game/Game.Press.pas` (~205 строк)
 Пресс финала испытания грейвелами (3.0.59, этап 6.2): его правила, без
 платформ, без монстров и без SDL - класс, который тест гоняет один
@@ -5620,7 +5722,7 @@ SDL.
     сцена церемонии.
 - Тесты: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4050 строк)
+### `Game/Game.Moon.pas` (~4100 строк)
 Вся машина состояний игрового потока (`TMoonGame`) - игра, которую
 запускает программа. Вынесена из `Moon2D.dpr` слово в слово перед этапом 8
 арены 3, чтобы до неё дотянулся юнит (а потом и тест). В `interface` -
@@ -6163,6 +6265,20 @@ SDL.
   из ответа идёт в **`StandMedkitOn(mark)`** - ступнями на метку,
   `SpawnStanding` из `MedkitMonsterId`; через него же `TickCapsules`
   ставит аптечки капсул.
+- 3.0.88, **дальний план погони**: `FFarPlane` (`TFarPlane`) и
+  `FFarPlanePainter` (`TFarPlanePainter`) - на каждый уровень, после
+  объектов, над `FarPlane` уровня и кэшем объектов.
+  `FFarPlane.Tick(FBelt.Speed / BeltCruise)` сразу после `FBelt.Tick`
+  (стоит вместе с дорогой на вдохе сброса); `FFarPlane.Clear` рядом с
+  каждым `FBelt.Clear` - смерть возвращает его на старт погони.
+  **`DrawBackdrop(alpha)`** - на экране дальнего плана вместо
+  `FTiles.DrawBackground` рисует живописец, задник экрана едет в нём.
+  **`SkyOrigin(alpha)`** - слой неба этого экрана (дальний уступ, его
+  столбы, конвои и прожектор) рисуется от минус смещения тоннеля: едет
+  вместе со стеной. **`HazeBackdrop(screen)`** - то, что получает
+  `BackdropOf` динамики: `Backdrop` рендерера тайлов, а на экране
+  дальнего плана ничего - гнуть там нечего, одной картинки нет.
+  `Levels.Dynamics` переехал в uses интерфейса.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -6514,6 +6630,22 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 платформе, поданной с ней; очистка начинает тройку заново);
 `TDriftLootTests` 2 (аптечка уезжает со своей платформой за левый край и
 исчезает, как и на дороге).
+3.0.88 - ещё 23, все в `Tests.Game.FarPlane`, над layout самих тестов -
+первой настройкой стенда, таймлайн которой дал стенд, так что тюнинг
+поставляемого layout ни одного не ломает: `TFarPlaneTests` 12 (стоит,
+пока дорога стоит; город открывается, тоннель уходит и тормоз
+начинается, когда говорит стенд, в пределах 0.2 с; выходит на круиз;
+полоса не кончается на виду за 900 с; хребет - доля города; земля на
+своей скорости; остановленная лента ставит всё, вместе с полом тормоза;
+между тиками - между ними; очистка; без дальнего плана не двигается),
+`TFarPlaneSunTests` 3 (белое без купола перед ним, тинт глубоко внутри
+купола, рампа на его краю), `TFarPlaneShadeTests` 3 (темно, пока тоннель
+на экране, полный цвет, когда ушёл, посередине - посередине),
+`TFarPlaneReadTests` 5 (уровень 2 читает свой дальний план - экран,
+набор, четыре слоя, длина города, конец тоннеля, задник в нём, земля с
+начала и тёмная в тоннеле, город зазеркален; нет секции - нет плана;
+отказ на layout, которого нет, неизвестную скорость и элемент без
+ширины).
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7215,6 +7347,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Обломки и взрыв свипера после прогона (3.0.83): каждый обломок отрывает взрывом, тем сильнее, чем ближе, потом он замедляется, свой подъём и своё вращение, каждый пятый против остальных; свипер взрывается смертью танка, под ней его гул | Game.Wrecks.pas (`Launch` с дальностью, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` на `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | Таран отъезжает перед взрывом свипера (3.0.82): стоянка, отъезд к правой стене с красными стволами, мигающим глазом и тревогой, перегруз там; пустой стоит у стены; герой, брошенный внутрь корпуса, выходит без раны, не дольше 60 тиков, весь бой | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` на `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | Аптечки шаттла на третях (3.0.84): капсула падает на высокий пад (охотника) или на дорогу у дальней стены (свипера), тормозит, садится, раскрывается и оставляет аптечку | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` действия `ram` в level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| Дальний план погони (3.0.88): конец тоннеля и город в кратере едут за дорогой каждый со своей скоростью - стена с дальним уступом медленно, ближние холмы быстро перед ней, тёмные в тоннеле и светлеющие по мере его ухода, город медленнее, хребет медленнее всех; солнце кодом под ними всеми, с тинтом, где перед ним купол; город зазеркален ради света; марева на этом экране нет | Levels.FarPlane.pas (`TFarPlaneDef`, `ReadFarPlane`) + Game.FarPlane.pas (`TFarPlane`) + Render.FarPlane.pas (`TFarPlanePainter`) + Levels.Defs.pas (`FarPlane`, `CheckFarPlane`) + Render.Dynamics.pas (`Draw` от `TSdlFPoint`) + Game.Moon.pas (`DrawBackdrop`, `SkyOrigin`, `HazeBackdrop`, тик и очистка) + bin/chase-backdrop.json + `farPlane` и `objectSets` в level2.json + chase-backdrop.mset + tools/chase (стенд) + Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md) |
 | Дрейфующие платформы погони и их аптечки (3.0.87): одинокие платформы и случайные подъёмы на высоту люка подаются из-за правого края по ходу дороги, едут влево и отпускаются за левым краем; аптечка на средней платформе одного подъёма из трёх уезжает со своей платформой | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, константы) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` с `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, дорога до платформ, `StandMedkitOn`) + `"drift": true` на пуле экрана 13 в level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Заряд формы в бою Тарана (3.0.85): шкала растёт от попаданий по охотнику и свиперу, поздно и неровными толчками, до 30% и 55%; смерть головы доливает остаток | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |

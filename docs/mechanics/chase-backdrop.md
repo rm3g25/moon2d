@@ -2,14 +2,19 @@
 
 The far plane of act 2 (arena-3.md, "Decided 2026-10-30, the chase"): the
 end of the tunnel and the city in the crater, built from separate
-elements. The numbers are in `tools/chase/layout.json`; the stand that
-plays them is the place to judge them before any code of the game. First
-guesses all, tuned on the stand and then live.
+elements. The numbers are in `bin/chase-backdrop.json` - game data the
+level names in its `farPlane` section, and the very file the stand plays
+(moved there from `tools/chase/layout.json` with 3.0.88): what is tuned
+on the stand is what the game plays. The code: `Levels.FarPlane`,
+`Game.FarPlane`, `Render.FarPlane` (arena-3.md, "Stage 11b-1 as built").
+The numbers below are the ones after the live runs of 3.0.88 ("Decided
+2026-10-31, the far plane" in arena-3.md).
 
 ## The strip, left to right
 
 ```
-tunnel layer  |== screen 13 wall ==|~cliff~>  near sand (seamless) ...........................
+ground layer  near hills, a seamless band, y 276 down - in front of the tunnel, from the arena's first frame
+tunnel layer  |== screen 13 wall ==|~cliff~>
 city layer          (behind the cliff)  [ main dome + city ]==monorail==[ sat dome ]  hangar  ring  dish  (empty crater)
 ridge layer   ~~~~~~~~~~~~~~~~~~~~~~~~ far crater rim (seamless) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sky           black; the sun is code, fixed on the screen at (288, 208)
@@ -24,21 +29,22 @@ sky           black; the sun is code, fixed on the screen at (288, 208)
   x 400: its left 64 units fade into the wall of 13 (400-464), solid to 512,
   so the join is rock over dark rock along horizontal bands, never through an
   object; every notch of its edge lies right of 512 (the nearest at 517).
-- **The overlap is baked into screen 13 for the whole fight.** The cliff's
-  part over 400-512 is on the screen from the first frame of the arena, not
-  from the start of the chase - otherwise the right of the backdrop would
-  change under the player the moment the belt starts. So `screen13` becomes
-  the wall with the cliff's left end laid over it; the chase draws the rest
-  of the cliff (512 on) from the same picture. Its top goes black into
-  the vault, as 13's does. No gate and no lights in it - the gate is 13's.
+- **The overlap is on the screen for the whole fight.** The cliff's part
+  over 400-512 is there from the first frame of the arena, not from the
+  start of the chase - otherwise the right of the backdrop would change
+  under the player the moment the belt starts. It is drawn by code over
+  `screen13`, not baked into its picture (decided 2026-10-31): the same
+  pixels, nothing to regenerate. Its top goes black into the vault, as
+  13's does. No gate and no lights in it - the gate is 13's.
 - **The shoulder.** At the sun's height (y 184-230, 48-60% of the cliff) the
   edge is one sloping shoulder descending to the right at 25-30 degrees, not
   steps. The sun is drawn behind the rock, so the slope does it with no code:
   the top of the disc shows first, then the rest as the slope slides off -
-  a sunrise over a mountainside, about 1.4 s for the disc at 30 a second,
-  several seconds for the halo.
+  a sunrise over a mountainside, about 7 s for the disc at the wall's 6 a
+  second, half a minute and more for the halo.
 - **The main dome** stands almost behind the cliff (city-x 468-980): its right
-  part shows the moment the rock opens.
+  part shows the moment the rock opens. The city's pictures are drawn
+  mirrored (`"mirror": true`): the sun fell on them from the wrong side.
 - **The monorail** (920-1360) is drawn behind both domes; its cut ends hide in
   their skylines.
 - **The satellite dome**, industry (1300-1620).
@@ -50,42 +56,50 @@ The city layer is 2688 units long, 5.25 screens.
 ## Layers and speeds
 
 Back to front. Units a second at cruise; the belt's ramp of 2 s starts all
-of them.
+of them, and its stop stands them.
 
 | Layer | What | Speed |
 |---|---|---|
 | sky | black, the sun and its halo (code) | 0 |
 | ridge | far crater rim, a seamless band, y 202-262 | 0.35 of the city |
-| city | crater floor band (the lower 55% of the ridge's texture, y 238-320, its top faded over 16 units, its foot under the sand), the domes, the rail, the outskirts | 0.4 of the tunnel while the cliff is in sight, then 7 |
-| tunnel | screen 13, the cliff, the near sand band (seamless, from x 560, y 288 down) | 30 while the cliff is in sight, then 14 |
+| city | crater floor band (`floor-tex`, y 238-320, its top faded over 16 units, its foot under the hills), the domes, the rail, the outskirts | 0.5 of the tunnel while the cliff is in sight, then 3 |
+| tunnel | screen 13 and its far ledge, the cliff | 6 |
+| ground | the near hills (`sand-tex`, seamless, y 276 down), in front of the tunnel | 14 |
 | fangs | behind the play layer | 20 |
 | road | the floor tile | 33 |
 
-- **The tunnel layer runs at 30 until the cliff is gone, then eases to 14
-  over 3 s; the city eases from 12 to 7 with it.** 30 is the most it can
-  take: past the road's 33 the far wall would outrun the floor, and the
-  depth reads wrong.
+- **Depth sets the speed.** The far wall carries tiny convoys - far off, as
+  the whole arena told the player - so it rides slowly; the city behind
+  it slower, the rim slowest; the near hills fast. The first build ran the
+  tunnel's layer at 30 (the near hills in it, their start hidden under the
+  cliff) and the city at 12 to 7: the far things rushed past. The layout
+  keeps the peak, the cruise and the ease of the tunnel; with the peak at
+  the cruise the ease does nothing.
+- **The near hills stand from the arena's first frame**, in front of the
+  wall's foot, and keep 30% of their colour while the tunnel is all on
+  the screen (`shadeInTunnel` 0.3) - as dark as the wall around them; they
+  brighten as the tunnel leaves, to the full once it is gone. A start
+  fading in from the right was tried and read as ground out of nowhere.
 - **The brake.** Within the last screen of the city layer its speed goes
-  down in proportion to what is left, to a floor of 0.3; the ridge follows,
-  being a share of it. The tunnel and the near sand do not brake - the
-  far wall that crawls is the city.
+  down in proportion to what is left, to a floor of 0.3, never past its
+  end; the ridge follows, being a share of it. The tunnel and the hills do
+  not brake.
 
-## Timeline (the stand's simulation of layout.json)
+## Timeline (the stand's simulation of the layout)
 
 | t | what |
 |---|---|
-| 4.9 s | the nearest notch of the cliff passes x 400: the city opens on the right |
-| 11.4 s | the shoulder slides off the sun: it rises over the slope, white and hard |
-| 16.0 s | the main dome comes in front of the sun: pink-orange |
-| 22.0 s | the cliff is gone; the speeds ease to cruise |
-| 83.5 s | the main dome leaves the sun: white again over the monorail |
-| 129 s | the satellite dome takes the sun |
-| 175 s | the sun is free over the outskirts |
-| 222 s | the brake zone begins |
-| ~390 s | 90% of the brake zone crossed - the guard is far off |
+| 20.5 s | the nearest notch of the cliff passes x 400: the city opens on the right |
+| 52.7 s | the shoulder slides off the sun: it rises over the slope, white and hard |
+| 61.0 s | the main dome comes in front of the sun: pink-orange |
+| 105.7 s | the cliff is gone |
+| 232 s | the main dome leaves the sun: white again over the monorail |
+| 338 s | the satellite dome takes the sun |
+| 445 s | the sun is free over the outskirts |
+| 556 s | the brake zone begins |
 
-So a fight of four minutes sees the whole city, and a longer one sees the
-far wall crawl, never end.
+So a fight of a few minutes sees the main dome and the city in it - what
+matters; the satellite dome and the outskirts come only if it drags on.
 
 ## The sun
 
@@ -124,7 +138,9 @@ little warm bounce from the ground. The sun is fixed on the screen while
 the objects ride past it, so any light from one side would be wrong on the
 other half of the strip; light from behind is right on both. The cliff is
 the one exception: it is always left of the sun, so it is lit from the right
-and behind, as in the reference.
+and behind, as in the reference. The generations of the city came lit from
+one side all the same, and the wrong one: they are drawn mirrored. Lit
+from one side they read as cardboard - the city gets a step of its own.
 
 No haze, fog, god rays or bloom in any element: vacuum. The glow is the
 code's sun.
@@ -150,8 +166,8 @@ own over it.
 5. The hangar, the landing ring, the dish. **In the set** (96 x 15, 90 x 13
    and 50 x 52 units: the dish is set by its height, the other two by their
    width).
-6. Then: the stand judged whole, the speeds tuned on it, and the backdrop
-   handed to the code of the chase (arena-3.md, stages 11-14).
+6. The stand judged whole and the backdrop handed to the code of the chase:
+   done in 3.0.88 (arena-3.md, stage 11b-1); the speeds tuned live.
 
 ## The pipeline
 
@@ -175,7 +191,8 @@ python tools/chase/build_stand.py chase-stand.html
   it lifted), evens the light along the band, and cross-fades its ends over
   a quarter of the width.
 - `pack_set.py` packs `<work>` into `bin/sprites/chase-backdrop.mset` in the
-  layout's order; an element not generated yet is left out.
+  layout's order; an element not generated yet is left out. The three tools
+  read the layout from `bin/chase-backdrop.json`.
 - `build_stand.py` writes one HTML page from `stand.template.html`, the
   layout, the set and screen 13's backdrop: the chase played over time,
   1080p or 4K, "real pixels" for a 1:1 look; a PNG named by its id dropped
@@ -323,10 +340,10 @@ A radio telescope dish on the Moon seen from the side, from far away: a large wh
 
 ## Open
 
-- Whether the far plane at 30 a second in the first 20 s reads as speed or
-  as a wall that slides too fast - the stand first, then live.
-- The flickering neon sign of the city: an additive spot drawn by code over
-  one of the dome's signs, placed once the dome's picture is in.
-- The contact shadow under the domes: a soft dark ellipse drawn by code, if
-  their plinths float on the floor band.
+- The city: lit from one side it reads as cardboard, and it has no lights
+  and no life - a step of its own, likely a unit of its own. The flickering
+  neon sign and the contact shadow under the domes belong to it. The
+  mirror swapped the sides of the monorail's stations; set right there.
 - Dome size in 4K: two generations a dome if one at 4 px a unit is soft.
+- The haze of the pad jets over the far plane: off on screen 13 until the
+  far plane is drawn into a texture the haze can bend.

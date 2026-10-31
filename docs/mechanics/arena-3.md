@@ -269,6 +269,13 @@ Turret 2 dies: turret 3 comes out, a napalm launcher opens on the stern, and the
 - **Passing over the machine.** A chunk enters from beyond the right edge over the hull, its high pad through the column first - while the hero is still on the road or the low pad. A pad over the hull is in front of it, as on the arena.
 - **Medkits** only on the chunks that lead up, as decided, on the middle pad.
 
+**Decided 2026-10-31, the far plane (the live runs of 3.0.88), over the text above and `chase-backdrop.md` where they disagree:**
+- **Speeds by depth.** The first build ran the tunnel's layer at 30 a second and the city at 12 to 7: the far wall with its tiny convoys - far off, as the whole arena told the player - rushed past, and the city with it. The wall and the city are far and ride slowly: the wall 6, the city 3, the ridge a share of the city. The near hills were in the tunnel's layer, their start hidden under the cliff, so a slow wall made them slow too: they are a layer of their own now, fast (14), in front of the wall.
+- **The near hills stand from the arena's first frame.** A start fading in from the right read as ground out of nowhere - transparency does not work in this scene. Dark in the tunnel (30% of their colour, as the wall around them), they brighten as the tunnel leaves the screen, barely to be seen, to the full once the screen is all outside.
+- **What matters is the city.** It shows from about 20 s; what lies beyond the main dome - the satellite dome, the outskirts - only if the fight drags on.
+- **The city is mirrored**: the sun fell on it from the wrong side. Lit from one side it still reads as cardboard, and it lacks lights and life - a step of its own later, likely a unit of its own, to be thought through well.
+- **No haze on the chase's screen for now.** The pad jets bent the still picture of screen 13 over a far plane that moves - a piece of the old wall in every jet. Off on that screen; brought back in a step of its own (the far plane drawn into a texture the haze bends).
+
 ### End of the chase
 Turret 3 dies: the launcher folds into the hull, the belt runs down to a standstill, the machine stops. The energy reaches 100% - the evolution. The rest of the fight is on a still screen.
 
@@ -676,6 +683,19 @@ The medkits of the chase's climbs, in the same version: 3.0.87 was not yet close
 - **A death** takes them away with the field, which a restart makes anew; the round starts anew with `FDrift.Clear`.
 - **Tests**: `Tests.Pads.Drift` - `TPadDriftTests` 5 more (a medkit only on the middle pad of a climb; one climb in three carries one; the dice pick the climb of the three; the medkit stands on the pad sent with it; a clear starts the three anew), `TDriftLootTests` 2 (a medkit rides its pad out past the left edge and is gone; one on the road rides out and is gone).
 
+## Stage 11b-1 as built (3.0.88)
+The far plane of the chase (`chase-backdrop.md`), in three units of its own: the data (`Levels.FarPlane`), the motion (`Game.FarPlane`) and the drawing (`Render.FarPlane`). The numbers: `bin/chase-backdrop.json`, moved from `tools/chase/layout.json` - one source for the stand and the game.
+
+- **The data.** Level 2 names the screen and the layout in a section of its own (`"farPlane": screen 13, layout chase-backdrop.json`); the pictures are the set named as the layout, `chase-backdrop`, which joined the level's `objectSets` (a set the level does not list, or a screen past the level's, raises at load). Layers back to front: the ridge, the city (the crater floor, the domes, the monorail, the outskirts), the tunnel (screen 13's own backdrop as an element, `existing`, and the cliff over it) and the near ground. A band may start at an x of its layer and fade in there (`from`, `featherLeft` - unused now), fade its top in (`fadeTop`) and keep less of its colour in the tunnel (`shadeInTunnel`); an element may fade its left end in (`featherLeft`), be shaded (`shade`), tint the sun (`tintsSun`) and be drawn mirrored (`mirror`).
+- **The motion** (`TFarPlane`), by the stand's rules tick for tick: the tunnel at its peak and the city at a share of it until the tunnel's last element is 16 past the left edge, then both ease to cruise over 3 s; the city brakes within the last screen of its strip, to a floor, never past its end; the ridge at a share of the city, the ground at its own speed. Every speed times the belt's share - the road's ramp starts the far plane, its stop stands it. Ticks with the belt (and stands with it in the burst's inhale); a death, a door or a new level puts it back at the start of the chase.
+- **The drawing** (`TFarPlanePainter`), in place of the screen's backdrop on screen 13: the black sky, the sun (a disc and two glows added, fitted to the stand's gradient, tinted while a dome stands before it), the layers - every picture a strip of triangles whose corners carry the fades and the shade, so the shared cache's colour mods are not touched. While screen 13's backdrop covers the whole screen nothing behind the tunnel's layer is drawn: the arena before the chase costs the cliff's end and the near hills.
+- **The cliff over the wall** is drawn by code from the arena's first frame (its left 64 units fading into the wall), not baked into `screen13`: the same pixels, nothing to regenerate.
+- **The far ledge rides with the wall.** The sky layer of screen 13 - the lip, the pillars, the convoys, the searchlight - is drawn from minus the tunnel's offset, in fractions of a unit (`TDynamicScreenRenderer.Draw` takes a `TSdlFPoint`), so it rides with the wall. Drawn after the cliff, as over a backdrop the cliff were baked into.
+- **No haze on screen 13** (`HazeBackdrop`): the hazes bend nothing there.
+- **The numbers after the live runs** ("Decided 2026-10-31, the far plane"): the wall 6 a second, the city 3 (0.5 of the wall while the cliff is in sight), the ridge 0.35 of the city, the ground 14 and 30% of its colour in the tunnel; the city's six elements mirrored; the domes at a shade of 0.7.
+- **The stand** (`tools/chase`) plays the same: the ground's layer in front of the cliff, its shade in the tunnel, the mirror; the layout's path in the three tools.
+- **Tests**: `Tests.Game.FarPlane` (23, over a layout of their own - the stand's first tuning, so tuning the shipped one breaks none): the ride against the stand's timeline, cruise, the strip never ending in sight, the ridge and the ground, a stopped belt, between ticks, a clear; the sun's tint; a band's shade; level 2 reading its far plane and the layouts that raise.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
@@ -712,7 +732,9 @@ Each its own commit, each run live.
    - 10d. **The shuttle's capsule.** Built (3.0.84), see "Stage 10d as built".
 11. **The belt and the far plane.** Split (2026-10-31):
    - 11a. **The belt.** Built (3.0.86), see "Stage 11a as built". The tiled floor slides with a wrapping offset; the world carried left (the hero, in the air too, and the loot), the hull's wheels turning by the belt, the speed-up and the run-down.
-   - 11b. **The backdrop and the fangs.** The far plane of `chase-backdrop.md` - the strip, its layers and speeds, the sun - and the fangs riding through behind the play layer.
+   - 11b. **The backdrop and the fangs.** Split (2026-10-31):
+     - 11b-1. **The far plane.** Built (3.0.88), see "Stage 11b-1 as built". The strip of `chase-backdrop.md`, its layers and speeds, the sun.
+     - 11b-2. **The fangs.** The kit is in `level2-objects.mset` (`s11-fang-needle`, `-crown`, `-double`, `-leaning`); they ride through from right to left at random, behind the play layer, faster than the near hills.
 12. **The napalm launcher.** The shell up and out, the aim a second behind the hero, the warning on the floor, the drop, the splash, the puddles riding the belt; the fire zone and its unstable edge. Art: shell, trail, splash frames, puddle loop.
 13. **The drifting pads and the medkits.** Built (3.0.87), see "Stage 13 as built" and "Stage 13b as built"; the plan below is the first design, the numbers are the built ones. Pads in the world carried by the belt (a pad that leaves the screen on the left is let go), the chunks that lead up to deck 128 every 180 units of belt and the low and middle pads between, medkits on the middle pads of the chunks, gone at the left edge. Numbers: "Decided 2026-10-31, the drifting pads".
 14. **Turret 3, the bunker, and the brake lurch.** The shielded turret with the breathing hatch, its rolling volley; the lurch with the eye's warning; the end of the chase (launcher folds, belt runs down).
@@ -726,6 +748,9 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
+- The city (after 11b-1): lit from one side it reads as cardboard, and it lacks lights and life - a step of its own, likely a unit of its own. The mirror swapped the sides of the monorail's stations (the main dome's stub on its left now, the satellite's on its right); the rail between them hides its ends in the domes' bodies - set right with the city's step.
+- The haze of the pad jets on screen 13: back once the far plane is drawn into a texture the haze can bend.
+- The speed of the fangs (11b-2): with the wall at 6 and the ground at 14, at 20 they ride in front of everything from the start; whether they come only once the cliff is gone, as decided before the speeds changed.
 - The entrance's numbers (8b, live): the drive-in's speed, the breath before the mast, how fast the mast rises; whether the shortened replay after a death reads right.
 - The press and the hunt of act 1 (stage 9): the numbers after the live run - the low line, how fast it presses, the legs of the hunt.
 - The hunter's lives (100 a grade) and its bursts by the thirds: tuned live.

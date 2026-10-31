@@ -58,8 +58,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Ram`, 3.0.75), the pads its sweeper's wave knocks off
   (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
   (`Game.Capsules`, 3.0.84), the hidden tank of the form's charge in
-  it (`Game.StoneTank`, 3.0.85) and the road of its chase
-  (`Game.Belt`, 3.0.86). `Game/Events/`
+  it (`Game.StoneTank`, 3.0.85), the road of its chase
+  (`Game.Belt`, 3.0.86) and how far the far plane behind the road has
+  ridden (`Game.FarPlane`, 3.0.88). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
   (`Scenes.Director`, 3.0.62); `Game/Pads/` holds the pads in play
   (`Pads.World`), the cycle of a pad that plunges under the hero
@@ -98,7 +99,9 @@ names in `Core/` still carry the `Game.` prefix (`Game.Config`,
 Dependency direction (roughly bottom-up):
 `Sdl2.Core` / `Sprites.Sets` -> `Sdl2.Image` -> `Render.*` / `Audio` / `Game.Config` /
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
-`Monsters.Defs` -> `Levels.Tint` / `Levels.Events` (over `Monsters.Defs`
+`Monsters.Defs` -> `Levels.Tint` / `Levels.FarPlane` (the far plane of a
+chase as data: over `Render.Brush` for the colours of its sun) /
+`Levels.Events` (over `Monsters.Defs`
 for the tactics an event sets and the side a body comes in from, and over
 `Levels.Pads` for the shelf programs and bank orders an event tells) / `Effects.Emitter` / `Render.Puff` /
 `Effects.Sparks` (its streak texture comes from the owner) /
@@ -136,6 +139,8 @@ boss's pilot: over `Levels.Defs`, `Monsters.Defs`, `Pads.World`,
 window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
 `Monsters` (both over `Pads.World` too; `Monsters` over `Levels.Events`
 for the orders of a body an event lets in) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
+`Render.FarPlane` (over `Levels.FarPlane`, the backdrop view of
+`Levels.Dynamics` and `Render.Sprites`; the sun through `Render.Glow`) /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
 explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
@@ -188,6 +193,8 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Game.StoneTank` (the tank of the charge: over `Render.Brush` for its
 dice) /
 `Game.Belt` (the road of the chase: over nothing) /
+`Game.FarPlane` (how far its far plane has ridden: over `Levels.FarPlane`
+alone) /
 `Events.Director` (over `Game.Trial` for the progress it reads) / `Orbs.Aura` (the hero's aura: over
 `Orbs.Flock` and `Orbs.Harvest`) / `Orbs.Rain` (the fire rain: over the
 same two, and `Game.Space`) / `Game.HeroOrbs` (the hero's orbs: over
@@ -393,7 +400,38 @@ screen dump of `Game.Moon`.
   run, wrapped round the screen's width - and once more a screen to the
   left when it hangs over the right edge.
 
-### `Core/Render.Dynamics.pas` (~495 lines)
+### `Core/Render.FarPlane.pas` (~395 lines, 3.0.88)
+- **`TFarPlanePainter`** - draws the far plane of a chase
+  (`Levels.FarPlane`) where its offsets have taken it, in place of the
+  screen's backdrop: the black sky, the sun, then the layers back to
+  front, each its band repeated across and its elements on it.
+  `Create(renderer, cache, def)` resolves every picture now (a sprite the
+  set lacks raises at level load) and makes its two glows (`gsPoint` 128,
+  `gsDisc` 64 - the destructor frees them, nil-guarded for a constructor
+  stopped by a missing sprite); a band's texture is set to blend, so its
+  corners can fade it. `Draw(offsets, backdrop)` - the backdrop is the
+  screen's own (`TTileScreenRenderer.Backdrop`), drawn where its element
+  (`existing`) rides. While a layer's backdrop covers the whole screen
+  (`FirstSeenLayer`) nothing behind that layer is drawn, the sky and the
+  sun neither: the arena before the chase costs the cliff's end and the
+  near hills over the wall.
+- Every picture is a strip of triangles (`SDL_RenderGeometry`, `AddQuad`
+  / `Flush`). The alpha of its corners (`TQuadAlpha` - each edge's share,
+  a corner the product of its two) fades a band's top in (`fadeTop`), a
+  band's start in (`featherLeft` from its `from`) and the cliff's left end
+  into the wall; their colour is the element's `shade`, the backdrop's
+  tint or the band's shade (`BandShade`) - the vertices carry it, and no
+  colour mod of the shared cache is touched. A band runs in turns of its
+  texture from left of the screen (`DrawBand`, `TBandTurn`), cut at its
+  start and again where its feather ends (`AddBandPiece`). An element
+  marked `mirror` is read from the right (`Across`).
+- The sun (`DrawSun`), added over the black: the glare (`HaloGlareSize`
+  3.1 of the halo's radius at `HaloGlareLevel` 0.19) and the core (0.92 at
+  0.38), two point glows fitted to the stand's radial gradient, and the
+  disc, all in the colour `SunCover` gives between `white` and `tint`. The
+  sky (`DrawSky`) is a black fill with the draw blend set to none.
+
+### `Core/Render.Dynamics.pas` (~515 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
   (`Levels.Dynamics`) to the screen. Owns the textures of the
   `TDynamicCanvas` (point, flare, starburst, streak and beam glows -
@@ -474,13 +512,18 @@ screen dump of `Game.Moon`.
   The constructor takes a **`TDynamicWorld`** (record) - what the objects
   ask of the game: `LocateParent`, `BackdropOf` (`TBackdropOf`,
   `reference to function(screen): TBackdropView` - the backdrop drawn
-  behind a screen; the game gives the tile renderer's `Backdrop`) and
+  behind a screen; the game gives `HazeBackdrop` - the tile renderer's
+  `Backdrop`, and nothing on the screen of a chase's far plane, 3.0.88) and
   `Solid`, the game's `TSolidProbe`,
   which answers for the hero's screen. The canvas hands the objects
   `SolidInView` instead of it: the game's probe while the object being
   ticked stands on the hero's screen (`FInView`, set per place in `Tick`),
   no walls at all otherwise - an object on another screen must not ring
   off the wrong grid.
+- 3.0.88: `Draw` takes the origin in fractions of a unit too
+  (`TSdlFPoint`; the `TSdlPoint` one passes it on, `FineOrigin`): the far
+  ledge of screen 13 rides the tunnel's layer of the far plane with the
+  wall, not in whole units.
 
 ### `Core/Render.Shake.pas` (~110 lines)
 Screen shake as one trauma meter for the whole game, read back as a draw
@@ -616,7 +659,7 @@ no version resource, so nothing else has to agree with it.
   lang\en.json / ru.json, validated against the full key roster), `Tr(key)`,
   `CurrentLanguage`, `ReadLocalizedText(jsonObj, key)`, `MakeLocalizedText`.
 
-### `Core/Levels.Defs.pas` (~2165 lines)
+### `Core/Levels.Defs.pas` (~2190 lines)
 Level data model + JSON parser. No game logic.
 - **`EmptyTile = 0`** - grid value 0 is nothing; N >= 1 maps to
   `TilePalette[N - 1]`.
@@ -892,6 +935,50 @@ Level data model + JSON parser. No game logic.
   door (`SLevelDoorSealedOpens`) and one on a screen with no shut door
   (`SLevelDoorNotShut`). `CheckEvents` also refuses a heroStands cell off
   the grid (`SLevelEventCellOff`, 3.0.67).
+- The far plane (3.0.88): **`FarPlane`** - the `TFarPlaneDef` of
+  `Levels.FarPlane`, read last in `ParseRoot` (which takes the level
+  file's folder now, for the layout beside it). Private `CheckFarPlane`
+  refuses a screen past the level's (`SLevelFarPlaneBadScreen`) and a set
+  the level's `objectSets` do not list (`SLevelFarPlaneNoSet`).
+
+### `Core/Levels.FarPlane.pas` (~350 lines, 3.0.88)
+The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
+strip of layers riding left behind the play layer at speeds of their own,
+and a sun under them all. A level names the screen and the layout in its
+`farPlane` section (`"screen"`, `"layout"`); the layout lies beside the
+level file (`bin/chase-backdrop.json` for level 2) and is the one
+`tools/chase/build_stand.py` plays on the stand. Its pictures are the set
+named as the layout file without its extension. The keys only the stand
+reads (`road`, `rampSec`, `fangs`, the cliff's edge marks) are let be.
+No SDL.
+- **`TFarPlaneMotion`** - `fmRidge`, `fmCity`, `fmTunnel`, `fmGround` (a
+  layer's `"speed"`: `ridge`, `city`, `tunnel`, `ground`).
+  **`TFarPlaneOffsets`** - how far each motion has taken its layers to the
+  left, in units.
+- **`TFarPlaneSun`** - `X`, `Y`, `Disc`, `Halo`, `White`, `Tint` (`TRgb`),
+  `TintRamp`. **`TFarPlaneSpeeds`** - units a second: `TunnelPeak`,
+  `TunnelCruise`, `EaseSec`, `CityShareInTunnel`, `CityCruise`,
+  `CityBrakeZone`, `CityLeast`, `RidgeShareOfCity`, `Ground`.
+- **`TFarPlaneBand`** - `Texture`, `Top`, `Bottom`, `FadeTop`, `From` (-1:
+  the whole width), `FeatherLeft`, `ShadeInTunnel` (how much of its colour
+  it keeps while the tunnel is all on the screen; 1 when absent).
+  **`TFarPlaneElement`** - `Id` (its sprite), `X` (its left edge along the
+  layer), `Y` (its feet), `W` (the height follows the picture), `Shade`,
+  `TintsSun`, `FeatherLeft`, `Mirror`, `Backdrop` (`"existing"`: the
+  screen's own backdrop). **`TFarPlaneLayer`** - `Id`, `Motion`, `Length`,
+  `Band`, `Elements`.
+- **`TFarPlaneDef`** - `Screen` (0 - none, `Present`), `SetName`,
+  `ScreenWidth`, `ScreenHeight`, `Sun`, `Speeds`, `Layers` (back to
+  front); `CityLength`, `TunnelEnd` (the right edge of the tunnel's last
+  element along its layer), `SunCover(offsets)` (0 white .. 1: the deepest
+  of the domes before the sun, ramped over `TintRamp`),
+  `TunnelPassed(offsets)` (0..1), `BandShade(band, offsets)`
+  (`ShadeInTunnel` up to 1 as the tunnel leaves), `SpriteName(id)`
+  (`set:id`).
+- **`ReadFarPlane(root, levelId, levelDir)`** - no section, no far plane;
+  raises `EFarPlaneError` on a layout missing or unreadable, a layer of an
+  unknown speed, an element without width, a city without length and a
+  sun colour that is not three numbers.
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -5227,6 +5314,24 @@ picture; no SDL.
   nothing run); `Tick` (the ramp, then `Travel` grows by `Speed`);
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
+
+### `Game/Game.FarPlane.pas` (~150 lines, 3.0.88)
+How far each layer of the chase's far plane has ridden
+(`docs/mechanics/chase-backdrop.md`), by the rules of the stand, tick for
+tick. Knows neither the belt, the hero nor SDL.
+- **`TFarPlane`** - `Create(def)` (one without a screen never moves),
+  `Clear` (back to the start of the chase), `Tick(beltShare)` - the belt's
+  speed as a share of its cruise. The tunnel runs at `TunnelPeak` and the
+  city at `CityShareInTunnel` of it until the tunnel's last element is
+  `TunnelGoneMargin` 16 past the left edge (`TunnelGone`); then both ease
+  to their cruise over `EaseSec` by a smooth step. The city brakes within
+  its last `CityBrakeZone` in proportion to what is left, to `CityLeast`,
+  and never past its end (`BrakeCity`); the ridge runs at
+  `RidgeShareOfCity` of the city, the ground at `Ground`. Every speed is
+  multiplied by the belt's share after the brake: the road's ramp starts
+  the far plane and its stop stands it, the brake's floor included.
+  Units a second over `FarPlaneTicksPerSecond` 33. `Offsets`,
+  `OffsetsAt(alpha)`, `TunnelSpeed`, `CitySpeed`.
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -5654,7 +5759,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     `Burst` - the ceremony's stage watches them.
 - Tests: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4050 lines)
+### `Game/Game.Moon.pas` (~4100 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -6208,6 +6313,20 @@ so a unit (and later a test) can reach it. `interface` holds
   medkit of the cue goes to **`StandMedkitOn(mark)`** - its feet on the
   mark, `SpawnStanding` of `MedkitMonsterId`; `TickCapsules` stands the
   capsules' medkits through it too.
+- 3.0.88, **the far plane of the chase**: `FFarPlane` (`TFarPlane`) and
+  `FFarPlanePainter` (`TFarPlanePainter`), made per level after the
+  objects, over the level's `FarPlane` and the object cache.
+  `FFarPlane.Tick(FBelt.Speed / BeltCruise)` right after `FBelt.Tick` (it
+  stands with the road in the burst's inhale); `FFarPlane.Clear` beside
+  every `FBelt.Clear` - a death puts it back at the start of the chase.
+  **`DrawBackdrop(alpha)`** - on the far plane's screen the painter draws
+  in place of `FTiles.DrawBackground`, the screen's backdrop riding in it.
+  **`SkyOrigin(alpha)`** - the sky layer of that screen (the far ledge,
+  its pillars, the convoys and the searchlight) is drawn from minus the
+  tunnel's offset: it rides with the wall. **`HazeBackdrop(screen)`** -
+  what the dynamics' `BackdropOf` gets: the tile renderer's `Backdrop`,
+  and nothing on the far plane's screen - there is no single picture to
+  bend there. `Levels.Dynamics` moved to the interface uses.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6566,6 +6685,22 @@ carries one; the dice pick the climb of the three; the medkit stands on
 the pad sent with it; a clear starts the three anew); `TDriftLootTests` 2
 (a medkit rides its pad out past the left edge and is gone, as one on
 the road).
+3.0.88 - 23 more, all in `Tests.Game.FarPlane`, over a layout of the
+tests' own - the stand's first tuning, whose timeline the stand gave, so
+tuning the shipped layout breaks none of them: `TFarPlaneTests` 12
+(stands until the road runs; the city opens, the tunnel goes and the
+brake begins when the stand says, within 0.2 s; eases to cruise; the
+strip never ends in sight in 900 s; the ridge a share of the city; the
+ground at its speed; a stopped belt stands it all, the brake's floor
+included; between ticks between them; a clear; no far plane never
+moves), `TFarPlaneSunTests` 3 (white with no dome before it, tinted deep
+inside one, ramped at its edge), `TFarPlaneShadeTests` 3 (dark while the
+tunnel is on the screen, full once it has left, halfway between),
+`TFarPlaneReadTests` 5 (level 2 reads its far plane - the screen, the
+set, four layers, the city's length, the tunnel's end, the backdrop in
+it, the ground standing from the start and dark in the tunnel, the city
+mirrored; no section, no far plane; a missing layout, an unknown speed
+and an element without width raise).
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7280,6 +7415,7 @@ made again in 3.0.83).
 | The wrecks and the sweeper's blast retuned (3.0.83): each wreck kicked off hard by the blast, the harder the nearer, then slowed, a climb and a spin of its own, one in five against the others; the sweeper bursts with the tank's death and its drone under it | Game.Wrecks.pas (`Launch` with the reach, `WreckVariety`) + Game.Moon.pas (`KnockOffPads` - `FRam.WaveReach`; `TickRam` - `BottleSoundFile`, `RageBlastSoundFile`, `SweeperBlastSoundFile` on `Shock`) + tools/sounds/sweeperblast.py + Tests.Game.Wrecks.pas (`TestNearerKickedHarder`, `TestKickDiesDown`, `TestSpinsNoSlowerUpToItsMost`, `TestNoTwoSpinAlike`) |
 | The Ram backs off before the sweeper bursts (3.0.82): a stand, the drive to the right wall with its barrels red, the eye blinking and the alarm, the overload there; spent, it stands at the wall; a hero thrown down inside the hull walks out unhurt, for 60 ticks at most, through the whole fight | Game.Ram.pas (`TickRetreat`, `BeginRetreat`, `Retreating`, `Spent`, `FClearTicks`, `ClearTicks`, cue `Alarm`) + Game.Moon.pas (`TickRam` - `padhum.wav` on `Alarm`) + Tests.Game.Ram.pas (`TestBacksToTheRightWallBeforeTheOverload`, `TestTheWaveLeavesHimInFrontTillHeIsClear`, `TestTheWayOutOfTheHullCloses`) |
 | The shuttle's medkits on the thirds (3.0.84): a capsule falls onto a high pad (the hunter's) or the road at the far wall (the sweeper's), brakes, lands, parts and leaves a medkit | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` of the `ram` action in level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
+| The chase's far plane (3.0.88): the end of the tunnel and the city in the crater ride behind the road at speeds of their own - the wall with its far ledge slow, the near hills fast in front of it, dark in the tunnel and brightening as it leaves, the city slower, the ridge slowest; the sun in code under them all, tinted where a dome stands before it; the city mirrored for the light; no haze on that screen | Levels.FarPlane.pas (`TFarPlaneDef`, `ReadFarPlane`) + Game.FarPlane.pas (`TFarPlane`) + Render.FarPlane.pas (`TFarPlanePainter`) + Levels.Defs.pas (`FarPlane`, `CheckFarPlane`) + Render.Dynamics.pas (`Draw` from a `TSdlFPoint`) + Game.Moon.pas (`DrawBackdrop`, `SkyOrigin`, `HazeBackdrop`, the tick and the clear) + bin/chase-backdrop.json + `farPlane` and `objectSets` in level2.json + chase-backdrop.mset + tools/chase (the stand) + Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md) |
 | The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
