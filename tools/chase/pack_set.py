@@ -1,11 +1,11 @@
 """Packs the checked elements of the chase backdrop into
 bin/sprites/chase-backdrop.mset (format: docs/MSET-FORMAT.md).
 
-The folder holds one PNG per element, named by its id in layout.json -
-cliff.png, dome-main.png, ridge-tex.png... - as check_element.py and
-make_seamless.py left them. A solid texture (the floor) may be a .jpg; it is
-stored as PNG, the only image the sets carry. The order of the set is the
-order of layout.json, the textures last.
+The folder holds one PNG per element, named by its id in the layout,
+bin/chase-backdrop.json - cliff.png, dome-main.png, ridge-tex.png... - as
+check_element.py and make_seamless.py left them. A solid texture (the floor)
+may be a .jpg; it is stored as PNG, the only image the sets carry. The order
+of the set is the order of the layout, the textures last.
 
   python pack_set.py <folder> [out.mset]
 
@@ -20,11 +20,11 @@ import sys
 from PIL import Image
 
 Here = os.path.dirname(os.path.abspath(__file__))
-LayoutPath = os.path.join(Here, 'layout.json')
+LayoutPath = os.path.join(Here, '..', '..', 'bin', 'chase-backdrop.json')
 DefaultOut = os.path.join(Here, '..', '..', 'bin', 'sprites', 'chase-backdrop.mset')
 SetId = 'chase-backdrop'
 SetDescription = ('The far plane of the arena 3 chase: the end of the tunnel and the city in the '
-  'crater. Placed by tools/chase/layout.json; the plan is docs/mechanics/chase-backdrop.md.')
+  'crater. Placed by bin/chase-backdrop.json; the plan is docs/mechanics/chase-backdrop.md.')
 
 
 def ordered_ids():

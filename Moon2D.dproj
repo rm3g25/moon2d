@@ -178,6 +178,7 @@
         <DCCReference Include="Core\Render.Sprites.pas"/>
         <DCCReference Include="Core\Levels.Tint.pas"/>
         <DCCReference Include="Core\Levels.Dynamics.pas"/>
+        <DCCReference Include="Core\Levels.FarPlane.pas"/>
         <DCCReference Include="Core\Levels.Defs.pas"/>
         <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Levels.Scenes.pas"/>
@@ -186,6 +187,7 @@
         <DCCReference Include="Core\Levels.Rigs.pas"/>
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Objects.pas"/>
+        <DCCReference Include="Core\Render.FarPlane.pas"/>
         <DCCReference Include="Core\Render.Puff.pas"/>
         <DCCReference Include="Core\Effects.Emitter.pas"/>
         <DCCReference Include="Core\Effects.Sparks.pas"/>
@@ -232,6 +234,7 @@
         <DCCReference Include="Game\Game.Capsules.pas"/>
         <DCCReference Include="Game\Game.StoneTank.pas"/>
         <DCCReference Include="Game\Game.Belt.pas"/>
+        <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Explosions.pas"/>
         <DCCReference Include="Game\Game.Blasts.pas"/>
         <DCCReference Include="Game\Game.Impacts.pas"/>

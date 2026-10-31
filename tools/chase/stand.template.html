@@ -86,6 +86,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label>tunnel cruise <input id="p-tunnelCruise" type="number" step="1"></label>
     <label>city cruise <input id="p-cityCruise" type="number" step="0.5"></label>
     <label>city share in tunnel <input id="p-cityShareInTunnel" type="number" step="0.05"></label>
+    <label>ground <input id="p-ground" type="number" step="1"></label>
     <span style="color: var(--dim); font-size: 12px">units a second</span>
   </div>
 
@@ -113,7 +114,8 @@ const Layout = /*LAYOUT*/null;
 const Screen13Src = /*SCREEN13*/'';
 
 const View = document.getElementById('view');
-const Ctx = View.getContext('2d');
+// let: the ground draws its band through it onto a canvas of its own
+let Ctx = View.getContext('2d');
 let Px = View.width / Layout.screen.w;
 const Sp = Layout.speeds;
 const Sun = Layout.sun;
@@ -143,7 +145,7 @@ let Track = [];
 function smooth(k) { k = Math.min(1, Math.max(0, k)); return k * k * (3 - 2 * k); }
 function simulate() {
   Track = [];
-  let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oRoad = 0, phase = 'tunnel', eased = 0;
+  let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oG = 0, oRoad = 0, phase = 'tunnel', eased = 0;
   const cliffRight = Cliff.x + Cliff.w;
   for (let i = 0; i <= SimSeconds * 33; i++) {
     const t = i * Tick;
@@ -159,8 +161,9 @@ function simulate() {
     }
     const rem = CityLength - Layout.screen.w - oC;
     if (rem < Sp.cityBrakeZone) C = rem > 0 ? Math.max(Sp.cityLeast, C * rem / Sp.cityBrakeZone) : 0;
-    Track.push({ t, oT, oC, oR, oRoad, T, C });
+    Track.push({ t, oT, oC, oR, oG, oRoad, T, C });
     oT += T * Tick; oC += C * Tick; oR += C * Sp.ridgeShareOfCity * Tick; oRoad += Sp.road * ramp * Tick;
+    oG += (Sp.ground || 0) * ramp * Tick;
   }
   listEvents();
 }
@@ -247,12 +250,22 @@ function bandStrip(Img, Band) {
   Strips.set(Key, Strip);
   return Strip;
 }
+// How much of its colour a band keeps: shadeInTunnel while the tunnel is
+// all on the screen, the full as it leaves, as the game draws it
+let TunnelNow = 0;
+function bandShade(Band) {
+  const InTunnel = Band.shadeInTunnel ?? 1;
+  const Passed = Math.min(1, Math.max(0, TunnelNow / (Cliff.x + Cliff.w)));
+  return InTunnel + (1 - InTunnel) * Passed;
+}
 function drawTexBand(Img, Band, Offset) {
   const Strip = bandStrip(Img, Band);
   const H = U(Band.bottom - Band.top);
   const W = Strip.width * H / Strip.height;
   let X = -((U(Offset) % W) + W) % W;
+  Ctx.filter = `brightness(${bandShade(Band)})`;
   for (; X < View.width; X += W) Ctx.drawImage(Strip, X, U(Band.top), W, H);
+  Ctx.filter = 'none';
 }
 function drawRidge(oR) {
   const Band = LayerById.ridge.band;
@@ -284,22 +297,39 @@ function drawFloor(oC) {
     Ctx.stroke();
   }
 }
-function drawSand(oT) {
-  const Band = LayerById.tunnel.band;
-  const From = U(Band.from - oT);
+// The near ground: in front of the tunnel, its start coming in from the
+// right and fading in over its feather; drawn on a canvas of its own, so
+// the fade cuts the band alone
+const GroundCanvas = document.createElement('canvas');
+function drawGround(oG) {
+  const Layer = LayerById.ground;
+  if (!Layer) return;
+  const Band = Layer.band;
+  const From = Band.from === undefined ? -Infinity : U(Band.from - oG);
   if (From > View.width) return;
-  Ctx.save();
-  Ctx.beginPath(); Ctx.rect(Math.max(0, From), 0, View.width, View.height); Ctx.clip();
-  if (Images['sand-tex']) drawTexBand(Images['sand-tex'], Band, oT);
+  GroundCanvas.width = View.width; GroundCanvas.height = View.height;
+  const G = GroundCanvas.getContext('2d');
+  const Main = Ctx;
+  Ctx = G;
+  if (Images[Band.texture]) drawTexBand(Images[Band.texture], Band, oG);
   else {
-    Ctx.beginPath(); Ctx.moveTo(0, View.height);
-    for (let x = 0; x <= Layout.screen.w; x += 2) Ctx.lineTo(U(x), U(300 + wave(x + oT, 4.2) * 9));
-    Ctx.lineTo(View.width, View.height); Ctx.closePath();
-    const G = Ctx.createLinearGradient(0, U(288), 0, View.height);
-    G.addColorStop(0, '#3a3029'); G.addColorStop(0.3, '#1c1916'); G.addColorStop(1, '#0d0c0b');
-    Ctx.fillStyle = G; Ctx.fill();
+    G.beginPath(); G.moveTo(0, View.height);
+    for (let x = 0; x <= Layout.screen.w; x += 2) G.lineTo(U(x), U(300 + wave(x + oG, 4.2) * 9));
+    G.lineTo(View.width, View.height); G.closePath();
+    const Grad = G.createLinearGradient(0, U(288), 0, View.height);
+    Grad.addColorStop(0, '#3a3029'); Grad.addColorStop(0.3, '#1c1916'); Grad.addColorStop(1, '#0d0c0b');
+    G.fillStyle = Grad; G.fill();
   }
-  Ctx.restore();
+  Ctx = Main;
+  if (From > -Infinity) {
+    const Feather = U(Band.featherLeft || 0);
+    G.globalCompositeOperation = 'destination-in';
+    const Mask = G.createLinearGradient(From, 0, From + Math.max(Feather, 1), 0);
+    Mask.addColorStop(0, 'rgba(0,0,0,0)'); Mask.addColorStop(1, 'rgba(0,0,0,1)');
+    G.fillStyle = Mask; G.fillRect(0, 0, View.width, View.height);
+    G.globalCompositeOperation = 'source-over';
+  }
+  Ctx.drawImage(GroundCanvas, 0, 0);
 }
 
 // ---- elements: a real picture with its feet on y, or a placeholder ----
@@ -311,7 +341,13 @@ function drawElement(E, Offset) {
     const W = U(E.w), H = W * Img.height / Img.width;
     // brightness() scales the colour linearly, as SDL_SetTextureColorMod will in the game
     Ctx.filter = `brightness(${shadeOf(E)})`;
-    Ctx.drawImage(Img, U(X), U(E.y) - H, W, H);
+    if (E.mirror) {
+      // left for right, as the game draws it: the light of a picture lit
+      // from the wrong side
+      Ctx.save(); Ctx.translate(U(X) + W, 0); Ctx.scale(-1, 1);
+      Ctx.drawImage(Img, 0, U(E.y) - H, W, H);
+      Ctx.restore();
+    } else Ctx.drawImage(Img, U(X), U(E.y) - H, W, H);
     Ctx.filter = 'none';
     return;
   }
@@ -452,18 +488,19 @@ function frame(Stamp) {
   const Dt = Math.min(0.1, (Stamp - Last) / 1000); Last = Stamp;
   if (Playing) Now = Math.min(SimSeconds, Now + Dt * Rate);
   const S = Track[Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)))];
+  TunnelNow = S.oT;
   Ctx.fillStyle = '#000'; Ctx.fillRect(0, 0, View.width, View.height);
   const Cover = drawSun(S.oC);
   drawRidge(S.oR);
   drawFloor(S.oC);
   for (const E of LayerById.city.elements) drawElement(E, S.oC);
-  drawSand(S.oT);
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
   if (Cliff.x + Cliff.w - S.oT > 0) Ctx.drawImage(CliffCanvas, U(Cliff.x - S.oT), 0);
+  drawGround(S.oG);
   if (document.getElementById('g-play').checked) drawGuides(S.oRoad);
   if (document.getElementById('g-spans').checked) drawSpans(S.oC);
   document.getElementById('hud').innerHTML =
-    `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>sun tint ${(Cover * 100).toFixed(0)}%`;
+    `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%`;
   document.getElementById('scrub').value = Now;
   document.getElementById('clock').textContent = Now.toFixed(1) + ' s';
   requestAnimationFrame(frame);
@@ -477,7 +514,7 @@ document.querySelectorAll('.rate').forEach(B => B.onclick = () => {
   Rate = +B.dataset.rate; document.querySelectorAll('.rate').forEach(O => O.classList.toggle('on', O === B));
 });
 document.getElementById('scrub').oninput = Ev => { Now = +Ev.target.value; };
-for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunnel']) {
+for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunnel', 'ground']) {
   const Input = document.getElementById('p-' + Key);
   Input.value = Sp[Key];
   Input.onchange = () => { const V = parseFloat(Input.value); if (V > 0) { Sp[Key] = V; simulate(); } };

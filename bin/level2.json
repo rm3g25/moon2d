@@ -16,7 +16,8 @@
     "level1-structures",
     "ventilation",
     "pads",
-    "dust"
+    "dust",
+    "chase-backdrop"
   ],
   "music": "hallu.ogg",
   "henshinPattern": "vortex",
@@ -4702,6 +4703,10 @@
   ],
   "shutDoors": [9, 10, 11, 12],
   "sealedDoors": [13],
+  "farPlane": {
+    "screen": 13,
+    "layout": "chase-backdrop.json"
+  },
   "events": [
     {
       "id": "breachWarning",

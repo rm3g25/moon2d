@@ -6,8 +6,9 @@ scales it to the size the layout gives it, within 2048 px.
 
   python check_element.py <id> in.png [out.png]
 
-<id> is an element of layout.json (cliff, dome-main, dome-sat, monorail,
-hangar, landing-ring, dish) or a texture (ridge-tex, floor-tex, sand-tex).
+<id> is an element of the layout, bin/chase-backdrop.json (cliff, dome-main,
+dome-sat, monorail, hangar, landing-ring, dish), or a texture (ridge-tex,
+floor-tex, sand-tex).
 The verdict is PASS, WARN or FAIL per check; the exit code is 1 on any FAIL.
 Needs numpy and Pillow.
 """
@@ -38,7 +39,8 @@ AllowedEdges = {
 # A texture that fills its whole frame has no alpha to check.
 SolidTextures = {'floor-tex'}
 
-LayoutPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'layout.json')
+LayoutPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'bin',
+  'chase-backdrop.json')
 
 
 def find_element(AId):

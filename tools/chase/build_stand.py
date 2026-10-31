@@ -1,5 +1,5 @@
 """Builds the stand of the chase backdrop: one self-contained HTML page that
-plays the layers of layout.json over time, with every checked element of
+plays the layers of the layout (bin/chase-backdrop.json) over time, with every checked element of
 chase-backdrop.mset and the backdrop of screen 13 put inside it.
 
   python build_stand.py [out.html]
@@ -20,7 +20,7 @@ from PIL import Image
 Here = os.path.dirname(os.path.abspath(__file__))
 Root = os.path.join(Here, '..', '..')
 TemplatePath = os.path.join(Here, 'stand.template.html')
-LayoutPath = os.path.join(Here, 'layout.json')
+LayoutPath = os.path.join(Here, '..', '..', 'bin', 'chase-backdrop.json')
 ChaseSet = os.path.join(Root, 'bin', 'sprites', 'chase-backdrop.mset')
 BackdropSet = os.path.join(Root, 'bin', 'sprites', 'level2-backdrops.mset')
 DefaultOut = 'chase-stand.html'

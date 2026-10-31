@@ -28,7 +28,7 @@ uses
   System.SysUtils, System.Classes, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
   Localization, Levels.Events, Levels.Scenes, Levels.Tint, Levels.Dynamics,
-  Levels.Pads, Levels.Carousels;
+  Levels.Pads, Levels.Carousels, Levels.FarPlane;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -210,7 +210,8 @@ type
     FEvents: TArray<TLevelEvent>;
     FScenes: TArray<TLevelScene>;
     FDynamics: TDynamicObjects;
-    procedure ParseRoot(const ARoot: TJSONObject);
+    FFarPlane: TFarPlaneDef;
+    procedure ParseRoot(const ARoot: TJSONObject; const ALevelDir: string);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
     procedure ParseScreenTriggers(const AArr: TJSONArray);
@@ -224,6 +225,7 @@ type
     procedure CheckEventRespawns(const AEvent: TLevelEvent);
     procedure CheckEventSphere(const AEvent: TLevelEvent);
     procedure CheckShutDoors;
+    procedure CheckFarPlane;
     function RespawnHasFloor(const APoint: TRespawnPoint): Boolean;
     procedure CheckPads;
     procedure CheckPadGroups;
@@ -331,6 +333,8 @@ type
     // Owned by the level and kept through a restart: a lamp keeps its
     // rhythm; only what a re-armed event changed goes back
     property Dynamics: TDynamicObjects read FDynamics;
+    // The far plane of a chase (Levels.FarPlane); Screen 0 - none
+    property FarPlane: TFarPlaneDef read FFarPlane;
   end;
 
 implementation
@@ -503,6 +507,10 @@ resourcestring
     + 'event of the screen opens it';
   SLevelDoorNotShut = 'Level "%s": event "%s" opens the door of screen %d, '
     + 'which the level does not shut';
+  SLevelFarPlaneBadScreen = 'Level "%s": its far plane stands on screen %d '
+    + 'of %d';
+  SLevelFarPlaneNoSet = 'Level "%s": its far plane draws from set "%s", '
+    + 'which "objectSets" does not list';
   SLevelFinaleNoTrial = 'Level "%s": %s names a finale but no gravelBoss';
   SLevelFinaleNoMonster = 'Level "%s": %s names a finale with no "monster"';
   SLevelFinaleBadCount = 'Level "%s": %s names a finale whose "count" is not '
@@ -609,7 +617,7 @@ begin
   if Root = nil then
     raise ELevelError.CreateFmt(SLevelParseFailed, [AFileName]);
   try
-    ParseRoot(Root);
+    ParseRoot(Root, ExtractFilePath(AFileName));
   finally
     Root.Free;
   end;
@@ -711,7 +719,7 @@ begin
     Result := Result + [Item.GetValue<Integer>];
 end;
 
-procedure TLevel.ParseRoot(const ARoot: TJSONObject);
+procedure TLevel.ParseRoot(const ARoot: TJSONObject; const ALevelDir: string);
 begin
   FId := ARoot.GetValue<string>('id');
   FTitle := ReadLocalizedText(ARoot, 'title', FId);
@@ -772,6 +780,8 @@ begin
   FShutDoors := ReadScreens(ARoot.GetValue<TJSONArray>('shutDoors', nil));
   FSealedDoors := ReadScreens(ARoot.GetValue<TJSONArray>('sealedDoors', nil));
   CheckShutDoors;
+  FFarPlane := ReadFarPlane(ARoot, FId, ALevelDir);
+  CheckFarPlane;
 end;
 
 function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;
@@ -1210,6 +1220,19 @@ begin
       raise ELevelError.CreateFmt(SLevelDoorNotShut,
         [FId, Event.Id, Event.Screen]);
   end;
+end;
+
+procedure TLevel.CheckFarPlane;
+begin
+  if not FFarPlane.Present then
+    Exit;
+  if FFarPlane.Screen > FScreenCount then
+    raise ELevelError.CreateFmt(SLevelFarPlaneBadScreen,
+      [FId, FFarPlane.Screen, FScreenCount]);
+  for var SetName in FObjectSets do
+    if SetName = FFarPlane.SetName then
+      Exit;
+  raise ELevelError.CreateFmt(SLevelFarPlaneNoSet, [FId, FFarPlane.SetName]);
 end;
 
 function RespawnsOn(const APoints: TArray<TRespawnPoint>;

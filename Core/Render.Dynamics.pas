@@ -126,7 +126,7 @@ type
     // timestep's alpha
     TFrameView = record
       Screen: Integer;
-      Origin: TSdlPoint;
+      Origin: TSdlFPoint;
       Alpha: Single;
     end;
 
@@ -150,7 +150,7 @@ type
     function LeadStand(const APlace: TPlace; AScreen: Integer): TStand;
     function OriginOf(const APlace: TPlace; const AStand: TStand;
       AAlpha: Single): TSdlFPoint;
-    function ViewOf(AScreen: Integer; AOrigin: TSdlPoint;
+    function ViewOf(AScreen: Integer; const AOrigin: TSdlFPoint;
       AAlpha: Single): TFrameView;
     procedure DrawStands(const APlace: TPlace; const AView: TFrameView;
       ASides: TStandSides);
@@ -172,7 +172,11 @@ type
     // The objects of ALayer, but for what hangs on a parent in the
     // depth: DrawSunk draws that. The backdrop layer is drawn whole.
     procedure Draw(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single;
-      ALayer: TDynamicLayer);
+      ALayer: TDynamicLayer); overload;
+    // The same from a corner in fractions of a unit: the far ledge riding
+    // the tunnel's layer of a chase (Render.FarPlane)
+    procedure Draw(AScreen: Integer; const AOrigin: TSdlFPoint; AAlpha: Single;
+      ALayer: TDynamicLayer); overload;
     // What hangs on a parent in the depth, whatever its layer - the
     // backdrop layer left out
     procedure DrawSunk(AScreen: Integer; AOrigin: TSdlPoint; AAlpha: Single);
@@ -432,8 +436,8 @@ begin
   FJolt := 0;
 end;
 
-function TDynamicScreenRenderer.ViewOf(AScreen: Integer; AOrigin: TSdlPoint;
-  AAlpha: Single): TFrameView;
+function TDynamicScreenRenderer.ViewOf(AScreen: Integer;
+  const AOrigin: TSdlFPoint; AAlpha: Single): TFrameView;
 begin
   Result.Screen := AScreen;
   Result.Origin := AOrigin;
@@ -474,8 +478,20 @@ begin
   FCanvas.Tone := 1;
 end;
 
+function FineOrigin(const AOrigin: TSdlPoint): TSdlFPoint;
+begin
+  Result.X := AOrigin.X;
+  Result.Y := AOrigin.Y;
+end;
+
 procedure TDynamicScreenRenderer.Draw(AScreen: Integer; AOrigin: TSdlPoint;
   AAlpha: Single; ALayer: TDynamicLayer);
+begin
+  Draw(AScreen, FineOrigin(AOrigin), AAlpha, ALayer);
+end;
+
+procedure TDynamicScreenRenderer.Draw(AScreen: Integer;
+  const AOrigin: TSdlFPoint; AAlpha: Single; ALayer: TDynamicLayer);
 begin
   var View := ViewOf(AScreen, AOrigin, AAlpha);
   var Sides: TStandSides := [ssFront];
@@ -492,7 +508,7 @@ end;
 procedure TDynamicScreenRenderer.DrawSunk(AScreen: Integer;
   AOrigin: TSdlPoint; AAlpha: Single);
 begin
-  var View := ViewOf(AScreen, AOrigin, AAlpha);
+  var View := ViewOf(AScreen, FineOrigin(AOrigin), AAlpha);
   for var Place in FPlaces do
     if Place.DynamicObject.Placement.Layer <> dlBackdrop then
       DrawStands(Place, View, [ssSunk]);

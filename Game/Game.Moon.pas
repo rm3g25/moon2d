@@ -20,14 +20,14 @@ interface
 
 uses
   System.Generics.Collections, Sdl2.Core, Sprites.Sets, Game.Config, Game.Loop,
-  Monsters.Defs, Render.Sprites, Levels.Defs, Levels.Events, Render.Tiles,
-  Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero, Bullets,
-  Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
+  Monsters.Defs, Render.Sprites, Levels.Defs, Levels.Events, Levels.Dynamics,
+  Render.Tiles, Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero,
+  Bullets, Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
   Render.Font,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
-  Game.StoneTank, Game.Belt,
+  Game.StoneTank, Game.Belt, Game.FarPlane, Render.FarPlane,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
@@ -71,6 +71,10 @@ type
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
     FObjects: TObjectScreenRenderer;
+    // The far plane of a chase: how far its layers have ridden, and the
+    // painter that draws them in place of the screen's backdrop
+    FFarPlane: TFarPlane;
+    FFarPlanePainter: TFarPlanePainter;
     FDynamics: TDynamicScreenRenderer;
     FPads: TPadWorld;
     // The pads of a chase, sent in from beyond the right edge as the road
@@ -345,6 +349,9 @@ type
     procedure AdvanceBriefing;
     procedure DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
     procedure DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
+    procedure DrawBackdrop(AAlpha: Single);
+    function SkyOrigin(AAlpha: Single): TSdlFPoint;
+    function HazeBackdrop(AScreen: Integer): TBackdropView;
     procedure LoadLevel(const AFileName: string);
     function OpenSpriteSet(const ASetName: string): TSpriteSet;
     function LevelArtSetFile(const AKind: string): string;
@@ -372,7 +379,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.IOUtils, Sdl2.Image,
-  Levels.Dynamics, Levels.Pads, Pads.Flights, Game.Space, Localization;
+  Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space, Localization;
 
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
@@ -675,6 +682,8 @@ begin
   FMonsterBullets.Free;
   FHero.Free;
   FDynamics.Free;
+  FFarPlanePainter.Free;
+  FFarPlane.Free;
   FObjects.Free;
   FDrift.Free;
   FPads.Free;
@@ -707,6 +716,8 @@ begin
   FField.Free;
   FHero.Free;
   FDynamics.Free;
+  FFarPlanePainter.Free;
+  FFarPlane.Free;
   FObjects.Free;
   FDrift.Free;
   FPads.Free;
@@ -718,6 +729,8 @@ begin
   FField := nil;
   FHero := nil;
   FDynamics := nil;
+  FFarPlanePainter := nil;
+  FFarPlane := nil;
   FObjects := nil;
   FDrift := nil;
   FPads := nil;
@@ -766,6 +779,9 @@ begin
   for var SetName in FLevel.ObjectSets do
     FObjectCache.AttachSpriteSet(OpenSpriteSet(SetName));
   FObjects := TObjectScreenRenderer.Create(FSprites, FObjectCache, FLevel);
+  FFarPlane := TFarPlane.Create(FLevel.FarPlane);
+  FFarPlanePainter := TFarPlanePainter.Create(FRenderer, FObjectCache,
+    FLevel.FarPlane);
   // Before the dynamics: their parents may be pads
   FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel, JumpReach,
     RollDiceSeed);
@@ -773,7 +789,7 @@ begin
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
-  World.BackdropOf := FTiles.Backdrop;
+  World.BackdropOf := HazeBackdrop;
   FDynamics := TDynamicScreenRenderer.Create(FRenderer, FLevel, FObjectCache,
     World);
 
@@ -891,6 +907,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FFarPlane.Clear;
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.BeginLevel(Pattern);
@@ -1193,6 +1210,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FFarPlane.Clear;
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FUptake.Settle;
@@ -2532,6 +2550,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FFarPlane.Clear;
   FDrift.Clear(RollDiceSeed);
   StopRamRumble;
   FOrbs.Rewind;
@@ -3282,6 +3301,7 @@ begin
   begin
     FBelt.Tick;
     BeltWay := -FBelt.Speed;
+    FFarPlane.Tick(FBelt.Speed / BeltCruise);
   end;
 
   // The pads go first: their riders move with them, then by themselves.
@@ -3445,12 +3465,12 @@ begin
         // backdrop stands still - what a jolt bares at the edge is sky,
         // not void; cursor and HUD are glass over the world and stand too
         FSprites.Origin := NoShake;
-        FTiles.DrawBackground(FHero.Screen);
+        DrawBackdrop(AAlpha);
         // The haze bends the still backdrop where its pad has been jolted
         // to: placed with the world, it reads the backdrop as it stands
         FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
           dlBackdrop);
-        FDynamics.Draw(FHero.Screen, NoShake, AAlpha, dlSky);
+        FDynamics.Draw(FHero.Screen, SkyOrigin(AAlpha), AAlpha, dlSky);
         FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha, dlAloft);
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
@@ -3528,6 +3548,35 @@ begin
   end;
 
   DrawAtlasOverlay;
+end;
+
+// On the screen of a chase the far plane stands for the backdrop: the
+// backdrop rides in it
+procedure TMoonGame.DrawBackdrop(AAlpha: Single);
+begin
+  if FHero.Screen = FLevel.FarPlane.Screen then
+    FFarPlanePainter.Draw(FFarPlane.OffsetsAt(AAlpha), FTiles.Backdrop(FHero.Screen))
+  else
+    FTiles.DrawBackground(FHero.Screen);
+end;
+
+// The far ledge stands on the backdrop, so on the screen of a chase it
+// rides with the backdrop's layer
+function TMoonGame.SkyOrigin(AAlpha: Single): TSdlFPoint;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  if FHero.Screen = FLevel.FarPlane.Screen then
+    Result.X := -FFarPlane.OffsetsAt(AAlpha)[fmTunnel];
+end;
+
+// What a haze bends: the screen's backdrop as it stands. The far plane of a
+// chase is no single picture, so there a haze bends nothing
+function TMoonGame.HazeBackdrop(AScreen: Integer): TBackdropView;
+begin
+  if AScreen = FLevel.FarPlane.Screen then
+    Exit(Default(TBackdropView));
+  Result := FTiles.Backdrop(AScreen);
 end;
 
 // The first key hurries the story out, the next one starts the level
@@ -3640,6 +3689,7 @@ begin
   FCapsules.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  FFarPlane.Clear;
   FDrift.Clear(RollDiceSeed);
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
