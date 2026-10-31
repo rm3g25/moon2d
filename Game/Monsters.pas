@@ -292,8 +292,9 @@ type
     // to tell
     procedure Vanish;
     // The road of a chase has slid AWay under it, below 0 to the left: it
-    // goes with it, unless a deck carries it - the road has no walls - and
-    // once wholly past the left edge it is gone from the world
+    // goes with it - the road has no walls - or with the deck it stands on,
+    // and once wholly past the left edge it is gone from the world. After
+    // its Tick of the same tick, which tells what the deck carried
     procedure RideBelt(AWay: Double);
     // The deck under its feet; nil when it stands on none
     function DeckUnderFeet: TPad;
@@ -1905,11 +1906,16 @@ begin
   FGone := True;
 end;
 
+// The deck carried it in RideDeck, but CarryX stops a body at the screen's
+// edge: the rest of the deck's way is given here, or the loot would hang at
+// the edge and drop off the deck going out from under it
 procedure TMonster.RideBelt(AWay: Double);
 begin
-  if DeckUnderFeet <> nil then
-    Exit;
-  FX := FX + AWay;
+  var Deck := DeckUnderFeet;
+  if Deck = nil then
+    FX := FX + AWay
+  else
+    FX := FX + Deck.MotionX - FCarriedX;
   if FX + SpriteSize <= 0 then
     Vanish;
 end;

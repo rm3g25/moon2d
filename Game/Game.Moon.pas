@@ -311,6 +311,7 @@ type
     function TryPickMedkitPad(out AMark: TSdlFPoint): Boolean;
     function MedkitWallMark: TSdlFPoint;
     procedure TickCapsules;
+    procedure StandMedkitOn(const AMark: TSdlFPoint);
     function BulletStruckRam(const ABullet: TBullet): Boolean;
     function BulletStruckRamEye(const ABullet: TBullet): Boolean;
     function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
@@ -2944,8 +2945,7 @@ begin
   Result.Y := RamFloorY;
 end;
 
-// A capsule lands with the clack of a pad; the medkit it opens on stands
-// in the field from now on, a pickup like any other
+// A capsule lands with the clack of a pad, and opens on a medkit
 procedure TMoonGame.TickCapsules;
 begin
   var Cue := FCapsules.Tick;
@@ -2953,8 +2953,14 @@ begin
   if Cue.Landed then
     FAudio.Play(PadClackSoundFile);
   for var Mark in Cue.Opened do
-    FField.SpawnStanding(MedkitMonsterId, '', FHero.Screen,
-      Mark.X - SpriteSize / 2, Mark.Y, '', False);
+    StandMedkitOn(Mark);
+end;
+
+// Its feet on AMark, in the field from now on: a pickup like any other
+procedure TMoonGame.StandMedkitOn(const AMark: TSdlFPoint);
+begin
+  FField.SpawnStanding(MedkitMonsterId, '', FHero.Screen,
+    AMark.X - SpriteSize / 2, AMark.Y, '', False);
 end;
 
 // The hunter's eye takes the bullet: sparks off the lens, a ping, a life
@@ -3285,7 +3291,8 @@ begin
     HeroDeck := FHero.DeckUnderFeet;
   FPads.Tick(FHero.Screen, HeroDeck, BeltWay);
   if FBelt.Running then
-    FDrift.Tick(FHero.Screen, FBelt.Travel);
+    for var Mark in FDrift.Tick(FHero.Screen, FBelt.Travel).Medkits do
+      StandMedkitOn(Mark);
   if FPads.CornerTurned then
     FAudio.Play(PadClickSoundFile);
   if FPads.PairDocked then

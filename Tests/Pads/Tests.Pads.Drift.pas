@@ -8,6 +8,10 @@
   let go past the left edge and sent again; a clear puts the pool to
   sleep. And the level file's word on a pad that drifts.
 
+  A climb in every three carries a medkit, on its middle pad by height,
+  which climb of the three the dice's; the medkit rides its pad out past
+  the left edge and is gone, as one on the road is.
+
   The room is the empty one, its pool of screen 1 as the level's. The pads
   name no sprite, so the world asks no art for them. The road is run by
   hand: the world ticks the pads its way, then the dispatcher hears how
@@ -23,7 +27,10 @@ interface
 
 uses
   DUnitX.TestFramework,
+  Sdl2.Core,
   Levels.Defs,
+  Monsters,
+  Monsters.Defs,
   Pads.World,
   Pads.Drift;
 
@@ -37,6 +44,12 @@ type
 
   TSentGroup = TArray<TSentPad>;
 
+  // Where a medkit was told to stand: the middle of its feet on the road
+  TSentMedkit = record
+    RoadX: Double;
+    Deck: Double;
+  end;
+
   [TestFixture]
   TPadDriftTests = class
   private
@@ -47,9 +60,16 @@ type
     // The pads the last tick of the road sent, and all of them so far
     FSent: TArray<TPad>;
     FHistory: TArray<TSentPad>;
+    // The medkits the last tick of the road told, on the screen, and all of
+    // them so far, on the road
+    FTickMedkits: TArray<TSdlFPoint>;
+    FMedkits: TArray<TSentMedkit>;
     procedure RunRoad(ATicks: Integer; ASpeed: Double = 1);
     procedure RunVaried(ATicks: Integer);
     function Groups: TArray<TSentGroup>;
+    function CarriesMedkit(const AGroup: TSentGroup;
+      out APadIndex: Integer): Boolean;
+    function ClimbsCarrying: TArray<Boolean>;
   public
     [Setup]
     procedure Setup;
@@ -88,14 +108,50 @@ type
     procedure TestPadThatDriftsTakesNoPlace;
     [Test]
     procedure TestPadThatDriftsDoesNothingElse;
+    [Test]
+    procedure TestMedkitOnlyOnTheMiddlePadOfAClimb;
+    [Test]
+    procedure TestOneClimbInThreeCarriesAMedkit;
+    [Test]
+    procedure TestTheDicePickTheClimbOfTheThree;
+    [Test]
+    procedure TestMedkitStandsOnThePadSentWithIt;
+    [Test]
+    procedure TestClearStartsTheThreeAnew;
+  end;
+
+  // A medkit standing on a pad of the chase, and one on the road; the
+  // road runs by hand, as the game runs it
+  [TestFixture]
+  TDriftLootTests = class
+  private
+    FLevel: TLevel;
+    FWorld: TPadWorld;
+    FRegistry: TMonsterRegistry;
+    FField: TMonsterField;
+    function StandMedkit(AX, AY: Double): TMonster;
+    procedure RunRoad(ATicks: Integer);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestMedkitRidesItsPadOutAndIsGone;
+    [Test]
+    procedure TestMedkitOnTheRoadRidesOutAndIsGone;
   end;
 
 implementation
 
 uses
+  System.IOUtils,
   System.SysUtils,
+  Game.Config,
   Game.Space,
   Levels.Pads,
+  Render.Sprites,
   Tests.Rooms;
 
 const
@@ -108,6 +164,13 @@ const
   LongRunTicks = 6000;
   UnitSlack = 0.001;
   FeetWidth = 16;
+  // A run long enough for every place of the medkit in its three
+  RoundsRunTicks = 4 * LongRunTicks;
+  // The medkit's road: the road at cruise, its floor, a pad over it
+  RoadSpeed = 1.0;
+  FloorY = 352;
+  PadDeck = 200;
+  PadLeft = 96;
 
 function DriftPadJson(AWidth: Integer; const ATag: string): string;
 begin
@@ -153,6 +216,8 @@ begin
   FTravel := 0;
   FSent := [];
   FHistory := [];
+  FTickMedkits := [];
+  FMedkits := [];
 end;
 
 procedure TPadDriftTests.TearDown;
@@ -171,7 +236,14 @@ begin
     FWorld.Tick(Screen, nil, -ASpeed);
     var Before := FWorld.Standing(Screen);
     FTravel := FTravel + ASpeed;
-    FDrift.Tick(Screen, FTravel);
+    FTickMedkits := FDrift.Tick(Screen, FTravel).Medkits;
+    for var Mark in FTickMedkits do
+    begin
+      var Medkit: TSentMedkit;
+      Medkit.RoadX := Mark.X + FTravel;
+      Medkit.Deck := Mark.Y;
+      FMedkits := FMedkits + [Medkit];
+    end;
     FSent := [];
     for var Pad in FWorld.Standing(Screen) do
     begin
@@ -245,6 +317,63 @@ end;
 function IsClimb(const AGroup: TSentGroup): Boolean;
 begin
   Result := Length(AGroup) > 1;
+end;
+
+// Its pad the middle by height: neither the foot nor the top, and no pad
+// between them nearer halfway up - or as near and lower
+function IsMidway(const AGroup: TSentGroup; APadIndex: Integer): Boolean;
+begin
+  var Foot := FootOf(AGroup).Deck;
+  var Top := TopOf(AGroup).Deck;
+  var Deck := AGroup[APadIndex].Deck;
+  if (Deck = Foot) or (Deck = Top) then
+    Exit(False);
+  var Halfway := (Foot + Top) / 2;
+  var Off := Abs(Deck - Halfway);
+  for var Pad in AGroup do
+  begin
+    var Between := (Pad.Deck <> Foot) and (Pad.Deck <> Top);
+    var PadOff := Abs(Pad.Deck - Halfway);
+    var AsNearAndLower := (PadOff = Off) and (Pad.Deck > Deck);
+    var Nearer := (PadOff < Off) or AsNearAndLower;
+    if Between and Nearer then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// The medkit on a pad of AGroup, if one was told: the middle of its deck
+function TPadDriftTests.CarriesMedkit(const AGroup: TSentGroup;
+  out APadIndex: Integer): Boolean;
+begin
+  for var i := 0 to High(AGroup) do
+    for var Medkit in FMedkits do
+    begin
+      var OnDeck := Abs(Medkit.Deck - AGroup[i].Deck) < UnitSlack;
+      var Middle := AGroup[i].RoadLeft + AGroup[i].Width / 2;
+      if OnDeck and (Abs(Medkit.RoadX - Middle) < UnitSlack) then
+      begin
+        APadIndex := i;
+        Exit(True);
+      end;
+    end;
+  APadIndex := -1;
+  Result := False;
+end;
+
+// The climbs along the road, whether each carries a medkit; the last group
+// may still be coming in, so it is left out
+function TPadDriftTests.ClimbsCarrying: TArray<Boolean>;
+begin
+  Result := [];
+  var All := Groups;
+  for var g := 0 to High(All) - 1 do
+  begin
+    if not IsClimb(All[g]) then
+      Continue;
+    var PadIndex: Integer;
+    Result := Result + [CarriesMedkit(All[g], PadIndex)];
+  end;
 end;
 
 // By value, not const: the anonymous method captures it
@@ -543,7 +672,196 @@ begin
     end, ELevelError, 'A pad that drifts and sleeps for a scene');
 end;
 
+procedure TPadDriftTests.TestMedkitOnlyOnTheMiddlePadOfAClimb;
+begin
+  RunVaried(LongRunTicks);
+
+  var All := Groups;
+  var Carried := 0;
+  // The last may still be coming in
+  for var g := 0 to High(All) - 1 do
+  begin
+    var PadIndex: Integer;
+    if not CarriesMedkit(All[g], PadIndex) then
+      Continue;
+    Inc(Carried);
+    Assert.IsTrue(IsClimb(All[g]), Format('Group %d: a medkit on a lone pad',
+      [g]));
+    Assert.IsTrue(IsMidway(All[g], PadIndex),
+      Format('Group %d: a medkit on %g, not the middle of its climb',
+        [g, All[g][PadIndex].Deck]));
+  end;
+  Assert.IsTrue(Carried > 3, Format('Only %d medkits', [Carried]));
+end;
+
+procedure TPadDriftTests.TestOneClimbInThreeCarriesAMedkit;
+begin
+  RunRoad(RoundsRunTicks);
+
+  var Climbs := ClimbsCarrying;
+  var Rounds := Length(Climbs) div MedkitClimbs;
+  for var r := 0 to Rounds - 1 do
+  begin
+    var Carrying := 0;
+    for var i := 0 to MedkitClimbs - 1 do
+      if Climbs[r * MedkitClimbs + i] then
+        Inc(Carrying);
+    Assert.AreEqual(1, Carrying, Format('Climbs %d to %d',
+      [r * MedkitClimbs, (r + 1) * MedkitClimbs - 1]));
+  end;
+  Assert.IsTrue(Rounds > 5, Format('Only %d rounds', [Rounds]));
+end;
+
+procedure TPadDriftTests.TestTheDicePickTheClimbOfTheThree;
+var
+  Places: array [0..MedkitClimbs - 1] of Integer;
+begin
+  RunRoad(RoundsRunTicks);
+
+  var Climbs := ClimbsCarrying;
+  for var i := 0 to MedkitClimbs - 1 do
+    Places[i] := 0;
+  for var i := 0 to Length(Climbs) div MedkitClimbs * MedkitClimbs - 1 do
+    if Climbs[i] then
+      Inc(Places[i mod MedkitClimbs]);
+  for var i := 0 to MedkitClimbs - 1 do
+    Assert.IsTrue(Places[i] > 0,
+      Format('Never the climb %d of its three', [i + 1]));
+end;
+
+procedure TPadDriftTests.TestMedkitStandsOnThePadSentWithIt;
+begin
+  var Told := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    RunRoad(1);
+    for var Mark in FTickMedkits do
+    begin
+      Inc(Told);
+      var Found := False;
+      for var Pad in FSent do
+      begin
+        var OnDeck := Abs(Mark.Y - Pad.Top) < UnitSlack;
+        var Middle := Pad.Left + Pad.Placement.Width / 2;
+        if OnDeck and (Abs(Mark.X - Middle) < UnitSlack) then
+          Found := True;
+      end;
+      Assert.IsTrue(Found, Format('Tick %d: a medkit on no pad just sent',
+        [i]));
+    end;
+  end;
+  Assert.IsTrue(Told > 3, Format('Only %d medkits', [Told]));
+end;
+
+procedure TPadDriftTests.TestClearStartsTheThreeAnew;
+begin
+  // A climb or two into the first three
+  RunRoad(300);
+  Assert.IsTrue(Length(FHistory) > 0, 'Nothing sent before the clear');
+
+  FDrift.Clear(7);
+  FTravel := 0;
+  FHistory := [];
+  FMedkits := [];
+  RunRoad(LongRunTicks);
+
+  var Climbs := ClimbsCarrying;
+  Assert.IsTrue(Length(Climbs) >= MedkitClimbs, 'Too few climbs');
+  var Carrying := 0;
+  for var i := 0 to MedkitClimbs - 1 do
+    if Climbs[i] then
+      Inc(Carrying);
+  Assert.AreEqual(1, Carrying, 'The first three after the clear');
+end;
+
+// ---------------------------------------------------------------------------
+// The medkit on the road of the chase
+// ---------------------------------------------------------------------------
+
+procedure TDriftLootTests.Setup;
+begin
+  FLevel := LevelFromRows(RoomRowsOf(0, 0, 0, 0),
+    PoolSections(PoolSteps, PoolHighs));
+  FWorld := TPadWorld.Create(nil, nil, FLevel, nil, 1);
+  FRegistry := TMonsterRegistry.Create;
+  FRegistry.LoadFromFile(
+    TPath.Combine(ExtractFilePath(ParamStr(0)), 'monsters.json'));
+  FField := TMonsterField.Create(nil, FRegistry, FLevel, FWorld, dfNormal,
+    1.0);
+end;
+
+// The field, which owns the bodies leaning on the level and the pads, first
+procedure TDriftLootTests.TearDown;
+begin
+  FreeAndNil(FField);
+  FreeAndNil(FRegistry);
+  FreeAndNil(FWorld);
+  FreeAndNil(FLevel);
+end;
+
+function TDriftLootTests.StandMedkit(AX, AY: Double): TMonster;
+var
+  Placement: TEntityPlacement;
+begin
+  Placement := Default(TEntityPlacement);
+  Placement.MonsterId := 'medkit';
+  Placement.Screen := Screen;
+  Placement.X := 1;
+  Placement.Y := 1;
+  Result := TMonster.Create(FRegistry.Find(Placement.MonsterId),
+    Default(TAnimSet), nil, nil, FLevel, FWorld, Placement, 1.0);
+  FField.Monsters.Add(Result);
+  Result.Stand(AX, AY, False);
+end;
+
+// The pads first, then the bodies, then the loot on the road
+procedure TDriftLootTests.RunRoad(ATicks: Integer);
+begin
+  for var i := 1 to ATicks do
+  begin
+    FWorld.Tick(Screen, nil, -RoadSpeed);
+    FField.Tick(Screen, 0, 0, nil);
+    FField.CarryLoot(Screen, -RoadSpeed);
+  end;
+end;
+
+procedure TDriftLootTests.TestMedkitRidesItsPadOutAndIsGone;
+begin
+  var Pad := FWorld.FreeDrifter(Screen, StepWidth);
+  Pad.SetAdrift(PadLeft, PadDeck);
+  var Medkit := StandMedkit(PadLeft + (StepWidth - SpriteSize) / 2, PadDeck);
+
+  for var i := 1 to PadLeft + StepWidth + 10 do
+  begin
+    RunRoad(1);
+    if Medkit.Life <> mlAlive then
+      Break;
+    Assert.IsTrue(Abs(Medkit.Y - Pad.Top) < UnitSlack,
+      Format('Tick %d: off the deck, its feet at %g', [i, Medkit.Y]));
+    Assert.IsTrue(Abs(Medkit.X - Pad.Left) < UnitSlack,
+      Format('Tick %d: at %g, its pad at %g', [i, Medkit.X, Pad.Left]));
+  end;
+  Assert.IsTrue(Medkit.Life <> mlAlive, 'Still there past the left edge');
+end;
+
+procedure TDriftLootTests.TestMedkitOnTheRoadRidesOutAndIsGone;
+const
+  StartX = 40;
+  TicksToGo = StartX + SpriteSize;
+begin
+  var Medkit := StandMedkit(StartX, FloorY);
+
+  RunRoad(TicksToGo - 1);
+  Assert.IsTrue(Medkit.Life = mlAlive, 'Gone before wholly past the edge');
+  Assert.IsTrue(Abs(Medkit.X - (StartX - (TicksToGo - 1))) < UnitSlack,
+    Format('At %g after riding the road', [Medkit.X]));
+
+  RunRoad(1);
+  Assert.IsTrue(Medkit.Life <> mlAlive, 'Still there past the left edge');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TPadDriftTests);
+  TDUnitX.RegisterTestFixture(TDriftLootTests);
 
 end.

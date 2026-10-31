@@ -12,6 +12,11 @@
   every group: no two climbs alike, and a lone pad looks like the foot of
   a climb until the next pad comes in. So the player looks for a way up.
 
+  One climb in MedkitClimbs carries a medkit, which one of them the dice's:
+  on its middle pad by height, of the pads between the foot and the top
+  the one nearest halfway. The dispatcher does not know the monsters - it
+  tells the game where a medkit is to stand, and the game stands it.
+
   A guard keeps him from waiting too long: when no climb has ended for
   GuardUnits of road, the next group is a climb - one of the dice's like
   any other, nothing to tell it by. A new group comes only when the screen
@@ -23,8 +28,9 @@
   load, and so does a pad of it neither of the two widths. A width the
   pool has run out of is made up with the other.
 
-  It does not know the belt, the hero or the bunker: the game tells it how
-  far the road has run, while the road runs.
+  It does not know the belt, the hero, the bunker or the monsters: the
+  game tells it how far the road has run, while the road runs, and hears
+  back where the medkits go.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -34,7 +40,7 @@ unit Pads.Drift;
 interface
 
 uses
-  Render.Brush, Pads.World;
+  Sdl2.Core, Render.Brush, Pads.World;
 
 const
   // The pool's two pictures
@@ -64,13 +70,23 @@ const
   // No climb ended for 6 s of road at cruise: the next group is one
   GuardUnits = 198;
   MostAdrift = 10;
+  // Of every three climbs one carries a medkit
+  MedkitClimbs = 3;
 
 type
-  // A pad of a group as planned: its width, its deck, the road after it
+  // A pad of a group as planned: its width, its deck, the road after it,
+  // whether a medkit stands on it
   TDriftStep = record
     Width: Integer;
     Deck: Integer;
     GapAfter: Integer;
+    Medkit: Boolean;
+  end;
+
+  TDriftCue = record
+    // Where the medkits stand from this tick: the middle of their feet, on
+    // the deck of a pad just sent
+    Medkits: TArray<TSdlFPoint>;
   end;
 
   TPadDrift = class
@@ -87,6 +103,10 @@ type
     FPlan: TArray<TDriftStep>;
     FPlanClimbs: Boolean;
     FGroupWaits: Boolean;
+    // The climbs planned in the current round of MedkitClimbs, and which of
+    // the round carries the medkit
+    FClimbsThisRound: Integer;
+    FMedkitClimb: Integer;
     function RollRange(ALeast, AMost: Integer): Integer;
     function RollWidth: Integer;
     function PlanLone: TArray<TDriftStep>;
@@ -94,7 +114,8 @@ type
     procedure PlanGroup;
     function AdriftOn(AScreen: Integer): Integer;
     function TakeDrifter(AScreen, AWidth: Integer): TPad;
-    procedure SendStep(AScreen: Integer; ATravel: Double);
+    procedure SendStep(AScreen: Integer; ATravel: Double;
+      var ACue: TDriftCue);
   public
     // AWorld must outlive the dispatcher; ALevelId names the level in the
     // errors of its pools; ASeed - the dice of the groups
@@ -104,8 +125,9 @@ type
     // dice new for the new try
     procedure Clear(ASeed: Cardinal);
     // The road has run ATravel units since its start: every pad due by now
-    // is sent on AScreen, beyond the right edge
-    procedure Tick(AScreen: Integer; ATravel: Double);
+    // is sent on AScreen, beyond the right edge, and the cue tells where
+    // the medkits on them stand
+    function Tick(AScreen: Integer; ATravel: Double): TDriftCue;
   end;
 
 implementation
@@ -148,6 +170,8 @@ begin
   FPlan := [];
   FPlanClimbs := False;
   FGroupWaits := False;
+  FClimbsThisRound := 0;
+  FMedkitClimb := 0;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
   FWorld.LetGoDrifters;
@@ -170,6 +194,7 @@ function TPadDrift.PlanLone: TArray<TDriftStep>;
 var
   Step: TDriftStep;
 begin
+  Step := Default(TDriftStep);
   Step.Width := RollWidth;
   Step.Deck := RollRange(HighestDeck, LowestDeck);
   Step.GapAfter := RollRange(GroupGapLeast, GroupGapMost);
@@ -182,6 +207,7 @@ function TPadDrift.PlanClimb: TArray<TDriftStep>;
 var
   Step: TDriftStep;
 begin
+  Step := Default(TDriftStep);
   Result := [];
   var Deck := RollRange(ClimbFootHighest, LowestDeck);
   repeat
@@ -209,14 +235,46 @@ begin
   Result[High(Result)].GapAfter := RollRange(GroupGapLeast, GroupGapMost);
 end;
 
+// Nearer halfway up the climb than AOther; as near, the lower of the two
+function NearerHalfway(const AStep, AOther: TDriftStep;
+  AHalfway: Double): Boolean;
+begin
+  var Off := Abs(AStep.Deck - AHalfway);
+  var OtherOff := Abs(AOther.Deck - AHalfway);
+  if Off <> OtherOff then
+    Exit(Off < OtherOff);
+  Result := AStep.Deck > AOther.Deck;
+end;
+
+// Of the pads between the foot and the top, the one nearest halfway
+// between their decks
+procedure PutMedkitMidway(var AClimb: TArray<TDriftStep>);
+begin
+  var Halfway := (AClimb[0].Deck + AClimb[High(AClimb)].Deck) / 2;
+  var Middle := -1;
+  for var i := 1 to High(AClimb) - 1 do
+    if (Middle < 0) or NearerHalfway(AClimb[i], AClimb[Middle], Halfway) then
+      Middle := i;
+  if Middle >= 0 then
+    AClimb[Middle].Medkit := True;
+end;
+
 procedure TPadDrift.PlanGroup;
 begin
   var Waited := FCursor - FClimbEnd > GuardUnits;
   FPlanClimbs := Waited or (FDice.NextUnit < ClimbShare);
-  if FPlanClimbs then
-    FPlan := PlanClimb
-  else
+  if not FPlanClimbs then
+  begin
     FPlan := PlanLone;
+    Exit;
+  end;
+
+  FPlan := PlanClimb;
+  if FClimbsThisRound = 0 then
+    FMedkitClimb := RollRange(0, MedkitClimbs - 1);
+  if FClimbsThisRound = FMedkitClimb then
+    PutMedkitMidway(FPlan);
+  FClimbsThisRound := (FClimbsThisRound + 1) mod MedkitClimbs;
 end;
 
 function TPadDrift.AdriftOn(AScreen: Integer): Integer;
@@ -239,8 +297,10 @@ begin
 end;
 
 // The pool is checked at load: a screen with none is a road with no pads,
-// and the road goes on as if they were there
-procedure TPadDrift.SendStep(AScreen: Integer; ATravel: Double);
+// and the road goes on as if they were there - with no medkit, nothing to
+// stand it on
+procedure TPadDrift.SendStep(AScreen: Integer; ATravel: Double;
+  var ACue: TDriftCue);
 begin
   var Step := FPlan[0];
   Delete(FPlan, 0, 1);
@@ -249,7 +309,15 @@ begin
   if Pad <> nil then
   begin
     Width := Pad.Placement.Width;
-    Pad.SetAdrift(FCursor - ATravel, Step.Deck);
+    var Left := FCursor - ATravel;
+    Pad.SetAdrift(Left, Step.Deck);
+    if Step.Medkit then
+    begin
+      var Mark: TSdlFPoint;
+      Mark.X := Left + Width / 2;
+      Mark.Y := Step.Deck;
+      ACue.Medkits := ACue.Medkits + [Mark];
+    end;
   end;
   FCursor := FCursor + Width;
   if FPlanClimbs and (Length(FPlan) = 0) then
@@ -257,8 +325,9 @@ begin
   FCursor := FCursor + Step.GapAfter;
 end;
 
-procedure TPadDrift.Tick(AScreen: Integer; ATravel: Double);
+function TPadDrift.Tick(AScreen: Integer; ATravel: Double): TDriftCue;
 begin
+  Result := Default(TDriftCue);
   repeat
     if Length(FPlan) = 0 then
     begin
@@ -276,7 +345,7 @@ begin
     end;
     if FCursor - ATravel > ScreenWidth then
       Exit;
-    SendStep(AScreen, ATravel);
+    SendStep(AScreen, ATravel, Result);
   until False;
 end;
 
