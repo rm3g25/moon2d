@@ -86,6 +86,8 @@ Tests\
     Tests.Levels.CityLife.pas  the clock of the chase city's lights, against
                                tables made by the stand's own functions
     Tests.Levels.Doors.pas     the doors a level shuts
+    Tests.Levels.Monorail.pas  the chase city's train, against tables made
+                               by the stand's own functions
     Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust,
                                the convoy, the searchlight
     Tests.Levels.Entities.pas

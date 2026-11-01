@@ -7,6 +7,27 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is the roadmap in
 `PORTING-NOTES.md`, section "Следующая часть".
 
+До этого, на 2026-11-01: **3.0.92 - жизнь города погони.** Огни города
+тик в тик со стендом: вывески дышат и спотыкаются, окна просыпаются
+отрезками, красные лампы на мачтах, неоновая эмблема TeK на центральном
+шпиле гаснет и зажигается заново по частям, эмблема старой краской на
+двух стенах, красные маячки на верхних узлах каркасов. Данные в
+`Levels.FarPlane` (`cityLights`, `emblem`, `beacons`, `beaconsAbove`
+каркаса, `paint` элемента) с отказами на кривые данные; новый юнит
+`Levels.CityLife` без SDL - кости стенда до бита (lowbias32, `Roll`,
+`RollInt`) и уровни огней; часы - `TFarPlane.Clock`, тик стенда (его дорога
+трогается на втором тике). Маячки - узлы каркаса в `TDomeFrames`, дальние до
+зданий, ближние с ближними рёбрами. Рисует `Render.FarPlane`: после
+каждого здания города - краска, огни (`gsPoint` над вывеской и лампой,
+`gsBeam` над полосой и окном), эмблема на шпиле; картинки эмблемы
+(`tek-*`) из набора - их кладёт `tools/chase/make_emblem.py`, а
+`pack_set.py` их выкидывает: после перепаковки набора make_emblem
+прогоняется заново. Тесты - ещё 36 (новый `Tests.Levels.CityLife` 18 -
+таблицы, снятые функциями самого стенда под node; `Tests.Game.FarPlane`
+14; `Tests.Render.DomeFrames` 4), DUnitX находит 948. Подробности - в
+`docs/mechanics/arena-3.md`, "The city's life as built (3.0.92)", и
+`docs/mechanics/chase-backdrop.md`, от "The lights" до "The beacons".
+
 До этого, на 2026-11-01: **3.0.91 - длинные тени каркасов.** Тень ребра
 больше не выбрасывается целиком, когда её конец уходит за глаз: она
 режется у плоскости глаза (`TDomeFrames.CutAtEye`) и стекает по полу
