@@ -40,6 +40,7 @@ uses
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',
   Tests.Levels.Carousels in 'Levels\Tests.Levels.Carousels.pas',
+  Tests.Levels.CityLife in 'Levels\Tests.Levels.CityLife.pas',
   Tests.Levels.Doors in 'Levels\Tests.Levels.Doors.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',
   Tests.Levels.Events in 'Levels\Tests.Levels.Events.pas',

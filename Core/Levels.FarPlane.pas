@@ -39,6 +39,13 @@
   the speeds. Where each one stands is Game.Fangs' business. A layout
   without the section has no fangs.
 
+  The city lives: its lights ("cityLights" - a box and a colour on a piece
+  of the kit, riding with every building drawn from it), the TeK emblem
+  standing on a spire ("emblem"), the red beacons on a frame's upper nodes
+  ("beacons", and "beaconsAbove" of the frame) and the emblem as old paint
+  on a wall ("paint" of a placed building). Here they are numbers; how
+  bright each one is at a tick is Levels.CityLife's business.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.FarPlane;
@@ -87,6 +94,105 @@ type
     // The thickness of a rib, units
     Rib: Single;
     TintsSun: Boolean;
+    // Its nodes above BeaconsAbove of its height carry beacons
+    Beacons: Boolean;
+    BeaconsAbove: Double;
+  end;
+
+  // A box in shares of a picture: from its top left, U across and V down
+  TPictureBox = record
+    U, V, W, H: Single;
+  end;
+
+  TCityLightKind = (lkWindow, lkNeon, lkStrip, lkLamp);
+  TCityGlowKind = lkWindow..lkStrip;
+
+  // A lamp's box is a point: its width and height are nothing
+  TCityLight = record
+    Kind: TCityLightKind;
+    Box: TPictureBox;
+    Color: TRgb;
+  end;
+
+  // A glow over a light's box: its core the box scaled by Core, its halo
+  // the box scaled by Halo and grown by HaloPad units on each side at the
+  // domes' nearness; the levels 0..1
+  TCityGlowLook = record
+    CoreW, CoreH, CoreLevel: Single;
+    HaloW, HaloH, HaloPad, HaloLevel: Single;
+  end;
+
+  // A sign's clock, in ticks of the far plane: a slow breath, and windows
+  // of time, a share of them carrying a fault - flips down to FaultLow and
+  // back. The shares are Double: they are compared with the dice
+  TCityFlicker = record
+    BreathDepth: Double;
+    BreathLeast, BreathMost: Integer;
+    WindowLeast, WindowMost: Integer;
+    FaultShare: Double;
+    FlipsLeast, FlipsMost: Integer;
+    FlipLeast, FlipMost: Integer;
+    FaultLow: Double;
+  end;
+
+  // A window's time is cut into spans, OnShare of them lit
+  TCityWindows = record
+    OnShare: Double;
+    SpanLeast, SpanMost: Integer;
+  end;
+
+  TCityPieceLights = record
+    Piece: string;
+    Lights: TArray<TCityLight>;
+  end;
+
+  TCityLights = record
+    Present: Boolean;
+    Looks: array [TCityGlowKind] of TCityGlowLook;
+    Flicker: TCityFlicker;
+    Windows: TCityWindows;
+    Pieces: TArray<TCityPieceLights>;
+    // Empty for a piece without lights
+    function LightsOf(const APiece: string): TArray<TCityLight>;
+    function HasLamps: Boolean;
+  end;
+
+  // The TeK emblem: a neon sign on the lower point of its frame at the tip
+  // of a building drawn from Piece (AtU, AtV of its picture). W units wide
+  // at the domes' nearness, H = W * Aspect; the metal at Shade, the tubes
+  // and their glows added in Color. Parts and Halos are boxes in shares of
+  // the emblem, the parts in the order they light, the first one the frame
+  TCityEmblem = record
+    Present: Boolean;
+    Piece: string;
+    AtU, AtV: Single;
+    W, Aspect: Single;
+    Shade: Single;
+    Color: TRgb;
+    CoreLevel, HaloLevel: Single;
+    FaultShare: Double;
+    RelightLeast, RelightMost: Integer;
+    DarkLeast, DarkMost: Integer;
+    PartLeast, PartMost: Integer;
+    Parts, Halos: TArray<TPictureBox>;
+  end;
+
+  // The red warning lights: a dim glow and a short flash, each on its own
+  // period. Size and Halo in units at the node's nearness
+  TCityBeacons = record
+    Present: Boolean;
+    Color: TRgb;
+    Size, Halo: Single;
+    GlowLevel, FlashLevel: Single;
+    FlashTicks: Integer;
+    PeriodLeast, PeriodMost: Integer;
+  end;
+
+  // The emblem as old paint on a wall: at U, V of the picture, W of its
+  // width, Alpha opaque
+  TElementPaint = record
+    Present: Boolean;
+    U, V, W, Alpha: Single;
   end;
 
   // Units a second; the shares are of another layer's speed
@@ -132,6 +238,7 @@ type
     Mirror: Boolean;
     // The screen's own backdrop, not a picture of the set
     Backdrop: Boolean;
+    Paint: TElementPaint;
   end;
 
   TFarPlaneLayer = record
@@ -180,6 +287,9 @@ type
     // Back to front
     Layers: TArray<TFarPlaneLayer>;
     Fangs: TFarPlaneFangs;
+    Lights: TCityLights;
+    Emblem: TCityEmblem;
+    Beacons: TCityBeacons;
     function Present: Boolean;
     // How near a thing of the city whose feet stand at AY is, the domes'
     // centres 1: it rides that share of its layer's speed
@@ -213,7 +323,11 @@ type
 // ALevelDir - where the layout lies. A layout that is missing or does not
 // read, a layer of an unknown speed, an element without width, a city
 // without length, fangs that cannot be scattered, a camera that sees no
-// depth and a frame without size or without a camera raise.
+// depth and a frame without size or without a camera raise. So do the
+// city's life that cannot play: a light of an unknown kind or without a
+// box, a clock of fewer ticks than it needs, a paint without width, an
+// emblem without parts, lamps or frame beacons without "beacons", an
+// emblem without "cityLights".
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -229,7 +343,7 @@ resourcestring
     + 'ridge, city, tunnel or ground';
   SFarPlaneBadElement = 'Level "%s": far plane element "%s" is %g units wide';
   SFarPlaneNoCity = 'Level "%s": its far plane has no city layer with a length';
-  SFarPlaneBadColor = 'Level "%s": far plane sun colour "%s" is not three bytes';
+  SFarPlaneBadColor = 'Level "%s": far plane colour "%s" is not three bytes';
   SFarPlaneNoFangs = 'Level "%s": the fangs of its far plane have an empty kit';
   SFarPlaneBadFang = 'Level "%s": fang "%s" is %g by %g units';
   SFarPlaneBadRange = 'Level "%s": fangs "%s" takes two numbers, the least first';
@@ -239,6 +353,26 @@ resourcestring
   SFarPlaneBadFrame = 'Level "%s": frame "%s" needs a size, a frequency of 1 '
     + 'or more and a rib above zero';
   SFarPlaneFramesNoCamera = 'Level "%s": its far plane has frames and no camera';
+  SFarPlaneBadLightKind = 'Level "%s": a light of piece "%s" is of kind "%s" - '
+    + 'window, neon, strip or lamp';
+  SFarPlaneBadBox = 'Level "%s": %s needs a box of four numbers, its width and '
+    + 'height not below zero';
+  SFarPlaneBadTicks = 'Level "%s": "%s" takes two whole numbers, the least first '
+    + 'and %d at the least';
+  SFarPlaneBadPaint = 'Level "%s": the paint of "%s" needs four numbers and a width '
+    + 'above zero';
+  SFarPlaneBadEmblem = 'Level "%s": the emblem needs a part at the least, a halo to '
+    + 'each part, and a width and an aspect above zero';
+  SFarPlaneLampsNoBeacons = 'Level "%s": its city has lamps and no "beacons" to '
+    + 'blink them by';
+  SFarPlaneFrameNoBeacons = 'Level "%s": frame "%s" has beacons and the far plane '
+    + 'no "beacons"';
+  SFarPlaneEmblemNoLights = 'Level "%s": its emblem flickers by the signs'' clock '
+    + 'and the city has no "cityLights"';
+  SFarPlaneBadPair = 'Level "%s": "%s" takes two numbers';
+  SLightOfPiece = 'a light of piece "%s"';
+  SEmblemPart = 'emblem part %d';
+  SEmblemHalo = 'emblem halo %d';
 
 const
   FullShade = 1.0;
@@ -366,6 +500,23 @@ begin
   Result := Length(Kinds) > 0;
 end;
 
+function TCityLights.LightsOf(const APiece: string): TArray<TCityLight>;
+begin
+  for var Own in Pieces do
+    if Own.Piece = APiece then
+      Exit(Own.Lights);
+  Result := [];
+end;
+
+function TCityLights.HasLamps: Boolean;
+begin
+  for var Own in Pieces do
+    for var Light in Own.Lights do
+      if Light.Kind = lkLamp then
+        Exit(True);
+  Result := False;
+end;
+
 function ParseMotion(const AWord, ALevelId, ALayerId: string): TFarPlaneMotion;
 begin
   if AWord = 'ridge' then
@@ -435,6 +586,24 @@ begin
     0.0, 1.0);
 end;
 
+function ReadPaint(const AObj: TJSONObject; const AId, ALevelId: string): TElementPaint;
+var
+  Numbers: TJSONArray;
+begin
+  Result := Default(TElementPaint);
+  if not AObj.TryGetValue<TJSONArray>('paint', Numbers) then
+    Exit;
+  if Numbers.Count <> 4 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadPaint, [ALevelId, AId]);
+  Result.Present := True;
+  Result.U := Numbers.Items[0].GetValue<Double>;
+  Result.V := Numbers.Items[1].GetValue<Double>;
+  Result.W := Numbers.Items[2].GetValue<Double>;
+  Result.Alpha := EnsureRange(Numbers.Items[3].GetValue<Double>, 0.0, 1.0);
+  if Result.W <= 0 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadPaint, [ALevelId, AId]);
+end;
+
 function ReadElement(const AObj: TJSONObject; const ALevelId: string): TFarPlaneElement;
 begin
   Result.Id := AObj.GetValue<string>('id');
@@ -450,6 +619,7 @@ begin
   Result.FeatherLeft := AObj.GetValue<Double>('featherLeft', 0);
   Result.Mirror := AObj.GetValue<Boolean>('mirror', False);
   Result.Backdrop := AObj.GetValue<string>('existing', '') <> '';
+  Result.Paint := ReadPaint(AObj, Result.Id, ALevelId);
 end;
 
 function ReadLayer(const AObj: TJSONObject; const ALevelId: string): TFarPlaneLayer;
@@ -541,6 +711,11 @@ begin
   Result.Frequency := AObj.GetValue<Integer>('frequency', DefaultFrequency);
   Result.Rib := AObj.GetValue<Double>('rib', DefaultRib);
   Result.TintsSun := AObj.GetValue<Boolean>('tintsSun', False);
+  var Above: TJSONValue := AObj.GetValue('beaconsAbove');
+  Result.Beacons := Above <> nil;
+  Result.BeaconsAbove := 0;
+  if Result.Beacons then
+    Result.BeaconsAbove := Above.GetValue<Double>;
   var HasSize := (Result.W > 0) and (Result.H > 0);
   if not HasSize or (Result.Frequency < 1) or (Result.Rib <= 0) then
     raise EFarPlaneError.CreateFmt(SFarPlaneBadFrame, [ALevelId, Result.Id]);
@@ -556,6 +731,186 @@ begin
     Obj.TryGetValue<TJSONArray>('items', Items) then
     for var Item in Items do
       Result := Result + [ReadFrame(Item as TJSONObject, ALevelId)];
+end;
+
+procedure ReadPair(const AObj: TJSONObject; const AKey, ALevelId: string;
+  out AFirst, ASecond: Single);
+var
+  Pair: TJSONArray;
+begin
+  if not AObj.TryGetValue<TJSONArray>(AKey, Pair) or (Pair.Count <> 2) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadPair, [ALevelId, AKey]);
+  AFirst := Pair.Items[0].GetValue<Double>;
+  ASecond := Pair.Items[1].GetValue<Double>;
+end;
+
+// A range of whole numbers, ALeastAllowed at the least: a clock of fewer
+// ticks would never end its span or would divide by nothing
+procedure ReadWholeRange(const AObj: TJSONObject; const AKey, ALevelId: string;
+  ALeastAllowed: Integer; out ALeast, AMost: Integer);
+var
+  Pair: TJSONArray;
+begin
+  if not AObj.TryGetValue<TJSONArray>(AKey, Pair) or (Pair.Count <> 2) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadTicks, [ALevelId, AKey, ALeastAllowed]);
+  ALeast := Pair.Items[0].GetValue<Integer>;
+  AMost := Pair.Items[1].GetValue<Integer>;
+  if (ALeast < ALeastAllowed) or (ALeast > AMost) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadTicks, [ALevelId, AKey, ALeastAllowed]);
+end;
+
+function ReadBox(const AValue: TJSONValue; const AWhat, ALevelId: string): TPictureBox;
+begin
+  if not (AValue is TJSONArray) or (TJSONArray(AValue).Count <> 4) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadBox, [ALevelId, AWhat]);
+  var Numbers := TJSONArray(AValue);
+  Result.U := Numbers.Items[0].GetValue<Double>;
+  Result.V := Numbers.Items[1].GetValue<Double>;
+  Result.W := Numbers.Items[2].GetValue<Double>;
+  Result.H := Numbers.Items[3].GetValue<Double>;
+  if (Result.W < 0) or (Result.H < 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadBox, [ALevelId, AWhat]);
+end;
+
+function ParseLightKind(const AWord, ALevelId, APiece: string): TCityLightKind;
+begin
+  if AWord = 'window' then
+    Result := lkWindow
+  else if AWord = 'neon' then
+    Result := lkNeon
+  else if AWord = 'strip' then
+    Result := lkStrip
+  else if AWord = 'lamp' then
+    Result := lkLamp
+  else
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadLightKind, [ALevelId, APiece, AWord]);
+end;
+
+function ReadLight(const AObj: TJSONObject; const APiece, ALevelId: string): TCityLight;
+begin
+  Result.Kind := ParseLightKind(AObj.GetValue<string>('kind'), ALevelId, APiece);
+  Result.Box := ReadBox(AObj.GetValue('box'), Format(SLightOfPiece, [APiece]), ALevelId);
+  Result.Color := ReadColor(AObj, 'color', ALevelId);
+end;
+
+function ReadGlowLook(const AObj: TJSONObject; const ALevelId: string): TCityGlowLook;
+begin
+  ReadPair(AObj, 'core', ALevelId, Result.CoreW, Result.CoreH);
+  Result.CoreLevel := AObj.GetValue<Double>('coreLevel');
+  ReadPair(AObj, 'halo', ALevelId, Result.HaloW, Result.HaloH);
+  Result.HaloPad := AObj.GetValue<Double>('haloPad', 0);
+  Result.HaloLevel := AObj.GetValue<Double>('haloLevel');
+end;
+
+function ReadFlicker(const AObj: TJSONObject; const ALevelId: string): TCityFlicker;
+begin
+  Result.BreathDepth := AObj.GetValue<Double>('breathDepth');
+  ReadWholeRange(AObj, 'breathTicks', ALevelId, 1, Result.BreathLeast, Result.BreathMost);
+  ReadWholeRange(AObj, 'windowTicks', ALevelId, 1, Result.WindowLeast, Result.WindowMost);
+  Result.FaultShare := AObj.GetValue<Double>('faultShare');
+  ReadWholeRange(AObj, 'flips', ALevelId, 0, Result.FlipsLeast, Result.FlipsMost);
+  ReadWholeRange(AObj, 'flipTicks', ALevelId, 1, Result.FlipLeast, Result.FlipMost);
+  Result.FaultLow := AObj.GetValue<Double>('faultLow');
+end;
+
+function ReadCityLights(const ARoot: TJSONObject; const ALevelId: string): TCityLights;
+const
+  LookKeys: array [TCityGlowKind] of string = ('window', 'neon', 'strip');
+var
+  Obj, PiecesObj: TJSONObject;
+begin
+  Result := Default(TCityLights);
+  if not ARoot.TryGetValue<TJSONObject>('cityLights', Obj) then
+    Exit;
+  Result.Present := True;
+  for var Kind := Low(TCityGlowKind) to High(TCityGlowKind) do
+    Result.Looks[Kind] := ReadGlowLook(Obj.GetValue<TJSONObject>(LookKeys[Kind]), ALevelId);
+  Result.Flicker := ReadFlicker(Obj.GetValue<TJSONObject>('flicker'), ALevelId);
+
+  var WindowsObj := Obj.GetValue<TJSONObject>('windows');
+  Result.Windows.OnShare := WindowsObj.GetValue<Double>('onShare');
+  ReadWholeRange(WindowsObj, 'spanTicks', ALevelId, 1, Result.Windows.SpanLeast,
+    Result.Windows.SpanMost);
+
+  if not Obj.TryGetValue<TJSONObject>('pieces', PiecesObj) then
+    Exit;
+  for var Pair in PiecesObj do
+  begin
+    var Own: TCityPieceLights;
+    Own.Piece := Pair.JsonString.Value;
+    Own.Lights := [];
+    for var Item in Pair.JsonValue as TJSONArray do
+      Own.Lights := Own.Lights + [ReadLight(Item as TJSONObject, Own.Piece, ALevelId)];
+    Result.Pieces := Result.Pieces + [Own];
+  end;
+end;
+
+function ReadEmblem(const ARoot: TJSONObject; const ALevelId: string): TCityEmblem;
+var
+  Obj: TJSONObject;
+  Parts, Halos: TJSONArray;
+begin
+  Result := Default(TCityEmblem);
+  Parts := nil;
+  Halos := nil;
+  if not ARoot.TryGetValue<TJSONObject>('emblem', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Piece := Obj.GetValue<string>('on');
+  ReadPair(Obj, 'at', ALevelId, Result.AtU, Result.AtV);
+  Result.W := Obj.GetValue<Double>('w');
+  Result.Aspect := Obj.GetValue<Double>('aspect');
+  Result.Shade := EnsureRange(Obj.GetValue<Double>('shade', FullShade), 0.0, 1.0);
+  Result.Color := ReadColor(Obj, 'color', ALevelId);
+  Result.CoreLevel := Obj.GetValue<Double>('coreLevel');
+  Result.HaloLevel := Obj.GetValue<Double>('haloLevel');
+  Result.FaultShare := Obj.GetValue<Double>('faultShare');
+  ReadWholeRange(Obj, 'relightTicks', ALevelId, 1, Result.RelightLeast, Result.RelightMost);
+  ReadWholeRange(Obj, 'darkTicks', ALevelId, 0, Result.DarkLeast, Result.DarkMost);
+  ReadWholeRange(Obj, 'partTicks', ALevelId, 0, Result.PartLeast, Result.PartMost);
+
+  var HasParts := Obj.TryGetValue<TJSONArray>('parts', Parts) and
+    Obj.TryGetValue<TJSONArray>('halos', Halos);
+  if not HasParts or (Parts.Count = 0) or (Halos.Count <> Parts.Count) or
+    (Result.W <= 0) or (Result.Aspect <= 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadEmblem, [ALevelId]);
+  for var i := 0 to Parts.Count - 1 do
+  begin
+    Result.Parts := Result.Parts + [ReadBox(Parts.Items[i], Format(SEmblemPart, [i + 1]),
+      ALevelId)];
+    Result.Halos := Result.Halos + [ReadBox(Halos.Items[i], Format(SEmblemHalo, [i + 1]),
+      ALevelId)];
+  end;
+end;
+
+function ReadBeacons(const ARoot: TJSONObject; const ALevelId: string): TCityBeacons;
+var
+  Obj: TJSONObject;
+begin
+  Result := Default(TCityBeacons);
+  if not ARoot.TryGetValue<TJSONObject>('beacons', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Color := ReadColor(Obj, 'color', ALevelId);
+  Result.Size := Obj.GetValue<Double>('size');
+  Result.Halo := Obj.GetValue<Double>('halo');
+  Result.GlowLevel := Obj.GetValue<Double>('glowLevel');
+  Result.FlashLevel := Obj.GetValue<Double>('flashLevel');
+  Result.FlashTicks := Obj.GetValue<Integer>('flashTicks');
+  ReadWholeRange(Obj, 'periodTicks', ALevelId, 1, Result.PeriodLeast, Result.PeriodMost);
+end;
+
+// The parts of the city's life lean on each other: a lamp blinks as the
+// beacons do, the emblem flickers by the signs' clock
+procedure CheckCityLife(const ADef: TFarPlaneDef; const ALevelId: string);
+begin
+  if ADef.Lights.HasLamps and not ADef.Beacons.Present then
+    raise EFarPlaneError.CreateFmt(SFarPlaneLampsNoBeacons, [ALevelId]);
+  for var Frame in ADef.Frames do
+    if Frame.Beacons and not ADef.Beacons.Present then
+      raise EFarPlaneError.CreateFmt(SFarPlaneFrameNoBeacons, [ALevelId, Frame.Id]);
+  if ADef.Emblem.Present and not ADef.Lights.Present then
+    raise EFarPlaneError.CreateFmt(SFarPlaneEmblemNoLights, [ALevelId]);
 end;
 
 function ReadLayout(const AFileName, ALevelId: string): TFarPlaneDef;
@@ -578,6 +933,9 @@ begin
     for var Item in Root.GetValue<TJSONArray>('layers') do
       Result.Layers := Result.Layers + [ReadLayer(Item as TJSONObject, ALevelId)];
     Result.Fangs := ReadFangs(Root, ALevelId);
+    Result.Lights := ReadCityLights(Root, ALevelId);
+    Result.Emblem := ReadEmblem(Root, ALevelId);
+    Result.Beacons := ReadBeacons(Root, ALevelId);
   finally
     Root.Free;
   end;
@@ -585,6 +943,7 @@ begin
     raise EFarPlaneError.CreateFmt(SFarPlaneNoCity, [ALevelId]);
   if (Length(Result.Frames) > 0) and not Result.Camera.Present then
     raise EFarPlaneError.CreateFmt(SFarPlaneFramesNoCamera, [ALevelId]);
+  CheckCityLife(Result, ALevelId);
 end;
 
 function ReadFarPlane(const ARoot: TJSONObject;

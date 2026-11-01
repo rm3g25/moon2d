@@ -17,11 +17,14 @@
   the disc's angle over the way the light runs from the rib, and a rib
   thinner than the spread hides only a part of the disc - a stroke, dark at
   a dome's foot and faint toward the eye. The sun's own glare is laid over
-  the ribs that cross its disc. The stand (tools/chase/stand.template.html)
-  is the reference, number for number.
+  the ribs that cross its disc. A frame may carry red beacons on its nodes
+  above a share of its height: they ride in 3D with it, the far ones
+  behind the buildings, the near ones with the near ribs; each one's seed
+  is its place on the frame (Levels.CityLife). The stand
+  (tools/chase/stand.template.html) is the reference, number for number.
 
-  TDomeFrames is the geometry: it does not touch SDL - the ribs and the
-  shadows on the screen, in units, for a ride of the city.
+  TDomeFrames is the geometry: it does not touch SDL - the ribs, the
+  shadows and the beacons on the screen, in units, for a ride of the city.
   TDomeFramePainter draws them as strips of triangles, the colour and the
   alpha in the vertices: the rim is a strip of its own, and every edge
   fades out over one pixel of the window, the smoothing a canvas gives a
@@ -70,6 +73,13 @@ type
     Samples: array [0..ShadowSamples - 1] of TShadowSample;
   end;
 
+  // A warning light on a node of a frame, on the screen in units
+  TFrameBeacon = record
+    At: TSdlFPoint;
+    Nearness: Single;
+    Seed: Cardinal;
+  end;
+
   // The frames as they stand on the screen at one ride of the city
   TFrameView = record
     // Behind the buildings, far to near
@@ -79,6 +89,8 @@ type
     // Down to where they pass the eye: on the crater floor, then on over
     // the ground nearer the eye
     Shadows: TArray<TRibShadow>;
+    // Behind the buildings, and with the near ribs
+    FarBeacons, NearBeacons: TArray<TFrameBeacon>;
   end;
 
   TDomeFrames = class
@@ -92,21 +104,31 @@ type
       // The ring the frame stands on, thicker than a rib
       Ring: Boolean;
     end;
+    // A node of a frame that carries a beacon, on the unit half-sphere
+    TBeaconNode = record
+      At: TPoint3;
+      Seed: Cardinal;
+    end;
+    TBeaconNodes = TArray<TBeaconNode>;
     // A view being filled: its arrays as long as they may get, and how
     // much of each is filled
     TViewFill = record
       View: TFrameView;
       FarCount, NearCount, ShadowCount: Integer;
+      FarBeaconCount, NearBeaconCount: Integer;
     end;
   private
     FDef: TFarPlaneDef;
     // By frame; frames of one frequency share them
     FEdges: TArray<TArray<TEdge>>;
+    // By frame; empty for a frame without beacons
+    FBeaconNodes: TArray<TBeaconNodes>;
     // From the scene toward the sun, a unit long
     FToSun: TPoint3;
     // The sun's disc as seen from the scene: its radius over the focal length
     FSunSpread: Double;
     function SharedEdges(AFrame: Integer): TArray<TEdge>;
+    function BeaconNodes(AFrame: Integer): TBeaconNodes;
     function Project(const AFrame: TDomeFrame; ACityOffset: Double;
       const AAt: TPoint3; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
     function DropToFloor(const AAt: TPoint3): TPoint3;
@@ -114,6 +136,7 @@ type
       out AFromShare, AToShare: Double): Boolean;
     procedure LightRim(var ARib: TFrameRib);
     procedure AddFrame(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
+    procedure AddBeacons(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
     procedure AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
       const AEdge: TEdge; var AFill: TViewFill);
     // AThickness - the rib's own, at the frame's centre
@@ -177,11 +200,13 @@ implementation
 
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
-  System.Generics.Defaults, Render.Brush, Render.Glow;
+  System.Generics.Defaults, Render.Brush, Render.Glow, Levels.CityLife;
 
 type
   TPoint3 = TDomeFrames.TPoint3;
   TEdge = TDomeFrames.TEdge;
+  TBeaconNode = TDomeFrames.TBeaconNode;
+  TBeaconNodes = TDomeFrames.TBeaconNodes;
 
 const
   Golden = 1.6180339887498949;
@@ -410,8 +435,12 @@ begin
     Exit;
 
   SetLength(FEdges, Length(FDef.Frames));
+  SetLength(FBeaconNodes, Length(FDef.Frames));
   for var i := 0 to High(FDef.Frames) do
+  begin
     FEdges[i] := SharedEdges(i);
+    FBeaconNodes[i] := BeaconNodes(i);
+  end;
 
   var Focal: Double := FDef.Camera.Focal;
   var SunX: Double := FDef.Sun.X - FDef.ScreenWidth / 2;
@@ -433,6 +462,46 @@ begin
     if FDef.Frames[i].Frequency = Frequency then
       Exit(FEdges[i]);
   Result := BuildGeodesic(Frequency);
+end;
+
+// Every end of an edge above the equator once, the ones above the frame's
+// share of its height kept
+function TDomeFrames.BeaconNodes(AFrame: Integer): TBeaconNodes;
+var
+  Frame: TDomeFrame;
+  Nodes: TBeaconNodes;
+  Seen: TDictionary<string, Boolean>;
+
+  procedure Take(const APoint: TPoint3);
+  begin
+    var Key := PointKey(APoint);
+    if (APoint.Y <= OverEquator) or Seen.ContainsKey(Key) then
+      Exit;
+    Seen.Add(Key, True);
+    if APoint.Y <= Frame.BeaconsAbove then
+      Exit;
+    var Node: TBeaconNode;
+    Node.At := APoint;
+    Node.Seed := BeaconSeed(AFrame, APoint.X, APoint.Z);
+    Nodes := Nodes + [Node];
+  end;
+
+begin
+  Frame := FDef.Frames[AFrame];
+  Nodes := [];
+  if not Frame.Beacons then
+    Exit(Nodes);
+  Seen := TDictionary<string, Boolean>.Create;
+  try
+    for var Edge in FEdges[AFrame] do
+    begin
+      Take(Edge.A);
+      Take(Edge.B);
+    end;
+  finally
+    Seen.Free;
+  end;
+  Result := Nodes;
 end;
 
 // AAt - X across, Y up, Z into the screen, from the frame's centre on its
@@ -582,6 +651,35 @@ begin
     Exit;
   for var Edge in FEdges[AFrame] do
     AddEdge(Frame, ACityOffset, Edge, AFill);
+  AddBeacons(AFrame, ACityOffset, AFill);
+end;
+
+procedure TDomeFrames.AddBeacons(AFrame: Integer; ACityOffset: Double;
+  var AFill: TViewFill);
+var
+  Beacon: TFrameBeacon;
+begin
+  var Frame := FDef.Frames[AFrame];
+  var Radius: Double := Frame.W / 2;
+  for var Node in FBeaconNodes[AFrame] do
+  begin
+    var At := Point3(Node.At.X * Radius, Node.At.Y * Frame.H, Node.At.Z * Radius);
+    if not Project(Frame, ACityOffset, At, Beacon.At, Beacon.Nearness) then
+      Continue;
+    Beacon.Seed := Node.Seed;
+    // The top stands at Z 0, near on the stand; the FPU's extended
+    // precision puts it a hair off either way
+    if Node.At.Z > OverEquator then
+    begin
+      AFill.View.FarBeacons[AFill.FarBeaconCount] := Beacon;
+      Inc(AFill.FarBeaconCount);
+    end
+    else
+    begin
+      AFill.View.NearBeacons[AFill.NearBeaconCount] := Beacon;
+      Inc(AFill.NearBeaconCount);
+    end;
+  end;
 end;
 
 function TDomeFrames.View(ACityOffset: Double): TFrameView;
@@ -595,6 +693,11 @@ begin
   SetLength(Fill.View.Far, Most);
   SetLength(Fill.View.Near, Most);
   SetLength(Fill.View.Shadows, Most);
+  var MostBeacons := 0;
+  for var Nodes in FBeaconNodes do
+    Inc(MostBeacons, Length(Nodes));
+  SetLength(Fill.View.FarBeacons, MostBeacons);
+  SetLength(Fill.View.NearBeacons, MostBeacons);
 
   for var i := 0 to High(FDef.Frames) do
     AddFrame(i, ACityOffset, Fill);
@@ -602,6 +705,8 @@ begin
   SetLength(Fill.View.Far, Fill.FarCount);
   SetLength(Fill.View.Near, Fill.NearCount);
   SetLength(Fill.View.Shadows, Fill.ShadowCount);
+  SetLength(Fill.View.FarBeacons, Fill.FarBeaconCount);
+  SetLength(Fill.View.NearBeacons, Fill.NearBeaconCount);
   SortFarToNear(Fill.View.Far);
   SortFarToNear(Fill.View.Near);
   Result := Fill.View;

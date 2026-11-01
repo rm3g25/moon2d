@@ -14,6 +14,11 @@
   dome's foot and fading toward the eye; a sun under the horizon throws
   none. The rim faces the sun and is brightest by it.
 
+  A frame's beacons stand on the nodes the stand puts them on, above their
+  share of its height - their seeds, the stand's own for both frames, say
+  so - none on a frame without a share; the far ones behind its centre, the
+  near ones in front; they ride with the city.
+
   How the ribs look - the dark, the rim's colour, the smoothing of their
   edges, the glare - has no test here: none of it shows without drawing.
 
@@ -77,12 +82,20 @@ type
     procedure TestRimFacesTheSun;
     [Test]
     procedure TestRimBrightestByTheSun;
+    [Test]
+    procedure TestBeaconsNoneWithoutTheirShare;
+    [Test]
+    procedure TestBeaconsSitOnTheStandsNodes;
+    [Test]
+    procedure TestBeaconsFarBehindNearInFront;
+    [Test]
+    procedure TestBeaconsRideWithTheCity;
   end;
 
 implementation
 
 uses
-  System.Math, Sdl2.Core;
+  System.Math, System.Generics.Collections, Sdl2.Core;
 
 const
   ScreenWidth = 512;
@@ -105,6 +118,17 @@ const
   EyeShare = 0.15;
   EyeY = Horizon + (BaseY - Horizon) / EyeShare;
   Slack = 0.01;
+  BeaconsAbove = 0.8;
+  SatelliteWidth = 360;
+  SatelliteHeight = 115;
+  SatelliteFrequency = 3;
+  SatelliteBeaconsAbove = 0.9;
+  // The stand's beaconSeed of the nodes above the shares: the frame above
+  // and a satellite after it, the second frame
+  StandBeaconSeeds: array [0..21] of Cardinal = (
+    22849282, 130681901, 184482304, 216005431, 376524091, 470226707, 508778340, 882786705,
+    1150238390, 1441563046, 1540583311, 1668231194, 1689678975, 1693691114, 2237285661,
+    3185708816, 3533269019, 3546826322, 3798457710, 3937259466, 3983871065, 4132272264);
 
 function StandDef: TFarPlaneDef;
 var
@@ -402,6 +426,70 @@ begin
       Farthest := Rib;
   end;
   Assert.IsTrue(Nearest.Light > Farthest.Light);
+end;
+
+// The frame with beacons above their share, and a satellite after it
+function BeaconDef: TFarPlaneDef;
+begin
+  Result := StandDef;
+  Result.Frames[0].Beacons := True;
+  Result.Frames[0].BeaconsAbove := BeaconsAbove;
+  var Satellite := Result.Frames[0];
+  Satellite.Id := 'satellite';
+  Satellite.W := SatelliteWidth;
+  Satellite.H := SatelliteHeight;
+  Satellite.Frequency := SatelliteFrequency;
+  Satellite.BeaconsAbove := SatelliteBeaconsAbove;
+  Result.Frames := Result.Frames + [Satellite];
+end;
+
+function AllBeacons(const AView: TFrameView): TArray<TFrameBeacon>;
+begin
+  Result := AView.FarBeacons + AView.NearBeacons;
+end;
+
+procedure TDomeFramesTests.TestBeaconsNoneWithoutTheirShare;
+begin
+  var View := ViewOf(FDef, Centred);
+  Assert.AreEqual(0, Integer(Length(AllBeacons(View))));
+end;
+
+procedure TDomeFramesTests.TestBeaconsSitOnTheStandsNodes;
+begin
+  var Seeds: TArray<Cardinal> := [];
+  for var Beacon in AllBeacons(ViewOf(BeaconDef, Centred)) do
+    Seeds := Seeds + [Beacon.Seed];
+  TArray.Sort<Cardinal>(Seeds);
+  Assert.AreEqual(Integer(Length(StandBeaconSeeds)), Integer(Length(Seeds)), 'As many');
+  for var i := 0 to High(Seeds) do
+    Assert.AreEqual<Cardinal>(StandBeaconSeeds[i], Seeds[i], 'The same nodes');
+end;
+
+procedure TDomeFramesTests.TestBeaconsFarBehindNearInFront;
+begin
+  var View := ViewOf(BeaconDef, Centred);
+  Assert.IsTrue(Length(View.FarBeacons) > 0, 'Some behind');
+  Assert.IsTrue(Length(View.NearBeacons) > 0, 'Some in front');
+  for var Beacon in View.FarBeacons do
+    Assert.IsTrue(Beacon.Nearness < 1, 'Behind the centre: smaller');
+  for var Beacon in View.NearBeacons do
+    Assert.IsTrue(Beacon.Nearness >= 1, 'In front of it: larger');
+end;
+
+procedure TDomeFramesTests.TestBeaconsRideWithTheCity;
+const
+  Ride = 40;
+begin
+  var Before := AllBeacons(ViewOf(BeaconDef, Centred));
+  var After := AllBeacons(ViewOf(BeaconDef, Centred + Ride));
+  Assert.AreEqual(Integer(Length(Before)), Integer(Length(After)), 'All still in sight');
+  for var i := 0 to High(Before) do
+  begin
+    Assert.AreEqual<Cardinal>(Before[i].Seed, After[i].Seed, 'The same beacon');
+    Assert.AreEqual(Double(-Ride * Before[i].Nearness), Double(After[i].At.X - Before[i].At.X),
+      Slack, 'Left by its nearness');
+    Assert.AreEqual(Double(Before[i].At.Y), Double(After[i].At.Y), Slack, 'At its height');
+  end;
 end;
 
 initialization

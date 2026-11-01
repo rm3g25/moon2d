@@ -15,8 +15,11 @@
   feet the faster; every one comes to the middle of the screen when its
   layer has ridden its centre there; a thing hanging in the air rides by
   what it stands on; without a camera the city is flat, and the other
-  layers are flat always. Level 2 reads its far plane, its camera and
-  frames among it; a layout that does not make sense raises.
+  layers are flat always. The city's clock stands until the road first
+  moves, counts its ticks from there, runs on when the road stops, and a
+  clear sets it back. Level 2 reads its far plane, its camera and frames
+  among it, and the life of its city; a layout that does not make sense
+  raises, and so does a city's life that cannot play.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -70,6 +73,14 @@ type
     procedure TestClearGoesBackToTheStart;
     [Test]
     procedure TestNoFarPlaneNeverMoves;
+    [Test]
+    procedure TestTheClockStandsBeforeTheRoad;
+    [Test]
+    procedure TestTheClockCountsFromTheRoadsFirstTick;
+    [Test]
+    procedure TestTheClockRunsOnWhenTheRoadStops;
+    [Test]
+    procedure TestClearSetsTheClockBack;
   end;
 
   [TestFixture]
@@ -162,6 +173,26 @@ type
     procedure TestAFrameWithoutSizeRaises;
     [Test]
     procedure TestFramesWithoutACameraRaise;
+    [Test]
+    procedure TestLevelTwoReadsItsCityLife;
+    [Test]
+    procedure TestALightOfAnUnknownKindRaises;
+    [Test]
+    procedure TestALightWithoutABoxRaises;
+    [Test]
+    procedure TestASpanOfNoTicksRaises;
+    [Test]
+    procedure TestAPaintWithoutWidthRaises;
+    [Test]
+    procedure TestAnEmblemWithoutPartsRaises;
+    [Test]
+    procedure TestAnEmblemWithAHaloShortRaises;
+    [Test]
+    procedure TestLampsWithoutBeaconsRaise;
+    [Test]
+    procedure TestFrameBeaconsWithoutBeaconsRaise;
+    [Test]
+    procedure TestAnEmblemWithoutCityLightsRaises;
   end;
 
 implementation
@@ -467,6 +498,53 @@ begin
   end;
 end;
 
+procedure TFarPlaneTests.TestTheClockStandsBeforeTheRoad;
+begin
+  for var i := 1 to 100 do
+    TickBoth;
+  Assert.AreEqual(0, FPlane.Clock);
+end;
+
+procedure TFarPlaneTests.TestTheClockCountsFromTheRoadsFirstTick;
+const
+  Waited = 50;
+  Ridden = 100;
+begin
+  for var i := 1 to Waited do
+    TickBoth;
+  FBelt.Start;
+  for var i := 1 to Ridden do
+    TickBoth;
+  Assert.AreEqual(Ridden + 1, FPlane.Clock,
+    'The ticks before the road do not count; the stand''s standing first one does');
+end;
+
+procedure TFarPlaneTests.TestTheClockRunsOnWhenTheRoadStops;
+const
+  Stood = 100;
+begin
+  FBelt.Start;
+  RunSeconds(10);
+  FBelt.Stop;
+  for var i := 1 to BeltRampTicks do
+    TickBoth;
+  var Before := FPlane.Clock;
+  for var i := 1 to Stood do
+    TickBoth;
+  Assert.AreEqual(Before + Stood, FPlane.Clock, 'The city lives on');
+end;
+
+procedure TFarPlaneTests.TestClearSetsTheClockBack;
+begin
+  FBelt.Start;
+  RunSeconds(10);
+  FPlane.Clear;
+  Assert.AreEqual(0, FPlane.Clock, 'Back to the start');
+  for var i := 1 to 10 do
+    FPlane.Tick(0);
+  Assert.AreEqual(0, FPlane.Clock, 'Standing until the road moves again');
+end;
+
 // TFarPlaneSunTests
 
 procedure TFarPlaneSunTests.Setup;
@@ -741,6 +819,140 @@ begin
     begin
       ReadFromLayout(DepthLayout(StandFrames));
     end, EFarPlaneError);
+end;
+
+type
+  TLightKinds = set of TCityLightKind;
+
+// A city with each part of its life, ALife put in its place: what goes
+// before the layers. AElements - the city's elements
+function LifeLayout(const ALife, AElements: string): string;
+begin
+  Result := '{' + StandScreenSunSpeeds + StandCamera + ALife
+    + '"layers": [{"id": "city", "speed": "city", "length": 2688, "elements": ['
+    + AElements + ']}]}';
+end;
+
+const
+  LifeLooks = '"window": {"core": [1, 1.4], "coreLevel": 0.35, "halo": [1.1, 3],'
+    + ' "haloLevel": 0.1},'
+    + '"neon": {"core": [1.5, 2.6], "coreLevel": 0.85, "halo": [1.3, 1.3], "haloLevel": 0.28},'
+    + '"strip": {"core": [1.05, 3], "coreLevel": 0.5, "halo": [1.05, 9], "haloLevel": 0.14},'
+    + '"flicker": {"breathDepth": 0.12, "breathTicks": [90, 200], "windowTicks": [200, 660],'
+    + ' "faultShare": 0.6, "flips": [2, 6], "flipTicks": [2, 5], "faultLow": 0.12},';
+  LifeBuilding = '{"id": "tower", "x": 600, "y": 266, "w": 40}';
+  LifeBeacons = '"beacons": {"color": [255, 46, 30], "size": 2.6, "halo": 12, "glowLevel": 0.3,'
+    + ' "flashLevel": 0.85, "flashTicks": 3, "periodTicks": [56, 96]},';
+  LifeEmblemHead = '"emblem": {"on": "tower", "at": [0.5, 0], "w": 43, "aspect": 1,'
+    + ' "color": [255, 196, 80], "coreLevel": 1, "haloLevel": 0.8, "faultShare": 0.25,'
+    + ' "relightTicks": [2400, 4800], "darkTicks": [25, 45], "partTicks": [8, 20],';
+
+// The lights with ASpans for the windows' span and APieces for the pieces
+function LifeLights(const ASpans, APieces: string): string;
+begin
+  Result := '"cityLights": {' + LifeLooks
+    + '"windows": {"onShare": 0.25, "spanTicks": ' + ASpans + '},'
+    + '"pieces": {' + APieces + '}},';
+end;
+
+function LightOfKind(const AKind, ABox: string): string;
+begin
+  Result := '"tower": [{"kind": "' + AKind + '", "box": ' + ABox
+    + ', "color": [72, 232, 255]}]';
+end;
+
+procedure AssertLifeRaises(const ALife: string; const AElements: string = LifeBuilding);
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(LifeLayout(ALife, AElements));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestLevelTwoReadsItsCityLife;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Plane := Level.FarPlane;
+    Assert.IsTrue(Plane.Lights.Present, 'Lights');
+    var Kinds: TLightKinds := [];
+    for var Own in Plane.Lights.Pieces do
+      for var Light in Own.Lights do
+        Include(Kinds, Light.Kind);
+    Assert.IsTrue(Kinds = [lkWindow, lkNeon, lkStrip, lkLamp], 'Every kind of light');
+    Assert.IsTrue(Plane.Beacons.Present, 'Beacons to blink the lamps by');
+    Assert.IsTrue(Plane.Emblem.Present, 'The emblem');
+    Assert.AreEqual(Integer(Length(Plane.Emblem.Parts)), Integer(Length(Plane.Emblem.Halos)),
+      'A halo to a part');
+    var Stands := False;
+    var Painted := False;
+    for var Layer in Plane.Layers do
+      for var Element in Layer.Elements do
+      begin
+        Stands := Stands or (Element.Id = Plane.Emblem.Piece);
+        Painted := Painted or Element.Paint.Present;
+      end;
+    Assert.IsTrue(Stands, 'The emblem''s building is in the city');
+    Assert.IsTrue(Painted, 'The emblem as paint on a wall');
+    var Beaconed := False;
+    for var Frame in Plane.Frames do
+      Beaconed := Beaconed or Frame.Beacons;
+    Assert.IsTrue(Beaconed, 'A frame carries beacons');
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestALightOfAnUnknownKindRaises;
+begin
+  AssertLifeRaises(LifeLights('[600, 3000]', LightOfKind('laser', '[0.1, 0.1, 0.2, 0.1]')));
+end;
+
+procedure TFarPlaneReadTests.TestALightWithoutABoxRaises;
+begin
+  AssertLifeRaises(LifeLights('[600, 3000]', LightOfKind('neon', '[0.1, 0.1, 0.2]')));
+end;
+
+procedure TFarPlaneReadTests.TestASpanOfNoTicksRaises;
+begin
+  AssertLifeRaises(LifeLights('[0, 3000]', LightOfKind('window', '[0.1, 0.1, 0.2, 0.1]')));
+end;
+
+procedure TFarPlaneReadTests.TestAPaintWithoutWidthRaises;
+begin
+  AssertLifeRaises('',
+    '{"id": "tower", "x": 600, "y": 266, "w": 40, "paint": [0.2, 0.3, 0, 0.9]}');
+end;
+
+procedure TFarPlaneReadTests.TestAnEmblemWithoutPartsRaises;
+begin
+  AssertLifeRaises(LifeLights('[600, 3000]', '') + LifeEmblemHead
+    + ' "parts": [], "halos": []},');
+end;
+
+procedure TFarPlaneReadTests.TestAnEmblemWithAHaloShortRaises;
+begin
+  AssertLifeRaises(LifeLights('[600, 3000]', '') + LifeEmblemHead
+    + ' "parts": [[0, 0, 1, 1], [0.2, 0.2, 0.2, 0.2]], "halos": [[0, 0, 1, 1]]},');
+end;
+
+procedure TFarPlaneReadTests.TestLampsWithoutBeaconsRaise;
+begin
+  AssertLifeRaises(LifeLights('[600, 3000]', LightOfKind('lamp', '[0.5, 0.1, 0, 0]')));
+end;
+
+procedure TFarPlaneReadTests.TestFrameBeaconsWithoutBeaconsRaise;
+begin
+  AssertLifeRaises('"frames": {"items": [{"id": "dome", "x": 468, "w": 512, "h": 170,'
+    + ' "beaconsAbove": 0.8}]},');
+end;
+
+procedure TFarPlaneReadTests.TestAnEmblemWithoutCityLightsRaises;
+begin
+  AssertLifeRaises(LifeBeacons + LifeEmblemHead
+    + ' "parts": [[0, 0, 1, 1]], "halos": [[0, 0, 1, 1]]},');
 end;
 
 initialization

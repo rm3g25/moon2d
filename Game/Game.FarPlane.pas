@@ -12,6 +12,10 @@
   end to them. All of it runs at the belt's share of its cruise - the
   road's ramp starts the far plane and its stop stands it, brake floor
   included.
+
+  The far plane keeps the city's clock (Levels.CityLife): the stand's tick,
+  counted from the start of its run, whose road first moves on its second
+  tick. It stands with the far plane while the world stands.
   The rules are those of the stand (tools/chase), tick for tick.
 
   It does not know the belt, the hero or SDL: the game hands in the belt's
@@ -42,6 +46,8 @@ type
     FTunnelSpeed, FCitySpeed: Single;
     FTunnelGone: Boolean;
     FEaseTicks: Integer;
+    FClock: Integer;
+    FClockRuns: Boolean;
     // Units a second the schedule gives the tunnel and the city, before
     // the belt's share
     procedure ScheduleSpeeds(out ATunnel, ACity: Single);
@@ -57,6 +63,8 @@ type
     function OffsetsAt(AAlpha: Single): TFarPlaneOffsets;
     property Offsets: TFarPlaneOffsets read FOffsets;
     property TunnelGone: Boolean read FTunnelGone;
+    // The stand's tick: the road first moves on its second; 0 before
+    property Clock: Integer read FClock;
     // Units a second this tick, the belt's share in
     property TunnelSpeed: Single read FTunnelSpeed;
     property CitySpeed: Single read FCitySpeed;
@@ -88,6 +96,8 @@ begin
   FCitySpeed := 0;
   FTunnelGone := False;
   FEaseTicks := 0;
+  FClock := 0;
+  FClockRuns := False;
 end;
 
 procedure TFarPlane.ScheduleSpeeds(out ATunnel, ACity: Single);
@@ -143,6 +153,15 @@ begin
     FDef.Speeds.Ground * ABeltShare / FarPlaneTicksPerSecond;
   FOffsets[fmFangs] := FOffsets[fmFangs] +
     FDef.Speeds.Fangs * ABeltShare / FarPlaneTicksPerSecond;
+
+  // The stand's run stands its first tick: its road moves from its second
+  if (ABeltShare > 0) and not FClockRuns then
+  begin
+    FClockRuns := True;
+    FClock := 1;
+  end;
+  if FClockRuns then
+    Inc(FClock);
 end;
 
 function TFarPlane.OffsetsAt(AAlpha: Single): TFarPlaneOffsets;
