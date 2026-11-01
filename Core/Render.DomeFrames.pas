@@ -11,16 +11,22 @@
   inside. Lit from behind, nothing of a frame faces the eye in the light: a
   rib is a dark silhouette with a thin rim on its side toward the sun,
   brighter the nearer the sun it runs. The ribs throw long shadows toward
-  the eye on the crater floor, and the sun's own glare is laid over the
-  ribs that cross its disc. The stand (tools/chase/stand.template.html) is
-  the reference, number for number.
+  the eye: the sun is low, so a shadow streams down the crater floor and on
+  over the near ground, cut where it passes the eye. The sun is a disc, not
+  a point: past its rib a shadow softens and widens, its penumbra spread by
+  the disc's angle over the way the light runs from the rib, and a rib
+  thinner than the spread hides only a part of the disc - a stroke, dark at
+  a dome's foot and faint toward the eye. The sun's own glare is laid over
+  the ribs that cross its disc. The stand (tools/chase/stand.template.html)
+  is the reference, number for number.
 
   TDomeFrames is the geometry: it does not touch SDL - the ribs and the
   shadows on the screen, in units, for a ride of the city.
   TDomeFramePainter draws them as strips of triangles, the colour and the
   alpha in the vertices: the rim is a strip of its own, and every edge
   fades out over one pixel of the window, the smoothing a canvas gives a
-  line for free.
+  line for free; a shadow is a mesh of such strips, its dark fading out
+  across it and along it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -31,6 +37,10 @@ interface
 
 uses
   Sdl2.Core, Levels.FarPlane;
+
+const
+  // Points along a shadow's stroke
+  ShadowSamples = 16;
 
 type
   // A rib of a frame on the screen, in units: A to B, W thick. Its rim of
@@ -45,10 +55,19 @@ type
     Light: Single;
   end;
 
-  // A rib's shadow on the crater floor, in units
+  // A point along a rib's shadow, in units: its middle, the half width of
+  // the plateau of its dark and of its whole, and how dark the plateau is,
+  // a share of a shadow's full dark
+  TShadowSample = record
+    At: TSdlFPoint;
+    CoreHalf, OuterHalf: Single;
+    Peak: Single;
+  end;
+
+  // A rib's shadow on the ground, its samples from one end of the rib's to
+  // the other
   TRibShadow = record
-    A, B: TSdlFPoint;
-    W: Single;
+    Samples: array [0..ShadowSamples - 1] of TShadowSample;
   end;
 
   // The frames as they stand on the screen at one ride of the city
@@ -57,6 +76,8 @@ type
     Far: TArray<TFrameRib>;
     // Over the buildings, far to near
     Near: TArray<TFrameRib>;
+    // Down to where they pass the eye: on the crater floor, then on over
+    // the ground nearer the eye
     Shadows: TArray<TRibShadow>;
   end;
 
@@ -83,18 +104,21 @@ type
     FEdges: TArray<TArray<TEdge>>;
     // From the scene toward the sun, a unit long
     FToSun: TPoint3;
-    // Where the crater floor ends below: no shadow past it
-    FFloorBottom: Single;
+    // The sun's disc as seen from the scene: its radius over the focal length
+    FSunSpread: Double;
     function SharedEdges(AFrame: Integer): TArray<TEdge>;
     function Project(const AFrame: TDomeFrame; ACityOffset: Double;
       const AAt: TPoint3; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
     function DropToFloor(const AAt: TPoint3): TPoint3;
+    function CutAtEye(const AFrom, ATo: TPoint3;
+      out AFromShare, AToShare: Double): Boolean;
     procedure LightRim(var ARib: TFrameRib);
     procedure AddFrame(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
     procedure AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
       const AEdge: TEdge; var AFill: TViewFill);
+    // AThickness - the rib's own, at the frame's centre
     procedure AddShadow(const AFrame: TDomeFrame; ACityOffset: Double;
-      const AFrom, ATo: TPoint3; AWidth: Single; var AFill: TViewFill);
+      const AFrom, ATo: TPoint3; AThickness: Single; var AFill: TViewFill);
   public
     // ADef - the level's far plane; one without frames shows none
     constructor Create(const ADef: TFarPlaneDef);
@@ -104,6 +128,17 @@ type
   end;
 
   TDomeFramePainter = class
+  private type
+    // A corner of a strip, its alpha a share of the strip's colour
+    TStripCorner = record
+      X, Y, Alpha: Single;
+    end;
+    // The four lines along a strip, across one point of it: the outer two
+    // clear, the inner two at its peak
+    TStripEnd = array [0..3] of TStripCorner;
+    TStrip = record
+      AtFrom, AtTo: TStripEnd;
+    end;
   private
     FRenderer: PSdlRenderer;
     FSun: TFarPlaneSun;
@@ -114,10 +149,14 @@ type
     // One pixel of the window, in units
     FPixel: Single;
     procedure MeasurePixel;
+    function StripEnd(const AAt, ANormal: TSdlFPoint;
+      AShift, ACoreHalf, AOuterHalf, APeak: Single): TStripEnd;
+    function SolidStrip(const AFrom, ATo, ANormal: TSdlFPoint;
+      AShift, AHalfWidth: Single): TStrip;
     function AddVertex(AX, AY: Single; AColor: TSdlColor): Integer;
     procedure AddTriangle(AFirst, ASecond, AThird: Integer);
-    procedure AddStrip(const AFrom, ATo, ANormal: TSdlFPoint;
-      AShift, AHalfWidth: Single; AColor: TSdlColor);
+    procedure AddStrip(const AStrip: TStrip; AColor: TSdlColor);
+    procedure AddStroke(const AShadow: TRibShadow);
     procedure AddDisc(const ACentre: TSdlFPoint; ARadius: Single; AColor: TSdlColor);
     procedure Flush;
   public
@@ -125,7 +164,9 @@ type
     // past the painter
     constructor Create(ARenderer: PSdlRenderer; const ASun: TFarPlaneSun;
       AGlow: PSdlTexture);
-    procedure DrawShadows(const AShadows: TArray<TRibShadow>);
+    // Only where they fall inside AClip, logical units: the crater floor's
+    // band, or the near ground's
+    procedure DrawShadows(const AShadows: TArray<TRibShadow>; const AClip: TSdlRect);
     procedure DrawRibs(const ARibs: TArray<TFrameRib>);
     // ACover - how far the domes before the sun have turned it
     // (TFarPlaneDef.SunCover)
@@ -163,6 +204,11 @@ const
   RingThickening = 1.6;
   // A point nearer the eye than this share of the focal length is behind it
   NearestShare = 0.15;
+  // A shadow is cut this many units in front of that plane: cut on it, the
+  // arithmetic could put its end behind it
+  EyeCutMargin = 1E-3;
+  // How much wider than its rib a shadow's dark is drawn
+  ShadowWidening = 1.4;
   // The rim: how far from the sun it fades, units, the least of it far off
   // and turned away, and where it lies on the rib - in shares of the rib's
   // width
@@ -173,7 +219,6 @@ const
   RimWidth = 0.3;
   // A rim darker than this is not drawn
   LeastRim = 0.03;
-  ShadowWidening = 1.4;
   DiscSegments = 10;
   LeastBuffer = 1024;
   RibDark: TSdlColor = (R: 26; G: 23; B: 21; A: 255);
@@ -337,24 +382,11 @@ begin
   TArray.Sort<TFrameRib>(ARibs, TComparer<TFrameRib>.Construct(DeeperFirst));
 end;
 
-// Where the segment crosses the height AY
-function PointAtY(const AFrom, ATo: TSdlFPoint; AY: Single): TSdlFPoint;
+// The point AShare of the way from AFrom to ATo
+function PointBetween(const AFrom, ATo: TPoint3; AShare: Double): TPoint3;
 begin
-  var Share: Single := (AY - AFrom.Y) / (ATo.Y - AFrom.Y);
-  Result.X := AFrom.X + (ATo.X - AFrom.X) * Share;
-  Result.Y := AY;
-end;
-
-// Keeps the part of the segment above ABottom (y down); False - none of it
-function KeepAbove(var AFrom, ATo: TSdlFPoint; ABottom: Single): Boolean;
-begin
-  Result := (AFrom.Y <= ABottom) or (ATo.Y <= ABottom);
-  if not Result then
-    Exit;
-  if AFrom.Y > ABottom then
-    AFrom := PointAtY(ATo, AFrom, ABottom)
-  else if ATo.Y > ABottom then
-    ATo := PointAtY(AFrom, ATo, ABottom);
+  Result := Point3(AFrom.X + (ATo.X - AFrom.X) * AShare,
+    AFrom.Y + (ATo.Y - AFrom.Y) * AShare, AFrom.Z + (ATo.Z - AFrom.Z) * AShare);
 end;
 
 function NormalOf(const AFrom, ATo: TSdlFPoint): TSdlFPoint;
@@ -386,11 +418,7 @@ begin
   var SunY: Double := FDef.Camera.Horizon - FDef.Sun.Y;
   var Reach := Sqrt(SunX * SunX + SunY * SunY + Focal * Focal);
   FToSun := Point3(SunX / Reach, SunY / Reach, Focal / Reach);
-
-  FFloorBottom := FDef.ScreenHeight;
-  for var Layer in FDef.Layers do
-    if (Layer.Motion = fmCity) and Layer.Band.Present then
-      FFloorBottom := Layer.Band.Bottom;
+  FSunSpread := FDef.Sun.Disc / Focal;
 end;
 
 function TDomeFrames.Present: Boolean;
@@ -431,6 +459,28 @@ begin
   Result := Point3(AAt.X - FToSun.X * Run, 0, AAt.Z - FToSun.Z * Run);
 end;
 
+// The part of a shadow on the floor in front of the eye, AFrom to ATo, as
+// shares of the way between them; False - none of it. A lifted rib drops
+// an end behind the eye, and its shadow streams toward the bottom of the
+// screen
+function TDomeFrames.CutAtEye(const AFrom, ATo: TPoint3;
+  out AFromShare, AToShare: Double): Boolean;
+begin
+  var Plane: Double := FDef.Camera.Focal * (NearestShare - 1) + EyeCutMargin;
+  AFromShare := 0;
+  AToShare := 1;
+  Result := (AFrom.Z >= Plane) or (ATo.Z >= Plane);
+  if not Result then
+    Exit;
+  var Crossing: Double := 0;
+  if (AFrom.Z < Plane) or (ATo.Z < Plane) then
+    Crossing := (Plane - AFrom.Z) / (ATo.Z - AFrom.Z);
+  if AFrom.Z < Plane then
+    AFromShare := Crossing
+  else if ATo.Z < Plane then
+    AToShare := Crossing;
+end;
+
 procedure TDomeFrames.LightRim(var ARib: TFrameRib);
 begin
   ARib.Normal := NormalOf(ARib.A, ARib.B);
@@ -451,18 +501,34 @@ begin
     (RimSideFloor + (1 - RimSideFloor) * Facing);
 end;
 
+// A sample a share of the way along the rib: the light runs from there down
+// to the floor, and the farther it runs, the wider the penumbra and the
+// less of the disc the rib hides
 procedure TDomeFrames.AddShadow(const AFrame: TDomeFrame; ACityOffset: Double;
-  const AFrom, ATo: TPoint3; AWidth: Single; var AFill: TViewFill);
+  const AFrom, ATo: TPoint3; AThickness: Single; var AFill: TViewFill);
 var
   Shadow: TRibShadow;
+  FromShare, ToShare: Double;
   Nearness: Single;
 begin
-  if not Project(AFrame, ACityOffset, DropToFloor(AFrom), Shadow.A, Nearness) or
-    not Project(AFrame, ACityOffset, DropToFloor(ATo), Shadow.B, Nearness) then
+  if not CutAtEye(DropToFloor(AFrom), DropToFloor(ATo), FromShare, ToShare) then
     Exit;
-  if not KeepAbove(Shadow.A, Shadow.B, FFloorBottom) then
-    Exit;
-  Shadow.W := AWidth;
+  var Width: Double := AThickness * ShadowWidening;
+  for var i := 0 to ShadowSamples - 1 do
+  begin
+    var Share: Double := FromShare + (ToShare - FromShare) * i / (ShadowSamples - 1);
+    var Caster := PointBetween(AFrom, ATo, Share);
+    if not Project(AFrame, ACityOffset, DropToFloor(Caster), Shadow.Samples[i].At,
+      Nearness) then
+      Exit;
+    var Spread: Double := FSunSpread * Caster.Y / FToSun.Y;
+    var Penumbra: Double := 2 * Spread;
+    if Penumbra < Width then
+      Penumbra := Width;
+    Shadow.Samples[i].CoreHalf := Nearness * Abs(Width / 2 - Spread);
+    Shadow.Samples[i].OuterHalf := Nearness * (Width / 2 + Spread);
+    Shadow.Samples[i].Peak := Width / Penumbra;
+  end;
   AFill.View.Shadows[AFill.ShadowCount] := Shadow;
   Inc(AFill.ShadowCount);
 end;
@@ -480,9 +546,10 @@ begin
     not Project(AFrame, ACityOffset, Till, Rib.B, NearnessB) then
     Exit;
   Rib.Z := (From.Z + Till.Z) / 2;
-  Rib.W := AFrame.Rib * (NearnessA + NearnessB) / 2;
+  var Thickness: Single := AFrame.Rib;
   if AEdge.Ring then
-    Rib.W := Rib.W * RingThickening;
+    Thickness := Thickness * RingThickening;
+  Rib.W := Thickness * (NearnessA + NearnessB) / 2;
   LightRim(Rib);
 
   if Rib.Z > 0 then
@@ -498,7 +565,7 @@ begin
 
   var Lifted := (AEdge.A.Y > OverEquator) or (AEdge.B.Y > OverEquator);
   if Lifted and (FToSun.Y > 0) then
-    AddShadow(AFrame, ACityOffset, From, Till, Rib.W, AFill);
+    AddShadow(AFrame, ACityOffset, From, Till, Thickness, AFill);
 end;
 
 procedure TDomeFrames.AddFrame(AFrame: Integer; ACityOffset: Double;
@@ -563,6 +630,42 @@ begin
     FPixel := 1 / ScaleY;
 end;
 
+// Four corners across AAt along ANormal, AShift its middle: the inner two
+// ACoreHalf to each side at APeak, the outer two AOuterHalf out and clear
+function TDomeFramePainter.StripEnd(const AAt, ANormal: TSdlFPoint;
+  AShift, ACoreHalf, AOuterHalf, APeak: Single): TStripEnd;
+var
+  Offsets, Alphas: array [0..3] of Single;
+begin
+  Offsets[0] := AShift - AOuterHalf;
+  Offsets[1] := AShift - ACoreHalf;
+  Offsets[2] := AShift + ACoreHalf;
+  Offsets[3] := AShift + AOuterHalf;
+  Alphas[0] := 0;
+  Alphas[1] := APeak;
+  Alphas[2] := APeak;
+  Alphas[3] := 0;
+  for var i := 0 to 3 do
+  begin
+    Result[i].X := AAt.X + ANormal.X * Offsets[i];
+    Result[i].Y := AAt.Y + ANormal.Y * Offsets[i];
+    Result[i].Alpha := Alphas[i];
+  end;
+end;
+
+// A band along AFrom..ATo, its middle AShift along ANormal, AHalfWidth to
+// each side: solid inside, fading out over one pixel at both edges
+function TDomeFramePainter.SolidStrip(const AFrom, ATo, ANormal: TSdlFPoint;
+  AShift, AHalfWidth: Single): TStrip;
+begin
+  var Inner: Single := AHalfWidth - FPixel / 2;
+  if Inner < 0 then
+    Inner := 0;
+  var Outer: Single := AHalfWidth + FPixel / 2;
+  Result.AtFrom := StripEnd(AFrom, ANormal, AShift, Inner, Outer, 1);
+  Result.AtTo := StripEnd(ATo, ANormal, AShift, Inner, Outer, 1);
+end;
+
 function TDomeFramePainter.AddVertex(AX, AY: Single; AColor: TSdlColor): Integer;
 begin
   if FVertexCount = Length(FVertices) then
@@ -586,41 +689,53 @@ begin
   Inc(FIndexCount, 3);
 end;
 
-// A band along AFrom..ATo, its middle AShift along ANormal, AHalfWidth to
-// each side: solid inside, fading out over one pixel at both edges
-procedure TDomeFramePainter.AddStrip(const AFrom, ATo, ANormal: TSdlFPoint;
-  AShift, AHalfWidth: Single; AColor: TSdlColor);
+procedure TDomeFramePainter.AddStrip(const AStrip: TStrip; AColor: TSdlColor);
 var
-  Offsets: array [0..3] of Single;
-  Colors: array [0..3] of TSdlColor;
   FromIds, ToIds: array [0..3] of Integer;
 begin
-  var Inner: Single := AHalfWidth - FPixel / 2;
-  if Inner < 0 then
-    Inner := 0;
-  var Outer: Single := AHalfWidth + FPixel / 2;
-  var Clear := AColor;
-  Clear.A := 0;
-  Offsets[0] := AShift - Outer;
-  Offsets[1] := AShift - Inner;
-  Offsets[2] := AShift + Inner;
-  Offsets[3] := AShift + Outer;
-  Colors[0] := Clear;
-  Colors[1] := AColor;
-  Colors[2] := AColor;
-  Colors[3] := Clear;
-
   for var i := 0 to 3 do
   begin
-    FromIds[i] := AddVertex(AFrom.X + ANormal.X * Offsets[i],
-      AFrom.Y + ANormal.Y * Offsets[i], Colors[i]);
-    ToIds[i] := AddVertex(ATo.X + ANormal.X * Offsets[i],
-      ATo.Y + ANormal.Y * Offsets[i], Colors[i]);
+    var Color := AColor;
+    Color.A := Round(AColor.A * AStrip.AtFrom[i].Alpha);
+    FromIds[i] := AddVertex(AStrip.AtFrom[i].X, AStrip.AtFrom[i].Y, Color);
+    ToIds[i] := AddVertex(AStrip.AtTo[i].X, AStrip.AtTo[i].Y, Color);
   end;
   for var i := 0 to 2 do
   begin
     AddTriangle(FromIds[i], ToIds[i], ToIds[i + 1]);
     AddTriangle(FromIds[i], ToIds[i + 1], FromIds[i + 1]);
+  end;
+end;
+
+// Four lines across every sample, joined sample to sample: the dark of the
+// stroke fades out across it to its edges and along it as its peak falls.
+// Its edges fade over a pixel at the least
+procedure TDomeFramePainter.AddStroke(const AShadow: TRibShadow);
+var
+  Was, Ids: array [0..3] of Integer;
+begin
+  var Normal := NormalOf(AShadow.Samples[0].At,
+    AShadow.Samples[ShadowSamples - 1].At);
+  for var i := 0 to ShadowSamples - 1 do
+  begin
+    var Sample := AShadow.Samples[i];
+    var Outer: Single := Sample.CoreHalf + FPixel;
+    if Sample.OuterHalf > Outer then
+      Outer := Sample.OuterHalf;
+    var Across := StripEnd(Sample.At, Normal, 0, Sample.CoreHalf, Outer, Sample.Peak);
+    for var j := 0 to 3 do
+    begin
+      var Color := ShadowColor;
+      Color.A := Round(ShadowColor.A * Across[j].Alpha);
+      Ids[j] := AddVertex(Across[j].X, Across[j].Y, Color);
+    end;
+    if i > 0 then
+      for var j := 0 to 2 do
+      begin
+        AddTriangle(Was[j], Ids[j], Ids[j + 1]);
+        AddTriangle(Was[j], Ids[j + 1], Was[j + 1]);
+      end;
+    Was := Ids;
   end;
 end;
 
@@ -669,18 +784,15 @@ begin
   FIndexCount := 0;
 end;
 
-procedure TDomeFramePainter.DrawShadows(const AShadows: TArray<TRibShadow>);
+procedure TDomeFramePainter.DrawShadows(const AShadows: TArray<TRibShadow>;
+  const AClip: TSdlRect);
 begin
   MeasurePixel;
   for var Shadow in AShadows do
-  begin
-    var Width: Single := Shadow.W * ShadowWidening;
-    if Width < FPixel then
-      Width := FPixel;
-    AddStrip(Shadow.A, Shadow.B, NormalOf(Shadow.A, Shadow.B), 0, Width / 2,
-      ShadowColor);
-  end;
+    AddStroke(Shadow);
+  SDL_RenderSetClipRect(FRenderer, @AClip);
   Flush;
+  SDL_RenderSetClipRect(FRenderer, nil);
 end;
 
 // Each rib dark, then its rim: the next rib over it covers both, as the
@@ -691,7 +803,7 @@ begin
   for var Rib in ARibs do
   begin
     var Width: Single := Max(Rib.W, FPixel);
-    AddStrip(Rib.A, Rib.B, Rib.Normal, 0, Width / 2, RibDark);
+    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, 0, Width / 2), RibDark);
     AddDisc(Rib.A, Width / 2, RibDark);
     AddDisc(Rib.B, Width / 2, RibDark);
     if Rib.Light < LeastRim then
@@ -701,7 +813,8 @@ begin
     var RimWide: Single := Width * RimWidth;
     if RimWide < FPixel then
       RimWide := FPixel;
-    AddStrip(Rib.A, Rib.B, Rib.Normal, Width * RimShift, RimWide / 2, Rim);
+    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, Width * RimShift, RimWide / 2),
+      Rim);
   end;
   Flush;
 end;

@@ -409,7 +409,7 @@ screen dump of `Game.Moon`.
   run, wrapped round the screen's width - and once more a screen to the
   left when it hangs over the right edge.
 
-### `Core/Render.FarPlane.pas` (~420 lines, 3.0.88)
+### `Core/Render.FarPlane.pas` (~450 lines, 3.0.91)
 - **`TFarPlanePainter`** - draws the far plane of a chase
   (`Levels.FarPlane`) where its offsets have taken it, in place of the
   screen's backdrop: the black sky, the sun, then the layers back to
@@ -446,19 +446,26 @@ screen dump of `Game.Moon`.
   lent the point glow and freed before it). `DrawLayer` of the city's
   layer: the band, then the frames' shadows and far half, the buildings,
   the near half and the glare. The sun's colour is `TFarPlaneSun.ColorAt`.
+- 3.0.91, **the long shadows**: `Draw` takes the frames' view once a
+  frame (`FFrameView`); `DrawFrameShadows(top, bottom)` draws them clipped
+  across the screen - on the city's band before its far half, and on the
+  layer of motion `fmGround` after its band, from its top to the bottom of
+  the screen.
 
-### `Core/Render.DomeFrames.pas` (~720 lines, 3.0.90)
+### `Core/Render.DomeFrames.pas` (~800 lines, 3.0.91)
 The dome frames of a chase's city (`docs/mechanics/chase-backdrop.md`,
 "The city"): geodesic half-ellipsoids drawn by code through the city's
 camera, riding with the city past the fixed sun. The stand
 (`tools/chase/stand.template.html` - `geodesic`, `frameProject`,
-`frameRibs`, `drawRibs`, `drawShadows`, `drawGlare`) is the reference,
-number for number.
+`frameRibs`, `cutAtEye`, `shadowStroke`, `drawRibs`, `renderShadows` and
+`drawShadows`, `drawGlare`) is the reference, number for number.
 - **`TFrameRib`** - a rib on the screen in units: `A`, `B`, `W`, `Z` (the
   depth of its middle behind its frame's centre), `Normal` (the side of
-  its rim, toward the sun), `Light` (0..1). **`TRibShadow`** - `A`, `B`,
-  `W`. **`TFrameView`** - `Far` and `Near` (each far to near) and
-  `Shadows`.
+  its rim, toward the sun), `Light` (0..1). **`TRibShadow`** (3.0.91) -
+  a stroke of `ShadowSamples` (16) **`TShadowSample`** - `At`,
+  `CoreHalf`, `OuterHalf` (the half widths of the plateau of its dark and
+  of its whole), `Peak` (a share of the full dark). **`TFrameView`** -
+  `Far` and `Near` (each far to near) and `Shadows`.
 - **`TDomeFrames`** - the geometry, no SDL. `Create(def)` builds the
   geodesic of each frame once (`BuildGeodesic`: an icosahedron turned so
   a corner stands at the top, each face cut `Frequency` times and pushed
@@ -475,20 +482,32 @@ number for number.
   exact, not `CompareValue`, whose slack leaves the ribs on the equator
   out of order). A lifted edge (over the equator by more than its noise)
   throws its shadow (`AddShadow`): both ends dropped along the light onto
-  the floor (`DropToFloor`); an end behind the eye drops the shadow whole,
-  as on the stand; cut at the foot of the city's band (`KeepAbove`). No
-  shadow under a sun below the horizon.
+  the floor (`DropToFloor`); cut where it passes the eye (`CutAtEye`, the
+  shares of the way along the rib in front of the `NearestShare` plane,
+  `EyeCutMargin` short of it; 3.0.91 - before, an end behind the eye
+  dropped the shadow whole and a tall frame threw none). The stroke
+  (3.0.91): 16 points of the rib between the shares, each dropped onto the
+  floor; the penumbra spreads by the sun's disc over the focal length
+  (`FSunSpread`) times the way the light runs from the rib, the dark 1.4
+  times the rib wide (`ShadowWidening`), the peak the dark over the larger
+  of the dark and the spread - full at a dome's foot, fading toward the
+  eye. No shadow under a sun below the horizon.
 - **`TDomeFramePainter`** - `Create(renderer, sun, pointGlow)` (the glow
-  is lent). `DrawShadows`, `DrawRibs` (each rib dark - 26, 23, 21 - then
+  is lent). `DrawShadows(shadows, clip)` (3.0.91: the strokes inside a
+  clip rect, `SDL_RenderSetClipRect`, then the clip let go; `AddStroke` -
+  four lines across every sample, clear, the peak, the peak, clear, joined
+  sample to sample, black at 0.45 times the peak, the edge a pixel past
+  the plateau at the least), `DrawRibs` (each rib dark - 26, 23, 21 - then
   its rim, so the next rib covers both), `DrawGlare(cover)` (two point
   glows fitted to the stand's gradient). Strips of triangles with no
-  texture (`AddStrip`, `AddDisc` for a rib's round end): solid inside,
-  their alpha fading to nothing over one pixel of the window at each edge
+  texture (`StripEnd` - four corners across a point, `SolidStrip`,
+  `AddStrip`, `AddDisc` for a rib's round end): solid inside, their alpha
+  fading to nothing over one pixel of the window at each edge
   (`MeasurePixel` by `SDL_RenderGetScale`), the smoothing a canvas gives a
   line. The rim 0.3 of the rib wide and 0.35 of it toward the sun, at
-  least a pixel; a shadow black at 0.45, 1.4 times its rib. `Flush` sets
-  the draw blend - a strip with no texture takes it, and the sky leaves it
-  at none - and draws a pass in one call; the buffers grow and are kept.
+  least a pixel. `Flush` sets the draw blend - a strip with no texture
+  takes it, and the sky leaves it at none - and draws a pass in one call;
+  the buffers grow and are kept.
 
 ### `Core/Render.Dynamics.pas` (~515 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
@@ -6846,6 +6865,11 @@ front, far to near, the near ribs thicker; a finer frame more ribs; none
 off the screen; a low frame's shadows on the floor, none of a tall frame,
 none under a sun below the horizon; the rim toward the sun and brightest
 by it). DUnitX counts 909 tests at 3.0.90.
+3.0.91 - 3 more, in `Tests.Render.DomeFrames` (18): the low frame's
+shadows on the floor and the tall frame's none give way to the shadows
+of both lying between the horizon and the eye; new - a shadow runs to the
+eye, soft at its edges, fully dark at its rib's foot, fading toward the
+eye. DUnitX counts 912 tests at 3.0.91.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7563,7 +7587,7 @@ made again in 3.0.83).
 | The chase's far plane (3.0.88): the end of the tunnel and the city in the crater ride behind the road at speeds of their own - the wall with its far ledge slow, the near hills fast in front of it, dark in the tunnel and brightening as it leaves, the city slower, the ridge slowest; the sun in code under them all, tinted where a dome stands before it; the city mirrored for the light; no haze on that screen | Levels.FarPlane.pas (`TFarPlaneDef`, `ReadFarPlane`) + Game.FarPlane.pas (`TFarPlane`) + Render.FarPlane.pas (`TFarPlanePainter`) + Levels.Defs.pas (`FarPlane`, `CheckFarPlane`) + Render.Dynamics.pas (`Draw` from a `TSdlFPoint`) + Game.Moon.pas (`DrawBackdrop`, `SkyOrigin`, `HazeBackdrop`, the tick and the clear) + bin/chase-backdrop.json + `farPlane` and `objectSets` in level2.json + chase-backdrop.mset + tools/chase (the stand) + Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md) |
 | The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, stage 11b-2) |
-| The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
+| The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame; their long shadows, soft strokes down the floor and on over the near ground, cut at the eye (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |

@@ -17,6 +17,7 @@
   faster (TFarPlaneDef.ElementLeft). Its dome frames are code
   (Render.DomeFrames): their shadows on the crater floor and their far half
   go under the buildings, their near half and the sun's glare over them.
+  The shadows run on over the near ground, from the top of its band down.
 
   While the screen's own backdrop covers the whole screen, nothing behind
   its layer is drawn: the arena before the chase costs one picture more,
@@ -59,6 +60,9 @@ type
     FDiscGlow: PSdlTexture;
     FFrames: TDomeFrames;
     FFramePainter: TDomeFramePainter;
+    // The frames at this frame's ride of the city: the city's layer and the
+    // near ground's both draw from it
+    FFrameView: TFrameView;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
@@ -71,6 +75,7 @@ type
     procedure DrawBand(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
     procedure DrawElement(const AElement: TFarPlaneElement;
       ATexture: PSdlTexture; ALeft: Double; AColor: TSdlColor);
+    procedure DrawFrameShadows(ATop, ABottom: Single);
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
       const ABackdrop: TBackdropView);
   public
@@ -367,23 +372,43 @@ begin
   Flush(ATexture);
 end;
 
-// The city stands inside its frames: their shadows and far half before its
-// buildings, their near half and the glare after
+// The frames' shadows across the screen, between ATop and ABottom
+procedure TFarPlanePainter.DrawFrameShadows(ATop, ABottom: Single);
+var
+  Clip: TSdlRect;
+begin
+  Clip.X := 0;
+  Clip.Y := Round(ATop);
+  Clip.W := Round(FDef.ScreenWidth);
+  Clip.H := Round(ABottom - ATop);
+  FFramePainter.DrawShadows(FFrameView.Shadows, Clip);
+end;
+
+// The city stands inside its frames: their shadows on its floor and their
+// far half before its buildings, their near half and the glare after. The
+// shadows run on over the near ground's band: over the sky between its
+// crests they fall on the crater floor, which they shade too
 procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
   const ABackdrop: TBackdropView);
-var
-  Frames: TFrameView;
 begin
   var Layer := FDef.Layers[ALayer];
   if Layer.Band.Present then
     DrawBand(ALayer, AOffsets);
+  if Layer.Band.Present and (Layer.Motion = fmGround) and FFrames.Present then
+    DrawFrameShadows(Layer.Band.Top, FDef.ScreenHeight);
 
   var Framed := (Layer.Motion = fmCity) and FFrames.Present;
   if Framed then
   begin
-    Frames := FFrames.View(AOffsets[fmCity]);
-    FFramePainter.DrawShadows(Frames.Shadows);
-    FFramePainter.DrawRibs(Frames.Far);
+    var FloorTop: Single := 0;
+    var FloorBottom: Single := FDef.ScreenHeight;
+    if Layer.Band.Present then
+    begin
+      FloorTop := Layer.Band.Top;
+      FloorBottom := Layer.Band.Bottom;
+    end;
+    DrawFrameShadows(FloorTop, FloorBottom);
+    FFramePainter.DrawRibs(FFrameView.Far);
   end;
 
   for var j := 0 to High(Layer.Elements) do
@@ -398,7 +423,7 @@ begin
 
   if Framed then
   begin
-    FFramePainter.DrawRibs(Frames.Near);
+    FFramePainter.DrawRibs(FFrameView.Near);
     FFramePainter.DrawGlare(FDef.SunCover(AOffsets));
   end;
 end;
@@ -406,6 +431,8 @@ end;
 procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets;
   const ABackdrop: TBackdropView);
 begin
+  if FFrames.Present then
+    FFrameView := FFrames.View(AOffsets[fmCity]);
   var First := FirstSeenLayer(AOffsets);
   if First < 0 then
   begin

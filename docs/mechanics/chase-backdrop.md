@@ -214,8 +214,8 @@ over them, so the city stands inside. Lit from behind, nothing of a frame
 faces the eye in the light: a rib is a dark silhouette with a thin rim on
 its side toward the sun, brighter the nearer the sun it runs, so the light
 walks over the frame as it rides past. The ribs throw long shadows toward
-the eye on the crater floor; the sun's own glare is laid over the ribs that
-cross its disc. `tintsSun` as the elements had it.
+the eye, down the crater floor and on over the near hills; the sun's own
+glare is laid over the ribs that cross its disc. `tintsSun` as the elements had it.
 
 | Frame | x | w x h | frequency | rib |
 |---|---|---|---|---|
@@ -250,15 +250,49 @@ the glare, the sun tinted by the frames. The kit is a key the game does
 not read. The stand's switches (frames, shadows, glare, parallax) are the
 stand's alone: the game draws all of it.
 
-**The shadows as they are.** A shadow is a rib dropped onto the floor
-along the sun's light, and one end of it falling behind the eye drops the
-shadow whole - on the stand, and so in the game. The sun stands 30 units
-over the horizon at a focal length of 1024: a rib lifted more than about a
-fifth of the main dome's height throws its shadow behind the eye. So the
-main dome throws none, the satellite dome only those of its lowest ribs, at
-its foot; the long shadows toward the eye do not show. The points on the
-equator carry the noise of the arithmetic: the stand lets some of the
-chords along it throw a shadow onto themselves, the game none.
+**The shadows** (3.0.91). A shadow is a rib dropped onto the floor along
+the sun's light. The sun stands 30 units over the horizon at a focal
+length of 1024, so a shadow runs about 34 units toward the eye for each
+unit the rib is lifted: a rib lifted more than about a fifth of the main
+dome's height throws its shadow past the eye. Such a shadow is cut where
+it passes the eye (the plane at 0.15 of the focal length, a hair in front
+of it), not dropped; a rib with both ends dropped past the eye throws
+none. So the ribs at a dome's foot throw the shadows - 40 of the main
+dome's, 73 of the satellite's - and the ones higher up throw none.
+
+**A shadow is a stroke, not a band.** The sun is a disc (7 units at a
+focal length of 1024), not a point: past its rib a shadow softens. Its
+penumbra spreads by the disc's angle over the way the light runs from the
+rib to the floor, and a rib thinner than that spread hides only a part of
+the disc. So a shadow is fully dark and sharp at a dome's foot and wide and
+faint toward the eye - about a third of its dark at the eye, some 40 units
+to each side. Across, it is clear at its edges and at its peak over its
+plateau; along, 16 samples, its dark and its width changing between them.
+Taken together the strokes are no stripes but a veil: the dome shades the
+ground in front of it, and between the shadows of its ribs soft rays of
+light come through.
+
+Where they show: the main dome's front ring stands at y 275.3 and the near
+hills begin at 276 - the dome stands on their crest, and the floor inside
+it is under the buildings. So the floor shows little of them; the long
+shadows lie on the near hills, down to the road. They are drawn twice,
+clipped: on the crater floor's band, and from the top of the near hills'
+band to the bottom of the screen after the hills. Over the sky between the
+crests a stroke falls on the crater floor, which it shades too. A shadow
+rides with its dome while the sand flows under it faster: the light is far
+and still.
+
+Tried on the stand and left: the light of the shadows raised apart from
+the sun's disc - shorter shadows fall under the buildings, the floor has no
+room for them at any height; a darker shadow on the sand; hard-edged bands
+widening toward the eye - stripes, not shadows; a shadow laid on the sand
+alone (`source-atop` on the stand, the sand's texture in black in the game)
+- it never showed in the game, and over crests this low the clip serves as
+well.
+
+The points on the equator carry the noise of the arithmetic: the stand
+lets some of the chords along it throw a shadow onto themselves, the game
+none.
 
 ## The order of work
 
@@ -480,10 +514,6 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 
 ## Open
 
-- The long shadows ("The shadows as they are"): cut at the eye rather than
-  dropped whole, the shadow of a rib would stream toward the bottom of the
-  screen, under the near hills - the long shadows toward the eye the frames
-  were meant to throw. On the stand first, then in the game.
 - The life of the city, a step after the frames: the neon of each piece
   found by its saturation and made to glow and flicker, lamps on the masts'
   tops, the train (`rail-train`) along the beam, into one station and out.

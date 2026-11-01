@@ -6,11 +6,13 @@
   height over its centre; one in the middle of the screen reaches as far
   left as right; it rides with the city. Its far half is behind its centre
   and its near half in front, each far to near, the near ribs thicker; a
-  finer frame has more ribs; one off the screen shows none. The shadows of
-  a low frame lie on the crater floor; a sun under the horizon throws none.
-  A tall frame throws none at all: the shadow of a rib that runs up the
-  dome falls behind the eye, and the stand drops it whole - so does the
-  game. The rim faces the sun and is brightest by it.
+  finer frame has more ribs; one off the screen shows none. The shadows
+  lie below the horizon and in front of the eye, a tall frame's as a low
+  one's: the sun is low, a lifted rib throws its shadow past the eye, and
+  the shadow is cut there - the stand cuts it so, and so does the game. They
+  run to the eye. A shadow is a stroke: soft at its edges, fully dark at a
+  dome's foot and fading toward the eye; a sun under the horizon throws
+  none. The rim faces the sun and is brightest by it.
 
   How the ribs look - the dark, the rim's colour, the smoothing of their
   edges, the glare - has no test here: none of it shows without drawing.
@@ -58,9 +60,17 @@ type
     [Test]
     procedure TestFrameOffTheScreenShowsNothing;
     [Test]
-    procedure TestShadowsLieOnTheFloor;
+    procedure TestShadowsLieBetweenTheHorizonAndTheEye;
     [Test]
-    procedure TestShadowsNoneOfATallFrame;
+    procedure TestShadowsOfATallFrameLieBetweenTheHorizonAndTheEye;
+    [Test]
+    procedure TestShadowsRunToTheEye;
+    [Test]
+    procedure TestShadowsAreSoftEdged;
+    [Test]
+    procedure TestShadowsFullyDarkAtTheFoot;
+    [Test]
+    procedure TestShadowsFadeTowardTheEye;
     [Test]
     procedure TestShadowsNoneUnderASunBelowTheHorizon;
     [Test]
@@ -89,8 +99,11 @@ const
   FrameHeight = 170;
   FrameFrequency = 4;
   FrameRib = 2.2;
-  // Low enough that the shadows of its ribs fall in front of the eye
   LowFrameHeight = 30;
+  // The share of the focal length where a point stands at the eye
+  // (Render.DomeFrames): the floor there lies this far down the screen
+  EyeShare = 0.15;
+  EyeY = Horizon + (BaseY - Horizon) / EyeShare;
   Slack = 0.01;
 
 function StandDef: TFarPlaneDef;
@@ -168,6 +181,34 @@ end;
 procedure TDomeFramesTests.Setup;
 begin
   FDef := StandDef;
+end;
+
+procedure AssertBetweenTheHorizonAndTheEye(const AView: TFrameView);
+begin
+  Assert.IsTrue(Length(AView.Shadows) > 0, 'The ribs throw shadows');
+  for var Shadow in AView.Shadows do
+    for var Sample in Shadow.Samples do
+    begin
+      Assert.IsTrue(Sample.At.Y > Horizon, 'Below the horizon');
+      Assert.IsTrue(Sample.At.Y <= EyeY + Slack, 'In front of the eye');
+    end;
+end;
+
+// The sample of a shadow nearest the eye: the lowest on the screen
+function NearestSample(const AShadow: TRibShadow): TShadowSample;
+begin
+  Result := AShadow.Samples[0];
+  for var Sample in AShadow.Samples do
+    if Sample.At.Y > Result.At.Y then
+      Result := Sample;
+end;
+
+function FarthestSample(const AShadow: TRibShadow): TShadowSample;
+begin
+  Result := AShadow.Samples[0];
+  for var Sample in AShadow.Samples do
+    if Sample.At.Y < Result.At.Y then
+      Result := Sample;
 end;
 
 function TDomeFramesTests.Centred: Double;
@@ -276,23 +317,56 @@ begin
   Assert.AreEqual(0, Integer(Length(View.Shadows)), 'No shadows');
 end;
 
-procedure TDomeFramesTests.TestShadowsLieOnTheFloor;
+procedure TDomeFramesTests.TestShadowsLieBetweenTheHorizonAndTheEye;
 begin
   FDef.Frames[0].H := LowFrameHeight;
+  AssertBetweenTheHorizonAndTheEye(ViewOf(FDef, Centred));
+end;
+
+procedure TDomeFramesTests.TestShadowsOfATallFrameLieBetweenTheHorizonAndTheEye;
+begin
+  AssertBetweenTheHorizonAndTheEye(ViewOf(FDef, Centred));
+end;
+
+procedure TDomeFramesTests.TestShadowsRunToTheEye;
+begin
+  var Reached := False;
+  for var Shadow in ViewOf(FDef, Centred).Shadows do
+    if Abs(NearestSample(Shadow).At.Y - EyeY) < Slack then
+      Reached := True;
+  Assert.IsTrue(Reached, 'A shadow runs to the eye');
+end;
+
+procedure TDomeFramesTests.TestShadowsAreSoftEdged;
+begin
   var View := ViewOf(FDef, Centred);
   Assert.IsTrue(Length(View.Shadows) > 0, 'The ribs throw shadows');
   for var Shadow in View.Shadows do
-  begin
-    Assert.IsTrue(Min(Shadow.A.Y, Shadow.B.Y) > Horizon, 'Below the horizon');
-    Assert.IsTrue(Max(Shadow.A.Y, Shadow.B.Y) <= FloorBottom + Slack, 'On the floor');
-  end;
+    for var Sample in Shadow.Samples do
+    begin
+      Assert.IsTrue(Sample.OuterHalf >= Sample.CoreHalf, 'Its edge past its plateau');
+      Assert.IsTrue((Sample.Peak > 0) and (Sample.Peak <= 1), 'A share of the dark');
+    end;
 end;
 
-procedure TDomeFramesTests.TestShadowsNoneOfATallFrame;
+// Where a rib stands on the ring, the light runs nowhere: the whole disc is
+// hidden
+procedure TDomeFramesTests.TestShadowsFullyDarkAtTheFoot;
+begin
+  var Full := False;
+  for var Shadow in ViewOf(FDef, Centred).Shadows do
+    if FarthestSample(Shadow).Peak > 1 - Slack then
+      Full := True;
+  Assert.IsTrue(Full, 'A shadow fully dark at the foot of its rib');
+end;
+
+procedure TDomeFramesTests.TestShadowsFadeTowardTheEye;
 begin
   var View := ViewOf(FDef, Centred);
-  Assert.IsTrue(RibCount(View) > 0, 'The frame stands');
-  Assert.AreEqual(0, Integer(Length(View.Shadows)), 'No shadow');
+  Assert.IsTrue(Length(View.Shadows) > 0, 'The ribs throw shadows');
+  for var Shadow in View.Shadows do
+    Assert.IsTrue(NearestSample(Shadow).Peak <= FarthestSample(Shadow).Peak + Slack,
+      'Fainter at its nearer end');
 end;
 
 procedure TDomeFramesTests.TestShadowsNoneUnderASunBelowTheHorizon;

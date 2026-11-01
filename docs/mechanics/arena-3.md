@@ -740,6 +740,16 @@ The frames and the depth of the city ("Decided 2026-11-01, the city"), in the ga
 - **The shadows** show little, as on the stand: `chase-backdrop.md`, "The shadows as they are".
 - **Tests**: `Tests.Game.FarPlane` 13 more - the sun under a frame; the depth (on the base line with its layer, halfway at half the speed, the lower the faster, on the horizon still riding, every centre to the middle, a hanging thing by what it stands on, flat without a camera, the other layers flat); level 2 reading its camera and frames, and the camera, frame and frames that raise. `Tests.Render.DomeFrames` 15, over a far plane of their own: none without frames; a frame on the base line, its top over its centre, as far left as right, riding with the city; the halves, far to near, the near ribs thicker; a finer frame more ribs; none off the screen; a low frame's shadows on the floor, none of a tall frame, none under a sun below the horizon; the rim toward the sun and brightest by it.
 
+## The long shadows as built (3.0.91)
+The frames' shadows cut at the eye rather than dropped whole, drawn as soft strokes and laid on over the near hills (`chase-backdrop.md`, "The shadows") - the stand first, the game number for number.
+
+- **The cut** (`TDomeFrames.CutAtEye`, the stand's `cutAtEye`): both ends of a rib dropped onto the floor; the part in front of the plane at `NearestShare` of the focal length is kept, as the shares of the way along the rib, cut `EyeCutMargin` (0.001 unit) in front of it - cut on it, the arithmetic could put the end behind it and `Project` drop it. Both ends past it - no shadow.
+- **The stroke** (`AddShadow`, the stand's `shadowStroke`): `ShadowSamples` (16) points between the shares, each a point of the rib dropped onto the floor. The light runs `Y / ToSun.Y` from there to the floor; the penumbra spreads by the sun's disc over the focal length (`FSunSpread`) times that run. The dark is 1.4 times the rib wide (`ShadowWidening`): the plateau's half width is the nearness times half of it less the spread, the whole's the nearness times half of it and the spread, the peak the dark over the larger of the dark and twice the spread (`TShadowSample`).
+- **The drawing** (`TDomeFramePainter.DrawShadows`, `AddStroke`; the stand's `renderShadows` in WebGL, since a canvas cannot shade a triangle by its corners): four lines across every sample - clear, the peak, the peak, clear - joined sample to sample, black at 0.45 times the peak in the vertices, the edge a pixel past the plateau at the least.
+- **Twice, clipped** (`SDL_RenderSetClipRect`; `TFarPlanePainter.DrawFrameShadows`): on the city's band, under the buildings; on the layer of motion `fmGround` after its band, from its top to the bottom of the screen. The frames' view is taken once a frame (`FFrameView`).
+- **The stand**: the switch "shadows over the near hills", on by default; the game always draws them.
+- **Tests**: `Tests.Render.DomeFrames` 18 - the shadows of a low and of a tall frame between the horizon and the eye (in place of the low frame's on the floor and the tall frame's none: the design changed, not a bug), a shadow running to the eye, soft at its edges, fully dark at its rib's foot, fading toward the eye.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".

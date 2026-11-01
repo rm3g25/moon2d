@@ -414,7 +414,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   столько, сколько пробежала дорога погони, по кругу ширины экрана, - и
   ещё раз на экран левее, если он свисает за правый край.
 
-### `Core/Render.FarPlane.pas` (~420 строк, 3.0.88)
+### `Core/Render.FarPlane.pas` (~450 строк, 3.0.91)
 - **`TFarPlanePainter`** - рисует дальний план погони (`Levels.FarPlane`)
   там, куда его увели смещения, вместо задника экрана: чёрное небо,
   солнце, потом слои от дальнего к ближнему - у каждого своя полоса,
@@ -451,18 +451,25 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   `DrawLayer` слоя города: полоса, потом тени каркасов и их дальняя
   половина, здания, ближняя половина и блик. Цвет солнца -
   `TFarPlaneSun.ColorAt`.
+- 3.0.91, **длинные тени**: `Draw` берёт вид каркасов раз за кадр
+  (`FFrameView`); `DrawFrameShadows(top, bottom)` рисует их во всю ширину
+  экрана с обрезкой - на полосе города перед дальней половиной и на слое с
+  движением `fmGround` после его полосы, от её верха до низа экрана.
 
-### `Core/Render.DomeFrames.pas` (~720 строк, 3.0.90)
+### `Core/Render.DomeFrames.pas` (~800 строк, 3.0.91)
 Каркасы куполов города погони (`docs/mechanics/chase-backdrop.md`, "The
 city"): геодезические полуэллипсоиды, нарисованные кодом через камеру
 города, едут с городом мимо неподвижного солнца. Эталон - стенд
 (`tools/chase/stand.template.html` - `geodesic`, `frameProject`,
-`frameRibs`, `drawRibs`, `drawShadows`, `drawGlare`), число в число.
+`frameRibs`, `cutAtEye`, `shadowStroke`, `drawRibs`, `renderShadows` и
+`drawShadows`, `drawGlare`), число в число.
 - **`TFrameRib`** - ребро на экране в единицах: `A`, `B`, `W`, `Z`
   (глубина его середины за центром каркаса), `Normal` (сторона кромки, к
-  солнцу), `Light` (0..1). **`TRibShadow`** - `A`, `B`, `W`.
-  **`TFrameView`** - `Far` и `Near` (каждая от дальних к ближним) и
-  `Shadows`.
+  солнцу), `Light` (0..1). **`TRibShadow`** (3.0.91) - мазок из
+  `ShadowSamples` (16) **`TShadowSample`** - `At`, `CoreHalf`,
+  `OuterHalf` (полуширины плато темноты и всего мазка), `Peak` (доля
+  полной темноты). **`TFrameView`** - `Far` и `Near` (каждая от дальних к
+  ближним) и `Shadows`.
 - **`TDomeFrames`** - геометрия, без SDL. `Create(def)` один раз строит
   геодезию каждого каркаса (`BuildGeodesic`: икосаэдр, повёрнутый вершиной
   вверх, каждая грань разрезана `Frequency` раз и вытолкнута на сферу,
@@ -479,21 +486,31 @@ city"): геодезические полуэллипсоиды, нарисов�
   ближним (`DeeperFirst` - точно, не `CompareValue`: его допуск оставляет
   рёбра на экваторе не по порядку). Поднятое ребро (выше экватора больше
   его шума) бросает тень (`AddShadow`): оба конца опущены вдоль света на
-  пол (`DropToFloor`); конец за глазом выбрасывает тень целиком, как на
-  стенде; обрезана по низу полосы города (`KeepAbove`). Солнце под
-  горизонтом теней не даёт.
+  пол (`DropToFloor`); обрезана там, где проходит глаз (`CutAtEye` - доли
+  пути вдоль ребра перед плоскостью `NearestShare`, на `EyeCutMargin` не
+  доходя; 3.0.91 - раньше конец за глазом выбрасывал тень целиком, и
+  высокий каркас не давал ни одной). Мазок (3.0.91): 16 точек ребра между
+  долями, каждая опущена на пол; полутень расходится на диск солнца,
+  делённый на фокусное (`FSunSpread`), умноженный на путь света от ребра,
+  темнота в 1.4 ребра шириной (`ShadowWidening`), пик - темнота на
+  большее из темноты и расхождения: полный у ноги купола, бледнеет к
+  глазу. Солнце под горизонтом теней не даёт.
 - **`TDomeFramePainter`** - `Create(renderer, sun, pointGlow)` (свечение
-  одолжено). `DrawShadows`, `DrawRibs` (каждое ребро тёмным - 26, 23,
-  21 - потом его кромка, так что следующее ребро накрывает оба),
-  `DrawGlare(cover)` (два точечных свечения, подогнанных под градиент
-  стенда). Ленты треугольников без текстуры (`AddStrip`, `AddDisc` -
+  одолжено). `DrawShadows(shadows, clip)` (3.0.91: мазки внутри
+  прямоугольника обрезки, `SDL_RenderSetClipRect`, потом обрезка
+  снимается; `AddStroke` - четыре линии поперёк каждой точки: прозрачно,
+  пик, пик, прозрачно, соединённые от точки к точке, чёрные на 0.45 от
+  пика, край не меньше чем на пиксель за плато), `DrawRibs` (каждое ребро
+  тёмным - 26, 23, 21 - потом его кромка, так что следующее ребро
+  накрывает оба), `DrawGlare(cover)` (два точечных свечения, подогнанных
+  под градиент стенда). Ленты треугольников без текстуры (`StripEnd` -
+  четыре угла поперёк точки, `SolidStrip`, `AddStrip`, `AddDisc` -
   круглый конец ребра): сплошные внутри, альфа у каждого края гаснет до
   нуля за один пиксель окна (`MeasurePixel` по `SDL_RenderGetScale`) -
   сглаживание, которое canvas даёт линии даром. Кромка - 0.3 ребра в
-  ширину и 0.35 его к солнцу, не тоньше пикселя; тень чёрная на 0.45, в
-  1.4 ребра. `Flush` ставит blend рисования - лента без текстуры берёт
-  его, а небо оставляет none - и рисует проход одним вызовом; буферы
-  растут и хранятся.
+  ширину и 0.35 его к солнцу, не тоньше пикселя. `Flush` ставит blend
+  рисования - лента без текстуры берёт его, а небо оставляет none - и
+  рисует проход одним вызовом; буферы растут и хранятся.
 
 ### `Core/Render.Dynamics.pas` (~515 строк)
 - **`TDynamicScreenRenderer`** - выводит динамические объекты уровня
@@ -6790,6 +6807,11 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 ничего; тени низкого каркаса на полу, у высокого нет, под солнцем ниже
 горизонта нет; кромка к солнцу и ярче всего у него). DUnitX на 3.0.90
 находит 909 тестов.
+3.0.91 - ещё 3, в `Tests.Render.DomeFrames` (18): тени низкого каркаса
+на полу и их отсутствие у высокого уступили место теням обоих между
+горизонтом и глазом; новые - тень доходит до глаза, мягкая по краям,
+полной темноты у ноги ребра, бледнеет к глазу. DUnitX на 3.0.91 находит
+912 тестов.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7494,7 +7516,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Дальний план погони (3.0.88): конец тоннеля и город в кратере едут за дорогой каждый со своей скоростью - стена с дальним уступом медленно, ближние холмы быстро перед ней, тёмные в тоннеле и светлеющие по мере его ухода, город медленнее, хребет медленнее всех; солнце кодом под ними всеми, с тинтом, где перед ним купол; город зазеркален ради света; марева на этом экране нет | Levels.FarPlane.pas (`TFarPlaneDef`, `ReadFarPlane`) + Game.FarPlane.pas (`TFarPlane`) + Render.FarPlane.pas (`TFarPlanePainter`) + Levels.Defs.pas (`FarPlane`, `CheckFarPlane`) + Render.Dynamics.pas (`Draw` от `TSdlFPoint`) + Game.Moon.pas (`DrawBackdrop`, `SkyOrigin`, `HazeBackdrop`, тик и очистка) + bin/chase-backdrop.json + `farPlane` и `objectSets` в level2.json + chase-backdrop.mset + tools/chase (стенд) + Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md) |
 | Дрейфующие платформы погони и их аптечки (3.0.87): одинокие платформы и случайные подъёмы на высоту люка подаются из-за правого края по ходу дороги, едут влево и отпускаются за левым краем; аптечка на средней платформе одного подъёма из трёх уезжает со своей платформой | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, константы) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` с `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, дорога до платформ, `StandMedkitOn`) + `"drift": true` на пуле экрана 13 в level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | Клыки погони (3.0.89): отроги базальта едут между ближними холмами и дорогой, за игровым слоем, в основном низкие, изредка высокий, никогда два высоких на экране, тёмные в тоннеле | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (смещение клыков) + Game.Moon.pas (`DrawFangs`, тик и очистка) + `fangs` в bin/chase-backdrop.json + `s11-fang-*` в level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, этап 11b-2) |
-| Город погони в глубину и каркасы его куполов (3.0.90): здания едут по своим ступням, чем ближе, тем быстрее; рёбра каркасов кодом, дальняя половина за зданиями, ближняя поверх, кромка света к солнцу, блик поверх диска, солнце в тинте под каркасом | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` в bin/chase-backdrop.json + tools/chase/stand.template.html (эталон) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
+| Город погони в глубину и каркасы его куполов (3.0.90): здания едут по своим ступням, чем ближе, тем быстрее; рёбра каркасов кодом, дальняя половина за зданиями, ближняя поверх, кромка света к солнцу, блик поверх диска, солнце в тинте под каркасом; их длинные тени - мягкие мазки по полу и дальше по ближней земле, обрезанные у глаза (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` в bin/chase-backdrop.json + tools/chase/stand.template.html (эталон) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
 | Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Заряд формы в бою Тарана (3.0.85): шкала растёт от попаданий по охотнику и свиперу, поздно и неровными толчками, до 30% и 55%; смерть головы доливает остаток | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
