@@ -6,7 +6,9 @@ elements. The numbers are in `bin/chase-backdrop.json` - game data the
 level names in its `farPlane` section, and the very file the stand plays
 (moved there from `tools/chase/layout.json` with 3.0.88): what is tuned
 on the stand is what the game plays. The code: `Levels.FarPlane`,
-`Game.FarPlane`, `Render.FarPlane` (arena-3.md, "Stage 11b-1 as built").
+`Game.FarPlane`, `Render.FarPlane` (arena-3.md, "Stage 11b-1 as built"),
+the dome frames `Render.DomeFrames` (arena-3.md, "The city's frames as
+built").
 The numbers below are the ones after the live runs of 3.0.88 ("Decided
 2026-10-31, the far plane" in arena-3.md). The city was rebuilt on
 2026-11-01 ("The city" below, and "Decided 2026-11-01, the city" in
@@ -68,7 +70,7 @@ of them, and its stop stands them.
 |---|---|---|
 | sky | black, the sun and its halo (code) | 0 |
 | ridge | far crater rim, a seamless band, y 202-262 | 0.35 of the city |
-| city | crater floor band (`floor-tex`, y 238-320, its top faded over 16 units, its foot under the hills), the dome frames, the buildings, the rail, the outskirts | 0.5 of the tunnel while the cliff is in sight, then 3; a building k of it by its depth (on the stand) |
+| city | crater floor band (`floor-tex`, y 238-320, its top faded over 16 units, its foot under the hills), the dome frames, the buildings, the rail, the outskirts | 0.5 of the tunnel while the cliff is in sight, then 3; a building k of it by its depth |
 | tunnel | screen 13 and its far ledge, the cliff | 6 |
 | ground | the near hills (`sand-tex`, seamless, y 276 down), in front of the tunnel | 14 |
 | fangs | spurs of basalt at random, behind the play layer, from the start (`Game.Fangs`, arena-3.md "Stage 11b-2 as built") | 20 |
@@ -242,10 +244,21 @@ end to end, overlapping by 0.3. A tile hangs in the air, so its depth is
 given by `groundY` - the feet of the pylons - and the editor moves it along
 the street only. The train waits for the life of the city.
 
-**What the game plays until the frames are coded**: the buildings as
-elements of the city layer, flat - no parallax, no frames, no tint of the
-sun (no element tints it now). The camera, the frames and the kit are keys
-the game does not read.
+**What the game plays** (3.0.90): what the stand plays - the buildings in
+depth by their feet, the frames in two halves around them, the shadows,
+the glare, the sun tinted by the frames. The kit is a key the game does
+not read. The stand's switches (frames, shadows, glare, parallax) are the
+stand's alone: the game draws all of it.
+
+**The shadows as they are.** A shadow is a rib dropped onto the floor
+along the sun's light, and one end of it falling behind the eye drops the
+shadow whole - on the stand, and so in the game. The sun stands 30 units
+over the horizon at a focal length of 1024: a rib lifted more than about a
+fifth of the main dome's height throws its shadow behind the eye. So the
+main dome throws none, the satellite dome only those of its lowest ribs, at
+its foot; the long shadows toward the eye do not show. The points on the
+equator carry the noise of the arithmetic: the stand lets some of the
+chords along it throw a shadow onto themselves, the game none.
 
 ## The order of work
 
@@ -467,11 +480,10 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 
 ## Open
 
-- The frames in the game (3.0.90): a unit of their own for the ribs - strips
-  of triangles through `SDL_RenderGeometry`, the rim by vertex colour - and
-  the parallax of the buildings by their feet; the stand is the reference.
-  Whether a frame drawn by code lives beside the painted buildings is the
-  stand's question first.
+- The long shadows ("The shadows as they are"): cut at the eye rather than
+  dropped whole, the shadow of a rib would stream toward the bottom of the
+  screen, under the near hills - the long shadows toward the eye the frames
+  were meant to throw. On the stand first, then in the game.
 - The life of the city, a step after the frames: the neon of each piece
   found by its saturation and made to glow and flicker, lamps on the masts'
   tops, the train (`rail-train`) along the beam, into one station and out.
