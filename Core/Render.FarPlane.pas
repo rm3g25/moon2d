@@ -13,6 +13,11 @@
   end into the wall it continues, and their colour is the element's shade -
   the vertices carry it, so no colour mod of the shared cache is touched.
 
+  The city has a depth: a building rides by its feet, the nearer the
+  faster (TFarPlaneDef.ElementLeft). Its dome frames are code
+  (Render.DomeFrames): their shadows on the crater floor and their far half
+  go under the buildings, their near half and the sun's glare over them.
+
   While the screen's own backdrop covers the whole screen, nothing behind
   its layer is drawn: the arena before the chase costs one picture more,
   the cliff's end over the wall.
@@ -25,7 +30,7 @@ unit Render.FarPlane;
 interface
 
 uses
-  Sdl2.Core, Render.Sprites, Levels.FarPlane, Levels.Dynamics;
+  Sdl2.Core, Render.Sprites, Levels.FarPlane, Levels.Dynamics, Render.DomeFrames;
 
 type
   TFarPlanePainter = class
@@ -52,6 +57,8 @@ type
     FPictures: TArray<TArray<PSdlTexture>>;
     FPointGlow: PSdlTexture;
     FDiscGlow: PSdlTexture;
+    FFrames: TDomeFrames;
+    FFramePainter: TDomeFramePainter;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
@@ -63,7 +70,7 @@ type
     procedure DrawSun(const AOffsets: TFarPlaneOffsets);
     procedure DrawBand(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
     procedure DrawElement(const AElement: TFarPlaneElement;
-      ATexture: PSdlTexture; AOffset: Double; AColor: TSdlColor);
+      ATexture: PSdlTexture; ALeft: Double; AColor: TSdlColor);
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
       const ABackdrop: TBackdropView);
   public
@@ -162,10 +169,15 @@ begin
   end;
   FPointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
   FDiscGlow := CreateGlowShape(ARenderer, gsDisc, DiscGlowSide);
+  FFrames := TDomeFrames.Create(ADef);
+  FFramePainter := TDomeFramePainter.Create(ARenderer, ADef.Sun, FPointGlow);
 end;
 
 destructor TFarPlanePainter.Destroy;
 begin
+  // The frame painter borrows the point glow
+  FFramePainter.Free;
+  FFrames.Free;
   // A sprite the set lacks stops the constructor before the glows exist
   if Assigned(FPointGlow) then
     SDL_DestroyTexture(FPointGlow);
@@ -251,11 +263,7 @@ end;
 procedure TFarPlanePainter.DrawSun(const AOffsets: TFarPlaneOffsets);
 begin
   var Sun := FDef.Sun;
-  var Cover := FDef.SunCover(AOffsets);
-  var Color: TRgb;
-  Color.R := Round(Sun.White.R + (Sun.Tint.R - Sun.White.R) * Cover);
-  Color.G := Round(Sun.White.G + (Sun.Tint.G - Sun.White.G) * Cover);
-  Color.B := Round(Sun.White.B + (Sun.Tint.B - Sun.White.B) * Cover);
+  var Color := Sun.ColorAt(FDef.SunCover(AOffsets));
 
   DrawGlow(FRenderer, FPointGlow, Sun.X, Sun.Y, Sun.Halo * HaloGlareSize, Color,
     HaloGlareLevel);
@@ -341,39 +349,57 @@ begin
 end;
 
 procedure TFarPlanePainter.DrawElement(const AElement: TFarPlaneElement;
-  ATexture: PSdlTexture; AOffset: Double; AColor: TSdlColor);
+  ATexture: PSdlTexture; ALeft: Double; AColor: TSdlColor);
 var
-  Left, Height, Feather, FeatherShare: Double;
+  Height, Feather, FeatherShare: Double;
 begin
-  Left := AElement.X - AOffset;
-  if (Left >= FDef.ScreenWidth) or (Left + AElement.W <= 0) then
+  if (ALeft >= FDef.ScreenWidth) or (ALeft + AElement.W <= 0) then
     Exit;
   Height := AElement.W * TextureAspect(ATexture);
   Feather := Min(Double(AElement.FeatherLeft), Double(AElement.W));
   FeatherShare := Feather / AElement.W;
   var Top := AElement.Y - Height;
   if Feather > 0 then
-    AddQuad(FloatRect(Left, Top, Feather, Height),
+    AddQuad(FloatRect(ALeft, Top, Feather, Height),
       Across(AElement, 0, FeatherShare), AColor, QuadAlpha(0, 1, 1, 1));
-  AddQuad(FloatRect(Left + Feather, Top, AElement.W - Feather, Height),
+  AddQuad(FloatRect(ALeft + Feather, Top, AElement.W - Feather, Height),
     Across(AElement, FeatherShare, 1 - FeatherShare), AColor, QuadAlpha(1, 1, 1, 1));
   Flush(ATexture);
 end;
 
+// The city stands inside its frames: their shadows and far half before its
+// buildings, their near half and the glare after
 procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
   const ABackdrop: TBackdropView);
+var
+  Frames: TFrameView;
 begin
   var Layer := FDef.Layers[ALayer];
-  var Offset: Double := AOffsets[Layer.Motion];
   if Layer.Band.Present then
     DrawBand(ALayer, AOffsets);
+
+  var Framed := (Layer.Motion = fmCity) and FFrames.Present;
+  if Framed then
+  begin
+    Frames := FFrames.View(AOffsets[fmCity]);
+    FFramePainter.DrawShadows(Frames.Shadows);
+    FFramePainter.DrawRibs(Frames.Far);
+  end;
+
   for var j := 0 to High(Layer.Elements) do
   begin
     var Element := Layer.Elements[j];
+    var Left := FDef.ElementLeft(Layer, Element, AOffsets);
     if not Element.Backdrop then
-      DrawElement(Element, FPictures[ALayer][j], Offset, ShadeColor(Element.Shade))
+      DrawElement(Element, FPictures[ALayer][j], Left, ShadeColor(Element.Shade))
     else if ABackdrop.Texture <> nil then
-      DrawElement(Element, ABackdrop.Texture, Offset, TintColor(ABackdrop.Tint));
+      DrawElement(Element, ABackdrop.Texture, Left, TintColor(ABackdrop.Tint));
+  end;
+
+  if Framed then
+  begin
+    FFramePainter.DrawRibs(Frames.Near);
+    FFramePainter.DrawGlare(FDef.SunCover(AOffsets));
   end;
 end;
 

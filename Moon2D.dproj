@@ -188,6 +188,7 @@
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Objects.pas"/>
         <DCCReference Include="Core\Render.FarPlane.pas"/>
+        <DCCReference Include="Core\Render.DomeFrames.pas"/>
         <DCCReference Include="Core\Render.Puff.pas"/>
         <DCCReference Include="Core\Effects.Emitter.pas"/>
         <DCCReference Include="Core\Effects.Sparks.pas"/>

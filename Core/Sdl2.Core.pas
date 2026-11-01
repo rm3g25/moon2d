@@ -362,6 +362,10 @@ function SDL_RenderGeometry(ARenderer: PSdlRenderer; ATexture: PSdlTexture;
 function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
   AW, AH: Integer): Integer; cdecl;
   external SdlLib name 'SDL_RenderSetLogicalSize';
+// Pixels of the window to a logical unit, as the logical size has set them
+procedure SDL_RenderGetScale(ARenderer: PSdlRenderer;
+  AScaleX, AScaleY: PSingle); cdecl;
+  external SdlLib name 'SDL_RenderGetScale';
 // ARect in logical units, as a copy's destination; nil lets the drawing
 // land anywhere again
 function SDL_RenderSetClipRect(ARenderer: PSdlRenderer;

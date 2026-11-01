@@ -88,6 +88,7 @@
         <DCCReference Include="Game\Tests.Game.StoneTank.pas"/>
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
+        <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Game\Tests.Game.Fangs.pas"/>
         <DCCReference Include="Game\Tests.Game.Uptake.pas"/>
         <DCCReference Include="Game\Tests.Game.HeroOrbs.pas"/>

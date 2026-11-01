@@ -17,7 +17,18 @@
   the near ground, the tunnel, the city, the ridge; how fast each runs is
   Game.FarPlane's business. An element marked "existing" is the screen's
   own backdrop, riding with its layer. The keys only the stand reads (the
-  road's speed and ramp, the cliff's edge marks) are let be.
+  road's speed and ramp, the cliff's edge marks, the city's kit) are let
+  be.
+
+  The city has a depth. One camera ("camera": the crater floor's horizon,
+  the domes' base line, the focal length) sets how near a thing of it is
+  by its feet alone: the lower they stand, the nearer, and the faster it
+  rides - k times the layer, k = 1 at the base line. A picture's width in
+  the layout is already its width at its depth; a thing hanging in the air
+  gives the feet of what it stands on as "groundY". Without a camera the
+  city is flat. The dome frames ("frames") are geodesic half-ellipsoids
+  drawn by code over that camera (Render.DomeFrames); one marked tintsSun
+  turns the sun while it stands before it, as an element marked so does.
 
   The fangs are no layer: separate pictures of basalt rising from below
   the bottom edge, riding by on a motion of their own between the near
@@ -53,6 +64,29 @@ type
     White, Tint: TRgb;
     // Over how many units at each end of a dome the sun turns its colour
     TintRamp: Single;
+    // From white (0) to the tint (1), as far as the domes before it turn it
+    function ColorAt(ACover: Single): TRgb;
+  end;
+
+  TFarPlaneCamera = record
+    Present: Boolean;
+    // y down: where the crater floor meets the sky, and the line the domes
+    // stand on
+    Horizon, BaseY: Single;
+    // Units
+    Focal: Single;
+  end;
+
+  // A dome frame drawn by code: X its left edge along the city's layer, W
+  // and H its size at the base line
+  TDomeFrame = record
+    Id: string;
+    X, W, H: Single;
+    // How many times each side of the icosahedron is cut
+    Frequency: Integer;
+    // The thickness of a rib, units
+    Rib: Single;
+    TintsSun: Boolean;
   end;
 
   // Units a second; the shares are of another layer's speed
@@ -87,6 +121,8 @@ type
   TFarPlaneElement = record
     Id: string;
     X, Y, W, H: Single;
+    // Where its nearness is read: its feet, or the feet of what it hangs on
+    DepthY: Single;
     // 0..1, how much of its colour the picture keeps
     Shade: Single;
     TintsSun: Boolean;
@@ -138,10 +174,21 @@ type
     ScreenWidth, ScreenHeight: Single;
     Sun: TFarPlaneSun;
     Speeds: TFarPlaneSpeeds;
+    Camera: TFarPlaneCamera;
+    // Ride with the city's layer
+    Frames: TArray<TDomeFrame>;
     // Back to front
     Layers: TArray<TFarPlaneLayer>;
     Fangs: TFarPlaneFangs;
     function Present: Boolean;
+    // How near a thing of the city whose feet stand at AY is, the domes'
+    // centres 1: it rides that share of its layer's speed
+    function Nearness(AY: Single): Single;
+    // Where an element's left edge stands on the screen. One of the city
+    // brings its centre to the middle of the screen when its layer has
+    // ridden it there, and drifts from it Nearness times as fast
+    function ElementLeft(const ALayer: TFarPlaneLayer;
+      const AElement: TFarPlaneElement; const AOffsets: TFarPlaneOffsets): Double;
     // The length of the city's layer: where the strip ends
     function CityLength: Single;
     // Where the tunnel's last element ends along its layer: once that is
@@ -165,7 +212,8 @@ type
 // The "farPlane" section of a level and its layout; absent = no far plane.
 // ALevelDir - where the layout lies. A layout that is missing or does not
 // read, a layer of an unknown speed, an element without width, a city
-// without length and fangs that cannot be scattered raise.
+// without length, fangs that cannot be scattered, a camera that sees no
+// depth and a frame without size or without a camera raise.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -186,10 +234,27 @@ resourcestring
   SFarPlaneBadFang = 'Level "%s": fang "%s" is %g by %g units';
   SFarPlaneBadRange = 'Level "%s": fangs "%s" takes two numbers, the least first';
   SFarPlaneBadScale = 'Level "%s": fangs "scale" must be above zero';
+  SFarPlaneBadCamera = 'Level "%s": the camera of its far plane needs its base line '
+    + 'below the horizon and a focal length above zero';
+  SFarPlaneBadFrame = 'Level "%s": frame "%s" needs a size, a frequency of 1 '
+    + 'or more and a rib above zero';
+  SFarPlaneFramesNoCamera = 'Level "%s": its far plane has frames and no camera';
 
 const
   FullShade = 1.0;
   NoBandStart = -1;
+  // The stand's floor: a thing far back on the horizon still rides
+  LeastNearness = 0.05;
+  // As the stand draws a frame missing them
+  DefaultFrequency = 3;
+  DefaultRib = 2;
+
+function TFarPlaneSun.ColorAt(ACover: Single): TRgb;
+begin
+  Result.R := Round(White.R + (Tint.R - White.R) * ACover);
+  Result.G := Round(White.G + (Tint.G - White.G) * ACover);
+  Result.B := Round(White.B + (Tint.B - White.B) * ACover);
+end;
 
 function TFarPlaneDef.Present: Boolean;
 begin
@@ -216,8 +281,16 @@ begin
       end;
 end;
 
+// How far inside a span the sun stands, ramped in over TintRamp at each end
+function SpanCover(const ASun: TFarPlaneSun; ALeft, AWidth: Double): Single;
+begin
+  var FromLeftEdge: Double := ASun.X - ALeft;
+  var ToRightEdge: Double := ALeft + AWidth - ASun.X;
+  Result := EnsureRange(Min(FromLeftEdge, ToRightEdge) / ASun.TintRamp, 0.0, 1.0);
+end;
+
 // Deepest of the domes: the sun is as covered as the dome it is furthest
-// inside, ramped in over TintRamp at each end of its span
+// inside
 function TFarPlaneDef.SunCover(const AOffsets: TFarPlaneOffsets): Single;
 begin
   Result := 0;
@@ -225,15 +298,32 @@ begin
     Exit;
   for var Layer in Layers do
     for var Element in Layer.Elements do
-    begin
-      if not Element.TintsSun then
-        Continue;
-      var Left: Double := Element.X - AOffsets[Layer.Motion];
-      var FromLeftEdge: Double := Sun.X - Left;
-      var ToRightEdge: Double := Left + Element.W - Sun.X;
-      var Share: Single := EnsureRange(Min(FromLeftEdge, ToRightEdge) / Sun.TintRamp, 0.0, 1.0);
-      Result := Max(Result, Share);
-    end;
+      if Element.TintsSun then
+        Result := Max(Result,
+          SpanCover(Sun, Element.X - AOffsets[Layer.Motion], Element.W));
+  for var Frame in Frames do
+    if Frame.TintsSun then
+      Result := Max(Result, SpanCover(Sun, Frame.X - AOffsets[fmCity], Frame.W));
+end;
+
+function TFarPlaneDef.Nearness(AY: Single): Single;
+begin
+  if not Camera.Present then
+    Exit(1);
+  Result := (AY - Camera.Horizon) / (Camera.BaseY - Camera.Horizon);
+  if Result < LeastNearness then
+    Result := LeastNearness;
+end;
+
+function TFarPlaneDef.ElementLeft(const ALayer: TFarPlaneLayer;
+  const AElement: TFarPlaneElement; const AOffsets: TFarPlaneOffsets): Double;
+begin
+  var Offset: Double := AOffsets[ALayer.Motion];
+  if ALayer.Motion <> fmCity then
+    Exit(AElement.X - Offset);
+  var Middle: Double := ScreenWidth / 2;
+  var Centre: Double := AElement.X + AElement.W / 2;
+  Result := Middle + (Centre - Offset - Middle) * Nearness(AElement.DepthY) - AElement.W / 2;
 end;
 
 function TFarPlaneDef.TunnelPassed(const AOffsets: TFarPlaneOffsets): Single;
@@ -354,6 +444,7 @@ begin
   Result.H := AObj.GetValue<Double>('h', 0);
   if Result.W <= 0 then
     raise EFarPlaneError.CreateFmt(SFarPlaneBadElement, [ALevelId, Result.Id, Result.W]);
+  Result.DepthY := AObj.GetValue<Double>('groundY', Result.Y);
   Result.Shade := EnsureRange(AObj.GetValue<Double>('shade', FullShade), 0.0, 1.0);
   Result.TintsSun := AObj.GetValue<Boolean>('tintsSun', False);
   Result.FeatherLeft := AObj.GetValue<Double>('featherLeft', 0);
@@ -426,6 +517,47 @@ begin
   Result.TintJitter := Obj.GetValue<Integer>('tintJitter', 0);
 end;
 
+function ReadCamera(const ARoot: TJSONObject; const ALevelId: string): TFarPlaneCamera;
+var
+  Obj: TJSONObject;
+begin
+  Result := Default(TFarPlaneCamera);
+  if not ARoot.TryGetValue<TJSONObject>('camera', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Horizon := Obj.GetValue<Double>('horizon');
+  Result.BaseY := Obj.GetValue<Double>('baseY');
+  Result.Focal := Obj.GetValue<Double>('focal');
+  if (Result.BaseY <= Result.Horizon) or (Result.Focal <= 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadCamera, [ALevelId]);
+end;
+
+function ReadFrame(const AObj: TJSONObject; const ALevelId: string): TDomeFrame;
+begin
+  Result.Id := AObj.GetValue<string>('id');
+  Result.X := AObj.GetValue<Double>('x');
+  Result.W := AObj.GetValue<Double>('w', 0);
+  Result.H := AObj.GetValue<Double>('h', 0);
+  Result.Frequency := AObj.GetValue<Integer>('frequency', DefaultFrequency);
+  Result.Rib := AObj.GetValue<Double>('rib', DefaultRib);
+  Result.TintsSun := AObj.GetValue<Boolean>('tintsSun', False);
+  var HasSize := (Result.W > 0) and (Result.H > 0);
+  if not HasSize or (Result.Frequency < 1) or (Result.Rib <= 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadFrame, [ALevelId, Result.Id]);
+end;
+
+function ReadFrames(const ARoot: TJSONObject; const ALevelId: string): TArray<TDomeFrame>;
+var
+  Obj: TJSONObject;
+  Items: TJSONArray;
+begin
+  Result := [];
+  if ARoot.TryGetValue<TJSONObject>('frames', Obj) and
+    Obj.TryGetValue<TJSONArray>('items', Items) then
+    for var Item in Items do
+      Result := Result + [ReadFrame(Item as TJSONObject, ALevelId)];
+end;
+
 function ReadLayout(const AFileName, ALevelId: string): TFarPlaneDef;
 begin
   Result := Default(TFarPlaneDef);
@@ -441,6 +573,8 @@ begin
     Result.ScreenHeight := ScreenObj.GetValue<Double>('h');
     Result.Sun := ReadSun(Root.GetValue<TJSONObject>('sun'), ALevelId);
     Result.Speeds := ReadSpeeds(Root.GetValue<TJSONObject>('speeds'));
+    Result.Camera := ReadCamera(Root, ALevelId);
+    Result.Frames := ReadFrames(Root, ALevelId);
     for var Item in Root.GetValue<TJSONArray>('layers') do
       Result.Layers := Result.Layers + [ReadLayer(Item as TJSONObject, ALevelId)];
     Result.Fangs := ReadFangs(Root, ALevelId);
@@ -449,6 +583,8 @@ begin
   end;
   if Result.CityLength <= 0 then
     raise EFarPlaneError.CreateFmt(SFarPlaneNoCity, [ALevelId]);
+  if (Length(Result.Frames) > 0) and not Result.Camera.Present then
+    raise EFarPlaneError.CreateFmt(SFarPlaneFramesNoCamera, [ALevelId]);
 end;
 
 function ReadFarPlane(const ARoot: TJSONObject;

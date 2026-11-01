@@ -36,6 +36,7 @@ uses
   Render.Tiles in 'Core\Render.Tiles.pas',
   Render.Objects in 'Core\Render.Objects.pas',
   Render.FarPlane in 'Core\Render.FarPlane.pas',
+  Render.DomeFrames in 'Core\Render.DomeFrames.pas',
   Render.Puff in 'Core\Render.Puff.pas',
   Effects.Emitter in 'Core\Effects.Emitter.pas',
   Effects.Sparks in 'Core\Effects.Sparks.pas',

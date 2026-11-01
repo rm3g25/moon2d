@@ -21,13 +21,13 @@
     "tintInTunnel": [35, 33, 37], "tint": [55, 52, 56], "tintJitter": 4
   },
   "camera": {
-    "about": "One camera for the city: the crater floor's horizon and the base line of the domes, the focal length in units. A thing whose feet stand at y is k = (y - horizon) / (baseY - horizon) as near as the domes' centres: drawn k times their size and riding k times their speed, so the lower its feet, the nearer and the faster; a thing hanging in the air (the monorail's beam) gives the feet of what it stands on as groundY. The stand plays it; the game does not yet.",
+    "about": "One camera for the city: the crater floor's horizon and the base line of the domes, the focal length in units. A thing whose feet stand at y is k = (y - horizon) / (baseY - horizon) as near as the domes' centres: drawn k times their size and riding k times their speed, so the lower its feet, the nearer and the faster; a thing hanging in the air (the monorail's beam) gives the feet of what it stands on as groundY. The stand and the game play it.",
     "horizon": 238,
     "baseY": 266,
     "focal": 1024
   },
   "frames": {
-    "about": "The dome frames, drawn by code: geodesic half-ellipsoids, x the left edge along the city layer, w the width and h the height at the base line, frequency how finely the icosahedron is cut, rib the thickness of a rib in units. Their far half is drawn behind the buildings, the near half over them. The stand plays them; the game does not yet.",
+    "about": "The dome frames, drawn by code: geodesic half-ellipsoids, x the left edge along the city layer, w the width and h the height at the base line, frequency how finely the icosahedron is cut, rib the thickness of a rib in units. Their far half is drawn behind the buildings, the near half over them. The stand and the game play them.",
     "items": [
       { "id": "dome-main", "x": 468, "w": 512, "h": 170, "frequency": 4, "rib": 2.2, "tintsSun": true },
       { "id": "dome-sat", "x": 1300, "w": 360, "h": 115, "frequency": 3, "rib": 2.6, "tintsSun": true }
