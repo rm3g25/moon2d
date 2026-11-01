@@ -248,7 +248,9 @@ the street only. The train waits for the life of the city.
 depth by their feet, the frames in two halves around them, the shadows,
 the glare, the sun tinted by the frames. The kit is a key the game does
 not read. The stand's switches (frames, shadows, glare, parallax) are the
-stand's alone: the game draws all of it.
+stand's alone: the game draws all of it. Since 3.0.92 it plays the life
+of the city too - the lights, the emblem, its paint, the beacons, tick for
+tick (arena-3.md, "The city's life as built").
 
 **The shadows** (3.0.91). A shadow is a rib dropped onto the floor along
 the sun's light. The sun stands 30 units over the horizon at a focal

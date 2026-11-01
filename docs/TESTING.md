@@ -73,7 +73,7 @@ Tests\
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
-    Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the layout read
+    Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
@@ -83,6 +83,8 @@ Tests\
     Tests.Hud.Energy.pas   the reading of the gauge, and the energy action
   Levels\
     Tests.Levels.Carousels.pas
+    Tests.Levels.CityLife.pas  the clock of the chase city's lights, against
+                               tables made by the stand's own functions
     Tests.Levels.Doors.pas     the doors a level shuts
     Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust,
                                the convoy, the searchlight
@@ -113,7 +115,7 @@ Tests\
     Tests.Pads.Stray.pas
     Tests.Pads.World.pas    the dormant pad, and the pad the game puts to sleep
   Render\
-    Tests.Render.DomeFrames.pas  the geometry of the chase city's dome frames
+    Tests.Render.DomeFrames.pas  the geometry of the chase city's dome frames and their beacons
   Scenes\
     Tests.Scenes.Director.pas
   Sprites\

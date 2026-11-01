@@ -103,6 +103,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.FarPlane` (дальний план погони
 данными: над `Render.Brush` ради цветов его солнца) /
+`Levels.CityLife` (часы огней города погони, 3.0.92: над
+`Levels.FarPlane`) /
 `Levels.Events` (над `Monsters.Defs`
 ради тактики, которую ставит событие, и стороны, с которой входит тело, и
 над `Levels.Pads` ради программ полок и порядков банков, которые
@@ -143,10 +145,11 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Monsters` (оба тоже над `Pads.World`; `Monsters` - над `Levels.Events`
 ради приказов телу, которое впускает событие) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.DomeFrames` (каркасы куполов города погони, 3.0.90: над
-`Levels.FarPlane`, `Render.Brush` и `Render.Glow`) /
+`Levels.FarPlane`, `Render.Brush` и `Render.Glow`; зёрна маячков из
+`Levels.CityLife`) /
 `Render.FarPlane` (над `Levels.FarPlane`, видом задника из
-`Levels.Dynamics`, `Render.Sprites` и `Render.DomeFrames`; солнце через
-`Render.Glow`) /
+`Levels.Dynamics`, `Render.Sprites` и `Render.DomeFrames`; солнце и огни
+города через `Render.Glow`, их уровни из `Levels.CityLife`) /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
 `Levels.Dynamics` и `Monsters.Defs`) / `Game.Blasts` (волна взрыва: над
 `Monsters.Defs`, `Effects.Sparks` ради типа щупа и `Sdl2.Core`) /
@@ -414,7 +417,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   столько, сколько пробежала дорога погони, по кругу ширины экрана, - и
   ещё раз на экран левее, если он свисает за правый край.
 
-### `Core/Render.FarPlane.pas` (~450 строк, 3.0.91)
+### `Core/Render.FarPlane.pas` (~695 строк, 3.0.92)
 - **`TFarPlanePainter`** - рисует дальний план погони (`Levels.FarPlane`)
   там, куда его увели смещения, вместо задника экрана: чёрное небо,
   солнце, потом слои от дальнего к ближнему - у каждого своя полоса,
@@ -455,8 +458,24 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   (`FFrameView`); `DrawFrameShadows(top, bottom)` рисует их во всю ширину
   экрана с обрезкой - на полосе города перед дальней половиной и на слое с
   движением `fmGround` после его полосы, от её верха до низа экрана.
+- 3.0.92, **жизнь города**: `Draw(offsets, tick, backdrop)` - тик это
+  часы дальнего плана (`TFarPlane.Clock`). `DrawElement` говорит, стояло
+  ли здание на экране; после каждого такого здания города - `DrawLife`:
+  его краска (`DrawPaint` - `tek-paint` по его `Paint`, в тени здания,
+  зеркало сдвигает её и никогда не переворачивает), его огни (`DrawLight`
+  по `LightsOf`, зерно - `LightSeed`: место здания в слое и огня в куске;
+  лампа мигает как маячок; вывеска - точечное свечение, полоса и окно -
+  лучевое, `gsBeam` 128, новое; ореол, выросший на `HaloPad` по близости
+  здания, потом ядро, на `NeonLevel`, `WindowLevel` или 1), потом
+  эмблема, если она стоит на этом здании (`DrawEmblem` - металл
+  `tek-emblem` в своей тени на шпиле, трубки `tek-N` и их свечения
+  `tek-N-halo` прибавляются её цветом на `EmblemPartLevel`). Маячки
+  каркасов (`DrawBeacons`, `DrawBeacon`: ореол на половине уровня, потом
+  ядро) - после дальней половины и после ближней. Картинки эмблемы - из
+  набора (`LoadEmblem`), сложение и фильтр (`MakeLight`); `tek-paint` -
+  только если на каком-то здании есть краска (`HasPaint`).
 
-### `Core/Render.DomeFrames.pas` (~800 строк, 3.0.91)
+### `Core/Render.DomeFrames.pas` (~935 строк, 3.0.92)
 Каркасы куполов города погони (`docs/mechanics/chase-backdrop.md`, "The
 city"): геодезические полуэллипсоиды, нарисованные кодом через камеру
 города, едут с городом мимо неподвижного солнца. Эталон - стенд
@@ -511,6 +530,13 @@ city"): геодезические полуэллипсоиды, нарисов�
   ширину и 0.35 его к солнцу, не тоньше пикселя. `Flush` ставит blend
   рисования - лента без текстуры берёт его, а небо оставляет none - и
   рисует проход одним вызовом; буферы растут и хранятся.
+- 3.0.92, **маячки**: **`TFrameBeacon`** - `At`, `Nearness`, `Seed`;
+  `TFrameView.FarBeacons` и `NearBeacons`. `Create` для каркаса с
+  `Beacons` берёт каждый конец ребра выше экватора по разу, выше
+  `BeaconsAbove` его высоты (`BeaconNodes`, `TBeaconNode`), его зерно -
+  `BeaconSeed(frame, x, z)`, по месту, а не по порядку узлов. `View`
+  проецирует их вместе с каркасом (`AddBeacons`), дальние (Z больше 0)
+  отдельно от ближних.
 
 ### `Core/Render.Dynamics.pas` (~515 строк)
 - **`TDynamicScreenRenderer`** - выводит динамические объекты уровня
@@ -1035,7 +1061,7 @@ city"): геодезические полуэллипсоиды, нарисов�
   (`SLevelFarPlaneBadScreen`) и набору, которого нет в `objectSets`
   уровня (`SLevelFarPlaneNoSet`).
 
-### `Core/Levels.FarPlane.pas` (~605 строк, 3.0.88)
+### `Core/Levels.FarPlane.pas` (~965 строк, 3.0.92)
 Дальний план погони данными (`docs/mechanics/chase-backdrop.md`): лента
 слоёв, уезжающих влево за игровым слоем каждый со своей скоростью, и
 солнце под ними всеми. Уровень называет экран и layout в секции
@@ -1094,6 +1120,47 @@ city"): геодезические полуэллипсоиды, нарисов�
   Камера, у которой линия основания не ниже горизонта или нет фокусного,
   каркас без размера, частота меньше 1 или ребро 0, и каркасы без камеры
   падают.
+- 3.0.92, **жизнь города**: **`TPictureBox`** - `U`, `V`, `W`, `H`, доли
+  картинки. **`TCityLights`** (`cityLights`) - `Present`, `Looks` по
+  `TCityGlowKind` (окно, неон, полоса: `TCityGlowLook` - ядро и ореол от
+  коробки, `HaloPad`, уровни), `Flicker` (`TCityFlicker` - часы вывесок в
+  тиках; доли в Double, с ними сравнивают кости), `Windows`
+  (`TCityWindows`), `Pieces` (`TCityPieceLights` - огни куска
+  `TCityLight`: `TCityLightKind`, `Box`, `Color`); `LightsOf(piece)`,
+  `HasLamps`. **`TCityEmblem`** (`emblem`) - `Piece` (его `on`), `AtU`,
+  `AtV`, `W`, `Aspect`, `Shade`, `Color`, уровни, `FaultShare`, тики
+  перезажигания, темноты и частей, `Parts` и `Halos`.
+  **`TCityBeacons`** (`beacons`). `Beacons` и `BeaconsAbove` каркаса
+  (`beaconsAbove`); `Paint` элемента (**`TElementPaint`**). Падают: огонь
+  неизвестного вида, коробка не из четырёх чисел или меньше нуля, диапазон
+  целых не по порядку или ниже своего минимума (часы без тиков никогда не
+  кончат свой отрезок), краска без ширины, эмблема без частей, ореола к
+  каждой, ширины и пропорции; и (`CheckCityLife`) лампы или маячки
+  каркаса без `beacons`, эмблема без `cityLights`. `SFarPlaneBadColor`
+  теперь про любой цвет, не только солнца.
+
+### `Core/Levels.CityLife.pas` (~270 строк, 3.0.92)
+Насколько ярок каждый огонь города погони на тике часов дальнего плана
+(`docs/mechanics/chase-backdrop.md`, от "The lights" до "The beacons").
+Без SDL. Кости стенда до бита: его функции с теми же именами - эталон,
+ключ в ключ.
+- **`Mix`** - lowbias32 (`MulLow32` умножает половинами, и ни один шаг не
+  переполняется в сборках с проверками). **`Roll(seed, key)`** - 0..1 из
+  `Mix(Mix(seed) xor key)`; **`RollRange`**, **`RollInt`** (произведение
+  сначала в Double, потом `Floor`: расширенная точность FPU разошлась бы
+  с double стенда на волосок под целым). **`LightSeed(element, light)`**.
+- **`NeonLevel(flicker, seed, tick, faultShare)`** - дыхание и окна
+  времени, доля которых несёт сбой: провалы до `FaultLow` и обратно
+  (`Alternate`). **`WindowLevel(lights, seed, tick)`** - отрезки, `OnShare`
+  из них горят, включённое окно схватывается за первые четыре тика.
+  **`EmblemCycle(emblem, tick)`** (`TEmblemCycle` - `Index`, `Start`;
+  первый начался так давно, что на старте вывеска горит) и
+  **`EmblemPartLevel(emblem, flicker, part, tick)`** - темно, потом части
+  по очереди, каждая схватывается 2-5 провалами по 2-4 тика, потом мигание
+  вывески на `FaultShare` эмблемы. **`BeaconSeed(frame, x, z)`** - по
+  месту узла с точностью до тысячной, половина вверх, как `Math.round`
+  (`NodeKey`); **`BeaconLevel`** - вспышка на `FlashTicks` раз за период,
+  между ними тлеет.
 
 ### `Core/Effects.Emitter.pas` (~105 строк)
 - **`TParticle`** (запись) - место, скорость (единиц за тик), угол и
@@ -5391,7 +5458,7 @@ SDL.
   `Speed`); `Speed` (сколько дорога ушла влево за тик), `Travel`,
   `TravelAt(alpha)` (между тиками), `Running`.
 
-### `Game/Game.FarPlane.pas` (~150 строк, 3.0.88)
+### `Game/Game.FarPlane.pas` (~170 строк, 3.0.92)
 Сколько проехал каждый слой дальнего плана погони
 (`docs/mechanics/chase-backdrop.md`), по правилам стенда, тик в тик. Не
 знает ни ленты, ни героя, ни SDL.
@@ -5410,6 +5477,9 @@ SDL.
   `TunnelSpeed`, `CitySpeed`.
 - 3.0.89: движение клыков (`fmFangs`) на `Speeds.Fangs`, умноженной на
   долю ленты, как земля - без выхода на круиз и без тормоза.
+- 3.0.92: **`Clock`** - часы города (`Levels.CityLife`): тик стенда, у
+  которого дорога трогается на втором тике, до того 0; идут дальше, когда дорога
+  встала, стоят с дальним планом на вдохе сброса; `Clear` их сбрасывает.
 
 ### `Game/Game.Fangs.pas` (~235 строк, 3.0.89)
 Клыки погони (`docs/mechanics/arena-3.md`, "Stage 11b-2 as built"):
@@ -6414,6 +6484,8 @@ SDL.
   **`DrawFangs(alpha)`** - на экране дальнего плана, после `dlSky`
   динамики (дальний уступ) и до `dlAloft` (шаттл) и игрового слоя; стоят,
   пока мир трясёт, как дальний план.
+- 3.0.92: `DrawBackdrop` отдаёт художнику часы дальнего плана
+  (`FFarPlane.Clock`) для огней города.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -6812,6 +6884,22 @@ pace в `Tests.Levels.Scenes`, `shiftX` в `Tests.Levels.Entities`,
 горизонтом и глазом; новые - тень доходит до глаза, мягкая по краям,
 полной темноты у ноги ребра, бледнеет к глазу. DUnitX на 3.0.91 находит
 912 тестов.
+3.0.92 - ещё 36. Новый `Levels/Tests.Levels.CityLife` (`TCityLifeTests`
+18): хэш, бросок и зёрна против чисел стенда; вывеска, окно, рама и малый
+треугольник эмблемы и маячок - тик в тик против таблиц, снятых
+собственными функциями стенда под node на числах самих тестов: каждый
+тик, где уровень меняется, уровень там и сумма за прогон; бросок в своих
+границах, дыхание в своей глубине, окна горят около своей доли, эмблема
+горит на старте и рама схватывается первой, вспышка своей длины, зерно
+узла по месту с половиной вверх. `Tests.Game.FarPlane` 14: часы (стоят до
+дороги, считают с её первого тика, идут дальше, когда она встала,
+сбрасываются Clear); уровень 2 читает жизнь своего города; огонь
+неизвестного вида, короткая коробка, отрезок без тиков, краска без
+ширины, эмблема без частей или без ореола, лампы или маячки каркаса без
+маячков, эмблема без огней города - падают. `Tests.Render.DomeFrames` 4
+(22): без доли маячков нет; маячки на узлах стенда (его зёрна для двух
+каркасов); дальние позади, ближние впереди; едут с городом. DUnitX на
+3.0.92 находит 948 тестов.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7517,6 +7605,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Дрейфующие платформы погони и их аптечки (3.0.87): одинокие платформы и случайные подъёмы на высоту люка подаются из-за правого края по ходу дороги, едут влево и отпускаются за левым краем; аптечка на средней платформе одного подъёма из трёх уезжает со своей платформой | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, константы) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` с `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, дорога до платформ, `StandMedkitOn`) + `"drift": true` на пуле экрана 13 в level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | Клыки погони (3.0.89): отроги базальта едут между ближними холмами и дорогой, за игровым слоем, в основном низкие, изредка высокий, никогда два высоких на экране, тёмные в тоннеле | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (смещение клыков) + Game.Moon.pas (`DrawFangs`, тик и очистка) + `fangs` в bin/chase-backdrop.json + `s11-fang-*` в level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, этап 11b-2) |
 | Город погони в глубину и каркасы его куполов (3.0.90): здания едут по своим ступням, чем ближе, тем быстрее; рёбра каркасов кодом, дальняя половина за зданиями, ближняя поверх, кромка света к солнцу, блик поверх диска, солнце в тинте под каркасом; их длинные тени - мягкие мазки по полу и дальше по ближней земле, обрезанные у глаза (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` в bin/chase-backdrop.json + tools/chase/stand.template.html (эталон) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
+| Жизнь города погони (3.0.92): мигают вывески, просыпаются окна, красные лампы на мачтах, неоновая эмблема TeK на центральном шпиле гаснет и зажигается заново по частям, эмблема старой краской на двух стенах, красные маячки на верхних узлах каркасов - тик в тик как на стенде | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Заряд формы в бою Тарана (3.0.85): шкала растёт от попаданий по охотнику и свиперу, поздно и неровными толчками, до 30% и 55%; смерть головы доливает остаток | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |

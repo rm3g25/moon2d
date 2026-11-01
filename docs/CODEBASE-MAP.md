@@ -102,6 +102,8 @@ Dependency direction (roughly bottom-up):
 `Game.Bonus` / `Game.Space` / `Localization` / `Render.Brush` ->
 `Monsters.Defs` -> `Levels.Tint` / `Levels.FarPlane` (the far plane of a
 chase as data: over `Render.Brush` for the colours of its sun) /
+`Levels.CityLife` (the clock of the chase city's lights, 3.0.92: over
+`Levels.FarPlane`) /
 `Levels.Events` (over `Monsters.Defs`
 for the tactics an event sets and the side a body comes in from, and over
 `Levels.Pads` for the shelf programs and bank orders an event tells) / `Effects.Emitter` / `Render.Puff` /
@@ -141,10 +143,12 @@ window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
 `Monsters` (both over `Pads.World` too; `Monsters` over `Levels.Events`
 for the orders of a body an event lets in) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.DomeFrames` (the dome frames of a chase's city, 3.0.90: over
-`Levels.FarPlane`, `Render.Brush` and `Render.Glow`) /
+`Levels.FarPlane`, `Render.Brush` and `Render.Glow`; the beacons' seeds
+from `Levels.CityLife`) /
 `Render.FarPlane` (over `Levels.FarPlane`, the backdrop view of
-`Levels.Dynamics`, `Render.Sprites` and `Render.DomeFrames`; the sun
-through `Render.Glow`) /
+`Levels.Dynamics`, `Render.Sprites` and `Render.DomeFrames`; the sun and
+the city's lights through `Render.Glow`, their levels from
+`Levels.CityLife`) /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
 explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
@@ -409,7 +413,7 @@ screen dump of `Game.Moon`.
   run, wrapped round the screen's width - and once more a screen to the
   left when it hangs over the right edge.
 
-### `Core/Render.FarPlane.pas` (~450 lines, 3.0.91)
+### `Core/Render.FarPlane.pas` (~695 lines, 3.0.92)
 - **`TFarPlanePainter`** - draws the far plane of a chase
   (`Levels.FarPlane`) where its offsets have taken it, in place of the
   screen's backdrop: the black sky, the sun, then the layers back to
@@ -451,8 +455,25 @@ screen dump of `Game.Moon`.
   across the screen - on the city's band before its far half, and on the
   layer of motion `fmGround` after its band, from its top to the bottom of
   the screen.
+- 3.0.92, **the life of the city**: `Draw(offsets, tick, backdrop)` - the
+  tick is the far plane's clock (`TFarPlane.Clock`). `DrawElement` says
+  whether the building stood on the screen; after each one of the city
+  that did, `DrawLife`: its paint (`DrawPaint` - `tek-paint` at its
+  `Paint`, at the building's shade, moved and never turned by a mirror),
+  its lights (`DrawLight` over `LightsOf`, seeded by `LightSeed` - its
+  place in the layer, the light's in its piece: a lamp blinks as a beacon;
+  a sign is a point glow, a strip or a window a beam glow - `gsBeam` 128,
+  new - a halo grown by `HaloPad` at the building's nearness, then a core,
+  at `NeonLevel`, `WindowLevel` or 1), then the emblem if it stands on that
+  building (`DrawEmblem` - the metal `tek-emblem` at its shade on the tip,
+  the tubes `tek-N` and their glows `tek-N-halo` added in its colour at
+  `EmblemPartLevel`). The frames' beacons (`DrawBeacons`, `DrawBeacon`: a
+  halo at half the level, then a core) after the far half and after the
+  near half. The emblem's pictures come from the set (`LoadEmblem`), set
+  to add and filtered (`MakeLight`); `tek-paint` only when a building
+  wears paint (`HasPaint`).
 
-### `Core/Render.DomeFrames.pas` (~800 lines, 3.0.91)
+### `Core/Render.DomeFrames.pas` (~935 lines, 3.0.92)
 The dome frames of a chase's city (`docs/mechanics/chase-backdrop.md`,
 "The city"): geodesic half-ellipsoids drawn by code through the city's
 camera, riding with the city past the fixed sun. The stand
@@ -508,6 +529,13 @@ camera, riding with the city past the fixed sun. The stand
   least a pixel. `Flush` sets the draw blend - a strip with no texture
   takes it, and the sky leaves it at none - and draws a pass in one call;
   the buffers grow and are kept.
+- 3.0.92, **the beacons**: **`TFrameBeacon`** - `At`, `Nearness`, `Seed`;
+  `TFrameView.FarBeacons` and `NearBeacons`. `Create` keeps, for a frame
+  with `Beacons`, every end of an edge above the equator once, above
+  `BeaconsAbove` of its height (`BeaconNodes`, `TBeaconNode`), its seed
+  `BeaconSeed(frame, x, z)` - by its place, not the order of the nodes.
+  `View` projects them with the frame (`AddBeacons`), the far ones (Z over
+  0) apart from the near.
 
 ### `Core/Render.Dynamics.pas` (~515 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
@@ -1019,7 +1047,7 @@ Level data model + JSON parser. No game logic.
   refuses a screen past the level's (`SLevelFarPlaneBadScreen`) and a set
   the level's `objectSets` do not list (`SLevelFarPlaneNoSet`).
 
-### `Core/Levels.FarPlane.pas` (~605 lines, 3.0.88)
+### `Core/Levels.FarPlane.pas` (~965 lines, 3.0.92)
 The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
 strip of layers riding left behind the play layer at speeds of their own,
 and a sun under them all. A level names the screen and the layout in its
@@ -1082,6 +1110,49 @@ No SDL.
   tint. A camera whose base line is not below its horizon or without a
   focal length, a frame without a size, a frequency under 1 or a rib of 0,
   and frames without a camera raise.
+- 3.0.92, **the life of the city**: **`TPictureBox`** - `U`, `V`, `W`,
+  `H`, shares of a picture. **`TCityLights`** (`cityLights`) -
+  `Present`, `Looks` by `TCityGlowKind` (window, neon, strip:
+  `TCityGlowLook` - the core and the halo scaled from the box, `HaloPad`,
+  the levels), `Flicker` (`TCityFlicker` - the signs' clock in ticks; its
+  shares are Double, the dice are compared with them), `Windows`
+  (`TCityWindows`), `Pieces` (`TCityPieceLights` - a piece's
+  `TCityLight`s: `TCityLightKind`, `Box`, `Color`); `LightsOf(piece)`,
+  `HasLamps`. **`TCityEmblem`** (`emblem`) - `Piece` (its `on`), `AtU`,
+  `AtV`, `W`, `Aspect`, `Shade`, `Color`, the levels, `FaultShare`, the
+  relight, dark and part ticks, `Parts` and `Halos`.
+  **`TCityBeacons`** (`beacons`). A frame's `Beacons` and `BeaconsAbove`
+  (`beaconsAbove`); an element's `Paint` (**`TElementPaint`**). Raise: a
+  light of an unknown kind, a box not of four numbers or below zero, a
+  range of whole numbers out of order or under its least (a clock of no
+  ticks would never end its span), a paint without width, an emblem without
+  parts, a halo to each, a width and an aspect; and (`CheckCityLife`) lamps
+  or frame beacons without `beacons`, an emblem without `cityLights`.
+  `SFarPlaneBadColor` names any colour now, not the sun's alone.
+
+### `Core/Levels.CityLife.pas` (~270 lines, 3.0.92)
+How bright each light of the chase's city is at a tick of the far plane's
+clock (`docs/mechanics/chase-backdrop.md`, "The lights" to "The
+beacons"). No SDL. The stand's dice to the bit: its functions of the same
+names are the reference, key for key.
+- **`Mix`** - lowbias32 (`MulLow32` multiplies in halves, so no step
+  overflows under the checked builds). **`Roll(seed, key)`** - 0..1 from
+  `Mix(Mix(seed) xor key)`; **`RollRange`**, **`RollInt`** (the product
+  kept in a Double before `Floor`: the FPU's extended precision would
+  part from the stand's doubles a hair under a whole number).
+  **`LightSeed(element, light)`**.
+- **`NeonLevel(flicker, seed, tick, faultShare)`** - a breath, and
+  windows of time a share of them carrying a fault, flips down to
+  `FaultLow` and back (`Alternate`). **`WindowLevel(lights, seed, tick)`**
+  - spans, `OnShare` of them lit, a lit one catching over its first four
+  ticks. **`EmblemCycle(emblem, tick)`** (`TEmblemCycle` - `Index`,
+  `Start`; the first began long enough ago that the sign is lit at the
+  start) and **`EmblemPartLevel(emblem, flicker, part, tick)`** - dark,
+  then the parts in turn, each catching with 2 to 5 flips of 2 to 4 ticks,
+  then a sign's flicker at the emblem's `FaultShare`.
+  **`BeaconSeed(frame, x, z)`** - by the node's place to a thousandth,
+  rounded half up as `Math.round` (`NodeKey`); **`BeaconLevel`** - a flash
+  of `FlashTicks` once a period, the glow between.
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -5418,7 +5489,7 @@ picture; no SDL.
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
 
-### `Game/Game.FarPlane.pas` (~150 lines, 3.0.88)
+### `Game/Game.FarPlane.pas` (~170 lines, 3.0.92)
 How far each layer of the chase's far plane has ridden
 (`docs/mechanics/chase-backdrop.md`), by the rules of the stand, tick for
 tick. Knows neither the belt, the hero nor SDL.
@@ -5437,6 +5508,9 @@ tick. Knows neither the belt, the hero nor SDL.
   `OffsetsAt(alpha)`, `TunnelSpeed`, `CitySpeed`.
 - 3.0.89: the fangs' motion (`fmFangs`) at `Speeds.Fangs` times the
   belt's share, as the ground - no ease, no brake.
+- 3.0.92: **`Clock`** - the city's clock (`Levels.CityLife`): the stand's
+  tick, whose road first moves on its second, 0 before; it runs on when the road stops and
+  stands with the far plane in the burst's inhale; `Clear` sets it back.
 
 ### `Game/Game.Fangs.pas` (~235 lines, 3.0.89)
 The fangs of the chase (`docs/mechanics/arena-3.md`, "Stage 11b-2 as
@@ -6465,6 +6539,8 @@ so a unit (and later a test) can reach it. `interface` holds
   **`DrawFangs(alpha)`** - on the far plane's screen, after the dynamics'
   `dlSky` (the far ledge) and before `dlAloft` (the shuttle) and the play
   layer; they stand while the world shakes, as the far plane.
+- 3.0.92: `DrawBackdrop` hands the painter the far plane's clock
+  (`FFarPlane.Clock`) for the city's lights.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6870,6 +6946,23 @@ shadows on the floor and the tall frame's none give way to the shadows
 of both lying between the horizon and the eye; new - a shadow runs to the
 eye, soft at its edges, fully dark at its rib's foot, fading toward the
 eye. DUnitX counts 912 tests at 3.0.91.
+3.0.92 - 36 more. The new `Levels/Tests.Levels.CityLife`
+(`TCityLifeTests` 18): the hash, the roll and the seeds against the
+stand's numbers; a sign, a window, the emblem's frame and small triangle
+and a beacon tick by tick against tables made by the stand's own
+functions under node, over numbers of the tests' own - every tick a level
+changes on, the level there, and the sum over the run; a roll in its
+range, a breath within its depth, windows lit about their share, the
+emblem lit at the start and its frame catching first, a flash of its
+ticks, a node's seed by its place, rounded half up. `Tests.Game.FarPlane`
+14: the clock (standing before the road, counting from its first tick,
+running on when it stops, set back by a clear); level 2 reads its city's
+life; a light of an unknown kind, a box short, a span of no ticks, a paint
+without width, an emblem without parts or a halo short, lamps or frame
+beacons without beacons, an emblem without the city's lights raise.
+`Tests.Render.DomeFrames` 4 (22): no beacons without a share; the beacons
+on the stand's nodes (its seeds for two frames); the far ones behind, the
+near in front; riding with the city. DUnitX counts 948 tests at 3.0.92.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7588,6 +7681,7 @@ made again in 3.0.83).
 | The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, stage 11b-2) |
 | The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame; their long shadows, soft strokes down the floor and on over the near ground, cut at the eye (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
+| The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TeK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
