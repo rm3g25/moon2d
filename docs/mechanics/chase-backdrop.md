@@ -242,7 +242,7 @@ the whole line: the middle 70% of the generated beam, uniform along its
 length, is one tile (`rail-beam`, 72.6 units), and the line is tiles laid
 end to end, overlapping by 0.3. A tile hangs in the air, so its depth is
 given by `groundY` - the feet of the pylons - and the editor moves it along
-the street only. The train waits for the life of the city.
+the street only. The train rides it ("The train", below).
 
 **What the game plays** (3.0.90): what the stand plays - the buildings in
 depth by their feet, the frames in two halves around them, the shadows,
@@ -250,7 +250,8 @@ the glare, the sun tinted by the frames. The kit is a key the game does
 not read. The stand's switches (frames, shadows, glare, parallax) are the
 stand's alone: the game draws all of it. Since 3.0.92 it plays the life
 of the city too - the lights, the emblem, its paint, the beacons, tick for
-tick (arena-3.md, "The city's life as built").
+tick (arena-3.md, "The city's life as built"); since 3.0.93 the train
+(arena-3.md, "The train as built").
 
 **The shadows** (3.0.91). A shadow is a rib dropped onto the floor along
 the sun's light. The sun stands 30 units over the horizon at a focal
@@ -372,6 +373,40 @@ glow and a short flash, each on its own period; the dice are seeded by the
 node's place on the frame, not by the order of the nodes. They ride in 3D
 with the frame: the far ones before the buildings, the near ones with the
 near ribs.
+
+**The train** (`train` in the layout): one train shuttling on the beam
+between the city's two stations - a dwell at a station, a run to the
+other, back. One beam and no loop, so one train: two would only meet.
+The stations are the city's elements drawn from `station`, both at one
+depth, which is the train's; a station's mouth - where its box begins
+past the stub of beam - is `mouth` of its picture from the end the beam
+enters (its left, its right on a mirrored station). At a stop the nose
+stands `inside` units past the mouth, near the box's far wall: the box is
+some 53 units deep and the train 80 long, so a car of three stands out
+on the beam all the dwell - the train is seen standing at the platform.
+It is shown between the two mouths only, its picture and its strip of
+lights cut there (a beam glow is flat along, so the cut part is exact).
+
+The line is the train's depth with the city at rest: a place on it is
+where a left edge would stand on the screen with the city's offset at 0.
+Elements ride by their centres, so two at one depth keep their distance
+on the line however the city rides, and the mouths with them; on the
+screen a place stands the offset times the nearness to the left. `cruise`
+is units a second along the line.
+
+A run is a steady push up to cruise over `accelTicks`, a roll, the same
+push down; a run too short for cruise would turn halfway. The dwell is
+`dwellTicks`, dice of the lights' hash seeded by the train and keyed by
+the leg; the first dwell, at the left station, began some ticks before
+the clock. The time is the far plane's clock with its fraction - the
+stand's `Now` unrounded, the game's tick before the last one plus the
+frame's share - so the train glides between ticks as the city does,
+where the lights step by whole ticks. Its feet `y` sit its skirt over
+the top of the beam, its roof about level with the station's; it is drawn
+among the buildings at its depth, before the first one in front of the
+line. On the stand: cruise, push ticks, inside and feet in the bar of the
+looks, written back by the download; the run's length in seconds in the
+corner.
 
 ## The order of work
 
@@ -604,12 +639,8 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 
 ## Open
 
-- The life of the city, a step after the frames: the neon, the TeK emblem
-  and the frames' beacons (on the stand, "The lights" under "The city" and
-  after it); the beacons take the place of lamps on the buildings' masts;
-  then the train
-  (`rail-train`) shuttling along the beam between the two stations - a
-  dwell in each, cut at the station's mouth as it goes in.
+- The train's numbers (3.0.93): cruise, push and dwell are first guesses,
+  for the live run.
 - Dome size in 4K: two generations a dome if one at 4 px a unit is soft.
 - The haze of the pad jets over the far plane: off on screen 13 until the
   far plane is drawn into a texture the haze can bend.

@@ -760,6 +760,17 @@ The lights of the city, the TeK emblem, its paint and the frames' beacons (`chas
 - **The set**: `tek-emblem`, `tek-1..6`, `tek-1..6-halo` and `tek-paint`, put into `chase-backdrop.mset` by `tools/chase/make_emblem.py`. `pack_set.py` writes the set anew from its folder and drops them: after a repack, make_emblem runs again, or the level does not load.
 - **Tests**: `Tests.Levels.CityLife` 18 - the hash and the seeds against the stand's numbers, and a sign, a window, the emblem's frame and small triangle and a beacon tick by tick against tables the stand's own functions made under node, over numbers of the tests' own (every tick a level changes on, the level there, the sum over the run); `Tests.Game.FarPlane` 14 - the clock, level 2's city life read, the refusals; `Tests.Render.DomeFrames` 4 - none without a share, the stand's nodes (its seeds), far and near, riding with the city.
 
+## The train as built (3.0.93)
+The train on the monorail (`chase-backdrop.md`, "The train"): one train shuttling between the two stations, on the stand first, then in the game tick for tick - the stand is the reference, key for key.
+
+- **Decided**: one train, there is one beam and no loop; at a stop the nose goes in near the box's far wall and a car of three stands out on the beam, so the train is seen standing at the platform (of three ways - that, the train cut to two cars to vanish into the station, a stop outside the mouth - the first).
+- **The data** (`Levels.FarPlane`): `train` (`TCityTrain`: the piece, the station's piece, `mouth`, `w`, `y`, `shade`, `inside`, `cruise`, `accelTicks`, `dwellTicks`); `CityElements` finds the stations. Raise: no width, no cruise, a push of less than a tick, a dwell out of order or under a tick, not two stations in the city; and at the painter's making (`MonorailLine`), stations at two depths or stops with no run between them.
+- **The motion** (`Levels.Monorail`, no SDL): the stand's `monorailLine`, `trainRun`, `runPlace`, `trainLeft`, `trainShown` under Pascal names. The line is the train's depth with the city at rest, so the mouths keep their places as the city rides; a run pushes up and down over `accelTicks` and rolls between; the dwells are dice of `Levels.CityLife` (seed `$7A1`, the first dwell before the clock at key 1, the legs' at 100 on).
+- **The time** (`TFarPlane.ClockAt`): the clock between ticks as the offsets lie - the tick before the last one plus the frame's share, 0 before the road; the stand's `Now * 33` unrounded. The lights keep their whole tick.
+- **The drawing** (`TFarPlanePainter.DrawTrain`): in the city's layer before the first element in front of the line, its picture's quad and source cut between the mouths, then its lights (the piece's `cityLights`, seeded one past the city's elements) cut to the same span (`DrawLight` takes a `TScreenSpan` now, `GlowWithin` cuts a beam and keeps a point whole while its centre is in).
+- **The stand**: cruise, push ticks, inside and feet among the looks, written back by the download; the run's seconds in the corner. The first numbers: cruise 16, a push of 132 ticks, dwells of 300 to 600 - a run of about 30 s.
+- **Tests**: `Tests.Levels.Monorail` 19 - the run, the ticks the train leaves and reaches its stops, where it stands and the sum against tables the stand's own functions made under node, over a train and stops of the tests' own; a short run, either end, never past cruise, within the stops, the dwells, between ticks; the line's stops, mouths and depth, the order of the stations, the refusals, the cut. `Tests.Game.FarPlane` 5 - the clock between ticks, level 2's train, the refusals.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".
@@ -812,7 +823,7 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
-- The city (2026-11-01, "Decided 2026-11-01, the city"): the life of the city after the frames (built in 3.0.90), the train on the monorail with it (the monorail itself rebuilt from a sheet of its parts the same day); the long shadows of the frames (`chase-backdrop.md`, Open).
+- The city (2026-11-01, "Decided 2026-11-01, the city"): its life and the train built (3.0.92, 3.0.93); the train's numbers for the live run (`chase-backdrop.md`, Open).
 - The haze of the pad jets on screen 13: back once the far plane is drawn into a texture the haze can bend.
 - The fangs (11b-2, live): their speed (20 - a fang crosses the screen in about 30 s, a calm middle ground rather than posts flashing by), how many, how high the tall ones, how dark.
 - The entrance's numbers (8b, live): the drive-in's speed, the breath before the mast, how fast the mast rises; whether the shortened replay after a death reads right.

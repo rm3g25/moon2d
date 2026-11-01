@@ -104,6 +104,8 @@ Dependency direction (roughly bottom-up):
 chase as data: over `Render.Brush` for the colours of its sun) /
 `Levels.CityLife` (the clock of the chase city's lights, 3.0.92: over
 `Levels.FarPlane`) /
+`Levels.Monorail` (where the chase city's train stands, 3.0.93: over
+`Levels.FarPlane` and the dice of `Levels.CityLife`) /
 `Levels.Events` (over `Monsters.Defs`
 for the tactics an event sets and the side a body comes in from, and over
 `Levels.Pads` for the shelf programs and bank orders an event tells) / `Effects.Emitter` / `Render.Puff` /
@@ -148,7 +150,7 @@ from `Levels.CityLife`) /
 `Render.FarPlane` (over `Levels.FarPlane`, the backdrop view of
 `Levels.Dynamics`, `Render.Sprites` and `Render.DomeFrames`; the sun and
 the city's lights through `Render.Glow`, their levels from
-`Levels.CityLife`) /
+`Levels.CityLife`, the train's place from `Levels.Monorail`) /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
 explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
@@ -413,7 +415,7 @@ screen dump of `Game.Moon`.
   run, wrapped round the screen's width - and once more a screen to the
   left when it hangs over the right edge.
 
-### `Core/Render.FarPlane.pas` (~695 lines, 3.0.92)
+### `Core/Render.FarPlane.pas` (~795 lines, 3.0.93)
 - **`TFarPlanePainter`** - draws the far plane of a chase
   (`Levels.FarPlane`) where its offsets have taken it, in place of the
   screen's backdrop: the black sky, the sun, then the layers back to
@@ -473,6 +475,22 @@ screen dump of `Game.Moon`.
   to add and filtered (`MakeLight`); `tek-paint` only when a building
   wears paint (`HasPaint`).
 
+- 3.0.93, **the train**: `Draw(offsets, tick, clock, backdrop)` - the
+  clock is the far plane's between its ticks (`TFarPlane.ClockAt`), the
+  tick stays the lights'. With a `train` the constructor takes its
+  picture and its line (`MonorailLine` - raises there, at level load) and
+  makes `FTrainElement`, the train as a building for its lights.
+  `DrawLayer` of the city's layer draws it (`DrawTrain`) before the first
+  element whose `DepthY` is past the line's depth, or after the last:
+  `TrainLeft` on the clock, the share between the mouths (`TrainShown`),
+  on the screen the city's offset times the line's nearness to the left;
+  the picture's quad and source cut to that share, then its lights
+  (`LightsOf` the piece, seeded one past the city's elements) cut to the
+  same span. `DrawLight` takes the span (**`TScreenSpan`**; `WholeScreen`
+  for a building): a lamp is drawn while its point is in it, a glow
+  through **`GlowWithin`** - a beam whole inside the span as before, cut
+  to it otherwise (flat along, so the part is exact), a point whole while
+  its centre is in it.
 ### `Core/Render.DomeFrames.pas` (~935 lines, 3.0.92)
 The dome frames of a chase's city (`docs/mechanics/chase-backdrop.md`,
 "The city"): geodesic half-ellipsoids drawn by code through the city's
@@ -1047,7 +1065,7 @@ Level data model + JSON parser. No game logic.
   refuses a screen past the level's (`SLevelFarPlaneBadScreen`) and a set
   the level's `objectSets` do not list (`SLevelFarPlaneNoSet`).
 
-### `Core/Levels.FarPlane.pas` (~965 lines, 3.0.92)
+### `Core/Levels.FarPlane.pas` (~1030 lines, 3.0.93)
 The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
 strip of layers riding left behind the play layer at speeds of their own,
 and a sun under them all. A level names the screen and the layout in its
@@ -1129,6 +1147,13 @@ No SDL.
   parts, a halo to each, a width and an aspect; and (`CheckCityLife`) lamps
   or frame beacons without `beacons`, an emblem without `cityLights`.
   `SFarPlaneBadColor` names any colour now, not the sun's alone.
+- 3.0.93, **the train**: **`TCityTrain`** (`train`, `ReadTrain`) -
+  `Piece`, `Station`, `Mouth`, `W`, `Y`, `Shade`, `Inside`, `Cruise`,
+  `AccelTicks`, the dwell ticks. **`CityElements(piece)`** - the city's
+  layer's elements drawn from a piece, in its order. Raise
+  (`SFarPlaneBadTrain`): no width, no cruise, a push of less than a tick;
+  a dwell out of order or under a tick; and (`CheckCityLife`,
+  `SFarPlaneTrainStations`) not two stations in the city.
 
 ### `Core/Levels.CityLife.pas` (~270 lines, 3.0.92)
 How bright each light of the chase's city is at a tick of the far plane's
@@ -1153,6 +1178,31 @@ names are the reference, key for key.
   **`BeaconSeed(frame, x, z)`** - by the node's place to a thousandth,
   rounded half up as `Math.round` (`NodeKey`); **`BeaconLevel`** - a flash
   of `FlashTicks` once a period, the glow between.
+
+### `Core/Levels.Monorail.pas` (~205 lines, 3.0.93)
+Where the chase city's train stands at a time of the far plane's clock
+(`docs/mechanics/chase-backdrop.md`, "The train"). No SDL. The stand's
+functions of the same names are the reference.
+- **`TMonorailLine`** (`MonorailLine(def)`) - the line at the train's
+  depth with the city at rest: a place on it is where a left edge would
+  stand on the screen with the city's offset at 0. `Depth` and
+  `Nearness` (the stations', the train's), the two mouths (`MouthOf` -
+  `Mouth` of a station's picture from its left, from its right on one
+  drawn mirrored; `LineLeft` - the stand's `lineLeft`), the two stops
+  (the nose `Inside` past each mouth). The stations in the order of their
+  x, whatever their order in the city. Raises (`EFarPlaneError`) on
+  stations at two depths and on stops with no run between them.
+- **`TTrainRun`** (`TrainRun(train, distance)`) - `Push` (units a tick
+  gained a tick: cruise over 33 over `AccelTicks`), `Ramp`, `Peak`, `Roll`
+  (a run too short for cruise turns halfway, its roll 0), `Ticks`,
+  `Place(ticks)`.
+- **`TrainLeft(train, line, time)`** - the time the clock's ticks with
+  their fraction: the first dwell at the left station began
+  `RollInt(TrainSeed, 1, 0, DwellMost)` ticks before the clock; then legs
+  of a dwell (`RollInt` at `DwellKeys` + the leg) and a run, out from the
+  left on the even ones. **`TrainShown(train, line, left)`**
+  (**`TTrainShown`** - `From`, `Till`, `Any`) - the share of the picture
+  between the mouths.
 
 ### `Core/Effects.Emitter.pas` (~105 lines)
 - **`TParticle`** (record) - place, speed (units per tick), angle and spin,
@@ -5489,7 +5539,7 @@ picture; no SDL.
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
 
-### `Game/Game.FarPlane.pas` (~170 lines, 3.0.92)
+### `Game/Game.FarPlane.pas` (~185 lines, 3.0.93)
 How far each layer of the chase's far plane has ridden
 (`docs/mechanics/chase-backdrop.md`), by the rules of the stand, tick for
 tick. Knows neither the belt, the hero nor SDL.
@@ -5511,6 +5561,9 @@ tick. Knows neither the belt, the hero nor SDL.
 - 3.0.92: **`Clock`** - the city's clock (`Levels.CityLife`): the stand's
   tick, whose road first moves on its second, 0 before; it runs on when the road stops and
   stands with the far plane in the burst's inhale; `Clear` sets it back.
+- 3.0.93: **`ClockAt(alpha)`** - the clock between the last tick and this
+  one, as `OffsetsAt` lies (`Clock` - 1 + alpha; 0 before the road): the
+  train glides with the city.
 
 ### `Game/Game.Fangs.pas` (~235 lines, 3.0.89)
 The fangs of the chase (`docs/mechanics/arena-3.md`, "Stage 11b-2 as
@@ -6541,6 +6594,7 @@ so a unit (and later a test) can reach it. `interface` holds
   layer; they stand while the world shakes, as the far plane.
 - 3.0.92: `DrawBackdrop` hands the painter the far plane's clock
   (`FFarPlane.Clock`) for the city's lights.
+- 3.0.93: and `FFarPlane.ClockAt(alpha)` for the train.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -6963,6 +7017,20 @@ beacons without beacons, an emblem without the city's lights raise.
 `Tests.Render.DomeFrames` 4 (22): no beacons without a share; the beacons
 on the stand's nodes (its seeds for two frames); the far ones behind, the
 near in front; riding with the city. DUnitX counts 948 tests at 3.0.92.
+3.0.93 - 24 more. The new `Levels/Tests.Levels.Monorail`
+(`TTrainRunTests` 10, `TMonorailLineTests` 9): a run, its places, the
+ticks the train leaves and reaches its stops, where it stands (between
+ticks too) and the sum of its places against tables the stand's own
+functions made under node, over a train and stops of the tests' own; a
+short run turning halfway, a run read the same from either end, never
+faster than cruise, within its stops, dwells within their ticks, between
+two ticks between them; the stops inside the mouths, the mouth facing
+the beam, the line at depth drawn to the middle, stations listed right
+to left, two depths and no run raising, the train shown whole between the
+mouths and cut at each. `Tests.Game.FarPlane` 5: the clock between ticks;
+level 2 reads its train on a line with a run; a train without two
+stations, without a cruise, or with a dwell of no ticks raises. DUnitX
+counts 972 tests at 3.0.93.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7682,6 +7750,7 @@ made again in 3.0.83).
 | The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, stage 11b-2) |
 | The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame; their long shadows, soft strokes down the floor and on over the near ground, cut at the eye (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
 | The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TeK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
+| The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
