@@ -17,9 +17,11 @@
   what it stands on; without a camera the city is flat, and the other
   layers are flat always. The city's clock stands until the road first
   moves, counts its ticks from there, runs on when the road stops, and a
-  clear sets it back. Level 2 reads its far plane, its camera and frames
-  among it, and the life of its city; a layout that does not make sense
-  raises, and so does a city's life that cannot play.
+  clear sets it back; between ticks it lies between them, as the offsets
+  do. Level 2 reads its far plane, its camera and frames among it, the
+  life of its city and its train on a line with a run; a layout that does
+  not make sense raises, and so does a city's life that cannot play - a
+  train among them.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -81,6 +83,8 @@ type
     procedure TestTheClockRunsOnWhenTheRoadStops;
     [Test]
     procedure TestClearSetsTheClockBack;
+    [Test]
+    procedure TestTheClockBetweenTicksLiesBetweenThem;
   end;
 
   [TestFixture]
@@ -193,13 +197,21 @@ type
     procedure TestFrameBeaconsWithoutBeaconsRaise;
     [Test]
     procedure TestAnEmblemWithoutCityLightsRaises;
+    [Test]
+    procedure TestLevelTwoReadsItsTrain;
+    [Test]
+    procedure TestATrainWithoutTwoStationsRaises;
+    [Test]
+    procedure TestATrainWithoutACruiseRaises;
+    [Test]
+    procedure TestADwellOfNoTicksRaises;
   end;
 
 implementation
 
 uses
   System.IOUtils, System.JSON, System.Math,
-  Levels.Defs;
+  Levels.Defs, Levels.Monorail;
 
 const
   LevelTwoFile = 'level2.json';
@@ -532,6 +544,17 @@ begin
   for var i := 1 to Stood do
     TickBoth;
   Assert.AreEqual(Before + Stood, FPlane.Clock, 'The city lives on');
+end;
+
+procedure TFarPlaneTests.TestTheClockBetweenTicksLiesBetweenThem;
+begin
+  Assert.AreEqual(0.0, FPlane.ClockAt(0.5), 1E-9, 'Nothing before the road');
+  FBelt.Start;
+  RunSeconds(2);
+  var Clock: Double := FPlane.Clock;
+  Assert.AreEqual(Clock - 1, FPlane.ClockAt(0), 1E-9, 'The last tick, as OffsetsAt(0)');
+  Assert.AreEqual(Clock - 0.5, FPlane.ClockAt(0.5), 1E-9, 'Halfway');
+  Assert.AreEqual(Clock, FPlane.ClockAt(1), 1E-9, 'This tick, as OffsetsAt(1)');
 end;
 
 procedure TFarPlaneTests.TestClearSetsTheClockBack;
@@ -953,6 +976,47 @@ procedure TFarPlaneReadTests.TestAnEmblemWithoutCityLightsRaises;
 begin
   AssertLifeRaises(LifeBeacons + LifeEmblemHead
     + ' "parts": [[0, 0, 1, 1]], "halos": [[0, 0, 1, 1]]},');
+end;
+
+const
+  TrainHead = '"train": {"piece": "car", "station": "stop", "mouth": 0.25, "y": 244,'
+    + ' "inside": 30, "accelTicks": 132,';
+  TrainStations = '{"id": "stop", "x": 100, "y": 266, "w": 80, "mirror": true},'
+    + ' {"id": "stop", "x": 400, "y": 266, "w": 80}';
+
+procedure TFarPlaneReadTests.TestLevelTwoReadsItsTrain;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Plane := Level.FarPlane;
+    Assert.IsTrue(Plane.Train.Present, 'A train');
+    Assert.AreEqual(2, Integer(Length(Plane.CityElements(Plane.Train.Station))),
+      'Two stations in the city');
+    Assert.IsTrue(Length(Plane.Lights.LightsOf(Plane.Train.Piece)) > 0, 'Its lights');
+    var Line := MonorailLine(Plane);
+    Assert.IsTrue(Line.RightStop - Line.LeftStop > Plane.Train.W, 'A run longer than the train');
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestATrainWithoutTwoStationsRaises;
+begin
+  AssertLifeRaises(TrainHead + ' "w": 60, "cruise": 16, "dwellTicks": [300, 600]},',
+    '{"id": "stop", "x": 100, "y": 266, "w": 80}');
+end;
+
+procedure TFarPlaneReadTests.TestATrainWithoutACruiseRaises;
+begin
+  AssertLifeRaises(TrainHead + ' "w": 60, "cruise": 0, "dwellTicks": [300, 600]},',
+    TrainStations);
+end;
+
+procedure TFarPlaneReadTests.TestADwellOfNoTicksRaises;
+begin
+  AssertLifeRaises(TrainHead + ' "w": 60, "cruise": 16, "dwellTicks": [0, 600]},',
+    TrainStations);
 end;
 
 initialization

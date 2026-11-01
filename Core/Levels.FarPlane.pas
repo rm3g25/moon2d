@@ -44,7 +44,9 @@
   standing on a spire ("emblem"), the red beacons on a frame's upper nodes
   ("beacons", and "beaconsAbove" of the frame) and the emblem as old paint
   on a wall ("paint" of a placed building). Here they are numbers; how
-  bright each one is at a tick is Levels.CityLife's business.
+  bright each one is at a tick is Levels.CityLife's business. The train
+  ("train") shuttles on the monorail between the city's two stations;
+  where it stands at a time is Levels.Monorail's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -188,6 +190,23 @@ type
     PeriodLeast, PeriodMost: Integer;
   end;
 
+  // The train on the monorail, shuttling between the two elements of the
+  // city drawn from Station. Mouth - where a station's box begins, a share
+  // of its picture from its left (unmirrored); W its width in units, Y its
+  // feet; at a stop its nose stands Inside units past the mouth. A run
+  // pushes up to Cruise (units a second) over AccelTicks and down the same
+  // way; a dwell lasts DwellLeast..DwellMost ticks
+  TCityTrain = record
+    Present: Boolean;
+    Piece, Station: string;
+    Mouth: Single;
+    W, Y, Shade: Single;
+    Inside: Single;
+    Cruise: Double;
+    AccelTicks: Integer;
+    DwellLeast, DwellMost: Integer;
+  end;
+
   // The emblem as old paint on a wall: at U, V of the picture, W of its
   // width, Alpha opaque
   TElementPaint = record
@@ -290,6 +309,7 @@ type
     Lights: TCityLights;
     Emblem: TCityEmblem;
     Beacons: TCityBeacons;
+    Train: TCityTrain;
     function Present: Boolean;
     // How near a thing of the city whose feet stand at AY is, the domes'
     // centres 1: it rides that share of its layer's speed
@@ -301,6 +321,8 @@ type
       const AElement: TFarPlaneElement; const AOffsets: TFarPlaneOffsets): Double;
     // The length of the city's layer: where the strip ends
     function CityLength: Single;
+    // The elements of the city's layer drawn from APiece, in its order
+    function CityElements(const APiece: string): TArray<TFarPlaneElement>;
     // Where the tunnel's last element ends along its layer: once that is
     // past the left edge, the tunnel is gone
     function TunnelEnd: Single;
@@ -327,7 +349,8 @@ type
 // city's life that cannot play: a light of an unknown kind or without a
 // box, a clock of fewer ticks than it needs, a paint without width, an
 // emblem without parts, lamps or frame beacons without "beacons", an
-// emblem without "cityLights".
+// emblem without "cityLights", a train without size or speed, of a dwell
+// of no ticks or without two stations in the city.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -370,6 +393,10 @@ resourcestring
   SFarPlaneEmblemNoLights = 'Level "%s": its emblem flickers by the signs'' clock '
     + 'and the city has no "cityLights"';
   SFarPlaneBadPair = 'Level "%s": "%s" takes two numbers';
+  SFarPlaneBadTrain = 'Level "%s": the train needs a width, a cruise and a push of a '
+    + 'tick at the least';
+  SFarPlaneTrainStations = 'Level "%s": the train runs between two "%s" of the city, '
+    + 'and it has %d';
   SLightOfPiece = 'a light of piece "%s"';
   SEmblemPart = 'emblem part %d';
   SEmblemHalo = 'emblem halo %d';
@@ -401,6 +428,16 @@ begin
   for var Layer in Layers do
     if Layer.Motion = fmCity then
       Result := Max(Result, Layer.Length);
+end;
+
+function TFarPlaneDef.CityElements(const APiece: string): TArray<TFarPlaneElement>;
+begin
+  Result := [];
+  for var Layer in Layers do
+    if Layer.Motion = fmCity then
+      for var Element in Layer.Elements do
+        if Element.Id = APiece then
+          Result := Result + [Element];
 end;
 
 function TFarPlaneDef.TunnelEnd: Single;
@@ -900,6 +937,28 @@ begin
   ReadWholeRange(Obj, 'periodTicks', ALevelId, 1, Result.PeriodLeast, Result.PeriodMost);
 end;
 
+function ReadTrain(const ARoot: TJSONObject; const ALevelId: string): TCityTrain;
+var
+  Obj: TJSONObject;
+begin
+  Result := Default(TCityTrain);
+  if not ARoot.TryGetValue<TJSONObject>('train', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Piece := Obj.GetValue<string>('piece');
+  Result.Station := Obj.GetValue<string>('station');
+  Result.Mouth := Obj.GetValue<Double>('mouth');
+  Result.W := Obj.GetValue<Double>('w', 0);
+  Result.Y := Obj.GetValue<Double>('y');
+  Result.Shade := EnsureRange(Obj.GetValue<Double>('shade', FullShade), 0.0, 1.0);
+  Result.Inside := Obj.GetValue<Double>('inside', 0);
+  Result.Cruise := Obj.GetValue<Double>('cruise', 0);
+  Result.AccelTicks := Obj.GetValue<Integer>('accelTicks', 0);
+  ReadWholeRange(Obj, 'dwellTicks', ALevelId, 1, Result.DwellLeast, Result.DwellMost);
+  if (Result.W <= 0) or (Result.Cruise <= 0) or (Result.AccelTicks < 1) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadTrain, [ALevelId]);
+end;
+
 // The parts of the city's life lean on each other: a lamp blinks as the
 // beacons do, the emblem flickers by the signs' clock
 procedure CheckCityLife(const ADef: TFarPlaneDef; const ALevelId: string);
@@ -911,6 +970,12 @@ begin
       raise EFarPlaneError.CreateFmt(SFarPlaneFrameNoBeacons, [ALevelId, Frame.Id]);
   if ADef.Emblem.Present and not ADef.Lights.Present then
     raise EFarPlaneError.CreateFmt(SFarPlaneEmblemNoLights, [ALevelId]);
+  if not ADef.Train.Present then
+    Exit;
+  var Stations := Length(ADef.CityElements(ADef.Train.Station));
+  if Stations <> 2 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneTrainStations,
+      [ALevelId, ADef.Train.Station, Stations]);
 end;
 
 function ReadLayout(const AFileName, ALevelId: string): TFarPlaneDef;
@@ -936,6 +1001,7 @@ begin
     Result.Lights := ReadCityLights(Root, ALevelId);
     Result.Emblem := ReadEmblem(Root, ALevelId);
     Result.Beacons := ReadBeacons(Root, ALevelId);
+    Result.Train := ReadTrain(Root, ALevelId);
   finally
     Root.Free;
   end;

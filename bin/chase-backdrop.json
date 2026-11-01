@@ -219,6 +219,12 @@
     "about": "Red warning lights on the nodes of the dome frames above the share of their height named per frame (beaconsAbove): a dim glow and a short flash, each on its own period, phase taken from the node's place. size and halo in units at the node's nearness.",
     "color": [255, 46, 30], "size": 2.6, "halo": 12, "glowLevel": 0.3, "flashLevel": 0.85, "flashTicks": 3, "periodTicks": [56, 96]
   },
+  "train": {
+    "about": "One train shuttling on the monorail between the city's two stations (the elements drawn from station, both at one depth - the train's): a dwell at a station, a run to the other, back. mouth - where a station's box begins, a share of its picture from the end the beam enters (the left one, unmirrored); the train is shown between the two mouths only, cut where it goes in. At a stop its nose stands inside units past the mouth. w its width in units, y its feet, shade as a building's. A run pushes up to cruise (units a second along the line) over accelTicks, rolls on and comes down the same way; a dwell lasts dwellTicks, the dice of the stand. Its lights are the cityLights of piece. The stand and the game play it.",
+    "piece": "rail-train", "station": "rail-station", "mouth": 0.259,
+    "w": 81.9, "y": 243.9, "shade": 0.44, "inside": 50,
+    "cruise": 16, "accelTicks": 132, "dwellTicks": [300, 600]
+  },
   "layers": [
     { "id": "ridge", "speed": "ridge", "band": { "texture": "ridge-tex", "top": 202, "bottom": 262, "seamless": true } },
     { "id": "city", "speed": "city", "length": 2688,

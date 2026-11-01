@@ -28,6 +28,7 @@ uses
   Levels.Dynamics in 'Core\Levels.Dynamics.pas',
   Levels.FarPlane in 'Core\Levels.FarPlane.pas',
   Levels.CityLife in 'Core\Levels.CityLife.pas',
+  Levels.Monorail in 'Core\Levels.Monorail.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
   Levels.Scenes in 'Core\Levels.Scenes.pas',

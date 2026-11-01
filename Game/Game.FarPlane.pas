@@ -15,7 +15,9 @@
 
   The far plane keeps the city's clock (Levels.CityLife): the stand's tick,
   counted from the start of its run, whose road first moves on its second
-  tick. It stands with the far plane while the world stands.
+  tick. It stands with the far plane while the world stands. Between two
+  ticks it lies between them, as the offsets do: the train
+  (Levels.Monorail) glides with the city.
   The rules are those of the stand (tools/chase), tick for tick.
 
   It does not know the belt, the hero or SDL: the game hands in the belt's
@@ -63,6 +65,9 @@ type
     function OffsetsAt(AAlpha: Single): TFarPlaneOffsets;
     property Offsets: TFarPlaneOffsets read FOffsets;
     property TunnelGone: Boolean read FTunnelGone;
+    // The clock between the last tick and this one, AAlpha of the way, with
+    // the offsets of OffsetsAt; 0 before the road
+    function ClockAt(AAlpha: Single): Double;
     // The stand's tick: the road first moves on its second; 0 before
     property Clock: Integer read FClock;
     // Units a second this tick, the belt's share in
@@ -162,6 +167,13 @@ begin
   end;
   if FClockRuns then
     Inc(FClock);
+end;
+
+function TFarPlane.ClockAt(AAlpha: Single): Double;
+begin
+  if FClock = 0 then
+    Exit(0);
+  Result := FClock - 1 + AAlpha;
 end;
 
 function TFarPlane.OffsetsAt(AAlpha: Single): TFarPlaneOffsets;

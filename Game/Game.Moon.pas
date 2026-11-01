@@ -3573,7 +3573,7 @@ procedure TMoonGame.DrawBackdrop(AAlpha: Single);
 begin
   if FHero.Screen = FLevel.FarPlane.Screen then
     FFarPlanePainter.Draw(FFarPlane.OffsetsAt(AAlpha), FFarPlane.Clock,
-      FTiles.Backdrop(FHero.Screen))
+      FFarPlane.ClockAt(AAlpha), FTiles.Backdrop(FHero.Screen))
   else
     FTiles.DrawBackground(FHero.Screen);
 end;

@@ -26,6 +26,11 @@
   frames' beacons go with their halves. The glows are Render.Glow's, the
   emblem's pictures the set's (made by tools/chase/make_emblem.py).
 
+  The train rides at its depth among the buildings, where Levels.Monorail
+  puts it on the clock with its fraction, and is drawn between the
+  stations' mouths only: its picture and its lights are cut there, as it
+  goes in.
+
   While the screen's own backdrop covers the whole screen, nothing behind
   its layer is drawn: the arena before the chase costs one picture more,
   the cliff's end over the wall.
@@ -39,7 +44,7 @@ interface
 
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Levels.FarPlane, Levels.Dynamics,
-  Render.DomeFrames;
+  Levels.Monorail, Render.DomeFrames;
 
 type
   TFarPlanePainter = class
@@ -57,6 +62,10 @@ type
       Left, Width: Double;
       Start: Double;
     end;
+    // Where on the screen a light is shown, units across
+    TScreenSpan = record
+      Left, Right: Single;
+    end;
   private
     FRenderer: PSdlRenderer;
     FDef: TFarPlaneDef;
@@ -71,6 +80,11 @@ type
     FEmblemMetal: PSdlTexture;
     FEmblemTubes, FEmblemHalos: TArray<PSdlTexture>;
     FPaint: PSdlTexture;
+    // nil without a train
+    FTrain: PSdlTexture;
+    FTrainLine: TMonorailLine;
+    // The train as a building of the city, for its lights
+    FTrainElement: TFarPlaneElement;
     FFrames: TDomeFrames;
     FFramePainter: TDomeFramePainter;
     // The frames at this frame's ride of the city: the city's layer and the
@@ -95,12 +109,15 @@ type
       const AColor: TRgb; ALevel: Single);
     procedure GlowAround(ATexture: PSdlTexture; ACentreX, ACentreY, AWidth,
       AHeight: Single; const AColor: TRgb; ALevel: Single);
+    procedure GlowWithin(ATexture: PSdlTexture; ACentreX, ACentreY, AWidth,
+      AHeight: Single; const AColor: TRgb; ALevel: Single; const ASpan: TScreenSpan);
     procedure DrawBeacon(const AColor: TRgb; AX, AY, ANearness, ALevel: Single);
     procedure DrawBeacons(const ABeacons: TArray<TFrameBeacon>; ATick: Integer);
     function LightLevel(AKind: TCityLightKind; ASeed: Cardinal; ATick: Integer): Double;
-    // ALeft, AHeight - where the building was drawn, units
+    // ALeft, AHeight - where the building was drawn, units; ASpan - where
+    // its lights are shown
     procedure DrawLight(const AElement: TFarPlaneElement; const ALight: TCityLight;
-      ASeed: Cardinal; ALeft, AHeight: Double; ATick: Integer);
+      ASeed: Cardinal; ALeft, AHeight: Double; ATick: Integer; const ASpan: TScreenSpan);
     procedure DrawPaint(const AElement: TFarPlaneElement; ALeft, AHeight: Double);
     procedure DrawEmblem(const AElement: TFarPlaneElement; ALeft, AHeight: Double;
       ATick: Integer);
@@ -108,8 +125,10 @@ type
     // lights' clocks
     procedure DrawLife(const AElement: TFarPlaneElement; AIndex: Integer;
       ALeft, AHeight: Double; ATick: Integer);
+    // AIndex - one past the city's buildings: the seed of its lights' clocks
+    procedure DrawTrain(ACityOffset: Double; AIndex, ATick: Integer; AClock: Double);
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
-      ATick: Integer; const ABackdrop: TBackdropView);
+      ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
   public
     // Resolves every picture now, so a sprite the set lacks raises at
     // level load. ACache - the level's object art, with the far plane's set
@@ -117,9 +136,10 @@ type
     constructor Create(ARenderer: PSdlRenderer; ACache: TSpriteCache;
       const ADef: TFarPlaneDef);
     destructor Destroy; override;
-    // ATick - the far plane's clock (TFarPlane.Clock); ABackdrop - the
-    // screen's own, drawn where its element rides
-    procedure Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer;
+    // ATick - the far plane's clock (TFarPlane.Clock), AClock - the same
+    // between its ticks, as the offsets are (TFarPlane.ClockAt); ABackdrop -
+    // the screen's own, drawn where its element rides
+    procedure Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer; AClock: Double;
       const ABackdrop: TBackdropView);
   end;
 
@@ -149,6 +169,7 @@ const
   HaloGlareLevel = 0.19;
   SolidAlpha = 255;
   NoStart = -MaxInt;
+  WholeScreen: TFarPlanePainter.TScreenSpan = (Left: -MaxSingle; Right: MaxSingle);
   SkyBlack: TSdlColor = (R: 0; G: 0; B: 0; A: 255);
 
 function TextureAspect(ATexture: PSdlTexture): Single;
@@ -239,6 +260,16 @@ begin
   begin
     FPaint := ACache.Get(FDef.SpriteName(EmblemPaintSprite));
     SDL_SetTextureScaleMode(FPaint, SdlScaleModeLinear);
+  end;
+  if FDef.Train.Present then
+  begin
+    FTrain := ACache.Get(FDef.SpriteName(FDef.Train.Piece));
+    FTrainLine := MonorailLine(FDef);
+    FTrainElement := Default(TFarPlaneElement);
+    FTrainElement.Id := FDef.Train.Piece;
+    FTrainElement.Y := FDef.Train.Y;
+    FTrainElement.W := FDef.Train.W;
+    FTrainElement.DepthY := FTrainLine.Depth;
   end;
   FPointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
   FDiscGlow := CreateGlowShape(ARenderer, gsDisc, DiscGlowSide);
@@ -493,6 +524,32 @@ begin
     AHeight), AColor, ALevel);
 end;
 
+// A beam is flat along, so the part of its glow within the span is the glow
+// over that part; a point is drawn whole while its centre is in it
+procedure TFarPlanePainter.GlowWithin(ATexture: PSdlTexture; ACentreX, ACentreY,
+  AWidth, AHeight: Single; const AColor: TRgb; ALevel: Single; const ASpan: TScreenSpan);
+begin
+  if ATexture <> FBeamGlow then
+  begin
+    if (ACentreX >= ASpan.Left) and (ACentreX <= ASpan.Right) then
+      GlowAround(ATexture, ACentreX, ACentreY, AWidth, AHeight, AColor, ALevel);
+    Exit;
+  end;
+  var Left: Single := ACentreX - AWidth / 2;
+  var Right: Single := ACentreX + AWidth / 2;
+  if (Left >= ASpan.Left) and (Right <= ASpan.Right) then
+  begin
+    GlowAround(ATexture, ACentreX, ACentreY, AWidth, AHeight, AColor, ALevel);
+    Exit;
+  end;
+  if Left < ASpan.Left then
+    Left := ASpan.Left;
+  if Right > ASpan.Right then
+    Right := ASpan.Right;
+  if Right > Left then
+    GlowAround(ATexture, (Left + Right) / 2, ACentreY, Right - Left, AHeight, AColor, ALevel);
+end;
+
 procedure TFarPlanePainter.DrawBeacon(const AColor: TRgb; AX, AY, ANearness,
   ALevel: Single);
 begin
@@ -527,7 +584,8 @@ end;
 // A lamp blinks as the beacons do; any other light is a core over its box
 // and a halo around it
 procedure TFarPlanePainter.DrawLight(const AElement: TFarPlaneElement;
-  const ALight: TCityLight; ASeed: Cardinal; ALeft, AHeight: Double; ATick: Integer);
+  const ALight: TCityLight; ASeed: Cardinal; ALeft, AHeight: Double; ATick: Integer;
+  const ASpan: TScreenSpan);
 begin
   var Box := ALight.Box;
   var Top: Double := AElement.Y - AHeight;
@@ -537,8 +595,10 @@ begin
     var LampU: Single := Box.U;
     if AElement.Mirror then
       LampU := 1 - Box.U;
-    DrawBeacon(ALight.Color, ALeft + LampU * AElement.W, Top + Box.V * AHeight, Nearness,
-      BeaconLevel(FDef.Beacons, ASeed, ATick));
+    var LampX: Single := ALeft + LampU * AElement.W;
+    if (LampX >= ASpan.Left) and (LampX <= ASpan.Right) then
+      DrawBeacon(ALight.Color, LampX, Top + Box.V * AHeight, Nearness,
+        BeaconLevel(FDef.Beacons, ASeed, ATick));
     Exit;
   end;
 
@@ -558,10 +618,10 @@ begin
     Shape := FPointGlow;
   var Pad: Single := 2 * Look.HaloPad * Nearness;
 
-  GlowAround(Shape, CentreX, CentreY, Width * Look.HaloW + Pad, Height * Look.HaloH + Pad,
-    ALight.Color, Look.HaloLevel * Level);
-  GlowAround(Shape, CentreX, CentreY, Width * Look.CoreW, Height * Look.CoreH,
-    ALight.Color, Look.CoreLevel * Level);
+  GlowWithin(Shape, CentreX, CentreY, Width * Look.HaloW + Pad, Height * Look.HaloH + Pad,
+    ALight.Color, Look.HaloLevel * Level, ASpan);
+  GlowWithin(Shape, CentreX, CentreY, Width * Look.CoreW, Height * Look.CoreH,
+    ALight.Color, Look.CoreLevel * Level, ASpan);
 end;
 
 // Lit as its wall is, so at the building's shade; a mirrored building moves
@@ -620,9 +680,37 @@ begin
     DrawPaint(AElement, ALeft, AHeight);
   var Lights := FDef.Lights.LightsOf(AElement.Id);
   for var i := 0 to High(Lights) do
-    DrawLight(AElement, Lights[i], LightSeed(AIndex, i), ALeft, AHeight, ATick);
+    DrawLight(AElement, Lights[i], LightSeed(AIndex, i), ALeft, AHeight, ATick, WholeScreen);
   if FDef.Emblem.Present and (AElement.Id = FDef.Emblem.Piece) then
     DrawEmblem(AElement, ALeft, AHeight, ATick);
+end;
+
+// Its picture and its lights between the mouths: what has gone into a
+// station is not drawn
+procedure TFarPlanePainter.DrawTrain(ACityOffset: Double; AIndex, ATick: Integer;
+  AClock: Double);
+begin
+  var Train := FDef.Train;
+  var Place := TrainLeft(Train, FTrainLine, AClock);
+  var Shown := TrainShown(Train, FTrainLine, Place);
+  if not Shown.Any then
+    Exit;
+  var Left: Double := Place - ACityOffset * FTrainLine.Nearness;
+  var Span: TScreenSpan;
+  Span.Left := Left + Shown.From * Train.W;
+  Span.Right := Left + Shown.Till * Train.W;
+  if (Span.Right < 0) or (Span.Left > FDef.ScreenWidth) then
+    Exit;
+
+  var Height: Double := Train.W * TextureAspect(FTrain);
+  AddQuad(FloatRect(Span.Left, Train.Y - Height, Span.Right - Span.Left, Height),
+    FloatRect(Shown.From, 0, Shown.Till - Shown.From, 1), ShadeColor(Train.Shade),
+    QuadAlpha(1, 1, 1, 1));
+  Flush(FTrain);
+
+  var Lights := FDef.Lights.LightsOf(Train.Piece);
+  for var i := 0 to High(Lights) do
+    DrawLight(FTrainElement, Lights[i], LightSeed(AIndex, i), Left, Height, ATick, Span);
 end;
 
 // The city stands inside its frames: their shadows on its floor and their
@@ -630,7 +718,7 @@ end;
 // shadows run on over the near ground's band: over the sky between its
 // crests they fall on the crater floor, which they shade too
 procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
-  ATick: Integer; const ABackdrop: TBackdropView);
+  ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
 begin
   var Layer := FDef.Layers[ALayer];
   if Layer.Band.Present then
@@ -653,9 +741,16 @@ begin
     DrawBeacons(FFrameView.FarBeacons, ATick);
   end;
 
+  // The train at its depth: before the first building in front of the line
+  var TrainDue := (Layer.Motion = fmCity) and FDef.Train.Present;
   for var j := 0 to High(Layer.Elements) do
   begin
     var Element := Layer.Elements[j];
+    if TrainDue and (Element.DepthY > FTrainLine.Depth) then
+    begin
+      DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
+      TrainDue := False;
+    end;
     var Left := FDef.ElementLeft(Layer, Element, AOffsets);
     if Element.Backdrop then
     begin
@@ -668,6 +763,8 @@ begin
     if Shown and (Layer.Motion = fmCity) then
       DrawLife(Element, j, Left, Element.W * TextureAspect(Picture), ATick);
   end;
+  if TrainDue then
+    DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
 
   if Framed then
   begin
@@ -678,7 +775,7 @@ begin
 end;
 
 procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer;
-  const ABackdrop: TBackdropView);
+  AClock: Double; const ABackdrop: TBackdropView);
 begin
   if FFrames.Present then
     FFrameView := FFrames.View(AOffsets[fmCity]);
@@ -690,7 +787,7 @@ begin
     First := 0;
   end;
   for var i := First to High(FDef.Layers) do
-    DrawLayer(i, AOffsets, ATick, ABackdrop);
+    DrawLayer(i, AOffsets, ATick, AClock, ABackdrop);
 end;
 
 end.
