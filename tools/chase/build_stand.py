@@ -56,6 +56,7 @@ def main():
     Shipped = {Id: data_url(Png, Id in SolidTextures) for Id, Png in read_set(ChaseSet).items()}
   Screen13 = data_url(read_set(BackdropSet)['screen13'], AJpeg=True)
   Page = Page.replace('/*LAYOUT*/null', Layout)
+  Page = Page.replace("/*LAYOUTTEXT*/''", json.dumps(Layout + '\n'))
   Page = Page.replace('/*SHIPPED*/{}', json.dumps(Shipped))
   Page = Page.replace("/*SCREEN13*/''", json.dumps(Screen13))
   with open(OutPath, 'w', encoding='utf-8', newline='\n') as Out:

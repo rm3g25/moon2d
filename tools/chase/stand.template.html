@@ -51,6 +51,11 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .slot { font: 12px var(--mono); padding: 6px 8px; border: 1px dashed var(--line); color: var(--dim); }
 .slot.real { border-style: solid; border-color: var(--cyan); color: var(--cyan); }
+.kit { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.kit button { height: 72px; padding: 4px; background: #08090c; display: grid; place-items: end center; }
+.kit img { max-width: 100%; max-height: 52px; filter: brightness(0.75); }
+.kit span { font: 10px var(--mono); color: var(--dim); }
+.stage.editing canvas { cursor: crosshair; }
 .drop { margin-top: 10px; color: var(--dim); font-size: 13px; }
 .drop input { font-size: 12px; color: var(--dim); max-width: 100%; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
@@ -59,7 +64,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 <div class="wrap">
   <header>
     <h1>Chase Backdrop Stand</h1>
-    <p>Screen 13, act 2: the tunnel ends, the city rides past. Placeholders until the generations come in.</p>
+    <p>Screen 13, act 2: the tunnel ends, the city rides past. The buildings are pictures, the dome frames are code.</p>
   </header>
 
   <div class="stage">
@@ -80,6 +85,10 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
   <div class="bar">
     <label><input id="g-play" type="checkbox" checked> play layer guides</label>
     <label><input id="g-spans" type="checkbox"> dome spans</label>
+    <label><input id="g-frames" type="checkbox" checked> frames</label>
+    <label><input id="g-shadows" type="checkbox" checked> frame shadows</label>
+    <label><input id="g-glare" type="checkbox" checked> sun glare over</label>
+    <label><input id="g-parallax" type="checkbox" checked> depth parallax</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -90,10 +99,11 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <span style="color: var(--dim); font-size: 12px">units a second</span>
   </div>
 
-  <div class="bar" id="shades">
-    <span style="color: var(--dim); font-size: 12px">shade, 1 = as generated</span>
+  <div class="bar">
+    <button id="edit">Place buildings</button>
+    <output id="picked" style="font: 12px var(--mono); color: var(--dim)">drag a building: sideways along the street, up and down into the depth (it grows and shrinks with it); M mirror, + and - size, [ and ] shade, D copy, Delete remove</output>
+    <button id="export">Download chase-backdrop.json</button>
   </div>
-  <div class="bar"><output id="shade-line" style="font: 12px var(--mono); color: var(--dim)"></output></div>
 
   <div class="cols">
     <section>
@@ -101,9 +111,11 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
       <ul class="events" id="events"></ul>
     </section>
     <section>
-      <h2>Elements</h2>
+      <h2>The city kit</h2>
+      <div class="kit" id="kit"></div>
+      <h2 style="margin-top: 12px">Elements</h2>
       <div class="slots" id="slots"></div>
-      <div class="drop">Pick the checked PNGs (named by id: cliff.png, dome-main.png, ridge-tex.png...) or drop them on the stage; each replaces its placeholder. They stay on this page only.
+      <div class="drop">Pick the checked PNGs (named by id: cliff.png, land-03.png, ridge-tex.png...) or drop them on the stage; each replaces its placeholder. They stay on this page only.
         <br><input id="files" type="file" accept="image/png" multiple></div>
     </section>
   </div>
@@ -111,6 +123,9 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 
 <script>
 const Layout = /*LAYOUT*/null;
+// The file as it lies in the repository: the download replaces its city's
+// elements and keeps the rest of it to the byte
+const LayoutText = /*LAYOUTTEXT*/'';
 const Screen13Src = /*SCREEN13*/'';
 
 const View = document.getElementById('view');
@@ -123,10 +138,13 @@ const Tick = 1 / 33;
 const SimSeconds = 420;
 
 const LayerById = Object.fromEntries(Layout.layers.map(L => [L.id, L]));
-const Elements = {};
-for (const L of Layout.layers) for (const E of (L.elements || [])) Elements[E.id] = E;
-const Cliff = Elements['cliff'];
-const CityLength = LayerById.city.length;
+const City = LayerById.city;
+const Cliff = LayerById.tunnel.elements.find(E => E.id === 'cliff');
+const CityLength = City.length;
+const Camera = Layout.camera;
+const Frames = Layout.frames?.items || [];
+const FrameById = Object.fromEntries(Frames.map(F => [F.id, F]));
+const Kit = Layout.cityKit?.pieces || {};
 const Images = {};
 const Screen13 = new Image();
 Screen13.src = Screen13Src;
@@ -172,13 +190,13 @@ function listEvents() {
   const Checks = [
     ['the city opens on the right', s => (Cliff.edgeLeast ?? Cliff.edgeAt) - s.oT < 400],
     ['the sun comes out from behind the cliff', s => Cliff.edgeAt - s.oT < Sun.x],
-    ['the main dome takes the sun', s => Elements['dome-main'].x - s.oC < Sun.x],
     ['the cliff is gone, speeds ease to cruise', s => Cliff.x + Cliff.w - s.oT < 0],
-    ['the main dome leaves the sun', s => Elements['dome-main'].x + Elements['dome-main'].w - s.oC < Sun.x],
-    ['the satellite dome takes the sun', s => Elements['dome-sat'].x - s.oC < Sun.x],
-    ['the satellite dome leaves the sun', s => Elements['dome-sat'].x + Elements['dome-sat'].w - s.oC < Sun.x],
     ['the brake zone begins', s => CityLength - Layout.screen.w - s.oC < Sp.cityBrakeZone],
   ];
+  for (const F of Frames) {
+    Checks.push([`${F.id} takes the sun`, s => F.x - s.oC < Sun.x]);
+    Checks.push([`${F.id} leaves the sun`, s => F.x + F.w - s.oC < Sun.x]);
+  }
   const List = document.getElementById('events');
   List.innerHTML = '';
   for (const [Name, Test] of Checks) {
@@ -202,7 +220,7 @@ const U = v => v * Px;
 // ---- the sun ----
 function sunCover(oC) {
   let Cover = 0;
-  for (const E of LayerById.city.elements) {
+  for (const E of [...City.elements, ...Frames]) {
     if (!E.tintsSun) continue;
     const X0 = E.x - oC, X1 = E.x + E.w - oC;
     const Inside = Math.min(Sun.x - X0, X1 - Sun.x);
@@ -333,84 +351,210 @@ function drawGround(oG) {
 }
 
 // ---- elements: a real picture with its feet on y, or a placeholder ----
-function drawElement(E, Offset) {
-  const X = E.x - Offset;
+// How near a thing of the city stands, by its feet (the layout's camera): 1
+// at the domes' base line, less behind it. It rides that much of the
+// layer's speed - the parallax of the depth; a picture's width in the
+// layout is already its width at its depth. A thing that hangs in the air -
+// the monorail's beam - gives the feet of what it stands on as groundY.
+function depthY(E) { return E.groundY ?? E.y; }
+function nearness(Y) {
+  if (!Camera || !document.getElementById('g-parallax').checked) return 1;
+  return Math.max(0.05, (Y - Camera.horizon) / (Camera.baseY - Camera.horizon));
+}
+// Where an element of the city stands on the screen: its centre comes to
+// the middle of the screen when the layer has ridden its centre's x there,
+// and drifts away from it k times as fast
+function cityLeft(E, Offset) {
+  const K = nearness(depthY(E)), Half = Layout.screen.w / 2;
+  return Half + (E.x + E.w / 2 - Offset - Half) * K - E.w / 2;
+}
+// The shade is a picture of its own, made once: a canvas filter on every
+// one of a hundred buildings every frame is more than a browser can draw
+const Shaded = new Map();
+function shadedImage(Id, Shade) {
+  const Key = Id + '@' + Shade;
+  if (Shaded.has(Key)) return Shaded.get(Key);
+  const Img = Images[Id];
+  const C = document.createElement('canvas');
+  C.width = Img.width; C.height = Img.height;
+  const G = C.getContext('2d');
+  // brightness() scales the colour linearly, as SDL_SetTextureColorMod will in the game
+  G.filter = `brightness(${Shade})`;
+  G.drawImage(Img, 0, 0);
+  Shaded.set(Key, C);
+  return C;
+}
+// Where each building of the city was drawn this frame, back to front: the
+// editor picks from it
+let Drawn = [];
+function drawElement(E, Offset, InCity) {
+  const X = InCity ? cityLeft(E, Offset) : E.x - Offset;
   if (X > Layout.screen.w || X + E.w < 0) return;
   const Img = Images[E.id];
   if (Img) {
     const W = U(E.w), H = W * Img.height / Img.width;
-    // brightness() scales the colour linearly, as SDL_SetTextureColorMod will in the game
-    Ctx.filter = `brightness(${shadeOf(E)})`;
+    const Pic = shadedImage(E.id, shadeOf(E));
     if (E.mirror) {
-      // left for right, as the game draws it: the light of a picture lit
-      // from the wrong side
+      // left for right, as the game draws it
       Ctx.save(); Ctx.translate(U(X) + W, 0); Ctx.scale(-1, 1);
-      Ctx.drawImage(Img, 0, U(E.y) - H, W, H);
+      Ctx.drawImage(Pic, 0, U(E.y) - H, W, H);
       Ctx.restore();
-    } else Ctx.drawImage(Img, U(X), U(E.y) - H, W, H);
-    Ctx.filter = 'none';
+    } else Ctx.drawImage(Pic, U(X), U(E.y) - H, W, H);
+    if (InCity) Drawn.push({ E, X0: U(X), Y0: U(E.y) - H, X1: U(X) + W, Y1: U(E.y) });
     return;
   }
   Placeholders[E.id]?.(E, X);
 }
-const Gold = '#cdbb98', GoldDim = '#6f6452', Rim = 'rgba(255,244,225,0.8)';
-function domePh(E, X, Seed, Industry) {
-  const Cx = U(X + E.w / 2), Base = U(E.y), Rx = U(E.w / 2), Ry = U(E.h);
-  // the city or the plant inside first, the frame over it
-  for (let i = 0; i < (Industry ? 14 : 26); i++) {
-    const Hx = hash(i + Seed), Hh = hash(i * 3.3 + Seed);
-    const Bx = X + E.w * (0.1 + 0.8 * Hx);
-    const Top = Math.min(1, 1 - Math.abs(Bx - X - E.w / 2) / (E.w / 2)) ;
-    const Hgt = E.h * (0.15 + 0.55 * Hh * Top);
-    const Wd = Industry ? 6 + 10 * hash(i + 9) : 3 + 6 * hash(i + 7);
-    Ctx.fillStyle = Industry && i % 3 === 0 ? '#585148' : '#8a7f6c';
-    if (Industry && i % 3 === 0) { Ctx.beginPath(); Ctx.ellipse(U(Bx), Base - U(Wd), U(Wd), U(Wd), 0, 0, Math.PI * 2); Ctx.fill(); continue; }
-    Ctx.fillRect(U(Bx - Wd / 2), Base - U(Hgt), U(Wd), U(Hgt));
-    Ctx.beginPath(); Ctx.moveTo(U(Bx - Wd / 2), Base - U(Hgt)); Ctx.lineTo(U(Bx), Base - U(Hgt + Wd)); Ctx.lineTo(U(Bx + Wd / 2), Base - U(Hgt)); Ctx.fill();
-    Ctx.fillStyle = Rim; Ctx.fillRect(U(Bx - Wd / 2), Base - U(Hgt + 0.5), U(Wd), 2);
-    if (hash(i + 21 + Seed) > (Industry ? 0.93 : 0.8)) {
-      Ctx.fillStyle = hash(i + 4) > 0.5 ? '#ff5fb3' : '#5fe6ff';
-      Ctx.fillRect(U(Bx - 1), Base - U(Hgt * 0.6), U(2), U(1.2));
-    }
+
+// ---- the dome frames: geodesic half-ellipsoids, drawn by code ----
+// The edges of an icosahedron cut AFrequency times along each side, pushed
+// out onto the unit sphere, a vertex at the top; the lower half dropped and
+// the edges across the equator cut at it, and the equator itself added as
+// the ring the frame stands on.
+const Geodesics = new Map();
+function geodesic(AFrequency) {
+  if (Geodesics.has(AFrequency)) return Geodesics.get(AFrequency);
+  const P = (1 + Math.sqrt(5)) / 2;
+  const Raw = [[-1, P, 0], [1, P, 0], [-1, -P, 0], [1, -P, 0], [0, -1, P], [0, 1, P],
+    [0, -1, -P], [0, 1, -P], [P, 0, -1], [P, 0, 1], [-P, 0, -1], [-P, 0, 1]];
+  const Faces = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4],
+    [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+    [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  // turned about x so that vertex 5 (0, 1, P) stands at the top
+  const A = Math.atan2(-P, 1), Ca = Math.cos(A), Sa = Math.sin(A);
+  const V = Raw.map(([x, y, z]) => { const L = Math.hypot(x, y, z); x /= L; y /= L; z /= L;
+    return [x, y * Ca - z * Sa, y * Sa + z * Ca]; });
+  const Unit = p => { const L = Math.hypot(...p); return p.map(c => c / L); };
+  const Seen = new Set(), Edges = [];
+  const Key = p => p.map(c => c.toFixed(4)).join(',');
+  const Add = (Pa, Pb) => {
+    const Ka = Key(Pa), Kb = Key(Pb), K = Ka < Kb ? Ka + '|' + Kb : Kb + '|' + Ka;
+    if (Seen.has(K)) return;
+    Seen.add(K);
+    if (Pa[1] < -1e-6 && Pb[1] < -1e-6) return;
+    if (Pa[1] < -1e-6 || Pb[1] < -1e-6) {
+      const [Lo, Hi] = Pa[1] < Pb[1] ? [Pa, Pb] : [Pb, Pa];
+      const T = Hi[1] / (Hi[1] - Lo[1]);
+      Edges.push([Hi, Hi.map((c, i) => c + (Lo[i] - c) * T)]);
+    } else Edges.push([Pa, Pb]);
+  };
+  for (const [Ia, Ib, Ic] of Faces) {
+    const [Va, Vb, Vc] = [V[Ia], V[Ib], V[Ic]];
+    const At = (i, j) => Unit(Va.map((c, n) => c + (Vb[n] - c) * i / AFrequency + (Vc[n] - c) * j / AFrequency));
+    for (let i = 0; i < AFrequency; i++)
+      for (let j = 0; j < AFrequency - i; j++) {
+        Add(At(i, j), At(i + 1, j)); Add(At(i, j), At(i, j + 1)); Add(At(i + 1, j), At(i, j + 1));
+      }
   }
-  Ctx.strokeStyle = Gold; Ctx.lineWidth = U(Industry ? 2.4 : 1.6);
-  const Ribs = Industry ? 3 : 5;
-  for (let k = -Ribs; k <= Ribs; k++) {
-    Ctx.beginPath(); Ctx.ellipse(Cx, Base, Math.abs(k) / Ribs * Rx + 0.5, Ry, 0, Math.PI, Math.PI * 2); Ctx.stroke();
+  const Ring = [];
+  for (let i = 0; i < 96; i++) {
+    const A0 = i / 96 * Math.PI * 2, A1 = (i + 1) / 96 * Math.PI * 2;
+    Ring.push([[Math.cos(A0), 0, Math.sin(A0)], [Math.cos(A1), 0, Math.sin(A1)]]);
   }
-  for (const Level of Industry ? [0.55] : [0.35, 0.7]) {
-    const Yr = Base - Ry * Level, Wr = Rx * Math.sqrt(1 - Level * Level);
-    Ctx.beginPath(); Ctx.ellipse(Cx, Yr, Wr, U(3), 0, Math.PI, Math.PI * 2); Ctx.stroke();
-  }
-  Ctx.fillStyle = GoldDim; Ctx.fillRect(Cx - Rx, Base - U(3), Rx * 2, U(3));
+  const G = { Edges, Ring };
+  Geodesics.set(AFrequency, G);
+  return G;
 }
-const Placeholders = {
-  'dome-main': (E, X) => domePh(E, X, 11, false),
-  'dome-sat': (E, X) => domePh(E, X, 47, true),
-  'monorail': (E, X) => {
-    const Rail = U(E.y - E.h + 6);
-    Ctx.fillStyle = GoldDim;
-    for (let i = 0; i < 8; i++) Ctx.fillRect(U(X + 12 + i * (E.w - 24) / 7) - U(1.5), Rail, U(3), U(E.y) - Rail);
-    Ctx.fillStyle = Gold; Ctx.fillRect(U(X), Rail - U(4), U(E.w), U(4));
-    Ctx.fillStyle = '#5fe6ff'; Ctx.fillRect(U(X), Rail - U(1.5), U(E.w), 1.5);
-  },
-  'hangar': (E, X) => {
-    Ctx.fillStyle = '#7b715f';
-    Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y), U(E.w / 2), U(E.h), 0, Math.PI, Math.PI * 2); Ctx.fill();
-    Ctx.fillStyle = '#5fe6ff'; Ctx.fillRect(U(X + E.w * 0.4), U(E.y - 6), 3, 3);
-  },
-  'landing-ring': (E, X) => {
-    Ctx.fillStyle = GoldDim;
-    for (const f of [0.2, 0.5, 0.8]) Ctx.fillRect(U(X + E.w * f), U(E.y - E.h * 0.7), U(2), U(E.h * 0.7));
-    Ctx.fillStyle = Gold; Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y - E.h * 0.75), U(E.w / 2), U(E.h * 0.25), 0, 0, Math.PI * 2); Ctx.fill();
-  },
-  'dish': (E, X) => {
-    Ctx.strokeStyle = GoldDim; Ctx.lineWidth = U(2);
-    Ctx.beginPath(); Ctx.moveTo(U(X + E.w / 2), U(E.y)); Ctx.lineTo(U(X + E.w / 2), U(E.y - E.h * 0.5)); Ctx.stroke();
-    Ctx.fillStyle = '#d8ccb4';
-    Ctx.beginPath(); Ctx.ellipse(U(X + E.w / 2), U(E.y - E.h * 0.62), U(E.w / 2), U(E.h * 0.38), -0.6, 0, Math.PI); Ctx.fill();
-  },
-};
+// A point of a frame on the screen, in units: X across, Y up, Z into the
+// screen, from the frame's centre on its base line; null behind the eye
+function frameProject(F, Offset, X, Y, Z) {
+  const Half = Layout.screen.w / 2;
+  const Focal = Camera.focal;
+  if (Focal + Z < Focal * 0.15) return null;
+  const K = Focal / (Focal + Z);
+  const Centre = F.x + F.w / 2 - Offset - Half;
+  return [Half + (Centre + X) * K, Camera.horizon + (Camera.baseY - Camera.horizon) * K - Y * K, K];
+}
+// The ribs of every frame on the screen, split by depth: the far half goes
+// behind the buildings, the near half over them; each far to near
+function frameRibs(Offset) {
+  const Far = [], Near = [], Shadows = [];
+  const Sx = Sun.x - Layout.screen.w / 2, Sy = Camera.horizon - Sun.y;
+  // the sun's direction, from the scene toward it: low, straight behind
+  const L = Math.hypot(Sx, Sy, Camera.focal);
+  const D = [Sx / L, Sy / L, Camera.focal / L];
+  for (const F of Frames) {
+    const R = F.w / 2, H = F.h;
+    const Left = frameProject(F, Offset, -R, 0, 0), Right = frameProject(F, Offset, R, 0, 0);
+    if (Right[0] < -R || Left[0] > Layout.screen.w + R) continue;
+    const G = geodesic(F.frequency || 3);
+    const Put = (Pa, Pb, Ring) => {
+      const A = [Pa[0] * R, Pa[1] * H, Pa[2] * R], B = [Pb[0] * R, Pb[1] * H, Pb[2] * R];
+      const Sa = frameProject(F, Offset, ...A), Sb = frameProject(F, Offset, ...B);
+      if (!Sa || !Sb) return;
+      const Z = (A[2] + B[2]) / 2;
+      const Rib = { A: Sa, B: Sb, Z, W: (F.rib || 2) * (Ring ? 1.6 : 1) * (Sa[2] + Sb[2]) / 2 };
+      (Z > 0 ? Far : Near).push(Rib);
+      // its shadow on the crater floor: thrown toward the eye, long - the sun is low
+      if (A[1] > 0 || B[1] > 0) {
+        const Drop = P => [P[0] - D[0] * P[1] / D[1], 0, P[2] - D[2] * P[1] / D[1]];
+        const Ta = frameProject(F, Offset, ...Drop(A)), Tb = frameProject(F, Offset, ...Drop(B));
+        if (Ta && Tb) Shadows.push({ A: Ta, B: Tb, W: Rib.W });
+      }
+    };
+    for (const [Pa, Pb] of G.Edges) Put(Pa, Pb, false);
+    for (const [Pa, Pb] of G.Ring) Put(Pa, Pb, true);
+  }
+  Far.sort((a, b) => b.Z - a.Z);
+  Near.sort((a, b) => b.Z - a.Z);
+  return { Far, Near, Shadows };
+}
+// A rib against the sun: a dark silhouette, and a thin rim of light along
+// its edge on the side toward the sun, brighter the nearer the sun it runs.
+// Lit from behind, nothing of the frame faces the eye in the light; only the
+// edges catch it.
+const RibDark = 'rgb(26,23,21)';
+function drawRibs(Ribs) {
+  const Sx = U(Sun.x), Sy = U(Sun.y);
+  Ctx.lineCap = 'round';
+  for (const R of Ribs) {
+    const Ax = U(R.A[0]), Ay = U(R.A[1]), Bx = U(R.B[0]), By = U(R.B[1]);
+    const W = Math.max(1, U(R.W));
+    Ctx.strokeStyle = RibDark; Ctx.lineWidth = W;
+    Ctx.beginPath(); Ctx.moveTo(Ax, Ay); Ctx.lineTo(Bx, By); Ctx.stroke();
+    // the side toward the sun
+    let Nx = -(By - Ay), Ny = Bx - Ax;
+    const Len = Math.hypot(Nx, Ny) || 1; Nx /= Len; Ny /= Len;
+    const Mx = (Ax + Bx) / 2, My = (Ay + By) / 2;
+    let Tx = Sx - Mx, Ty = Sy - My;
+    const Dist = Math.hypot(Tx, Ty) || 1; Tx /= Dist; Ty /= Dist;
+    let Facing = Nx * Tx + Ny * Ty;
+    if (Facing < 0) { Nx = -Nx; Ny = -Ny; Facing = -Facing; }
+    const Near = Math.exp(-Dist / U(150));
+    const Level = Math.min(1, 0.12 + 0.88 * Near) * (0.35 + 0.65 * Facing);
+    if (Level < 0.03) continue;
+    const Off = W * 0.35;
+    Ctx.strokeStyle = `rgba(255,226,180,${Level.toFixed(3)})`;
+    Ctx.lineWidth = Math.max(1, W * 0.3);
+    Ctx.beginPath(); Ctx.moveTo(Ax + Nx * Off, Ay + Ny * Off); Ctx.lineTo(Bx + Nx * Off, By + Ny * Off); Ctx.stroke();
+  }
+}
+function drawShadows(Shadows) {
+  const Band = City.band;
+  Ctx.save();
+  Ctx.beginPath(); Ctx.rect(0, U(Band.top), View.width, U(Band.bottom - Band.top)); Ctx.clip();
+  Ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  Ctx.lineCap = 'butt';
+  for (const S of Shadows) {
+    Ctx.lineWidth = Math.max(1, U(S.W) * 1.4);
+    Ctx.beginPath(); Ctx.moveTo(U(S.A[0]), U(S.A[1])); Ctx.lineTo(U(S.B[0]), U(S.B[1])); Ctx.stroke();
+  }
+  Ctx.restore();
+}
+// The sun's own glare over what stands before it: a thin rib across the disc
+// is eaten by the light, as a lens sees it
+function drawGlare(Cover) {
+  const Col = Sun.white.map((v, i) => Math.round(v + (Sun.tint[i] - v) * Cover));
+  const X = U(Sun.x), Y = U(Sun.y), Rad = U(Sun.disc * 3.2);
+  Ctx.save();
+  Ctx.globalCompositeOperation = 'lighter';
+  const G = Ctx.createRadialGradient(X, Y, 0, X, Y, Rad);
+  G.addColorStop(0, `rgba(${Col},0.55)`); G.addColorStop(0.35, `rgba(${Col},0.22)`); G.addColorStop(1, `rgba(${Col},0)`);
+  Ctx.fillStyle = G; Ctx.fillRect(X - Rad, Y - Rad, Rad * 2, Rad * 2);
+  Ctx.restore();
+}
+// Drawn in place of a picture not generated yet; none is waited for now
+const Placeholders = {};
 
 // ---- the cliff: rock over the wall of 13, its left end faded into it ----
 const CliffCanvas = document.createElement('canvas');
@@ -478,7 +622,7 @@ function drawGuides(oRoad) {
 }
 function drawSpans(oC) {
   Ctx.fillStyle = 'rgba(255,138,112,0.18)';
-  for (const E of LayerById.city.elements) if (E.tintsSun) Ctx.fillRect(U(E.x - oC), U(16), U(E.w), U(6));
+  for (const E of [...City.elements, ...Frames]) if (E.tintsSun) Ctx.fillRect(U(E.x - oC), U(16), U(E.w), U(6));
   Ctx.fillStyle = '#ff8a70'; Ctx.fillRect(U(Sun.x) - 1, U(12), 2, U(14));
 }
 
@@ -493,14 +637,22 @@ function frame(Stamp) {
   const Cover = drawSun(S.oC);
   drawRidge(S.oR);
   drawFloor(S.oC);
-  for (const E of LayerById.city.elements) drawElement(E, S.oC);
+  const ShowFrames = Camera && document.getElementById('g-frames').checked;
+  const Ribs = ShowFrames ? frameRibs(S.oC) : null;
+  if (Ribs && document.getElementById('g-shadows').checked) drawShadows(Ribs.Shadows);
+  if (Ribs) drawRibs(Ribs.Far);
+  Drawn = [];
+  for (const E of City.elements) drawElement(E, S.oC, true);
+  if (Ribs) drawRibs(Ribs.Near);
+  if (document.getElementById('g-glare').checked) drawGlare(Cover);
+  drawPicked();
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
   if (Cliff.x + Cliff.w - S.oT > 0) Ctx.drawImage(CliffCanvas, U(Cliff.x - S.oT), 0);
   drawGround(S.oG);
   if (document.getElementById('g-play').checked) drawGuides(S.oRoad);
   if (document.getElementById('g-spans').checked) drawSpans(S.oC);
   document.getElementById('hud').innerHTML =
-    `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%`;
+    (Editing ? 'placing - paused<br>' : '') + `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%`;
   document.getElementById('scrub').value = Now;
   document.getElementById('clock').textContent = Now.toFixed(1) + ' s';
   requestAnimationFrame(frame);
@@ -521,31 +673,159 @@ for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunne
 }
 
 function shadeOf(AElement) { return AElement.shade ?? 1; }
-function showShades() {
-  document.getElementById('shade-line').textContent = LayerById.city.elements
-    .filter(E => shadeOf(E) !== 1).map(E => `${E.id} "shade": ${shadeOf(E)}`).join(',  ') || 'no shade set';
-}
-for (const E of LayerById.city.elements) {
-  const Label = document.createElement('label');
-  Label.textContent = E.id + ' ';
-  const Input = document.createElement('input');
-  Input.type = 'number'; Input.step = '0.05'; Input.min = '0'; Input.max = '1';
-  Input.value = shadeOf(E);
-  Input.oninput = () => { const V = parseFloat(Input.value); if (V >= 0 && V <= 1) { E.shade = V; showShades(); } };
-  Label.appendChild(Input);
-  document.getElementById('shades').appendChild(Label);
-}
-showShades();
 
-const Ids = [...Object.keys(Elements).filter(I => I !== 'screen13'), 'ridge-tex', 'floor-tex', 'sand-tex'];
+const Ids = [...new Set([...LayerById.tunnel.elements.filter(E => !E.existing).map(E => E.id),
+  ...City.elements.map(E => E.id), ...Object.keys(Kit)])].concat(['ridge-tex', 'floor-tex', 'sand-tex']);
 function listSlots() {
   const Box = document.getElementById('slots'); Box.innerHTML = '';
   for (const Id of Ids) {
+    if (Kit[Id]) continue;
     const D = document.createElement('div'); D.className = 'slot' + (Images[Id] ? ' real' : '');
     D.textContent = Id + (Images[Id] ? ` - ${Images[Id].width}x${Images[Id].height}` : ' - placeholder');
     Box.appendChild(D);
   }
+  listKit();
 }
+
+// ---- placing the buildings ----
+// The editor works on the city's elements as the game reads them: x the
+// left edge along the layer, y the feet, w the width at that depth. Moving
+// a building up or down moves it into the depth: its size follows its
+// nearness, as the camera has it.
+let Editing = false, Picked = null, Grab = null;
+const Half = () => Layout.screen.w / 2;
+function naturalWidth(E) {
+  // the width at k = 1, at the size it was given: a building made bigger
+  // stays bigger as it moves
+  return E.w / nearness(depthY(E));
+}
+function sortCity() { City.elements.sort((a, b) => depthY(a) - depthY(b)); }
+function stageUnits(Ev) {
+  const Box = View.getBoundingClientRect();
+  return [(Ev.clientX - Box.left) * View.width / Box.width / Px, (Ev.clientY - Box.top) * View.height / Box.height / Px];
+}
+function pick(Ux, Uy) {
+  for (let i = Drawn.length - 1; i >= 0; i--) {
+    const D = Drawn[i];
+    if (U(Ux) >= D.X0 && U(Ux) <= D.X1 && U(Uy) >= D.Y0 && U(Uy) <= D.Y1) return D.E;
+  }
+  return null;
+}
+function showPicked() {
+  const Out = document.getElementById('picked');
+  if (!Picked) return;
+  Out.textContent = `${Picked.id}  x ${Picked.x}  y ${Picked.y}  w ${Picked.w}  shade ${shadeOf(Picked)}${Picked.mirror ? '  mirrored' : ''}  - k ${nearness(depthY(Picked)).toFixed(2)}${Picked.groundY !== undefined ? '  (hangs: moves along the street only)' : ''}`;
+}
+function drawPicked() {
+  if (!Editing || !Picked) return;
+  const D = Drawn.find(D => D.E === Picked);
+  if (!D) return;
+  Ctx.strokeStyle = '#6fd8e8'; Ctx.lineWidth = 2; Ctx.setLineDash([6, 4]);
+  Ctx.strokeRect(D.X0, D.Y0, D.X1 - D.X0, D.Y1 - D.Y0);
+  Ctx.setLineDash([]);
+}
+const Round1 = v => Math.round(v * 10) / 10;
+function moveTo(E, CentreX, FeetY) {
+  if (E.groundY !== undefined) { E.x = Round1(CentreX - E.w / 2); return; }
+  const Natural = naturalWidth(E), Tall = E.h / E.w;
+  E.y = Round1(Math.max(Camera.horizon + 1, FeetY));
+  E.w = Round1(Natural * nearness(E.y));
+  E.h = Round1(E.w * Tall);
+  E.x = Round1(CentreX - E.w / 2);
+}
+// The layer's x of a building's centre that puts it at the screen's AX with
+// the city where it is now
+function layerCentre(AScreenX, AY, AOffset) {
+  return (AScreenX - Half()) / nearness(AY) + Half() + AOffset;
+}
+function nowOffset() { return Track[Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)))].oC; }
+View.addEventListener('pointerdown', Ev => {
+  if (!Editing) return;
+  const [Ux, Uy] = stageUnits(Ev);
+  Picked = pick(Ux, Uy);
+  if (Picked) {
+    const Left = cityLeft(Picked, nowOffset());
+    Grab = { Dx: Ux - (Left + Picked.w / 2), Dy: Uy - Picked.y };
+    View.setPointerCapture(Ev.pointerId);
+  }
+  showPicked();
+});
+View.addEventListener('pointermove', Ev => {
+  if (!Editing || !Picked || !Grab) return;
+  const [Ux, Uy] = stageUnits(Ev);
+  const Y = Uy - Grab.Dy;
+  const Depth = Picked.groundY ?? Math.max(Camera.horizon + 1, Y);
+  moveTo(Picked, layerCentre(Ux - Grab.Dx, Depth, nowOffset()), Y);
+  showPicked();
+});
+View.addEventListener('pointerup', () => { if (Grab) { Grab = null; sortCity(); } });
+document.addEventListener('keydown', Ev => {
+  if (!Editing || !Picked || Ev.target.tagName === 'INPUT') return;
+  const Centre = Picked.x + Picked.w / 2;
+  if (Ev.key === 'm' || Ev.key === 'M') Picked.mirror = !Picked.mirror;
+  else if (Ev.key === '+' || Ev.key === '=') { Picked.h = Round1(Picked.h * 1.05); Picked.w = Round1(Picked.w * 1.05); Picked.x = Round1(Centre - Picked.w / 2); }
+  else if (Ev.key === '-') { Picked.h = Round1(Picked.h / 1.05); Picked.w = Round1(Picked.w / 1.05); Picked.x = Round1(Centre - Picked.w / 2); }
+  else if (Ev.key === ']') Picked.shade = Math.min(1, Round1(shadeOf(Picked) * 100 + 2) / 100);
+  else if (Ev.key === '[') Picked.shade = Math.max(0, Round1(shadeOf(Picked) * 100 - 2) / 100);
+  else if (Ev.key === 'd' || Ev.key === 'D') {
+    const Copy = { ...Picked, x: Round1(Picked.x + Picked.w * 0.6) };
+    City.elements.push(Copy); sortCity(); Picked = Copy;
+  } else if (Ev.key === 'Delete' || Ev.key === 'Backspace') {
+    City.elements.splice(City.elements.indexOf(Picked), 1); Picked = null;
+    document.getElementById('picked').textContent = 'removed';
+    Ev.preventDefault(); return;
+  } else return;
+  Ev.preventDefault();
+  showPicked();
+});
+const EditButton = document.getElementById('edit');
+EditButton.onclick = () => {
+  Editing = !Editing;
+  EditButton.classList.toggle('on', Editing);
+  document.querySelector('.stage').classList.toggle('editing', Editing);
+  if (Editing) { Playing = false; syncPlay(); }
+  else Picked = null;
+};
+// A building of the kit comes in at the middle of the screen, on the
+// domes' base line, at its own size
+function listKit() {
+  const Box = document.getElementById('kit'); Box.innerHTML = '';
+  for (const [Id, [W, H]] of Object.entries(Kit)) {
+    const B = document.createElement('button');
+    B.title = `${Id}: ${W} x ${H} units`;
+    if (Images[Id]) { const I = document.createElement('img'); I.src = Images[Id].src; I.alt = ''; B.appendChild(I); }
+    const L = document.createElement('span'); L.textContent = Id; B.appendChild(L);
+    B.onclick = () => {
+      if (!Editing) EditButton.onclick();
+      const E = { id: Id, x: 0, y: Camera.baseY, w: W, h: H, shade: 0.45, mirror: false };
+      E.x = Round1(layerCentre(Half(), E.y, nowOffset()) - W / 2);
+      City.elements.push(E); sortCity(); Picked = E; showPicked();
+    };
+    Box.appendChild(B);
+  }
+}
+// The layout as it lies in the repository, its city's elements replaced -
+// one to a line, as the file has them
+function elementLine(E) {
+  const Keys = ['id', 'x', 'y', 'w', 'h', 'tintsSun', 'shade', 'mirror', 'featherLeft', 'groundY'];
+  const Parts = Keys.filter(K => E[K] !== undefined).map(K => `"${K}": ${JSON.stringify(E[K])}`);
+  return '        { ' + Parts.join(', ') + ' }';
+}
+document.getElementById('export').onclick = () => {
+  sortCity();
+  const Lines = City.elements.map(elementLine).join(',\n');
+  const Re = /(\{ "id": "city"[\s\S]*?"elements": \[\n)([\s\S]*?)(\n      \] \},)/;
+  if (!Re.test(LayoutText)) {
+    document.getElementById('picked').textContent = 'the city layer is not where the stand expects it in the file: nothing written';
+    return;
+  }
+  const Text = LayoutText.replace(Re, (_, Head, __, Tail) => Head + Lines + Tail);
+  const A = document.createElement('a');
+  A.href = URL.createObjectURL(new Blob([Text], { type: 'application/json' }));
+  A.download = 'chase-backdrop.json';
+  A.click();
+};
+
 function takeFiles(Files) {
   for (const F of Files) {
     const Id = F.name.replace(/\.(checked|seamless)?\.?png$/i, '').replace(/\.$/, '');

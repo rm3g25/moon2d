@@ -282,6 +282,14 @@ Turret 2 dies: turret 3 comes out, a napalm launcher opens on the stern, and the
 - **Their numbers live in the layout** (`chase-backdrop.json`, a section of its own beside the speed): the kit, the scale, the road between two, the corridors of the tops, the share of tall ones, the tint in the tunnel and outside. The game only - the stand does not play them, and may never need to.
 - **Dark in the tunnel, lighter out of it**, as the near hills: 35% in the tunnel to 55% outside, each a few percent off. Low, so the warm rim light of the kit, lit from below, reads as a silhouette against the contre-jour of the far plane.
 
+**Decided 2026-11-01, the city, over the text above and `chase-backdrop.md` where they disagree:**
+- **Geometry is code, paint is the generation's.** The dome frames are drawn by code - geodesic half-ellipsoids in a 3D of their own, the far half behind the city, the near half over it, dark ribs with a rim of light on the side toward the sun, their shadows on the crater floor. A generation draws only what is paint: the buildings.
+- **The buildings come from sheets**, many to a generation, one light and one scale for all, and are cut by code into a kit of pieces (42: landmarks, housing, outskirts, industry), placed in depth on the stand by hand. The domes' pictures (and their mirror), the outskirts' hangar, ring and dish and the first monorail are gone; the monorail is a sheet of parts too.
+- **The style: the space age as the 1970s saw it** - a space programme's colony and Japanese Metabolism. No domes, spires or finials: Art Deco with them read as a Stalinist high-rise, a church and a mosque.
+- **Depth by the feet.** One camera for the city: the lower a building's feet, the nearer it stands, the bigger it is and the faster it rides - the parallax inside the city layer.
+- **The front row of the city may stand in a row**: at 3 a second it reads as a street.
+- **The frames come first, then the life**: the frames on the stand and the eye's verdict, then in the game (3.0.90); the neon, the lamps and the train after. Whether a frame drawn by code lives beside the painted buildings is the stand's question; if not, a frame is generated without the city and the kit stays.
+
 ### End of the chase
 Turret 3 dies: the launcher folds into the hull, the belt runs down to a standstill, the machine stops. The energy reaches 100% - the evolution. The rest of the fight is on a still screen. *Replaced 2026-11-01: the belt does not run down, the fight goes on in motion - see "Decided 2026-11-01, the fight in motion and the air phase".*
 
@@ -772,7 +780,7 @@ Each its own commit, each run live.
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
-- The city (after 11b-1): lit from one side it reads as cardboard, and it lacks lights and life - a step of its own, likely a unit of its own. The mirror swapped the sides of the monorail's stations (the main dome's stub on its left now, the satellite's on its right); the rail between them hides its ends in the domes' bodies - set right with the city's step.
+- The city (2026-11-01, "Decided 2026-11-01, the city"): the frames in the game (3.0.90) once the stand has passed them; the life of the city after them, the train on the monorail with it (the monorail itself rebuilt from a sheet of its parts the same day).
 - The haze of the pad jets on screen 13: back once the far plane is drawn into a texture the haze can bend.
 - The fangs (11b-2, live): their speed (20 - a fang crosses the screen in about 30 s, a calm middle ground rather than posts flashing by), how many, how high the tall ones, how dark.
 - The entrance's numbers (8b, live): the drive-in's speed, the breath before the mast, how fast the mast rises; whether the shortened replay after a death reads right.

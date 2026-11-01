@@ -193,11 +193,15 @@ boss; no 2008 frame stands behind it.
 **The chase backdrop** (`sprites/chase-backdrop.mset`) - generated with
 ChatGPT's image model to the author's direction, one generation per object
 on a clear ground with one style reference for all: the end of the tunnel
-(the cliff), the city under its dome, the monorail, and the crater's far
-ridge, floor and near sand as bands. Checked, trimmed and scaled by
-`tools/chase/check_element.py`; the bands levelled, evened in light and
-made seamless by `tools/chase/make_seamless.py`; packed by
-`tools/chase/pack_set.py`. New art for the chase of the level 2 finale.
+(the cliff) and the crater's far ridge, floor and near sand as bands. Checked, trimmed and scaled by `tools/chase/check_element.py`; the
+bands levelled, evened in light and made seamless by
+`tools/chase/make_seamless.py`; packed by `tools/chase/pack_set.py`. The
+city's buildings (since 2026-11-01) come from four sheets of the same model,
+many buildings to a sheet - landmark towers, housing, low outskirts,
+industry, and the monorail's parts -, the first described in words alone and
+the rest made with the first attached; cut one PNG a building, their edges cleaned, by
+`tools/chase/cut_sheet.py`. The dome frames over them are drawn by code. New
+art for the chase of the level 2 finale.
 
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine

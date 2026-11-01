@@ -481,7 +481,7 @@ begin
     Assert.IsTrue(Ground.Motion = fmGround, 'The near ground in front');
     Assert.IsTrue(Ground.Band.From < 0, 'It stands from the start of the arena');
     Assert.IsTrue(Ground.Band.ShadeInTunnel < 1, 'Dark in the tunnel');
-    Assert.IsTrue(ElementById(Plane, 'dome-main').Mirror, 'The city lit from the sun side');
+    Assert.IsFalse(ElementById(Plane, 'land-03').Backdrop, 'The city built of the kit''s buildings');
   finally
     Level.Free;
   end;

@@ -6,9 +6,9 @@ scales it to the size the layout gives it, within 2048 px.
 
   python check_element.py <id> in.png [out.png]
 
-<id> is an element of the layout, bin/chase-backdrop.json (cliff, dome-main,
-dome-sat, monorail, hangar, landing-ring, dish), or a texture (ridge-tex,
-floor-tex, sand-tex).
+<id> is an element of the layout, bin/chase-backdrop.json (the cliff), or a
+texture (ridge-tex, floor-tex, sand-tex). The city's buildings and the
+monorail come in sheets and go through cut_sheet.py instead.
 The verdict is PASS, WARN or FAIL per check; the exit code is 1 on any FAIL.
 Needs numpy and Pillow.
 """
@@ -175,7 +175,7 @@ def trim_and_scale(AImage, AElement, AOutPath, AFringed):
     print(f'INFO  texture kept at {Trimmed.size}')
     return
   # Fit inside the layout's box: a full-height cliff is set by its height,
-  # a dome by its width. The other side follows the picture.
+  # a wide one by its width. The other side follows the picture.
   Scale = min(AElement['w'] / Trimmed.width, AElement['h'] / Trimmed.height) * TargetPxPerUnit
   Size = (round(Trimmed.width * Scale), round(Trimmed.height * Scale))
   if max(Size) > MaxSide:
