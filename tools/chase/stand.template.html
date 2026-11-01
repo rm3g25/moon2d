@@ -90,6 +90,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label><input id="g-hill-shadows" type="checkbox" checked> shadows over the near hills</label>
     <label><input id="g-glare" type="checkbox" checked> sun glare over</label>
     <label><input id="g-parallax" type="checkbox" checked> depth parallax</label>
+    <label><input id="g-lights" type="checkbox" checked> city lights</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -104,6 +105,10 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <button id="edit">Place buildings</button>
     <output id="picked" style="font: 12px var(--mono); color: var(--dim)">drag a building: sideways along the street, up and down into the depth (it grows and shrinks with it); M mirror, + and - size, [ and ] shade, D copy, Delete remove</output>
     <button id="export">Download chase-backdrop.json</button>
+  </div>
+
+  <div class="bar" id="looks">
+    <span style="color: var(--dim); font-size: 13px">city lights, 0..1:</span>
   </div>
 
   <div class="cols">
@@ -388,7 +393,7 @@ function shadedImage(Id, Shade) {
 // Where each building of the city was drawn this frame, back to front: the
 // editor picks from it
 let Drawn = [];
-function drawElement(E, Offset, InCity) {
+function drawElement(E, Offset, InCity, Index) {
   const X = InCity ? cityLeft(E, Offset) : E.x - Offset;
   if (X > Layout.screen.w || X + E.w < 0) return;
   const Img = Images[E.id];
@@ -401,10 +406,260 @@ function drawElement(E, Offset, InCity) {
       Ctx.drawImage(Pic, 0, U(E.y) - H, W, H);
       Ctx.restore();
     } else Ctx.drawImage(Pic, U(X), U(E.y) - H, W, H);
-    if (InCity) Drawn.push({ E, X0: U(X), Y0: U(E.y) - H, X1: U(X) + W, Y1: U(E.y) });
+    if (InCity) {
+      Drawn.push({ E, X0: U(X), Y0: U(E.y) - H, X1: U(X) + W, Y1: U(E.y) });
+      drawPaint(E, X, E.w * Img.height / Img.width);
+      drawLights(E, Index, X, E.w * Img.height / Img.width, LifeTick);
+      drawEmblem(E, X, E.w * Img.height / Img.width, LifeTick);
+    }
     return;
   }
   Placeholders[E.id]?.(E, X);
+}
+
+// ---- the life of the city: its lights ----
+// A light is a box in shares of its piece's picture; it rides with every
+// building drawn from the piece. Its glow is added over the building: a
+// core over the box and a halo around it, the shapes of Render.Glow - a
+// point for a sign, a beam (flat along, Gaussian across) for a strip.
+const Lights = Layout.cityLights || null;
+// The tick of the far plane's clock: 33 a second, as the game's
+let LifeTick = 0;
+
+// 32-bit integer mixing (lowbias32): the same bits in the game. A hash on
+// Math.sin would part from Delphi's in the last digits, and the signs with it
+function mix(AValue) {
+  let X = AValue >>> 0;
+  X = (X ^ (X >>> 16)) >>> 0;
+  X = Math.imul(X, 0x7feb352d) >>> 0;
+  X = (X ^ (X >>> 15)) >>> 0;
+  X = Math.imul(X, 0x846ca68b) >>> 0;
+  return (X ^ (X >>> 16)) >>> 0;
+}
+// 0 .. 1, the same for the same seed and key
+function roll(ASeed, AKey) { return mix((mix(ASeed) ^ AKey) >>> 0) / 4294967296; }
+function rollRange(ASeed, AKey, [ALeast, AMost]) { return ALeast + (AMost - ALeast) * roll(ASeed, AKey); }
+function rollInt(ASeed, AKey, ALeast, AMost) { return ALeast + Math.floor(roll(ASeed, AKey) * (AMost - ALeast + 1)); }
+function lightSeed(AElement, ALight) { return mix(AElement * 64 + ALight + 1); }
+
+const BreathPeriodKey = 1, BreathPhaseKey = 2, WindowKey = 3, ShiftKey = 4;
+const FaultKeys = 1000, KeysAWindow = 16;
+// How bright a sign is at the tick, 0..1: a slow breath, and now and then a
+// tube that stutters - flips down and back, a few ticks each
+function neonLevel(ASeed, ATick, AFaultShare = Lights.flicker.faultShare) {
+  const F = Lights.flicker;
+  const Period = rollRange(ASeed, BreathPeriodKey, F.breathTicks);
+  const Phase = roll(ASeed, BreathPhaseKey);
+  const Breath = 1 - F.breathDepth * (0.5 + 0.5 * Math.sin(2 * Math.PI * (ATick / Period + Phase)));
+  const Window = rollInt(ASeed, WindowKey, F.windowTicks[0], F.windowTicks[1]);
+  const Shifted = ATick + rollInt(ASeed, ShiftKey, 0, Window - 1);
+  const Which = Math.floor(Shifted / Window);
+  const Inside = Shifted - Which * Window;
+  const Base = FaultKeys + Which * KeysAWindow;
+  if (roll(ASeed, Base) >= AFaultShare) return Breath;
+  const Flips = rollInt(ASeed, Base + 1, F.flips[0], F.flips[1]);
+  const Start = rollInt(ASeed, Base + 2, 0, Math.max(0, Window - Flips * F.flipTicks[1] - 1));
+  let At = Start;
+  for (let i = 0; i < Flips; i++) {
+    const Length = rollInt(ASeed, Base + 3 + i, F.flipTicks[0], F.flipTicks[1]);
+    if (Inside >= At && Inside < At + Length) return i % 2 === 0 ? Breath * F.faultLow : Breath;
+    At += Length;
+  }
+  return Breath;
+}
+
+// Whether a window is lit at the tick: its time is cut into spans of
+// spanTicks, onShare of them lit; a light switched on catches with a flicker
+const SpanKeys = 10, SpanOnKeys = 500, FirstSpanKey = 6;
+function windowLevel(ASeed, ATick) {
+  const W = Lights.windows;
+  let Start = -rollInt(ASeed, FirstSpanKey, 0, W.spanTicks[1]);
+  for (let n = 0; ; n++) {
+    const Length = rollInt(ASeed, SpanKeys + n, W.spanTicks[0], W.spanTicks[1]);
+    if (ATick < Start + Length) {
+      if (roll(ASeed, SpanOnKeys + n) >= W.onShare) return 0;
+      const Inside = ATick - Start;
+      return Inside < 4 && Inside % 2 === 1 ? Lights.flicker.faultLow : 1;
+    }
+    Start += Length;
+  }
+}
+
+// The glow textures of Render.Glow, at its 128 pixels, white with the shape
+// in alpha; tinted copies made once a colour
+function glowShape(AAlpha) {
+  const Side = 128, C = document.createElement('canvas');
+  C.width = C.height = Side;
+  const G = C.getContext('2d'), Data = G.createImageData(Side, Side), Half = Side / 2;
+  for (let Row = 0; Row < Side; Row++)
+    for (let Col = 0; Col < Side; Col++) {
+      const At = (Row * Side + Col) * 4;
+      Data.data[At] = Data.data[At + 1] = Data.data[At + 2] = 255;
+      Data.data[At + 3] = Math.round(255 * AAlpha((Col + 0.5 - Half) / Half, (Row + 0.5 - Half) / Half));
+    }
+  G.putImageData(Data, 0, 0);
+  return C;
+}
+const GlowShapes = {
+  point: glowShape((Dx, Dy) => Math.exp(-(Dx * Dx + Dy * Dy) / (2 * 0.3 * 0.3))),
+  beam: glowShape((Dx, Dy) => Math.exp(-((Dy / 0.4) ** 2))),
+};
+const Tinted = new Map();
+function tintedGlow(AShape, AColor) { return tinted(AShape, GlowShapes[AShape], AColor); }
+function tinted(AKey, ABase, AColor) {
+  const Key = AKey + AColor.join(',');
+  if (Tinted.has(Key)) return Tinted.get(Key);
+  const Base = ABase, C = document.createElement('canvas');
+  C.width = Base.width; C.height = Base.height;
+  const G = C.getContext('2d');
+  G.drawImage(Base, 0, 0);
+  // keeps the alpha, takes the colour: SDL_SetTextureColorMod over white
+  G.globalCompositeOperation = 'source-in';
+  G.fillStyle = `rgb(${AColor.join(',')})`;
+  G.fillRect(0, 0, C.width, C.height);
+  Tinted.set(Key, C);
+  return C;
+}
+// Added as SDL_BLENDMODE_ADD adds: the colour times the alpha onto what is there
+function addGlow(AShape, AColor, ACentreX, ACentreY, AWidth, AHeight, ALevel) {
+  addPicture(tintedGlow(AShape, AColor), ACentreX - AWidth / 2, ACentreY - AHeight / 2, AWidth, AHeight, ALevel);
+}
+function addPicture(APicture, ALeft, ATop, AWidth, AHeight, ALevel) {
+  const Level = Math.min(1, Math.max(0, ALevel));
+  if (Level <= 0) return;
+  Ctx.globalCompositeOperation = 'lighter';
+  Ctx.globalAlpha = Level;
+  Ctx.drawImage(APicture, U(ALeft), U(ATop), U(AWidth), U(AHeight));
+  Ctx.globalAlpha = 1;
+  Ctx.globalCompositeOperation = 'source-over';
+}
+// AIndex - the building's place in the city's list, back to front: the seed
+// of its signs' clocks. ALeft and AHeight - where it was drawn, in units
+function drawLights(E, AIndex, ALeft, AHeight, ATick) {
+  if (!Lights || !document.getElementById('g-lights').checked) return;
+  const Own = Lights.pieces[E.id];
+  if (!Own) return;
+  const Near = nearness(depthY(E)), Top = E.y - AHeight;
+  Own.forEach((L, i) => {
+    const [Bu, Bv, Bw, Bh] = L.box;
+    const Seed = lightSeed(AIndex, i);
+    if (L.kind === 'lamp') {
+      const X = ALeft + (E.mirror ? 1 - Bu : Bu) * E.w, Y = Top + Bv * AHeight;
+      drawBeacon(L.color, X, Y, Near, beaconLevel(Seed, ATick));
+      return;
+    }
+    if (L.kind === 'window') {
+      const Lit = windowLevel(Seed, ATick);
+      if (Lit <= 0) return;
+    }
+    const Look = Lights[L.kind];
+    const U0 = E.mirror ? 1 - Bu - Bw : Bu;
+    const Cx = ALeft + (U0 + Bw / 2) * E.w, Cy = Top + (Bv + Bh / 2) * AHeight;
+    const W = Bw * E.w, H = Bh * AHeight;
+    const Shape = L.kind === 'neon' ? 'point' : 'beam';
+    const Level = L.kind === 'neon' ? neonLevel(Seed, ATick) : L.kind === 'window' ? windowLevel(Seed, ATick) : 1;
+    const Pad = 2 * Look.haloPad * Near;
+    addGlow(Shape, L.color, Cx, Cy, W * Look.halo[0] + Pad, H * Look.halo[1] + Pad, Look.haloLevel * Level);
+    addGlow(Shape, L.color, Cx, Cy, W * Look.core[0], H * Look.core[1], Look.coreLevel * Level);
+  });
+}
+
+// ---- the emblem as old paint on a building ----
+// A building's "paint": [u, v, w, alpha] - the worn emblem (tek-paint) at
+// that place of its picture, w its width as a share of the picture's. Paint
+// is lit as the wall is, so it takes the building's shade; a mirrored
+// building moves it, never turns it - the letters stay the right way round.
+function drawPaint(E, ALeft, AHeight) {
+  const Img = Images['tek-paint'];
+  if (!E.paint || !Img) return;
+  const [Pu, Pv, Pw, Alpha] = E.paint;
+  const U0 = E.mirror ? 1 - Pu - Pw : Pu;
+  const W = Pw * E.w, H = W * Img.height / Img.width;
+  Ctx.globalAlpha = Alpha;
+  Ctx.drawImage(shadedImage('tek-paint', shadeOf(E)), U(ALeft + U0 * E.w), U(E.y - AHeight + Pv * AHeight), U(W), U(H));
+  Ctx.globalAlpha = 1;
+}
+
+// ---- the TeK emblem under the main dome ----
+// A neon sign on two cables under the apex of its frame, at the frame's
+// centre, so as near as the domes' centres. Its parts burn on one clock:
+// a tired flicker now and then, and every relightTicks the whole sign goes
+// out and lights again part after part, each catching with a stutter.
+const Emblem = Layout.emblem || null;
+const EmblemSeed = 0x7e4;
+const CycleLengthKey = 10, CycleDarkKey = 11, FirstCycleKey = 5;
+const PartGapKeys = 2000, CatchFlipsKeys = 3000, CatchFlipKeys = 4000;
+const CycleKeys = 16, PartKeys = 8;
+// The cycle the tick falls in: where it began and how long the sign stays dark
+function emblemCycle(ATick) {
+  const Least = Emblem.darkTicks[1] + Emblem.partTicks[1] * Emblem.parts.length + 600;
+  let Start = -rollInt(EmblemSeed, FirstCycleKey, Least, Math.max(Least, Emblem.relightTicks[0]));
+  for (let k = 0; ; k++) {
+    const Length = rollInt(EmblemSeed, CycleLengthKey + k * CycleKeys, Emblem.relightTicks[0], Emblem.relightTicks[1]);
+    if (ATick < Start + Length) return { k, Start };
+    Start += Length;
+  }
+}
+function emblemPartLevel(APart, ATick) {
+  const { k, Start } = emblemCycle(ATick);
+  let LitAt = Start + rollInt(EmblemSeed, CycleDarkKey + k * CycleKeys, Emblem.darkTicks[0], Emblem.darkTicks[1]);
+  for (let i = 0; i <= APart; i++)
+    LitAt += rollInt(EmblemSeed, PartGapKeys + k * CycleKeys + i, Emblem.partTicks[0], Emblem.partTicks[1]);
+  if (ATick < LitAt) return 0;
+  // catching: on, off, on... a few ticks each
+  const Flips = rollInt(EmblemSeed, CatchFlipsKeys + k * CycleKeys + APart, 2, 5);
+  let At = LitAt;
+  for (let j = 0; j < Flips; j++) {
+    const Length = rollInt(EmblemSeed, CatchFlipKeys + (k * CycleKeys + APart) * PartKeys + j, 2, 4);
+    if (ATick < At + Length) return j % 2 === 0 ? 1 : Lights.flicker.faultLow;
+    At += Length;
+  }
+  return neonLevel(mix(EmblemSeed + APart + 1), ATick, Emblem.faultShare);
+}
+// The emblem stands on the lower point of its frame on the tip of its
+// building (Emblem.on, at Emblem.at of its picture), as near as the building
+function drawEmblem(E, ALeft, AHeight, ATick) {
+  if (!Emblem || E.id !== Emblem.on || !Images['tek-emblem']) return;
+  const K = nearness(depthY(E)), W = Emblem.w * K, H = W * Emblem.aspect;
+  const [Au, Av] = Emblem.at;
+  const TipX = ALeft + (E.mirror ? 1 - Au : Au) * E.w, TipY = E.y - AHeight + Av * AHeight;
+  // the lower point of the frame, the first part
+  const Frame = Emblem.parts[0];
+  const Left = TipX - (Frame[0] + Frame[2] / 2) * W, Top = TipY - (Frame[1] + Frame[3]) * H;
+  Ctx.drawImage(shadedImage('tek-emblem', Emblem.shade), U(Left), U(Top), U(W), U(H));
+  if (!document.getElementById('g-lights').checked) return;
+  Emblem.parts.forEach((Box, i) => {
+    const Level = emblemPartLevel(i, ATick);
+    const Tube = Images[`tek-${i + 1}`], Halo = Images[`tek-${i + 1}-halo`];
+    const Hb = Emblem.halos[i];
+    if (Halo) addPicture(tinted(`tek-${i + 1}-halo`, Halo, Emblem.color), Left + Hb[0] * W, Top + Hb[1] * H,
+      Hb[2] * W, Hb[3] * H, Emblem.haloLevel * Level);
+    if (Tube) addPicture(tinted(`tek-${i + 1}`, Tube, Emblem.color), Left + Box[0] * W, Top + Box[1] * H,
+      Box[2] * W, Box[3] * H, Emblem.coreLevel * Level);
+  });
+}
+
+// ---- the warning lights on the frames ----
+const Beacons = Layout.beacons || null;
+// Its seed is its place on the frame, so the order of the nodes does not matter
+function beaconSeed(AFrame, ANode) {
+  const Grid = c => (Math.round(c * 1000) + 100000) >>> 0;
+  return mix((mix((mix(AFrame + 1) ^ Grid(ANode[0])) >>> 0) ^ Grid(ANode[2])) >>> 0);
+}
+function beaconLevel(ASeed, ATick) {
+  const Period = rollInt(ASeed, 1, Beacons.periodTicks[0], Beacons.periodTicks[1]);
+  const Phase = rollInt(ASeed, 2, 0, Period - 1);
+  return (ATick + Phase) % Period < Beacons.flashTicks ? Beacons.flashLevel : Beacons.glowLevel;
+}
+function drawBeacons(AList, ATick) {
+  if (!Beacons || !document.getElementById('g-lights').checked) return;
+  for (const B of AList) {
+    drawBeacon(Beacons.color, B.X, B.Y, B.K, beaconLevel(B.Seed, ATick));
+  }
+}
+function drawBeacon(AColor, AX, AY, ANear, ALevel) {
+  addGlow('point', AColor, AX, AY, Beacons.halo * ANear, Beacons.halo * ANear, ALevel * 0.5);
+  addGlow('point', AColor, AX, AY, Beacons.size * ANear, Beacons.size * ANear, ALevel);
 }
 
 // ---- the dome frames: geodesic half-ellipsoids, drawn by code ----
@@ -452,7 +707,12 @@ function geodesic(AFrequency) {
     const A0 = i / 96 * Math.PI * 2, A1 = (i + 1) / 96 * Math.PI * 2;
     Ring.push([[Math.cos(A0), 0, Math.sin(A0)], [Math.cos(A1), 0, Math.sin(A1)]]);
   }
-  const G = { Edges, Ring };
+  // the nodes: every end of an edge above the equator, once
+  const NodeKeys = new Set(), Nodes = [];
+  for (const Edge of Edges)
+    for (const P of Edge)
+      if (P[1] > 1e-6 && !NodeKeys.has(Key(P))) { NodeKeys.add(Key(P)); Nodes.push(P); }
+  const G = { Edges, Ring, Nodes };
   Geodesics.set(AFrequency, G);
   return G;
 }
@@ -511,7 +771,7 @@ function shadowStroke(F, Offset, Pa, Pb, Shares, Thick, D) {
 // The ribs of every frame on the screen, split by depth: the far half goes
 // behind the buildings, the near half over them; each far to near
 function frameRibs(Offset) {
-  const Far = [], Near = [], Shadows = [];
+  const Far = [], Near = [], Shadows = [], FarBeacons = [], NearBeacons = [];
   const Sx = Sun.x - Layout.screen.w / 2, Sy = Camera.horizon - Sun.y;
   // the sun's direction, from the scene toward it: low, straight behind
   const L = Math.hypot(Sx, Sy, Camera.focal);
@@ -538,11 +798,17 @@ function frameRibs(Offset) {
       }
     };
     for (const [Pa, Pb] of G.Edges) Put(Pa, Pb, false);
+    if (F.beaconsAbove !== undefined)
+      for (const N of G.Nodes) {
+        if (N[1] <= F.beaconsAbove) continue;
+        const S = frameProject(F, Offset, N[0] * R, N[1] * H, N[2] * R);
+        if (S) (N[2] > 0 ? FarBeacons : NearBeacons).push({ X: S[0], Y: S[1], K: S[2], Seed: beaconSeed(Frames.indexOf(F), N) });
+      }
     for (const [Pa, Pb] of G.Ring) Put(Pa, Pb, true);
   }
   Far.sort((a, b) => b.Z - a.Z);
   Near.sort((a, b) => b.Z - a.Z);
-  return { Far, Near, Shadows };
+  return { Far, Near, Shadows, FarBeacons, NearBeacons };
 }
 // A rib against the sun: a dark silhouette, and a thin rim of light along
 // its edge on the side toward the sun, brighter the nearer the sun it runs.
@@ -743,10 +1009,11 @@ function frame(Stamp) {
     renderShadows(Ribs.Shadows);
     drawShadows(City.band.top, City.band.bottom);
   }
-  if (Ribs) drawRibs(Ribs.Far);
+  LifeTick = Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)));
+  if (Ribs) { drawRibs(Ribs.Far); drawBeacons(Ribs.FarBeacons, LifeTick); }
   Drawn = [];
-  for (const E of City.elements) drawElement(E, S.oC, true);
-  if (Ribs) drawRibs(Ribs.Near);
+  City.elements.forEach((E, i) => drawElement(E, S.oC, true, i));
+  if (Ribs) { drawRibs(Ribs.Near); drawBeacons(Ribs.NearBeacons, LifeTick); }
   if (document.getElementById('g-glare').checked) drawGlare(Cover);
   drawPicked();
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
@@ -759,7 +1026,7 @@ function frame(Stamp) {
   if (document.getElementById('g-play').checked) drawGuides(S.oRoad);
   if (document.getElementById('g-spans').checked) drawSpans(S.oC);
   document.getElementById('hud').innerHTML =
-    (Editing ? 'placing - paused<br>' : '') + `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%`;
+    (Editing ? 'placing - paused<br>' : '') + `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%<br>tick ${LifeTick}`;
   document.getElementById('scrub').value = Now;
   document.getElementById('clock').textContent = Now.toFixed(1) + ' s';
   requestAnimationFrame(frame);
@@ -781,6 +1048,40 @@ for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunne
 }
 
 function shadeOf(AElement) { return AElement.shade ?? 1; }
+
+// The looks of the lights, tuned here and written back by the download
+const LookFields = [['neon', 'coreLevel', 'sign core'], ['neon', 'haloLevel', 'sign halo'],
+  ['neon', 'haloPad', 'sign halo pad'], ['strip', 'coreLevel', 'strip core'],
+  ['strip', 'haloLevel', 'strip halo'], ['window', 'coreLevel', 'window core'],
+  ['window', 'haloLevel', 'window halo']];
+const OwnFields = [['emblem', 'coreLevel', 'TeK core'], ['emblem', 'haloLevel', 'TeK halo'],
+  ['emblem', 'shade', 'TeK metal'], ['emblem', 'w', 'TeK width'],
+  ['beacons', 'glowLevel', 'beacon glow'], ['beacons', 'flashLevel', 'beacon flash']];
+for (const [Section, Key, Name] of OwnFields) {
+  const Owner = Layout[Section];
+  if (!Owner) continue;
+  const Label = document.createElement('label');
+  Label.textContent = Name + ' ';
+  const Input = document.createElement('input');
+  Input.type = 'number'; Input.step = Key === 'w' ? '1' : '0.02'; Input.value = Owner[Key];
+  Input.onchange = () => { const V = parseFloat(Input.value); if (V >= 0) Owner[Key] = V; };
+  Label.appendChild(Input);
+  document.getElementById('looks').appendChild(Label);
+}
+if (Lights) for (const [Kind, Key, Name] of LookFields) {
+  const Label = document.createElement('label');
+  Label.textContent = Name + ' ';
+  const Input = document.createElement('input');
+  Input.type = 'number'; Input.step = Key === 'haloPad' ? '0.5' : '0.02'; Input.value = Lights[Kind][Key];
+  Input.onchange = () => { const V = parseFloat(Input.value); if (V >= 0) Lights[Kind][Key] = V; };
+  Label.appendChild(Input);
+  document.getElementById('looks').appendChild(Label);
+}
+// One look to a line, as the file has it
+function lookLine(AKind) {
+  const Parts = Object.entries(Lights[AKind]).map(([K, V]) => `"${K}": ${JSON.stringify(V).replace(/,/g, ', ')}`);
+  return `    "${AKind}": { ${Parts.join(', ')} },`;
+}
 
 const Ids = [...new Set([...LayerById.tunnel.elements.filter(E => !E.existing).map(E => E.id),
   ...City.elements.map(E => E.id), ...Object.keys(Kit)])].concat(['ridge-tex', 'floor-tex', 'sand-tex']);
@@ -915,8 +1216,8 @@ function listKit() {
 // The layout as it lies in the repository, its city's elements replaced -
 // one to a line, as the file has them
 function elementLine(E) {
-  const Keys = ['id', 'x', 'y', 'w', 'h', 'tintsSun', 'shade', 'mirror', 'featherLeft', 'groundY'];
-  const Parts = Keys.filter(K => E[K] !== undefined).map(K => `"${K}": ${JSON.stringify(E[K])}`);
+  const Keys = ['id', 'x', 'y', 'w', 'h', 'tintsSun', 'shade', 'mirror', 'featherLeft', 'groundY', 'paint'];
+  const Parts = Keys.filter(K => E[K] !== undefined).map(K => `"${K}": ${JSON.stringify(E[K]).replace(/,/g, ', ')}`);
   return '        { ' + Parts.join(', ') + ' }';
 }
 document.getElementById('export').onclick = () => {
@@ -927,7 +1228,17 @@ document.getElementById('export').onclick = () => {
     document.getElementById('picked').textContent = 'the city layer is not where the stand expects it in the file: nothing written';
     return;
   }
-  const Text = LayoutText.replace(Re, (_, Head, __, Tail) => Head + Lines + Tail);
+  let Text = LayoutText.replace(Re, (_, Head, __, Tail) => Head + Lines + Tail);
+  if (Lights)
+    for (const Kind of ['neon', 'strip', 'window'])
+      Text = Text.replace(new RegExp(`    "${Kind}": \\{.*\\},`), lookLine(Kind));
+  // the emblem's and the beacons' numbers, each where it stands in its section
+  for (const [Section, Key] of OwnFields) {
+    if (!Layout[Section]) continue;
+    const From = Text.indexOf(`  "${Section}": {`), To = Text.indexOf('\n  },', From);
+    const Part = Text.slice(From, To).replace(new RegExp(`"${Key}": [0-9.]+`), `"${Key}": ${Layout[Section][Key]}`);
+    Text = Text.slice(0, From) + Part + Text.slice(To);
+  }
   const A = document.createElement('a');
   A.href = URL.createObjectURL(new Blob([Text], { type: 'application/json' }));
   A.download = 'chase-backdrop.json';

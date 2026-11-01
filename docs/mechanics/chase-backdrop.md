@@ -294,6 +294,83 @@ The points on the equator carry the noise of the arithmetic: the stand
 lets some of the chords along it throw a shadow onto themselves, the game
 none.
 
+**The lights** (`cityLights` in the layout), the first of the life of the
+city. The neon is found by its saturation (`find_lights.py`): solid, hot,
+bright pixels not of the warm hues - the sheets paint their burnt-orange
+stripes and lit windows in those, and no colour tells them from a sign, so
+they are never taken. The finder proposes, the eye keeps: the red band of
+the chimney (`ind-10`) is paint and left out. What is kept: the signs of
+`land-02`, `land-05`, `house-10` and `ind-11` (cyan, and one pink), and the
+guide strips of the monorail's beam, station and train. A light belongs to
+the piece, not to its placing: a box in shares of the picture and a
+colour, riding with every building drawn from it, mirrored with it, its
+glow growing with the building's nearness. No mask, no texture of its
+own: the glow is the point and the beam of `Render.Glow` (a point over a
+sign, a beam - flat along, Gaussian across - over a strip), a core over
+the box and a halo around it, added over the building just after it, so
+the buildings and the frame in front cover it. Not dimmed by the shade: it
+is the one thing in the city that shines.
+
+A sign flickers on a clock of its own; a strip burns steady. The clock is
+the far plane's tick (33 a second; on the stand the tick of its time), the
+dice a 32-bit integer hash (lowbias32) seeded by the building's place in
+the city's list and the light's in its piece - the same bits in JavaScript
+and in Delphi, so a sign stutters on the same tick on the stand and in the
+game. A sign breathes slowly (`breathDepth` over `breathTicks`); its time
+is cut into windows of `windowTicks`, `faultShare` of them carrying a
+fault - `flips` of `flipTicks` each, down to `faultLow` and back, a tired
+tube. Nothing in step, nothing in a rhythm the player could read.
+
+**The emblem** (`emblem` in the layout): the signs are fireflies at the
+city's distance, so the city's dominant is code-made and big - the TeK
+emblem as a neon sign, 43 units wide at the domes' nearness, standing on
+the lower point of its frame on the tip of the central spire (`on` the
+piece `land-03`, `at` its tip in shares of the picture): it rides and grows
+with that building and is drawn just after it, so the near ribs pass in
+front of it. Hung under the dome's apex first, it was too big and belonged
+to nothing. `make_emblem.py` takes
+the emblem's picture (the metal sign with a real alpha), finds its parts
+- the triangle's frame, the bar, T, e, K, the small triangle - and makes a
+tube along the edge of each, a little inside it, and the tube's glow at a
+quarter of the size; the metal is drawn at a shade like the city, the
+tubes and glows added in TeK's gold. Its own textures are small (the
+metal 768 px, the tubes cut to their parts): 43 units at 4K are some 240
+px. The parts share one clock: a tired flicker now and then, and every
+one to two and a half minutes the sign goes out and lights again part by
+part, each catching with a stutter - the frame first, the small triangle
+last.
+
+**The windows** (`window` lights, found by `find_lights.py --windows` on
+the landmarks and the main dome's housing): the dark ribbons of glass the
+sheets paint, a box each. A window's time is cut into spans of
+`spanTicks`, `onShare` of them lit in warm light, the switch on catching
+with a flicker: a city of dark windows wakes here and there, a quarter of
+them lit at a time, never together.
+
+**The lamps** (`lamp` lights, `box` [u, v, 0, 0], set by hand at a mast's
+tip; a write of the finder keeps them): red warning lights on the masts
+outside the domes' caps - the lattice mast (`ind-08`), the antenna mast
+(`low-11`), the raised crane (`ind-06`); they blink as the frames' beacons
+do.
+
+**The emblem as paint** (`paint` of a placed building: `[u, v, w,
+alpha]`): the same emblem as old paint on two walls - small on the core of
+the capsule tower in the main dome, larger on the big cooling tower in the
+satellite dome. `make_emblem.py` bakes it (`tek-paint`): one faded flat
+colour, worn through in blotches and scratches, the wear in the picture so
+the stand and the game show the same marks. It is lit as its wall is - it
+takes the building's shade - and a mirrored building moves it but never
+turns it: the letters read the right way round. A key of the placing, not
+of the piece: the stand's editor carries it with the building.
+
+**The beacons** (`beacons`; `beaconsAbove` of a frame): red warning lights
+for the ships on the frame's nodes above that share of its height - the
+upper rings of the main dome (16), the cap of the satellite (6). A dim
+glow and a short flash, each on its own period; the dice are seeded by the
+node's place on the frame, not by the order of the nodes. They ride in 3D
+with the frame: the far ones before the buildings, the near ones with the
+near ribs.
+
 ## The order of work
 
 1. The cliff - it joins screen 13 and sets the tone. **In the set.**
@@ -322,6 +399,8 @@ Each generation, as it comes:
 python tools/chase/check_element.py <id> <in>.png <work>/<id>.png
 python tools/chase/make_seamless.py <in>.png <work>/<id>.png     (bands only)
 python tools/chase/cut_sheet.py <sheet>.png <prefix> <work> <n>   (the city's sheets)
+python tools/chase/find_lights.py [--write] [--skip id,id] [--windows id,id]   (the city's lights, from the set)
+python tools/chase/make_emblem.py <emblem>.png                   (the TeK sign, into the set; after pack_set)
 python tools/chase/pack_set.py <work>
 python tools/chase/build_stand.py chase-stand.html
 ```
@@ -341,6 +420,15 @@ python tools/chase/build_stand.py chase-stand.html
   edge and prints the sizes in units; it warns when the count is not the one
   ordered - joined buildings mean a new generation, not a retouch. The sizes
   go into the layout's `cityKit`.
+- `find_lights.py` reads the kit's pieces from the set and prints the
+  lights it finds by saturation; `--write` replaces the layout's
+  `cityLights` pieces with them, the pieces of `--skip` left out (the
+  chimney's red band). The looks - the core and the halo of a sign and of a
+  strip - are tuned on the stand and written back by its download.
+- `make_emblem.py` writes the emblem's pictures (`tek-emblem`, `tek-N`,
+  `tek-N-halo`, `tek-paint`) straight into the set and its parts' boxes into the
+  layout; `pack_set.py` packs from the working folder and does not know
+  them, so the emblem is made again after a repack.
 - `pack_set.py` packs `<work>` into `bin/sprites/chase-backdrop.mset` in the
   layout's order, each picture once, every piece of the kit placed or not; an
   element not generated yet is left out. The tools read the layout from
@@ -514,9 +602,12 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 
 ## Open
 
-- The life of the city, a step after the frames: the neon of each piece
-  found by its saturation and made to glow and flicker, lamps on the masts'
-  tops, the train (`rail-train`) along the beam, into one station and out.
+- The life of the city, a step after the frames: the neon, the TeK emblem
+  and the frames' beacons (on the stand, "The lights" under "The city" and
+  after it); the beacons take the place of lamps on the buildings' masts;
+  then the train
+  (`rail-train`) shuttling along the beam between the two stations - a
+  dwell in each, cut at the station's mouth as it goes in.
 - Dome size in 4K: two generations a dome if one at 4 px a unit is soft.
 - The haze of the pad jets over the far plane: off on screen 13 until the
   far plane is drawn into a texture the haze can bend.
