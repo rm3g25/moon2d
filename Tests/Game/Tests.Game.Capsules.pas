@@ -3,7 +3,8 @@
   capsule comes down from over the screen onto its mark and never past
   it, braking at the end; it lands once, and its medkit stands on the
   mark a moment after; then the shell is gone. Two dropped at once land
-  each on its own; a clear takes them away.
+  each on its own; on a road that slides a capsule rides it, and its
+  medkit stands where the road has carried it; a clear takes them away.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -38,6 +39,8 @@ type
     procedure TestTheShellIsGoneAfterwards;
     [Test]
     procedure TestTwoLandEachOnItsOwn;
+    [Test]
+    procedure TestRidesTheRoad;
     [Test]
     procedure TestClearTakesThemAway;
   end;
@@ -115,6 +118,25 @@ begin
   end;
   Assert.AreEqual(1, Landings, 'Lands once');
   Assert.AreEqual(1, Medkits, 'One medkit');
+end;
+
+procedure TShuttleCapsuleTests.TestRidesTheRoad;
+const
+  Way = -1.0;
+begin
+  FCapsules.Drop(RoadX, RoadY);
+  for var i := 1 to ManyTicks do
+  begin
+    FCapsules.Ride(Way);
+    var Cue := FCapsules.Tick;
+    if Length(Cue.Opened) = 0 then
+      Continue;
+    Assert.AreEqual(Double(RoadX + i * Way), Double(Cue.Opened[0].X), 0.001,
+      'Carried as far as the road ran');
+    Assert.AreEqual(RoadY, Cue.Opened[0].Y, 0.001, 'On the road');
+    Exit;
+  end;
+  Assert.Fail('No medkit came out');
 end;
 
 procedure TShuttleCapsuleTests.TestTheMedkitStandsOnTheMark;

@@ -27,6 +27,7 @@ uses
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
+  Game.Shells,
   Game.StoneTank, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
@@ -133,6 +134,9 @@ type
     // The shuttle's medkits on the thirds of the heads' lives
     FCapsules: TShuttleCapsules;
     FCapsulePainter: TCapsulePainter;
+    // The bunker's shells: on their arcs, on the road
+    FShells: TBunkerShells;
+    FShellPainter: TShellPainter;
     FRamMedkitPads: TArray<string>; // tags of the hunter's
     // Between the heads' wounds and the gauge of the form's charge
     FStoneTank: TStoneTank;
@@ -314,14 +318,19 @@ type
     procedure ResolveRamContact;
     procedure ResolveRamWave;
     procedure KnockOffPads;
+    procedure TickShells(AWay: Single);
+    procedure ResolveShellContact;
+    procedure ResolveRamColumn;
     procedure CallTheShuttle;
     function TryPickMedkitPad(out AMark: TSdlFPoint): Boolean;
     function MedkitWallMark: TSdlFPoint;
+    function MedkitAheadMark: TSdlFPoint;
     procedure TickCapsules;
     procedure StandMedkitOn(const AMark: TSdlFPoint);
     function BulletStruckRam(const ABullet: TBullet): Boolean;
     function BulletStruckRamEye(const ABullet: TBullet): Boolean;
     function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
+    function BulletStruckRamBunker(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
     procedure DrawEnding;
@@ -425,6 +434,8 @@ const
   // The sweeper's overload bursts as the tank dies, then this low blow
   // and a drone sinking away under it
   SweeperBlastSoundFile = 'sweeperblast.wav';
+  // The bunker's lob: the thump of the grenade launcher
+  ShellLobSoundFile = 'granade.wav';
   TerminalKeySoundFile = 'terminal.wav';
   // The life sphere: its sparks spiral in; it bursts into the hero
   SphereFormSoundFile = 'sphereform.wav';
@@ -449,6 +460,13 @@ const
   // The sweeper's medkits stand on the road this far from the wall away
   // from the Ram: the middle of a cell
   MedkitWallGap = 16;
+  // The bunker's stand on the road this far ahead of the hero, where he
+  // runs to keep up
+  MedkitAhead = 64;
+  // A shell bursting on a deck kicks the pad's wreck as a blast whose wave
+  // dies this far off: hard, the pad is right under it
+  ShellBurstReach = 48.0;
+  ShellBurstTrauma = 0.15;
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
@@ -522,6 +540,7 @@ const
   ScancodeL = 15; // the burst at once on the hero: no rite, no suit
   ScancodeM = 16; // music mute toggle (trailer capture)
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
+  ScancodeO = 18; // a third of the lives of the Ram's head at once
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
@@ -617,6 +636,8 @@ begin
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
   FCapsules := TShuttleCapsules.Create;
   FCapsulePainter := TCapsulePainter.Create(FCapsules);
+  FShells := TBunkerShells.Create(RamFloorY);
+  FShellPainter := TShellPainter.Create(FShells);
   FStoneTank := TStoneTank.Create(StoneTankSeed);
   FBelt := TBelt.Create;
   FOrbs := CreateOrbs;
@@ -658,6 +679,8 @@ begin
   FWrecks.Free;
   FCapsulePainter.Free;
   FCapsules.Free;
+  FShellPainter.Free;
+  FShells.Free;
   FStoneTank.Free;
   FBelt.Free;
   FRamPainter.Free;
@@ -917,6 +940,7 @@ begin
   FRam.Reset;
   FWrecks.Clear;
   FCapsules.Clear;
+  FShells.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
@@ -1221,6 +1245,7 @@ begin
   FRam.Clear;
   FWrecks.Clear;
   FCapsules.Clear;
+  FShells.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
@@ -2201,7 +2226,7 @@ begin
 
     if (Own.Status <> bsFlying) or BulletStruckCannon(Own) or
       BulletStruckRamEye(Own) or BulletStruckRamBarrels(Own) or
-      BulletStruckRam(Own) then
+      BulletStruckRamBunker(Own) or BulletStruckRam(Own) then
       Continue;
 
     // Hit a monster: knockback dx/2; a death that blows up sends its
@@ -2562,6 +2587,7 @@ begin
   FRam.Clear;
   FWrecks.Clear;
   FCapsules.Clear;
+  FShells.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
@@ -2832,6 +2858,10 @@ begin
     FAudio.Play(RamWhineSoundFile);
   if Cue.Alarm then
     FAudio.Play(PadHumSoundFile);
+  if Cue.Lob and FShells.Lob(Cue.LobFrom, Cue.LobAt) then
+    FAudio.Play(ShellLobSoundFile);
+  if Cue.Vent then
+    FAudio.Play(RamHissSoundFile);
   if Cue.Jolt > 0 then
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
@@ -2866,6 +2896,7 @@ begin
     CallTheShuttle;
   FWrecks.Tick;
   FWreckPainter.Tick;
+  FCapsules.Ride(-FBelt.Speed);
   TickCapsules;
   FOrbs.Charge(FStoneTank.Tick(FOrbs.Energy));
 end;
@@ -2937,14 +2968,82 @@ begin
   end;
 end;
 
+// The bunker's shells, after the pads' tick and before the hero's: a pad
+// a shell bursts on is knocked off, and whoever stood on it falls this
+// tick (as KnockOffPads). The decks are the pads standing on the screen.
+procedure TMoonGame.TickShells(AWay: Single);
+begin
+  if FShells.Active = 0 then
+  begin
+    FShellPainter.Tick(AWay);
+    Exit;
+  end;
+  var Pads := FPads.Standing(FHero.Screen);
+  var Decks: TArray<TShellDeck>;
+  SetLength(Decks, Length(Pads));
+  for var i := 0 to High(Pads) do
+  begin
+    Decks[i].Left := Pads[i].Left;
+    Decks[i].Right := Pads[i].Right;
+    Decks[i].Top := Pads[i].Top;
+  end;
+  var Cue := FShells.Tick(Decks, AWay);
+  FShellPainter.Tick(AWay);
+  for var Burst in Cue.Bursts do
+  begin
+    var Pad := Pads[Burst.Deck];
+    var Middle := Pad.Middle;
+    Middle.X := Middle.X + Pad.Left;
+    Middle.Y := Middle.Y + Pad.Top;
+    Pad.Doze;
+    FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
+      Burst.At, ShellBurstReach);
+    FExplosions.Detonate(Burst.At.X, Burst.At.Y, ekBarrel);
+    FAudio.Play(BottleSoundFile);
+    FShake.AddTrauma(ShellBurstTrauma);
+  end;
+end;
+
+// A rolling shell that runs into the hero is spent on him: a wound
+procedure TMoonGame.ResolveShellContact;
+begin
+  if FHero.Dead then
+    Exit;
+  var At: TSdlFPoint;
+  if not FShells.Strikes(HeroBody(FHero), At) then
+    Exit;
+  FExplosions.Detonate(At.X, At.Y, ekBarrel);
+  FAudio.Play(BottleSoundFile);
+  FShake.AddTrauma(ShellBurstTrauma);
+  if FHurtCooldown > 0 then
+    Exit;
+  FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
+  FAudio.Play(PainSoundFile);
+  HurtHero;
+end;
+
+// The bunker's column of exhaust burns whoever is in it
+procedure TMoonGame.ResolveRamColumn;
+begin
+  if FHero.Dead or (FHurtCooldown > 0) or
+    not FRam.ColumnHolds(HeroBody(FHero)) then
+    Exit;
+  FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
+  FAudio.Play(PainSoundFile);
+  HurtHero;
+end;
+
 // A head's lives have passed into their next third: the shuttle drops a
 // medkit - the hunter's onto whichever of its pads stands farther from
 // the hero, in the gun's sights; the sweeper's onto the road at the wall
-// away from the Ram, under its closed ceiling
+// away from the Ram, under its closed ceiling; the bunker's onto the road
+// ahead of the hero, where he runs to keep up
 procedure TMoonGame.CallTheShuttle;
 begin
   var Mark: TSdlFPoint;
-  if (FRam.Head <> rhHunter) or not TryPickMedkitPad(Mark) then
+  if FRam.Head = rhBunker then
+    Mark := MedkitAheadMark
+  else if (FRam.Head <> rhHunter) or not TryPickMedkitPad(Mark) then
     Mark := MedkitWallMark;
   FCapsules.Drop(Mark.X, Mark.Y);
 end;
@@ -2976,6 +3075,17 @@ begin
   Result.X := MedkitWallGap;
   if FRam.Left + RamWidth / 2 < ScreenWidth / 2 then
     Result.X := ScreenWidth - MedkitWallGap;
+  Result.Y := RamFloorY;
+end;
+
+// Short of the Ram standing at the right wall
+function TMoonGame.MedkitAheadMark: TSdlFPoint;
+begin
+  Result.X := HeroCenter.X + MedkitAhead;
+  if Result.X > FRam.Left - MedkitWallGap then
+    Result.X := FRam.Left - MedkitWallGap;
+  if Result.X < MedkitWallGap then
+    Result.X := MedkitWallGap;
   Result.Y := RamFloorY;
 end;
 
@@ -3037,6 +3147,29 @@ begin
   Strike.SpeedX := ABullet.DX;
   Strike.SpeedY := ABullet.DY;
   FaceFromCenter(Strike, FRam.BarrelsPoint);
+  SoundArmorHit(FImpacts.Land(Strike));
+end;
+
+// The bunker takes the bullet through its open hatch - sparks, a ping, a
+// life gone - or its lid or honeycomb takes it into its light
+function TMoonGame.BulletStruckRamBunker(const ABullet: TBullet): Boolean;
+begin
+  var Stretch := BulletStretch(ABullet);
+  var At: TSdlFPoint;
+  var Guarded: Boolean;
+  Result := FRam.StrikeBunker(Stretch.Start, Stretch.Finish, At, Guarded);
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
+  if Guarded then
+    Exit;
+  FStoneTank.Wound(1 / FRam.FullLives);
+  var Strike := Default(TStrike);
+  Strike.X := At.X;
+  Strike.Y := At.Y;
+  Strike.SpeedX := ABullet.DX;
+  Strike.SpeedY := ABullet.DY;
+  FaceFromCenter(Strike, FRam.HatchPoint);
   SoundArmorHit(FImpacts.Land(Strike));
 end;
 
@@ -3338,6 +3471,8 @@ begin
   // After the pads' tick, before the hero's: one gone from under him this
   // tick drops him
   KnockOffPads;
+  if not WorldStands then
+    TickShells(BeltWay);
   FHero.Tick;
   if FHeldFire and FHero.Fire then
   begin
@@ -3393,6 +3528,8 @@ begin
   ResolveCannonContact;
   ResolveRamContact;
   ResolveRamWave;
+  ResolveRamColumn;
+  ResolveShellContact;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
@@ -3501,6 +3638,8 @@ begin
         FPads.Draw(FHero.Screen, AAlpha, plDeep);
         FDynamics.DrawSunk(FHero.Screen, FSprites.Origin, AAlpha);
         FPads.Draw(FHero.Screen, AAlpha, plFront);
+        // Where the shells come down, on the decks and the road
+        FShellPainter.DrawRings(FDynamics.Canvas, FSprites.Origin, AAlpha);
         // The pads knocked off, before the pads in front of them no more
         FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FWreckPainter.DrawBodies(FSprites, AAlpha);
@@ -3537,6 +3676,7 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         FHero.Bullets.Draw(FSprites);
         FMonsterBullets.Draw(FSprites);
+        FShellPainter.DrawShells(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FWreckPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
@@ -3713,6 +3853,7 @@ begin
   FRam.Reset;
   FWrecks.Clear;
   FCapsules.Clear;
+  FShells.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
   FFarPlane.Clear;
@@ -3904,6 +4045,14 @@ begin
     ScancodeI:
       // A long fight replayed from its start costs lives to tune against
       CureHero;
+    ScancodeO:
+      // Three heads of the Ram stand between the start and the chase - too
+      // far to tune against
+      if FRam.Head <> rhNone then
+      begin
+        FRam.WoundThird;
+        FStoneTank.Wound(1 / 3);
+      end;
     ScancodeJ:
       // The boss gives the ceremony once a fight, at two thirds of his
       // lives - too far to tune against

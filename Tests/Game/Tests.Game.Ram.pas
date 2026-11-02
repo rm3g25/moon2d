@@ -31,8 +31,18 @@
   from over it toward the side with more road; it reaches a point near
   the blast before one far from it. Either head's lives passing into
   their next third call the shuttle, once a third; the last life does
-  not. After the sweeper, not the hunter, the machine drives off into the
-  chase, once, standing at the wall.
+  not. After the sweeper the bunker rises at the right wall; a breath
+  after its row is lit the machine drives off into the chase, once.
+
+  The bunker: its lives follow the grade; it lobs nothing while its row
+  comes up; its hatch breathes - the shell, a beat, the column for about
+  half a second, the window for about a second, shut again - and its
+  shell goes at the hero's feet; it is hit from above or aslant, the lid
+  shut or open; shallow or from the side the honeycomb takes the bullet;
+  the column burns only what is in it, only
+  while it blows; it turns to a hero on its other side; its thirds call
+  the shuttle; its last life blows it up with no wave, the empty mast
+  sinks, and the machine stands at the wall for good.
 
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
@@ -223,7 +233,7 @@ type
     [Test]
     procedure TestTurnsToAHeroOnItsOtherSide;
     [Test]
-    procedure TestTheLastLifeLeavesTheMastEmpty;
+    procedure TestTheBunkerRisesAtTheWall;
     [Test]
     procedure TestShortsOutFromHalfItsLives;
     [Test]
@@ -244,6 +254,45 @@ type
     procedure TestEachThirdCallsTheShuttle;
     [Test]
     procedure TestDrivesOffIntoTheChaseOnce;
+  end;
+
+  [TestFixture]
+  TRamBunkerTests = class
+  private
+    FRam: TRam;
+    procedure RaiseTheBunker(const ATarget: TRamTarget; ALivesShare: Single = 1);
+    procedure WaitForTheWindow(const ATarget: TRamTarget);
+    procedure StrikeTheHatch(ATimes: Integer);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestLivesFollowTheGrade;
+    [Test]
+    procedure TestNoShellWhileTheRowComesUp;
+    [Test]
+    procedure TestTheChaseStartsABreathAfterTheRowIsLit;
+    [Test]
+    procedure TestTheHatchBreathes;
+    [Test]
+    procedure TestTheShellGoesAtTheHerosFeet;
+    [Test]
+    procedure TestHitFromAboveShutOrOpen;
+    [Test]
+    procedure TestAShotDownFromAPadGoesIn;
+    [Test]
+    procedure TestShallowOrSideTheHoneycombTakesIt;
+    [Test]
+    procedure TestTheColumnBurnsWhileItBlows;
+    [Test]
+    procedure TestTurnsToAHeroOnItsOtherSide;
+    [Test]
+    procedure TestEachThirdCallsTheShuttle;
+    [Test]
+    procedure TestTheLastLifeBlowsItUpAndItStands;
   end;
 
 implementation
@@ -1494,7 +1543,7 @@ begin
   Assert.Fail('Never turned to the hero on its right');
 end;
 
-procedure TRamSweeperTests.TestTheLastLifeLeavesTheMastEmpty;
+procedure TRamSweeperTests.TestTheBunkerRisesAtTheWall;
 const
   LivesShare = 0.02;
 begin
@@ -1502,16 +1551,19 @@ begin
   ArmTheSweeper(Hero, LivesShare);
   StrikeThePack(FRam.Lives);
   Assert.IsTrue(BlastWithin(Hero, EndLimit) > 0, 'The head blows up');
+  var Whines := 0;
   for var i := 1 to ManyTicks do
   begin
     var Cue := FRam.Tick(Hero);
-    Assert.IsFalse(Cue.Whine or Cue.Shot, 'No head comes up, nothing fires');
+    Inc(Whines, Ord(Cue.Whine));
+    Assert.IsFalse(Cue.Shot, 'No bullet: the bunker lobs shells');
     Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'It stands');
   end;
-  Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
-  Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
+  Assert.AreEqual(1, Whines, 'One head comes up');
+  Assert.IsTrue(FRam.Head = rhBunker, 'The bunker');
+  Assert.IsTrue(FRam.Armed, 'Locked');
   Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
-    'At the right wall, where the chase begins');
+    'At the right wall, where the chase runs');
 end;
 
 procedure TRamSweeperTests.TestShortsOutFromHalfItsLives;
@@ -1757,9 +1809,9 @@ begin
   Assert.AreEqual(0, Rest, 'The last third, the retreat and the blast: none');
 end;
 
-// After the blast: the mast sinks, the time the third head would take to
-// rise and light its row, a breath - about three and a half seconds - and
-// it drives off, once, to the roar of its engine, standing at the wall
+// After the blast: the mast sinks, the bunker rises and lights its row, a
+// breath - about three and a half seconds - and it drives off, once, to
+// the roar of its engine, standing at the wall
 procedure TRamSweeperTests.TestDrivesOffIntoTheChaseOnce;
 const
   LivesShare = 0.02;
@@ -1778,7 +1830,7 @@ begin
     Inc(Chases);
     ChaseTick := i;
     Assert.IsTrue(Cue.Rumble, 'The engine roars as it drives off');
-    Assert.IsTrue(FRam.Mast < 0, 'The empty mast is down');
+    Assert.IsTrue((FRam.Head = rhBunker) and FRam.Armed, 'The bunker is up');
     Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
       'At the right wall');
   end;
@@ -1787,10 +1839,369 @@ begin
   Assert.IsTrue(ChaseTick < 4 * TicksPerSecond, 'Within four');
 end;
 
+// ---------------------------------------------------------------------------
+// The bunker
+// ---------------------------------------------------------------------------
+
+const
+  // A high pad of the chase left of the machine, its deck, and a hero on it
+  ChaseDeckY = 128.0;
+  ChaseHeroX = 250.0;
+  // Right of the mast, out of the bunker's way
+  RightOfItX = 470.0;
+  RightOfItDeckY = 200.0;
+  // The breath: the column about half a second, the window about a second
+  ShortestVentTicks = 13;
+  LongestVentTicks = 20;
+  ShortestWindowTicks = 33;
+  LongestWindowTicks = 46;
+  // From the shell to the column: a beat
+  LongestBeatTicks = 20;
+  // From the row lit to the drive-off: within 0.5-1 s
+  ShortestBreathTicks = 15;
+  LongestBreathTicks = 35;
+  // Long enough for a breath to come round twice
+  TwoBreaths = 400;
+
+procedure TRamBunkerTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamBunkerTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+// The ticks until AHead is up and locked, ATarget watched
+procedure WaitForHead(ARam: TRam; const ATarget: TRamTarget; AHead: TRamHead);
+begin
+  for var i := 1 to ManyTicks do
+  begin
+    if (ARam.Head = AHead) and ARam.Armed then
+      Exit;
+    ARam.Tick(ATarget);
+  end;
+  Assert.Fail('The head never locked');
+end;
+
+// From the stop after a death: the hunter's eye shot out, the sweeper's
+// pack, the bunker up and locked, its row coming up
+procedure TRamBunkerTests.RaiseTheBunker(const ATarget: TRamTarget;
+  ALivesShare: Single);
+begin
+  FRam.Start(Orders, ALivesShare);
+  FRam.Clear;
+  FRam.Start(Orders, ALivesShare);
+  WaitForHead(FRam, ATarget, rhHunter);
+  for var i := 1 to FRam.Lives do
+  begin
+    var Lens := FRam.LensPoint;
+    var Struck: TSdlFPoint;
+    FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
+  end;
+  WaitForHead(FRam, ATarget, rhSweeper);
+  for var i := 1 to FRam.Lives do
+  begin
+    var Pack := FRam.BarrelsPoint;
+    var Struck: TSdlFPoint;
+    var Guarded: Boolean;
+    FRam.StrikeBarrels(At(Pack.X - 30, Pack.Y), At(Pack.X + 30, Pack.Y),
+      Struck, Guarded);
+  end;
+  WaitForHead(FRam, ATarget, rhBunker);
+end;
+
+procedure TRamBunkerTests.WaitForTheWindow(const ATarget: TRamTarget);
+begin
+  for var i := 1 to TwoBreaths do
+  begin
+    if FRam.Hatch = bhOpen then
+      Exit;
+    FRam.Tick(ATarget);
+  end;
+  Assert.Fail('The hatch never opened');
+end;
+
+// Straight down into the opening, all of them at once
+procedure TRamBunkerTests.StrikeTheHatch(ATimes: Integer);
+begin
+  for var i := 1 to ATimes do
+  begin
+    var Hatch := FRam.HatchPoint;
+    var Struck: TSdlFPoint;
+    var Guarded: Boolean;
+    Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X - 1, Hatch.Y - 10),
+      At(Hatch.X + 1, Hatch.Y + 2), Struck, Guarded) and not Guarded,
+      Format('Strike %d goes in', [i]));
+  end;
+end;
+
+procedure TRamBunkerTests.TestLivesFollowTheGrade;
+begin
+  RaiseTheBunker(HeroOnAPad(ChaseHeroX, ChaseDeckY), 1.5);
+  Assert.AreEqual(225, FRam.FullLives, 'Half as many again');
+  Assert.AreEqual(FRam.FullLives, FRam.Lives, 'All of them');
+end;
+
+procedure TRamBunkerTests.TestNoShellWhileTheRowComesUp;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  Assert.IsTrue(FRam.Booting, 'The row comes up');
+  var Lobbed := False;
+  for var i := 1 to TwoBreaths do
+  begin
+    var Booting := FRam.Booting;
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Lob then
+      Continue;
+    Assert.IsFalse(Booting, 'Not while the row comes up');
+    Lobbed := True;
+    Break;
+  end;
+  Assert.IsTrue(Lobbed, 'Then it lobs');
+end;
+
+procedure TRamBunkerTests.TestTheChaseStartsABreathAfterTheRowIsLit;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  var LitTick := -1;
+  var ChaseTick := -1;
+  var Chases := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if (LitTick < 0) and not FRam.Booting then
+      LitTick := i;
+    if Cue.Chase then
+    begin
+      Inc(Chases);
+      ChaseTick := i;
+    end;
+  end;
+  Assert.AreEqual(1, Chases, 'Once');
+  Assert.IsTrue(LitTick > 0, 'The row lit');
+  Assert.IsTrue(ChaseTick - LitTick >= ShortestBreathTicks,
+    Format('A breath after it: %d ticks', [ChaseTick - LitTick]));
+  Assert.IsTrue(ChaseTick - LitTick <= LongestBreathTicks,
+    Format('Not long after: %d ticks', [ChaseTick - LitTick]));
+end;
+
+procedure TRamBunkerTests.TestTheHatchBreathes;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  var LobTick := -1;
+  var VentTick := -1;
+  var Vented := 0;
+  var Opened := 0;
+  var SecondLob := False;
+  for var i := 1 to TwoBreaths do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Lob then
+    begin
+      if LobTick > 0 then
+      begin
+        SecondLob := True;
+        Break;
+      end;
+      LobTick := i;
+      Assert.IsTrue(FRam.Hatch = bhFired, 'Shut as it lobs');
+    end;
+    if Cue.Vent then
+      VentTick := i;
+    if FRam.Hatch = bhVenting then
+      Inc(Vented);
+    if FRam.Hatch = bhOpen then
+      Inc(Opened);
+  end;
+  Assert.IsTrue(LobTick > 0, 'A shell');
+  Assert.IsTrue((VentTick > LobTick) and (VentTick - LobTick <= LongestBeatTicks),
+    'A beat, then the column');
+  Assert.IsTrue(InRange(Vented, ShortestVentTicks, LongestVentTicks),
+    Format('The column blows %d ticks', [Vented]));
+  Assert.IsTrue(InRange(Opened, ShortestWindowTicks, LongestWindowTicks),
+    Format('The window stands %d ticks', [Opened]));
+  Assert.IsTrue(SecondLob, 'Shut again, the next shell');
+end;
+
+procedure TRamBunkerTests.TestTheShellGoesAtTheHerosFeet;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  for var i := 1 to TwoBreaths do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Lob then
+      Continue;
+    var Center := CenterOf(Hero);
+    Assert.AreEqual(Double(Center.X), Double(Cue.LobAt.X), 0.001, 'Under him');
+    Assert.AreEqual(ChaseDeckY, Double(Cue.LobAt.Y), 0.001, 'On his deck');
+    Assert.IsTrue(Cue.LobFrom.X < FRam.HatchPoint.X, 'Out of a muzzle toward him');
+    Exit;
+  end;
+  Assert.Fail('No shell');
+end;
+
+procedure TRamBunkerTests.TestHitFromAboveShutOrOpen;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  Assert.IsTrue(FRam.Hatch = bhAiming, 'Shut');
+  var Before := FRam.Lives;
+  StrikeTheHatch(3);
+  Assert.AreEqual(Before - 3, FRam.Lives, 'Shut: three lives');
+  Assert.IsTrue(FRam.Hurt, 'It flashes');
+  WaitForTheWindow(Hero);
+  StrikeTheHatch(3);
+  Assert.AreEqual(Before - 6, FRam.Lives, 'Open: three more');
+end;
+
+// From up and to the side, as from a pad: the honeycomb over the rim does
+// not take it on its way down; the open hatch does. Bullets of a tick a
+// few units long, as the guns fire them, walked down the whole line.
+procedure TRamBunkerTests.TestAShotDownFromAPadGoesIn;
+const
+  Steps: array [0..2] of Single = (25, 40, 60);
+  StepLength = 8.0;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  WaitForTheWindow(Hero);
+  for var Degrees in Steps do
+  begin
+    var Hatch := FRam.HatchPoint;
+    var DX := Cos(DegToRad(Degrees)) * StepLength;
+    var DY := Sin(DegToRad(Degrees)) * StepLength;
+    // Back up the line from the middle of the opening, then down along it
+    var Point := At(Hatch.X - DX * 12, Hatch.Y - DY * 12);
+    var Lives := FRam.Lives;
+    var Met := False;
+    for var i := 1 to 20 do
+    begin
+      var Next := At(Point.X + DX, Point.Y + DY);
+      var Struck: TSdlFPoint;
+      var Guarded: Boolean;
+      if FRam.StrikeBunker(Point, Next, Struck, Guarded) then
+      begin
+        Assert.IsFalse(Guarded, Format('At %g degrees: taken over the rim', [Degrees]));
+        Met := True;
+        Break;
+      end;
+      Point := Next;
+    end;
+    Assert.IsTrue(Met, Format('At %g degrees: it goes in', [Degrees]));
+    Assert.AreEqual(Lives - 1, FRam.Lives, Format('At %g degrees: a life', [Degrees]));
+  end;
+end;
+
+procedure TRamBunkerTests.TestShallowOrSideTheHoneycombTakesIt;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  var Lives := FRam.Lives;
+  var Hatch := FRam.HatchPoint;
+  Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X - 24, Hatch.Y - 2),
+    At(Hatch.X + 24, Hatch.Y + 2), Struck, Guarded) and Guarded,
+    'Too shallow');
+  Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X - 60, Hatch.Y + 12),
+    At(Hatch.X, Hatch.Y + 12), Struck, Guarded) and Guarded,
+    'From the side: the honeycomb');
+  Assert.AreEqual(Lives, FRam.Lives, 'No life lost');
+  Assert.IsFalse(FRam.StrikeBunker(At(Hatch.X - 60, Hatch.Y - 60),
+    At(Hatch.X - 50, Hatch.Y - 60), Struck, Guarded), 'Far off: nothing');
+end;
+
+procedure TRamBunkerTests.TestTheColumnBurnsWhileItBlows;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  var Hatch := FRam.HatchPoint;
+  var OverIt := Box(Hatch.X - 8, Hatch.Y - 50, 16, HeroSide);
+  var Beside := Box(Hatch.X + 40, Hatch.Y - 50, 16, HeroSide);
+  Assert.IsFalse(FRam.ColumnHolds(OverIt), 'Shut: no column');
+  var Blew := False;
+  for var i := 1 to TwoBreaths do
+  begin
+    FRam.Tick(Hero);
+    case FRam.Hatch of
+      bhVenting:
+        begin
+          Blew := True;
+          Assert.IsTrue(FRam.ColumnHolds(OverIt), 'Over the hatch: burnt');
+          Assert.IsFalse(FRam.ColumnHolds(Beside), 'Beside it: not');
+        end;
+      bhOpen:
+        if Blew then
+        begin
+          Assert.IsFalse(FRam.ColumnHolds(OverIt), 'The window: no column');
+          Exit;
+        end;
+    end;
+  end;
+  Assert.Fail('The column never blew');
+end;
+
+procedure TRamBunkerTests.TestTurnsToAHeroOnItsOtherSide;
+begin
+  RaiseTheBunker(HeroOnAPad(ChaseHeroX, ChaseDeckY));
+  Assert.AreEqual(-1, FRam.Facing, 'Facing left, as it rose');
+  var Hero := HeroOnAPad(RightOfItX, RightOfItDeckY);
+  for var i := 1 to TwoBreaths do
+  begin
+    FRam.Tick(Hero);
+    if FRam.Facing > 0 then
+      Exit;
+  end;
+  Assert.Fail('Never turned');
+end;
+
+procedure TRamBunkerTests.TestEachThirdCallsTheShuttle;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  WaitForTheWindow(Hero);
+  var First, Second, Rest: Integer;
+  CountShuttleCalls(FRam, Hero, StrikeTheHatch, First, Second, Rest);
+  Assert.AreEqual(1, First, 'A third gone: one call');
+  Assert.AreEqual(1, Second, 'Two thirds gone: one more');
+  Assert.AreEqual(0, Rest, 'The last third and the blast: none');
+end;
+
+procedure TRamBunkerTests.TestTheLastLifeBlowsItUpAndItStands;
+const
+  LivesShare = 0.02;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero, LivesShare);
+  WaitForTheWindow(Hero);
+  StrikeTheHatch(FRam.Lives);
+  var Cue := FRam.Tick(Hero);
+  Assert.IsTrue(Cue.Blast, 'It blows up');
+  Assert.IsFalse(Cue.Shock, 'No wave');
+  for var i := 1 to ManyTicks do
+  begin
+    Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Lob or Cue.Whine or Cue.Chase or Cue.Blast,
+      'Nothing comes up, nothing fires, it does not drive off again');
+    Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'It stands');
+  end;
+  Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
+  Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
+  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+    'At the right wall');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TRamTests);
   TDUnitX.RegisterTestFixture(TRamHunterTests);
   TDUnitX.RegisterTestFixture(TRamSweeperTests);
+  TDUnitX.RegisterTestFixture(TRamBunkerTests);
   TDUnitX.RegisterTestFixture(TBodyShieldTests);
   TDUnitX.RegisterTestFixture(TRamLevelTests);
 

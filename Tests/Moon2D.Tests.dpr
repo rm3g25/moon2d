@@ -32,6 +32,7 @@ uses
   Tests.Game.Ram in 'Game\Tests.Game.Ram.pas',
   Tests.Game.Wrecks in 'Game\Tests.Game.Wrecks.pas',
   Tests.Game.Capsules in 'Game\Tests.Game.Capsules.pas',
+  Tests.Game.Shells in 'Game\Tests.Game.Shells.pas',
   Tests.Game.StoneTank in 'Game\Tests.Game.StoneTank.pas',
   Tests.Game.Belt in 'Game\Tests.Game.Belt.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',

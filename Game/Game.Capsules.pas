@@ -9,6 +9,8 @@
   the medkit it leaves is the game's, a pickup like any other. What the
   capsule was dropped for, and where, is the game's too. A death takes
   the capsules away; the field the medkits stood in is reborn with it.
+  On a road that slides a capsule rides it, in the air and on the ground,
+  as the medkit it leaves will.
 
   TShuttleCapsules is the rules, TCapsulePainter draws them with the
   shapes of the dynamics' canvas - a hull of discs, a green beacon, the
@@ -34,8 +36,8 @@ type
   TCapsulePhase = (cpFalling, cpOpening);
 
   TCapsule = record
-    // The middle of its bottom on landing, screen units
-    X, LandY: Single;
+    // The middle of its bottom on landing, screen units; X the last tick
+    X, LastX, LandY: Single;
     // Its bottom this tick and the last
     Bottom, LastBottom: Single;
     Phase: TCapsulePhase;
@@ -60,10 +62,14 @@ type
     // One falls onto AX, ALandY: the middle of the feet of the medkit it
     // leaves
     procedure Drop(AX, ALandY: Single);
+    // AWay along the road this tick: below zero, to the left. Before the
+    // tick that may open them, so the medkit stands where its capsule is.
+    procedure Ride(AWay: Single);
     function Tick: TCapsuleCue;
     // A death, a new level: none in the air or on the ground
     procedure Clear;
     function Count: Integer;
+    function XAt(AIndex: Integer; AAlpha: Single): Single;
     function BottomAt(AIndex: Integer; AAlpha: Single): Single;
     // 0 the tick it lands, 1 as the shell is gone
     function OpenShare(AIndex: Integer; AAlpha: Single): Single;
@@ -177,11 +183,23 @@ procedure TShuttleCapsules.Drop(AX, ALandY: Single);
 begin
   var Capsule := Default(TCapsule);
   Capsule.X := AX;
+  Capsule.LastX := AX;
   Capsule.LandY := ALandY;
   Capsule.Bottom := StartBottom;
   Capsule.LastBottom := StartBottom;
   Capsule.Phase := cpFalling;
   FCapsules.Add(Capsule);
+end;
+
+procedure TShuttleCapsules.Ride(AWay: Single);
+begin
+  for var i := 0 to FCapsules.Count - 1 do
+  begin
+    var Capsule := FCapsules[i];
+    Capsule.LastX := Capsule.X;
+    Capsule.X := Capsule.X + AWay;
+    FCapsules[i] := Capsule;
+  end;
 end;
 
 function TShuttleCapsules.Tick: TCapsuleCue;
@@ -235,6 +253,12 @@ begin
   Result := FCapsules[AIndex];
 end;
 
+function TShuttleCapsules.XAt(AIndex: Integer; AAlpha: Single): Single;
+begin
+  var Capsule := FCapsules[AIndex];
+  Result := Capsule.LastX + (Capsule.X - Capsule.LastX) * AAlpha;
+end;
+
 function TShuttleCapsules.BottomAt(AIndex: Integer; AAlpha: Single): Single;
 begin
   var Capsule := FCapsules[AIndex];
@@ -274,7 +298,7 @@ procedure TCapsulePainter.Draw(const ACanvas: TDynamicCanvas;
 begin
   for var i := 0 to FCapsules.Count - 1 do
   begin
-    var X := FCapsules[i].X + AOrigin.X;
+    var X := FCapsules.XAt(i, AAlpha) + AOrigin.X;
     var Bottom := FCapsules.BottomAt(i, AAlpha) + AOrigin.Y;
     if FCapsules[i].Phase = cpOpening then
     begin

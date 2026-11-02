@@ -6,7 +6,8 @@
   off the screen within a few seconds; the nearer to the blast, the
   harder the kick, and the kick dies down; its picture never spins
   slower, never faster than its most, and no two wrecks of a blast spin
-  alike; a clear takes the wrecks away.
+  alike; a new wreck takes the place of one gone, so a long chase does
+  not pile them up; a clear takes the wrecks away.
 
   The wrecks fly in no picture here: the rules need none.
 
@@ -43,6 +44,8 @@ type
     procedure TestSpinsNoSlowerUpToItsMost;
     [Test]
     procedure TestNoTwoSpinAlike;
+    [Test]
+    procedure TestANewOneTakesAGoneOnesPlace;
     [Test]
     procedure TestClearTakesThemAway;
   end;
@@ -209,6 +212,19 @@ begin
     for var j := i + 1 to FWrecks.Count - 1 do
       Assert.IsTrue(Abs(Abs(FWrecks[i].SpinRate) - Abs(FWrecks[j].SpinRate)) > 0.1,
         Format('Wrecks %d and %d spin alike', [i + 1, j + 1]));
+end;
+
+procedure TPadWreckTests.TestANewOneTakesAGoneOnesPlace;
+begin
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(270, 190), 32, PadHeight, Blast, ReachOf(Blast));
+  FWrecks.Launch(nil, At(230, 190), 32, PadHeight, Blast, ReachOf(Blast));
+  for var i := 1 to LongestFlightTicks do
+    FWrecks.Tick;
+  Assert.IsFalse(FWrecks.Flying, 'Both gone');
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  Assert.AreEqual(2, FWrecks.Count, 'In a gone one''s place');
+  Assert.IsTrue(FWrecks.Flying, 'And it flies');
 end;
 
 procedure TPadWreckTests.TestClearTakesThemAway;

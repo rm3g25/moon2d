@@ -17,6 +17,10 @@
   and its own way of spinning up, and one in a few spins against the
   others.
 
+  The bunker's shells knock pads off one by one through a long chase: a
+  new wreck takes the place of one already gone, so they do not pile
+  up.
+
   TPadWrecks is the rules, TPadWreckPainter draws them: the picture of
   the pad turned with the spin, fire and smoke out of its jet, sparks
   behind it, a glow about it, small bolts over its deck.
@@ -50,16 +54,21 @@ type
     SpinRate, SpinGain: Single;
     // Off the screen: it flies no more
     Gone: Boolean;
+    // Which launch since the clear it is: a new wreck in the place of a
+    // gone one has another
+    Turn: Integer;
   end;
 
   TPadWrecks = class
   private
     FWrecks: TArray<TPadWreck>;
     FClears: Integer;
+    FLaunched: Integer;
     function GetWreck(AIndex: Integer): TPadWreck;
   public
     // APad's picture, AWidth by AHeight about AMiddle, thrown away from
-    // AFrom - the blast, whose wave dies AReach units off it
+    // AFrom - the blast, whose wave dies AReach units off it. It takes
+    // the place of the first wreck gone, if one is.
     procedure Launch(const APad: TPad; const AMiddle: TSdlFPoint;
       AWidth, AHeight: Single; const AFrom: TSdlFPoint; AReach: Single);
     procedure Tick;
@@ -85,6 +94,8 @@ type
     FFires: TArray<TSmoke>;
     FSparks: TArray<TSparks>;
     FBolts: TArray<TLightning>;
+    // The turn of the wreck each place's sources burn for
+    FTurns: TArray<Integer>;
     FClears: Integer;
     FAge: Integer;
     procedure Grow;
@@ -204,8 +215,10 @@ end;
 procedure TPadWrecks.Launch(const APad: TPad; const AMiddle: TSdlFPoint;
   AWidth, AHeight: Single; const AFrom: TSdlFPoint; AReach: Single);
 begin
-  var Turn := Length(FWrecks);
+  var Turn := FLaunched;
+  Inc(FLaunched);
   var Wreck := Default(TPadWreck);
+  Wreck.Turn := Turn;
   Wreck.Pad := APad;
   Wreck.Width := AWidth;
   Wreck.Height := AHeight;
@@ -233,6 +246,12 @@ begin
   Wreck.SpinRate := SpinSide * Lerp(WreckSpinFarShare, 1, Strength) *
     (WreckSpinLeast + WreckSpinSpan * WreckVariety(Turn, WreckSpinSalt));
   Wreck.SpinGain := WreckSpinGainMost * WreckVariety(Turn, WreckSpinGainSalt);
+  for var i := 0 to High(FWrecks) do
+    if FWrecks[i].Gone then
+    begin
+      FWrecks[i] := Wreck;
+      Exit;
+    end;
   FWrecks := FWrecks + [Wreck];
 end;
 
@@ -271,6 +290,7 @@ end;
 procedure TPadWrecks.Clear;
 begin
   FWrecks := nil;
+  FLaunched := 0;
   Inc(FClears);
 end;
 
@@ -347,6 +367,7 @@ begin
       WreckSeedSalts[1] xor Turn)];
     FBolts := FBolts + [TLightning.CreateLook(Default(TDynamicPlacement),
       WreckBoltLook, 1, WreckSeedSalts[2] xor Turn)];
+    FTurns := FTurns + [-1];
   end;
 end;
 
@@ -360,6 +381,8 @@ begin
     Spray.Rewind;
   for var Bolt in FBolts do
     Bolt.Rewind;
+  for var i := 0 to High(FTurns) do
+    FTurns[i] := -1;
 end;
 
 function TPadWreckPainter.JetPoint(AIndex: Integer): TSdlFPoint;
@@ -383,6 +406,15 @@ begin
   Inc(FAge);
   for var i := 0 to FWrecks.Count - 1 do
   begin
+    // A new wreck in a gone one's place: its jet starts where it is, and
+    // what the old one put out burns out where it was
+    if FTurns[i] <> FWrecks[i].Turn then
+    begin
+      FTurns[i] := FWrecks[i].Turn;
+      FFires[i].ForgetOrigin;
+      FSparks[i].ForgetOrigin;
+      FBolts[i].ForgetOrigin;
+    end;
     var Burning := not FWrecks[i].Gone;
     var Jet := JetPoint(i);
     FFires[i].Tick(Jet.X, Jet.Y, Burning);

@@ -91,6 +91,9 @@ type
     constructor CreateOver(const ABody: TShieldMask);
     // ACells in a row about the middle, at AScale of the full cell
     constructor CreateStrip(ACells: Integer; AScale: Single);
+    // No cells over AY from the middle: a shield open on top, where the
+    // machine is to be hit, shows none there
+    procedure OpenAbove(AY: Single);
     destructor Destroy; override;
     // Up again, with no flare on it
     procedure Rise;
@@ -521,6 +524,15 @@ begin
   else
     Result := 0;
   end;
+end;
+
+procedure TTekShield.OpenAbove(AY: Single);
+begin
+  var Kept: TArray<TCell> := nil;
+  for var Cell in FCells do
+    if Cell.Y >= AY then
+      Kept := Kept + [Cell];
+  FCells := Kept;
 end;
 
 procedure TTekShield.Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;

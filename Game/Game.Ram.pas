@@ -76,10 +76,21 @@
   the hull, or from over it toward the side with more road - and with the
   hull at the wall that is always the left: the chase that follows starts
   from there; come down inside the hull, he walks out of it as after any
-  throw. The empty mast sinks and the machine stands at the wall; there is no third
-  head yet. After the time the third would take to rise and light its
-  row, and a breath, the machine drives off and the chase begins: it
-  does not leave the screen, the road slides under it (Game.Belt).
+  throw. The empty mast sinks and the machine stands at the wall.
+
+  The bunker: an armoured dome low on the mast, its barrels short, its
+  hatch on top. It rises and lights its row; a breath after the row is
+  lit the machine drives off and the chase begins: it does not leave the
+  screen, the road slides under it (Game.Belt). It stands at the right
+  wall and turns to the hero as the others do. Its hatch breathes: shut,
+  it aims, and lobs a shell at where his feet are (Game.Shells); a beat,
+  then a column of hot exhaust goes straight up out of the open hatch -
+  it wounds whoever is in it; then the hatch stands open and cooling, and
+  shuts. Its top is open to a bullet at any time, the lid shut or not: one
+  that comes down onto it from above or aslant, from a pad. The honeycomb
+  closes its sides and front. Its lives go by thirds as the others' do - in
+  this stage all three thirds are its first phase. Its last life blows
+  it up as the hunter's does; the empty mast sinks and the road runs on.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -112,6 +123,7 @@ const
   // The hunter's eye on the first grade; the game scales them by its own
   HunterLives = 100;
   SweeperLives = 140;
+  BunkerLives = 150;
   // Units a tick, as TBurst.NewBullet takes them
   HunterBulletSpeed = 6;
   SweeperBulletSpeed = 5;
@@ -126,7 +138,11 @@ type
   TRamPhase = (rpAbsent, rpWaiting, rpDriving, rpBreathing, rpRising,
     rpResting, rpRevving, rpChanging);
 
-  TRamHead = (rhNone, rhHunter, rhSweeper);
+  TRamHead = (rhNone, rhHunter, rhSweeper, rhBunker);
+
+  // The bunker's breath: shut and aiming; shut, the shell just out; the
+  // column of exhaust out of the open hatch; open and cooling - the window
+  TBunkerHatch = (bhAiming, bhFired, bhVenting, bhOpen);
 
   // The gun: idle (aiming or riding, resting), the warning before a burst
   // - the hunter's lens, the sweeper's barrels burning red - the burst
@@ -203,6 +219,11 @@ type
     Third: Boolean;
     // It drives off: the chase begins, the road slides under it
     Chase: Boolean;
+    // The bunker lobs a shell out of LobFrom that comes down on LobAt
+    Lob: Boolean;
+    LobFrom, LobAt: TSdlFPoint;
+    // The column of exhaust goes up out of the bunker's hatch
+    Vent: Boolean;
   end;
 
   TRam = class
@@ -292,8 +313,15 @@ type
     FRetreating: Boolean;
     FRetreatTicks: Integer;
     FStoodTicks: Integer;
-    // Both heads gone, it has driven off into the chase
+    // The bunker up, it has driven off into the chase
     FChased: Boolean;
+    // The bunker's breath, ticks left of it; how open the lid stands, 1
+    // open; the muzzle that fires next; the honeycomb about it
+    FHatch: TBunkerHatch;
+    FHatchTicks: Integer;
+    FLid, FLastLid: Single;
+    FNextMuzzle: Integer;
+    FHeadShield: TTekShield;
     // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
@@ -304,8 +332,14 @@ type
     procedure TickThirds;
     procedure BeginRetreat;
     procedure TickRetreat;
-    function Spent: Boolean;
-    procedure TickSpent;
+    function AtTheWall: Boolean;
+    procedure TickChaseStart;
+    procedure LockBunker;
+    procedure TickBunkerTurn;
+    procedure TickHatch;
+    procedure TickLid;
+    procedure Lob;
+    function BunkerMiddle: TSdlFPoint;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -383,6 +417,21 @@ type
     function LensPoint: TSdlFPoint;
     // The middle of the sweeper's barrel pack on the screen now
     function BarrelsPoint: TSdlFPoint;
+    // Where a bullet's stretch of this tick meets the bunker: through the
+    // open hatch, falling steeply enough - a life; anywhere else - the lid
+    // or the honeycomb about it takes it, AGuarded, and flares. False when
+    // it misses.
+    function StrikeBunker(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
+      out AGuarded: Boolean): Boolean;
+    // The middle of the bunker's hatch on the screen now
+    function HatchPoint: TSdlFPoint;
+    // The column of exhaust over the hatch holds some of ABody
+    function ColumnHolds(const ABody: TSdlFRect): Boolean;
+    // How open the bunker's lid stands, 0 shut to 1 open, between two ticks
+    function LidAt(AAlpha: Single): Single;
+    // A third of the lives of the head on the mast at once: the debug key's
+    // way past a head
+    procedure WoundThird;
     // The hero's body touches the hull or a wheel and he is in the
     // machine's way: AOnDeck - he stands on a pad, AInAir - on his way up
     // or down. AAway - the side to throw him to, away from its middle; 0 -
@@ -442,6 +491,8 @@ type
     // The middle of the top of the head, between two ticks
     function HeadTopAt(AAlpha: Single): TSdlFPoint;
     property Head: TRamHead read FHead;
+    property Hatch: TBunkerHatch read FHatch;
+    property HeadShield: TTekShield read FHeadShield;
     property Facing: Integer read FFacing;
     property Lives: Integer read FLives;
     property FullLives: Integer read FFullLives;
@@ -488,6 +539,8 @@ type
     FHunterBarrel: PSdlTexture;
     FSweeper: PSdlTexture;
     FSweeperHeat: PSdlTexture;
+    FBunker: PSdlTexture;
+    FBunkerLid: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
@@ -514,7 +567,11 @@ type
     FHeadSmoke: TSmoke;
     FHeadSmoking: Boolean;
     // The bolts over a head under half its lives, one source a head
-    FShorts: array [rhHunter..rhSweeper] of TLightning;
+    FShorts: array [rhHunter..rhBunker] of TLightning;
+    // The bunker's column of exhaust
+    FColumn: TSmoke;
+    FColumnOn: Boolean;
+    FAge: Integer;
     // The thick bolts of the sweeper's overload
     FOverloadShort: TLightning;
     // The dust the wave kicks up where its front runs along the road, one
@@ -525,7 +582,14 @@ type
     procedure TickExhausts(ABeltShift: Single);
     procedure TickHeadSmoke(ABeltShift: Single);
     procedure TickShorts;
+    procedure TickColumn(ABeltShift: Single);
     procedure TickWaveDust;
+    procedure DrawLid(const ASprites: TSpriteRenderer; ALeft, AMast,
+      ASway, AAlpha: Single);
+    procedure DrawColumn(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
+    procedure DrawTop(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+      AAlpha: Single);
     procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
       ASway, AAlpha: Single);
     procedure DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
@@ -602,10 +666,13 @@ const
     (HeatTicks: 16; Shots: 12; GapTicks: 3; RestTicks: 50; Fork: False; Ladder: True));
 
   // The heads as the art draws them, facing left; the socket at the bottom
+  // The bunker's art faces right: its points here are mirrored to the
+  // others' left-facing frame, X = the width less the art's
   HeadShapes: array [TRamHead] of THeadShape = (
     (Width: 0; Height: 0; SocketX: 0; SocketY: 0),
     (Width: 27.7; Height: 18.8; SocketX: 16.6; SocketY: 18.7),
-    (Width: 42.1; Height: 18.7; SocketX: 29.2; SocketY: 18.7));
+    (Width: 42.1; Height: 18.7; SocketX: 29.2; SocketY: 18.7),
+    (Width: 28.2; Height: 34.3; SocketX: 17.9; SocketY: 34.1));
 
 const
   LogicTicksPerSecond = 33;
@@ -755,6 +822,39 @@ const
   HeatRed: TRgb = (R: 255; G: 48; B: 28);
   HeatFrom = 0.4;
 
+  // The bunker, low on the mast: its hatch under the high pads of the
+  // chase, a shot down from one of them reaches it
+  BunkerMast = 12.0;
+  // Its breath: aiming shut, a beat after the shell, the column, the
+  // window; the lid opens fast as the column blows it, shuts slower
+  HatchAimTicks = 50;
+  HatchFiredTicks = 10;
+  HatchVentTicks = 16;
+  HatchWindowTicks = 40;
+  LidOpenTicks = 3;
+  LidShutTicks = 6;
+  // The top of the dome in the left-facing frame, as measured on the art:
+  // the hatch in the middle of it; a bullet that comes down onto it at
+  // least this steeply takes a life
+  HatchX = 17.4;
+  HatchY = 12.0;
+  HatchHalfWidth = 8.5;
+  HatchFallLeast = 15.0;
+  BunkerMuzzles: array [0..1] of THullPoint = ((X: 0.2; Y: 24.2),
+    (X: 0.2; Y: 28.0));
+  // The lid's art stands open; turned this far counter-clockwise about
+  // its hinge and moved, on the art as drawn facing right, it lies shut
+  LidHinge: THullPoint = (X: 9.6; Y: 11.6);
+  LidShutTurn = 52.0;
+  LidShutShift: THullPoint = (X: 5.5; Y: -1.5);
+  // The honeycomb about the dome, from its middle
+  BunkerShieldRadiusX = 15.0;
+  BunkerShieldRadiusY = 18.0;
+  // The column: straight up out of the hatch, two cells and a half
+  ColumnHalfWidth = 6.0;
+  ColumnHeight = 80.0;
+  LobJolt = 0.05;
+
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
   HurtFlashTicks = 4;
@@ -844,13 +944,39 @@ const
   HeadSmokeSeed = $48656164; // "Head"
   HeadSmokeRampTicks = 10;
 
+  // The bunker's column: fire thrown straight up out of the hatch, two
+  // cells and a half in its short life, cooling to smoke; a glow stands
+  // in it while it blows
+  ColumnLook: TSmokeLook = (Rate: 90; Life: 0.45; Size: 4; EndSize: 12;
+    Opacity: 0.8; Angle: 90; Cone: 10; Speed: 190; Drag: 0.4; Lift: 0;
+    Wind: 0; Turbulence: 4; Spin: 60; Flow: sfSteady; Frequency: 1;
+    Heat: 1; EndTint: (R: 40; G: 38; B: 38));
+  ColumnTint: TColorTint = (R: 70; G: 62; B: 56);
+  ColumnSeed = $436F6C6D; // "Colm"
+  ColumnGlows = 4;
+  ColumnGlowSize = 18.0;
+  ColumnGlowLevel = 0.6;
+  ColumnFlicker = 0.25;
+  // Radians a tick, and between two glows
+  ColumnFlickerRate = 0.9;
+  ColumnFlickerOffset = 1.7;
+  ColumnHot: TRgb = (R: 255; G: 150; B: 60);
+  // The top of the bunker, where it is hit: a pale band of light lying on
+  // it that breathes, as the hunter's lens winks - this is what has lives;
+  // white while its row comes up and when it is struck
+  TopGlowWidth = 22.0;
+  TopGlowHeight = 7.0;
+  TopGlowLow = 0.35;
+  TopGlowHigh = 0.75;
+  TopGlowTicks = 40;
+
   // Under half its lives a head shorts out as the tank's wreck does, and
   // from the wreck's floor: the bolts of a head just under half come
   // about once a second, of one at its last life twice
   ShortFloor = 0.35;
   ShortSpan = 0.65;
   // Over the middle of the head, in a box about its width
-  HeadShorts: array [rhHunter..rhSweeper] of TLightningLook = (
+  HeadShorts: array [rhHunter..rhBunker] of TLightningLook = (
     (Reach: 14; Spread: (X: 10; Y: 6); Angle: 90; Cone: 360; Collide: lcNone;
     Size: 0.9; Jag: 0.26; Fork: 0.18; Frequency: 2.2; Strokes: 2; Life: 0.11;
     Leader: 0; Spell: 0; Pause: 0; Flash: 0.55; Jolt: 0;
@@ -858,9 +984,13 @@ const
     (Reach: 16; Spread: (X: 16; Y: 6); Angle: 90; Cone: 360; Collide: lcNone;
     Size: 1; Jag: 0.26; Fork: 0.18; Frequency: 2.2; Strokes: 2; Life: 0.11;
     Leader: 0; Spell: 0; Pause: 0; Flash: 0.55; Jolt: 0;
+    Tint: (R: 66; G: 74; B: 100)),
+    (Reach: 16; Spread: (X: 12; Y: 12); Angle: 90; Cone: 360; Collide: lcNone;
+    Size: 1; Jag: 0.26; Fork: 0.18; Frequency: 2.2; Strokes: 2; Life: 0.11;
+    Leader: 0; Spell: 0; Pause: 0; Flash: 0.55; Jolt: 0;
     Tint: (R: 66; G: 74; B: 100)));
-  ShortSeeds: array [rhHunter..rhSweeper] of Cardinal = ($53687431,
-    $53687432); // "Sht1", "Sht2"
+  ShortSeeds: array [rhHunter..rhBunker] of Cardinal = ($53687431,
+    $53687432, $53687433); // "Sht1", "Sht2", "Sht3"
   // The overload over its shorts: longer, thicker, many times as often
   OverloadShortLook: TLightningLook = (Reach: 24; Spread: (X: 16; Y: 6);
     Angle: 90; Cone: 360; Collide: lcNone; Size: 1.8; Jag: 0.3; Fork: 0.3;
@@ -1070,12 +1200,17 @@ begin
   FShield := TTekShield.CreateOver(ABody);
   for var i := Low(FPlates) to High(FPlates) do
     FPlates[i] := TTekShield.CreateStrip(PlateCells, PlateScale);
+  FHeadShield := TTekShield.Create(BunkerShieldRadiusX, BunkerShieldRadiusY);
+  // Open on top: the honeycomb only on the sides and the front, under the
+  // top of the dome, where bullets are taken
+  FHeadShield.OpenAbove(HatchY - HeadShapes[rhBunker].Height / 2);
   FDice.Seed := ASeed;
   FWave.Stop;
 end;
 
 destructor TRam.Destroy;
 begin
+  FHeadShield.Free;
   for var Plate in FPlates do
     Plate.Free;
   FShield.Free;
@@ -1149,6 +1284,11 @@ begin
   FRetreatTicks := 0;
   FStoodTicks := 0;
   FChased := False;
+  FHatch := bhAiming;
+  FHatchTicks := FirstBurstTicks;
+  FLid := 0;
+  FLastLid := 0;
+  FNextMuzzle := 0;
   FOverloadTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
@@ -1164,6 +1304,7 @@ begin
   FShield.Rise;
   for var Plate in FPlates do
     Plate.Rise;
+  FHeadShield.Rise;
   Arm(ALivesShare);
   if Result then
   begin
@@ -1241,12 +1382,12 @@ begin
     Exit;
   end;
 
-  var Target := FX;
-  for var i := 1 to Tries do
+  var Target := Highest * FDice.NextUnit;
+  for var i := 2 to Tries do
   begin
-    Target := Highest * FDice.NextUnit;
     if Abs(Target - FX) >= PatrolMinLeg then
       Break;
+    Target := Highest * FDice.NextUnit;
   end;
   BeginDrive(Target, PatrolSpeed, False);
 end;
@@ -1354,6 +1495,7 @@ begin
   FLastLens := FLens;
   FLastAim := FAim;
   FLastHeat := FHeat;
+  FLastLid := FLid;
   FLastFlash := FFlash;
   FFlash := Max(0, FFlash - 1 / BlastFlashTicks);
   // The way out counts from the moment he lands
@@ -1377,6 +1519,7 @@ begin
   FShield.Tick;
   for var Plate in FPlates do
     Plate.Tick;
+  FHeadShield.Tick;
   Result := FCue;
 end;
 
@@ -1476,14 +1619,16 @@ begin
     FRetreating := False;
 end;
 
-// Both heads gone: it stands at the wall, where the chase will begin
-function TRam.Spent: Boolean;
+// From the sweeper's blast on it stands at the right wall: the bunker
+// rises there, the chase runs there, and it stays there once the bunker
+// is gone
+function TRam.AtTheWall: Boolean;
 begin
-  Result := (FHead = rhNone) and (FKilled = rhSweeper);
+  Result := FKilled in [rhSweeper, rhBunker];
 end;
 
-// Standing at the wall it waits out its rest, then drives off - once
-procedure TRam.TickSpent;
+// The bunker's row lit, it waits out a breath, then drives off - once
+procedure TRam.TickChaseStart;
 begin
   if FChased then
     Exit;
@@ -1501,7 +1646,7 @@ end;
 // An overloading head presses nobody.
 procedure TRam.TickMode;
 begin
-  if FHeadKilled or Spent then
+  if FHeadKilled or AtTheWall then
   begin
     FPressing := False;
     Exit;
@@ -1580,6 +1725,8 @@ begin
   FHead := rhNone;
   FArmed := False;
   FFire := rfIdle;
+  FHatch := bhAiming;
+  FLid := 0;
   FLensHot := False;
   FTurnTicks := 0;
   FPressing := False;
@@ -1606,12 +1753,10 @@ begin
   FChangeFrom := FMast;
 end;
 
-// The empty mast sinks, a beat, the sweeper rises and the fight goes on.
-// After the sweeper the mast stays down and the machine stands at the
-// wall as long as the third head would take to rise and light its row,
-// then a breath before the chase.
-// TODO: the bunker rises here, and the breath counts from its row lit
-// (tracked: arena-3.md, stage 14)
+// The empty mast sinks, a beat, the next head rises and the fight goes
+// on: the sweeper after the hunter, the bunker after the sweeper - and the
+// breath before the chase counts from the bunker's row lit. After the
+// bunker the mast stays down.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1623,23 +1768,35 @@ begin
   var Rising := FPhaseTicks - SinkTicks - EmptyTicks;
   if Rising < 0 then
     Exit;
-  if FKilled = rhSweeper then
+  if FKilled = rhBunker then
   begin
-    BeginRest(ChangeRiseTicks + RowBootTicks + ChaseBreathTicks);
+    BeginRest(0);
     Exit;
   end;
   if Rising = 0 then
   begin
     FHead := rhSweeper;
+    if FKilled = rhSweeper then
+      FHead := rhBunker;
     FFacing := -1;
     FCue.Whine := True;
     Exit;
   end;
-  FMast := Lerp(MastRest, SweeperMast, SmoothStep(Rising / ChangeRiseTicks));
-  if Rising >= ChangeRiseTicks then
+  var Height := SweeperMast;
+  if FHead = rhBunker then
+    Height := BunkerMast;
+  FMast := Lerp(MastRest, Height, SmoothStep(Rising / ChangeRiseTicks));
+  if Rising < ChangeRiseTicks then
+    Exit;
+  if FHead = rhSweeper then
   begin
     LockSweeper;
     BeginRest(LockRestTicks);
+  end
+  else
+  begin
+    LockBunker;
+    BeginRest(RowBootTicks + ChaseBreathTicks);
   end;
 end;
 
@@ -1662,6 +1819,27 @@ begin
   FForkLeft := False;
   FLadderWay := 0;
   FRowY := SweeperRowY(FMast);
+end;
+
+// Locked low on the mast with all its lives and its hatch shut; the row
+// comes up and the first shell waits for it
+procedure TRam.LockBunker;
+begin
+  FArmed := True;
+  FArmedTicks := 0;
+  FFullLives := Max(1, Round(BunkerLives * FLivesShare));
+  FLives := FFullLives;
+  FThirds := 0;
+  FHurtTicks := 0;
+  FHitTicks := NoHitTicks;
+  FGoneTicks := -1;
+  FRowTicks := 0;
+  FFire := rfIdle;
+  FPastTicks := 0;
+  FHatch := bhAiming;
+  FHatchTicks := FirstBurstTicks;
+  FLid := 0;
+  FNextMuzzle := 0;
 end;
 
 procedure TRam.TickPhase;
@@ -1709,13 +1887,13 @@ begin
           BeginChange;
           Exit;
         end;
-        // A dying head holds the machine as its end says; a spent one
-        // stands at the wall, and the road runs under it
+        // A dying head holds the machine as its end says; past the
+        // sweeper it stands at the wall, and the road runs under it
         if FHeadKilled then
           Exit;
-        if Spent then
+        if AtTheWall then
         begin
-          TickSpent;
+          TickChaseStart;
           Exit;
         end;
         if FHero.Alive and not FPressing and (FHead = rhHunter) and
@@ -1897,6 +2075,11 @@ begin
     TickRide;
     Exit;
   end;
+  if FHead = rhBunker then
+  begin
+    TickBunkerTurn;
+    Exit;
+  end;
 
   var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
     HunterSleeveX, HunterSleeveY);
@@ -1933,6 +2116,11 @@ end;
 // is let out.
 procedure TRam.TickFire;
 begin
+  if FHead = rhBunker then
+  begin
+    TickHatch;
+    Exit;
+  end;
   if not CanShoot then
   begin
     if FFire <> rfIdle then
@@ -2164,6 +2352,202 @@ begin
     FCue.ShotAngle := 0;
   FCue.ShotSpeed := SweeperBulletSpeed;
   FNextBarrel := (FNextBarrel + 1) mod Length(MuzzleYs);
+end;
+
+// Turns to a hero on its other side - only while it aims, never with the
+// hatch open
+procedure TRam.TickBunkerTurn;
+begin
+  if not FArmed then
+    Exit;
+  var OtherSide := (FHeroCenter.X - MastPivot(FX).X) * -FFacing;
+  if OtherSide > SweeperTurnPast then
+    Inc(FPastTicks)
+  else
+    FPastTicks := 0;
+  if (FPastTicks >= TurnHoldTicks) and (FHatch = bhAiming) then
+  begin
+    FPastTicks := 0;
+    FTurnTicks := TurnTicks;
+  end;
+end;
+
+// Shut, it aims and lobs; a beat; the column; the window; shut again. A
+// breath under way runs to its end; a new one waits for a hero to aim at,
+// a head turned to him and its row lit.
+procedure TRam.TickHatch;
+begin
+  if not FArmed or FHeadKilled then
+  begin
+    TickLid;
+    Exit;
+  end;
+  case FHatch of
+    bhAiming:
+      if CanShoot and not Booting then
+      begin
+        if FHatchTicks > 0 then
+          Dec(FHatchTicks)
+        else
+        begin
+          Lob;
+          FHatch := bhFired;
+          FHatchTicks := HatchFiredTicks;
+        end;
+      end;
+    bhFired:
+      if FHatchTicks > 0 then
+        Dec(FHatchTicks)
+      else
+      begin
+        FHatch := bhVenting;
+        FHatchTicks := HatchVentTicks;
+        FCue.Vent := True;
+      end;
+    bhVenting:
+      if FHatchTicks > 0 then
+        Dec(FHatchTicks)
+      else
+      begin
+        FHatch := bhOpen;
+        FHatchTicks := HatchWindowTicks;
+      end;
+    bhOpen:
+      if FHatchTicks > 0 then
+        Dec(FHatchTicks)
+      else
+      begin
+        FHatch := bhAiming;
+        FHatchTicks := HatchAimTicks;
+      end;
+  end;
+  TickLid;
+end;
+
+// The column throws the lid open at once; it shuts slower
+procedure TRam.TickLid;
+begin
+  if (FHead = rhBunker) and FArmed and (FHatch in [bhVenting, bhOpen]) then
+    FLid := Min(1, FLid + 1 / LidOpenTicks)
+  else
+    FLid := Max(0, FLid - 1 / LidShutTicks);
+end;
+
+// Out of the next of its two muzzles, at the hero's feet
+procedure TRam.Lob;
+begin
+  var Muzzle := BunkerMuzzles[FNextMuzzle];
+  FNextMuzzle := (FNextMuzzle + 1) mod Length(BunkerMuzzles);
+  FCue.Lob := True;
+  FCue.LobFrom := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+    Muzzle.X, Muzzle.Y);
+  FCue.LobAt := UnitPoint(FHeroCenter.X, FHero.Body.Y + FHero.Body.H);
+  FCue.Jolt := Max(FCue.Jolt, LobJolt);
+end;
+
+function TRam.BunkerMiddle: TSdlFPoint;
+begin
+  var Shape := HeadShapes[rhBunker];
+  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+    Shape.Width / 2, Shape.Height / 2);
+end;
+
+function TRam.HatchPoint: TSdlFPoint;
+begin
+  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+    HatchX, HatchY);
+end;
+
+// Down onto the top of the dome within its width: a steep enough bullet
+// takes a life, the lid shut or open; a shallow one only flares the
+// honeycomb. Elsewhere the honeycomb takes it - on the sides and the
+// front, under the top: over it a bullet flies on.
+function TRam.StrikeBunker(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
+  out AGuarded: Boolean): Boolean;
+begin
+  AAt := ATo;
+  AGuarded := False;
+  if not Present or (FHead <> rhBunker) or not FArmed or FHeadKilled or
+    (TurnSquash < ThinHeadSquash) then
+    Exit(False);
+  var Opening := HatchPoint;
+  var Half := HatchHalfWidth * TurnSquash;
+  var Fall := ATo.Y - AFrom.Y;
+  var Middle := BunkerMiddle;
+  if (Fall > 0) and (AFrom.Y <= Opening.Y) and (ATo.Y >= Opening.Y) then
+  begin
+    var Share := (Opening.Y - AFrom.Y) / Fall;
+    var X := Lerp(AFrom.X, ATo.X, Share);
+    if Abs(X - Opening.X) <= Half then
+    begin
+      AAt := UnitPoint(X, Opening.Y);
+      var Steep := Fall >= Abs(ATo.X - AFrom.X) * Tan(DegToRad(HatchFallLeast));
+      if Steep then
+      begin
+        FHurtTicks := HurtFlashTicks;
+        FHitTicks := 0;
+        Dec(FLives);
+        if FLives <= 0 then
+          FHeadKilled := True;
+        Exit(True);
+      end;
+      AGuarded := True;
+      FHeadShield.Strike(UnitPoint(AAt.X - Middle.X, AAt.Y - Middle.Y));
+      Exit(True);
+    end;
+  end;
+
+  // Only the part of the stretch under the rim line meets the honeycomb
+  var From := AFrom;
+  var Till := ATo;
+  if (From.Y < Opening.Y) and (Till.Y < Opening.Y) then
+    Exit(False);
+  if (From.Y < Opening.Y) or (Till.Y < Opening.Y) then
+  begin
+    var Rim := UnitPoint(Lerp(AFrom.X, ATo.X, (Opening.Y - AFrom.Y) / Fall),
+      Opening.Y);
+    if From.Y < Opening.Y then
+      From := Rim
+    else
+      Till := Rim;
+  end;
+  var Entry: TSdlFPoint;
+  if not FHeadShield.TryEntry(UnitPoint(From.X - Middle.X, From.Y - Middle.Y),
+    UnitPoint(Till.X - Middle.X, Till.Y - Middle.Y), Entry) then
+    Exit(False);
+  AGuarded := True;
+  AAt := UnitPoint(Middle.X + Entry.X, Middle.Y + Entry.Y);
+  FHeadShield.Strike(Entry);
+  Result := True;
+end;
+
+function TRam.ColumnHolds(const ABody: TSdlFRect): Boolean;
+begin
+  if not Present or (FHead <> rhBunker) or (FHatch <> bhVenting) then
+    Exit(False);
+  var Opening := HatchPoint;
+  Result := (ABody.X < Opening.X + ColumnHalfWidth) and
+    (ABody.X + ABody.W > Opening.X - ColumnHalfWidth) and
+    (ABody.Y < Opening.Y) and (ABody.Y + ABody.H > Opening.Y - ColumnHeight);
+end;
+
+function TRam.LidAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastLid, FLid, AAlpha);
+end;
+
+procedure TRam.WoundThird;
+begin
+  if (FHead = rhNone) or not FArmed or FHeadKilled then
+    Exit;
+  FLives := Max(0, FLives - Max(1, FFullLives div 3));
+  FHurtTicks := HurtFlashTicks;
+  FHitTicks := 0;
+  if FLives > 0 then
+    Exit;
+  FHeadKilled := True;
+  if FHead = rhSweeper then
+    FRetreating := True;
 end;
 
 procedure TRam.TickHeat;
@@ -2723,6 +3107,8 @@ begin
   FHunterBarrel := FCache.Get('hunterBarrel');
   FSweeper := FCache.Get('sweeper');
   FSweeperHeat := FCache.Get('sweeperHeat');
+  FBunker := FCache.Get('bunker');
+  FBunkerLid := FCache.Get('bunkerLid');
   FHullArt := THullArt.Create(ARenderer, RamHullDef);
   FShield := TShieldArt.Create(ARenderer);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
@@ -2768,6 +3154,9 @@ begin
       HeadShorts[Head], 0, ShortSeeds[Head]);
   FOverloadShort := TLightning.CreateLook(Default(TDynamicPlacement),
     OverloadShortLook, 0, OverloadShortSeed);
+  var ColumnPlacement := Default(TDynamicPlacement);
+  ColumnPlacement.Tint := ColumnTint;
+  FColumn := TSmoke.CreateLook(ColumnPlacement, ColumnLook, 0, ColumnSeed);
   var DustPlacement := Default(TDynamicPlacement);
   DustPlacement.Tint := WaveDustTint;
   for var i := Low(FWaveDust) to High(FWaveDust) do
@@ -2779,6 +3168,7 @@ destructor TRamPainter.Destroy;
 begin
   for var Dust in FWaveDust do
     Dust.Free;
+  FColumn.Free;
   FOverloadShort.Free;
   for var Short in FShorts do
     Short.Free;
@@ -2791,11 +3181,13 @@ end;
 
 procedure TRamPainter.Tick(ABeltShift: Single);
 begin
+  Inc(FAge);
   FHull.Tick(0, 0, FRam.Rolled + ABeltShift);
   TickArrival;
   TickExhausts(ABeltShift);
   TickHeadSmoke(ABeltShift);
   TickShorts;
+  TickColumn(ABeltShift);
   TickWaveDust;
 end;
 
@@ -2813,6 +3205,8 @@ begin
   for var Short in FShorts do
     Short.Rewind;
   FOverloadShort.Rewind;
+  FColumnOn := False;
+  FColumn.Rewind;
   for var Dust in FWaveDust do
     Dust.Rewind;
 end;
@@ -2891,6 +3285,23 @@ begin
   end;
 end;
 
+// The column blows while the bunker vents; what it threw up rides the
+// road away as the exhausts' smoke does
+procedure TRamPainter.TickColumn(ABeltShift: Single);
+begin
+  if not FRam.Present then
+    Exit;
+  var Venting := (FRam.Head = rhBunker) and (FRam.Hatch = bhVenting);
+  if Venting <> FColumnOn then
+  begin
+    FColumnOn := Venting;
+    FColumn.FadeTo(Ord(Venting), 0);
+  end;
+  var Hatch := FRam.HatchPoint;
+  FColumn.Drift(-ABeltShift, 0);
+  FColumn.Tick(Hatch.X, Hatch.Y, Venting);
+end;
+
 // Where the front runs along the road - one point each side of the blast
 // - the dust is kicked up; off the screen, or with no wave, none
 procedure TRamPainter.TickWaveDust;
@@ -2946,11 +3357,21 @@ begin
   var Squash := FRam.TurnSquash;
   var Mirrored := Facing > 0;
   var Texture := FArt.FHunter;
-  if Head = rhSweeper then
-    Texture := FArt.FSweeper;
+  case Head of
+    rhSweeper:
+      Texture := FArt.FSweeper;
+    rhBunker:
+      begin
+        // Its art faces right
+        Texture := FArt.FBunker;
+        Mirrored := Facing < 0;
+      end;
+  end;
   ASprites.DrawSized(Texture, HeadPoint(ALeft, AMast, ASway, Head, Facing,
     Squash, Shape.Width / 2, Shape.Height / 2), Shape.Width * Squash,
     Shape.Height, 1, Mirrored, ASway);
+  if Head = rhBunker then
+    DrawLid(ASprites, ALeft, AMast, ASway, AAlpha);
   if Head <> rhHunter then
     Exit;
 
@@ -2964,6 +3385,77 @@ begin
     Turn := -Along;
   ASprites.DrawSized(FArt.FHunterBarrel, UnitPoint(Sleeve.X + Barrel.X * Reach,
     Sleeve.Y + Barrel.Y * Reach), BarrelWidth, BarrelHeight, 1, Mirrored, Turn);
+end;
+
+// The lid in the bunker's frame, turned about its hinge and moved toward
+// where it lies shut by how shut it is. Worked out on the art as drawn
+// facing right, then put into the left-facing frame of the heads; mirrored,
+// the turn goes the other way.
+procedure TRamPainter.DrawLid(const ASprites: TSpriteRenderer; ALeft, AMast,
+  ASway, AAlpha: Single);
+begin
+  var Shape := HeadShapes[rhBunker];
+  var Shut := 1 - FRam.LidAt(AAlpha);
+  var Turn := LidShutTurn * Shut;
+  var Angle := DegToRad(Turn);
+  var FromHingeX := Shape.Width / 2 - LidHinge.X;
+  var FromHingeY := Shape.Height / 2 - LidHinge.Y;
+  // Counter-clockwise on the screen, Y down
+  var CenterX := LidHinge.X + FromHingeX * Cos(Angle) + FromHingeY * Sin(Angle) +
+    LidShutShift.X * Shut;
+  var CenterY := LidHinge.Y - FromHingeX * Sin(Angle) + FromHingeY * Cos(Angle) +
+    LidShutShift.Y * Shut;
+  var Squash := FRam.TurnSquash;
+  var Mirrored := FRam.Facing < 0;
+  var Clockwise := -Turn;
+  if Mirrored then
+    Clockwise := Turn;
+  ASprites.DrawSized(FArt.FBunkerLid, HeadPoint(ALeft, AMast, ASway, rhBunker,
+    FRam.Facing, Squash, Shape.Width - CenterX, CenterY), Shape.Width * Squash,
+    Shape.Height, 1, Mirrored, Clockwise + ASway);
+end;
+
+procedure TRamPainter.DrawTop(const ASprites: TSpriteRenderer; ALeft, AMast,
+  ASway, AAlpha: Single);
+begin
+  if not FRam.Armed then
+    Exit;
+  var Level: Single;
+  var Color := LensColor;
+  if FRam.Booting or FRam.Hurt then
+  begin
+    Level := 1;
+    Color := HeatWhite;
+  end
+  else
+    Level := Lerp(TopGlowLow, TopGlowHigh,
+      0.5 - 0.5 * Cos(2 * Pi * (FAge + AAlpha) / TopGlowTicks));
+  var Top := HeadPoint(ALeft, AMast, ASway, rhBunker, FRam.Facing,
+    FRam.TurnSquash, HatchX, HatchY);
+  DrawGlowTurned(FArt.FRenderer, FArt.FGlow, Top.X + ASprites.Origin.X,
+    Top.Y + ASprites.Origin.Y, TopGlowWidth * FRam.TurnSquash, TopGlowHeight,
+    ASway, Color, Level);
+end;
+
+// The fire of the column over the open hatch: its puffs and a glow that
+// stands in it, flickering, while it blows
+procedure TRamPainter.DrawColumn(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  FColumn.Draw(ACanvas, FColumn.Origin.X + AOrigin.X,
+    FColumn.Origin.Y + AOrigin.Y, AAlpha);
+  if not FColumnOn then
+    Exit;
+  var Hatch := FRam.HatchPoint;
+  for var i := 0 to ColumnGlows - 1 do
+  begin
+    var Flicker := 1 - ColumnFlicker * Abs(Sin(FAge * ColumnFlickerRate +
+      i * ColumnFlickerOffset));
+    DrawGlow(FArt.FRenderer, FArt.FGlow, Hatch.X + AOrigin.X,
+      Hatch.Y - ColumnHeight * (i + 0.5) / ColumnGlows + AOrigin.Y,
+      ColumnGlowSize * (1 - 0.15 * i), ColumnHot,
+      ColumnGlowLevel * Flicker * (1 - i / (ColumnGlows + 1)));
+  end;
 end;
 
 // The barrels in white over the sweeper: red as they burn before and
@@ -3148,7 +3640,10 @@ begin
   ASprites.ClipAbove(RamTop + WellY);
   DrawMast(ASprites, Left, Mast, Sway, AAlpha);
   DrawLens(ASprites, Left, Mast, Sway, AAlpha);
-  // Once: the mast is drawn twice, and the heat is see-through
+  // Once: the mast is drawn twice, and the heat and the light are
+  // see-through
+  if FRam.Head = rhBunker then
+    DrawTop(ASprites, Left, Mast, Sway, AAlpha);
   if FRam.Head = rhSweeper then
   begin
     DrawOverload(ASprites, Left, Mast, Sway);
@@ -3187,6 +3682,15 @@ begin
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,
     RamTop + FRam.Body.Middle.Y + AOrigin.Y);
   FRam.Shield.Draw(ACanvas, FArt.FShield, Middle, AAlpha);
+  if (FRam.Head = rhBunker) and FRam.Armed then
+  begin
+    var Shape := HeadShapes[rhBunker];
+    var Dome := HeadPoint(Left, FRam.MastAt(AAlpha), FRam.SwayAt(AAlpha),
+      rhBunker, FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2);
+    FRam.HeadShield.Draw(ACanvas, FArt.FShield,
+      UnitPoint(Dome.X + AOrigin.X, Dome.Y + AOrigin.Y), AAlpha);
+  end;
+  DrawColumn(ACanvas, AOrigin, AAlpha);
   if (FRam.Head = rhSweeper) and FRam.Armed then
   begin
     var Mast := FRam.MastAt(AAlpha);

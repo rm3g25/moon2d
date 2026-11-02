@@ -83,6 +83,7 @@ uses
   Game.Ram in 'Game\Game.Ram.pas',
   Game.Wrecks in 'Game\Game.Wrecks.pas',
   Game.Capsules in 'Game\Game.Capsules.pas',
+  Game.Shells in 'Game\Game.Shells.pas',
   Game.StoneTank in 'Game\Game.StoneTank.pas',
   Game.Belt in 'Game\Game.Belt.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
