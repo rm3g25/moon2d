@@ -59,7 +59,7 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
   (`Game.Capsules`, 3.0.84), the hidden tank of the form's charge in
   it (`Game.StoneTank`, 3.0.85), the road of its chase
-  (`Game.Belt`, 3.0.86), how far the far plane behind the road has
+  (`Game.Belt`, 3.0.86), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
   front of it (`Game.Fangs`, 3.0.89). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
@@ -203,6 +203,8 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Game.StoneTank` (the tank of the charge: over `Render.Brush` for its
 dice) /
 `Game.Belt` (the road of the chase: over nothing) /
+`Game.Shells` (the bunker's shells: over the canvas of `Levels.Dynamics`,
+`Render.Brush`, `Render.Glow` and `Game.Space`) /
 `Game.FarPlane` (how far its far plane has ridden: over `Levels.FarPlane`
 alone) /
 `Game.Fangs` (the fangs of the chase: over `Levels.FarPlane`,
@@ -5153,6 +5155,9 @@ addition.
   box of the row's half-length and a cell's half-height. A plate that
   guards one side of a gun: the Ram's sweeper wears two under its
   barrels.
+- 3.0.94: **`OpenAbove(y)`** - no cells over `y` from the middle: a shield
+  open on top shows none there. The Ram's bunker wears an ellipse open
+  over the top of its dome.
 ### `Game/Game.Cannons.pas` (~900 lines)
 The two TeK cannons of the gravel arena (3.0.56, act 3): guns clamped to
 the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
@@ -5213,7 +5218,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3205 lines, 3.0.86)
+### `Game/Game.Ram.pas` (~3710 lines, 3.0.94)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -5456,7 +5461,36 @@ monster. The game carries out the cue.
   the cue **`Chase`** with `Rumble`, once (`FChased`, false in `Arm`): the
   game starts the road. The machine itself stays at the wall; the road
   is `Game.Belt`.
-### `Game/Game.Wrecks.pas` (~440 lines, 3.0.83)
+- 3.0.94, **the bunker** (stage 14a; `docs/mechanics/arena-3.md`, "Stage
+  14a as built"). **`rhBunker`**; `TickChange` raises it after the sweeper
+  to `BunkerMast` 12, **`LockBunker`** (`BunkerLives` 150 times the share,
+  the hatch shut) and rests `RowBootTicks` + `ChaseBreathTicks`: the chase
+  counts from its row lit (**`TickChaseStart`**, was `TickSpent`).
+  **`AtTheWall`** (was `Spent`): the sweeper or the bunker killed - no
+  press, no legs. **`TBunkerHatch`** (`bhAiming`, `bhFired`, `bhVenting`,
+  `bhOpen`) and **`TickHatch`** (from `TickFire`): aiming `HatchAimTicks`
+  50, **`Lob`** (cue **`Lob`**, `LobFrom` the next of `BunkerMuzzles`,
+  `LobAt` the hero's feet), `HatchFiredTicks` 10, the column (cue
+  **`Vent`**) `HatchVentTicks` 16, the window `HatchWindowTicks` 40;
+  **`TickLid`** (`LidAt`, open in `LidOpenTicks` 3, shut in
+  `LidShutTicks` 6). **`TickBunkerTurn`** (from `TickAim`) - only while
+  aiming. **`StrikeBunker(from, to, at, guarded)`**: down across the top
+  (`HatchX` 17.4, `HatchY` 12, `HatchHalfWidth` 8.5) at `HatchFallLeast`
+  15 or steeper - a life; shallower - guarded; under the top line the
+  part of the stretch against **`FHeadShield`** (`HeadShield`, an ellipse
+  15 by 18 about **`BunkerMiddle`**, `OpenAbove` the top) - guarded.
+  **`HatchPoint`**, **`ColumnHolds(body)`** (`ColumnHalfWidth` 6,
+  `ColumnHeight` 80, while venting), **`Hatch`**, **`WoundThird`** (the
+  debug key). `KillHead` of the bunker: the hunter's blast. `HeadShapes`
+  of the bunker - mirrored from its right-facing art. `TRamArt`:
+  `bunker`, `bunkerLid`. `TRamPainter`: the bunker in `DrawHead`
+  (mirrored facing left) with **`DrawLid`**; **`DrawTop`** - the pale band
+  on the top (`TopGlow*`), white while booting or struck, after the lens;
+  **`TickColumn`**/**`DrawColumn`** - `ColumnLook` smoke and four glows,
+  ridden off with the road; the honeycomb of the head in `DrawLight`; a
+  third `HeadShorts`. 3.0.94 also: `BeginPatrolLeg`'s first roll out of
+  the loop (no value left unused).
+### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
 to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
@@ -5479,7 +5513,9 @@ to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
   spin faster by its gain up to `WreckSpinMost` 24; gone
   `WreckOffMargin` 60 past the left, the right or the top edge. `Clear`
   (`Clears` counts), `Count`, `Flying`, `MiddleAt`, `SpinAt`, the default
-  `Wrecks[i]`.
+  `Wrecks[i]`. 3.0.94: a new wreck takes the place of the first gone one;
+  each its **`Turn`** (`FLaunched`, set back by a clear) - the bunker's
+  shells knock pads off one by one through a long chase.
 - **`TPadWreckPainter`** - a `TSmoke` of fire (`WreckFire`, heat 1,
   cooling to `WreckFireTint`), a `TSparks` (`WreckSparkLook`) and a
   `TLightning` (`WreckBoltLook`) a wreck, grown as wrecks come (`Grow`),
@@ -5488,8 +5524,10 @@ to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
   stop with a gone wreck and burn out. `DrawFire` (under the pictures),
   `DrawBodies` (the pad's texture, its placement's tint, `DrawSized` at
   the spin), `DrawLight` (an orange glow `WreckGlowSize` 36 breathing
-  about `WreckGlowLevel` 0.45, the sparks, the bolts).
-### `Game/Game.Capsules.pas` (~340 lines, 3.0.84)
+  about `WreckGlowLevel` 0.45, the sparks, the bolts). 3.0.94: `FTurns` -
+  a slot whose wreck's turn changed starts its sources anew
+  (`ForgetOrigin`).
+### `Game/Game.Capsules.pas` (~360 lines, 3.0.94)
 The shuttle's medkits in the Ram's fight (`docs/mechanics/arena-3.md`,
 stage 10d): a capsule falls onto its mark, lands, parts and leaves the
 medkit there; where and why is the game's. Decoration - no floor, no
@@ -5504,14 +5542,16 @@ body, no wound.
   at `MedkitOutTicks` 5, then gone. `Tick` returns the cue. `Clear`,
   `Count`, `BottomAt`, `OpenShare`, `JetLevel` (from `JetFrom` 0.4 of the
   fall to 1 on landing), the default `Capsules[i]`. `CapsuleWidth` 18,
-  `CapsuleHeight` 24.
+  `CapsuleHeight` 24. 3.0.94: **`Ride(way)`** - along the road, before
+  the tick that may open them (`X`, `LastX`, **`XAt`**): the medkit stands
+  where the capsule has been carried.
 - **`TCapsulePainter`** - drawn with the canvas: `DrawHull` (two
   `DiscShade` discs, `HullDark` under `HullLight`, a green cross of two
   thin discs, the beacon blinking every `BeaconBlinkTicks` 8),
   `DrawJet` (`JetHot` glow growing with `JetLevel`, a white core),
   `DrawHalves` (out by `HalfSpread` 9, leaning `HalfLean` 35, fading; a
   green `OutFlashSize` 36 breath). `Tick` counts the blink.
-### `Game/Game.StoneTank.pas` (~180 lines, 3.0.85)
+### `Game/Game.StoneTank.pas` (~185 lines, 3.0.94)
 The hidden tank between the Ram's heads and the gauge of the form's
 charge (`docs/mechanics/arena-3.md`, stage 15a): the charge grows with
 the fight, never read as a hit. Knows neither the Ram nor the gauge, no
@@ -5527,6 +5567,9 @@ SDL.
   `PulseGapSpan` 22 ticks, rolled each time, of 1, or 2 at
   `DoublePulseShare` 0.3 when the tank holds them; returns the percent to
   add), `Ceiling` (`Ceilings` 30, 55 by heads down), `Running`.
+- 3.0.94 (stage 15b): `Ceilings` 30, 55, 95, 100; `HeadShares` 20, 20, 36
+  by heads down in place of one `HeadShare`; the last head's death
+  (`HeadDown` with all but the last ceiling behind) pours up to full.
 ### `Game/Game.Belt.pas` (~125 lines, 3.0.86)
 The treadmill of the chase (`docs/mechanics/arena-3.md`, stage 11a):
 only the road's motion. Knows neither the Ram, the hero nor the road's
@@ -5538,6 +5581,36 @@ picture; no SDL.
   nothing run); `Tick` (the ramp, then `Travel` grows by `Speed`);
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
+
+### `Game/Game.Shells.pas` (~560 lines, 3.0.94)
+The bunker's shells in the chase (`docs/mechanics/arena-3.md`, stage
+14a): lobbed along a low arc seen whole at where the hero's feet were,
+aimed in the world - the road carries the point. A ring marks where a
+shell comes down, every tick anew. On a deck it bursts (the game knocks
+the pad off), on the road it rolls left faster than the road and wounds
+the hero it touches. Knows neither the pads, the hero nor the bunker.
+- **`TShellDeck`** (record) - `Left`, `Right`, `Top`; **`TShellState`** =
+  (`ssNone`, `ssFlying`, `ssRolling`); **`TShell`** - `State`,
+  `Middle`/`LastMiddle`, `Speed`, `Ring`, `RingOnDeck`, `RingTicks`,
+  `FlightTicks`, `Rolled`, `Turn`; **`TShellBurst`** - `At`, `Deck`;
+  **`TShellCue`** - `Bursts`, `Landed`. `ShellSlots` 8, `ShellRadius` 3.5.
+- **`TBunkerShells`** - `Create(roadY)`; **`Lob(from, target)`** (False
+  with every slot taken): of 18 to 60 ticks the arc whose top stands
+  nearest `LobRise` 40 over the higher end (`ArcTop`), `ShellGravity`
+  0.25, the middle a radius over the target; **`Tick(decks, way)`** -
+  flying, the road's way added before the step, the first deck or the
+  road the step comes down onto (`FirstDown`, `LineSlop` 0.01): a deck -
+  a burst; the road - rolling; else the ring anew (**`Predict`**, up to
+  `PredictTicks` 240); rolling, left by the way and `RollSpeed` 1.6, gone
+  `ShellOffMargin` 24 past the left edge; **`Strikes(body, at)`** - a
+  rolling shell touching the body is spent; `Clear`, `Active`,
+  `MiddleAt`, the default `Shells[i]`.
+- **`TShellPainter`** - a trail a slot (`ShellTrail`, started anew with a
+  new shell's `Turn`, ridden off with the road); **`DrawRings`** - a flat
+  ring of triangles (`RingFlat` 0.35) closing from `RingMost` 14 to
+  `RingLeast` 6 as it comes, throbbing, a glow under it; **`DrawShells`**
+  - the trails, a hot glow, a dark disc, a white core in the air, a hot
+  point turning on its rim as it rolls.
 
 ### `Game/Game.FarPlane.pas` (~185 lines, 3.0.93)
 How far each layer of the chase's far plane has ridden
@@ -6595,6 +6668,21 @@ so a unit (and later a test) can reach it. `interface` holds
 - 3.0.92: `DrawBackdrop` hands the painter the far plane's clock
   (`FFarPlane.Clock`) for the city's lights.
 - 3.0.93: and `FFarPlane.ClockAt(alpha)` for the train.
+- 3.0.94, **the bunker and its shells**: `FShells` (`TBunkerShells` on
+  `RamFloorY`), `FShellPainter`. `TickRam`: on `Lob` - `FShells.Lob`
+  (`ShellLobSoundFile`, `granade.wav`), on `Vent` the brake's hiss;
+  `FCapsules.Ride(-FBelt.Speed)` before `TickCapsules`.
+  **`TickShells(way)`** after `KnockOffPads`, before the hero's tick
+  (not in the burst's inhale): the decks of `FPads.Standing`; a burst -
+  `Doze`, a wreck from the burst (`ShellBurstReach` 48), `ekBarrel`,
+  `bottle.wav`, `ShellBurstTrauma` 0.15. **`ResolveRamColumn`**,
+  **`ResolveShellContact`** after the wave - a wound each.
+  **`BulletStruckRamBunker`** before `BulletStruckRam`.
+  `CallTheShuttle` - the bunker's onto **`MedkitAheadMark`**
+  (`MedkitAhead` 64 ahead of the hero, short of the Ram). The rings
+  after the pads in front, the shells after the monsters' bullets.
+  `FShells.Clear` beside every `FCapsules.Clear`. Debug key `O`
+  (`ScancodeO`): `FRam.WoundThird` and a third into the tank.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -7031,6 +7119,21 @@ mouths and cut at each. `Tests.Game.FarPlane` 5: the clock between ticks;
 level 2 reads its train on a line with a run; a train without two
 stations, without a cruise, or with a dwell of no ticks raises. DUnitX
 counts 972 tests at 3.0.93.
+3.0.94 - 30 more. `Tests.Game.Ram`: the new `TRamBunkerTests` 12 (its
+lives by the grade; nothing lobbed while the row comes up; the chase a
+breath after the row lit; the breath of the hatch; the shell at the
+hero's feet; hit from above shut or open; a shot down from a pad goes
+in; shallow or from the side the honeycomb; the column; the turn; the
+thirds; its death with no wave, standing); `TRamSweeperTests`:
+`TestTheBunkerRisesAtTheWall` in place of the empty mast, the drive-off
+with the bunker up. The new `Game/Tests.Game.Shells` (`TBunkerShellTests`
+13: on its target; the arc's climb; a standing hero on a sliding road;
+the ring; a burst on a deck, none rising through one; the ring down once
+the deck is gone; the roll; spent only rolling; past the left edge; the
+slots; a clear). `Tests.Game.StoneTank` 3, `Tests.Game.Capsules` 1,
+`Tests.Game.Wrecks` 1. `Tests.Levels.Monorail` made to build (a loop's
+tick cast to `Integer`; two refusals through `try`/`except`). DUnitX
+counts 1003 tests at 3.0.94.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7752,7 +7855,9 @@ made again in 3.0.83).
 | The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TeK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
-| The form's charge in the Ram's fight (3.0.85): the gauge grows with the hits on the hunter and the sweeper, late and in uneven pulses, up to 30% and 55%; a head's death pours the rest | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
+| The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
+| The bunker's shells (3.0.94): the arc at the hero's feet aimed in the world, the ring, a burst on a deck knocking the pad off, the roll on the road and its wound | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (a new wreck in a gone one's place) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, the draw of the rings and the shells) + Tests.Game.Shells.pas |
+| The form's charge in the Ram's fight (3.0.85; the bunker's half 3.0.94): the gauge grows with the hits on the heads, late and in uneven pulses, up to 30%, 55% and 95%; a head's death pours the rest, the bunker's to full | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
 | Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |

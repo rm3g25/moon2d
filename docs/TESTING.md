@@ -68,10 +68,11 @@ Tests\
   Game\
     Tests.Game.Blasts.pas
     Tests.Game.Press.pas
-    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter and sweeper, the shield over a body and a strip
+    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter, sweeper and bunker, the shield over a body and a strip
     Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
+    Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
