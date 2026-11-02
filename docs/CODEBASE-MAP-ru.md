@@ -108,6 +108,8 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Levels.FarPlane`) /
 `Levels.Monorail` (где стоит поезд города погони, 3.0.93: над
 `Levels.FarPlane` и костями `Levels.CityLife`) /
+`Levels.Searchlights` (куда смотрят прожекторы города погони, 3.0.95: над
+`Levels.FarPlane` и костями `Levels.CityLife`) /
 `Levels.Events` (над `Monsters.Defs`
 ради тактики, которую ставит событие, и стороны, с которой входит тело, и
 над `Levels.Pads` ради программ полок и порядков банков, которые
@@ -153,7 +155,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
 `Render.FarPlane` (над `Levels.FarPlane`, видом задника из
 `Levels.Dynamics`, `Render.Sprites` и `Render.DomeFrames`; солнце и огни
 города через `Render.Glow`, их уровни из `Levels.CityLife`, место поезда
-из `Levels.Monorail`) /
+из `Levels.Monorail`, лучи из `Levels.Searchlights`) /
 `Render.Dynamics` / `Game.Explosions` (над `Effects.Debris`,
 `Levels.Dynamics` и `Monsters.Defs`) / `Game.Blasts` (волна взрыва: над
 `Monsters.Defs`, `Effects.Sparks` ради типа щупа и `Sdl2.Core`) /
@@ -423,7 +425,7 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   столько, сколько пробежала дорога погони, по кругу ширины экрана, - и
   ещё раз на экран левее, если он свисает за правый край.
 
-### `Core/Render.FarPlane.pas` (~795 строк, 3.0.93)
+### `Core/Render.FarPlane.pas` (~940 строк, 3.0.95)
 - **`TFarPlanePainter`** - рисует дальний план погони (`Levels.FarPlane`)
   там, куда его увели смещения, вместо задника экрана: чёрное небо,
   солнце, потом слои от дальнего к ближнему - у каждого своя полоса,
@@ -495,6 +497,18 @@ Game, Hud и Menu - соседи над Core и могут пользовать�
   точка в нём, свечение - через **`GlowWithin`**: луч целиком внутри
   отрезка как раньше, иначе обрезан по нему (вдоль он плоский, так что
   часть точна), точка целиком, пока её центр в нём.
+- 3.0.95, **прожекторы**: `DrawLayer` слоя города наводит луч каждой
+  лампы (`SearchlightBeam` по часам с дробью) в `FBeams` и рисует его
+  (`DrawBeamsBefore` - каждый ещё не нарисованный, `FBeamsDrawn`) перед
+  первым элементом, чей `DepthY` дальше ног лампы, или после последнего.
+  `DrawBeam` кладёт полосу на свечение луча (`AddBeamPiece`,
+  **`TBeamSample`** - расстояние и уровень; `InsideSample` 20 до стекла,
+  `TailSample` 12 по хвосту, как на стенде), V текстуры поперёк, вершины
+  несут цвет и уровень; моды свечения сначала сброшены в белый - их
+  оставляет `DrawGlowRect`. После ближних рёбер и их маячков, до блика,
+  `DrawBeamGlints`: пятно там, где луч выходит из стекла, и точечное
+  свечение на каждом ближнем ребре, которое он пересекает внутри купола,
+  на уровне луча там, делённом на его собственный.
 
 ### `Core/Render.DomeFrames.pas` (~935 строк, 3.0.92)
 Каркасы куполов города погони (`docs/mechanics/chase-backdrop.md`, "The
@@ -1082,7 +1096,7 @@ city"): геодезические полуэллипсоиды, нарисов�
   (`SLevelFarPlaneBadScreen`) и набору, которого нет в `objectSets`
   уровня (`SLevelFarPlaneNoSet`).
 
-### `Core/Levels.FarPlane.pas` (~1030 строк, 3.0.93)
+### `Core/Levels.FarPlane.pas` (~1145 строк, 3.0.95)
 Дальний план погони данными (`docs/mechanics/chase-backdrop.md`): лента
 слоёв, уезжающих влево за игровым слоем каждый со своей скоростью, и
 солнце под ними всеми. Уровень называет экран и layout в секции
@@ -1166,6 +1180,17 @@ city"): геодезические полуэллипсоиды, нарисов�
   ширины, без круиза, разгон меньше тика; стоянка не по порядку или
   меньше тика; и (`CheckCityLife`, `SFarPlaneTrainStations`) в городе не
   две станции.
+- 3.0.95, **прожекторы**: **`TCitySearchlights`** (`searchlights`,
+  `ReadSearchlights`) - `Color`, `Level`, `GlassLevel`, `TailShare`,
+  `Tail`, `RootHalf`, `Spread`, размер и уровень пятна и бликов, `Pause`
+  (**`TSearchlightPause`** - тики окон, `Share`, `EaseTicks`, тики
+  замирания; `ReadSearchlightPause`), `Lamps` (**`TSearchlightLamp`** -
+  `X`, `Y`, `Lift`, `Aim`, две **`TSweepWave`** `Waves`: `Degrees`,
+  `PeriodTicks`; `ReadSearchlightLamp`). Падают
+  (`SFarPlaneBadSearchlights`): уровень, хвост или раскрытие не выше
+  нуля, разгон меньше тика; тики окон и замирания не по порядку
+  (`ReadWholeRange`); (`SFarPlaneBadSearchlight`) лампа без двух качаний и
+  двух периодов выше нуля.
 
 ### `Core/Levels.CityLife.pas` (~270 строк, 3.0.92)
 Насколько ярок каждый огонь города погони на тике часов дальнего плана
@@ -1212,6 +1237,28 @@ city"): геодезические полуэллипсоиды, нарисов�
   стоянки (`RollInt` на `DwellKeys` + номер ноги) и пробега, на чётных -
   от левой. **`TrainShown(train, line, left)`** (**`TTrainShown`** -
   `From`, `Till`, `Any`) - доля картинки между ртами.
+
+### `Core/Levels.Searchlights.pas` (~240 строк, 3.0.95)
+Куда смотрят прожекторы города погони в момент часов дальнего плана и как
+ярок луч по ходу (`docs/mechanics/chase-backdrop.md`, "The
+searchlights"). Без SDL. Эталон - одноимённые функции стенда.
+- **`SearchlightSeed(lamp)`** - `Mix($5E1 + lamp)`.
+  **`SearchlightClock(pause, seed, clock)`** - часы дальнего плана минус
+  то, что забрали паузы: окна (**`TClockWindow`**) от
+  `RollInt(seed, 3, 0, WindowMost)` до часов; в окне пауза
+  (`WindowPause`, **`TWindowPause`** - `At`, `Hold`, `Span`), когда его
+  бросок меньше `Share`; `PauseLost` - скорость гаснет как (1 + cos) / 2,
+  стоит, разгоняется обратно. **`SearchlightAngle(lights, lamp, clock)`**
+  - радианы, Y вниз: прицел и две синусоиды собственных часов, фазы
+  брошены.
+- **`TSearchlightBeam`** (`SearchlightBeam(def, lamp, cityOffset,
+  clock)`) - `FromX`, `FromY` (лампа едет на своей близости, на `Lift`
+  над ногами), `DirX`, `DirY`, `Glass` (`GlassDistance` - где луч
+  выходит из полуэллипса через центр каркаса на линии основания;
+  `DomeOf` - каркас, в следе которого стоит лампа; 0 вне всех куполов);
+  `AtX`, `AtY`. **`BeamLevel(lights, beam, distance)`** - от `Level` у
+  лампы до `GlassLevel` у стекла, дальше хвост; **`TailLevel(lights,
+  share)`** - `GlassLevel` на `TailShare`, плавно до нуля.
 
 ### `Core/Effects.Emitter.pas` (~105 строк)
 - **`TParticle`** (запись) - место, скорость (единиц за тик), угол и
@@ -7068,6 +7115,17 @@ DUnitX на 3.0.93 находит 972 теста.
 `Tests.Game.Wrecks` 1. `Tests.Levels.Monorail` собирается (тик цикла
 приведён к `Integer`; два отказа через `try`/`except`). DUnitX на 3.0.94
 находит 1003 теста.
+3.0.95 - ещё 20. Новый `Levels/Tests.Levels.Searchlights`
+(`TSearchlightClockTests` 7, `TSearchlightBeamTests` 8): часы лампы, её
+угол и луч - против таблиц, снятых собственными функциями стенда под node
+на лампах и куполе самих тестов; часы не идут назад и не обгоняют часы
+дальнего плана, стоят не дольше самого долгого замирания, без пауз равны
+часам дальнего плана; угол в пределах качания; лампа едет на своей
+близости, стекло лежит на куполе, вне купола его нет; луч ярче всего у
+лампы, ступенька у стекла, хвост гаснет, за ним и позади лампы ничего.
+`Tests.Game.FarPlane` 5: уровень 2 читает свои прожекторы, каждый в
+куполе; лампы читаются; без хвоста, без разгона или с одним качанием -
+падают. DUnitX на 3.0.95 находит 1023 теста.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7775,6 +7833,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Город погони в глубину и каркасы его куполов (3.0.90): здания едут по своим ступням, чем ближе, тем быстрее; рёбра каркасов кодом, дальняя половина за зданиями, ближняя поверх, кромка света к солнцу, блик поверх диска, солнце в тинте под каркасом; их длинные тени - мягкие мазки по полу и дальше по ближней земле, обрезанные у глаза (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` в bin/chase-backdrop.json + tools/chase/stand.template.html (эталон) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
 | Жизнь города погони (3.0.92): мигают вывески, просыпаются окна, красные лампы на мачтах, неоновая эмблема TeK на центральном шпиле гаснет и зажигается заново по частям, эмблема старой краской на двух стенах, красные маячки на верхних узлах каркасов - тик в тик как на стенде | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | Поезд города погони (3.0.93): один поезд челноком по монорельсу между двумя станциями - стоянка, разгон до круиза, ход, торможение; нос уходит в станцию и обрезан у рта, хвост стоит на балке; полоса огней едет с ним; скользит между тиками - тик в тик как на стенде | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (эталон) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
+| Прожекторы города погони (3.0.95): два тёплых луча из главного купола блуждают по небу - яркие в воздухе купола, горячее пятно и ступенька вниз у стекла, слабый хвост в лунной пыли, блики на ближних рёбрах, которые они пересекают; собственные часы каждой лампы время от времени плавно замирают; скользят между тиками - тик в тик как на стенде | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (эталон) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
 | Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Бункер Тарана и фаза 1 погони (3.0.94): поднимается после свипера, погоня стартует от его ряда; дыхание люка (снаряд, столб, окно), крышка; уязвим сверху всегда, соты на боках и спереди, бледная полоса на верхе; его смерть, дорога едет дальше | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | Снаряды бункера (3.0.94): дуга к ногам героя, нацеленная в мир, кольцо, взрыв на палубе сбивает пад, качение по дороге и его рана | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (новый обломок на место ушедшего) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, рисование колец и снарядов) + Tests.Game.Shells.pas |

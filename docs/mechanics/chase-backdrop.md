@@ -408,6 +408,50 @@ line. On the stand: cruise, push ticks, inside and feet in the bar of the
 looks, written back by the download; the run's length in seconds in the
 corner.
 
+**The searchlights** (`searchlights` in the layout): two warm lamps in the
+main dome wander over the sky as if looking for something; the satellite
+dome and its industry have none. Warm on purpose: the city's own lights are
+cool (cyan and pink signs, white panels), and the beams bring warmth to it
+without repainting a thing. Nothing of them is a picture.
+
+The air is the dome's. There is no air on the Moon to light, but there is
+inside the dome: a beam is bright there, from `level` at the lamp to
+`glassLevel` where it leaves the dome's silhouette - the half-ellipse
+through its frame's centre, at the frame's nearness. There the glass takes
+a hot spot (`spotSize`, `spotLevel`) and the beam steps down to `tailShare`
+of itself, and a faint tail of `tail` units fades into the lunar dust the
+fight has lifted. So the dome shows itself by its light from inside, and
+the beams still search the black sky. Where a beam crosses a near rib
+inside the dome, the rib takes a glint (`glintSize`, `glintLevel` times the
+beam's level there over `level`): a rib in front, lit from behind.
+
+A beam lies at the depth of its lamp, as a building standing there: `x`
+along the city layer, `y` its feet, riding at that nearness; `lift` - how
+high over its feet the lamp stands, low enough for the front row to hide
+it. Its numbers are units at that depth. It is drawn among the buildings
+before the first one in front of its feet, the near ribs over it, then its
+spot and its glints. Its shape is Render.Glow's beam laid along it -
+Gaussian across, flat along - a strip of triangles whose corners carry the
+level (the stand through WebGL, the game through `SDL_RenderGeometry`), its
+half width `rootHalf` plus `spread` a unit of its length.
+
+Its angle in degrees (-90 straight up): `aim` plus two slow waves
+(`sweep`, `periodTicks`, phases from the dice of the lights' hash seeded by
+the lamp's place in the list) on a clock of its own. That clock is the far
+plane's with its fraction, less what the pauses took: the time is cut into
+windows of `windowTicks`, `share` of them holding a pause somewhere in them
+- the speed eases down over `easeTicks` as (1 + cos) / 2, holds still for
+`holdTicks` and eases back up. A lamp stops, looks closer, moves on. A
+tremble in the hold was tried and left: at the beam's length a degree reads
+as a twitch back and forth, not as a look; nothing in step,
+nothing in a rhythm the player could read. The two beams cross now and then,
+and their sum lights the crossing by itself.
+
+On the stand: the switch "searchlights", the levels in the bar of the
+looks, written back by the download. The game (3.0.95) plays them tick
+for tick: the clock and the beam are `Levels.Searchlights`, the strip,
+the spot and the glints `Render.FarPlane`.
+
 ## The order of work
 
 1. The cliff - it joins screen 13 and sets the tone. **In the set.**
@@ -638,6 +682,9 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 ```
 
 ## Open
+
+- The searchlights' numbers (3.0.95): levels, spread and pauses are the
+  stand's first tuning, for the live run.
 
 - The train's numbers (3.0.93): cruise, push and dwell are first guesses,
   for the live run.
