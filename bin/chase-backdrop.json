@@ -225,6 +225,16 @@
     "w": 81.9, "y": 243.9, "shade": 0.44, "inside": 50,
     "cruise": 16, "accelTicks": 132, "dwellTicks": [300, 600]
   },
+  "searchlights": {
+    "about": "Warm searchlights of the main dome, wandering over the sky. A beam is drawn by code at the depth of its lamp (y its feet, x along the city layer, lift how high the lamp stands over its feet - hidden behind the front row): bright in the air of the dome, from level at the lamp to glassLevel at the dome's silhouette, a hot spot there and a step down to tailShare of it, then a faint tail of tail units in the lunar dust; glints where it crosses the near ribs. Its half width is rootHalf plus spread a unit of its length. Its angle in degrees (-90 straight up): aim plus two slow waves (sweep, periodTicks) on a clock of its own that now and then eases to a hold (pause). Units at the lamp's depth. The stand and the game play it.",
+    "color": [255, 214, 150], "level": 0.42, "glassLevel": 0.26, "tailShare": 0.25, "tail": 150,
+    "rootHalf": 1.5, "spread": 0.15, "spotSize": 22, "spotLevel": 0.55, "glintSize": 6, "glintLevel": 0.6,
+    "pause": { "windowTicks": [200, 330], "share": 0.45, "easeTicks": 20, "holdTicks": [40, 90] },
+    "items": [
+      { "x": 676, "y": 266, "lift": 10, "aim": -105, "sweep": [28, 8], "periodTicks": [760, 270] },
+      { "x": 858, "y": 266, "lift": 10, "aim": -78, "sweep": [26, 8], "periodTicks": [640, 230] }
+    ]
+  },
   "layers": [
     { "id": "ridge", "speed": "ridge", "band": { "texture": "ridge-tex", "top": 202, "bottom": 262, "seamless": true } },
     { "id": "city", "speed": "city", "length": 2688,

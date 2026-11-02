@@ -46,7 +46,9 @@
   on a wall ("paint" of a placed building). Here they are numbers; how
   bright each one is at a tick is Levels.CityLife's business. The train
   ("train") shuttles on the monorail between the city's two stations;
-  where it stands at a time is Levels.Monorail's.
+  where it stands at a time is Levels.Monorail's. The searchlights
+  ("searchlights") wander over the sky from the main dome; where a beam
+  points at a time is Levels.Searchlights'.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -207,6 +209,47 @@ type
     DwellLeast, DwellMost: Integer;
   end;
 
+  // One of a searchlight's two slow waves: Degrees each way, over
+  // PeriodTicks
+  TSweepWave = record
+    Degrees: Double;
+    PeriodTicks: Double;
+  end;
+
+  // A lamp of the searchlights: X along the city's layer, Y its feet, Lift
+  // how high over them it stands; Aim in degrees on the screen, -90 straight
+  // up, and the two waves around it
+  TSearchlightLamp = record
+    X, Y, Lift: Single;
+    Aim: Double;
+    Waves: array [0..1] of TSweepWave;
+  end;
+
+  // A lamp's own clock now and then eases to a hold: its time is cut into
+  // windows of WindowLeast..WindowMost ticks, Share of them holding a pause
+  // - EaseTicks down, HoldLeast..HoldMost still, EaseTicks back up
+  TSearchlightPause = record
+    WindowLeast, WindowMost: Integer;
+    Share: Double;
+    EaseTicks: Integer;
+    HoldLeast, HoldMost: Integer;
+  end;
+
+  // Warm beams from the main dome: Level at the lamp to GlassLevel where the
+  // beam leaves the dome's silhouette, a spot there and a step down to
+  // TailShare of it, a tail of Tail units; half width RootHalf plus Spread a
+  // unit of the way. Units at the lamp's depth
+  TCitySearchlights = record
+    Present: Boolean;
+    Color: TRgb;
+    Level, GlassLevel, TailShare, Tail: Single;
+    RootHalf, Spread: Single;
+    SpotSize, SpotLevel: Single;
+    GlintSize, GlintLevel: Single;
+    Pause: TSearchlightPause;
+    Lamps: TArray<TSearchlightLamp>;
+  end;
+
   // The emblem as old paint on a wall: at U, V of the picture, W of its
   // width, Alpha opaque
   TElementPaint = record
@@ -310,6 +353,7 @@ type
     Emblem: TCityEmblem;
     Beacons: TCityBeacons;
     Train: TCityTrain;
+    Searchlights: TCitySearchlights;
     function Present: Boolean;
     // How near a thing of the city whose feet stand at AY is, the domes'
     // centres 1: it rides that share of its layer's speed
@@ -350,7 +394,8 @@ type
 // box, a clock of fewer ticks than it needs, a paint without width, an
 // emblem without parts, lamps or frame beacons without "beacons", an
 // emblem without "cityLights", a train without size or speed, of a dwell
-// of no ticks or without two stations in the city.
+// of no ticks or without two stations in the city, and searchlights without
+// a level, a tail or an ease, or a lamp whose waves do not turn.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -397,6 +442,10 @@ resourcestring
     + 'tick at the least';
   SFarPlaneTrainStations = 'Level "%s": the train runs between two "%s" of the city, '
     + 'and it has %d';
+  SFarPlaneBadSearchlights = 'Level "%s": the searchlights need a level, a tail and a '
+    + 'spread above zero and an ease of a tick at the least';
+  SFarPlaneBadSearchlight = 'Level "%s": searchlight %d needs two sweeps and two '
+    + 'periods above zero';
   SLightOfPiece = 'a light of piece "%s"';
   SEmblemPart = 'emblem part %d';
   SEmblemHalo = 'emblem halo %d';
@@ -959,6 +1008,70 @@ begin
     raise EFarPlaneError.CreateFmt(SFarPlaneBadTrain, [ALevelId]);
 end;
 
+function ReadSearchlightLamp(const AObj: TJSONObject; AIndex: Integer;
+  const ALevelId: string): TSearchlightLamp;
+var
+  Sweep, Periods: TJSONArray;
+begin
+  Result.X := AObj.GetValue<Double>('x');
+  Result.Y := AObj.GetValue<Double>('y');
+  Result.Lift := AObj.GetValue<Double>('lift', 0);
+  Result.Aim := AObj.GetValue<Double>('aim');
+  var HasWaves := AObj.TryGetValue<TJSONArray>('sweep', Sweep) and
+    AObj.TryGetValue<TJSONArray>('periodTicks', Periods) and
+    (Sweep.Count = Length(Result.Waves)) and (Periods.Count = Length(Result.Waves));
+  if not HasWaves then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadSearchlight, [ALevelId, AIndex]);
+  for var i := 0 to High(Result.Waves) do
+  begin
+    Result.Waves[i].Degrees := Sweep.Items[i].GetValue<Double>;
+    Result.Waves[i].PeriodTicks := Periods.Items[i].GetValue<Double>;
+    if Result.Waves[i].PeriodTicks <= 0 then
+      raise EFarPlaneError.CreateFmt(SFarPlaneBadSearchlight, [ALevelId, AIndex]);
+  end;
+end;
+
+function ReadSearchlightPause(const AObj: TJSONObject;
+  const ALevelId: string): TSearchlightPause;
+begin
+  ReadWholeRange(AObj, 'windowTicks', ALevelId, 1, Result.WindowLeast, Result.WindowMost);
+  ReadWholeRange(AObj, 'holdTicks', ALevelId, 0, Result.HoldLeast, Result.HoldMost);
+  Result.Share := EnsureRange(AObj.GetValue<Double>('share', 0), 0.0, 1.0);
+  Result.EaseTicks := AObj.GetValue<Integer>('easeTicks', 0);
+  if Result.EaseTicks < 1 then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadSearchlights, [ALevelId]);
+end;
+
+function ReadSearchlights(const ARoot: TJSONObject;
+  const ALevelId: string): TCitySearchlights;
+var
+  Obj: TJSONObject;
+  Items: TJSONArray;
+begin
+  Result := Default(TCitySearchlights);
+  if not ARoot.TryGetValue<TJSONObject>('searchlights', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Color := ReadColor(Obj, 'color', ALevelId);
+  Result.Level := Obj.GetValue<Double>('level');
+  Result.GlassLevel := Obj.GetValue<Double>('glassLevel');
+  Result.TailShare := Obj.GetValue<Double>('tailShare');
+  Result.Tail := Obj.GetValue<Double>('tail', 0);
+  Result.RootHalf := Obj.GetValue<Double>('rootHalf');
+  Result.Spread := Obj.GetValue<Double>('spread', 0);
+  Result.SpotSize := Obj.GetValue<Double>('spotSize');
+  Result.SpotLevel := Obj.GetValue<Double>('spotLevel');
+  Result.GlintSize := Obj.GetValue<Double>('glintSize');
+  Result.GlintLevel := Obj.GetValue<Double>('glintLevel');
+  if (Result.Level <= 0) or (Result.Tail <= 0) or (Result.Spread <= 0) then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadSearchlights, [ALevelId]);
+  Result.Pause := ReadSearchlightPause(Obj.GetValue<TJSONObject>('pause'), ALevelId);
+  if Obj.TryGetValue<TJSONArray>('items', Items) then
+    for var i := 0 to Items.Count - 1 do
+      Result.Lamps := Result.Lamps +
+        [ReadSearchlightLamp(Items.Items[i] as TJSONObject, i, ALevelId)];
+end;
+
 // The parts of the city's life lean on each other: a lamp blinks as the
 // beacons do, the emblem flickers by the signs' clock
 procedure CheckCityLife(const ADef: TFarPlaneDef; const ALevelId: string);
@@ -1002,6 +1115,7 @@ begin
     Result.Emblem := ReadEmblem(Root, ALevelId);
     Result.Beacons := ReadBeacons(Root, ALevelId);
     Result.Train := ReadTrain(Root, ALevelId);
+    Result.Searchlights := ReadSearchlights(Root, ALevelId);
   finally
     Root.Free;
   end;

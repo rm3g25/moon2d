@@ -19,9 +19,10 @@
   moves, counts its ticks from there, runs on when the road stops, and a
   clear sets it back; between ticks it lies between them, as the offsets
   do. Level 2 reads its far plane, its camera and frames among it, the
-  life of its city and its train on a line with a run; a layout that does
-  not make sense raises, and so does a city's life that cannot play - a
-  train among them.
+  life of its city, its train on a line with a run and its searchlights
+  in the main dome; a layout that does not make sense raises, and so does
+  a city's life that cannot play - a train and the searchlights among
+  them.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -205,13 +206,23 @@ type
     procedure TestATrainWithoutACruiseRaises;
     [Test]
     procedure TestADwellOfNoTicksRaises;
+    [Test]
+    procedure TestLevelTwoReadsItsSearchlights;
+    [Test]
+    procedure TestSearchlightsReadTheirLamps;
+    [Test]
+    procedure TestSearchlightsWithoutATailRaise;
+    [Test]
+    procedure TestSearchlightsWithoutAnEaseRaise;
+    [Test]
+    procedure TestASearchlightWithOneSweepRaises;
   end;
 
 implementation
 
 uses
   System.IOUtils, System.JSON, System.Math,
-  Levels.Defs, Levels.Monorail;
+  Levels.Defs, Levels.Monorail, Levels.Searchlights;
 
 const
   LevelTwoFile = 'level2.json';
@@ -1017,6 +1028,63 @@ procedure TFarPlaneReadTests.TestADwellOfNoTicksRaises;
 begin
   AssertLifeRaises(TrainHead + ' "w": 60, "cruise": 16, "dwellTicks": [0, 600]},',
     TrainStations);
+end;
+
+const
+  SearchlightsHead = '"searchlights": {"color": [255, 214, 150], "level": 0.42,'
+    + ' "glassLevel": 0.26, "tailShare": 0.25, "rootHalf": 1.5, "spotSize": 22,'
+    + ' "spotLevel": 0.55, "glintSize": 6, "glintLevel": 0.6,';
+  SearchlightsPause = '"pause": {"windowTicks": [200, 330], "share": 0.45, "easeTicks": 20,'
+    + ' "holdTicks": [40, 90]},';
+  SearchlightLamp = '"items": [{"x": 676, "y": 266, "lift": 10, "aim": -105,'
+    + ' "sweep": [28, 8], "periodTicks": [760, 270]}]},';
+
+procedure TFarPlaneReadTests.TestLevelTwoReadsItsSearchlights;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Plane := Level.FarPlane;
+    Assert.IsTrue(Plane.Searchlights.Present, 'Searchlights');
+    Assert.IsTrue(Length(Plane.Searchlights.Lamps) >= 2, 'Two lamps at the least');
+    for var i := 0 to High(Plane.Searchlights.Lamps) do
+      Assert.IsTrue(SearchlightBeam(Plane, i, 0, 0).Glass > 0,
+        Format('Lamp %d stands in a dome', [i]));
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestSearchlightsReadTheirLamps;
+begin
+  var Plane := ReadFromLayout(LifeLayout(SearchlightsHead + ' "tail": 150, "spread": 0.15,'
+    + SearchlightsPause + SearchlightLamp, LifeBuilding));
+  var Lights := Plane.Searchlights;
+  Assert.AreEqual(1, Integer(Length(Lights.Lamps)), 'One lamp');
+  Assert.AreEqual(10.0, Double(Lights.Lamps[0].Lift), 0.0001, 'Its lift');
+  Assert.AreEqual(8.0, Lights.Lamps[0].Waves[1].Degrees, 0.0001, 'Its second sweep');
+  Assert.AreEqual(270.0, Lights.Lamps[0].Waves[1].PeriodTicks, 0.0001, 'Its second period');
+  Assert.AreEqual(90, Lights.Pause.HoldMost, 'The longest hold');
+  Assert.AreEqual(150.0, Double(Lights.Tail), 0.0001, 'The tail');
+end;
+
+procedure TFarPlaneReadTests.TestSearchlightsWithoutATailRaise;
+begin
+  AssertLifeRaises(SearchlightsHead + ' "tail": 0, "spread": 0.15,' + SearchlightsPause
+    + SearchlightLamp);
+end;
+
+procedure TFarPlaneReadTests.TestSearchlightsWithoutAnEaseRaise;
+begin
+  AssertLifeRaises(SearchlightsHead + ' "tail": 150, "spread": 0.15,'
+    + StringReplace(SearchlightsPause, '"easeTicks": 20', '"easeTicks": 0', [])
+    + SearchlightLamp);
+end;
+
+procedure TFarPlaneReadTests.TestASearchlightWithOneSweepRaises;
+begin
+  AssertLifeRaises(SearchlightsHead + ' "tail": 150, "spread": 0.15,' + SearchlightsPause
+    + StringReplace(SearchlightLamp, '"sweep": [28, 8]', '"sweep": [28]', []));
 end;
 
 initialization

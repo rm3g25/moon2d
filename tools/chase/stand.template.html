@@ -91,6 +91,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label><input id="g-glare" type="checkbox" checked> sun glare over</label>
     <label><input id="g-parallax" type="checkbox" checked> depth parallax</label>
     <label><input id="g-lights" type="checkbox" checked> city lights</label>
+    <label><input id="g-searchlights" type="checkbox" checked> searchlights</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -759,6 +760,170 @@ function drawTrain(ALine, AOffset, AIndex) {
   drawLights({ id: Train.piece, y: Train.y, w: Train.w, groundY: ALine.Depth }, AIndex, Left, H, LifeTick, Cut);
 }
 
+// ---- the searchlights of the main dome ----
+// A beam lies at the depth of its lamp: it rides with the city as a building
+// standing there does, and its numbers are units at that depth. Bright in
+// the air of the dome; where it leaves the dome's silhouette, a hot spot and
+// a step down to a faint tail in the lunar dust. Its angle wanders on a clock
+// of its own that now and then eases to a hold.
+const Searchlights = Layout.searchlights || null;
+const SearchSeed = 0x5e1;
+const SweepPhaseKeys = 1, FirstWindowKey = 3;
+const WindowKeys = 100, PausedKeys = 1000, PauseAtKeys = 2000, HoldKeys = 3000;
+const InsideSamples = 20, TailSamples = 12;
+function searchlightSeed(AIndex) { return mix(SearchSeed + AIndex); }
+// How much of the lamp's own clock a pause has taken AInside ticks into it:
+// its speed eases down over AEase as (1 + cos) / 2, holds at 0 for AHold,
+// eases back up
+function pauseLost(AInside, AEase, AHold) {
+  if (AInside < AEase) return AInside / 2 - AEase / (2 * Math.PI) * Math.sin(Math.PI * AInside / AEase);
+  if (AInside < AEase + AHold) return AEase / 2 + AInside - AEase;
+  const Up = AInside - AEase - AHold;
+  return AEase / 2 + AHold + Up / 2 + AEase / (2 * Math.PI) * Math.sin(Math.PI * Up / AEase);
+}
+// The lamp's own clock at AClock: the far plane's, less what the pauses took
+function searchlightClock(ASeed, AClock) {
+  const P = Searchlights.pause;
+  let Start = -rollInt(ASeed, FirstWindowKey, 0, P.windowTicks[1]), Lost = 0;
+  for (let n = 0; ; n++) {
+    const Length = rollInt(ASeed, WindowKeys + n, P.windowTicks[0], P.windowTicks[1]);
+    if (roll(ASeed, PausedKeys + n) < P.share) {
+      const Hold = rollInt(ASeed, HoldKeys + n, P.holdTicks[0], P.holdTicks[1]);
+      const Span = 2 * P.easeTicks + Hold;
+      const At = Start + rollInt(ASeed, PauseAtKeys + n, 0, Math.max(0, Length - Span));
+      if (AClock < At) return AClock - Lost;
+      if (AClock < At + Span) return AClock - Lost - pauseLost(AClock - At, P.easeTicks, Hold);
+      Lost += P.easeTicks + Hold;
+    }
+    Start += Length;
+    if (AClock < Start) return AClock - Lost;
+  }
+}
+// The beam's direction in radians on the screen, y down
+function searchlightAngle(AItem, AIndex, AClock) {
+  const Seed = searchlightSeed(AIndex);
+  const Own = searchlightClock(Seed, AClock);
+  let Degrees = AItem.aim;
+  for (let i = 0; i < 2; i++)
+    Degrees += AItem.sweep[i] * Math.sin(2 * Math.PI * (Own / AItem.periodTicks[i] + roll(Seed, SweepPhaseKeys + i)));
+  return Degrees * Math.PI / 180;
+}
+// The dome the lamp stands in: its frame's footprint along the layer holds x
+function searchlightDome(AItem) {
+  return Frames.find(F => AItem.x >= F.x && AItem.x <= F.x + F.w) || null;
+}
+// How far along the beam from AFrom in ADirection it leaves the dome's
+// silhouette, the half-ellipse through its frame's centre; 0 - not inside
+function glassDistance(F, AOffset, AFrom, ADirection) {
+  const C = frameProject(F, AOffset, 0, 0, 0);
+  const Rx = F.w / 2 * C[2], Ry = F.h * C[2];
+  const X = (AFrom[0] - C[0]) / Rx, Y = (AFrom[1] - C[1]) / Ry;
+  const Dx = ADirection[0] / Rx, Dy = ADirection[1] / Ry;
+  const A = Dx * Dx + Dy * Dy, B = 2 * (X * Dx + Y * Dy), Cc = X * X + Y * Y - 1;
+  if (Cc >= 0) return 0;
+  return (-B + Math.sqrt(B * B - 4 * A * Cc)) / (2 * A);
+}
+// Where each beam stands this frame, in units: its lamp, direction, the
+// distance to the glass and the samples along it - [distance, level]
+function searchlightBeams(AOffset, AClock) {
+  const S = Searchlights, Half = Layout.screen.w / 2;
+  return S.items.map((Item, i) => {
+    const K = nearness(Item.y);
+    const From = [Half + (Item.x - AOffset - Half) * K, Item.y - Item.lift];
+    const Angle = searchlightAngle(Item, i, AClock);
+    const Direction = [Math.cos(Angle), Math.sin(Angle)];
+    const Dome = searchlightDome(Item);
+    const Glass = Dome && Camera ? glassDistance(Dome, AOffset, From, Direction) : 0;
+    const Samples = [];
+    for (let n = 0; n <= InsideSamples && Glass > 0; n++)
+      Samples.push([Glass * n / InsideSamples, S.level + (S.glassLevel - S.level) * n / InsideSamples]);
+    const Out = S.glassLevel * S.tailShare;
+    for (let n = 0; n <= TailSamples; n++)
+      Samples.push([Glass + S.tail * n / TailSamples, Out * (1 - smooth(n / TailSamples))]);
+    return { Item, From, Direction, Glass, Samples };
+  });
+}
+// Triangles whose alpha lies in their corners, the across coordinate giving
+// the Gaussian of Render.Glow's beam - as the game will lay them out through
+// SDL_RenderGeometry. Onto a canvas of their own, added over the scene
+const BeamCanvas = document.createElement('canvas');
+const BeamGl = BeamCanvas.getContext('webgl', { premultipliedAlpha: true });
+const BeamProgram = (() => {
+  const Make = (Kind, Src) => { const Sh = BeamGl.createShader(Kind); BeamGl.shaderSource(Sh, Src); BeamGl.compileShader(Sh); return Sh; };
+  const P = BeamGl.createProgram();
+  BeamGl.attachShader(P, Make(BeamGl.VERTEX_SHADER, `attribute vec2 At; attribute float Alpha; attribute float Across;
+    uniform vec2 Size; varying float V; varying float Q;
+    void main() { gl_Position = vec4(At.x / Size.x * 2.0 - 1.0, 1.0 - At.y / Size.y * 2.0, 0.0, 1.0); V = Alpha; Q = Across; }`));
+  BeamGl.attachShader(P, Make(BeamGl.FRAGMENT_SHADER, `precision mediump float; varying float V; varying float Q; uniform vec3 Color;
+    void main() { float A = V * exp(-(Q / 0.4) * (Q / 0.4)); gl_FragColor = vec4(Color * A, A); }`));
+  BeamGl.linkProgram(P);
+  return P;
+})();
+const BeamBuffer = BeamGl.createBuffer();
+function addBeam(ABeam) {
+  const S = Searchlights, [Dx, Dy] = ABeam.Direction, Nx = -Dy, Ny = Dx;
+  if (BeamCanvas.width !== View.width || BeamCanvas.height !== View.height) {
+    BeamCanvas.width = View.width; BeamCanvas.height = View.height;
+  }
+  const Edge = (Sample, Side) => {
+    const [D, Level] = Sample, Half = S.rootHalf + S.spread * D;
+    return [U(ABeam.From[0] + Dx * D + Nx * Half * Side), U(ABeam.From[1] + Dy * D + Ny * Half * Side), Level, Side];
+  };
+  const Data = [];
+  for (let n = 0; n + 1 < ABeam.Samples.length; n++) {
+    const A = ABeam.Samples[n], B = ABeam.Samples[n + 1];
+    // the step at the glass: the inner span ends at glassLevel, the tail starts below it
+    if (B[0] <= A[0]) continue;
+    const A0 = Edge(A, -1), A1 = Edge(A, 1), B0 = Edge(B, -1), B1 = Edge(B, 1);
+    Data.push(...A0, ...A1, ...B1, ...A0, ...B1, ...B0);
+  }
+  BeamGl.viewport(0, 0, BeamCanvas.width, BeamCanvas.height);
+  BeamGl.clearColor(0, 0, 0, 0); BeamGl.clear(BeamGl.COLOR_BUFFER_BIT);
+  BeamGl.useProgram(BeamProgram);
+  BeamGl.uniform2f(BeamGl.getUniformLocation(BeamProgram, 'Size'), BeamCanvas.width, BeamCanvas.height);
+  BeamGl.uniform3f(BeamGl.getUniformLocation(BeamProgram, 'Color'), ...S.color.map(c => c / 255));
+  BeamGl.bindBuffer(BeamGl.ARRAY_BUFFER, BeamBuffer);
+  BeamGl.bufferData(BeamGl.ARRAY_BUFFER, new Float32Array(Data), BeamGl.STREAM_DRAW);
+  const Stride = 4 * 4;
+  for (const [Name, Size, At] of [['At', 2, 0], ['Alpha', 1, 8], ['Across', 1, 12]]) {
+    const Loc = BeamGl.getAttribLocation(BeamProgram, Name);
+    BeamGl.enableVertexAttribArray(Loc);
+    BeamGl.vertexAttribPointer(Loc, Size, BeamGl.FLOAT, false, Stride, At);
+  }
+  BeamGl.enable(BeamGl.BLEND); BeamGl.blendFunc(BeamGl.ONE, BeamGl.ONE);
+  BeamGl.drawArrays(BeamGl.TRIANGLES, 0, Data.length / 4);
+  Ctx.globalCompositeOperation = 'lighter';
+  Ctx.drawImage(BeamCanvas, 0, 0);
+  Ctx.globalCompositeOperation = 'source-over';
+}
+// The beam's level ADistance along it, between its samples
+function beamLevel(ABeam, ADistance) {
+  const S = ABeam.Samples;
+  for (let n = 0; n + 1 < S.length; n++)
+    if (ADistance >= S[n][0] && ADistance <= S[n + 1][0] && S[n + 1][0] > S[n][0])
+      return S[n][1] + (S[n + 1][1] - S[n][1]) * (ADistance - S[n][0]) / (S[n + 1][0] - S[n][0]);
+  return 0;
+}
+// After the near ribs: the hot spot on the glass, and a glint on every near
+// rib the beam crosses inside the dome - a rib in front, lit from behind
+function addBeamGlints(ABeam, ANearRibs) {
+  const S = Searchlights;
+  if (ABeam.Glass <= 0) return;
+  const [Fx, Fy] = ABeam.From, [Dx, Dy] = ABeam.Direction;
+  addGlow('point', S.color, Fx + Dx * ABeam.Glass, Fy + Dy * ABeam.Glass, S.spotSize, S.spotSize, S.spotLevel);
+  if (!ANearRibs) return;
+  for (const R of ANearRibs) {
+    const Ex = R.B[0] - R.A[0], Ey = R.B[1] - R.A[1];
+    const Cross = Dx * Ey - Dy * Ex;
+    if (Math.abs(Cross) < 1e-6) continue;
+    const Wx = R.A[0] - Fx, Wy = R.A[1] - Fy;
+    const Along = (Wx * Ey - Wy * Ex) / Cross, OnRib = (Wx * Dy - Wy * Dx) / Cross;
+    if (OnRib < 0 || OnRib > 1 || Along <= 0 || Along >= ABeam.Glass) continue;
+    addGlow('point', S.color, Fx + Dx * Along, Fy + Dy * Along, S.glintSize, S.glintSize,
+      S.glintLevel * beamLevel(ABeam, Along) / S.level);
+  }
+}
+
 // ---- the dome frames: geodesic half-ellipsoids, drawn by code ----
 // The edges of an icosahedron cut AFrequency times along each side, pushed
 // out onto the unit sphere, a vertex at the top; the lower half dropped and
@@ -1113,12 +1278,22 @@ function frame(Stamp) {
   // the train at its depth: before the first building in front of the line
   const Line = Train && monorailLine();
   let TrainDue = !!Line;
+  // each beam at its lamp's depth: the buildings in front hide the lamp
+  const Beams = Searchlights && document.getElementById('g-searchlights').checked ? searchlightBeams(S.oC, TrainTime) : [];
+  let BeamsDue = Beams.slice();
+  const DrawBeamsBefore = Depth => {
+    BeamsDue.filter(B => B.Item.y < Depth).forEach(addBeam);
+    BeamsDue = BeamsDue.filter(B => B.Item.y >= Depth);
+  };
   City.elements.forEach((E, i) => {
     if (TrainDue && depthY(E) > Line.Depth) { drawTrain(Line, S.oC, City.elements.length); TrainDue = false; }
+    DrawBeamsBefore(depthY(E));
     drawElement(E, S.oC, true, i);
   });
   if (TrainDue) drawTrain(Line, S.oC, City.elements.length);
+  BeamsDue.forEach(addBeam);
   if (Ribs) { drawRibs(Ribs.Near); drawBeacons(Ribs.NearBeacons, LifeTick); }
+  for (const B of Beams) addBeamGlints(B, Ribs?.Near);
   if (document.getElementById('g-glare').checked) drawGlare(Cover);
   drawPicked();
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
@@ -1163,7 +1338,10 @@ const OwnFields = [['emblem', 'coreLevel', 'TeK core'], ['emblem', 'haloLevel', 
   ['emblem', 'shade', 'TeK metal'], ['emblem', 'w', 'TeK width'],
   ['beacons', 'glowLevel', 'beacon glow'], ['beacons', 'flashLevel', 'beacon flash'],
   ['train', 'cruise', 'train cruise'], ['train', 'accelTicks', 'train push ticks'],
-  ['train', 'inside', 'train inside'], ['train', 'y', 'train feet']];
+  ['train', 'inside', 'train inside'], ['train', 'y', 'train feet'],
+  ['searchlights', 'level', 'beam'], ['searchlights', 'glassLevel', 'beam at glass'],
+  ['searchlights', 'tailShare', 'beam tail share'], ['searchlights', 'spotLevel', 'beam spot'],
+  ['searchlights', 'glintLevel', 'rib glints']];
 const OwnSteps = { w: '1', cruise: '0.5', accelTicks: '1', inside: '1', y: '0.1' };
 // A train that never moves or never speeds up would stand on the line for good
 const OwnLeast = { cruise: 0.5, accelTicks: 1 };

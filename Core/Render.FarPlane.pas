@@ -31,6 +31,13 @@
   stations' mouths only: its picture and its lights are cut there, as it
   goes in.
 
+  The searchlights stand at their lamps' depth among the buildings, where
+  Levels.Searchlights points them on the clock with its fraction: a strip
+  of triangles along each beam over Render.Glow's beam - Gaussian across,
+  flat along - its corners carrying the level, bright inside the dome and
+  a faint tail past its glass. After the near ribs, a hot spot where the
+  beam leaves the glass and a glint on each near rib it crosses.
+
   While the screen's own backdrop covers the whole screen, nothing behind
   its layer is drawn: the arena before the chase costs one picture more,
   the cliff's end over the wall.
@@ -44,7 +51,7 @@ interface
 
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Levels.FarPlane, Levels.Dynamics,
-  Levels.Monorail, Render.DomeFrames;
+  Levels.Monorail, Levels.Searchlights, Render.DomeFrames;
 
 type
   TFarPlanePainter = class
@@ -65,6 +72,10 @@ type
     // Where on the screen a light is shown, units across
     TScreenSpan = record
       Left, Right: Single;
+    end;
+    // A point along a beam, units from its lamp, and its level there
+    TBeamSample = record
+      Distance, Level: Double;
     end;
   private
     FRenderer: PSdlRenderer;
@@ -90,6 +101,10 @@ type
     // The frames at this frame's ride of the city: the city's layer and the
     // near ground's both draw from it
     FFrameView: TFrameView;
+    // The searchlights at this frame's clock, and which of them the city's
+    // layer has drawn so far
+    FBeams: TArray<TSearchlightBeam>;
+    FBeamsDrawn: TArray<Boolean>;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
@@ -127,6 +142,11 @@ type
       ALeft, AHeight: Double; ATick: Integer);
     // AIndex - one past the city's buildings: the seed of its lights' clocks
     procedure DrawTrain(ACityOffset: Double; AIndex, ATick: Integer; AClock: Double);
+    procedure AddBeamPiece(const ABeam: TSearchlightBeam; const AFrom, ATill: TBeamSample);
+    procedure DrawBeam(const ABeam: TSearchlightBeam);
+    // Each beam not drawn yet whose lamp stands behind ADepth
+    procedure DrawBeamsBefore(ADepth: Single);
+    procedure DrawBeamGlints(const ABeam: TSearchlightBeam);
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
       ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
   public
@@ -169,6 +189,11 @@ const
   HaloGlareLevel = 0.19;
   SolidAlpha = 255;
   NoStart = -MaxInt;
+  // The stand's samples of a beam: inside the dome and along its tail
+  BeamInsideSamples = 20;
+  BeamTailSamples = 12;
+  // A rib this near parallel to a beam crosses it nowhere
+  ParallelSlack = 1E-6;
   WholeScreen: TFarPlanePainter.TScreenSpan = (Left: -MaxSingle; Right: MaxSingle);
   SkyBlack: TSdlColor = (R: 0; G: 0; B: 0; A: 255);
 
@@ -713,6 +738,113 @@ begin
     DrawLight(FTrainElement, Lights[i], LightSeed(AIndex, i), Left, Height, ATick, Span);
 end;
 
+function InsideSample(const ALights: TCitySearchlights; const ABeam: TSearchlightBeam;
+  AIndex: Integer): TFarPlanePainter.TBeamSample;
+begin
+  Result.Distance := ABeam.Glass * AIndex / BeamInsideSamples;
+  Result.Level := BeamLevel(ALights, ABeam, Result.Distance);
+end;
+
+function TailSample(const ALights: TCitySearchlights; const ABeam: TSearchlightBeam;
+  AIndex: Integer): TFarPlanePainter.TBeamSample;
+begin
+  var Share: Double := AIndex / BeamTailSamples;
+  Result.Distance := ABeam.Glass + ALights.Tail * Share;
+  Result.Level := TailLevel(ALights, Share);
+end;
+
+// The beam's texture is Gaussian across V and flat along U
+procedure TFarPlanePainter.AddBeamPiece(const ABeam: TSearchlightBeam;
+  const AFrom, ATill: TBeamSample);
+const
+  // From's edges, then Till's: the side, the level's end
+  Side: array [0..3] of Integer = (-1, 1, 1, -1);
+  AtTill: array [0..3] of Boolean = (False, False, True, True);
+  Triangles: array [0..5] of Integer = (0, 1, 2, 0, 2, 3);
+begin
+  var Lights := FDef.Searchlights;
+  var NormalX := -ABeam.DirY;
+  var NormalY := ABeam.DirX;
+  var First := Length(FVertices);
+  SetLength(FVertices, First + 4);
+  for var i := 0 to 3 do
+  begin
+    var Sample := AFrom;
+    if AtTill[i] then
+      Sample := ATill;
+    var Half: Double := Lights.RootHalf + Lights.Spread * Sample.Distance;
+    var Vertex: TSdlVertex;
+    Vertex.Position.X := ABeam.AtX(Sample.Distance) + NormalX * Half * Side[i];
+    Vertex.Position.Y := ABeam.AtY(Sample.Distance) + NormalY * Half * Side[i];
+    Vertex.TexCoord.X := 0.5;
+    Vertex.TexCoord.Y := (Side[i] + 1) / 2;
+    Vertex.Color.R := Lights.Color.R;
+    Vertex.Color.G := Lights.Color.G;
+    Vertex.Color.B := Lights.Color.B;
+    Vertex.Color.A := Round(SolidAlpha * EnsureRange(Sample.Level, 0.0, 1.0));
+    FVertices[First + i] := Vertex;
+  end;
+  for var Corner in Triangles do
+    FIndices := FIndices + [First + Corner];
+end;
+
+// Inside the dome from the lamp's level to the glass's; past the glass the
+// tail starts a step lower and fades out
+procedure TFarPlanePainter.DrawBeam(const ABeam: TSearchlightBeam);
+begin
+  var Lights := FDef.Searchlights;
+  if ABeam.Glass > 0 then
+    for var n := 0 to BeamInsideSamples - 1 do
+      AddBeamPiece(ABeam, InsideSample(Lights, ABeam, n), InsideSample(Lights, ABeam, n + 1));
+  for var n := 0 to BeamTailSamples - 1 do
+    AddBeamPiece(ABeam, TailSample(Lights, ABeam, n), TailSample(Lights, ABeam, n + 1));
+  // The vertices carry the colour and the level; the shared glow may still
+  // hold the mods of the last glow drawn through it
+  SDL_SetTextureColorMod(FBeamGlow, 255, 255, 255);
+  SDL_SetTextureAlphaMod(FBeamGlow, SolidAlpha);
+  Flush(FBeamGlow);
+end;
+
+procedure TFarPlanePainter.DrawBeamsBefore(ADepth: Single);
+begin
+  for var i := 0 to High(FBeams) do
+  begin
+    if FBeamsDrawn[i] or (FDef.Searchlights.Lamps[i].Y >= ADepth) then
+      Continue;
+    DrawBeam(FBeams[i]);
+    FBeamsDrawn[i] := True;
+  end;
+end;
+
+// A near rib stands in front of the beam and is lit from behind where the
+// beam crosses it inside the dome
+procedure TFarPlanePainter.DrawBeamGlints(const ABeam: TSearchlightBeam);
+begin
+  if ABeam.Glass <= 0 then
+    Exit;
+  var Lights := FDef.Searchlights;
+  GlowAround(FPointGlow, ABeam.AtX(ABeam.Glass), ABeam.AtY(ABeam.Glass), Lights.SpotSize,
+    Lights.SpotSize, Lights.Color, Lights.SpotLevel);
+  for var Rib in FFrameView.Near do
+  begin
+    var RibX: Double := Rib.B.X - Rib.A.X;
+    var RibY: Double := Rib.B.Y - Rib.A.Y;
+    var Cross := ABeam.DirX * RibY - ABeam.DirY * RibX;
+    if Abs(Cross) < ParallelSlack then
+      Continue;
+    var ToRibX: Double := Rib.A.X - ABeam.FromX;
+    var ToRibY: Double := Rib.A.Y - ABeam.FromY;
+    var Along := (ToRibX * RibY - ToRibY * RibX) / Cross;
+    var OnRib := (ToRibX * ABeam.DirY - ToRibY * ABeam.DirX) / Cross;
+    var Crosses := (OnRib >= 0) and (OnRib <= 1) and (Along > 0) and (Along < ABeam.Glass);
+    if not Crosses then
+      Continue;
+    GlowAround(FPointGlow, ABeam.AtX(Along), ABeam.AtY(Along), Lights.GlintSize,
+      Lights.GlintSize, Lights.Color,
+      Lights.GlintLevel * BeamLevel(Lights, ABeam, Along) / Lights.Level);
+  end;
+end;
+
 // The city stands inside its frames: their shadows on its floor and their
 // far half before its buildings, their near half and the glare after. The
 // shadows run on over the near ground's band: over the sky between its
@@ -743,6 +875,16 @@ begin
 
   // The train at its depth: before the first building in front of the line
   var TrainDue := (Layer.Motion = fmCity) and FDef.Train.Present;
+  // Each beam at its lamp's depth: the buildings in front hide the lamp
+  FBeams := nil;
+  if (Layer.Motion = fmCity) and FDef.Searchlights.Present then
+  begin
+    SetLength(FBeams, Length(FDef.Searchlights.Lamps));
+    for var i := 0 to High(FBeams) do
+      FBeams[i] := SearchlightBeam(FDef, i, AOffsets[fmCity], AClock);
+  end;
+  FBeamsDrawn := nil;
+  SetLength(FBeamsDrawn, Length(FBeams));
   for var j := 0 to High(Layer.Elements) do
   begin
     var Element := Layer.Elements[j];
@@ -751,6 +893,7 @@ begin
       DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
       TrainDue := False;
     end;
+    DrawBeamsBefore(Element.DepthY);
     var Left := FDef.ElementLeft(Layer, Element, AOffsets);
     if Element.Backdrop then
     begin
@@ -765,11 +908,14 @@ begin
   end;
   if TrainDue then
     DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
+  DrawBeamsBefore(MaxSingle);
 
   if Framed then
   begin
     FFramePainter.DrawRibs(FFrameView.Near);
     DrawBeacons(FFrameView.NearBeacons, ATick);
+    for var Beam in FBeams do
+      DrawBeamGlints(Beam);
     FFramePainter.DrawGlare(FDef.SunCover(AOffsets));
   end;
 end;
