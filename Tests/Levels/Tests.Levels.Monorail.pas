@@ -207,7 +207,7 @@ begin
       if Next <= High(StandEvents) then
       begin
         var Event := StandEvents[Next];
-        Assert.AreEqual(Event.Tick, Tick, Format('Event %d', [Next]));
+        Assert.AreEqual(Event.Tick, Integer(Tick), Format('Event %d', [Next]));
         Assert.IsTrue(Event.Leaves = Moves, Format('Event %d leaves', [Next]));
         var AtStop := Left;
         if Moves then
@@ -370,24 +370,32 @@ begin
   Assert.AreEqual(390.0, Line.RightStop, Slack, 'The right stop still at the right');
 end;
 
+// Called straight, not through Assert.WillRaise: the anonymous method
+// that drops the line's record finds no overload of it
 procedure TMonorailLineTests.TestStationsAtTwoDepthsRaise;
 begin
   FDef.Layers[0].Elements[2].DepthY := HalfwayY;
-  Assert.WillRaise(
-    procedure
-    begin
-      MonorailLine(FDef);
-    end, EFarPlaneError);
+  var Raised := False;
+  try
+    MonorailLine(FDef);
+  except
+    on EFarPlaneError do
+      Raised := True;
+  end;
+  Assert.IsTrue(Raised, 'Two depths raise');
 end;
 
 procedure TMonorailLineTests.TestStopsWithoutARunRaise;
 begin
   FDef.Train.Inside := -200;
-  Assert.WillRaise(
-    procedure
-    begin
-      MonorailLine(FDef);
-    end, EFarPlaneError);
+  var Raised := False;
+  try
+    MonorailLine(FDef);
+  except
+    on EFarPlaneError do
+      Raised := True;
+  end;
+  Assert.IsTrue(Raised, 'No run raises');
 end;
 
 procedure TMonorailLineTests.TestShownWholeBetweenTheMouths;
