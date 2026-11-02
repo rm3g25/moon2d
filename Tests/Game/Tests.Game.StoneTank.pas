@@ -3,9 +3,11 @@
   gauge: nothing runs before the fight; a wound reaches the gauge only a
   while later, and in pulses of a percent or two at uneven gaps; the
   gauge never passes the ceiling of the head that lives - 30 while the
-  hunter does, 55 after it; a head's death pours what is left up to its
-  ceiling, and nothing of it spills into the next head's quarter; the
-  trickle keeps the gauge alive with no hit; a clear stops it all.
+  hunter does, 55 after it, 95 while the bunker does; a head's death
+  pours what is left up to its ceiling, and nothing of it spills into the
+  next head's quarter; the bunker's lives bring the most of its half, and
+  only its death fills the gauge; the trickle keeps the gauge alive with
+  no hit; a clear stops it all.
 
   The gauge is a number here: each tick it takes what the tank gives.
 
@@ -48,6 +50,12 @@ type
     [Test]
     procedure TestTheSecondHeadStopsAtItsCeiling;
     [Test]
+    procedure TestTheBunkerStopsShortOfFull;
+    [Test]
+    procedure TestTheBunkersLivesBringMostOfItsHalf;
+    [Test]
+    procedure TestTheBunkersDeathFillsTheGauge;
+    [Test]
     procedure TestTheTrickleKeepsItAlive;
     [Test]
     procedure TestClearStopsIt;
@@ -64,6 +72,8 @@ const
   StoneCharge = 5;
   HunterCeiling = 30;
   SweeperCeiling = 55;
+  BunkerCeiling = 95;
+  Full = 100;
   TicksPerSecond = 33;
   // Long enough for any pour to come in whole
   ManyTicks = 1500;
@@ -185,6 +195,64 @@ begin
       Format('Tick %d: %d past the sweeper''s ceiling', [i, FEnergy]));
   end;
   Assert.AreEqual(SweeperCeiling, FEnergy, 'Up to it');
+end;
+
+procedure TStoneTankTests.TestTheBunkerStopsShortOfFull;
+begin
+  FTank.Start;
+  FEnergy := HunterCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := SweeperCeiling;
+  FTank.HeadDown(FEnergy);
+  Assert.AreEqual(BunkerCeiling, FTank.Ceiling, 'The bunker''s ceiling now');
+  FTank.Wound(3);
+  for var i := 1 to 3 * ManyTicks do
+  begin
+    Inc(FEnergy, FTank.Tick(FEnergy));
+    Assert.IsTrue(FEnergy <= BunkerCeiling,
+      Format('Tick %d: %d past the bunker''s ceiling', [i, FEnergy]));
+  end;
+  Assert.AreEqual(BunkerCeiling, FEnergy, 'Up to it');
+end;
+
+procedure TStoneTankTests.TestTheBunkersLivesBringMostOfItsHalf;
+const
+  // Its whole lives: a little short of the way from 55 to 95, the
+  // trickle over ManyTicks on top
+  LeastBrought = 30;
+  MostBrought = 40;
+begin
+  FTank.Start;
+  FEnergy := HunterCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := SweeperCeiling;
+  FTank.HeadDown(FEnergy);
+  Run(ManyTicks);
+  var Before := FEnergy;
+  FTank.Wound(1);
+  Run(ManyTicks);
+  Assert.IsTrue(FEnergy - Before >= LeastBrought,
+    Format('Brought %d', [FEnergy - Before]));
+  Assert.IsTrue(FEnergy - Before <= MostBrought,
+    Format('Brought %d', [FEnergy - Before]));
+end;
+
+procedure TStoneTankTests.TestTheBunkersDeathFillsTheGauge;
+begin
+  FTank.Start;
+  FEnergy := HunterCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := SweeperCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := 80;
+  FTank.HeadDown(FEnergy);
+  Assert.AreEqual(Full, FTank.Ceiling, 'Full now');
+  for var i := 1 to ManyTicks do
+  begin
+    Inc(FEnergy, FTank.Tick(FEnergy));
+    Assert.IsTrue(FEnergy <= Full, Format('Tick %d: %d past full', [i, FEnergy]));
+  end;
+  Assert.AreEqual(Full, FEnergy, 'Filled');
 end;
 
 procedure TStoneTankTests.TestTheTrickleKeepsItAlive;

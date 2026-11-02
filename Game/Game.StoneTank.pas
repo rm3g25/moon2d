@@ -11,7 +11,10 @@
   any wound: what was still on its way goes into that one pour, and
   nothing of one head spills over into the next head's quarter.
   What its whole lives bring is a little less than the way to its
-  ceiling: the trickle and the death make up the rest.
+  ceiling: the trickle and the death make up the rest. The hunter brings
+  a quarter, the sweeper a quarter, the bunker the half that is left -
+  but 95 while it lives: the full gauge comes only with its death, which
+  pours up to full, not to its own ceiling.
 
   It does not know the Ram or the gauge: the game tells it the wounds and
   the deaths and gives the hero what a tick says. It does not touch SDL.
@@ -70,14 +73,13 @@ uses
   System.Math;
 
 const
-  // The gauge stops here while the head of this many down lives. The
-  // charge comes by heads: a quarter the hunter, a quarter the sweeper.
-  // TODO: 95 for the bunker, 100 on its death (tracked: arena-3.md,
-  // stage 15b)
-  Ceilings: array [0..1] of Integer = (30, 55);
-  // What a head's whole lives pour in, percent: a little short of its
-  // quarter, so the trickle and the death have something to bring
-  HeadShare = 20.0;
+  // The gauge stops here while the head of this many down lives; with all
+  // three down, full
+  Ceilings: array [0..3] of Integer = (30, 55, 95, 100);
+  // What the whole lives of the head of this many down pour in, percent:
+  // a little short of the way to its ceiling, so the trickle and the death
+  // have something to bring
+  HeadShares: array [0..2] of Single = (20, 20, 36);
   // Percent a tick: about 0.1% a second
   TricklePerTick = 0.1 / 33;
   // A pulse every so many ticks, the gap rolled anew each time
@@ -133,7 +135,8 @@ begin
   if not FRunning or (AShare <= 0) then
     Exit;
   var Slot := NewestSlot;
-  FLate[Slot] := FLate[Slot] + AShare * HeadShare;
+  FLate[Slot] := FLate[Slot] +
+    AShare * HeadShares[Min(FHeadsDown, High(HeadShares))];
 end;
 
 procedure TStoneTank.HeadDown(AEnergy: Integer);
@@ -141,8 +144,12 @@ begin
   if not FRunning then
     Exit;
   EmptyTheWay;
-  FLate[NewestSlot] := Max(0, Ceiling - AEnergy);
+  var UpTo := Ceiling;
   Inc(FHeadsDown);
+  // The last head's death fills the gauge
+  if FHeadsDown >= High(Ceilings) then
+    UpTo := Ceiling;
+  FLate[NewestSlot] := Max(0, UpTo - AEnergy);
 end;
 
 function TStoneTank.Ceiling: Integer;
