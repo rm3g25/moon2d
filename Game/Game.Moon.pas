@@ -315,6 +315,7 @@ type
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
+    procedure ResolveRamShove;
     procedure ResolveRamThrowOver;
     procedure ResolveRamContact;
     procedure HurtByRam;
@@ -2862,13 +2863,18 @@ begin
     var Feet: TSdlFPoint;
     Feet.X := Target.Body.X + Target.Body.W / 2;
     Feet.Y := Target.Body.Y + Target.Body.H;
-    Target.SecondAt := SecondShellMark(ShellDecks(FPads.Standing(FHero.Screen)),
-      Feet, RamFloorY);
+    var Decks := ShellDecks(FPads.Standing(FHero.Screen));
+    if FRam.Hunts then
+      Target.SecondAt := AheadShellMark(Decks, Feet, RamFloorY)
+    else
+      Target.SecondAt := SecondShellMark(Decks, Feet, RamFloorY);
   end;
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
   if Cue.Chase then
     FBelt.Start;
+  if Cue.Rows then
+    FDrift.BeginRows(FHero.Screen, FBelt.Travel);
   if Cue.Rumble then
   begin
     StopRamRumble;
@@ -2950,18 +2956,32 @@ begin
   FRamRumble.Channel := -1;
 end;
 
-// Falling back, the Ram throws a hero who comes down onto the road behind
-// its stern back over its hull to the left, with a wound - before its
-// touch is asked, which the flight is then out of (Game.Ram)
+// In the pass of the hunt the Ram's bow shoves a hero on the road before
+// it, with no wound - before the throw over its hull is asked (Game.Ram)
+procedure TMoonGame.ResolveRamShove;
+begin
+  if FHero.Dead then
+    Exit;
+  var OnRoad := not FHero.InAir and (FHero.DeckUnderFeet = nil);
+  var Way := FRam.Shoves(HeroBody(FHero), OnRoad);
+  if Way < 0 then
+    FHero.Shove(Way);
+end;
+
+// The Ram throws a hero over its hull with a wound: falling back, one who
+// comes down onto the road behind its stern; in the hunt, one it pins or
+// rams on the road - before its touch is asked, which the flight is then
+// out of (Game.Ram)
 procedure TMoonGame.ResolveRamThrowOver;
 begin
   if FHero.Dead then
     Exit;
   var OnRoad := not FHero.InAir and (FHero.DeckUnderFeet = nil);
-  if not FRam.ThrowsOverTheHull(HeroBody(FHero), OnRoad) then
+  var Throw: TOverTheHull;
+  if not FRam.ThrowsOverTheHull(HeroBody(FHero), OnRoad, Throw) then
     Exit;
   HurtByRam;
-  FHero.Fling(-1);
+  FHero.Fling(Throw.Side, Throw.Way);
 end;
 
 // Any touch wounds and throws the hero off - but a hero on a pad is out of
@@ -3511,8 +3531,13 @@ begin
     HeroDeck := FHero.DeckUnderFeet;
   FPads.Tick(FHero.Screen, HeroDeck, BeltWay);
   if FBelt.Running then
-    for var Mark in FDrift.Tick(FHero.Screen, FBelt.Travel).Medkits do
+  begin
+    var DriftCue := FDrift.Tick(FHero.Screen, FBelt.Travel);
+    for var Mark in DriftCue.Medkits do
       StandMedkitOn(Mark);
+    if DriftCue.RowsIn then
+      FRam.RowsArrived;
+  end;
   if FPads.CornerTurned then
     FAudio.Play(PadClickSoundFile);
   if FPads.PairDocked then
@@ -3577,6 +3602,7 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
+  ResolveRamShove;
   ResolveRamThrowOver;
   ResolveRamContact;
   ResolveRamWave;

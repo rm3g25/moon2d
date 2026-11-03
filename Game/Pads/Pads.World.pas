@@ -237,6 +237,11 @@ type
     FShelfCommandAt: Integer;
     FShelfTold: Boolean;
     FDormant: Boolean;
+    // A pad of a chase that flies in to its place: how far right of it it
+    // set off, the ticks the way takes and the ticks of it so far
+    FComeFrom: Double;
+    FComeTicks: Integer;
+    FComeClock: Integer;
     procedure BuildCycle;
     procedure PlaceOnPath;
     procedure PlaceOnOrbit;
@@ -248,6 +253,8 @@ type
     procedure TickSag;
     procedure TickKnock;
     procedure KnockOffset(out AX, AY: Double);
+    function ComeOffset: Double;
+    function Coming: Boolean;
     function Tilt(AAlpha: Single): Double;
     function GetRight: Double;
   public
@@ -313,6 +320,10 @@ type
     // A pad of a chase's pool is there from now on at AX, AY (its top-left
     // corner) and rides the road; nothing for one that does not drift
     procedure SetAdrift(AX, AY: Double);
+    // The same, but it flies in to AX from AFrom units right of it over
+    // ATicks, its jets hard, and comes to the road's pace there: its place
+    // rides the road all the while
+    procedure SetAdriftComing(AX, AY, AFrom: Double; ATicks: Integer);
     // The pad flies straight to AX, AY (its top-left corner) over ATicks
     // and stays there; 0 ticks - it is there at once, and whatever stood
     // on it is left in the air
@@ -763,6 +774,8 @@ begin
   FSag := 0;
   FSagSpeed := 0;
   FFlightClock := NoFlight;
+  FComeTicks := 0;
+  FComeClock := 0;
   FTurnedCorner := False;
   FLanded := False;
   FLatched := False;
@@ -1028,10 +1041,12 @@ begin
   TickBob;
   TickSag;
   TickKnock;
+  if Coming then
+    Inc(FComeClock);
   FPlunge.Tick;
   var OffX, OffY: Double;
   KnockOffset(OffX, OffY);
-  FLeft := FPathLeft + OffX;
+  FLeft := FPathLeft + OffX + ComeOffset;
   FTop := FPathTop + OffY + FPlunge.Below;
 end;
 
@@ -1093,7 +1108,33 @@ begin
   if not FPlacement.Drift then
     Exit;
   FDormant := False;
+  FComeTicks := 0;
+  FComeClock := 0;
   FlyTo(AX, AY, 0);
+end;
+
+procedure TPad.SetAdriftComing(AX, AY, AFrom: Double; ATicks: Integer);
+begin
+  if not FPlacement.Drift then
+    Exit;
+  SetAdrift(AX, AY);
+  FComeFrom := AFrom;
+  FComeTicks := ATicks;
+  FLeft := AX + ComeOffset;
+  FPrevLeft := FLeft;
+end;
+
+function TPad.Coming: Boolean;
+begin
+  Result := FComeClock < FComeTicks;
+end;
+
+// Easing out as a square: the last of the way at the road's own pace
+function TPad.ComeOffset: Double;
+begin
+  if not Coming then
+    Exit(0);
+  Result := FComeFrom * Sqr(1 - FComeClock / FComeTicks);
 end;
 
 // From where the path or the last flight left it; a knock is not minded,
@@ -1141,7 +1182,7 @@ end;
 function TPad.Effort: Single;
 begin
   var Landing := FOrbitPhase = opLanding;
-  if Thrusting or Landing or FShelf.Warns(FClock) then
+  if Thrusting or Landing or Coming or FShelf.Warns(FClock) then
     Exit(1);
   if FPlacement.Stray.Strays then
     Exit(FStray.Effort);

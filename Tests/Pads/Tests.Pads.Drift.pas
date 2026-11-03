@@ -8,6 +8,12 @@
   let go past the left edge and sent again; a clear puts the pool to
   sleep. And the level file's word on a pad that drifts.
 
+  The rows of the hunt: told to, the dispatcher lays three rows over the
+  whole screen and past it, flying in from beyond the right edge; they
+  are in, at the road's pace, once, as long after as their flight takes,
+  covering the screen with gaps narrower than the hero; a pad already
+  riding keeps its slot; from then on only the rows come, as dense.
+
   A climb in every three carries a medkit, on its middle pad by height,
   which climb of the three the dice's; the medkit rides its pad out past
   the left edge and is gone, as one on the road is.
@@ -70,6 +76,9 @@ type
     function CarriesMedkit(const AGroup: TSentGroup;
       out APadIndex: Integer): Boolean;
     function ClimbsCarrying: TArray<Boolean>;
+    procedure UseTheRowsPool;
+    function RunRoadTillTheRowsAreIn: Integer;
+    procedure ExpectTheRowsCoverTheScreen(const AWhen: string);
   public
     [Setup]
     procedure Setup;
@@ -118,6 +127,14 @@ type
     procedure TestMedkitStandsOnThePadSentWithIt;
     [Test]
     procedure TestClearStartsTheThreeAnew;
+    [Test]
+    procedure TestTheRowsFlyInFromBeyondTheRightEdge;
+    [Test]
+    procedure TestTheRowsAreInOnceAtTheRoadsPace;
+    [Test]
+    procedure TestOnlyTheRowsComeAfterAsDense;
+    [Test]
+    procedure TestARidingPadKeepsItsSlot;
   end;
 
   // A medkit standing on a pad of the chase, and one on the road; the
@@ -147,6 +164,7 @@ implementation
 
 uses
   System.IOUtils,
+  System.Math,
   System.SysUtils,
   Game.Config,
   Game.Space,
@@ -171,6 +189,9 @@ const
   FloorY = 352;
   PadDeck = 200;
   PadLeft = 96;
+  // The pool of the level's chase since the rows
+  RowsPoolSteps = 38;
+  RowsPoolHighs = 14;
 
 function DriftPadJson(AWidth: Integer; const ATag: string): string;
 begin
@@ -384,6 +405,140 @@ begin
     begin
       TPadDrift.Create(AWorld, LevelId, 1).Free;
     end, EPadError, AWhat);
+end;
+
+procedure TPadDriftTests.UseTheRowsPool;
+begin
+  FreeAndNil(FDrift);
+  FreeAndNil(FWorld);
+  FreeAndNil(FLevel);
+  FLevel := LevelFromRows(RoomRowsOf(0, 0, 0, 0),
+    PoolSections(RowsPoolSteps, RowsPoolHighs));
+  FWorld := TPadWorld.Create(nil, nil, FLevel, nil, 1);
+  FDrift := TPadDrift.Create(FWorld, LevelId, 1);
+end;
+
+// The road at cruise, the world before the dispatcher as the game ticks
+// them; the ticks until the cue tells the rows are in
+function TPadDriftTests.RunRoadTillTheRowsAreIn: Integer;
+begin
+  for var i := 1 to LongRunTicks do
+  begin
+    FWorld.Tick(Screen, nil, -RoadSpeed);
+    FTravel := FTravel + RoadSpeed;
+    if FDrift.Tick(Screen, FTravel).RowsIn then
+      Exit(i);
+  end;
+  Assert.Fail('The rows never came in');
+  Result := -1;
+end;
+
+function IsRowDeck(ATop: Double): Boolean;
+begin
+  for var Deck in RowDecks do
+    if Abs(ATop - Deck) < UnitSlack then
+      Exit(True);
+  Result := False;
+end;
+
+// The farthest right edge of a pad of the row at ADeck that begins no
+// more than a gap of the row past AFrom; AFrom when there is none
+function FarthestFrom(const APads: TArray<TPad>; ADeck: Integer;
+  AFrom: Double): Double;
+begin
+  Result := AFrom;
+  for var Pad in APads do
+    if (Abs(Pad.Top - ADeck) < UnitSlack) and
+      (Pad.Left <= AFrom + RowGapMost + UnitSlack) then
+      Result := Max(Result, Pad.Right);
+end;
+
+// How far along the row at ADeck from the left edge no gap he could fall
+// through breaks it
+function RowReach(const APads: TArray<TPad>; ADeck: Integer): Double;
+begin
+  Result := 0;
+  var Next := FarthestFrom(APads, ADeck, Result);
+  while Next > Result do
+  begin
+    Result := Next;
+    Next := FarthestFrom(APads, ADeck, Result);
+  end;
+end;
+
+// Up to the right edge, but the last gap there, where the next pad has
+// not come in yet
+procedure TPadDriftTests.ExpectTheRowsCoverTheScreen(const AWhen: string);
+begin
+  var Pads := FWorld.Standing(Screen);
+  for var Deck in RowDecks do
+  begin
+    var Reached := RowReach(Pads, Deck);
+    Assert.IsTrue(Reached >= ScreenWidth - RowGapMost,
+      Format('%s: the row at %d breaks at %g', [AWhen, Deck, Reached]));
+  end;
+end;
+
+procedure TPadDriftTests.TestTheRowsFlyInFromBeyondTheRightEdge;
+begin
+  UseTheRowsPool;
+  FDrift.BeginRows(Screen, FTravel);
+  var Pads := FWorld.Standing(Screen);
+  Assert.IsTrue(Length(Pads) > 3 * ScreenWidth div (HighWidth + RowGapMost),
+    Format('%d pads in the rows', [Length(Pads)]));
+  for var Pad in Pads do
+  begin
+    Assert.IsTrue(IsRowDeck(Pad.Top), Format('A pad at %g', [Pad.Top]));
+    Assert.IsTrue(Pad.Left >= ScreenWidth,
+      Format('A pad at %g, inside the screen', [Pad.Left]));
+  end;
+end;
+
+procedure TPadDriftTests.TestTheRowsAreInOnceAtTheRoadsPace;
+begin
+  UseTheRowsPool;
+  FDrift.BeginRows(Screen, FTravel);
+  Assert.AreEqual(RowsComeTicks, RunRoadTillTheRowsAreIn,
+    'In as their flight ends');
+  ExpectTheRowsCoverTheScreen('In');
+  var Before: TArray<Double> := [];
+  var Pads := FWorld.Standing(Screen);
+  for var Pad in Pads do
+    Before := Before + [Pad.Left];
+  FWorld.Tick(Screen, nil, -RoadSpeed);
+  FTravel := FTravel + RoadSpeed;
+  Assert.IsFalse(FDrift.Tick(Screen, FTravel).RowsIn, 'In once');
+  for var i := 0 to High(Pads) do
+    Assert.AreEqual(Before[i] - RoadSpeed, Pads[i].Left, UnitSlack,
+      'At the road''s pace');
+end;
+
+procedure TPadDriftTests.TestOnlyTheRowsComeAfterAsDense;
+begin
+  UseTheRowsPool;
+  FDrift.BeginRows(Screen, FTravel);
+  RunRoadTillTheRowsAreIn;
+  RunRoad(LongRunTicks div 3);
+  for var Sent in FHistory do
+    Assert.IsTrue(IsRowDeck(Sent.Deck), Format('A pad at %g', [Sent.Deck]));
+  ExpectTheRowsCoverTheScreen('Later');
+end;
+
+procedure TPadDriftTests.TestARidingPadKeepsItsSlot;
+begin
+  UseTheRowsPool;
+  RunRoad(LongRunTicks div 10);
+  FDrift.BeginRows(Screen, FTravel);
+  RunRoadTillTheRowsAreIn;
+  var Pads := FWorld.Standing(Screen);
+  for var j := 0 to High(Pads) do
+    for var k := j + 1 to High(Pads) do
+    begin
+      var Apart := (Pads[j].Right <= Pads[k].Left + UnitSlack) or
+        (Pads[k].Right <= Pads[j].Left + UnitSlack) or
+        (Abs(Pads[j].Top - Pads[k].Top) >= RowsApart);
+      Assert.IsTrue(Apart, 'Two pads across each other');
+    end;
 end;
 
 procedure TPadDriftTests.TestNothingComesBeforeTheRoadRuns;

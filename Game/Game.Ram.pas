@@ -90,7 +90,7 @@
   that comes down onto it from above or aslant, from a pad. The honeycomb
   closes its sides and front. Its lives go by thirds as the others' do.
 
-  From its middle third on comes its second phase. Now and then, its
+  In its middle third comes its second phase. Now and then, its
   hatch shut, the eye blinks the warning and the machine lunges back to
   the middle of the screen - never to the left edge, where the hero could
   have nowhere to jump - stands a breath and drives back to the wall. A
@@ -102,6 +102,19 @@
   stands on, or at one he could climb to once it has ridden past the
   middle of the screen - a pad is let in first, so the way up is caught
   on the right half - or onto the road ahead of him (Game.Shells).
+
+  Its last third is the hunt. The fire stops, the eye blinks and the
+  alarm sounds, and the game sends in three rows of pads; once they are
+  in, the machine drives back to the left edge through the hero, silent
+  on the way. A hero up on the rows lets it pass under him. One left on
+  the road is shoved before its bow to the left edge and thrown up over
+  the hull to the right with a wound - either way he ends right of it.
+  Then it hunts him from behind, stern first: its hatch keeps a step
+  behind him, as fast as he runs along a row against the road, so he
+  strikes down as it comes beneath him. A fall to the road is a ram: he
+  is thrown forward over the hull with a wound, and it stands while he
+  flies clear. Its shells come in pairs again: one at his feet, one at
+  the nearest pad ahead of him along his row (Game.Shells).
 
   Its last life blows it up as the hunter's does; the empty mast sinks,
   the machine drives back to the wall if it stood away from it, and the
@@ -164,6 +177,11 @@ type
   // drive back to the wall
   TFallBack = (fbNone, fbWarning, fbLunging, fbStanding, fbReturning);
 
+  // The bunker's last third: none yet; the change - the rows called in,
+  // the eye's warning; the pass to the left edge through the hero; the
+  // hunt from behind, stern first
+  TBunkerHunt = (htNone, htCalling, htPassing, htHunting);
+
   // The gun: idle (aiming or riding, resting), the warning before a burst
   // - the hunter's lens, the sweeper's barrels burning red - the burst
   TRamFire = (rfIdle, rfFlare, rfBurst);
@@ -199,6 +217,13 @@ type
     function Running: Boolean;
     // The front ATicks after the blast, units from it
     function FrontOf(ATicks: Single): Single;
+  end;
+
+  // A throw over the hull: to Side, Way units a tick across of its own on
+  // top of his
+  TOverTheHull = record
+    Side: Integer;
+    Way: Single;
   end;
 
   TRamTarget = record
@@ -249,6 +274,8 @@ type
     SecondLobFrom, SecondLobAt: TSdlFPoint;
     // The column of exhaust goes up out of the bunker's hatch
     Vent: Boolean;
+    // Its last third: the rows of the hunt are to ride in
+    Rows: Boolean;
   end;
 
   TRam = class
@@ -352,6 +379,12 @@ type
     FFallBack: TFallBack;
     FFallBackTicks: Integer;
     FFallBackWait: Integer;
+    // Its last third: the step of the hunt and ticks into it, the rows in,
+    // and ticks it stands after a ram
+    FHunt: TBunkerHunt;
+    FHuntTicks: Integer;
+    FRowsIn: Boolean;
+    FRamStandTicks: Integer;
     // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
@@ -375,6 +408,13 @@ type
     procedure TickFallBack;
     function HoldsFire: Boolean;
     function NextFallBackWait: Integer;
+    function BunkerThirdPhase: Boolean;
+    procedure BeginHunt;
+    procedure TickHunt;
+    procedure TickHuntDrive;
+    function BowAt(const AHeroBody: TSdlFRect): Single;
+    function RamsOnTheRoad(const AHeroBody: TSdlFRect): Boolean;
+    function HuntThrowSide(const AHeroBody: TSdlFRect): Integer;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -475,14 +515,25 @@ type
     // ClearTicks at most.
     function Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
       out AAway: Integer): Boolean;
-    // Falling back, the hero has come down onto the road right of the hull
-    // (AOnRoad - not in the air, not on a pad): he is to be thrown back
-    // over it to the left, and is out of its way till he comes down
-    function ThrowsOverTheHull(const AHeroBody: TSdlFRect;
-      AOnRoad: Boolean): Boolean;
+    // He is to be thrown over the hull as AThrow says, and is out of its
+    // way till he comes down. Falling back, he has come down onto the road
+    // right of it (AOnRoad - not in the air, not on a pad): back to the
+    // left. In the pass, pinned at the left edge, or run into deep: over it
+    // to the right. In the hunt, touched on the road: forward over it,
+    // to the right but at the right wall.
+    function ThrowsOverTheHull(const AHeroBody: TSdlFRect; AOnRoad: Boolean;
+      out AThrow: TOverTheHull): Boolean;
+    // In the pass, how far the bow shoves a hero on the road before it this
+    // tick, below 0 to the left; 0 - none
+    function Shoves(const AHeroBody: TSdlFRect; AOnRoad: Boolean): Single;
     // Away from the right wall in a fall back: on its way, standing, or on
     // its way back - the napalm waits
     function FallingBack: Boolean;
+    // In its last third: no fall back, the mortar folded - the machine
+    // behind him is the leash
+    function Hunts: Boolean;
+    // The rows of the hunt have flown in: the pass may begin
+    procedure RowsArrived;
     // On the screen to be seen and touched
     function Present: Boolean;
     // Between the last tick and this one, AAlpha of the way
@@ -909,6 +960,27 @@ const
   LungeStopJolt = 0.2;
   FallBackStandTicks = 33;
   ReturnSpeed = 1.2;
+  // Thrown back over the hull from behind its stern: the road's way and
+  // his own carry him most of it
+  FallBackFlingWay = 1.0;
+  // The last third. The rows in, the eye warns this long before the pass,
+  // which goes at the lunge's pace. The bow shoves a hero on the road
+  // before it; one it has run into deeper than this, or pinned with less
+  // room than his body and this to the left edge, it throws over the hull.
+  HuntPassWarnTicks = 16;
+  ShoveDeepest = 12.0;
+  PinRoom = 12.0;
+  // Over the hull against the road: his own 2 a tick, the road's 1 back,
+  // this on top - about 190 units by the time he comes down past the roof
+  HuntFlingWay = 3.0;
+  // The hunt: the hatch a step behind him, clear of the column; a run
+  // along a row against the road gains 1 a tick on the screen, and it is
+  // a little faster; it closes this share of the gap a tick
+  HuntTrail = 24.0;
+  HuntBehindSpeed = 1.5;
+  HuntGain = 0.15;
+  // After a ram it stands while he flies clear
+  RamStandTicks = 50;
 
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
@@ -1347,6 +1419,10 @@ begin
   FFallBack := fbNone;
   FFallBackTicks := 0;
   FFallBackWait := 0;
+  FHunt := htNone;
+  FHuntTicks := 0;
+  FRowsIn := False;
+  FRamStandTicks := 0;
   FOverloadTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
@@ -1679,7 +1755,7 @@ end;
 
 // From the sweeper's blast on it keeps to the right wall: the bunker rises
 // there, the chase runs there, and it stays there once the bunker is gone.
-// Only the bunker's falls back take it away for a while.
+// Only the bunker's falls back and its hunt take it away.
 function TRam.AtTheWall: Boolean;
 begin
   Result := FKilled in [rhSweeper, rhBunker];
@@ -1784,6 +1860,8 @@ begin
   FArmed := False;
   FFire := rfIdle;
   FFallBack := fbNone;
+  FHunt := htNone;
+  FRamStandTicks := 0;
   FHatch := bhAiming;
   FLid := 0;
   FLensHot := False;
@@ -1906,6 +1984,9 @@ begin
   FNextMuzzle := 0;
   FFallBack := fbNone;
   FFallBackWait := FallBackFirstTicks;
+  FHunt := htNone;
+  FRowsIn := False;
+  FRamStandTicks := 0;
 end;
 
 procedure TRam.TickPhase;
@@ -1960,6 +2041,7 @@ begin
         if AtTheWall then
         begin
           TickChaseStart;
+          TickHunt;
           TickFallBack;
           Exit;
         end;
@@ -2026,6 +2108,13 @@ begin
   FCue.Jolt := Max(FCue.Jolt, PatrolStopJolt);
   if FChangePending then
     BeginChange
+  else if FHunt = htPassing then
+  begin
+    FCue.Jolt := Max(FCue.Jolt, LungeStopJolt);
+    FHunt := htHunting;
+    FHuntTicks := 0;
+    BeginRest(0);
+  end
   else if FFallBack = fbLunging then
   begin
     FCue.Jolt := Max(FCue.Jolt, LungeStopJolt);
@@ -2514,13 +2603,14 @@ begin
 end;
 
 // Out of the next of its two muzzles, at the hero's feet; in the second
-// phase out of both, the other shell where the game says
+// phase and the hunt out of both, the other shell where the game says
 procedure TRam.Lob;
 begin
   FCue.Lob := True;
   FCue.LobAt := UnitPoint(FHeroCenter.X, FHero.Body.Y + FHero.Body.H);
   FCue.Jolt := Max(FCue.Jolt, LobJolt);
-  if not BunkerSecondPhase then
+  var Paired := BunkerSecondPhase or (FHunt = htHunting);
+  if not Paired then
   begin
     FCue.LobFrom := BunkerMuzzle(FNextMuzzle);
     FNextMuzzle := (FNextMuzzle + 1) mod Length(BunkerMuzzles);
@@ -2542,7 +2632,13 @@ end;
 function TRam.BunkerSecondPhase: Boolean;
 begin
   Result := (FHead = rhBunker) and FArmed and FChased and not FHeadKilled and
-    (Tier >= 1);
+    (Tier = 1);
+end;
+
+function TRam.BunkerThirdPhase: Boolean;
+begin
+  Result := (FHead = rhBunker) and FArmed and FChased and not FHeadKilled and
+    (Tier = 2);
 end;
 
 // At the wall it waits out the gap and the hatch's breath, warns and
@@ -2585,10 +2681,12 @@ begin
 end;
 
 // One danger at a time: while it warns, lunges and stands, the bunker is
-// silent; on its way back it aims again
+// silent; on its way back it aims again. Through the change to the hunt
+// and the pass it is silent too.
 function TRam.HoldsFire: Boolean;
 begin
-  Result := FFallBack in [fbWarning, fbLunging, fbStanding];
+  Result := (FFallBack in [fbWarning, fbLunging, fbStanding]) or
+    (FHunt in [htCalling, htPassing]);
 end;
 
 function TRam.NextFallBackWait: Integer;
@@ -2600,6 +2698,80 @@ end;
 function TRam.FallingBack: Boolean;
 begin
   Result := FFallBack in [fbLunging, fbStanding, fbReturning];
+end;
+
+// The change begins where it stands, at the wall or at the middle: a fall
+// back under way is over
+procedure TRam.BeginHunt;
+begin
+  FHunt := htCalling;
+  FHuntTicks := 0;
+  FRowsIn := False;
+  FFallBack := fbNone;
+  FCue.Alarm := True;
+  FCue.Rows := True;
+end;
+
+// The change: the eye blinks till the rows are in and a warning after;
+// then the pass to the left edge, which ends in Arrive; then the hunt
+procedure TRam.TickHunt;
+begin
+  case FHunt of
+    htNone:
+      if BunkerThirdPhase then
+        BeginHunt;
+    htCalling:
+      begin
+        Inc(FHuntTicks);
+        if FRowsIn and (FHuntTicks >= HuntPassWarnTicks) then
+        begin
+          FHunt := htPassing;
+          BeginDrive(0, LungeSpeed, False);
+        end;
+      end;
+    htHunting:
+      TickHuntDrive;
+  end;
+end;
+
+// Not of the world: the road does not carry it. Its hatch a step behind
+// the hero, at its pace and no faster; after a ram it stands while he
+// flies clear.
+procedure TRam.TickHuntDrive;
+begin
+  // The pass ended with the brake's hiss
+  if FHuntTicks = 0 then
+    FCue.Rumble := True;
+  Inc(FHuntTicks);
+  var OldSpeed := FSpeed;
+  var Want: Single := 0;
+  if FRamStandTicks > 0 then
+    Dec(FRamStandTicks)
+  else if FHero.Alive then
+  begin
+    var Mark := FHeroCenter.X - HuntTrail - WellX;
+    Want := EnsureRange((Mark - FX) * HuntGain, -HuntBehindSpeed,
+      HuntBehindSpeed);
+  end;
+  FSpeed := EnsureRange(Want, FSpeed - Brake, FSpeed + Brake);
+  var Next: Single := FX + FSpeed;
+  FX := EnsureRange(Next, 0, ScreenWidth - RamWidth);
+  if FX <> Next then
+    FSpeed := 0;
+  FAccel := FSpeed - OldSpeed;
+end;
+
+function TRam.Hunts: Boolean;
+begin
+  Result := FHunt <> htNone;
+end;
+
+procedure TRam.RowsArrived;
+begin
+  if FHunt <> htCalling then
+    Exit;
+  FRowsIn := True;
+  FHuntTicks := 0;
 end;
 
 function TRam.BunkerMiddle: TSdlFPoint;
@@ -2737,14 +2909,14 @@ begin
 end;
 
 // Lit, it breathes; while a head rises, through a change of heads, through
-// the sweeper's end and before the bunker's fall back, it blinks - the
-// warning
+// the sweeper's end, before the bunker's fall back and through the change
+// to its hunt, it blinks - the warning
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
   else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading or
-    (FFallBack = fbWarning) then
+    (FFallBack = fbWarning) or (FHunt = htCalling) then
   begin
     var Clock := FPhaseTicks;
     if FRetreating then
@@ -2752,7 +2924,9 @@ begin
     else if Overloading then
       Clock := FOverloadTicks
     else if FFallBack = fbWarning then
-      Clock := FFallBackTicks;
+      Clock := FFallBackTicks
+    else if FHunt = htCalling then
+      Clock := FHuntTicks;
     FEye := EyeBlinkLow;
     if (Clock div EyeBlinkTicks) mod 2 = 0 then
       FEye := 1;
@@ -2876,6 +3050,10 @@ begin
   end;
   if FClearTicks > 0 then
     Exit(False);
+  // In the pass and the hunt a touch on the road is a throw over the hull,
+  // and in the air or on a pad there is none
+  if FHunt in [htPassing, htHunting] then
+    Exit(False);
   if AOnDeck then
   begin
     FHeroInFront := True;
@@ -2891,16 +3069,78 @@ begin
   Result := True;
 end;
 
-function TRam.ThrowsOverTheHull(const AHeroBody: TSdlFRect;
-  AOnRoad: Boolean): Boolean;
+function TRam.ThrowsOverTheHull(const AHeroBody: TSdlFRect; AOnRoad: Boolean;
+  out AThrow: TOverTheHull): Boolean;
 begin
-  if not Present or not FallingBack or not AOnRoad or FHeroThrown or
-    (AHeroBody.X + AHeroBody.W / 2 <= FX + RamWidth) then
+  AThrow := Default(TOverTheHull);
+  if not Present or not AOnRoad or FHeroThrown then
     Exit(False);
+  if FHunt in [htPassing, htHunting] then
+  begin
+    if not RamsOnTheRoad(AHeroBody) then
+      Exit(False);
+    AThrow.Side := HuntThrowSide(AHeroBody);
+    AThrow.Way := HuntFlingWay;
+    FRamStandTicks := RamStandTicks;
+  end
+  else
+  begin
+    if not FallingBack or (AHeroBody.X + AHeroBody.W / 2 <= FX + RamWidth) then
+      Exit(False);
+    AThrow.Side := -1;
+    AThrow.Way := FallBackFlingWay;
+  end;
   FHeroInFront := False;
   FHeroThrown := True;
   FClearTicks := ClearTicks;
   Result := True;
+end;
+
+function TRam.Shoves(const AHeroBody: TSdlFRect; AOnRoad: Boolean): Single;
+begin
+  Result := 0;
+  if not Present or (FHunt <> htPassing) or not AOnRoad or FHeroThrown or
+    (FClearTicks > 0) or not Overlaps(AHeroBody) then
+    Exit;
+  var Depth := AHeroBody.X + AHeroBody.W - BowAt(AHeroBody);
+  if Depth <= ShoveDeepest then
+    Result := -Depth;
+end;
+
+// The left edge of the hull along the rows of his body
+function TRam.BowAt(const AHeroBody: TSdlFRect): Single;
+begin
+  Result := FX;
+  var First, Last: Integer;
+  if SpanAcross(AHeroBody, First, Last) then
+    Result := FX + First;
+end;
+
+// In the pass the bow shoves him before it till he is pinned at the left
+// edge, and throws at once one it has run into deep - one who came down
+// inside the hull. In the hunt any touch on the road is a ram.
+function TRam.RamsOnTheRoad(const AHeroBody: TSdlFRect): Boolean;
+begin
+  if (FClearTicks > 0) or not Overlaps(AHeroBody) then
+    Exit(False);
+  if FHunt = htHunting then
+    Exit(True);
+  var Bow := BowAt(AHeroBody);
+  var Deep := AHeroBody.X + AHeroBody.W - Bow > ShoveDeepest;
+  var Pinned := Bow < AHeroBody.W + PinRoom;
+  Result := Deep or Pinned;
+end;
+
+// To the right, but at the right wall, with no room past the stern for
+// his body, back over it to the left
+function TRam.HuntThrowSide(const AHeroBody: TSdlFRect): Integer;
+begin
+  Result := 1;
+  var First, Last: Integer;
+  if not SpanAcross(AHeroBody, First, Last) then
+    Exit;
+  if ScreenWidth - (FX + Last + 1) < AHeroBody.W then
+    Result := -1;
 end;
 
 function TRam.Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;

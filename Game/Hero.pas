@@ -215,9 +215,13 @@ type
     // last throw.
     procedure Throw(ASide: Integer);
     // Thrown high and far toward ASide, over the Ram's hull: a throw that
-    // climbs about 150 units and carries him across on top of his own way
-    // till he lands. As Throw, nothing for the dead or one still flying.
-    procedure Fling(ASide: Integer);
+    // climbs about 150 units and carries him across AWay units a tick on
+    // top of his own way till he lands. As Throw, nothing for the dead or
+    // one still flying.
+    procedure Fling(ASide: Integer; AWay: Double);
+    // The Ram's bow shoves him AWay along the road, below 0 to the left, as
+    // far as no wall stops him
+    procedure Shove(AWay: Double);
     // The road of a chase has slid AWay under him, below 0 to the left:
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
@@ -309,7 +313,6 @@ const
   // square, and the controls stay out of his hands for the whole rise
   FlingBoost = 10.0;
   FlingLockTicks = 30;
-  FlingWay = 1.0;
   DeathFrameAdvance = 0.6; // frames 9 -> 16 in ~12 ticks
   // Left of this the one-way door of 2008 puts him back after every tick
   LeftDoorStop = 2;
@@ -583,10 +586,15 @@ begin
   BeginThrow(ASide, ThrowBoost, ThrowLockTicks);
 end;
 
-procedure THero.Fling(ASide: Integer);
+procedure THero.Fling(ASide: Integer; AWay: Double);
 begin
   if BeginThrow(ASide, FlingBoost, FlingLockTicks) then
-    FFlingWay := Sign(ASide) * FlingWay;
+    FFlingWay := Sign(ASide) * AWay;
+end;
+
+procedure THero.Shove(AWay: Double);
+begin
+  CarryX(AWay);
 end;
 
 function THero.BeginThrow(ASide: Integer; ABoost: Double;

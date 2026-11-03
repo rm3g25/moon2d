@@ -17,7 +17,8 @@
   game's: a blast, as a tank's.
 
   In the bunker's second phase the shells come in pairs; where the second
-  goes is SecondShellMark's.
+  goes is SecondShellMark's. In its hunt the second goes ahead of the hero
+  along his row, AheadShellMark's.
 
   It knows neither the pads, the hero nor the bunker: the game gives it
   the decks of the screen and the road's way of the tick, asks it what
@@ -135,6 +136,13 @@ type
 // first, so the way up is caught on the right half; else the road ahead
 // of him, ARoadY, where its roll comes back at him
 function SecondShellMark(const ADecks: TArray<TShellDeck>;
+  const AFeet: TSdlFPoint; ARoadY: Single): TSdlFPoint;
+
+// Where the second shell of a pair goes in the hunt, the hero's feet at
+// AFeet: the middle of the nearest of ADecks' decks ahead of him - right
+// of his feet - along the row he stands on, a hole where he runs; else
+// the road ahead of him, ARoadY
+function AheadShellMark(const ADecks: TArray<TShellDeck>;
   const AFeet: TSdlFPoint; ARoadY: Single): TSdlFPoint;
 
 implementation
@@ -296,6 +304,22 @@ begin
       Continue;
     Nearest := Gap;
     Result := Middle;
+  end;
+end;
+
+function AheadShellMark(const ADecks: TArray<TShellDeck>;
+  const AFeet: TSdlFPoint; ARoadY: Single): TSdlFPoint;
+begin
+  Result := UnitPoint(Min(AFeet.X + RoadAhead, ScreenWidth), ARoadY);
+  var Nearest := MaxSingle;
+  for var Deck in ADecks do
+  begin
+    var Ahead := Deck.Left - AFeet.X;
+    if (Abs(Deck.Top - AFeet.Y) > UnderFeetSlop) or (Ahead <= 0) or
+      (Ahead >= Nearest) or (Deck.Left >= ScreenWidth) then
+      Continue;
+    Nearest := Ahead;
+    Result := DeckMiddle(Deck);
   end;
 end;
 

@@ -15,6 +15,10 @@
   middle of the screen - never one still on the right half, nor one too
   high; else onto the road ahead of him, never past the right edge.
 
+  The second shell of the hunt: at the nearest pad ahead of the hero along
+  his row - not the one under him, not one behind him, not one of another
+  row; else onto the road ahead of him.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Shells;
@@ -77,6 +81,17 @@ type
     procedure TestNotOneTooHigh;
     [Test]
     procedure TestNoneTheRoadAheadNeverPastTheEdge;
+  end;
+
+  [TestFixture]
+  TAheadShellMarkTests = class
+  public
+    [Test]
+    procedure TestTheNearestPadAheadAlongHisRow;
+    [Test]
+    procedure TestNotUnderHimBehindHimNorOnAnotherRow;
+    [Test]
+    procedure TestNoneTheRoadAhead;
   end;
 
 implementation
@@ -386,8 +401,35 @@ begin
   Assert.AreEqual(RightEdge, Double(Mark.X), 0.001, 'Never past the right edge');
 end;
 
+procedure TAheadShellMarkTests.TestTheNearestPadAheadAlongHisRow;
+begin
+  var Mark := AheadShellMark([Deck(FeetX - 20, PadWidth, DeckTop),
+    Deck(FeetX + 140, PadWidth, DeckTop), Deck(FeetX + 60, PadWidth, DeckTop)],
+    At(FeetX, DeckTop), RoadY);
+  Assert.AreEqual(FeetX + 60 + PadWidth / 2, Double(Mark.X), 0.001,
+    'The nearer one ahead');
+  Assert.AreEqual(DeckTop, Double(Mark.Y), 0.001, 'On his row');
+end;
+
+procedure TAheadShellMarkTests.TestNotUnderHimBehindHimNorOnAnotherRow;
+begin
+  var Mark := AheadShellMark([Deck(FeetX - 20, PadWidth, DeckTop),
+    Deck(FeetX - 90, PadWidth, DeckTop), Deck(FeetX + 40, PadWidth, MiddleDeckTop)],
+    At(FeetX, DeckTop), RoadY);
+  Assert.AreEqual(AheadX, Double(Mark.X), 0.001, 'The road ahead');
+  Assert.AreEqual(RoadY, Double(Mark.Y), 0.001, 'On the road');
+end;
+
+procedure TAheadShellMarkTests.TestNoneTheRoadAhead;
+begin
+  var Mark := AheadShellMark(NoDecks, At(FeetX, RoadY), RoadY);
+  Assert.AreEqual(AheadX, Double(Mark.X), 0.001, 'Ahead of him');
+  Assert.AreEqual(RoadY, Double(Mark.Y), 0.001, 'On the road');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TBunkerShellTests);
   TDUnitX.RegisterTestFixture(TSecondShellMarkTests);
+  TDUnitX.RegisterTestFixture(TAheadShellMarkTests);
 
 end.
