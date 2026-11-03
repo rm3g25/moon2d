@@ -88,9 +88,24 @@
   it wounds whoever is in it; then the hatch stands open and cooling, and
   shuts. Its top is open to a bullet at any time, the lid shut or not: one
   that comes down onto it from above or aslant, from a pad. The honeycomb
-  closes its sides and front. Its lives go by thirds as the others' do - in
-  this stage all three thirds are its first phase. Its last life blows
-  it up as the hunter's does; the empty mast sinks and the road runs on.
+  closes its sides and front. Its lives go by thirds as the others' do.
+
+  From its middle third on comes its second phase. Now and then, its
+  hatch shut, the eye blinks the warning and the machine lunges back to
+  the middle of the screen - never to the left edge, where the hero could
+  have nowhere to jump - stands a breath and drives back to the wall. A
+  touch is a touch as ever. From the warning till it stands at the
+  middle the bunker holds its fire; the road it leaves behind its stern
+  is not the hero's: one who comes down onto it is thrown back over the
+  hull to the left, with a wound. A hero on a pad is carried over it by
+  the pad. Its shells come in pairs: one at his feet, one at the pad he
+  stands on, or at one he could climb to once it has ridden past the
+  middle of the screen - a pad is let in first, so the way up is caught
+  on the right half - or onto the road ahead of him (Game.Shells).
+
+  Its last life blows it up as the hunter's does; the empty mast sinks,
+  the machine drives back to the wall if it stood away from it, and the
+  road runs on.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -144,6 +159,11 @@ type
   // column of exhaust out of the open hatch; open and cooling - the window
   TBunkerHatch = (bhAiming, bhFired, bhVenting, bhOpen);
 
+  // The bunker's second phase at the wall: waiting for the next fall
+  // back; the eye's warning; the lunge to the middle; the stand there; the
+  // drive back to the wall
+  TFallBack = (fbNone, fbWarning, fbLunging, fbStanding, fbReturning);
+
   // The gun: idle (aiming or riding, resting), the warning before a burst
   // - the hunter's lens, the sweeper's barrels burning red - the burst
   TRamFire = (rfIdle, rfFlare, rfBurst);
@@ -186,6 +206,8 @@ type
     Body: TSdlFRect;
     // Stands on a pad
     OnDeck: Boolean;
+    // Where the second shell of a pair goes (SecondShellMark)
+    SecondAt: TSdlFPoint;
   end;
 
   TRamCue = record
@@ -222,6 +244,9 @@ type
     // The bunker lobs a shell out of LobFrom that comes down on LobAt
     Lob: Boolean;
     LobFrom, LobAt: TSdlFPoint;
+    // With it, in the second phase, a second shell out of the other muzzle
+    SecondLob: Boolean;
+    SecondLobFrom, SecondLobAt: TSdlFPoint;
     // The column of exhaust goes up out of the bunker's hatch
     Vent: Boolean;
   end;
@@ -322,6 +347,11 @@ type
     FLid, FLastLid: Single;
     FNextMuzzle: Integer;
     FHeadShield: TTekShield;
+    // Its second phase: the step of a fall back, ticks into the step, and
+    // ticks till the next one
+    FFallBack: TFallBack;
+    FFallBackTicks: Integer;
+    FFallBackWait: Integer;
     // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
@@ -339,7 +369,12 @@ type
     procedure TickHatch;
     procedure TickLid;
     procedure Lob;
+    function BunkerMuzzle(AIndex: Integer): TSdlFPoint;
     function BunkerMiddle: TSdlFPoint;
+    function BunkerSecondPhase: Boolean;
+    procedure TickFallBack;
+    function HoldsFire: Boolean;
+    function NextFallBackWait: Integer;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -440,6 +475,14 @@ type
     // ClearTicks at most.
     function Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
       out AAway: Integer): Boolean;
+    // Falling back, the hero has come down onto the road right of the hull
+    // (AOnRoad - not in the air, not on a pad): he is to be thrown back
+    // over it to the left, and is out of its way till he comes down
+    function ThrowsOverTheHull(const AHeroBody: TSdlFRect;
+      AOnRoad: Boolean): Boolean;
+    // Away from the right wall in a fall back: on its way, standing, or on
+    // its way back - the napalm waits
+    function FallingBack: Boolean;
     // On the screen to be seen and touched
     function Present: Boolean;
     // Between the last tick and this one, AAlpha of the way
@@ -854,6 +897,18 @@ const
   ColumnHalfWidth = 6.0;
   ColumnHeight = 80.0;
   LobJolt = 0.05;
+  // The second phase: the first fall back 2 s into it, then one every 6
+  // to 8 s; the warning half a second; the lunge to its ram at the middle
+  // at a run faster than the hero's, a second's stand, the way back slower
+  FallBackFirstTicks = 66;
+  FallBackEveryLeastTicks = 200;
+  FallBackEveryMostTicks = 264;
+  FallBackWarnTicks = 16;
+  FallBackX = 256.0;
+  LungeSpeed = 3.0;
+  LungeStopJolt = 0.2;
+  FallBackStandTicks = 33;
+  ReturnSpeed = 1.2;
 
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
@@ -1289,6 +1344,9 @@ begin
   FLid := 0;
   FLastLid := 0;
   FNextMuzzle := 0;
+  FFallBack := fbNone;
+  FFallBackTicks := 0;
+  FFallBackWait := 0;
   FOverloadTicks := 0;
   FFlash := 0;
   FLastFlash := 0;
@@ -1619,9 +1677,9 @@ begin
     FRetreating := False;
 end;
 
-// From the sweeper's blast on it stands at the right wall: the bunker
-// rises there, the chase runs there, and it stays there once the bunker
-// is gone
+// From the sweeper's blast on it keeps to the right wall: the bunker rises
+// there, the chase runs there, and it stays there once the bunker is gone.
+// Only the bunker's falls back take it away for a while.
 function TRam.AtTheWall: Boolean;
 begin
   Result := FKilled in [rhSweeper, rhBunker];
@@ -1725,6 +1783,7 @@ begin
   FHead := rhNone;
   FArmed := False;
   FFire := rfIdle;
+  FFallBack := fbNone;
   FHatch := bhAiming;
   FLid := 0;
   FLensHot := False;
@@ -1756,7 +1815,8 @@ end;
 // The empty mast sinks, a beat, the next head rises and the fight goes
 // on: the sweeper after the hunter, the bunker after the sweeper - and the
 // breath before the chase counts from the bunker's row lit. After the
-// bunker the mast stays down.
+// bunker the mast stays down, and a machine that died away from the wall
+// goes back to it.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1770,7 +1830,11 @@ begin
     Exit;
   if FKilled = rhBunker then
   begin
-    BeginRest(0);
+    var Wall: Single := ScreenWidth - RamWidth;
+    if FX < Wall then
+      BeginDrive(Wall, ReturnSpeed, False)
+    else
+      BeginRest(0);
     Exit;
   end;
   if Rising = 0 then
@@ -1840,6 +1904,8 @@ begin
   FHatchTicks := FirstBurstTicks;
   FLid := 0;
   FNextMuzzle := 0;
+  FFallBack := fbNone;
+  FFallBackWait := FallBackFirstTicks;
 end;
 
 procedure TRam.TickPhase;
@@ -1894,6 +1960,7 @@ begin
         if AtTheWall then
         begin
           TickChaseStart;
+          TickFallBack;
           Exit;
         end;
         if FHero.Alive and not FPressing and (FHead = rhHunter) and
@@ -1959,6 +2026,19 @@ begin
   FCue.Jolt := Max(FCue.Jolt, PatrolStopJolt);
   if FChangePending then
     BeginChange
+  else if FFallBack = fbLunging then
+  begin
+    FCue.Jolt := Max(FCue.Jolt, LungeStopJolt);
+    FFallBack := fbStanding;
+    FFallBackTicks := 0;
+    BeginRest(0);
+  end
+  else if FFallBack = fbReturning then
+  begin
+    FFallBack := fbNone;
+    FFallBackWait := NextFallBackWait;
+    BeginRest(0);
+  end
   else if not FHero.Alive then
     BeginRest(PatrolRestMinTicks +
       Round(FDice.NextUnit * (PatrolRestMaxTicks - PatrolRestMinTicks)))
@@ -2374,7 +2454,7 @@ end;
 
 // Shut, it aims and lobs; a beat; the column; the window; shut again. A
 // breath under way runs to its end; a new one waits for a hero to aim at,
-// a head turned to him and its row lit.
+// a head turned to him and its row lit - and for a fall back to be over.
 procedure TRam.TickHatch;
 begin
   if not FArmed or FHeadKilled then
@@ -2384,7 +2464,7 @@ begin
   end;
   case FHatch of
     bhAiming:
-      if CanShoot and not Booting then
+      if CanShoot and not Booting and not HoldsFire then
       begin
         if FHatchTicks > 0 then
           Dec(FHatchTicks)
@@ -2433,16 +2513,93 @@ begin
     FLid := Max(0, FLid - 1 / LidShutTicks);
 end;
 
-// Out of the next of its two muzzles, at the hero's feet
+// Out of the next of its two muzzles, at the hero's feet; in the second
+// phase out of both, the other shell where the game says
 procedure TRam.Lob;
 begin
-  var Muzzle := BunkerMuzzles[FNextMuzzle];
-  FNextMuzzle := (FNextMuzzle + 1) mod Length(BunkerMuzzles);
   FCue.Lob := True;
-  FCue.LobFrom := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
-    Muzzle.X, Muzzle.Y);
   FCue.LobAt := UnitPoint(FHeroCenter.X, FHero.Body.Y + FHero.Body.H);
   FCue.Jolt := Max(FCue.Jolt, LobJolt);
+  if not BunkerSecondPhase then
+  begin
+    FCue.LobFrom := BunkerMuzzle(FNextMuzzle);
+    FNextMuzzle := (FNextMuzzle + 1) mod Length(BunkerMuzzles);
+    Exit;
+  end;
+  FCue.LobFrom := BunkerMuzzle(0);
+  FCue.SecondLob := True;
+  FCue.SecondLobFrom := BunkerMuzzle(1);
+  FCue.SecondLobAt := FHero.SecondAt;
+end;
+
+function TRam.BunkerMuzzle(AIndex: Integer): TSdlFPoint;
+begin
+  var Muzzle := BunkerMuzzles[AIndex];
+  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+    Muzzle.X, Muzzle.Y);
+end;
+
+function TRam.BunkerSecondPhase: Boolean;
+begin
+  Result := (FHead = rhBunker) and FArmed and FChased and not FHeadKilled and
+    (Tier >= 1);
+end;
+
+// At the wall it waits out the gap and the hatch's breath, warns and
+// lunges; at the middle it stands, then drives back. The two drives end
+// in Arrive.
+procedure TRam.TickFallBack;
+begin
+  case FFallBack of
+    fbNone:
+      begin
+        if not BunkerSecondPhase or not FHero.Alive then
+          Exit;
+        if FFallBackWait > 0 then
+          Dec(FFallBackWait)
+        else if FHatch = bhAiming then
+        begin
+          FFallBack := fbWarning;
+          FFallBackTicks := 0;
+        end;
+      end;
+    fbWarning:
+      begin
+        Inc(FFallBackTicks);
+        if FFallBackTicks >= FallBackWarnTicks then
+        begin
+          FFallBack := fbLunging;
+          BeginDrive(FallBackX, LungeSpeed, False);
+        end;
+      end;
+    fbStanding:
+      begin
+        Inc(FFallBackTicks);
+        if FFallBackTicks >= FallBackStandTicks then
+        begin
+          FFallBack := fbReturning;
+          BeginDrive(ScreenWidth - RamWidth, ReturnSpeed, False);
+        end;
+      end;
+  end;
+end;
+
+// One danger at a time: while it warns, lunges and stands, the bunker is
+// silent; on its way back it aims again
+function TRam.HoldsFire: Boolean;
+begin
+  Result := FFallBack in [fbWarning, fbLunging, fbStanding];
+end;
+
+function TRam.NextFallBackWait: Integer;
+begin
+  Result := FallBackEveryLeastTicks +
+    Round(FDice.NextUnit * (FallBackEveryMostTicks - FallBackEveryLeastTicks));
+end;
+
+function TRam.FallingBack: Boolean;
+begin
+  Result := FFallBack in [fbLunging, fbStanding, fbReturning];
 end;
 
 function TRam.BunkerMiddle: TSdlFPoint;
@@ -2579,19 +2736,23 @@ begin
     FLamps := Max(0, FLamps - LampFade);
 end;
 
-// Lit, it breathes; while a head rises, through a change of heads and
-// through the sweeper's end, it blinks - the warning
+// Lit, it breathes; while a head rises, through a change of heads, through
+// the sweeper's end and before the bunker's fall back, it blinks - the
+// warning
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
-  else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading then
+  else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading or
+    (FFallBack = fbWarning) then
   begin
     var Clock := FPhaseTicks;
     if FRetreating then
       Clock := FRetreatTicks
     else if Overloading then
-      Clock := FOverloadTicks;
+      Clock := FOverloadTicks
+    else if FFallBack = fbWarning then
+      Clock := FFallBackTicks;
     FEye := EyeBlinkLow;
     if (Clock div EyeBlinkTicks) mod 2 = 0 then
       FEye := 1;
@@ -2727,6 +2888,18 @@ begin
   FHeroThrown := True;
   FClearTicks := ClearTicks;
   AAway := ThrowSide(AHeroBody);
+  Result := True;
+end;
+
+function TRam.ThrowsOverTheHull(const AHeroBody: TSdlFRect;
+  AOnRoad: Boolean): Boolean;
+begin
+  if not Present or not FallingBack or not AOnRoad or FHeroThrown or
+    (AHeroBody.X + AHeroBody.W / 2 <= FX + RamWidth) then
+    Exit(False);
+  FHeroInFront := False;
+  FHeroThrown := True;
+  FClearTicks := ClearTicks;
   Result := True;
 end;
 

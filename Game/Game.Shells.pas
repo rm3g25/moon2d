@@ -10,10 +10,14 @@
   the ring sends the ring on down to what lies below.
 
   A shell that comes down on a deck bursts there, and the game knocks that
-  pad off - whoever stood on it falls; the shell wounds nobody in the air.
-  One that misses every deck lands on the road and rolls left along it,
-  faster than the road runs: that one wounds the hero it touches, and is
-  spent on him. Past the left edge it is gone.
+  pad off - whoever stood on it falls. One that misses every deck lands
+  on the road and rolls left along it, faster than the road runs. In the
+  air or rolling, a shell that touches the hero is spent on him. Past the
+  left edge it is gone. What a burst does to whoever is near is the
+  game's: a blast, as a tank's.
+
+  In the bunker's second phase the shells come in pairs; where the second
+  goes is SecondShellMark's.
 
   It knows neither the pads, the hero nor the bunker: the game gives it
   the decks of the screen and the road's way of the tick, asks it what
@@ -91,7 +95,8 @@ type
     // ADecks - the decks of the screen this tick; AWay - what the road ran
     // this tick, below zero to the left
     function Tick(const ADecks: TArray<TShellDeck>; AWay: Single): TShellCue;
-    // A rolling shell touches ABody: it is spent on it, at AAt
+    // A shell in the air or rolling touches ABody: it is spent on it, at
+    // AAt
     function Strikes(const ABody: TSdlFRect; out AAt: TSdlFPoint): Boolean;
     // A death, a door, a new level: none left
     procedure Clear;
@@ -123,6 +128,14 @@ type
     procedure DrawShells(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
   end;
+
+// Where the second shell of a pair goes, the hero's feet at AFeet: the
+// middle of ADecks' deck he stands on; else of the nearest one a plain
+// jump up that has ridden past the middle of the screen - a pad is let in
+// first, so the way up is caught on the right half; else the road ahead
+// of him, ARoadY, where its roll comes back at him
+function SecondShellMark(const ADecks: TArray<TShellDeck>;
+  const AFeet: TSdlFPoint; ARoadY: Single): TSdlFPoint;
 
 implementation
 
@@ -176,6 +189,14 @@ const
     Heat: 0.6; EndTint: (R: 40; G: 38; B: 38));
   ShellTrailTint: TColorTint = (R: 70; G: 64; B: 60);
   ShellTrailSeed = $53686C31; // "Shl1"
+
+  // A deck he stands on lies this near his feet. One he could climb to
+  // stands over them, and no higher than a plain jump clears it: the jump
+  // peaks about 100 over his feet, and must clear the deck by a few units.
+  UnderFeetSlop = 1.0;
+  ClimbLeast = 16.0;
+  ClimbMost = 92.0;
+  RoadAhead = 64.0;
 
 function UnitPoint(AX, AY: Single): TSdlFPoint;
 begin
@@ -245,6 +266,36 @@ begin
       ADeck := -1;
       Result := True;
     end;
+  end;
+end;
+
+function DeckMiddle(const ADeck: TShellDeck): TSdlFPoint;
+begin
+  Result := UnitPoint((ADeck.Left + ADeck.Right) / 2, ADeck.Top);
+end;
+
+function SecondShellMark(const ADecks: TArray<TShellDeck>;
+  const AFeet: TSdlFPoint; ARoadY: Single): TSdlFPoint;
+begin
+  for var Deck in ADecks do
+    if (Abs(Deck.Top - AFeet.Y) <= UnderFeetSlop) and
+      InRange(AFeet.X, Deck.Left, Deck.Right) then
+      Exit(DeckMiddle(Deck));
+
+  Result := UnitPoint(Min(AFeet.X + RoadAhead, ScreenWidth), ARoadY);
+  var Nearest := MaxSingle;
+  for var Deck in ADecks do
+  begin
+    var Rise := AFeet.Y - Deck.Top;
+    var Middle := DeckMiddle(Deck);
+    if (Rise < ClimbLeast) or (Rise > ClimbMost) or
+      (Middle.X >= ScreenWidth / 2) then
+      Continue;
+    var Gap := Abs(Middle.X - AFeet.X);
+    if Gap >= Nearest then
+      Continue;
+    Nearest := Gap;
+    Result := Middle;
   end;
 end;
 
@@ -395,7 +446,7 @@ function TBunkerShells.Strikes(const ABody: TSdlFRect;
 begin
   for var i := 0 to High(FShells) do
   begin
-    if FShells[i].State <> ssRolling then
+    if FShells[i].State = ssNone then
       Continue;
     var Middle := FShells[i].Middle;
     var NearX := EnsureRange(Middle.X, ABody.X, ABody.X + ABody.W);

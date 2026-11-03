@@ -44,6 +44,17 @@
   the shuttle; its last life blows it up with no wave, the empty mast
   sinks, and the machine stands at the wall for good.
 
+  Its second phase: none in the first; the eye warns about half a second
+  at the wall; the machine lunges to the middle of the screen, never
+  nearer the left edge, stands about a second and drives back slower,
+  the first fall back soon into the phase, the next a few seconds after;
+  the bunker is silent from the warning till the drive back, then fires
+  again; its shells come in pairs, the second where the game says;
+  a hero who comes down onto the road behind its stern is thrown back
+  over the hull, once while he flies, and is out of its way over it - not
+  from a pad or the air, not in front of it; dying away from the wall it
+  drives back to it.
+
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
   executable.
@@ -263,6 +274,9 @@ type
     procedure RaiseTheBunker(const ATarget: TRamTarget; ALivesShare: Single = 1);
     procedure WaitForTheWindow(const ATarget: TRamTarget);
     procedure StrikeTheHatch(ATimes: Integer);
+    procedure EnterTheSecondPhase(const ATarget: TRamTarget);
+    function WaitForTheFallBack(const ATarget: TRamTarget): Integer;
+    procedure WaitForTheStand(const ATarget: TRamTarget);
   public
     [Setup]
     procedure Setup;
@@ -293,6 +307,24 @@ type
     procedure TestEachThirdCallsTheShuttle;
     [Test]
     procedure TestTheLastLifeBlowsItUpAndItStands;
+    [Test]
+    procedure TestNoFallBackInTheFirstPhase;
+    [Test]
+    procedure TestTheEyeWarnsHalfASecondBeforeTheLunge;
+    [Test]
+    procedure TestFallsBackToTheMiddleStandsAndDrivesBack;
+    [Test]
+    procedure TestFallsBackAgainAfterAFewSeconds;
+    [Test]
+    procedure TestHoldsFireTillItDrivesBack;
+    [Test]
+    procedure TestShellsComeInPairsInTheSecondPhase;
+    [Test]
+    procedure TestThrowsOverTheHullFromTheRoadBehind;
+    [Test]
+    procedure TestNoThrowOverFromAPadOrInFront;
+    [Test]
+    procedure TestDiesAwayFromTheWallAndGoesBack;
   end;
 
 implementation
@@ -1862,6 +1894,21 @@ const
   LongestBreathTicks = 35;
   // Long enough for a breath to come round twice
   TwoBreaths = 400;
+  // The second phase: the warning about half a second; the lunge to the
+  // middle of the screen; a stand of about a second; the first fall back
+  // within 3 s of the phase, the next 6 to 8 s after the last - and a
+  // breath of the hatch more at most, which it waits out
+  ShortestWarnTicks = 13;
+  LongestWarnTicks = 20;
+  FallBackLeft = ScreenWidth / 2;
+  ShortestFallBackStandTicks = 25;
+  LongestFallBackStandTicks = 40;
+  FirstFallBackTicks = 100;
+  ShortestGapTicks = 190;
+  LongestGapTicks = 350;
+  // Where the second shell of a pair is asked to go
+  SecondX = 180.0;
+  SecondY = 280.0;
 
 procedure TRamBunkerTests.Setup;
 begin
@@ -1935,6 +1982,47 @@ begin
       At(Hatch.X + 1, Hatch.Y + 2), Struck, Guarded) and not Guarded,
       Format('Strike %d goes in', [i]));
   end;
+end;
+
+// The chase under way, then a third of its lives gone at a window
+procedure TRamBunkerTests.EnterTheSecondPhase(const ATarget: TRamTarget);
+begin
+  RaiseTheBunker(ATarget);
+  var Chased := False;
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(ATarget).Chase then
+    begin
+      Chased := True;
+      Break;
+    end;
+  Assert.IsTrue(Chased, 'The chase began');
+  WaitForTheWindow(ATarget);
+  StrikeTheHatch(FRam.FullLives div 3 + 1);
+end;
+
+// The ticks until it leaves the wall
+function TRamBunkerTests.WaitForTheFallBack(const ATarget: TRamTarget): Integer;
+begin
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.FallingBack then
+      Exit(i);
+  end;
+  Assert.Fail('It never fell back');
+  Result := -1;
+end;
+
+procedure TRamBunkerTests.WaitForTheStand(const ATarget: TRamTarget);
+begin
+  WaitForTheFallBack(ATarget);
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.Rolled = 0 then
+      Exit;
+  end;
+  Assert.Fail('It never stood at the middle');
 end;
 
 procedure TRamBunkerTests.TestLivesFollowTheGrade;
@@ -2195,6 +2283,205 @@ begin
   Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
   Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
     'At the right wall');
+end;
+
+
+procedure TRamBunkerTests.TestNoFallBackInTheFirstPhase;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  for var i := 1 to 3 * TwoBreaths do
+  begin
+    var Cue := FRam.Tick(Hero);
+    Assert.IsFalse(FRam.FallingBack, 'It keeps to the wall');
+    Assert.IsFalse(Cue.SecondLob, 'One shell at a time');
+  end;
+  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+    'At the right wall');
+end;
+
+procedure TRamBunkerTests.TestTheEyeWarnsHalfASecondBeforeTheLunge;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  var Blinks := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    if FRam.FallingBack then
+    begin
+      Assert.IsTrue(InRange(Blinks, ShortestWarnTicks, LongestWarnTicks),
+        Format('The eye blinks %d ticks first', [Blinks]));
+      Exit;
+    end;
+    // Lit, the eye breathes between two dim levels; a blink leaves them
+    var Blinking := (FRam.Eye > 0.9) or (FRam.Eye < 0.2);
+    if Blinking then
+    begin
+      Inc(Blinks);
+      Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+        'Still at the wall while it warns');
+    end
+    else
+      Blinks := 0;
+  end;
+  Assert.Fail('It never fell back');
+end;
+
+procedure TRamBunkerTests.TestFallsBackToTheMiddleStandsAndDrivesBack;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  var Ticks := WaitForTheFallBack(Hero);
+  Assert.IsTrue(Ticks <= FirstFallBackTicks,
+    Format('The first fall back %d ticks into the phase', [Ticks]));
+  var Nearest := FRam.Left;
+  var Lunge: Single := 0;
+  var Back: Single := 0;
+  var Stood := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    Nearest := Min(Nearest, FRam.Left);
+    if FRam.Rolled < 0 then
+      Lunge := Max(Lunge, -FRam.Rolled)
+    else if FRam.Rolled > 0 then
+      Back := Max(Back, FRam.Rolled)
+    else if FRam.FallingBack and (Back = 0) then
+      Inc(Stood);
+    if not FRam.FallingBack then
+      Break;
+  end;
+  Assert.AreEqual(Double(FallBackLeft), Double(Nearest), 1.0,
+    'Its ram at the middle, never nearer the left edge');
+  Assert.IsTrue(InRange(Stood, ShortestFallBackStandTicks,
+    LongestFallBackStandTicks),
+    Format('It stands %d ticks', [Stood]));
+  Assert.IsTrue(Lunge > Back, 'Back to the wall slower than it lunged');
+  Assert.IsFalse(FRam.FallingBack, 'The fall back is over');
+  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+    'At the right wall again');
+end;
+
+procedure TRamBunkerTests.TestFallsBackAgainAfterAFewSeconds;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  WaitForTheFallBack(Hero);
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    if not FRam.FallingBack then
+      Break;
+  end;
+  var Gap := WaitForTheFallBack(Hero);
+  Assert.IsTrue(InRange(Gap, ShortestGapTicks, LongestGapTicks),
+    Format('The next one %d ticks after the last', [Gap]));
+end;
+
+procedure TRamBunkerTests.TestHoldsFireTillItDrivesBack;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  // From the first blink of the warning till it rolls back to the wall
+  var Warned := False;
+  var Returning := False;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if (FRam.Eye > 0.9) or (FRam.Eye < 0.2) then
+      Warned := True;
+    if FRam.Rolled > 0 then
+    begin
+      Returning := True;
+      Break;
+    end;
+    if Warned then
+      Assert.IsFalse(Cue.Lob, 'Silent while it warns, lunges and stands');
+  end;
+  Assert.IsTrue(Warned and Returning, 'It warned and went back');
+  var Lobbed := False;
+  for var i := 1 to TwoBreaths do
+    if FRam.Tick(Hero).Lob then
+    begin
+      Lobbed := True;
+      Break;
+    end;
+  Assert.IsTrue(Lobbed, 'On its way back it fires again');
+end;
+
+procedure TRamBunkerTests.TestShellsComeInPairsInTheSecondPhase;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  Hero.SecondAt := At(SecondX, SecondY);
+  EnterTheSecondPhase(Hero);
+  for var i := 1 to TwoBreaths do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Lob then
+      Continue;
+    var Center := CenterOf(Hero);
+    Assert.IsTrue(Cue.SecondLob, 'Two shells');
+    Assert.AreEqual(Double(Center.X), Double(Cue.LobAt.X), 0.001,
+      'The first under him');
+    Assert.AreEqual(ChaseDeckY, Double(Cue.LobAt.Y), 0.001, 'On his deck');
+    Assert.AreEqual(SecondX, Double(Cue.SecondLobAt.X), 0.001,
+      'The second where it is asked to go');
+    Assert.AreEqual(SecondY, Double(Cue.SecondLobAt.Y), 0.001, 'And as low');
+    Assert.IsTrue(Abs(Cue.LobFrom.Y - Cue.SecondLobFrom.Y) > 1,
+      'Out of both muzzles');
+    Exit;
+  end;
+  Assert.Fail('No shell');
+end;
+
+procedure TRamBunkerTests.TestThrowsOverTheHullFromTheRoadBehind;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  Assert.IsFalse(FRam.ThrowsOverTheHull(OnTheRoad(ScreenWidth), True),
+    'Not while it stands at the wall');
+  WaitForTheStand(Hero);
+  var Behind := OnTheRoad(FRam.Left + RamWidth + 10);
+  Assert.IsTrue(FRam.ThrowsOverTheHull(Behind, True), 'Thrown back over it');
+  Assert.IsFalse(FRam.ThrowsOverTheHull(Behind, True),
+    'Once a throw, while he flies');
+  var Away: Integer;
+  var Over := Behind;
+  Over.X := FRam.Left + RamWidth / 2;
+  Over.Y := RamTop - 40;
+  Assert.IsFalse(FRam.Contact(Over, False, True, Away),
+    'Out of its way over the hull');
+end;
+
+procedure TRamBunkerTests.TestNoThrowOverFromAPadOrInFront;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  WaitForTheStand(Hero);
+  var Behind := OnTheRoad(FRam.Left + RamWidth + 10);
+  Assert.IsFalse(FRam.ThrowsOverTheHull(Behind, False),
+    'Off the road - in the air or on a pad');
+  Assert.IsFalse(FRam.ThrowsOverTheHull(OnTheRoad(FRam.Left - 40), True),
+    'In front of it the touch is the rule');
+end;
+
+procedure TRamBunkerTests.TestDiesAwayFromTheWallAndGoesBack;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  EnterTheSecondPhase(Hero);
+  WaitForTheStand(Hero);
+  Assert.IsTrue(FRam.Left < ScreenWidth - RamWidth - 1, 'Away from the wall');
+  StrikeTheHatch(FRam.Lives);
+  var Blasted := False;
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(Hero).Blast then
+      Blasted := True;
+  Assert.IsTrue(Blasted, 'It blows up');
+  Assert.IsFalse(FRam.FallingBack, 'No fall back with the bunker gone');
+  Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
+  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
+    'Back at the right wall');
 end;
 
 initialization

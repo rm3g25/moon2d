@@ -6,9 +6,14 @@
   deck under the arc before the road, and on down to the road once the
   deck is gone. It bursts on a deck it comes down on, never on one it
   rises through. Missing every deck it lands on the road and rolls left,
-  faster than the road; rolling, it is spent on a body it touches - and
-  only rolling; past the left edge it is gone. As many as its slots at
+  faster than the road; in the air or rolling, it is spent on a body it
+  touches, and not on one it passes by; past the left edge it is gone. As many as its slots at
   once; a clear takes them all.
+
+  The second shell of a pair: at the pad the hero stands on, wherever it
+  is; else at the nearest pad a plain jump up that has ridden past the
+  middle of the screen - never one still on the right half, nor one too
+  high; else onto the road ahead of him, never past the right edge.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -50,13 +55,28 @@ type
     [Test]
     procedure TestRollingItIsSpentOnABody;
     [Test]
-    procedure TestInTheAirItTouchesNobody;
+    procedure TestInTheAirItIsSpentOnABody;
     [Test]
     procedure TestGonePastTheLeftEdge;
     [Test]
     procedure TestAsManyAsItsSlots;
     [Test]
     procedure TestClearTakesThemAll;
+  end;
+
+  [TestFixture]
+  TSecondShellMarkTests = class
+  public
+    [Test]
+    procedure TestThePadHeStandsOn;
+    [Test]
+    procedure TestTheNearestPadPastTheMiddleAJumpUp;
+    [Test]
+    procedure TestNotAPadStillOnTheRightHalf;
+    [Test]
+    procedure TestNotOneTooHigh;
+    [Test]
+    procedure TestNoneTheRoadAheadNeverPastTheEdge;
   end;
 
 implementation
@@ -266,18 +286,20 @@ begin
   Assert.IsFalse(FShells.Strikes(Hero, Again), 'Once');
 end;
 
-procedure TBunkerShellTests.TestInTheAirItTouchesNobody;
+procedure TBunkerShellTests.TestInTheAirItIsSpentOnABody;
 begin
   FShells.Lob(At(MuzzleX, MuzzleY), At(100, RoadY));
   for var i := 1 to 10 do
-  begin
     FShells.Tick(NoDecks, Still);
-    var Middle := FShells[0].Middle;
-    var Where: TSdlFPoint;
-    Assert.IsFalse(FShells.Strikes(Box(Middle.X - 8, Middle.Y - 16, 16, 32),
-      Where), 'Flying through him');
-  end;
-  Assert.AreEqual(1, FShells.Active, 'Still flying');
+  Assert.IsTrue(FShells[0].State = ssFlying, 'Still flying');
+  var Middle := FShells[0].Middle;
+  var Where: TSdlFPoint;
+  Assert.IsFalse(FShells.Strikes(Box(Middle.X + 40, Middle.Y - 16, 16, 32),
+    Where), 'Not one it passes by');
+  Assert.IsTrue(FShells.Strikes(Box(Middle.X - 8, Middle.Y - 16, 16, 32),
+    Where), 'Caught in the air');
+  Assert.AreEqual(Double(Middle.X), Double(Where.X), 0.001, 'Where it was');
+  Assert.AreEqual(0, FShells.Active, 'Spent on him');
 end;
 
 procedure TBunkerShellTests.TestGonePastTheLeftEdge;
@@ -305,7 +327,67 @@ begin
   Assert.AreEqual(0, FShells.Active, 'None');
 end;
 
+// ---------------------------------------------------------------------------
+// The second shell's mark
+// ---------------------------------------------------------------------------
+
+const
+  // The chase's low and middle decks, a plain jump's step apart
+  LowDeckTop = 280.0;
+  MiddleDeckTop = 200.0;
+  PadWidth = 64.0;
+  FeetX = 100.0;
+  // A pad still on the right half of the screen
+  RightHalfLeft = 300.0;
+  // The road ahead of him when no pad will do
+  AheadX = 164.0;
+
+procedure TSecondShellMarkTests.TestThePadHeStandsOn;
+begin
+  var Mark := SecondShellMark([Deck(FeetX + 40, PadWidth, DeckTop),
+    Deck(RightHalfLeft, PadWidth, MiddleDeckTop)],
+    At(RightHalfLeft + 10, MiddleDeckTop), RoadY);
+  Assert.AreEqual(RightHalfLeft + PadWidth / 2, Double(Mark.X), 0.001,
+    'His own, on the right half too');
+  Assert.AreEqual(MiddleDeckTop, Double(Mark.Y), 0.001, 'On its deck');
+end;
+
+procedure TSecondShellMarkTests.TestTheNearestPadPastTheMiddleAJumpUp;
+begin
+  var Mark := SecondShellMark([Deck(190, PadWidth, LowDeckTop),
+    Deck(150, PadWidth, LowDeckTop)], At(FeetX, RoadY), RoadY);
+  Assert.AreEqual(150 + PadWidth / 2, Double(Mark.X), 0.001, 'The nearer one');
+  Assert.AreEqual(LowDeckTop, Double(Mark.Y), 0.001, 'On its deck');
+end;
+
+procedure TSecondShellMarkTests.TestNotAPadStillOnTheRightHalf;
+begin
+  var Mark := SecondShellMark([Deck(RightHalfLeft, PadWidth, LowDeckTop)],
+    At(FeetX, RoadY), RoadY);
+  Assert.AreEqual(AheadX, Double(Mark.X), 0.001, 'Let in: the road ahead');
+  Assert.AreEqual(RoadY, Double(Mark.Y), 0.001, 'On the road');
+end;
+
+procedure TSecondShellMarkTests.TestNotOneTooHigh;
+begin
+  var Mark := SecondShellMark([Deck(150, PadWidth, DeckTop)],
+    At(FeetX, RoadY), RoadY);
+  Assert.AreEqual(AheadX, Double(Mark.X), 0.001,
+    'Out of a jump''s reach: the road ahead');
+end;
+
+procedure TSecondShellMarkTests.TestNoneTheRoadAheadNeverPastTheEdge;
+begin
+  var Mark := SecondShellMark(NoDecks, At(FeetX, RoadY), RoadY);
+  Assert.AreEqual(AheadX, Double(Mark.X), 0.001, 'Ahead of him');
+  Assert.AreEqual(RoadY, Double(Mark.Y), 0.001, 'On the road');
+  Mark := SecondShellMark(NoDecks, At(ScreenWidth - 10, RoadY), RoadY);
+  var RightEdge: Double := ScreenWidth;
+  Assert.AreEqual(RightEdge, Double(Mark.X), 0.001, 'Never past the right edge');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TBunkerShellTests);
+  TDUnitX.RegisterTestFixture(TSecondShellMarkTests);
 
 end.

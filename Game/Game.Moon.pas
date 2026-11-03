@@ -315,7 +315,9 @@ type
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
+    procedure ResolveRamThrowOver;
     procedure ResolveRamContact;
+    procedure HurtByRam;
     procedure ResolveRamWave;
     procedure KnockOffPads;
     procedure TickShells(AWay: Single);
@@ -467,6 +469,9 @@ const
   // dies this far off: hard, the pad is right under it
   ShellBurstReach = 48.0;
   ShellBurstTrauma = 0.15;
+  // A shell's burst wounds whoever is near as a tank's blast does
+  // (monsters.json, "tank"); it throws no shards
+  ShellBlast: TBlastDef = (Radius: 80; Lives: 100; ShardLives: 0);
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
@@ -2830,6 +2835,18 @@ begin
   FAudio.FadeOutMusic(AOrders.SilenceSeconds);
 end;
 
+// The decks of APads, one for one
+function ShellDecks(const APads: TArray<TPad>): TArray<TShellDeck>;
+begin
+  SetLength(Result, Length(APads));
+  for var i := 0 to High(APads) do
+  begin
+    Result[i].Left := APads[i].Left;
+    Result[i].Right := APads[i].Right;
+    Result[i].Top := APads[i].Top;
+  end;
+end;
+
 // A tick of the Ram, carried out. The boss track starts as the head locks,
 // unless it already plays - after a death it plays on. The heads'
 // bullets are the monsters' own: they wound as theirs do, and the hero's
@@ -2840,6 +2857,14 @@ begin
   Target.Alive := not FHero.Dead;
   Target.Body := HeroBody(FHero);
   Target.OnDeck := not FHero.InAir and (FHero.DeckUnderFeet <> nil);
+  if FRam.Head = rhBunker then
+  begin
+    var Feet: TSdlFPoint;
+    Feet.X := Target.Body.X + Target.Body.W / 2;
+    Feet.Y := Target.Body.Y + Target.Body.H;
+    Target.SecondAt := SecondShellMark(ShellDecks(FPads.Standing(FHero.Screen)),
+      Feet, RamFloorY);
+  end;
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
   if Cue.Chase then
@@ -2858,8 +2883,14 @@ begin
     FAudio.Play(RamWhineSoundFile);
   if Cue.Alarm then
     FAudio.Play(PadHumSoundFile);
-  if Cue.Lob and FShells.Lob(Cue.LobFrom, Cue.LobAt) then
-    FAudio.Play(ShellLobSoundFile);
+  if Cue.Lob then
+  begin
+    var Lobbed := FShells.Lob(Cue.LobFrom, Cue.LobAt);
+    if Cue.SecondLob and FShells.Lob(Cue.SecondLobFrom, Cue.SecondLobAt) then
+      Lobbed := True;
+    if Lobbed then
+      FAudio.Play(ShellLobSoundFile);
+  end;
   if Cue.Vent then
     FAudio.Play(RamHissSoundFile);
   if Cue.Jolt > 0 then
@@ -2919,6 +2950,20 @@ begin
   FRamRumble.Channel := -1;
 end;
 
+// Falling back, the Ram throws a hero who comes down onto the road behind
+// its stern back over its hull to the left, with a wound - before its
+// touch is asked, which the flight is then out of (Game.Ram)
+procedure TMoonGame.ResolveRamThrowOver;
+begin
+  if FHero.Dead then
+    Exit;
+  var OnRoad := not FHero.InAir and (FHero.DeckUnderFeet = nil);
+  if not FRam.ThrowsOverTheHull(HeroBody(FHero), OnRoad) then
+    Exit;
+  HurtByRam;
+  FHero.Fling(-1);
+end;
+
 // Any touch wounds and throws the hero off - but a hero on a pad is out of
 // its way (Game.Ram)
 procedure TMoonGame.ResolveRamContact;
@@ -2929,13 +2974,17 @@ begin
   var Away: Integer;
   if not FRam.Contact(HeroBody(FHero), OnDeck, FHero.InAir, Away) then
     Exit;
-  if FHurtCooldown = 0 then
-  begin
-    FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
-    FAudio.Play(PainSoundFile);
-    HurtHero;
-  end;
+  HurtByRam;
   FHero.Throw(Away);
+end;
+
+procedure TMoonGame.HurtByRam;
+begin
+  if FHurtCooldown > 0 then
+    Exit;
+  FMessages.AddTicker(Tr(SHurtByMonster), TickerNoticeTicks);
+  FAudio.Play(PainSoundFile);
+  HurtHero;
 end;
 
 // The sweeper's shock wave throws the hero clear as a touch does, but
@@ -2979,32 +3028,33 @@ begin
     Exit;
   end;
   var Pads := FPads.Standing(FHero.Screen);
-  var Decks: TArray<TShellDeck>;
-  SetLength(Decks, Length(Pads));
-  for var i := 0 to High(Pads) do
-  begin
-    Decks[i].Left := Pads[i].Left;
-    Decks[i].Right := Pads[i].Right;
-    Decks[i].Top := Pads[i].Top;
-  end;
-  var Cue := FShells.Tick(Decks, AWay);
+  var Cue := FShells.Tick(ShellDecks(Pads), AWay);
   FShellPainter.Tick(AWay);
+  // Two shells of a pair may burst on one long pad in one tick: one wreck
+  var Knocked: TArray<Boolean>;
+  SetLength(Knocked, Length(Pads));
   for var Burst in Cue.Bursts do
   begin
     var Pad := Pads[Burst.Deck];
-    var Middle := Pad.Middle;
-    Middle.X := Middle.X + Pad.Left;
-    Middle.Y := Middle.Y + Pad.Top;
-    Pad.Doze;
-    FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
-      Burst.At, ShellBurstReach);
+    if not Knocked[Burst.Deck] then
+    begin
+      Knocked[Burst.Deck] := True;
+      var Middle := Pad.Middle;
+      Middle.X := Middle.X + Pad.Left;
+      Middle.Y := Middle.Y + Pad.Top;
+      Pad.Doze;
+      FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
+        Burst.At, ShellBurstReach);
+    end;
+    FBlasts.Add(TBlast.Create(Burst.At, ShellBlast));
     FExplosions.Detonate(Burst.At.X, Burst.At.Y, ekBarrel);
     FAudio.Play(BottleSoundFile);
     FShake.AddTrauma(ShellBurstTrauma);
   end;
 end;
 
-// A rolling shell that runs into the hero is spent on him: a wound
+// A shell that runs into the hero, in the air or rolling, bursts on him:
+// a wound, and its blast for whoever else is near
 procedure TMoonGame.ResolveShellContact;
 begin
   if FHero.Dead then
@@ -3012,6 +3062,7 @@ begin
   var At: TSdlFPoint;
   if not FShells.Strikes(HeroBody(FHero), At) then
     Exit;
+  FBlasts.Add(TBlast.Create(At, ShellBlast));
   FExplosions.Detonate(At.X, At.Y, ekBarrel);
   FAudio.Play(BottleSoundFile);
   FShake.AddTrauma(ShellBurstTrauma);
@@ -3526,6 +3577,7 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
+  ResolveRamThrowOver;
   ResolveRamContact;
   ResolveRamWave;
   ResolveRamColumn;

@@ -96,6 +96,8 @@ type
     FDupletHeld: PSdlTexture;
     // Ticks left of a throw, with the controls out of his hands
     FThrownTicks: Integer;
+    // A fling's own way across, units a tick, till he lands
+    FFlingWay: Double;
 
     FAction: THeroAction;
     FDirection: Boolean; // walk direction, True = right ('direction' of 2008)
@@ -157,6 +159,10 @@ type
     procedure DrawWeapon(const ASprites: TSpriteRenderer;
       AMouseRight: Boolean);
     function FacingMouseRight: Boolean;
+    // A throw's jump, the controls out of his hands for ALockTicks; False
+    // for the dead or one still flying
+    function BeginThrow(ASide: Integer; ABoost: Double;
+      ALockTicks: Integer): Boolean;
     // --- shared formulas of OurHero.Timer, extracted verbatim ---
     procedure AdvanceWalkFrame;
     procedure FallOneTick;
@@ -208,6 +214,10 @@ type
     // for a moment. Nothing for the dead, nor for one still flying from the
     // last throw.
     procedure Throw(ASide: Integer);
+    // Thrown high and far toward ASide, over the Ram's hull: a throw that
+    // climbs about 150 units and carries him across on top of his own way
+    // till he lands. As Throw, nothing for the dead or one still flying.
+    procedure Fling(ASide: Integer);
     // The road of a chase has slid AWay under him, below 0 to the left:
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
@@ -295,6 +305,11 @@ const
   // the jump key the player does not hold would cut its rise short
   ThrowBoost = 7.0;
   ThrowLockTicks = 14;
+  // Over a hull 128 tall: the rise of a boost climbs about 1.5 times its
+  // square, and the controls stay out of his hands for the whole rise
+  FlingBoost = 10.0;
+  FlingLockTicks = 30;
+  FlingWay = 1.0;
   DeathFrameAdvance = 0.6; // frames 9 -> 16 in ~12 ticks
   // Left of this the one-way door of 2008 puts him back after every tick
   LeftDoorStop = 2;
@@ -494,6 +509,7 @@ begin
   FDead := True;
   FDeathFrame := 9;
   FThrownTicks := 0;
+  FFlingWay := 0;
   // Frozen at the moment of death: the corpse must not track the cursor
   FDeathFacingRight := FacingMouseRight;
 end;
@@ -502,6 +518,7 @@ procedure THero.Revive;
 begin
   FDead := False;
   FThrownTicks := 0;
+  FFlingWay := 0;
   FDropFrom := nil;
   FCorpseSettled := False;
   FDeathFrame := 9;
@@ -563,7 +580,20 @@ end;
 
 procedure THero.Throw(ASide: Integer);
 begin
-  if FDead or (FThrownTicks > 0) then
+  BeginThrow(ASide, ThrowBoost, ThrowLockTicks);
+end;
+
+procedure THero.Fling(ASide: Integer);
+begin
+  if BeginThrow(ASide, FlingBoost, FlingLockTicks) then
+    FFlingWay := Sign(ASide) * FlingWay;
+end;
+
+function THero.BeginThrow(ASide: Integer; ABoost: Double;
+  ALockTicks: Integer): Boolean;
+begin
+  Result := not FDead and (FThrownTicks = 0);
+  if not Result then
     Exit;
   FPending := psNone;
   FAction := haJump;
@@ -573,8 +603,8 @@ begin
     FAction := haJumpLeft;
   if ASide <> 0 then
     FDirection := ASide > 0;
-  FAcceleration := ThrowBoost;
-  FThrownTicks := ThrowLockTicks;
+  FAcceleration := ABoost;
+  FThrownTicks := ALockTicks;
 end;
 
 function THero.InAir: Boolean;
@@ -1335,6 +1365,13 @@ begin
       haFallRight:
         FAction := haWalkRight;
     end;
+
+  if FFlingWay = 0 then
+    Exit;
+  if InAir then
+    CarryX(FFlingWay)
+  else
+    FFlingWay := 0;
 end;
 
 // ---------------------------------------------------------------------------
