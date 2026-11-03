@@ -2789,7 +2789,7 @@ draws it. No SDL and no level in it - a record a test drives alone
     `Dismissed`, `Left`, `Top` (the top-left corner of the deck; the fall
     adds its depth).
 
-### `Game/Pads/Pads.World.pas` (~2230 lines)
+### `Game/Pads/Pads.World.pas` (~2270 lines)
 The level's pads (`Levels.Pads`) in play: where each one stands, what its
 deck carries, what its body stops, and its picture. The world keeps no
 riders: the hero and the monsters ask it for the deck under their feet,
@@ -3217,8 +3217,15 @@ rebuilds new for the new try.
   for a flock no pad strays in.
 - `TPad.FlyEased(x, y, ticks, ease)` (3.0.67) - `Fly` over an
   `EasedFlight`: a scene's fly with an ease.
+- 3.0.97: **`SetAdriftComing(x, y, from, ticks)`** - a pad of the
+  chase's pool sent as `SetAdrift` does, but flying in to its place from
+  `from` units right of it over `ticks` (`FComeFrom`, `FComeTicks`,
+  `FComeClock`): **`ComeOffset`** eased out as a square, added to `FLeft`
+  over the path, so it ends at the road's pace while its place rides the
+  road all the while; **`Coming`** keeps `Effort` at 1, the jets hard.
+  `SetAdrift` and `Rewind` drop it.
 
-### `Game/Pads/Pads.Drift.pas` (~350 lines, 3.0.87)
+### `Game/Pads/Pads.Drift.pas` (~480 lines, 3.0.97)
 The pads of the chase (`docs/mechanics/arena-3.md`, stages 13 and 13b):
 as the road runs, pads of the screen's pool are sent in from beyond the
 right edge, in groups along the road with empty road between - a lone pad
@@ -3255,6 +3262,19 @@ stands the medkits it tells back. No SDL.
   run is sent (`SetAdrift`); a width the pool has run out of is made up
   with the other, and a screen with no pool is a road with no pads - and
   no medkits.
+- 3.0.97, **the rows of the hunt** (stage 14c; `arena-3.md`, "Stage 14c
+  as built"). **`BeginRows(screen, travel)`**: from now on the pads come
+  in `RowCount` 3 rows at **`RowDecks`** 272, 192, 120, the gaps
+  `RowGapLeast` 4 to `RowGapMost` 12 (**`RollRowGap`**), no more climbs
+  (the plan dropped). **`LayComingRow`** lays the first stretch of a row
+  from the left edge to `RowsBeyond` 128 past the right one, each pad sent
+  with `SetAdriftComing` (`RowsComeFrom` 560, `RowsComeTicks` 120); a
+  slot within `RowsApart` 32 of a pad already riding (**`SlotTaken`**) is
+  left to it. `FRows`, **`FRowCursors`**, `FRowsComing`: `Tick` in the
+  rows counts the flight down and tells **`TDriftCue.RowsIn`** the tick
+  it ends, then **`SendRow`** sends each row at the right edge as the
+  road runs. **`TakeRowPad`** - a pad of the width or the other; none is
+  a hole (the pool is checked for the climbs, not the rows).
 
 ### `Game/Pads/Pads.Arena.pas` (~370 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
@@ -3313,7 +3333,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1650 lines)
+### `Game/Hero.pas` (~1660 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -3451,6 +3471,10 @@ moves in comes from `Game.Space`.
   left door puts him back on after the tick: a deck is judged under the
   feet he keeps, or a pad of the chase carried off from under them at the
   left edge is never seen to go.
+- 3.0.97: **`Fling(side, way)`** - the way of its own across is the
+  caller's now (`FlingWay` is gone: the Ram's `FallBackFlingWay` 1 and
+  `HuntFlingWay` 3). **`Shove(way)`** - the Ram's bow shoves him along
+  the road, `CarryX` as far as no wall stops him.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -5273,7 +5297,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3880 lines, 3.0.96)
+### `Game/Game.Ram.pas` (~4120 lines, 3.0.97)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -5567,6 +5591,31 @@ monster. The game carries out the cue.
   `TickChange` after the bunker drives back to the wall at `ReturnSpeed`
   if it died away from it. `AtTheWall`'s comment: the falls back are the
   one way off the wall.
+- 3.0.97, **the bunker's third phase, the hunt** (stage 14c;
+  `arena-3.md`, "Stage 14c as built"). `BunkerSecondPhase` is `Tier` 1
+  only; **`BunkerThirdPhase`** - `Tier` 2. **`TBunkerHunt`** (`htNone`,
+  `htCalling`, `htPassing`, `htHunting`), `FHunt`, `FHuntTicks`,
+  `FRowsIn`, `FRamStandTicks`. **`TickHunt`** (from `TickPhase`, resting
+  `AtTheWall`, before `TickFallBack`): **`BeginHunt`** where it stands
+  (the fall back dropped; cues `Alarm` and the new **`Rows`**), the eye's
+  blink in `TickEye` till **`RowsArrived`** and `HuntPassWarnTicks` 16
+  after, the pass `BeginDrive(0, LungeSpeed)` ended in `Arrive`, then
+  **`TickHuntDrive`**: the hatch toward `HuntTrail` 24 behind his middle
+  (`WellX` off the left edge), `HuntGain` 0.15 of the gap, at most
+  `HuntBehindSpeed` 1.5, by `Brake`; the rumble back; `RamStandTicks` 50 after
+  a ram. **`HoldsFire`** holds through the change and the pass;
+  **`Hunts`** - the hunt under way, for the napalm. `Lob` pairs in the
+  hunt too. `Contact` is out in the pass and the hunt. The new record
+  **`TOverTheHull`** (`Side`, `Way`) out of **`ThrowsOverTheHull(body,
+  onRoad, out throw)`**: falling back as before, `FallBackFlingWay` 1;
+  in the pass and the hunt by **`RamsOnTheRoad`** - in the hunt any touch
+  on the road, in the pass pinned (the bow, **`BowAt`**, nearer the left
+  edge than his body and `PinRoom` 12) or run into deeper than
+  `ShoveDeepest` 12 - to **`HuntThrowSide`** (right, left at the right
+  wall), `HuntFlingWay` 3. **`Shoves(body, onRoad)`** - in the pass, the
+  bow's depth into a hero on the road, at most `ShoveDeepest`. `KillHead`,
+  `LockBunker`, `Arm` drop the hunt. `AtTheWall`'s comment: the falls
+  back and the hunt take it off the wall.
 ### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -5659,7 +5708,7 @@ picture; no SDL.
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
 
-### `Game/Game.Shells.pas` (~600 lines, 3.0.96)
+### `Game/Game.Shells.pas` (~630 lines, 3.0.97)
 The bunker's shells in the chase (`docs/mechanics/arena-3.md`, stage
 14a): lobbed along a low arc seen whole at where the hero's feet were,
 aimed in the world - the road carries the point. A ring marks where a
@@ -5695,6 +5744,10 @@ the hero it touches. Knows neither the pads, the hero nor the bunker.
   pad is let in first); else the road `RoadAhead` 64 ahead of him, never
   past the right edge. `DeckMiddle`. **`Strikes`** asks the shells in the
   air too: caught in flight, one is spent on the body.
+- 3.0.97: **`AheadShellMark(decks, feet, roadY)`** - the second shell of
+  the hunt: the middle of the nearest deck whose left edge is right of
+  his feet along his row (`UnderFeetSlop`), never past the right edge;
+  else the road `RoadAhead` 64 ahead of him.
 
 ### `Game/Game.FarPlane.pas` (~185 lines, 3.0.93)
 How far each layer of the chase's far plane has ridden
@@ -6174,7 +6227,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     `Burst` - the ceremony's stage watches them.
 - Tests: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4315 lines)
+### `Game/Game.Moon.pas` (~4355 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -6778,6 +6831,12 @@ so a unit (and later a test) can reach it. `interface` holds
   `ResolveRamContact`: `FRam.ThrowsOverTheHull` - a wound and
   `FHero.Fling(-1)`. **`HurtByRam`** - the ticker, the pain and
   `HurtHero` under the mercy, for both.
+- 3.0.97: **`TickRam`** hands the bunker `AheadShellMark` while
+  `FRam.Hunts`, else `SecondShellMark`; the cue's `Rows` calls
+  `FDrift.BeginRows`; the drift's cue `RowsIn` (after the pads' tick)
+  tells `FRam.RowsArrived`. **`ResolveRamShove`** before
+  `ResolveRamThrowOver`: `FRam.Shoves` - `FHero.Shove`, no wound;
+  `ResolveRamThrowOver` flings by the throw's `Side` and `Way`.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -7253,6 +7312,20 @@ not one too high; the road ahead, never past the edge);
 `TBunkerShellTests.TestInTheAirItIsSpentOnABody` in place of
 `TestInTheAirItTouchesNobody`. The fling itself is the hero's and checked
 by eye. DUnitX counts 1037 tests at 3.0.96.
+
+3.0.97 - 17 more. `TRamBunkerTests` 10 (no hunt in the middle third; the
+change - the alarm with the rows, called once, no fall back; silent and
+blinking till the rows are in; the pass a warning after, to the left
+edge, silent; a hero on a pad lets it pass; shoved to the left edge and
+thrown over to the right; the hatch a step behind him, standing and
+running; a ram on the road forward, once, and it stands; at the right
+wall back to the left; the shells in pairs); the two phase-2 throw tests
+to the new `ThrowsOverTheHull`. The new `TAheadShellMarkTests` 3 in
+`Tests.Game.Shells`. `TPadDriftTests` 4 (the rows fly in from beyond the
+right edge; in once at their flight's end, covering the screen, at the
+road's pace; only the rows after, as dense; a riding pad keeps its slot).
+The shove, the fling and the flying in are checked by eye. DUnitX counts
+1054 tests at 3.0.97.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7978,6 +8051,7 @@ made again in 3.0.83).
 | The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | The bunker's shells (3.0.94): the arc at the hero's feet aimed in the world, the ring, a burst on a deck knocking the pad off, the roll on the road and its wound | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (a new wreck in a gone one's place) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, the draw of the rings and the shells) + Tests.Game.Shells.pas |
 | The bunker's second phase (3.0.96): the eye's warning, the lunge to the middle, the stand and the drive back, the bunker silent meanwhile; the throw back over the hull from the road behind the stern; the shells in pairs, the second at his pad or at a pad past the middle, one wreck a pad; a shell caught in the air, every burst a blast as a tank's; the death away from the wall | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` in the air) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3.md) |
+| The bunker's third phase, the hunt (3.0.97): the change - the alarm, three dense rows of pads flying in and coming to the road's pace; the pass to the left edge, the bow shoving a hero on the road and throwing him over the hull to the right; the hunt stern first, its hatch a step behind him; a ram forward from the road and the stand after it; the shells in pairs, the second at the pad ahead along his row | Game.Ram.pas (`TBunkerHunt`, `BunkerThirdPhase`, `BeginHunt`, `TickHunt`, `TickHuntDrive`, `RowsArrived`, `Hunts`, `HoldsFire`, `ThrowsOverTheHull` - `TOverTheHull`, `RamsOnTheRoad`, `BowAt`, `HuntThrowSide`, `Shoves`, `Contact`, `Lob`, `TickEye`, `Arrive`; cue `Rows`) + Pads.Drift.pas (`BeginRows`, `LayComingRow`, `SendRow`, `TakeRowPad`, `SlotTaken`, `RowDecks`, `TDriftCue.RowsIn`) + Pads.World.pas (`SetAdriftComing`, `ComeOffset`, `Coming`) + Game.Shells.pas (`AheadShellMark`) + Hero.pas (`Fling(side, way)`, `Shove`) + Game.Moon.pas (`TickRam`, `ResolveRamShove`, `ResolveRamThrowOver`) + the pool of screen 13 in level2.json (52) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TAheadShellMarkTests`) + Tests.Pads.Drift.pas (`TPadDriftTests`) (+docs/mechanics/arena-3.md) |
 | The form's charge in the Ram's fight (3.0.85; the bunker's half 3.0.94): the gauge grows with the hits on the heads, late and in uneven pulses, up to 30%, 55% and 95%; a head's death pours the rest, the bunker's to full | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |

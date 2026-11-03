@@ -2803,7 +2803,7 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
     `Left`, `Top` (левый верхний угол настила; падение прибавляет свою
     глубину).
 
-### `Game/Pads/Pads.World.pas` (~2230 строк)
+### `Game/Pads/Pads.World.pas` (~2270 строк)
 Платформы уровня (`Levels.Pads`) в игре: где каждая стоит, что несёт её
 настил, что останавливает её тело, и её картинка. Мир не держит седоков:
 герой и монстры спрашивают у него настил под ногами, настил, который
@@ -3249,8 +3249,15 @@ level)` (3.0.47) - клуб, растянутый в прямоугольник,
   False для стаи, в которой не блуждает ни одна платформа.
 - `TPad.FlyEased(x, y, ticks, ease)` (3.0.67) - `Fly` по
   `EasedFlight`: fly сцены с ease.
+- 3.0.97: **`SetAdriftComing(x, y, from, ticks)`** - платформа пула
+  погони подаётся как `SetAdrift`, но влетает на место из-за `from`
+  единиц правее него за `ticks` (`FComeFrom`, `FComeTicks`, `FComeClock`):
+  **`ComeOffset`** гаснет квадратом и прибавляется к `FLeft` поверх пути,
+  так что прилёт кончается скоростью ленты, а место всё время едет с
+  лентой; **`Coming`** держит `Effort` на 1 - реактивы на полную.
+  `SetAdrift` и `Rewind` его сбрасывают.
 
-### `Game/Pads/Pads.Drift.pas` (~350 строк, 3.0.87)
+### `Game/Pads/Pads.Drift.pas` (~480 строк, 3.0.97)
 Платформы погони (`docs/mechanics/arena-3.md`, этапы 13 и 13b): пока
 бежит дорога, платформы из пула экрана подаются из-за правого края
 группами вдоль дороги, между ними пустая дорога, - одинокая платформа
@@ -3287,6 +3294,19 @@ SDL.
   travel): TDriftCue` - подаёт (`SetAdrift`) каждую платформу, которой
   пора по пробегу дороги; ширину, которой в пуле не осталось, заменяет
   другая, а экран без пула - дорога без платформ и без аптечек.
+- 3.0.97, **ряды охоты** (этап 14c; `arena-3.md`, "Stage 14c as
+  built"). **`BeginRows(screen, travel)`**: дальше платформы идут
+  `RowCount` 3 рядами на **`RowDecks`** 272, 192, 120, зазоры
+  `RowGapLeast` 4 - `RowGapMost` 12 (**`RollRowGap`**), подъёмов больше
+  нет (план бросается). **`LayComingRow`** кладёт первый отрезок ряда от
+  левого края до `RowsBeyond` 128 за правым, каждая платформа - через
+  `SetAdriftComing` (`RowsComeFrom` 560, `RowsComeTicks` 120); слот ближе
+  `RowsApart` 32 к уже едущей платформе (**`SlotTaken`**) остаётся ей.
+  `FRows`, **`FRowCursors`**, `FRowsComing`: `Tick` в рядах отсчитывает
+  прилёт и в тик его конца говорит **`TDriftCue.RowsIn`**, дальше
+  **`SendRow`** подаёт каждый ряд у правого края по ходу дороги.
+  **`TakeRowPad`** - платформа нужной ширины или другой; нет ни одной -
+  дыра (пул проверяется для подъёмов, не для рядов).
 
 ### `Game/Pads/Pads.Arena.pas` (~370 строк)
 Директор боя с боссом над группой платформ, которая перестраивается:
@@ -3345,7 +3365,7 @@ SDL.
   никогда. Платформа, уходящая в глубину, всё равно погружается сразу,
   как в любой перестройке.
 
-### `Game/Hero.pas` (~1650 строк)
+### `Game/Hero.pas` (~1660 строк)
 Герой: физика, оружие, смерть. Владеет `HeroSize=32`; размер экрана, в
 котором он движется, берёт из `Game.Space`.
 - **Перечисления**: `THeroAction` (стоит/идёт/прыгает/падает x направление),
@@ -3486,6 +3506,10 @@ SDL.
   на которую левая дверь 2008 возвращает его после тика: палубу судят под
   ступнями, которые он сохранит, иначе платформу погони, увезённую из-под
   них у левого края, не заметят.
+- 3.0.97: **`Fling(side, way)`** - свой ход вбок задаёт вызывающий
+  (`FlingWay` ушёл: у Тарана `FallBackFlingWay` 1 и `HuntFlingWay` 3).
+  **`Shove(way)`** - нос Тарана толкает его по дороге, `CarryX` насколько
+  пустит стена.
 
 ### `Game/Monsters.Disc.pas` (~250 строк)
 Монстр, нарисованный вращающимся диском из слоёв вместо кадров `alive`, -
@@ -5249,7 +5273,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3880 строк, 3.0.96)
+### `Game/Game.Ram.pas` (~4120 строк, 3.0.97)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -5535,6 +5559,30 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   сбрасывает откат; `TickChange` после бункера, умершего не у стены,
   ведёт машину к ней на `ReturnSpeed`. Комментарий `AtTheWall`: откаты -
   единственный путь от стены.
+- 3.0.97, **третья фаза бункера, охота** (этап 14c; `arena-3.md`,
+  "Stage 14c as built"). `BunkerSecondPhase` - только `Tier` 1;
+  **`BunkerThirdPhase`** - `Tier` 2. **`TBunkerHunt`** (`htNone`,
+  `htCalling`, `htPassing`, `htHunting`), `FHunt`, `FHuntTicks`,
+  `FRowsIn`, `FRamStandTicks`. **`TickHunt`** (из `TickPhase`, на отдыхе
+  `AtTheWall`, до `TickFallBack`): **`BeginHunt`** там, где стоит (откат
+  бросается; cue `Alarm` и новый **`Rows`**), мигание глаза в `TickEye`
+  до **`RowsArrived`** и `HuntPassWarnTicks` 16 после, проход
+  `BeginDrive(0, LungeSpeed)` с концом в `Arrive`, потом
+  **`TickHuntDrive`**: люк к `HuntTrail` 24 позади его середины (`WellX`
+  от левого края), `HuntGain` 0.15 зазора, не быстрее `HuntBehindSpeed` 1.5,
+  по `Brake`; рокот снова; `RamStandTicks` 50 после тарана.
+  **`HoldsFire`** держит через смену и проход; **`Hunts`** - охота идёт,
+  для напалма. `Lob` в охоте тоже парой. `Contact` в проходе и охоте
+  выключен. Новая запись **`TOverTheHull`** (`Side`, `Way`) из
+  **`ThrowsOverTheHull(body, onRoad, out throw)`**: на откате как
+  раньше, `FallBackFlingWay` 1; в проходе и охоте по **`RamsOnTheRoad`**
+  - в охоте любое касание на дороге, в проходе прижат (нос, **`BowAt`**,
+  ближе к левому краю, чем его тело и `PinRoom` 12) или въехал глубже
+  `ShoveDeepest` 12 - в сторону **`HuntThrowSide`** (вправо, у правой
+  стены влево), `HuntFlingWay` 3. **`Shoves(body, onRoad)`** - в проходе
+  на сколько нос вошёл в героя на дороге, не больше `ShoveDeepest`.
+  `KillHead`, `LockBunker`, `Arm` охоту сбрасывают. Комментарий
+  `AtTheWall`: от стены уводят откаты и охота.
 ### `Game/Game.Wrecks.pas` (~470 строк, 3.0.94)
 Пады, сбитые ударной волной свипера (`docs/mechanics/arena-3.md`, этап
 10c-3): обломок улетает в картинке пада, а сам пад усыплён (`TPad.Doze`).
@@ -5627,7 +5675,7 @@ SDL.
   `Speed`); `Speed` (сколько дорога ушла влево за тик), `Travel`,
   `TravelAt(alpha)` (между тиками), `Running`.
 
-### `Game/Game.Shells.pas` (~600 строк, 3.0.96)
+### `Game/Game.Shells.pas` (~630 строк, 3.0.97)
 Снаряды бункера в погоне (`docs/mechanics/arena-3.md`, этап 14a):
 бросаются по низкой дуге, видной целиком, туда, где были ноги героя, и
 целятся в мир - точку везёт дорога. Кольцо отмечает, куда снаряд упадёт,
@@ -5663,6 +5711,10 @@ SDL.
   `RoadAhead` 64 впереди него, не дальше правого края. `DeckMiddle`.
   **`Strikes`** спрашивает и снаряды в воздухе: пойманный в полёте тратится
   на теле.
+- 3.0.97: **`AheadShellMark(decks, feet, roadY)`** - второй снаряд
+  охоты: середина ближней палубы, чей левый край правее его ног, по его
+  ряду (`UnderFeetSlop`), не за правым краем; иначе дорога на `RoadAhead`
+  64 впереди.
 
 ### `Game/Game.FarPlane.pas` (~185 строк, 3.0.93)
 Сколько проехал каждый слой дальнего плана погони
@@ -6129,7 +6181,7 @@ SDL.
     сцена церемонии.
 - Тесты: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4315 строк)
+### `Game/Game.Moon.pas` (~4355 строк)
 Вся машина состояний игрового потока (`TMoonGame`) - игра, которую
 запускает программа. Вынесена из `Moon2D.dpr` слово в слово перед этапом 8
 арены 3, чтобы до неё дотянулся юнит (а потом и тест). В `interface` -
@@ -6720,6 +6772,12 @@ SDL.
   `ResolveRamContact`:
   `FRam.ThrowsOverTheHull` - рана и `FHero.Fling(-1)`. **`HurtByRam`** -
   строка, боль и `HurtHero` под милостью, для обоих.
+- 3.0.97: **`TickRam`** даёт бункеру `AheadShellMark`, пока
+  `FRam.Hunts`, иначе `SecondShellMark`; cue `Rows` зовёт
+  `FDrift.BeginRows`; cue дрейфа `RowsIn` (после тика платформ) -
+  `FRam.RowsArrived`. **`ResolveRamShove`** до `ResolveRamThrowOver`:
+  `FRam.Shoves` - `FHero.Shove`, без раны; `ResolveRamThrowOver` бросает
+  по `Side` и `Way` броска.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -7184,6 +7242,19 @@ DUnitX на 3.0.93 находит 972 теста.
 `TBunkerShellTests.TestInTheAirItIsSpentOnABody` вместо
 `TestInTheAirItTouchesNobody`. Сам бросок - героя, проверяется глазом.
 DUnitX на 3.0.96 находит 1037 тестов.
+
+3.0.97 - ещё 17. `TRamBunkerTests` 10 (в средней трети охоты нет; смена -
+тревога с рядами, зов один, отката нет; молчит и мигает, пока ряды не
+влетели; проход через предупреждение, к левому краю, молча; герой на паде
+пропускает; толкает к левому краю и бросает через корпус вправо; люк на
+шаг позади, стоит он или бежит; таран на дороге вперёд, один раз, и
+машина стоит; у правой стены - назад влево; снаряды парой); два теста
+броска фазы 2 - под новый `ThrowsOverTheHull`. Новый
+`TAheadShellMarkTests` 3 в `Tests.Game.Shells`. `TPadDriftTests` 4 (ряды
+влетают из-за правого края; влетели один раз в конце прилёта, закрыли
+экран, идут со скоростью ленты; дальше только ряды, такие же плотные;
+едущая платформа сохраняет слот). Толчок, бросок и влёт - глазом. DUnitX
+на 3.0.97 находит 1054 теста.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7896,6 +7967,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Бункер Тарана и фаза 1 погони (3.0.94): поднимается после свипера, погоня стартует от его ряда; дыхание люка (снаряд, столб, окно), крышка; уязвим сверху всегда, соты на боках и спереди, бледная полоса на верхе; его смерть, дорога едет дальше | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | Снаряды бункера (3.0.94): дуга к ногам героя, нацеленная в мир, кольцо, взрыв на палубе сбивает пад, качение по дороге и его рана | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (новый обломок на место ушедшего) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, рисование колец и снарядов) + Tests.Game.Shells.pas |
 | Вторая фаза бункера (3.0.96): предупреждение глазом, рывок к середине, стоянка и путь назад, бункер всё это время молчит; бросок назад через корпус с дороги за кормой; снаряды парой, второй по его паду или по паду за серединой, один обломок на пад; снаряд ловится в воздухе, каждый взрыв - волна как у танка; смерть не у стены | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` в воздухе) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3.md) |
+| Третья фаза бункера, охота (3.0.97): смена - тревога, три плотных ряда влетают и приходят к скорости ленты; проход к левому краю, нос толкает героя на дороге и бросает через корпус вправо; охота кормой вперёд, люк на шаг позади него; таран вперёд с дороги и стоянка после; снаряды парой, второй по паду впереди по его ряду | Game.Ram.pas (`TBunkerHunt`, `BunkerThirdPhase`, `BeginHunt`, `TickHunt`, `TickHuntDrive`, `RowsArrived`, `Hunts`, `HoldsFire`, `ThrowsOverTheHull` - `TOverTheHull`, `RamsOnTheRoad`, `BowAt`, `HuntThrowSide`, `Shoves`, `Contact`, `Lob`, `TickEye`, `Arrive`; cue `Rows`) + Pads.Drift.pas (`BeginRows`, `LayComingRow`, `SendRow`, `TakeRowPad`, `SlotTaken`, `RowDecks`, `TDriftCue.RowsIn`) + Pads.World.pas (`SetAdriftComing`, `ComeOffset`, `Coming`) + Game.Shells.pas (`AheadShellMark`) + Hero.pas (`Fling(side, way)`, `Shove`) + Game.Moon.pas (`TickRam`, `ResolveRamShove`, `ResolveRamThrowOver`) + пул экрана 13 в level2.json (52) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TAheadShellMarkTests`) + Tests.Pads.Drift.pas (`TPadDriftTests`) (+docs/mechanics/arena-3.md) |
 | Заряд формы в бою Тарана (3.0.85; половина бункера 3.0.94): шкала растёт от попаданий по головам, поздно и неровными толчками, до 30%, 55% и 95%; смерть головы доливает остаток, бункера - до полного | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
