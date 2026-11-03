@@ -3313,7 +3313,7 @@ after it. A 2026 addition (3.0.29).
   upright one; 0 for a cell it never passes. A pad going deep sinks at
   once all the same, as in every rebuild.
 
-### `Game/Hero.pas` (~1615 lines)
+### `Game/Hero.pas` (~1650 lines)
 The hero: physics, weapons, death. Owns `HeroSize=32`; the screen size it
 moves in comes from `Game.Space`.
 - **Enums**: `THeroAction` (stand/walk/jump/fall x direction), `THeroCommand`
@@ -3435,6 +3435,12 @@ moves in comes from `Game.Space`.
   for the dead or for one still flying from the last throw; `Kill` and
   `Revive` drop it. `InAir` - in a jump or a fall (the game's
   `HeroStandsIn` asks it).
+- 3.0.96: `Fling(side)` - thrown back over the Ram's hull: the throw's
+  jump (**`BeginThrow(side, boost, lockTicks)`**, which `Throw` now calls
+  too) at `FlingBoost` 10, about 150 units up, the controls out of his
+  hands for `FlingLockTicks` 30 (the whole rise), and **`FFlingWay`**
+  (`FlingWay` 1 a tick toward the side) carried by `CarryX` on top of his
+  own way until he lands; `Kill` and `Revive` drop it.
 - 3.0.86: `RideBelt(way)` - the road of the chase has slid under him: on
   the floor and in the air he goes with it by `CarryX` (fractions of a
   unit, the wall asked at every one); standing on a deck, the deck carries
@@ -5267,7 +5273,7 @@ and the blast. A 2026 addition.
   `Active`, `Leaving` (the scene plays: the game's `RoomBusy`),
   `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3710 lines, 3.0.94)
+### `Game/Game.Ram.pas` (~3880 lines, 3.0.96)
 TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
@@ -5539,6 +5545,28 @@ monster. The game carries out the cue.
   ridden off with the road; the honeycomb of the head in `DrawLight`; a
   third `HeadShorts`. 3.0.94 also: `BeginPatrolLeg`'s first roll out of
   the loop (no value left unused).
+- 3.0.96, **the bunker's second phase** (stage 14b; `arena-3.md`, "Stage
+  14b as built"). **`TFallBack`** (`fbNone`, `fbWarning`, `fbLunging`,
+  `fbStanding`, `fbReturning`), `FFallBack`, `FFallBackTicks`,
+  `FFallBackWait`. **`BunkerSecondPhase`** - the bunker up, the chase
+  begun, `Tier` 1 or more (until phase 3, both later thirds).
+  **`TickFallBack`** (from `TickPhase`, resting `AtTheWall`): the wait
+  (`FallBackFirstTicks` 66 into the phase, then **`NextFallBackWait`**,
+  `FallBackEveryLeastTicks` 200 to `FallBackEveryMostTicks` 264), with the
+  hatch shut the warning `FallBackWarnTicks` 16 (the eye's blink in
+  `TickEye`), the lunge to `FallBackX` 256 at `LungeSpeed` 3; `Arrive`
+  ends it with `LungeStopJolt` 0.2, the stand `FallBackStandTicks` 33,
+  the drive back at `ReturnSpeed` 1.2, then the next wait.
+  **`HoldsFire`** (warning, lunge, stand) holds `TickHatch`'s aim.
+  **`FallingBack`** (lunge, stand, return) - for the napalm (stage 12).
+  **`Lob`** in the second phase: out of both muzzles (**`BunkerMuzzle`**),
+  the cue's **`SecondLob`**, `SecondLobFrom`, `SecondLobAt` - the
+  target's new **`SecondAt`** (`SecondShellMark`). **`ThrowsOverTheHull(body, onRoad)`**:
+  falling back, a hero on the road right of the stern - thrown, out of
+  its way as after `Contact`'s throw. `KillHead` drops the fall back;
+  `TickChange` after the bunker drives back to the wall at `ReturnSpeed`
+  if it died away from it. `AtTheWall`'s comment: the falls back are the
+  one way off the wall.
 ### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -5631,7 +5659,7 @@ picture; no SDL.
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
 
-### `Game/Game.Shells.pas` (~560 lines, 3.0.94)
+### `Game/Game.Shells.pas` (~600 lines, 3.0.96)
 The bunker's shells in the chase (`docs/mechanics/arena-3.md`, stage
 14a): lobbed along a low arc seen whole at where the hero's feet were,
 aimed in the world - the road carries the point. A ring marks where a
@@ -5660,6 +5688,13 @@ the hero it touches. Knows neither the pads, the hero nor the bunker.
   `RingLeast` 6 as it comes, throbbing, a glow under it; **`DrawShells`**
   - the trails, a hot glow, a dark disc, a white core in the air, a hot
   point turning on its rim as it rolls.
+- 3.0.96: **`SecondShellMark(decks, feet, roadY)`** - where the second
+  shell of a pair goes: the middle of the deck under the feet
+  (`UnderFeetSlop` 1); else of the nearest deck `ClimbLeast` 16 to
+  `ClimbMost` 92 over them whose middle is left of the screen's middle (a
+  pad is let in first); else the road `RoadAhead` 64 ahead of him, never
+  past the right edge. `DeckMiddle`. **`Strikes`** asks the shells in the
+  air too: caught in flight, one is spent on the body.
 
 ### `Game/Game.FarPlane.pas` (~185 lines, 3.0.93)
 How far each layer of the chase's far plane has ridden
@@ -6139,7 +6174,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     `Burst` - the ceremony's stage watches them.
 - Tests: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4100 lines)
+### `Game/Game.Moon.pas` (~4315 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -6732,6 +6767,17 @@ so a unit (and later a test) can reach it. `interface` holds
   after the pads in front, the shells after the monsters' bullets.
   `FShells.Clear` beside every `FCapsules.Clear`. Debug key `O`
   (`ScancodeO`): `FRam.WoundThird` and a third into the tank.
+- 3.0.96: **`ShellDecks(pads)`** - the decks of the pads, for the shells'
+  tick and for **`TickRam`**, which hands the bunker the target's
+  `SecondAt` (`SecondShellMark` over the feet, `RamFloorY`) and lobs the
+  cue's second shell too (the lob's sound once); in **`TickShells`** two
+  bursts on one pad in one tick knock it off once (`Knocked`), both
+  explode; every burst, and **`ResolveShellContact`** (the shell caught in
+  the air too), adds a `TBlast` of **`ShellBlast`** (the tank's radius 80
+  and lives 100, no shards). **`ResolveRamThrowOver`** before
+  `ResolveRamContact`: `FRam.ThrowsOverTheHull` - a wound and
+  `FHero.Fling(-1)`. **`HurtByRam`** - the ticker, the pain and
+  `HurtHero` under the mercy, for both.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -7194,6 +7240,19 @@ the beam brightest at the lamp, stepping down at the glass, its tail fading
 out, nothing past it or behind the lamp. `Tests.Game.FarPlane` 5: level 2
 reads its searchlights, each in a dome; the lamps read; no tail, no ease
 or one sweep raises. DUnitX counts 1023 tests at 3.0.95.
+3.0.96 - 14 more. `TRamBunkerTests` 9 (no fall back in the first phase;
+the eye warns about half a second at the wall; the lunge to the middle,
+the stand, the slower way back; the next a few seconds after; silent from
+the warning till the way back, then firing again; shells in pairs, the
+second at `SecondAt`; the throw over the hull from the road behind, once
+while he flies, out of its way over it; none from a pad or in front;
+dying away from the wall it goes back). The new `TSecondShellMarkTests` 5
+in `Tests.Game.Shells` (the pad he stands on, on the right half too; the
+nearest pad past the middle a jump up; not one still on the right half;
+not one too high; the road ahead, never past the edge);
+`TBunkerShellTests.TestInTheAirItIsSpentOnABody` in place of
+`TestInTheAirItTouchesNobody`. The fling itself is the hero's and checked
+by eye. DUnitX counts 1037 tests at 3.0.96.
 
 ### `Tests/` - the test suite (console app, DUnitX)
 Fourth project of `Moon2D.groupproj`. Tries what the game counts, not
@@ -7918,6 +7977,7 @@ made again in 3.0.83).
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | The bunker's shells (3.0.94): the arc at the hero's feet aimed in the world, the ring, a burst on a deck knocking the pad off, the roll on the road and its wound | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (a new wreck in a gone one's place) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, the draw of the rings and the shells) + Tests.Game.Shells.pas |
+| The bunker's second phase (3.0.96): the eye's warning, the lunge to the middle, the stand and the drive back, the bunker silent meanwhile; the throw back over the hull from the road behind the stern; the shells in pairs, the second at his pad or at a pad past the middle, one wreck a pad; a shell caught in the air, every burst a blast as a tank's; the death away from the wall | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` in the air) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3.md) |
 | The form's charge in the Ram's fight (3.0.85; the bunker's half 3.0.94): the gauge grows with the hits on the heads, late and in uneven pulses, up to 30%, 55% and 95%; a head's death pours the rest, the bunker's to full | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |

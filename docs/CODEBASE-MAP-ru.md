@@ -3345,7 +3345,7 @@ SDL.
   никогда. Платформа, уходящая в глубину, всё равно погружается сразу,
   как в любой перестройке.
 
-### `Game/Hero.pas` (~1615 строк)
+### `Game/Hero.pas` (~1650 строк)
 Герой: физика, оружие, смерть. Владеет `HeroSize=32`; размер экрана, в
 котором он движется, берёт из `Game.Space`.
 - **Перечисления**: `THeroAction` (стоит/идёт/прыгает/падает x направление),
@@ -3471,6 +3471,12 @@ SDL.
   каждый тик, срезал бы взлёт); мёртвому и ещё летящему от прошлого
   броска - ничего; `Kill` и `Revive` его сбрасывают. `InAir` - в прыжке
   или падении (его спрашивает `HeroStandsIn` игры).
+- 3.0.96: `Fling(side)` - брошен назад через корпус Тарана: прыжок броска
+  (**`BeginThrow(side, boost, lockTicks)`**, через него теперь и `Throw`) с
+  разгоном `FlingBoost` 10, вверх около 150 единиц, управление отнято на
+  `FlingLockTicks` 30 (весь взлёт), и **`FFlingWay`** (`FlingWay` 1 за тик
+  в сторону броска) везёт `CarryX` поверх его собственного хода, пока он
+  не приземлится; `Kill` и `Revive` его сбрасывают.
 - 3.0.86: `RideBelt(way)` - под ним проехала дорога погони: на полу и в
   воздухе он едет с ней через `CarryX` (в долях единицы, стену
   спрашивают на каждой); стоящего на палубе везёт палуба.
@@ -5243,7 +5249,7 @@ TeK, танк TeK (3.0.45), крепление TeK (3.0.48). Близнец ди
   (снаряды, дула, линза, щиты); `Active`, `Leaving` (идёт сцена:
   `RoomBusy` игры), `YieldBank`.
 
-### `Game/Game.Ram.pas` (~3710 строк, 3.0.94)
+### `Game/Game.Ram.pas` (~3880 строк, 3.0.96)
 TeK-R13, Таран арены босса второго уровня (`docs/mechanics/arena-3.md`,
 этапы 8b и 9): корпус на двух колёсах, всегда носом влево, ездит туда и
 обратно, мачта из трёх секций в колодце на крыше с головой наверху -
@@ -5507,6 +5513,28 @@ TeK-R13, Таран арены босса второго уровня (`docs/mec
   дорогой; соты головы в `DrawLight`; третий `HeadShorts`. Ещё в 3.0.94:
   первый бросок кубика `BeginPatrolLeg` вынесен из цикла (без
   неиспользованного значения).
+- 3.0.96, **вторая фаза бункера** (этап 14b; `arena-3.md`, "Stage 14b as
+  built"). **`TFallBack`** (`fbNone`, `fbWarning`, `fbLunging`,
+  `fbStanding`, `fbReturning`), `FFallBack`, `FFallBackTicks`,
+  `FFallBackWait`. **`BunkerSecondPhase`** - бункер поднят, погоня
+  началась, `Tier` 1 и выше (до фазы 3 - обе поздние трети).
+  **`TickFallBack`** (из `TickPhase`, отдых `AtTheWall`): ожидание
+  (`FallBackFirstTicks` 66 от начала фазы, дальше **`NextFallBackWait`**,
+  от `FallBackEveryLeastTicks` 200 до `FallBackEveryMostTicks` 264), при
+  закрытом люке предупреждение `FallBackWarnTicks` 16 (мигание глаза в
+  `TickEye`), рывок к `FallBackX` 256 на `LungeSpeed` 3; его кончает
+  `Arrive` с `LungeStopJolt` 0.2, стоянка `FallBackStandTicks` 33, назад на
+  `ReturnSpeed` 1.2, потом новое ожидание. **`HoldsFire`** (предупреждение,
+  рывок, стоянка) держит прицел `TickHatch`. **`FallingBack`** (рывок,
+  стоянка, возврат) - для напалма (этап 12). **`Lob`** во второй фазе: из
+  обоих стволов (**`BunkerMuzzle`**), в cue **`SecondLob`**,
+  `SecondLobFrom`, `SecondLobAt` - новый **`SecondAt`** цели
+  (`SecondShellMark`).
+  **`ThrowsOverTheHull(body, onRoad)`**: на откате герой на дороге правее
+  кормы - брошен и вне его пути, как после броска `Contact`. `KillHead`
+  сбрасывает откат; `TickChange` после бункера, умершего не у стены,
+  ведёт машину к ней на `ReturnSpeed`. Комментарий `AtTheWall`: откаты -
+  единственный путь от стены.
 ### `Game/Game.Wrecks.pas` (~470 строк, 3.0.94)
 Пады, сбитые ударной волной свипера (`docs/mechanics/arena-3.md`, этап
 10c-3): обломок улетает в картинке пада, а сам пад усыплён (`TPad.Doze`).
@@ -5599,7 +5627,7 @@ SDL.
   `Speed`); `Speed` (сколько дорога ушла влево за тик), `Travel`,
   `TravelAt(alpha)` (между тиками), `Running`.
 
-### `Game/Game.Shells.pas` (~560 строк, 3.0.94)
+### `Game/Game.Shells.pas` (~600 строк, 3.0.96)
 Снаряды бункера в погоне (`docs/mechanics/arena-3.md`, этап 14a):
 бросаются по низкой дуге, видной целиком, туда, где были ноги героя, и
 целятся в мир - точку везёт дорога. Кольцо отмечает, куда снаряд упадёт,
@@ -5628,6 +5656,13 @@ SDL.
   `RingLeast` 6 по мере подлёта, пульсирует, под ним свечение;
   **`DrawShells`** - следы, горячее свечение, тёмный диск, белое ядро в
   воздухе, горячая точка на ободе крутится, пока он катится.
+- 3.0.96: **`SecondShellMark(decks, feet, roadY)`** - куда идёт второй
+  снаряд пары: середина палубы под ногами (`UnderFeetSlop` 1); иначе
+  ближней палубы от `ClimbLeast` 16 до `ClimbMost` 92 над ними, чья
+  середина левее середины экрана (пад пускают въехать); иначе дорога на
+  `RoadAhead` 64 впереди него, не дальше правого края. `DeckMiddle`.
+  **`Strikes`** спрашивает и снаряды в воздухе: пойманный в полёте тратится
+  на теле.
 
 ### `Game/Game.FarPlane.pas` (~185 строк, 3.0.93)
 Сколько проехал каждый слой дальнего плана погони
@@ -6094,7 +6129,7 @@ SDL.
     сцена церемонии.
 - Тесты: `Tests/Game/Tests.Game.HeroOrbs.pas`.
 
-### `Game/Game.Moon.pas` (~4100 строк)
+### `Game/Game.Moon.pas` (~4315 строк)
 Вся машина состояний игрового потока (`TMoonGame`) - игра, которую
 запускает программа. Вынесена из `Moon2D.dpr` слово в слово перед этапом 8
 арены 3, чтобы до неё дотянулся юнит (а потом и тест). В `interface` -
@@ -6674,6 +6709,17 @@ SDL.
   дальше Тарана). Кольца после передних падов, снаряды после пуль
   монстров. `FShells.Clear` рядом с каждым `FCapsules.Clear`. Отладочная
   клавиша `O` (`ScancodeO`): `FRam.WoundThird` и треть в бак.
+- 3.0.96: **`ShellDecks(pads)`** - палубы падов, для тика снарядов и для
+  **`TickRam`**, который отдаёт бункеру `SecondAt` цели (`SecondShellMark`
+  над ногами, `RamFloorY`) и бросает и второй снаряд из cue (звук броска
+  один); в **`TickShells`** два взрыва на одном паде за тик сбивают его
+  один раз (`Knocked`), взрываются оба; каждый взрыв и
+  **`ResolveShellContact`** (и снаряд, пойманный в воздухе) добавляют
+  `TBlast` из **`ShellBlast`** (радиус 80 и жизни 100 танка, без
+  осколков). **`ResolveRamThrowOver`** до
+  `ResolveRamContact`:
+  `FRam.ThrowsOverTheHull` - рана и `FHero.Fling(-1)`. **`HurtByRam`** -
+  строка, боль и `HurtHero` под милостью, для обоих.
 
 ### `Moon2D.dpr` (~200 строк)
 Программа: старт и ничего больше. `RunGame` (настоящий main: конфиг ->
@@ -7126,6 +7172,18 @@ DUnitX на 3.0.93 находит 972 теста.
 `Tests.Game.FarPlane` 5: уровень 2 читает свои прожекторы, каждый в
 куполе; лампы читаются; без хвоста, без разгона или с одним качанием -
 падают. DUnitX на 3.0.95 находит 1023 теста.
+3.0.96 - ещё 14. `TRamBunkerTests` 9 (в первой фазе отката нет; глаз
+предупреждает около полусекунды у стены; рывок к середине, стоянка,
+обратно медленнее; следующий через несколько секунд; молчит от
+предупреждения до пути назад, потом снова стреляет; снаряды парой, второй
+в `SecondAt`; бросок через корпус с дороги позади, один на полёт, над ним
+вне его пути; ни с пада, ни спереди; умер не у стены - едет к ней). Новый
+`TSecondShellMarkTests` 5 в `Tests.Game.Shells` (пад под ним, и на правой
+половине; ближний пад за серединой на прыжок вверх; не тот, что ещё на
+правой половине; не слишком высокий; дорога впереди, не дальше края);
+`TBunkerShellTests.TestInTheAirItIsSpentOnABody` вместо
+`TestInTheAirItTouchesNobody`. Сам бросок - героя, проверяется глазом.
+DUnitX на 3.0.96 находит 1037 тестов.
 
 ### `Tests/` - набор тестов (консоль, DUnitX)
 Четвёртый проект в `Moon2D.groupproj`. Проверяет то, что игра считает, а
@@ -7837,6 +7895,7 @@ OGG, все в деле. 3.0.64: `duplet.wav` (`tools/sounds/duplet.py`, из
 | Дорога погони (3.0.86): Таран уезжает после свипера, дорога плавно трогается и останавливается, уезжая влево под ним, на ней едут герой, и в воздухе тоже, и добыча, крутятся колёса, дым уносит с ней | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, рисование объектов) + `"belt": true` на дороге экрана 13 в level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | Бункер Тарана и фаза 1 погони (3.0.94): поднимается после свипера, погоня стартует от его ряда; дыхание люка (снаряд, столб, окно), крышка; уязвим сверху всегда, соты на боках и спереди, бледная полоса на верхе; его смерть, дорога едет дальше | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | Снаряды бункера (3.0.94): дуга к ногам героя, нацеленная в мир, кольцо, взрыв на палубе сбивает пад, качение по дороге и его рана | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (новый обломок на место ушедшего) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, рисование колец и снарядов) + Tests.Game.Shells.pas |
+| Вторая фаза бункера (3.0.96): предупреждение глазом, рывок к середине, стоянка и путь назад, бункер всё это время молчит; бросок назад через корпус с дороги за кормой; снаряды парой, второй по его паду или по паду за серединой, один обломок на пад; снаряд ловится в воздухе, каждый взрыв - волна как у танка; смерть не у стены | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` в воздухе) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3.md) |
 | Заряд формы в бою Тарана (3.0.85; половина бункера 3.0.94): шкала растёт от попаданий по головам, поздно и неровными толчками, до 30%, 55% и 95%; смерть головы доливает остаток, бункера - до полного | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | Первый акт Тарана (3.0.76): давка героя внизу и охота на героя на падах; прицел, разворот и очереди охотника по третям, его глаз и жизни по сложности, взрыв головы и смена на свипера | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - цель, выстрел в пули монстров, взрыв; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | Пресс финала: конвейер балконов, такт, новичок на верхний ряд | Game.Press.pas + действия `press` и `waveOnto` в level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
