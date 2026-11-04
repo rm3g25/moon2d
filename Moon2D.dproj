@@ -238,6 +238,7 @@
         <DCCReference Include="Game\Game.Capsules.pas"/>
         <DCCReference Include="Game\Game.Shells.pas"/>
         <DCCReference Include="Game\Game.StoneTank.pas"/>
+        <DCCReference Include="Game\Game.Heartbeat.pas"/>
         <DCCReference Include="Game\Game.Belt.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>

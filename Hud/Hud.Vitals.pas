@@ -18,6 +18,10 @@
   of the form's charge (Hud.Energy). The wing's own picture is not the
   monitor's.
 
+  A paced monitor keeps no pulse of its own: it beats when the game says
+  so (Beat), in step with the heartbeat of the last of the charge
+  (Game.Heartbeat).
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hud.Vitals;
@@ -54,6 +58,8 @@ type
     FGrownCell: Integer;
     FGrownTicks: Integer;
     FWing: Single;
+    FPaced: Boolean;
+    FBeatDue: Boolean;
     function BaseColor: TRgb;
     function BeatsPerMinute: Integer;
     function BeatPeriod: Integer;
@@ -80,8 +86,12 @@ type
     // or a rise against the last call is what the monitor animates.
     procedure Tick(AHealth: Integer; AInvulnerable: Boolean);
     procedure Draw;
+    // A beat on the trace right now
+    procedure Beat;
     // Units the panel reaches past its own width; 0 - no wing
     property Wing: Single read FWing write FWing;
+    // No beats of its own: only Beat strikes
+    property Paced: Boolean read FPaced write FPaced;
   end;
 
 implementation
@@ -169,6 +179,11 @@ begin
   FBeatPhase := BeatPeriod; // a beat right now, not at the next due one
 end;
 
+procedure THudVitals.Beat;
+begin
+  FBeatDue := True;
+end;
+
 procedure THudVitals.CoolEffects;
 begin
   Cool(FNoiseTicks);
@@ -204,8 +219,11 @@ function THudVitals.NextSample: Single;
 begin
   if FHealth <= 0 then
     Exit(0);
-  if FBeatPhase >= BeatPeriod then
+  if FBeatDue or (not FPaced and (FBeatPhase >= BeatPeriod)) then
+  begin
     FBeatPhase := 0;
+    FBeatDue := False;
+  end;
   Result := 0;
   if FBeatPhase < Length(BeatShape) then
     Result := BeatShape[FBeatPhase];

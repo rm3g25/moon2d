@@ -2,7 +2,11 @@
   Tests.Hud.Energy - the reading of the form's charge: no slot without a
   charge; the first of it opens the slot, which folds back once the
   charge is gone; the arc eases up to a rise and flashes, and stands on a
-  fall at once. And the words of the event that gives the charge - the
+  fall at once. The ride of the last of the charge: in the slot until it
+  is lifted, from the slot to the top centre where the level's title
+  stands, growing to three times its size, eased so that halfway is half
+  of both; there it stays, a dock is at once, and a lift starts the way
+  over. And the words of the event that gives the charge - the
   energy action and its value - and the moon stone of level 2, which
   gives five.
 
@@ -17,6 +21,7 @@ interface
 
 uses
   DUnitX.TestFramework,
+  Sdl2.Core,
   Hud.Energy;
 
 type
@@ -46,6 +51,35 @@ type
   end;
 
   [TestFixture]
+  TGaugeRideTests = class
+  private
+    FRide: TGaugeRide;
+    procedure TickTimes(ACount: Integer);
+    procedure ExpectAt(const APoint: TSdlFPoint; AScale: Single;
+      const AWhere: string);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestDockedItSitsInTheSlot;
+    [Test]
+    procedure TestLiftedItStartsFromTheSlot;
+    [Test]
+    procedure TestItRidesToTheTitleThreeTimesAsBig;
+    [Test]
+    procedure TestHalfwayIsHalfOfTheWayAndTheGrowth;
+    [Test]
+    procedure TestUpItStays;
+    [Test]
+    procedure TestADockIsAtOnce;
+    [Test]
+    procedure TestALiftAfterTheRideStartsOver;
+  end;
+
+  [TestFixture]
   TEnergyLevelTests = class
   public
     [Test]
@@ -62,12 +96,18 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.JSON,
+  Game.Space,
+  Render.Font,
+  Hud.Messages,
   Levels.Defs,
   Levels.Events;
 
 const
   WingTicks = 8;
   FlashTicks = 14;
+  RideTicks = 66;
+  RideScale = 3;
+  PlaceSlop: Double = 0.01;
   // Long enough for the arc to stand on any charge
   SettleTicks = 200;
 
@@ -144,6 +184,106 @@ begin
   Assert.IsTrue((Folding > 0) and (Folding < 1), 'Folding, not gone');
   Assert.AreEqual<Single>(0, FReading.Wing, 'Folded');
   Assert.AreEqual<Single>(0, FReading.Arc, 'No arc');
+end;
+
+function TitleMiddle: TSdlFPoint;
+begin
+  Result.X := FrameWidth / 2;
+  Result.Y := BigMessageY + BigGlyphHeight / 2;
+end;
+
+function Halfway(const AFrom, ATo: TSdlFPoint): TSdlFPoint;
+begin
+  Result.X := (AFrom.X + ATo.X) / 2;
+  Result.Y := (AFrom.Y + ATo.Y) / 2;
+end;
+
+procedure TGaugeRideTests.Setup;
+begin
+  FRide := TGaugeRide.Create;
+end;
+
+procedure TGaugeRideTests.TearDown;
+begin
+  FRide.Free;
+end;
+
+procedure TGaugeRideTests.TickTimes(ACount: Integer);
+begin
+  for var i := 1 to ACount do
+    FRide.Tick;
+end;
+
+procedure TGaugeRideTests.ExpectAt(const APoint: TSdlFPoint; AScale: Single;
+  const AWhere: string);
+begin
+  var Center := FRide.Center(0);
+  Assert.AreEqual(Double(APoint.X), Double(Center.X), PlaceSlop, AWhere + ': across');
+  Assert.AreEqual(Double(APoint.Y), Double(Center.Y), PlaceSlop, AWhere + ': down');
+  Assert.AreEqual(Double(AScale), Double(FRide.Scale(0)), PlaceSlop, AWhere + ': size');
+end;
+
+procedure TGaugeRideTests.TestDockedItSitsInTheSlot;
+begin
+  TickTimes(RideTicks);
+  ExpectAt(THudEnergy.Heart, 1, 'In the slot');
+  Assert.IsFalse(FRide.Lifted, 'Not lifted');
+  Assert.IsFalse(FRide.Up, 'Not up');
+end;
+
+procedure TGaugeRideTests.TestLiftedItStartsFromTheSlot;
+begin
+  FRide.Lift;
+  ExpectAt(THudEnergy.Heart, 1, 'At the lift');
+  Assert.IsTrue(FRide.Lifted, 'Lifted');
+  Assert.IsFalse(FRide.Up, 'Its way ahead of it');
+end;
+
+procedure TGaugeRideTests.TestItRidesToTheTitleThreeTimesAsBig;
+begin
+  FRide.Lift;
+  TickTimes(RideTicks - 1);
+  var Before := FRide.Up;
+  FRide.Tick;
+  Assert.IsFalse(Before, 'Still on its way a tick before');
+  Assert.IsTrue(FRide.Up, 'Up after its ticks');
+  ExpectAt(TitleMiddle, RideScale, 'Up');
+end;
+
+procedure TGaugeRideTests.TestHalfwayIsHalfOfTheWayAndTheGrowth;
+begin
+  FRide.Lift;
+  TickTimes(RideTicks div 2);
+  ExpectAt(Halfway(THudEnergy.Heart, TitleMiddle), (1 + RideScale) / 2,
+    'Halfway');
+end;
+
+procedure TGaugeRideTests.TestUpItStays;
+begin
+  FRide.Lift;
+  TickTimes(10 * RideTicks);
+  ExpectAt(TitleMiddle, RideScale, 'Long after');
+  Assert.AreEqual(Double(RideScale), Double(FRide.Scale(0.9)), PlaceSlop,
+    'No growth past the way between ticks');
+end;
+
+procedure TGaugeRideTests.TestADockIsAtOnce;
+begin
+  FRide.Lift;
+  TickTimes(RideTicks);
+  FRide.Dock;
+  ExpectAt(THudEnergy.Heart, 1, 'Docked');
+  Assert.IsFalse(FRide.Up, 'Not up');
+end;
+
+procedure TGaugeRideTests.TestALiftAfterTheRideStartsOver;
+begin
+  FRide.Lift;
+  TickTimes(RideTicks);
+  FRide.Lift;
+  ExpectAt(THudEnergy.Heart, 1, 'From the slot again');
+  TickTimes(RideTicks);
+  ExpectAt(TitleMiddle, RideScale, 'Up again');
 end;
 
 function EventsOf(const AJson: string): TArray<TLevelEvent>;
@@ -224,6 +364,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TEnergyReadingTests);
+  TDUnitX.RegisterTestFixture(TGaugeRideTests);
   TDUnitX.RegisterTestFixture(TEnergyLevelTests);
 
 end.

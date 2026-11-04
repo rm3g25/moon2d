@@ -28,7 +28,7 @@ uses
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
   Game.Shells,
-  Game.StoneTank, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
+  Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
@@ -143,6 +143,9 @@ type
     FPastBunker: Boolean;
     // Between the heads' wounds and the gauge of the form's charge
     FStoneTank: TStoneTank;
+    // From the last of the charge on: the sound, the gauge and the monitor
+    // beat with it
+    FHeartbeat: THeartbeat;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
@@ -320,6 +323,7 @@ type
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
     procedure StartRam(const AOrders: TRamOrders);
     procedure ResumePastBunker(const AOrders: TRamOrders);
+    procedure TickHeartbeat;
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
@@ -450,6 +454,8 @@ const
   // The life sphere: its sparks spiral in; it bursts into the hero
   SphereFormSoundFile = 'sphereform.wav';
   SphereTakeSoundFile = 'spheretake.wav';
+  // The double thump of the last of the charge
+  HeartbeatSoundFile = 'heartbeat.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -664,6 +670,7 @@ begin
   FShells := TBunkerShells.Create(RamFloorY);
   FShellPainter := TShellPainter.Create(FShells);
   FStoneTank := TStoneTank.Create(StoneTankSeed);
+  FHeartbeat := THeartbeat.Create;
   FBelt := TBelt.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
@@ -707,6 +714,7 @@ begin
   FShellPainter.Free;
   FShells.Free;
   FStoneTank.Free;
+  FHeartbeat.Free;
   FBelt.Free;
   FRamPainter.Free;
   FRam.Free;
@@ -968,6 +976,7 @@ begin
   FCapsules.Clear;
   FShells.Clear;
   FStoneTank.Clear;
+  FHeartbeat.Stop;
   FBelt.Clear;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
@@ -1932,6 +1941,7 @@ begin
   FAudio.Load(TerminalKeySoundFile);
   FAudio.Load(SphereFormSoundFile);
   FAudio.Load(SphereTakeSoundFile);
+  FAudio.Load(HeartbeatSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -2615,6 +2625,8 @@ begin
   FCapsules.Clear;
   FShells.Clear;
   FStoneTank.Clear;
+  FHeartbeat.Stop;
+  FEnergyGauge.Dock;
   FBelt.Clear;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
@@ -2883,10 +2895,28 @@ begin
   FBelt.Start;
   FStoneTank.BeginPastTheHeads;
   FOrbs.Charge(FStoneTank.Ceiling - FOrbs.Energy);
+  FEnergyGauge.Lift;
   StopRamRumble;
   FRamRumble := FAudio.PlayLooped(RamRumbleSoundFile);
   if not FAudio.Plays(AOrders.Track) then
     ChangeMusic(AOrders.Track);
+end;
+
+// Past the bunker, from the heartbeat's charge on: its tempo rises with the
+// last percents. The monitor hears a beat a tick late - it has ticked
+// already
+procedure TMoonGame.TickHeartbeat;
+begin
+  var Energy := FOrbs.Energy;
+  if FPastBunker and (Energy >= HeartbeatCharge) then
+    FHeartbeat.Tick(ChargeTempo(Energy))
+  else
+    FHeartbeat.Stop;
+  FVitals.Paced := FHeartbeat.Running;
+  if not FHeartbeat.Struck then
+    Exit;
+  FAudio.Play(HeartbeatSoundFile);
+  FVitals.Beat;
 end;
 
 // The decks of APads, one for one
@@ -2971,7 +3001,10 @@ begin
   if Cue.Blast then
   begin
     if HeadBefore = rhBunker then
+    begin
       FPastBunker := True;
+      FEnergyGauge.Lift;
+    end;
     FStoneTank.HeadDown(FOrbs.Energy);
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
     if Cue.Shock then
@@ -3629,6 +3662,7 @@ begin
   FOrbs.TickAfterCeremony;
   FEnergyGauge.Tick(FOrbs.Energy);
   FVitals.Wing := FEnergyGauge.WingWidth;
+  TickHeartbeat;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -3815,7 +3849,7 @@ begin
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
-        FEnergyGauge.Draw(AAlpha);
+        FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha));
         // Over the gauge: the orbs go into it
         FOrbs.DrawFeed(FDynamics.Canvas, NoShake, AAlpha);
         FCharge.Draw;
@@ -3983,10 +4017,12 @@ begin
   StopVictoryTrack;
   FRam.Reset;
   FPastBunker := False;
+  FEnergyGauge.Dock;
   FWrecks.Clear;
   FCapsules.Clear;
   FShells.Clear;
   FStoneTank.Clear;
+  FHeartbeat.Stop;
   FBelt.Clear;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);

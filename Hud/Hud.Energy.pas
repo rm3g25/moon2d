@@ -17,6 +17,12 @@
   the go-right arrow is drawn with - so it stays round at any size of
   the window.
 
+  At the last of the charge the gauge rides out of its slot to the top
+  centre, where the level's title stands, growing on the way, and stays
+  there: the slot is left open and empty. It beats with the heart there;
+  the pulse is the game's to give (Game.Heartbeat), the gauge only draws
+  it. TGaugeRide counts the ride.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hud.Energy;
@@ -54,18 +60,44 @@ type
     property Age: Integer read FAge; // ticks
   end;
 
+  // The gauge's way from its slot to the top centre: eased in and out,
+  // growing as it goes; standing there once it is up
+  TGaugeRide = class
+  private
+    FLifted: Boolean;
+    FTicks: Integer;
+    function Share(AAlpha: Single): Single;
+  public
+    // From the slot, from the start of the way
+    procedure Lift;
+    // Back in the slot at once
+    procedure Dock;
+    procedure Tick;
+    // The middle of the disc on the screen, AAlpha ticks past this one
+    function Center(AAlpha: Single): TSdlFPoint;
+    // The disc's size against its size in the slot
+    function Scale(AAlpha: Single): Single;
+    // At the top centre, the way behind it
+    function Up: Boolean;
+    property Lifted: Boolean read FLifted;
+  end;
+
   THudEnergy = class
   private
     FRenderer: PSdlRenderer;
     FBrush: THudBrush;
     FReading: TEnergyReading;
+    FRide: TGaugeRide;
+    // Where and how big this frame draws the disc
+    FCenter: TSdlFPoint;
+    FScale: Single;
     FBeam: PSdlTexture;
     FHalo: PSdlTexture;
     FBody: PSdlTexture;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     function Breath(AAlpha: Single): Single;
-    procedure DrawHalo(AShown, ABreath: Single);
+    procedure DrawHalo(AShown, ABreath, APulse: Single);
     procedure DrawRim(AFrom, ASweep, AWidth: Single; ATint: TRgb;
       ALevel: Single);
     procedure DrawArc(AShown, ABreath: Single);
@@ -74,18 +106,23 @@ type
     constructor Create(ARenderer: PSdlRenderer);
     destructor Destroy; override;
     procedure Tick(ACharge: Integer);
-    procedure Draw(AAlpha: Single);
+    // APulse - the heartbeat, 0..1; 0 when the heart is still
+    procedure Draw(AAlpha, APulse: Single);
+    // To the top centre, for good: the slot stays empty
+    procedure Lift;
+    procedure Dock;
     // Units the slot widens the monitor's panel by, as open as it is
     function WingWidth: Single;
     // The middle of the disc, on the screen: where the charge flies to
     class function Heart: TSdlFPoint;
     property Reading: TEnergyReading read FReading;
+    property Ride: TGaugeRide read FRide;
   end;
 
 implementation
 
 uses
-  System.Math, Render.Glow;
+  System.Math, Game.Space, Render.Font, Render.Glow, Hud.Messages;
 
 const
   SlotWidth = 32; // as the reward slot of the charge panel
@@ -133,6 +170,13 @@ const
   BeamGlowSide = 64;
   GlowSide = 64;
 
+  // The ride: about two seconds; three times its size in the slot
+  RideTicks = 66;
+  RideScale = 3;
+  // A beat swells the disc by this share of its size and lights its halo
+  PulseGrowth = 0.08;
+  HaloPulse = 0.45;
+
 { TEnergyReading }
 
 procedure TEnergyReading.Tick(ACharge: Integer);
@@ -173,6 +217,56 @@ begin
   Result := FFlashTicks / FlashTicks;
 end;
 
+{ TGaugeRide }
+
+procedure TGaugeRide.Lift;
+begin
+  FLifted := True;
+  FTicks := 0;
+end;
+
+procedure TGaugeRide.Dock;
+begin
+  FLifted := False;
+  FTicks := 0;
+end;
+
+procedure TGaugeRide.Tick;
+begin
+  if FLifted and (FTicks < RideTicks) then
+    Inc(FTicks);
+end;
+
+function TGaugeRide.Up: Boolean;
+begin
+  Result := FLifted and (FTicks >= RideTicks);
+end;
+
+// 0 in the slot, 1 up; smooth at both ends of the way
+function TGaugeRide.Share(AAlpha: Single): Single;
+begin
+  if not FLifted then
+    Exit(0);
+  var Way: Single := Min((FTicks + AAlpha) / RideTicks, 1);
+  Result := Way * Way * (3 - 2 * Way);
+end;
+
+function TGaugeRide.Center(AAlpha: Single): TSdlFPoint;
+begin
+  var Slot := THudEnergy.Heart;
+  var Top: TSdlFPoint;
+  Top.X := FrameWidth / 2;
+  Top.Y := BigMessageY + BigGlyphHeight / 2;
+  var Way := Share(AAlpha);
+  Result.X := Slot.X + (Top.X - Slot.X) * Way;
+  Result.Y := Slot.Y + (Top.Y - Slot.Y) * Way;
+end;
+
+function TGaugeRide.Scale(AAlpha: Single): Single;
+begin
+  Result := 1 + (RideScale - 1) * Share(AAlpha);
+end;
+
 { THudEnergy }
 
 constructor THudEnergy.Create(ARenderer: PSdlRenderer);
@@ -181,6 +275,7 @@ begin
   FRenderer := ARenderer;
   FBrush := THudBrush.Create(ARenderer);
   FReading := TEnergyReading.Create;
+  FRide := TGaugeRide.Create;
   FBeam := CreateGlowShape(ARenderer, gsBeam, BeamGlowSide);
   FHalo := CreateGlowShape(ARenderer, gsPoint, GlowSide);
   FBody := CreateShadeShape(ARenderer, gsDisc, GlowSide);
@@ -209,6 +304,7 @@ begin
     SDL_DestroyTexture(FHalo);
   if FBeam <> nil then
     SDL_DestroyTexture(FBeam);
+  FRide.Free;
   FReading.Free;
   FBrush.Free;
   inherited;
@@ -217,6 +313,17 @@ end;
 procedure THudEnergy.Tick(ACharge: Integer);
 begin
   FReading.Tick(ACharge);
+  FRide.Tick;
+end;
+
+procedure THudEnergy.Lift;
+begin
+  FRide.Lift;
+end;
+
+procedure THudEnergy.Dock;
+begin
+  FRide.Dock;
 end;
 
 function THudEnergy.WingWidth: Single;
@@ -239,30 +346,31 @@ begin
   Result := 0.5 + 0.5 * Sin((FReading.Age + AAlpha) * Speed);
 end;
 
-procedure THudEnergy.Draw(AAlpha: Single);
+procedure THudEnergy.Draw(AAlpha, APulse: Single);
 begin
   var Shown := FReading.Wing;
   if Shown <= 0 then
     Exit;
+  FCenter := FRide.Center(AAlpha);
+  FScale := FRide.Scale(AAlpha) * (1 + PulseGrowth * APulse);
+
   var Breathing := Breath(AAlpha);
-  DrawHalo(Shown, Breathing);
-  var Center := Heart;
-  DrawGlow(FRenderer, FBody, Center.X, Center.Y, 2 * DiscRadius, MoonBody,
-    Shown);
+  DrawHalo(Shown, Breathing, APulse);
+  DrawGlow(FRenderer, FBody, FCenter.X, FCenter.Y,
+    2 * DiscRadius * FScale, MoonBody, Shown);
   DrawRim(0, 2 * Pi, TrackWidth, MoonGlow, TrackLevel * Shown);
   DrawArc(Shown, Breathing);
   DrawNumber(Shown);
 end;
 
-procedure THudEnergy.DrawHalo(AShown, ABreath: Single);
+procedure THudEnergy.DrawHalo(AShown, ABreath, APulse: Single);
 begin
   var Level: Single := HaloLevel + HaloBreath * ABreath +
-    HaloFlash * FReading.Flash;
+    HaloFlash * FReading.Flash + HaloPulse * APulse;
   if FReading.Charge >= FullEnergy then
     Level := Level + HaloFullBreath * ABreath;
-  var Center := Heart;
-  DrawGlow(FRenderer, FHalo, Center.X, Center.Y, HaloAcross, MoonGlow,
-    Level * AShown);
+  DrawGlow(FRenderer, FHalo, FCenter.X, FCenter.Y, HaloAcross * FScale,
+    MoonGlow, Level * AShown);
 end;
 
 // A strip AWidth across along the rim, from the top AFrom radians on and
@@ -272,17 +380,16 @@ procedure THudEnergy.DrawRim(AFrom, ASweep, AWidth: Single; ATint: TRgb;
 begin
   var Segments := EnsureRange(Ceil(CircleSegments * ASweep / (2 * Pi)), 1,
     CircleSegments);
-  var Center := Heart;
   var Alpha: UInt8 := Round(255 * EnsureRange(ALevel, 0, 1));
   for var i := 0 to Segments do
   begin
     var Angle: Single := -Pi / 2 + AFrom + ASweep * i / Segments;
     for var Side := 0 to 1 do
     begin
-      var Radius: Single := DiscRadius + (0.5 - Side) * AWidth;
+      var Radius: Single := (DiscRadius + (0.5 - Side) * AWidth) * FScale;
       var Corner := 2 * i + Side;
-      FVertices[Corner].Position.X := Center.X + Cos(Angle) * Radius;
-      FVertices[Corner].Position.Y := Center.Y + Sin(Angle) * Radius;
+      FVertices[Corner].Position.X := FCenter.X + Cos(Angle) * Radius;
+      FVertices[Corner].Position.Y := FCenter.Y + Sin(Angle) * Radius;
       FVertices[Corner].Color.R := ATint.R;
       FVertices[Corner].Color.G := ATint.G;
       FVertices[Corner].Color.B := ATint.B;
@@ -307,10 +414,10 @@ begin
   DrawRim(0, Sweep, ArcCoreWidth, Mix(MoonGlow, White, ArcCoreWhiteness),
     CoreLevel * AShown);
 
-  var Center := Heart;
   var HeadAngle: Single := -Pi / 2 + Sweep;
-  DrawGlow(FRenderer, FHalo, Center.X + Cos(HeadAngle) * DiscRadius,
-    Center.Y + Sin(HeadAngle) * DiscRadius, HeadAcross, White,
+  var HeadRadius := DiscRadius * FScale;
+  DrawGlow(FRenderer, FHalo, FCenter.X + Cos(HeadAngle) * HeadRadius,
+    FCenter.Y + Sin(HeadAngle) * HeadRadius, HeadAcross * FScale, White,
     HeadLevel * AShown);
 end;
 
@@ -319,19 +426,21 @@ begin
   var Value := FReading.Charge;
   if Value <= 0 then
     Exit;
-  var Center := Heart;
   var Pixel: Single := NumberPixel;
   if Value >= FullEnergy then
     Pixel := FullNumberPixel;
+  Pixel := Pixel * FScale;
+  var SignPixel: Single := PercentPixel * FScale;
+  var Gap: Single := PercentGap * FScale;
   var DigitsWidth := NumberWidth(Value, Pixel);
-  var Width := DigitsWidth + PercentGap + GlyphCols * PercentPixel;
-  var X := Center.X - Width / 2;
-  var Y := Center.Y - GlyphRows * Pixel / 2;
+  var Width := DigitsWidth + Gap + GlyphCols * SignPixel;
+  var X := FCenter.X - Width / 2;
+  var Y := FCenter.Y - GlyphRows * Pixel / 2;
   var Color := Mix(MoonGlow, White, FReading.Flash);
   FBrush.BeginDraw;
   FBrush.DrawNumber(Value, X, Y, Color, AShown, Pixel);
-  FBrush.DrawPercent(X + DigitsWidth + PercentGap,
-    Y + GlyphRows * (Pixel - PercentPixel), Color, AShown, PercentPixel);
+  FBrush.DrawPercent(X + DigitsWidth + Gap,
+    Y + GlyphRows * (Pixel - SignPixel), Color, AShown, SignPixel);
   FBrush.EndDraw;
 end;
 

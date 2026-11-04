@@ -123,6 +123,10 @@ const
   // The standard life of a ticker notice: hits, small captions (2008
   // passim)
   TickerNoticeTicks = 125;
+  // Big message: 2008 drew line2 at row 12 (y = 12 * 12.48). The
+  // horizontal was approximated as (17 - len/2) columns; the remake
+  // centers exactly - same look, honest math.
+  BigMessageY = 150;
 
 implementation
 
@@ -148,10 +152,6 @@ const
   // boss popup rocketed, a '+1' floated. Decision pending (item 24).
   PopupRiseSpeed = 0.5; // game units upward per tick
 
-  // Big message: 2008 drew line2 at row 12 (y = 12 * 12.48). The
-  // horizontal was approximated as (17 - len/2) columns; the remake
-  // centers exactly - same look, honest math.
-  BigMessageY = 150;
   BigNoteGap = 6;
 
 constructor TMessageBoard.Create(const AFont: TMoonFont;
