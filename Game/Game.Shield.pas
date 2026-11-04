@@ -78,6 +78,9 @@ type
     FFlares: TList<TFlare>;
     FState: TShieldState;
     FFallAge: Integer;
+    // Drawn and met mirrored about the middle: the machine turned round
+    FMirrored: Boolean;
+    function Own(const APoint: TSdlFPoint): TSdlFPoint;
     procedure LayCells;
     procedure LayCellsOverBody;
     procedure LayStrip(ACells: Integer);
@@ -111,6 +114,9 @@ type
     procedure Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
       const ACenter: TSdlFPoint; AAlpha: Single);
     property State: TShieldState read FState;
+    // The cells are laid on the machine as drawn; turned round, every point
+    // asked and every cell drawn is mirrored across its middle
+    property Mirrored: Boolean read FMirrored write FMirrored;
   end;
 
 implementation
@@ -433,24 +439,34 @@ begin
   FFallAge := 0;
 end;
 
+// A point from the middle, in the frame the cells were laid in
+function TTekShield.Own(const APoint: TSdlFPoint): TSdlFPoint;
+begin
+  Result := APoint;
+  if FMirrored then
+    Result.X := -APoint.X;
+end;
+
 procedure TTekShield.Strike(const APoint: TSdlFPoint);
 begin
   if FState <> sdUp then
     Exit;
+  var Point := Own(APoint);
   var Flare: TFlare;
-  Flare.X := APoint.X;
-  Flare.Y := APoint.Y;
+  Flare.X := Point.X;
+  Flare.Y := Point.Y;
   Flare.Age := 0;
   FFlares.Add(Flare);
 end;
 
 function TTekShield.Holds(const APoint: TSdlFPoint): Boolean;
 begin
+  var Point := Own(APoint);
   if FOverBody then
-    Exit(FField.At(Floor(APoint.X - FFieldX), Floor(APoint.Y - FFieldY)));
+    Exit(FField.At(Floor(Point.X - FFieldX), Floor(Point.Y - FFieldY)));
   if FStrip then
-    Exit((Abs(APoint.X) <= FRadiusX) and (Abs(APoint.Y) <= FRadiusY));
-  Result := Sqr(APoint.X / FRadiusX) + Sqr(APoint.Y / FRadiusY) <= 1;
+    Exit((Abs(Point.X) <= FRadiusX) and (Abs(Point.Y) <= FRadiusY));
+  Result := Sqr(Point.X / FRadiusX) + Sqr(Point.Y / FRadiusY) <= 1;
 end;
 
 function TTekShield.TryEntry(const AFrom, ATo: TSdlFPoint;
@@ -549,7 +565,10 @@ begin
     var Level := Whole * (Rest + (FlareLevel - Rest) * Flare);
     if Level < DimmestLevel then
       Continue;
-    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + Cell.X,
+    var CellX := Cell.X;
+    if FMirrored then
+      CellX := -CellX;
+    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + CellX,
       ACenter.Y + Cell.Y, CellSize, MixColor(ShieldColor, FlareColor, Flare),
       Min(Level, 1));
   end;

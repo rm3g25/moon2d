@@ -57,6 +57,12 @@ type
     [Test]
     procedure TestRollsLeftFasterThanTheRoad;
     [Test]
+    procedure TestLobbedRightItRollsRight;
+    [Test]
+    procedure TestTheRoadMarkIsTheRoadWithNoDeckInTheWay;
+    [Test]
+    procedure TestTheRoadMarkStepsAsideFromADeckOverIt;
+    [Test]
     procedure TestRollingItIsSpentOnABody;
     [Test]
     procedure TestInTheAirItIsSpentOnABody;
@@ -275,6 +281,69 @@ begin
     Assert.AreEqual(Double(RoadY - ShellRadius), Double(FShells[0].Middle.Y),
       0.001, 'On the road');
   end;
+end;
+
+procedure TBunkerShellTests.TestLobbedRightItRollsRight;
+const
+  // Right of the muzzle: the hull turned round shoots this way
+  RightX = 470.0;
+begin
+  FShells.Lob(At(MuzzleX, MuzzleY), At(RightX, RoadY));
+  var Landed: TSdlFPoint;
+  Assert.IsTrue(LandsWithin(FShells, NoDecks, Road, Landed) > 0, 'Lands');
+  Assert.IsTrue(FShells[0].State = ssRolling, 'Rolls');
+  for var i := 1 to 10 do
+  begin
+    var Before := FShells[0].Middle.X;
+    FShells.Tick(NoDecks, Road);
+    if FShells[0].State <> ssRolling then
+      Break;
+    Assert.IsTrue(FShells[0].Middle.X > Before + 0.5,
+      'Right, against the road');
+  end;
+end;
+
+procedure TBunkerShellTests.TestTheRoadMarkIsTheRoadWithNoDeckInTheWay;
+const
+  MarkX = 250.0;
+begin
+  var Mark := FShells.RoadMark(At(MuzzleX, MuzzleY), MarkX, NoDecks);
+  Assert.AreEqual(MarkX, Double(Mark.X), 0.001, 'Where it was asked');
+  Assert.AreEqual(RoadY, Double(Mark.Y), 0.001, 'On the road');
+end;
+
+procedure TBunkerShellTests.TestTheRoadMarkStepsAsideFromADeckOverIt;
+const
+  // A low pad over the road at the mark: a shell aimed straight at the
+  // road there bursts on it
+  LowLeft = 220.0;
+  LowWidth = 64.0;
+  LowTop = 272.0;
+  MarkX = 250.0;
+  // Its search reaches no farther
+  Reach = 64.0;
+begin
+  var Decks: TArray<TShellDeck> := [Deck(LowLeft, LowWidth, LowTop)];
+  FShells.Lob(At(MuzzleX, MuzzleY), At(MarkX, RoadY));
+  var Cue := FShells.Tick(Decks, Still);
+  var Burst := Length(Cue.Bursts) > 0;
+  for var i := 1 to ManyTicks do
+  begin
+    if Burst or (FShells[0].State <> ssFlying) then
+      Break;
+    Cue := FShells.Tick(Decks, Still);
+    Burst := Length(Cue.Bursts) > 0;
+  end;
+  Assert.IsTrue(Burst, 'Straight at the road there, the pad takes it');
+
+  var Mark := FShells.RoadMark(At(MuzzleX, MuzzleY), MarkX, Decks);
+  Assert.IsTrue(Abs(Mark.X - MarkX) <= Reach, Format('Aside to %g', [Mark.X]));
+  Assert.IsTrue(Abs(Mark.X - MarkX) > 0, 'Not where the pad is');
+  FShells.Clear;
+  FShells.Lob(At(MuzzleX, MuzzleY), Mark);
+  var Landed: TSdlFPoint;
+  Assert.IsTrue(LandsWithin(FShells, Decks, Still, Landed) > 0,
+    'It comes down on the road');
 end;
 
 procedure TBunkerShellTests.TestRollingItIsSpentOnABody;

@@ -237,9 +237,9 @@ type
     FShelfCommandAt: Integer;
     FShelfTold: Boolean;
     FDormant: Boolean;
-    // A pad of a chase that flies in to its place: how far right of it it
-    // set off, the ticks the way takes and the ticks of it so far
-    FComeFrom: Double;
+    // A pad of a chase that flies in to its place: how far from it it set
+    // off, the ticks the way takes and the ticks of it so far
+    FComeFrom: TSdlFPoint;
     FComeTicks: Integer;
     FComeClock: Integer;
     procedure BuildCycle;
@@ -253,7 +253,7 @@ type
     procedure TickSag;
     procedure TickKnock;
     procedure KnockOffset(out AX, AY: Double);
-    function ComeOffset: Double;
+    function ComeShare: Double;
     function Coming: Boolean;
     function Tilt(AAlpha: Single): Double;
     function GetRight: Double;
@@ -320,10 +320,11 @@ type
     // A pad of a chase's pool is there from now on at AX, AY (its top-left
     // corner) and rides the road; nothing for one that does not drift
     procedure SetAdrift(AX, AY: Double);
-    // The same, but it flies in to AX from AFrom units right of it over
-    // ATicks, its jets hard, and comes to the road's pace there: its place
-    // rides the road all the while
-    procedure SetAdriftComing(AX, AY, AFrom: Double; ATicks: Integer);
+    // The same, but it flies in to AX, AY from AFrom off its place - from
+    // any side - over ATicks, its jets hard, and comes to rest on its place
+    // at the road's pace: its place rides the road all the while
+    procedure SetAdriftComing(AX, AY: Double; const AFrom: TSdlFPoint;
+      ATicks: Integer);
     // The pad flies straight to AX, AY (its top-left corner) over ATicks
     // and stays there; 0 ticks - it is there at once, and whatever stood
     // on it is left in the air
@@ -1046,8 +1047,8 @@ begin
   FPlunge.Tick;
   var OffX, OffY: Double;
   KnockOffset(OffX, OffY);
-  FLeft := FPathLeft + OffX + ComeOffset;
-  FTop := FPathTop + OffY + FPlunge.Below;
+  FLeft := FPathLeft + OffX + FComeFrom.X * ComeShare;
+  FTop := FPathTop + OffY + FPlunge.Below + FComeFrom.Y * ComeShare;
 end;
 
 procedure TPad.TellShelf(const ACommand: TShelfCommand; ADelayTicks: Integer);
@@ -1113,15 +1114,18 @@ begin
   FlyTo(AX, AY, 0);
 end;
 
-procedure TPad.SetAdriftComing(AX, AY, AFrom: Double; ATicks: Integer);
+procedure TPad.SetAdriftComing(AX, AY: Double; const AFrom: TSdlFPoint;
+  ATicks: Integer);
 begin
   if not FPlacement.Drift then
     Exit;
   SetAdrift(AX, AY);
   FComeFrom := AFrom;
   FComeTicks := ATicks;
-  FLeft := AX + ComeOffset;
+  FLeft := AX + FComeFrom.X * ComeShare;
+  FTop := AY + FComeFrom.Y * ComeShare;
   FPrevLeft := FLeft;
+  FPrevTop := FTop;
 end;
 
 function TPad.Coming: Boolean;
@@ -1129,12 +1133,13 @@ begin
   Result := FComeClock < FComeTicks;
 end;
 
-// Easing out as a square: the last of the way at the road's own pace
-function TPad.ComeOffset: Double;
+// How much of the way in is left: easing out as a square, the last of it
+// at the road's own pace
+function TPad.ComeShare: Double;
 begin
   if not Coming then
     Exit(0);
-  Result := FComeFrom * Sqr(1 - FComeClock / FComeTicks);
+  Result := Sqr(1 - FComeClock / FComeTicks);
 end;
 
 // From where the path or the last flight left it; a knock is not minded,
@@ -1696,11 +1701,12 @@ begin
 end;
 
 // Wholly past the left edge nobody stands on it: the screen's edge holds
-// the hero
+// the hero. One still flying in from beyond the left edge is on its way.
 procedure TPadWorld.LetGoPastLeft;
 begin
   for var Pad in FPads do
-    if Pad.Drifts and not Pad.Dormant and (Pad.Right < 0) then
+    if Pad.Drifts and not Pad.Dormant and not Pad.Coming and
+      (Pad.Right < 0) then
       Pad.Doze;
 end;
 

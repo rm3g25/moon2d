@@ -1,11 +1,11 @@
 ﻿{
   Game.Ram - TeK-R13, the Ram: the TeK machine of level 2's boss arena. A
-  hull on two wheels that faces left for good and drives back and forth,
-  backward when it goes right; a mast of three sections in a well on its
-  roof, with a head on the top of it; an eye that lights when the machine
-  wakes, and brake lamps that burn as it brakes. Its two exhausts smoke a
-  little at rest and hard while it drives, the jet thrown back off the
-  stern.
+  hull on two wheels that faces left and drives back and forth, backward
+  when it goes right - only the bunker's hunt turns it round; a mast of
+  three sections in a well on its roof, with a head on the top of it; an
+  eye that lights when the machine wakes, and brake lamps that burn as it
+  brakes. Its two exhausts smoke a little at rest and hard while it
+  drives, the jet thrown back off the stern.
 
   The eye is its telegraph: lit, it breathes slowly, and it blinks fast
   only as a warning - while a head rises or the heads change. The head's
@@ -85,10 +85,12 @@
   wall and turns to the hero as the others do. Its hatch breathes: shut,
   it aims, and lobs a shell at where his feet are (Game.Shells); a beat,
   then a column of hot exhaust goes straight up out of the open hatch -
-  it wounds whoever is in it; then the hatch stands open and cooling, and
-  shuts. Its top is open to a bullet at any time, the lid shut or not: one
-  that comes down onto it from above or aslant, from a pad. The honeycomb
-  closes its sides and front. Its lives go by thirds as the others' do.
+  it wounds whoever is in it; then the hatch stands open and cooling,
+  and shuts. Its top is open to a bullet at any time, the lid shut or
+  not: one that comes down onto it from above or aslant, from a pad -
+  down to a row of cells under the hatch, so a pad a little lower or
+  farther off still reaches it. The honeycomb closes its sides and
+  front. Its lives go by thirds as the others' do.
 
   In its middle third comes its second phase. Now and then, its
   hatch shut, the eye blinks the warning and the machine lunges back to
@@ -104,21 +106,36 @@
   on the right half - or onto the road ahead of him (Game.Shells).
 
   Its last third is the hunt. The fire stops, the eye blinks and the
-  alarm sounds, and the game sends in three rows of pads; once they are
-  in, the machine drives back to the left edge through the hero, silent
-  on the way. A hero up on the rows lets it pass under him. One left on
-  the road is shoved before its bow to the left edge and thrown up over
-  the hull to the right with a wound - either way he ends right of it.
-  Then it hunts him from behind, stern first: its hatch keeps a step
-  behind him, as fast as he runs along a row against the road, so he
-  strikes down as it comes beneath him. A fall to the road is a ram: he
-  is thrown forward over the hull with a wound, and it stands while he
-  flies clear. Its shells come in pairs again: one at his feet, one at
-  the nearest pad ahead of him along his row (Game.Shells).
+  alarm sounds, and the game sends in a wave of pads, three rows of them;
+  once they are in, the machine drives left through the hero and on off
+  the screen, silent on the way. A hero up on the wave jumps over it. One
+  left on the road is thrown up over the hull to the right with a wound -
+  either way he ends right of it. Past the left edge it turns round,
+  unseen but for the rumble and, before it comes back, its eye's red at
+  the edge; then it drives in again bow first and hunts him. The right is
+  his; the left is the machine's: its bow keeps a step behind him, as
+  fast as he runs against the road, but within the left half. Now and
+  then, after the eye's warning, it surges toward nearly the right edge
+  for a couple of seconds and goes back as fast - a press, never a trap.
+  It goes back for a hero only when he has come down behind its stern -
+  one up on a pad it lets the road carry back over its hatch, where he
+  strikes down. Any touch on the
+  road is a ram: he is thrown up over the hull to the right with a wound -
+  its bow never reaches the right wall, so there is always room - and it
+  stands while he flies clear. Its shells come one at a time, a little
+  more often than before: at the pad he stands on, which goes; in the air
+  or on the road, at the road near him where no pad is in the way
+  (Game.Shells finds it), so fewer pads are knocked away.
+
+  The hull is drawn facing left; turned round, everything on it - the
+  well and the mast, the eye, the lamps, the exhausts, its honeycomb,
+  what a touch meets - is mirrored about its middle. The heads turn on
+  their own.
 
   Its last life blows it up as the hunter's does; the empty mast sinks,
-  the machine drives back to the wall if it stood away from it, and the
-  road runs on.
+  and the machine runs on - the hunt with no head, its shells gone,
+  nothing left on it to hit - till the hero's henshin. Killed before its
+  last third (the debug key), it begins the hunt there.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -177,10 +194,15 @@ type
   // drive back to the wall
   TFallBack = (fbNone, fbWarning, fbLunging, fbStanding, fbReturning);
 
-  // The bunker's last third: none yet; the change - the rows called in,
-  // the eye's warning; the pass to the left edge through the hero; the
-  // hunt from behind, stern first
-  TBunkerHunt = (htNone, htCalling, htPassing, htHunting);
+  // The bunker's last third: none yet; the change - the wave called in,
+  // the eye's warning; the pass through the hero off the left edge; the
+  // turn round out there; the drive in again; the hunt, bow first
+  TBunkerHunt = (htNone, htCalling, htPassing, htTurning, htEntering,
+    htHunting);
+
+  // The hunt's surge toward the right edge: waiting for the next; the
+  // eye's warning; the surge, then back to the left half
+  THuntSurge = (hsWaiting, hsWarning, hsSurging);
 
   // The gun: idle (aiming or riding, resting), the warning before a burst
   // - the hunter's lens, the sweeper's barrels burning red - the burst
@@ -269,6 +291,9 @@ type
     // The bunker lobs a shell out of LobFrom that comes down on LobAt
     Lob: Boolean;
     LobFrom, LobAt: TSdlFPoint;
+    // In the hunt, he is not on a pad: the shell is for the road near LobAt,
+    // where no pad is in its way - the game knows the decks
+    LobForRoad: Boolean;
     // With it, in the second phase, a second shell out of the other muzzle
     SecondLob: Boolean;
     SecondLobFrom, SecondLobAt: TSdlFPoint;
@@ -379,12 +404,18 @@ type
     FFallBack: TFallBack;
     FFallBackTicks: Integer;
     FFallBackWait: Integer;
-    // Its last third: the step of the hunt and ticks into it, the rows in,
+    // Its last third: the step of the hunt and ticks into it, the wave in,
     // and ticks it stands after a ram
     FHunt: TBunkerHunt;
     FHuntTicks: Integer;
     FRowsIn: Boolean;
     FRamStandTicks: Integer;
+    // The way the hull faces: -1 left, as the art is drawn
+    FHullFacing: Integer;
+    // The hunt's surge, and the ticks of its step - left of the wait,
+    // into the warning or the surge
+    FSurge: THuntSurge;
+    FSurgeTicks: Integer;
     // Then: ticks of its overload so far
     FOverloadTicks: Integer;
     // The white of the sweeper's blast, 1 the tick it bursts, and where
@@ -412,9 +443,13 @@ type
     procedure BeginHunt;
     procedure TickHunt;
     procedure TickHuntDrive;
-    function BowAt(const AHeroBody: TSdlFRect): Single;
-    function RamsOnTheRoad(const AHeroBody: TSdlFRect): Boolean;
-    function HuntThrowSide(const AHeroBody: TSdlFRect): Integer;
+    procedure BeginTurn;
+    function HuntMark: Single;
+    procedure TickSurge;
+    function HuntLine: Single;
+    function NextSurgeWait: Integer;
+    function SurgeWarns: Boolean;
+    function SolidAt(ACol, ARow: Integer): Boolean;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -500,6 +535,9 @@ type
       out AGuarded: Boolean): Boolean;
     // The middle of the bunker's hatch on the screen now
     function HatchPoint: TSdlFPoint;
+    // Under the hatch, where the honeycomb begins: a bullet that comes
+    // down past this line within the hatch's width takes a life
+    function OpenTop: TSdlFPoint;
     // The column of exhaust over the hatch holds some of ABody
     function ColumnHolds(const ABody: TSdlFRect): Boolean;
     // How open the bunker's lid stands, 0 shut to 1 open, between two ticks
@@ -518,22 +556,28 @@ type
     // He is to be thrown over the hull as AThrow says, and is out of its
     // way till he comes down. Falling back, he has come down onto the road
     // right of it (AOnRoad - not in the air, not on a pad): back to the
-    // left. In the pass, pinned at the left edge, or run into deep: over it
-    // to the right. In the hunt, touched on the road: forward over it,
-    // to the right but at the right wall.
+    // left. From the pass on, touched on the road: over it to the right.
     function ThrowsOverTheHull(const AHeroBody: TSdlFRect; AOnRoad: Boolean;
       out AThrow: TOverTheHull): Boolean;
-    // In the pass, how far the bow shoves a hero on the road before it this
-    // tick, below 0 to the left; 0 - none
-    function Shoves(const AHeroBody: TSdlFRect; AOnRoad: Boolean): Single;
     // Away from the right wall in a fall back: on its way, standing, or on
     // its way back - the napalm waits
     function FallingBack: Boolean;
     // In its last third: no fall back, the mortar folded - the machine
     // behind him is the leash
     function Hunts: Boolean;
-    // The rows of the hunt have flown in: the pass may begin
+    property Hunt: TBunkerHunt read FHunt;
+    // The wave of the hunt has flown in: the pass may begin
     procedure RowsArrived;
+    // Off the left edge, turning round: how near it is to coming back, 0
+    // unseen to 1 the moment it sets off - its eye's red at the edge
+    function PeekLevel: Single;
+    // Turned round: bow first to the right, everything on the hull
+    // mirrored
+    function HullMirrored: Boolean;
+    // The middle of the well on the screen, the hull's left edge at ALeft
+    function WellAt(ALeft: Single): Single;
+    // A point of the hull's art on the screen, the hull's left edge at ALeft
+    function HullSpot(ALeft: Single; const APoint: THullPoint): TSdlFPoint;
     // On the screen to be seen and touched
     function Present: Boolean;
     // Between the last tick and this one, AAlpha of the way
@@ -650,12 +694,17 @@ type
     property Body: TShieldMask read FBody;
   end;
 
+  TExhaustPair = array [0..1] of TSmoke;
+
   TRamPainter = class
   private
     FArt: TRamArt;
     FRam: TRam;
     FHull: THull;
-    FExhausts: array [0..1] of TSmoke;
+    // A pair for each way the hull faces, the jets thrown back off the
+    // stern; the pair of the other way puffs no more and its smoke clears
+    // A for-in over it walks all four smokes, both pairs
+    FExhausts: array [Boolean] of TExhaustPair;
     FExhaustDriving: Boolean;
     // From a wounded head, or from the top of an empty mast
     FHeadSmoke: TSmoke;
@@ -678,23 +727,24 @@ type
     procedure TickShorts;
     procedure TickColumn(ABeltShift: Single);
     procedure TickWaveDust;
-    procedure DrawLid(const ASprites: TSpriteRenderer; ALeft, AMast,
+    procedure DrawLid(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
     procedure DrawColumn(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
-    procedure DrawTop(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+    procedure DrawTop(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
-    procedure DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
+    procedure DrawMast(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
-    procedure DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
+    procedure DrawHead(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
     procedure DrawLamps(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
     procedure DrawEye(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
-    procedure DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+    procedure DrawPeek(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawLens(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
-    procedure DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast, ASway,
+    procedure DrawHeat(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
-    procedure DrawOverload(const ASprites: TSpriteRenderer; ALeft, AMast,
+    procedure DrawOverload(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway: Single);
     procedure DrawFlash(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawWave(AOrigin: TSdlPoint; AAlpha: Single);
@@ -922,6 +972,8 @@ const
   // Its breath: aiming shut, a beat after the shell, the column, the
   // window; the lid opens fast as the column blows it, shuts slower
   HatchAimTicks = 50;
+  // In the hunt one shell, not a pair, a little more often
+  HuntAimTicks = 35;
   HatchFiredTicks = 10;
   HatchVentTicks = 16;
   HatchWindowTicks = 40;
@@ -934,6 +986,9 @@ const
   HatchY = 12.0;
   HatchHalfWidth = 8.5;
   HatchFallLeast = 15.0;
+  // The honeycomb starts a row of cells under the hatch (Game.Shield's
+  // 1.5 * HexSize)
+  OpenRowsDepth = 5.1;
   BunkerMuzzles: array [0..1] of THullPoint = ((X: 0.2; Y: 24.2),
     (X: 0.2; Y: 28.0));
   // The lid's art stands open; turned this far counter-clockwise about
@@ -963,19 +1018,35 @@ const
   // Thrown back over the hull from behind its stern: the road's way and
   // his own carry him most of it
   FallBackFlingWay = 1.0;
-  // The last third. The rows in, the eye warns this long before the pass,
-  // which goes at the lunge's pace. The bow shoves a hero on the road
-  // before it; one it has run into deeper than this, or pinned with less
-  // room than his body and this to the left edge, it throws over the hull.
+  // The last third. The wave in, the eye warns this long before the pass,
+  // which goes at the lunge's pace off the left edge, on by the brake's way
+  // from that pace, so it stops unseen.
   HuntPassWarnTicks = 16;
-  ShoveDeepest = 12.0;
-  PinRoom = 12.0;
+  PassBeyond = 24.0;
+  // Out there it turns round this long, its eye's red at the edge for the
+  // last of it, and drives in again at the lunge's pace
+  HuntTurnTicks = 50;
+  HuntPeekTicks = 16;
+  // Coming in, it closes on the left edge slower and slower: this near it
+  // counts as in
+  EnterSlop = 1.0;
+  // The left is the machine's: its bow holds within the left half. Every
+  // 6 to 9 s, after the eye's warning, it surges at the lunge's pace
+  // toward nearly the right edge for a couple of seconds - long enough to
+  // get there from the middle - and goes back as fast: a press, never a
+  // trap.
+  HuntMiddleLine = ScreenWidth / 2;
+  HuntFarLine = ScreenWidth - 40.0;
+  HuntSurgeEveryLeastTicks = 200;
+  HuntSurgeEveryMostTicks = 300;
+  HuntSurgeWarnTicks = 16;
+  HuntSurgeTicks = 75;
   // Over the hull against the road: his own 2 a tick, the road's 1 back,
   // this on top - about 190 units by the time he comes down past the roof
   HuntFlingWay = 3.0;
-  // The hunt: the hatch a step behind him, clear of the column; a run
-  // along a row against the road gains 1 a tick on the screen, and it is
-  // a little faster; it closes this share of the gap a tick
+  // The hunt: its bow this far behind his middle, a step behind his back;
+  // a run against the road gains 1 a tick on the screen, and it is a
+  // little faster; it closes this share of the gap a tick
   HuntTrail = 24.0;
   HuntBehindSpeed = 1.5;
   HuntGain = 0.15;
@@ -1000,6 +1071,7 @@ const
   // half.
   WellX = 69.9;
   WellY = 14.6;
+  WellPoint: THullPoint = (X: WellX; Y: WellY);
   MastRest = -20.0;
   HunterMast = 48.0;
   // Below this line of the hull the sections stay inside it, and drawn
@@ -1047,6 +1119,9 @@ const
   EyeRestSize = 4.0;
   EyeFlashSize = 9.0;
   EyeColor: TRgb = (R: 255; G: 36; B: 20);
+  // Off the screen, the eye's red thrown on the left edge: wider than the
+  // eye, half of it beyond the edge
+  PeekSize = 40.0;
 
   // The lens of the head, armed: a wink a second over a faint ember. Pale,
   // not red: red on this machine is a warning, and a light that burns red
@@ -1202,21 +1277,22 @@ begin
   Result.Y := AY;
 end;
 
-// The middle of the well, which the mast turns about with the sway
-function MastPivot(ALeft: Single): TSdlFPoint;
+// The middle of the well, AWell across the screen, which the mast turns
+// about with the sway
+function MastPivot(AWell: Single): TSdlFPoint;
 begin
-  Result := UnitPoint(ALeft + WellX, RamTop + WellY);
+  Result := UnitPoint(AWell, RamTop + WellY);
 end;
 
 // A point of a head's art, AX, AY units from its corner as drawn facing
-// left, on the screen: the head on the top of the mast, facing AFacing,
-// squashed to ASquash of its width about the socket, all of it turned with
-// the sway
-function HeadPoint(ALeft, AMast, ASway: Single; AHead: TRamHead;
+// left, on the screen: the head on the top of the mast in the well at
+// AWell, facing AFacing, squashed to ASquash of its width about the
+// socket, all of it turned with the sway
+function HeadPoint(AWell, AMast, ASway: Single; AHead: TRamHead;
   AFacing: Integer; ASquash, AX, AY: Single): TSdlFPoint;
 begin
   var Shape := HeadShapes[AHead];
-  var Pivot := MastPivot(ALeft);
+  var Pivot := MastPivot(AWell);
   var Upright := UnitPoint(Pivot.X - AFacing * (AX - Shape.SocketX) * ASquash,
     Pivot.Y - AMast + AY - Shape.SocketY);
   Result := Turned(Upright, Pivot, ASway);
@@ -1330,7 +1406,8 @@ begin
   FHeadShield := TTekShield.Create(BunkerShieldRadiusX, BunkerShieldRadiusY);
   // Open on top: the honeycomb only on the sides and the front, under the
   // top of the dome, where bullets are taken
-  FHeadShield.OpenAbove(HatchY - HeadShapes[rhBunker].Height / 2);
+  FHeadShield.OpenAbove(HatchY + OpenRowsDepth -
+    HeadShapes[rhBunker].Height / 2);
   FDice.Seed := ASeed;
   FWave.Stop;
 end;
@@ -1348,6 +1425,8 @@ procedure TRam.Place(AX: Single);
 begin
   FX := AX;
   FLastX := AX;
+  FHullFacing := -1;
+  FShield.Mirrored := False;
   FSpeed := 0;
   FAccel := 0;
   FBraking := False;
@@ -1601,10 +1680,11 @@ function TRam.InSightsFrom(ALeft: Single): Boolean;
 begin
   if FHead <> rhHunter then
     Exit(True);
+  var WellMiddle := WellAt(ALeft);
   var Facing := -1;
-  if FHeroCenter.X > ALeft + WellX then
+  if FHeroCenter.X > WellMiddle then
     Facing := 1;
-  var Sleeve := HeadPoint(ALeft, HunterMast, 0, rhHunter, Facing, 1,
+  var Sleeve := HeadPoint(WellMiddle, HunterMast, 0, rhHunter, Facing, 1,
     HunterSleeveX, HunterSleeveY);
   AimWithin(Bearing(Sleeve, FHeroCenter), Facing, Result);
 end;
@@ -1754,8 +1834,8 @@ begin
 end;
 
 // From the sweeper's blast on it keeps to the right wall: the bunker rises
-// there, the chase runs there, and it stays there once the bunker is gone.
-// Only the bunker's falls back and its hunt take it away.
+// there and the chase runs there. Only the bunker's falls back and its
+// hunt take it away, and the hunt goes on after the bunker is gone.
 function TRam.AtTheWall: Boolean;
 begin
   Result := FKilled in [rhSweeper, rhBunker];
@@ -1843,7 +1923,7 @@ begin
   FHeadKilled := False;
   FCue.Blast := True;
   var Shape := HeadShapes[FHead];
-  FCue.BlastAt := HeadPoint(FX, FMast, FSway, FHead, FFacing, TurnSquash,
+  FCue.BlastAt := HeadPoint(WellAt(FX), FMast, FSway, FHead, FFacing, TurnSquash,
     Shape.Width / 2, Shape.Height / 2);
   FCue.Jolt := Max(FCue.Jolt, HeadBlastJolt);
   FBlastAt := FCue.BlastAt;
@@ -1860,8 +1940,13 @@ begin
   FArmed := False;
   FFire := rfIdle;
   FFallBack := fbNone;
-  FHunt := htNone;
-  FRamStandTicks := 0;
+  // The bunker's death leaves the hunt on: the machine runs on without a
+  // head, nothing left to hit on it, till the hero's henshin
+  if FKilled <> rhBunker then
+  begin
+    FHunt := htNone;
+    FRamStandTicks := 0;
+  end;
   FHatch := bhAiming;
   FLid := 0;
   FLensHot := False;
@@ -1873,7 +1958,9 @@ begin
     rpDriving:
       begin
         FChangePending := True;
-        FTarget := StopAhead;
+        // The pass runs on off the screen: the mast sinks out there
+        if FHunt <> htPassing then
+          FTarget := StopAhead;
       end;
     rpResting, rpRevving:
       BeginChange;
@@ -1893,8 +1980,8 @@ end;
 // The empty mast sinks, a beat, the next head rises and the fight goes
 // on: the sweeper after the hunter, the bunker after the sweeper - and the
 // breath before the chase counts from the bunker's row lit. After the
-// bunker the mast stays down, and a machine that died away from the wall
-// goes back to it.
+// bunker the mast stays down and the hunt goes on where it was; one that
+// had not begun (a bunker killed before its last third) begins now.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -1908,11 +1995,9 @@ begin
     Exit;
   if FKilled = rhBunker then
   begin
-    var Wall: Single := ScreenWidth - RamWidth;
-    if FX < Wall then
-      BeginDrive(Wall, ReturnSpeed, False)
-    else
-      BeginRest(0);
+    if FHunt = htNone then
+      BeginHunt;
+    BeginRest(0);
     Exit;
   end;
   if Rising = 0 then
@@ -2095,6 +2180,12 @@ begin
   FSpeed := 0;
   FAccel := -AOldSpeed;
   FBraking := False;
+  // Off the screen: no hiss, no jolt, and the rumble runs on
+  if FHunt = htPassing then
+  begin
+    BeginTurn;
+    Exit;
+  end;
   FLamps := 1;
   FLampHold := LampHoldTicks;
   FCue.Hiss := True;
@@ -2108,13 +2199,6 @@ begin
   FCue.Jolt := Max(FCue.Jolt, PatrolStopJolt);
   if FChangePending then
     BeginChange
-  else if FHunt = htPassing then
-  begin
-    FCue.Jolt := Max(FCue.Jolt, LungeStopJolt);
-    FHunt := htHunting;
-    FHuntTicks := 0;
-    BeginRest(0);
-  end
   else if FFallBack = fbLunging then
   begin
     FCue.Jolt := Max(FCue.Jolt, LungeStopJolt);
@@ -2196,7 +2280,7 @@ begin
   var Head := FHead;
   if Head = rhNone then
     Head := rhHunter;
-  Result := HeadPoint(LeftAt(AAlpha), MastAt(AAlpha), SwayAt(AAlpha), Head,
+  Result := HeadPoint(WellAt(LeftAt(AAlpha)), MastAt(AAlpha), SwayAt(AAlpha), Head,
     FFacing, 1, HeadShapes[Head].Width / 2, 0);
 end;
 
@@ -2250,7 +2334,7 @@ begin
     Exit;
   end;
 
-  var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+  var Sleeve := HeadPoint(WellAt(FX), FMast, FSway, rhHunter, FFacing, 1,
     HunterSleeveX, HunterSleeveY);
   FWant := AimWithin(Bearing(Sleeve, FHeroCenter), FFacing, FInSights) + FSway;
 
@@ -2321,7 +2405,7 @@ begin
         if Pattern.Lead then
         begin
           // Where he will be when the bullet gets there, if he keeps going
-          var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+          var Sleeve := HeadPoint(WellAt(FX), FMast, FSway, rhHunter, FFacing, 1,
             HunterSleeveX, HunterSleeveY);
           var Flight := Hypot(FHeroCenter.X - Sleeve.X,
             FHeroCenter.Y - Sleeve.Y) / HunterBulletSpeed + Pattern.FlareTicks;
@@ -2364,7 +2448,7 @@ end;
 // A bullet out of the muzzle, along the barrel as the sway has it
 procedure TRam.Shoot;
 begin
-  var Sleeve := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, 1,
+  var Sleeve := HeadPoint(WellAt(FX), FMast, FSway, rhHunter, FFacing, 1,
     HunterSleeveX, HunterSleeveY);
   var Along := FAim - FSway;
   var Barrel := Heading(Along);
@@ -2398,7 +2482,7 @@ procedure TRam.TickRide;
 begin
   if not FArmed then
     Exit;
-  var OtherSide := (FHeroCenter.X - MastPivot(FX).X) * -FFacing;
+  var OtherSide := (FHeroCenter.X - WellAt(FX)) * -FFacing;
   if OtherSide > SweeperTurnPast then
     Inc(FPastTicks)
   else
@@ -2438,7 +2522,7 @@ begin
       if FFireTicks > 0 then
         Dec(FFireTicks)
       else if OnRow and
-        ((FHeroCenter.X - MastPivot(FX).X) * -FFacing <= SweeperTurnPast) then
+        ((FHeroCenter.X - WellAt(FX)) * -FFacing <= SweeperTurnPast) then
       begin
         FForkLeft := Pattern.Fork;
         BeginSweep(Pattern.HeatTicks);
@@ -2514,7 +2598,7 @@ end;
 procedure TRam.ShootBarrel;
 begin
   FCue.Shot := True;
-  FCue.ShotFrom := HeadPoint(FX, FMast, FSway, rhSweeper, FFacing, 1, MuzzleX,
+  FCue.ShotFrom := HeadPoint(WellAt(FX), FMast, FSway, rhSweeper, FFacing, 1, MuzzleX,
     MuzzleYs[FNextBarrel]);
   FCue.ShotAngle := 180;
   if FFacing > 0 then
@@ -2529,7 +2613,7 @@ procedure TRam.TickBunkerTurn;
 begin
   if not FArmed then
     Exit;
-  var OtherSide := (FHeroCenter.X - MastPivot(FX).X) * -FFacing;
+  var OtherSide := (FHeroCenter.X - WellAt(FX)) * -FFacing;
   if OtherSide > SweeperTurnPast then
     Inc(FPastTicks)
   else
@@ -2588,6 +2672,8 @@ begin
       begin
         FHatch := bhAiming;
         FHatchTicks := HatchAimTicks;
+        if FHunt <> htNone then
+          FHatchTicks := HuntAimTicks;
       end;
   end;
   TickLid;
@@ -2603,14 +2689,15 @@ begin
 end;
 
 // Out of the next of its two muzzles, at the hero's feet; in the second
-// phase and the hunt out of both, the other shell where the game says
+// phase out of both, the other shell where the game says. In the hunt, at
+// the pad he stands on, or else at the road under him.
 procedure TRam.Lob;
 begin
   FCue.Lob := True;
   FCue.LobAt := UnitPoint(FHeroCenter.X, FHero.Body.Y + FHero.Body.H);
+  FCue.LobForRoad := (FHunt <> htNone) and not FHero.OnDeck;
   FCue.Jolt := Max(FCue.Jolt, LobJolt);
-  var Paired := BunkerSecondPhase or (FHunt = htHunting);
-  if not Paired then
+  if not BunkerSecondPhase then
   begin
     FCue.LobFrom := BunkerMuzzle(FNextMuzzle);
     FNextMuzzle := (FNextMuzzle + 1) mod Length(BunkerMuzzles);
@@ -2625,7 +2712,7 @@ end;
 function TRam.BunkerMuzzle(AIndex: Integer): TSdlFPoint;
 begin
   var Muzzle := BunkerMuzzles[AIndex];
-  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhBunker, FFacing, TurnSquash,
     Muzzle.X, Muzzle.Y);
 end;
 
@@ -2681,12 +2768,12 @@ begin
 end;
 
 // One danger at a time: while it warns, lunges and stands, the bunker is
-// silent; on its way back it aims again. Through the change to the hunt
-// and the pass it is silent too.
+// silent; on its way back it aims again. From the change to the hunt till
+// it is in again bow first it is silent too.
 function TRam.HoldsFire: Boolean;
 begin
   Result := (FFallBack in [fbWarning, fbLunging, fbStanding]) or
-    (FHunt in [htCalling, htPassing]);
+    (FHunt in [htCalling, htPassing, htTurning, htEntering]);
 end;
 
 function TRam.NextFallBackWait: Integer;
@@ -2712,8 +2799,9 @@ begin
   FCue.Rows := True;
 end;
 
-// The change: the eye blinks till the rows are in and a warning after;
-// then the pass to the left edge, which ends in Arrive; then the hunt
+// The change: the eye blinks till the wave is in and a warning after;
+// then the pass off the left edge, which ends in Arrive; the turn out
+// there; the drive in again and the hunt
 procedure TRam.TickHunt;
 begin
   case FHunt of
@@ -2726,44 +2814,173 @@ begin
         if FRowsIn and (FHuntTicks >= HuntPassWarnTicks) then
         begin
           FHunt := htPassing;
-          BeginDrive(0, LungeSpeed, False);
+          BeginDrive(-RamWidth - PassBeyond, LungeSpeed, False);
         end;
       end;
-    htHunting:
+    htTurning:
+      begin
+        Inc(FHuntTicks);
+        if FHuntTicks >= HuntTurnTicks then
+          FHunt := htEntering;
+      end;
+    htEntering, htHunting:
       TickHuntDrive;
   end;
 end;
 
-// Not of the world: the road does not carry it. Its hatch a step behind
-// the hero, at its pace and no faster; after a ram it stands while he
-// flies clear.
+// Off the screen it faces right from now on
+procedure TRam.BeginTurn;
+begin
+  FHunt := htTurning;
+  FHuntTicks := 0;
+  FHullFacing := 1;
+  FShield.Mirrored := True;
+  BeginRest(0);
+end;
+
+// Where its left edge would put the bow a step behind him
+function TRam.HuntMark: Single;
+begin
+  Result := EnsureRange(FHeroCenter.X - HuntTrail - RamWidth, 0,
+    ScreenWidth - RamWidth);
+end;
+
+// Not of the world: the road does not carry it. Its bow a step behind the
+// hero, a little faster than he runs; back only for one who has come down
+// behind its stern - one on a pad there the road carries back over its
+// hatch. After a ram it stands while he flies clear. It comes in from
+// beyond the left edge at the lunge's pace, whole onto the screen.
 procedure TRam.TickHuntDrive;
 begin
-  // The pass ended with the brake's hiss
-  if FHuntTicks = 0 then
-    FCue.Rumble := True;
-  Inc(FHuntTicks);
   var OldSpeed := FSpeed;
-  var Want: Single := 0;
-  if FRamStandTicks > 0 then
-    Dec(FRamStandTicks)
-  else if FHero.Alive then
+  var Entering := FHunt = htEntering;
+  var Mark := FX;
+  if FHero.Alive then
+    Mark := HuntMark;
+  if Entering then
+    Mark := Max(Mark, 0)
+  else if FRamStandTicks > 0 then
   begin
-    var Mark := FHeroCenter.X - HuntTrail - WellX;
-    Want := EnsureRange((Mark - FX) * HuntGain, -HuntBehindSpeed,
-      HuntBehindSpeed);
+    Dec(FRamStandTicks);
+    Mark := FX;
   end;
+  var Behind := FHero.Alive and not FHero.OnDeck and (FHeroCenter.X < FX);
+  if not Behind then
+    Mark := Max(Mark, FX);
+
+  var Fastest: Single := HuntBehindSpeed;
+  var Least: Single := 0;
+  if Entering then
+  begin
+    Fastest := LungeSpeed;
+    Least := FX;
+  end
+  else
+  begin
+    TickSurge;
+    // Past its line it goes back to it, whoever is where - as fast as it
+    // surged, so the right is pressed only for a breath
+    var LineLeft: Single := HuntLine - RamWidth;
+    Mark := Min(Mark, LineLeft);
+    if (FSurge = hsSurging) or (FX > LineLeft) then
+      Fastest := LungeSpeed;
+  end;
+  var Want: Single := EnsureRange((Mark - FX) * HuntGain, -Fastest, Fastest);
   FSpeed := EnsureRange(Want, FSpeed - Brake, FSpeed + Brake);
   var Next: Single := FX + FSpeed;
-  FX := EnsureRange(Next, 0, ScreenWidth - RamWidth);
+  FX := EnsureRange(Next, Least, ScreenWidth - RamWidth);
   if FX <> Next then
     FSpeed := 0;
   FAccel := FSpeed - OldSpeed;
+  if Entering and (FX > -EnterSlop) then
+  begin
+    FHunt := htHunting;
+    FSurge := hsWaiting;
+    FSurgeTicks := NextSurgeWait;
+  end;
+end;
+
+procedure TRam.TickSurge;
+begin
+  case FSurge of
+    hsWaiting:
+      begin
+        Dec(FSurgeTicks);
+        if FSurgeTicks <= 0 then
+        begin
+          FSurge := hsWarning;
+          FSurgeTicks := 0;
+        end;
+      end;
+    hsWarning:
+      begin
+        Inc(FSurgeTicks);
+        if FSurgeTicks >= HuntSurgeWarnTicks then
+        begin
+          FSurge := hsSurging;
+          FSurgeTicks := 0;
+        end;
+      end;
+    hsSurging:
+      begin
+        Inc(FSurgeTicks);
+        if FSurgeTicks >= HuntSurgeTicks then
+        begin
+          FSurge := hsWaiting;
+          FSurgeTicks := NextSurgeWait;
+        end;
+      end;
+  end;
+end;
+
+function TRam.SurgeWarns: Boolean;
+begin
+  Result := (FHunt = htHunting) and (FSurge = hsWarning);
+end;
+
+// How far right its bow may go now
+function TRam.HuntLine: Single;
+begin
+  Result := HuntMiddleLine;
+  if FSurge = hsSurging then
+    Result := HuntFarLine;
+end;
+
+function TRam.NextSurgeWait: Integer;
+begin
+  Result := HuntSurgeEveryLeastTicks + Round(FDice.NextUnit *
+    (HuntSurgeEveryMostTicks - HuntSurgeEveryLeastTicks));
 end;
 
 function TRam.Hunts: Boolean;
 begin
   Result := FHunt <> htNone;
+end;
+
+function TRam.PeekLevel: Single;
+begin
+  if FHunt <> htTurning then
+    Exit(0);
+  Result := EnsureRange((FHuntTicks - (HuntTurnTicks - HuntPeekTicks)) /
+    HuntPeekTicks, 0.0, 1.0);
+end;
+
+function TRam.HullMirrored: Boolean;
+begin
+  Result := FHullFacing > 0;
+end;
+
+function TRam.WellAt(ALeft: Single): Single;
+begin
+  Result := HullSpot(ALeft, WellPoint).X;
+end;
+
+function TRam.HullSpot(ALeft: Single; const APoint: THullPoint): TSdlFPoint;
+begin
+  var Across := APoint.X;
+  if HullMirrored then
+    Across := RamWidth - Across;
+  Result := UnitPoint(ALeft + Across, RamTop + APoint.Y);
 end;
 
 procedure TRam.RowsArrived;
@@ -2777,20 +2994,27 @@ end;
 function TRam.BunkerMiddle: TSdlFPoint;
 begin
   var Shape := HeadShapes[rhBunker];
-  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhBunker, FFacing, TurnSquash,
     Shape.Width / 2, Shape.Height / 2);
 end;
 
 function TRam.HatchPoint: TSdlFPoint;
 begin
-  Result := HeadPoint(FX, FMast, FSway, rhBunker, FFacing, TurnSquash,
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhBunker, FFacing, TurnSquash,
     HatchX, HatchY);
 end;
 
-// Down onto the top of the dome within its width: a steep enough bullet
-// takes a life, the lid shut or open; a shallow one only flares the
-// honeycomb. Elsewhere the honeycomb takes it - on the sides and the
-// front, under the top: over it a bullet flies on.
+function TRam.OpenTop: TSdlFPoint;
+begin
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhBunker, FFacing, TurnSquash,
+    HatchX, HatchY + OpenRowsDepth);
+end;
+
+// Down onto the top of the dome within its width, past the line where the
+// honeycomb begins: a steep enough bullet takes a life, the lid shut or
+// open; a shallow one only flares the honeycomb. Elsewhere the honeycomb
+// takes it - on the sides and the front, under that line: over it a bullet
+// flies on.
 function TRam.StrikeBunker(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
   out AGuarded: Boolean): Boolean;
 begin
@@ -2799,7 +3023,7 @@ begin
   if not Present or (FHead <> rhBunker) or not FArmed or FHeadKilled or
     (TurnSquash < ThinHeadSquash) then
     Exit(False);
-  var Opening := HatchPoint;
+  var Opening := OpenTop;
   var Half := HatchHalfWidth * TurnSquash;
   var Fall := ATo.Y - AFrom.Y;
   var Middle := BunkerMiddle;
@@ -2909,14 +3133,15 @@ begin
 end;
 
 // Lit, it breathes; while a head rises, through a change of heads, through
-// the sweeper's end, before the bunker's fall back and through the change
-// to its hunt, it blinks - the warning
+// the sweeper's end, before the bunker's fall back, through the change to
+// its hunt and as it turns round off the screen, it blinks - the warning
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
   else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading or
-    (FFallBack = fbWarning) or (FHunt = htCalling) then
+    (FFallBack = fbWarning) or (FHunt in [htCalling, htTurning]) or
+    SurgeWarns then
   begin
     var Clock := FPhaseTicks;
     if FRetreating then
@@ -2925,8 +3150,10 @@ begin
       Clock := FOverloadTicks
     else if FFallBack = fbWarning then
       Clock := FFallBackTicks
-    else if FHunt = htCalling then
-      Clock := FHuntTicks;
+    else if FHunt in [htCalling, htTurning] then
+      Clock := FHuntTicks
+    else if SurgeWarns then
+      Clock := FSurgeTicks;
     FEye := EyeBlinkLow;
     if (Clock div EyeBlinkTicks) mod 2 = 0 then
       FEye := 1;
@@ -2993,9 +3220,19 @@ begin
   var LastRow := Ceil(ABox.Y + ABox.H - RamTop) - 1;
   for var Row := Max(FirstRow, 0) to Min(LastRow, FBody.Height - 1) do
     for var Col := Max(FirstCol, 0) to Min(LastCol, FBody.Width - 1) do
-      if FBody.At(Col, Row) then
+      if SolidAt(Col, Row) then
         Exit(True);
   Result := False;
+end;
+
+// The body at ACol from the hull's left edge on the screen, turned round
+// or not
+function TRam.SolidAt(ACol, ARow: Integer): Boolean;
+begin
+  var Col := ACol;
+  if HullMirrored then
+    Col := FBody.Width - 1 - ACol;
+  Result := FBody.At(Col, ARow);
 end;
 
 // The columns of the body that the rows of ABox meet, the whole width of
@@ -3009,7 +3246,7 @@ begin
   var LastRow := Min(Ceil(ABox.Y + ABox.H - RamTop) - 1, FBody.Height - 1);
   for var Row := FirstRow to LastRow do
     for var Col := 0 to FBody.Width - 1 do
-      if FBody.At(Col, Row) then
+      if SolidAt(Col, Row) then
       begin
         AFirst := Min(AFirst, Col);
         ALast := Max(ALast, Col);
@@ -3050,9 +3287,9 @@ begin
   end;
   if FClearTicks > 0 then
     Exit(False);
-  // In the pass and the hunt a touch on the road is a throw over the hull,
-  // and in the air or on a pad there is none
-  if FHunt in [htPassing, htHunting] then
+  // From the pass on a touch on the road is a throw over the hull, and in
+  // the air or on a pad there is none
+  if FHunt in [htPassing..htHunting] then
     Exit(False);
   if AOnDeck then
   begin
@@ -3075,11 +3312,13 @@ begin
   AThrow := Default(TOverTheHull);
   if not Present or not AOnRoad or FHeroThrown then
     Exit(False);
-  if FHunt in [htPassing, htHunting] then
+  if FHunt in [htPassing..htHunting] then
   begin
-    if not RamsOnTheRoad(AHeroBody) then
+    if (FClearTicks > 0) or not Overlaps(AHeroBody) then
       Exit(False);
-    AThrow.Side := HuntThrowSide(AHeroBody);
+    // To the right, his side: in the pass the hull drives on left under
+    // him, in the hunt its bow keeps a step behind him, short of the wall
+    AThrow.Side := 1;
     AThrow.Way := HuntFlingWay;
     FRamStandTicks := RamStandTicks;
   end
@@ -3094,53 +3333,6 @@ begin
   FHeroThrown := True;
   FClearTicks := ClearTicks;
   Result := True;
-end;
-
-function TRam.Shoves(const AHeroBody: TSdlFRect; AOnRoad: Boolean): Single;
-begin
-  Result := 0;
-  if not Present or (FHunt <> htPassing) or not AOnRoad or FHeroThrown or
-    (FClearTicks > 0) or not Overlaps(AHeroBody) then
-    Exit;
-  var Depth := AHeroBody.X + AHeroBody.W - BowAt(AHeroBody);
-  if Depth <= ShoveDeepest then
-    Result := -Depth;
-end;
-
-// The left edge of the hull along the rows of his body
-function TRam.BowAt(const AHeroBody: TSdlFRect): Single;
-begin
-  Result := FX;
-  var First, Last: Integer;
-  if SpanAcross(AHeroBody, First, Last) then
-    Result := FX + First;
-end;
-
-// In the pass the bow shoves him before it till he is pinned at the left
-// edge, and throws at once one it has run into deep - one who came down
-// inside the hull. In the hunt any touch on the road is a ram.
-function TRam.RamsOnTheRoad(const AHeroBody: TSdlFRect): Boolean;
-begin
-  if (FClearTicks > 0) or not Overlaps(AHeroBody) then
-    Exit(False);
-  if FHunt = htHunting then
-    Exit(True);
-  var Bow := BowAt(AHeroBody);
-  var Deep := AHeroBody.X + AHeroBody.W - Bow > ShoveDeepest;
-  var Pinned := Bow < AHeroBody.W + PinRoom;
-  Result := Deep or Pinned;
-end;
-
-// To the right, but at the right wall, with no room past the stern for
-// his body, back over it to the left
-function TRam.HuntThrowSide(const AHeroBody: TSdlFRect): Integer;
-begin
-  Result := 1;
-  var First, Last: Integer;
-  if not SpanAcross(AHeroBody, First, Last) then
-    Exit;
-  if ScreenWidth - (FX + Last + 1) < AHeroBody.W then
-    Result := -1;
 end;
 
 function TRam.Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
@@ -3167,7 +3359,7 @@ end;
 
 function TRam.LensPoint: TSdlFPoint;
 begin
-  Result := HeadPoint(FX, FMast, FSway, rhHunter, FFacing, TurnSquash,
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhHunter, FFacing, TurnSquash,
     HunterLensX, HunterLensY);
 end;
 
@@ -3214,7 +3406,7 @@ end;
 function TRam.ToHead(const APoint: TSdlFPoint): TSdlFPoint;
 begin
   var Shape := HeadShapes[rhSweeper];
-  var Pivot := MastPivot(FX);
+  var Pivot := MastPivot(WellAt(FX));
   var Upright := Turned(APoint, Pivot, -FSway);
   Result := UnitPoint(Shape.SocketX - (Upright.X - Pivot.X) / (FFacing * TurnSquash),
     Upright.Y - Pivot.Y + FMast + Shape.SocketY);
@@ -3277,7 +3469,7 @@ end;
 
 function TRam.BarrelsPoint: TSdlFPoint;
 begin
-  Result := HeadPoint(FX, FMast, FSway, rhSweeper, FFacing, TurnSquash,
+  Result := HeadPoint(WellAt(FX), FMast, FSway, rhSweeper, FFacing, TurnSquash,
     (BarrelsLeft + BarrelsRight) / 2, (BarrelsTop + BarrelsBottom) / 2);
 end;
 
@@ -3558,9 +3750,15 @@ begin
   FHull.Doze;
   var Placement := Default(TDynamicPlacement);
   Placement.Tint := ExhaustTint;
-  for var i := Low(FExhausts) to High(FExhausts) do
-    FExhausts[i] := TSmoke.CreateLook(Placement, ExhaustSmoke, ExhaustIdle,
-      ExhaustSeeds[i]);
+  for var Turned := False to True do
+  begin
+    var Look := ExhaustSmoke;
+    if Turned then
+      Look.Angle := 180 - Look.Angle;
+    for var i := Low(ExhaustSeeds) to High(ExhaustSeeds) do
+      FExhausts[Turned][i] := TSmoke.CreateLook(Placement, Look, ExhaustIdle,
+        ExhaustSeeds[i]);
+  end;
   FHeadSmoke := TSmoke.CreateLook(Placement, HeadSmokeLook, 0, HeadSmokeSeed);
   for var Head := Low(FShorts) to High(FShorts) do
     FShorts[Head] := TLightning.CreateLook(Default(TDynamicPlacement),
@@ -3640,12 +3838,13 @@ begin
     for var Exhaust in FExhausts do
       Exhaust.FadeTo(Level, ExhaustRampTicks);
   end;
-  for var i := Low(FExhausts) to High(FExhausts) do
-  begin
-    FExhausts[i].Drift(-ABeltShift, 0);
-    FExhausts[i].Tick(FRam.Left + ExhaustPoints[i].X,
-      RamTop + ExhaustPoints[i].Y, True);
-  end;
+  for var Turned := False to True do
+    for var i := Low(ExhaustPoints) to High(ExhaustPoints) do
+    begin
+      var Spot := FRam.HullSpot(FRam.Left, ExhaustPoints[i]);
+      FExhausts[Turned][i].Drift(-ABeltShift, 0);
+      FExhausts[Turned][i].Tick(Spot.X, Spot.Y, Turned = FRam.HullMirrored);
+    end;
 end;
 
 // A wounded hunter smokes from its head; an empty mast from its top while
@@ -3660,12 +3859,13 @@ begin
     FHeadSmoking := Smoking;
     FHeadSmoke.FadeTo(Ord(Smoking), HeadSmokeRampTicks);
   end;
-  var Source := MastPivot(FRam.Left);
+  var Well := FRam.WellAt(FRam.Left);
+  var Source := MastPivot(Well);
   Source.Y := Source.Y - FRam.Mast;
   if FRam.Head <> rhNone then
   begin
     var Shape := HeadShapes[FRam.Head];
-    Source := HeadPoint(FRam.Left, FRam.Mast, FRam.SwayAt(1), FRam.Head,
+    Source := HeadPoint(Well, FRam.Mast, FRam.SwayAt(1), FRam.Head,
       FRam.Facing, 1, Shape.Width / 2, Shape.Height / 2);
   end;
   FHeadSmoke.Drift(-ABeltShift, 0);
@@ -3687,7 +3887,7 @@ begin
       Level := FRam.ShortLevel;
     FShorts[Head].FadeTo(Level, 0);
     var Shape := HeadShapes[Head];
-    var Middle := HeadPoint(FRam.Left, FRam.Mast, FRam.SwayAt(1), Head,
+    var Middle := HeadPoint(FRam.WellAt(FRam.Left), FRam.Mast, FRam.SwayAt(1), Head,
       FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2);
     FShorts[Head].Tick(Middle.X, Middle.Y, OnTheMast);
     if Head = rhSweeper then
@@ -3740,26 +3940,26 @@ end;
 // The sections back to front - the narrowest rides out of the wider ones
 // - each top raised by its share of the mast's rise, then the head on the
 // top collar. All of it turned with the sway about the middle of the well.
-procedure TRamPainter.DrawMast(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawMast(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
-  var Pivot := MastPivot(ALeft);
+  var Pivot := MastPivot(AWell);
   var Rise := AMast - MastRest;
   for var Section := High(FArt.FMasts) downto Low(FArt.FMasts) do
   begin
     var Top := Pivot.Y - MastRest - Rise * Section / High(FArt.FMasts);
     var Middle := UnitPoint(Pivot.X, Top + MastLengths[Section] / 2);
     ASprites.DrawSized(FArt.FMasts[Section], Turned(Middle, Pivot, ASway),
-      MastWidths[Section], MastLengths[Section], 1, False, ASway);
+      MastWidths[Section], MastLengths[Section], 1, FRam.HullMirrored, ASway);
   end;
-  DrawHead(ASprites, ALeft, AMast, ASway, AAlpha);
+  DrawHead(ASprites, AWell, AMast, ASway, AAlpha);
 end;
 
 // The head facing its way, squashed in a turn; the hunter's barrel over it
 // on the sleeve, along its aim. The art faces left; facing right it is
 // mirrored, and so is the barrel, which then lies along the aim from the
 // other end.
-procedure TRamPainter.DrawHead(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawHead(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
   var Head := FRam.Head;
@@ -3780,15 +3980,15 @@ begin
         Mirrored := Facing < 0;
       end;
   end;
-  ASprites.DrawSized(Texture, HeadPoint(ALeft, AMast, ASway, Head, Facing,
+  ASprites.DrawSized(Texture, HeadPoint(AWell, AMast, ASway, Head, Facing,
     Squash, Shape.Width / 2, Shape.Height / 2), Shape.Width * Squash,
     Shape.Height, 1, Mirrored, ASway);
   if Head = rhBunker then
-    DrawLid(ASprites, ALeft, AMast, ASway, AAlpha);
+    DrawLid(ASprites, AWell, AMast, ASway, AAlpha);
   if Head <> rhHunter then
     Exit;
 
-  var Sleeve := HeadPoint(ALeft, AMast, ASway, rhHunter, Facing, Squash,
+  var Sleeve := HeadPoint(AWell, AMast, ASway, rhHunter, Facing, Squash,
     HunterSleeveX, HunterSleeveY);
   var Along := FRam.AimAt(AAlpha) - ASway;
   var Barrel := Heading(Along);
@@ -3804,7 +4004,7 @@ end;
 // where it lies shut by how shut it is. Worked out on the art as drawn
 // facing right, then put into the left-facing frame of the heads; mirrored,
 // the turn goes the other way.
-procedure TRamPainter.DrawLid(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawLid(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
   var Shape := HeadShapes[rhBunker];
@@ -3823,12 +4023,12 @@ begin
   var Clockwise := -Turn;
   if Mirrored then
     Clockwise := Turn;
-  ASprites.DrawSized(FArt.FBunkerLid, HeadPoint(ALeft, AMast, ASway, rhBunker,
+  ASprites.DrawSized(FArt.FBunkerLid, HeadPoint(AWell, AMast, ASway, rhBunker,
     FRam.Facing, Squash, Shape.Width - CenterX, CenterY), Shape.Width * Squash,
     Shape.Height, 1, Mirrored, Clockwise + ASway);
 end;
 
-procedure TRamPainter.DrawTop(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawTop(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
   if not FRam.Armed then
@@ -3843,7 +4043,7 @@ begin
   else
     Level := Lerp(TopGlowLow, TopGlowHigh,
       0.5 - 0.5 * Cos(2 * Pi * (FAge + AAlpha) / TopGlowTicks));
-  var Top := HeadPoint(ALeft, AMast, ASway, rhBunker, FRam.Facing,
+  var Top := HeadPoint(AWell, AMast, ASway, rhBunker, FRam.Facing,
     FRam.TurnSquash, HatchX, HatchY);
   DrawGlowTurned(FArt.FRenderer, FArt.FGlow, Top.X + ASprites.Origin.X,
     Top.Y + ASprites.Origin.Y, TopGlowWidth * FRam.TurnSquash, TopGlowHeight,
@@ -3874,7 +4074,7 @@ end;
 // The barrels in white over the sweeper: red as they burn before and
 // through a sweep, white while its row comes up, for a moment when they
 // are struck, and as the overload whitens the head
-procedure TRamPainter.DrawHeat(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawHeat(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
   var Level := FRam.HeatAt(AAlpha);
@@ -3893,14 +4093,14 @@ begin
     Exit;
   var Shape := HeadShapes[rhSweeper];
   SDL_SetTextureColorMod(FArt.FSweeperHeat, Color.R, Color.G, Color.B);
-  ASprites.DrawSized(FArt.FSweeperHeat, HeadPoint(ALeft, AMast, ASway,
+  ASprites.DrawSized(FArt.FSweeperHeat, HeadPoint(AWell, AMast, ASway,
     rhSweeper, FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2),
     Shape.Width * FRam.TurnSquash, Shape.Height, Level, FRam.Facing > 0, ASway);
 end;
 
 // The whole head whitening as the overload goes on: its art added over
 // itself, brighter and brighter
-procedure TRamPainter.DrawOverload(const ASprites: TSpriteRenderer; ALeft,
+procedure TRamPainter.DrawOverload(const ASprites: TSpriteRenderer; AWell,
   AMast, ASway: Single);
 begin
   var Level := FRam.Overload;
@@ -3909,7 +4109,7 @@ begin
   var Shape := HeadShapes[rhSweeper];
   var Texture := FArt.FSweeper;
   SDL_SetTextureBlendMode(Texture, SdlBlendModeAdd);
-  ASprites.DrawSized(Texture, HeadPoint(ALeft, AMast, ASway, rhSweeper,
+  ASprites.DrawSized(Texture, HeadPoint(AWell, AMast, ASway, rhSweeper,
     FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2),
     Shape.Width * FRam.TurnSquash, Shape.Height, OverloadWhite * Level,
     FRam.Facing > 0, ASway);
@@ -3986,9 +4186,11 @@ begin
   if Level <= 0 then
     Exit;
   for var Lamp in LampPoints do
-    DrawGlow(FArt.FRenderer, FArt.FGlow,
-      ALeft + Lamp.X + ASprites.Origin.X, RamTop + Lamp.Y + ASprites.Origin.Y,
-      LampSize, LampColor, Level);
+  begin
+    var Spot := FRam.HullSpot(ALeft, Lamp);
+    DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + ASprites.Origin.X,
+      Spot.Y + ASprites.Origin.Y, LampSize, LampColor, Level);
+  end;
 end;
 
 procedure TRamPainter.DrawEye(const ASprites: TSpriteRenderer;
@@ -3997,14 +4199,26 @@ begin
   var Level := FRam.EyeAt(AAlpha);
   if Level <= 0 then
     Exit;
-  DrawGlow(FArt.FRenderer, FArt.FGlow, ALeft + EyePoint.X + ASprites.Origin.X,
-    RamTop + EyePoint.Y + ASprites.Origin.Y,
-    Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)), EyeColor, Level);
+  var Spot := FRam.HullSpot(ALeft, EyePoint);
+  DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + ASprites.Origin.X,
+    Spot.Y + ASprites.Origin.Y, Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)),
+    EyeColor, Level);
+end;
+
+// Turning round beyond the left edge it is not drawn: its eye's red is
+// thrown on the edge, blinking, brighter the nearer it is to coming back
+procedure TRamPainter.DrawPeek(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Level := FRam.PeekLevel * FRam.EyeAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  DrawGlow(FArt.FRenderer, FArt.FGlow, AOrigin.X,
+    RamTop + EyePoint.Y + AOrigin.Y, PeekSize, EyeColor, Level);
 end;
 
 // On the hunter's head, turned and squashed as the head is: pale and
 // winking, red and bigger while it burns, a flash when it is struck
-procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; ALeft, AMast,
+procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; AWell, AMast,
   ASway, AAlpha: Single);
 begin
   if FRam.Head <> rhHunter then
@@ -4012,7 +4226,7 @@ begin
   var Level := FRam.LensAt(AAlpha);
   if Level <= 0 then
     Exit;
-  var Lens := HeadPoint(ALeft, AMast, ASway, rhHunter, FRam.Facing,
+  var Lens := HeadPoint(AWell, AMast, ASway, rhHunter, FRam.Facing,
     FRam.TurnSquash, HunterLensX, HunterLensY);
   var Size := Lerp(LensEmberSize, LensWinkSize, Level);
   var Color := LensColor;
@@ -4039,28 +4253,30 @@ begin
   var Left := FRam.LeftAt(AAlpha);
   var Stand: THullStand;
   Stand.Center := UnitPoint(Left + RamWidth / 2, RamTop + RamHeight / 2);
-  Stand.Mirrored := False;
+  Stand.Mirrored := FRam.HullMirrored;
+  var Well := FRam.WellAt(Left);
   var Mast := FRam.MastAt(AAlpha);
   var Sway := FRam.SwayAt(AAlpha);
 
-  ASprites.DrawSized(FArt.FWell, Stand.Center, RamWidth, RamHeight);
+  ASprites.DrawSized(FArt.FWell, Stand.Center, RamWidth, RamHeight, 1,
+    Stand.Mirrored);
   FHull.DrawUnder(ASprites, Stand, AAlpha);
   ASprites.ClipAbove(RamTop + MastHiddenBelow);
-  DrawMast(ASprites, Left, Mast, Sway, AAlpha);
+  DrawMast(ASprites, Well, Mast, Sway, AAlpha);
   ASprites.ClearClip;
   FHull.DrawBody(ASprites, Stand, AAlpha);
   DrawEye(ASprites, Left, AAlpha);
   ASprites.ClipAbove(RamTop + WellY);
-  DrawMast(ASprites, Left, Mast, Sway, AAlpha);
-  DrawLens(ASprites, Left, Mast, Sway, AAlpha);
+  DrawMast(ASprites, Well, Mast, Sway, AAlpha);
+  DrawLens(ASprites, Well, Mast, Sway, AAlpha);
   // Once: the mast is drawn twice, and the heat and the light are
   // see-through
   if FRam.Head = rhBunker then
-    DrawTop(ASprites, Left, Mast, Sway, AAlpha);
+    DrawTop(ASprites, Well, Mast, Sway, AAlpha);
   if FRam.Head = rhSweeper then
   begin
-    DrawOverload(ASprites, Left, Mast, Sway);
-    DrawHeat(ASprites, Left, Mast, Sway, AAlpha);
+    DrawOverload(ASprites, Well, Mast, Sway);
+    DrawHeat(ASprites, Well, Mast, Sway, AAlpha);
   end;
   ASprites.ClearClip;
   DrawLamps(ASprites, Left, AAlpha);
@@ -4091,14 +4307,16 @@ begin
       AAlpha);
   FOverloadShort.Draw(ACanvas, FOverloadShort.Origin.X + AOrigin.X,
     FOverloadShort.Origin.Y + AOrigin.Y, AAlpha);
+  DrawPeek(AOrigin, AAlpha);
   var Left := FRam.LeftAt(AAlpha);
+  var Well := FRam.WellAt(Left);
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,
     RamTop + FRam.Body.Middle.Y + AOrigin.Y);
   FRam.Shield.Draw(ACanvas, FArt.FShield, Middle, AAlpha);
   if (FRam.Head = rhBunker) and FRam.Armed then
   begin
     var Shape := HeadShapes[rhBunker];
-    var Dome := HeadPoint(Left, FRam.MastAt(AAlpha), FRam.SwayAt(AAlpha),
+    var Dome := HeadPoint(Well, FRam.MastAt(AAlpha), FRam.SwayAt(AAlpha),
       rhBunker, FRam.Facing, FRam.TurnSquash, Shape.Width / 2, Shape.Height / 2);
     FRam.HeadShield.Draw(ACanvas, FArt.FShield,
       UnitPoint(Dome.X + AOrigin.X, Dome.Y + AOrigin.Y), AAlpha);
@@ -4110,7 +4328,7 @@ begin
     var Sway := FRam.SwayAt(AAlpha);
     for var i := Low(PlateMiddles) to High(PlateMiddles) do
     begin
-      var Plate := HeadPoint(Left, Mast, Sway, rhSweeper, FRam.Facing,
+      var Plate := HeadPoint(Well, Mast, Sway, rhSweeper, FRam.Facing,
         FRam.TurnSquash, PlateMiddles[i].X, PlateMiddles[i].Y);
       FRam.Plate(i).Draw(ACanvas, FArt.FShield,
         UnitPoint(Plate.X + AOrigin.X, Plate.Y + AOrigin.Y), AAlpha);

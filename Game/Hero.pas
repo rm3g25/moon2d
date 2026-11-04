@@ -219,9 +219,6 @@ type
     // top of his own way till he lands. As Throw, nothing for the dead or
     // one still flying.
     procedure Fling(ASide: Integer; AWay: Double);
-    // The Ram's bow shoves him AWay along the road, below 0 to the left, as
-    // far as no wall stops him
-    procedure Shove(AWay: Double);
     // The road of a chase has slid AWay under him, below 0 to the left:
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
@@ -590,11 +587,6 @@ procedure THero.Fling(ASide: Integer; AWay: Double);
 begin
   if BeginThrow(ASide, FlingBoost, FlingLockTicks) then
     FFlingWay := Sign(ASide) * AWay;
-end;
-
-procedure THero.Shove(AWay: Double);
-begin
-  CarryX(AWay);
 end;
 
 function THero.BeginThrow(ASide: Integer; ABoost: Double;

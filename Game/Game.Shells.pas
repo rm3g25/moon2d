@@ -11,9 +11,9 @@
 
   A shell that comes down on a deck bursts there, and the game knocks that
   pad off - whoever stood on it falls. One that misses every deck lands
-  on the road and rolls left along it, faster than the road runs. In the
-  air or rolling, a shell that touches the hero is spent on him. Past the
-  left edge it is gone. What a burst does to whoever is near is the
+  on the road and rolls along it the way it was lobbed, faster than the
+  road runs. In the air or rolling, a shell that touches the hero is spent
+  on him. Past either edge it is gone. What a burst does to whoever is near is the
   game's: a blast, as a tank's.
 
   In the bunker's second phase the shells come in pairs; where the second
@@ -61,8 +61,10 @@ type
     RingTicks: Integer;
     // The ticks the whole arc takes, as lobbed
     FlightTicks: Integer;
-    // How far it has rolled: its picture turns by it
+    // How far it has rolled, below 0 to the right: its picture turns by it
     Rolled: Single;
+    // The way it rolls, -1 left or 1 right: the way it was lobbed
+    RollWay: Integer;
     // Which lob since the clear it is: a new shell in a spent one's slot
     // has another
     Turn: Integer;
@@ -87,12 +89,19 @@ type
     FLobs: Integer;
     procedure Predict(var AShell: TShell; const ADecks: TArray<TShellDeck>);
     function GetShell(AIndex: Integer): TShell;
+    function Aim(const AFrom, ATarget: TSdlFPoint; out ATicks: Integer): TSdlFPoint;
+    function ReachesRoad(const AFrom: TSdlFPoint; AX: Single;
+      const ADecks: TArray<TShellDeck>): Boolean;
   public
     // ARoadY - the top of the road the shells roll on
     constructor Create(ARoadY: Single);
     // A shell out of AFrom that comes down on ATarget, both on the screen
     // now; False when every slot is taken
     function Lob(const AFrom, ATarget: TSdlFPoint): Boolean;
+    // Where on the road, nearest AX, a shell out of AFrom comes down with
+    // no deck in its way: the road at AX itself when none is clear
+    function RoadMark(const AFrom: TSdlFPoint; AX: Single;
+      const ADecks: TArray<TShellDeck>): TSdlFPoint;
     // ADecks - the decks of the screen this tick; AWay - what the road ran
     // this tick, below zero to the left
     function Tick(const ADecks: TArray<TShellDeck>; AWay: Single): TShellCue;
@@ -159,13 +168,18 @@ const
   // An arc takes this long at the least and at the most
   LobLeastTicks = 18;
   LobMostTicks = 60;
-  // Along the road, units a tick, on top of the road's own way: faster
-  // than the road runs
+  // Along the road the way it was lobbed, units a tick, on top of the
+  // road's own way: faster than the road runs
   RollSpeed = 1.6;
   // Gone this far past an edge
   ShellOffMargin = 24.0;
   // Its arc looked ahead this far at most for the ring
   PredictTicks = 240;
+  // A shell for the road looks for a way clear of the decks this far to
+  // either side of its mark at most, by this much, not this near an edge
+  RoadMarkReach = 64;
+  RoadMarkStep = 8;
+  RoadMarkMargin = 16.0;
   // A crossing this near a line is on it: the arc is aimed to end on the
   // line exactly, and the sums of its ticks miss it by a hair
   LineSlop = 0.01;
@@ -355,10 +369,30 @@ begin
   if Slot < 0 then
     Exit(False);
 
-  // Its middle aimed a radius over the target: it comes down touching it
+  var Ticks: Integer;
+  var Shell := Default(TShell);
+  Shell.State := ssFlying;
+  Shell.Middle := AFrom;
+  Shell.LastMiddle := AFrom;
+  Shell.Speed := Aim(AFrom, ATarget, Ticks);
+  Shell.Ring := ATarget;
+  Shell.RingTicks := Ticks;
+  Shell.FlightTicks := Ticks;
+  Shell.Turn := FLobs;
+  Inc(FLobs);
+  FShells[Slot] := Shell;
+  Result := True;
+end;
+
+// The speed of the arc out of AFrom that comes down on ATarget, and the
+// ticks it takes: its middle aimed a radius over the target, so it comes
+// down touching it, its top LobRise over the higher end
+function TBunkerShells.Aim(const AFrom, ATarget: TSdlFPoint;
+  out ATicks: Integer): TSdlFPoint;
+begin
   var Wanted := Min(AFrom.Y, ATarget.Y) - LobRise;
   var Drop := ATarget.Y - ShellRadius - AFrom.Y;
-  var Ticks := LobLeastTicks;
+  ATicks := LobLeastTicks;
   var Nearest := MaxSingle;
   for var i := LobLeastTicks to LobMostTicks do
   begin
@@ -367,23 +401,53 @@ begin
     if Off < Nearest then
     begin
       Nearest := Off;
-      Ticks := i;
+      ATicks := i;
     end;
   end;
+  Result := UnitPoint((ATarget.X - AFrom.X) / ATicks,
+    (Drop - ShellGravity * ATicks * (ATicks + 1) / 2) / ATicks);
+end;
 
-  var Shell := Default(TShell);
-  Shell.State := ssFlying;
-  Shell.Middle := AFrom;
-  Shell.LastMiddle := AFrom;
-  Shell.Speed := UnitPoint((ATarget.X - AFrom.X) / Ticks,
-    (Drop - ShellGravity * Ticks * (Ticks + 1) / 2) / Ticks);
-  Shell.Ring := ATarget;
-  Shell.RingTicks := Ticks;
-  Shell.FlightTicks := Ticks;
-  Shell.Turn := FLobs;
-  Inc(FLobs);
-  FShells[Slot] := Shell;
-  Result := True;
+// The whole arc onto the road at AX against the decks as they stand
+function TBunkerShells.ReachesRoad(const AFrom: TSdlFPoint; AX: Single;
+  const ADecks: TArray<TShellDeck>): Boolean;
+begin
+  var Ticks: Integer;
+  var Speed := Aim(AFrom, UnitPoint(AX, FRoadY), Ticks);
+  var Point := AFrom;
+  for var i := 1 to PredictTicks do
+  begin
+    Speed.Y := Speed.Y + ShellGravity;
+    var Next := UnitPoint(Point.X + Speed.X, Point.Y + Speed.Y);
+    var Share: Single;
+    var At: TSdlFPoint;
+    var Deck: Integer;
+    if FirstDown(Point, Next, ADecks, FRoadY, Share, At, Deck) then
+      Exit(Deck < 0);
+    Point := Next;
+  end;
+  Result := False;
+end;
+
+// The nearest first, to either side by turns, within RoadMarkReach
+function TBunkerShells.RoadMark(const AFrom: TSdlFPoint; AX: Single;
+  const ADecks: TArray<TShellDeck>): TSdlFPoint;
+const
+  Sides: array [0..1] of Integer = (-1, 1);
+begin
+  var Step := 0;
+  while Step <= RoadMarkReach do
+  begin
+    for var Side in Sides do
+    begin
+      var X := EnsureRange(AX + Side * Step, RoadMarkMargin,
+        ScreenWidth - RoadMarkMargin);
+      if ReachesRoad(AFrom, X, ADecks) then
+        Exit(UnitPoint(X, FRoadY));
+    end;
+    Inc(Step, RoadMarkStep);
+  end;
+  Result := UnitPoint(AX, FRoadY);
 end;
 
 // The rest of its arc against the decks as they stand: the road carries
@@ -444,6 +508,9 @@ begin
             begin
               Shell.State := ssRolling;
               Shell.Middle := UnitPoint(At.X, FRoadY - ShellRadius);
+              Shell.RollWay := -1;
+              if Shell.Speed.X > 0 then
+                Shell.RollWay := 1;
               Result.Landed := True;
             end;
           end
@@ -455,9 +522,10 @@ begin
         end;
       ssRolling:
         begin
-          Shell.Middle.X := Shell.Middle.X + AWay - RollSpeed;
-          Shell.Rolled := Shell.Rolled + RollSpeed;
-          if Shell.Middle.X < -ShellOffMargin then
+          Shell.Middle.X := Shell.Middle.X + AWay + Shell.RollWay * RollSpeed;
+          Shell.Rolled := Shell.Rolled - Shell.RollWay * RollSpeed;
+          if (Shell.Middle.X < -ShellOffMargin) or
+            (Shell.Middle.X > ScreenWidth + ShellOffMargin) then
             Shell.State := ssNone;
         end;
     end;

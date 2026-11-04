@@ -315,7 +315,6 @@ type
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
-    procedure ResolveRamShove;
     procedure ResolveRamThrowOver;
     procedure ResolveRamContact;
     procedure HurtByRam;
@@ -472,7 +471,7 @@ const
   ShellBurstTrauma = 0.15;
   // A shell's burst wounds whoever is near as a tank's blast does
   // (monsters.json, "tank"); it throws no shards
-  ShellBlast: TBlastDef = (Radius: 80; Lives: 100; ShardLives: 0);
+  ShellBlast: TBlastDef = (Radius: 40; Lives: 100; ShardLives: 0);
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
@@ -2863,11 +2862,8 @@ begin
     var Feet: TSdlFPoint;
     Feet.X := Target.Body.X + Target.Body.W / 2;
     Feet.Y := Target.Body.Y + Target.Body.H;
-    var Decks := ShellDecks(FPads.Standing(FHero.Screen));
-    if FRam.Hunts then
-      Target.SecondAt := AheadShellMark(Decks, Feet, RamFloorY)
-    else
-      Target.SecondAt := SecondShellMark(Decks, Feet, RamFloorY);
+    Target.SecondAt := SecondShellMark(ShellDecks(FPads.Standing(FHero.Screen)),
+      Feet, RamFloorY);
   end;
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
@@ -2891,7 +2887,11 @@ begin
     FAudio.Play(PadHumSoundFile);
   if Cue.Lob then
   begin
-    var Lobbed := FShells.Lob(Cue.LobFrom, Cue.LobAt);
+    var At := Cue.LobAt;
+    if Cue.LobForRoad then
+      At := FShells.RoadMark(Cue.LobFrom, At.X,
+        ShellDecks(FPads.Standing(FHero.Screen)));
+    var Lobbed := FShells.Lob(Cue.LobFrom, At);
     if Cue.SecondLob and FShells.Lob(Cue.SecondLobFrom, Cue.SecondLobAt) then
       Lobbed := True;
     if Lobbed then
@@ -2956,22 +2956,10 @@ begin
   FRamRumble.Channel := -1;
 end;
 
-// In the pass of the hunt the Ram's bow shoves a hero on the road before
-// it, with no wound - before the throw over its hull is asked (Game.Ram)
-procedure TMoonGame.ResolveRamShove;
-begin
-  if FHero.Dead then
-    Exit;
-  var OnRoad := not FHero.InAir and (FHero.DeckUnderFeet = nil);
-  var Way := FRam.Shoves(HeroBody(FHero), OnRoad);
-  if Way < 0 then
-    FHero.Shove(Way);
-end;
-
 // The Ram throws a hero over its hull with a wound: falling back, one who
-// comes down onto the road behind its stern; in the hunt, one it pins or
-// rams on the road - before its touch is asked, which the flight is then
-// out of (Game.Ram)
+// comes down onto the road behind its stern; in the hunt, one it touches
+// on the road - before its touch is asked, which the flight is then out of
+// (Game.Ram)
 procedure TMoonGame.ResolveRamThrowOver;
 begin
   if FHero.Dead then
@@ -3602,7 +3590,6 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
-  ResolveRamShove;
   ResolveRamThrowOver;
   ResolveRamContact;
   ResolveRamWave;

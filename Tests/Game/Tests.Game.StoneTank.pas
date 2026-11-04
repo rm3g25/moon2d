@@ -3,11 +3,12 @@
   gauge: nothing runs before the fight; a wound reaches the gauge only a
   while later, and in pulses of a percent or two at uneven gaps; the
   gauge never passes the ceiling of the head that lives - 30 while the
-  hunter does, 55 after it, 95 while the bunker does; a head's death
+  hunter does, 55 after it, 97 while the bunker does; a head's death
   pours what is left up to its ceiling, and nothing of it spills into the
   next head's quarter; the bunker's lives bring the most of its half, and
-  only its death fills the gauge; the trickle keeps the gauge alive with
-  no hit; a clear stops it all.
+  only its death fills the gauge - the last three percent a percent at a
+  time, full 10 to 15 s after its blast; the trickle keeps the gauge alive
+  with no hit; a clear stops it all.
 
   The gauge is a number here: each tick it takes what the tank gives.
 
@@ -56,6 +57,8 @@ type
     [Test]
     procedure TestTheBunkersDeathFillsTheGauge;
     [Test]
+    procedure TestFullTenToFifteenSecondsAfterTheBunker;
+    [Test]
     procedure TestTheTrickleKeepsItAlive;
     [Test]
     procedure TestClearStopsIt;
@@ -72,7 +75,7 @@ const
   StoneCharge = 5;
   HunterCeiling = 30;
   SweeperCeiling = 55;
-  BunkerCeiling = 95;
+  BunkerCeiling = 97;
   Full = 100;
   TicksPerSecond = 33;
   // Long enough for any pour to come in whole
@@ -217,10 +220,10 @@ end;
 
 procedure TStoneTankTests.TestTheBunkersLivesBringMostOfItsHalf;
 const
-  // Its whole lives: a little short of the way from 55 to 95, the
+  // Its whole lives: a little short of the way from 55 to 97, the
   // trickle over ManyTicks on top
-  LeastBrought = 30;
-  MostBrought = 40;
+  LeastBrought = 32;
+  MostBrought = 42;
 begin
   FTank.Start;
   FEnergy := HunterCeiling;
@@ -246,13 +249,41 @@ begin
   FTank.HeadDown(FEnergy);
   FEnergy := 80;
   FTank.HeadDown(FEnergy);
-  Assert.AreEqual(Full, FTank.Ceiling, 'Full now');
+  Assert.AreEqual(BunkerCeiling, FTank.Ceiling, 'Its death pours up to 97');
   for var i := 1 to ManyTicks do
   begin
     Inc(FEnergy, FTank.Tick(FEnergy));
     Assert.IsTrue(FEnergy <= Full, Format('Tick %d: %d past full', [i, FEnergy]));
   end;
   Assert.AreEqual(Full, FEnergy, 'Filled');
+end;
+
+procedure TStoneTankTests.TestFullTenToFifteenSecondsAfterTheBunker;
+const
+  Soonest = 10 * TicksPerSecond;
+  Latest = 15 * TicksPerSecond;
+begin
+  FTank.Start;
+  FEnergy := HunterCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := SweeperCeiling;
+  FTank.HeadDown(FEnergy);
+  FEnergy := BunkerCeiling;
+  FTank.HeadDown(FEnergy);
+  var Ticks := 0;
+  var Steps := 0;
+  while (FEnergy < Full) and (Ticks < ManyTicks) do
+  begin
+    var Rise := FTank.Tick(FEnergy);
+    Assert.IsTrue(Rise <= 1, 'A percent at a time');
+    Inc(Steps, Rise);
+    Inc(FEnergy, Rise);
+    Inc(Ticks);
+  end;
+  Assert.AreEqual(Full, FEnergy, 'Full');
+  Assert.AreEqual(Full - BunkerCeiling, Steps, 'The last three percent');
+  Assert.IsTrue((Ticks >= Soonest) and (Ticks <= Latest),
+    Format('Full %d ticks after the blast', [Ticks]));
 end;
 
 procedure TStoneTankTests.TestTheTrickleKeepsItAlive;

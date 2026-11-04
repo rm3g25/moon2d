@@ -42,7 +42,7 @@
   the column burns only what is in it, only
   while it blows; it turns to a hero on its other side; its thirds call
   the shuttle; its last life blows it up with no wave, the empty mast
-  sinks, and the machine stands at the wall for good.
+  sinks, and the hunt begins there.
 
   Its second phase: none in the first; the eye warns about half a second
   at the wall; the machine lunges to the middle of the screen, never
@@ -53,17 +53,28 @@
   a hero who comes down onto the road behind its stern is thrown back
   over the hull, once while he flies, and is out of its way over it - not
   from a pad or the air, not in front of it; dying away from the wall it
-  drives back to it.
+  begins the hunt where it stands.
 
   Its hunt: only in the last third, never a fall back in it. The change
-  sounds the alarm and calls the rows once, the eye blinking, the machine
-  standing silent until it is told the rows are in; a warning after, then
-  the pass to the left edge, silent. A hero on a pad lets it pass under
-  him; one on the road is shoved before the bow to the left edge and
-  thrown over the hull to the right, farther than a fall back throws. Then
-  its hatch keeps a step behind him, no faster than a little over his run;
-  a ram on the road throws him forward, back to the left at the right
-  wall, and it stands while he flies. Its shells come in pairs again.
+  sounds the alarm and calls the wave once, the eye blinking, the machine
+  standing silent until it is told the wave is in; a warning after, then
+  the pass off the left edge, silent, the whole hull past it. A hero on a
+  pad lets it pass under him; one on the road is thrown over the hull to
+  the right, farther than a fall back throws. Out there it turns round,
+  unseen, its eye's red at the edge only at the end, and drives in bow
+  first. Then its bow keeps a step behind him, no faster than a little
+  over his run, within the left half; now and then, after the eye's
+  warning, it surges toward nearly the right edge and is back within a
+  few seconds. A hero up on a pad it lets ride back over it, never
+  backing; one on the road behind its stern it backs into and throws to
+  the right. A ram on the road throws him forward, and it stands while he
+  flies. Its shells come one at a time, at his feet, sooner after each
+  other than outside the hunt. Its bunker blown up, it hunts
+  on bow first with an empty mast: no shells, no new wave, nothing to
+  hit, and a touch on the road still a ram.
+
+  Turned round, the hull is mirrored: what a touch meets and where the
+  mast stands.
 
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid. The arena is read from level2.json beside the
@@ -288,6 +299,8 @@ type
     function WaitForTheFallBack(const ATarget: TRamTarget): Integer;
     procedure WaitForTheStand(const ATarget: TRamTarget);
     procedure EnterTheThirdPhase(const ATarget: TRamTarget);
+    procedure WaitForTheWave(const ATarget: TRamTarget);
+    procedure WaitForTheTurn(const ATarget: TRamTarget);
     procedure WaitForTheHunt(const ATarget: TRamTarget);
   public
     [Setup]
@@ -310,6 +323,8 @@ type
     [Test]
     procedure TestAShotDownFromAPadGoesIn;
     [Test]
+    procedure TestARowOffTheTopReachesFromLower;
+    [Test]
     procedure TestShallowOrSideTheHoneycombTakesIt;
     [Test]
     procedure TestTheColumnBurnsWhileItBlows;
@@ -318,7 +333,7 @@ type
     [Test]
     procedure TestEachThirdCallsTheShuttle;
     [Test]
-    procedure TestTheLastLifeBlowsItUpAndItStands;
+    procedure TestTheLastLifeBlowsItUpAndTheHuntBegins;
     [Test]
     procedure TestNoFallBackInTheFirstPhase;
     [Test]
@@ -336,7 +351,7 @@ type
     [Test]
     procedure TestNoThrowOverFromAPadOrInFront;
     [Test]
-    procedure TestDiesAwayFromTheWallAndGoesBack;
+    procedure TestDiesAwayFromTheWallAndHuntsFromThere;
     [Test]
     procedure TestNoHuntBeforeTheLastThird;
     [Test]
@@ -344,19 +359,33 @@ type
     [Test]
     procedure TestStandsSilentTillTheRowsAreIn;
     [Test]
-    procedure TestPassesToTheLeftEdgeAfterAWarning;
+    procedure TestPassesOffTheLeftEdgeAfterAWarning;
     [Test]
     procedure TestAHeroOnAPadLetsItPassUnder;
     [Test]
-    procedure TestShovesHimToTheLeftEdgeAndThrowsHimOver;
+    procedure TestOnTheRoadInThePassHeIsThrownOverToTheRight;
     [Test]
-    procedure TestTheHatchKeepsAStepBehindHim;
+    procedure TestTurnsRoundUnseenAndComesInBowFirst;
+    [Test]
+    procedure TestTurnedRoundTheHullIsMirrored;
+    [Test]
+    procedure TestTheBowKeepsAStepBehindHim;
+    [Test]
+    procedure TestAHeroOnAPadRidesBackOverItsHatch;
+    [Test]
+    procedure TestBacksIntoAHeroBehindItsStern;
     [Test]
     procedure TestARamOnTheRoadThrowsHimForwardAndItStands;
     [Test]
-    procedure TestAtTheRightWallTheRamThrowsHimBack;
+    procedure TestHoldsTheLeftHalf;
     [Test]
-    procedure TestTheHuntLobsInPairs;
+    procedure TestSurgesTowardTheRightEdgeForABreath;
+    [Test]
+    procedure TestTheHuntGoesOnAfterTheBunker;
+    [Test]
+    procedure TestTheHuntLobsOneAtATimeMoreOften;
+    [Test]
+    procedure TestOffAPadTheHuntsShellIsForTheRoad;
   end;
 
 implementation
@@ -1941,27 +1970,56 @@ const
   // Where the second shell of a pair is asked to go
   SecondX = 180.0;
   SecondY = 280.0;
-  // The hunt: the warning after the rows are in, about half a second; a
-  // hero on the low row over its way; the left edge he is shoved to - the
-  // left door holds his feet at 2, his body is 8 in from them; the road
-  // runs 1 a tick against a throw to the right
+  // The hunt: the warning after the wave is in, about half a second; a
+  // hero on the low row over its way; the road runs 1 a tick against a
+  // throw to the right; the turn out of sight about a second and a half,
+  // its eye's red at the edge in the last half second of it
   ShortestPassWarnTicks = 13;
   LongestPassWarnTicks = 20;
   LowRowX = 200.0;
   LowRowDeckY = 272.0;
-  LeftEdgeX = 10.0;
   RoadAgainst = 1.0;
-  // Its hatch a step behind him: no farther than this, no nearer than the
-  // column's reach over it; no faster than a little over his run against
-  // the road; a ram's stand long enough for him to fly clear
+  ShortestTurnTicks = 40;
+  LongestTurnTicks = 60;
+  LongestPeekTicks = 20;
+  // A hero over the middle of the screen: its bow holds at the middle
+  // line under him. Long enough for it to settle there, short of the
+  // first surge.
   HuntHeroX = 300.0;
+  MiddleLine = ScreenWidth / 2;
+  // It brakes onto its line and may run past it by a unit or so; past it
+  // by this much it surges
+  LineSlop = 2.0;
+  SurgedPast = 10.0;
+  SettleTicks = 100;
+  // Its bow a step behind him, within the left half: no farther than this,
+  // no nearer than his back; no faster than a little over his run against
+  // the road; a ram's stand long enough for him to fly clear
+  StepHeroX = 210.0;
   NearestBehind = 14.0;
   FarthestBehind = 36.0;
   HuntFastest = 1.6;
-  // Long enough for it to settle on his pace, short of the right wall
-  HuntRunTicks = 100;
+  HuntRunTicks = 40;
   ShortestRamStandTicks = 40;
-  AtTheRightX = 480.0;
+  // His pad carries him back over it at the road's pace: its hatch comes
+  // under him on the way, before the first surge
+  RideHeroX = 250.0;
+  RideBackTicks = 100;
+  UnderHimSlop = 4.0;
+  // A hero far right: it holds the left half for a while; then the eye
+  // warns, it surges toward nearly the right edge and is back within a
+  // few seconds
+  FarHeroX = 480.0;
+  HoldTicks = 150;
+  SoonestSurgeTicks = 150;
+  SurgeFarthestLeast = 400.0;
+  SurgeLongestTicks = 200;
+  // The well mirrored: as far from the right edge of the hull as it is
+  // from the left one facing left
+  WellFromTheLeft = 69.9;
+  // The breath in the hunt, shell to shell: the aim 35, the beat, the
+  // column and the window - about 105, against 120 outside the hunt
+  HuntLobGapMost = 110;
 
 procedure TRamBunkerTests.Setup;
 begin
@@ -2028,7 +2086,7 @@ procedure TRamBunkerTests.StrikeTheHatch(ATimes: Integer);
 begin
   for var i := 1 to ATimes do
   begin
-    var Hatch := FRam.HatchPoint;
+    var Hatch := FRam.OpenTop;
     var Struck: TSdlFPoint;
     var Guarded: Boolean;
     Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X - 1, Hatch.Y - 10),
@@ -2085,8 +2143,8 @@ begin
   StrikeTheHatch(FRam.Lives - FRam.FullLives div 3);
 end;
 
-// The rows called, told in, the pass to the left edge over
-procedure TRamBunkerTests.WaitForTheHunt(const ATarget: TRamTarget);
+// The wave called and told in
+procedure TRamBunkerTests.WaitForTheWave(const ATarget: TRamTarget);
 begin
   EnterTheThirdPhase(ATarget);
   var Called := False;
@@ -2096,18 +2154,34 @@ begin
       Called := True;
       Break;
     end;
-  Assert.IsTrue(Called, 'The rows called');
+  Assert.IsTrue(Called, 'The wave called');
   FRam.RowsArrived;
+end;
+
+// The wave in, the pass off the left edge over
+procedure TRamBunkerTests.WaitForTheTurn(const ATarget: TRamTarget);
+begin
+  WaitForTheWave(ATarget);
   for var i := 1 to ManyTicks do
   begin
     FRam.Tick(ATarget);
-    if FRam.Left = 0 then
-    begin
-      FRam.Tick(ATarget);
+    if FRam.Hunt = htTurning then
       Exit;
-    end;
   end;
-  Assert.Fail('It never reached the left edge');
+  Assert.Fail('It never got off the screen');
+end;
+
+// The turn over, in again bow first, the hunt under way
+procedure TRamBunkerTests.WaitForTheHunt(const ATarget: TRamTarget);
+begin
+  WaitForTheTurn(ATarget);
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.Hunt = htHunting then
+      Exit;
+  end;
+  Assert.Fail('It never came back');
 end;
 
 procedure TRamBunkerTests.TestLivesFollowTheGrade;
@@ -2246,7 +2320,7 @@ begin
   WaitForTheWindow(Hero);
   for var Degrees in Steps do
   begin
-    var Hatch := FRam.HatchPoint;
+    var Hatch := FRam.OpenTop;
     var DX := Cos(DegToRad(Degrees)) * StepLength;
     var DY := Sin(DegToRad(Degrees)) * StepLength;
     // Back up the line from the middle of the opening, then down along it
@@ -2271,6 +2345,31 @@ begin
   end;
 end;
 
+// A row of cells is off the top: a bullet from a little lower or farther
+// off, that would have met the honeycomb beside the hatch, comes down past
+// the open line within its width
+procedure TRamBunkerTests.TestARowOffTheTopReachesFromLower;
+const
+  // 16 degrees down - steep enough - crossing the hatch's own line 19
+  // units short of its middle, past its width
+  Back = 40.0;
+  Above = 11.0;
+  Past = 2.0;
+  Below = 1.0;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  WaitForTheWindow(Hero);
+  var Top := FRam.OpenTop;
+  var Lives := FRam.Lives;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsTrue(FRam.StrikeBunker(At(Top.X - Back, Top.Y - Above),
+    At(Top.X + Past, Top.Y + Below), Struck, Guarded), 'It meets the head');
+  Assert.IsFalse(Guarded, 'Not the honeycomb');
+  Assert.AreEqual(Lives - 1, FRam.Lives, 'A life');
+end;
+
 procedure TRamBunkerTests.TestShallowOrSideTheHoneycombTakesIt;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
@@ -2278,7 +2377,7 @@ begin
   var Struck: TSdlFPoint;
   var Guarded: Boolean;
   var Lives := FRam.Lives;
-  var Hatch := FRam.HatchPoint;
+  var Hatch := FRam.OpenTop;
   Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X - 24, Hatch.Y - 2),
     At(Hatch.X + 24, Hatch.Y + 2), Struck, Guarded) and Guarded,
     'Too shallow');
@@ -2346,7 +2445,7 @@ begin
   Assert.AreEqual(0, Rest, 'The last third and the blast: none');
 end;
 
-procedure TRamBunkerTests.TestTheLastLifeBlowsItUpAndItStands;
+procedure TRamBunkerTests.TestTheLastLifeBlowsItUpAndTheHuntBegins;
 const
   LivesShare = 0.02;
 begin
@@ -2357,17 +2456,19 @@ begin
   var Cue := FRam.Tick(Hero);
   Assert.IsTrue(Cue.Blast, 'It blows up');
   Assert.IsFalse(Cue.Shock, 'No wave');
+  var Called := 0;
   for var i := 1 to ManyTicks do
   begin
     Cue := FRam.Tick(Hero);
-    Assert.IsFalse(Cue.Lob or Cue.Whine or Cue.Chase or Cue.Blast,
-      'Nothing comes up, nothing fires, it does not drive off again');
-    Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'It stands');
+    Assert.IsFalse(Cue.Lob or Cue.Whine or Cue.Blast,
+      'Nothing comes up, nothing fires');
+    if Cue.Rows then
+      Inc(Called);
   end;
+  Assert.AreEqual(1, Called, 'The hunt begins: the wave called once');
+  Assert.IsTrue(FRam.Hunts, 'It hunts');
   Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
   Assert.IsTrue(FRam.Mast < 0, 'Down in the well');
-  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
-    'At the right wall');
 end;
 
 
@@ -2555,7 +2656,7 @@ begin
     'In front of it the touch is the rule');
 end;
 
-procedure TRamBunkerTests.TestDiesAwayFromTheWallAndGoesBack;
+procedure TRamBunkerTests.TestDiesAwayFromTheWallAndHuntsFromThere;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
   EnterTheSecondPhase(Hero);
@@ -2569,8 +2670,9 @@ begin
   Assert.IsTrue(Blasted, 'It blows up');
   Assert.IsFalse(FRam.FallingBack, 'No fall back with the bunker gone');
   Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
-  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
-    'Back at the right wall');
+  Assert.IsTrue(FRam.Hunt = htCalling, 'The hunt begins, the wave called');
+  Assert.IsTrue(FRam.Left < ScreenWidth - RamWidth - 1,
+    'Where it stood, not back at the wall');
 end;
 
 procedure TRamBunkerTests.TestNoHuntBeforeTheLastThird;
@@ -2622,14 +2724,10 @@ begin
   end;
 end;
 
-procedure TRamBunkerTests.TestPassesToTheLeftEdgeAfterAWarning;
+procedure TRamBunkerTests.TestPassesOffTheLeftEdgeAfterAWarning;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
-  EnterTheThirdPhase(Hero);
-  for var i := 1 to ManyTicks do
-    if FRam.Tick(Hero).Rows then
-      Break;
-  FRam.RowsArrived;
+  WaitForTheWave(Hero);
   var Warned := 0;
   while (FRam.Rolled = 0) and (Warned < ManyTicks) do
   begin
@@ -2637,15 +2735,18 @@ begin
     Inc(Warned);
   end;
   Assert.IsTrue(InRange(Warned, ShortestPassWarnTicks, LongestPassWarnTicks),
-    Format('It sets off %d ticks after the rows are in', [Warned]));
+    Format('It sets off %d ticks after the wave is in', [Warned]));
   for var i := 1 to ManyTicks do
   begin
     Assert.IsFalse(FRam.Tick(Hero).Lob, 'Silent on its way');
     Assert.IsTrue(FRam.Rolled <= 0, 'Only to the left');
-    if FRam.Left = 0 then
+    if FRam.Hunt = htTurning then
+    begin
+      Assert.IsTrue(FRam.Left + RamWidth <= 0, 'The whole hull past the edge');
       Exit;
+    end;
   end;
-  Assert.Fail('It never reached the left edge');
+  Assert.Fail('It never got off the screen');
 end;
 
 procedure TRamBunkerTests.TestAHeroOnAPadLetsItPassUnder;
@@ -2653,100 +2754,174 @@ var
   Throw: TOverTheHull;
 begin
   var Hero := HeroOnAPad(LowRowX, LowRowDeckY);
-  EnterTheThirdPhase(Hero);
-  for var i := 1 to ManyTicks do
-    if FRam.Tick(Hero).Rows then
-      Break;
-  FRam.RowsArrived;
+  WaitForTheWave(Hero);
   var Away: Integer;
   for var i := 1 to ManyTicks do
   begin
     FRam.Tick(Hero);
-    Assert.AreEqual(0.0, Double(FRam.Shoves(Hero.Body, False)), 0.001,
-      'No shove on a pad');
-    Assert.IsFalse(FRam.ThrowsOverTheHull(Hero.Body, False, Throw), 'No throw on a pad');
+    Assert.IsFalse(FRam.ThrowsOverTheHull(Hero.Body, False, Throw),
+      'No throw on a pad');
     Assert.IsFalse(FRam.Contact(Hero.Body, True, False, Away),
       'No touch on a pad');
-    if FRam.Left = 0 then
-      Break;
+    if FRam.Hunt = htTurning then
+      Exit;
   end;
-  Assert.AreEqual(0.0, Double(FRam.Left), 0.001, 'At the left edge');
-  Assert.IsTrue(Hero.Body.X >= FRam.Left + RamWidth, 'He is right of it');
+  Assert.Fail('It never got off the screen');
 end;
 
-procedure TRamBunkerTests.TestShovesHimToTheLeftEdgeAndThrowsHimOver;
+procedure TRamBunkerTests.TestOnTheRoadInThePassHeIsThrownOverToTheRight;
 var
   Throw: TOverTheHull;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
-  EnterTheThirdPhase(Hero);
-  for var i := 1 to ManyTicks do
-    if FRam.Tick(Hero).Rows then
-      Break;
-  FRam.RowsArrived;
-  var BodyX: Single := FRam.Left - 17;
-  var Shoved := False;
-  var Thrown := False;
+  WaitForTheWave(Hero);
+  var Body := OnTheRoad(FRam.Left - 40);
   for var i := 1 to ManyTicks do
   begin
-    FRam.Tick(HeroOnTheRoad(BodyX));
-    var Way := FRam.Shoves(OnTheRoad(BodyX), True);
-    if Way < 0 then
+    FRam.Tick(HeroOnTheRoad(Body.X));
+    if FRam.ThrowsOverTheHull(Body, True, Throw) then
     begin
-      Shoved := True;
-      BodyX := Max(Single(LeftEdgeX), BodyX + Way);
+      Assert.AreEqual(1, Throw.Side, 'Over it to the right');
+      Assert.IsTrue(Throw.Way > RoadAgainst, 'Farther than the road carries back');
+      Assert.IsFalse(FRam.ThrowsOverTheHull(Body, True, Throw),
+        'Once a throw, while he flies');
+      Exit;
     end;
-    Thrown := FRam.ThrowsOverTheHull(OnTheRoad(BodyX), True, Throw);
-    if Thrown then
-      Break;
+    Assert.IsTrue(FRam.Hunt <> htTurning, 'Off the screen without a throw');
   end;
-  Assert.IsTrue(Shoved, 'Shoved before the bow');
-  Assert.IsTrue(Thrown, 'Thrown over the hull');
-  Assert.AreEqual(Double(LeftEdgeX), Double(BodyX), 0.001,
-    'Pinned at the left edge first');
-  Assert.AreEqual(1, Throw.Side, 'Over it to the right');
-  Assert.IsTrue(Throw.Way > RoadAgainst, 'Farther than the road carries back');
+  Assert.Fail('Never thrown');
 end;
 
-procedure TRamBunkerTests.TestTheHatchKeepsAStepBehindHim;
+procedure TRamBunkerTests.TestTurnsRoundUnseenAndComesInBowFirst;
 begin
   var Hero := HeroOnAPad(HuntHeroX, ChaseDeckY);
-  WaitForTheHunt(Hero);
-  var Fastest: Single := 0;
-  for var i := 1 to 2 * TwoBreaths do
+  WaitForTheTurn(Hero);
+  Assert.IsTrue(FRam.HullMirrored, 'Turned round');
+  var Turned := 0;
+  var FirstPeek := -1;
+  while (FRam.Hunt = htTurning) and (Turned < ManyTicks) do
+  begin
+    Assert.IsFalse(FRam.Tick(Hero).Lob, 'Silent out there');
+    Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'It stands out there');
+    Inc(Turned);
+    if (FirstPeek < 0) and (FRam.PeekLevel > 0) then
+      FirstPeek := Turned;
+  end;
+  Assert.IsTrue(InRange(Turned, ShortestTurnTicks, LongestTurnTicks),
+    Format('It turns round %d ticks', [Turned]));
+  Assert.IsTrue(FirstPeek > 0, 'Its eye''s red at the edge');
+  Assert.IsTrue(Turned - FirstPeek <= LongestPeekTicks,
+    Format('Its eye''s red %d ticks before it comes', [Turned - FirstPeek]));
+  for var i := 1 to ManyTicks do
+  begin
+    Assert.IsFalse(FRam.Tick(Hero).Lob, 'Silent coming in');
+    Assert.IsTrue(FRam.Rolled >= 0, 'Only to the right');
+    if FRam.Hunt = htHunting then
+    begin
+      Assert.IsTrue(FRam.Left > -1, 'Whole on the screen');
+      Assert.IsTrue(FRam.HullMirrored, 'Bow first');
+      Exit;
+    end;
+  end;
+  Assert.Fail('It never came in');
+end;
+
+procedure TRamBunkerTests.TestTurnedRoundTheHullIsMirrored;
+begin
+  var Hero := HeroOnAPad(HuntHeroX, ChaseDeckY);
+  WaitForTheWave(Hero);
+  Assert.IsFalse(FRam.HullMirrored, 'Facing left at the wall');
+  Assert.AreEqual(WellFromTheLeft, Double(FRam.WellAt(FRam.Left) - FRam.Left),
+    0.001, 'Facing left, the well as drawn');
+  for var i := 1 to ManyTicks do
   begin
     FRam.Tick(Hero);
-    Fastest := Max(Fastest, Abs(FRam.Rolled));
+    if FRam.Hunt = htTurning then
+      Break;
   end;
-  var Behind := CenterOf(Hero).X - FRam.HatchPoint.X;
+  Assert.AreEqual(Double(RamWidth - WellFromTheLeft),
+    Double(FRam.WellAt(FRam.Left) - FRam.Left), 0.001,
+    'Turned round, the well mirrored');
+end;
+
+procedure TRamBunkerTests.TestTheBowKeepsAStepBehindHim;
+begin
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  for var i := 1 to SettleTicks do
+    FRam.Tick(Hero);
+  var Behind := CenterOf(Hero).X - (FRam.Left + RamWidth);
   Assert.IsTrue(InRange(Behind, NearestBehind, FarthestBehind),
-    Format('Its hatch %g behind him', [Behind]));
-  Assert.IsTrue(Fastest <= HuntFastest, Format('At %g a tick', [Fastest]));
-  // He runs along a row against the road: 1 a tick on the screen
+    Format('Its bow %g behind him', [Behind]));
+  // He runs against the road: 1 a tick on the screen
+  var Fastest: Single := 0;
   for var i := 1 to HuntRunTicks do
   begin
     Hero.Body.X := Hero.Body.X + 1;
     FRam.Tick(Hero);
+    Fastest := Max(Fastest, Abs(FRam.Rolled));
   end;
-  Behind := CenterOf(Hero).X - FRam.HatchPoint.X;
+  Behind := CenterOf(Hero).X - (FRam.Left + RamWidth);
   Assert.IsTrue(InRange(Behind, NearestBehind, FarthestBehind),
-    Format('It keeps up, its hatch %g behind him', [Behind]));
+    Format('It keeps up, its bow %g behind him', [Behind]));
+  Assert.IsTrue(Fastest <= HuntFastest, Format('At %g a tick', [Fastest]));
+end;
+
+procedure TRamBunkerTests.TestAHeroOnAPadRidesBackOverItsHatch;
+begin
+  var Hero := HeroOnAPad(RideHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  for var i := 1 to SettleTicks do
+    FRam.Tick(Hero);
+  var Under := False;
+  for var i := 1 to RideBackTicks do
+  begin
+    Hero.Body.X := Hero.Body.X - 1;
+    FRam.Tick(Hero);
+    Assert.IsTrue(FRam.Rolled >= 0, 'It never backs under a hero on a pad');
+    Under := Under or (Abs(CenterOf(Hero).X - FRam.HatchPoint.X) <= UnderHimSlop);
+  end;
+  Assert.IsTrue(Under, 'Its hatch came under him');
+end;
+
+procedure TRamBunkerTests.TestBacksIntoAHeroBehindItsStern;
+var
+  Throw: TOverTheHull;
+begin
+  var Hero := HeroOnAPad(HuntHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  for var i := 1 to SettleTicks do
+    FRam.Tick(Hero);
+  var Body := OnTheRoad(FRam.Left - 60);
+  var Backed := False;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(HeroOnTheRoad(Body.X));
+    Backed := Backed or (FRam.Rolled < 0);
+    if FRam.ThrowsOverTheHull(Body, True, Throw) then
+    begin
+      Assert.IsTrue(Backed, 'It backed into him');
+      Assert.AreEqual(1, Throw.Side, 'Over it to the right');
+      Exit;
+    end;
+  end;
+  Assert.Fail('Never rammed from behind');
 end;
 
 procedure TRamBunkerTests.TestARamOnTheRoadThrowsHimForwardAndItStands;
 var
   Throw: TOverTheHull;
 begin
-  var Hero := HeroOnAPad(HuntHeroX, ChaseDeckY);
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
   WaitForTheHunt(Hero);
-  for var i := 1 to TwoBreaths do
+  for var i := 1 to SettleTicks do
     FRam.Tick(Hero);
-  var Fallen := OnTheRoad(CenterOf(Hero).X - 8);
+  var Fallen := OnTheRoad(FRam.Left + RamWidth - 20);
   Assert.IsTrue(FRam.ThrowsOverTheHull(Fallen, True, Throw), 'A fall to the road is a ram');
   Assert.AreEqual(1, Throw.Side, 'Forward, to the right');
   Assert.IsFalse(FRam.ThrowsOverTheHull(Fallen, True, Throw),
     'Once a throw, while he flies');
-  var Away := HeroOnTheRoad(ScreenWidth - 20);
+  var Away := HeroOnAPad(HuntHeroX, ChaseDeckY);
   for var i := 1 to ShortestRamStandTicks do
   begin
     FRam.Tick(Away);
@@ -2761,38 +2936,124 @@ begin
   Assert.IsTrue(Moved, 'Then it hunts on');
 end;
 
-procedure TRamBunkerTests.TestAtTheRightWallTheRamThrowsHimBack;
+procedure TRamBunkerTests.TestHoldsTheLeftHalf;
+begin
+  var Hero := HeroOnAPad(FarHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  for var i := 1 to HoldTicks do
+  begin
+    FRam.Tick(Hero);
+    Assert.IsTrue(FRam.Left + RamWidth <= MiddleLine + LineSlop,
+      Format('Its bow at %g, past the middle', [FRam.Left + RamWidth]));
+  end;
+end;
+
+procedure TRamBunkerTests.TestSurgesTowardTheRightEdgeForABreath;
+begin
+  var Hero := HeroOnAPad(FarHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  var Ticks := 0;
+  var Warned := False;
+  var SurgedAt := -1;
+  var Farthest: Single := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    Inc(Ticks);
+    var Bow := FRam.Left + RamWidth;
+    if SurgedAt < 0 then
+    begin
+      Warned := Warned or (FRam.Eye > 0.9);
+      if Bow > MiddleLine + SurgedPast then
+        SurgedAt := Ticks;
+      Continue;
+    end;
+    Farthest := Max(Farthest, Bow);
+    if Bow <= MiddleLine + LineSlop then
+    begin
+      Assert.IsTrue(SurgedAt >= SoonestSurgeTicks,
+        Format('It surged %d ticks into the hunt', [SurgedAt]));
+      Assert.IsTrue(Warned, 'The eye warned first');
+      Assert.IsTrue(Farthest >= SurgeFarthestLeast,
+        Format('Its bow got to %g', [Farthest]));
+      Assert.IsTrue(Ticks - SurgedAt <= SurgeLongestTicks,
+        Format('Past the middle %d ticks', [Ticks - SurgedAt]));
+      Exit;
+    end;
+  end;
+  Assert.Fail('It never surged and came back');
+end;
+
+procedure TRamBunkerTests.TestTheHuntGoesOnAfterTheBunker;
 var
   Throw: TOverTheHull;
 begin
-  var Hero := HeroOnAPad(AtTheRightX, ChaseDeckY);
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
   WaitForTheHunt(Hero);
-  for var i := 1 to 2 * TwoBreaths do
+  for var i := 1 to SettleTicks do
     FRam.Tick(Hero);
-  Assert.AreEqual(Double(ScreenWidth - RamWidth), Double(FRam.Left), 0.001,
-    'At the right wall under him');
-  Assert.IsTrue(FRam.ThrowsOverTheHull(OnTheRoad(AtTheRightX), True, Throw), 'Rammed');
-  Assert.AreEqual(-1, Throw.Side, 'No room past the stern: back over it');
+  StrikeTheHatch(FRam.Lives);
+  var Blasted := False;
+  var Moved := False;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    Blasted := Blasted or Cue.Blast;
+    Assert.IsFalse(Cue.Lob or Cue.Rows, 'No shells, no new wave');
+    Hero.Body.X := StepHeroX + 40 * Sin(i / 30);
+    Moved := Moved or (FRam.Rolled <> 0);
+  end;
+  Assert.IsTrue(Blasted, 'It blows up');
+  Assert.IsTrue(FRam.Head = rhNone, 'The mast stays empty');
+  Assert.IsTrue(FRam.Hunt = htHunting, 'It hunts on');
+  Assert.IsTrue(FRam.HullMirrored, 'Bow first still');
+  Assert.IsTrue(Moved, 'After him');
+  var Hatch := FRam.OpenTop;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsFalse(FRam.StrikeBunker(At(Hatch.X - 1, Hatch.Y - 10),
+    At(Hatch.X + 1, Hatch.Y + 2), Struck, Guarded), 'Nothing left to hit');
+  Assert.IsTrue(FRam.ThrowsOverTheHull(OnTheRoad(FRam.Left + RamWidth - 20),
+    True, Throw), 'A touch on the road is still a ram');
 end;
 
-procedure TRamBunkerTests.TestTheHuntLobsInPairs;
+procedure TRamBunkerTests.TestOffAPadTheHuntsShellIsForTheRoad;
 begin
-  var Hero := HeroOnAPad(HuntHeroX, ChaseDeckY);
-  Hero.SecondAt := At(SecondX, SecondY);
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
   WaitForTheHunt(Hero);
-  for var i := 1 to TwoBreaths do
+  Hero.OnDeck := False;
+  for var i := 1 to 2 * TwoBreaths do
   begin
     var Cue := FRam.Tick(Hero);
     if not Cue.Lob then
       Continue;
-    Assert.IsTrue(Cue.SecondLob, 'Two shells');
-    Assert.AreEqual(Double(CenterOf(Hero).X), Double(Cue.LobAt.X), 0.001,
-      'The first under him');
-    Assert.AreEqual(SecondX, Double(Cue.SecondLobAt.X), 0.001,
-      'The second where it is asked to go');
+    Assert.IsTrue(Cue.LobForRoad, 'For the road');
     Exit;
   end;
   Assert.Fail('No shell in the hunt');
+end;
+
+procedure TRamBunkerTests.TestTheHuntLobsOneAtATimeMoreOften;
+begin
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
+  Hero.SecondAt := At(SecondX, SecondY);
+  WaitForTheHunt(Hero);
+  var Lobs: TArray<Integer> := [];
+  for var i := 1 to 2 * TwoBreaths do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if not Cue.Lob then
+      Continue;
+    Assert.IsFalse(Cue.SecondLob, 'One shell');
+    Assert.AreEqual(Double(CenterOf(Hero).X), Double(Cue.LobAt.X), 0.001,
+      'At his feet');
+    Assert.IsFalse(Cue.LobForRoad, 'On a pad: at the pad');
+    Lobs := Lobs + [i];
+  end;
+  Assert.IsTrue(Length(Lobs) >= 3, Format('%d shells', [Length(Lobs)]));
+  for var i := 1 to High(Lobs) do
+    Assert.IsTrue(Lobs[i] - Lobs[i - 1] < HuntLobGapMost,
+      Format('%d ticks between two shells', [Lobs[i] - Lobs[i - 1]]));
 end;
 
 initialization

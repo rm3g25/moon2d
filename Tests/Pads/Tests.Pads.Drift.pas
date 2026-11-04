@@ -8,11 +8,13 @@
   let go past the left edge and sent again; a clear puts the pool to
   sleep. And the level file's word on a pad that drifts.
 
-  The rows of the hunt: told to, the dispatcher lays three rows over the
-  whole screen and past it, flying in from beyond the right edge; they
-  are in, at the road's pace, once, as long after as their flight takes,
+  The wave of the hunt: told to, the dispatcher lays three rows over the
+  whole screen and past it, at the decks of a climb, each row flying in
+  from its own side - the right, the left, above; they are in, at the
+  road's pace, once, as long after as their flight takes,
   covering the screen with gaps narrower than the hero; a pad already
-  riding keeps its slot; from then on only the rows come, as dense.
+  riding keeps its slot; the groups come again right after the wave,
+  while it still rides.
 
   A climb in every three carries a medkit, on its middle pad by height,
   which climb of the three the dice's; the medkit rides its pad out past
@@ -128,11 +130,11 @@ type
     [Test]
     procedure TestClearStartsTheThreeAnew;
     [Test]
-    procedure TestTheRowsFlyInFromBeyondTheRightEdge;
+    procedure TestTheRowsFlyInFromThreeSides;
     [Test]
     procedure TestTheRowsAreInOnceAtTheRoadsPace;
     [Test]
-    procedure TestOnlyTheRowsComeAfterAsDense;
+    procedure TestTheGroupsComeRightAfterTheWave;
     [Test]
     procedure TestARidingPadKeepsItsSlot;
   end;
@@ -192,6 +194,9 @@ const
   // The pool of the level's chase since the rows
   RowsPoolSteps = 38;
   RowsPoolHighs = 14;
+  // After the wave is in: long enough for groups to come in at the right
+  // edge, short of the wave riding off
+  WaveRidesTicks = 300;
 
 function DriftPadJson(AWidth: Integer; const ATag: string): string;
 begin
@@ -479,19 +484,32 @@ begin
   end;
 end;
 
-procedure TPadDriftTests.TestTheRowsFlyInFromBeyondTheRightEdge;
+procedure TPadDriftTests.TestTheRowsFlyInFromThreeSides;
 begin
   UseTheRowsPool;
   FDrift.BeginRows(Screen, FTravel);
   var Pads := FWorld.Standing(Screen);
   Assert.IsTrue(Length(Pads) > 3 * ScreenWidth div (HighWidth + RowGapMost),
     Format('%d pads in the rows', [Length(Pads)]));
+  var FromRight := 0;
+  var FromLeft := 0;
+  var FromAbove := 0;
   for var Pad in Pads do
-  begin
-    Assert.IsTrue(IsRowDeck(Pad.Top), Format('A pad at %g', [Pad.Top]));
-    Assert.IsTrue(Pad.Left >= ScreenWidth,
-      Format('A pad at %g, inside the screen', [Pad.Left]));
-  end;
+    if Pad.Left >= ScreenWidth then
+      Inc(FromRight)
+    else if Pad.Right <= 0 then
+      Inc(FromLeft)
+    else if Pad.Top < 0 then
+      Inc(FromAbove)
+    else
+      Assert.Fail(Format('A pad at %g, %g, inside the screen',
+        [Pad.Left, Pad.Top]));
+  Assert.IsTrue((FromRight > 0) and (FromLeft > 0) and (FromAbove > 0),
+    Format('From the right %d, the left %d, above %d',
+    [FromRight, FromLeft, FromAbove]));
+  RunRoadTillTheRowsAreIn;
+  for var Pad in FWorld.Standing(Screen) do
+    Assert.IsTrue(IsRowDeck(Pad.Top), Format('In, a pad at %g', [Pad.Top]));
 end;
 
 procedure TPadDriftTests.TestTheRowsAreInOnceAtTheRoadsPace;
@@ -513,15 +531,21 @@ begin
       'At the road''s pace');
 end;
 
-procedure TPadDriftTests.TestOnlyTheRowsComeAfterAsDense;
+procedure TPadDriftTests.TestTheGroupsComeRightAfterTheWave;
 begin
   UseTheRowsPool;
   FDrift.BeginRows(Screen, FTravel);
   RunRoadTillTheRowsAreIn;
-  RunRoad(LongRunTicks div 3);
+  FHistory := [];
+  RunRoad(WaveRidesTicks);
+  Assert.IsTrue(Length(FHistory) > 0, 'The groups come again');
+  Assert.IsTrue(Length(FWorld.Standing(Screen)) > MostAdrift,
+    'The wave still rides: the groups did not wait for it');
+  // The wave was laid with the road at 0: its stretch is its place on the
+  // road too
   for var Sent in FHistory do
-    Assert.IsTrue(IsRowDeck(Sent.Deck), Format('A pad at %g', [Sent.Deck]));
-  ExpectTheRowsCoverTheScreen('Later');
+    Assert.IsTrue(Sent.RoadLeft >= ScreenWidth + RowsBeyond,
+      Format('A pad sent inside the wave, at %g', [Sent.RoadLeft]));
 end;
 
 procedure TPadDriftTests.TestARidingPadKeepsItsSlot;
