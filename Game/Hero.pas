@@ -30,6 +30,10 @@
   feet along before the tick, and one rising into still feet picks them
   up.
 
+  Held (the henshin's beam), he is the game's to place: the controls,
+  the deck under him and his own weight are out of it; only his arm
+  follows the cursor and his gun cools down.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hero;
@@ -98,6 +102,7 @@ type
     FThrownTicks: Integer;
     // A fling's own way across, units a tick, till he lands
     FFlingWay: Double;
+    FHeld: Boolean;
 
     FAction: THeroAction;
     FDirection: Boolean; // walk direction, True = right ('direction' of 2008)
@@ -128,6 +133,8 @@ type
       const ASequences: array of string;
       ACount: Integer): TArray<PSdlTexture>;
     procedure SetWeaponAngle;
+    // The arm after the cursor, the cooldown of the gun
+    procedure TickGun;
     // --- verbatim ports of the 2008 collision oracles ---
     function Solid(ACol, ARow: Integer): Boolean; // 1-based, like WhatTheSprite
     // Snaps the feet to the top of the cell below - shared by the fall
@@ -223,6 +230,14 @@ type
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
     procedure RideBelt(AWay: Double);
+    // Caught where he is, in the air or not: from now on he goes where
+    // HoldAt puts him, as a hanging figure, and nothing else moves him
+    procedure Hold;
+    // His left edge and his feet line; nothing unless held
+    procedure HoldAt(AX, AY: Double);
+    // Let go: standing where there is ground under him, falling where
+    // there is none. Nothing unless held
+    procedure Release;
     // On his way up or down
     function InAir: Boolean;
     procedure SetY(AY: Double);
@@ -255,6 +270,7 @@ type
     property CrossDY: Integer read FCrossDY write FCrossDY;
     property WeaponType: Integer read FWeaponType;
     property Dead: Boolean read FDead;
+    property Held: Boolean read FHeld;
     property HeroForm: THeroForm read FForm write FForm;
     property SkinSet: TSpriteSet read FSkinSet;
   end;
@@ -506,6 +522,7 @@ end;
 
 procedure THero.Kill;
 begin
+  FHeld := False;
   FDead := True;
   FDeathFrame := 9;
   FThrownTicks := 0;
@@ -516,6 +533,7 @@ end;
 
 procedure THero.Revive;
 begin
+  FHeld := False;
   FDead := False;
   FThrownTicks := 0;
   FFlingWay := 0;
@@ -554,6 +572,8 @@ end;
 
 procedure THero.ShoveX(ADeltaX: Integer);
 begin
+  if FHeld then
+    Exit;
   var StoodOnDeck := DeckUnderFeet <> nil;
   // Unit-by-unit with a probe at every position: a single pre-check
   // cannot guarantee a multi-unit displacement lands in free space
@@ -573,6 +593,8 @@ end;
 
 procedure THero.RideBelt(AWay: Double);
 begin
+  if FHeld then
+    Exit;
   if not InAir and (DeckUnderFeet <> nil) then
     Exit;
   CarryX(AWay);
@@ -592,7 +614,7 @@ end;
 function THero.BeginThrow(ASide: Integer; ABoost: Double;
   ALockTicks: Integer): Boolean;
 begin
-  Result := not FDead and (FThrownTicks = 0);
+  Result := not FDead and not FHeld and (FThrownTicks = 0);
   if not Result then
     Exit;
   FPending := psNone;
@@ -605,6 +627,37 @@ begin
     FDirection := ASide > 0;
   FAcceleration := ABoost;
   FThrownTicks := ALockTicks;
+end;
+
+// The hanging figure is the jump's: legs drawn up, as in the air
+procedure THero.Hold;
+begin
+  if FDead then
+    Exit;
+  FHeld := True;
+  FAction := haFall;
+  FAcceleration := 0;
+  FPending := psNone;
+  FThrownTicks := 0;
+  FFlingWay := 0;
+  FDropFrom := nil;
+end;
+
+procedure THero.HoldAt(AX, AY: Double);
+begin
+  if not FHeld then
+    Exit;
+  FX := AX;
+  FY := AY;
+end;
+
+procedure THero.Release;
+begin
+  if not FHeld then
+    Exit;
+  FHeld := False;
+  FAcceleration := 0;
+  SettleOnGround;
 end;
 
 function THero.InAir: Boolean;
@@ -866,7 +919,7 @@ end;
 
 procedure THero.Command(ACmd: THeroCommand);
 begin
-  if FDead or (FThrownTicks > 0) then
+  if FDead or FHeld or (FThrownTicks > 0) then
     Exit;
 
   if ACmd = hcDrop then
@@ -1071,6 +1124,8 @@ end;
 
 function THero.DeckUnderFeet: TPad;
 begin
+  if FHeld then
+    Exit(nil);
   var Middle := FX + HeroSize / 2;
   Result := FPads.DeckUnder(FScreen, Middle, Middle, FY);
 end;
@@ -1213,18 +1268,28 @@ begin
   FAcceleration := 1;
 end;
 
+procedure THero.TickGun;
+begin
+  SetWeaponAngle;
+  if FTimeOfFire < FFireCooldown then // TWeapon.Timer
+    Inc(FTimeOfFire);
+end;
+
 procedure THero.Tick;
 var
   PrevY: Double; // the feet where the last tick left them
 begin
+  if FHeld then
+  begin
+    TickGun;
+    Exit;
+  end;
   PrevY := FY;
   RideDeck;
   // On the ground the drop is over, whatever stopped it
   if FAction in [haStand, haWalkLeft, haWalkRight] then
     FDropFrom := nil;
-  SetWeaponAngle;
-  if FTimeOfFire < FFireCooldown then // TWeapon.Timer
-    Inc(FTimeOfFire);
+  TickGun;
   if FThrownTicks > 0 then
     Dec(FThrownTicks);
 
@@ -1387,7 +1452,7 @@ var
   BaseAngle: Integer;
   SpawnX, SpawnY: Double;
 begin
-  if FDead then
+  if FDead or FHeld then
     Exit(False);
   if FTimeOfFire <> FFireCooldown then
     Exit(False);

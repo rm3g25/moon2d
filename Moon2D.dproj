@@ -240,6 +240,7 @@
         <DCCReference Include="Game\Game.StoneTank.pas"/>
         <DCCReference Include="Game\Game.Heartbeat.pas"/>
         <DCCReference Include="Game\Game.Eclipse.pas"/>
+        <DCCReference Include="Game\Game.Hoist.pas"/>
         <DCCReference Include="Game\Game.Belt.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>

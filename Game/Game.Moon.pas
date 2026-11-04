@@ -30,7 +30,7 @@ uses
   Game.Shells,
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
-  Game.Impacts, Game.Eclipse,
+  Game.Impacts, Game.Eclipse, Game.Hoist,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
   Hud.Marks, Hud.GoRight, Hud.Energy, Audio, Menu;
@@ -149,6 +149,8 @@ type
     // The henshin's scene from the brake of the Ram on, and its darkness
     FEclipse: TEclipseScene;
     FEclipsePainter: TEclipsePainter;
+    // The hero's way up at the henshin, from where it caught him
+    FHoist: THoistPath;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
@@ -331,6 +333,8 @@ type
     procedure BeginEclipse;
     procedure ClearHeroOfHull;
     procedure ClearEclipse;
+    procedure CatchHero;
+    function BeamFoot: TSdlFPoint;
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
@@ -2122,6 +2126,8 @@ begin
   if not FBonusActivateQueued then
     Exit;
   FBonusActivateQueued := False;
+  if FHero.Held then
+    Exit;
   if FBonus = bkNone then
     Exit; // a click with an empty slot buys nothing
 
@@ -2947,11 +2953,42 @@ begin
     Exit;
   end;
   var Cue := FEclipse.Tick;
-  if Cue.Corona then
+  if Cue.Caught then
+    CatchHero;
+  if Cue.Dim then
     FAudio.PauseMusic(EclipseFadeSeconds);
-  if Cue.Diamond then
-    FEclipse.AimDiamond(DiamondAngleToward(FEnergyGauge.Ride.Center(0),
-      HeroCenter));
+  var Hoisted := FEclipse.Hoisted;
+  if Hoisted < 0 then
+    Exit;
+  var Place := FHoist.At(Hoisted);
+  FHero.HoldAt(Place.X, Place.Y);
+end;
+
+// Held where the scene finds him at rest; his way up is set from there,
+// clear of the edges and of the hull
+procedure TMoonGame.CatchHero;
+begin
+  FHero.Hold;
+  var World := Default(THoistWorld);
+  World.HasHull := FRam.Present;
+  if World.HasHull then
+  begin
+    World.Hull.X := FRam.LeftAt(0);
+    World.Hull.Y := RamTop;
+    World.Hull.W := RamWidth;
+    World.Hull.H := RamHeight;
+  end;
+  var From: TSdlFPoint;
+  From.X := FHero.X;
+  From.Y := FHero.Y;
+  FHoist := PlanHoist(From, World);
+end;
+
+// Where the beam comes down: his feet, under the middle of him
+function TMoonGame.BeamFoot: TSdlFPoint;
+begin
+  Result.X := FHero.X + HeroSize / 2;
+  Result.Y := FHero.Y;
 end;
 
 // The Ram brakes and the road runs down with it: the far plane, the fangs
@@ -2976,6 +3013,7 @@ end;
 procedure TMoonGame.ClearEclipse;
 begin
   FEclipse.Clear;
+  FHero.Release;
   FAudio.ResumeMusic(0);
 end;
 
@@ -3633,21 +3671,26 @@ begin
   // roulette - same slot here
   TickGravelAttack;
 
-  // Poll held keys every tick, verbatim input model of 2008
-  if FHeldLeft then
-    FHero.Command(hcGoLeft)
-  else
-    FHero.Command(hcStopLeft);
-  if FHeldRight then
-    FHero.Command(hcGoRight)
-  else
-    FHero.Command(hcStopRight);
-  if FHeldJump then
-    FHero.Command(hcJump)
-  else
-    FHero.Command(hcStopJump);
-  if FHeldDown then
-    FHero.Command(hcDrop);
+  // Poll held keys every tick, verbatim input model of 2008. In the
+  // henshin the keys are not his: a key held through it acts once
+  // he is let go
+  if not FHero.Held then
+  begin
+    if FHeldLeft then
+      FHero.Command(hcGoLeft)
+    else
+      FHero.Command(hcStopLeft);
+    if FHeldRight then
+      FHero.Command(hcGoRight)
+    else
+      FHero.Command(hcStopRight);
+    if FHeldJump then
+      FHero.Command(hcJump)
+    else
+      FHero.Command(hcStopJump);
+    if FHeldDown then
+      FHero.Command(hcDrop);
+  end;
 
   // The burst's inhale: the world stands, the hero, his arms and the pads
   // go on - but the road of a chase stands with the world
@@ -3882,6 +3925,7 @@ begin
         FEclipsePainter.DrawDark(AAlpha);
         FRamPainter.DrawEyeOverDark(FShake.Offset(scWorld), AAlpha,
           FEclipse.Darkness(AAlpha));
+        FEclipsePainter.DrawBeam(BeamFoot, FHeartbeat.Pulse(AAlpha), AAlpha);
         FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);
         var HeroLift := FHero.DeckLift(AAlpha);
@@ -3916,7 +3960,7 @@ begin
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
         FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha),
-          FEclipse.Gauge(AAlpha));
+          FEclipse.Fade(AAlpha));
         // Over the gauge: the orbs go into it
         FOrbs.DrawFeed(FDynamics.Canvas, NoShake, AAlpha);
         FCharge.Draw;
