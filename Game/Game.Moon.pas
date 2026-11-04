@@ -111,6 +111,7 @@ type
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
+    FDebugJumps: Integer; // End: the steps the key has taken
     FShowAtlas: Boolean; // F: raw font atlas (orientation check)
 {$ENDIF}
     FMouseGX, FMouseGY: Integer;
@@ -138,6 +139,8 @@ type
     FShells: TBunkerShells;
     FShellPainter: TShellPainter;
     FRamMedkitPads: TArray<string>; // tags of the hunter's
+    // The bunker is dead: a death comes back right before the henshin
+    FPastBunker: Boolean;
     // Between the heads' wounds and the gauge of the form's charge
     FStoneTank: TStoneTank;
     // The road of the chase, sliding under the Ram
@@ -266,6 +269,10 @@ type
     procedure DebugBrowseScreen(ADelta: Integer);
     procedure DebugShowScreen(AScreen: Integer);
     procedure DebugJumpToWork;
+    procedure DebugLoadWorkLevel;
+    procedure DebugJumpToTrialEnd;
+    procedure DebugJumpToRam;
+    procedure DebugJumpPastBunker;
     procedure DebugSpendTriggers(AScreen: Integer);
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
@@ -312,6 +319,7 @@ type
     procedure ResolveCannonContact;
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
     procedure StartRam(const AOrders: TRamOrders);
+    procedure ResumePastBunker(const AOrders: TRamOrders);
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
@@ -459,6 +467,10 @@ const
   // A death in the Ram's fight restarts the whole fight: the hero comes
   // back to it whole, bonus and all
   RamRestartHealth = 10;
+  // Past the bunker's death a death brings him back with this, on the road
+  // right of the middle: the right is his, the machine comes from the left
+  PastBunkerHealth = 5;
+  PastBunkerHeroX = 352.0;
   // The sweeper's medkits stand on the road this far from the wall away
   // from the Ram: the middle of a cell
   MedkitWallGap = 16;
@@ -554,7 +566,7 @@ const
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
-  ScancodeEnd = 77; // the gravel trial just won: the false ending and on
+  ScancodeEnd = 77; // a step a press: the trial won, the Ram, past the bunker
   ScancodeKp1 = 89;
   ScancodeKp2 = 90;
   ScancodeKp3 = 91;
@@ -565,6 +577,14 @@ const
   ScancodeKp9 = 97;
   ScancodeKpMinus = 86;
   ScancodeKpPlus = 87;
+  // The End key's walk on level 2: the gravel trial, then the Ram's arena;
+  // its steps - the trial won, the Ram's entrance, past the bunker
+  WorkLevel = 2;
+  TrialScreen = 9;
+  RamScreen = 13;
+  DebugJumpSteps = 3;
+  // The gun a walk to the Ram has taken on screen 10
+  DupletPickupId = 'weaponDuplet';
 {$ENDIF}
 
 // Every player-facing string lives in lang\*.json now (part 6): the
@@ -943,6 +963,7 @@ begin
   FArrivals.Clear;
   FCannons.Clear;
   FRam.Reset;
+  FPastBunker := False;
   FWrecks.Clear;
   FCapsules.Clear;
   FShells.Clear;
@@ -2610,6 +2631,8 @@ begin
   FHeroHealth := DifficultyHeroHealth[FDifficulty];
   if FRam.Entered then
     FHeroHealth := RamRestartHealth;
+  if FPastBunker then
+    FHeroHealth := PastBunkerHealth;
   FHurtCooldown := 0;
   // See the LoadLevel comment: 2008 never cleared this flag, here it
   // would softlock the reborn screen. The screen trigger of the trial
@@ -2665,6 +2688,11 @@ begin
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
   PinRespawnPoint;
+  if FPastBunker then
+  begin
+    FCheckpointX := PastBunkerHeroX;
+    FHero.SetScreenX(FCheckpointX);
+  end;
 end;
 
 // What the hero touches is his this tick; what is seen of it from here on
@@ -2829,10 +2857,36 @@ end;
 procedure TMoonGame.StartRam(const AOrders: TRamOrders);
 begin
   FRamMedkitPads := AOrders.MedkitPads;
+  if FPastBunker then
+  begin
+    ResumePastBunker(AOrders);
+    Exit;
+  end;
   if not FRam.Start(AOrders, DifficultyMonsterLives[FDifficulty]) then
     Exit;
   FCurrentMusic := '';
   FAudio.FadeOutMusic(AOrders.SilenceSeconds);
+end;
+
+// Right before the henshin, where a death past the bunker comes back and
+// the End key's last step goes: the hull turning round beyond the left
+// edge, its mast empty; the road coming up to speed under the city's
+// emblem; the screen's own pads gone, as the sweeper's wave took them; the
+// charge at the bunker's ceiling, its last percents to come
+procedure TMoonGame.ResumePastBunker(const AOrders: TRamOrders);
+begin
+  FRam.StartPastBunker(AOrders);
+  for var Pad in FPads.Standing(FHero.Screen) do
+    Pad.Doze;
+  FFarPlane.RideToEmblem;
+  FDrift.BeginAfterWave;
+  FBelt.Start;
+  FStoneTank.BeginPastTheHeads;
+  FOrbs.Charge(FStoneTank.Ceiling - FOrbs.Energy);
+  StopRamRumble;
+  FRamRumble := FAudio.PlayLooped(RamRumbleSoundFile);
+  if not FAudio.Plays(AOrders.Track) then
+    ChangeMusic(AOrders.Track);
 end;
 
 // The decks of APads, one for one
@@ -2865,6 +2919,7 @@ begin
     Target.SecondAt := SecondShellMark(ShellDecks(FPads.Standing(FHero.Screen)),
       Feet, RamFloorY);
   end;
+  var HeadBefore := FRam.Head;
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
   if Cue.Chase then
@@ -2915,6 +2970,8 @@ begin
   end;
   if Cue.Blast then
   begin
+    if HeadBefore = rhBunker then
+      FPastBunker := True;
     FStoneTank.HeadDown(FOrbs.Energy);
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
     if Cue.Shock then
@@ -3893,16 +3950,26 @@ begin
   ArriveOnScreen;
 end;
 
-// End: the false ending of level 2 from anywhere in the campaign - the
-// hero stands on the screen of the gravel trial the moment it is won:
-// the victory track, the tunnel music coming in under its end, the arrow,
-// and the whole way on from there. The trial itself is skipped: its
-// trigger counts as fired, its track as played. Every press plays the
-// ending anew.
+// End, a step a press through the end of the version: the false ending of
+// level 2, the start of the Ram's fight, the moment right before the
+// henshin. A press past the last does nothing.
 procedure TMoonGame.DebugJumpToWork;
-const
-  WorkLevel = 2;
-  TrialScreen = 9;
+begin
+  case FDebugJumps of
+    0:
+      DebugJumpToTrialEnd;
+    1:
+      DebugJumpToRam;
+    2:
+      DebugJumpPastBunker;
+  end;
+  if FDebugJumps < DebugJumpSteps then
+    Inc(FDebugJumps);
+end;
+
+// Level 2, and nothing of the finale under way: the trial stopped, the
+// Ram's whole entrance to come, the chase not begun
+procedure TMoonGame.DebugLoadWorkLevel;
 begin
   var LevelFile := Format(LevelFilePattern, [WorkLevel]);
   if not SameText(LevelFile, FLevelFile) then
@@ -3914,8 +3981,8 @@ begin
 
   FTrial.Stop;
   StopVictoryTrack;
-  // The whole entrance of the Ram again at the end of the walk
   FRam.Reset;
+  FPastBunker := False;
   FWrecks.Clear;
   FCapsules.Clear;
   FShells.Clear;
@@ -3924,12 +3991,47 @@ begin
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
+  StopRamRumble;
+end;
+
+// The hero stands on the screen of the gravel trial the moment it is won:
+// the victory track, the tunnel music coming in under its end, the arrow,
+// and the whole way on from there. The trial itself is skipped: its
+// trigger counts as fired, its track as played.
+procedure TMoonGame.DebugJumpToTrialEnd;
+begin
+  DebugLoadWorkLevel;
   DebugSpendTriggers(TrialScreen);
   DebugShowScreen(TrialScreen);
   FHero.SetScreenX(FCheckpointX);
   FHero.SetY(FCheckpointY);
   FDirector.ReArm(TrialScreen);
   CelebrateBreakthrough;
+end;
+
+// The hero comes into the Ram's arena as from the tunnel, the Duplet in
+// his hands and whole, as a death in the fight brings him back: the whole
+// entrance and the fight from its first head
+procedure TMoonGame.DebugJumpToRam;
+begin
+  DebugLoadWorkLevel;
+  DebugShowScreen(RamScreen);
+  FHero.SetScreenX(FCheckpointX);
+  FHero.SetY(FCheckpointY);
+  var Gun := FMonsters.Find(DupletPickupId).PickupEffect;
+  FHero.ApplyWeaponPickup(Gun.WeaponType, Gun.FireCooldown, Gun.BulletSpeed,
+    Gun.BulletGravity);
+  FHeroHealth := RamRestartHealth;
+  FDirector.ReArm(RamScreen);
+end;
+
+// The moment right before the henshin, as a death past the bunker brings
+// it back
+procedure TMoonGame.DebugJumpPastBunker;
+begin
+  DebugJumpToRam;
+  FPastBunker := True;
+  RestartLevel;
 end;
 
 // The triggers of AScreen count as fired, and their track as changed to:

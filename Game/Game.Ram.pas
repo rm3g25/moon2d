@@ -505,6 +505,10 @@ type
     // stop on after that. The hunter comes with HunterLives times
     // ALivesShare.
     function Start(const AOrders: TRamOrders; ALivesShare: Single = 1): Boolean;
+    // Back past the bunker's death, as a restart there asks: entered, the
+    // mast empty, turning round beyond the left edge to come in bow first
+    // and hunt, its eye's warning first
+    procedure StartPastBunker(const AOrders: TRamOrders);
     // Gone from the screen: a door, a death
     procedure Clear;
     // A new level: gone, and the entrance not seen
@@ -1532,6 +1536,23 @@ begin
     FPhase := rpBreathing;
     FPhaseTicks := BreathTicks;
   end;
+end;
+
+procedure TRam.StartPastBunker(const AOrders: TRamOrders);
+begin
+  FOrders := AOrders;
+  FEntered := True;
+  Inc(FArrivals);
+  FShield.Rise;
+  Arm(1);
+  FHead := rhNone;
+  FKilled := rhBunker;
+  FLives := 0;
+  FChased := True;
+  FRowsIn := True;
+  Place(-RamWidth - PassBeyond);
+  FEyeLit := True;
+  BeginTurn;
 end;
 
 procedure TRam.Clear;

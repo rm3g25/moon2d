@@ -59,6 +59,10 @@ type
     constructor Create(const ADef: TFarPlaneDef);
     // A death, a door, a new level: back to the start of the chase
     procedure Clear;
+    // A restart past the bunker's death: from the start, ridden on at the
+    // road's cruise as a run of the chase rides it, till the city's emblem
+    // stands over the middle of the screen - and standing there
+    procedure RideToEmblem;
     // ABeltShare - the belt's speed as a share of its cruise, 0..1
     procedure Tick(ABeltShare: Single);
     // Between the last tick and this one, AAlpha of the way
@@ -103,6 +107,30 @@ begin
   FEaseTicks := 0;
   FClock := 0;
   FClockRuns := False;
+end;
+
+procedure TFarPlane.RideToEmblem;
+const
+  // Minutes of the chase: a strip too short for its emblem stops here
+  RideTicksMost = 60 * 60 * FarPlaneTicksPerSecond;
+begin
+  Clear;
+  if not FDef.Present or not FDef.Emblem.Present then
+    Exit;
+  var Spires := FDef.CityElements(FDef.Emblem.Piece);
+  if Length(Spires) = 0 then
+    Exit;
+  var Spire := Spires[0];
+  var Mark: Double := Spire.X + Spire.W / 2 - FDef.ScreenWidth / 2;
+  var Ticks := 0;
+  while (FOffsets[fmCity] < Mark) and (Ticks < RideTicksMost) do
+  begin
+    Tick(1);
+    Inc(Ticks);
+  end;
+  FLastOffsets := FOffsets;
+  FTunnelSpeed := 0;
+  FCitySpeed := 0;
 end;
 
 procedure TFarPlane.ScheduleSpeeds(out ATunnel, ACity: Single);

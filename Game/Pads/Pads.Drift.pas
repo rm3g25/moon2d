@@ -179,6 +179,9 @@ type
     // The road has run ATravel: the wave flies in over AScreen now, the
     // groups wait till it is in and come after it, denser
     procedure BeginRows(AScreen: Integer; ATravel: Double);
+    // The groups as after the wave, denser, with no wave: a restart past
+    // the bunker's death
+    procedure BeginAfterWave;
   end;
 
 implementation
@@ -473,6 +476,11 @@ begin
     Left := Left + Width + RollRowGap;
   end;
   Result := Left;
+end;
+
+procedure TPadDrift.BeginAfterWave;
+begin
+  FDense := True;
 end;
 
 procedure TPadDrift.BeginRows(AScreen: Integer; ATravel: Double);

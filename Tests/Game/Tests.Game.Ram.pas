@@ -71,7 +71,9 @@
   flies. Its shells come one at a time, at his feet, sooner after each
   other than outside the hunt. Its bunker blown up, it hunts
   on bow first with an empty mast: no shells, no new wave, nothing to
-  hit, and a touch on the road still a ram.
+  hit, and a touch on the road still a ram. Started past the bunker, as
+  a restart there asks, it turns round beyond the left edge with its mast
+  empty, its eye's red at the edge first, and comes in to hunt the same.
 
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
@@ -382,6 +384,8 @@ type
     procedure TestSurgesTowardTheRightEdgeForABreath;
     [Test]
     procedure TestTheHuntGoesOnAfterTheBunker;
+    [Test]
+    procedure TestPastTheBunkerItTurnsOffTheLeftEdgeAndHunts;
     [Test]
     procedure TestTheHuntLobsOneAtATimeMoreOften;
     [Test]
@@ -3015,6 +3019,43 @@ begin
     At(Hatch.X + 1, Hatch.Y + 2), Struck, Guarded), 'Nothing left to hit');
   Assert.IsTrue(FRam.ThrowsOverTheHull(OnTheRoad(FRam.Left + RamWidth - 20),
     True, Throw), 'A touch on the road is still a ram');
+end;
+
+procedure TRamBunkerTests.TestPastTheBunkerItTurnsOffTheLeftEdgeAndHunts;
+var
+  Throw: TOverTheHull;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  FRam.StartPastBunker(OrdersAt(Stop));
+  Assert.IsTrue(FRam.Entered, 'Entered');
+  Assert.IsTrue(FRam.Head = rhNone, 'The mast empty');
+  Assert.IsTrue(FRam.Hunt = htTurning, 'Turning round');
+  Assert.IsTrue(FRam.HullMirrored, 'Bow first');
+  Assert.IsTrue(FRam.Left + RamWidth < 0, 'Beyond the left edge');
+  var Peeked := False;
+  var Hunted := False;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Lob or Cue.Rows or Cue.Blast or Cue.Shot,
+      'No shells, no wave, nothing to blow up');
+    Peeked := Peeked or (FRam.PeekLevel > 0);
+    if FRam.Hunt = htHunting then
+    begin
+      Hunted := True;
+      Break;
+    end;
+  end;
+  Assert.IsTrue(Peeked, 'Its eye''s red at the edge first');
+  Assert.IsTrue(Hunted, 'It comes in and hunts');
+  Assert.IsTrue(FRam.Left >= -1, 'Whole onto the screen');
+  var Hatch := FRam.OpenTop;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsFalse(FRam.StrikeBunker(At(Hatch.X - 1, Hatch.Y - 10),
+    At(Hatch.X + 1, Hatch.Y + 2), Struck, Guarded), 'Nothing left to hit');
+  Assert.IsTrue(FRam.ThrowsOverTheHull(OnTheRoad(FRam.Left + RamWidth - 20),
+    True, Throw), 'A touch on the road is a ram');
 end;
 
 procedure TRamBunkerTests.TestOffAPadTheHuntsShellIsForTheRoad;

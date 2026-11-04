@@ -69,6 +69,10 @@ type
     // head's ceiling stands from now on; after the last, the last percents
     // follow on their own clock
     procedure HeadDown(AEnergy: Integer);
+    // A restart past the last head: running, every head down, the last
+    // percents on their clock from its start; the gauge is to stand at
+    // Ceiling
+    procedure BeginPastTheHeads;
     // The charge to add to AEnergy this tick, in percent
     function Tick(AEnergy: Integer): Integer;
     // Where the gauge stops while the current head lives; with all down,
@@ -165,6 +169,13 @@ begin
   FFinalClock := 0;
   FFinalGiven := 0;
   FLate[NewestSlot] := Max(0, UpTo - AEnergy);
+end;
+
+procedure TStoneTank.BeginPastTheHeads;
+begin
+  Clear;
+  Start;
+  FHeadsDown := High(Ceilings);
 end;
 
 function TStoneTank.Ceiling: Integer;

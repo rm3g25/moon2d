@@ -20,7 +20,8 @@
   clear sets it back; between ticks it lies between them, as the offsets
   do. Level 2 reads its far plane, its camera and frames among it, the
   life of its city, its train on a line with a run and its searchlights
-  in the main dome; a layout that does not make sense raises, and so does
+  in the main dome, and rides on to stand with the emblem's spire over the
+  middle of the screen, as a restart past the bunker asks; a layout that does not make sense raises, and so does
   a city's life that cannot play - a train and the searchlights among
   them.
 
@@ -180,6 +181,8 @@ type
     procedure TestFramesWithoutACameraRaise;
     [Test]
     procedure TestLevelTwoReadsItsCityLife;
+    [Test]
+    procedure TestRidesToTheEmblemOverTheMiddle;
     [Test]
     procedure TestALightOfAnUnknownKindRaises;
     [Test]
@@ -902,6 +905,39 @@ begin
     begin
       ReadFromLayout(LifeLayout(ALife, AElements));
     end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestRidesToTheEmblemOverTheMiddle;
+const
+  // One tick of the city at its cruise and a little more
+  Slop = 0.2;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Def := Level.FarPlane;
+    var Plane := TFarPlane.Create(Def);
+    try
+      Plane.RideToEmblem;
+      var Spire := Def.CityElements(Def.Emblem.Piece)[0];
+      var Layer := Def.Layers[0];
+      for var Each in Def.Layers do
+        if Each.Motion = fmCity then
+          Layer := Each;
+      var Left := Def.ElementLeft(Layer, Spire, Plane.Offsets);
+      Assert.AreEqual(Double(Def.ScreenWidth / 2), Left + Spire.W / 2, Slop,
+        'The emblem''s spire over the middle');
+      Assert.IsTrue(Plane.TunnelGone, 'Out of the tunnel');
+      Assert.IsTrue(Plane.Clock > 0, 'The city''s clock has run');
+      Assert.AreEqual(Plane.Offsets[fmCity], Plane.OffsetsAt(0.5)[fmCity], 0.0001,
+        'Standing there');
+      Assert.AreEqual(0.0, Double(Plane.CitySpeed), 0.0001, 'Till the road runs');
+    finally
+      Plane.Free;
+    end;
+  finally
+    Level.Free;
+  end;
 end;
 
 procedure TFarPlaneReadTests.TestLevelTwoReadsItsCityLife;
