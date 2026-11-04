@@ -7,6 +7,25 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is the roadmap in
 `PORTING-NOTES.md`, section "Следующая часть".
 
+На 2026-11-04: **3.0.99 - точка перезапуска перед хеншином и End в три
+шага (этап 16a).** Взрыв бункера ставит точку A (`FPastBunker`): смерть
+после него возвращает героя прямо перед хеншином с 5 здоровья
+(`PastBunkerHealth`), на дорогу правее середины (`PastBunkerHeroX` 352).
+Событие экрана 13 зовёт `StartRam`, и мимо бункера он ведёт в
+`ResumePastBunker`: `TRam.StartPastBunker` - мачта пуста, разворот за
+левым краем (`htTurning`, красный глаз у края) и охота передом; пады
+экрана гаснут (`Doze`), как от волны подметальщика; дальний план
+прокручен с начала на крейсерской скорости дороги, пока шпиль с неоновым
+TeK не встанет над серединой (`TFarPlane.RideToEmblem`, часы города
+тоже); группы падов сразу густые (`TPadDrift.BeginAfterWave`); лента
+разгоняется; бак - все головы сняты (`TStoneTank.BeginPastTheHeads`),
+заряд 97, последние 3% по своим часам; гул и трек босса. End шагает:
+конец арены 2, вход на экран 13 с Дуплетом и 10 здоровья (`DebugJumpToRam`), точка A - Дуплет и 5
+(`DebugJumpPastBunker` - тот же `RestartLevel`, что и смерть); четвёртое
+нажатие ничего не делает. Тесты: `TestPastTheHeadsItFillsFromTheBunkersCeiling`,
+`TestRidesToTheEmblemOverTheMiddle`,
+`TestPastTheBunkerItTurnsOffTheLeftEdgeAndHunts`.
+
 На 2026-11-04: **3.0.98 - третья фаза бункера (14c) переделана: волна на
 проход, охота передом.** 3.0.97 строилась по неверно понятому договору.
 Теперь толпа падов (волна) - только на перестройку машины от правой
