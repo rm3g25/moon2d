@@ -100,6 +100,11 @@ function Mix_FadeOutMusic(AMilliseconds: Integer): Integer; cdecl;
 // Non-zero while the music plays, a fade-out included
 function Mix_PlayingMusic: Integer; cdecl;
   external MixerLib name 'Mix_PlayingMusic' delayed;
+// A paused track still plays as far as Mix_PlayingMusic tells
+procedure Mix_PauseMusic; cdecl;
+  external MixerLib name 'Mix_PauseMusic' delayed;
+procedure Mix_ResumeMusic; cdecl;
+  external MixerLib name 'Mix_ResumeMusic' delayed;
 {$WARN SYMBOL_PLATFORM DEFAULT}
 
 type
@@ -128,6 +133,11 @@ type
     FEnabled: Boolean;
     FMusicMuted: Boolean;
     FMusicLevel: Single; // 0..1 of the full volume
+    // The pause's own share of the volume, apart from FMusicLevel: 1, or
+    // fading by FHushStep a tick; paused at 0
+    FHush: Single;
+    FHushStep: Single;
+    FMusicPaused: Boolean;
     FSounds: TDictionary<string, PMixChunk>;
     // Tracks of the music folder played as sounds; nil for a missing one
     FTracks: TDictionary<string, PMixChunk>;
@@ -142,6 +152,8 @@ type
       THeldSound;
     function StillHeld(const ASound: THeldSound): Boolean;
     procedure ApplyMusicVolume;
+    procedure TickHush;
+    procedure ClearHush;
   public
     constructor Create(const ASoundsDir, AMusicDir: string);
     destructor Destroy; override;
@@ -189,6 +201,13 @@ type
     procedure FadeOutMusic(ASeconds: Single);
     // Drops a track waiting for a fade-out as well
     procedure StopMusic;
+    // The track fades to silence over AFadeSeconds and is paused there, not
+    // stopped: ResumeMusic goes on from that place. A track that plays on,
+    // paused or not, plays as far as Plays tells.
+    procedure PauseMusic(AFadeSeconds: Single);
+    // Back from the pause, fading in over AFadeSeconds; at once with 0.
+    // Nothing for a track not paused or pausing.
+    procedure ResumeMusic(AFadeSeconds: Single);
     // Mutes the music channel at the mixer, effects untouched. The game
     // keeps switching tracks normally underneath - unmuting resumes
     // whatever the current screen ordered, no bookkeeping needed.
@@ -199,11 +218,16 @@ type
 
 implementation
 
+uses
+  System.Math;
+
 resourcestring
   SSoundLoadFailed = 'Sound failed to load: %s (%s)';
 
 const
   MillisecondsPerSecond = 1000;
+  // The game ticks the bank: the pause fades by its ticks
+  LogicTicksPerSecond = 33;
 
 function MixerBytesPerSecond: Integer;
 const
@@ -236,6 +260,7 @@ begin
   FSounds := TDictionary<string, PMixChunk>.Create;
   FTracks := TDictionary<string, PMixChunk>.Create;
   FMusicLevel := 1;
+  FHush := 1;
   try
     // Delay-loaded import: a missing SDL2_mixer.dll surfaces exactly
     // here, as a catchable exception instead of a startup error box
@@ -402,7 +427,7 @@ begin
   if FMusicMuted then
     Mix_VolumeMusic(0)
   else
-    Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel));
+    Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel * FHush));
 end;
 
 procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode;
@@ -456,6 +481,7 @@ end;
 
 procedure TSoundBank.Tick;
 begin
+  TickHush;
   if FNextTrack.FileName = '' then
     Exit;
   if Mix_PlayingMusic <> 0 then
@@ -489,12 +515,71 @@ begin
   if not FEnabled then
     Exit;
   FNextTrack := Default(TQueuedTrack);
+  ClearHush;
   if FMusic = nil then
     Exit;
   Mix_HaltMusic;
   Mix_FreeMusic(FMusic);
   FMusic := nil;
   FMusicName := '';
+end;
+
+procedure TSoundBank.PauseMusic(AFadeSeconds: Single);
+begin
+  if not FEnabled or (FMusic = nil) or FMusicPaused then
+    Exit;
+  if AFadeSeconds <= 0 then
+    FHushStep := -1
+  else
+    FHushStep := -1 / (AFadeSeconds * LogicTicksPerSecond);
+end;
+
+procedure TSoundBank.ResumeMusic(AFadeSeconds: Single);
+begin
+  if not FEnabled then
+    Exit;
+  if not FMusicPaused and (FHushStep >= 0) then
+    Exit;
+  if FMusicPaused then
+    Mix_ResumeMusic;
+  FMusicPaused := False;
+  if AFadeSeconds <= 0 then
+  begin
+    FHush := 1;
+    FHushStep := 0;
+    ApplyMusicVolume;
+  end
+  else
+    FHushStep := 1 / (AFadeSeconds * LogicTicksPerSecond);
+end;
+
+procedure TSoundBank.TickHush;
+begin
+  if FHushStep = 0 then
+    Exit;
+  FHush := EnsureRange(FHush + FHushStep, 0, 1);
+  ApplyMusicVolume;
+  if (FHushStep > 0) and (FHush >= 1) then
+    FHushStep := 0
+  else if (FHushStep < 0) and (FHush <= 0) then
+  begin
+    FHushStep := 0;
+    FMusicPaused := True;
+    Mix_PauseMusic;
+  end;
+end;
+
+// A new track or none: at the full of its level, not paused
+procedure TSoundBank.ClearHush;
+begin
+  var Hushed := FHush < 1;
+  if FMusicPaused then
+    Mix_ResumeMusic;
+  FMusicPaused := False;
+  FHush := 1;
+  FHushStep := 0;
+  if Hushed then
+    ApplyMusicVolume;
 end;
 
 procedure TSoundBank.ToggleMusicMuted;

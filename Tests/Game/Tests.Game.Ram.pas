@@ -75,6 +75,12 @@
   a restart there asks, it turns round beyond the left edge with its mast
   empty, its eye's red at the edge first, and comes in to hunt the same.
 
+  At the henshin it brakes: not while it turns round off the screen; in
+  its hunt down to a stand, the hiss and the jolt once as it stops, the
+  lamps burning; it stands there with its eye lit, wherever the hero
+  goes, and neither touches nor throws him. A hero in the hull is set out
+  away from its middle; one clear of it is not.
+
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
 
@@ -148,6 +154,32 @@ type
     procedure TestShieldTakesABullet;
     [Test]
     procedure TestAbsentMeetsNothing;
+  end;
+
+  [TestFixture]
+  TRamBrakeTests = class
+  private
+    FRam: TRam;
+    procedure HuntPastTheBunker(const ATarget: TRamTarget);
+    procedure BringToAStand(const ATarget: TRamTarget);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestNoBrakeWhileItTurnsOffTheScreen;
+    [Test]
+    procedure TestBrakesToAStandWithTheHissAndTheJoltOnce;
+    [Test]
+    procedure TestTheLampsBurnAtTheStand;
+    [Test]
+    procedure TestStandsWithItsEyeLitWhereverHeGoes;
+    [Test]
+    procedure TestStandingItNeitherTouchesNorThrows;
+    [Test]
+    procedure TestAHeroInTheHullIsSetOutAwayFromItsMiddle;
   end;
 
   [TestFixture]
@@ -3097,11 +3129,127 @@ begin
       Format('%d ticks between two shells', [Lobs[i] - Lobs[i - 1]]));
 end;
 
+procedure TRamBrakeTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamBrakeTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+procedure TRamBrakeTests.HuntPastTheBunker(const ATarget: TRamTarget);
+begin
+  FRam.StartPastBunker(OrdersAt(Stop));
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.Hunt = htHunting then
+      Exit;
+  end;
+  Assert.Fail('It never came in to hunt');
+end;
+
+procedure TRamBrakeTests.BringToAStand(const ATarget: TRamTarget);
+begin
+  HuntPastTheBunker(ATarget);
+  FRam.BrakeToAStand;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.Hunt = htHalted then
+      Exit;
+  end;
+  Assert.Fail('It never stood');
+end;
+
+procedure TRamBrakeTests.TestNoBrakeWhileItTurnsOffTheScreen;
+begin
+  FRam.StartPastBunker(OrdersAt(Stop));
+  Assert.IsFalse(FRam.CanBrake, 'Not off the screen');
+  FRam.BrakeToAStand;
+  Assert.IsTrue(FRam.Hunt = htTurning, 'It turns on');
+  Assert.IsFalse(FRam.Halted, 'Not halted');
+end;
+
+procedure TRamBrakeTests.TestBrakesToAStandWithTheHissAndTheJoltOnce;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  HuntPastTheBunker(Hero);
+  Assert.IsTrue(FRam.CanBrake, 'In its hunt');
+  FRam.BrakeToAStand;
+  Assert.IsTrue(FRam.Halted, 'Braking');
+  var Hisses := 0;
+  var Jolted := False;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Hiss then
+      Inc(Hisses);
+    Jolted := Jolted or (Cue.Hiss and (Cue.Jolt > 0));
+    Assert.IsFalse(Cue.Rumble, 'It does not drive off again');
+  end;
+  Assert.AreEqual(1, Hisses, 'One hiss');
+  Assert.IsTrue(Jolted, 'The jolt with it');
+  Assert.IsTrue(FRam.Hunt = htHalted, 'It stands');
+  Assert.AreEqual(0.0, Double(FRam.Rolled), 0.001, 'Still');
+end;
+
+procedure TRamBrakeTests.TestTheLampsBurnAtTheStand;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  Assert.AreEqual(1.0, Double(FRam.LampsAt(1)), 0.001, 'Lit');
+end;
+
+procedure TRamBrakeTests.TestStandsWithItsEyeLitWhereverHeGoes;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  var Stood := FRam.Left;
+  for var i := 1 to ManyTicks do
+  begin
+    Hero.Body.X := 20 + (i mod 460);
+    FRam.Tick(Hero);
+    Assert.AreEqual(Double(Stood), Double(FRam.Left), 0.001,
+      Format('Where it stopped, at %d', [i]));
+  end;
+  Assert.IsTrue(FRam.EyeLit and (FRam.Eye > 0), 'Its eye lit');
+end;
+
+procedure TRamBrakeTests.TestStandingItNeitherTouchesNorThrows;
+var
+  Away: Integer;
+  Throw: TOverTheHull;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  var InIt := OnTheRoad(FRam.Left + RamWidth / 2);
+  Assert.IsFalse(FRam.Contact(InIt, False, False, Away), 'No touch');
+  Assert.IsFalse(FRam.ThrowsOverTheHull(InIt, True, Throw), 'No throw');
+end;
+
+procedure TRamBrakeTests.TestAHeroInTheHullIsSetOutAwayFromItsMiddle;
+var
+  Away: Integer;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  Assert.IsTrue(FRam.InTheHull(OnTheRoad(FRam.Left + RamWidth - 20), Away),
+    'In its right end');
+  Assert.AreEqual(1, Away, 'Out to the right');
+  Assert.IsFalse(FRam.InTheHull(OnTheRoad(FRam.Left + RamWidth + 10), Away),
+    'Clear of it');
+  Assert.AreEqual(0, Away, 'Nowhere to go');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TRamTests);
   TDUnitX.RegisterTestFixture(TRamHunterTests);
   TDUnitX.RegisterTestFixture(TRamSweeperTests);
   TDUnitX.RegisterTestFixture(TRamBunkerTests);
+  TDUnitX.RegisterTestFixture(TRamBrakeTests);
   TDUnitX.RegisterTestFixture(TBodyShieldTests);
   TDUnitX.RegisterTestFixture(TRamLevelTests);
 

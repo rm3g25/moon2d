@@ -137,6 +137,11 @@
   nothing left on it to hit - till the hero's henshin. Killed before its
   last third (the debug key), it begins the hunt there.
 
+  At the henshin the game brakes it: down to a stand by its brake, the
+  lamps burning, and the hiss and the jolt as it stops. Then it stands
+  with its eye lit, and nothing of it wounds or throws; a hero caught in
+  the hull the game sets out of it.
+
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
   third.
@@ -196,9 +201,10 @@ type
 
   // The bunker's last third: none yet; the change - the wave called in,
   // the eye's warning; the pass through the hero off the left edge; the
-  // turn round out there; the drive in again; the hunt, bow first
+  // turn round out there; the drive in again; the hunt, bow first; at the
+  // henshin, the brake and the stand after it
   TBunkerHunt = (htNone, htCalling, htPassing, htTurning, htEntering,
-    htHunting);
+    htHunting, htBraking, htHalted);
 
   // The hunt's surge toward the right edge: waiting for the next; the
   // eye's warning; the surge, then back to the left half
@@ -446,6 +452,7 @@ type
     procedure BeginTurn;
     function HuntMark: Single;
     procedure TickSurge;
+    procedure TickBrake;
     function HuntLine: Single;
     function NextSurgeWait: Integer;
     function SurgeWarns: Boolean;
@@ -572,6 +579,16 @@ type
     property Hunt: TBunkerHunt read FHunt;
     // The wave of the hunt has flown in: the pass may begin
     procedure RowsArrived;
+    // Whole on the screen in its hunt: the henshin may brake it
+    function CanBrake: Boolean;
+    // Down to a stand, and standing from then on; nothing for one that
+    // cannot brake
+    procedure BrakeToAStand;
+    // Braking or standing for the henshin: nothing of it wounds or throws
+    function Halted: Boolean;
+    // Some of AHeroBody is in the hull or a wheel: AAway - the side to set
+    // him out to, as a touch would throw him; 0 - straight up
+    function InTheHull(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
     // Off the left edge, turning round: how near it is to coming back, 0
     // unseen to 1 the moment it sets off - its eye's red at the edge
     function PeekLevel: Single;
@@ -770,6 +787,9 @@ type
     // plates, the wave itself and the white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
+    // The eye once more, over a darkness ADepth deep: the body's eye is
+    // under it, and the two add up to its own light
+    procedure DrawEyeOverDark(AOrigin: TSdlPoint; AAlpha, ADepth: Single);
   end;
 
 implementation
@@ -1056,6 +1076,8 @@ const
   HuntGain = 0.15;
   // After a ram it stands while he flies clear
   RamStandTicks = 50;
+  // The brake of the henshin: the stop the whole screen feels
+  HaltJolt = 0.3;
 
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
@@ -2846,6 +2868,8 @@ begin
       end;
     htEntering, htHunting:
       TickHuntDrive;
+    htBraking:
+      TickBrake;
   end;
 end;
 
@@ -2952,6 +2976,52 @@ begin
         end;
       end;
   end;
+end;
+
+// By the brake of every stop, the lamps burning; at a stand the hiss and
+// the jolt. A machine already standing stops this tick.
+procedure TRam.TickBrake;
+begin
+  var OldSpeed := FSpeed;
+  var Pace := Max(0, Abs(FSpeed) - Brake);
+  FBraking := Pace > 0;
+  FSpeed := Sign(FSpeed) * Pace;
+  FX := EnsureRange(FX + FSpeed, 0, ScreenWidth - RamWidth);
+  FAccel := FSpeed - OldSpeed;
+  if FBraking then
+    Exit;
+  FHunt := htHalted;
+  FLamps := 1;
+  FLampHold := LampHoldTicks;
+  FCue.Hiss := True;
+  FCue.Jolt := HaltJolt;
+end;
+
+function TRam.CanBrake: Boolean;
+begin
+  Result := Present and (FHunt = htHunting);
+end;
+
+procedure TRam.BrakeToAStand;
+begin
+  if not CanBrake then
+    Exit;
+  FHunt := htBraking;
+  FSurge := hsWaiting;
+  FRamStandTicks := 0;
+end;
+
+function TRam.Halted: Boolean;
+begin
+  Result := FHunt in [htBraking, htHalted];
+end;
+
+function TRam.InTheHull(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+begin
+  AAway := 0;
+  Result := Present and Overlaps(AHeroBody);
+  if Result then
+    AAway := ThrowSide(AHeroBody);
 end;
 
 function TRam.SurgeWarns: Boolean;
@@ -3297,6 +3367,8 @@ function TRam.Contact(const AHeroBody: TSdlFRect; AOnDeck, AInAir: Boolean;
   out AAway: Integer): Boolean;
 begin
   AAway := 0;
+  if Halted then
+    Exit(False);
   if FHeroThrown and AInAir then
     Exit(False);
   FHeroThrown := False;
@@ -3331,7 +3403,7 @@ function TRam.ThrowsOverTheHull(const AHeroBody: TSdlFRect; AOnRoad: Boolean;
   out AThrow: TOverTheHull): Boolean;
 begin
   AThrow := Default(TOverTheHull);
-  if not Present or not AOnRoad or FHeroThrown then
+  if not Present or not AOnRoad or FHeroThrown or Halted then
     Exit(False);
   if FHunt in [htPassing..htHunting] then
   begin
@@ -4224,6 +4296,19 @@ begin
   DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + ASprites.Origin.X,
     Spot.Y + ASprites.Origin.Y, Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)),
     EyeColor, Level);
+end;
+
+procedure TRamPainter.DrawEyeOverDark(AOrigin: TSdlPoint; AAlpha,
+  ADepth: Single);
+begin
+  if not FRam.Present or (ADepth <= 0) then
+    Exit;
+  var Level := FRam.EyeAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  var Spot := FRam.HullSpot(FRam.LeftAt(AAlpha), EyePoint);
+  DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + AOrigin.X, Spot.Y + AOrigin.Y,
+    Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)), EyeColor, Level * ADepth);
 end;
 
 // Turning round beyond the left edge it is not drawn: its eye's red is

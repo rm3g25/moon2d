@@ -35,6 +35,7 @@ uses
   Tests.Game.Shells in 'Game\Tests.Game.Shells.pas',
   Tests.Game.StoneTank in 'Game\Tests.Game.StoneTank.pas',
   Tests.Game.Heartbeat in 'Game\Tests.Game.Heartbeat.pas',
+  Tests.Game.Eclipse in 'Game\Tests.Game.Eclipse.pas',
   Tests.Game.Belt in 'Game\Tests.Game.Belt.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',

@@ -60,6 +60,19 @@ type
     property Age: Integer read FAge; // ticks
   end;
 
+  // The disc as the eclipsed sun of the henshin; all at 0 - the gauge as
+  // ever
+  TGaugeEclipse = record
+    // The corona round the rim, 0..1
+    Corona: Single;
+    // How much of the disc's own light is gone, 0..1
+    Covered: Single;
+    // The diamond on the edge, 0..1, at DiamondAngle: radians on the
+    // screen, 0 to the right, growing downward
+    Diamond: Single;
+    DiamondAngle: Single;
+  end;
+
   // The gauge's way from its slot to the top centre: eased in and out,
   // growing as it goes; standing there once it is up
   TGaugeRide = class
@@ -102,12 +115,14 @@ type
       ALevel: Single);
     procedure DrawArc(AShown, ABreath: Single);
     procedure DrawNumber(AShown: Single);
+    procedure DrawCorona(ALevel: Single);
+    procedure DrawDiamond(ALevel, AAngle: Single);
   public
     constructor Create(ARenderer: PSdlRenderer);
     destructor Destroy; override;
     procedure Tick(ACharge: Integer);
     // APulse - the heartbeat, 0..1; 0 when the heart is still
-    procedure Draw(AAlpha, APulse: Single);
+    procedure Draw(AAlpha, APulse: Single; const AEclipse: TGaugeEclipse);
     // To the top centre, for good: the slot stays empty
     procedure Lift;
     procedure Dock;
@@ -176,6 +191,14 @@ const
   // A beat swells the disc by this share of its size and lights its halo
   PulseGrowth = 0.08;
   HaloPulse = 0.45;
+  // The eclipse: a pearly corona, a glow behind the disc and a bright ring
+  // on its rim; the diamond, a soft star with a hard core
+  CoronaColor: TRgb = (R: 255; G: 250; B: 240);
+  CoronaAcross = 36;
+  CoronaGlowLevel = 0.8;
+  CoronaRimWidth = 3;
+  DiamondAcross = 9;
+  DiamondCoreAcross = 3.5;
 
 { TEnergyReading }
 
@@ -346,7 +369,8 @@ begin
   Result := 0.5 + 0.5 * Sin((FReading.Age + AAlpha) * Speed);
 end;
 
-procedure THudEnergy.Draw(AAlpha, APulse: Single);
+procedure THudEnergy.Draw(AAlpha, APulse: Single;
+  const AEclipse: TGaugeEclipse);
 begin
   var Shown := FReading.Wing;
   if Shown <= 0 then
@@ -354,13 +378,40 @@ begin
   FCenter := FRide.Center(AAlpha);
   FScale := FRide.Scale(AAlpha) * (1 + PulseGrowth * APulse);
 
+  // The corona takes over from the disc's own light: its glow behind the
+  // dark body, its ring over the edge
+  var Lit := Shown * (1 - AEclipse.Covered);
+  var Corona := AEclipse.Corona * Shown;
   var Breathing := Breath(AAlpha);
-  DrawHalo(Shown, Breathing, APulse);
+  DrawHalo(Lit, Breathing, APulse);
+  DrawCorona(Corona);
   DrawGlow(FRenderer, FBody, FCenter.X, FCenter.Y,
     2 * DiscRadius * FScale, MoonBody, Shown);
-  DrawRim(0, 2 * Pi, TrackWidth, MoonGlow, TrackLevel * Shown);
-  DrawArc(Shown, Breathing);
-  DrawNumber(Shown);
+  DrawRim(0, 2 * Pi, TrackWidth, MoonGlow, TrackLevel * Lit);
+  if Corona > 0 then
+    DrawRim(0, 2 * Pi, CoronaRimWidth, CoronaColor, Corona);
+  DrawArc(Lit, Breathing);
+  DrawNumber(Lit);
+  DrawDiamond(AEclipse.Diamond * Shown, AEclipse.DiamondAngle);
+end;
+
+procedure THudEnergy.DrawCorona(ALevel: Single);
+begin
+  if ALevel <= 0 then
+    Exit;
+  DrawGlow(FRenderer, FHalo, FCenter.X, FCenter.Y, CoronaAcross * FScale,
+    CoronaColor, CoronaGlowLevel * ALevel);
+end;
+
+procedure THudEnergy.DrawDiamond(ALevel, AAngle: Single);
+begin
+  if ALevel <= 0 then
+    Exit;
+  var Radius := DiscRadius * FScale;
+  var X := FCenter.X + Cos(AAngle) * Radius;
+  var Y := FCenter.Y + Sin(AAngle) * Radius;
+  DrawGlow(FRenderer, FHalo, X, Y, DiamondAcross * FScale, White, ALevel);
+  DrawGlow(FRenderer, FHalo, X, Y, DiamondCoreAcross * FScale, White, ALevel);
 end;
 
 procedure THudEnergy.DrawHalo(AShown, ABreath, APulse: Single);

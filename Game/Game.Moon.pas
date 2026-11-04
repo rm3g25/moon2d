@@ -30,7 +30,7 @@ uses
   Game.Shells,
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
-  Game.Impacts,
+  Game.Impacts, Game.Eclipse,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
   Hud.Marks, Hud.GoRight, Hud.Energy, Audio, Menu;
@@ -146,6 +146,9 @@ type
     // From the last of the charge on: the sound, the gauge and the monitor
     // beat with it
     FHeartbeat: THeartbeat;
+    // The henshin's scene from the brake of the Ram on, and its darkness
+    FEclipse: TEclipseScene;
+    FEclipsePainter: TEclipsePainter;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
@@ -324,6 +327,10 @@ type
     procedure StartRam(const AOrders: TRamOrders);
     procedure ResumePastBunker(const AOrders: TRamOrders);
     procedure TickHeartbeat;
+    procedure TickEclipse;
+    procedure BeginEclipse;
+    procedure ClearHeroOfHull;
+    procedure ClearEclipse;
     procedure TickRam;
     procedure TickBelt(AWay: Double);
     procedure StopRamRumble;
@@ -671,6 +678,8 @@ begin
   FShellPainter := TShellPainter.Create(FShells);
   FStoneTank := TStoneTank.Create(StoneTankSeed);
   FHeartbeat := THeartbeat.Create;
+  FEclipse := TEclipseScene.Create;
+  FEclipsePainter := TEclipsePainter.Create(ARenderer, FEclipse);
   FBelt := TBelt.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
@@ -715,6 +724,8 @@ begin
   FShells.Free;
   FStoneTank.Free;
   FHeartbeat.Free;
+  FEclipsePainter.Free;
+  FEclipse.Free;
   FBelt.Free;
   FRamPainter.Free;
   FRam.Free;
@@ -977,6 +988,7 @@ begin
   FShells.Clear;
   FStoneTank.Clear;
   FHeartbeat.Stop;
+  ClearEclipse;
   FBelt.Clear;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
@@ -2577,6 +2589,9 @@ procedure TMoonGame.HurtHero;
 begin
   if FHero.Dead then
     Exit;
+  // From the brake of the henshin on nothing wounds him
+  if FEclipse.Spares then
+    Exit;
   FKillStreak := 0; // 2008 reset it at every damage site (752/781/985)
   Dec(FHeroHealth);
   GrantMercy(HurtMercyTicks);
@@ -2626,6 +2641,7 @@ begin
   FShells.Clear;
   FStoneTank.Clear;
   FHeartbeat.Stop;
+  ClearEclipse;
   FEnergyGauge.Dock;
   FBelt.Clear;
   FFarPlane.Clear;
@@ -2917,6 +2933,50 @@ begin
     Exit;
   FAudio.Play(HeartbeatSoundFile);
   FVitals.Beat;
+end;
+
+// The charge full past the bunker, the world stops for the henshin - once
+// the Ram is whole on the screen, its eye to burn through the dark
+procedure TMoonGame.TickEclipse;
+begin
+  if not FEclipse.Running then
+  begin
+    if FPastBunker and not FHero.Dead and (FOrbs.Energy >= FullEnergy) and
+      FRam.CanBrake then
+      BeginEclipse;
+    Exit;
+  end;
+  var Cue := FEclipse.Tick;
+  if Cue.Corona then
+    FAudio.PauseMusic(EclipseFadeSeconds);
+  if Cue.Diamond then
+    FEclipse.AimDiamond(DiamondAngleToward(FEnergyGauge.Ride.Center(0),
+      HeroCenter));
+end;
+
+// The Ram brakes and the road runs down with it: the far plane, the fangs
+// and the pads come to rest
+procedure TMoonGame.BeginEclipse;
+begin
+  FEclipse.Start;
+  FRam.BrakeToAStand;
+  FBelt.Stop;
+  ClearHeroOfHull;
+end;
+
+// Out of the hull with no wound, the way a touch would throw him
+procedure TMoonGame.ClearHeroOfHull;
+begin
+  var Away: Integer;
+  if FRam.InTheHull(HeroBody(FHero), Away) then
+    FHero.Throw(Away);
+end;
+
+// The paused track goes on before a restart asks whether it plays
+procedure TMoonGame.ClearEclipse;
+begin
+  FEclipse.Clear;
+  FAudio.ResumeMusic(0);
 end;
 
 // The decks of APads, one for one
@@ -3663,6 +3723,7 @@ begin
   FEnergyGauge.Tick(FOrbs.Energy);
   FVitals.Wing := FEnergyGauge.WingWidth;
   TickHeartbeat;
+  TickEclipse;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -3816,6 +3877,11 @@ begin
         FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
           AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
+        // The eclipse: the world under the dark, the Ram's eye through it;
+        // the hero, his orbs and the HUD over it
+        FEclipsePainter.DrawDark(AAlpha);
+        FRamPainter.DrawEyeOverDark(FShake.Offset(scWorld), AAlpha,
+          FEclipse.Darkness(AAlpha));
         FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);
         var HeroLift := FHero.DeckLift(AAlpha);
@@ -3849,7 +3915,8 @@ begin
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;
-        FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha));
+        FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha),
+          FEclipse.Gauge(AAlpha));
         // Over the gauge: the orbs go into it
         FOrbs.DrawFeed(FDynamics.Canvas, NoShake, AAlpha);
         FCharge.Draw;
@@ -4023,6 +4090,7 @@ begin
   FShells.Clear;
   FStoneTank.Clear;
   FHeartbeat.Stop;
+  ClearEclipse;
   FBelt.Clear;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);

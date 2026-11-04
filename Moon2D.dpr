@@ -87,6 +87,7 @@ uses
   Game.Shells in 'Game\Game.Shells.pas',
   Game.StoneTank in 'Game\Game.StoneTank.pas',
   Game.Heartbeat in 'Game\Game.Heartbeat.pas',
+  Game.Eclipse in 'Game\Game.Eclipse.pas',
   Game.Belt in 'Game\Game.Belt.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
   Game.Fangs in 'Game\Game.Fangs.pas',
