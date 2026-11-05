@@ -6,7 +6,8 @@
 
   It does not know the charge: the game hands it a tempo every tick, so
   later steps of the henshin can drive it by their own clock. What the
-  last of the charge asks of it is ChargeTempo.
+  last of the charge asks of it is ChargeTempo, what the rite of the
+  eclipse asks is RiteTempo.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -40,6 +41,9 @@ type
     procedure Stop;
     // The pulse of both thumps, 0..1, AAlpha ticks past the current one
     function Pulse(AAlpha: Single): Single;
+    // Ticks since the last beat was struck, AAlpha past the current one;
+    // -1 while the heart is still
+    function SinceBeat(AAlpha: Single): Single;
     property Running: Boolean read FRunning;
     // A beat was struck this tick: the first of its two thumps
     property Struck: Boolean read FStruck;
@@ -48,6 +52,9 @@ type
 // The tempo of the last of the charge: 60 beats a minute at
 // HeartbeatCharge, 90 at full, straight between them
 function ChargeTempo(ACharge: Integer): Single;
+// The tempo of the rite of the eclipse: 90 with its ring empty, where the
+// charge left it, 140 with the ring full, straight between them
+function RiteTempo(ARingShare: Single): Single;
 
 implementation
 
@@ -57,8 +64,9 @@ uses
 const
   TicksPerSecond = 33;
   TicksPerMinute = 60 * TicksPerSecond;
-  SlowestTempo = 60;
-  FastestTempo = 90;
+  StartTempo = 60;
+  FullChargeTempo = 90;
+  FullRingTempo = 140;
   // A thump fades out over this many ticks
   ThumpTicks = 7;
   DubLevel = 0.7;
@@ -68,7 +76,13 @@ begin
   var Share: Single := (ACharge - HeartbeatCharge) /
     (FullEnergy - HeartbeatCharge);
   Share := EnsureRange(Share, 0, 1);
-  Result := SlowestTempo + (FastestTempo - SlowestTempo) * Share;
+  Result := StartTempo + (FullChargeTempo - StartTempo) * Share;
+end;
+
+function RiteTempo(ARingShare: Single): Single;
+begin
+  var Share := EnsureRange(ARingShare, 0, 1);
+  Result := FullChargeTempo + (FullRingTempo - FullChargeTempo) * Share;
 end;
 
 // 1 at the thump, down to 0 over ThumpTicks; 0 before it
@@ -116,6 +130,13 @@ begin
   var Lub := Thump(Since);
   var Dub: Single := DubLevel * Thump(Since - DubTicks);
   Result := Max(Lub, Dub);
+end;
+
+function THeartbeat.SinceBeat(AAlpha: Single): Single;
+begin
+  if not FRunning then
+    Exit(-1);
+  Result := FSinceBeat + AAlpha;
 end;
 
 end.

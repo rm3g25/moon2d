@@ -330,10 +330,15 @@ type
     procedure ResumePastBunker(const AOrders: TRamOrders);
     procedure TickHeartbeat;
     procedure TickEclipse;
+    procedure StepEclipse;
     procedure BeginEclipse;
     procedure ClearHeroOfHull;
     procedure ClearEclipse;
     procedure CatchHero;
+    procedure BeginMoonRite;
+    function HullBox: TSdlFRect;
+    function EclipseMatter: TMatter;
+    function RingProgress: TRingProgress;
     function BeamFoot: TSdlFPoint;
     procedure TickRam;
     procedure TickBelt(AWay: Double);
@@ -417,7 +422,8 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.IOUtils, Sdl2.Image,
-  Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space, Localization;
+  Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space, Localization,
+  Orbs.Moonrite;
 
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
@@ -897,6 +903,7 @@ begin
   Stage.Shake := FShake;
   Stage.Shroud := FShroud;
   Stage.Rite := FOrbs.Rite;
+  Stage.MoonRite := FOrbs.MoonRite;
   Stage.Burst := FOrbs.Burst;
   var Calls: THenshinCalls;
   Calls.Cure := CureHero;
@@ -904,6 +911,7 @@ begin
   Calls.BeginRite := FOrbs.BeginRite;
   Calls.ShedSuit := FOrbs.ShedSuit;
   Calls.Burst := FOrbs.BurstSuit;
+  Calls.BeginMoonRite := BeginMoonRite;
   FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
@@ -2925,12 +2933,14 @@ begin
 end;
 
 // Past the bunker, from the heartbeat's charge on: its tempo rises with the
-// last percents. The monitor hears a beat a tick late - it has ticked
-// already
+// last percents, then with the ring of the rite. The monitor hears a beat a
+// tick late - it has ticked already
 procedure TMoonGame.TickHeartbeat;
 begin
   var Energy := FOrbs.Energy;
-  if FPastBunker and (Energy >= HeartbeatCharge) then
+  if FEclipse.Running then
+    FHeartbeat.Tick(RiteTempo(RingProgress.Share))
+  else if FPastBunker and (Energy >= HeartbeatCharge) then
     FHeartbeat.Tick(ChargeTempo(Energy))
   else
     FHeartbeat.Stop;
@@ -2942,21 +2952,33 @@ begin
 end;
 
 // The charge full past the bunker, the world stops for the henshin - once
-// the Ram is whole on the screen, its eye to burn through the dark
+// the Ram is whole on the screen, its eye to burn through the dark. The
+// rite of the eclipse ticks after the scene has put the hero where he
+// hangs this tick: its ring keeps to him without trailing a tick behind.
 procedure TMoonGame.TickEclipse;
 begin
-  if not FEclipse.Running then
-  begin
-    if FPastBunker and not FHero.Dead and (FOrbs.Energy >= FullEnergy) and
-      FRam.CanBrake then
-      BeginEclipse;
-    Exit;
-  end;
-  var Cue := FEclipse.Tick;
+  if FEclipse.Running then
+    StepEclipse
+  else if FPastBunker and not FHero.Dead and (FOrbs.Energy >= FullEnergy) and
+    FRam.CanBrake then
+    BeginEclipse;
+
+  var Beat: TRiteBeat;
+  Beat.Struck := FHeartbeat.Struck;
+  Beat.Pulse := FHeartbeat.Pulse(0);
+  FOrbs.TickMoonRite(Beat);
+end;
+
+// The scene reads the ring as the rite left it a tick ago
+procedure TMoonGame.StepEclipse;
+begin
+  var Cue := FEclipse.Tick(RingProgress);
   if Cue.Caught then
     CatchHero;
-  if Cue.Dim then
-    FAudio.PauseMusic(EclipseFadeSeconds);
+  if Cue.Lifted then
+    FAudio.PauseMusic(RiteFadeSeconds);
+  if Cue.DrawIn then
+    FOrbs.MoonRite.DrawIn;
   var Hoisted := FEclipse.Hoisted;
   if Hoisted < 0 then
     Exit;
@@ -2965,23 +2987,72 @@ begin
 end;
 
 // Held where the scene finds him at rest; his way up is set from there,
-// clear of the edges and of the hull
+// clear of the edges and of the hull, and the rite is called about him
 procedure TMoonGame.CatchHero;
 begin
   FHero.Hold;
   var World := Default(THoistWorld);
   World.HasHull := FRam.Present;
   if World.HasHull then
-  begin
-    World.Hull.X := FRam.LeftAt(0);
-    World.Hull.Y := RamTop;
-    World.Hull.W := RamWidth;
-    World.Hull.H := RamHeight;
-  end;
+    World.Hull := HullBox;
   var From: TSdlFPoint;
   From.X := FHero.X;
   From.Y := FHero.Y;
   FHoist := PlanHoist(From, World);
+  FHenshin.StartEclipse;
+end;
+
+// Its orbs off the matter about him and, on the screen of the chase, out
+// of the far city
+procedure TMoonGame.BeginMoonRite;
+begin
+  var Deep: TArray<TSdlFPoint> := [];
+  if FHero.Screen = FLevel.FarPlane.Screen then
+    Deep := FLevel.FarPlane.CityPoints(FFarPlane.Offsets);
+  FOrbs.BeginMoonRite(EclipseMatter, Deep);
+end;
+
+// The matter of his screen with the hull on it and, on the screen of the
+// chase, the fangs: a fang gives its orbs off its tip, not off the box of
+// its picture, which is mostly air
+function TMoonGame.EclipseMatter: TMatter;
+const
+  FangTipWidth = 8;
+begin
+  Result := MatterAround;
+  if FRam.Present then
+    Result.Bodies := Result.Bodies + [HullBox];
+  if FHero.Screen <> FLevel.FarPlane.Screen then
+    Exit;
+  var Def := FLevel.FarPlane;
+  var Travel := FFarPlane.Offsets[fmFangs];
+  for var Fang in FFangs.Fangs do
+  begin
+    var Middle: Single := Fang.X - Travel + Fang.W / 2;
+    if (Middle < 0) or (Middle >= Def.ScreenWidth) then
+      Continue;
+    var Tip: TSdlFRect;
+    Tip.X := Middle - FangTipWidth / 2;
+    Tip.Y := Fang.Top;
+    Tip.W := FangTipWidth;
+    Tip.H := Def.ScreenHeight - Fang.Top;
+    Result.Bodies := Result.Bodies + [Tip];
+  end;
+end;
+
+// The box of the hull as it stands
+function TMoonGame.HullBox: TSdlFRect;
+begin
+  Result.X := FRam.LeftAt(0);
+  Result.Y := RamTop;
+  Result.W := RamWidth;
+  Result.H := RamHeight;
+end;
+
+function TMoonGame.RingProgress: TRingProgress;
+begin
+  Result.Gathered := FOrbs.MoonRite.Gathered;
+  Result.Count := FOrbs.MoonRite.Count;
 end;
 
 // Where the beam comes down: his feet, under the middle of him
@@ -3013,6 +3084,7 @@ end;
 procedure TMoonGame.ClearEclipse;
 begin
   FEclipse.Clear;
+  FOrbs.MoonRite.Clear;
   FHero.Release;
   FAudio.ResumeMusic(0);
 end;
@@ -3925,6 +3997,8 @@ begin
         FEclipsePainter.DrawDark(AAlpha);
         FRamPainter.DrawEyeOverDark(FShake.Offset(scWorld), AAlpha,
           FEclipse.Darkness(AAlpha));
+        FEclipsePainter.DrawRipple(HeroCenter, FHeartbeat.SinceBeat(AAlpha),
+          AAlpha);
         FEclipsePainter.DrawBeam(BeamFoot, FHeartbeat.Pulse(AAlpha), AAlpha);
         FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);

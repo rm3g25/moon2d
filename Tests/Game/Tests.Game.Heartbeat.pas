@@ -6,7 +6,9 @@
   and a change of tempo keeps what was gathered; a stop strikes again at
   once; the pulse peaks on the beat, the second thump comes DubTicks
   later and weaker, and both are gone before the next beat; a still heart
-  has no pulse.
+  has no pulse. The tempo of the rite of the eclipse is 90 with its ring
+  empty, 140 with it full, straight between, held outside; the ticks since
+  a beat count from it, and a still heart has none.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -30,6 +32,14 @@ type
     procedure TestStraightBetween;
     [Test]
     procedure TestHoldsOutsideTheLastPercents;
+    [Test]
+    procedure TestTheRiteStartsWhereTheChargeLeftIt;
+    [Test]
+    procedure TestTheRiteBeatsAtHundredFortyWithTheRingFull;
+    [Test]
+    procedure TestTheRiteGoesStraightBetween;
+    [Test]
+    procedure TestTheRiteHoldsOutsideItsRing;
   end;
 
   [TestFixture]
@@ -64,6 +74,10 @@ type
     procedure TestThePulseDiesBeforeTheNextBeat;
     [Test]
     procedure TestAStillHeartHasNoPulse;
+    [Test]
+    procedure TestTheTicksSinceABeatCountFromIt;
+    [Test]
+    procedure TestAStillHeartHasNoBeatToCountFrom;
   end;
 
 implementation
@@ -98,6 +112,28 @@ procedure THeartbeatTempoTests.TestHoldsOutsideTheLastPercents;
 begin
   Assert.AreEqual(60.0, Double(ChargeTempo(50)), TempoSlop, 'Below');
   Assert.AreEqual(90.0, Double(ChargeTempo(120)), TempoSlop, 'Above');
+end;
+
+procedure THeartbeatTempoTests.TestTheRiteStartsWhereTheChargeLeftIt;
+begin
+  Assert.AreEqual(Double(ChargeTempo(100)), Double(RiteTempo(0)), TempoSlop);
+end;
+
+procedure THeartbeatTempoTests.TestTheRiteBeatsAtHundredFortyWithTheRingFull;
+begin
+  Assert.AreEqual(140.0, Double(RiteTempo(1)), TempoSlop);
+end;
+
+procedure THeartbeatTempoTests.TestTheRiteGoesStraightBetween;
+begin
+  Assert.AreEqual(115.0, Double(RiteTempo(0.5)), TempoSlop, 'Half');
+  Assert.AreEqual(100.0, Double(RiteTempo(0.2)), TempoSlop, 'A fifth');
+end;
+
+procedure THeartbeatTempoTests.TestTheRiteHoldsOutsideItsRing;
+begin
+  Assert.AreEqual(90.0, Double(RiteTempo(-1)), TempoSlop, 'Below');
+  Assert.AreEqual(140.0, Double(RiteTempo(2)), TempoSlop, 'Above');
 end;
 
 procedure THeartbeatTests.Setup;
@@ -224,6 +260,31 @@ begin
   Strikes(5, 60);
   FHeart.Stop;
   Assert.AreEqual(0.0, Double(FHeart.Pulse(0)), PulseSlop, 'Stopped');
+end;
+
+procedure THeartbeatTests.TestTheTicksSinceABeatCountFromIt;
+const
+  Between = 5;
+begin
+  FHeart.Tick(60);
+  Assert.AreEqual(0.0, Double(FHeart.SinceBeat(0)), PulseSlop, 'On the beat');
+  Assert.AreEqual(0.5, Double(FHeart.SinceBeat(0.5)), PulseSlop,
+    'Between ticks');
+  for var i := 1 to Between do
+    FHeart.Tick(60);
+  Assert.AreEqual(Double(Between), Double(FHeart.SinceBeat(0)), PulseSlop,
+    'Ticks on');
+  Strikes(SecondTicks, 60);
+  Assert.IsTrue(FHeart.SinceBeat(0) < SecondTicks - Between,
+    'From the next beat on, counted anew');
+end;
+
+procedure THeartbeatTests.TestAStillHeartHasNoBeatToCountFrom;
+begin
+  Assert.AreEqual(-1.0, Double(FHeart.SinceBeat(0)), PulseSlop, 'Never beat');
+  Strikes(5, 60);
+  FHeart.Stop;
+  Assert.AreEqual(-1.0, Double(FHeart.SinceBeat(0.5)), PulseSlop, 'Stopped');
 end;
 
 initialization

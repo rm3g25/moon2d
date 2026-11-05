@@ -58,7 +58,7 @@ unit Levels.FarPlane;
 interface
 
 uses
-  System.SysUtils, System.JSON, Render.Brush, Levels.Tint;
+  System.SysUtils, System.JSON, Sdl2.Core, Render.Brush, Levels.Tint;
 
 type
   EFarPlaneError = class(Exception);
@@ -367,6 +367,9 @@ type
     function CityLength: Single;
     // The elements of the city's layer drawn from APiece, in its order
     function CityElements(const APiece: string): TArray<TFarPlaneElement>;
+    // The middle of every building of the city whose middle is on the
+    // screen where the offsets have taken it, in the city's order
+    function CityPoints(const AOffsets: TFarPlaneOffsets): TArray<TSdlFPoint>;
     // Where the tunnel's last element ends along its layer: once that is
     // past the left edge, the tunnel is gone
     function TunnelEnd: Single;
@@ -487,6 +490,24 @@ begin
       for var Element in Layer.Elements do
         if Element.Id = APiece then
           Result := Result + [Element];
+end;
+
+function TFarPlaneDef.CityPoints(const AOffsets: TFarPlaneOffsets): TArray<TSdlFPoint>;
+begin
+  Result := [];
+  for var Layer in Layers do
+  begin
+    if Layer.Motion <> fmCity then
+      Continue;
+    for var Element in Layer.Elements do
+    begin
+      var Point: TSdlFPoint;
+      Point.X := ElementLeft(Layer, Element, AOffsets) + Element.W / 2;
+      Point.Y := Element.Y - Element.H / 2;
+      if (Point.X >= 0) and (Point.X < ScreenWidth) then
+        Result := Result + [Point];
+    end;
+  end;
 end;
 
 function TFarPlaneDef.TunnelEnd: Single;

@@ -18,6 +18,12 @@
   about the hero, and the mercy lasts as long as the ring does. The fan of
   bullets the suit shattered into in 2008 is gone.
 
+  The moon form comes by the rite of the eclipse (Orbs.Moonrite), in a
+  scene the game runs (Game.Eclipse): the shout, then the game is asked for
+  the rite. The ceremony hears it as it hears the ice form's: the light
+  fills the body as the orbs go in, and as the last one does the hero is
+  cured and wears the moon form.
+
   The ceremony acts on the stage it is given - the hero, the sound bank,
   the message board, the shake meter, the shroud, the rite, the burst -
   and asks the game for what it does not own, through its calls. The game
@@ -33,7 +39,7 @@ interface
 
 uses
   Hero, Audio, Hud.Messages, Render.Shake, Render.Font, Game.Shroud,
-  Orbs.Rite, Orbs.Burst;
+  Orbs.Rite, Orbs.Moonrite, Orbs.Burst;
 
 const
   // bottle.wav is the barrel burst that doubles as the henshin flash,
@@ -54,6 +60,9 @@ type
   // The burst of the suit begins about the hero, owned by his orbs: it
   // knows his center, the matter of his screen and the level's pattern
   TBurstSuit = reference to procedure;
+  // The rite of the eclipse begins about the hero, owned by the game: it
+  // knows the matter about him and the depth of the far city
+  TBeginMoonRite = reference to procedure;
 
   // What the ceremony acts on
   THenshinStage = record
@@ -63,6 +72,7 @@ type
     Shake: TScreenShake;
     Shroud: THeroShroud;
     Rite: TOrbRite;
+    MoonRite: TMoonRite;
     Burst: TOrbBurst;
   end;
 
@@ -74,6 +84,7 @@ type
     BeginRite: TBeginRite;
     ShedSuit: TShedSuit;
     Burst: TBurstSuit;
+    BeginMoonRite: TBeginMoonRite;
   end;
 
   THenshin = class
@@ -84,6 +95,7 @@ type
     FShake: TScreenShake;
     FShroud: THeroShroud;
     FRite: TOrbRite;
+    FMoonRite: TMoonRite;
     FBurst: TOrbBurst;
     FCalls: THenshinCalls;
     // The 3..2..1 prelude; 0 = idle
@@ -93,7 +105,9 @@ type
     // burst it did not ask for puts no suit on
     FBursting: Boolean;
     procedure TickCountdown;
+    procedure Shout;
     procedure HearRite;
+    procedure HearMoonRite;
     procedure HearBurst;
     procedure Finish;
   public
@@ -104,6 +118,8 @@ type
     procedure StartCountdown;
     // The ceremony straight away: the gravel trial of level 2
     procedure Start;
+    // The shout and the rite of the eclipse: the henshin of arena 3
+    procedure StartEclipse;
     // Once per logic tick, after the rite's and the burst's own: the
     // prelude, then what the rite and the burst have told since the last
     // one
@@ -122,7 +138,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math, Localization, Game.Space;
+  System.SysUtils, Localization, Game.Space;
 
 const
   HenshinSoundFile = 'evolution.wav'; // the transformation sting (878/966)
@@ -136,6 +152,9 @@ const
   // The screen-shake dose of the burst's strike (2026 addition), a trauma
   // share - see Render.Shake for the meter
   FinishTrauma = 0.7;
+  // As the suit goes on: with the point of each wave that sat, the six of
+  // the 2008 ceremony
+  SuitCures = 3;
 
   // Pre-henshin countdown (author's 2026 addition, not in the original):
   // 3..2..1 in screen center telegraphs the ceremony - one second of
@@ -158,6 +177,7 @@ begin
   FShake := AStage.Shake;
   FShroud := AStage.Shroud;
   FRite := AStage.Rite;
+  FMoonRite := AStage.MoonRite;
   FBurst := AStage.Burst;
   FCalls := ACalls;
   // Strict loads: a bad name blows up here, not mid-boss
@@ -233,37 +253,33 @@ end;
 // CEREMONY - the shout, what the rite and the burst tell, the suit
 // ---------------------------------------------------------------------------
 
-procedure THenshin.Start;
+procedure THenshin.Shout;
 begin
   FMessages.ShowBig(Tr(SEvolution), BigMessageTicks);
-  // The sting fires twice back to back (878-879 / 966-967) - a poor
-  // man's volume boost, kept verbatim
+  // The sting fires twice back to back - a poor man's volume boost, kept
+  // verbatim
   FAudio.Play(HenshinSoundFile);
   FAudio.Play(HenshinSoundFile);
+end;
+
+procedure THenshin.Start;
+begin
+  Shout;
   FCalls.BeginRite();
+end;
+
+procedure THenshin.StartEclipse;
+begin
+  Shout;
+  FCalls.BeginMoonRite();
 end;
 
 procedure THenshin.Tick;
 begin
   TickCountdown;
   HearRite;
+  HearMoonRite;
   HearBurst;
-end;
-
-// The body fills with light as the orbs go in: the look of the suit with
-// no frost and no motes, its light climbing all through the rite's
-// collapse. It tops out a tick past the collapse; the burst's inhale
-// covers the body with a bare figure until the suit's look takes the
-// light over at the strike.
-function ChargeLook: TShroudLook;
-const
-  TopAt = 0.9; // the share of the look's life its top falls on
-begin
-  Result := IceOnLook;
-  Result.Bands := 0;
-  Result.Motes := 0;
-  Result.FlashAt := TopAt;
-  Result.Life := Ceil((IceRiteScore.CollapseTicks + 1) / TopAt);
 end;
 
 procedure THenshin.HearRite;
@@ -282,8 +298,10 @@ begin
         // while the burst inhales
         FCalls.GrantMercy(IceRiteScore.HoverTicks +
           IceRiteScore.CollapseTicks + InhaleTicks);
+      // The burst's inhale covers the body with a bare figure until the
+      // suit's look takes the light over at the strike
       reCollapsing:
-        FShroud.Start(ChargeLook);
+        FShroud.Start(ChargeLook(IceRiteScore.CollapseTicks));
       reFinished:
         begin
           FBursting := True;
@@ -291,6 +309,25 @@ begin
         end;
     end;
     Event := FRite.DrainEvent;
+  end;
+end;
+
+procedure THenshin.HearMoonRite;
+begin
+  var Event := FMoonRite.DrainEvent;
+  while Event <> mvNone do
+  begin
+    case Event of
+      mvDrawingIn:
+        FShroud.Start(ChargeLook(MoonRiteScore.CollapseTicks));
+      mvFinished:
+        begin
+          for var i := 1 to SuitCures do
+            FCalls.Cure();
+          FHero.HeroForm := hfMoon;
+        end;
+    end;
+    Event := FMoonRite.DrainEvent;
   end;
 end;
 
@@ -307,13 +344,10 @@ end;
 
 // The strike of the burst: the suit is on
 procedure THenshin.Finish;
-const
-  // With the point of each wave that sat, the six of the 2008 ceremony
-  Cures = 3;
 begin
   FBursting := False;
   FMessages.AddTicker(Tr(SIceFormPerk), PerkTicks);
-  for var i := 1 to Cures do
+  for var i := 1 to SuitCures do
     FCalls.Cure();
   FHero.HeroForm := hfIce;
   FShroud.Start(IceOnLook);

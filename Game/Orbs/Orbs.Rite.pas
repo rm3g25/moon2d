@@ -210,6 +210,24 @@ const
     FreezeTicks: 9; CollapseTicks: 22; StandIns: 24; ShedOrbs: 72;
     ShedTicks: 100; ShedSpread: 33);
 
+// The moves of a rite's orb, shared by the rites (Orbs.Moonrite)
+
+// Slow away, slow home; 0..1 in, 0..1 out
+function EasedInOut(AShare: Single): Single;
+// From where it took off to its seat about the hero, AEased of the way: a
+// spiral about his center that turns ASweep radians in all. The seat is in
+// his frame, the takeoff and the result on the screen.
+function SpiralTo(const ATakeoff, ACenter: TSdlFPoint;
+  const ASeat: TPatternSeat; ASweep, AEased: Single): TSdlFPoint;
+// From its seat into the hero, AEntered of the way, to AEntry - a point of
+// his body from his center - winding to ASide (1 or -1), slowly at first
+// and then all at once. In his frame; its depth goes as it does.
+function DrawnInto(const ASeat: TPatternSeat; const AEntry: TSdlFPoint;
+  AEntered, ASide: Single): TPatternSeat;
+// A point of the body the dice pick, from ACenter; with no body, the chest
+function BodyEntry(const ABody: TBodyPoints; ACenter: TSdlFPoint;
+  var ADice: TXorShift): TSdlFPoint;
+
 implementation
 
 uses
@@ -330,12 +348,44 @@ begin
     Result := 1;
 end;
 
-// Slow away, slow home; 0..1 in, 0..1 out
 function EasedInOut(AShare: Single): Single;
 begin
   if AShare < 0.5 then
     Exit(2 * AShare * AShare);
   Result := 1 - Sqr(2 - 2 * AShare) / 2;
+end;
+
+function SpiralTo(const ATakeoff, ACenter: TSdlFPoint;
+  const ASeat: TPatternSeat; ASweep, AEased: Single): TSdlFPoint;
+begin
+  var Spiral := Rotated(ATakeoff.X - ACenter.X, ATakeoff.Y - ACenter.Y,
+    ASweep * AEased);
+  Result.X := ACenter.X + Spiral.X * (1 - AEased) + ASeat.X * AEased;
+  Result.Y := ACenter.Y + Spiral.Y * (1 - AEased) + ASeat.Y * AEased;
+end;
+
+function DrawnInto(const ASeat: TPatternSeat; const AEntry: TSdlFPoint;
+  AEntered, ASide: Single): TPatternSeat;
+begin
+  var Pull: Single := AEntered * AEntered * AEntered;
+  var Wound := Rotated(ASeat.X - AEntry.X, ASeat.Y - AEntry.Y,
+    WindTurn * Sqr(AEntered) * ASide);
+  Result := ASeat;
+  Result.X := AEntry.X + Wound.X * (1 - Pull);
+  Result.Y := AEntry.Y + Wound.Y * (1 - Pull);
+  Result.Depth := ASeat.Depth * (1 - Pull);
+end;
+
+function BodyEntry(const ABody: TBodyPoints; ACenter: TSdlFPoint;
+  var ADice: TXorShift): TSdlFPoint;
+begin
+  Result.X := 0;
+  Result.Y := ChestY;
+  if Length(ABody) = 0 then
+    Exit;
+  var Pick := Trunc(ADice.NextUnit * Length(ABody));
+  Result.X := ABody[Pick].X - ACenter.X;
+  Result.Y := ABody[Pick].Y - ACenter.Y;
 end;
 
 // ---------------------------------------------------------------------------
@@ -608,16 +658,9 @@ begin
   FEvents.Add(rePaused);
 end;
 
-// A point of the body the dice pick, from the hero's center
 function TOrbRite.EntryIn(const ABody: TBodyPoints): TSdlFPoint;
 begin
-  Result.X := 0;
-  Result.Y := ChestY;
-  if Length(ABody) = 0 then
-    Exit;
-  var Pick := Trunc(FRandom.NextUnit * Length(ABody));
-  Result.X := ABody[Pick].X - FHeroCenter.X;
-  Result.Y := ABody[Pick].Y - FHeroCenter.Y;
+  Result := BodyEntry(ABody, FHeroCenter, FRandom);
 end;
 
 // Where the orb of this number stands in the ring: the orbs share the oval
@@ -763,13 +806,10 @@ begin
   var Flown := UpToOne(AOrb.FStageAge / AOrb.FFlightTicks);
   var Eased := EasedInOut(Flown);
   var Seat := SeatFor(AOrb.FWave, AOrb.FNumber);
-  var Spiral := Rotated(AOrb.FTakeoff.X - FHeroCenter.X,
-    AOrb.FTakeoff.Y - FHeroCenter.Y, AOrb.FSweep * Eased);
+  var Place := SpiralTo(AOrb.FTakeoff, FHeroCenter, Seat, AOrb.FSweep, Eased);
   // The nearer its seat, the more of the hero's step is the orb's own:
   // that share is no part of what it is drawn on ahead by
-  AOrb.MoveBeside(FHeroCenter.X + Spiral.X * (1 - Eased) + Seat.X * Eased,
-    FHeroCenter.Y + Spiral.Y * (1 - Eased) + Seat.Y * Eased,
-    AHeroStep.X * Eased, AHeroStep.Y * Eased);
+  AOrb.MoveBeside(Place.X, Place.Y, AHeroStep.X * Eased, AHeroStep.Y * Eased);
 
   AOrb.Depth := Seat.Depth * Sqr(Eased);
   var Grown := UpToOne(AOrb.Age / AppearTicks);
@@ -818,14 +858,11 @@ begin
     Entered := 0;
 
   var Seat := SeatFor(AOrb.FWave, AOrb.FNumber);
-  var Pull: Single := Entered * Entered * Entered;
-  var Entry := AOrb.FEntry;
-  var Wound := Rotated(Seat.X - Entry.X, Seat.Y - Entry.Y,
-    WindTurn * Sqr(Entered) * AOrb.FSide);
-  AOrb.MoveBeside(FHeroCenter.X + Entry.X + Wound.X * (1 - Pull),
-    FHeroCenter.Y + Entry.Y + Wound.Y * (1 - Pull), AHeroStep.X, AHeroStep.Y);
+  var Place := DrawnInto(Seat, AOrb.FEntry, Entered, AOrb.FSide);
+  AOrb.MoveBeside(FHeroCenter.X + Place.X, FHeroCenter.Y + Place.Y,
+    AHeroStep.X, AHeroStep.Y);
 
-  AOrb.Depth := Seat.Depth * (1 - Pull);
+  AOrb.Depth := Place.Depth;
   Shine(AOrb, 1 - ShrinkShare * Entered,
     Seat.Level + (LightPeak - Seat.Level) * Entered);
 end;

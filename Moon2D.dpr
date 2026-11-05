@@ -101,6 +101,7 @@ uses
   Orbs.Rain in 'Game\Orbs\Orbs.Rain.pas',
   Orbs.Patterns in 'Game\Orbs\Orbs.Patterns.pas',
   Orbs.Rite in 'Game\Orbs\Orbs.Rite.pas',
+  Orbs.Moonrite in 'Game\Orbs\Orbs.Moonrite.pas',
   Orbs.Burst in 'Game\Orbs\Orbs.Burst.pas',
   Orbs.Feed in 'Game\Orbs\Orbs.Feed.pas',
   Events.Director in 'Game\Events\Events.Director.pas',

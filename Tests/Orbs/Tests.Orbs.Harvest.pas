@@ -3,7 +3,9 @@
   gives the spots in waves, each wave from all sides of the hero, the first
   off the nearest faces and the last off the farthest, passing by what lies
   at his very feet and topping up from thin air what the matter is short
-  of.
+  of. HarvestAfar gives its count, none of them near him, from all sides
+  and from far and less far, by their turn about him, no spot twice, and
+  thin air past its nearest for what the matter is short of.
 
   The hero stands on the floor of a room walled on every side. The dice are
   seeded by the test. How evenly the spots scatter along a face is for the
@@ -44,6 +46,18 @@ type
     procedure TestAroundAwayAndTurnPointFromCenter;
     [Test]
     procedure TestAroundSameDiceGiveSameSpots;
+    [Test]
+    procedure TestAfarGivesItsCount;
+    [Test]
+    procedure TestAfarPassesByAllNearHim;
+    [Test]
+    procedure TestAfarDrawsFromAllSides;
+    [Test]
+    procedure TestAfarDrawsFromFarAndLessFar;
+    [Test]
+    procedure TestAfarTakesNoSpotTwiceAndGoesByTurn;
+    [Test]
+    procedure TestAfarTopsUpWithThinAirPastItsNearest;
   end;
 
 implementation
@@ -89,6 +103,21 @@ var
 begin
   Dice.Seed := ASeed;
   Result := HarvestAround(AMatter, Standing, PerWave, WaveCount, Dice);
+end;
+
+const
+  // HarvestAfar passes by every spot nearer his middle than this
+  AfarNearest = 112;
+  AfarCount = 48;
+  // Thin air stands no farther past the nearest than this
+  AfarAirReach = 80;
+
+function AfarStanding(const AMatter: TMatter; ACount: Integer): TSpots;
+var
+  Dice: TXorShift;
+begin
+  Dice.Seed := DiceSeed;
+  Result := HarvestAfar(AMatter, Standing, ACount, AfarNearest, Dice);
 end;
 
 function Flattened(const AWaves: TWaveSpots): TSpots;
@@ -330,6 +359,81 @@ begin
       Inc(Differing);
   end;
   Assert.IsTrue(Differing > 0, 'Other dice gave the same spots');
+end;
+
+procedure TOrbHarvestTests.TestAfarGivesItsCount;
+const
+  Few = 5;
+begin
+  Assert.AreEqual(AfarCount, Integer(Length(AfarStanding(WalledMatter, AfarCount))));
+  Assert.AreEqual(Few, Integer(Length(AfarStanding(WalledMatter, Few))), 'Few');
+end;
+
+procedure TOrbHarvestTests.TestAfarPassesByAllNearHim;
+begin
+  for var Spot in AfarStanding(WalledMatter, AfarCount) do
+  begin
+    Assert.IsTrue(IsOnFace(Spot), 'A room full of matter gave a spot in thin air');
+    Assert.IsTrue(Spot.Away >= AfarNearest,
+      Format('A spot %g units from the hero was taken', [Spot.Away]));
+  end;
+end;
+
+procedure TOrbHarvestTests.TestAfarDrawsFromAllSides;
+begin
+  var ToTheLeft := 0;
+  var ToTheRight := 0;
+  var Above := 0;
+  for var Spot in AfarStanding(WalledMatter, AfarCount) do
+  begin
+    if Spot.X < StandX then
+      Inc(ToTheLeft);
+    if Spot.X > StandX then
+      Inc(ToTheRight);
+    if Spot.Y < StandY then
+      Inc(Above);
+  end;
+  Assert.IsTrue(ToTheLeft >= LeastToASide, Format('%d to the left', [ToTheLeft]));
+  Assert.IsTrue(ToTheRight >= LeastToASide, Format('%d to the right', [ToTheRight]));
+  Assert.IsTrue(Above >= LeastToASide, Format('%d above', [Above]));
+end;
+
+// Not the nearest faces past the nearest: some lie twice as far
+procedure TOrbHarvestTests.TestAfarDrawsFromFarAndLessFar;
+const
+  FarOff = 2 * AfarNearest;
+  LeastFarOff = 6;
+begin
+  var Far := 0;
+  for var Spot in AfarStanding(WalledMatter, AfarCount) do
+    if Spot.Away > FarOff then
+      Inc(Far);
+  Assert.IsTrue(Far >= LeastFarOff, Format('%d from far off', [Far]));
+end;
+
+procedure TOrbHarvestTests.TestAfarTakesNoSpotTwiceAndGoesByTurn;
+begin
+  var Spots := AfarStanding(WalledMatter, AfarCount);
+  for var i := 0 to High(Spots) do
+  begin
+    if i > 0 then
+      Assert.IsTrue(Spots[i].Turn >= Spots[i - 1].Turn,
+        Format('Spot %d is out of turn', [i]));
+    for var j := i + 1 to High(Spots) do
+      Assert.IsTrue(Apart(Spots[i], Spots[j]) > SameSpot,
+        Format('Spots %d and %d are one spot', [i, j]));
+  end;
+end;
+
+procedure TOrbHarvestTests.TestAfarTopsUpWithThinAirPastItsNearest;
+begin
+  for var Spot in AfarStanding(EmptyMatter, AfarCount) do
+  begin
+    Assert.IsFalse(IsOnFace(Spot), 'An empty room gave a face');
+    var IsPastNearest := (Spot.Away >= AfarNearest - PlaceSlack) and
+      (Spot.Away <= AfarNearest + AfarAirReach + PlaceSlack);
+    Assert.IsTrue(IsPastNearest, Format('A spot of air %g units off', [Spot.Away]));
+  end;
 end;
 
 initialization

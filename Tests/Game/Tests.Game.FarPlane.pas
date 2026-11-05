@@ -21,7 +21,10 @@
   do. Level 2 reads its far plane, its camera and frames among it, the
   life of its city, its train on a line with a run and its searchlights
   in the main dome, and rides on to stand with the emblem's spire over the
-  middle of the screen, as a restart past the bunker asks; a layout that does not make sense raises, and so does
+  middle of the screen, as a restart past the bunker asks - where the
+  middles of the buildings on the screen are the points the rite of the
+  eclipse calls its orbs out of, the spire's among them and none off the
+  screen; a layout that does not make sense raises, and so does
   a city's life that cannot play - a train and the searchlights among
   them.
 
@@ -183,6 +186,8 @@ type
     procedure TestLevelTwoReadsItsCityLife;
     [Test]
     procedure TestRidesToTheEmblemOverTheMiddle;
+    [Test]
+    procedure TestUnderTheEmblemTheCityGivesItsPointsOnTheScreen;
     [Test]
     procedure TestALightOfAnUnknownKindRaises;
     [Test]
@@ -932,6 +937,47 @@ begin
       Assert.AreEqual(Plane.Offsets[fmCity], Plane.OffsetsAt(0.5)[fmCity], 0.0001,
         'Standing there');
       Assert.AreEqual(0.0, Double(Plane.CitySpeed), 0.0001, 'Till the road runs');
+    finally
+      Plane.Free;
+    end;
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestUnderTheEmblemTheCityGivesItsPointsOnTheScreen;
+const
+  // One tick of the city at its cruise and a little more
+  Slop = 0.2;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Def := Level.FarPlane;
+    var Plane := TFarPlane.Create(Def);
+    try
+      Plane.RideToEmblem;
+      var Points := Def.CityPoints(Plane.Offsets);
+      var Spire := Def.CityElements(Def.Emblem.Piece)[0];
+      var Buildings := 0;
+      for var Layer in Def.Layers do
+        if Layer.Motion = fmCity then
+          Inc(Buildings, Length(Layer.Elements));
+
+      Assert.IsTrue(Length(Points) > 0, 'None on the screen');
+      Assert.IsTrue(Length(Points) < Buildings, 'All of the city on the screen');
+      var SpireSeen := False;
+      for var Point in Points do
+      begin
+        var OnScreen := (Point.X >= 0) and (Point.X < Def.ScreenWidth) and
+          (Point.Y > 0) and (Point.Y < Def.ScreenHeight);
+        Assert.IsTrue(OnScreen, Format('A point at %g, %g', [Point.X, Point.Y]));
+        var AtSpire := (Abs(Point.X - Def.ScreenWidth / 2) < Slop) and
+          (Abs(Point.Y - (Spire.Y - Spire.H / 2)) < Slop);
+        if AtSpire then
+          SpireSeen := True;
+      end;
+      Assert.IsTrue(SpireSeen, 'The spire over the middle gives none');
     finally
       Plane.Free;
     end;

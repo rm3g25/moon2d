@@ -3,8 +3,10 @@
   tried as figures: the snowflake has six rays behind him and a hexagon in
   front that walks against their turn; the vortex has an arm to a wave,
   goes round him, flares toward the top and leaps from its top to its foot
-  only with its light out. And the names: a word of a level file finds its
-  pattern, a word unknown raises.
+  only with its light out; the eclipse is sixty seats on two rings in
+  front of his chest, its three waves filling both together, the outer
+  seats between the inner ones, the rings turning against each other. And the
+  names: a word of a level file finds its pattern, a word unknown raises.
 
   A pattern is a function of a wave, a number and the pattern's clock, so a
   test asks for seats and looks at them. Whether a figure is beautiful is
@@ -45,6 +47,14 @@ type
     procedure TestVortexIsNarrowAtTheFeetAndWideOverTheHead;
     [Test]
     procedure TestVortexSeatLeapsOnlyWithItsLightOut;
+    [Test]
+    procedure TestEclipseIsFoundByItsWord;
+    [Test]
+    procedure TestEclipseIsTwoRingsInFrontOfTheChest;
+    [Test]
+    procedure TestEclipseWavesCloseTheRingsTogether;
+    [Test]
+    procedure TestEclipseRingsTurnAgainstEachOther;
   end;
 
 implementation
@@ -60,6 +70,11 @@ type
 const
   SnowflakeName = 'snowflake';
   VortexName = 'vortex';
+  EclipseName = 'eclipse';
+  // Three waves of 20: the rings of the rite of the eclipse
+  OrbsOfTheEclipse = 60;
+  // The middle of the rings, from the middle of the hero's body
+  ChestY = -2;
   // Three waves of 24
   OrbsOfARite = 72;
   PlaceSlack = 0.01; // units
@@ -436,6 +451,124 @@ begin
   TryPace(EvenPace);
   TryPace(QuickPace);
   Assert.IsTrue(Leaps > 0, 'No seat ever came to the end of its arm');
+end;
+
+// The turn of a seat about the chest, radians
+function TurnAboutChest(const ASeat: TPatternSeat): Single;
+begin
+  Result := ArcTan2(ASeat.Y - ChestY, ASeat.X);
+end;
+
+function FromChest(const ASeat: TPatternSeat): Single;
+begin
+  Result := Sqrt(Sqr(ASeat.X) + Sqr(ASeat.Y - ChestY));
+end;
+
+// The short way round from the one turn to the other, radians
+function TurnBetween(AFrom, ATo: Single): Single;
+begin
+  Result := ArcTan2(Sin(ATo - AFrom), Cos(ATo - AFrom));
+end;
+
+// The seat of place APlace of the whole figure, all its waves in turn
+function EclipseSeatAt(const AEclipse: TOrbPattern; APlace: Integer;
+  AFlow: Single): TPatternSeat;
+begin
+  Result := AEclipse.Seat(APlace mod PatternWaves, APlace div PatternWaves,
+    AEclipse.PerWave, AFlow);
+end;
+
+procedure TOrbPatternsTests.TestEclipseIsFoundByItsWord;
+begin
+  var Eclipse := FindPattern(EclipseName);
+  Assert.AreEqual(EclipseName, Eclipse.Name);
+  Assert.AreEqual(EclipseName, EclipsePatternName, 'The rite asks for it so');
+  Assert.IsTrue(Assigned(Eclipse.Seat), 'No seats');
+  Assert.AreEqual(OrbsOfTheEclipse, PatternWaves * Eclipse.PerWave);
+end;
+
+// The places of the figure in turn, even ones on the inner ring and odd
+// ones on the outer, half of the seats on each
+procedure TOrbPatternsTests.TestEclipseIsTwoRingsInFrontOfTheChest;
+const
+  RadiusSlack = 0.01;
+  // Clear of his body, close enough to read as his
+  NearestRing = 24;
+  FarthestRing = 46;
+  // Far enough apart to read as two rings
+  RingsApart = 8;
+begin
+  var Eclipse := FindPattern(EclipseName);
+  for var Flow in Flows do
+  begin
+    var Seats := SeatsOf(Eclipse, Flow);
+    ExpectAllApart(Seats);
+    var Inner := FromChest(EclipseSeatAt(Eclipse, 0, Flow));
+    var Outer := FromChest(EclipseSeatAt(Eclipse, 1, Flow));
+    Assert.IsTrue(Inner > NearestRing, Format('The inner ring is %g across', [Inner]));
+    Assert.IsTrue(Outer < FarthestRing, Format('The outer ring is %g across', [Outer]));
+    Assert.IsTrue(Outer - Inner > RingsApart,
+      Format('The rings are %g units apart', [Outer - Inner]));
+    for var Place := 0 to OrbsOfTheEclipse - 1 do
+    begin
+      var Seat := EclipseSeatAt(Eclipse, Place, Flow);
+      var Ring := Inner;
+      if Odd(Place) then
+        Ring := Outer;
+      Assert.AreEqual(Double(Ring), Double(FromChest(Seat)), RadiusSlack,
+        Format('Place %d is off its ring', [Place]));
+      Assert.IsTrue(Seat.Depth > 0,
+        Format('Place %d is not in front of the hero', [Place]));
+      var IsLightAShare := (Seat.Level >= 0) and (Seat.Level <= 1);
+      Assert.IsTrue(IsLightAShare,
+        Format('Place %d burns at %g', [Place, Seat.Level]));
+    end;
+  end;
+end;
+
+// At the start of the clock each ring is even, its seats a thirtieth of a
+// turn apart, and every outer seat stands halfway between two inner ones
+procedure TOrbPatternsTests.TestEclipseWavesCloseTheRingsTogether;
+const
+  TurnSlack = 0.001;
+  OnARing = OrbsOfTheEclipse div 2;
+begin
+  var Eclipse := FindPattern(EclipseName);
+  var Step: Single := 2 * Pi / OnARing;
+  for var Place := 0 to OrbsOfTheEclipse - 1 do
+  begin
+    var Seat := EclipseSeatAt(Eclipse, Place, 0);
+    var Along := EclipseSeatAt(Eclipse, (Place + 2) mod OrbsOfTheEclipse, 0);
+    var Between := EclipseSeatAt(Eclipse, (Place + 1) mod OrbsOfTheEclipse, 0);
+    Assert.AreEqual(Double(Step),
+      Double(TurnBetween(TurnAboutChest(Seat), TurnAboutChest(Along))),
+      TurnSlack, Format('Place %d and the next on its ring', [Place]));
+    Assert.AreEqual(Double(Step / 2),
+      Double(TurnBetween(TurnAboutChest(Seat), TurnAboutChest(Between))),
+      TurnSlack, Format('Place %d and the next on the other ring', [Place]));
+  end;
+end;
+
+// The rings turn evenly, the outer one against the inner
+procedure TOrbPatternsTests.TestEclipseRingsTurnAgainstEachOther;
+const
+  TurnSlack = 0.0001;
+begin
+  var Eclipse := FindPattern(EclipseName);
+  var InnerTurn := TurnBetween(TurnAboutChest(EclipseSeatAt(Eclipse, 0, 0)),
+    TurnAboutChest(EclipseSeatAt(Eclipse, 0, EvenPace)));
+  Assert.IsTrue(InnerTurn <> 0, 'The rings stand still');
+  for var Tick := 0 to ClockSpan - 1 do
+    for var Place := 0 to OrbsOfTheEclipse - 1 do
+    begin
+      var Turned := TurnBetween(TurnAboutChest(EclipseSeatAt(Eclipse, Place, Tick)),
+        TurnAboutChest(EclipseSeatAt(Eclipse, Place, Tick + EvenPace)));
+      var Expected := InnerTurn;
+      if Odd(Place) then
+        Expected := -InnerTurn;
+      Assert.AreEqual(Double(Expected), Double(Turned), TurnSlack,
+        Format('Place %d turns its own way on tick %d', [Place, Tick]));
+    end;
 end;
 
 initialization

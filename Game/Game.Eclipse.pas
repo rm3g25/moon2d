@@ -1,19 +1,21 @@
 ﻿{
   Game.Eclipse - the scene of the henshin from the brake of the Ram to
-  the beam: the clock it runs by and what it shows at each tick.
+  the beam: what it shows at each tick and what it asks for.
 
   The charge full, the game brakes the Ram and the road, and starts the
-  clock. The road runs down for BeltRampTicks; with the world at rest the
-  controls are taken and the hero is caught where he is and lifted a
-  cell (Game.Hoist) - the rite's orbs (stage 16d) come in on that lift.
-  Then the light goes: the world darkens under one overlay, the gauge
-  goes out with it, the track fades to silence. In the dark a column of
-  light falls from above onto him and stays, beating with the heart.
+  scene. The road runs down for BeltRampTicks; with the world at rest the
+  controls are taken, the hero is caught where he is and the rite of the
+  eclipse is called (Orbs.Moonrite). The rite drives the rest: its first
+  orb in its seat lifts him (Game.Hoist) and the track begins to fade;
+  the darker the world, the fuller the ring; the ring full, a column of
+  light falls from above onto him and stays, beating with the heart. The
+  ring beats in it a while, then the scene tells its orbs to go into him.
   From the start nothing wounds the hero.
 
-  The clock knows neither the Ram nor the gauge: the game starts it,
-  carries out its cues and reads its levels. TEclipsePainter draws the
-  darkness and the beam.
+  The scene knows neither the Ram, the gauge nor the orbs: the game starts
+  it, hands it how far the ring has come every tick, carries out its cues
+  and reads its levels. TEclipsePainter draws the darkness, the ripples
+  of the heart over it and the beam.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -26,51 +28,75 @@ uses
   Sdl2.Core, Game.Belt;
 
 const
-  LogicTicksPerSecond = 33;
   // The world at rest: the road has run down
   CatchAt = BeltRampTicks;
-  // He is up: the light begins to go
-  DimAt = CatchAt + 30;
-  // The darkness comes in over this many ticks, the track fading out with it
+  // The darkness comes in no quicker than to its depth over this many ticks
   DarkTicks = 40;
-  EclipseFadeSeconds = DarkTicks / LogicTicksPerSecond;
   DarkDepth = 0.85;
-  // The dark is in
-  BeamAt = DimAt + DarkTicks;
+  // The track fades out from the first orb in its seat: about as long as
+  // the ring takes to gather
+  RiteFadeSeconds = 3.5;
   BeamFallTicks = 8;
   // The flash of the beam's landing dies over this many ticks
   BeamFlashTicks = 12;
+  // The ring beats in the beam this long before its orbs go into him
+  RingInBeamTicks = 50;
 
 type
+  // How far the ring of the rite has come: the orbs in their seats of all
+  // it calls
+  TRingProgress = record
+    Gathered: Integer;
+    Count: Integer;
+    // 0..1; 0 for a ring of no seats
+    function Share: Single;
+    function Full: Boolean;
+  end;
+
   TEclipseCue = record
-    // The world at rest: the controls are taken, he is caught and lifted
+    // The world at rest: the controls are taken, he is caught, the rite
+    // is called
     Caught: Boolean;
-    // The light goes: the darkness starts in, the track fades to silence
-    Dim: Boolean;
-    // The beam starts down from above
+    // The first orb in its seat: he goes up, the track fades to silence
+    Lifted: Boolean;
+    // The ring is full: the beam starts down
     Beam: Boolean;
+    // The ring has beaten in the beam: its orbs go into him
+    DrawIn: Boolean;
   end;
 
   TEclipseScene = class
   private
     FRunning: Boolean;
     FTicks: Integer;
+    // The ticks of the lift and of the beam; -1 before
+    FLiftAt: Integer;
+    FBeamAt: Integer;
+    // The darkness at this tick and at the one before
+    FDark: Single;
+    FDarkBefore: Single;
     function Clock(AAlpha: Single): Single;
+    function DrawInAt: Integer;
+    procedure Deepen(const ARing: TRingProgress);
   public
     // At the brake: the first tick of the scene is the next one
     procedure Start;
     procedure Clear;
-    function Tick: TEclipseCue;
+    function Tick(const ARing: TRingProgress): TEclipseCue;
     // From the brake on: nothing wounds the hero
     function Spares: Boolean;
     // From the catch on: the controls are not his
     function Holds: Boolean;
-    // Whole ticks since the catch; -1 before
+    // Whole ticks since the lift; -1 before
     function Hoisted: Integer;
-    // How dark the world is, 0 to DarkDepth, AAlpha ticks past this one
+    // How dark the world is, 0 to DarkDepth: AAlpha of the way from the
+    // last tick to this one
     function Darkness(AAlpha: Single): Single;
     // How far the gauge has gone out with the light, 0..1
     function Fade(AAlpha: Single): Single;
+    // How strongly the heart's ripples run over the dark, 0..1: as dark as
+    // it is, from the lift till the orbs go into him
+    function Ripple(AAlpha: Single): Single;
     // How far down the beam has come, 0 at the top of the screen to 1 on him
     function Beam(AAlpha: Single): Single;
     // The landing's flash: 1 as the beam reaches him, gone BeamFlashTicks on
@@ -96,6 +122,10 @@ type
     destructor Destroy; override;
     // Over the far plane and the play layer, under the hero and the HUD
     procedure DrawDark(AAlpha: Single);
+    // Over the dark, under the beam: a ring of faint light running out from
+    // ACenter, the middle of the ring of the rite, ASinceBeat ticks after
+    // the heart struck; -1 - it does not beat
+    procedure DrawRipple(const ACenter: TSdlFPoint; ASinceBeat, AAlpha: Single);
     // Over the dark, under the hero: straight down from the top of the
     // screen onto AFoot, his feet, swelling with APulse, the heartbeat
     procedure DrawBeam(const AFoot: TSdlFPoint; APulse, AAlpha: Single);
@@ -111,6 +141,17 @@ const
   DarkTint: TRgb = (R: 6; G: 4; B: 16);
   WholeFrame: PSdlFRect = nil;
   DarkVisible = 1 / 255;
+
+  // A ripple runs from the ring out over this many ticks, from its radius
+  // to far over the world, and fades on the way
+  RippleTicks = 22;
+  RippleFrom = 48;
+  RippleTo = 170;
+  RippleLevel = 0.3;
+  // The ring is drawn in points of light this far apart along it
+  RippleSpacing = 6;
+  RippleAcross = 14;
+  RippleTint: TRgb = (R: 200; G: 186; B: 255);
 
   // A white core in a wide moonlit glow. The band's Gaussian leaves its
   // outer thirds faint, so the core drawn this wide reads about his width
@@ -141,29 +182,77 @@ begin
   Result := Share * Share * (3 - 2 * Share);
 end;
 
+{ TRingProgress }
+
+function TRingProgress.Share: Single;
+begin
+  if Count <= 0 then
+    Exit(0);
+  var Share: Single := Gathered / Count;
+  Result := EnsureRange(Share, 0, 1);
+end;
+
+function TRingProgress.Full: Boolean;
+begin
+  Result := (Count > 0) and (Gathered >= Count);
+end;
+
 { TEclipseScene }
 
 procedure TEclipseScene.Start;
 begin
+  Clear;
   FRunning := True;
-  FTicks := 0;
 end;
 
 procedure TEclipseScene.Clear;
 begin
   FRunning := False;
   FTicks := 0;
+  FLiftAt := -1;
+  FBeamAt := -1;
+  FDark := 0;
+  FDarkBefore := 0;
 end;
 
-function TEclipseScene.Tick: TEclipseCue;
+function TEclipseScene.DrawInAt: Integer;
+begin
+  Result := FBeamAt + BeamFallTicks + RingInBeamTicks;
+end;
+
+// The dark follows the ring, never lighter and never quicker than its
+// pace; with the ring full it goes all the way
+procedure TEclipseScene.Deepen(const ARing: TRingProgress);
+begin
+  FDarkBefore := FDark;
+  if FLiftAt < 0 then
+    Exit;
+  var Target: Single := DarkDepth * ARing.Share;
+  if FBeamAt >= 0 then
+    Target := DarkDepth;
+  var Paced: Single := FDark + DarkDepth / DarkTicks;
+  FDark := Max(FDark, Min(Target, Paced));
+end;
+
+function TEclipseScene.Tick(const ARing: TRingProgress): TEclipseCue;
 begin
   Result := Default(TEclipseCue);
   if not FRunning then
     Exit;
   Inc(FTicks);
   Result.Caught := FTicks = CatchAt;
-  Result.Dim := FTicks = DimAt;
-  Result.Beam := FTicks = BeamAt;
+  if (FLiftAt < 0) and Holds and (ARing.Gathered > 0) then
+  begin
+    FLiftAt := FTicks;
+    Result.Lifted := True;
+  end;
+  if (FBeamAt < 0) and (FLiftAt >= 0) and ARing.Full then
+  begin
+    FBeamAt := FTicks;
+    Result.Beam := True;
+  end;
+  Deepen(ARing);
+  Result.DrawIn := (FBeamAt >= 0) and (FTicks = DrawInAt);
 end;
 
 function TEclipseScene.Spares: Boolean;
@@ -178,9 +267,9 @@ end;
 
 function TEclipseScene.Hoisted: Integer;
 begin
-  if not Holds then
+  if not FRunning or (FLiftAt < 0) then
     Exit(-1);
-  Result := FTicks - CatchAt;
+  Result := FTicks - FLiftAt;
 end;
 
 function TEclipseScene.Clock(AAlpha: Single): Single;
@@ -192,28 +281,36 @@ end;
 
 function TEclipseScene.Darkness(AAlpha: Single): Single;
 begin
-  Result := DarkDepth * Fade(AAlpha);
+  if not FRunning then
+    Exit(0);
+  Result := FDarkBefore + (FDark - FDarkBefore) * AAlpha;
 end;
 
 function TEclipseScene.Fade(AAlpha: Single): Single;
 begin
-  if not FRunning then
+  Result := Darkness(AAlpha) / DarkDepth;
+end;
+
+function TEclipseScene.Ripple(AAlpha: Single): Single;
+begin
+  var Drawn := (FBeamAt >= 0) and (FTicks >= DrawInAt);
+  if not FRunning or (FLiftAt < 0) or Drawn then
     Exit(0);
-  Result := SmoothStep((Clock(AAlpha) - DimAt) / DarkTicks);
+  Result := Fade(AAlpha);
 end;
 
 function TEclipseScene.Beam(AAlpha: Single): Single;
 begin
-  if not FRunning or (FTicks < BeamAt) then
+  if not FRunning or (FBeamAt < 0) then
     Exit(0);
-  Result := SmoothStep((Clock(AAlpha) - BeamAt) / BeamFallTicks);
+  Result := SmoothStep((Clock(AAlpha) - FBeamAt) / BeamFallTicks);
 end;
 
 function TEclipseScene.BeamFlash(AAlpha: Single): Single;
 begin
-  if not FRunning then
+  if not FRunning or (FBeamAt < 0) then
     Exit(0);
-  var Since := Clock(AAlpha) - (BeamAt + BeamFallTicks);
+  var Since := Clock(AAlpha) - (FBeamAt + BeamFallTicks);
   if Since < 0 then
     Exit(0);
   Result := EnsureRange(1 - Since / BeamFlashTicks, 0, 1);
@@ -252,6 +349,26 @@ begin
   SDL_SetRenderDrawColor(FRenderer, DarkTint.R, DarkTint.G, DarkTint.B,
     Round(255 * Depth));
   SDL_RenderFillRectF(FRenderer, WholeFrame);
+end;
+
+// Quick away from the ring, slower as it spreads
+procedure TEclipsePainter.DrawRipple(const ACenter: TSdlFPoint; ASinceBeat,
+  AAlpha: Single);
+begin
+  var Strength := FEclipse.Ripple(AAlpha);
+  if (Strength <= 0) or (ASinceBeat < 0) or (ASinceBeat >= RippleTicks) then
+    Exit;
+  var Spread: Single := ASinceBeat / RippleTicks;
+  var Radius: Single := RippleFrom + (RippleTo - RippleFrom) *
+    (1 - Sqr(1 - Spread));
+  var Level: Single := RippleLevel * Strength * (1 - Spread);
+  var Points := Ceil(2 * Pi * Radius / RippleSpacing);
+  for var i := 0 to Points - 1 do
+  begin
+    var Turn: Single := 2 * Pi * i / Points;
+    DrawGlow(FRenderer, FHalo, ACenter.X + Radius * Cos(Turn),
+      ACenter.Y + Radius * Sin(Turn), RippleAcross, RippleTint, Level);
+  end;
 end;
 
 procedure TEclipsePainter.SetCorner(AIndex: Integer; AX, AY, AAcross: Single;

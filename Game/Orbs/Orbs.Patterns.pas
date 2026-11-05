@@ -1,5 +1,5 @@
 ﻿{
-  Orbs.Patterns - the patterns the rite of orbs builds about the hero: a
+  Orbs.Patterns - the patterns the rites of orbs build about the hero: a
   seat for every orb of every wave at any moment of the pattern's own
   clock. A pattern is a function and a name, no more; it knows nothing of
   how the orbs come to their seats or what the seats are for.
@@ -25,6 +25,8 @@ const
   // Every pattern is built in this many waves
   PatternWaves = 3;
   DefaultPatternName = 'snowflake';
+  // The ring of the moon form's rite (Orbs.Moonrite)
+  EclipsePatternName = 'eclipse';
 
 type
   EOrbPatternError = class(Exception);
@@ -227,9 +229,46 @@ begin
 end;
 
 const
-  Patterns: array [0..1] of TOrbPattern = (
+  // Two rings about the chest, face on and a little in front of the hero
+  EclipseInnerRadius = 30;
+  EclipseOuterRadius = 42;
+  EclipseRings = 2;
+  EclipseDepth = 0.2;
+  // The inner ring turns once round in this many ticks, the outer one the
+  // other way
+  EclipseLapTicks = 360;
+
+// The seats of all the waves, in order, stand on the two rings in turn:
+// even ones on the inner, odd ones on the outer, each outer seat halfway
+// between two inner ones. A wave takes every third seat, each wave a seat
+// on from the one before, so the three fill both rings together. The
+// light runs round them.
+function EclipseSeat(AWave, AIndex, APerWave: Integer;
+  AFlow: Single): TPatternSeat;
+begin
+  var Place := AIndex * PatternWaves + AWave;
+  var Ring := Place mod EclipseRings;
+  var OnRing: Single := (Place div EclipseRings + Ring / EclipseRings) /
+    (PatternWaves * APerWave div EclipseRings);
+  var Spin: Single := AFlow / EclipseLapTicks;
+  var Radius: Single := EclipseInnerRadius;
+  if Ring = 1 then
+  begin
+    Spin := -Spin;
+    Radius := EclipseOuterRadius;
+  end;
+  var Turn: Single := 2 * Pi * (OnRing + Spin) - Pi / 2;
+  Result.X := Radius * Cos(Turn);
+  Result.Y := HeartY + Radius * Sin(Turn);
+  Result.Depth := EclipseDepth;
+  Result.Level := Lit(2 * Pi * Radius * OnRing, AFlow);
+end;
+
+const
+  Patterns: array [0..2] of TOrbPattern = (
     (Name: 'snowflake'; PerWave: 24; Seat: SnowflakeSeat),
-    (Name: 'vortex'; PerWave: 24; Seat: VortexSeat));
+    (Name: 'vortex'; PerWave: 24; Seat: VortexSeat),
+    (Name: EclipsePatternName; PerWave: 20; Seat: EclipseSeat));
 
 function FindPattern(const AName: string): TOrbPattern;
 begin

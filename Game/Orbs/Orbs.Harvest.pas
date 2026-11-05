@@ -7,7 +7,8 @@
   and a count in, spots out. HarvestSpots gives that many spots, the
   nearer first. HarvestAround gives them in waves, each wave from all
   sides of the hero, the first off the nearest faces and the last off the
-  farthest. The dice are the caller's, so the same matter and the same
+  farthest. HarvestAfar gives them from all sides and from all over, none
+  near him. The dice are the caller's, so the same matter and the same
   dice give the same spots - it can be tried on a bench with no game
   behind it.
 
@@ -55,6 +56,14 @@ function HarvestSpots(const AMatter: TMatter; ACenter: TSdlFPoint;
 function HarvestAround(const AMatter: TMatter; ACenter: TSdlFPoint;
   APerWave, AWaves: Integer; var ADice: TXorShift): TArray<TArray<TFaceSpot>>;
 
+// ACount spots on the open faces of AMatter no nearer ACenter than
+// ANearest units: the sides about the center take turns, each giving one
+// of its spots at random, near or far, so the spots come from all sides
+// and from all over. What the matter is short of stands in thin air, from
+// ANearest on. The spots go by their turn about the center.
+function HarvestAfar(const AMatter: TMatter; ACenter: TSdlFPoint;
+  ACount, ANearest: Integer; var ADice: TXorShift): TArray<TFaceSpot>;
+
 implementation
 
 uses
@@ -83,6 +92,8 @@ const
   AroundAirFarthest = 110;
   // A spot nearer the center than this is passed by
   NearestAway = 34;
+  // HarvestAfar puts a spot of thin air up to this much past its nearest
+  AfarAirReach = 80;
   // The turns about the center are cut into this many equal sectors
   SectorCount = 12;
   NoLimit = MaxInt;
@@ -375,6 +386,53 @@ begin
   SetLength(Result, AWaves);
   for var i := 0 to AWaves - 1 do
     Result[i] := ReapWave(Stock, ACenter, APerWave, ADice);
+end;
+
+// The spots of every sector about the center, none nearer than ANearest
+function FarBySector(const AMatter: TMatter; ACenter: TSdlFPoint;
+  ANearest: Integer; var ADice: TXorShift): TArray<TList<TFaceSpot>>;
+begin
+  SetLength(Result, SectorCount);
+  for var i := 0 to SectorCount - 1 do
+    Result[i] := TList<TFaceSpot>.Create;
+  for var Ranked in GleanFaces(AMatter, ACenter, 0, ADice) do
+    if Ranked.Spot.Away >= ANearest then
+      Result[SectorOf(Ranked.Spot.Turn)].Add(Ranked.Spot);
+end;
+
+function HarvestAfar(const AMatter: TMatter; ACenter: TSdlFPoint;
+  ACount, ANearest: Integer; var ADice: TXorShift): TArray<TFaceSpot>;
+begin
+  var Sectors := FarBySector(AMatter, ACenter, ANearest, ADice);
+  var Taken := TList<TFaceSpot>.Create;
+  try
+    // Round the sectors from one the dice pick, till a whole round of
+    // them has nothing left
+    var Sector := Trunc(ADice.NextUnit * SectorCount);
+    var EmptyInARow := 0;
+    while (Taken.Count < ACount) and (EmptyInARow < SectorCount) do
+    begin
+      var Stock := Sectors[Sector];
+      if Stock.Count = 0 then
+        Inc(EmptyInARow)
+      else
+      begin
+        EmptyInARow := 0;
+        var Pick := Trunc(ADice.NextUnit * Stock.Count);
+        Taken.Add(Stock[Pick]);
+        Stock.Delete(Pick);
+      end;
+      Sector := (Sector + 1) mod SectorCount;
+    end;
+    while Taken.Count < ACount do
+      Taken.Add(AirSpot(ACenter, ANearest, ANearest + AfarAirReach, ADice));
+    Result := Taken.ToArray;
+  finally
+    Taken.Free;
+    for var Stock in Sectors do
+      Stock.Free;
+  end;
+  TArray.Sort<TFaceSpot>(Result, TComparer<TFaceSpot>.Construct(ByTurn));
 end;
 
 end.

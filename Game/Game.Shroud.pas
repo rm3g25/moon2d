@@ -223,6 +223,11 @@ const
     Reveal: False; Shift: 0; Flash: 1.0; FlashAt: 0;
     Motes: 5.0; Lift: -0.10; Tint: (R: 120; G: 200; B: 255));
 
+// The body fills with light as the orbs of a rite go in: the look of the
+// suit with no frost and no motes, its light climbing all through the
+// ACollapseTicks of their drawing in. It tops out a tick past them.
+function ChargeLook(ACollapseTicks: Integer): TShroudLook;
+
 implementation
 
 uses
@@ -306,6 +311,17 @@ const
   LightWavePower: Single = 1.4;
   StripLightPower: Single = 1.5;
   MoteFadePower: Single = 1.2;
+
+function ChargeLook(ACollapseTicks: Integer): TShroudLook;
+const
+  TopAt = 0.9; // the share of the look's life its top falls on
+begin
+  Result := IceOnLook;
+  Result.Bands := 0;
+  Result.Motes := 0;
+  Result.FlashAt := TopAt;
+  Result.Life := Ceil((ACollapseTicks + 1) / TopAt);
+end;
 
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin

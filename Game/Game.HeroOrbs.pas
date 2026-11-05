@@ -1,8 +1,8 @@
 ﻿{
-  Game.HeroOrbs - the hero's orbs: the aura, the rite of the henshin, the
-  burst of the suit, the fire rain, and the charge of the form with the
-  orbs that carry it into the gauge. Which form the hero wears is his own
-  (THero.HeroForm).
+  Game.HeroOrbs - the hero's orbs: the aura, the rite of the henshin and
+  the rite of the eclipse, the burst of the suit, the fire rain, and the
+  charge of the form with the orbs that carry it into the gauge. Which form
+  the hero wears is his own (THero.HeroForm).
 
   It does not know the game. It asks about the hero through probes, and
   what an orb strikes is settled by the targets the game hands in: the
@@ -20,7 +20,7 @@ interface
 uses
   System.Generics.Collections, Sdl2.Core, Levels.Dynamics, Monsters,
   Orbs.Flock, Orbs.Harvest, Orbs.Patterns, Orbs.Aura, Orbs.Rite, Orbs.Burst,
-  Orbs.Rain, Orbs.Feed;
+  Orbs.Rain, Orbs.Feed, Orbs.Moonrite;
 
 const
   // An orb takes an enemy bullet nearer than this on either axis: the
@@ -63,6 +63,7 @@ type
     FAura: TAura; // the hero's ring of orbs
     FRite: TOrbRite; // the orbs of the henshin
     FPattern: TOrbPattern; // the figure the rite builds
+    FMoonRite: TMoonRite; // the orbs of the moon form's henshin
     FBurst: TOrbBurst; // the light the suit cannot hold
     // What the burst under way has wounded: none loses more than a life
     FBurstWounded: TList<TMonster>;
@@ -98,6 +99,10 @@ type
     procedure CarryAura(AStepX, AStepY: Single);
 
     procedure BeginRite;
+    // The rite of the eclipse about the hero, its orbs off the faces of
+    // AMatter and out of the points of ADeep, the far city
+    procedure BeginMoonRite(const AMatter: TMatter;
+      const ADeep: TArray<TSdlFPoint>);
     procedure ShedSuit;
     procedure StartBurst(const ALook: TBurstLook);
     // The ice suit's burst, as the ceremony asks for it
@@ -113,6 +118,9 @@ type
     // The aura, the rite and the burst; before the ceremony's tick, which
     // hears what they tell
     procedure Tick;
+    // The rite of the eclipse, on its own: after the scene has put the
+    // hero where this tick holds him
+    procedure TickMoonRite(const ABeat: TRiteBeat);
     // The rain and the charge
     procedure TickAfterCeremony;
     // The orbs and the burst against the targets
@@ -127,7 +135,7 @@ type
     // The burst's inhale: the hero is drawn as a bare figure
     function Inhaling: Boolean;
 
-    // The layers, from the back: the rite behind the hero; the burst's
+    // The layers, from the back: the rites behind the hero; the burst's
     // veil under him; his bare figure through the inhale; the orbs over
     // the world; the burst's flash on the glass; the charge going into
     // the gauge
@@ -145,6 +153,7 @@ type
     property Energy: Integer read FEnergy;
     // The ceremony watches them
     property Rite: TOrbRite read FRite;
+    property MoonRite: TMoonRite read FMoonRite;
     property Burst: TOrbBurst read FBurst;
   end;
 
@@ -166,6 +175,7 @@ begin
   FTargets := ATargets;
   FAura := TAura.Create(IceOrbTint);
   FRite := TOrbRite.Create(IceOrbTint, FProbes.Body);
+  FMoonRite := TMoonRite.Create(FProbes.Body);
   FBurst := TOrbBurst.Create(FProbes.Body);
   FBurstWounded := TList<TMonster>.Create;
   FRain := TOrbRain.Create(IceOrbTint);
@@ -178,6 +188,7 @@ begin
   FRain.Free;
   FBurstWounded.Free;
   FBurst.Free;
+  FMoonRite.Free;
   FRite.Free;
   FAura.Free;
   inherited;
@@ -187,6 +198,7 @@ procedure THeroOrbs.ClearOrbs;
 begin
   FAura.Clear;
   FRite.Clear;
+  FMoonRite.Clear;
   FBurst.Clear;
   FBurstWounded.Clear;
   FRain.Clear;
@@ -219,6 +231,7 @@ procedure THeroOrbs.Fall;
 begin
   FAura.Collapse;
   FRite.Collapse;
+  FMoonRite.Collapse;
   FBurst.Clear;
   FRain.Collapse;
   FFeed.Collapse;
@@ -241,6 +254,16 @@ begin
   if not FProbes.Alive() then
     Exit;
   FRite.Start(FPattern, IceRiteScore, FProbes.Center(), FProbes.Matter());
+end;
+
+// The living hero's, as the rite of the ice form is
+procedure THeroOrbs.BeginMoonRite(const AMatter: TMatter;
+  const ADeep: TArray<TSdlFPoint>);
+begin
+  if not FProbes.Alive() then
+    Exit;
+  FMoonRite.Start(FindPattern(EclipsePatternName), MoonRiteScore,
+    FProbes.Center(), AMatter, ADeep);
 end;
 
 // The suit's orbs are the living hero's, like the rite's: over the corpse
@@ -317,6 +340,11 @@ begin
   FAura.Tick(Center);
   FRite.Tick(Center);
   FBurst.Tick(Center);
+end;
+
+procedure THeroOrbs.TickMoonRite(const ABeat: TRiteBeat);
+begin
+  FMoonRite.Tick(FProbes.Center(), ABeat);
 end;
 
 // The orbs fly, and the charge they bring in is the hero's
@@ -430,6 +458,7 @@ procedure THeroOrbs.DrawBehind(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; AAlpha: Single);
 begin
   FRite.DrawBehind(ACanvas, AOrigin, AAlpha);
+  FMoonRite.DrawBehind(ACanvas, AOrigin, AAlpha);
 end;
 
 procedure THeroOrbs.DrawVeil(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint);
@@ -448,6 +477,7 @@ procedure THeroOrbs.DrawOrbs(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
 begin
   FAura.Draw(ACanvas, AOrigin, AAlpha);
   FRite.DrawInFront(ACanvas, AOrigin, AAlpha);
+  FMoonRite.DrawInFront(ACanvas, AOrigin, AAlpha);
   FBurst.DrawWorld(ACanvas, AOrigin, AAlpha);
   FRain.Draw(ACanvas, AOrigin, AAlpha);
 end;

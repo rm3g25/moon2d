@@ -253,6 +253,7 @@
         <DCCReference Include="Game\Orbs\Orbs.Rain.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Patterns.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Rite.pas"/>
+        <DCCReference Include="Game\Orbs\Orbs.Moonrite.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Burst.pas"/>
         <DCCReference Include="Game\Orbs\Orbs.Feed.pas"/>
         <DCCReference Include="Game\Events\Events.Director.pas"/>

@@ -119,6 +119,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Harvest.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Patterns.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Rite.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Moonrite.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Burst.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Feed.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Decks.pas"/>

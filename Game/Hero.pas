@@ -69,7 +69,7 @@ type
   THeroCommand = (hcGoLeft, hcGoRight, hcStopLeft, hcStopRight,
     hcJump, hcStopJump, hcDrop);
 
-  THeroForm = (hfNormal, hfIce);
+  THeroForm = (hfNormal, hfIce, hfMoon);
 
   // Pending side intent when the way is blocked, executed once the
   // barrier clears ('ExtraInstruction' of the original).
@@ -317,6 +317,8 @@ const
                            // in 2008 - same digit as JumpDel, presumed
                            // coincidence, kept separate)
   IceJumpBoost = 1.25;     // the 'прыжок +25%' perk of the ice form
+  // In 3.0 the moon form looks like the ice form and jumps as it does
+  SuitForms = [hfIce, hfMoon];
   // A throw climbs about 75 units - over a low pad from the floor, under
   // the 100 of a jump - and takes the controls for its first 14 ticks:
   // the jump key the player does not hold would cut its rise short
@@ -1102,7 +1104,7 @@ end;
 procedure THero.BeginJumpBoost;
 begin
   FAcceleration := Step * StartUscor;
-  if FForm = hfIce then
+  if FForm in SuitForms then
     FAcceleration := FAcceleration * IceJumpBoost;
 end;
 
@@ -1628,7 +1630,7 @@ begin
   end;
 
   Frame := EnsureRange(Frame, 1, 8);
-  if FForm = hfIce then
+  if FForm in SuitForms then
     Frame := Frame + 16; // the ice skin lives at frames 17..24
 
   Result.Frame := Frame;
