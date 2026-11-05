@@ -1,15 +1,16 @@
 ﻿{
   Tests.Game.Eclipse - the henshin's scene from the brake to the beam, the
   ring of the rite handed in as the game hands it: it stands till started
-  and spares the hero from the start to its clear; he is caught once, as
-  the road stands, and held from then on; he is lifted once, as the first
-  orb sits, and not before the catch, the lift counting from then; the dark
+  and spares the hero from the start to its clear; the rite is called once,
+  as the road stands; the first orb in its seat is told once, and not
+  before the call; the dark
   follows the ring, no quicker than its pace and never lighter, the gauge
   going out with it, and goes all the way once the ring is full; the beam
   waits for the full ring, falls onto him and stays, its landing flashing
   and the flash dying; the orbs are told to go in once, the ring's time in
-  the beam after the landing; the heart's ripples run from the lift till
-  then; a clear takes it all away.
+  the beam after the landing; the heart's ripples run from the first seat
+  till then; a clear takes it all away. The controls are the hero's all
+  through the scene: it holds nothing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -50,17 +51,13 @@ type
     [Test]
     procedure TestSparesFromTheStartToTheClear;
     [Test]
-    procedure TestCaughtOnceAsTheRoadStands;
+    procedure TestCalledOnceAsTheRoadStands;
     [Test]
-    procedure TestHeldFromTheCatchToTheClear;
+    procedure TestNothingTillAnOrbSits;
     [Test]
-    procedure TestNotLiftedTillAnOrbSits;
+    procedure TestTheFirstSeatIsToldOnce;
     [Test]
-    procedure TestLiftedOnceAsTheFirstOrbSits;
-    [Test]
-    procedure TestNotLiftedBeforeTheCatch;
-    [Test]
-    procedure TestTheLiftCountsFromTheFirstOrb;
+    procedure TestNoFirstSeatBeforeTheCall;
     [Test]
     procedure TestTheDarkFollowsTheRing;
     [Test]
@@ -82,7 +79,7 @@ type
     [Test]
     procedure TestTheOrbsGoInOnceTheRingHasBeatenInTheBeam;
     [Test]
-    procedure TestTheRipplesRunFromTheLiftTillTheOrbsGoIn;
+    procedure TestTheRipplesRunFromTheFirstSeatTillTheOrbsGoIn;
     [Test]
     procedure TestAClearTakesItAllAway;
   end;
@@ -100,8 +97,8 @@ const
   // The rite's ring
   RingSeats = 30;
   // A ring that gathers an orb every few ticks from a little after the
-  // catch, as the rite's does
-  FirstSeatAfterCatch = 15;
+  // call, as the rite's does
+  FirstSeatAfterCall = 15;
   QuickOrbs = 4;
 
 procedure TEclipseTests.Setup;
@@ -159,19 +156,17 @@ begin
   for var i := 1 to WholeScene do
   begin
     var Cue := Tick;
-    Assert.IsFalse(Cue.Caught or Cue.Lifted or Cue.Beam or Cue.DrawIn,
+    Assert.IsFalse(Cue.Called or Cue.FirstSeat or Cue.Beam or Cue.DrawIn,
       'No cue');
   end;
   Assert.IsFalse(FEclipse.Running, 'Not running');
-  Assert.IsFalse(FEclipse.Holds, 'Not held');
-  Assert.AreEqual(-1, FEclipse.Hoisted, 'Not lifted');
   Assert.AreEqual(0.0, Double(FEclipse.Darkness(0)), Slop, 'No dark');
   Assert.AreEqual(0.0, Double(FEclipse.Beam(0)), Slop, 'No beam');
 end;
 
 procedure TEclipseTests.TestSparesFromTheStartToTheClear;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   Assert.IsFalse(FEclipse.Spares, 'Not before the brake');
   FEclipse.Start;
   Assert.IsTrue(FEclipse.Spares, 'From the brake on');
@@ -181,90 +176,63 @@ begin
   Assert.IsFalse(FEclipse.Spares, 'Not after a clear');
 end;
 
-procedure TEclipseTests.TestCaughtOnceAsTheRoadStands;
+procedure TEclipseTests.TestCalledOnceAsTheRoadStands;
 begin
   FEclipse.Start;
   var Heard: TArray<Integer> := [];
   for var i := 1 to WholeScene do
-    if Tick.Caught then
+    if Tick.Called then
       Heard := Heard + [i];
   Assert.AreEqual(1, Length(Heard), 'Once');
   Assert.AreEqual(BeltRampTicks, Heard[0], 'As the road stands');
 end;
 
-procedure TEclipseTests.TestHeldFromTheCatchToTheClear;
-begin
-  FEclipse.Start;
-  for var i := 1 to WholeScene do
-  begin
-    Tick;
-    if i >= CatchAt then
-      Assert.IsTrue(FEclipse.Holds, Format('Held at %d', [i]))
-    else
-      Assert.IsFalse(FEclipse.Holds, Format('Free at %d', [i]));
-  end;
-  FEclipse.Clear;
-  Assert.IsFalse(FEclipse.Holds, 'Not after a clear');
-end;
-
-procedure TEclipseTests.TestNotLiftedTillAnOrbSits;
+procedure TEclipseTests.TestNothingTillAnOrbSits;
 begin
   FEclipse.Start;
   for var i := 1 to WholeScene do
   begin
     var Cue := Tick;
-    Assert.IsFalse(Cue.Lifted or Cue.Beam, Format('No cue at %d', [i]));
-    Assert.AreEqual(-1, FEclipse.Hoisted, Format('Not lifted at %d', [i]));
-    Assert.AreEqual(0.0, Double(FEclipse.Darkness(0)), Slop,
+    Assert.IsFalse(Cue.FirstSeat or Cue.Beam or Cue.DrawIn,
+      Format('No cue at %d', [i]));
+    Assert.AreEqual(0.0, Double(FEclipse.Darkness(1)), Slop,
       Format('Light at %d', [i]));
+    Assert.AreEqual(0.0, Double(FEclipse.Ripple(1)), Slop,
+      Format('No ripples at %d', [i]));
   end;
 end;
 
-procedure TEclipseTests.TestLiftedOnceAsTheFirstOrbSits;
+procedure TEclipseTests.TestTheFirstSeatIsToldOnce;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var Heard: TArray<Integer> := [];
   for var i := 1 to WholeScene do
-    if Tick.Lifted then
+    if Tick.FirstSeat then
       Heard := Heard + [i];
   Assert.AreEqual(1, Length(Heard), 'Once');
   Assert.AreEqual(FFillFrom, Heard[0], 'As the first orb sits');
 end;
 
-procedure TEclipseTests.TestNotLiftedBeforeTheCatch;
+procedure TEclipseTests.TestNoFirstSeatBeforeTheCall;
 begin
   FillFrom(1, QuickOrbs);
   FEclipse.Start;
   var Heard: TArray<Integer> := [];
   for var i := 1 to WholeScene do
-    if Tick.Lifted then
+    if Tick.FirstSeat then
       Heard := Heard + [i];
   Assert.AreEqual(1, Length(Heard), 'Once');
-  Assert.AreEqual(CatchAt, Heard[0], 'At the catch, not before');
-end;
-
-procedure TEclipseTests.TestTheLiftCountsFromTheFirstOrb;
-begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
-  FEclipse.Start;
-  for var i := 1 to WholeScene do
-  begin
-    Tick;
-    if i < FFillFrom then
-      Assert.AreEqual(-1, FEclipse.Hoisted, Format('Not lifted at %d', [i]))
-    else
-      Assert.AreEqual(i - FFillFrom, FEclipse.Hoisted, Format('At %d', [i]));
-  end;
+  Assert.AreEqual(CallAt, Heard[0], 'At the call, not before');
 end;
 
 procedure TEclipseTests.TestTheDarkFollowsTheRing;
 const
   HalfARing = RingSeats div 2;
 begin
-  FillFrom(CatchAt + 1, 1);
+  FillFrom(CallAt + 1, 1);
   FEclipse.Start;
-  TickTimes(CatchAt);
+  TickTimes(CallAt);
   Assert.AreEqual(0.0, Double(FEclipse.Darkness(0)), Slop, 'Light till then');
   // Half the ring gathers, then nothing more comes
   TickTimes(HalfARing);
@@ -282,10 +250,10 @@ end;
 
 procedure TEclipseTests.TestTheDarkKeepsItsPace;
 begin
-  // The whole ring at once, as the lift comes
-  FillFrom(CatchAt, 1);
+  // The whole ring at once, as the call comes
+  FillFrom(CallAt, 1);
   FEclipse.Start;
-  TickTimes(CatchAt - 1);
+  TickTimes(CallAt - 1);
   FFillFrom := 1 - RingSeats;
   var Last: Single := 0;
   for var i := 1 to DarkTicks do
@@ -302,7 +270,7 @@ end;
 
 procedure TEclipseTests.TestTheDarkNeverLightens;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var Last: Single := 0;
   for var i := 1 to WholeScene do
@@ -320,7 +288,7 @@ end;
 
 procedure TEclipseTests.TestTheGaugeGoesOutWithTheLight;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   for var i := 1 to WholeScene do
   begin
@@ -337,7 +305,7 @@ end;
 
 procedure TEclipseTests.TestNoBeamTillTheRingIsFull;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   for var i := 1 to WholeScene do
   begin
@@ -355,7 +323,7 @@ end;
 
 procedure TEclipseTests.TestTheBeamStartsOnceAsTheRingFills;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var Heard: TArray<Integer> := [];
   for var i := 1 to WholeScene do
@@ -367,7 +335,7 @@ end;
 
 procedure TEclipseTests.TestWithTheRingFullTheDarkGoesAllTheWay;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   TickTimes(FullAt);
   // The rite tells no more of its ring: the dark goes on to its depth
@@ -378,7 +346,7 @@ end;
 
 procedure TEclipseTests.TestTheBeamFallsOntoHimAndStays;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var Last: Single := 0;
   for var i := 1 to WholeScene do
@@ -399,7 +367,7 @@ end;
 
 procedure TEclipseTests.TestTheLandingFlashesAndDies;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   TickTimes(FullAt + BeamFallTicks - 1);
   Assert.AreEqual(0.0, Double(FEclipse.BeamFlash(0)), Slop, 'Not before it lands');
@@ -414,7 +382,7 @@ end;
 
 procedure TEclipseTests.TestTheOrbsGoInOnceTheRingHasBeatenInTheBeam;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var Heard: TArray<Integer> := [];
   for var i := 1 to WholeScene do
@@ -425,9 +393,9 @@ begin
     'The ring''s time in the beam after it lands');
 end;
 
-procedure TEclipseTests.TestTheRipplesRunFromTheLiftTillTheOrbsGoIn;
+procedure TEclipseTests.TestTheRipplesRunFromTheFirstSeatTillTheOrbsGoIn;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   var DrawInAt := FullAt + BeamFallTicks + RingInBeamTicks;
   for var i := 1 to WholeScene do
@@ -445,13 +413,11 @@ end;
 
 procedure TEclipseTests.TestAClearTakesItAllAway;
 begin
-  FillFrom(CatchAt + FirstSeatAfterCatch, QuickOrbs);
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
   FEclipse.Start;
   TickTimes(WholeScene);
   FEclipse.Clear;
   Assert.IsFalse(FEclipse.Running, 'Stands');
-  Assert.IsFalse(FEclipse.Holds, 'Not held');
-  Assert.AreEqual(-1, FEclipse.Hoisted, 'Not lifted');
   Assert.AreEqual(0.0, Double(FEclipse.Darkness(0)), Slop, 'No dark');
   Assert.AreEqual(0.0, Double(FEclipse.Fade(0)), Slop, 'The gauge back');
   Assert.AreEqual(0.0, Double(FEclipse.Ripple(0)), Slop, 'No ripples');

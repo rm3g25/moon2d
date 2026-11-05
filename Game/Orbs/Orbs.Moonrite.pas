@@ -90,8 +90,10 @@ type
     FGathered: Integer;
     FGap: Single;
     FSinceCall: Single;
-    // The k-th orb called sits in seat k * FSeatStride round the ring
-    FSeatStride: Integer;
+    // The k-th orb called aims at FFirstTurn and k golden angles more, and
+    // takes the free seat nearest that turn as the rings stand
+    FFirstTurn: Single;
+    FSeatTaken: TArray<Boolean>;
     FDrawInAt: Integer;
     FEvents: TList<TMoonRiteEvent>;
     FHeroCenter: TSdlFPoint;
@@ -100,6 +102,7 @@ type
     function MoonOrb(AIndex: Integer): TMoonOrb;
     function SeatOf(ANumber: Integer): TPatternSeat;
     function CallsDeep: Boolean;
+    function NearestFreeSeat(ATurn: Single): Integer;
     function NearestFace(ATurn: Single): Integer;
     function FaceOrb(ANumber: Integer): TMoonOrb;
     function DeepOrb(ANumber: Integer): TMoonOrb;
@@ -180,9 +183,9 @@ const
   DeepBirthLight = 0.35;
   BehindDepth = -1;
 
-  // The seats of the calls one after another lie about this share of the
-  // ring apart
-  StrideShare = 0.37;
+  // The calls aim a golden angle apart, radians: one after another they
+  // come from far round the hero, and no two turns ever come round again
+  GoldenTurn = 2.39996323;
   // On a thump the ring draws in by this share and its orbs swell by this
   RingDrawIn = 0.12;
   SeatSwell = 0.15;
@@ -200,28 +203,6 @@ const
 function UpToOne(AShare: Single): Single;
 begin
   Result := EnsureRange(AShare, 0, 1);
-end;
-
-function CommonDivisor(A, B: Integer): Integer;
-begin
-  while B <> 0 do
-  begin
-    var Rest := A mod B;
-    A := B;
-    B := Rest;
-  end;
-  Result := A;
-end;
-
-// A step round a ring of ACount that comes to every seat before any twice,
-// a good way round each time
-function SpreadStride(ACount: Integer): Integer;
-begin
-  Result := Round(ACount * StrideShare);
-  if Result < 1 then
-    Result := 1;
-  while (ACount > 1) and (CommonDivisor(Result, ACount) <> 1) do
-    Inc(Result);
 end;
 
 // The short way round from one turn to the other, radians
@@ -280,7 +261,8 @@ begin
   FScore := AScore;
   FHeroCenter := ACenter;
   FDeep := ADeep;
-  FSeatStride := SpreadStride(Count);
+  SetLength(FSeatTaken, Count);
+  FFirstTurn := FRandom.NextUnit * 2 * Pi;
 
   var DeepCount := 0;
   if (Length(FDeep) > 0) and (FScore.DeepEvery > 0) then
@@ -361,9 +343,31 @@ begin
   TakeOff(Result, DeepFlightTicks);
 end;
 
+// The rings turn, the outer one against the inner, so a seat's place in the
+// figure says nothing of where it stands now: the free seat is found by its
+// turn this tick
+function TMoonRite.NearestFreeSeat(ATurn: Single): Integer;
+begin
+  Result := -1;
+  var Best: Single := MaxSingle;
+  for var i := 0 to Count - 1 do
+  begin
+    if FSeatTaken[i] then
+      Continue;
+    var Seat := SeatOf(i);
+    var Apart := TurnApart(ATurn, ArcTan2(Seat.Y, Seat.X));
+    if Apart < Best then
+    begin
+      Best := Apart;
+      Result := i;
+    end;
+  end;
+end;
+
 procedure TMoonRite.Call;
 begin
-  var Number := (FCalled * FSeatStride) mod Count;
+  var Number := NearestFreeSeat(FFirstTurn + FCalled * GoldenTurn);
+  FSeatTaken[Number] := True;
   var Orb: TMoonOrb;
   if CallsDeep then
     Orb := DeepOrb(Number)
@@ -376,7 +380,9 @@ begin
 end;
 
 // The pace quickens on the beats only: between two of them the calls come
-// at an even gap
+// at an even gap. The wait starts anew from each call: a part of a tick
+// carried over would bring the next call on early once a beat has made the
+// gap shorter, under the last gap
 procedure TMoonRite.RunCalls(AStruck: Boolean);
 begin
   if AStruck then
@@ -385,11 +391,10 @@ begin
     FGap := Max(FScore.LastGap, Shorter);
   end;
   FSinceCall := FSinceCall + 1;
-  while (FCalled < Count) and (FSinceCall >= FGap) do
-  begin
-    FSinceCall := FSinceCall - FGap;
-    Call;
-  end;
+  if (FCalled >= Count) or (FSinceCall < FGap) then
+    Exit;
+  FSinceCall := 0;
+  Call;
 end;
 
 // The hero's place of this tick becomes the one remembered, and his step
@@ -598,6 +603,7 @@ begin
   FPattern := Default(TOrbPattern);
   FFaces := nil;
   FFaceTaken := nil;
+  FSeatTaken := nil;
   FDeep := nil;
   FStage := mgIdle;
   FAge := 0;

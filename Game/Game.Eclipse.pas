@@ -4,13 +4,13 @@
 
   The charge full, the game brakes the Ram and the road, and starts the
   scene. The road runs down for BeltRampTicks; with the world at rest the
-  controls are taken, the hero is caught where he is and the rite of the
-  eclipse is called (Orbs.Moonrite). The rite drives the rest: its first
-  orb in its seat lifts him (Game.Hoist) and the track begins to fade;
-  the darker the world, the fuller the ring; the ring full, a column of
-  light falls from above onto him and stays, beating with the heart. The
-  ring beats in it a while, then the scene tells its orbs to go into him.
-  From the start nothing wounds the hero.
+  rite of the eclipse is called about the hero (Orbs.Moonrite). The rite
+  drives the rest: with its first orb in its seat the track begins to
+  fade; the darker the world, the fuller the ring; the ring full, a column
+  of light falls from above onto him and stays, beating with the heart.
+  The ring beats in it a while, then the scene tells its orbs to go into
+  him. From the start nothing wounds the hero; the controls stay his, so
+  the ring and the beam keep to him wherever he runs.
 
   The scene knows neither the Ram, the gauge nor the orbs: the game starts
   it, hands it how far the ring has come every tick, carries out its cues
@@ -29,7 +29,7 @@ uses
 
 const
   // The world at rest: the road has run down
-  CatchAt = BeltRampTicks;
+  CallAt = BeltRampTicks;
   // The darkness comes in no quicker than to its depth over this many ticks
   DarkTicks = 40;
   DarkDepth = 0.85;
@@ -54,11 +54,10 @@ type
   end;
 
   TEclipseCue = record
-    // The world at rest: the controls are taken, he is caught, the rite
-    // is called
-    Caught: Boolean;
-    // The first orb in its seat: he goes up, the track fades to silence
-    Lifted: Boolean;
+    // The world at rest: the rite is called about him
+    Called: Boolean;
+    // The first orb in its seat: the track fades to silence
+    FirstSeat: Boolean;
     // The ring is full: the beam starts down
     Beam: Boolean;
     // The ring has beaten in the beam: its orbs go into him
@@ -69,8 +68,8 @@ type
   private
     FRunning: Boolean;
     FTicks: Integer;
-    // The ticks of the lift and of the beam; -1 before
-    FLiftAt: Integer;
+    // The ticks of the first orb in its seat and of the beam; -1 before
+    FFirstSeatAt: Integer;
     FBeamAt: Integer;
     // The darkness at this tick and at the one before
     FDark: Single;
@@ -85,17 +84,13 @@ type
     function Tick(const ARing: TRingProgress): TEclipseCue;
     // From the brake on: nothing wounds the hero
     function Spares: Boolean;
-    // From the catch on: the controls are not his
-    function Holds: Boolean;
-    // Whole ticks since the lift; -1 before
-    function Hoisted: Integer;
     // How dark the world is, 0 to DarkDepth: AAlpha of the way from the
     // last tick to this one
     function Darkness(AAlpha: Single): Single;
     // How far the gauge has gone out with the light, 0..1
     function Fade(AAlpha: Single): Single;
     // How strongly the heart's ripples run over the dark, 0..1: as dark as
-    // it is, from the lift till the orbs go into him
+    // it is, from the first orb in its seat till the orbs go into him
     function Ripple(AAlpha: Single): Single;
     // How far down the beam has come, 0 at the top of the screen to 1 on him
     function Beam(AAlpha: Single): Single;
@@ -167,8 +162,7 @@ const
   // The landing: the core wider and the glow brighter for a moment
   BeamFlashGrowth = 0.6;
   BeamFlashGlow = 0.5;
-  // The light runs out below his feet over this much: down to the road
-  // he was lifted off
+  // The light runs out below his feet over this much
   BeamTail = 48;
   HaloAcross = 96;
   HaloLevel = 0.45;
@@ -209,7 +203,7 @@ procedure TEclipseScene.Clear;
 begin
   FRunning := False;
   FTicks := 0;
-  FLiftAt := -1;
+  FFirstSeatAt := -1;
   FBeamAt := -1;
   FDark := 0;
   FDarkBefore := 0;
@@ -225,7 +219,7 @@ end;
 procedure TEclipseScene.Deepen(const ARing: TRingProgress);
 begin
   FDarkBefore := FDark;
-  if FLiftAt < 0 then
+  if FFirstSeatAt < 0 then
     Exit;
   var Target: Single := DarkDepth * ARing.Share;
   if FBeamAt >= 0 then
@@ -240,13 +234,13 @@ begin
   if not FRunning then
     Exit;
   Inc(FTicks);
-  Result.Caught := FTicks = CatchAt;
-  if (FLiftAt < 0) and Holds and (ARing.Gathered > 0) then
+  Result.Called := FTicks = CallAt;
+  if (FFirstSeatAt < 0) and (FTicks >= CallAt) and (ARing.Gathered > 0) then
   begin
-    FLiftAt := FTicks;
-    Result.Lifted := True;
+    FFirstSeatAt := FTicks;
+    Result.FirstSeat := True;
   end;
-  if (FBeamAt < 0) and (FLiftAt >= 0) and ARing.Full then
+  if (FBeamAt < 0) and (FFirstSeatAt >= 0) and ARing.Full then
   begin
     FBeamAt := FTicks;
     Result.Beam := True;
@@ -258,18 +252,6 @@ end;
 function TEclipseScene.Spares: Boolean;
 begin
   Result := FRunning;
-end;
-
-function TEclipseScene.Holds: Boolean;
-begin
-  Result := FRunning and (FTicks >= CatchAt);
-end;
-
-function TEclipseScene.Hoisted: Integer;
-begin
-  if not FRunning or (FLiftAt < 0) then
-    Exit(-1);
-  Result := FTicks - FLiftAt;
 end;
 
 function TEclipseScene.Clock(AAlpha: Single): Single;
@@ -294,7 +276,7 @@ end;
 function TEclipseScene.Ripple(AAlpha: Single): Single;
 begin
   var Drawn := (FBeamAt >= 0) and (FTicks >= DrawInAt);
-  if not FRunning or (FLiftAt < 0) or Drawn then
+  if not FRunning or (FFirstSeatAt < 0) or Drawn then
     Exit(0);
   Result := Fade(AAlpha);
 end;

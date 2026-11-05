@@ -30,7 +30,7 @@ uses
   Game.Shells,
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
-  Game.Impacts, Game.Eclipse, Game.Hoist,
+  Game.Impacts, Game.Eclipse,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Events.Director, Scenes.Director, Hud.Charge,
   Hud.Marks, Hud.GoRight, Hud.Energy, Audio, Menu;
@@ -149,8 +149,6 @@ type
     // The henshin's scene from the brake of the Ram on, and its darkness
     FEclipse: TEclipseScene;
     FEclipsePainter: TEclipsePainter;
-    // The hero's way up at the henshin, from where it caught him
-    FHoist: THoistPath;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
@@ -334,7 +332,6 @@ type
     procedure BeginEclipse;
     procedure ClearHeroOfHull;
     procedure ClearEclipse;
-    procedure CatchHero;
     procedure BeginMoonRite;
     function HullBox: TSdlFRect;
     function EclipseMatter: TMatter;
@@ -2134,7 +2131,8 @@ begin
   if not FBonusActivateQueued then
     Exit;
   FBonusActivateQueued := False;
-  if FHero.Held then
+  // No aura or rain of ice in the moon form's henshin
+  if FHero.Held or FEclipse.Spares then
     Exit;
   if FBonus = bkNone then
     Exit; // a click with an empty slot buys nothing
@@ -2953,8 +2951,8 @@ end;
 
 // The charge full past the bunker, the world stops for the henshin - once
 // the Ram is whole on the screen, its eye to burn through the dark. The
-// rite of the eclipse ticks after the scene has put the hero where he
-// hangs this tick: its ring keeps to him without trailing a tick behind.
+// rite of the eclipse ticks after the hero has moved this tick: its ring
+// keeps to him without trailing a tick behind.
 procedure TMoonGame.TickEclipse;
 begin
   if FEclipse.Running then
@@ -2973,33 +2971,12 @@ end;
 procedure TMoonGame.StepEclipse;
 begin
   var Cue := FEclipse.Tick(RingProgress);
-  if Cue.Caught then
-    CatchHero;
-  if Cue.Lifted then
+  if Cue.Called then
+    FHenshin.StartEclipse;
+  if Cue.FirstSeat then
     FAudio.PauseMusic(RiteFadeSeconds);
   if Cue.DrawIn then
     FOrbs.MoonRite.DrawIn;
-  var Hoisted := FEclipse.Hoisted;
-  if Hoisted < 0 then
-    Exit;
-  var Place := FHoist.At(Hoisted);
-  FHero.HoldAt(Place.X, Place.Y);
-end;
-
-// Held where the scene finds him at rest; his way up is set from there,
-// clear of the edges and of the hull, and the rite is called about him
-procedure TMoonGame.CatchHero;
-begin
-  FHero.Hold;
-  var World := Default(THoistWorld);
-  World.HasHull := FRam.Present;
-  if World.HasHull then
-    World.Hull := HullBox;
-  var From: TSdlFPoint;
-  From.X := FHero.X;
-  From.Y := FHero.Y;
-  FHoist := PlanHoist(From, World);
-  FHenshin.StartEclipse;
 end;
 
 // Its orbs off the matter about him and, on the screen of the chase, out
@@ -3085,7 +3062,6 @@ procedure TMoonGame.ClearEclipse;
 begin
   FEclipse.Clear;
   FOrbs.MoonRite.Clear;
-  FHero.Release;
   FAudio.ResumeMusic(0);
 end;
 
