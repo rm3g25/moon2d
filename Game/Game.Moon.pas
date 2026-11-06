@@ -30,8 +30,9 @@ uses
   Game.Shells,
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
-  Game.Impacts, Game.Eclipse,
+  Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
+  Orbs.Grip,
   Events.Director, Scenes.Director, Hud.Charge,
   Hud.Marks, Hud.GoRight, Hud.Energy, Audio, Menu;
 
@@ -52,6 +53,14 @@ type
     WaitTicks: Integer; // until the next one may sound
     Last: Integer; // index into ArmorHitSounds
     Dice: TXorShift;
+  end;
+
+  // A pad the orbs of the throw take: its number among the wrecks once
+  // they grip it, -1 before; its place on the arc round the Ram
+  TThrownPad = record
+    Pad: TPad;
+    Wreck: Integer;
+    Place: TSdlFPoint;
   end;
 
   TMoonGame = class(TGameApp)
@@ -149,6 +158,12 @@ type
     // The henshin's scene from the brake of the Ram on, and its darkness
     FEclipse: TEclipseScene;
     FEclipsePainter: TEclipsePainter;
+    // After the burst: the hero carried aside, the pads gripped by the orbs,
+    // set round the Ram and spun up, the hum of the spin
+    FThrow: TThrowScene;
+    FThrowPainter: TThrowPainter;
+    FThrown: TArray<TThrownPad>;
+    FSpinHum: THeldSound;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
     FRamRumble: THeldSound; // loops while the Ram drives
@@ -335,6 +350,13 @@ type
     procedure BeginMoonRite;
     procedure BurstEclipse;
     procedure TearDark;
+    procedure TickThrow;
+    procedure CatchHero;
+    procedure CallMissingPads(const APath: THoistPath);
+    procedure SendOrbs;
+    procedure SeizePad(ANumber: Integer);
+    function PadsInSight: TArray<TPad>;
+    function GripBeams: TArray<TGripBeam>;
     function HullBox: TSdlFRect;
     function EclipseMatter: TMatter;
     function RingProgress: TRingProgress;
@@ -472,6 +494,10 @@ const
   SphereTakeSoundFile = 'spheretake.wav';
   // The double thump of the last of the charge
   HeartbeatSoundFile = 'heartbeat.wav';
+  // The pads spinning up in the orbs' grip at the throw, then held at the
+  // top
+  SpinRiseSoundFile = 'spinrise.wav';
+  SpinHoldSoundFile = 'spinhold.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -689,6 +715,8 @@ begin
   FHeartbeat := THeartbeat.Create;
   FEclipse := TEclipseScene.Create;
   FEclipsePainter := TEclipsePainter.Create(ARenderer, FEclipse);
+  FThrow := TThrowScene.Create;
+  FThrowPainter := TThrowPainter.Create(ARenderer, FThrow);
   FBelt := TBelt.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
@@ -699,6 +727,7 @@ begin
   FVictory.Channel := -1;
   FVictoryLeft := NoVictoryLeft;
   FRamRumble.Channel := -1;
+  FSpinHum.Channel := -1;
 
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet);
@@ -735,6 +764,8 @@ begin
   FHeartbeat.Free;
   FEclipsePainter.Free;
   FEclipse.Free;
+  FThrowPainter.Free;
+  FThrow.Free;
   FBelt.Free;
   FRamPainter.Free;
   FRam.Free;
@@ -1187,6 +1218,7 @@ begin
     FScenes.Pause;
   FAudio.PauseHeld(FVictory);
   FAudio.PauseHeld(FRamRumble);
+  FAudio.PauseHeld(FSpinHum);
 end;
 
 // Back from the menu to where Escape came from; a scene waits there
@@ -1199,6 +1231,7 @@ begin
     FScenes.Resume;
   FAudio.ResumeHeld(FVictory);
   FAudio.ResumeHeld(FRamRumble);
+  FAudio.ResumeHeld(FSpinHum);
 end;
 
 procedure TMoonGame.SetFullscreen(AValue: Boolean);
@@ -1967,6 +2000,8 @@ begin
   FAudio.Load(SphereFormSoundFile);
   FAudio.Load(SphereTakeSoundFile);
   FAudio.Load(HeartbeatSoundFile);
+  FAudio.Load(SpinRiseSoundFile);
+  FAudio.Load(SpinHoldSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -2936,12 +2971,15 @@ end;
 
 // Past the bunker, from the heartbeat's charge on: its tempo rises with the
 // last percents, then with the ring of the rite, to the burst's last beat;
-// from its strike the heart is the monitor's own again. The monitor hears
-// a beat a tick late - it has ticked already
+// from its strike the heart is the monitor's own again, till the throw
+// catches the hero and it beats anew with the spin of the pads. The
+// monitor hears a beat a tick late - it has ticked already
 procedure TMoonGame.TickHeartbeat;
 begin
   var Energy := FOrbs.Energy;
-  if FEclipse.Struck then
+  if FThrow.Beats then
+    FHeartbeat.Tick(SpinTempo(FThrow.Spin))
+  else if FEclipse.Struck then
     FHeartbeat.Stop
   else if FEclipse.Running then
     FHeartbeat.Tick(RiteTempo(RingProgress.Share))
@@ -3007,12 +3045,207 @@ begin
   FHeartbeat.StrikeLast;
 end;
 
+// The middle of a pad's picture on the screen
+function PadMiddle(const APad: TPad): TSdlFPoint;
+begin
+  Result := APad.Middle;
+  Result.X := Result.X + APad.Left;
+  Result.Y := Result.Y + APad.Top;
+end;
+
+// The middle of the beam of its deck, which a held pad turns about
+function PadPivot(const APad: TPad): TSdlFPoint;
+begin
+  Result.X := APad.Left + APad.Placement.Width / 2;
+  Result.Y := APad.Top + PadBeamDepth / 2;
+end;
+
+function SquaredApart(const AFrom, ATo: TSdlFPoint): Single;
+begin
+  Result := Sqr(ATo.X - AFrom.X) + Sqr(ATo.Y - AFrom.Y);
+end;
+
+// APads, the nearest to AFrom first
+function NearestFirst(const APads: TArray<TPad>;
+  const AFrom: TSdlFPoint): TArray<TPad>;
+begin
+  Result := Copy(APads);
+  for var i := 1 to High(Result) do
+  begin
+    var Pad := Result[i];
+    var Apart := SquaredApart(AFrom, PadMiddle(Pad));
+    var Slot := i;
+    while (Slot > 0) and (SquaredApart(AFrom, PadMiddle(Result[Slot - 1])) > Apart) do
+    begin
+      Result[Slot] := Result[Slot - 1];
+      Dec(Slot);
+    end;
+    Result[Slot] := Pad;
+  end;
+end;
+
+// The hull where it drives off to for the throw, and the middle of it -
+// the middle of the arc of the pads
+function RamPlaceBox: TSdlFRect;
+begin
+  Result.X := RamPlaceLeft;
+  Result.Y := RamTop;
+  Result.W := RamWidth;
+  Result.H := RamHeight;
+end;
+
+function ArcMiddle: TSdlFPoint;
+begin
+  Result.X := RamPlaceLeft + RamWidth / 2;
+  Result.Y := RamTop + RamHeight / 2;
+end;
+
 // The light is back at once; the Ram is thrown away from the hero, where
-// the burst came out of him
+// the burst came out of him, and drives off to its place; the throw
+// begins
 procedure TMoonGame.TearDark;
 begin
   FEclipse.Strike;
   FRam.Stun(HeroCenter);
+  FRam.Withdraw(RamPlaceBox.X);
+  FThrow.Start;
+end;
+
+// After the burst: he is caught and carried aside, the orbs grip the pads,
+// the pads glide round the Ram and spin up on the heart, the honeycomb in
+// alarm
+procedure TMoonGame.TickThrow;
+begin
+  if not FThrow.Running then
+    Exit;
+  var Cue := FThrow.Tick;
+  if Cue.Catch then
+    CatchHero;
+  if Cue.Grip then
+    SendOrbs;
+  if Cue.SpinUp then
+    FAudio.Play(SpinRiseSoundFile);
+  if Cue.SpunUp then
+    FSpinHum := FAudio.PlayLooped(SpinHoldSoundFile);
+  if FThrow.Holds then
+  begin
+    var Hangs := FThrow.HeroAt;
+    FHero.HoldAt(Hangs.X, Hangs.Y);
+  end;
+
+  var Pulse := FHeartbeat.Pulse(0);
+  FWrecks.HeldSpin := FThrow.SpinRate(Pulse);
+  FRam.LightsAlarm(FThrow.Spin);
+  for var Number in FOrbs.TickGrip(GripBeams, Pulse) do
+    SeizePad(Number);
+end;
+
+// The controls are not his from now on: the orbs carry him out of the
+// picture, a little over the road by the right edge
+procedure TMoonGame.CatchHero;
+begin
+  FHero.Hold;
+  var From: TSdlFPoint;
+  From.X := FHero.X;
+  From.Y := FHero.Y;
+  var Place: TSdlFPoint;
+  Place.X := ScreenWidth - HeroPlaceEdge - HeroSize;
+  Place.Y := RamFloorY - HeroHover;
+  var Path := PlanHoist(From, Place);
+  FThrow.Carry(Path);
+  CallMissingPads(Path);
+end;
+
+// Too few pads in sight for the throw: the rest come in from the pool of
+// the chase, from beyond the nearer edge, in by the time he is in his
+// place
+procedure TMoonGame.CallMissingPads(const APath: THoistPath);
+begin
+  var InSight := PadsInSight;
+  var Missing := ThrowLeastPads - Length(InSight);
+  if Missing <= 0 then
+    Exit;
+  var HeroThere: TSdlFRect;
+  HeroThere.X := APath.Place.X;
+  HeroThere.Y := APath.Place.Y - HeroSize;
+  HeroThere.W := HeroSize;
+  HeroThere.H := HeroSize;
+  var Taken: TArray<TSdlFRect> := [RamPlaceBox, HeroThere];
+  for var Pad in InSight do
+    Taken := Taken + [Pad.Body];
+  for var Called in PlaceCalledPads(Taken, Missing) do
+  begin
+    var Pad := FPads.FreeDrifter(FHero.Screen, Called.Width);
+    if Pad = nil then
+      Pad := FPads.FreeDrifter(FHero.Screen, StepWidth);
+    if Pad = nil then
+      Exit;
+    Pad.SetAdriftComing(Called.Left, Called.Deck, Called.From, APath.Ticks);
+  end;
+end;
+
+// He is in his place: the orbs go out to the pads in sight, the nearest
+// first, as many as the arc holds; each pad's place on the arc by its turn
+// about the Ram, so no two ways cross
+procedure TMoonGame.SendOrbs;
+begin
+  var Pads := NearestFirst(PadsInSight, HeroCenter);
+  if Length(Pads) > ThrowMostPads then
+    SetLength(Pads, ThrowMostPads);
+  var Pivots: TArray<TSdlFPoint> := [];
+  for var Pad in Pads do
+    Pivots := Pivots + [PadPivot(Pad)];
+  var Places := PlanArc(ArcMiddle, Length(Pads));
+  var Order := ArcOrder(ArcMiddle, Pivots);
+  SetLength(FThrown, Length(Pads));
+  for var i := 0 to High(Pads) do
+  begin
+    FThrown[i].Pad := Pads[i];
+    FThrown[i].Wreck := -1;
+    FThrown[i].Place := Places[Order[i]];
+  end;
+  FThrow.Grip(Length(FThrown));
+  FOrbs.BeginGrip(GripBeams);
+end;
+
+// The orbs have gripped a pad: its jets die, and it glides to its place,
+// turning about the middle of its beam
+procedure TMoonGame.SeizePad(ANumber: Integer);
+begin
+  var Pad := FThrown[ANumber].Pad;
+  Pad.Doze;
+  var Wreck := FWrecks.Hold(Pad, PadPivot(Pad), Pad.Placement.Width,
+    Pad.PictureHeight, Pad.PictureHeight / 2 - PadBeamDepth / 2);
+  FWrecks.Guide(Wreck, FThrown[ANumber].Place, GlideTicks);
+  FThrown[ANumber].Wreck := Wreck;
+  FThrow.PadHeld;
+end;
+
+// The pads of his screen some of which the screen shows
+function TMoonGame.PadsInSight: TArray<TPad>;
+begin
+  Result := [];
+  for var Pad in FPads.Standing(FHero.Screen) do
+    if (Pad.Right > 0) and (Pad.Left < ScreenWidth) then
+      Result := Result + [Pad];
+end;
+
+// The beams of the pads the orbs take, held or not yet
+function TMoonGame.GripBeams: TArray<TGripBeam>;
+begin
+  SetLength(Result, Length(FThrown));
+  for var i := 0 to High(FThrown) do
+  begin
+    var Pad := FThrown[i].Pad;
+    Result[i].Middle := PadPivot(Pad);
+    Result[i].Spin := 0;
+    Result[i].HalfWidth := Pad.Placement.Width / 2;
+    Result[i].HalfDepth := PadBeamDepth / 2;
+    if FThrown[i].Wreck < 0 then
+      Continue;
+    Result[i].Middle := FWrecks[FThrown[i].Wreck].Middle;
+    Result[i].Spin := FWrecks[FThrown[i].Wreck].Spin;
+  end;
 end;
 
 // The matter of his screen with the hull on it and, on the screen of the
@@ -3083,11 +3316,18 @@ begin
     FHero.Throw(Away);
 end;
 
+// The throw goes with it: he is let go, the orbs and the hum are gone.
 // The paused track goes on before a restart asks whether it plays
 procedure TMoonGame.ClearEclipse;
 begin
   FEclipse.Clear;
   FOrbs.MoonRite.Clear;
+  FThrow.Clear;
+  FThrown := nil;
+  FOrbs.Grip.Clear;
+  FHero.Release;
+  FAudio.StopHeld(FSpinHum);
+  FSpinHum.Channel := -1;
   FAudio.ResumeMusic(0);
 end;
 
@@ -3841,6 +4081,7 @@ begin
   FVitals.Wing := FEnergyGauge.WingWidth;
   TickHeartbeat;
   TickEclipse;
+  TickThrow;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -4032,6 +4273,10 @@ begin
         FMarks.Draw(FHero, FField, FShake.Offset(scHero),
           FShake.Offset(scMonsters));
         FMarks.DrawRam(FRam, FShake.Offset(scWorld), AAlpha);
+        var HintAt: TSdlFPoint;
+        HintAt.X := FHero.X + HeroSize / 2 + HeroShake.X;
+        HintAt.Y := FHero.Y - HeroSize + HeroShake.Y;
+        FThrowPainter.DrawHint(HintAt, FHeartbeat.Pulse(AAlpha), AAlpha);
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
         FVitals.Draw;

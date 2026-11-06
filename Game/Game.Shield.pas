@@ -9,6 +9,9 @@
   not come back by itself. The rules and the look of one shield; the
   machine says where its middle is.
 
+  In alarm the whole rim lights and throbs, as strongly as its owner
+  says: the light of a flare all round, the flares of hits over it.
+
   A shield is an ellipse about a small machine (the cannons), or it lies
   over the body of a big one (the Ram) a little past its outline: the rim
   is then the outline itself, and an ellipse round a long low hull would
@@ -80,12 +83,16 @@ type
     FFallAge: Integer;
     // Drawn and met mirrored about the middle: the machine turned round
     FMirrored: Boolean;
+    FAlarm: Single;
+    FAlarmTicks: Integer;
     function Own(const APoint: TSdlFPoint): TSdlFPoint;
     procedure LayCells;
     procedure LayCellsOverBody;
     procedure LayStrip(ACells: Integer);
     function FlareShare(const ACell: TCell; AAlpha: Single): Single;
     function FallLevel(AAlpha: Single): Single;
+    function AlarmLight(AAlpha: Single): Single;
+    procedure SetAlarm(AValue: Single);
   public
     // An ellipse of these half-axes about the middle of the machine
     constructor Create(ARadiusX, ARadiusY: Single);
@@ -98,7 +105,7 @@ type
     // machine is to be hit, shows none there
     procedure OpenAbove(AY: Single);
     destructor Destroy; override;
-    // Up again, with no flare on it
+    // Up again, with no flare on it and no alarm
     procedure Rise;
     procedure Fall;
     // A bullet, a round met the shield at this point from the middle
@@ -117,6 +124,8 @@ type
     // The cells are laid on the machine as drawn; turned round, every point
     // asked and every cell drawn is mirrored across its middle
     property Mirrored: Boolean read FMirrored write FMirrored;
+    // How strongly the rim lights in alarm, 0 none to 1
+    property Alarm: Single read FAlarm write SetAlarm;
   end;
 
 implementation
@@ -149,6 +158,10 @@ const
   FallBlinkTicks = 2;
   ShieldColor: TRgb = (R: 255; G: 214; B: 128);
   FlareColor: TRgb = (R: 255; G: 244; B: 206);
+  // The alarm throbs once in this many ticks, from AlarmLow of its light
+  // to all of it
+  AlarmThrobTicks = 12;
+  AlarmLow = 0.45;
   // Along a stretch the shield is looked for this often
   EntryStep = 1.0;
   // Over a body: units the shield stands past its outline, and the depth
@@ -429,6 +442,12 @@ begin
   FState := sdUp;
   FFallAge := 0;
   FFlares.Clear;
+  FAlarm := 0;
+end;
+
+procedure TTekShield.SetAlarm(AValue: Single);
+begin
+  FAlarm := EnsureRange(AValue, 0, 1);
 end;
 
 procedure TTekShield.Fall;
@@ -489,6 +508,7 @@ end;
 
 procedure TTekShield.Tick;
 begin
+  Inc(FAlarmTicks);
   for var i := FFlares.Count - 1 downto 0 do
   begin
     var Flare := FFlares[i];
@@ -525,6 +545,15 @@ begin
     Result := 1;
 end;
 
+function TTekShield.AlarmLight(AAlpha: Single): Single;
+begin
+  if FAlarm <= 0 then
+    Exit(0);
+  var Throb: Single := 0.5 + 0.5 * Cos(2 * Pi * (FAlarmTicks + AAlpha) /
+    AlarmThrobTicks);
+  Result := FAlarm * (AlarmLow + (1 - AlarmLow) * Throb);
+end;
+
 // Up - whole; falling - blinking out; down - nothing
 function TTekShield.FallLevel(AAlpha: Single): Single;
 begin
@@ -558,9 +587,11 @@ begin
   if Whole <= 0 then
     Exit;
   var CellSize: Single := 2 * HexSize * CellSpan * FScale;
+  var Alarm := AlarmLight(AAlpha);
   for var Cell in FCells do
   begin
-    var Flare := FlareShare(Cell, AAlpha) * RimBand(Cell.Rim, FlareRimFrom);
+    var Flare := Max(FlareShare(Cell, AAlpha), Alarm) *
+      RimBand(Cell.Rim, FlareRimFrom);
     var Rest := RestLevel * RimBand(Cell.Rim, RestRimFrom);
     var Level := Whole * (Rest + (FlareLevel - Rest) * Flare);
     if Level < DimmestLevel then

@@ -90,6 +90,7 @@
         <DCCReference Include="Game\Tests.Game.Heartbeat.pas"/>
         <DCCReference Include="Game\Tests.Game.Eclipse.pas"/>
         <DCCReference Include="Game\Tests.Game.Hoist.pas"/>
+        <DCCReference Include="Game\Tests.Game.Throw.pas"/>
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
@@ -122,6 +123,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Moonrite.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Burst.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Feed.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Grip.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Decks.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Drift.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Flights.pas"/>

@@ -86,7 +86,11 @@
   right from his left, stern first from its middle - fast, then slower,
   and it stands there; not in its hunt. Stunned, its lamps are out, its
   eye flickers out of step, and it neither touches, throws nor brakes
-  again.
+  again. In alarm its lamps and its eye blink together, faster the
+  stronger the alarm; a new stun starts with none. Told to drive off, it
+  does once its throw is over - the engine once, slow, faster, slow, to
+  where it is told and no farther, the brake's hiss once at the end; not
+  stunned, it is not told.
 
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
@@ -172,6 +176,9 @@ type
     // At a stand, stunned by a burst out of AFromX at the middle of the
     // hull's height; where it stood
     function StunFrom(const ATarget: TRamTarget; AFromX: Single): Single;
+    // Stunned, its lights in alarm at ALevel: how many times its lamps
+    // light over a few seconds
+    function AlarmBlinks(ALevel: Single): Integer;
   public
     [Setup]
     procedure Setup;
@@ -206,6 +213,16 @@ type
     procedure TestStunnedItsEyeFlickersOutOfStep;
     [Test]
     procedure TestStunnedItNeitherTouchesThrowsNorBrakes;
+    [Test]
+    procedure TestInAlarmItsLampsAndEyeBlinkTogether;
+    [Test]
+    procedure TestTheStrongerTheAlarmTheFaster;
+    [Test]
+    procedure TestANewStunStartsWithNoAlarm;
+    [Test]
+    procedure TestStunnedItDrivesOffWhereTold;
+    [Test]
+    procedure TestNotStunnedItDoesNotDriveOff;
   end;
 
   [TestFixture]
@@ -3477,6 +3494,118 @@ begin
   Assert.IsFalse(FRam.CanBrake, 'Nothing to brake');
   FRam.BrakeToAStand;
   Assert.IsTrue(FRam.Stunned, 'Stunned on');
+end;
+
+// Lit and dark by turns, and the eye bright with the lamps
+procedure TRamBrakeTests.TestInAlarmItsLampsAndEyeBlinkTogether;
+const
+  Watched = 60;
+  BrightAtLeast = 0.7;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  FRam.LightsAlarm(1);
+  var Lit := 0;
+  var Dark := 0;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick(Hero);
+    var LampsLit := FRam.LampsAt(1) > 0.5;
+    Assert.IsTrue(LampsLit = (FRam.Eye >= BrightAtLeast),
+      Format('Out of step at tick %d', [i]));
+    if LampsLit then
+      Inc(Lit)
+    else
+      Inc(Dark);
+  end;
+  Assert.IsTrue(Lit > 0, 'Never lit');
+  Assert.IsTrue(Dark > 0, 'Never dark');
+end;
+
+function TRamBrakeTests.AlarmBlinks(ALevel: Single): Integer;
+const
+  Watched = 120;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  FRam.LightsAlarm(ALevel);
+  Result := 0;
+  var WasLit := False;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick(Hero);
+    var Lit := FRam.LampsAt(1) > 0.5;
+    if Lit and not WasLit then
+      Inc(Result);
+    WasLit := Lit;
+  end;
+end;
+
+procedure TRamBrakeTests.TestTheStrongerTheAlarmTheFaster;
+begin
+  var Weak := AlarmBlinks(0.2);
+  var Strong := AlarmBlinks(1);
+  Assert.IsTrue(Strong > Weak, Format('%d blinks against %d', [Strong, Weak]));
+end;
+
+procedure TRamBrakeTests.TestANewStunStartsWithNoAlarm;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  FRam.LightsAlarm(1);
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(Hero);
+  StunFrom(Hero, CenterOf(Hero).X);
+  for var i := 1 to ThrownTicks do
+  begin
+    FRam.Tick(Hero);
+    Assert.AreEqual(0.0, Double(FRam.LampsAt(1)), 0.001, 'The lamps out');
+  end;
+end;
+
+// The hunt keeps it in the left half, his side the right: it drives off to
+// the right, back the way the burst threw it
+procedure TRamBrakeTests.TestStunnedItDrivesOffWhereTold;
+const
+  Off = 100.0;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  var Till: Single := StunFrom(Hero, CenterOf(Hero).X) + Off;
+  Assert.IsTrue(Till + RamWidth <= ScreenWidth, 'Room to drive off');
+  FRam.Withdraw(Till);
+  var Rumbles := 0;
+  var Hisses := 0;
+  var Steps: TArray<Single> := [];
+  for var i := 1 to ManyTicks do
+  begin
+    var Before := FRam.Left;
+    var Cue := FRam.Tick(Hero);
+    if Cue.Rumble then
+      Inc(Rumbles);
+    if Cue.Hiss then
+      Inc(Hisses);
+    Assert.IsTrue(FRam.Left <= Till + 0.001, Format('Past it at tick %d', [i]));
+    if (Rumbles > 0) and (Hisses = 0) then
+      Steps := Steps + [Single(FRam.Left - Before)];
+  end;
+  Assert.AreEqual(1, Rumbles, 'The engine once');
+  Assert.AreEqual(1, Hisses, 'The brake once');
+  Assert.AreEqual(Double(Till), Double(FRam.Left), 0.001, 'Where told');
+  var Middle := Steps[Length(Steps) div 2];
+  Assert.IsTrue((Steps[0] < Middle) and (Steps[High(Steps)] < Middle),
+    'Slow, faster, slow');
+  Assert.IsTrue(FRam.Stunned, 'Stunned on');
+end;
+
+procedure TRamBrakeTests.TestNotStunnedItDoesNotDriveOff;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  var Stood := FRam.Left;
+  FRam.Withdraw(60);
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FRam.Tick(Hero).Rumble, Format('The engine at tick %d', [i]));
+  Assert.AreEqual(Double(Stood), Double(FRam.Left), 0.001, 'Stands');
 end;
 
 initialization

@@ -11,7 +11,8 @@
   a beat count from it, and a still heart has none. The last beat comes on
   the tick after it is asked for, still heart or not, told once, stronger
   than any; none comes after it, whatever the tempo, but a stop forgets
-  it.
+  it. The tempo of the throw is 70 with the pads still, 150 spun up,
+  straight between, held outside.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -43,6 +44,14 @@ type
     procedure TestTheRiteGoesStraightBetween;
     [Test]
     procedure TestTheRiteHoldsOutsideItsRing;
+    [Test]
+    procedure TestSeventyWithThePadsStill;
+    [Test]
+    procedure TestHundredFiftySpunUp;
+    [Test]
+    procedure TestTheSpinGoesStraightBetween;
+    [Test]
+    procedure TestTheSpinHoldsOutside;
   end;
 
   [TestFixture]
@@ -149,6 +158,28 @@ procedure THeartbeatTempoTests.TestTheRiteHoldsOutsideItsRing;
 begin
   Assert.AreEqual(90.0, Double(RiteTempo(-1)), TempoSlop, 'Below');
   Assert.AreEqual(140.0, Double(RiteTempo(2)), TempoSlop, 'Above');
+end;
+
+procedure THeartbeatTempoTests.TestSeventyWithThePadsStill;
+begin
+  Assert.AreEqual(70.0, Double(SpinTempo(0)), TempoSlop);
+end;
+
+procedure THeartbeatTempoTests.TestHundredFiftySpunUp;
+begin
+  Assert.AreEqual(150.0, Double(SpinTempo(1)), TempoSlop);
+end;
+
+procedure THeartbeatTempoTests.TestTheSpinGoesStraightBetween;
+begin
+  Assert.AreEqual(110.0, Double(SpinTempo(0.5)), TempoSlop, 'Half');
+  Assert.AreEqual(90.0, Double(SpinTempo(0.25)), TempoSlop, 'A quarter');
+end;
+
+procedure THeartbeatTempoTests.TestTheSpinHoldsOutside;
+begin
+  Assert.AreEqual(70.0, Double(SpinTempo(-1)), TempoSlop, 'Below');
+  Assert.AreEqual(150.0, Double(SpinTempo(2)), TempoSlop, 'Above');
 end;
 
 procedure THeartbeatTests.Setup;

@@ -9,7 +9,8 @@
   last of the charge asks of it is ChargeTempo, what the rite of the
   eclipse asks is RiteTempo. The burst at the end of the rite asks for a
   last beat, stronger than any: the heart is still after it, whatever
-  tempo it is handed, till it is stopped.
+  tempo it is handed, till it is stopped. Started anew at the throw, it
+  quickens as the pads spin up: SpinTempo.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -69,6 +70,9 @@ function ChargeTempo(ACharge: Integer): Single;
 // The tempo of the rite of the eclipse: 90 with its ring empty, where the
 // charge left it, 140 with the ring full, straight between them
 function RiteTempo(ARingShare: Single): Single;
+// The tempo of the throw: 70 with the pads still, 150 spun up, straight
+// between them
+function SpinTempo(ASpinShare: Single): Single;
 
 implementation
 
@@ -81,6 +85,8 @@ const
   StartTempo = 60;
   FullChargeTempo = 90;
   FullRingTempo = 140;
+  StillPadsTempo = 70;
+  SpunUpTempo = 150;
   // A thump fades out over this many ticks
   ThumpTicks = 7;
   DubLevel = 0.7;
@@ -97,6 +103,12 @@ function RiteTempo(ARingShare: Single): Single;
 begin
   var Share := EnsureRange(ARingShare, 0, 1);
   Result := FullChargeTempo + (FullRingTempo - FullChargeTempo) * Share;
+end;
+
+function SpinTempo(ASpinShare: Single): Single;
+begin
+  var Share := EnsureRange(ASpinShare, 0, 1);
+  Result := StillPadsTempo + (SpunUpTempo - StillPadsTempo) * Share;
 end;
 
 // 1 at the thump, down to 0 over ThumpTicks; 0 before it

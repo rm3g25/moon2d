@@ -9,6 +9,13 @@
   alike; a new wreck takes the place of one gone, so a long chase does
   not pile them up; a clear takes the wrecks away.
 
+  A pad held at the throw rises a little where it was taken and hangs
+  there, flying nowhere; guided, it glides to its place, slow, faster,
+  slow, and stays; it spins as fast as it is told, each its own share of
+  it, about the point it was held by, its picture turning about it; it
+  keeps its place among the wrecks while others come and go; a clear
+  takes it away too.
+
   The wrecks fly in no picture here: the rules need none.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -48,6 +55,32 @@ type
     procedure TestANewOneTakesAGoneOnesPlace;
     [Test]
     procedure TestClearTakesThemAway;
+  end;
+
+  [TestFixture]
+  TPadHeldTests = class
+  private
+    FWrecks: TPadWrecks;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestRisesALittleAndHangs;
+    [Test]
+    procedure TestSpinsAsToldEachItsOwnShare;
+    [Test]
+    procedure TestGuidedItGlidesToItsPlace;
+    [Test]
+    procedure TestThePictureTurnsAboutTheBeam;
+    [Test]
+    procedure TestStillTillToldToSpin;
+    [Test]
+    procedure TestKeepsItsPlaceWhileOthersGo;
+    [Test]
+    procedure TestClearTakesItAway;
   end;
 
 implementation
@@ -238,7 +271,159 @@ begin
   Assert.AreEqual(Clears + 1, FWrecks.Clears, 'Counted');
 end;
 
+{ TPadHeldTests }
+
+const
+  HeldPad = 64.0;
+  // A held pad rises about this far; past this many ticks it hangs
+  HeldRiseAbout = 10.0;
+  HeldRiseOver = 40;
+  RiseSlop = 0.5;
+  // A held pad spins at this share of what it is told, either way
+  HeldShareLeast = 0.8;
+  HeldShareMost = 1.2;
+  ManyFlightTicks = 1000;
+  NoDrop = 0.0;
+  Slop = 0.001;
+
+procedure TPadHeldTests.Setup;
+begin
+  FWrecks := TPadWrecks.Create;
+end;
+
+procedure TPadHeldTests.TearDown;
+begin
+  FWrecks.Free;
+end;
+
+procedure TPadHeldTests.TestRisesALittleAndHangs;
+begin
+  var Number := FWrecks.Hold(nil, At(200, 150), HeldPad, PadHeight, NoDrop);
+  var Last := FWrecks[Number].Middle.Y;
+  for var i := 1 to HeldRiseOver do
+  begin
+    FWrecks.Tick;
+    Assert.IsTrue(FWrecks[Number].Middle.Y <= Last, Format('Down at tick %d', [i]));
+    Last := FWrecks[Number].Middle.Y;
+  end;
+  Assert.AreEqual(Double(150 - HeldRiseAbout), Double(Last), RiseSlop, 'Risen');
+  for var i := 1 to HeldRiseOver do
+    FWrecks.Tick;
+  Assert.AreEqual(Double(Last), Double(FWrecks[Number].Middle.Y), 0.001, 'Hangs');
+  Assert.AreEqual(200.0, Double(FWrecks[Number].Middle.X), 0.001, 'Straight up');
+  Assert.IsFalse(FWrecks[Number].Gone, 'Not gone');
+  Assert.IsFalse(FWrecks.Flying, 'Flies nowhere');
+end;
+
+procedure TPadHeldTests.TestSpinsAsToldEachItsOwnShare;
+const
+  Told = 10.0;
+  Held = 5;
+begin
+  for var i := 0 to Held - 1 do
+    FWrecks.Hold(nil, At(60 + 80 * i, 150), HeldPad, PadHeight, NoDrop);
+  FWrecks.HeldSpin := Told;
+  FWrecks.Tick;
+  var Spins: TArray<Single> := [];
+  for var i := 0 to Held - 1 do
+  begin
+    var Spin := FWrecks[i].Spin;
+    Assert.IsTrue((Abs(Spin) >= HeldShareLeast * Told - 0.001) and
+      (Abs(Spin) <= HeldShareMost * Told + 0.001),
+      Format('Pad %d spun %.2f for %.0f', [i, Spin, Told]));
+    for var Other in Spins do
+      Assert.IsTrue(Abs(Other - Spin) > 0.001, Format('Pad %d spins as another', [i]));
+    Spins := Spins + [Spin];
+  end;
+end;
+
+procedure TPadHeldTests.TestGuidedItGlidesToItsPlace;
+const
+  GlideTicks = 40;
+begin
+  var Number := FWrecks.Hold(nil, At(200, 150), HeldPad, PadHeight, NoDrop);
+  FWrecks.Tick;
+  var Till := At(100, 120);
+  FWrecks.Guide(Number, Till, GlideTicks);
+  var Steps: TArray<Single> := [];
+  for var i := 1 to GlideTicks do
+  begin
+    var Before := FWrecks[Number].Middle;
+    FWrecks.Tick;
+    var After := FWrecks[Number].Middle;
+    Steps := Steps + [Single(Hypot(After.X - Before.X, After.Y - Before.Y))];
+  end;
+  Assert.AreEqual(Double(Till.X), Double(FWrecks[Number].Middle.X), Slop, 'There across');
+  Assert.AreEqual(Double(Till.Y), Double(FWrecks[Number].Middle.Y), Slop, 'There down');
+  var Middle := Steps[Length(Steps) div 2];
+  Assert.IsTrue((Steps[0] < Middle) and (Steps[High(Steps)] < Middle), 'Slow, faster, slow');
+  for var i := 1 to GlideTicks do
+    FWrecks.Tick;
+  Assert.AreEqual(Double(Till.X), Double(FWrecks[Number].Middle.X), Slop, 'Stays');
+end;
+
+// Unturned, the picture hangs under the beam it turns about; turned, it
+// swings round it, as far from it
+procedure TPadHeldTests.TestThePictureTurnsAboutTheBeam;
+const
+  Drop = 5.0;
+  Quarter = 90.0;
+begin
+  var Number := FWrecks.Hold(nil, At(200, 150), HeldPad, PadHeight, Drop);
+  var Picture := FWrecks.PictureAt(Number, 1);
+  Assert.AreEqual(200.0, Double(Picture.X), Slop, 'Under it across');
+  Assert.AreEqual(150.0 + Drop, Double(Picture.Y), Slop, 'Under it');
+  FWrecks.HeldSpin := Quarter;
+  FWrecks.Tick;
+  var Turn := FWrecks[Number].Middle;
+  Picture := FWrecks.PictureAt(Number, 1);
+  var Angle := DegToRad(FWrecks[Number].Spin);
+  Assert.AreEqual(Double(Turn.X - Sin(Angle) * Drop), Double(Picture.X), Slop, 'Turned across');
+  Assert.AreEqual(Double(Turn.Y + Cos(Angle) * Drop), Double(Picture.Y), Slop, 'Turned down');
+  Assert.AreEqual(Double(Drop), Double(Hypot(Picture.X - Turn.X, Picture.Y - Turn.Y)), Slop,
+    'As far from it');
+  Assert.IsTrue(Abs(Picture.X - Turn.X) > Drop / 2, 'Swung aside');
+end;
+
+procedure TPadHeldTests.TestStillTillToldToSpin;
+begin
+  FWrecks.Hold(nil, At(200, 150), HeldPad, PadHeight, NoDrop);
+  for var i := 1 to HeldRiseOver do
+    FWrecks.Tick;
+  Assert.AreEqual(0.0, Double(FWrecks[0].Spin), 0.001, 'Still');
+  FWrecks.HeldSpin := 6;
+  FWrecks.Tick;
+  Assert.IsTrue(Abs(FWrecks[0].Spin) > 0, 'Spins once told');
+end;
+
+// A wreck gone gives its place to the next; a held one never does
+procedure TPadHeldTests.TestKeepsItsPlaceWhileOthersGo;
+begin
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  var Number := FWrecks.Hold(nil, At(100, 150), HeldPad, PadHeight, NoDrop);
+  var Ticks := 0;
+  while FWrecks.Flying and (Ticks < ManyFlightTicks) do
+  begin
+    FWrecks.Tick;
+    Inc(Ticks);
+  end;
+  Assert.IsTrue(FWrecks[0].Gone, 'The flying one gone');
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  Assert.AreEqual(2, FWrecks.Count, 'The new one in the gone one''s place');
+  Assert.IsTrue(FWrecks[Number].Held, 'Held where it was');
+  Assert.AreEqual(100.0, Double(FWrecks[Number].Middle.X), 0.001, 'The same pad');
+end;
+
+procedure TPadHeldTests.TestClearTakesItAway;
+begin
+  FWrecks.Hold(nil, At(200, 150), HeldPad, PadHeight, NoDrop);
+  FWrecks.Clear;
+  Assert.AreEqual(0, FWrecks.Count, 'None');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TPadWreckTests);
+  TDUnitX.RegisterTestFixture(TPadHeldTests);
 
 end.

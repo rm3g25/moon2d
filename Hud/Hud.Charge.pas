@@ -26,6 +26,11 @@ interface
 uses
   Sdl2.Core, Render.Brush, Game.Bonus;
 
+const
+  // The mouse glyph, at a scale of 1
+  MouseGlyphWidth = 7;
+  MouseGlyphHeight = 10;
+
 type
   THudCharge = class
   private type
@@ -85,6 +90,12 @@ type
     procedure Draw;
   end;
 
+// The mouse with its right button lit at AButtonAlpha, its top-left corner
+// at AX, AY, every unit of it AScale units on the screen, all of it at
+// AAlpha. The caller's brush is in its draw.
+procedure DrawMouseGlyph(const ABrush: THudBrush; AX, AY, AScale, AAlpha,
+  AButtonAlpha: Single);
+
 implementation
 
 uses
@@ -131,8 +142,6 @@ const
   NovicePulseSpeed = 0.2;
 
   // The mouse glyph hangs off the cell's corner like a hotkey badge
-  MouseW = 7;
-  MouseH = 10;
   MouseOverhangX = 2;
   MouseOverhangY = 3;
   MouseBlinkPeriod = 40;
@@ -382,8 +391,8 @@ begin
     FBrush.Glow(FSlotX - 1, SlotY - 1, SlotCell + 2, SlotCell + 2, BonusColor,
       0.25 + 0.25 * Sin(FTick * NovicePulseSpeed));
   DrawBonusIcon(FSlotX + IconInset, SlotY + IconInset);
-  DrawMouse(FSlotX + SlotCell + MouseOverhangX - MouseW,
-    SlotY + SlotCell + MouseOverhangY - MouseH);
+  DrawMouse(FSlotX + SlotCell + MouseOverhangX - MouseGlyphWidth,
+    SlotY + SlotCell + MouseOverhangY - MouseGlyphHeight);
   if FReadyTicks > 0 then
     FBrush.Glow(FSlotX - 2, SlotY - 2, SlotCell + 4, SlotCell + 4, White,
       0.7 * FReadyTicks / ReadyFlashTicks);
@@ -410,13 +419,11 @@ end;
 // A novice sees the right button blink like a press; after the first
 // reward spent it stays lit, quietly
 procedure THudCharge.DrawMouse(AX, AY: Single);
+const
+  FullSize = 1;
+  Opaque = 1;
 begin
-  FBrush.Fill(AX - 1, AY - 1, MouseW + 2, MouseH + 2, PanelColor, 0.9);
-  for var Part in MouseBody do
-    FBrush.Fill(AX + Part.X, AY + Part.Y, Part.W, Part.H, White, 0.75);
-
-  FBrush.Fill(AX + MouseRightButton.X, AY + MouseRightButton.Y,
-    MouseRightButton.W, MouseRightButton.H, BonusColor, MouseButtonAlpha);
+  DrawMouseGlyph(FBrush, AX, AY, FullSize, Opaque, MouseButtonAlpha);
 end;
 
 function THudCharge.MouseButtonAlpha: Single;
@@ -455,6 +462,20 @@ begin
       FBrush.Fill(X, CellY, StreakCellW, CellH, AlarmColor,
         0.8 * FStreakLostTicks / StreakLostTicks);
   end;
+end;
+
+procedure DrawMouseGlyph(const ABrush: THudBrush; AX, AY, AScale, AAlpha,
+  AButtonAlpha: Single);
+begin
+  ABrush.Fill(AX - AScale, AY - AScale, (MouseGlyphWidth + 2) * AScale,
+    (MouseGlyphHeight + 2) * AScale, PanelColor, 0.9 * AAlpha);
+  for var Part in MouseBody do
+    ABrush.Fill(AX + Part.X * AScale, AY + Part.Y * AScale, Part.W * AScale,
+      Part.H * AScale, White, 0.75 * AAlpha);
+
+  ABrush.Fill(AX + MouseRightButton.X * AScale, AY + MouseRightButton.Y * AScale,
+    MouseRightButton.W * AScale, MouseRightButton.H * AScale, BonusColor,
+    AButtonAlpha);
 end;
 
 end.

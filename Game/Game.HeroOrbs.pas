@@ -1,8 +1,9 @@
 ﻿{
   Game.HeroOrbs - the hero's orbs: the aura, the rite of the henshin and
-  the rite of the eclipse, the burst of the suit, the fire rain, and the
-  charge of the form with the orbs that carry it into the gauge. Which form
-  the hero wears is his own (THero.HeroForm).
+  the rite of the eclipse, the burst of the suit, the orbs that take the
+  pads at the throw, the fire rain, and the charge of the form with the
+  orbs that carry it into the gauge. Which form the hero wears is his own
+  (THero.HeroForm).
 
   It does not know the game. It asks about the hero through probes, and
   what an orb strikes is settled by the targets the game hands in: the
@@ -20,7 +21,7 @@ interface
 uses
   System.Generics.Collections, Sdl2.Core, Levels.Dynamics, Monsters,
   Orbs.Flock, Orbs.Harvest, Orbs.Patterns, Orbs.Aura, Orbs.Rite, Orbs.Burst,
-  Orbs.Rain, Orbs.Feed, Orbs.Moonrite;
+  Orbs.Rain, Orbs.Feed, Orbs.Moonrite, Orbs.Grip;
 
 const
   // An orb takes an enemy bullet nearer than this on either axis: the
@@ -65,6 +66,7 @@ type
     FPattern: TOrbPattern; // the figure the rite builds
     FMoonRite: TMoonRite; // the orbs of the moon form's henshin
     FBurst: TOrbBurst; // the light the suit cannot hold
+    FGrip: TOrbGrip; // the orbs that take the pads at the throw
     // The burst under way strikes what its rays meet; what it has wounded
     // - none loses more than a life
     FBurstStrikes: Boolean;
@@ -115,6 +117,8 @@ type
     // The burst at the end of the rite of the eclipse: the moon look, the
     // eclipse's strength, its rays straight and striking nothing
     procedure BurstEclipse;
+    // The orbs of the throw out to the pads of ABeams, in their order
+    procedure BeginGrip(const ABeams: TArray<TGripBeam>);
     procedure FeedEnergy(AAmount: Integer);
     // The charge rises in the gauge by itself, no orb carries it: the
     // stone charging as the fight goes
@@ -129,6 +133,10 @@ type
     // The rite of the eclipse, on its own: after the scene has put the
     // hero where this tick holds him
     procedure TickMoonRite(const ABeat: TRiteBeat);
+    // The orbs of the throw, the beams as the pads stand this tick; the
+    // pads gripped this tick (Orbs.Grip)
+    function TickGrip(const ABeams: TArray<TGripBeam>;
+      APulse: Single): TArray<Integer>;
     // The rain and the charge
     procedure TickAfterCeremony;
     // The orbs and the burst against the targets
@@ -163,6 +171,7 @@ type
     property Rite: TOrbRite read FRite;
     property MoonRite: TMoonRite read FMoonRite;
     property Burst: TOrbBurst read FBurst;
+    property Grip: TOrbGrip read FGrip;
   end;
 
 implementation
@@ -185,6 +194,7 @@ begin
   FRite := TOrbRite.Create(IceOrbTint, FProbes.Body);
   FMoonRite := TMoonRite.Create(FProbes.Body);
   FBurst := TOrbBurst.Create(FProbes.Body);
+  FGrip := TOrbGrip.Create;
   FBurstWounded := TList<TMonster>.Create;
   FRain := TOrbRain.Create(IceOrbTint);
   FFeed := TOrbFeed.Create(MoonOrbTint);
@@ -195,6 +205,7 @@ begin
   FFeed.Free;
   FRain.Free;
   FBurstWounded.Free;
+  FGrip.Free;
   FBurst.Free;
   FMoonRite.Free;
   FRite.Free;
@@ -209,6 +220,7 @@ begin
   FMoonRite.Clear;
   FBurst.Clear;
   FBurstWounded.Clear;
+  FGrip.Clear;
   FRain.Clear;
   FFeed.Clear;
 end;
@@ -241,6 +253,7 @@ begin
   FRite.Collapse;
   FMoonRite.Collapse;
   FBurst.Clear;
+  FGrip.Collapse;
   FRain.Collapse;
   FFeed.Collapse;
 end;
@@ -315,6 +328,14 @@ begin
   FBurstStrikes := False;
 end;
 
+// Out of the living, as the rite's are
+procedure THeroOrbs.BeginGrip(const ABeams: TArray<TGripBeam>);
+begin
+  if not FProbes.Alive() then
+    Exit;
+  FGrip.Start(ABeams);
+end;
+
 // The charge is the living hero's, like the rite's; what would run the
 // gauge past full stays where it came from
 procedure THeroOrbs.FeedEnergy(AAmount: Integer);
@@ -369,6 +390,15 @@ end;
 procedure THeroOrbs.TickMoonRite(const ABeat: TRiteBeat);
 begin
   FMoonRite.Tick(FProbes.Center(), ABeat);
+end;
+
+function THeroOrbs.TickGrip(const ABeams: TArray<TGripBeam>;
+  APulse: Single): TArray<Integer>;
+begin
+  var Body: TBodyPoints := nil;
+  if Assigned(FProbes.Body) then
+    Body := FProbes.Body();
+  Result := FGrip.Tick(Body, FProbes.Center(), ABeams, APulse);
 end;
 
 // The orbs fly, and the charge they bring in is the hero's
@@ -504,6 +534,7 @@ begin
   FAura.Draw(ACanvas, AOrigin, AAlpha);
   FRite.DrawInFront(ACanvas, AOrigin, AAlpha);
   FMoonRite.DrawInFront(ACanvas, AOrigin, AAlpha);
+  FGrip.Draw(ACanvas, AOrigin, AAlpha);
   FBurst.DrawWorld(ACanvas, AOrigin, AAlpha);
   FRain.Draw(ACanvas, AOrigin, AAlpha);
 end;

@@ -21,9 +21,18 @@
   new wreck takes the place of one already gone, so they do not pile
   up.
 
+  At the throw of the henshin the orbs take the pads the same way, and
+  hold them: a held pad rises a little where it stood and hangs there,
+  its jet dead, until the game guides it, slowly, to a place of its own;
+  its picture spins as fast as the game says - each its own share of it,
+  one in a few the other way - about the middle of its deck's beam, not
+  of the picture, whose engines hang under the beam. It is not gone till
+  a clear.
+
   TPadWrecks is the rules, TPadWreckPainter draws them: the picture of
   the pad turned with the spin, fire and smoke out of its jet, sparks
-  behind it, a glow about it, small bolts over its deck.
+  behind it, a glow about it, small bolts over its deck - for a held pad
+  the picture alone.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -36,6 +45,13 @@ uses
   Sdl2.Core, Render.Sprites, Levels.Dynamics, Pads.World;
 
 type
+  // A held pad's way: from where it set off to where it stops, eased in
+  // and out over Ticks; Clock of them gone
+  TWreckGlide = record
+    From, Till: TSdlFPoint;
+    Ticks, Clock: Integer;
+  end;
+
   TPadWreck = record
     // Whose picture it flies in; nil for a wreck of no pad
     Pad: TPad;
@@ -54,6 +70,14 @@ type
     SpinRate, SpinGain: Single;
     // Off the screen: it flies no more
     Gone: Boolean;
+    // Held by the orbs: on its way, spinning at its share of the held
+    // spin, signed
+    Held: Boolean;
+    Glide: TWreckGlide;
+    HeldShare: Single;
+    // Units the middle of the picture lies under the point it turns
+    // about, Middle; 0 - it turns about its own middle
+    PivotDrop: Single;
     // Which launch since the clear it is: a new wreck in the place of a
     // gone one has another
     Turn: Integer;
@@ -64,25 +88,42 @@ type
     FWrecks: TArray<TPadWreck>;
     FClears: Integer;
     FLaunched: Integer;
+    FHeldSpin: Single;
     function GetWreck(AIndex: Integer): TPadWreck;
+    function Place(const AWreck: TPadWreck): Integer;
+    procedure TickHeld(var AWreck: TPadWreck);
   public
     // APad's picture, AWidth by AHeight about AMiddle, thrown away from
     // AFrom - the blast, whose wave dies AReach units off it. It takes
     // the place of the first wreck gone, if one is.
     procedure Launch(const APad: TPad; const AMiddle: TSdlFPoint;
       AWidth, AHeight: Single; const AFrom: TSdlFPoint; AReach: Single);
+    // APad's picture, AWidth by AHeight, held where it stands: it rises a
+    // little and hangs, its jet dead, spinning about APivot, the middle of
+    // its deck's beam, APivotDrop units over the middle of the picture.
+    // Its number among the wrecks, which keeps till a clear.
+    function Hold(const APad: TPad; const APivot: TSdlFPoint;
+      AWidth, AHeight, APivotDrop: Single): Integer;
+    // The held wreck AIndex glides from where it is to ATill, its point of
+    // turning there, over ATicks; nothing for one not held
+    procedure Guide(AIndex: Integer; const ATill: TSdlFPoint; ATicks: Integer);
     procedure Tick;
     // A death, a new level: none in the air
     procedure Clear;
     function Count: Integer;
-    // Some are still on the screen
+    // Some are still on the screen and not held
     function Flying: Boolean;
     function MiddleAt(AIndex: Integer; AAlpha: Single): TSdlFPoint;
     function SpinAt(AIndex: Integer; AAlpha: Single): Single;
+    // The middle of the picture, turned about the point the wreck turns
+    // about with its spin
+    function PictureAt(AIndex: Integer; AAlpha: Single): TSdlFPoint;
     property Wrecks[AIndex: Integer]: TPadWreck read GetWreck; default;
     // Counts the clears: a painter that sees it change knows what it left
     // in the air is gone
     property Clears: Integer read FClears;
+    // Degrees a tick the held ones spin at, each its own share of it
+    property HeldSpin: Single read FHeldSpin write FHeldSpin;
   end;
 
   TPadWreckPainter = class
@@ -159,6 +200,13 @@ const
   // Gone this far past the left, the right or the top edge; the flight
   // never reaches the road, so the bottom is not one of them
   WreckOffMargin = 60.0;
+  // A held pad rises this far over this many ticks; it spins at this
+  // share of the held spin and up to HeldShareSpan more
+  HeldRise = 10.0;
+  HeldRiseTicks = 20;
+  HeldShareLeast = 0.8;
+  HeldShareSpan = 0.4;
+  HeldShareSalt = 5;
 
   // The jet leaves the middle of the underside, turned with the picture
   WreckJetDown = 6.0;
@@ -246,13 +294,58 @@ begin
   Wreck.SpinRate := SpinSide * Lerp(WreckSpinFarShare, 1, Strength) *
     (WreckSpinLeast + WreckSpinSpan * WreckVariety(Turn, WreckSpinSalt));
   Wreck.SpinGain := WreckSpinGainMost * WreckVariety(Turn, WreckSpinGainSalt);
+  Place(Wreck);
+end;
+
+// In the place of the first wreck gone, or a new place
+function TPadWrecks.Place(const AWreck: TPadWreck): Integer;
+begin
   for var i := 0 to High(FWrecks) do
     if FWrecks[i].Gone then
     begin
-      FWrecks[i] := Wreck;
-      Exit;
+      FWrecks[i] := AWreck;
+      Exit(i);
     end;
-  FWrecks := FWrecks + [Wreck];
+  FWrecks := FWrecks + [AWreck];
+  Result := High(FWrecks);
+end;
+
+// Clockwise but one in a few, as the wrecks of a blast spin
+function TPadWrecks.Hold(const APad: TPad; const APivot: TSdlFPoint;
+  AWidth, AHeight, APivotDrop: Single): Integer;
+begin
+  var Turn := FLaunched;
+  Inc(FLaunched);
+  var Wreck := Default(TPadWreck);
+  Wreck.Turn := Turn;
+  Wreck.Pad := APad;
+  Wreck.Width := AWidth;
+  Wreck.Height := AHeight;
+  Wreck.Middle := APivot;
+  Wreck.LastMiddle := APivot;
+  Wreck.PivotDrop := APivotDrop;
+  Wreck.Held := True;
+  Wreck.Glide.From := APivot;
+  Wreck.Glide.Till := APivot;
+  Wreck.Glide.Till.Y := APivot.Y - HeldRise;
+  Wreck.Glide.Ticks := HeldRiseTicks;
+  Wreck.HeldShare := HeldShareLeast +
+    HeldShareSpan * WreckVariety(Turn, HeldShareSalt);
+  if WreckVariety(Turn, WreckCounterSpinSalt) < WreckCounterSpinShare then
+    Wreck.HeldShare := -Wreck.HeldShare;
+  Result := Place(Wreck);
+end;
+
+procedure TPadWrecks.Guide(AIndex: Integer; const ATill: TSdlFPoint;
+  ATicks: Integer);
+begin
+  if not FWrecks[AIndex].Held then
+    Exit;
+  var Glide := Default(TWreckGlide);
+  Glide.From := FWrecks[AIndex].Middle;
+  Glide.Till := ATill;
+  Glide.Ticks := Max(ATicks, 1);
+  FWrecks[AIndex].Glide := Glide;
 end;
 
 procedure TPadWrecks.Tick;
@@ -262,7 +355,9 @@ begin
     var Wreck := FWrecks[i];
     Wreck.LastMiddle := Wreck.Middle;
     Wreck.LastSpin := Wreck.Spin;
-    if Wreck.Gone then
+    if Wreck.Held then
+      TickHeld(Wreck);
+    if Wreck.Gone or Wreck.Held then
     begin
       FWrecks[i] := Wreck;
       Continue;
@@ -287,6 +382,20 @@ begin
   end;
 end;
 
+// Along its way, eased, then it hangs
+procedure TPadWrecks.TickHeld(var AWreck: TPadWreck);
+begin
+  var Glide := AWreck.Glide;
+  if Glide.Clock < Glide.Ticks then
+    Inc(Glide.Clock);
+  var Share: Single := Glide.Clock / Glide.Ticks;
+  Share := Share * Share * (3 - 2 * Share);
+  AWreck.Middle.X := Glide.From.X + (Glide.Till.X - Glide.From.X) * Share;
+  AWreck.Middle.Y := Glide.From.Y + (Glide.Till.Y - Glide.From.Y) * Share;
+  AWreck.Glide := Glide;
+  AWreck.Spin := AWreck.Spin + AWreck.HeldShare * FHeldSpin;
+end;
+
 procedure TPadWrecks.Clear;
 begin
   FWrecks := nil;
@@ -302,7 +411,7 @@ end;
 function TPadWrecks.Flying: Boolean;
 begin
   for var Wreck in FWrecks do
-    if not Wreck.Gone then
+    if not Wreck.Gone and not Wreck.Held then
       Exit(True);
   Result := False;
 end;
@@ -322,6 +431,15 @@ end;
 function TPadWrecks.SpinAt(AIndex: Integer; AAlpha: Single): Single;
 begin
   Result := Lerp(FWrecks[AIndex].LastSpin, FWrecks[AIndex].Spin, AAlpha);
+end;
+
+// Straight down from it unturned, clockwise with the spin
+function TPadWrecks.PictureAt(AIndex: Integer; AAlpha: Single): TSdlFPoint;
+begin
+  var Turn := MiddleAt(AIndex, AAlpha);
+  var Drop := FWrecks[AIndex].PivotDrop;
+  var Angle := DegToRad(SpinAt(AIndex, AAlpha));
+  Result := UnitPoint(Turn.X - Sin(Angle) * Drop, Turn.Y + Cos(Angle) * Drop);
 end;
 
 // ---------------------------------------------------------------------------
@@ -415,7 +533,7 @@ begin
       FSparks[i].ForgetOrigin;
       FBolts[i].ForgetOrigin;
     end;
-    var Burning := not FWrecks[i].Gone;
+    var Burning := not FWrecks[i].Gone and not FWrecks[i].Held;
     var Jet := JetPoint(i);
     FFires[i].Tick(Jet.X, Jet.Y, Burning);
     FSparks[i].Tick(Jet.X, Jet.Y, Burning);
@@ -442,7 +560,7 @@ begin
       Continue;
     var Tint := Wreck.Pad.Placement.Tint;
     TintTexture(Wreck.Pad.Texture, Tint.R, Tint.G, Tint.B);
-    ASprites.DrawSized(Wreck.Pad.Texture, FWrecks.MiddleAt(i, AAlpha),
+    ASprites.DrawSized(Wreck.Pad.Texture, FWrecks.PictureAt(i, AAlpha),
       Wreck.Width, Wreck.Height, 1, False, FWrecks.SpinAt(i, AAlpha));
   end;
 end;
@@ -453,7 +571,7 @@ begin
   var Breath: Single := WreckGlowBreath * Sin(2 * Pi * FAge / WreckGlowTicks);
   for var i := 0 to Min(FWrecks.Count, Length(FFires)) - 1 do
   begin
-    if not FWrecks[i].Gone then
+    if not FWrecks[i].Gone and not FWrecks[i].Held then
     begin
       var Middle := FWrecks.MiddleAt(i, AAlpha);
       DrawGlow(FRenderer, FGlow, Middle.X + AOrigin.X, Middle.Y + AOrigin.Y,

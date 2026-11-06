@@ -147,7 +147,10 @@
   the hull the game sets out of it. The burst at the end of the henshin
   throws it half a cell away from the hero and stuns it: its eye catches
   and drops out of step, its lamps go out, smoke comes out of its wheel
-  arches. Stunned, it stands as harmless as before.
+  arches. Stunned, it stands as harmless as before - and drives off at
+  once, slow, faster, slow, to where the game wants it for the throw. As
+  the pads spin up against it its lamps and its eye blink in alarm, the
+  faster the more they spin; its honeycomb holds still.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -253,6 +256,15 @@ type
     function Running: Boolean;
     // The front ATicks after the blast, units from it
     function FrontOf(ATicks: Single): Single;
+  end;
+
+  // The drive off after the henshin's burst: asked for; where its left
+  // edge set off from and stands at the end; how long it takes and how
+  // far along it is
+  TRamWithdraw = record
+    Asked: Boolean;
+    From, Till: Single;
+    Ticks, Clock: Integer;
   end;
 
   // A throw over the hull: to Side, Way units a tick across of its own on
@@ -428,6 +440,10 @@ type
     // ticks the stunned eye holds its level yet
     FStunFrom: Single;
     FStunSide: Integer;
+    FWithdraw: TRamWithdraw;
+    // How strong the alarm of its lights is, and how far into its blinks
+    FLightsAlarm: Single;
+    FAlarmPhase: Single;
     FFlickerTicks: Integer;
     // The way the hull faces: -1 left, as the art is drawn
     FHullFacing: Integer;
@@ -467,6 +483,8 @@ type
     procedure TickSurge;
     procedure TickBrake;
     procedure TickStun;
+    procedure TickWithdraw;
+    function AlarmLight: Single;
     procedure FlickerEye;
     function HuntLine: Single;
     function NextSurgeWait: Integer;
@@ -612,6 +630,13 @@ type
     // then on; nothing for one not braking or standing
     procedure Stun(const AFrom: TSdlFPoint);
     function Stunned: Boolean;
+    // Stunned, its lamps and its eye blink together in alarm, ALevel 0
+    // none to 1 - the faster the higher: the pads spun up against it at
+    // the throw. A stun starts with none.
+    procedure LightsAlarm(ALevel: Single);
+    // Stunned, it drives off as soon as its throw is over, to stand with
+    // its left edge at ALeft; nothing for one not stunned
+    procedure Withdraw(ALeft: Single);
     // Some of AHeroBody is in the hull or a wheel: AAway - the side to set
     // him out to, as a touch would throw him; 0 - straight up
     function InTheHull(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
@@ -1126,6 +1151,14 @@ const
   // Its burst throws it half a cell, fast and slowing to a stand
   StunThrow = 16.0;
   StunThrowTicks = 6;
+  // Its lights blink in alarm once in this many ticks at the least alarm,
+  // once in this many at the most
+  AlarmBlinkSlow = 20.0;
+  AlarmBlinkFast = 6.0;
+  // Then it drives off at this pace on average, slow, faster, slow; no
+  // drive off is shorter than WithdrawLeastTicks
+  WithdrawPace = 2.0;
+  WithdrawLeastTicks = 30;
   // Stunned, its eye catches and drops out of step: dark this share of the
   // time, each level held a few ticks, as the dice pick
   StunDarkShare = 0.45;
@@ -3127,6 +3160,9 @@ begin
   FBraking := False;
   FLampHold := 0;
   FFlickerTicks := 0;
+  FWithdraw := Default(TRamWithdraw);
+  FLightsAlarm := 0;
+  FAlarmPhase := 0;
 end;
 
 function TRam.Stunned: Boolean;
@@ -3134,12 +3170,66 @@ begin
   Result := FHunt = htStunned;
 end;
 
+procedure TRam.LightsAlarm(ALevel: Single);
+begin
+  FLightsAlarm := EnsureRange(ALevel, 0, 1);
+end;
+
+// Lit for the first half of every blink; dark with no alarm
+function TRam.AlarmLight: Single;
+begin
+  Result := 0;
+  if (FLightsAlarm > 0) and (Frac(FAlarmPhase) < 0.5) then
+    Result := 1;
+end;
+
+procedure TRam.Withdraw(ALeft: Single);
+begin
+  if FHunt <> htStunned then
+    Exit;
+  FWithdraw := Default(TRamWithdraw);
+  FWithdraw.Asked := True;
+  FWithdraw.Till := ALeft;
+end;
+
+// The engine starts where the throw has left it; at the end the brake's
+// hiss
+procedure TRam.TickWithdraw;
+begin
+  if not FWithdraw.Asked then
+    Exit;
+  if FWithdraw.Clock = 0 then
+  begin
+    FWithdraw.From := FX;
+    FWithdraw.Ticks := Max(WithdrawLeastTicks,
+      Ceil(Abs(FWithdraw.Till - FX) / WithdrawPace));
+    FCue.Rumble := True;
+  end;
+  if FWithdraw.Clock >= FWithdraw.Ticks then
+    Exit;
+  Inc(FWithdraw.Clock);
+  var OldSpeed := FSpeed;
+  var Share: Single := FWithdraw.Clock / FWithdraw.Ticks;
+  var Next: Single := FWithdraw.From +
+    (FWithdraw.Till - FWithdraw.From) * Share * Share * (3 - 2 * Share);
+  FSpeed := Next - FX;
+  FX := Next;
+  FAccel := FSpeed - OldSpeed;
+  if FWithdraw.Clock < FWithdraw.Ticks then
+    Exit;
+  FSpeed := 0;
+  FCue.Hiss := True;
+end;
+
 // Thrown off the road's grip: fast, slower, at rest half a cell on. The
-// mast swings with the shove.
+// mast swings with the shove. Then the drive off, if one is asked for.
 procedure TRam.TickStun;
 begin
   if FHuntTicks >= StunThrowTicks then
+  begin
+    TickWithdraw;
     Exit;
+  end;
   Inc(FHuntTicks);
   var OldSpeed := FSpeed;
   var Share: Single := FHuntTicks / StunThrowTicks;
@@ -3346,7 +3436,11 @@ end;
 procedure TRam.TickLamps;
 begin
   if FHunt = htStunned then
-    FLamps := 0
+  begin
+    if FLightsAlarm > 0 then
+      FAlarmPhase := FAlarmPhase + 1 / Lerp(AlarmBlinkSlow, AlarmBlinkFast, FLightsAlarm);
+    FLamps := AlarmLight;
+  end
   else if FBraking then
     FLamps := 1
   else if FLampHold > 0 then
@@ -3362,6 +3456,8 @@ procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
+  else if (FHunt = htStunned) and (FLightsAlarm > 0) then
+    FEye := Max(EyeBlinkLow, AlarmLight)
   else if FHunt = htStunned then
     FlickerEye
   else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading or
