@@ -29,6 +29,13 @@
   of the picture, whose engines hang under the beam. It is not gone till
   a clear.
 
+  Then the game hurls them at a mark: a hurled pad's jet burns again and
+  it flies as a wreck flies - a kick off, the jet's thrust, the drag, the
+  moon's pull, its picture spinning on as it spun held - but its thrust
+  heads for the mark. It sets off bowed aside, up, each by its own
+  share, and the bow dies away as it closes, so no two take one way and
+  none flies a straight line. It is gone when the game says it struck.
+
   TPadWrecks is the rules, TPadWreckPainter draws them: the picture of
   the pad turned with the spin, fire and smoke out of its jet, sparks
   behind it, a glow about it, small bolts over its deck - for a held pad
@@ -78,6 +85,11 @@ type
     // Units the middle of the picture lies under the point it turns
     // about, Middle; 0 - it turns about its own middle
     PivotDrop: Single;
+    // Hurled at Aim; its thrust heads Swerve radians aside of it,
+    // clockwise, the swerve dying away
+    Hurled: Boolean;
+    Aim: TSdlFPoint;
+    Swerve: Single;
     // Which launch since the clear it is: a new wreck in the place of a
     // gone one has another
     Turn: Integer;
@@ -92,6 +104,7 @@ type
     function GetWreck(AIndex: Integer): TPadWreck;
     function Place(const AWreck: TPadWreck): Integer;
     procedure TickHeld(var AWreck: TPadWreck);
+    procedure TickHurled(var AWreck: TPadWreck);
   public
     // APad's picture, AWidth by AHeight about AMiddle, thrown away from
     // AFrom - the blast, whose wave dies AReach units off it. It takes
@@ -107,6 +120,11 @@ type
     // The held wreck AIndex glides from where it is to ATill, its point of
     // turning there, over ATicks; nothing for one not held
     procedure Guide(AIndex: Integer; const ATill: TSdlFPoint; ATicks: Integer);
+    // The held wreck AIndex is let go at AAim, the point it turns about
+    // making for it, its jet burning; nothing for one not held
+    procedure Hurl(AIndex: Integer; const AAim: TSdlFPoint);
+    // The wreck AIndex has struck: it is gone
+    procedure Smash(AIndex: Integer);
     procedure Tick;
     // A death, a new level: none in the air
     procedure Clear;
@@ -197,8 +215,7 @@ const
   WreckCounterSpinSalt = 8;
   WreckSpinSalt = 3;
   WreckSpinGainSalt = 4;
-  // Gone this far past the left, the right or the top edge; the flight
-  // never reaches the road, so the bottom is not one of them
+  // Gone this far past the left, the right or the top edge
   WreckOffMargin = 60.0;
   // A held pad rises this far over this many ticks; it spins at this
   // share of the held spin and up to HeldShareSpan more
@@ -207,6 +224,16 @@ const
   HeldShareLeast = 0.8;
   HeldShareSpan = 0.4;
   HeldShareSalt = 5;
+  // A hurled pad is kicked off this fast and pushed this hard a tick
+  // toward its mark: in about a second from the arc of the throw it is
+  // there. It sets off bowed aside, up, by HurlSwerveLeast degrees and up
+  // to HurlSwerveSpan more, the bow this much of itself a tick later.
+  HurlKick = 2.0;
+  HurlThrust = 0.45;
+  HurlSwerveLeast = 15.0;
+  HurlSwerveSpan = 25.0;
+  HurlSwerveFade = 0.92;
+  HurlSwerveSalt = 6;
 
   // The jet leaves the middle of the underside, turned with the picture
   WreckJetDown = 6.0;
@@ -247,6 +274,21 @@ end;
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
   Result := AFrom + (ATo - AFrom) * AAmount;
+end;
+
+// Radians from AFrom toward ATo, clockwise from straight right, the
+// screen's down being down
+function Bearing(const AFrom, ATo: TSdlFPoint): Single;
+begin
+  Result := ArcTan2(ATo.Y - AFrom.Y, ATo.X - AFrom.X);
+end;
+
+// Past the left, the right or the top edge by the margin; the flights
+// never reach the road, so the bottom is not one of them
+function OffTheScreen(const AMiddle: TSdlFPoint): Boolean;
+begin
+  Result := (AMiddle.X < -WreckOffMargin) or
+    (AMiddle.X > ScreenWidth + WreckOffMargin) or (AMiddle.Y < -WreckOffMargin);
 end;
 
 // A steady pick in [0, 1) for the wreck of this turn: the same blast throws
@@ -348,6 +390,34 @@ begin
   FWrecks[AIndex].Glide := Glide;
 end;
 
+// Bowed aside to the side that heads higher
+procedure TPadWrecks.Hurl(AIndex: Integer; const AAim: TSdlFPoint);
+begin
+  var Wreck := FWrecks[AIndex];
+  if not Wreck.Held then
+    Exit;
+  Wreck.Held := False;
+  Wreck.Hurled := True;
+  Wreck.Aim := AAim;
+  Wreck.SpinRate := Wreck.HeldShare * FHeldSpin;
+  Wreck.SpinGain := 0;
+
+  var Toward := Bearing(Wreck.Middle, AAim);
+  var Swerve := DegToRad(HurlSwerveLeast +
+    HurlSwerveSpan * WreckVariety(Wreck.Turn, HurlSwerveSalt));
+  if Sin(Toward + Swerve) > Sin(Toward - Swerve) then
+    Swerve := -Swerve;
+  Wreck.Swerve := Swerve;
+  Wreck.Speed := UnitPoint(HurlKick * Cos(Toward + Swerve),
+    HurlKick * Sin(Toward + Swerve));
+  FWrecks[AIndex] := Wreck;
+end;
+
+procedure TPadWrecks.Smash(AIndex: Integer);
+begin
+  FWrecks[AIndex].Gone := True;
+end;
+
 procedure TPadWrecks.Tick;
 begin
   for var i := 0 to High(FWrecks) do
@@ -356,8 +426,10 @@ begin
     Wreck.LastMiddle := Wreck.Middle;
     Wreck.LastSpin := Wreck.Spin;
     if Wreck.Held then
-      TickHeld(Wreck);
-    if Wreck.Gone or Wreck.Held then
+      TickHeld(Wreck)
+    else if Wreck.Hurled and not Wreck.Gone then
+      TickHurled(Wreck);
+    if Wreck.Gone or Wreck.Held or Wreck.Hurled then
     begin
       FWrecks[i] := Wreck;
       Continue;
@@ -375,9 +447,7 @@ begin
     Wreck.SpinRate := Sign(Wreck.SpinRate) *
       Min(Abs(Wreck.SpinRate) + Wreck.SpinGain, WreckSpinMost);
 
-    Wreck.Gone := (Wreck.Middle.X < -WreckOffMargin) or
-      (Wreck.Middle.X > ScreenWidth + WreckOffMargin) or
-      (Wreck.Middle.Y < -WreckOffMargin);
+    Wreck.Gone := OffTheScreen(Wreck.Middle);
     FWrecks[i] := Wreck;
   end;
 end;
@@ -394,6 +464,20 @@ begin
   AWreck.Middle.Y := Glide.From.Y + (Glide.Till.Y - Glide.From.Y) * Share;
   AWreck.Glide := Glide;
   AWreck.Spin := AWreck.Spin + AWreck.HeldShare * FHeldSpin;
+end;
+
+// The thrust toward the mark, turned aside by what is left of the swerve
+procedure TPadWrecks.TickHurled(var AWreck: TPadWreck);
+begin
+  AWreck.Swerve := AWreck.Swerve * HurlSwerveFade;
+  var Heading := Bearing(AWreck.Middle, AWreck.Aim) + AWreck.Swerve;
+  AWreck.Speed.X := (AWreck.Speed.X + HurlThrust * Cos(Heading)) * (1 - WreckDrag);
+  AWreck.Speed.Y := (AWreck.Speed.Y + HurlThrust * Sin(Heading) + WreckGravity) *
+    (1 - WreckDrag);
+  AWreck.Middle.X := AWreck.Middle.X + AWreck.Speed.X;
+  AWreck.Middle.Y := AWreck.Middle.Y + AWreck.Speed.Y;
+  AWreck.Spin := AWreck.Spin + AWreck.SpinRate;
+  AWreck.Gone := OffTheScreen(AWreck.Middle);
 end;
 
 procedure TPadWrecks.Clear;
@@ -503,9 +587,11 @@ begin
     FTurns[i] := -1;
 end;
 
+// Under the middle of the picture, which a held pad's hangs under the
+// beam it turns about
 function TPadWreckPainter.JetPoint(AIndex: Integer): TSdlFPoint;
 begin
-  var Middle := FWrecks.MiddleAt(AIndex, 1);
+  var Middle := FWrecks.PictureAt(AIndex, 1);
   var Angle := DegToRad(FWrecks.SpinAt(AIndex, 1));
   Result := UnitPoint(Middle.X - Sin(Angle) * WreckJetDown,
     Middle.Y + Cos(Angle) * WreckJetDown);
@@ -573,7 +659,7 @@ begin
   begin
     if not FWrecks[i].Gone and not FWrecks[i].Held then
     begin
-      var Middle := FWrecks.MiddleAt(i, AAlpha);
+      var Middle := FWrecks.PictureAt(i, AAlpha);
       DrawGlow(FRenderer, FGlow, Middle.X + AOrigin.X, Middle.Y + AOrigin.Y,
         WreckGlowSize, WreckGlowColor, WreckGlowLevel + Breath);
     end;

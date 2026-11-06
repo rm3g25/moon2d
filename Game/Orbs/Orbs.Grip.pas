@@ -9,7 +9,8 @@
   smaller than the orbs of the rite - many of them on a thin beam.
 
   Where the beams are and how they turn is the owner's: it hands them in
-  every tick (TGripBeam). No orb is armed.
+  every tick (TGripBeam). No orb is armed. A pad thrown, its orbs ride it;
+  blown up, they burn out where they cling.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -91,6 +92,8 @@ type
     // tick, by their number.
     function Tick(const ABody: TBodyPoints; const ACenter: TSdlFPoint;
       const ABeams: TArray<TGripBeam>; APulse: Single): TArray<Integer>;
+    // The pad APad is blown up: its orbs burn out where they cling
+    procedure Burn(APad: Integer);
     // The hero is dead: every orb draws into its point
     procedure Collapse;
     procedure Clear;
@@ -294,6 +297,13 @@ begin
     else
       Fly(Orb, Beam, Result);
   end;
+end;
+
+procedure TOrbGrip.Burn(APad: Integer);
+begin
+  for var i := 0 to FFlock.Orbs.Count - 1 do
+    if GripOrb(i).FPad = APad then
+      FFlock.Implode(GripOrb(i));
 end;
 
 procedure TOrbGrip.Collapse;

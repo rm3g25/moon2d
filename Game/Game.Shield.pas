@@ -12,6 +12,11 @@
   In alarm the whole rim lights and throbs, as strongly as its owner
   says: the light of a flare all round, the flares of hits over it.
 
+  Or it is broken: a heavy blow breaks off a piece of the rim about its
+  point, the cells of it flying off as shards, and the shield crumbles
+  after the last blow - the rest of it blinks and goes out cell by cell,
+  from the pieces broken off outward.
+
   A shield is an ellipse about a small machine (the cannons), or it lies
   over the body of a big one (the Ram) a little past its outline: the rim
   is then the outline itself, and an ellipse round a long low hull would
@@ -43,7 +48,7 @@ type
     destructor Destroy; override;
   end;
 
-  TShieldState = (sdUp, sdFalling, sdDown);
+  TShieldState = (sdUp, sdFalling, sdCrumbling, sdDown);
 
   // The body of a machine on a grid of units, row by row from its top-left
   // corner, and where its middle is on that grid
@@ -61,6 +66,16 @@ type
     TCell = record
       X, Y: Single;
       Rim: Single; // 0 in the middle .. 1 at the edge
+      // Broken off by a blow; crumbling, the tick it goes out
+      Broken: Boolean;
+      OutAt: Integer;
+    end;
+
+    // A cell of a piece broken off, flying, from the middle
+    TShard = record
+      X, Y: Single;
+      SpeedX, SpeedY: Single;
+      Age: Integer;
     end;
 
     TFlare = record
@@ -85,6 +100,10 @@ type
     FMirrored: Boolean;
     FAlarm: Single;
     FAlarmTicks: Integer;
+    // Where the blows broke it, from the middle; the shards in the air
+    FBreaks: TArray<TSdlFPoint>;
+    FShards: TList<TShard>;
+    FCrumbleAge: Integer;
     function Own(const APoint: TSdlFPoint): TSdlFPoint;
     procedure LayCells;
     procedure LayCellsOverBody;
@@ -93,6 +112,11 @@ type
     function FallLevel(AAlpha: Single): Single;
     function AlarmLight(AAlpha: Single): Single;
     procedure SetAlarm(AValue: Single);
+    procedure TickShards;
+    procedure TickCrumble;
+    function CellLit(const ACell: TCell): Boolean;
+    procedure DrawShards(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
+      const ACenter: TSdlFPoint; AAlpha: Single);
   public
     // An ellipse of these half-axes about the middle of the machine
     constructor Create(ARadiusX, ARadiusY: Single);
@@ -105,9 +129,15 @@ type
     // machine is to be hit, shows none there
     procedure OpenAbove(AY: Single);
     destructor Destroy; override;
-    // Up again, with no flare on it and no alarm
+    // Up again, whole, with no flare on it and no alarm
     procedure Rise;
     procedure Fall;
+    // A heavy blow at this point from the middle: a piece of the rim
+    // about it breaks off and flies. The shield still holds.
+    procedure Shatter(const APoint: TSdlFPoint);
+    // After the last blow: the rest blinks and goes out cell by cell from
+    // the pieces broken off outward - from the middle when none is
+    procedure Crumble;
     // A bullet, a round met the shield at this point from the middle
     procedure Strike(const APoint: TSdlFPoint);
     // The point, from the middle, is inside
@@ -162,6 +192,24 @@ const
   // to all of it
   AlarmThrobTicks = 12;
   AlarmLow = 0.45;
+  // A heavy blow breaks off the cells this far about it; those of the rim
+  // fly off from it at ShardLeast and up to ShardSpan more units a tick,
+  // ShardLift up, falling ShardFall a tick faster, and burn out over
+  // ShardTicks
+  ShatterReach = 12.0;
+  ShardLeast = 0.8;
+  ShardSpan = 1.6;
+  ShardLift = 0.6;
+  ShardFall = 0.08;
+  ShardTicks = 24;
+  // Crumbling, a cell goes out CrumbleWait ticks in and a tick later for
+  // every CrumblePace units it lies from the nearest break; till then it
+  // blinks, CrumbleBlinkTicks lit and as long dark, at this share of a
+  // flare's light
+  CrumbleWait = 4;
+  CrumblePace = 3.0;
+  CrumbleBlinkTicks = 3;
+  CrumbleGlow = 0.5;
   // Along a stretch the shield is looked for this often
   EntryStep = 1.0;
   // Over a body: units the shield stands past its outline, and the depth
@@ -209,6 +257,13 @@ function RimBand(ARim, AFrom: Single): Single;
 begin
   var Share := EnsureRange((ARim - AFrom) / (RimFull - AFrom), 0.0, 1.0);
   Result := Share * Share * (3 - 2 * Share);
+end;
+
+// A steady pick in [0, 1) for the cell AIndex: the same blow throws the
+// same shards
+function ShardVariety(AIndex: Integer): Single;
+begin
+  Result := Frac(Abs(Sin(AIndex * 12.9898) * 43758.5453));
 end;
 
 function MixColor(const AFrom, ATo: TRgb; AShare: Single): TRgb;
@@ -337,6 +392,7 @@ begin
   FRadiusY := ARadiusY;
   FScale := 1;
   FFlares := TList<TFlare>.Create;
+  FShards := TList<TShard>.Create;
   LayCells;
 end;
 
@@ -349,6 +405,7 @@ begin
   FFieldX := -FField.Middle.X;
   FFieldY := -FField.Middle.Y;
   FFlares := TList<TFlare>.Create;
+  FShards := TList<TShard>.Create;
   LayCellsOverBody;
 end;
 
@@ -360,11 +417,13 @@ begin
   FRadiusX := ACells * Sqrt(3) * HexSize * AScale / 2;
   FRadiusY := HexSize * AScale;
   FFlares := TList<TFlare>.Create;
+  FShards := TList<TShard>.Create;
   LayStrip(ACells);
 end;
 
 destructor TTekShield.Destroy;
 begin
+  FShards.Free;
   FFlares.Free;
   inherited;
 end;
@@ -381,7 +440,7 @@ begin
   for var Row := -Rows to Rows do
     for var Col := -Cols to Cols do
     begin
-      var Cell: TCell;
+      var Cell := Default(TCell);
       Cell.X := Col * StepX;
       if Odd(Row) then
         Cell.X := Cell.X + StepX / 2;
@@ -413,7 +472,7 @@ begin
       var FieldRow := Trunc(DownY);
       if not FField.At(FieldCol, FieldRow) then
         Continue;
-      var Cell: TCell;
+      var Cell := Default(TCell);
       Cell.X := AcrossX + FFieldX;
       Cell.Y := DownY + FFieldY;
       var Depth := Depths[FieldRow * FField.Width + FieldCol];
@@ -429,7 +488,7 @@ begin
   FCells := nil;
   for var i := 0 to ACells - 1 do
   begin
-    var Cell: TCell;
+    var Cell := Default(TCell);
     Cell.X := (i - (ACells - 1) / 2) * StepX;
     Cell.Y := 0;
     Cell.Rim := 1;
@@ -443,6 +502,11 @@ begin
   FFallAge := 0;
   FFlares.Clear;
   FAlarm := 0;
+  for var i := 0 to High(FCells) do
+    FCells[i].Broken := False;
+  FBreaks := nil;
+  FShards.Clear;
+  FCrumbleAge := 0;
 end;
 
 procedure TTekShield.SetAlarm(AValue: Single);
@@ -464,6 +528,58 @@ begin
   Result := APoint;
   if FMirrored then
     Result.X := -APoint.X;
+end;
+
+// Every cell within reach is gone; those of the rim fly off as shards,
+// away from the blow
+procedure TTekShield.Shatter(const APoint: TSdlFPoint);
+begin
+  if FState <> sdUp then
+    Exit;
+  var Point := Own(APoint);
+  FBreaks := FBreaks + [Point];
+  for var i := 0 to High(FCells) do
+  begin
+    var Cell := FCells[i];
+    var AcrossX := Cell.X - Point.X;
+    var AcrossY := Cell.Y - Point.Y;
+    var Apart := Hypot(AcrossX, AcrossY);
+    if Cell.Broken or (Apart > ShatterReach) then
+      Continue;
+    FCells[i].Broken := True;
+    if Cell.Rim < RestRimFrom then
+      Continue;
+
+    var Shard := Default(TShard);
+    Shard.X := Cell.X;
+    Shard.Y := Cell.Y;
+    var Speed := ShardLeast + ShardSpan * ShardVariety(i);
+    if Apart > 0 then
+    begin
+      Shard.SpeedX := Speed * AcrossX / Apart;
+      Shard.SpeedY := Speed * AcrossY / Apart;
+    end;
+    Shard.SpeedY := Shard.SpeedY - ShardLift;
+    FShards.Add(Shard);
+  end;
+end;
+
+procedure TTekShield.Crumble;
+begin
+  if FState <> sdUp then
+    Exit;
+  FState := sdCrumbling;
+  FCrumbleAge := 0;
+  var Marks := FBreaks;
+  if Marks = nil then
+    Marks := [Default(TSdlFPoint)];
+  for var i := 0 to High(FCells) do
+  begin
+    var Nearest: Single := MaxSingle;
+    for var Mark in Marks do
+      Nearest := Min(Nearest, Hypot(FCells[i].X - Mark.X, FCells[i].Y - Mark.Y));
+    FCells[i].OutAt := CrumbleWait + Round(Nearest / CrumblePace);
+  end;
 end;
 
 procedure TTekShield.Strike(const APoint: TSdlFPoint);
@@ -518,6 +634,8 @@ begin
     else
       FFlares[i] := Flare;
   end;
+  TickShards;
+  TickCrumble;
 
   if FState <> sdFalling then
     Exit;
@@ -527,6 +645,44 @@ begin
     FState := sdDown;
     FFlares.Clear;
   end;
+end;
+
+procedure TTekShield.TickShards;
+begin
+  for var i := FShards.Count - 1 downto 0 do
+  begin
+    var Shard := FShards[i];
+    Inc(Shard.Age);
+    if Shard.Age >= ShardTicks then
+    begin
+      FShards.Delete(i);
+      Continue;
+    end;
+    Shard.SpeedY := Shard.SpeedY + ShardFall;
+    Shard.X := Shard.X + Shard.SpeedX;
+    Shard.Y := Shard.Y + Shard.SpeedY;
+    FShards[i] := Shard;
+  end;
+end;
+
+// Down once no cell that can be seen is lit
+procedure TTekShield.TickCrumble;
+begin
+  if FState <> sdCrumbling then
+    Exit;
+  Inc(FCrumbleAge);
+  for var Cell in FCells do
+    if (Cell.Rim > FlareRimFrom) and CellLit(Cell) then
+      Exit;
+  FState := sdDown;
+  FFlares.Clear;
+end;
+
+// Not broken off, and not yet gone out in a crumble
+function TTekShield.CellLit(const ACell: TCell): Boolean;
+begin
+  Result := not ACell.Broken and
+    ((FState <> sdCrumbling) or (FCrumbleAge < ACell.OutAt));
 end;
 
 // How much of a flare's light the cell takes, 0..1
@@ -554,7 +710,8 @@ begin
   Result := FAlarm * (AlarmLow + (1 - AlarmLow) * Throb);
 end;
 
-// Up - whole; falling - blinking out; down - nothing
+// Up - whole; falling - blinking out; crumbling - blinking, its cells
+// going out one by one; down - nothing
 function TTekShield.FallLevel(AAlpha: Single): Single;
 begin
   case FState of
@@ -566,8 +723,34 @@ begin
           Exit(0);
         Result := 1.6 * (1 - (FFallAge + AAlpha) / FallTicks);
       end;
+    sdCrumbling:
+      begin
+        if Odd(FCrumbleAge div CrumbleBlinkTicks) then
+          Exit(0);
+        Result := 1;
+      end;
   else
     Result := 0;
+  end;
+end;
+
+// Flying off, shrinking and dimming as they burn out
+procedure TTekShield.DrawShards(const ACanvas: TDynamicCanvas;
+  AArt: TShieldArt; const ACenter: TSdlFPoint; AAlpha: Single);
+begin
+  var CellSize: Single := 2 * HexSize * CellSpan * FScale;
+  for var Shard in FShards do
+  begin
+    var Left: Single := 1 - (Shard.Age + AAlpha) / ShardTicks;
+    if Left <= 0 then
+      Continue;
+    var ShardX := Shard.X - Shard.SpeedX * (1 - AAlpha);
+    if FMirrored then
+      ShardX := -ShardX;
+    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + ShardX,
+      ACenter.Y + Shard.Y - Shard.SpeedY * (1 - AAlpha),
+      CellSize * (0.5 + 0.5 * Left), MixColor(ShieldColor, FlareColor, Left),
+      FlareLevel * Left);
   end;
 end;
 
@@ -583,14 +766,19 @@ end;
 procedure TTekShield.Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
   const ACenter: TSdlFPoint; AAlpha: Single);
 begin
+  DrawShards(ACanvas, AArt, ACenter, AAlpha);
   var Whole := FallLevel(AAlpha);
   if Whole <= 0 then
     Exit;
   var CellSize: Single := 2 * HexSize * CellSpan * FScale;
-  var Alarm := AlarmLight(AAlpha);
+  var Glow := AlarmLight(AAlpha);
+  if FState = sdCrumbling then
+    Glow := Max(Glow, CrumbleGlow);
   for var Cell in FCells do
   begin
-    var Flare := Max(FlareShare(Cell, AAlpha), Alarm) *
+    if not CellLit(Cell) then
+      Continue;
+    var Flare := Max(FlareShare(Cell, AAlpha), Glow) *
       RimBand(Cell.Rim, FlareRimFrom);
     var Rest := RestLevel * RimBand(Cell.Rim, RestRimFrom);
     var Level := Whole * (Rest + (FlareLevel - Rest) * Flare);

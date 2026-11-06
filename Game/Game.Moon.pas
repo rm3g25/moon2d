@@ -56,11 +56,13 @@ type
   end;
 
   // A pad the orbs of the throw take: its number among the wrecks once
-  // they grip it, -1 before; its place on the arc round the Ram
+  // they grip it, -1 before; its place on the arc round the Ram; let go,
+  // whether it has struck
   TThrownPad = record
     Pad: TPad;
     Wreck: Integer;
     Place: TSdlFPoint;
+    Struck: Boolean;
   end;
 
   TMoonGame = class(TGameApp)
@@ -355,6 +357,11 @@ type
     procedure CallMissingPads(const APath: THoistPath);
     procedure SendOrbs;
     procedure SeizePad(ANumber: Integer);
+    procedure BeginVolley;
+    procedure HurlPad(ANumber: Integer);
+    procedure StrikeHoneycomb;
+    procedure BlowPad(ANumber: Integer; const AAt: TSdlFPoint);
+    procedure CrumbleHoneycomb;
     function PadsInSight: TArray<TPad>;
     function GripBeams: TArray<TGripBeam>;
     function HullBox: TSdlFRect;
@@ -2170,8 +2177,14 @@ begin
   if not FBonusActivateQueued then
     Exit;
   FBonusActivateQueued := False;
+  // Held for the throw, the click is its press
+  if FHero.Held then
+  begin
+    FThrow.Press;
+    Exit;
+  end;
   // No aura or rain of ice in the moon form's henshin
-  if FHero.Held or FEclipse.Spares then
+  if FEclipse.Spares then
     Exit;
   if FBonus = bkNone then
     Exit; // a click with an empty slot buys nothing
@@ -3112,12 +3125,14 @@ begin
 end;
 
 // After the burst: he is caught and carried aside, the orbs grip the pads,
-// the pads glide round the Ram and spin up on the heart, the honeycomb in
-// alarm
+// the pads glide round the Ram and spin up on the heart, its lights in
+// alarm; the press, and they fly at the honeycomb. What flew last tick
+// meets it first: the wrecks move with the Ram, later in the tick.
 procedure TMoonGame.TickThrow;
 begin
   if not FThrow.Running then
     Exit;
+  StrikeHoneycomb;
   var Cue := FThrow.Tick;
   if Cue.Catch then
     CatchHero;
@@ -3127,6 +3142,10 @@ begin
     FAudio.Play(SpinRiseSoundFile);
   if Cue.SpunUp then
     FSpinHum := FAudio.PlayLooped(SpinHoldSoundFile);
+  if Cue.Volley then
+    BeginVolley;
+  for var Number in Cue.LetGo do
+    HurlPad(Number);
   if FThrow.Holds then
   begin
     var Hangs := FThrow.HeroAt;
@@ -3203,6 +3222,7 @@ begin
     FThrown[i].Pad := Pads[i];
     FThrown[i].Wreck := -1;
     FThrown[i].Place := Places[Order[i]];
+    FThrown[i].Struck := False;
   end;
   FThrow.Grip(Length(FThrown));
   FOrbs.BeginGrip(GripBeams);
@@ -3219,6 +3239,92 @@ begin
   FWrecks.Guide(Wreck, FThrown[ANumber].Place, GlideTicks);
   FThrown[ANumber].Wreck := Wreck;
   FThrow.PadHeld;
+end;
+
+// The middle of the hull as it stands, where the pads are hurled
+function HullMiddle(ARam: TRam): TSdlFPoint;
+begin
+  Result.X := ARam.LeftAt(0) + ARam.Body.Middle.X;
+  Result.Y := RamTop + ARam.Body.Middle.Y;
+end;
+
+// The silence: the heart stops of itself (TThrowScene.Beats), the hum is
+// cut. No pad to throw, and the honeycomb crumbles at once.
+procedure TMoonGame.BeginVolley;
+begin
+  FAudio.StopHeld(FSpinHum);
+  FSpinHum.Channel := -1;
+  if FThrow.AllStruck then
+    CrumbleHoneycomb;
+end;
+
+// Off the arc, its jet burning, its orbs riding it
+procedure TMoonGame.HurlPad(ANumber: Integer);
+begin
+  FWrecks.Hurl(FThrown[ANumber].Wreck, HullMiddle(FRam));
+end;
+
+// Each pad let go meets the honeycomb on its way of the last tick, as a
+// bullet does. One that missed and flew off the screen counts as struck,
+// with no blast: the scene does not wait for it, nor does the crumble.
+procedure TMoonGame.StrikeHoneycomb;
+begin
+  for var i := 0 to High(FThrown) do
+  begin
+    var Thrown := FThrown[i];
+    if Thrown.Struck or (Thrown.Wreck < 0) then
+      Continue;
+    var Wreck := FWrecks[Thrown.Wreck];
+    if not Wreck.Hurled then
+      Continue;
+    var At: TSdlFPoint;
+    if FRam.Block(Wreck.LastMiddle, Wreck.Middle, At) then
+      BlowPad(i, At)
+    else if Wreck.Gone then
+    begin
+      FThrown[i].Struck := True;
+      FOrbs.Grip.Burn(i);
+      FThrow.PadStruck;
+      if FThrow.AllStruck then
+        CrumbleHoneycomb;
+    end;
+  end;
+end;
+
+// A blast and a piece of the honeycomb broken off where the pad met it,
+// its orbs burnt out in it; the last a big blast, and the honeycomb
+// crumbles from the pieces outward
+procedure TMoonGame.BlowPad(ANumber: Integer; const AAt: TSdlFPoint);
+begin
+  FThrown[ANumber].Struck := True;
+  FWrecks.Smash(FThrown[ANumber].Wreck);
+  FOrbs.Grip.Burn(ANumber);
+  FRam.ShatterShield(AAt);
+  FThrow.PadStruck;
+  if not FThrow.AllStruck then
+  begin
+    FExplosions.Detonate(AAt.X, AAt.Y, ekMachine);
+    FAudio.Play(RageBlastSoundFile);
+    FShake.AddTrauma(ExploderTrauma);
+    Exit;
+  end;
+
+  FExplosions.Detonate(AAt.X, AAt.Y, ekBoss);
+  FAudio.Play(BottleSoundFile);
+  FAudio.Play(RageBlastSoundFile);
+  FAudio.Play(SweeperBlastSoundFile);
+  FShake.AddTrauma(BossBlastTrauma);
+  CrumbleHoneycomb;
+end;
+
+// The honeycomb goes out from the pieces broken off, and the boss track
+// starts again from its beginning, fading in under the blast
+procedure TMoonGame.CrumbleHoneycomb;
+const
+  TrackFadeSeconds = 1.5;
+begin
+  FRam.Shield.Crumble;
+  ChangeMusic(FRam.Track, TrackFadeSeconds);
 end;
 
 // The pads of his screen some of which the screen shows

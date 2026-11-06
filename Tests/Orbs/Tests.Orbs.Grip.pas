@@ -5,8 +5,8 @@
   the pads are gripped once each, in their order, once their orbs are all
   seated; an orb seated within its longest flight; seated, the orbs turn
   with the beam and go where it goes; they are smaller than the rite's
-  and swell on a thump; none is armed; a death draws them in, a clear
-  takes them all. An orb leaves from the point of his body that faces
+  and swell on a thump; none is armed; a pad blown up burns out its own
+  orbs and no other's; a death draws them in, a clear takes them all. An orb leaves from the point of his body that faces
   its seat, his center when he has none.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -53,6 +53,8 @@ type
     procedure TestSmallerThanTheRitesAndSwellOnAThump;
     [Test]
     procedure TestNoneIsArmed;
+    [Test]
+    procedure TestABlownPadBurnsOutItsOwnOrbs;
     [Test]
     procedure TestADeathDrawsThemIn;
     [Test]
@@ -250,6 +252,21 @@ begin
   GripAll;
   for var Orb in FGrip.Flock.Orbs do
     Assert.IsFalse(Orb.Armed, 'Armed');
+end;
+
+procedure TOrbGripTests.TestABlownPadBurnsOutItsOwnOrbs;
+const
+  Blown = 1;
+begin
+  GripAll;
+  var All := Length(AliveOrbs(FGrip.Flock));
+  var Left := All - FGrip.Seats(Blown);
+  FGrip.Burn(Blown);
+  Assert.AreEqual(Left, Length(AliveOrbs(FGrip.Flock)), 'Its orbs out');
+  for var i := 1 to ManyTicks do
+    Tick;
+  Assert.AreEqual(Left, FGrip.Flock.Orbs.Count, 'Burnt out, the rest still cling');
+  Assert.AreEqual(Left, Length(AliveOrbs(FGrip.Flock)), 'None called again');
 end;
 
 procedure TOrbGripTests.TestADeathDrawsThemIn;

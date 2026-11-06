@@ -8,6 +8,12 @@
   not at all; with no pad to hold the spin runs up at once; a clear takes
   it all.
 
+  The volley: a press is heard spun up and not before, and with none the
+  pads go by themselves in three seconds; the heart stops at it and he
+  stays held; every pad is let go once, within its small delay, not all
+  on one tick; every pad struck, and the scene stands; with no pad, all
+  is struck at once.
+
   The arc of the pads: as many places as pads, all as far from the Ram's
   middle, the first up and left of it, the last right of it and over its
   middle, evenly apart, far enough apart that two of the widest spinning
@@ -41,6 +47,8 @@ type
     procedure CarryAndGrip(ACount: Integer);
     // Then every pad held, ticked to the spin's start
     procedure HoldThePads(ACount: Integer);
+    // Then ticked till spun up
+    procedure SpinUpThePads(ACount: Integer);
   public
     [Setup]
     procedure Setup;
@@ -67,6 +75,18 @@ type
     procedure TestNoPadTheSpinRunsUpAtOnce;
     [Test]
     procedure TestAClearTakesItAll;
+    [Test]
+    procedure TestThePressIsHeardSpunUpOnly;
+    [Test]
+    procedure TestWithNoPressTheyGoInThreeSeconds;
+    [Test]
+    procedure TestTheHeartStopsAtTheVolleyHeHangsOn;
+    [Test]
+    procedure TestEachPadLetGoOnceWithinItsDelay;
+    [Test]
+    procedure TestEveryPadStruckTheSceneStands;
+    [Test]
+    procedure TestNoPadAllStruckAtTheVolley;
   end;
 
   [TestFixture]
@@ -218,6 +238,15 @@ begin
   Assert.Fail('The spin never ran up');
 end;
 
+procedure TThrowSceneTests.SpinUpThePads(ACount: Integer);
+begin
+  HoldThePads(ACount);
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.SpunUp then
+      Exit;
+  Assert.Fail('Never spun up');
+end;
+
 procedure TThrowSceneTests.TestNothingTillStarted;
 begin
   for var i := 1 to ManyTicks do
@@ -240,11 +269,16 @@ begin
   begin
     Assert.IsTrue(FScene.Holds = (Catches > 0), Format('Held at tick %d', [i]));
     Assert.IsTrue(FScene.Beats = (Catches > 0), Format('Beats at tick %d', [i]));
-    if FScene.Tick.Catch then
+    var Cue := FScene.Tick;
+    if Cue.Catch then
     begin
       Inc(Catches);
       CaughtAt := i;
     end;
+    // With no way handed in and no pad, it runs on to the volley, where
+    // the heart stops
+    if Cue.Volley then
+      Break;
   end;
   Assert.AreEqual(1, Catches, 'Once');
   Assert.AreEqual(CatchAfterTicks, CaughtAt, 'A second after the burst');
@@ -329,7 +363,7 @@ begin
   end;
   Assert.IsTrue(FScene.Tick.SpunUp, 'Spun up');
   var Last: Single := 0;
-  for var i := 1 to ManyTicks do
+  for var i := 1 to ThrowAfterTicks - 1 do
   begin
     FScene.Tick;
     Assert.IsTrue(FScene.Hint(0) >= Last, 'Coming in');
@@ -364,6 +398,120 @@ begin
   Assert.AreEqual(0.0, Double(FScene.Spin), Slop, 'No spin');
   for var i := 1 to ManyTicks do
     Assert.IsFalse(FScene.Tick.SpunUp, 'Nothing more');
+end;
+
+procedure TThrowSceneTests.TestThePressIsHeardSpunUpOnly;
+begin
+  HoldThePads(PadCount);
+  FScene.Press;
+  for var i := 1 to SpinUpTicks - 1 do
+    Assert.IsFalse(FScene.Tick.Volley, Format('Thrown spinning up, tick %d', [i]));
+  Assert.IsTrue(FScene.Tick.SpunUp, 'Spun up');
+  Assert.IsFalse(FScene.Tick.Volley, 'The press before it is not kept');
+
+  FScene.Press;
+  Assert.IsTrue(FScene.Tick.Volley, 'Thrown on the press');
+  Assert.AreEqual(0.0, Double(FScene.Hint(1)), Slop, 'The hint gone');
+  FScene.Press;
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FScene.Tick.Volley, 'Once');
+end;
+
+procedure TThrowSceneTests.TestWithNoPressTheyGoInThreeSeconds;
+begin
+  SpinUpThePads(PadCount);
+  var Volleys := 0;
+  var ThrownAt := 0;
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.Volley then
+    begin
+      Inc(Volleys);
+      ThrownAt := i;
+    end;
+  Assert.AreEqual(1, Volleys, 'Once');
+  Assert.AreEqual(ThrowAfterTicks, ThrownAt, 'Three seconds after the hint');
+end;
+
+procedure TThrowSceneTests.TestTheHeartStopsAtTheVolleyHeHangsOn;
+begin
+  SpinUpThePads(PadCount);
+  Assert.IsTrue(FScene.Beats, 'Beating spun up');
+  FScene.Press;
+  FScene.Tick;
+  Assert.IsFalse(FScene.Beats, 'Stopped at the volley');
+  for var i := 1 to ManyTicks do
+  begin
+    FScene.Tick;
+    Assert.IsFalse(FScene.Beats, Format('Still, tick %d', [i]));
+    Assert.IsTrue(FScene.Holds, Format('Held, tick %d', [i]));
+  end;
+  Assert.AreEqual(Double(HeroPlace.X), Double(FScene.HeroAt.X), Slop, 'In his place');
+end;
+
+procedure TThrowSceneTests.TestEachPadLetGoOnceWithinItsDelay;
+begin
+  SpinUpThePads(ThrowMostPads);
+  FScene.Press;
+  var LetGo: TArray<Integer>;
+  SetLength(LetGo, ThrowMostPads);
+  for var i := 0 to ThrowMostPads - 1 do
+    LetGo[i] := -1;
+  var Ticks := 0;
+  var Busiest := 0;
+  for var i := 0 to ManyTicks do
+  begin
+    var Cue := FScene.Tick;
+    if Cue.Volley then
+      Ticks := 0;
+    Busiest := Max(Busiest, Length(Cue.LetGo));
+    for var Number in Cue.LetGo do
+    begin
+      Assert.AreEqual(-1, LetGo[Number], Format('Pad %d let go twice', [Number]));
+      LetGo[Number] := Ticks;
+    end;
+    Inc(Ticks);
+  end;
+  for var i := 0 to ThrowMostPads - 1 do
+  begin
+    Assert.IsTrue(LetGo[i] >= 0, Format('Pad %d never let go', [Integer(i)]));
+    Assert.IsTrue(LetGo[i] <= LetGoMostTicks, Format('Pad %d let go late', [Integer(i)]));
+  end;
+  Assert.IsTrue(Busiest < ThrowMostPads, 'Not all on one tick');
+end;
+
+procedure TThrowSceneTests.TestEveryPadStruckTheSceneStands;
+begin
+  SpinUpThePads(PadCount);
+  FScene.PadStruck;
+  FScene.Press;
+  FScene.Tick;
+  Assert.IsFalse(FScene.AllStruck, 'A strike before the volley counts nothing');
+  for var i := 1 to PadCount do
+  begin
+    Assert.IsFalse(FScene.AllStruck, Format('%d struck', [i - 1]));
+    FScene.PadStruck;
+  end;
+  Assert.IsTrue(FScene.AllStruck, 'Every pad struck');
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FScene.Tick;
+    Assert.AreEqual(0, Length(Cue.LetGo), 'Nothing more let go');
+    Assert.IsFalse(Cue.Volley, 'No second volley');
+  end;
+  Assert.IsTrue(FScene.Holds, 'He hangs on, till the wheel');
+  Assert.AreEqual(0.0, Double(FScene.Spin), Slop, 'No spin left');
+  Assert.AreEqual(0.0, Double(FScene.Hint(1)), Slop, 'No hint');
+end;
+
+procedure TThrowSceneTests.TestNoPadAllStruckAtTheVolley;
+begin
+  CarryAndGrip(0);
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.SpunUp then
+      Break;
+  FScene.Press;
+  Assert.IsTrue(FScene.Tick.Volley, 'The volley');
+  Assert.IsTrue(FScene.AllStruck, 'Nothing to wait for');
 end;
 
 { TArcTests }

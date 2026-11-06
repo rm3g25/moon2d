@@ -16,6 +16,12 @@
   keeps its place among the wrecks while others come and go; a clear
   takes it away too.
 
+  A held pad hurled at a mark: from every place of the arc of the throw,
+  however many pads, it passes close by the mark within about a second,
+  never on the straight line, bowed aside; no two take one way; it flies,
+  spinning on as it spun held whatever the held ones are told after;
+  smashed, it is gone; a wreck not held is not hurled.
+
   The wrecks fly in no picture here: the rules need none.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -83,13 +89,38 @@ type
     procedure TestClearTakesItAway;
   end;
 
+  [TestFixture]
+  TPadHurledTests = class
+  private
+    FWrecks: TPadWrecks;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestFromEveryPlaceOfTheArcItReachesTheMark;
+    [Test]
+    procedure TestBowedAsideNotAStraightLine;
+    [Test]
+    procedure TestNoTwoTakeOneWay;
+    [Test]
+    procedure TestFliesSpinningOnAsItSpunHeld;
+    [Test]
+    procedure TestSmashedItIsGone;
+    [Test]
+    procedure TestAWreckNotHeldIsNotHurled;
+  end;
+
 implementation
 
 uses
   System.Math,
   System.SysUtils,
   Sdl2.Core,
-  Game.Space;
+  Game.Space,
+  Game.Throw;
 
 type
   TPadBox = record
@@ -422,8 +453,161 @@ begin
   Assert.AreEqual(0, FWrecks.Count, 'None');
 end;
 
+{ TPadHurledTests }
+
+const
+  // The Ram's middle where it stands for the throw
+  Mark: TSdlFPoint = (X: RamPlaceLeft + 84.5; Y: 288);
+  // It passes this close by the mark within this many ticks: the shield
+  // over the hull lies farther out
+  MarkReach = 50.0;
+  HurlReachTicks = 40;
+  // Off the straight line by at least this, before it closes in
+  LeastBow = 4.0;
+  CloseIn = 60.0;
+  HurledSpin = 20.0;
+
+// From APoint to the nearest point of the stretch from AFrom to ATo
+function ApartFromStretch(const APoint, AFrom, ATo: TSdlFPoint): Single;
+begin
+  var AcrossX := ATo.X - AFrom.X;
+  var AcrossY := ATo.Y - AFrom.Y;
+  var Span := Sqr(AcrossX) + Sqr(AcrossY);
+  var Share: Single := 0;
+  if Span > 0 then
+    Share := EnsureRange(((APoint.X - AFrom.X) * AcrossX +
+      (APoint.Y - AFrom.Y) * AcrossY) / Span, 0, 1);
+  Result := Hypot(AFrom.X + AcrossX * Share - APoint.X,
+    AFrom.Y + AcrossY * Share - APoint.Y);
+end;
+
+// From APoint to the straight line through AFrom and ATo
+function ApartFromLine(const APoint, AFrom, ATo: TSdlFPoint): Single;
+begin
+  var Span := Hypot(ATo.X - AFrom.X, ATo.Y - AFrom.Y);
+  Result := Abs((APoint.X - AFrom.X) * (ATo.Y - AFrom.Y) -
+    (APoint.Y - AFrom.Y) * (ATo.X - AFrom.X)) / Span;
+end;
+
+procedure TPadHurledTests.Setup;
+begin
+  FWrecks := TPadWrecks.Create;
+end;
+
+procedure TPadHurledTests.TearDown;
+begin
+  FWrecks.Free;
+end;
+
+procedure TPadHurledTests.TestFromEveryPlaceOfTheArcItReachesTheMark;
+begin
+  for var Count := 1 to ThrowMostPads do
+  begin
+    FWrecks.Clear;
+    var Places := PlanArc(Mark, Count);
+    for var Place in Places do
+      FWrecks.Hurl(FWrecks.Hold(nil, Place, HeldPad, PadHeight, NoDrop), Mark);
+    var Nearest: TArray<Single>;
+    SetLength(Nearest, Count);
+    for var Pad := 0 to Count - 1 do
+      Nearest[Pad] := MaxSingle;
+    for var i := 1 to HurlReachTicks do
+    begin
+      FWrecks.Tick;
+      for var Pad := 0 to Count - 1 do
+      begin
+        Nearest[Pad] := Min(Nearest[Pad], ApartFromStretch(Mark,
+          FWrecks[Pad].LastMiddle, FWrecks[Pad].Middle));
+        Assert.IsFalse(FWrecks[Pad].Gone, Format('Pad %d of %d off the screen',
+          [Integer(Pad), Integer(Count)]));
+      end;
+    end;
+    for var Pad := 0 to Count - 1 do
+      Assert.IsTrue(Nearest[Pad] <= MarkReach, Format('Pad %d of %d passed %.0f off',
+        [Integer(Pad), Integer(Count), Nearest[Pad]]));
+  end;
+end;
+
+procedure TPadHurledTests.TestBowedAsideNotAStraightLine;
+begin
+  var Places := PlanArc(Mark, ThrowMostPads);
+  for var Place in Places do
+    FWrecks.Hurl(FWrecks.Hold(nil, Place, HeldPad, PadHeight, NoDrop), Mark);
+  var Bows: TArray<Single>;
+  SetLength(Bows, Length(Places));
+  for var i := 1 to HurlReachTicks do
+  begin
+    FWrecks.Tick;
+    for var Pad := 0 to High(Places) do
+    begin
+      var Middle := FWrecks[Pad].Middle;
+      if Hypot(Middle.X - Mark.X, Middle.Y - Mark.Y) > CloseIn then
+        Bows[Pad] := Max(Bows[Pad], ApartFromLine(Middle, Places[Pad], Mark));
+    end;
+  end;
+  for var Pad := 0 to High(Places) do
+    Assert.IsTrue(Bows[Pad] >= LeastBow, Format('Pad %d bowed %.1f',
+      [Integer(Pad), Bows[Pad]]));
+end;
+
+procedure TPadHurledTests.TestNoTwoTakeOneWay;
+const
+  SetOff = 10;
+begin
+  var Place := At(300, 100);
+  for var i := 1 to 2 do
+    FWrecks.Hurl(FWrecks.Hold(nil, Place, HeldPad, PadHeight, NoDrop), Mark);
+  for var i := 1 to SetOff do
+    FWrecks.Tick;
+  var Apart := Hypot(FWrecks[0].Middle.X - FWrecks[1].Middle.X,
+    FWrecks[0].Middle.Y - FWrecks[1].Middle.Y);
+  Assert.IsTrue(Apart > 1, Format('%.2f apart', [Apart]));
+end;
+
+procedure TPadHurledTests.TestFliesSpinningOnAsItSpunHeld;
+begin
+  var Number := FWrecks.Hold(nil, At(300, 100), HeldPad, PadHeight, NoDrop);
+  FWrecks.HeldSpin := HurledSpin;
+  FWrecks.Tick;
+  var HeldRate := FWrecks[Number].Spin - FWrecks[Number].LastSpin;
+  FWrecks.Hurl(Number, Mark);
+  FWrecks.HeldSpin := 0;
+  for var i := 1 to 5 do
+  begin
+    FWrecks.Tick;
+    Assert.AreEqual(Double(HeldRate),
+      Double(FWrecks[Number].Spin - FWrecks[Number].LastSpin), Slop,
+      Format('Spin at tick %d', [i]));
+  end;
+  Assert.IsFalse(FWrecks[Number].Held, 'Held no more');
+  Assert.IsTrue(FWrecks[Number].Hurled, 'Hurled');
+  Assert.IsTrue(FWrecks.Flying, 'Flying');
+end;
+
+procedure TPadHurledTests.TestSmashedItIsGone;
+begin
+  var Number := FWrecks.Hold(nil, At(300, 100), HeldPad, PadHeight, NoDrop);
+  FWrecks.Hurl(Number, Mark);
+  FWrecks.Tick;
+  FWrecks.Smash(Number);
+  var Where := FWrecks[Number].Middle;
+  FWrecks.Tick;
+  Assert.IsTrue(FWrecks[Number].Gone, 'Gone');
+  Assert.IsFalse(FWrecks.Flying, 'Nothing flies');
+  Assert.AreEqual(Double(Where.X), Double(FWrecks[Number].Middle.X), Slop, 'Moves no more');
+end;
+
+procedure TPadHurledTests.TestAWreckNotHeldIsNotHurled;
+begin
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  FWrecks.Hurl(0, Mark);
+  Assert.IsFalse(FWrecks[0].Hurled, 'Not hurled');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TPadWreckTests);
   TDUnitX.RegisterTestFixture(TPadHeldTests);
+  TDUnitX.RegisterTestFixture(TPadHurledTests);
 
 end.

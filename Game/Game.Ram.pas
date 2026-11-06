@@ -565,6 +565,9 @@ type
     // Where a bullet's stretch of this tick first meets the shield, which
     // flares there; False when it meets nothing
     function Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    // A pad of the throw met the shield at AAt, a point of the screen: a
+    // piece of it breaks off there
+    procedure ShatterShield(const AAt: TSdlFPoint);
     // Where a bullet's stretch of this tick meets the hunter's eye or the
     // top of its head, which loses a life; False when it misses
     function StrikeHunter(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
@@ -3695,6 +3698,13 @@ begin
   FShield.Strike(Entry);
   AAt.X := MiddleX + Entry.X;
   AAt.Y := MiddleY + Entry.Y;
+end;
+
+// From the middle of the hull, as the shield has its points
+procedure TRam.ShatterShield(const AAt: TSdlFPoint);
+begin
+  FShield.Shatter(UnitPoint(AAt.X - (FX + FBody.Middle.X),
+    AAt.Y - (RamTop + FBody.Middle.Y)));
 end;
 
 function TRam.LensPoint: TSdlFPoint;

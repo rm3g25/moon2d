@@ -10,13 +10,21 @@
   heart, and the Ram's lamps and eye blink in alarm. Spun up, the hint of
   the press shows over him.
 
+  The press - or three seconds with none - and the volley: the heart
+  stops, the hum is cut, and each pad is let go at its own small delay,
+  flying at the Ram's honeycomb. Each that meets it blows up and breaks a
+  piece of it off; the last a big blast, and the rest of the honeycomb
+  crumbles. Then the scene stands: he hangs in his place, the controls
+  not his, till the wheel.
+
   The burst struck, the scene waits a second - the Ram thrown and smoking
   first - and catches him: from then on the controls are not his, and the
   game puts him on his way (Game.Hoist) every tick. In his place, the
   orbs go out (Orbs.Grip); the game tells the scene each pad they grip,
   and the pad is the game's to hold (Game.Wrecks). The last pad held, the
   spin runs up over four seconds, faster on every beat - the pads gliding
-  to their places as long; then the hint.
+  to their places as long; then the hint. The game hands in the press
+  (Press) and tells the scene each pad that struck (PadStruck).
 
   Too few pads on the screen, and the game calls the rest in from the pool
   of the chase as he is caught, to stand where PlaceCalledPads says: they
@@ -61,13 +69,18 @@ const
   // The hero hangs this far from the right edge, this far over the road
   HeroPlaceEdge = 48;
   HeroHover = 8;
+  // Spun up, the pads go by themselves this long after with no press;
+  // each is let go up to this long after the volley's start
+  ThrowAfterTicks = 99;
+  LetGoMostTicks = 6;
 
 type
   // tsWaiting - the burst has struck, he is not caught yet; tsCarrying -
   // caught, on his way to his place; tsGripping - in it, the orbs out to
-  // the pads; tsSpinning - every pad held, spinning up; tsSpunUp - the hint
+  // the pads; tsSpinning - every pad held, spinning up; tsSpunUp - the
+  // hint; tsVolley - let go, flying; tsStruck - every pad has struck
   TThrowStage = (tsIdle, tsWaiting, tsCarrying, tsGripping, tsSpinning,
-    tsSpunUp);
+    tsSpunUp, tsVolley, tsStruck);
 
   TThrowCue = record
     // He is caught: the controls are taken; the game plans his way and
@@ -80,6 +93,10 @@ type
     SpinUp: Boolean;
     // Spun up: the hint
     SpunUp: Boolean;
+    // Pressed, or the wait over: the silence; the pads are let go
+    Volley: Boolean;
+    // The pads let go this tick, by their number
+    LetGo: TArray<Integer>;
   end;
 
   TThrowScene = class
@@ -90,7 +107,10 @@ type
     FPath: THoistPath;
     FPads: Integer;
     FHeld: Integer;
+    FPressed: Boolean;
+    FStruck: Integer;
     procedure Enter(AStage: TThrowStage);
+    function LettingGo: TArray<Integer>;
   public
     // The burst has struck
     procedure Start;
@@ -101,11 +121,17 @@ type
     procedure Grip(ACount: Integer);
     // The orbs have gripped one more pad
     procedure PadHeld;
+    // The press of the throw: heard spun up, nothing before
+    procedure Press;
+    // One more pad let go has struck
+    procedure PadStruck;
+    // Every pad let go has struck; with no pad, at once
+    function AllStruck: Boolean;
     function Tick: TThrowCue;
     function Running: Boolean;
     // From the catch on he hangs where HeroAt puts him
     function Holds: Boolean;
-    // From the catch on the heart beats again
+    // From the catch on the heart beats again, till the volley
     function Beats: Boolean;
     // His left edge and feet line on his way, in his place once there
     function HeroAt: TSdlFPoint;
@@ -206,6 +232,8 @@ begin
   FPath := Default(THoistPath);
   FPads := 0;
   FHeld := 0;
+  FPressed := False;
+  FStruck := 0;
 end;
 
 procedure TThrowScene.Enter(AStage: TThrowStage);
@@ -229,6 +257,40 @@ procedure TThrowScene.PadHeld;
 begin
   if FStage = tsGripping then
     Inc(FHeld);
+end;
+
+procedure TThrowScene.Press;
+begin
+  if FStage = tsSpunUp then
+    FPressed := True;
+end;
+
+procedure TThrowScene.PadStruck;
+begin
+  if FStage = tsVolley then
+    Inc(FStruck);
+end;
+
+function TThrowScene.AllStruck: Boolean;
+begin
+  Result := (FStage >= tsVolley) and (FStruck >= FPads);
+end;
+
+// Each pad at its own delay, spread over the most by the golden share:
+// the first at once, no two neighbours close
+function LetGoDelay(ANumber: Integer): Integer;
+const
+  GoldenShare = 0.618034;
+begin
+  Result := Round(LetGoMostTicks * Frac(ANumber * GoldenShare));
+end;
+
+function TThrowScene.LettingGo: TArray<Integer>;
+begin
+  Result := [];
+  for var i := 0 to FPads - 1 do
+    if LetGoDelay(i) = FTicks then
+      Result := Result + [i];
 end;
 
 function TThrowScene.Tick: TThrowCue;
@@ -262,7 +324,18 @@ begin
         Enter(tsSpunUp);
         Result.SpunUp := True;
       end;
+    tsSpunUp:
+      if FPressed or (FTicks >= ThrowAfterTicks) then
+      begin
+        Enter(tsVolley);
+        Result.Volley := True;
+      end;
+    tsVolley:
+      if AllStruck then
+        Enter(tsStruck);
   end;
+  if FStage = tsVolley then
+    Result.LetGo := LettingGo;
 end;
 
 function TThrowScene.Running: Boolean;
@@ -277,7 +350,7 @@ end;
 
 function TThrowScene.Beats: Boolean;
 begin
-  Result := Holds;
+  Result := Holds and (FStage < tsVolley);
 end;
 
 function TThrowScene.HeroAt: TSdlFPoint;
@@ -292,7 +365,7 @@ begin
   case FStage of
     tsSpinning:
       Result := Min(FTicks / SpinUpTicks, 1);
-    tsSpunUp:
+    tsSpunUp, tsVolley:
       Result := 1;
   else
     Result := 0;
