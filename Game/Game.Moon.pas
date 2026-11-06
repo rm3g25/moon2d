@@ -362,6 +362,7 @@ type
     procedure StrikeHoneycomb;
     procedure BlowPad(ANumber: Integer; const AAt: TSdlFPoint);
     procedure CrumbleHoneycomb;
+    procedure ShedWheel;
     function PadsInSight: TArray<TPad>;
     function GripBeams: TArray<TGripBeam>;
     function HullBox: TSdlFRect;
@@ -373,6 +374,7 @@ type
     procedure StopRamRumble;
     procedure ResolveRamThrowOver;
     procedure ResolveRamContact;
+    procedure ResolveWheelContact;
     procedure HurtByRam;
     procedure ResolveRamWave;
     procedure KnockOffPads;
@@ -451,7 +453,7 @@ implementation
 uses
   Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.IOUtils, Sdl2.Image,
   Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space, Localization,
-  Orbs.Moonrite;
+  Orbs.Moonrite, Game.Shield, Game.Wheel;
 
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
@@ -505,6 +507,10 @@ const
   // top
   SpinRiseSoundFile = 'spinrise.wav';
   SpinHoldSoundFile = 'spinhold.wav';
+  // The Ram's nose on the road as its front wheel breaks off, and the
+  // wheel coming down from its hop
+  ScrapeSoundFile = 'scrape.wav';
+  WheelLandSoundFile = 'wheelland.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -661,6 +667,7 @@ const
   BonusExplosionTrauma = 0.7; // the bottle-and-fan reward
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
+  WheelShedTrauma = 0.5; // the Ram's front wheel breaking off
   CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
   DupletShotTrauma = 0.2; // every shot of the Duplet: the kick of the stock
   // The smoke of the cannons' blast hangs over the room about this long:
@@ -2009,6 +2016,8 @@ begin
   FAudio.Load(HeartbeatSoundFile);
   FAudio.Load(SpinRiseSoundFile);
   FAudio.Load(SpinHoldSoundFile);
+  FAudio.Load(ScrapeSoundFile);
+  FAudio.Load(WheelLandSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -3126,13 +3135,16 @@ end;
 
 // After the burst: he is caught and carried aside, the orbs grip the pads,
 // the pads glide round the Ram and spin up on the heart, its lights in
-// alarm; the press, and they fly at the honeycomb. What flew last tick
-// meets it first: the wrecks move with the Ram, later in the tick.
+// alarm; the press, and they fly at the honeycomb; the honeycomb down,
+// the front wheel breaks off and he is let go. What flew last tick meets
+// it first: the wrecks move with the Ram, later in the tick.
 procedure TMoonGame.TickThrow;
 begin
   if not FThrow.Running then
     Exit;
   StrikeHoneycomb;
+  if FRam.Shield.State = sdDown then
+    FThrow.HoneycombDown;
   var Cue := FThrow.Tick;
   if Cue.Catch then
     CatchHero;
@@ -3146,6 +3158,8 @@ begin
     BeginVolley;
   for var Number in Cue.LetGo do
     HurlPad(Number);
+  if Cue.Shed then
+    ShedWheel;
   if FThrow.Holds then
   begin
     var Hangs := FThrow.HeroAt;
@@ -3327,6 +3341,19 @@ begin
   ChangeMusic(FRam.Track, TrackFadeSeconds);
 end;
 
+// The honeycomb down a breath ago: the front wheel breaks off with a crash
+// and the hull drops onto its nose, scraping the road. He is let go onto
+// the road, the controls his again - and from now on he can be wounded
+procedure TMoonGame.ShedWheel;
+begin
+  FRam.ShedWheel;
+  FHero.Release;
+  FEclipse.StopSparing;
+  FAudio.Play(BossCrashSoundFile);
+  FAudio.Play(ScrapeSoundFile);
+  FShake.AddTrauma(WheelShedTrauma);
+end;
+
 // The pads of his screen some of which the screen shows
 function TMoonGame.PadsInSight: TArray<TPad>;
 begin
@@ -3502,6 +3529,8 @@ begin
   end;
   if Cue.Vent then
     FAudio.Play(RamHissSoundFile);
+  if Cue.WheelLands then
+    FAudio.Play(WheelLandSoundFile);
   if Cue.Jolt > 0 then
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
@@ -3592,6 +3621,20 @@ begin
     Exit;
   HurtByRam;
   FHero.Throw(Away);
+end;
+
+// The wheel the Ram has shed wounds and throws him as the hull's touch
+// does, away from its middle
+procedure TMoonGame.ResolveWheelContact;
+begin
+  if FHero.Dead then
+    Exit;
+  var Wheel := FRam.Wheel;
+  var Body := HeroBody(FHero);
+  if not Wheel.Touches(Body) then
+    Exit;
+  HurtByRam;
+  FHero.Throw(Wheel.AwaySide(Body));
 end;
 
 procedure TMoonGame.HurtByRam;
@@ -3840,14 +3883,35 @@ begin
   SoundArmorHit(FImpacts.Land(Strike));
 end;
 
-// The shield takes the bullet into its light; the hull loses nothing
+// The shield takes the bullet into its light; the hull loses nothing.
+// The honeycomb gone, the bare hull and the wheel it has shed throw the
+// bullet off in sparks, as a tank's armour does, and lose nothing either
 function TMoonGame.BulletStruckRam(const ABullet: TBullet): Boolean;
 begin
   var Stretch := BulletStretch(ABullet);
   var At: TSdlFPoint;
   Result := FRam.Block(Stretch.Start, Stretch.Finish, At);
   if Result then
+  begin
     ABullet.Status := bsInactive;
+    Exit;
+  end;
+  var Rapid := FRam.HullStruckWithin(RapidHitTicks);
+  var Normal: TSdlFPoint;
+  Result := FRam.StrikeHull(Stretch.Start, Stretch.Finish, At, Normal) or
+    FRam.StrikeWheel(Stretch.Start, Stretch.Finish, At, Normal);
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
+  var Strike := Default(TStrike);
+  Strike.X := At.X;
+  Strike.Y := At.Y;
+  Strike.SpeedX := ABullet.DX;
+  Strike.SpeedY := ABullet.DY;
+  Strike.NormalX := Normal.X;
+  Strike.NormalY := Normal.Y;
+  Strike.Rapid := Rapid;
+  SoundArmorHit(FImpacts.Land(Strike));
 end;
 
 // A tick of the wall cannons, carried out: the rules are Game.Cannons'
@@ -4208,6 +4272,7 @@ begin
   ResolveCannonContact;
   ResolveRamThrowOver;
   ResolveRamContact;
+  ResolveWheelContact;
   ResolveRamWave;
   ResolveRamColumn;
   ResolveShellContact;

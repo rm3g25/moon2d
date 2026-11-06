@@ -13,7 +13,8 @@
   through the scene: it holds nothing. The burst's strike tears the dark
   off in one tick, takes the beam and the ripples, leaves the gauge out
   for good and cues nothing more; the scene spares him on till its clear,
-  and a strike outside it is nothing.
+  and a strike outside it is nothing. Told to spare him no more - at the
+  wheel - it does not, running on, till it starts anew.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -97,6 +98,8 @@ type
     procedure TestStruckItSparesHimTillTheClear;
     [Test]
     procedure TestNoStrikeOutsideTheScene;
+    [Test]
+    procedure TestToldSoItSparesHimNoMoreTillANewStart;
   end;
 
 implementation
@@ -522,6 +525,20 @@ begin
   FEclipse.Strike;
   Assert.IsFalse(FEclipse.Struck, 'Nothing to strike');
   Assert.AreEqual(0.0, Double(FEclipse.Fade(0)), Slop, 'The gauge as it was');
+end;
+
+procedure TEclipseTests.TestToldSoItSparesHimNoMoreTillANewStart;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  TickTimes(WholeScene);
+  FEclipse.Strike;
+  FEclipse.StopSparing;
+  TickTimes(WholeScene);
+  Assert.IsTrue(FEclipse.Running, 'Running on');
+  Assert.IsFalse(FEclipse.Spares, 'Spares him no more');
+  FEclipse.Start;
+  Assert.IsTrue(FEclipse.Spares, 'Sparing him again from a new start');
 end;
 
 initialization

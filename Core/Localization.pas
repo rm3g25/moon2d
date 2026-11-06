@@ -72,6 +72,8 @@ const
   SEvolution = 'evolution';
   SIceForm = 'iceForm';
   SIceFormPerk = 'iceFormPerk';
+  SMoonForm = 'moonForm';
+  SMoonFormPerk = 'moonFormPerk';
   // 2008 tick-20 wave said 'регенерировало' - typo unified in ru,
   // deviation logged (part 3)
   SIceRegen = 'iceRegen';
@@ -177,7 +179,8 @@ const
     SHurtByBlast,
     SStreakBigTen, SStreakSmallTen, SStreakBigInvincible,
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,
-    SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SIceRegen,
+    SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SMoonForm,
+    SMoonFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
     SBonusAwardFmt, SBrokeThrough, SBonusHudHint, STerminalHeader,
     SBriefingHeader,

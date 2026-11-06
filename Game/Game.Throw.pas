@@ -14,8 +14,10 @@
   stops, the hum is cut, and each pad is let go at its own small delay,
   flying at the Ram's honeycomb. Each that meets it blows up and breaks a
   piece of it off; the last a big blast, and the rest of the honeycomb
-  crumbles. Then the scene stands: he hangs in his place, the controls
-  not his, till the wheel.
+  crumbles. He hangs on in his place, the controls not his, till the
+  wheel: the honeycomb down, a breath, and the Ram's front wheel breaks
+  off; he is let go onto the road, the controls his again, and the scene
+  stands.
 
   The burst struck, the scene waits a second - the Ram thrown and smoking
   first - and catches him: from then on the controls are not his, and the
@@ -24,7 +26,8 @@
   and the pad is the game's to hold (Game.Wrecks). The last pad held, the
   spin runs up over four seconds, faster on every beat - the pads gliding
   to their places as long; then the hint. The game hands in the press
-  (Press) and tells the scene each pad that struck (PadStruck).
+  (Press), tells the scene each pad that struck (PadStruck) and that the
+  honeycomb is down (HoneycombDown).
 
   Too few pads on the screen, and the game calls the rest in from the pool
   of the chase as he is caught, to stand where PlaceCalledPads says: they
@@ -73,14 +76,18 @@ const
   // each is let go up to this long after the volley's start
   ThrowAfterTicks = 99;
   LetGoMostTicks = 6;
+  // The honeycomb down, a breath before the wheel breaks off
+  WheelAfterTicks = 16;
 
 type
   // tsWaiting - the burst has struck, he is not caught yet; tsCarrying -
   // caught, on his way to his place; tsGripping - in it, the orbs out to
   // the pads; tsSpinning - every pad held, spinning up; tsSpunUp - the
-  // hint; tsVolley - let go, flying; tsStruck - every pad has struck
+  // hint; tsVolley - let go, flying; tsStruck - every pad has struck;
+  // tsBare - the honeycomb is down, a breath; tsLoose - the wheel is off,
+  // he is let go
   TThrowStage = (tsIdle, tsWaiting, tsCarrying, tsGripping, tsSpinning,
-    tsSpunUp, tsVolley, tsStruck);
+    tsSpunUp, tsVolley, tsStruck, tsBare, tsLoose);
 
   TThrowCue = record
     // He is caught: the controls are taken; the game plans his way and
@@ -97,6 +104,8 @@ type
     Volley: Boolean;
     // The pads let go this tick, by their number
     LetGo: TArray<Integer>;
+    // The Ram's front wheel breaks off; he is let go
+    Shed: Boolean;
   end;
 
   TThrowScene = class
@@ -109,6 +118,7 @@ type
     FHeld: Integer;
     FPressed: Boolean;
     FStruck: Integer;
+    FDown: Boolean;
     procedure Enter(AStage: TThrowStage);
     function LettingGo: TArray<Integer>;
   public
@@ -125,11 +135,13 @@ type
     procedure Press;
     // One more pad let go has struck
     procedure PadStruck;
+    // The honeycomb has gone out to its last cell: heard from the volley on
+    procedure HoneycombDown;
     // Every pad let go has struck; with no pad, at once
     function AllStruck: Boolean;
     function Tick: TThrowCue;
     function Running: Boolean;
-    // From the catch on he hangs where HeroAt puts him
+    // From the catch till the wheel he hangs where HeroAt puts him
     function Holds: Boolean;
     // From the catch on the heart beats again, till the volley
     function Beats: Boolean;
@@ -234,6 +246,7 @@ begin
   FHeld := 0;
   FPressed := False;
   FStruck := 0;
+  FDown := False;
 end;
 
 procedure TThrowScene.Enter(AStage: TThrowStage);
@@ -269,6 +282,12 @@ procedure TThrowScene.PadStruck;
 begin
   if FStage = tsVolley then
     Inc(FStruck);
+end;
+
+procedure TThrowScene.HoneycombDown;
+begin
+  if FStage >= tsVolley then
+    FDown := True;
 end;
 
 function TThrowScene.AllStruck: Boolean;
@@ -333,6 +352,15 @@ begin
     tsVolley:
       if AllStruck then
         Enter(tsStruck);
+    tsStruck:
+      if FDown then
+        Enter(tsBare);
+    tsBare:
+      if FTicks >= WheelAfterTicks then
+      begin
+        Enter(tsLoose);
+        Result.Shed := True;
+      end;
   end;
   if FStage = tsVolley then
     Result.LetGo := LettingGo;
@@ -345,7 +373,7 @@ end;
 
 function TThrowScene.Holds: Boolean;
 begin
-  Result := FStage >= tsCarrying;
+  Result := (FStage >= tsCarrying) and (FStage < tsLoose);
 end;
 
 function TThrowScene.Beats: Boolean;

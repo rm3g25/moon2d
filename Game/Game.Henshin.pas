@@ -374,12 +374,14 @@ end;
 procedure THenshin.FinishEclipse;
 begin
   FBurstForm := hfNormal;
+  FMessages.AddTicker(Tr(SMoonFormPerk), PerkTicks);
   for var i := 1 to SuitCures do
     FCalls.Cure();
   FHero.HeroForm := hfMoon;
   FAudio.Play(BottleSoundFile);
   FAudio.Play(BottleSoundFile);
   FShake.AddTrauma(EclipseTrauma);
+  FMessages.ShowBig(Tr(SMoonForm), BigMessageTicks);
   FCalls.TearDark();
 end;
 

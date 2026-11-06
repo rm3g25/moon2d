@@ -14,6 +14,10 @@
   on one tick; every pad struck, and the scene stands; with no pad, all
   is struck at once.
 
+  The wheel: a breath after the honeycomb is down, and not before, the
+  wheel is cued once and he is let go; then the scene stands, cueing
+  nothing more. The honeycomb's fall is heard from the volley on.
+
   The arc of the pads: as many places as pads, all as far from the Ram's
   middle, the first up and left of it, the last right of it and over its
   middle, evenly apart, far enough apart that two of the widest spinning
@@ -49,6 +53,8 @@ type
     procedure HoldThePads(ACount: Integer);
     // Then ticked till spun up
     procedure SpinUpThePads(ACount: Integer);
+    // Then pressed, ticked to the volley, every pad struck
+    procedure StrikeEveryPad(ACount: Integer);
   public
     [Setup]
     procedure Setup;
@@ -87,6 +93,12 @@ type
     procedure TestEveryPadStruckTheSceneStands;
     [Test]
     procedure TestNoPadAllStruckAtTheVolley;
+    [Test]
+    procedure TestTheWheelABreathAfterTheHoneycombIsDown;
+    [Test]
+    procedure TestLetGoAtTheWheelTheSceneStands;
+    [Test]
+    procedure TestTheHoneycombDownIsHeardFromTheVolleyOn;
   end;
 
   [TestFixture]
@@ -245,6 +257,17 @@ begin
     if FScene.Tick.SpunUp then
       Exit;
   Assert.Fail('Never spun up');
+end;
+
+procedure TThrowSceneTests.StrikeEveryPad(ACount: Integer);
+begin
+  SpinUpThePads(ACount);
+  FScene.Press;
+  if not FScene.Tick.Volley then
+    Assert.Fail('No volley');
+  for var i := 1 to ACount do
+    FScene.PadStruck;
+  FScene.Tick;
 end;
 
 procedure TThrowSceneTests.TestNothingTillStarted;
@@ -512,6 +535,61 @@ begin
   FScene.Press;
   Assert.IsTrue(FScene.Tick.Volley, 'The volley');
   Assert.IsTrue(FScene.AllStruck, 'Nothing to wait for');
+end;
+
+procedure TThrowSceneTests.TestTheWheelABreathAfterTheHoneycombIsDown;
+begin
+  StrikeEveryPad(PadCount);
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FScene.Tick.Shed, Format('The wheel at tick %d, the honeycomb up',
+      [Integer(i)]));
+  FScene.HoneycombDown;
+  var Sheds := 0;
+  var ShedAt := 0;
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.Shed then
+    begin
+      Inc(Sheds);
+      ShedAt := i;
+    end;
+  Assert.AreEqual(1, Sheds, 'Once');
+  Assert.IsTrue((ShedAt >= WheelAfterTicks) and (ShedAt <= WheelAfterTicks + 1),
+    Format('A breath after, not at tick %d', [ShedAt]));
+end;
+
+procedure TThrowSceneTests.TestLetGoAtTheWheelTheSceneStands;
+begin
+  StrikeEveryPad(PadCount);
+  FScene.HoneycombDown;
+  for var i := 1 to ManyTicks do
+  begin
+    Assert.IsTrue(FScene.Holds, Format('Held at tick %d, before the wheel',
+      [Integer(i)]));
+    if FScene.Tick.Shed then
+      Break;
+  end;
+  Assert.IsFalse(FScene.Holds, 'Let go at the wheel');
+  Assert.IsTrue(FScene.Running, 'The scene stands');
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FScene.Tick;
+    Assert.IsFalse(Cue.Catch or Cue.Grip or Cue.SpinUp or Cue.SpunUp or
+      Cue.Volley or Cue.Shed, Format('A cue at tick %d', [Integer(i)]));
+    Assert.IsFalse(FScene.Holds or FScene.Beats, 'Free, no heart');
+  end;
+end;
+
+procedure TThrowSceneTests.TestTheHoneycombDownIsHeardFromTheVolleyOn;
+begin
+  SpinUpThePads(PadCount);
+  FScene.HoneycombDown;
+  FScene.Press;
+  FScene.Tick;
+  for var i := 1 to PadCount do
+    FScene.PadStruck;
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FScene.Tick.Shed, Format('The wheel at tick %d', [Integer(i)]));
+  Assert.IsTrue(FScene.Holds, 'Held on');
 end;
 
 { TArcTests }

@@ -7,7 +7,10 @@
 
   A hull that drives stands on wheels: one picture at every axle, turned
   by the way the body has rolled, in front of the dark of the wheel wells
-  and behind the hull, whose fenders shade it.
+  and behind the hull, whose fenders shade it. A wheel it has lost is
+  left off, and the picture of one off its axle is drawn where its owner
+  says. The whole hull may lean about a point of the screen - every layer,
+  every wheel and the eye turned about it as one.
 
   The hull stands on whole units like a frame; only the eye and the wheels
   draw between ticks. A machine that puts something between its wheels and
@@ -51,10 +54,22 @@ type
     destructor Destroy; override;
   end;
 
-  // Where a hull stands and which way it heads
+  // The axles of a hull on wheels, by their order in its def
+  THullAxles = set of Byte;
+
+  // Where a hull stands, which way it heads, how it leans and which of its
+  // wheels it has lost
   THullStand = record
     Center: TSdlFPoint; // the middle of the hull, screen units
     Mirrored: Boolean; // the left-facing art heads right
+    // Degrees clockwise the whole hull is turned about Pivot, a point of
+    // the screen
+    Lean: Single;
+    Pivot: TSdlFPoint;
+    Shed: THullAxles;
+    // APoint of the screen turned with the hull
+    function Turned(const APoint: TSdlFPoint): TSdlFPoint;
+    function TurnedCenter: TSdlFPoint;
   end;
 
   THull = class
@@ -97,6 +112,10 @@ type
     // The hull, its worn copy and the eye
     procedure DrawBody(const ASprites: TSpriteRenderer;
       const AStand: THullStand; AAlpha: Single);
+    // A wheel of the set off its axle: its middle at ACenter, turned ATurn
+    // degrees clockwise
+    procedure DrawWheel(const ASprites: TSpriteRenderer;
+      const ACenter: TSdlFPoint; ATurn: Single);
     // Where a point of the art falls on the screen
     function Spot(const AStand: THullStand;
       const AHullPoint: THullPoint): TSdlFPoint;
@@ -121,6 +140,26 @@ const
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
   Result := AFrom + (ATo - AFrom) * AAmount;
+end;
+
+// ---------------------------------------------------------------------------
+// THullStand
+// ---------------------------------------------------------------------------
+
+function THullStand.Turned(const APoint: TSdlFPoint): TSdlFPoint;
+begin
+  if Lean = 0 then
+    Exit(APoint);
+  var Angle := DegToRad(Lean);
+  var AcrossX := APoint.X - Pivot.X;
+  var DownY := APoint.Y - Pivot.Y;
+  Result.X := Pivot.X + AcrossX * Cos(Angle) - DownY * Sin(Angle);
+  Result.Y := Pivot.Y + AcrossX * Sin(Angle) + DownY * Cos(Angle);
+end;
+
+function THullStand.TurnedCenter: TSdlFPoint;
+begin
+  Result := Turned(Center);
 end;
 
 // ---------------------------------------------------------------------------
@@ -218,8 +257,10 @@ begin
   var Across := AHullPoint.X;
   if AStand.Mirrored then
     Across := FDef.Width - Across;
-  Result.X := AStand.Center.X - FDef.Width / 2 + Across;
-  Result.Y := AStand.Center.Y - FDef.Height / 2 + AHullPoint.Y;
+  var Upright: TSdlFPoint;
+  Upright.X := AStand.Center.X - FDef.Width / 2 + Across;
+  Upright.Y := AStand.Center.Y - FDef.Height / 2 + AHullPoint.Y;
+  Result := AStand.Turned(Upright);
 end;
 
 // A wheel is not mirrored with the hull: it is painted in flat light, and
@@ -228,10 +269,17 @@ end;
 procedure THull.DrawWheels(const ASprites: TSpriteRenderer;
   const AStand: THullStand; AAlpha: Single);
 begin
-  var Side: Single := FDef.Wheels.Side;
-  var Turn := Lerp(FLastTurn, FTurn, AAlpha);
-  for var Axle in FDef.Wheels.Axles do
-    ASprites.DrawTurned(FArt.FWheel, Spot(AStand, Axle), Side, Turn);
+  var Turn := Lerp(FLastTurn, FTurn, AAlpha) + AStand.Lean;
+  var Axles := FDef.Wheels.Axles;
+  for var i := 0 to High(Axles) do
+    if not (i in AStand.Shed) then
+      DrawWheel(ASprites, Spot(AStand, Axles[i]), Turn);
+end;
+
+procedure THull.DrawWheel(const ASprites: TSpriteRenderer;
+  const ACenter: TSdlFPoint; ATurn: Single);
+begin
+  ASprites.DrawTurned(FArt.FWheel, ACenter, FDef.Wheels.Side, ATurn);
 end;
 
 procedure THull.Draw(const ASprites: TSpriteRenderer;
@@ -246,8 +294,8 @@ procedure THull.DrawUnder(const ASprites: TSpriteRenderer;
 begin
   if not FDef.Wheels.Enabled then
     Exit;
-  ASprites.DrawSized(FArt.FChassis, AStand.Center, FDef.Width, FDef.Height,
-    Opaque, AStand.Mirrored);
+  ASprites.DrawSized(FArt.FChassis, AStand.TurnedCenter, FDef.Width,
+    FDef.Height, Opaque, AStand.Mirrored, AStand.Lean);
   DrawWheels(ASprites, AStand, AAlpha);
 end;
 
@@ -256,11 +304,12 @@ procedure THull.DrawBody(const ASprites: TSpriteRenderer;
 begin
   var Width: Single := FDef.Width;
   var Height: Single := FDef.Height;
-  ASprites.DrawSized(FArt.FWhole, AStand.Center, Width, Height, Opaque,
-    AStand.Mirrored);
+  var Center := AStand.TurnedCenter;
+  ASprites.DrawSized(FArt.FWhole, Center, Width, Height, Opaque,
+    AStand.Mirrored, AStand.Lean);
   if FWear > 0 then
-    ASprites.DrawSized(FArt.FWorn, AStand.Center, Width, Height, FWear,
-      AStand.Mirrored);
+    ASprites.DrawSized(FArt.FWorn, Center, Width, Height, FWear,
+      AStand.Mirrored, AStand.Lean);
 
   var Eye := Spot(AStand, FDef.Eye);
   var EyeLevel := Lerp(FLastEye, FEye, AAlpha);

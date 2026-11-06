@@ -90,7 +90,13 @@
   stronger the alarm; a new stun starts with none. Told to drive off, it
   does once its throw is over - the engine once, slow, faster, slow, to
   where it is told and no farther, the brake's hiss once at the end; not
-  stunned, it is not told.
+  stunned, it is not told. Stunned and told to, it sheds its front wheel
+  - the bow's - once; not stunned, it does not. The hull leans onto its
+  bow and stays so; its touch wounds again; the wheel comes down from its
+  hop, told once; a new fight puts the wheel back and the hull level.
+  While the honeycomb holds, the hull throws no bullet off; bare, it
+  throws one off where it meets the face it comes to, and leaning too;
+  the wheel it has shed throws one off, and the hull counts it a hit.
 
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
@@ -179,6 +185,10 @@ type
     // Stunned, its lights in alarm at ALevel: how many times its lamps
     // light over a few seconds
     function AlarmBlinks(ALevel: Single): Integer;
+    // Stunned by a burst out of the hero's middle and thrown to a stand
+    procedure StunAndThrow(const ATarget: TRamTarget);
+    // Its honeycomb crumbled to the last cell
+    procedure BareTheHull(const ATarget: TRamTarget);
   public
     [Setup]
     procedure Setup;
@@ -223,6 +233,26 @@ type
     procedure TestStunnedItDrivesOffWhereTold;
     [Test]
     procedure TestNotStunnedItDoesNotDriveOff;
+    [Test]
+    procedure TestStunnedItShedsItsFrontWheelOnce;
+    [Test]
+    procedure TestNotStunnedNoWheelComesOff;
+    [Test]
+    procedure TestShedTheHullLeansOntoItsBowAndStays;
+    [Test]
+    procedure TestShedItsTouchWoundsAgain;
+    [Test]
+    procedure TestTheWheelComesDownOnceTold;
+    [Test]
+    procedure TestANewFightPutsTheWheelBack;
+    [Test]
+    procedure TestWhileTheHoneycombHoldsTheHullThrowsNothingOff;
+    [Test]
+    procedure TestBareTheHullThrowsABulletOffItsFace;
+    [Test]
+    procedure TestLeaningItThrowsABulletOffItsTop;
+    [Test]
+    procedure TestTheShedWheelThrowsABulletOffAHitOfTheHull;
   end;
 
   [TestFixture]
@@ -479,6 +509,7 @@ uses
   System.Math,
   Sdl2.Core,
   Game.Space,
+  Game.Wheel,
   Levels.Defs;
 
 const
@@ -3606,6 +3637,206 @@ begin
   for var i := 1 to ManyTicks do
     Assert.IsFalse(FRam.Tick(Hero).Rumble, Format('The engine at tick %d', [i]));
   Assert.AreEqual(Double(Stood), Double(FRam.Left), 0.001, 'Stands');
+end;
+
+procedure TRamBrakeTests.StunAndThrow(const ATarget: TRamTarget);
+begin
+  StunFrom(ATarget, CenterOf(ATarget).X);
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(ATarget);
+end;
+
+// It faces right from its hunt on: the bow's wheel is the right one
+procedure TRamBrakeTests.TestStunnedItShedsItsFrontWheelOnce;
+const
+  RollTicks = 5;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  Assert.IsFalse(FRam.WheelShed, 'Not before it is told');
+  Assert.IsFalse(FRam.Wheel.Running, 'No wheel off yet');
+  FRam.ShedWheel;
+  Assert.IsTrue(FRam.WheelShed, 'Shed');
+  Assert.IsTrue(FRam.Wheel.Running, 'The wheel off');
+  Assert.IsTrue(FRam.Wheel.CenterAt(1).X > FRam.Left + RamWidth / 2,
+    'The bow''s wheel');
+  for var i := 1 to RollTicks do
+    FRam.Tick(Hero);
+  var Rolled := FRam.Wheel.CenterAt(1).X;
+  FRam.ShedWheel;
+  Assert.AreEqual(Double(Rolled), Double(FRam.Wheel.CenterAt(1).X), 0.001,
+    'Not a second one');
+end;
+
+procedure TRamBrakeTests.TestNotStunnedNoWheelComesOff;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  FRam.ShedWheel;
+  Assert.IsFalse(FRam.WheelShed, 'Not shed');
+  Assert.IsFalse(FRam.Wheel.Running, 'No wheel off');
+  for var i := 1 to ManyTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(0.0, Double(FRam.LeanAt(1)), 0.001, 'Level');
+end;
+
+// Clockwise on the screen: down on its right, where its bow is
+procedure TRamBrakeTests.TestShedTheHullLeansOntoItsBowAndStays;
+const
+  Watched = 60;
+  AFewDegrees = 10.0;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  Assert.AreEqual(0.0, Double(FRam.LeanAt(1)), 0.001, 'Level before');
+  FRam.ShedWheel;
+  var Last: Single := 0;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick(Hero);
+    var Lean := FRam.LeanAt(1);
+    Assert.IsTrue(Lean >= Last - 0.001, Format('Rose back at tick %d',
+      [Integer(i)]));
+    Last := Lean;
+  end;
+  Assert.IsTrue(Last > 0, 'Onto its bow');
+  Assert.IsTrue(Last < AFewDegrees, 'A few degrees');
+  Assert.AreEqual(Double(FRam.LeanAt(0)), Double(FRam.LeanAt(1)), 0.001,
+    'Settled');
+end;
+
+procedure TRamBrakeTests.TestShedItsTouchWoundsAgain;
+var
+  Away: Integer;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  var InIt := OnTheRoad(FRam.Left + RamWidth / 2);
+  Assert.IsFalse(FRam.Contact(InIt, False, False, Away), 'No touch, stunned');
+  FRam.ShedWheel;
+  Assert.IsTrue(FRam.Contact(InIt, False, False, Away), 'A touch again');
+end;
+
+procedure TRamBrakeTests.TestTheWheelComesDownOnceTold;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  FRam.ShedWheel;
+  var Landings := 0;
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(Hero).WheelLands then
+      Inc(Landings);
+  Assert.AreEqual(1, Landings, 'Once');
+  Assert.IsFalse(FRam.Wheel.Running, 'Rolled away');
+end;
+
+procedure TRamBrakeTests.TestANewFightPutsTheWheelBack;
+const
+  RollTicks = 20;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  FRam.ShedWheel;
+  for var i := 1 to RollTicks do
+    FRam.Tick(Hero);
+  FRam.StartPastBunker(OrdersAt(Stop));
+  Assert.IsFalse(FRam.WheelShed, 'Its wheel back');
+  Assert.IsFalse(FRam.Wheel.Running, 'None rolling');
+  Assert.AreEqual(0.0, Double(FRam.LeanAt(1)), 0.001, 'Level');
+  Assert.AreEqual(0.0, Double(FRam.LeanAt(0)), 0.001, 'Level a tick ago');
+end;
+
+procedure TRamBrakeTests.BareTheHull(const ATarget: TRamTarget);
+begin
+  FRam.Shield.Crumble;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(ATarget);
+    if FRam.Shield.State = sdDown then
+      Exit;
+  end;
+  Assert.Fail('The honeycomb never came down');
+end;
+
+procedure TRamBrakeTests.TestWhileTheHoneycombHoldsTheHullThrowsNothingOff;
+const
+  Flight = 12.0;
+  Height = 60.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  var Face: Single := FRam.Left + RamWidth;
+  Assert.IsFalse(FRam.StrikeHull(At(Face + Flight / 2, RamTop + Height),
+    At(Face - Flight / 2, RamTop + Height), Where, Normal), 'The honeycomb''s');
+end;
+
+// From the right, level: its right face, looking right
+procedure TRamBrakeTests.TestBareTheHullThrowsABulletOffItsFace;
+const
+  Flight = 12.0;
+  Height = 60.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  BareTheHull(Hero);
+  var Face: Single := FRam.Left + RamWidth;
+  Assert.IsTrue(FRam.StrikeHull(At(Face + Flight / 2, RamTop + Height),
+    At(Face - Flight / 2, RamTop + Height), Where, Normal), 'Thrown off');
+  Assert.AreEqual(Double(Face), Double(Where.X), 0.01, 'On its face');
+  Assert.AreEqual(Double(RamTop + Height), Double(Where.Y), 0.01, 'Where it came');
+  Assert.AreEqual(1.0, Double(Normal.X), 0.001, 'Looking right');
+  Assert.AreEqual(0.0, Double(Normal.Y), 0.001, 'Level');
+end;
+
+// Straight down onto its middle: its top, looking up, turned a little
+// toward its bow with the lean
+procedure TRamBrakeTests.TestLeaningItThrowsABulletOffItsTop;
+const
+  Flight = 40.0;
+  Settled = 60;
+  NearTheTop = 4.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  BareTheHull(Hero);
+  FRam.ShedWheel;
+  for var i := 1 to Settled do
+    FRam.Tick(Hero);
+  var Middle: Single := FRam.Left + RamWidth / 2;
+  Assert.IsTrue(FRam.StrikeHull(At(Middle, RamTop - Flight / 2),
+    At(Middle, RamTop + Flight / 2), Where, Normal), 'Thrown off');
+  Assert.IsTrue(Abs(Where.Y - RamTop) < NearTheTop,
+    Format('Near its top, not at %.1f', [Where.Y]));
+  Assert.IsTrue(Normal.Y < -0.95, 'Looking up');
+  Assert.IsTrue(Normal.X > 0, 'Leaning onto its bow, its top looks toward it');
+end;
+
+procedure TRamBrakeTests.TestTheShedWheelThrowsABulletOffAHitOfTheHull;
+const
+  Flight = 30.0;
+  Forgotten = 20;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  Assert.IsFalse(FRam.HullStruckWithin(Forgotten), 'No hit yet');
+  FRam.ShedWheel;
+  FRam.Tick(Hero);
+  var Middle := FRam.Wheel.CenterAt(1);
+  Assert.IsTrue(FRam.StrikeWheel(At(Middle.X + Flight, Middle.Y),
+    At(Middle.X, Middle.Y), Where, Normal), 'Thrown off the wheel');
+  Assert.IsTrue(Normal.X > 0.9, 'Off its right side');
+  Assert.IsTrue(FRam.HullStruckWithin(0), 'A hit just now');
+  for var i := 1 to Forgotten + 1 do
+    FRam.Tick(Hero);
+  Assert.IsFalse(FRam.HullStruckWithin(Forgotten), 'Forgotten');
 end;
 
 initialization

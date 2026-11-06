@@ -886,6 +886,7 @@ end;
 // that gravity pulls stands on the feet line, whatever its height.
 function TMonster.HullStand: THullStand;
 begin
+  Result := Default(THullStand);
   Result.Center := ArtCenter;
   Result.Center.X := Round(Result.Center.X);
   Result.Center.Y := Round(Result.Center.Y);

@@ -38,6 +38,7 @@ uses
   Tests.Game.Eclipse in 'Game\Tests.Game.Eclipse.pas',
   Tests.Game.Hoist in 'Game\Tests.Game.Hoist.pas',
   Tests.Game.Throw in 'Game\Tests.Game.Throw.pas',
+  Tests.Game.Wheel in 'Game\Tests.Game.Wheel.pas',
   Tests.Game.Shield in 'Game\Tests.Game.Shield.pas',
   Tests.Game.Belt in 'Game\Tests.Game.Belt.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',

@@ -1,7 +1,8 @@
 ﻿{
   Tests.Monsters.Hull - the eye of a hull, asleep and awake: a hull born
   awake, a hull dozed off dark, and the two ways between, which come by
-  degrees and not at a stroke.
+  degrees and not at a stroke. Where a point of the art falls: a level
+  stand turns nothing, a leaning one turns it about its pivot.
 
   The hull is the mount's, made with no art: its ticks move numbers and
   never touch a picture. Drawing is not tried.
@@ -35,6 +36,10 @@ type
     procedure TestWakingHullComesUpByDegrees;
     [Test]
     procedure TestHullPutToSleepGoesDarkByDegrees;
+    [Test]
+    procedure TestALevelStandTurnsNothing;
+    [Test]
+    procedure TestALeaningStandTurnsItsPointsAboutThePivot;
   end;
 
 implementation
@@ -42,6 +47,7 @@ implementation
 uses
   System.IOUtils,
   System.SysUtils,
+  Sdl2.Core,
   Monsters.Defs;
 
 const
@@ -139,6 +145,50 @@ begin
     Previous := FHull.Wake;
   end;
   Assert.IsTrue(IsNear(FHull.Wake, 0), 'Within a second it is dark');
+end;
+
+function StandAt(AX, AY: Single): THullStand;
+begin
+  Result := Default(THullStand);
+  Result.Center.X := AX;
+  Result.Center.Y := AY;
+end;
+
+function ArtPoint(AX, AY: Double): THullPoint;
+begin
+  Result.X := AX;
+  Result.Y := AY;
+end;
+
+procedure THullTests.TestALevelStandTurnsNothing;
+const
+  Middle = 100.0;
+begin
+  UseHull;
+  var Def := MountHullDef;
+  var Corner := FHull.Spot(StandAt(Middle, Middle), ArtPoint(0, 0));
+  Assert.IsTrue(IsNear(Corner.X, Middle - Def.Width / 2), 'Across');
+  Assert.IsTrue(IsNear(Corner.Y, Middle - Def.Height / 2), 'Down');
+end;
+
+// A quarter turn clockwise on the screen, Y down: the right end of the
+// middle line goes down under the pivot
+procedure THullTests.TestALeaningStandTurnsItsPointsAboutThePivot;
+const
+  Middle = 100.0;
+  QuarterTurn = 90.0;
+  Slack = 0.001;
+begin
+  UseHull;
+  var Def := MountHullDef;
+  var Stand := StandAt(Middle, Middle);
+  Stand.Lean := QuarterTurn;
+  Stand.Pivot := Stand.Center;
+  var RightEnd := FHull.Spot(Stand, ArtPoint(Def.Width, Def.Height / 2));
+  Assert.AreEqual(Double(Middle), Double(RightEnd.X), Slack, 'Under the pivot');
+  Assert.AreEqual(Double(Middle + Def.Width / 2), Double(RightEnd.Y), Slack,
+    'As far down as it stood across');
+  Assert.IsTrue(IsNear(Stand.TurnedCenter.X, Middle), 'The pivot stays');
 end;
 
 initialization

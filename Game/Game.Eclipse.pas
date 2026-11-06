@@ -11,8 +11,9 @@
   The ring beats in it a while, then the scene tells its orbs to go into
   him. The burst that follows strikes the darkness off in one tick: the
   light is back, the beam gone, the gauge out for good. From the start
-  nothing wounds the hero; the controls stay his, so the ring and the beam
-  keep to him wherever he runs.
+  nothing wounds the hero till the game says the scene spares him no
+  more - at the wheel of the throw; the controls stay his, so the ring and
+  the beam keep to him wherever he runs.
 
   The scene knows neither the Ram, the gauge nor the orbs: the game starts
   it, hands it how far the ring has come every tick, carries out its cues
@@ -75,6 +76,8 @@ type
     FBeamAt: Integer;
     // The burst has struck: the light is back
     FStruck: Boolean;
+    // He can be wounded again
+    FSpareOver: Boolean;
     // The darkness at this tick and at the one before
     FDark: Single;
     FDarkBefore: Single;
@@ -89,8 +92,9 @@ type
     // The burst has struck: the dark, the beam and the ripples are gone at
     // once; nothing more is cued
     procedure Strike;
-    // From the brake on: nothing wounds the hero
+    // From the brake on: nothing wounds the hero, till StopSparing
     function Spares: Boolean;
+    procedure StopSparing;
     // How dark the world is, 0 to DarkDepth: AAlpha of the way from the
     // last tick to this one
     function Darkness(AAlpha: Single): Single;
@@ -215,6 +219,7 @@ begin
   FFirstSeatAt := -1;
   FBeamAt := -1;
   FStruck := False;
+  FSpareOver := False;
   FDark := 0;
   FDarkBefore := 0;
 end;
@@ -271,7 +276,12 @@ end;
 
 function TEclipseScene.Spares: Boolean;
 begin
-  Result := FRunning;
+  Result := FRunning and not FSpareOver;
+end;
+
+procedure TEclipseScene.StopSparing;
+begin
+  FSpareOver := True;
 end;
 
 function TEclipseScene.Clock(AAlpha: Single): Single;
