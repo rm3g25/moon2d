@@ -13,7 +13,8 @@
   the ram action of a level's events with the pads of its medkits, and
   the Ram of level 2's boss arena.
 
-  The hunter: its lives follow the grade; only its eye takes a hit, and
+  The hunter: its lives follow the grade; its eye and the top of its head
+  take a hit, from above or the side but not up through the head, and
   the last life blows the head up, the eye blinks through the change and
   the sweeper rises. A hero low on the road is pressed to the wall on his
   side and not shot at; one on a pad is not pressed but shot at, the lens
@@ -38,7 +39,8 @@
   comes up; its hatch breathes - the shell, a beat, the column for about
   half a second, the window for about a second, shut again - and its
   shell goes at the hero's feet; it is hit from above or aslant, the lid
-  shut or open; shallow or from the side the honeycomb takes the bullet;
+  shut or open, on the lid itself and on the dome's shoulders beside the
+  hatch; shallow or from the side the honeycomb takes the bullet;
   the column burns only what is in it, only
   while it blows; it turns to a hero on its other side; its thirds call
   the shuttle; its last life blows it up with no wave, the empty mast
@@ -220,7 +222,7 @@ type
     [Test]
     procedure TestLivesFollowTheGrade;
     [Test]
-    procedure TestOnlyTheEyeTakesAHit;
+    procedure TestTheEyeAndTheTopTakeAHit;
     [Test]
     procedure TestTheLastLifeBlowsTheHeadUp;
     [Test]
@@ -357,7 +359,11 @@ type
     [Test]
     procedure TestAShotDownFromAPadGoesIn;
     [Test]
-    procedure TestARowOffTheTopReachesFromLower;
+    procedure TestOnlyASteepBulletTakesALife;
+    [Test]
+    procedure TestTheShutLidTakesALife;
+    [Test]
+    procedure TestTheShouldersBesideTheHatchTakeALife;
     [Test]
     procedure TestShallowOrSideTheHoneycombTakesIt;
     [Test]
@@ -1073,7 +1079,7 @@ begin
   begin
     var Lens := FRam.LensPoint;
     var Struck: TSdlFPoint;
-    Assert.IsTrue(FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
+    Assert.IsTrue(FRam.StrikeHunter(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
       Struck), Format('Strike %d meets the eye', [i]));
   end;
 end;
@@ -1098,20 +1104,30 @@ begin
   Assert.AreEqual(FRam.FullLives, FRam.Lives, 'All of them to start with');
 end;
 
-procedure TRamHunterTests.TestOnlyTheEyeTakesAHit;
+// Beside the eye, past its circle on either side of the lens, the head's
+// top stands over it
+procedure TRamHunterTests.TestTheEyeAndTheTopTakeAHit;
+const
+  Aside = 6.0;
+  // The eye's circle about the lens
+  EyeRadius = 5.0;
 begin
   LockWith(HeroOnAPad(MiddleHeroX, MiddleDeckY));
   var Lens := FRam.LensPoint;
   var Struck: TSdlFPoint;
-  Assert.IsFalse(FRam.StrikeEye(At(Lens.X - 12, Lens.Y - 15),
-    At(Lens.X - 12, Lens.Y + 15), Struck), 'Through the head beside the eye');
-  Assert.IsFalse(FRam.StrikeEye(At(Lens.X - 20, Lens.Y + 30),
+  Assert.IsFalse(FRam.StrikeHunter(At(Lens.X + Aside, Lens.Y + 15),
+    At(Lens.X + Aside, Lens.Y - 15), Struck), 'Up through the head beside the eye');
+  Assert.IsFalse(FRam.StrikeHunter(At(Lens.X - 20, Lens.Y + 30),
     At(Lens.X + 20, Lens.Y + 30), Struck), 'Through the mast under the head');
   Assert.AreEqual(FRam.FullLives, FRam.Lives, 'Nothing lost yet');
-  Assert.IsTrue(FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
-    Struck), 'Through the eye');
-  Assert.IsTrue(Struck.X < Lens.X, 'Met on its near side');
+  Assert.IsTrue(FRam.StrikeHunter(At(Lens.X + Aside, Lens.Y - 15),
+    At(Lens.X + Aside, Lens.Y + 15), Struck), 'Down onto the top beside the eye');
+  Assert.IsTrue(Struck.Y < Lens.Y - EyeRadius, 'Met on the top, over the eye');
   Assert.AreEqual(FRam.FullLives - 1, FRam.Lives, 'A life gone');
+  Assert.IsTrue(FRam.StrikeHunter(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y),
+    Struck), 'Level at the lens');
+  Assert.IsTrue(Struck.X < Lens.X, 'Met on its near side');
+  Assert.AreEqual(FRam.FullLives - 2, FRam.Lives, 'Another life gone');
 end;
 
 procedure TRamHunterTests.TestTheLastLifeBlowsTheHeadUp;
@@ -1126,7 +1142,7 @@ begin
   Assert.IsFalse(Cue.Shock, 'With no shock wave: only the sweeper sends one');
   Assert.IsTrue(FRam.Head = rhNone, 'Gone off the mast');
   var Struck: TSdlFPoint;
-  Assert.IsFalse(FRam.StrikeEye(At(Cue.BlastAt.X - 20, Cue.BlastAt.Y),
+  Assert.IsFalse(FRam.StrikeHunter(At(Cue.BlastAt.X - 20, Cue.BlastAt.Y),
     At(Cue.BlastAt.X + 20, Cue.BlastAt.Y), Struck), 'No eye left to hit');
 
   var Brightest: Single := 0;
@@ -1428,7 +1444,7 @@ begin
   begin
     var Lens := FRam.LensPoint;
     var Struck: TSdlFPoint;
-    FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
+    FRam.StrikeHunter(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
   end;
   for var i := 1 to ManyTicks do
   begin
@@ -2092,7 +2108,7 @@ begin
   begin
     var Lens := FRam.LensPoint;
     var Struck: TSdlFPoint;
-    FRam.StrikeEye(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
+    FRam.StrikeHunter(At(Lens.X - 20, Lens.Y), At(Lens.X + 20, Lens.Y), Struck);
   end;
   WaitForHead(FRam, ATarget, rhSweeper);
   for var i := 1 to FRam.Lives do
@@ -2348,7 +2364,7 @@ end;
 // few units long, as the guns fire them, walked down the whole line.
 procedure TRamBunkerTests.TestAShotDownFromAPadGoesIn;
 const
-  Steps: array [0..2] of Single = (25, 40, 60);
+  Steps: array [0..2] of Single = (35, 45, 60);
   StepLength = 8.0;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
@@ -2381,29 +2397,80 @@ begin
   end;
 end;
 
-// A row of cells is off the top: a bullet from a little lower or farther
-// off, that would have met the honeycomb beside the hatch, comes down past
-// the open line within its width
-procedure TRamBunkerTests.TestARowOffTheTopReachesFromLower;
+// Two bullets onto the top from the same side, both ending just past the
+// middle of the hatch under the open line: one at 16 degrees down, as from
+// a pad far off, one at 32
+procedure TRamBunkerTests.TestOnlyASteepBulletTakesALife;
 const
-  // 16 degrees down - steep enough - crossing the hatch's own line 19
-  // units short of its middle, past its width
   Back = 40.0;
-  Above = 11.0;
   Past = 2.0;
   Below = 1.0;
+  Shallow = 16.0;
+  Steep = 32.0;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
   RaiseTheBunker(Hero);
   WaitForTheWindow(Hero);
   var Top := FRam.OpenTop;
+  var Till := At(Top.X + Past, Top.Y + Below);
   var Lives := FRam.Lives;
   var Struck: TSdlFPoint;
   var Guarded: Boolean;
-  Assert.IsTrue(FRam.StrikeBunker(At(Top.X - Back, Top.Y - Above),
-    At(Top.X + Past, Top.Y + Below), Struck, Guarded), 'It meets the head');
+  var Rise := Back * Tan(DegToRad(Shallow));
+  Assert.IsTrue(FRam.StrikeBunker(At(Till.X - Back, Till.Y - Rise), Till, Struck,
+    Guarded), 'Shallow: it meets the top');
+  Assert.IsTrue(Guarded, 'Shallow: the honeycomb flares');
+  Assert.AreEqual(Lives, FRam.Lives, 'Shallow: no life');
+  Rise := Back * Tan(DegToRad(Steep));
+  Assert.IsTrue(FRam.StrikeBunker(At(Till.X - Back, Till.Y - Rise), Till, Struck,
+    Guarded), 'Steep: it meets the top');
+  Assert.IsFalse(Guarded, 'Steep: not the honeycomb');
+  Assert.AreEqual(Lives - 1, FRam.Lives, 'Steep: a life');
+end;
+
+// Shut, the lid stands over the dome: a bullet straight down that stops
+// short of the dome meets it
+procedure TRamBunkerTests.TestTheShutLidTakesALife;
+const
+  ShortOfTheDome = 4.0;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  Assert.IsTrue(FRam.Hatch = bhAiming, 'Aiming');
+  Assert.AreEqual(Double(0), Double(FRam.LidAt(1)), 0.001, 'The lid shut');
+  var Hatch := FRam.HatchPoint;
+  var Lives := FRam.Lives;
+  var Struck: TSdlFPoint;
+  var Guarded: Boolean;
+  Assert.IsTrue(FRam.StrikeBunker(At(Hatch.X, Hatch.Y - 20),
+    At(Hatch.X, Hatch.Y - ShortOfTheDome), Struck, Guarded), 'It meets the lid');
   Assert.IsFalse(Guarded, 'Not the honeycomb');
+  Assert.IsTrue(Struck.Y < Hatch.Y - ShortOfTheDome, 'On the lid, over the dome');
   Assert.AreEqual(Lives - 1, FRam.Lives, 'A life');
+end;
+
+// Straight down past the hatch on either side, onto the slope of the dome
+// over the honeycomb: the top as the art draws it
+procedure TRamBunkerTests.TestTheShouldersBesideTheHatchTakeALife;
+const
+  Aside = 9.4;
+  ShortOfTheLine = 0.5;
+  Sides: array [0..1] of Integer = (-1, 1);
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero);
+  var Top := FRam.OpenTop;
+  var Lives := FRam.Lives;
+  for var Side in Sides do
+  begin
+    var X := Top.X + Side * Aside;
+    var Struck: TSdlFPoint;
+    var Guarded: Boolean;
+    Assert.IsTrue(FRam.StrikeBunker(At(X, Top.Y - 20), At(X, Top.Y - ShortOfTheLine),
+      Struck, Guarded), Format('Side %d: it meets the shoulder', [Side]));
+    Assert.IsFalse(Guarded, Format('Side %d: not the honeycomb', [Side]));
+  end;
+  Assert.AreEqual(Lives - 2, FRam.Lives, 'A life a side');
 end;
 
 procedure TRamBunkerTests.TestShallowOrSideTheHoneycombTakesIt;

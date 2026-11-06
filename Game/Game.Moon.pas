@@ -355,7 +355,7 @@ type
     procedure TickCapsules;
     procedure StandMedkitOn(const AMark: TSdlFPoint);
     function BulletStruckRam(const ABullet: TBullet): Boolean;
-    function BulletStruckRamEye(const ABullet: TBullet): Boolean;
+    function BulletStruckRamHunter(const ABullet: TBullet): Boolean;
     function BulletStruckRamBarrels(const ABullet: TBullet): Boolean;
     function BulletStruckRamBunker(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
@@ -2285,7 +2285,7 @@ begin
       Own.StartBurstSliding;
 
     if (Own.Status <> bsFlying) or BulletStruckCannon(Own) or
-      BulletStruckRamEye(Own) or BulletStruckRamBarrels(Own) or
+      BulletStruckRamHunter(Own) or BulletStruckRamBarrels(Own) or
       BulletStruckRamBunker(Own) or BulletStruckRam(Own) then
       Continue;
 
@@ -3402,13 +3402,13 @@ begin
     AMark.X - SpriteSize / 2, AMark.Y, '', False);
 end;
 
-// The hunter's eye takes the bullet: sparks off the lens, a ping, a life
-// gone - the only wound the machine takes before the evolution
-function TMoonGame.BulletStruckRamEye(const ABullet: TBullet): Boolean;
+// The hunter's eye or the top of its head takes the bullet: sparks off
+// the lens, a ping, a life gone
+function TMoonGame.BulletStruckRamHunter(const ABullet: TBullet): Boolean;
 begin
   var Stretch := BulletStretch(ABullet);
   var At: TSdlFPoint;
-  Result := FRam.StrikeEye(Stretch.Start, Stretch.Finish, At);
+  Result := FRam.StrikeHunter(Stretch.Start, Stretch.Finish, At);
   if not Result then
     Exit;
   ABullet.Status := bsInactive;

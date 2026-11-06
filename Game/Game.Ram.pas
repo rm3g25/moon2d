@@ -47,8 +47,11 @@
   shots where the hero stood; three where he will be if he keeps going;
   a hose of six that keeps following him.
 
-  The only target is the hunter's eye - its lens. Bullets pass the mast,
-  the head and the barrel. Its lives show as a row of cells over the head:
+  The targets are the hunter's eye - its lens - and the top of its head
+  down to the lens, as the art draws it: a bullet that comes onto it from
+  above or from the side. Bullets pass the mast, the barrel and the rest
+  of the head - one that comes up through it meets the top from inside
+  and flies on. Its lives show as a row of cells over the head:
   as the head locks the row lights cell by cell while the lens burns white
   - this is what has lives - and only then the first burst. The last of
   its lives blows the head up, the empty row fades; the
@@ -86,11 +89,12 @@
   it aims, and lobs a shell at where his feet are (Game.Shells); a beat,
   then a column of hot exhaust goes straight up out of the open hatch -
   it wounds whoever is in it; then the hatch stands open and cooling,
-  and shuts. Its top is open to a bullet at any time, the lid shut or
-  not: one that comes down onto it from above or aslant, from a pad -
-  down to a row of cells under the hatch, so a pad a little lower or
-  farther off still reaches it. The honeycomb closes its sides and
-  front. Its lives go by thirds as the others' do.
+  and shuts. Its top is open to a bullet at any time: the dome as the
+  art draws it down to a row of cells under the hatch, and the lid shut,
+  open or on its way. One that comes down onto it steeply enough, from
+  above or aslant from a pad, takes a life; a shallow one only flares the
+  honeycomb. The honeycomb closes its sides and front under that row. Its
+  lives go by thirds as the others' do.
 
   In its middle third comes its second phase. Now and then, its
   hatch shut, the eye blinks the warning and the machine lunges back to
@@ -492,6 +496,12 @@ type
     function SweeperMastFor(ARowY: Single): Single;
     function SweeperRowY(AMast: Single): Single;
     function ToHead(const APoint: TSdlFPoint): TSdlFPoint;
+    function EyeShare(const AFrom, ATo: TSdlFPoint; out AShare: Single): Boolean;
+    function TopShare(const AFrom, ATo: TSdlFPoint; out AShare: Single): Boolean;
+    function TopLine: Single;
+    function InTop(const ALocal: TSdlFPoint): Boolean;
+    function InDome(const ALocal: TSdlFPoint): Boolean;
+    function InLid(const ALocal: TSdlFPoint): Boolean;
     function Tier: Integer;
     function CanShoot: Boolean;
     procedure TickRow;
@@ -526,9 +536,9 @@ type
     // Where a bullet's stretch of this tick first meets the shield, which
     // flares there; False when it meets nothing
     function Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
-    // Where a bullet's stretch of this tick meets the hunter's eye, which
-    // loses a life; False when it misses
-    function StrikeEye(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    // Where a bullet's stretch of this tick meets the hunter's eye or the
+    // top of its head, which loses a life; False when it misses
+    function StrikeHunter(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
     // Where a bullet's stretch of this tick meets the sweeper's barrel
     // pack: AGuarded - a climbing bullet, taken by a plate under it, which
     // flares; otherwise the pack loses a life. False when it misses.
@@ -538,16 +548,15 @@ type
     function LensPoint: TSdlFPoint;
     // The middle of the sweeper's barrel pack on the screen now
     function BarrelsPoint: TSdlFPoint;
-    // Where a bullet's stretch of this tick meets the bunker: through the
-    // open hatch, falling steeply enough - a life; anywhere else - the lid
-    // or the honeycomb about it takes it, AGuarded, and flares. False when
-    // it misses.
+    // Where a bullet's stretch of this tick meets the bunker: on its top,
+    // falling steeply enough - a life; a shallow one, or the honeycomb
+    // under the top, takes it, AGuarded, and flares. False when it misses.
     function StrikeBunker(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
       out AGuarded: Boolean): Boolean;
     // The middle of the bunker's hatch on the screen now
     function HatchPoint: TSdlFPoint;
-    // Under the hatch, where the honeycomb begins: a bullet that comes
-    // down past this line within the hatch's width takes a life
+    // Under the hatch, where the honeycomb begins: over this line the top
+    // takes a bullet, under it the honeycomb
     function OpenTop: TSdlFPoint;
     // The column of exhaust over the hatch holds some of ABody
     function ColumnHolds(const ABody: TSdlFRect): Boolean;
@@ -983,7 +992,7 @@ const
   PlateCover = 6.0;
   // A turn this far squashed leaves no pack to hit
   ThinHeadSquash = 0.5;
-  // Along a stretch the pack is looked for this often, head units
+  // Along a stretch the pack or a top is looked for this often, head units
   StrikeStep = 0.5;
   // The barrels' white while its row comes up, and their red
   HeatWhite: TRgb = (R: 255; G: 255; B: 255);
@@ -1004,15 +1013,20 @@ const
   LidOpenTicks = 3;
   LidShutTicks = 6;
   // The top of the dome in the left-facing frame, as measured on the art:
-  // the hatch in the middle of it; a bullet that comes down onto it at
-  // least this steeply takes a life
+  // the hatch in the middle of it; a bullet that comes down onto the top
+  // at least this steeply takes a life
   HatchX = 17.4;
   HatchY = 12.0;
-  HatchHalfWidth = 8.5;
-  HatchFallLeast = 15.0;
+  HatchFallLeast = 30.0;
   // The honeycomb starts a row of cells under the hatch (Game.Shield's
   // 1.5 * HexSize)
   OpenRowsDepth = 5.1;
+  // The upper edge of the dome without its lid, left to right in the
+  // left-facing frame, as measured on the art
+  DomeTop: array [0..13] of THullPoint = ((X: 6.6; Y: 17.5), (X: 7.1; Y: 17.2),
+    (X: 7.3; Y: 16.3), (X: 9.1; Y: 12.8), (X: 10.3; Y: 11.5), (X: 14.3; Y: 11.0),
+    (X: 15.6; Y: 11.0), (X: 15.8; Y: 12.0), (X: 23.3; Y: 12.0), (X: 23.6; Y: 12.5),
+    (X: 25.1; Y: 12.5), (X: 25.9; Y: 13.5), (X: 27.6; Y: 16.5), (X: 28.2; Y: 18.8));
   BunkerMuzzles: array [0..1] of THullPoint = ((X: 0.2; Y: 24.2),
     (X: 0.2; Y: 28.0));
   // The lid's art stands open; turned this far counter-clockwise about
@@ -1020,6 +1034,14 @@ const
   LidHinge: THullPoint = (X: 9.6; Y: 11.6);
   LidShutTurn = 52.0;
   LidShutShift: THullPoint = (X: 5.5; Y: -1.5);
+  // The lid lying shut, its upper and lower edges left to right, on the
+  // art as drawn facing right
+  LidTop: array [0..12] of THullPoint = ((X: 1.8; Y: 10.0), (X: 1.9; Y: 8.2),
+    (X: 2.6; Y: 7.5), (X: 4.6; Y: 7.7), (X: 4.9; Y: 7.0), (X: 7.3; Y: 6.2),
+    (X: 11.3; Y: 6.0), (X: 13.6; Y: 6.3), (X: 14.6; Y: 7.3), (X: 14.8; Y: 9.0),
+    (X: 15.3; Y: 8.8), (X: 16.4; Y: 7.5), (X: 17.1; Y: 8.0));
+  LidBottom: array [0..4] of THullPoint = ((X: 1.8; Y: 10.7), (X: 2.3; Y: 11.5),
+    (X: 6.9; Y: 13.5), (X: 12.6; Y: 13.8), (X: 17.1; Y: 8.2));
   // The honeycomb about the dome, from its middle
   BunkerShieldRadiusX = 15.0;
   BunkerShieldRadiusY = 18.0;
@@ -1112,6 +1134,13 @@ const
   HunterSleeveY = 7.1;
   HunterLensX = 17.1;
   HunterLensY = 8.8;
+  // The hunter's upper edge, left to right, as measured on the art: from
+  // it down to the lens the top takes a bullet
+  HunterTop: array [0..15] of THullPoint = ((X: 0.1; Y: 6.0), (X: 0.3; Y: 5.2),
+    (X: 0.8; Y: 4.0), (X: 1.8; Y: 3.0), (X: 9.1; Y: 2.8), (X: 10.6; Y: 1.5),
+    (X: 13.5; Y: 1.3), (X: 13.8; Y: 0.3), (X: 14.6; Y: 0.0), (X: 18.6; Y: 0.0),
+    (X: 19.4; Y: 0.3), (X: 19.8; Y: 1.3), (X: 22.4; Y: 1.5), (X: 25.6; Y: 4.7),
+    (X: 26.8; Y: 4.8), (X: 27.6; Y: 5.7));
   BarrelWidth = 33.3;
   BarrelHeight = 9.3;
   BarrelPivotX = 30.9;
@@ -1301,6 +1330,25 @@ function UnitPoint(AX, AY: Single): TSdlFPoint;
 begin
   Result.X := AX;
   Result.Y := AY;
+end;
+
+// The height of an edge AX across, between its two points about it; False
+// off either end of it
+function OutlineAt(const AOutline: array of THullPoint; AX: Single;
+  out AY: Single): Boolean;
+begin
+  AY := 0;
+  if (AX < AOutline[0].X) or (AX > AOutline[High(AOutline)].X) then
+    Exit(False);
+  for var i := 1 to High(AOutline) do
+    if AX <= AOutline[i].X then
+    begin
+      var Left := AOutline[i - 1];
+      var Right := AOutline[i];
+      AY := Lerp(Left.Y, Right.Y, (AX - Left.X) / (Right.X - Left.X));
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 // The middle of the well, AWell across the screen, which the mast turns
@@ -3101,11 +3149,10 @@ begin
     HatchX, HatchY + OpenRowsDepth);
 end;
 
-// Down onto the top of the dome within its width, past the line where the
-// honeycomb begins: a steep enough bullet takes a life, the lid shut or
-// open; a shallow one only flares the honeycomb. Elsewhere the honeycomb
-// takes it - on the sides and the front, under that line: over it a bullet
-// flies on.
+// Onto the top - the dome over the line where the honeycomb begins, or the
+// lid: a steep enough bullet takes a life; a shallow one only flares the
+// honeycomb. Under that line the honeycomb takes it, on the sides and the
+// front.
 function TRam.StrikeBunker(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint;
   out AGuarded: Boolean): Boolean;
 begin
@@ -3114,34 +3161,30 @@ begin
   if not Present or (FHead <> rhBunker) or not FArmed or FHeadKilled or
     (TurnSquash < ThinHeadSquash) then
     Exit(False);
-  var Opening := OpenTop;
-  var Half := HatchHalfWidth * TurnSquash;
   var Fall := ATo.Y - AFrom.Y;
   var Middle := BunkerMiddle;
-  if (Fall > 0) and (AFrom.Y <= Opening.Y) and (ATo.Y >= Opening.Y) then
+  var Share: Single;
+  if TopShare(AFrom, ATo, Share) then
   begin
-    var Share := (Opening.Y - AFrom.Y) / Fall;
-    var X := Lerp(AFrom.X, ATo.X, Share);
-    if Abs(X - Opening.X) <= Half then
+    AAt := UnitPoint(Lerp(AFrom.X, ATo.X, Share), Lerp(AFrom.Y, ATo.Y, Share));
+    var Steep := (Fall > 0) and
+      (Fall >= Abs(ATo.X - AFrom.X) * Tan(DegToRad(HatchFallLeast)));
+    if Steep then
     begin
-      AAt := UnitPoint(X, Opening.Y);
-      var Steep := Fall >= Abs(ATo.X - AFrom.X) * Tan(DegToRad(HatchFallLeast));
-      if Steep then
-      begin
-        FHurtTicks := HurtFlashTicks;
-        FHitTicks := 0;
-        Dec(FLives);
-        if FLives <= 0 then
-          FHeadKilled := True;
-        Exit(True);
-      end;
-      AGuarded := True;
-      FHeadShield.Strike(UnitPoint(AAt.X - Middle.X, AAt.Y - Middle.Y));
+      FHurtTicks := HurtFlashTicks;
+      FHitTicks := 0;
+      Dec(FLives);
+      if FLives <= 0 then
+        FHeadKilled := True;
       Exit(True);
     end;
+    AGuarded := True;
+    FHeadShield.Strike(UnitPoint(AAt.X - Middle.X, AAt.Y - Middle.Y));
+    Exit(True);
   end;
 
   // Only the part of the stretch under the rim line meets the honeycomb
+  var Opening := OpenTop;
   var From := AFrom;
   var Till := ATo;
   if (From.Y < Opening.Y) and (Till.Y < Opening.Y) then
@@ -3456,14 +3499,39 @@ begin
     HunterLensX, HunterLensY);
 end;
 
-// The stretch against a circle about the lens: the first point of it
-// within the circle. Only a hunter up and locked has an eye to hit.
-function TRam.StrikeEye(const AFrom, ATo: TSdlFPoint;
+// The first point of the stretch on the eye or on the top, whichever it
+// meets first. Only a hunter up and locked has them to hit.
+function TRam.StrikeHunter(const AFrom, ATo: TSdlFPoint;
   out AAt: TSdlFPoint): Boolean;
 begin
   AAt := ATo;
   if not Present or (FHead <> rhHunter) or not FArmed or FHeadKilled then
     Exit(False);
+  var EyeAt: Single;
+  var MeetsEye := EyeShare(AFrom, ATo, EyeAt);
+  var TopAt: Single;
+  var MeetsTop := TopShare(AFrom, ATo, TopAt);
+  if not MeetsEye and not MeetsTop then
+    Exit(False);
+  var Share := EyeAt;
+  if not MeetsEye then
+    Share := TopAt
+  else if MeetsTop then
+    Share := Min(EyeAt, TopAt);
+  AAt := UnitPoint(Lerp(AFrom.X, ATo.X, Share), Lerp(AFrom.Y, ATo.Y, Share));
+  FHurtTicks := HurtFlashTicks;
+  FHitTicks := 0;
+  Dec(FLives);
+  if FLives <= 0 then
+    FHeadKilled := True;
+  Result := True;
+end;
+
+// The stretch against a circle about the lens: the share of it where it
+// first is within the circle
+function TRam.EyeShare(const AFrom, ATo: TSdlFPoint; out AShare: Single): Boolean;
+begin
+  AShare := 0;
   var Lens := LensPoint;
   var AlongX := ATo.X - AFrom.X;
   var AlongY := ATo.Y - AFrom.Y;
@@ -3473,32 +3541,104 @@ begin
   var A := Sqr(AlongX) + Sqr(AlongY);
   var B := 2 * (FromX * AlongX + FromY * AlongY);
   var C := Sqr(FromX) + Sqr(FromY) - Sqr(EyeRadius);
-  var Share: Single;
   if C <= 0 then
-    Share := 0
-  else
-  begin
-    var Discriminant := Sqr(B) - 4 * A * C;
-    if (A = 0) or (Discriminant < 0) then
-      Exit(False);
-    Share := (-B - Sqrt(Discriminant)) / (2 * A);
-    if (Share < 0) or (Share > 1) then
-      Exit(False);
-  end;
-  AAt := UnitPoint(AFrom.X + AlongX * Share, AFrom.Y + AlongY * Share);
-  FHurtTicks := HurtFlashTicks;
-  FHitTicks := 0;
-  Dec(FLives);
-  if FLives <= 0 then
-    FHeadKilled := True;
-  Result := True;
+    Exit(True);
+  var Discriminant := Sqr(B) - 4 * A * C;
+  if (A = 0) or (Discriminant < 0) then
+    Exit(False);
+  AShare := (-B - Sqrt(Discriminant)) / (2 * A);
+  Result := InRange(AShare, 0, 1);
 end;
 
-// A point of the screen in the sweeper's own units, as its art is drawn
-// facing left: the sway, the facing and the squash of a turn undone
+// The share of the stretch where it first comes onto the top of the head
+// on the mast, from above or from the side. A climbing bullet that crosses
+// the top's lower line into it comes up through the head and meets the
+// top from inside: no share. A turn this far squashed leaves no top.
+function TRam.TopShare(const AFrom, ATo: TSdlFPoint; out AShare: Single): Boolean;
+begin
+  AShare := 0;
+  if TurnSquash < ThinHeadSquash then
+    Exit(False);
+  var From := ToHead(AFrom);
+  var Till := ToHead(ATo);
+  var Climbs := Till.Y < From.Y;
+  var Line := TopLine;
+  var Steps := Max(1, Ceil(Hypot(Till.X - From.X, Till.Y - From.Y) / StrikeStep));
+  var Before := From;
+  for var i := 0 to Steps do
+  begin
+    var Point := UnitPoint(Lerp(From.X, Till.X, i / Steps),
+      Lerp(From.Y, Till.Y, i / Steps));
+    if InTop(Point) then
+    begin
+      var FromInside := (i = 0) or (Before.Y > Line);
+      if Climbs and FromInside then
+        Exit(False);
+      AShare := i / Steps;
+      Exit(True);
+    end;
+    Before := Point;
+  end;
+  Result := False;
+end;
+
+// The lower line of the top in the head's own units: the hunter's lens,
+// the bunker's row of cells under the hatch
+function TRam.TopLine: Single;
+begin
+  if FHead = rhBunker then
+    Result := HatchY + OpenRowsDepth
+  else
+    Result := HunterLensY;
+end;
+
+// A point in the head's own units on its top
+function TRam.InTop(const ALocal: TSdlFPoint): Boolean;
+begin
+  case FHead of
+    rhHunter:
+      begin
+        var Edge: Single;
+        Result := OutlineAt(HunterTop, ALocal.X, Edge) and
+          InRange(ALocal.Y, Edge, TopLine);
+      end;
+    rhBunker:
+      Result := InDome(ALocal) or InLid(ALocal);
+  else
+    Result := False;
+  end;
+end;
+
+function TRam.InDome(const ALocal: TSdlFPoint): Boolean;
+begin
+  var Edge: Single;
+  Result := OutlineAt(DomeTop, ALocal.X, Edge) and (ALocal.Y >= Edge) and
+    (ALocal.Y < TopLine);
+end;
+
+// The lid as it stands now, its turn and its way undone to where it lies
+// shut, as DrawLid moves it: on the art as drawn facing right
+function TRam.InLid(const ALocal: TSdlFPoint): Boolean;
+begin
+  var Shape := HeadShapes[rhBunker];
+  var Shut := 1 - FLid;
+  var Moved := UnitPoint(Shape.Width - ALocal.X - LidShutShift.X * Shut,
+    ALocal.Y - LidShutShift.Y * Shut);
+  var Hinge := UnitPoint(LidHinge.X, LidHinge.Y);
+  var Lying := Turned(Moved, Hinge, -LidShutTurn * FLid);
+  Lying := UnitPoint(Lying.X + LidShutShift.X, Lying.Y + LidShutShift.Y);
+  var Upper: Single;
+  var Lower: Single;
+  Result := OutlineAt(LidTop, Lying.X, Upper) and
+    OutlineAt(LidBottom, Lying.X, Lower) and InRange(Lying.Y, Upper, Lower);
+end;
+
+// A point of the screen in the own units of the head on the mast, as its
+// art is drawn facing left: the sway, the facing and the squash of a turn
+// undone
 function TRam.ToHead(const APoint: TSdlFPoint): TSdlFPoint;
 begin
-  var Shape := HeadShapes[rhSweeper];
+  var Shape := HeadShapes[FHead];
   var Pivot := MastPivot(WellAt(FX));
   var Upright := Turned(APoint, Pivot, -FSway);
   Result := UnitPoint(Shape.SocketX - (Upright.X - Pivot.X) / (FFacing * TurnSquash),
