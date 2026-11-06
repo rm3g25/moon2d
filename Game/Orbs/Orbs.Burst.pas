@@ -15,15 +15,20 @@
     settle; the marks melt.
 
   A ray has no knot of light at its head: its strongest stretch stands
-  behind the head, and the head thins out. In a vortex the rays leave
-  curled one way, and the curl dies off as they go, or a ray would circle
-  the room.
+  behind the head, and the head thins out - but for the white heart of a
+  dark ray. In a vortex the rays leave curled one way, and the curl dies
+  off as they go, or a ray would circle the room.
 
   The burst is one for every form; a form lends it its colors only. A
   light one is light added to light. A dark one is a black hole: the
   bodies of its rays, of its ring and of its motes are drawn over what is
-  beneath, with a light halo about them, and its inhale is a negative -
-  a light veil and a dark figure.
+  beneath, with a light halo about them, a white heart at the head of a
+  ray, and its inhale is a negative - a light veil and a dark figure.
+
+  How strong it is, the caller says: the suit's of arenas 1 and 2, or the
+  eclipse's of arena 3 - more rays, longer and faster, out past the
+  farthest corner of the screen, a wider ring, an inhale of half a second
+  in which the world only stands, and a white flash that holds.
 
   The look and the time only. What a ray strikes is the game's to settle:
   the burst tells the stretches its heads have passed this tick. Matter
@@ -53,6 +58,31 @@ type
     VeilLevel: Single;
     Silhouette: TRgb;
     Mote: TRgb;
+    // A white heart along the head of a ray, 0 - none
+    Heart: TRgb;
+    HeartLevel: Single;
+  end;
+
+  // How strong a burst is; the look is the form's, the strength the
+  // moment's
+  TBurstPower = record
+    // Evenly about the chest, the first straight up
+    Rays: Integer;
+    Speed: Single; // units a tick
+    Tail: Single; // units, along the head's way
+    // A ray is gone once its head is this far from the hero's center: its
+    // whole tail is off the screen
+    Reach: Single;
+    RingRun: Single; // units the ring runs out by
+    RingTicks: Integer;
+    InhaleTicks: Integer;
+    // Through the inhale the screen goes out under the veil and the hero
+    // is a bare figure; else the world only stands
+    Bare: Boolean;
+    // The flash holds its level this long, then dies over FlashTicks
+    FlashHoldTicks: Integer;
+    FlashTicks: Integer;
+    FlashLevel: Single;
   end;
 
   TBurstEvent = (beNone, beStruck);
@@ -90,10 +120,13 @@ type
       Level: Single;
       // The core color, else the glow; on a dark look it is drawn over
       Body: Boolean;
+      // The look's heart, strong at the head alone; added
+      Heart: Boolean;
     end;
   private
     FBodyOf: TBodyProbe;
     FLook: TBurstLook;
+    FPower: TBurstPower;
     FCurl: Boolean;
     FMatter: TMatter;
     // The hero's center: followed through the inhale, kept from the
@@ -119,6 +152,7 @@ type
     FVertexCount: Integer;
     FIndices: TArray<Integer>;
     FIndexCount: Integer;
+    function GetHolding: Boolean;
     function GetInhaling: Boolean;
     function MatterAt(AX, AY: Single): Boolean;
     procedure Strike(ACenter: TSdlFPoint);
@@ -128,7 +162,8 @@ type
     procedure FlyRay(var ARay: TBurstRay);
     procedure LookForFace(var ARay: TBurstRay; AX, AY, ANextX, ANextY: Single);
     procedure AddPoint(AX, AY, ASpread, AWeight: Single);
-    procedure LayRay(const ARay: TBurstRay; AOrigin: TSdlPoint; AAlpha: Single);
+    procedure LayRay(const ARay: TBurstRay; AOrigin: TSdlPoint; AAlpha: Single;
+      AHeart: Boolean);
     procedure LayRing(AOrigin: TSdlPoint; AShare: Single);
     procedure AppendStrip(const ABand: TBurstBand);
     procedure FlushBand(const ACanvas: TDynamicCanvas; const ABand: TBurstBand);
@@ -150,9 +185,10 @@ type
     constructor Create(const ABody: TBodyProbe);
     destructor Destroy; override;
     // The inhale begins about the hero's center: the world is to stand
-    // InhaleTicks, then the strike. One already going is dropped.
-    procedure Start(const ALook: TBurstLook; ACurl: Boolean;
-      ACenter: TSdlFPoint; const AMatter: TMatter);
+    // the power's InhaleTicks, then the strike. One already going is
+    // dropped.
+    procedure Start(const ALook: TBurstLook; const APower: TBurstPower;
+      ACurl: Boolean; ACenter: TSdlFPoint; const AMatter: TMatter);
     // Once a tick, with the hero's center where the tick has left it
     procedure Tick(ACenter: TSdlFPoint);
     // What has come to pass since the last call
@@ -171,8 +207,8 @@ type
     // The flash, on the glass: no shake
     procedure DrawGlass(const ACanvas: TDynamicCanvas; AAlpha: Single);
     // The inhale: the world stands
-    property Holding: Boolean read GetInhaling;
-    // The inhale: the hero is drawn as a bare figure
+    property Holding: Boolean read GetHolding;
+    // The inhale of a bare burst: the hero is drawn as a bare figure
     property Inhaling: Boolean read GetInhaling;
     // The marks left on the faces and the motes of the echo, as they are
     // now: to be read, not stirred
@@ -181,18 +217,32 @@ type
   end;
 
 const
+  // The suit's inhale
   InhaleTicks = 2;
 
   IceBurstLook: TBurstLook = (
     Glow: (R: 150; G: 225; B: 255); Core: (R: 255; G: 255; B: 255);
     Dark: False; Flash: (R: 200; G: 240; B: 255);
     Veil: (R: 2; G: 5; B: 12); VeilLevel: 0.82;
-    Silhouette: (R: 255; G: 255; B: 255); Mote: (R: 200; G: 240; B: 255));
+    Silhouette: (R: 255; G: 255; B: 255); Mote: (R: 200; G: 240; B: 255);
+    Heart: (R: 255; G: 255; B: 255); HeartLevel: 0);
   MoonBurstLook: TBurstLook = (
     Glow: (R: 225; G: 212; B: 255); Core: (R: 6; G: 0; B: 14);
-    Dark: True; Flash: (R: 225; G: 212; B: 255);
+    Dark: True; Flash: (R: 255; G: 255; B: 255);
     Veil: (R: 235; G: 232; B: 245); VeilLevel: 0.88;
-    Silhouette: (R: 6; G: 0; B: 14); Mote: (R: 6; G: 0; B: 14));
+    Silhouette: (R: 6; G: 0; B: 14); Mote: (R: 6; G: 0; B: 14);
+    Heart: (R: 255; G: 255; B: 255); HeartLevel: 0.9);
+
+  // The burst of the suit, arenas 1 and 2: its reach 420 and the tail
+  SuitBurst: TBurstPower = (Rays: 24; Speed: 20; Tail: 170; Reach: 590;
+    RingRun: 250; RingTicks: 13; InhaleTicks: InhaleTicks; Bare: True;
+    FlashHoldTicks: 0; FlashTicks: 4; FlashLevel: 0.5);
+  // The burst of the eclipse, arena 3: off the farthest corner of the
+  // screen from anywhere on it (its diagonal, 640) with the whole tail;
+  // half a second of inhale; white for two ticks
+  EclipseBurst: TBurstPower = (Rays: 36; Speed: 26; Tail: 340; Reach: 980;
+    RingRun: 420; RingTicks: 16; InhaleTicks: 16; Bare: False;
+    FlashHoldTicks: 2; FlashTicks: 3; FlashLevel: 0.95);
 
 implementation
 
@@ -200,12 +250,6 @@ uses
   System.Math, Render.Glow, Render.Sprites, Game.Space;
 
 const
-  RayCount = 24;
-  RaySpeed = 20; // units a tick
-  RayTail = 170; // units, along the head's way
-  // A ray is gone once its head is this far from the hero's center: its
-  // whole tail is off the screen
-  RayReach = 420 + RayTail;
   // Units: the head looks for a face this often, and the curl turns it
   // this often
   RayStep: Single = 2;
@@ -219,6 +263,8 @@ const
   ProfilePower: Single = 0.7;
   ProfileKnee = 0.8;
   ProfileThinning = 0.6;
+  // A heart climbs to the head as the share to this power
+  HeartPower = 4;
   // Units between the points a ray is laid on
   RaySampleStep = 4;
 
@@ -226,17 +272,12 @@ const
   // of the body
   ChestY = -2;
 
-  RingTicks = 13;
-  // Units: the ring's radius at the strike and what it runs out by. It is
-  // seen from above a little: its height is this share of its width.
+  // Units: the ring's radius at the strike. It is seen from above a
+  // little: its height is this share of its width.
   RingStart = 8;
-  RingRun = 250;
   RingFlatness = 0.86;
   RingFadePower: Single = 1.5;
   RingPoints = 96;
-
-  FlashTicks = 4;
-  FlashLevel = 0.5;
 
   // A mark: units across when grown, the ticks it grows in, the ticks it
   // shows in and its whole life; its white heart - or its dark body - is
@@ -279,18 +320,21 @@ const
   DiceSeed = $42757273; // "Burs"
 
   LightRayBands: array [0..2] of TOrbBurst.TBurstBand = (
-    (Width: 8; Swell: 12; Level: 0.10; Body: False),
-    (Width: 3; Swell: 5; Level: 0.28; Body: False),
-    (Width: 0.6; Swell: 1.2; Level: 0.35; Body: True));
+    (Width: 8; Swell: 12; Level: 0.10; Body: False; Heart: False),
+    (Width: 3; Swell: 5; Level: 0.28; Body: False; Heart: False),
+    (Width: 0.6; Swell: 1.2; Level: 0.35; Body: True; Heart: False));
   DarkRayBands: array [0..2] of TOrbBurst.TBurstBand = (
-    (Width: 10; Swell: 14; Level: 0.18; Body: False),
-    (Width: 4; Swell: 7; Level: 0.45; Body: False),
-    (Width: 0.8; Swell: 2.2; Level: 0.90; Body: True));
+    (Width: 10; Swell: 14; Level: 0.18; Body: False; Heart: False),
+    (Width: 4; Swell: 7; Level: 0.45; Body: False; Heart: False),
+    (Width: 0.8; Swell: 2.2; Level: 0.90; Body: True; Heart: False));
+  // Over the body, its level the look's
+  HeartRayBands: array [0..0] of TOrbBurst.TBurstBand = (
+    (Width: 0.6; Swell: 1.6; Level: 1; Body: False; Heart: True));
   LightRingBands: array [0..0] of TOrbBurst.TBurstBand = (
-    (Width: 1; Swell: 6; Level: 0.8; Body: False));
+    (Width: 1; Swell: 6; Level: 0.8; Body: False; Heart: False));
   DarkRingBands: array [0..1] of TOrbBurst.TBurstBand = (
-    (Width: 4; Swell: 8; Level: 0.85; Body: False),
-    (Width: 1; Swell: 4; Level: 0.90; Body: True));
+    (Width: 4; Swell: 8; Level: 0.85; Body: False; Heart: False),
+    (Width: 1; Swell: 4; Level: 0.90; Body: True; Heart: False));
 
 function UpToOne(AShare: Single): Single;
 begin
@@ -305,6 +349,12 @@ begin
   if AShare > ProfileKnee then
     Result := Result * (1 - ProfileThinning * (AShare - ProfileKnee) /
       (1 - ProfileKnee));
+end;
+
+// The heart is the head's: nothing of it down the tail
+function HeartProfile(AShare: Single): Single;
+begin
+  Result := Power(AShare, HeartPower);
 end;
 
 // The point ADistance units back from the head as drawn, along the way the
@@ -409,9 +459,14 @@ begin
   inherited;
 end;
 
-function TOrbBurst.GetInhaling: Boolean;
+function TOrbBurst.GetHolding: Boolean;
 begin
   Result := FInhaleLeft > 0;
+end;
+
+function TOrbBurst.GetInhaling: Boolean;
+begin
+  Result := Holding and FPower.Bare;
 end;
 
 // Matter on the screen: a solid cell or the body of a pad. Off the screen
@@ -429,15 +484,16 @@ begin
   Result := False;
 end;
 
-procedure TOrbBurst.Start(const ALook: TBurstLook; ACurl: Boolean;
-  ACenter: TSdlFPoint; const AMatter: TMatter);
+procedure TOrbBurst.Start(const ALook: TBurstLook; const APower: TBurstPower;
+  ACurl: Boolean; ACenter: TSdlFPoint; const AMatter: TMatter);
 begin
   Clear;
   FLook := ALook;
+  FPower := APower;
   FCurl := ACurl;
   FCenter := ACenter;
   FMatter := AMatter;
-  FInhaleLeft := InhaleTicks;
+  FInhaleLeft := APower.InhaleTicks;
 end;
 
 procedure TOrbBurst.Clear;
@@ -486,11 +542,11 @@ begin
   var Chest: TSdlFPoint;
   Chest.X := FCenter.X;
   Chest.Y := FCenter.Y + ChestY;
-  SetLength(FRays, RayCount);
-  for var k := 0 to RayCount - 1 do
+  SetLength(FRays, FPower.Rays);
+  for var k := 0 to FPower.Rays - 1 do
   begin
     FRays[k] := Default(TBurstRay);
-    FRays[k].Heading := -Pi / 2 + k * 2 * Pi / RayCount;
+    FRays[k].Heading := -Pi / 2 + k * 2 * Pi / FPower.Rays;
     FRays[k].Track := [Chest];
     FRays[k].WasOpen := OnScreen(Chest.X, Chest.Y) and
       not MatterAt(Chest.X, Chest.Y);
@@ -545,14 +601,14 @@ begin
   var From := ARay.Track[High(ARay.Track)];
   var X: Single := From.X;
   var Y: Single := From.Y;
-  var Left: Single := RaySpeed;
+  var Left: Single := FPower.Speed;
   while Left > 0 do
   begin
     var Step: Single := Min(RayStep, Left);
     Left := Left - Step;
     if FCurl then
       ARay.Heading := ARay.Heading +
-        CurlTurn * Step / RaySpeed * Exp(-ARay.Flown / CurlFade);
+        CurlTurn * Step / FPower.Speed * Exp(-ARay.Flown / CurlFade);
     var NextX: Single := X + Cos(ARay.Heading) * Step;
     var NextY: Single := Y + Sin(ARay.Heading) * Step;
     LookForFace(ARay, X, Y, NextX, NextY);
@@ -570,7 +626,7 @@ begin
   Stretch.ToX := X;
   Stretch.ToY := Y;
   FStretches := FStretches + [Stretch];
-  ARay.Gone := Hypot(X - FCenter.X, Y - FCenter.Y) > RayReach;
+  ARay.Gone := Hypot(X - FCenter.X, Y - FCenter.Y) > FPower.Reach;
 end;
 
 // From the open into matter on the screen: the mark goes on the last point
@@ -627,19 +683,20 @@ begin
 end;
 
 // The ray from its tail to its head, the head drawn on ahead between the
-// ticks; the band swells and strengthens with the profile
+// ticks; the band swells and strengthens with the profile, or with the
+// heart's
 procedure TOrbBurst.LayRay(const ARay: TBurstRay; AOrigin: TSdlPoint;
-  AAlpha: Single);
+  AAlpha: Single; AHeart: Boolean);
 begin
   FPointCount := 0;
   var Last := ARay.Track[High(ARay.Track)];
-  var Ahead: Single := RaySpeed * AAlpha;
+  var Ahead: Single := FPower.Speed * AAlpha;
   var Head: TSdlFPoint;
   Head.X := Last.X + Cos(ARay.Heading) * Ahead;
   Head.Y := Last.Y + Sin(ARay.Heading) * Ahead;
   var TailLength: Single := ARay.Flown + Ahead;
-  if TailLength > RayTail then
-    TailLength := RayTail;
+  if TailLength > FPower.Tail then
+    TailLength := FPower.Tail;
   if TailLength <= 0 then
     Exit;
 
@@ -648,7 +705,10 @@ begin
   begin
     var Back: Single := TailLength * i / Steps;
     var Place := TrailPoint(ARay.Track, Head, Back);
-    var Strength := Profile(1 - Back / TailLength);
+    var Share: Single := 1 - Back / TailLength;
+    var Strength := Profile(Share);
+    if AHeart then
+      Strength := HeartProfile(Share);
     AddPoint(AOrigin.X + Place.X, AOrigin.Y + Place.Y, Strength, Strength);
   end;
 end;
@@ -659,7 +719,7 @@ procedure TOrbBurst.LayRing(AOrigin: TSdlPoint; AShare: Single);
 begin
   FPointCount := 0;
   var Rest: Single := 1 - AShare;
-  var Radius: Single := RingStart + RingRun * (1 - Rest * Rest * Rest);
+  var Radius: Single := RingStart + FPower.RingRun * (1 - Rest * Rest * Rest);
   var Fade: Single := Power(Rest, RingFadePower);
   var MiddleX: Single := AOrigin.X + FCenter.X;
   var MiddleY: Single := AOrigin.Y + FCenter.Y + ChestY;
@@ -684,8 +744,14 @@ begin
       2 * Length(FIndices)));
 
   var Tint := FLook.Glow;
+  var Level := ABand.Level;
   if ABand.Body then
-    Tint := FLook.Core;
+    Tint := FLook.Core
+  else if ABand.Heart then
+  begin
+    Tint := FLook.Heart;
+    Level := Level * FLook.HeartLevel;
+  end;
   var FirstCorner := FVertexCount;
   for var k := 0 to FPointCount - 1 do
   begin
@@ -702,8 +768,7 @@ begin
       NormalY := SpanX / Span;
     end;
     var Half: Single := (ABand.Width + ABand.Swell * FSpreads[k]) / 2;
-    var Alpha: UInt8 := Round(255 * EnsureRange(ABand.Level * FWeights[k],
-      0.0, 1.0));
+    var Alpha: UInt8 := Round(255 * EnsureRange(Level * FWeights[k], 0.0, 1.0));
 
     for var Side := 0 to 1 do
     begin
@@ -761,7 +826,7 @@ begin
     begin
       if Ray.Gone then
         Continue;
-      LayRay(Ray, AOrigin, AAlpha);
+      LayRay(Ray, AOrigin, AAlpha, Band.Heart);
       AppendStrip(Band);
     end;
     FlushBand(ACanvas, Band);
@@ -786,6 +851,8 @@ begin
     DrawRayBands(ACanvas, AOrigin, AAlpha, DarkRayBands)
   else
     DrawRayBands(ACanvas, AOrigin, AAlpha, LightRayBands);
+  if FLook.HeartLevel > 0 then
+    DrawRayBands(ACanvas, AOrigin, AAlpha, HeartRayBands);
 end;
 
 // AShare - of the ring's life gone, 0..1
@@ -896,8 +963,8 @@ begin
   var Since: Single := FAge + AAlpha;
   DrawMarks(ACanvas, AOrigin, AAlpha);
   DrawRays(ACanvas, AOrigin, AAlpha);
-  if Since < RingTicks then
-    DrawRing(ACanvas, AOrigin, Since / RingTicks);
+  if Since < FPower.RingTicks then
+    DrawRing(ACanvas, AOrigin, Since / FPower.RingTicks);
   DrawMotes(ACanvas, AOrigin, AAlpha);
 end;
 
@@ -905,10 +972,11 @@ procedure TOrbBurst.DrawGlass(const ACanvas: TDynamicCanvas; AAlpha: Single);
 begin
   if not FStruck then
     Exit;
-  var Spent: Single := (FAge + AAlpha) / FlashTicks;
+  var Spent: Single := (FAge + AAlpha - FPower.FlashHoldTicks) / FPower.FlashTicks;
   if Spent >= 1 then
     Exit;
-  FillFrame(ACanvas.Renderer, FLook.Flash, FlashLevel * (1 - Spent));
+  FillFrame(ACanvas.Renderer, FLook.Flash,
+    FPower.FlashLevel * (1 - Max(Spent, 0)));
 end;
 
 end.

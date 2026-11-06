@@ -8,7 +8,10 @@
   later and weaker, and both are gone before the next beat; a still heart
   has no pulse. The tempo of the rite of the eclipse is 90 with its ring
   empty, 140 with it full, straight between, held outside; the ticks since
-  a beat count from it, and a still heart has none.
+  a beat count from it, and a still heart has none. The last beat comes on
+  the tick after it is asked for, still heart or not, told once, stronger
+  than any; none comes after it, whatever the tempo, but a stop forgets
+  it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -78,6 +81,16 @@ type
     procedure TestTheTicksSinceABeatCountFromIt;
     [Test]
     procedure TestAStillHeartHasNoBeatToCountFrom;
+    [Test]
+    procedure TestTheLastBeatComesOnTheNextTick;
+    [Test]
+    procedure TestNoBeatComesAfterTheLast;
+    [Test]
+    procedure TestTheLastBeatIsTheStrongest;
+    [Test]
+    procedure TestAStillHeartStrikesItsLastAtOnce;
+    [Test]
+    procedure TestAStopForgetsTheLastBeat;
   end;
 
 implementation
@@ -91,6 +104,8 @@ const
   SecondTicks = 33;
   // A beat at the fastest tempo of the last percents
   FastBeatTicks = 22;
+  // The tempo of the full ring
+  RiteFullTempo = 140;
 
 procedure THeartbeatTempoTests.TestSixtyAtTheHeartbeatsCharge;
 begin
@@ -285,6 +300,66 @@ begin
   Strikes(5, 60);
   FHeart.Stop;
   Assert.AreEqual(-1.0, Double(FHeart.SinceBeat(0.5)), PulseSlop, 'Stopped');
+end;
+
+procedure THeartbeatTests.TestTheLastBeatComesOnTheNextTick;
+begin
+  Strikes(5, RiteFullTempo);
+  FHeart.StrikeLast;
+  Assert.IsFalse(FHeart.Struck or FHeart.Final, 'Not before the tick');
+  FHeart.Tick(RiteFullTempo);
+  Assert.IsTrue(FHeart.Struck, 'Struck');
+  Assert.IsTrue(FHeart.Final, 'The last');
+  FHeart.Tick(RiteFullTempo);
+  Assert.IsFalse(FHeart.Final, 'Told once');
+end;
+
+procedure THeartbeatTests.TestNoBeatComesAfterTheLast;
+const
+  Long = 3 * SecondTicks;
+begin
+  Strikes(5, RiteFullTempo);
+  FHeart.StrikeLast;
+  FHeart.Tick(RiteFullTempo);
+  Assert.AreEqual(0, Length(Strikes(Long, RiteFullTempo)), 'Still');
+  Assert.IsTrue(FHeart.Running, 'Not stopped: still is not stopped');
+  Assert.AreEqual(Double(Long), Double(FHeart.SinceBeat(0)), PulseSlop,
+    'The ticks since the last');
+end;
+
+procedure THeartbeatTests.TestTheLastBeatIsTheStrongest;
+begin
+  FHeart.Tick(RiteFullTempo);
+  var Ordinary := FHeart.Pulse(0);
+  FHeart.StrikeLast;
+  FHeart.Tick(RiteFullTempo);
+  Assert.AreEqual(Double(Ordinary * LastBeatStrength), Double(FHeart.Pulse(0)),
+    PulseSlop, 'On the beat');
+  Assert.IsTrue(FHeart.Pulse(0) > Ordinary, 'Stronger than an ordinary one');
+end;
+
+procedure THeartbeatTests.TestAStillHeartStrikesItsLastAtOnce;
+begin
+  FHeart.StrikeLast;
+  FHeart.Tick(RiteFullTempo);
+  Assert.IsTrue(FHeart.Struck and FHeart.Final, 'The last, at once');
+  Assert.IsTrue(FHeart.Running, 'Beating');
+end;
+
+procedure THeartbeatTests.TestAStopForgetsTheLastBeat;
+begin
+  FHeart.StrikeLast;
+  FHeart.Stop;
+  FHeart.Tick(60);
+  Assert.IsTrue(FHeart.Struck, 'At once after a stop');
+  Assert.IsFalse(FHeart.Final, 'Not the last: asked before the stop');
+
+  FHeart.StrikeLast;
+  FHeart.Tick(60);
+  FHeart.Stop;
+  var Struck := Strikes(2 * SecondTicks, 60);
+  Assert.AreEqual(2, Length(Struck), 'Beating as ever after a stop');
+  Assert.AreEqual(SecondTicks, Struck[1], 'Once a second');
 end;
 
 initialization

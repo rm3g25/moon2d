@@ -333,6 +333,8 @@ type
     procedure ClearHeroOfHull;
     procedure ClearEclipse;
     procedure BeginMoonRite;
+    procedure BurstEclipse;
+    procedure TearDark;
     function HullBox: TSdlFRect;
     function EclipseMatter: TMatter;
     function RingProgress: TRingProgress;
@@ -909,6 +911,8 @@ begin
   Calls.ShedSuit := FOrbs.ShedSuit;
   Calls.Burst := FOrbs.BurstSuit;
   Calls.BeginMoonRite := BeginMoonRite;
+  Calls.BurstEclipse := BurstEclipse;
+  Calls.TearDark := TearDark;
   FHenshin := THenshin.Create(Stage, Calls);
   FField := TMonsterField.Create(FRenderer, FMonsters, FLevel, FPads,
     FDifficulty, DifficultyMonsterLives[FDifficulty]);
@@ -2931,12 +2935,15 @@ begin
 end;
 
 // Past the bunker, from the heartbeat's charge on: its tempo rises with the
-// last percents, then with the ring of the rite. The monitor hears a beat a
-// tick late - it has ticked already
+// last percents, then with the ring of the rite, to the burst's last beat;
+// from its strike the heart is the monitor's own again. The monitor hears
+// a beat a tick late - it has ticked already
 procedure TMoonGame.TickHeartbeat;
 begin
   var Energy := FOrbs.Energy;
-  if FEclipse.Running then
+  if FEclipse.Struck then
+    FHeartbeat.Stop
+  else if FEclipse.Running then
     FHeartbeat.Tick(RiteTempo(RingProgress.Share))
   else if FPastBunker and (Energy >= HeartbeatCharge) then
     FHeartbeat.Tick(ChargeTempo(Energy))
@@ -2946,6 +2953,9 @@ begin
   if not FHeartbeat.Struck then
     Exit;
   FAudio.Play(HeartbeatSoundFile);
+  // The last beat twice at once: louder
+  if FHeartbeat.Final then
+    FAudio.Play(HeartbeatSoundFile);
   FVitals.Beat;
 end;
 
@@ -2987,6 +2997,22 @@ begin
   if FHero.Screen = FLevel.FarPlane.Screen then
     Deep := FLevel.FarPlane.CityPoints(FFarPlane.Offsets);
   FOrbs.BeginMoonRite(EclipseMatter, Deep);
+end;
+
+// The orbs gone into him, the heart's last beat, then the inhale's
+// silence
+procedure TMoonGame.BurstEclipse;
+begin
+  FOrbs.BurstEclipse;
+  FHeartbeat.StrikeLast;
+end;
+
+// The light is back at once; the Ram is thrown away from the hero, where
+// the burst came out of him
+procedure TMoonGame.TearDark;
+begin
+  FEclipse.Strike;
+  FRam.Stun(HeroCenter);
 end;
 
 // The matter of his screen with the hull on it and, on the screen of the

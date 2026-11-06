@@ -65,7 +65,9 @@ type
     FPattern: TOrbPattern; // the figure the rite builds
     FMoonRite: TMoonRite; // the orbs of the moon form's henshin
     FBurst: TOrbBurst; // the light the suit cannot hold
-    // What the burst under way has wounded: none loses more than a life
+    // The burst under way strikes what its rays meet; what it has wounded
+    // - none loses more than a life
+    FBurstStrikes: Boolean;
     FBurstWounded: TList<TMonster>;
     FRain: TOrbRain; // the fire rain of orbs
     FFeed: TOrbFeed; // the charge of the form on its way to the gauge
@@ -78,6 +80,8 @@ type
     procedure ResolveOrbHits(const AFlock: TOrbFlock);
     procedure StrikeWithBurst(AX, AY: Single);
     procedure ResolveBurstHits;
+    procedure LaunchBurst(const ALook: TBurstLook; const APower: TBurstPower;
+      ACurl: Boolean);
   public
     constructor Create(const AProbes: TOrbProbes;
       const ATargets: TOrbTargets);
@@ -104,9 +108,13 @@ type
     procedure BeginMoonRite(const AMatter: TMatter;
       const ADeep: TArray<TSdlFPoint>);
     procedure ShedSuit;
+    // The suit's burst in ALook, as arenas 1 and 2 have it
     procedure StartBurst(const ALook: TBurstLook);
     // The ice suit's burst, as the ceremony asks for it
     procedure BurstSuit;
+    // The burst at the end of the rite of the eclipse: the moon look, the
+    // eclipse's strength, its rays straight and striking nothing
+    procedure BurstEclipse;
     procedure FeedEnergy(AAmount: Integer);
     // The charge rises in the gauge by itself, no orb carries it: the
     // stone charging as the fight goes
@@ -276,19 +284,35 @@ begin
 end;
 
 // The burst is the living hero's, like the rite's: over the corpse it is
-// spent on nothing. A vortex sends its rays out curled.
-procedure THeroOrbs.StartBurst(const ALook: TBurstLook);
+// spent on nothing
+procedure THeroOrbs.LaunchBurst(const ALook: TBurstLook;
+  const APower: TBurstPower; ACurl: Boolean);
 begin
   if not FProbes.Alive() then
     Exit;
   FBurstWounded.Clear;
-  FBurst.Start(ALook, FPattern.Name = 'vortex', FProbes.Center(),
-    FProbes.Matter());
+  FBurst.Start(ALook, APower, ACurl, FProbes.Center(), FProbes.Matter());
+end;
+
+// A vortex sends its rays out curled
+procedure THeroOrbs.StartBurst(const ALook: TBurstLook);
+begin
+  LaunchBurst(ALook, SuitBurst, FPattern.Name = 'vortex');
+  FBurstStrikes := True;
 end;
 
 procedure THeroOrbs.BurstSuit;
 begin
   StartBurst(IceBurstLook);
+end;
+
+procedure THeroOrbs.BurstEclipse;
+const
+  // The rite of the eclipse has a figure of its own, not the level's
+  Straight = False;
+begin
+  LaunchBurst(MoonBurstLook, EclipseBurst, Straight);
+  FBurstStrikes := False;
 end;
 
 // The charge is the living hero's, like the rite's; what would run the
@@ -405,6 +429,8 @@ end;
 // behind walls as well
 procedure THeroOrbs.ResolveBurstHits;
 begin
+  if not FBurstStrikes then
+    Exit;
   for var Stretch in FBurst.Stretches do
   begin
     var SpanX: Single := Stretch.ToX - Stretch.FromX;

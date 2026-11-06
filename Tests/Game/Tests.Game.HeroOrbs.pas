@@ -3,7 +3,9 @@
   up for the living and refuse the dead, the charge a new level, a new
   screen, a death and a restart leave, the charge that rises with no orb
   to carry it, and what its orbs and its burst strike through the targets
-  the game hands in.
+  the game hands in. The eclipse's burst holds the world with the hero in
+  his own shape, strikes nothing, and leaves the next burst of the suit
+  striking again.
 
   The hero is a point in a walled room, his body has no points, and the
   targets are the fixture's: a bullet or a monster stands everywhere or
@@ -93,6 +95,14 @@ type
     procedure TestBurstWoundsMonsterOncePerBurst;
     [Test]
     procedure TestNextBurstWoundsAgain;
+    [Test]
+    procedure TestTheEclipsesBurstHoldsTheWorldWithNoFigure;
+    [Test]
+    procedure TestTheEclipsesBurstStrikesNothing;
+    [Test]
+    procedure TestASuitsBurstAfterTheEclipsesStrikesAgain;
+    [Test]
+    procedure TestCorpseBurstsNoEclipse;
   end;
 
 implementation
@@ -449,6 +459,42 @@ begin
   FOrbs.StartBurst(IceBurstLook);
   RunBurstOut;
   Assert.AreEqual(2, FWounds);
+end;
+
+procedure THeroOrbsTests.TestTheEclipsesBurstHoldsTheWorldWithNoFigure;
+begin
+  FOrbs.BurstEclipse;
+  Assert.IsTrue(FOrbs.Holding, 'The world stands');
+  Assert.IsFalse(FOrbs.Inhaling, 'The hero in his own shape');
+  RunBurstOut;
+  Assert.IsFalse(FOrbs.Holding, 'The world goes on');
+end;
+
+procedure THeroOrbsTests.TestTheEclipsesBurstStrikesNothing;
+begin
+  FMonsterEverywhere := True;
+  FBulletsEverywhere := True;
+  FOrbs.BurstEclipse;
+  RunBurstOut;
+  Assert.AreEqual(0, FWounds, 'Wounds');
+  Assert.AreEqual(0, FPops, 'Bullets put out');
+end;
+
+procedure THeroOrbsTests.TestASuitsBurstAfterTheEclipsesStrikesAgain;
+begin
+  FMonsterEverywhere := True;
+  FOrbs.BurstEclipse;
+  RunBurstOut;
+  FOrbs.StartBurst(IceBurstLook);
+  RunBurstOut;
+  Assert.AreEqual(1, FWounds);
+end;
+
+procedure THeroOrbsTests.TestCorpseBurstsNoEclipse;
+begin
+  FAlive := False;
+  FOrbs.BurstEclipse;
+  Assert.IsFalse(FOrbs.Holding, 'No burst holds the world');
 end;
 
 initialization

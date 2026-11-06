@@ -3,7 +3,10 @@
   inhale in which the world stands, the strike told once, the rays - how
   many, which way, alike, through matter and off the screen, curled in a
   vortex -, the stretches the game strikes along, the marks on the faces
-  and the motes out of the body.
+  and the motes out of the body. The eclipse's burst: half a second of
+  inhale with the hero in his own shape, thirty-six rays every ten
+  degrees, faster and farther than the suit's, on past the whole
+  diagonal of the screen from its corner.
 
   The rays are watched by the stretches alone: a test joins every tick's
   stretches into the way of each head. The marks and the motes are read
@@ -48,6 +51,12 @@ type
     function NoBody: TBodyPoints;
     procedure RemakeBurst(const ABody: TBodyProbe);
     procedure Start(ACurl: Boolean);
+    // The eclipse's: the moon look at its strength, no curl
+    procedure StartEclipse;
+    // How far the farthest head ended from where its ray began, and the
+    // length of a ray's first stretch, of the ways FlyOut followed
+    function FarthestReach: Single;
+    function FirstStep: Single;
     // One tick, the hero stepped first; the twin, if any, ticks along
     procedure Tick;
     procedure Run(ACount: Integer);
@@ -120,6 +129,14 @@ type
     procedure TestMoonBurstFliesAsTheIceOne;
     [Test]
     procedure TestSameCallsGiveTheSameBurst;
+    [Test]
+    procedure TestTheEclipsesInhaleStandsHalfASecondWithNoFigure;
+    [Test]
+    procedure TestTheEclipseSendsThirtySixRaysEveryTenDegrees;
+    [Test]
+    procedure TestTheEclipsesRaysFlyFasterAndFartherThanTheSuits;
+    [Test]
+    procedure TestFromACornerTheEclipsesRaysFlyOnPastTheDiagonal;
   end;
 
 implementation
@@ -138,6 +155,13 @@ const
   AngleSlack = 0.01; // degrees
   // The rays leave from the chest: one point, this near the middle
   ChestReach = 4; // units
+  EclipseRays = 36;
+  EclipseApart = 10; // degrees
+  // From one corner of the screen to the other
+  ScreenDiagonal = 640; // units
+  // The hero's middle in the top left corner of the walled room
+  CornerX = 40;
+  CornerY = 40;
   // Rays alike: their stretches as long and their heads as far out, to
   // within these
   LengthSlack = 0.01; // units
@@ -329,7 +353,28 @@ procedure TOrbBurstTests.Start(ACurl: Boolean);
 begin
   FWays := nil;
   FTicks := 0;
-  FBurst.Start(IceBurstLook, ACurl, FCenter, FMatter);
+  FBurst.Start(IceBurstLook, SuitBurst, ACurl, FCenter, FMatter);
+end;
+
+procedure TOrbBurstTests.StartEclipse;
+begin
+  FWays := nil;
+  FTicks := 0;
+  FBurst.Start(MoonBurstLook, EclipseBurst, False, FCenter, FMatter);
+end;
+
+function TOrbBurstTests.FarthestReach: Single;
+begin
+  Result := 0;
+  for var Way in FWays do
+    Result := Max(Result, Distance(Way[0].X, Way[0].Y, Way[High(Way)].X,
+      Way[High(Way)].Y));
+end;
+
+function TOrbBurstTests.FirstStep: Single;
+begin
+  Result := Distance(FWays[0][0].X, FWays[0][0].Y, FWays[0][1].X,
+    FWays[0][1].Y);
 end;
 
 procedure TOrbBurstTests.Tick;
@@ -1024,8 +1069,8 @@ procedure TOrbBurstTests.TestMoonBurstFliesAsTheIceOne;
 begin
   FMatter := MatterFromRows(SlabRows);
   FTwin := TOrbBurst.Create(BodyAboutHero);
-  FBurst.Start(IceBurstLook, True, FCenter, FMatter);
-  FTwin.Start(MoonBurstLook, True, FCenter, FMatter);
+  FBurst.Start(IceBurstLook, SuitBurst, True, FCenter, FMatter);
+  FTwin.Start(MoonBurstLook, SuitBurst, True, FCenter, FMatter);
 
   for var i := 0 to InhaleTicks + LongestFlight do
   begin
@@ -1041,13 +1086,97 @@ begin
   FMatter := MatterFromRows(SlabRows);
   FTwin := TOrbBurst.Create(BodyAboutHero);
   FWalk := 1;
-  FBurst.Start(IceBurstLook, True, FCenter, FMatter);
-  FTwin.Start(IceBurstLook, True, FCenter, FMatter);
+  FBurst.Start(IceBurstLook, SuitBurst, True, FCenter, FMatter);
+  FTwin.Start(IceBurstLook, SuitBurst, True, FCenter, FMatter);
 
   for var i := 0 to InhaleTicks + TenSeconds do
   begin
     Tick;
     ExpectSameAsTwin(i);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// The eclipse's burst
+// ---------------------------------------------------------------------------
+
+procedure TOrbBurstTests.TestTheEclipsesInhaleStandsHalfASecondWithNoFigure;
+begin
+  StartEclipse;
+  for var i := 1 to HalfSecond do
+  begin
+    Assert.IsTrue(FBurst.Holding,
+      Format('Before tick %d of the inhale: the world goes on', [i]));
+    Assert.IsFalse(FBurst.Inhaling,
+      Format('Before tick %d of the inhale: the hero is a bare figure', [i]));
+    Tick;
+    if i < HalfSecond then
+      Assert.AreEqual<TBurstEvent>(beNone, FBurst.DrainEvent,
+        Format('Tick %d of the inhale: struck', [i]));
+  end;
+  Assert.AreEqual<TBurstEvent>(beStruck, FBurst.DrainEvent,
+    'Struck as the half second ends');
+  Assert.IsFalse(FBurst.Holding, 'The world goes on');
+end;
+
+procedure TOrbBurstTests.TestTheEclipseSendsThirtySixRaysEveryTenDegrees;
+begin
+  StartEclipse;
+  Run(HalfSecond);
+
+  var Stretches := FBurst.Stretches;
+  Assert.AreEqual(EclipseRays, Length(Stretches), 'Rays');
+  var Seen: TArray<Boolean>;
+  SetLength(Seen, EclipseRays);
+  for var Stretch in Stretches do
+  begin
+    Assert.IsTrue(Distance(Stretch.FromX, Stretch.FromY, FCenter.X,
+      FCenter.Y) <= ChestReach, 'A ray leaves far from the chest');
+    var Turn := TurnFromUp(PointAt(Stretch.FromX, Stretch.FromY),
+      PointAt(Stretch.ToX, Stretch.ToY));
+    var Index := Round(Turn / EclipseApart);
+    Assert.IsTrue(Abs(Turn - Index * EclipseApart) < AngleSlack, Format(
+      'A ray goes %.3f degrees from up: not a multiple of %d',
+      [Turn, EclipseApart]));
+    Index := Index mod EclipseRays;
+    Assert.IsFalse(Seen[Index], Format('Two rays go %d degrees from up',
+      [Index * EclipseApart]));
+    Seen[Index] := True;
+  end;
+  Assert.IsTrue(Seen[0], 'No ray goes straight up');
+end;
+
+procedure TOrbBurstTests.TestTheEclipsesRaysFlyFasterAndFartherThanTheSuits;
+begin
+  Start(False);
+  Inhale;
+  FlyOut;
+  var SuitStep := FirstStep;
+  var SuitReach := FarthestReach;
+
+  StartEclipse;
+  Run(HalfSecond - 1);
+  Assert.IsTrue(FlyOut <= LongestFlight, 'The eclipse''s rays never leave');
+  Assert.IsTrue(FirstStep > SuitStep, Format('No faster: %.1f against %.1f',
+    [FirstStep, SuitStep]));
+  Assert.IsTrue(FarthestReach > SuitReach, Format(
+    'No farther: %.1f against %.1f', [FarthestReach, SuitReach]));
+end;
+
+procedure TOrbBurstTests.TestFromACornerTheEclipsesRaysFlyOnPastTheDiagonal;
+begin
+  FCenter := PointAt(CornerX, CornerY);
+  StartEclipse;
+  Run(HalfSecond - 1);
+  Assert.IsTrue(FlyOut <= LongestFlight, 'The rays never leave');
+  Assert.AreEqual(EclipseRays, Length(FWays), 'Rays');
+  for var i := 0 to High(FWays) do
+  begin
+    var Way := FWays[i];
+    var Reach := Distance(Way[0].X, Way[0].Y, Way[High(Way)].X,
+      Way[High(Way)].Y);
+    Assert.IsTrue(Reach > ScreenDiagonal, Format(
+      'Ray %d is gone %.1f units out, within the diagonal', [i, Reach]));
   end;
 end;
 

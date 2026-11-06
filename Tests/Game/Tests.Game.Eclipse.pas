@@ -10,7 +10,10 @@
   and the flash dying; the orbs are told to go in once, the ring's time in
   the beam after the landing; the heart's ripples run from the first seat
   till then; a clear takes it all away. The controls are the hero's all
-  through the scene: it holds nothing.
+  through the scene: it holds nothing. The burst's strike tears the dark
+  off in one tick, takes the beam and the ripples, leaves the gauge out
+  for good and cues nothing more; the scene spares him on till its clear,
+  and a strike outside it is nothing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -82,6 +85,18 @@ type
     procedure TestTheRipplesRunFromTheFirstSeatTillTheOrbsGoIn;
     [Test]
     procedure TestAClearTakesItAllAway;
+    [Test]
+    procedure TestTheStrikeTearsTheDarkOffInOneTick;
+    [Test]
+    procedure TestAfterTheStrikeTheGaugeStaysOut;
+    [Test]
+    procedure TestTheStrikeTakesTheBeamAndTheRipples;
+    [Test]
+    procedure TestNothingIsCuedAfterTheStrike;
+    [Test]
+    procedure TestStruckItSparesHimTillTheClear;
+    [Test]
+    procedure TestNoStrikeOutsideTheScene;
   end;
 
 implementation
@@ -423,6 +438,90 @@ begin
   Assert.AreEqual(0.0, Double(FEclipse.Ripple(0)), Slop, 'No ripples');
   Assert.AreEqual(0.0, Double(FEclipse.Beam(0)), Slop, 'No beam');
   Assert.AreEqual(0.0, Double(FEclipse.BeamFlash(0)), Slop, 'No flash');
+end;
+
+procedure TEclipseTests.TestTheStrikeTearsTheDarkOffInOneTick;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  TickTimes(WholeScene);
+  Assert.AreEqual(Double(DarkDepth), Double(FEclipse.Darkness(0)), Slop,
+    'In before the strike');
+  FEclipse.Strike;
+  for var Step := 0 to 2 do
+    Assert.AreEqual(0.0, Double(FEclipse.Darkness(Step / 2)), Slop,
+      Format('Gone at once, %d halves of the tick on', [Step]));
+  TickTimes(DarkTicks);
+  Assert.AreEqual(0.0, Double(FEclipse.Darkness(0.5)), Slop, 'And stays gone');
+end;
+
+procedure TEclipseTests.TestAfterTheStrikeTheGaugeStaysOut;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  // Halfway into the dark
+  TickTimes(FFillFrom + DarkTicks div 2);
+  FEclipse.Strike;
+  for var i := 1 to WholeScene do
+  begin
+    Tick;
+    Assert.AreEqual(1.0, Double(FEclipse.Fade(0)), Slop,
+      Format('Out at %d', [i]));
+    Assert.AreEqual(1.0, Double(FEclipse.Fade(1)), Slop,
+      Format('Out between the ticks at %d', [i]));
+  end;
+end;
+
+procedure TEclipseTests.TestTheStrikeTakesTheBeamAndTheRipples;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  // The beam landed, its flash still on, the ripples running
+  TickTimes(FullAt + BeamFallTicks);
+  Assert.AreEqual(1.0, Double(FEclipse.Beam(0)), Slop, 'The beam on him');
+  Assert.IsTrue(FEclipse.Ripple(0) > 0, 'The ripples run');
+  FEclipse.Strike;
+  Assert.AreEqual(0.0, Double(FEclipse.Beam(0)), Slop, 'No beam');
+  Assert.AreEqual(0.0, Double(FEclipse.BeamFlash(0)), Slop, 'No flash');
+  Assert.AreEqual(0.0, Double(FEclipse.Ripple(0)), Slop, 'No ripples');
+  TickTimes(WholeScene);
+  Assert.AreEqual(0.0, Double(FEclipse.Beam(1)), Slop, 'Never again');
+end;
+
+procedure TEclipseTests.TestNothingIsCuedAfterTheStrike;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  TickTimes(FullAt);
+  FEclipse.Strike;
+  for var i := 1 to WholeScene do
+  begin
+    var Cue := Tick;
+    Assert.IsFalse(Cue.Called or Cue.FirstSeat or Cue.Beam or Cue.DrawIn,
+      Format('A cue at %d after the strike', [i]));
+  end;
+end;
+
+procedure TEclipseTests.TestStruckItSparesHimTillTheClear;
+begin
+  FillFrom(CallAt + FirstSeatAfterCall, QuickOrbs);
+  FEclipse.Start;
+  TickTimes(WholeScene);
+  Assert.IsFalse(FEclipse.Struck, 'Not before the strike');
+  FEclipse.Strike;
+  Assert.IsTrue(FEclipse.Struck, 'Struck');
+  TickTimes(WholeScene);
+  Assert.IsTrue(FEclipse.Running and FEclipse.Spares, 'Still sparing him');
+  FEclipse.Clear;
+  Assert.IsFalse(FEclipse.Struck, 'A clear forgets it');
+  Assert.IsFalse(FEclipse.Spares, 'Nor spares any more');
+end;
+
+procedure TEclipseTests.TestNoStrikeOutsideTheScene;
+begin
+  FEclipse.Strike;
+  Assert.IsFalse(FEclipse.Struck, 'Nothing to strike');
+  Assert.AreEqual(0.0, Double(FEclipse.Fade(0)), Slop, 'The gauge as it was');
 end;
 
 initialization

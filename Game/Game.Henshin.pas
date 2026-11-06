@@ -21,8 +21,9 @@
   The moon form comes by the rite of the eclipse (Orbs.Moonrite), in a
   scene the game runs (Game.Eclipse): the shout, then the game is asked for
   the rite. The ceremony hears it as it hears the ice form's: the light
-  fills the body as the orbs go in, and as the last one does the hero is
-  cured and wears the moon form.
+  fills the body as the orbs go in, and as the last one does the game is
+  asked for the eclipse's burst. At its strike the hero is cured and wears
+  the moon form, and the game is asked to tear the darkness off.
 
   The ceremony acts on the stage it is given - the hero, the sound bank,
   the message board, the shake meter, the shroud, the rite, the burst -
@@ -63,6 +64,9 @@ type
   // The rite of the eclipse begins about the hero, owned by the game: it
   // knows the matter about him and the depth of the far city
   TBeginMoonRite = reference to procedure;
+  // The burst of the eclipse has struck, owned by the game: the light is
+  // back, and what stands in the scene takes the blow
+  TTearDark = reference to procedure;
 
   // What the ceremony acts on
   THenshinStage = record
@@ -85,6 +89,9 @@ type
     ShedSuit: TShedSuit;
     Burst: TBurstSuit;
     BeginMoonRite: TBeginMoonRite;
+    // The burst at the end of the rite of the eclipse, owned by the game
+    BurstEclipse: TBurstSuit;
+    TearDark: TTearDark;
   end;
 
   THenshin = class
@@ -101,15 +108,16 @@ type
     // The 3..2..1 prelude; 0 = idle
     FCountdownDigit: Integer;
     FCountdownTick: Integer;
-    // The ceremony has asked for the burst and waits for its strike: a
-    // burst it did not ask for puts no suit on
-    FBursting: Boolean;
+    // The form the burst the ceremony has asked for puts on at its strike;
+    // hfNormal - none asked: a burst it did not ask for puts no suit on
+    FBurstForm: THeroForm;
     procedure TickCountdown;
     procedure Shout;
     procedure HearRite;
     procedure HearMoonRite;
     procedure HearBurst;
     procedure Finish;
+    procedure FinishEclipse;
   public
     constructor Create(const AStage: THenshinStage;
       const ACalls: THenshinCalls);
@@ -150,8 +158,9 @@ const
   PerkTicks = 300;  // 'ICE FORM: прыжок +25%' (501)
 
   // The screen-shake dose of the burst's strike (2026 addition), a trauma
-  // share - see Render.Shake for the meter
+  // share - see Render.Shake for the meter; the eclipse's is the strongest
   FinishTrauma = 0.7;
+  EclipseTrauma = 1.0;
   // As the suit goes on: with the point of each wave that sat, the six of
   // the 2008 ceremony
   SuitCures = 3;
@@ -190,7 +199,7 @@ procedure THenshin.Reset;
 begin
   FCountdownDigit := 0;
   FCountdownTick := 0;
-  FBursting := False;
+  FBurstForm := hfNormal;
   FHero.HeroForm := hfNormal;
 end;
 
@@ -304,7 +313,7 @@ begin
         FShroud.Start(ChargeLook(IceRiteScore.CollapseTicks));
       reFinished:
         begin
-          FBursting := True;
+          FBurstForm := hfIce;
           FCalls.Burst();
         end;
     end;
@@ -322,9 +331,8 @@ begin
         FShroud.Start(ChargeLook(MoonRiteScore.CollapseTicks));
       mvFinished:
         begin
-          for var i := 1 to SuitCures do
-            FCalls.Cure();
-          FHero.HeroForm := hfMoon;
+          FBurstForm := hfMoon;
+          FCalls.BurstEclipse();
         end;
     end;
     Event := FMoonRite.DrainEvent;
@@ -336,8 +344,13 @@ begin
   var Event := FBurst.DrainEvent;
   while Event <> beNone do
   begin
-    if (Event = beStruck) and FBursting then
-      Finish;
+    if Event = beStruck then
+      case FBurstForm of
+        hfIce:
+          Finish;
+        hfMoon:
+          FinishEclipse;
+      end;
     Event := FBurst.DrainEvent;
   end;
 end;
@@ -345,7 +358,7 @@ end;
 // The strike of the burst: the suit is on
 procedure THenshin.Finish;
 begin
-  FBursting := False;
+  FBurstForm := hfNormal;
   FMessages.AddTicker(Tr(SIceFormPerk), PerkTicks);
   for var i := 1 to SuitCures do
     FCalls.Cure();
@@ -354,6 +367,20 @@ begin
   FAudio.Play(BottleSoundFile);
   FShake.AddTrauma(FinishTrauma);
   FMessages.ShowBig(Tr(SIceForm), BigMessageTicks);
+end;
+
+// The strike of the eclipse's burst: the moon form is on, the light back.
+// The flash sounds twice at once - louder than the suit's
+procedure THenshin.FinishEclipse;
+begin
+  FBurstForm := hfNormal;
+  for var i := 1 to SuitCures do
+    FCalls.Cure();
+  FHero.HeroForm := hfMoon;
+  FAudio.Play(BottleSoundFile);
+  FAudio.Play(BottleSoundFile);
+  FShake.AddTrauma(EclipseTrauma);
+  FCalls.TearDark();
 end;
 
 procedure THenshin.RemoveIceForm;

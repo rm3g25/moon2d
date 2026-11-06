@@ -9,8 +9,10 @@
   fade; the darker the world, the fuller the ring; the ring full, a column
   of light falls from above onto him and stays, beating with the heart.
   The ring beats in it a while, then the scene tells its orbs to go into
-  him. From the start nothing wounds the hero; the controls stay his, so
-  the ring and the beam keep to him wherever he runs.
+  him. The burst that follows strikes the darkness off in one tick: the
+  light is back, the beam gone, the gauge out for good. From the start
+  nothing wounds the hero; the controls stay his, so the ring and the beam
+  keep to him wherever he runs.
 
   The scene knows neither the Ram, the gauge nor the orbs: the game starts
   it, hands it how far the ring has come every tick, carries out its cues
@@ -71,6 +73,8 @@ type
     // The ticks of the first orb in its seat and of the beam; -1 before
     FFirstSeatAt: Integer;
     FBeamAt: Integer;
+    // The burst has struck: the light is back
+    FStruck: Boolean;
     // The darkness at this tick and at the one before
     FDark: Single;
     FDarkBefore: Single;
@@ -82,12 +86,16 @@ type
     procedure Start;
     procedure Clear;
     function Tick(const ARing: TRingProgress): TEclipseCue;
+    // The burst has struck: the dark, the beam and the ripples are gone at
+    // once; nothing more is cued
+    procedure Strike;
     // From the brake on: nothing wounds the hero
     function Spares: Boolean;
     // How dark the world is, 0 to DarkDepth: AAlpha of the way from the
     // last tick to this one
     function Darkness(AAlpha: Single): Single;
-    // How far the gauge has gone out with the light, 0..1
+    // How far the gauge has gone out with the light, 0..1; out for good
+    // once the burst has struck
     function Fade(AAlpha: Single): Single;
     // How strongly the heart's ripples run over the dark, 0..1: as dark as
     // it is, from the first orb in its seat till the orbs go into him
@@ -97,6 +105,7 @@ type
     // The landing's flash: 1 as the beam reaches him, gone BeamFlashTicks on
     function BeamFlash(AAlpha: Single): Single;
     property Running: Boolean read FRunning;
+    property Struck: Boolean read FStruck;
   end;
 
   TEclipsePainter = class
@@ -205,6 +214,17 @@ begin
   FTicks := 0;
   FFirstSeatAt := -1;
   FBeamAt := -1;
+  FStruck := False;
+  FDark := 0;
+  FDarkBefore := 0;
+end;
+
+// The dark and the tick before it alike, so not a frame of it is drawn
+procedure TEclipseScene.Strike;
+begin
+  if not FRunning then
+    Exit;
+  FStruck := True;
   FDark := 0;
   FDarkBefore := 0;
 end;
@@ -231,7 +251,7 @@ end;
 function TEclipseScene.Tick(const ARing: TRingProgress): TEclipseCue;
 begin
   Result := Default(TEclipseCue);
-  if not FRunning then
+  if not FRunning or FStruck then
     Exit;
   Inc(FTicks);
   Result.Called := FTicks = CallAt;
@@ -270,27 +290,29 @@ end;
 
 function TEclipseScene.Fade(AAlpha: Single): Single;
 begin
+  if FStruck then
+    Exit(1);
   Result := Darkness(AAlpha) / DarkDepth;
 end;
 
 function TEclipseScene.Ripple(AAlpha: Single): Single;
 begin
   var Drawn := (FBeamAt >= 0) and (FTicks >= DrawInAt);
-  if not FRunning or (FFirstSeatAt < 0) or Drawn then
+  if not FRunning or FStruck or (FFirstSeatAt < 0) or Drawn then
     Exit(0);
   Result := Fade(AAlpha);
 end;
 
 function TEclipseScene.Beam(AAlpha: Single): Single;
 begin
-  if not FRunning or (FBeamAt < 0) then
+  if not FRunning or FStruck or (FBeamAt < 0) then
     Exit(0);
   Result := SmoothStep((Clock(AAlpha) - FBeamAt) / BeamFallTicks);
 end;
 
 function TEclipseScene.BeamFlash(AAlpha: Single): Single;
 begin
-  if not FRunning or (FBeamAt < 0) then
+  if not FRunning or FStruck or (FBeamAt < 0) then
     Exit(0);
   var Since := Clock(AAlpha) - (FBeamAt + BeamFallTicks);
   if Since < 0 then

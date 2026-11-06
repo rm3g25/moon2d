@@ -81,7 +81,12 @@
   its hunt down to a stand, the hiss and the jolt once as it stops, the
   lamps burning; it stands there with its eye lit, wherever the hero
   goes, and neither touches nor throws him. A hero in the hull is set out
-  away from its middle; one clear of it is not.
+  away from its middle; one clear of it is not. The burst throws it half a
+  cell away from where it came out - to its left from his right, to its
+  right from his left, stern first from its middle - fast, then slower,
+  and it stands there; not in its hunt. Stunned, its lamps are out, its
+  eye flickers out of step, and it neither touches, throws nor brakes
+  again.
 
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
@@ -164,6 +169,9 @@ type
     FRam: TRam;
     procedure HuntPastTheBunker(const ATarget: TRamTarget);
     procedure BringToAStand(const ATarget: TRamTarget);
+    // At a stand, stunned by a burst out of AFromX at the middle of the
+    // hull's height; where it stood
+    function StunFrom(const ATarget: TRamTarget; AFromX: Single): Single;
   public
     [Setup]
     procedure Setup;
@@ -182,6 +190,22 @@ type
     procedure TestStandingItNeitherTouchesNorThrows;
     [Test]
     procedure TestAHeroInTheHullIsSetOutAwayFromItsMiddle;
+    [Test]
+    procedure TestTheBurstThrowsItHalfACellAwayFromHim;
+    [Test]
+    procedure TestFromItsLeftTheBurstThrowsItRight;
+    [Test]
+    procedure TestFromItsMiddleItGoesSternFirst;
+    [Test]
+    procedure TestTheThrowIsFastThenSlower;
+    [Test]
+    procedure TestNoStunInItsHunt;
+    [Test]
+    procedure TestStunnedItsLampsAreOut;
+    [Test]
+    procedure TestStunnedItsEyeFlickersOutOfStep;
+    [Test]
+    procedure TestStunnedItNeitherTouchesThrowsNorBrakes;
   end;
 
   [TestFixture]
@@ -2062,6 +2086,10 @@ const
   // warns, it surges toward nearly the right edge and is back within a
   // few seconds
   FarHeroX = 480.0;
+  // The burst's throw: half a cell, over within a quarter of a second
+  HalfACell = 16.0;
+  ThrownTicks = 8;
+  PlaceSlop = 0.001;
   HoldTicks = 150;
   SoonestSurgeTicks = 150;
   SurgeFarthestLeast = 400.0;
@@ -3231,6 +3259,14 @@ begin
   Assert.Fail('It never stood');
 end;
 
+function TRamBrakeTests.StunFrom(const ATarget: TRamTarget;
+  AFromX: Single): Single;
+begin
+  BringToAStand(ATarget);
+  Result := FRam.Left;
+  FRam.Stun(At(AFromX, RamTop + RamHeight / 2));
+end;
+
 procedure TRamBrakeTests.TestNoBrakeWhileItTurnsOffTheScreen;
 begin
   FRam.StartPastBunker(OrdersAt(Stop));
@@ -3309,6 +3345,138 @@ begin
   Assert.IsFalse(FRam.InTheHull(OnTheRoad(FRam.Left + RamWidth + 10), Away),
     'Clear of it');
   Assert.AreEqual(0, Away, 'Nowhere to go');
+end;
+
+procedure TRamBrakeTests.TestTheBurstThrowsItHalfACellAwayFromHim;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  var Stood := StunFrom(Hero, CenterOf(Hero).X);
+  Assert.IsTrue(FRam.Stunned, 'Stunned');
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(Double(Stood - HalfACell), Double(FRam.Left), PlaceSlop,
+    'Half a cell to the left of him');
+  for var i := 1 to ManyTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(Double(Stood - HalfACell), Double(FRam.Left), PlaceSlop,
+    'And it stands there');
+end;
+
+procedure TRamBrakeTests.TestFromItsLeftTheBurstThrowsItRight;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  var Stood := StunFrom(Hero, 0);
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(Double(Stood + HalfACell), Double(FRam.Left), PlaceSlop);
+end;
+
+procedure TRamBrakeTests.TestFromItsMiddleItGoesSternFirst;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  BringToAStand(Hero);
+  Assert.IsTrue(FRam.HullMirrored, 'Bow to the right since its hunt');
+  var Stood := FRam.Left;
+  FRam.Stun(At(Stood + RamWidth / 2, RamTop + RamHeight / 2));
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(Double(Stood - HalfACell), Double(FRam.Left), PlaceSlop,
+    'Its stern to the left');
+end;
+
+procedure TRamBrakeTests.TestTheThrowIsFastThenSlower;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  var Steps: TArray<Single> := [];
+  for var i := 1 to ThrownTicks do
+  begin
+    FRam.Tick(Hero);
+    if FRam.Rolled <> 0 then
+      Steps := Steps + [Abs(FRam.Rolled)];
+  end;
+  Assert.IsTrue(Length(Steps) >= 2, 'Thrown over more than a tick');
+  for var i := 1 to High(Steps) do
+    Assert.IsTrue(Steps[i] < Steps[i - 1], Format(
+      'Slower at step %d: %.2f after %.2f', [i, Steps[i], Steps[i - 1]]));
+end;
+
+procedure TRamBrakeTests.TestNoStunInItsHunt;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  HuntPastTheBunker(Hero);
+  FRam.Stun(CenterOf(Hero));
+  Assert.IsFalse(FRam.Stunned, 'Not stunned');
+  Assert.IsTrue(FRam.Hunt = htHunting, 'Hunting on');
+end;
+
+procedure TRamBrakeTests.TestStunnedItsLampsAreOut;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  FRam.Tick(Hero);
+  Assert.AreEqual(0.0, Double(FRam.LampsAt(1)), 0.001, 'Out');
+  for var i := 1 to ManyTicks do
+    FRam.Tick(Hero);
+  Assert.AreEqual(0.0, Double(FRam.LampsAt(1)), 0.001, 'Out for good');
+end;
+
+// Its breath changes every tick and a blink keeps an even beat: stunned,
+// the eye holds a level for runs of uneven length, dark and bright by
+// turns
+procedure TRamBrakeTests.TestStunnedItsEyeFlickersOutOfStep;
+const
+  Watched = 200;
+  DarkAtMost = 0.15;
+  BrightAtLeast = 0.7;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  var Dark := 0;
+  var Bright := 0;
+  var Runs: TArray<Integer> := [];
+  var Run := 0;
+  var Last: Single := -1;
+  for var i := 1 to Watched do
+  begin
+    FRam.Tick(Hero);
+    var Eye := FRam.Eye;
+    if Eye <= DarkAtMost then
+      Inc(Dark);
+    if Eye >= BrightAtLeast then
+      Inc(Bright);
+    if (i > 1) and (Eye <> Last) then
+    begin
+      Runs := Runs + [Run];
+      Run := 0;
+    end;
+    Inc(Run);
+    Last := Eye;
+  end;
+  Assert.IsTrue(Dark > 0, 'Never dark');
+  Assert.IsTrue(Bright > 0, 'Never bright');
+  var Uneven := False;
+  for var i := 1 to High(Runs) do
+    Uneven := Uneven or (Runs[i] <> Runs[0]);
+  Assert.IsTrue(Uneven, 'In step: every level held as long');
+end;
+
+procedure TRamBrakeTests.TestStunnedItNeitherTouchesThrowsNorBrakes;
+var
+  Away: Integer;
+  Throw: TOverTheHull;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunFrom(Hero, CenterOf(Hero).X);
+  for var i := 1 to ThrownTicks do
+    FRam.Tick(Hero);
+  var InIt := OnTheRoad(FRam.Left + RamWidth / 2);
+  Assert.IsTrue(FRam.Halted, 'Halted');
+  Assert.IsFalse(FRam.Contact(InIt, False, False, Away), 'No touch');
+  Assert.IsFalse(FRam.ThrowsOverTheHull(InIt, True, Throw), 'No throw');
+  Assert.IsFalse(FRam.CanBrake, 'Nothing to brake');
+  FRam.BrakeToAStand;
+  Assert.IsTrue(FRam.Stunned, 'Stunned on');
 end;
 
 initialization

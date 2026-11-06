@@ -144,7 +144,10 @@
   At the henshin the game brakes it: down to a stand by its brake, the
   lamps burning, and the hiss and the jolt as it stops. Then it stands
   with its eye lit, and nothing of it wounds or throws; a hero caught in
-  the hull the game sets out of it.
+  the hull the game sets out of it. The burst at the end of the henshin
+  throws it half a cell away from the hero and stuns it: its eye catches
+  and drops out of step, its lamps go out, smoke comes out of its wheel
+  arches. Stunned, it stands as harmless as before.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -206,9 +209,10 @@ type
   // The bunker's last third: none yet; the change - the wave called in,
   // the eye's warning; the pass through the hero off the left edge; the
   // turn round out there; the drive in again; the hunt, bow first; at the
-  // henshin, the brake and the stand after it
+  // henshin, the brake and the stand after it; thrown by its burst and
+  // stunned
   TBunkerHunt = (htNone, htCalling, htPassing, htTurning, htEntering,
-    htHunting, htBraking, htHalted);
+    htHunting, htBraking, htHalted, htStunned);
 
   // The hunt's surge toward the right edge: waiting for the next; the
   // eye's warning; the surge, then back to the left half
@@ -420,6 +424,11 @@ type
     FHuntTicks: Integer;
     FRowsIn: Boolean;
     FRamStandTicks: Integer;
+    // Thrown by the burst: where it stood and which way it goes, -1 left;
+    // ticks the stunned eye holds its level yet
+    FStunFrom: Single;
+    FStunSide: Integer;
+    FFlickerTicks: Integer;
     // The way the hull faces: -1 left, as the art is drawn
     FHullFacing: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -457,6 +466,8 @@ type
     function HuntMark: Single;
     procedure TickSurge;
     procedure TickBrake;
+    procedure TickStun;
+    procedure FlickerEye;
     function HuntLine: Single;
     function NextSurgeWait: Integer;
     function SurgeWarns: Boolean;
@@ -593,8 +604,14 @@ type
     // Down to a stand, and standing from then on; nothing for one that
     // cannot brake
     procedure BrakeToAStand;
-    // Braking or standing for the henshin: nothing of it wounds or throws
+    // Braking or standing for the henshin, or stunned by its burst:
+    // nothing of it wounds or throws
     function Halted: Boolean;
+    // The burst of the henshin out of AFrom: thrown away from it half a
+    // cell, stern first when it comes out of the middle, and stunned from
+    // then on; nothing for one not braking or standing
+    procedure Stun(const AFrom: TSdlFPoint);
+    function Stunned: Boolean;
     // Some of AHeroBody is in the hull or a wheel: AAway - the side to set
     // him out to, as a touch would throw him; 0 - straight up
     function InTheHull(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
@@ -750,6 +767,10 @@ type
     // The dust the wave kicks up where its front runs along the road, one
     // a side of the blast
     FWaveDust: array [0..1] of TSmoke;
+    // Out of the wheel arches of a stunned machine; ticks since the stun
+    FArchSmoke: array [0..1] of TSmoke;
+    FArchSmoking: Boolean;
+    FArchSmokeTicks: Integer;
     FArrivals: Integer;
     procedure TickArrival;
     procedure TickExhausts(ABeltShift: Single);
@@ -757,6 +778,7 @@ type
     procedure TickShorts;
     procedure TickColumn(ABeltShift: Single);
     procedure TickWaveDust;
+    procedure TickArchSmoke(ABeltShift: Single);
     procedure DrawLid(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
     procedure DrawColumn(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
@@ -792,8 +814,9 @@ type
       AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
-    // The dust of the wave, the bolts of a head, the shield, the sweeper's
-    // plates, the wave itself and the white of the blast
+    // The dust of the wave, the smoke out of the arches, the bolts of a
+    // head, the shield, the sweeper's plates, the wave itself and the
+    // white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // The eye once more, over a darkness ADepth deep: the body's eye is
@@ -1100,6 +1123,14 @@ const
   RamStandTicks = 50;
   // The brake of the henshin: the stop the whole screen feels
   HaltJolt = 0.3;
+  // Its burst throws it half a cell, fast and slowing to a stand
+  StunThrow = 16.0;
+  StunThrowTicks = 6;
+  // Stunned, its eye catches and drops out of step: dark this share of the
+  // time, each level held a few ticks, as the dice pick
+  StunDarkShare = 0.45;
+  StunFlickerLeast = 1;
+  StunFlickerMost = 5;
 
   // The eye: a circle around the lens; a hit flashes it white
   EyeRadius = 5.0;
@@ -1281,6 +1312,19 @@ const
   WaveDustSeeds: array [0..1] of Cardinal = ($44737431, $44737432); // "Dst1"
   // Its puffs rise off the road, not out of it
   WaveDustOverRoad = 1.0;
+
+  // Stunned, it smokes out of its wheel arches, over the top of each tyre:
+  // thick at first, then a thin trickle
+  ArchSmokePoints: array [0..1] of THullPoint = ((X: 61.1; Y: 86.0),
+    (X: 133.2; Y: 86.0));
+  ArchSmokeLook: TSmokeLook = (Rate: 22; Life: 1.8; Size: 3; EndSize: 22;
+    Opacity: 0.55; Angle: 90; Cone: 40; Speed: 14; Drag: 0.5; Lift: 0;
+    Wind: 0; Turbulence: 4; Spin: 30; Flow: sfGusty; Frequency: 1;
+    Heat: 0; EndTint: (R: 40; G: 40; B: 44));
+  ArchSmokeSeeds: array [0..1] of Cardinal = ($41726331, $41726332); // "Arc1"
+  ArchSmokeThickTicks = 100;
+  ArchSmokeThin = 0.35;
+  ArchSmokeThinTicks = 66;
 
   // The exhausts: where the jet leaves the mouths of the two pipes on the
   // stern. It flies back on its own speed and does not rise - no air to
@@ -2918,6 +2962,8 @@ begin
       TickHuntDrive;
     htBraking:
       TickBrake;
+    htStunned:
+      TickStun;
   end;
 end;
 
@@ -3061,7 +3107,48 @@ end;
 
 function TRam.Halted: Boolean;
 begin
-  Result := FHunt in [htBraking, htHalted];
+  Result := FHunt in [htBraking, htHalted, htStunned];
+end;
+
+procedure TRam.Stun(const AFrom: TSdlFPoint);
+begin
+  if not (FHunt in [htBraking, htHalted]) then
+    Exit;
+  var Middle: Single := FX + RamWidth / 2;
+  FStunSide := -FHullFacing;
+  if AFrom.X > Middle then
+    FStunSide := -1
+  else if AFrom.X < Middle then
+    FStunSide := 1;
+  FHunt := htStunned;
+  FHuntTicks := 0;
+  FStunFrom := FX;
+  FSpeed := 0;
+  FBraking := False;
+  FLampHold := 0;
+  FFlickerTicks := 0;
+end;
+
+function TRam.Stunned: Boolean;
+begin
+  Result := FHunt = htStunned;
+end;
+
+// Thrown off the road's grip: fast, slower, at rest half a cell on. The
+// mast swings with the shove.
+procedure TRam.TickStun;
+begin
+  if FHuntTicks >= StunThrowTicks then
+    Exit;
+  Inc(FHuntTicks);
+  var OldSpeed := FSpeed;
+  var Share: Single := FHuntTicks / StunThrowTicks;
+  var Next: Single := FStunFrom + FStunSide * StunThrow * (1 - Sqr(1 - Share));
+  FSpeed := Next - FX;
+  FX := Next;
+  FAccel := FSpeed - OldSpeed;
+  if FHuntTicks = StunThrowTicks then
+    FSpeed := 0;
 end;
 
 function TRam.InTheHull(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
@@ -3258,7 +3345,9 @@ end;
 
 procedure TRam.TickLamps;
 begin
-  if FBraking then
+  if FHunt = htStunned then
+    FLamps := 0
+  else if FBraking then
     FLamps := 1
   else if FLampHold > 0 then
     Dec(FLampHold)
@@ -3273,6 +3362,8 @@ procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
+  else if FHunt = htStunned then
+    FlickerEye
   else if (FPhase in [rpRising, rpChanging]) or FRetreating or Overloading or
     (FFallBack = fbWarning) or (FHunt in [htCalling, htTurning]) or
     SurgeWarns then
@@ -3298,6 +3389,23 @@ begin
     FEye := Lerp(EyeBreathLow, EyeBreathHigh, Breath);
     Inc(FBreathTicks);
   end;
+end;
+
+// A level the dice pick, held as long as they say: a dark one, or one
+// from its breath up to a flash
+procedure TRam.FlickerEye;
+begin
+  if FFlickerTicks > 0 then
+  begin
+    Dec(FFlickerTicks);
+    Exit;
+  end;
+  FFlickerTicks := StunFlickerLeast +
+    Trunc(FDice.NextUnit * (StunFlickerMost - StunFlickerLeast + 1));
+  if FDice.NextUnit < StunDarkShare then
+    FEye := EyeBlinkLow
+  else
+    FEye := Lerp(EyeBreathLow, 1, FDice.NextUnit);
 end;
 
 // The first wink comes the tick the head locks. The lens burns red,
@@ -4006,10 +4114,15 @@ begin
   for var i := Low(FWaveDust) to High(FWaveDust) do
     FWaveDust[i] := TSmoke.CreateLook(DustPlacement, WaveDustLook, 0,
       WaveDustSeeds[i]);
+  for var i := Low(FArchSmoke) to High(FArchSmoke) do
+    FArchSmoke[i] := TSmoke.CreateLook(Placement, ArchSmokeLook, 0,
+      ArchSmokeSeeds[i]);
 end;
 
 destructor TRamPainter.Destroy;
 begin
+  for var Smoke in FArchSmoke do
+    Smoke.Free;
   for var Dust in FWaveDust do
     Dust.Free;
   FColumn.Free;
@@ -4033,6 +4146,7 @@ begin
   TickShorts;
   TickColumn(ABeltShift);
   TickWaveDust;
+  TickArchSmoke(ABeltShift);
 end;
 
 // A machine come anew left nothing in the air
@@ -4053,6 +4167,9 @@ begin
   FColumn.Rewind;
   for var Dust in FWaveDust do
     Dust.Rewind;
+  FArchSmoking := False;
+  for var Smoke in FArchSmoke do
+    Smoke.Rewind;
 end;
 
 // One that drives smokes hard, on the road or on the belt
@@ -4167,6 +4284,33 @@ begin
     var Kicking := Crossing and (X >= 0) and (X <= ScreenWidth);
     FWaveDust[i].FadeTo(Ord(Kicking), 0);
     FWaveDust[i].Tick(X, RamFloorY - WaveDustOverRoad, Kicking);
+  end;
+end;
+
+procedure TRamPainter.TickArchSmoke(ABeltShift: Single);
+begin
+  if not FRam.Present then
+    Exit;
+  var Stunned := FRam.Stunned;
+  if Stunned <> FArchSmoking then
+  begin
+    FArchSmoking := Stunned;
+    FArchSmokeTicks := 0;
+    for var Smoke in FArchSmoke do
+      Smoke.FadeTo(Ord(Stunned), 0);
+  end;
+  if Stunned then
+  begin
+    Inc(FArchSmokeTicks);
+    if FArchSmokeTicks = ArchSmokeThickTicks then
+      for var Smoke in FArchSmoke do
+        Smoke.FadeTo(ArchSmokeThin, ArchSmokeThinTicks);
+  end;
+  for var i := Low(FArchSmoke) to High(FArchSmoke) do
+  begin
+    var Spot := FRam.HullSpot(FRam.Left, ArchSmokePoints[i]);
+    FArchSmoke[i].Drift(-ABeltShift, 0);
+    FArchSmoke[i].Tick(Spot.X, Spot.Y, Stunned);
   end;
 end;
 
@@ -4547,6 +4691,9 @@ begin
     Exit;
   for var Dust in FWaveDust do
     Dust.Draw(ACanvas, Dust.Origin.X + AOrigin.X, Dust.Origin.Y + AOrigin.Y,
+      AAlpha);
+  for var Smoke in FArchSmoke do
+    Smoke.Draw(ACanvas, Smoke.Origin.X + AOrigin.X, Smoke.Origin.Y + AOrigin.Y,
       AAlpha);
   for var Short in FShorts do
     Short.Draw(ACanvas, Short.Origin.X + AOrigin.X, Short.Origin.Y + AOrigin.Y,
