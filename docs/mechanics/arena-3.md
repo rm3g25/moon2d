@@ -446,6 +446,23 @@ Over "Evolution and the moon form", "Air phase" and "Decided 2026-11-01, the fig
 - The boss track comes back where it paused, fading in. *Replaced 2026-11-06: the music starts again at the fall of the honeycomb (18a-2), so the takeoff plays on under it - see "The throw".*
 - What follows is the air phase (stage 18d), not designed yet: the road's edge, the long pads, how the machine fights. Till then it hangs.
 
+**Decided 2026-11-07, the takeoff rewritten** (over the points above where they disagree):
+- **The fire out of the front well.** Where the first wheel was, a jet of fire bursts down out of the empty well: the bow lifts off the road, the plough out of it, the hull rocking up about its rear wheel - the lean of 18b turned the other way.
+- **The second wheel spat out.** A jet out of the rear well too, and the second wheel is spat out of it and rolls at the hero as the first did (`TLooseWheel`, from the other axle): a second jump, a second dodge. Not thrown off the screen to the left with a clank out there - a wheel the player never sees is a shot fired at nothing.
+- **Level in the air.** On its two jets the hull rights itself as it rises: it swings past level, back, and settles, a spring dying out - then it is steady.
+- **Over the hero, and it hangs.** It rises to stand over him and hangs there; how it keeps to him (over him or over a fixed point), and whether its hull wounds by touch in the air, are the stage's design.
+- **The jets** are drawn in code as the pads' are, the blue of a jet or the fire of a burst well - no new art; if they read poorly, art later.
+- **The hero watches.** Through the takeoff he has the controls and his old gun; the gun does nothing to the hull (it ricochets, 3.0.110). He has only the second wheel to mind.
+- **The orb gun and the health bar come together, after the takeoff**, once the hull hangs: a bar without a weapon that strikes it would be a promise with no button.
+
+**The orb gun (decided 2026-11-07)**: the moon form's weapon, the one thing that wounds the Ram's body.
+- **Like any weapon it replaces the one he holds** (the Duplet, the chain, whatever it is); its ammunition is endless.
+- **Its fire is the chain's of level 2** (`weapon3`: a cooldown of 5, bullets at 10, three bullets a shot a unit apart) with one orb a shot instead of three, a little faster - a cooldown of 4 as a first guess. A sound of its own. One orb, one life.
+- **The look of the shot**: a black orb with the moon look (the white heart, the light halo of `MoonBurstLook`), not a bullet; "a sledgehammer after a pistol" from "Evolution and the moon form" gives way to the fire just decided - heavier in look and sound, not slower.
+- **What it strikes**: the Ram's bare hull, which loses a life to each orb; the loose wheels and anything else of it throw an orb off as they throw a bullet off. Its old bullets ricochet on, as since 3.0.110.
+- **The Ram's lives**: 150 on the first grade, scaled by the grade as the heads' are (`HunterLives` and the rest); its long bar over it shows them.
+- **How the gun comes to him is open** (see "Open"): down from above in some way, a scene of its own.
+
 ### Restart points
 Over "a death restarts the fight from its start" for everything after the bunker:
 - **Point A, the bunker's death.** A death from there till the takeoff brings the hero back right before the henshin with 5 health: the bunker dead, the Ram hunting empty-masted from the left, the charge at 97 and the last 3% played again. The far plane goes on from where it stands.
@@ -1138,18 +1155,24 @@ Each its own commit, each run live.
      - 16c-2. **The order reworked, the lift and the beam.** Built (3.0.102), see "Stage 16c-2 as built". The corona, the diamond and the beam out of the disc taken out (decided 2026-11-05, see "100%: the brake and the eclipse"); the control taken at rest, the hero held (`THero`) and lifted a cell, drawn clear of an edge or the hull first; the light going with the gauge; the beam falling from above. The lift waits there for the rite's orbs (16d), which take over its moment.
    - 16d. **The rite.** Built (3.0.103), see "Stage 16d as built"; the hold taken out (3.0.104), see "Stage 16d reworked". Between the catch and the beam: the lift is theirs, the dark deepens with them, the beam comes when the ring is full. The orbs one by one from the surfaces and out of the depth of the far city, the tempo on the beat; the beating ring (the pattern "eclipse"); the collapse; `hfMoon` with the jump +25%.
    - 16e. **The burst.** Built (3.0.106), see "Stage 16e as built". Stronger rays in the moon look, the white flash, the light back at once, the shake; the Ram thrown back and stunned.
-17. **The moon form.** Orb gun piercing armour, fire rain, black orb aura. The form's value and its jump came with 16d (3.0.103).
+17. **The moon form.** Orb gun piercing armour, fire rain, black orb aura. The form's value and its jump came with 16d (3.0.103). The orb gun decided 2026-11-07 (see "The takeoff"), in steps after 18c:
+   - 17a. **The orb gun comes.** Its scene (open: how it comes down), the gun in his hands in place of his own, the Ram's long bar coming up with it.
+   - 17b. **The orb gun fires.** One black orb a shot, a cooldown of 4, endless; its sound; an orb wounds the bare hull by a life of 150 (the grade's), the bar following; whatever else of the Ram it meets throws it off.
 18. **Air phase.** Split (2026-11-04), the first three designed in "The henshin, the throw and the takeoff":
    - 18a. **The throw.** Split (2026-11-06):
      - 18a-1. **The grip and the spin.** Built (3.0.107), see "Stage 18a-1 as built". The Ram drives off to the left, a cell of road behind it; the catch, the hero carried to the right over the road, the controls not his till the wheel but for the press; a floor of 4 pads called in; the orbs out of him onto the pads' beams, the jets dead, the pads gliding to a wide arc round the Ram and spinning about their beams on the beat; the hum, the Ram's lights in alarm, the hint.
      - 18a-2. **The volley.** Built (3.0.108), see "Stage 18a-2 as built". The press (or 3 s), each pad let go at its own small delay, the flight off the arc at the honeycomb (the wrecks' flight, aimed), the blasts, a piece of the honeycomb shattered at each hit, the last a big blast, the rest going out cell by cell from the hits outward, the silence.
    - 18b. **The wheel.** Built (3.0.109), see "Stage 18b as built"; the bare hull's ricochet (3.0.110), see "The bare hull's ricochet as built". The front wheel off, the hull's lean and the scrape with sparks, the wheel rolling right and wounding, the control given back.
-   - 18c. **The takeoff.** The second wheel thrown left, the jets in the wells, the hull level and hanging, its long health bar, point B with 5 health (the music is back since the honeycomb, 18a-2).
+   - 18c. **The takeoff.** Rewritten 2026-11-07 (see "The takeoff"), split:
+     - 18c-1. **Up off the road.** The jet out of the front well and the bow lifting; the jet out of the rear well spitting the second wheel at the hero; the hull righting itself in the air, swinging and settling. The hero only watches and jumps the wheel.
+     - 18c-2. **It hangs.** Risen over the hero and hanging there; how it keeps to him; whether its touch wounds in the air; point B with 5 health. The bar waits for the orb gun (17a). The music is back since the honeycomb (18a-2).
    - 18d and on. **The air fight**, designed in a chat of its own: the takeoff (wheels in, nozzles out), the road's edge and no floor past it, the long pads flying with the hero, the fall back onto a pad; grenades, guns, the hull open to orbs. Likely split into steps when designed. Art: the road's edge, the machine on its nozzles, the long pads with their nozzles to the left.
 19. **The blast.** The explosion, the form off, silence instead of the victory track, the hand-over to the titles (docs/mechanics/finale.md, stage F7; the titles themselves, F1-F6, can be built before the boss).
 20. **Tests and docs.** Codebase maps, PORTING-NOTES, TESTING.md, this plan.
 
 ## Open
+- **How the orb gun comes to him** (17a, open 2026-11-07): down from above, the rest not settled. Three ways on the table: in a beam - the column of moonlight of 16c falls once more and the gun comes down in it into his hands (the beam's code is there); out of orbs - the black orbs that held the pads fly together off their wrecks into his hands and make the gun (the throw handing him its strength); both - orbs coming down in the beam and gathering into the gun. The beam if the gun gets art of its own; the orbs if the gun is drawn in code out of them.
+- **The order of 17 and 18c**: the takeoff first (18c-1, 18c-2), the orb gun and the bar after it (17a, 17b) - the hero watches the takeoff with his old gun.
 - **Phase 1 is far too easy** (the live run of 3.0.94). The bunker went from unkillable to very easy at once, and three phases are still ahead of it. Left as it is for now (2026-11-03): the three phases are tuned together once 14c is in - what phase 1 asks of the player (its lives, how often it lobs, how hard the shells and the column punish, how the pads lead up to it), and how the three phases grow from it.
 - Phase 3's numbers (3.0.98, live): whether the wave's flight reads as a sight or as noise, and whether it lasts the pass; the turn out of sight and the eye's red at the edge; the bow's step behind him and its speed; whether the left reads as the machine's - a hero behind its stern backed into, one on a pad carried back over its hatch; the ram and the stand after it; the groups after the wave, denser. Then the three phases tuned together (see above).
 - The machine after the bunker (3.0.98): it hunts on, invulnerable, till the henshin; at 100 it brakes (16c). It faces right from the hunt on, so the wheel that comes off is the right one and the air phase begins with it facing right.
