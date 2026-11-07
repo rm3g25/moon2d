@@ -148,6 +148,29 @@ influence.
 The security system (turret, TEK-R1, boss1) is the second faction of
 threats: TEK machines running the quarantine protocol.
 
+### Names
+
+A monster of `bin/monsters.json` keeps its two names there,
+`displayName` and `displayNameEn`; they are not repeated here. This
+table holds the names that have no home in the data - machines the code
+builds. The official name of a machine is its kind and its index, the
+index first in English (as "TEK-J02 Tank", "Танк TEK-J02"). A name that
+reaches the screen goes into `bin/lang/*.json`, and this table points
+there.
+
+The documents and the code call a thing by its code name; the name the
+player sees is the data's, and the two may differ: the Duplet of the
+documents and of `DupletWeapon` is "Double Tap" in the English game and
+"Дуплет" in the Russian one.
+
+| en | ru | what | lives in |
+|---|---|---|---|
+| TEK-R13 Ram | Таран TEK-R13 | the boss of level 2, the machine of arena 3: three heads on a mast | `Game.Ram` |
+| the hunter | охотник | the Ram's first head | `Game.Ram`, `rhHunter` |
+| the sweeper | свипер | the Ram's second head | `Game.Ram`, `rhSweeper` |
+| the bunker | бункер | the Ram's third head | `Game.Ram`, `rhBunker` |
+| TEK-Q6, the Cordon | TEK-Q6, Кордон | TEK's orbital machine holding the quarantine; flies over screen 9 of level 1 | the craft `cordon` in `bin/level1.json`, art `cordon.mset` |
+
 The final monster (level 10): a **warden from Selene**, who came not by
 accident — it wants to close the Rift from its own side. The hero is,
 in essence, fighting it for the right to keep the door ajar. Morally
