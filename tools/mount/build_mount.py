@@ -1,4 +1,4 @@
-"""Builds bin/sprites/mount-hull.mset - the HD art of the TeK ceiling mount -
+"""Builds bin/sprites/mount-hull.mset - the HD art of the TEK ceiling mount -
 from two generated pictures: the pod whole and the same pod battle-worn.
 
     python build_mount.py build <sources dir> ../../bin/sprites/mount-hull.mset
@@ -131,7 +131,7 @@ def build(source_dir, set_path):
     hull_size = f'{width}x{height}, {WIDTH_UNITS} x {HEIGHT_UNITS} units'
     spot = lambda name: '%.1f, %.1f' % spots[name]
     description = (
-        f'HD art of the TeK ceiling mount, drawn by code in place of the \'alive\' frame of krep.mset: '
+        f'HD art of the TEK ceiling mount, drawn by code in place of the \'alive\' frame of krep.mset: '
         f'{DENSITY} px per screen unit, front view, mirror-symmetric, never mirrored. Back to front: hull, '
         f'hullDamaged. The pod is as tall as its cell and hangs from the flat top edge of its flange. Points '
         f'in screen units from the top-left corner: lens {spot("lens")} (lens radius %.1f); gun ports, '

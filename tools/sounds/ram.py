@@ -1,4 +1,4 @@
-"""Synthesises the three sounds of TeK-R13, the Ram, into bin/sounds:
+"""Synthesises the three sounds of TEK-R13, the Ram, into bin/sounds:
 ramrumble.wav, ramhiss.wav, ramwhine.wav. 44.1 kHz, 16 bit, mono - as the
 armor pings.
 

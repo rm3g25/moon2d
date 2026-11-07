@@ -275,7 +275,7 @@ maneuver and on its row being open; the first run shows it.
 State: written, 11 tests, green (239 in the suite). The expectations were
 checked on a Python port of the strip and of the offset's range. The unit
 is tried by `Tests\Monsters\Tests.Monsters.Mount.pas`, fixture
-`TMountTests`: the TeK mount in an open room, the hero two numbers handed
+`TMountTests`: the TEK mount in an open room, the hero two numbers handed
 to `Tick`.
 
 Two things are tried: the fire offset of a placement (the tick a mount

@@ -40,7 +40,7 @@
   without the section has no fangs.
 
   The city lives: its lights ("cityLights" - a box and a colour on a piece
-  of the kit, riding with every building drawn from it), the TeK emblem
+  of the kit, riding with every building drawn from it), the TEK emblem
   standing on a spire ("emblem"), the red beacons on a frame's upper nodes
   ("beacons", and "beaconsAbove" of the frame) and the emblem as old paint
   on a wall ("paint" of a placed building). Here they are numbers; how
@@ -161,7 +161,7 @@ type
     function HasLamps: Boolean;
   end;
 
-  // The TeK emblem: a neon sign on the lower point of its frame at the tip
+  // The TEK emblem: a neon sign on the lower point of its frame at the tip
   // of a building drawn from Piece (AtU, AtV of its picture). W units wide
   // at the domes' nearness, H = W * Aspect; the metal at Shade, the tubes
   // and their glows added in Color. Parts and Halos are boxes in shares of

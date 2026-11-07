@@ -1231,7 +1231,7 @@ type
     property Columns: TList<TConvoyColumn> read FColumns;
   end;
 
-  // The tiny lights of TeK columns crawling along a far ledge: a warm
+  // The tiny lights of TEK columns crawling along a far ledge: a warm
   // headlight in front, dim running lights, a red tail light at the back,
   // and on some columns an orange flasher between them. The tint is the
   // color of the headlights, size their halo across in units; the other

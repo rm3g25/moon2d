@@ -118,7 +118,7 @@ play since 3.0.42: they stay in each set as the `death-2008` sequence.
 
 **The medkit** (`sprites/medic.mset`, sprites `medkit`, `light` and `gone`) -
 since 3.0.50, generated with ChatGPT's image model to the author's direction
-(a TeK field case seen from the front on a clear ground), then packed by
+(a TEK field case seen from the front on a clear ground), then packed by
 `tools/medkit/build_medkit.py`: the generator's alpha put right, the case
 set in the cell of a monster, standing on its bottom edge, and scaled to
 192x192 (6 px per screen unit) with a bled edge. `light` is the cross of
@@ -145,7 +145,7 @@ shaft behind, scaled and packed by `tools/fans/build_fans.py`. On level 2
 they replaced the 2008 tiles `cooler1`-`cooler4` and `ventelat`, which
 stay in `machinery.mset` unplaced.
 
-**The TeK platform's hull** (`sprites/platform-hull.mset`) - since 3.0.36,
+**The TEK platform's hull** (`sprites/platform-hull.mset`) - since 3.0.36,
 generated with ChatGPT's image model to the author's direction (a clean and
 a battle-worn hull of the same geometry), then cut out by one shared frame,
 scaled to 240x122 (6 px per screen unit), given a bled edge and packed. The
@@ -153,7 +153,7 @@ hull replaced the three flight frames `plat1`-`plat3` of the platform, which
 stay in `platform.mset`; the 2008 death frames there are out of play since
 3.0.42, as the barrel's.
 
-**The TeK tank's hull** (`sprites/tank-hull.mset`) - since 3.0.45, generated
+**The TEK tank's hull** (`sprites/tank-hull.mset`) - since 3.0.45, generated
 with ChatGPT's image model to the author's direction (the tank whole, the same tank
 battle-worn, one wheel in flat light), then cut into layers and packed by
 `tools/tank/build_tank.py`: the wheels cut out of both hulls by the frame of
@@ -163,15 +163,15 @@ wheels painted in, the wheel's hub moved onto the tyre's axis, all scaled to
 edge. The hull replaced the three drive frames `tank1`-`tank3` of the tank,
 which stay in `tank.mset`.
 
-**The TeK mount's hull** (`sprites/mount-hull.mset`) - generated with ChatGPT's image
+**The TEK mount's hull** (`sprites/mount-hull.mset`) - generated with ChatGPT's image
 model to the author's direction (the ceiling pod whole, the same pod battle-worn),
 then cut by one shared frame, scaled to 219x192 (6 px per screen unit), given a bled
 edge and packed by `tools/mount/build_mount.py`; the worn pod is cut by the
 silhouette of the whole one. It is for the ceiling mount of level 2, which still
 draws its 2008 frame from `krep.mset`; the frame stays in that set.
 
-**The TeK wall cannon** (`sprites/tek-cannon.mset`) - since 3.0.56, generated
-with ChatGPT's image model to the author's direction, from a TeK style sheet
+**The TEK wall cannon** (`sprites/tek-cannon.mset`) - since 3.0.56, generated
+with ChatGPT's image model to the author's direction, from a TEK style sheet
 made of the tank, mount, platform and medkit art (the cannon from the side,
 facing right, at 2:1, no text or emblem, since the right-wall gun is the same
 picture mirrored), then scaled whole to 6 px per screen unit - 384x192 - with
@@ -179,8 +179,8 @@ the barrels cut out as a heat layer and packed by
 `tools/cannon/build_cannon.py`. It is new art for the gravel arena of level 2;
 no 2008 frame stands behind it.
 
-**The TeK machine** (`sprites/tek-machine.mset`) - generated with ChatGPT's
-image model to the author's direction, with the game's TeK machines as the
+**The TEK machine** (`sprites/tek-machine.mset`) - generated with ChatGPT's
+image model to the author's direction, with the game's TEK machines as the
 style references (the machine whole from a blockout, the same machine
 battle-worn, one wheel, the mast kit, the turret heads), then cut into
 layers and packed by `tools/machine/build_machine.py`: the hull scaled by

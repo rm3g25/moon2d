@@ -52,9 +52,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   of a pickup (`Game.Uptake`), the hero's orbs and the charge of the form
   (`Game.HeroOrbs`), the version, and the gravel arena of level
   2: the rules of the trial (`Game.Trial`), the violet light its bodies
-  come down in (`Game.Arrivals`), the TeK wall cannons (`Game.Cannons`)
+  come down in (`Game.Arrivals`), the TEK wall cannons (`Game.Cannons`)
   and the shield they wear (`Game.Shield`), the press of the finale
-  (`Game.Press`); and TeK-R13, the Ram of level 2's boss arena
+  (`Game.Press`); and TEK-R13, the Ram of level 2's boss arena
   (`Game.Ram`, 3.0.75), the pads its sweeper's wave knocks off
   (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
   (`Game.Capsules`, 3.0.84), the hidden tank of the form's charge in
@@ -189,7 +189,7 @@ canvas of `Levels.Dynamics`, drawn through `Render.Glow`) /
 (the press of its finale: over no unit of the game either) /
 `Game.Arrivals` (the violet light: over `Sdl2.Core`, `Render.Brush` and
 the canvas of `Levels.Dynamics`, drawn through `Render.Glow`) /
-`Game.Shield` (the TeK shield: over `Sdl2.Core`, `Render.Brush` and the
+`Game.Shield` (the TEK shield: over `Sdl2.Core`, `Render.Brush` and the
 canvas of `Levels.Dynamics`, drawn through `Render.Glow`) ->
 `Game.Cannons` (the wall cannons: over `Game.Shield`, `Levels.Events`
 for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
@@ -3527,7 +3527,7 @@ the `death` frames of its own set, as every monster does.
 
 ### `Game/Monsters.Hull.pas` (~255 lines)
 A monster drawn as a hull out of layers instead of its `alive` frames -
-the TeK platform, the TeK tank (3.0.45), the TeK mount (3.0.48). The disc's
+the TEK platform, the TEK tank (3.0.45), the TEK mount (3.0.48). The disc's
 twin without the iris:
 art and pose only, the hull knows nothing of the monster's logic. Not here:
 where the hull stands - the monster says (`TMonster.HullStand`); the
@@ -5206,7 +5206,7 @@ its own, not the hero's shroud (decided). A 2026 addition.
   nothing follows the hero to the next screen).
 
 ### `Game/Game.Shield.pas` (~545 lines)
-The shield of a TeK machine while it cannot be hit (3.0.56): a pale gold
+The shield of a TEK machine while it cannot be hit (3.0.56): a pale gold
 honeycomb about it, always seen, on its rim alone - the machine inside
 stays in plain view (asked after the first look: a full honeycomb hid the
 gun). A hit lights the cells about its point, and the flare dies out in
@@ -5251,7 +5251,7 @@ addition.
   open on top shows none there. The Ram's bunker wears an ellipse open
   over the top of its dome.
 ### `Game/Game.Cannons.pas` (~900 lines)
-The two TeK cannons of the gravel arena (3.0.56, act 3): guns clamped to
+The two TEK cannons of the gravel arena (3.0.56, act 3): guns clamped to
 the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
 cells out of the wall; variant B of the design) that do not aim. They
 slide in from beyond both edges once (`ArrivalTicks` 30, smoothstep) and
@@ -5311,11 +5311,11 @@ and the blast. A 2026 addition.
   `YieldBank`.
 
 ### `Game/Game.Ram.pas` (~4230 lines, 3.0.98)
-TeK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
+TEK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
 with a head on top - the hunter, then the sweeper -, an eye, brake lamps,
-two smoking exhausts, the TeK shield over its body. It presses a hero
+two smoking exhausts, the TEK shield over its body. It presses a hero
 low on the road and hunts one on the pads; the hunter fires bursts and
 its eye is the only target. A unit of the game as the cannons are, not a
 monster. The game carries out the cue.
@@ -7071,7 +7071,7 @@ are in `docs/mechanics/scenes.md`.
 
 ### `tools/medkit/build_medkit.py`
 Puts the HD art of the medkit into `bin/sprites/medic.mset` from one
-generated picture - the TeK case seen from the front on a clear ground:
+generated picture - the TEK case seen from the front on a clear ground:
 `build <picture> <set>`. The set is read and written: the 2008 frames in
 it are carried over byte for byte, and what the script makes is made anew
 on every run. `build` puts the generator's alpha right (8 of 255 and below
@@ -7119,7 +7119,7 @@ sinking from 44 to 24 Hz as it fades; a soft clip and a low-pass at
 crack. Needs numpy, scipy and `armor.py`.
 
 ### `tools/cannon/build_cannon.py`
-Builds `bin/sprites/tek-cannon.mset`, the art of the TeK wall cannon of the
+Builds `bin/sprites/tek-cannon.mset`, the art of the TEK wall cannon of the
 gravel arena (`Game.Cannons`), from one generated picture - the cannon
 seen from the side, facing right, at exactly 2:1 - found in a sources
 folder as `cannon.png` (`SOURCE_FILE`): `build <sources dir> <set>`. It
@@ -7133,7 +7133,7 @@ emblem on the art: the right gun is the left one mirrored. The source is
 not in the repository. numpy, scipy, Pillow.
 
 ### `tools/machine/build_machine.py`
-Builds `bin/sprites/tek-machine.mset`, the art of the TeK machine, the
+Builds `bin/sprites/tek-machine.mset`, the art of the TEK machine, the
 second level 2 boss (stage 8b of arena 3; nothing draws it yet), from five
 generated pictures found in a sources folder under the names in
 `WHOLE_FILE`, `DAMAGED_FILE`, `WHEEL_FILE`, `MAST_FILE` and `HEADS_FILE`:
@@ -7764,7 +7764,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   tower on screens 14-15, under `s14-tower` and `s15-tower`: 43.4 across,
   14 turns a minute counterclockwise, a dim cold light in the shaft; the
   bottom right one on screen 15 is `dying`, on the `heavy-torn` rotor.
-  The thirteen TeK platforms - one on screen 7, one on 8, two on 10, four
+  The thirteen TEK platforms - one on screen 7, one on 8, two on 10, four
   on 11, five on 13 - are tagged `s07-tek-01`..`s13-tek-05` (the screen,
   then the number on it) and wear the rig `tekPlatform`: two blue pulsing
   lamps on the hull (front layer, halo 5 across, intensity 70, 0.8-1.2
@@ -7809,7 +7809,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   floor of screen 3, at 150 turns a minute, with a `louver-2x1` object
   between them - the cells are empty in the grid and solid as before, the
   names stay in the palette; the fourteen on the ducts of screen 9 went
-  with its repaint (3.0.54). The one TeK platform, on screen 6, is tagged `s06-tek-01` and
+  with its repaint (3.0.54). The one TEK platform, on screen 6, is tagged `s06-tek-01` and
   wears the rig `tekPlatform` - the numbers of level 1, written again in
   this file's `rigs`. Screens 1-4 are repainted (`docs/REPAINT.md`).
   Screen 1 is the arena of level 1's screen 17 moved six cells left:
@@ -7839,7 +7839,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   through its own body (`collide` none). `tunnel-gate`, `s03-room`,
   `s04-room` and `s04-tek-crates` are the level's own art, the set
   `level2-objects`. Screens 5 and 6 are repainted too (the rooms of the
-  TeK mount; `docs/PORTING-NOTES.md`). Screen 7 is `s07-room`, joined
+  TEK mount; `docs/PORTING-NOTES.md`). Screen 7 is `s07-room`, joined
   from several generations, its tiles cleared and its matter as it was
   but one floor cell (column 6, row 10, under the shaft) taken out; the
   crates are objects of the earlier screens (`s07-pile` of `s02-crates`
@@ -7895,7 +7895,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   strays `s09-stray-01..03` of the flock `s09-strays` (zone [4, 3, 11,
   8], waits 0, 1.5, 3). Twelve events run the six acts: `s09-act1` ..
   `s09-act6` (actReached), `s09-act3-cannons` (200 ticks into act 3),
-  `s09-act4-tek-upper` / `-lower` (gravelDealt: the two TeK-K10 platforms,
+  `s09-act4-tek-upper` / `-lower` (gravelDealt: the two TEK-K10 platforms,
   tagged `s09-tek-01` / `-02`, wearing `tekPlatform`), `s09-act6-tanks`
   and `-tanks-2` (waveKilled 1 of 2: two tanks from each side, the second
   pair 66 ticks later), `s09-done` (trialDone: every balcony slides in
@@ -7939,7 +7939,7 @@ build script in the repository); `level2-backdrops` and
   4 px a unit; its `alive` is that one frame eight times over) beside the
   2008 frames `boch1`-`boch4` (the `alive-2008` sequence, which nothing
   asks for). `medic` (3.0.50) carries `medkit` (192x192, 6 px a unit: a
-  TeK case of 20 x 16 units standing on the bottom edge of the cell; its
+  TEK case of 20 x 16 units standing on the bottom edge of the cell; its
   `alive` is that one frame eight times over) and `light` (the cross of
   the case alone, white with the shape in alpha, in the same 192x192
   frame; the build script puts the middle of its box at 16.00, 25.25
@@ -7966,12 +7966,12 @@ build script in the repository); `level2-backdrops` and
   `Monsters.Hull`. `platform` keeps its flight frames `plat1`-`plat3` and
   `tank` its drive frames `tank1`-`tank3` for
   the `TAnimSet` contract.
-- **The TeK wall cannon** (3.0.56): `tek-cannon` - `hull` (the cannon
+- **The TEK wall cannon** (3.0.56): `tek-cannon` - `hull` (the cannon
   whole, facing right, the lens unlit) and `heat` (the barrels alone,
   white, their shape in alpha), 384x192 each, 6 px a unit, a 64 x 32 unit
   gun; built by `tools/cannon/build_cannon.py`, read by `TCannonArt` of
   `Game.Cannons` (no monster, so no `hull` entry in monsters.json).
-- **The TeK machine** (2026-10-26, art only): `tek-machine` - the second
+- **The TEK machine** (2026-10-26, art only): `tek-machine` - the second
   level 2 boss, 6 px a unit, facing left for good (mirrored when packed).
   Back to front: `well`, `chassis`, `wheel` (twice, radius 20.5), `mortar`,
   `mast3`, `mast2`, `mast1`, `hull`, `hullDamaged` (each hull layer
@@ -8117,9 +8117,9 @@ made again in 3.0.83).
 | The gravel trial: acts and batches, the gate, the breath between acts, the herald, the aimed rain, pit and side returns, the medkits (per 15 kills, the middle of an act), the open sky, the wave of the finale and its cap; where a body comes down | Game.Trial.pas (rules) + Game.Moon.pas (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) in level2.json + docs/mechanics/arena-2.md |
 | The gravel arena's room act by act: which shelves wake, sleep or blink, in which order, sparing the hero or not | `events` of screen 9 in level2.json (`s09-act1`..`s09-done`) + the banks of the shelves there + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/mechanics/arena-2.md |
 | The violet light of an arrival; the herald's | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |
-| The TeK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
-| The TeK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
-| The Ram (TeK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
+| The TEK wall cannons: ride, warn, burst, rows, the shelves that yield, the contact, the scripted end; their art | Game.Cannons.pas + the `cannons` action in level2.json + Game.Moon.pas (`StartCannons`, `TickCannons`, `TellYieldBank`, `BlowCannons`, `ResolveCannonContact`, `BulletStruckCannon`, `CannonsScenePlays`) + `tek-cannon.mset` (tools/cannon/build_cannon.py) |
+| The TEK shield: the honeycomb, its rim, a flare, the fall | Game.Shield.pas (+Game.Cannons.pas, which wears it) |
+| The Ram (TEK-R13): the entrance, the drive and the brake, the mast, the eye, the lens and the lamps, the exhaust smoke, the patrol, the contact and the throw, the shield over its body; its sounds and the boss track | Game.Ram.pas + Game.Shield.pas (`CreateOver`) + Monsters.Hull.pas (`DrawUnder`, `DrawBody`) + Levels.Dynamics.pas (`TSmoke.CreateLook`) + Hero.pas (`Throw`) + Audio.pas (`PlayLooped`, `Plays`, `FadeOutMusic`) + the `ram` action in level2.json + Game.Moon.pas (`StartRam`, `TickRam`, `ResolveRamContact`, `BulletStruckRam`, the draw of the smoke) + `tek-machine.mset` (tools/machine/build_machine.py) + tools/sounds/ram.py |
 | The Ram's sweeper (3.0.77): the ride to the hero's row, the red barrels and the sweep, the closed ceiling, the fork and the ladder by the thirds, the barrel pack as the target and the plates under it, the empty mast after it | Game.Ram.pas (`TickRide`, `TickSweep`, `ForkRow`, `ShootBarrel`, `TickHeat`, `LockSweeper`, `StrikeBarrels`, `ToHead`; `TRamPainter.DrawHeat`, `DrawLight` - the plates) + Game.Shield.pas (`CreateStrip`) + Game.Moon.pas (`BulletStruckRamBarrels`; `TickRam` - `ShotSpeed`) + Tests.Game.Ram.pas (`TRamSweeperTests`) |
 | The Ram's heads short out (3.0.78): bolts over a head under half its lives, more often the fewer are left | Game.Ram.pas (`ShortLevel`; `TRamPainter.TickShorts`, `TickArrival`, `DrawLight`) + Levels.Dynamics.pas (`TLightning.CreateLook`) + Tests.Game.Ram.pas (`TestShortsOutFromHalfItsLives`) |
 | The sweeper's overload and blast (3.0.79): it falls silent and whitens, the machine brakes to a stand, the head bursts with a white flash, a heavy jolt and a low blow | Game.Ram.pas (`TickKill`, `BeginOverload`, `Overloading`, `Overload`, `FlashAt`, the cue `Shock`; `TRamPainter.DrawOverload`, `DrawFlash`, `FOverloadShort`) + Game.Moon.pas (`TickRam` - `SweeperBlastSoundFile`) + tools/sounds/sweeperblast.py + Tests.Game.Ram.pas (`TestTheLastLifeOverloadsBeforeTheBlast`, `TestTheMachineStandsThroughTheOverload`) |
@@ -8132,7 +8132,7 @@ made again in 3.0.83).
 | The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
 | The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, stage 11b-2) |
 | The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame; their long shadows, soft strokes down the floor and on over the near ground, cut at the eye (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
-| The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TeK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
+| The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TEK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase city's searchlights (3.0.95): two warm beams from the main dome wander over the sky - bright in the dome's air, a hot spot and a step down at the glass, a faint tail in the lunar dust, glints on the near ribs they cross; each lamp's own clock eases to a hold now and then; it glides between ticks - tick for tick as on the stand | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
@@ -8143,7 +8143,7 @@ made again in 3.0.83).
 | The form's charge in the Ram's fight (3.0.85; the bunker's half 3.0.94): the gauge grows with the hits on the heads, late and in uneven pulses, up to 30%, 55% and 95%; a head's death pours the rest, the bunker's to full | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
-| Bodies an event lets in along a row (the TeK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
+| Bodies an event lets in along a row (the TEK-K10 platforms, the tanks of the finale): their way in, their rigs, holding the gate | the `spawn` action in level2.json + Monsters.pas (`SpawnInLane`, `EnterFrom`, `Depart`, `CountAliveGuests`) + Levels.Defs.pas (`SpawnWearer`) + Game.Moon.pas `SpawnGuest` |
 | A parked carousel flying in, its speed-up; a carousel that breaks into falling pads | `parked`, `speedUp`, `failing` of a carousel in level2.json + Levels.Carousels.pas (`TCarouselLanding`, `Clock`, `Halting`, `FailingRigTag`) + Pads.World.pas (`TryFlyInCarousel`, `TryBreakCarousel`, `TurnLandedCarousels`, `TPad.Land` / `BreakDown` / `Fail`) + Game.Moon.pas (`FlyInParked`, `ReleaseHeldFlyIns`) |
 | Stray pads: when they come, where they hang, how they misbehave, sent away | Pads.Stray.pas + `stray` on a pad and the `strays` / `straysLeave` actions in level2.json + Pads.World.pas (`TryLaunchFlock`, `TryDismissFlock`) + Levels.Defs.pas `CheckPadStray` |
 | Weather: a body that bursts where it lands (the sky barrel) | `weather` in monsters.json + Monsters.pas (`EndWeather`, `Burst`) + Game.Moon.pas (`meBurst`, `RewardMonsterKill`, `ResolveMonsterContact`) + Game.Trial.pas `OpenSky` |

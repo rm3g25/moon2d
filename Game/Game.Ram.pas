@@ -1,5 +1,5 @@
 ﻿{
-  Game.Ram - TeK-R13, the Ram: the TeK machine of level 2's boss arena. A
+  Game.Ram - TEK-R13, the Ram: the TEK machine of level 2's boss arena. A
   hull on two wheels that faces left and drives back and forth, backward
   when it goes right - only the bunker's hunt turns it round; a mast of
   three sections in a well on its roof, with a head on the top of it; an
@@ -19,7 +19,7 @@
   it from the stop on: the machine stands at its mark, the mast rises and
   the track plays on.
 
-  Its hull wears the TeK shield over its body: a bullet flares the
+  Its hull wears the TEK shield over its body: a bullet flares the
   honeycomb and does nothing. Any touch of the hull or a wheel wounds the
   hero and throws him off - but the machine drives behind the pads: a hero
   who stands on one is out of its way, and stays so while he is over it in

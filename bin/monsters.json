@@ -136,8 +136,8 @@
     {
       "id": "platform",
       "legacyName": "Платформа",
-      "displayName": "Платформа TeK-K10",
-      "displayNameEn": "TeK-K10 Platform",
+      "displayName": "Платформа TEK-K10",
+      "displayNameEn": "TEK-K10 Platform",
       "category": "enemy",
       "spriteList": null,
       "movement": {
@@ -155,8 +155,8 @@
         "score": 3
       },
       "animFreq": 0.5,
-      "deathText": "платформа TeK-K10 уничтожена",
-      "deathTextEn": "TeK-K10 platform decommissioned",
+      "deathText": "платформа TEK-K10 уничтожена",
+      "deathTextEn": "TEK-K10 platform decommissioned",
       "deathSounds": [
         "platform.wav"
       ],
@@ -190,8 +190,8 @@
     {
       "id": "tank",
       "legacyName": "Танк",
-      "displayName": "Танк TeK-J02",
-      "displayNameEn": "TeK-J02 Tank",
+      "displayName": "Танк TEK-J02",
+      "displayNameEn": "TEK-J02 Tank",
       "category": "enemy",
       "spriteList": null,
       "movement": {
@@ -209,8 +209,8 @@
         "score": 3
       },
       "animFreq": 0.25,
-      "deathText": "Танк TeK-J02 уничтожен",
-      "deathTextEn": "TeK-J02 tank scrapped",
+      "deathText": "Танк TEK-J02 уничтожен",
+      "deathTextEn": "TEK-J02 tank scrapped",
       "deathSounds": [
         "bottle.wav",
         "platform.wav"

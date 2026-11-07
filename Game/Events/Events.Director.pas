@@ -99,7 +99,7 @@ type
   TSphereCue = reference to procedure(ACol, ARow: Integer; ASize: Single);
   // The hero has taken the life sphere of his screen
   TSphereTakenCue = reference to function: Boolean;
-  // TeK-R13, the Ram, comes onto the hero's screen (Game.Ram)
+  // TEK-R13, the Ram, comes onto the hero's screen (Game.Ram)
   TRamStartCue = reference to procedure(const AOrders: TRamOrders);
 
   TDirectorCues = record

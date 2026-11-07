@@ -1,4 +1,4 @@
-"""Builds bin/sprites/tek-cannon.mset - the HD art of the TeK wall cannon of
+"""Builds bin/sprites/tek-cannon.mset - the HD art of the TEK wall cannon of
 the gravel arena - from one generated picture.
 
     python build_cannon.py build <sources dir> ../../bin/sprites/tek-cannon.mset
@@ -125,7 +125,7 @@ def build(source_dir, set_path):
 
     hull_size = f'{size[0]}x{size[1]}, {WIDTH_UNITS} x {HEIGHT_UNITS} units'
     description = (
-        f'HD art of the TeK wall cannon of the gravel arena: {DENSITY} px per screen unit, side view, facing '
+        f'HD art of the TEK wall cannon of the gravel arena: {DENSITY} px per screen unit, side view, facing '
         f'right, mirrored whole for the right wall. Back to front: hull, heat. Points in screen units from '
         f'the top-left corner of the right-facing picture: lens %.1f, %.1f (radius %.1f); muzzles %s; '
         f'contact boxes (left, top .. right, bottom) %s.'

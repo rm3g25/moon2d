@@ -1,5 +1,5 @@
 ﻿{
-  Game.Cannons - the two TeK cannons of the gravel arena: guns clamped to
+  Game.Cannons - the two TEK cannons of the gravel arena: guns clamped to
   the side faces of the wall pillars that do not aim. They ride the walls
   in unison, face to face, always on one row; at a row they warn with a red
   fire at the muzzles and sweep it with a long burst from both sides at

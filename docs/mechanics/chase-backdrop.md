@@ -325,7 +325,7 @@ fault - `flips` of `flipTicks` each, down to `faultLow` and back, a tired
 tube. Nothing in step, nothing in a rhythm the player could read.
 
 **The emblem** (`emblem` in the layout): the signs are fireflies at the
-city's distance, so the city's dominant is code-made and big - the TeK
+city's distance, so the city's dominant is code-made and big - the TEK
 emblem as a neon sign, 43 units wide at the domes' nearness, standing on
 the lower point of its frame on the tip of the central spire (`on` the
 piece `land-03`, `at` its tip in shares of the picture): it rides and grows
@@ -336,7 +336,7 @@ the emblem's picture (the metal sign with a real alpha), finds its parts
 - the triangle's frame, the bar, T, e, K, the small triangle - and makes a
 tube along the edge of each, a little inside it, and the tube's glow at a
 quarter of the size; the metal is drawn at a shade like the city, the
-tubes and glows added in TeK's gold. Its own textures are small (the
+tubes and glows added in TEK's gold. Its own textures are small (the
 metal 768 px, the tubes cut to their parts): 43 units at 4K are some 240
 px. The parts share one clock: a tired flicker now and then, and every
 one to two and a half minutes the sign goes out and lights again part by
@@ -481,7 +481,7 @@ python tools/chase/check_element.py <id> <in>.png <work>/<id>.png
 python tools/chase/make_seamless.py <in>.png <work>/<id>.png     (bands only)
 python tools/chase/cut_sheet.py <sheet>.png <prefix> <work> <n>   (the city's sheets)
 python tools/chase/find_lights.py [--write] [--skip id,id] [--windows id,id]   (the city's lights, from the set)
-python tools/chase/make_emblem.py <emblem>.png                   (the TeK sign, into the set; after pack_set)
+python tools/chase/make_emblem.py <emblem>.png                   (the TEK sign, into the set; after pack_set)
 python tools/chase/pack_set.py <work>
 python tools/chase/build_stand.py chase-stand.html
 ```

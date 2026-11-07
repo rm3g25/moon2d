@@ -2,7 +2,7 @@
   Levels.CityLife - how bright each light of a chase's city is at a tick of
   the far plane's clock (Levels.FarPlane: "cityLights", "emblem",
   "beacons"): a sign's breath and its tired faults, a window waking for a
-  span, the TeK emblem going out and lighting again part by part, a
+  span, the TEK emblem going out and lighting again part by part, a
   beacon's flash.
 
   The dice are a 32-bit integer hash (lowbias32), seeded by places - a

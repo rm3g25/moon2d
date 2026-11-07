@@ -1,5 +1,5 @@
 ﻿{
-  Tests.Game.Ram - TeK-R13, the Ram: the whole entrance waits out the
+  Tests.Game.Ram - TEK-R13, the Ram: the whole entrance waits out the
   silence, drives in and stops at its mark, breathes, lights its eye and
   locks its head; a second start after a death begins at the stop; a new
   level sees the whole entrance again; after the lock it drives legs of

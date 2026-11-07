@@ -1,4 +1,4 @@
-"""Turns the TeK emblem into the neon sign hanging under the main dome
+"""Turns the TEK emblem into the neon sign hanging under the main dome
 (chase-backdrop.md, "The emblem") and puts its pictures into
 bin/sprites/chase-backdrop.mset.
 
@@ -188,7 +188,7 @@ def main():
 
   Manifest, Old = read_set(SetPath)
   Kept = [Sprite for Sprite in Manifest['sprites'] if not Sprite['name'].startswith('tek-')]
-  New = [{'name': Name, 'description': 'the TeK emblem under the main dome, make_emblem.py',
+  New = [{'name': Name, 'description': 'the TEK emblem under the main dome, make_emblem.py',
     'offset': 0, 'size': 0} for Name in Blobs]
   Manifest['sprites'] = Kept + New
   write_set(SetPath, Manifest, dict(Old, **Blobs))

@@ -1,4 +1,4 @@
-"""Builds bin/sprites/tek-machine.mset - the HD art of the TeK machine, the
+"""Builds bin/sprites/tek-machine.mset - the HD art of the TEK machine, the
 second level 2 boss - from five generated pictures: the machine whole, the
 same machine battle-worn, one wheel, the mast kit (three telescopic sections
 and the napalm mortar) and the turret heads (hunter, its barrel, sweeper,
@@ -339,7 +339,7 @@ def build(source_dir, set_path):
                 f'{image.width}x{image.height}, {width:.1f} x {height:.1f} units', image)
 
     description = (
-        f'HD art of the TeK machine, the second level 2 boss: {DENSITY} px per screen unit, side view, '
+        f'HD art of the TEK machine, the second level 2 boss: {DENSITY} px per screen unit, side view, '
         f'facing left for good (mirrored here, never in the game). Back to front: well, chassis, the wheel '
         f'twice, mortar, mast3, mast2, mast1, hull, hullDamaged, then the head on mast3. The hull stands on '
         f'the bottom edge (the ram tip). Points in screen units from the top-left corner of the hull: axles '

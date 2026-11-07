@@ -1,7 +1,7 @@
-# Летающая платформа TeK-K10 в HD - дизайн и план по коммитам
+# Летающая платформа TEK-K10 в HD - дизайн и план по коммитам
 
 Статус (2026-10-07): арт готов и упакован (`bin/sprites/platform-hull.mset`,
-коммит `Add the HD hull art of the TeK platform`). Игра на 3.0.35. Кода
+коммит `Add the HD hull art of the TEK platform`). Игра на 3.0.35. Кода
 нет. Следующий шаг - этап 1.
 
 Все числа облика ниже сняты с картинки и ни разу не смотрены вживую:
@@ -11,7 +11,7 @@
 Летающая платформа - последний враг первого уровня с графикой 2008 года
 рядом с HD-кораблём и HD-диском босса: хромированная "летучая мышь",
 64x64 px на клетку. Нужен вид из той же серии, что корабль и босс: серое
-потёртое железо TeK, жёлто-чёрная полоса, красный глаз.
+потёртое железо TEK, жёлто-чёрная полоса, красный глаз.
 
 Поведение не меняется. Платформа летает и стреляет ровно как раньше;
 меняется только то, что нарисовано. Всё, что трогает механику, вынесено в
@@ -223,7 +223,7 @@ Game/Game.Version.pas  3.0.37
    "shade": 10}
 ]
 ```
-- Лампы - синие TeK, как лампы босса до ярости; у каждой платформы свой
+- Лампы - синие TEK, как лампы босса до ярости; у каждой платформы свой
   темп (разброс по тегу).
 - Марево - без огня и без струи: только рябь задника под соплами.
 - Теги размещений: `s07-tek-01` - экран и номер по порядку в файле.
@@ -247,7 +247,7 @@ Game/Game.Version.pas  3.0.37
 1. **Корпус (3.0.36).** Коммиты:
    1. `Fold the mirrored wreck point into one function` - только
       `Game/Monsters.pas`, поведение то же.
-   2. `Draw the TeK platform as an HD hull (3.0.36)` - всё из раздела
+   2. `Draw the TEK platform as an HD hull (3.0.36)` - всё из раздела
       "Архитектура / Этап 1".
    3. Доки: карта (оба языка, заплаткой: `Monsters.Hull`, `hull` в
       monsters.json, набор, строка в таблице маршрутов), PORTING-NOTES,
@@ -256,7 +256,7 @@ Game/Game.Version.pas  3.0.37
 2. **Лампы и марево (3.0.37).** Коммиты:
    1. `Let monsters wear rigs of dynamic objects` - `Levels.Defs`,
       `Levels.Rigs`; уровни не меняются, поведение то же.
-   2. `Dress the TeK platforms in lamps and haze (3.0.37)` - два JSON и
+   2. `Dress the TEK platforms in lamps and haze (3.0.37)` - два JSON и
       версия.
    3. Доки. Тег.
 3. **Тесты** - по конвейеру `docs/TESTING.md`, по отдельной команде.
@@ -307,7 +307,7 @@ Game/Game.Version.pas  3.0.37
 ## Открыто
 - Сенсор диска и глаз корпуса считаются одинаково, а записаны дважды
   (`Monsters.Disc`, `Monsters.Hull`). Свернуть, когда появится третий.
-- Цвет ламп: синий TeK взят по боссу. Жёлтый проблесковый - вариант.
+- Цвет ламп: синий TEK взят по боссу. Жёлтый проблесковый - вариант.
 - Плотность 6 px на единицу - кандидат в правило для всей новой графики
   монстров; диск босса сейчас в 4.
 - Скрипт релиза лежит вне репозитория и про `platform-hull.mset` не знает.
@@ -403,7 +403,7 @@ Game/Game.Version.pas  3.0.37
 - Скрипт релиза лежит вне репозитория и про `platform-hull.mset` не знает.
 
 #### Коммиты
-Fold the mirrored wreck point into one function; Draw the TeK platform as
+Fold the mirrored wreck point into one function; Draw the TEK platform as
 an HD hull (3.0.36); Update the docs for the HD hull. Тег v3.0.36 стоит на
 коммите доков.
 
@@ -520,7 +520,7 @@ an HD hull (3.0.36); Update the docs for the HD hull. Тег v3.0.36 стоит 
 
 #### Коммиты
 Put out a lamp and a haze with their dead parent; Let monsters wear rigs
-of dynamic objects; Dress the TeK platforms in lamps and haze (3.0.37);
+of dynamic objects; Dress the TEK platforms in lamps and haze (3.0.37);
 Update the docs for the platforms' rig. Тег v3.0.37 - на коммит доков.
 
 ---

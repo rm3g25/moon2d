@@ -1,6 +1,6 @@
 ﻿{
-  Monsters.Hull - a monster drawn as a hull out of layers: the TeK
-  platform, the TeK tank, the TeK mount. A whole hull, and a worn copy of
+  Monsters.Hull - a monster drawn as a hull out of layers: the TEK
+  platform, the TEK tank, the TEK mount. A whole hull, and a worn copy of
   it over it that shows through as the lives run out. The red eye in the
   sensor housing glows and swells before every shot, and goes dark while
   the monster says the hull sleeps.

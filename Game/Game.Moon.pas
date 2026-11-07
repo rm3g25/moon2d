@@ -138,7 +138,7 @@ type
     FCannonArt: TCannonArt;
     FCannons: TCannonPair; // the wall cannons of the trial
     FRamArt: TRamArt;
-    FRam: TRam; // TeK-R13 of the boss arena
+    FRam: TRam; // TEK-R13 of the boss arena
     FRamPainter: TRamPainter;
     // The pads the sweeper's wave knocks off, flying away in flames
     FWrecks: TPadWrecks;
@@ -2956,7 +2956,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// THE RAM - TeK-R13 of the boss arena; the rules are Game.Ram's
+// THE RAM - TEK-R13 of the boss arena; the rules are Game.Ram's
 // ---------------------------------------------------------------------------
 
 // The whole entrance begins in silence: the track before it fades out and

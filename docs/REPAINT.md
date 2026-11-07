@@ -157,7 +157,7 @@ wrong:
   sparks, halos in the air, figures, monsters.
 - **The inside is darker and lower in contrast than the structure**, so
   a bright figure reads against it.
-- **Text**: one stencilled letter, one TeK emblem, nothing else.
+- **Text**: one stencilled letter, one TEK emblem, nothing else.
 
 The reading of the blockout is spelled out colour by colour: what
 mid-grey, navy, a black disc, a white bar, a yellow mark stand for.
@@ -657,7 +657,7 @@ a repainted room; Update the docs for the level 2 repaint.
 - Экран 3 по-прежнему без пропсов и без погашенной лампы.
 - Скрипты блокаута, посадки и упаковки в репозиторий не вошли.
 - Скрипт релиза (вне репозитория) не знает `level2-objects.mset`.
-- Экраны 5-9 - тайлы 2008. На экране 5 тоже стоят ящики TeK.
+- Экраны 5-9 - тайлы 2008. На экране 5 тоже стоят ящики TEK.
 
 #### Коммиты
 Stand level 2 screen 4 on a repainted room; Update the docs for the

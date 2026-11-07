@@ -1,5 +1,5 @@
 ﻿{
-  Game.Shield - the shield of a TeK machine while it cannot be hit: a pale
+  Game.Shield - the shield of a TEK machine while it cannot be hit: a pale
   gold honeycomb about the machine, always seen, on its rim alone: the
   machine inside stays in plain view. A hit lights the cells about its point, and the
   flare dies out in about half a second. No sparks: sparks are the game's

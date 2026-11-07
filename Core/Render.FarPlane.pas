@@ -22,7 +22,7 @@
   The city lives (Levels.CityLife, on the far plane's clock): after each
   building its paint - the emblem worn on its wall, at its shade - then its
   lights added over it, a point glow over a sign or a lamp, a beam over a
-  strip or a window, then the TeK emblem if it stands on that building; the
+  strip or a window, then the TEK emblem if it stands on that building; the
   frames' beacons go with their halves. The glows are Render.Glow's, the
   emblem's pictures the set's (made by tools/chase/make_emblem.py).
 

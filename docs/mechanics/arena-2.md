@@ -2,7 +2,7 @@
 
 Status: done (2026-10-16, 3.0.59). Every stage below is built, run live and committed; what is left is under "Open" and "Risks", to be watched in the play of the level, not a stage of its own. The plan is kept as the record of how the arena came to be.
 
-Stage plan. History: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TeK cannons, the shared TeK shield, the floor islands, the bottom steps yielding; waits for its live run). Stage 4 (act 4, the carousel) is designed (2026-10-13); 4.1 (the platforms' engine) is built (2026-10-13), 4.2 (the parked carousel) is built (2026-10-14) and 4.3 (the act 4 data, 3.0.57) is built (2026-10-14), run live and committed with its fixes. Stage 5 (act 5, chaos) is designed (2026-10-15); 5.1 (the carousel breaks, the act 5 room, 3.0.58) is built, run live and pushed (2026-10-15); 5.2 (stray pads, a thicker floor) is built (2026-10-15); 5.3 (sky barrels) is built (2026-10-15); stage 5 is run live and done. Stage 6 (the finale) is designed (2026-10-15); variant A taken (2026-10-16); 6.1 (the wave, 3.0.59) is built (2026-10-16), with the tanks at half the wave and the strays flying away after the victory added; 6.2 (the press, still 3.0.59) is built and run live (2026-10-16) - the arena is done. The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
+Stage plan. History: stage 1 done (3.0.53: trial in acts, arrival glow); stage 2 built (3.0.54: acts engine, acts 1-3); stage 0 done (the room, data and art only, 3.0.54; the first run found the waving ladder unclimbable, acts 2-3 relaid with a holding pair pyramid - "пойдёт", pushed); stage 2a done and committed (3.0.55: gravels face either way, pit returns one at a time). Stage 3 built (3.0.56: the TEK cannons, the shared TEK shield, the floor islands, the bottom steps yielding; waits for its live run). Stage 4 (act 4, the carousel) is designed (2026-10-13); 4.1 (the platforms' engine) is built (2026-10-13), 4.2 (the parked carousel) is built (2026-10-14) and 4.3 (the act 4 data, 3.0.57) is built (2026-10-14), run live and committed with its fixes. Stage 5 (act 5, chaos) is designed (2026-10-15); 5.1 (the carousel breaks, the act 5 room, 3.0.58) is built, run live and pushed (2026-10-15); 5.2 (stray pads, a thicker floor) is built (2026-10-15); 5.3 (sky barrels) is built (2026-10-15); stage 5 is run live and done. Stage 6 (the finale) is designed (2026-10-15); variant A taken (2026-10-16); 6.1 (the wave, 3.0.59) is built (2026-10-16), with the tanks at half the wave and the strays flying away after the victory added; 6.2 (the press, still 3.0.59) is built and run live (2026-10-16) - the arena is done. The second level 2 boss - the mast-turret machine - comes on the screens after this one; this arena must not repeat it and must not repeat the level 1 pad arena.
 
 ## The idea in one line
 Five arenas in one room: each act brings its own gravels (15 on normal, more on hard and wild); when the last of them is dead, the room rebuilds itself, and every rebuild takes away what the hero stood on. Selena does not throw gravels at the hero - she rearranges the room; the gravels are the weather.
@@ -46,9 +46,9 @@ Five arenas in one room: each act brings its own gravels (15 on normal, more on 
 - Pickups are excluded from the gate (AnyAliveOnScreen counts them now - an untaken medkit would hold an act forever).
 - Act 4 (decided 2026-10-13): two medkits, both riding carousel pads (a seat, as the barrels and betoners of screen 8), not teleported onto a bank - the crown sleeps in act 4, and a medkit on a pad that has to be caught on the fly is a reason to climb. The hero is worn by then and act 5 is chaos. The two sit on pads half a lap apart. The per-15-kills teleport goes on in act 4 too, onto the act 4 floor (decided at 4.3, see "Built at 4.3").
 
-## TeK cannons (stage 3)
+## TEK cannons (stage 3)
 The room gets guns that do not aim. They sweep a whole level of the pyramid at once from both sides: the damage is unavoidable on that level, and the only way out is not to be on it.
-- **Whose.** TeK, not Selena: grey metal, gold trim (the colours of TeK, gold as their letters). The cannons are drawn from scratch in ChatGPT.
+- **Whose.** TEK, not Selena: grey metal, gold trim (the colours of TEK, gold as their letters). The cannons are drawn from scratch in ChatGPT.
 - **Arrival.** Both slide in from beyond the left and right screen edges once, at the start of the act, and settle on the walls - the walls are solid there.
 - **Movement.** They ride up and down their walls in unison - always face to face, on the same row. So a volley always sweeps exactly one row, and the other rows are free: never every row at once, with no rule of its own for it.
 - **Every row, the bottom one too.** They come down to the floor level, or the floor is the safe place. The heights are the heights of a standing hero: floor row 11 -> the volley at row 10, a step on row 9 -> row 8, and so on.
@@ -66,11 +66,11 @@ The room gets guns that do not aim. They sweep a whole level of the pyramid at o
 - **Fires from the muzzle**, not from the wall.
 - **Touching a cannon wounds.** Its body cannot be a bunker: a hero standing inside the gun behind the muzzle (at the bottom row the left gun is over the doorstep, col 1 of row 11) is hurt by the contact. The contact box is the body and carriage, not the empty air over and under the barrels - taken from the art's alpha.
 - **Respawn inside a cannon** - the mercy window of the respawn is the time to jump out of it.
-- **Look.** Serious guns: TeK grey worn steel, yellow-black hazard stripes, twin ribbed barrels, a dark sensor lens (lit by the code with the red fire), no text or emblem (the right gun is mirrored). The art faces right (left wall) and is mirrored for the right wall.
-- **Art.** Generated 2026-10-13 in ChatGPT from the TeK style sheet (`tek-style-reference.png`, made from tank-hull, mount-hull, platform-hull, medic and cordon sets) and the prompt of this plan; accepted. 1774x887, real alpha. Packed (3.0.56) by tools/cannon/build_cannon.py from `cannon.png` in the sources dir.
+- **Look.** Serious guns: TEK grey worn steel, yellow-black hazard stripes, twin ribbed barrels, a dark sensor lens (lit by the code with the red fire), no text or emblem (the right gun is mirrored). The art faces right (left wall) and is mirrored for the right wall.
+- **Art.** Generated 2026-10-13 in ChatGPT from the TEK style sheet (`tek-style-reference.png`, made from tank-hull, mount-hull, platform-hull, medic and cordon sets) and the prompt of this plan; accepted. 1774x887, real alpha. Packed (3.0.56) by tools/cannon/build_cannon.py from `cannon.png` in the sources dir.
 
-### The TeK shield (shared)
-A shield for the TeK machines while they cannot be hit - the cannons first, the bosses later (the mast-turret machine and the ones after it). Not orbs.
+### The TEK shield (shared)
+A shield for the TEK machines while they cannot be hit - the cannons first, the bosses later (the mast-turret machine and the ones after it). Not orbs.
 - A pale gold honeycomb always visible around the machine.
 - A bright flare of the cells around the point of a hit, fading in about half a second.
 - No sparks: sparks are the game's sign of a wound, and this is not one.
@@ -90,12 +90,12 @@ Their death is a scene, not a mechanic: they do not die of hits. The hero may sh
 ## Acts (batch of 15 on normal)
 1. **Floor.** Flat floor, two shelves at the walls. Random drops. "A shooting gallery." The wall shelves alternate with a long warning (1.2 s) - the lamp lesson in the safe act.
 2. **Ladder.** The pair pyramid wakes from both walls up to the peak and HOLDS for the act. Aimed rain starts: every third gravel arrives in the column over the hero. The medkit goes on the peak. A rehearsal act: the player learns the ladder while the floor is still there.
-3. **Collapse.** The floor slides away in sections from the end farthest from the hero toward him, the wave drives the hero onto the ladder, which holds. Below - a pit; a fallen gravel teleports up over the hero. Gravels landing on steps walk off them and cascade down. Then the floor comes back as islands and the TeK cannons arrive (see TeK cannons) - decided 2026-10-13, the cannons and the islands both approved.
+3. **Collapse.** The floor slides away in sections from the end farthest from the hero toward him, the wave drives the hero onto the ladder, which holds. Below - a pit; a fallen gravel teleports up over the hero. Gravels landing on steps walk off them and cascade down. Then the floor comes back as islands and the TEK cannons arrive (see TEK cannons) - decided 2026-10-13, the cannons and the islands both approved.
 4. **Carousel.** The room is rebuilt around a box carousel in the centre (a rehearsal of the square carousel wanted for the next level). Details in "Stage 4 design" below.
    - The pyramid thins out: the crown and the ladder go to sleep from the bottom up, step by step - but never a step the hero stands on: it waits until he is off it (decided at the live run) - and only the foot (row 9, cols 2-3 and 12-13) stays, as ledges at the walls.
    - The floor comes back one through one: a shelf, a hole, a shelf.
    - The carousel, parked above the screen, flies in and stands on its track, then starts to turn. Two medkits ride two of its pads. No barrels.
-   - Two TeK-K10 platforms come gradually - the first at a third of the batch, the second at two thirds - one above the carousel, one below it; they stay until the hero kills them, and the act waits for that.
+   - Two TEK-K10 platforms come gradually - the first at a third of the batch, the second at two thirds - one above the carousel, one below it; they stay until the hero kills them, and the act waits for that.
 5. **Chaos.** The carousel breaks: it runs down to a standstill, then its pads become falling pads one after another, where they stand (decided 2026-10-15: they do not drop on their own - a pad falls only under the hero, as on screen 4, and climbs back to its place). The floor comes back in random pieces. Shelves blink out of step. Details in "Stage 5 design" below.
    - Stray pads: ordinary pads fly in from beyond a random edge to a random point, hang, fly on to another point or out. They misbehave at random: fall like a falling pad, turn back halfway, twitch. Transport nobody can count on.
    - Barrels from the sky through the same violet teleport, bursting on impact with the floor, a shelf or a pad - no waiting on the floor. The blast strikes everyone - the hero and the gravels alike (decided 2026-10-15). The weather, and sometimes a lucky one.
@@ -162,7 +162,7 @@ Decided 2026-10-13 unless marked "first guess"; the numbers are tuned at the liv
   - Files: Levels.Carousels, Levels.Defs, Pads.World, Moon2D.dpr, Tests.Levels.Carousels; comments in Levels.Events and Events.Director.
 
 ### Shooting platforms
-- **Who.** The TeK-K10 platform of monsters.json as it is: patrolNoEdgeCheck at speed 2 (a horizontal lane, wall to wall), aimedDouble every 41 ticks at bullet speed 5, 27 lives, a machine explosion with a blast of 100 lives over 80 units. Shootable, as on level 1.
+- **Who.** The TEK-K10 platform of monsters.json as it is: patrolNoEdgeCheck at speed 2 (a horizontal lane, wall to wall), aimedDouble every 41 ticks at bullet speed 5, 27 lives, a machine explosion with a blast of 100 lives over 80 units. Shootable, as on level 1.
 - **When.** By the birth of the batch's gravels, not by kills (no cap on the living, so the two differ): the first when gravel number floor(batch / 3) + 1 is born, the second at floor(2 * batch / 3) + 1. Normal (15): the 6th and the 11th; hard (25): the 9th and the 17th; wild (40): the 14th and the 27th.
 - **Where.** Two lanes. The upper at row 2 over the carousel (hull about y 70-90; the top run is at about y 176, so a hero on it has 54 units of air over his head), entering from the left wall. The lower at row 10, the hero's own row, sweeping the floor wall to wall, entering from the right wall (hull about y 326-346, 6 units under the carousel's pad bodies). The lower one wounds by touch and aims: the floor is no place to stand, the way out is up, onto the foot and the carousel. The foot ledges (row 9) are above its hull and do not touch it.
 - **Entering.** A slide from beyond the screen edge, as the cannons do.
@@ -315,7 +315,7 @@ Run live (2026-10-16) with the additions below.
 
 ### Added to 6.1 (2026-10-16, still 3.0.59)
 Asked after the build was handed over, before its live run; everything else of 6.1 stays.
-- **Tanks at half the wave.** The betoners are too easy shot from below: the hero must be driven up. When half the wave is killed (5 on normal, 7 on hard, 10 on wild), TeK-J02 tanks come in along the floor row (row 10) through the walls, two from each side, nose to tail: a pair (one left, one right), then a second pair 66 ticks later (about 34 units behind, at the tank's pace of 1). Their ordinary behaviour (patrol, the five-round straight cluster); as guests of the act they hold the gate - the trial is won only when they are dead too.
+- **Tanks at half the wave.** The betoners are too easy shot from below: the hero must be driven up. When half the wave is killed (5 on normal, 7 on hard, 10 on wild), TEK-J02 tanks come in along the floor row (row 10) through the walls, two from each side, nose to tail: a pair (one left, one right), then a second pair 66 ticks later (about 34 units behind, at the tank's pace of 1). Their ordinary behaviour (patrol, the five-round straight cluster); as guests of the act they hold the gate - the trial is won only when they are dead too.
 - **New condition `"when": "waveKilled", "act": 6, "part": 1, "of": 2`** (ecWaveKilled): holds once count * part div of bodies of the wave are killed, and once the act is past; read with gravelDealt's act and share (ReadActShare). Game.Trial counts the kills: NoteWaveKilled (only in the act of the wave; the game calls it on meDied of the wave's monster on the trial's screen), TTrialProgress.WaveKilled.
 - **The cap counts the wave alone.** Tick(gateHolders, waveAlive): the gate holders are everyone (gravels, guests, the wave), the cap is checked against the wave's own living - four tanks alive no longer hold the betoners back.
 - **The strays fly away after the victory.** Event action `{"action": "straysLeave", "target": <flock>}` (eaStraysLeave; Levels.Defs checks the flock as for strays; Events.Director cue StraysLeave; TPadWorld.TryDismissFlock; TStrayCycle.Dismiss). A pad sent away flies out along its row beyond the nearer side at half the pace, its jets at half, and stays asleep out of sight; it no longer turns back, stalls, twitches or falls; a leg or a fall under way runs out first; with the hero aboard it hangs until he is off it; asleep or waiting it stays asleep; a rewind forgets the dismissal. s09-done sends s09-strays away.
@@ -340,7 +340,7 @@ Each stage ends with a live run. Versions: one per stage that changes mechanics,
 1. **Trial rework.** Done (3.0.53). Acts as batches: batch size by difficulty (TDifficultyValue), spawn the batch, gate = batch spent and no gravel alive, then the act number goes up and the next batch starts; kill counter for medkits; move the trial triggers off the medkits; remove the medkits; pickups out of the gate; right-exit and pit teleport for gravels; violet arrival (Game.Arrivals); medkit every 15 kills by teleport. Rules in Game.Trial, the game carries out its cue.
 2. **Acts engine.** Built (3.0.54). Event condition "act N reached"; actions: shelf bank wake / sleep, program switch (hold, wave, alternate, blink), pad fly-in from above, medkits onto a bank. Acts 1-3 in level2.json. Aimed rain, herald, pit returns over the hero, crown medkits.
 2a. **Trial tuning.** Done and committed (3.0.55). Pit returns as a queue (TrialPitReturnTicks 10, cue ReturnFromPit; TMonsterField.TryReturnPitStray, spread 2) - side returns stay at once (ReturnSideStrays); TMonster.HeadRandomly on every trial gravel let down or brought back. The medkit at the start of an act - dropped.
-3. **TeK cannons.** Done (3.0.56), see "Stage 3 as built".
+3. **TEK cannons.** Done (3.0.56), see "Stage 3 as built".
 4. **Carousel act (3.0.57).** Done, see "Stage 4 design". Three commits, a live run after the last:
    - 4.1 **Platforms' engine.** Built (2026-10-13), see "New engine pieces" under Shooting platforms; compiled and run by him, not by Claude. Game.Version is still 3.0.56 after it - nothing in the data uses the new pieces yet. Files: Game.Trial (TTrialProgress, Progress, ActEnded), Monsters.Defs (TLaneSide), Levels.Events (gravelDealt, spawn), Events.Director (two cues), Monsters (the lane phases, SpawnInLane, DepartGuests), Moon2D.dpr (the wiring).
    - 4.2 **Parked carousel.** Built (2026-10-14), see "Built at 4.2" under Parked carousel; not compiled by Claude. Game.Version stays 3.0.56 - nothing in the data parks a carousel yet.
@@ -560,13 +560,13 @@ the trial tuning.
 
 ### Сессия: арена грейвелов, этапы 3-6, 3.0.56-3.0.59 (2026-10-13/16)
 
-Пушки TeK (3.0.56), акт карусели (3.0.57), хаос (3.0.58), финал с
+Пушки TEK (3.0.56), акт карусели (3.0.57), хаос (3.0.58), финал с
 бетонерами и прессом (3.0.59). Весь план, решения и данные по этапам -
 `docs/mechanics/arena-2.md`, юниты - карта кода; здесь то, что нужно помнить.
 
 #### Что вышло
 - Новые юниты: `Game.Trial` (правила испытания, без SDL),
-  `Game.Arrivals` (фиолетовый свет прибытия), `Game.Shield` (сота TeK),
+  `Game.Arrivals` (фиолетовый свет прибытия), `Game.Shield` (сота TEK),
   `Game.Cannons` (пушки на стенах), `Game.Press` (пресс финала, без SDL),
   `Pads.Stray` (блуждающий пад, без SDL). Испытание - правила в
   `Game.Trial`, игра исполняет его отсчёт в `TickGravelAttack`.

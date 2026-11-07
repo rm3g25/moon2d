@@ -1,4 +1,4 @@
-"""Builds bin/sprites/tank-hull.mset - the HD art of the TeK-J02 tank - from
+"""Builds bin/sprites/tank-hull.mset - the HD art of the TEK-J02 tank - from
 three generated pictures: the tank whole, the same tank battle-worn, and one
 wheel seen from the front in flat light.
 
@@ -218,7 +218,7 @@ def build(source_dir, set_path):
     hull_size = f'{width}x{height}, {WIDTH_UNITS} x {HEIGHT_UNITS} units'
     spot = lambda name: '%.1f, %.1f' % spots[name]
     description = (
-        f'HD art of the TeK-J02 tank, drawn by code in place of the \'alive\' frames of tank.mset: '
+        f'HD art of the TEK-J02 tank, drawn by code in place of the \'alive\' frames of tank.mset: '
         f'{DENSITY} px per screen unit, side view, facing left, mirrored whole when it drives right. '
         f'Back to front: chassis, the wheel twice, hull, hullDamaged. The tank stands on the bottom '
         f'edge. Points in screen units from the top-left corner: axles %.1f and %.1f, y %.1f '

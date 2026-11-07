@@ -67,7 +67,7 @@ type
     YieldRows: TArray<Integer>;
   end;
 
-  // TeK-R13, the Ram, of the boss arena (Game.Ram): where its ram stops
+  // TEK-R13, the Ram, of the boss arena (Game.Ram): where its ram stops
   // after the drive-in, the track that starts as its head locks, the
   // seconds the track before it takes to fade out to silence, and the
   // pads the shuttle drops the hunter's medkits onto
@@ -158,7 +158,7 @@ type
     // shelves of the bank Target. JSON: "target".
     // eaWaveOnto: from now on the bodies of the trial's wave come down
     // over the shelves of the bank Target. JSON: "target".
-    // eaCannons: the two TeK cannons slide in on the walls for the act of
+    // eaCannons: the two TEK cannons slide in on the walls for the act of
     // the trial they come in (Game.Cannons). JSON: "rows" (the rows they
     // fire at), "yield" (a bank of shelves, optional) and "yieldRows"
     // (while a cannon is on any of them the bank stays in the wall).
@@ -196,7 +196,7 @@ type
     // eaSphere: the life sphere forms with its middle on the middle of the
     // cell CellX, CellY of the event's screen, counted as a placement's,
     // Size units across. JSON: "x", "y", "size" (16 by default).
-    // eaRam: TeK-R13, the Ram, comes onto the screen (Game.Ram): the whole
+    // eaRam: TEK-R13, the Ram, comes onto the screen (Game.Ram): the whole
     // entrance the first time on the level, from its stop on after a death.
     // JSON: "stop" (units, the tip of the ram after the drive-in), "file"
     // (the track of the fight), "fadeOut" (the music before it fades to

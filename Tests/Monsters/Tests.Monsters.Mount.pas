@@ -1,5 +1,5 @@
 ﻿{
-  Tests.Monsters.Mount - the TeK mount under the ceiling: the tick its
+  Tests.Monsters.Mount - the TEK mount under the ceiling: the tick its
   count starts from (the fireOffset of a placement) and when it watches
   (the sentry: asleep until the hero stands in the strip under it).
 

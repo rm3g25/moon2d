@@ -1,5 +1,5 @@
 ﻿{
-  Tests.Game.Shield - a TeK shield broken and crumbling: a heavy blow
+  Tests.Game.Shield - a TEK shield broken and crumbling: a heavy blow
   breaks a piece off it, and it still holds; crumbled, it holds no more,
   and blows do nothing; it goes out from the pieces broken off outward -
   broken at one end, it takes longer than broken in its middle - and from

@@ -44,7 +44,7 @@ Not built. One file per thing, in the order of `ROADMAP.md`.
 | file | what |
 |---|---|
 | `arena-2.md` | level 2 screen 9, the gravel arena (first boss of level 2) |
-| `arena-3.md` | level 2 finale: the tunnels and the TeK machine (end of 3.0) |
+| `arena-3.md` | level 2 finale: the tunnels and the TEK machine (end of 3.0) |
 | `blasts.md` | the look of an explosion, sparks, the blast wave, the shards |
 | `boss-1.md` | the level 1 boss TEK-R1 in HD, its pilot, the damage ceiling |
 | `engine.md` | the frame: window, frame and screen, shake, settings, unit folders, draw batching, system requirements |
@@ -65,8 +65,8 @@ Not built. One file per thing, in the order of `ROADMAP.md`.
 | `sky.md` | HD backdrops, the Earth in the sky, Selene |
 | `smoke.md` | the `smoke` dynamics: gas, wrecked machines, the barrel |
 | `tek-mount.md` | the ceiling mount in HD |
-| `tek-platform.md` | the flying platform TeK-K10 in HD |
-| `tek-tank.md` | the tank TeK-J02 in HD |
+| `tek-platform.md` | the flying platform TEK-K10 in HD |
+| `tek-tank.md` | the tank TEK-J02 in HD |
 | `terminal.md` | the terminal: hints and the level briefing |
 
 ## How a mechanic's file is read

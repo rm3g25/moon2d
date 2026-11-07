@@ -1,5 +1,5 @@
 """Puts the HD art of the medkit into bin/sprites/medic.mset, from one
-generated picture: the TeK case seen from the front on a clear ground.
+generated picture: the TEK case seen from the front on a clear ground.
 
     python build_medkit.py build <medkit-whole.png> ../../bin/sprites/medic.mset
 
@@ -46,7 +46,7 @@ CROSS_ALPHA = 200 / 255
 
 MADE = ('medkit', 'light', 'gone')
 DESCRIPTION = (
-    'The medkit. "medkit" is the HD art: a TeK field case, {side}x{side}, {density} px per screen unit, '
+    'The medkit. "medkit" is the HD art: a TEK field case, {side}x{side}, {density} px per screen unit, '
     'one still frame in the cell of a monster; the case is {width:.0f} x {height:.0f} units and stands on '
     'the bottom edge. "light" is its cross alone, white with the shape in alpha: the code lights it. '
     'The middle of the cross is at {cross_x:.2f}, {cross_y:.2f} units from the top-left corner of the '
@@ -162,7 +162,7 @@ def build(source, set_path):
              (lit_rows.max() + 1) / DENSITY, cross_x, cross_y))
 
     made = {
-        'medkit': ('HD TeK field case, light grey scuffed steel, green cross unlit, hazard band; '
+        'medkit': ('HD TEK field case, light grey scuffed steel, green cross unlit, hazard band; '
                    f'{side}x{side}, {CELL_UNITS} units', png_bytes(medkit)),
         'light': (f'the cross of "medkit" alone, white, the shape in alpha; {side}x{side}', png_bytes(light)),
         'gone': ('a clear frame', png_bytes(gone)),
