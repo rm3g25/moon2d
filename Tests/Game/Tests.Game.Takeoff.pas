@@ -3,15 +3,17 @@
   bays come out first, then the nozzles, never back, the hull as it leaned
   and no fire; the front jet catches once they are out, told with the
   tick, and the bow lifts the other way round from where the hull faces,
-  about its rear wheel, nothing risen yet. The rear jet catches once, a while after, with the
-  wheel spat out on the same tick. It rises to its height, never down on
-  the way, to its height as it settles; it rights itself as it rises,
-  swinging past level and back, and settles level, told once. On the road
-  it turns about the wheel, off it about its middle. Hanging, it bobs and
-  rocks a little about its height and level; told where the hero is, it
-  goes after him slower than he runs, no faster than its most, banking
-  into the way it goes - rising, it hears none of that. A jet flares as
-  it catches and comes down to its steady fire. A stop takes it all.
+  about its rear wheel, nothing risen yet. The rear jet catches once, a
+  while after, and it starts to rise with its rear wheel in; the wheel is
+  thrown out once, on the tick it is SpitLift up, and is out from then on.
+  It rises to its height, never down on the way, to its height as it
+  settles; it rights itself as it rises, swinging past level and back, and
+  settles level, told once. On the road it turns about the wheel, off it
+  about its middle. Hanging, it bobs and rocks a little about its height
+  and level; told where the hero is, it goes after him slower than he
+  runs, no faster than its most, banking into the way it goes - rising, it
+  hears none of that. A jet flares as it catches and comes down to its
+  steady fire. A stop takes it all, the wheel in again.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -30,7 +32,7 @@ type
     FTakeoff: TTakeoff;
     // Started from AFrom degrees, facing right, and ticked till the rear
     // jet catches
-    procedure SpitTheWheel(AFrom: Single);
+    procedure CatchTheRearJet(AFrom: Single);
     // Started as off the shed wheel and ticked till it settles
     procedure HangIt;
   public
@@ -46,7 +48,7 @@ type
     [Test]
     procedure TestTheBowLiftsAgainstTheWayItFaces;
     [Test]
-    procedure TestTheRearJetCatchesOnceWithTheWheel;
+    procedure TestTheRearJetCatchesOnceThenTheWheelIsThrownOut;
     [Test]
     procedure TestRisesToItsHeightNeverDown;
     [Test]
@@ -85,12 +87,15 @@ begin
   FTakeoff.Stop;
 end;
 
-procedure TTakeoffTests.SpitTheWheel(AFrom: Single);
+procedure TTakeoffTests.CatchTheRearJet(AFrom: Single);
 begin
   FTakeoff.Start(AFrom, 1);
   for var i := 1 to ManyTicks do
-    if FTakeoff.Tick.Spit then
+  begin
+    var Cue := FTakeoff.Tick;
+    if Cue.Ignite and (Cue.Jet = tjRear) then
       Exit;
+  end;
   Assert.Fail('The rear jet never caught');
 end;
 
@@ -177,34 +182,43 @@ begin
     'Facing left, bow up');
 end;
 
-procedure TTakeoffTests.TestTheRearJetCatchesOnceWithTheWheel;
+procedure TTakeoffTests.TestTheRearJetCatchesOnceThenTheWheelIsThrownOut;
 begin
   FTakeoff.Start(ShedLean, 1);
   var Ignites := 0;
+  var RearAt := 0;
   var Spits := 0;
   var SpitAt := 0;
+  var LastLift: Single := 0;
   for var i := 1 to ManyTicks do
   begin
     var Cue := FTakeoff.Tick;
     if Cue.Ignite then
       Inc(Ignites);
+    if Cue.Ignite and (Cue.Jet = tjRear) then
+      RearAt := i;
     if Cue.Spit then
     begin
       Inc(Spits);
       SpitAt := i;
-      Assert.IsTrue(Cue.Ignite and (Cue.Jet = tjRear), 'The rear jet with it');
+      Assert.IsTrue(FTakeoff.LiftAt(1) >= SpitLift, 'Up as high');
+      Assert.IsTrue(LastLift < SpitLift, 'Not a tick late');
     end;
+    Assert.IsTrue(FTakeoff.Spat = (Spits > 0),
+      Format('Out only from the throw on, tick %d', [Integer(i)]));
+    LastLift := FTakeoff.LiftAt(1);
   end;
   Assert.AreEqual(2, Ignites, 'Two jets, each once');
+  Assert.IsTrue((RearAt >= OpenTicks + RearJetAfterTicks) and
+    (RearAt <= OpenTicks + RearJetAfterTicks + 1),
+    Format('A while after the front, not at tick %d', [RearAt]));
   Assert.AreEqual(1, Spits, 'One wheel');
-  Assert.IsTrue((SpitAt >= OpenTicks + RearJetAfterTicks) and
-    (SpitAt <= OpenTicks + RearJetAfterTicks + 1),
-    Format('A while after the front, not at tick %d', [SpitAt]));
+  Assert.IsTrue(SpitAt > RearAt, 'Thrown out after the rear jet catches');
 end;
 
 procedure TTakeoffTests.TestRisesToItsHeightNeverDown;
 begin
-  SpitTheWheel(ShedLean);
+  CatchTheRearJet(ShedLean);
   var Last: Single := 0;
   for var i := 1 to ManyTicks do
   begin
@@ -225,7 +239,7 @@ end;
 // over 0
 procedure TTakeoffTests.TestRightsItselfPastLevelAndSettles;
 begin
-  SpitTheWheel(ShedLean);
+  CatchTheRearJet(ShedLean);
   var PastLevel := False;
   var Steadies := 0;
   for var i := 1 to ManyTicks do
@@ -294,7 +308,7 @@ end;
 
 procedure TTakeoffTests.TestRisingItHearsNoneOfTheHero;
 begin
-  SpitTheWheel(ShedLean);
+  CatchTheRearJet(ShedLean);
   for var i := 1 to RiseTicks do
   begin
     FTakeoff.Tick(500);
@@ -331,9 +345,11 @@ end;
 
 procedure TTakeoffTests.TestAStopTakesItAll;
 begin
-  SpitTheWheel(ShedLean);
-  FTakeoff.Tick;
+  CatchTheRearJet(ShedLean);
+  while not FTakeoff.Spat and FTakeoff.Running do
+    FTakeoff.Tick;
   FTakeoff.Stop;
+  Assert.IsFalse(FTakeoff.Spat, 'The wheel in again');
   Assert.IsFalse(FTakeoff.Running, 'Stopped');
   Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(1)), Slop, 'Level');
   Assert.AreEqual(0.0, Double(FTakeoff.LiftAt(1)), Slop, 'On the road');

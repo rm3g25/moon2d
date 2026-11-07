@@ -4,13 +4,14 @@
   behind its wheel - and the nozzles slide down out of their rings. Then
   fire bursts down out of the front nozzle and the bow lifts off the road,
   the hull rocking up about its rear wheel; a breath, and the fire out of
-  the rear nozzle spits the rear wheel out, and the hull rises on its two
-  jets. Off the road it turns about its middle, no more about the wheel,
-  and rights itself as it rises: it swings past level, back, and settles,
-  a spring dying out - then it hangs on its jets. Hanging it bobs and
-  rocks, ever so little, out of step, and keeps over the hero: told how
-  far he is across, it goes after him with a lag, slower than he runs,
-  and banks into the way it goes.
+  the rear nozzle catches, and the hull rises on its two jets, the rear
+  wheel still in its well - till the fire throws it down out of it, a
+  little way up. Off the road it turns about its middle, no more about
+  the wheel, and rights itself as it rises: it swings past level, back,
+  and settles, a spring dying out - then it hangs on its jets. Hanging it
+  bobs and rocks, ever so little, out of step, and keeps over the hero:
+  told how far he is across, it goes after him with a lag, slower than he
+  runs, and banks into the way it goes.
 
   Not here: where the hull stands across and how it is drawn - the Ram
   says, and moves it by the pace this gives; the wheel spat out
@@ -34,6 +35,10 @@ const
   BowUpTicks = 24;
   // The rear jet catches this long after the front one
   RearJetAfterTicks = 33;
+  // Units it has risen as the rear jet throws its wheel down: a cell and a
+  // half - high enough for the fall to read and the bounces to carry, low
+  // enough for a hull just off the road, a quarter of its climb gone
+  SpitLift = 48.0;
   // Units the hull rises over the road, and how long it takes: the bottom
   // of its body just over the top of the moon form's jump
   HangLift = 184.0;
@@ -66,9 +71,10 @@ type
 
   TTakeoffCue = record
     // A jet catches: the front one once the nozzles are out, the rear one
-    // as it spits the wheel out
+    // as it starts to rise
     Ignite: Boolean;
     Jet: TTakeoffJet;
+    // The rear wheel thrown down out of its well, SpitLift up
     Spit: Boolean;
     // Risen and settled: it hangs
     Steady: Boolean;
@@ -86,6 +92,7 @@ type
     FSwing: Single;
     FLift, FLastLift: Single;
     FAir, FLastAir: Single;
+    FSpat: Boolean;
     // 0..1: how far the bays are out of the arches, the nozzles out of
     // their rings
     FBay, FLastBay: Single;
@@ -111,6 +118,8 @@ type
     function Tick(AToward: Single = 0): TTakeoffCue;
     function Running: Boolean;
     property Stage: TTakeoffStage read FStage;
+    // The rear wheel is out of its well
+    property Spat: Boolean read FSpat;
     // Units a tick it goes across this tick, right is more
     property Pace: Single read FPace;
     // AAlpha of the way from the last tick to this one
@@ -182,6 +191,7 @@ begin
   FLastLift := 0;
   FAir := 0;
   FLastAir := 0;
+  FSpat := False;
   FBay := 0;
   FLastBay := 0;
   FNozzle := 0;
@@ -254,13 +264,17 @@ begin
   FTicks := 0;
   FSwing := 0;
   Catch(tjRear, ACue);
-  ACue.Spit := True;
 end;
 
 // Up on a smooth step; the spring pulls the lean to level all the while
 procedure TTakeoff.TickRising(var ACue: TTakeoffCue);
 begin
   FLift := HangLift * SmoothStep(FTicks / RiseTicks);
+  if not FSpat and (FLift >= SpitLift) then
+  begin
+    FSpat := True;
+    ACue.Spit := True;
+  end;
   FAir := SmoothStep(FTicks / AirTicks);
   FSwing := FSwing - SpringPull * FLean - SpringDrag * FSwing;
   FLean := FLean + FSwing;

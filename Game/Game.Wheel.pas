@@ -1,11 +1,14 @@
 ﻿{
   Game.Wheel - a wheel off its axle: the Ram's front wheel, broken off
-  once its armour is gone, and its rear one, spat out of its well by the
-  jet as it takes off - higher. It hops once off the road and rolls on to
-  the right at an even pace, turning by the way it has rolled, and is gone
-  once it has rolled off the right edge of the screen. Its touch is the
-  hull's: it wounds and throws the hero, away from its middle. A bullet
-  that meets its rim is thrown off - it loses nothing.
+  once its armour is gone, and its rear one, thrown down out of its well
+  by the jet once the hull is off the road. The first hops off the road,
+  the second falls onto it; each strikes the road, bounces lower and
+  lower, losing speed at every strike, and once a bounce has too little in
+  it, rolls. All the while it goes to the right at an even pace, turning
+  by the way it has rolled, and is gone once it has rolled off the right
+  edge of the screen. Its touch is the hull's: it wounds and throws the
+  hero, away from its middle. A bullet that meets its rim is thrown off -
+  it loses nothing.
 
   Not here: why it came off and what its touch does to the hero - the Ram
   and the game say; its picture - the hull's wheel (Monsters.Hull).
@@ -24,11 +27,17 @@ const
   // Units a tick it rolls to the right, from the moment it is off
   WheelRollPace = 3.0;
   // Units a tick up as it hops off; the moon's pull, the hero's and the
-  // wrecks', brings it down from about 22 over the road - a spat one from
-  // about 56
+  // wrecks', brings it down from about 22 over the road
   WheelHopKick = 2.5;
+  // Units a tick down the jet throws a dropped one at
   WheelSpitKick = 4.0;
   WheelGravity = 2 / 14;
+  // The share of its speed a strike gives back up: a dropped one, struck
+  // at about 5.5, bounces to about 40, 16 and 7; a hopped one to about 10
+  // and 5
+  WheelBounceKeep = 0.6;
+  // A bounce slower than this, units a tick, and it rolls
+  WheelRestRise = 1.0;
 
 type
   TLooseWheel = record
@@ -41,19 +50,28 @@ type
     // Units a tick up, below 0 down; in the air till it comes down
     FRise: Single;
     FAirborne: Boolean;
+    FStruck: Single;
     // Degrees clockwise
     FTurn, FLastTurn: Single;
+    procedure Launch(const ACenter: TSdlFPoint; ARadius, ARollY,
+      AKick: Single);
     procedure Roll;
     function Hop: Boolean;
   public
     // Off its axle with its middle at ACenter, its bottom on the road,
-    // hopping off at AKick
-    procedure Start(const ACenter: TSdlFPoint; ARadius: Single;
-      AKick: Single = WheelHopKick);
+    // hopping off
+    procedure Start(const ACenter: TSdlFPoint; ARadius: Single);
+    // Thrown down with its middle at ACenter, over the road where its
+    // middle rolls at ARollY
+    procedure Drop(const ACenter: TSdlFPoint; ARadius, ARollY: Single);
     procedure Stop;
-    // True the tick it comes down on the road from its hop
+    // True the tick it strikes the road
     function Tick: Boolean;
     function Running: Boolean;
+    // Units a tick down it struck the road at this tick; 0 - it did not
+    function Struck: Single;
+    // The bottom of its rim
+    function Contact: TSdlFPoint;
     // AAlpha of the way from the last tick to this one
     function CenterAt(AAlpha: Single): TSdlFPoint;
     function TurnAt(AAlpha: Single): Single;
@@ -72,16 +90,27 @@ implementation
 uses
   System.Math, Game.Space;
 
-procedure TLooseWheel.Start(const ACenter: TSdlFPoint; ARadius: Single;
+procedure TLooseWheel.Start(const ACenter: TSdlFPoint; ARadius: Single);
+begin
+  Launch(ACenter, ARadius, ACenter.Y, WheelHopKick);
+end;
+
+procedure TLooseWheel.Drop(const ACenter: TSdlFPoint; ARadius, ARollY: Single);
+begin
+  Launch(ACenter, ARadius, ARollY, -WheelSpitKick);
+end;
+
+procedure TLooseWheel.Launch(const ACenter: TSdlFPoint; ARadius, ARollY,
   AKick: Single);
 begin
   FRunning := True;
   FCenter := ACenter;
   FLastCenter := ACenter;
   FRadius := ARadius;
-  FRollY := ACenter.Y;
+  FRollY := ARollY;
   FRise := AKick;
   FAirborne := True;
+  FStruck := 0;
   FTurn := 0;
   FLastTurn := 0;
 end;
@@ -90,6 +119,7 @@ procedure TLooseWheel.Stop;
 begin
   FRunning := False;
   FAirborne := False;
+  FStruck := 0;
 end;
 
 function TLooseWheel.Running: Boolean;
@@ -97,9 +127,21 @@ begin
   Result := FRunning;
 end;
 
+function TLooseWheel.Struck: Single;
+begin
+  Result := FStruck;
+end;
+
+function TLooseWheel.Contact: TSdlFPoint;
+begin
+  Result.X := FCenter.X;
+  Result.Y := FCenter.Y + FRadius;
+end;
+
 function TLooseWheel.Tick: Boolean;
 begin
   Result := False;
+  FStruck := 0;
   if not FRunning then
     Exit;
   FLastCenter := FCenter;
@@ -125,7 +167,8 @@ begin
   end;
 end;
 
-// True as it comes down
+// True as it strikes the road; it bounces off it with a share of its
+// speed, or rolls
 function TLooseWheel.Hop: Boolean;
 begin
   Result := False;
@@ -136,8 +179,13 @@ begin
   if FCenter.Y < FRollY then
     Exit;
   FCenter.Y := FRollY;
-  FRise := 0;
-  FAirborne := False;
+  FStruck := -FRise;
+  FRise := FStruck * WheelBounceKeep;
+  if FRise < WheelRestRise then
+  begin
+    FRise := 0;
+    FAirborne := False;
+  end;
   Result := True;
 end;
 

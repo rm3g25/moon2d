@@ -1,10 +1,13 @@
 ﻿{
   Tests.Game.Wheel - the wheel off the Ram's axle: nothing till it is
-  off; it hops once off the road and comes down onto it, told once, and
-  rolls on along it; one spat out hops higher, and comes down the same; to the right at an even pace, turning clockwise by
-  the way it rolls; gone once past the right edge and not before. It
-  touches a body in its way and not one over it; it throws away from its
-  middle - straight up against the edge of the screen. A stop takes it.
+  off; it hops off the road and strikes it, bounces lower each time and
+  strikes softer, told at every strike and only then, and rolls on along
+  it, never into it; one dropped from over the road falls onto the road
+  line it was given, strikes harder and bounces higher than a hopped one.
+  To the right at an even pace, turning clockwise by the way it rolls;
+  gone once past the right edge and not before. It touches a body in its
+  way and not one over it; it throws away from its middle - straight up
+  against the edge of the screen. A stop takes it.
   A bullet meets its rim where it comes to it, the rim's way out there; a
   bullet past it, or one at a wheel not off, meets nothing.
 
@@ -23,9 +26,9 @@ type
   TLooseWheelTests = class
   private
     FWheel: TLooseWheel;
-    // Off its axle hopping at AKick, rolled till gone: the top of its hop,
-    // and how many times it came down
-    function HighestOfItsHop(AKick: Single; out ALandings: Integer): Single;
+    // Rolled till gone: the speed of each strike, and the top of the flight
+    // before each, from the road
+    procedure Strikes(out ASpeeds, ATops: TArray<Single>);
   public
     [Setup]
     procedure Setup;
@@ -33,9 +36,11 @@ type
     [Test]
     procedure TestNothingTillItIsOff;
     [Test]
-    procedure TestHopsOnceThenRollsOnTheRoad;
+    procedure TestBouncesLowerAndSofterThenRollsOnTheRoad;
     [Test]
-    procedure TestASpatOneHopsHigher;
+    procedure TestToldAtEveryStrikeOnlyThen;
+    [Test]
+    procedure TestADroppedOneFallsOntoItsRoadAndBouncesHigher;
     [Test]
     procedure TestRollsRightAtAnEvenPace;
     [Test]
@@ -107,47 +112,96 @@ begin
   Assert.IsFalse(FWheel.Touches(HeroOnTheRoad(OnItsAxle.X)), 'Touches nothing');
 end;
 
-procedure TLooseWheelTests.TestHopsOnceThenRollsOnTheRoad;
+procedure TLooseWheelTests.Strikes(out ASpeeds, ATops: TArray<Single>);
+begin
+  ASpeeds := nil;
+  ATops := nil;
+  var Top: Single := Road - FWheel.Contact.Y;
+  while FWheel.Running do
+  begin
+    var Struck := FWheel.Tick;
+    Top := Max(Top, Road - FWheel.Contact.Y);
+    if not Struck then
+      Continue;
+    ASpeeds := ASpeeds + [FWheel.Struck];
+    ATops := ATops + [Top];
+    Top := 0;
+  end;
+end;
+
+procedure TLooseWheelTests.TestBouncesLowerAndSofterThenRollsOnTheRoad;
+var
+  Speeds, Tops: TArray<Single>;
 begin
   FWheel.Start(OnItsAxle, Radius);
-  var Landings := 0;
-  var Highest: Single := OnItsAxle.Y;
+  Strikes(Speeds, Tops);
+  Assert.IsTrue(Length(Speeds) >= 2, 'It bounces');
+  Assert.IsTrue(Tops[0] > 10, 'Off the road');
+  for var i := 1 to High(Speeds) do
+  begin
+    Assert.IsTrue(Speeds[i] < Speeds[i - 1], Format('Softer at strike %d', [i]));
+    Assert.IsTrue(Tops[i] < Tops[i - 1], Format('Lower before strike %d', [i]));
+  end;
+
+  FWheel.Start(OnItsAxle, Radius);
+  var Heights: TArray<Single> := nil;
+  var LastStrike := -1;
   while FWheel.Running do
   begin
     if FWheel.Tick then
-      Inc(Landings);
-    var Middle := FWheel.CenterAt(1);
-    Highest := Min(Highest, Middle.Y);
-    if Landings > 0 then
-      Assert.AreEqual(Double(OnItsAxle.Y), Double(Middle.Y), Slop, 'On the road');
-    Assert.IsTrue(Middle.Y <= OnItsAxle.Y + Slop, 'Never into the road');
+      LastStrike := Length(Heights);
+    Heights := Heights + [FWheel.CenterAt(1).Y];
+    Assert.IsTrue(FWheel.CenterAt(1).Y <= OnItsAxle.Y + Slop, 'Never into the road');
   end;
-  Assert.AreEqual(1, Landings, 'Came down once');
-  Assert.IsTrue(Highest < OnItsAxle.Y - 10, 'Off the road');
+  Assert.IsTrue(LastStrike < High(Heights), 'It rolls after its last strike');
+  for var i := LastStrike to High(Heights) do
+    Assert.AreEqual(Double(OnItsAxle.Y), Double(Heights[i]), Slop,
+      Format('On the road at tick %d after the last strike', [i - LastStrike]));
 end;
 
-function TLooseWheelTests.HighestOfItsHop(AKick: Single;
-  out ALandings: Integer): Single;
+procedure TLooseWheelTests.TestToldAtEveryStrikeOnlyThen;
 begin
-  FWheel.Start(OnItsAxle, Radius, AKick);
-  ALandings := 0;
-  Result := OnItsAxle.Y;
+  FWheel.Start(OnItsAxle, Radius);
+  var Told := 0;
   while FWheel.Running do
   begin
-    if FWheel.Tick then
-      Inc(ALandings);
-    Result := Min(Result, FWheel.CenterAt(1).Y);
+    var Struck := FWheel.Tick;
+    Assert.IsTrue(Struck = (FWheel.Struck > 0), 'Struck only on the tick told');
+    if not Struck then
+      Continue;
+    Inc(Told);
+    Assert.AreEqual(Double(Road), Double(FWheel.Contact.Y), Slop,
+      'Its rim on the road');
   end;
+  Assert.IsTrue(Told >= 2, 'More than once');
+  Assert.AreEqual(0.0, Double(FWheel.Struck), Slop, 'Nothing once gone');
 end;
 
-procedure TLooseWheelTests.TestASpatOneHopsHigher;
+procedure TLooseWheelTests.TestADroppedOneFallsOntoItsRoadAndBouncesHigher;
+const
+  Over = 48.0;
 var
-  Landings: Integer;
+  Speeds, Tops, Dropped, DroppedTops: TArray<Single>;
 begin
-  var Hopped := HighestOfItsHop(WheelHopKick, Landings);
-  var Spat := HighestOfItsHop(WheelSpitKick, Landings);
-  Assert.IsTrue(Spat < Hopped - 10, 'Higher');
-  Assert.AreEqual(1, Landings, 'Came down once');
+  FWheel.Start(OnItsAxle, Radius);
+  Strikes(Speeds, Tops);
+  var OverTheRoad := At(OnItsAxle.X, OnItsAxle.Y - Over);
+  FWheel.Drop(OverTheRoad, Radius, OnItsAxle.Y);
+  var Fell := False;
+  while FWheel.Running and not Fell do
+  begin
+    Fell := FWheel.Tick;
+    if Fell then
+      Assert.AreEqual(Double(Road), Double(FWheel.Contact.Y), Slop,
+        'Onto the road it was given');
+    Assert.IsTrue(FWheel.Contact.Y <= Road + Slop, 'Never into the road');
+  end;
+  Assert.IsTrue(Fell, 'Never came down');
+
+  FWheel.Drop(OverTheRoad, Radius, OnItsAxle.Y);
+  Strikes(Dropped, DroppedTops);
+  Assert.IsTrue(Dropped[0] > Speeds[0] + 1, 'A harder first strike');
+  Assert.IsTrue(DroppedTops[1] > Tops[0] + 10, 'Its bounce over the hopped one''s hop');
 end;
 
 procedure TLooseWheelTests.TestRollsRightAtAnEvenPace;

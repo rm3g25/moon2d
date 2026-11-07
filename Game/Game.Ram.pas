@@ -153,17 +153,19 @@
   faster the more they spin; its honeycomb holds still.
 
   Its armour gone, the game breaks its front wheel off - the one on the
-  side it faces. The wheel hops once and rolls away to the right
-  (Game.Wheel); the hull drops on that side about its rear wheel, the
-  point of its plough digging into the road and scraping it in sparks.
+  side it faces. The wheel hops off, bounces lower and lower, every strike
+  of the road in sparks, and rolls away to the right (Game.Wheel); the
+  hull drops on that side about its rear wheel, the point of its plough
+  digging into the road and scraping it in sparks.
   From then on a touch of the hull wounds and throws again. The bare hull
   and the wheel throw bullets off as a tank's armour does, and lose
   nothing to them.
   Then the game has it take off (Game.Takeoff): its engine bays come out
   of the depth of both arches - the rear one behind its wheel - and their
   nozzles slide down out of the rings, as far as the road lets them; fire
-  out of the front nozzle lifts the bow, the rear jet spits the rear wheel
-  out to roll after the first, and the hull rises on its two jets, rights
+  out of the front nozzle lifts the bow, the rear jet catches and the hull
+  rises on its two jets; a little way up the rear jet throws the rear
+  wheel down to bounce and roll after the first, and the hull rights
   itself and hangs - bobbing, rocking, keeping over the hero with a lag.
   The engine is done with: its exhausts smoke no more from the takeoff on.
   Off the road it is where its pose puts it - turned, raised - and its
@@ -352,7 +354,7 @@ type
     Vent: Boolean;
     // Its last third: the rows of the hunt are to ride in
     Rows: Boolean;
-    // A wheel it has shed has come down on the road from its hop
+    // A wheel it has shed strikes the road hard enough to be heard
     WheelLands: Boolean;
     // A jet catches in a well: the fire bursts out of it
     Ignite: Boolean;
@@ -541,6 +543,8 @@ type
     procedure TickStun;
     procedure TickWithdraw;
     procedure TickShed;
+    // Its strike of the road, if it struck, told and felt
+    procedure HearStrike(const AWheel: TLooseWheel);
     procedure TickTakeoff;
     procedure SpitWheel;
     procedure TickShutter;
@@ -920,6 +924,7 @@ type
     FArchSmokeTicks: Integer;
     // Off the point of its plough as its nose drops onto the road
     FScrape: TSparkField;
+    FWheelSparks: TSparkField;
     // The dust a jet blows off the road while it reaches it
     FJetDust: array [TTakeoffJet] of TSmoke;
     FArrivals: Integer;
@@ -931,6 +936,8 @@ type
     procedure TickWaveDust;
     procedure TickArchSmoke(ABeltShift: Single);
     procedure TickScrape;
+    procedure TickWheelSparks;
+    procedure SprayStrike(const AWheel: TLooseWheel);
     procedure TickJets;
     function NozzleTop(const APose: TRamPose; AJet: TTakeoffJet): TSdlFPoint;
     function NozzleOut(const APose: TRamPose; AJet: TTakeoffJet;
@@ -1318,6 +1325,13 @@ const
   LeanTicks = 6;
   // A jet catching in a well
   IgniteJolt = 0.35;
+  // A shed wheel striking the road: heard from WheelThumpStrike units a
+  // tick down - the hop's landing and a dropped one's first bounces, not
+  // the last small ones; the shake and the sparks grow with the strike up
+  // to WheelHardStrike, about a dropped one's first
+  WheelThumpStrike = 2.0;
+  WheelHardStrike = 5.5;
+  WheelStrikeTrauma = 0.2;
   // The hatch over the empty well sliding shut, from the far edge
   ShutterTicks = 20;
   // The point of the plough, which scrapes the road, sparks flying from it
@@ -1550,6 +1564,13 @@ const
     ForkChance: 0.3);
   ScrapeCapacity = 160;
   ScrapeSeed = $53637270; // "Scrp"
+  // A shed wheel striking the road: as many sparks at a hard strike, fewer
+  // and slower as the strikes soften, fanned both ways along the road and
+  // up off it - the scrape's sparks
+  WheelSparks = 14;
+  WheelSparkCone = 150.0;
+  WheelSparkCapacity = 80;
+  WheelSparkSeed = $57686C53; // "WhlS"
 
   // The exhausts: where the jet leaves the mouths of the two pipes on the
   // stern. It flies back on its own speed and does not rise - no air to
@@ -3530,10 +3551,10 @@ end;
 // off; the wheels roll
 procedure TRam.TickShed;
 begin
-  if FWheel.Tick then
-    FCue.WheelLands := True;
-  if FRearWheel.Tick then
-    FCue.WheelLands := True;
+  FWheel.Tick;
+  HearStrike(FWheel);
+  FRearWheel.Tick;
+  HearStrike(FRearWheel);
   if not FShed then
     Exit;
   if FShedTicks < ScrapeTicks then
@@ -3576,11 +3597,22 @@ begin
   end;
 end;
 
-// Out of its well where the rear axle stands on the road: the bow is up
-// about that wheel's touch, so it has hardly moved
+procedure TRam.HearStrike(const AWheel: TLooseWheel);
+begin
+  var Strike := AWheel.Struck;
+  if Strike <= 0 then
+    Exit;
+  if Strike >= WheelThumpStrike then
+    FCue.WheelLands := True;
+  FCue.Jolt := Max(FCue.Jolt, WheelStrikeTrauma * Min(Strike / WheelHardStrike, 1));
+end;
+
+// Out of its well where the pose has the rear axle now, down onto the road
+// under the axle's spot upright
 procedure TRam.SpitWheel;
 begin
-  FRearWheel.Start(HullSpot(FX, Axles[RearAxle]), WheelRadius, WheelSpitKick);
+  FRearWheel.Drop(PoseSpot(PoseAt(1), Axles[RearAxle]), WheelRadius,
+    HullSpot(FX, Axles[RearAxle]).Y);
 end;
 
 function TRam.LeanAt(AAlpha: Single): Single;
@@ -4076,7 +4108,7 @@ begin
   var Middle := AArtCol + 0.5;
   var Shed := FShed;
   if Abs(Middle - Axles[RearAxle].X) < Abs(Middle - Axles[FrontAxle].X) then
-    Shed := FTakeoff.Stage >= tkRising;
+    Shed := FTakeoff.Spat;
   Result := Shed and (FTakeoff.BayAt(1) < BayHolds);
 end;
 
@@ -4809,6 +4841,8 @@ begin
       ArchSmokeSeeds[i]);
   FScrape := TSparkField.Create(ScrapeSparkLook, UnderTheRoad, ScrapeCapacity,
     ScrapeSeed);
+  FWheelSparks := TSparkField.Create(ScrapeSparkLook, UnderTheRoad,
+    WheelSparkCapacity, WheelSparkSeed);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
     FJetDust[Jet] := TSmoke.CreateLook(DustPlacement, JetDustLook, 1,
       JetDustSeeds[Jet]);
@@ -4818,6 +4852,7 @@ destructor TRamPainter.Destroy;
 begin
   for var Smoke in FJetDust do
     Smoke.Free;
+  FWheelSparks.Free;
   FScrape.Free;
   for var Smoke in FArchSmoke do
     Smoke.Free;
@@ -4846,6 +4881,7 @@ begin
   TickWaveDust;
   TickArchSmoke(ABeltShift);
   TickScrape;
+  TickWheelSparks;
   TickJets;
 end;
 
@@ -4871,6 +4907,7 @@ begin
   for var Smoke in FArchSmoke do
     Smoke.Rewind;
   FScrape.Clear;
+  FWheelSparks.Clear;
   for var Smoke in FJetDust do
     Smoke.Rewind;
 end;
@@ -5084,6 +5121,31 @@ begin
   Spray.FastSpeed := ScrapeFastSpeed;
   var Nose := FRam.PoseSpot(FRam.PoseAt(1), NosePoint);
   FScrape.Spray(Nose.X, Nose.Y, Spray);
+end;
+
+procedure TRamPainter.TickWheelSparks;
+begin
+  FWheelSparks.Tick;
+  SprayStrike(FRam.Wheel);
+  SprayStrike(FRam.RearWheel);
+end;
+
+// Off the bottom of its rim, a hair over the road the sparks ring off
+procedure TRamPainter.SprayStrike(const AWheel: TLooseWheel);
+const
+  OverTheRoad = 1.0;
+begin
+  var Share: Single := Min(AWheel.Struck / WheelHardStrike, 1);
+  if Share <= 0 then
+    Exit;
+  var Spray := Default(TSparkSpray);
+  Spray.Count := Max(Round(WheelSparks * Share), 1);
+  Spray.Heading := 90;
+  Spray.Cone := WheelSparkCone;
+  Spray.SlowSpeed := ScrapeSlowSpeed;
+  Spray.FastSpeed := Max(ScrapeFastSpeed * Share, ScrapeSlowSpeed);
+  var Bottom := AWheel.Contact;
+  FWheelSparks.Spray(Bottom.X, Bottom.Y - OverTheRoad, Spray);
 end;
 
 // The sections back to front - the narrowest rides out of the wider ones
@@ -5471,7 +5533,7 @@ begin
   Stand.Pivot := UnitPoint(Pivot.X + Pose.Shift.X, Pivot.Y + Pose.Shift.Y);
   if FRam.WheelShed then
     Stand.Shed := [FrontAxle];
-  if FRam.Flight.Stage >= tkRising then
+  if FRam.Flight.Spat then
     Stand.Shed := Stand.Shed + [RearAxle];
   var Moved := not Pose.Upright;
   var Well := FRam.WellAt(Left);
@@ -5611,6 +5673,8 @@ begin
     Smoke.Draw(ACanvas, Smoke.Origin.X + AOrigin.X, Smoke.Origin.Y + AOrigin.Y,
       AAlpha);
   FScrape.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
+    UnitPoint(AOrigin.X, AOrigin.Y), AAlpha);
+  FWheelSparks.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
     UnitPoint(AOrigin.X, AOrigin.Y), AAlpha);
   DrawJetGlow(AOrigin, AAlpha);
   for var Short in FShorts do

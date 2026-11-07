@@ -93,15 +93,17 @@
   stunned, it is not told. Stunned and told to, it sheds its front wheel
   - the bow's - once; not stunned, it does not. The hull leans onto its
   bow and stays so; its touch wounds again; the wheel comes down from its
-  hop, told once; a new fight puts the wheel back and the hull level.
+  hop, heard once, and bounces on, every strike of the road a jolt, each
+  softer; a new fight puts the wheel back and the hull level.
   While the honeycomb holds, the hull throws no bullet off; bare, it
   throws one off where it meets the face it comes to, and leaning too;
   the wheel it has shed throws one off, and the hull counts it a hit.
   The shed wheel's well lets a bullet in, as far as the other arch, till
   its bay comes out at the takeoff. With its wheels on it does not take
-  off. Its front wheel off, it takes
-  off once: two jets catch, the jets' roar once, both wheels come down
-  from their hops; it hangs level, risen to its height; hanging, its
+  off. Its front wheel off, it takes off once: two jets catch, the jets'
+  roar once, both wheels come down, the rear one heard more than once; the
+  rear one is thrown down out of the risen hull onto the road; it hangs
+  level, risen to its height; hanging, its
   touch and a bullet meet it up there, not on the road; it goes over the
   hero no faster than its most, keeping to the screen; a new fight puts it
   back on the road. After the bunker the well shuts, only once the mast is
@@ -256,6 +258,8 @@ type
     [Test]
     procedure TestTheWheelComesDownOnceTold;
     [Test]
+    procedure TestEveryStrikeOfTheWheelJoltsSofter;
+    [Test]
     procedure TestANewFightPutsTheWheelBack;
     [Test]
     procedure TestWhileTheHoneycombHoldsTheHullThrowsNothingOff;
@@ -271,6 +275,8 @@ type
     procedure TestWithItsWheelsOnItDoesNotTakeOff;
     [Test]
     procedure TestTakesOffOnceTwoJetsAndBothWheelsDown;
+    [Test]
+    procedure TestTheRearWheelFallsOutOfTheRisenHull;
     [Test]
     procedure TestHangingItStandsLevelAtItsHeight;
     [Test]
@@ -3811,6 +3817,26 @@ begin
   Assert.IsFalse(FRam.Wheel.Running, 'Rolled away');
 end;
 
+procedure TRamBrakeTests.TestEveryStrikeOfTheWheelJoltsSofter;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  FRam.ShedWheel;
+  var Strikes := 0;
+  var LastJolt: Single := MaxSingle;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if FRam.Wheel.Struck <= 0 then
+      Continue;
+    Inc(Strikes);
+    Assert.IsTrue((Cue.Jolt > 0) and (Cue.Jolt < LastJolt),
+      Format('A softer jolt at strike %d', [Strikes]));
+    LastJolt := Cue.Jolt;
+  end;
+  Assert.IsTrue(Strikes >= 2, 'It bounces');
+end;
+
 procedure TRamBrakeTests.TestANewFightPutsTheWheelBack;
 const
   RollTicks = 20;
@@ -4012,10 +4038,40 @@ begin
   end;
   Assert.AreEqual(2, Ignites, 'Two jets');
   Assert.AreEqual(1, Roars, 'The roar once');
-  Assert.AreEqual(2, Landings, 'Both wheels down');
+  Assert.IsTrue(Landings >= 3, 'Both wheels down, the rear one more than once');
   Assert.IsTrue(RearRolled, 'The rear wheel spat out');
   FRam.TakeOff;
   Assert.IsFalse(FRam.Tick(Hero).Ignite, 'Not a second time');
+end;
+
+procedure TRamBrakeTests.TestTheRearWheelFallsOutOfTheRisenHull;
+const
+  // Its bottom over the road as it is thrown
+  Clear = 30.0;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  FRam.ShedWheel;
+  FRam.TakeOff;
+  var Thrown := False;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    var Wheel := FRam.RearWheel;
+    if not Thrown and Wheel.Running then
+    begin
+      Thrown := True;
+      Assert.IsTrue(FRam.Flight.LiftAt(1) >= SpitLift, 'Out of the risen hull');
+      Assert.IsTrue(Wheel.Contact.Y < RamFloorY - Clear, 'Over the road');
+      Continue;
+    end;
+    if Wheel.Struck > 0 then
+    begin
+      Assert.AreEqual(Double(RamFloorY), Double(Wheel.Contact.Y), 0.001, 'Onto the road');
+      Exit;
+    end;
+  end;
+  Assert.Fail('It never struck the road');
 end;
 
 procedure TRamBrakeTests.TestHangingItStandsLevelAtItsHeight;
