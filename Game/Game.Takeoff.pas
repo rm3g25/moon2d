@@ -1,8 +1,10 @@
 ﻿{
-  Game.Takeoff - the Ram off the road on its jets, its wheels gone. Fire
-  bursts down out of the empty front well and the bow lifts off the road,
+  Game.Takeoff - the Ram off the road on its jets, its wheels gone. First
+  its engine bays come out of the depth of both arches - the rear one
+  behind its wheel - and the nozzles slide down out of their rings. Then
+  fire bursts down out of the front nozzle and the bow lifts off the road,
   the hull rocking up about its rear wheel; a breath, and the fire out of
-  the rear well spits the rear wheel out, and the hull rises on its two
+  the rear nozzle spits the rear wheel out, and the hull rises on its two
   jets. Off the road it turns about its middle, no more about the wheel,
   and rights itself as it rises: it swings past level, back, and settles,
   a spring dying out - then it hangs on its jets. Hanging it bobs and
@@ -12,7 +14,8 @@
 
   Not here: where the hull stands across and how it is drawn - the Ram
   says, and moves it by the pace this gives; the wheel spat out
-  (Game.Wheel); the fire and the dust - the Ram's painter.
+  (Game.Wheel); the bays, the nozzles, the fire and the dust - the Ram's
+  painter.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -22,6 +25,10 @@ unit Game.Takeoff;
 interface
 
 const
+  // The bays come out of the arches over BayTicks, then the nozzles out of
+  // their rings over NozzleTicks, then the front jet catches
+  BayTicks = 14;
+  NozzleTicks = 8;
   // Degrees the bow lifts, and how long it takes
   BowUpDegrees = 10.0;
   BowUpTicks = 24;
@@ -50,15 +57,16 @@ const
   BankPerPace = 2.5;
 
 type
-  // tkBowUp - the front jet, the bow lifting about the rear wheel;
-  // tkRising - both jets, off the road; tkHanging - risen and settled, it
-  // bobs, rocks and keeps over the hero
-  TTakeoffStage = (tkNone, tkBowUp, tkRising, tkHanging);
+  // tkOpening - the bays and the nozzles coming out, no fire yet; tkBowUp -
+  // the front jet, the bow lifting about the rear wheel; tkRising - both
+  // jets, off the road; tkHanging - risen and settled, it bobs, rocks and
+  // keeps over the hero
+  TTakeoffStage = (tkNone, tkOpening, tkBowUp, tkRising, tkHanging);
   TTakeoffJet = (tjFront, tjRear);
 
   TTakeoffCue = record
-    // A jet catches: the front one at the start, the rear one as it spits
-    // the wheel out
+    // A jet catches: the front one once the nozzles are out, the rear one
+    // as it spits the wheel out
     Ignite: Boolean;
     Jet: TTakeoffJet;
     Spit: Boolean;
@@ -78,12 +86,17 @@ type
     FSwing: Single;
     FLift, FLastLift: Single;
     FAir, FLastAir: Single;
+    // 0..1: how far the bays are out of the arches, the nozzles out of
+    // their rings
+    FBay, FLastBay: Single;
+    FNozzle, FLastNozzle: Single;
     // Units a tick across, after the hero
     FPace: Single;
     // Ticks since each jet caught; -1 - out
     FLit: array [TTakeoffJet] of Integer;
     FJets, FLastJets: array [TTakeoffJet] of Single;
     procedure Catch(AJet: TTakeoffJet; var ACue: TTakeoffCue);
+    procedure TickOpening(var ACue: TTakeoffCue);
     procedure TickBowUp(var ACue: TTakeoffCue);
     procedure TickRising(var ACue: TTakeoffCue);
     procedure TickHanging(AToward: Single);
@@ -108,6 +121,10 @@ type
     function AirAt(AAlpha: Single): Single;
     // 0 out, 1 burning; over 1 for a moment as it catches
     function JetAt(AJet: TTakeoffJet; AAlpha: Single): Single;
+    // 0 in the depth of the arch, 1 out; both arches alike
+    function BayAt(AAlpha: Single): Single;
+    // 0 in the ring, 1 out
+    function NozzleAt(AAlpha: Single): Single;
   end;
 
 implementation
@@ -145,7 +162,7 @@ end;
 procedure TTakeoff.Start(ALean: Single; AFacing: Integer);
 begin
   Stop;
-  FStage := tkBowUp;
+  FStage := tkOpening;
   FFrom := ALean;
   FBowUp := -Sign(AFacing) * BowUpDegrees;
   FLean := ALean;
@@ -165,6 +182,10 @@ begin
   FLastLift := 0;
   FAir := 0;
   FLastAir := 0;
+  FBay := 0;
+  FLastBay := 0;
+  FNozzle := 0;
+  FLastNozzle := 0;
   FPace := 0;
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
@@ -187,12 +208,13 @@ begin
   FLastLean := FLean;
   FLastLift := FLift;
   FLastAir := FAir;
+  FLastBay := FBay;
+  FLastNozzle := FNozzle;
   FLastJets := FJets;
-  // The front jet catches with the first tick, so the cue is heard at once
-  if FLit[tjFront] < 0 then
-    Catch(tjFront, Result);
   Inc(FTicks);
   case FStage of
+    tkOpening:
+      TickOpening(Result);
     tkBowUp:
       TickBowUp(Result);
     tkRising:
@@ -208,6 +230,19 @@ begin
   FLit[AJet] := 0;
   ACue.Ignite := True;
   ACue.Jet := AJet;
+end;
+
+// The front jet catches on the tick the nozzles are out, so the cue is
+// heard with the first fire
+procedure TTakeoff.TickOpening(var ACue: TTakeoffCue);
+begin
+  FBay := SmoothStep(FTicks / BayTicks);
+  FNozzle := SmoothStep((FTicks - BayTicks) / NozzleTicks);
+  if FTicks < BayTicks + NozzleTicks then
+    Exit;
+  FStage := tkBowUp;
+  FTicks := 0;
+  Catch(tjFront, ACue);
 end;
 
 procedure TTakeoff.TickBowUp(var ACue: TTakeoffCue);
@@ -286,6 +321,16 @@ end;
 function TTakeoff.JetAt(AJet: TTakeoffJet; AAlpha: Single): Single;
 begin
   Result := Lerp(FLastJets[AJet], FJets[AJet], AAlpha);
+end;
+
+function TTakeoff.BayAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastBay, FBay, AAlpha);
+end;
+
+function TTakeoff.NozzleAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastNozzle, FNozzle, AAlpha);
 end;
 
 end.

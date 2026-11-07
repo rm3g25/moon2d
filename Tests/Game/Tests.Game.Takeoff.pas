@@ -1,8 +1,9 @@
 ﻿{
   Tests.Game.Takeoff - the Ram off the road: nothing till it starts. The
-  front jet catches at once, told with the first tick, and the bow lifts
-  the other way round from where the hull faces, about its rear wheel,
-  nothing risen yet. The rear jet catches once, a while after, with the
+  bays come out first, then the nozzles, never back, the hull as it leaned
+  and no fire; the front jet catches once they are out, told with the
+  tick, and the bow lifts the other way round from where the hull faces,
+  about its rear wheel, nothing risen yet. The rear jet catches once, a while after, with the
   wheel spat out on the same tick. It rises to its height, never down on
   the way, to its height as it settles; it rights itself as it rises,
   swinging past level and back, and settles level, told once. On the road
@@ -39,7 +40,9 @@ type
     [Test]
     procedure TestNothingTillItStarts;
     [Test]
-    procedure TestTheFrontJetCatchesWithTheFirstTick;
+    procedure TestTheBaysThenTheNozzlesComeOutBeforeTheFire;
+    [Test]
+    procedure TestTheFrontJetCatchesOnceTheNozzlesAreOut;
     [Test]
     procedure TestTheBowLiftsAgainstTheWayItFaces;
     [Test]
@@ -74,6 +77,8 @@ const
   ManyTicks = 600;
   // The lean of 18b it starts from, onto its bow
   ShedLean = 3.0;
+  // The front jet catches on this tick
+  OpenTicks = BayTicks + NozzleTicks;
 
 procedure TTakeoffTests.Setup;
 begin
@@ -106,12 +111,47 @@ begin
   Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(1)), Slop, 'Level');
   Assert.AreEqual(0.0, Double(FTakeoff.LiftAt(1)), Slop, 'On the road');
   Assert.AreEqual(0.0, Double(FTakeoff.JetAt(tjFront, 1)), Slop, 'No fire');
+  Assert.AreEqual(0.0, Double(FTakeoff.BayAt(1)), Slop, 'No bay');
+  Assert.AreEqual(0.0, Double(FTakeoff.NozzleAt(1)), Slop, 'No nozzle');
 end;
 
-procedure TTakeoffTests.TestTheFrontJetCatchesWithTheFirstTick;
+procedure TTakeoffTests.TestTheBaysThenTheNozzlesComeOutBeforeTheFire;
 begin
   FTakeoff.Start(ShedLean, 1);
   Assert.IsTrue(FTakeoff.Running, 'Running');
+  var LastBay: Single := 0;
+  var LastNozzle: Single := 0;
+  for var i := 1 to OpenTicks - 1 do
+  begin
+    var Cue := FTakeoff.Tick;
+    var Bay := FTakeoff.BayAt(1);
+    var Nozzle := FTakeoff.NozzleAt(1);
+    Assert.IsFalse(Cue.Ignite, Format('Fire at tick %d', [Integer(i)]));
+    Assert.IsTrue((Bay >= LastBay) and (Nozzle >= LastNozzle),
+      Format('Back in at tick %d', [Integer(i)]));
+    if Bay < 1 then
+      Assert.AreEqual(0.0, Double(Nozzle), Slop,
+        Format('The nozzle before its bay at tick %d', [Integer(i)]));
+    Assert.AreEqual(ShedLean, Double(FTakeoff.LeanAt(1)), Slop, 'As it leaned');
+    Assert.AreEqual(0.0, Double(FTakeoff.LiftAt(1)), Slop, 'On the road');
+    LastBay := Bay;
+    LastNozzle := Nozzle;
+  end;
+  Assert.AreEqual(1.0, Double(LastBay), Slop, 'The bays out');
+  Assert.IsTrue(LastNozzle > 0, 'The nozzles coming');
+  FTakeoff.Tick;
+  Assert.AreEqual(1.0, Double(FTakeoff.NozzleAt(1)), Slop, 'The nozzles out');
+  for var i := 1 to ManyTicks do
+    FTakeoff.Tick;
+  Assert.AreEqual(1.0, Double(FTakeoff.BayAt(1)), Slop, 'Hanging, the bays out');
+  Assert.AreEqual(1.0, Double(FTakeoff.NozzleAt(1)), Slop, 'And the nozzles');
+end;
+
+procedure TTakeoffTests.TestTheFrontJetCatchesOnceTheNozzlesAreOut;
+begin
+  FTakeoff.Start(ShedLean, 1);
+  for var i := 1 to OpenTicks - 1 do
+    FTakeoff.Tick;
   var Cue := FTakeoff.Tick;
   Assert.IsTrue(Cue.Ignite, 'A jet catches');
   Assert.IsTrue(Cue.Jet = tjFront, 'The front one');
@@ -124,14 +164,14 @@ end;
 procedure TTakeoffTests.TestTheBowLiftsAgainstTheWayItFaces;
 begin
   FTakeoff.Start(ShedLean, 1);
-  for var i := 1 to BowUpTicks do
+  for var i := 1 to OpenTicks + BowUpTicks do
     FTakeoff.Tick;
   Assert.AreEqual(-BowUpDegrees, Double(FTakeoff.LeanAt(1)), Slop,
     'Facing right, bow up');
   Assert.AreEqual(0.0, Double(FTakeoff.LiftAt(1)), Slop, 'Not risen yet');
 
   FTakeoff.Start(-ShedLean, -1);
-  for var i := 1 to BowUpTicks do
+  for var i := 1 to OpenTicks + BowUpTicks do
     FTakeoff.Tick;
   Assert.AreEqual(BowUpDegrees, Double(FTakeoff.LeanAt(1)), Slop,
     'Facing left, bow up');
@@ -157,7 +197,8 @@ begin
   end;
   Assert.AreEqual(2, Ignites, 'Two jets, each once');
   Assert.AreEqual(1, Spits, 'One wheel');
-  Assert.IsTrue((SpitAt >= RearJetAfterTicks) and (SpitAt <= RearJetAfterTicks + 1),
+  Assert.IsTrue((SpitAt >= OpenTicks + RearJetAfterTicks) and
+    (SpitAt <= OpenTicks + RearJetAfterTicks + 1),
     Format('A while after the front, not at tick %d', [SpitAt]));
 end;
 
@@ -265,7 +306,7 @@ end;
 procedure TTakeoffTests.TestOnTheRoadAboutTheWheelOffItAboutItsMiddle;
 begin
   FTakeoff.Start(ShedLean, 1);
-  for var i := 1 to BowUpTicks do
+  for var i := 1 to OpenTicks + BowUpTicks do
     FTakeoff.Tick;
   Assert.AreEqual(0.0, Double(FTakeoff.AirAt(1)), Slop, 'On the road');
   for var i := 1 to ManyTicks do
@@ -279,7 +320,7 @@ const
 begin
   FTakeoff.Start(ShedLean, 1);
   var Brightest: Single := 0;
-  for var i := 1 to Settled do
+  for var i := 1 to OpenTicks + Settled do
   begin
     FTakeoff.Tick;
     Brightest := Max(Brightest, FTakeoff.JetAt(tjFront, 1));
@@ -297,6 +338,8 @@ begin
   Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(1)), Slop, 'Level');
   Assert.AreEqual(0.0, Double(FTakeoff.LiftAt(1)), Slop, 'On the road');
   Assert.AreEqual(0.0, Double(FTakeoff.JetAt(tjRear, 1)), Slop, 'No fire');
+  Assert.AreEqual(0.0, Double(FTakeoff.BayAt(1)), Slop, 'No bay');
+  Assert.AreEqual(0.0, Double(FTakeoff.NozzleAt(1)), Slop, 'No nozzle');
   Assert.IsFalse(FTakeoff.Tick.Ignite, 'Nothing catches');
 end;
 

@@ -195,6 +195,13 @@ type
     procedure DrawSized(ATexture: PSdlTexture; const ACenter: TSdlFPoint;
       AWidth, AHeight: Single; ALevel: Single = 1;
       AMirrored: Boolean = False; AAngleDegrees: Double = 0);
+    // The lower AShare (0..1) of a picture AWidth by AHeight units that
+    // hangs by the middle of its top edge from ATop, turned AAngleDegrees
+    // clockwise about that point: a thing slid part way out of a slot shows
+    // what is out, its top still in the slot
+    procedure DrawHanging(ATexture: PSdlTexture; const ATop: TSdlFPoint;
+      AWidth, AHeight, AShare: Single; ALevel: Single = 1;
+      AMirrored: Boolean = False; AAngleDegrees: Double = 0);
     // Every draw from here on lands only above the line AY units down,
     // shifted by Origin as the draws are; ClearClip lets them land
     // anywhere again. A line is whole units: the renderer clips no finer.
@@ -586,6 +593,34 @@ begin
   Dest.H := AHeight;
   SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
   SDL_RenderCopyExF(FRenderer, ATexture, nil, @Dest, AAngleDegrees, nil,
+    FlipOf(AMirrored));
+end;
+
+procedure TSpriteRenderer.DrawHanging(ATexture: PSdlTexture;
+  const ATop: TSdlFPoint; AWidth, AHeight, AShare: Single; ALevel: Single;
+  AMirrored: Boolean; AAngleDegrees: Double);
+var
+  TextureWidth, TextureHeight: Integer;
+  Source: TSdlRect;
+  Dest: TSdlFRect;
+  Pivot: TSdlFPoint;
+begin
+  if AShare <= 0 then
+    Exit;
+  SDL_QueryTexture(ATexture, nil, nil, @TextureWidth, @TextureHeight);
+  var Shown: Integer := Max(1, Round(TextureHeight * Min(AShare, 1.0)));
+  Source.X := 0;
+  Source.Y := TextureHeight - Shown;
+  Source.W := TextureWidth;
+  Source.H := Shown;
+  Dest.X := ATop.X - AWidth / 2 + FOrigin.X;
+  Dest.Y := ATop.Y + FOrigin.Y + FFineY;
+  Dest.W := AWidth;
+  Dest.H := AHeight * Shown / TextureHeight;
+  Pivot.X := AWidth / 2;
+  Pivot.Y := 0;
+  SDL_SetTextureAlphaMod(ATexture, EnsureRange(Round(255 * ALevel), 0, 255));
+  SDL_RenderCopyExF(FRenderer, ATexture, @Source, @Dest, AAngleDegrees, @Pivot,
     FlipOf(AMirrored));
 end;
 

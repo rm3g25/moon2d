@@ -14,10 +14,12 @@
 
   The hull stands on whole units like a frame; only the eye and the wheels
   draw between ticks. A machine that puts something between its wheels and
-  its body - the mast of the Ram - draws the two halves itself, in turn. The platform and the mount are never mirrored: their
-  art is symmetric, and the torn panel of the worn layer would jump from
-  side to side at every turn. The tank faces left and is mirrored whole
-  while it heads right.
+  its body - the mast of the Ram - draws the two halves itself, in turn;
+  one that puts something between the dark of its wells and its wheels -
+  the Ram's engine bays - draws those apart too. The platform and the
+  mount are never mirrored: their art is symmetric, and the torn panel of
+  the worn layer would jump from side to side at every turn. The tank
+  faces left and is mirrored whole while it heads right.
 
   Not here: where the hull stands - the monster says; the death - a dying
   hull monster plays the death frames of its own set, as every monster
@@ -85,8 +87,6 @@ type
     FWake: Single; // 0..1, how far the eye has come up from dark
     FLastWake: Single;
     procedure TurnWheels(ARolled: Single);
-    procedure DrawWheels(const ASprites: TSpriteRenderer;
-      const AStand: THullStand; AAlpha: Single);
   public
     // AArt belongs to the caller and must outlive the hull
     constructor Create(const ADef: THullDef; AArt: THullArt);
@@ -106,8 +106,12 @@ type
     procedure Draw(const ASprites: TSpriteRenderer;
       const AStand: THullStand; AAlpha: Single);
     // The dark of the wheel wells and the wheels; nothing for a hull
-    // without wheels
+    // without wheels. DrawChassis and then DrawWheels.
     procedure DrawUnder(const ASprites: TSpriteRenderer;
+      const AStand: THullStand; AAlpha: Single);
+    procedure DrawChassis(const ASprites: TSpriteRenderer;
+      const AStand: THullStand);
+    procedure DrawWheels(const ASprites: TSpriteRenderer;
       const AStand: THullStand; AAlpha: Single);
     // The hull, its worn copy and the eye
     procedure DrawBody(const ASprites: TSpriteRenderer;
@@ -269,6 +273,8 @@ end;
 procedure THull.DrawWheels(const ASprites: TSpriteRenderer;
   const AStand: THullStand; AAlpha: Single);
 begin
+  if not FDef.Wheels.Enabled then
+    Exit;
   var Turn := Lerp(FLastTurn, FTurn, AAlpha) + AStand.Lean;
   var Axles := FDef.Wheels.Axles;
   for var i := 0 to High(Axles) do
@@ -292,11 +298,17 @@ end;
 procedure THull.DrawUnder(const ASprites: TSpriteRenderer;
   const AStand: THullStand; AAlpha: Single);
 begin
+  DrawChassis(ASprites, AStand);
+  DrawWheels(ASprites, AStand, AAlpha);
+end;
+
+procedure THull.DrawChassis(const ASprites: TSpriteRenderer;
+  const AStand: THullStand);
+begin
   if not FDef.Wheels.Enabled then
     Exit;
   ASprites.DrawSized(FArt.FChassis, AStand.TurnedCenter, FDef.Width,
     FDef.Height, Opaque, AStand.Mirrored, AStand.Lean);
-  DrawWheels(ASprites, AStand, AAlpha);
 end;
 
 procedure THull.DrawBody(const ASprites: TSpriteRenderer;

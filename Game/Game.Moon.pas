@@ -721,7 +721,7 @@ begin
   FCannonArt := TCannonArt.Create(ARenderer);
   FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
   FRamArt := TRamArt.Create(ARenderer);
-  FRam := TRam.Create(FRamArt.Body, RamSeed);
+  FRam := TRam.Create(FRamArt.Body, FRamArt.Wells, RamSeed);
   FRamPainter := TRamPainter.Create(FRamArt, FRam);
   FWrecks := TPadWrecks.Create;
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);

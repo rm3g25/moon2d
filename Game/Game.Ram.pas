@@ -159,15 +159,22 @@
   From then on a touch of the hull wounds and throws again. The bare hull
   and the wheel throw bullets off as a tank's armour does, and lose
   nothing to them.
-  Then the game has it take off (Game.Takeoff): fire out of the empty
-  front well lifts the bow, the rear jet spits the rear wheel out to roll
-  after the first, and the hull rises on its two jets, rights itself and
-  hangs - bobbing, rocking, keeping over the hero with a lag. The engine
-  is done with: its exhausts smoke no more from the takeoff on. Off the
-  road it is where its pose puts it - turned, raised - and its touch, the
-  bullets it throws off and everything drawn on it go with the pose. Once
-  the bunker is gone and the mast has sunk, a hatch slides shut over the
-  well, and the smoke out of it stops.
+  Then the game has it take off (Game.Takeoff): its engine bays come out
+  of the depth of both arches - the rear one behind its wheel - and their
+  nozzles slide down out of the rings, as far as the road lets them; fire
+  out of the front nozzle lifts the bow, the rear jet spits the rear wheel
+  out to roll after the first, and the hull rises on its two jets, rights
+  itself and hangs - bobbing, rocking, keeping over the hero with a lag.
+  The engine is done with: its exhausts smoke no more from the takeoff on.
+  Off the road it is where its pose puts it - turned, raised - and its
+  touch, the bullets it throws off and everything drawn on it go with the
+  pose. Once the bunker is gone and the mast has sunk, a hatch slides
+  shut over the well, and the smoke out of it stops. The fire is short and
+  narrow, a white-blue core in an orange sheath, gone well over the road;
+  only its warmth reaches the road, and it lights the nozzle from below.
+
+  A shed wheel leaves its arch hollow - a bullet and a touch go into it -
+  till the bay comes out and fills it.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -365,6 +372,7 @@ type
   TRam = class
   private
     FBody: TShieldMask;
+    FWells: TShieldMask;
     FShield: TTekShield;
     FOrders: TRamOrders;
     FEntered: Boolean; // the whole entrance has begun on this level
@@ -543,6 +551,7 @@ type
     function NextSurgeWait: Integer;
     function SurgeWarns: Boolean;
     function SolidAt(ACol, ARow: Integer): Boolean;
+    function WellOpen(AArtCol: Integer): Boolean;
     function WaveSide(const AHeroBody: TSdlFRect): Integer;
     procedure Place(AX: Single);
     procedure Arm(ALivesShare: Single);
@@ -596,8 +605,13 @@ type
       ALast: Integer): Boolean;
     function ThrowSide(const AHeroBody: TSdlFRect): Integer;
   public
-    // ABody - the hull and the wheels on a grid of units (TRamArt.Body)
-    constructor Create(const ABody: TShieldMask; ASeed: Cardinal);
+    // ABody - the hull and the wheels on a grid of units (TRamArt.Body);
+    // AWells - the cells of it that are the wheels and the dark of their
+    // arches (TRamArt.Wells), hollow while a wheel is gone and no bay has
+    // come out in its place. Without them the wells stay solid.
+    constructor Create(const ABody: TShieldMask; ASeed: Cardinal); overload;
+    constructor Create(const ABody, AWells: TShieldMask;
+      ASeed: Cardinal); overload;
     destructor Destroy; override;
     // Comes onto the screen as AOrders say: the whole entrance the first
     // time on the level - True, and the music must go silent - from the
@@ -700,9 +714,10 @@ type
     procedure ShedWheel;
     function WheelShed: Boolean;
     property Wheel: TLooseWheel read FWheel;
-    // Its front wheel shed, it takes off: the fire out of the front well,
-    // the bow up, the rear wheel spat out to roll after the first - the
-    // cue tells it - and up on both jets to hang. Once a fight.
+    // Its front wheel shed, it takes off: the bays and the nozzles out,
+    // the fire out of the front nozzle, the bow up, the rear wheel spat
+    // out to roll after the first - the cue tells it - and up on both jets
+    // to hang. Once a fight.
     procedure TakeOff;
     property Flight: TTakeoff read FTakeoff;
     property RearWheel: TLooseWheel read FRearWheel;
@@ -849,6 +864,11 @@ type
     FBunker: PSdlTexture;
     FBunkerLid: PSdlTexture;
     FShutter: PSdlTexture;
+    FBay: PSdlTexture;
+    FNozzle: PSdlTexture;
+    FNozzleLit: PSdlTexture;
+    // The fire out of a nozzle, the mouth at its top
+    FFlame: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
@@ -857,11 +877,15 @@ type
     // square, drawn black
     FWaveBand: PSdlTexture;
     FBody: TShieldMask;
+    FWells: TShieldMask;
   public
     constructor Create(ARenderer: PSdlRenderer);
     destructor Destroy; override;
     // The hull and the wheels on a grid of units, read off the art
     property Body: TShieldMask read FBody;
+    // The cells of the body that are the wheels and the dark of their
+    // arches, not the hull
+    property Wells: TShieldMask read FWells;
   end;
 
   TExhaustPair = array [0..1] of TSmoke;
@@ -896,9 +920,7 @@ type
     FArchSmokeTicks: Integer;
     // Off the point of its plough as its nose drops onto the road
     FScrape: TSparkField;
-    // The fire out of a well as it takes off, and the dust it blows off the
-    // road while it reaches it
-    FJetFire: array [TTakeoffJet] of TSmoke;
+    // The dust a jet blows off the road while it reaches it
     FJetDust: array [TTakeoffJet] of TSmoke;
     FArrivals: Integer;
     procedure TickArrival;
@@ -910,6 +932,15 @@ type
     procedure TickArchSmoke(ABeltShift: Single);
     procedure TickScrape;
     procedure TickJets;
+    function NozzleTop(const APose: TRamPose; AJet: TTakeoffJet): TSdlFPoint;
+    function NozzleOut(const APose: TRamPose; AJet: TTakeoffJet;
+      AAlpha: Single): Single;
+    function NozzleMouth(const APose: TRamPose; AJet: TTakeoffJet;
+      AAlpha: Single): TSdlFPoint;
+    procedure DrawEngines(const ASprites: TSpriteRenderer;
+      const APose: TRamPose; AAlpha: Single);
+    procedure DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
+      AAlpha: Single);
     procedure DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawLid(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
@@ -945,14 +976,16 @@ type
     // wheels roll by it too, the exhausts work as in a drive, and the
     // smoke in the air rides away with the road.
     procedure Tick(ABeltShift: Single);
-    // The exhausts' smoke and the fire of its jets, before the body: the
-    // machine backs into the one, the other bursts out from under it
+    // The exhausts' smoke, the jets' dust and their fire, before the body:
+    // the machine backs into the smoke, the fire bursts out from under the
+    // nozzles' lips
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
     // The dust of the wave, the smoke out of the arches, the sparks of the
-    // scrape, the glow of the jets, the bolts of a head, the shield, the
+    // scrape, the glow of the jets and their warmth on the road, the bolts
+    // of a head, the shield, the
     // sweeper's plates, the wave itself and the white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -1532,26 +1565,53 @@ const
   ExhaustRampTicks = 8;
   ExhaustSeeds: array [0..1] of Cardinal = ($45786831, $45786832); // "Exh1"
 
-  // The fire out of a well, straight down out of its middle where the axle
-  // was; its glow at the mouth of the well under the hull. It reaches about
-  // JetReach down: the road under it that near is blown into dust.
-  JetFireLook: TSmokeLook = (Rate: 140; Life: 0.4; Size: 5; EndSize: 14;
-    Opacity: 0.9; Angle: -90; Cone: 14; Speed: 150; Drag: 0.85; Lift: 0;
-    Wind: 0; Turbulence: 4; Spin: 60; Flow: sfSteady; Frequency: 1;
-    Heat: 1; EndTint: (R: 30; G: 28; B: 28));
-  JetFireTint: TColorTint = (R: 48; G: 46; B: 44);
-  JetFireSeeds: array [TTakeoffJet] of Cardinal = ($4A657446, $4A657452); // "JetF"
+  // The engine bay in an arch, the axle at its middle (engineBay); out of
+  // the depth it grows from BayDepth of itself, out of the dark
+  BayWidth = 41.8;
+  BayHeight = 36.2;
+  BayDepth = 0.6;
+  // Half out, a bay fills its arch: the well is no more hollow
+  BayHolds = 0.5;
+  // The nozzle hangs NozzleHang under the axle from the bay's ring
+  // (engineNozzle); the fire leaves it NozzleLipInset over its bottom edge
+  NozzleHang = 8.9;
+  NozzleWidth = 14.0;
+  NozzleHeight = 15.8;
+  NozzleLipInset = 0.8;
+  // Sliding out on the road, its tip goes no deeper under the road line
+  NozzleRoadSink = 1.0;
+  // The fire straight out of the nozzle: an orange sheath and a white-blue
+  // core, fading out well short of the road under the hanging hull;
+  // flickering by FlameFlicker of its length
+  FlameLength = 30.0;
+  FlameWidth = 8.0;
+  FlameColor: TRgb = (R: 255; G: 128; B: 40);
+  FlameCoreLength = 12.0;
+  FlameCoreWidth = 3.2;
+  FlameCoreColor: TRgb = (R: 205; G: 230; B: 255);
+  FlameFlicker = 0.1;
+  FlameSideTexels = 32;
+  FlameLengthTexels = 128;
+  // A jet whose mouth is JetReach over the road blows it into dust
   JetDustLook: TSmokeLook = (Rate: 40; Life: 1.2; Size: 4; EndSize: 24;
     Opacity: 0.45; Angle: 90; Cone: 150; Speed: 60; Drag: 0.5; Lift: 0;
     Wind: 0; Turbulence: 4; Spin: 20; Flow: sfGusty; Frequency: 2;
     Heat: 0; EndTint: (R: 90; G: 86; B: 80));
   JetDustSeeds: array [TTakeoffJet] of Cardinal = ($4A657444, $4A657464); // "JetD"
-  JetMouthDrop = 12.0;
-  JetReach = 70.0;
-  JetGlowSize = 34.0;
+  JetReach = 40.0;
+  // The glow at a nozzle's mouth, over its lip
+  JetGlowSize = 22.0;
   JetGlowColor: TRgb = (R: 255; G: 150; B: 60);
-  JetCoreSize = 12.0;
-  JetCoreColor: TRgb = (R: 255; G: 236; B: 200);
+  JetCoreSize = 8.0;
+  JetCoreColor: TRgb = (R: 225; G: 238; B: 255);
+  // The fire's warmth on the road under a jet: a flat pool, brightest with
+  // the mouth on the road, gone WarmReach over it
+  WarmReach = 260.0;
+  WarmWidth = 70.0;
+  WarmHeight = 12.0;
+  WarmDrop = 4.0;
+  WarmLevel = 0.5;
+  WarmColor: TRgb = (R: 255; G: 140; B: 60);
   JetAxles: array [TTakeoffJet] of Integer = (FrontAxle, RearAxle);
 
   // Read off the art: a unit of the grid is solid where the art is this
@@ -1730,8 +1790,14 @@ end;
 
 constructor TRam.Create(const ABody: TShieldMask; ASeed: Cardinal);
 begin
+  Create(ABody, Default(TShieldMask), ASeed);
+end;
+
+constructor TRam.Create(const ABody, AWells: TShieldMask; ASeed: Cardinal);
+begin
   inherited Create;
   FBody := ABody;
+  FWells := AWells;
   FShield := TTekShield.CreateOver(ABody);
   for var i := Low(FPlates) to High(FPlates) do
     FPlates[i] := TTekShield.CreateStrip(PlateCells, PlateScale);
@@ -4000,7 +4066,18 @@ begin
   var Col := ACol;
   if HullMirrored then
     Col := FBody.Width - 1 - ACol;
-  Result := FBody.At(Col, ARow);
+  Result := FBody.At(Col, ARow) and not (FWells.At(Col, ARow) and WellOpen(Col));
+end;
+
+// The arch nearer the column of the art has lost its wheel, and no bay has
+// come out into it yet
+function TRam.WellOpen(AArtCol: Integer): Boolean;
+begin
+  var Middle := AArtCol + 0.5;
+  var Shed := FShed;
+  if Abs(Middle - Axles[RearAxle].X) < Abs(Middle - Axles[FrontAxle].X) then
+    Shed := FTakeoff.Stage >= tkRising;
+  Result := Shed and (FTakeoff.BayAt(1) < BayHolds);
 end;
 
 // The columns of the body that the rows of ABox meet, the whole width of
@@ -4554,6 +4631,70 @@ begin
   end;
 end;
 
+// The wheels and the dark of their arches, where the hull is not: what a
+// shed wheel leaves hollow
+function ReadWells(const ASpriteSet: TSpriteSet): TShieldMask;
+begin
+  Result.Width := Round(RamWidth);
+  Result.Height := Round(RamHeight);
+  Result.Middle.X := RamWidth / 2;
+  Result.Middle.Y := RamHeight / 2;
+  SetLength(Result.Solid, Result.Width * Result.Height);
+  var Hull := ReadArtSurface(ASpriteSet, 'hull');
+  try
+    var Chassis := ReadArtSurface(ASpriteSet, 'chassis');
+    try
+      SDL_LockSurface(Hull);
+      SDL_LockSurface(Chassis);
+      for var Row := 0 to Result.Height - 1 do
+        for var Col := 0 to Result.Width - 1 do
+        begin
+          var InArch := (AlphaAt(Chassis, Col, Row) >= BodyAlpha) or
+            WithinWheel(Col, Row);
+          Result.Solid[Row * Result.Width + Col] := InArch and
+            (AlphaAt(Hull, Col, Row) < BodyAlpha);
+        end;
+      SDL_UnlockSurface(Chassis);
+      SDL_UnlockSurface(Hull);
+    finally
+      SDL_FreeSurface(Chassis);
+    end;
+  finally
+    SDL_FreeSurface(Hull);
+  end;
+end;
+
+// A flame along the texture's height, its mouth at the top: as wide as a
+// nozzle's mouth there, swelling a little, then thinning to its tip;
+// brightest at the mouth, down its middle
+function CreateFlameShape(ARenderer: PSdlRenderer): PSdlTexture;
+const
+  MouthShare = 0.6;
+  SwellAt = 0.25;
+  // Typed: Power has three overloads
+  Fade: Single = 1.4;
+  Edge = 2.5;
+begin
+  var Image: TArray<Single>;
+  SetLength(Image, FlameSideTexels * FlameLengthTexels);
+  var Half: Single := FlameSideTexels / 2;
+  for var Row := 0 to FlameLengthTexels - 1 do
+  begin
+    var Along: Single := (Row + 0.5) / FlameLengthTexels;
+    var Rest: Single := 1 - Along;
+    var Strength: Single := Power(Rest, Fade);
+    var Radius: Single := (MouthShare + (1 - MouthShare) *
+      SmoothStep(Along / SwellAt)) * Sqrt(1 - Sqr(Along));
+    for var Col := 0 to FlameSideTexels - 1 do
+    begin
+      var Across := (Col + 0.5 - Half) / Half / Radius;
+      Image[Row * FlameSideTexels + Col] := Strength * Exp(-Edge * Sqr(Across));
+    end;
+  end;
+  Result := CreateGlowFromImage(ARenderer, Image, FlameSideTexels,
+    FlameLengthTexels);
+end;
+
 // A ring just inside the edge of its square, soft both ways; blended, not
 // added, so drawn black it darkens what lies under it
 function CreateWaveBand(ARenderer: PSdlRenderer): PSdlTexture;
@@ -4583,6 +4724,9 @@ begin
   FCache.AttachSpriteSet(FSpriteSet);
   FWell := FCache.Get('well');
   FShutter := FCache.Get('wellShutter');
+  FBay := FCache.Get('engineBay');
+  FNozzle := FCache.Get('engineNozzle');
+  FNozzleLit := FCache.Get('engineNozzleLit');
   for var i := Low(FMasts) to High(FMasts) do
     FMasts[i] := FCache.Get('mast' + IntToStr(i));
   FHunter := FCache.Get('hunter');
@@ -4595,12 +4739,16 @@ begin
   FShield := TShieldArt.Create(ARenderer);
   FGlow := CreateGlowShape(ARenderer, gsPoint, GlowSide);
   FWaveBand := CreateWaveBand(ARenderer);
+  FFlame := CreateFlameShape(ARenderer);
   FBody := ReadBody(FSpriteSet);
+  FWells := ReadWells(FSpriteSet);
 end;
 
 // The cache before the set: it reads from the set, never the reverse
 destructor TRamArt.Destroy;
 begin
+  if Assigned(FFlame) then
+    SDL_DestroyTexture(FFlame);
   if Assigned(FWaveBand) then
     SDL_DestroyTexture(FWaveBand);
   if Assigned(FGlow) then
@@ -4661,22 +4809,14 @@ begin
       ArchSmokeSeeds[i]);
   FScrape := TSparkField.Create(ScrapeSparkLook, UnderTheRoad, ScrapeCapacity,
     ScrapeSeed);
-  var FirePlacement := Default(TDynamicPlacement);
-  FirePlacement.Tint := JetFireTint;
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
-  begin
-    FJetFire[Jet] := TSmoke.CreateLook(FirePlacement, JetFireLook, 1,
-      JetFireSeeds[Jet]);
     FJetDust[Jet] := TSmoke.CreateLook(DustPlacement, JetDustLook, 1,
       JetDustSeeds[Jet]);
-  end;
 end;
 
 destructor TRamPainter.Destroy;
 begin
   for var Smoke in FJetDust do
-    Smoke.Free;
-  for var Smoke in FJetFire do
     Smoke.Free;
   FScrape.Free;
   for var Smoke in FArchSmoke do
@@ -4731,8 +4871,6 @@ begin
   for var Smoke in FArchSmoke do
     Smoke.Rewind;
   FScrape.Clear;
-  for var Smoke in FJetFire do
-    Smoke.Rewind;
   for var Smoke in FJetDust do
     Smoke.Rewind;
 end;
@@ -4881,8 +5019,7 @@ begin
   end;
 end;
 
-// Out of the middle of each well a jet burns in; the road it reaches is
-// blown into dust
+// The road a burning jet reaches is blown into dust
 procedure TRamPainter.TickJets;
 begin
   if not FRam.Present then
@@ -4890,16 +5027,44 @@ begin
   var Pose := FRam.PoseAt(1);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
-    var Burning := FRam.Flight.JetAt(Jet, 1) > 0;
-    var Axle := Axles[JetAxles[Jet]];
-    var Source := FRam.PoseSpot(Pose, Axle);
-    FJetFire[Jet].Tick(Source.X, Source.Y, Burning);
-    var Mouth := Axle;
-    Mouth.Y := Mouth.Y + JetMouthDrop;
-    var MouthSpot := FRam.PoseSpot(Pose, Mouth);
-    var Reaches := Burning and (MouthSpot.Y + JetReach >= RamFloorY);
-    FJetDust[Jet].Tick(MouthSpot.X, RamFloorY - WaveDustOverRoad, Reaches);
+    var Mouth := NozzleMouth(Pose, Jet, 1);
+    var Reaches := (FRam.Flight.JetAt(Jet, 1) > 0) and
+      (Mouth.Y + JetReach >= RamFloorY);
+    FJetDust[Jet].Tick(Mouth.X, RamFloorY - WaveDustOverRoad, Reaches);
   end;
+end;
+
+// The middle of the nozzle's top edge, under the bay's ring
+function TRamPainter.NozzleTop(const APose: TRamPose;
+  AJet: TTakeoffJet): TSdlFPoint;
+begin
+  var Hang := Axles[JetAxles[AJet]];
+  Hang.Y := Hang.Y + NozzleHang;
+  Result := FRam.PoseSpot(APose, Hang);
+end;
+
+// The share of its height out of the ring: as far as the nozzles have
+// come, and on the road no deeper than the road lets it
+function TRamPainter.NozzleOut(const APose: TRamPose; AJet: TTakeoffJet;
+  AAlpha: Single): Single;
+begin
+  var Top := NozzleTop(APose, AJet);
+  var Room: Single := (RamFloorY + NozzleRoadSink - Top.Y) /
+    (NozzleHeight * Cos(DegToRad(APose.Lean)));
+  Result := EnsureRange(Min(FRam.Flight.NozzleAt(AAlpha), Room), 0.0, 1.0);
+end;
+
+// Where the fire leaves the nozzle: down the hull's own down from the top
+// of the nozzle, as far as it is out
+function TRamPainter.NozzleMouth(const APose: TRamPose; AJet: TTakeoffJet;
+  AAlpha: Single): TSdlFPoint;
+begin
+  var Top := NozzleTop(APose, AJet);
+  var Reach: Single := Max(NozzleHeight * NozzleOut(APose, AJet, AAlpha) -
+    NozzleLipInset, 0);
+  var Angle := DegToRad(APose.Lean);
+  Result.X := Top.X - Reach * Sin(Angle);
+  Result.Y := Top.Y + Reach * Cos(Angle);
 end;
 
 // Forward off the point of the plough, the way the bow faces
@@ -5163,6 +5328,34 @@ begin
     @Indices[0], Length(Indices));
 end;
 
+// In each arch, behind the hull and its wheels: the bay out of the depth -
+// growing, out of the dark of the chassis - and the nozzle out of its
+// ring, lit from below while its fire burns. The rear one comes out behind
+// its wheel.
+procedure TRamPainter.DrawEngines(const ASprites: TSpriteRenderer;
+  const APose: TRamPose; AAlpha: Single);
+begin
+  var Bay := FRam.Flight.BayAt(AAlpha);
+  if Bay <= 0 then
+    Exit;
+  var Mirrored := FRam.HullMirrored;
+  var Size := Lerp(BayDepth, 1, Bay);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Axle := FRam.PoseSpot(APose, Axles[JetAxles[Jet]]);
+    ASprites.DrawSized(FArt.FBay, Axle, BayWidth * Size, BayHeight * Size, Bay,
+      Mirrored, APose.Lean);
+    var Top := NozzleTop(APose, Jet);
+    var Shown := NozzleOut(APose, Jet, AAlpha);
+    ASprites.DrawHanging(FArt.FNozzle, Top, NozzleWidth, NozzleHeight, Shown, 1,
+      Mirrored, APose.Lean);
+    var Fire := Min(FRam.Flight.JetAt(Jet, AAlpha), 1);
+    if Fire > 0 then
+      ASprites.DrawHanging(FArt.FNozzleLit, Top, NozzleWidth, NozzleHeight,
+        Shown, Fire, Mirrored, APose.Lean);
+  end;
+end;
+
 // Over the hull, slid shut from the far edge toward the eye: it shuts with
 // the hull upright on the road, so a level line cuts what is not there yet
 procedure TRamPainter.DrawShutter(const ASprites: TSpriteRenderer;
@@ -5254,7 +5447,8 @@ begin
     Lens.Y + ASprites.Origin.Y, Size, Color, Level);
 end;
 
-// Back to front: the dark of the well, the arches and the wheels, the
+// Back to front: the dark of the well, the arches, the engine bays and
+// their nozzles, the wheels, the
 // mast as far as it stays in the hull, the hull with its eye, and what of
 // the mast and the head - and the lens - stands over the middle line of
 // the well once more, over the hull; the wheels it has shed over it all.
@@ -5286,7 +5480,9 @@ begin
 
   ASprites.DrawSized(FArt.FWell, Stand.TurnedCenter, RamWidth, RamHeight, 1,
     Stand.Mirrored, Stand.Lean);
-  FHull.DrawUnder(ASprites, Stand, AAlpha);
+  FHull.DrawChassis(ASprites, Stand);
+  DrawEngines(ASprites, Pose, AAlpha);
+  FHull.DrawWheels(ASprites, Stand, AAlpha);
   if not Moved then
   begin
     ASprites.ClipAbove(RamTop + MastHiddenBelow);
@@ -5335,13 +5531,50 @@ begin
   for var Dust in FJetDust do
     Dust.Draw(ACanvas, Dust.Origin.X + AOrigin.X, Dust.Origin.Y + AOrigin.Y,
       AAlpha);
-  for var Fire in FJetFire do
-    Fire.Draw(ACanvas, Fire.Origin.X + AOrigin.X, Fire.Origin.Y + AOrigin.Y,
-      AAlpha);
+  DrawFlames(ACanvas.Renderer, AOrigin, AAlpha);
 end;
 
-// At the mouth of each well that burns: the fire's glow and its white
-// core, swelling as the jet flares
+// Straight out of each burning nozzle along the hull's own down, the
+// sheath and the core, longer as the jet flares; each flickers out of
+// step with the other
+procedure TRamPainter.DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
+  AAlpha: Single);
+const
+  FlareMost = 1.5;
+  // Two waves beating against each other, radians a tick; the rear jet
+  // that many ticks along
+  FlickerFast = 1.9;
+  FlickerSlow = 0.67;
+  JetsApartTicks = 17;
+begin
+  var Pose := FRam.PoseAt(AAlpha);
+  var Angle := DegToRad(Pose.Lean);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Level: Single := Min(FRam.Flight.JetAt(Jet, AAlpha), FlareMost);
+    if Level <= 0 then
+      Continue;
+    var Phase: Single := FAge + AAlpha + Ord(Jet) * JetsApartTicks;
+    var Flicker := 1 + FlameFlicker * Sin(Phase * FlickerFast) *
+      Cos(Phase * FlickerSlow);
+    var Mouth := NozzleMouth(Pose, Jet, AAlpha);
+    var Shown := Min(Level, 1);
+    var Sheath := FlameLength * Level * Flicker;
+    DrawGlowTurned(ARenderer, FArt.FFlame,
+      Mouth.X - Sheath / 2 * Sin(Angle) + AOrigin.X,
+      Mouth.Y + Sheath / 2 * Cos(Angle) + AOrigin.Y,
+      FlameWidth, Sheath, Pose.Lean, FlameColor, Shown);
+    var Core := FlameCoreLength * Level * Flicker;
+    DrawGlowTurned(ARenderer, FArt.FFlame,
+      Mouth.X - Core / 2 * Sin(Angle) + AOrigin.X,
+      Mouth.Y + Core / 2 * Cos(Angle) + AOrigin.Y,
+      FlameCoreWidth, Core, Pose.Lean, FlameCoreColor, Shown);
+  end;
+end;
+
+// At the mouth of each nozzle that burns: the fire's glow and its white
+// core over the lip, swelling as the jet flares; and its warmth on the
+// road under it, the nearer the warmer
 procedure TRamPainter.DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
 begin
   var Pose := FRam.PoseAt(AAlpha);
@@ -5350,15 +5583,19 @@ begin
     var Level := FRam.Flight.JetAt(Jet, AAlpha);
     if Level <= 0 then
       Continue;
-    var Mouth := Axles[JetAxles[Jet]];
-    Mouth.Y := Mouth.Y + JetMouthDrop;
-    var Spot := FRam.PoseSpot(Pose, Mouth);
-    var X := Spot.X + AOrigin.X;
-    var Y := Spot.Y + AOrigin.Y;
+    var Mouth := NozzleMouth(Pose, Jet, AAlpha);
+    var X := Mouth.X + AOrigin.X;
+    var Y := Mouth.Y + AOrigin.Y;
     DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y, JetGlowSize * Level,
       JetGlowColor, Level);
     DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y, JetCoreSize * Level,
       JetCoreColor, Level);
+    var Warmth := WarmLevel * Min(Level, 1) *
+      (1 - EnsureRange((RamFloorY - Mouth.Y) / WarmReach, 0.0, 1.0));
+    if Warmth > 0 then
+      DrawGlowTurned(FArt.FRenderer, FArt.FGlow, X,
+        RamFloorY + WarmDrop + AOrigin.Y, WarmWidth, WarmHeight, 0, WarmColor,
+        Warmth);
   end;
 end;
 

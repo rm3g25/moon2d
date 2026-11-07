@@ -97,7 +97,9 @@
   While the honeycomb holds, the hull throws no bullet off; bare, it
   throws one off where it meets the face it comes to, and leaning too;
   the wheel it has shed throws one off, and the hull counts it a hit.
-  With its wheels on it does not take off. Its front wheel off, it takes
+  The shed wheel's well lets a bullet in, as far as the other arch, till
+  its bay comes out at the takeoff. With its wheels on it does not take
+  off. Its front wheel off, it takes
   off once: two jets catch, the jets' roar once, both wheels come down
   from their hops; it hangs level, risen to its height; hanging, its
   touch and a bullet meet it up there, not on the road; it goes over the
@@ -109,8 +111,8 @@
   mast stands.
 
   The Ram only counts, so the tests tick it with a body of their own: the
-  hull's whole box solid. The arena is read from level2.json beside the
-  executable.
+  hull's whole box solid, and for the wells its lower band. The arena is
+  read from level2.json beside the executable.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -263,6 +265,8 @@ type
     procedure TestLeaningItThrowsABulletOffItsTop;
     [Test]
     procedure TestTheShedWheelThrowsABulletOffAHitOfTheHull;
+    [Test]
+    procedure TestAShedWheelsWellIsHollowTillItsBayComesOut;
     [Test]
     procedure TestWithItsWheelsOnItDoesNotTakeOff;
     [Test]
@@ -562,6 +566,16 @@ begin
   SetLength(Result.Solid, AWidth * AHeight);
   for var i := 0 to High(Result.Solid) do
     Result.Solid[i] := True;
+end;
+
+// The rows from AFromRow down, all across: both arches, as far as a test
+// needs them
+function LowerBand(AWidth, AHeight, AFromRow: Integer): TShieldMask;
+begin
+  Result := SolidBody(AWidth, AHeight);
+  for var Row := 0 to AFromRow - 1 do
+    for var Col := 0 to AWidth - 1 do
+      Result.Solid[Row * AWidth + Col] := False;
 end;
 
 function OrdersAt(AStop: Single): TRamOrders;
@@ -3904,6 +3918,45 @@ begin
   for var i := 1 to Forgotten + 1 do
     FRam.Tick(Hero);
   Assert.IsFalse(FRam.HullStruckWithin(Forgotten), 'Forgotten');
+end;
+
+// Level from the right, through the bow's arch: into the hull as far as
+// the rear arch, its wheel on; till the bay is out and it meets the face
+procedure TRamBrakeTests.TestAShedWheelsWellIsHollowTillItsBayComesOut;
+const
+  WellsFromRow = 80;
+  Height = 112.0;
+  Flight = 200.0;
+  Before = 6.0;
+  Deep = 30.0;
+  NearTheFace = 3.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  FRam.Free;
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)),
+    LowerBand(Round(RamWidth), Round(RamHeight), WellsFromRow), Seed);
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  BareTheHull(Hero);
+  var Face: Single := FRam.Left + RamWidth;
+  var From := At(Face + Before, RamTop + Height);
+  var Till := At(Face - Flight, RamTop + Height);
+  Assert.IsTrue(FRam.StrikeHull(From, Till, Where, Normal), 'Its wheels on');
+  Assert.AreEqual(Double(Face), Double(Where.X), 0.01, 'At its face');
+
+  FRam.ShedWheel;
+  FRam.Tick(Hero);
+  Assert.IsTrue(FRam.StrikeHull(From, Till, Where, Normal), 'Thrown off inside');
+  Assert.IsTrue(Where.X < Face - Deep,
+    Format('Into the well, not at %.1f from the face', [Face - Where.X]));
+
+  FRam.TakeOff;
+  for var i := 1 to BayTicks do
+    FRam.Tick(Hero);
+  Assert.IsTrue(FRam.StrikeHull(From, Till, Where, Normal), 'The bay out');
+  Assert.IsTrue(Abs(Where.X - Face) < NearTheFace,
+    Format('At the face again, not %.1f from it', [Face - Where.X]));
 end;
 
 procedure TRamBrakeTests.TakeOffAndHang(const ATarget: TRamTarget);
