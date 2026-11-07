@@ -16,7 +16,9 @@
   piece of it off; the last a big blast, and the rest of the honeycomb
   crumbles. He hangs on in his place, the controls not his, till the
   wheel: the honeycomb down, a breath, and the Ram's front wheel breaks
-  off; he is let go onto the road, the controls his again, and the scene
+  off; he is let go onto the road, the controls his again. The wheel
+  rolls off the right edge, a breath, and the Ram takes off - its rear
+  wheel after him in its turn, never the two at once - and the scene
   stands.
 
   The burst struck, the scene waits a second - the Ram thrown and smoking
@@ -26,8 +28,9 @@
   and the pad is the game's to hold (Game.Wrecks). The last pad held, the
   spin runs up over four seconds, faster on every beat - the pads gliding
   to their places as long; then the hint. The game hands in the press
-  (Press), tells the scene each pad that struck (PadStruck) and that the
-  honeycomb is down (HoneycombDown).
+  (Press), tells the scene each pad that struck (PadStruck), that the
+  honeycomb is down (HoneycombDown) and that the wheel has rolled off the
+  screen (WheelGone).
 
   Too few pads on the screen, and the game calls the rest in from the pool
   of the chase as he is caught, to stand where PlaceCalledPads says: they
@@ -76,8 +79,10 @@ const
   // each is let go up to this long after the volley's start
   ThrowAfterTicks = 99;
   LetGoMostTicks = 6;
-  // The honeycomb down, a breath before the wheel breaks off
+  // The honeycomb down, a breath before the wheel breaks off; the wheel
+  // gone off the screen, a breath before the Ram takes off
   WheelAfterTicks = 16;
+  TakeoffAfterTicks = 20;
 
 type
   // tsWaiting - the burst has struck, he is not caught yet; tsCarrying -
@@ -85,9 +90,10 @@ type
   // the pads; tsSpinning - every pad held, spinning up; tsSpunUp - the
   // hint; tsVolley - let go, flying; tsStruck - every pad has struck;
   // tsBare - the honeycomb is down, a breath; tsLoose - the wheel is off,
-  // he is let go
+  // he is let go; tsGone - the wheel has rolled off the screen, a breath;
+  // tsTakenOff - the Ram is off the road
   TThrowStage = (tsIdle, tsWaiting, tsCarrying, tsGripping, tsSpinning,
-    tsSpunUp, tsVolley, tsStruck, tsBare, tsLoose);
+    tsSpunUp, tsVolley, tsStruck, tsBare, tsLoose, tsGone, tsTakenOff);
 
   TThrowCue = record
     // He is caught: the controls are taken; the game plans his way and
@@ -106,6 +112,8 @@ type
     LetGo: TArray<Integer>;
     // The Ram's front wheel breaks off; he is let go
     Shed: Boolean;
+    // The Ram takes off
+    TakeOff: Boolean;
   end;
 
   TThrowScene = class
@@ -119,6 +127,7 @@ type
     FPressed: Boolean;
     FStruck: Integer;
     FDown: Boolean;
+    FWheelGone: Boolean;
     procedure Enter(AStage: TThrowStage);
     function LettingGo: TArray<Integer>;
   public
@@ -137,6 +146,8 @@ type
     procedure PadStruck;
     // The honeycomb has gone out to its last cell: heard from the volley on
     procedure HoneycombDown;
+    // The wheel it shed has rolled off the screen: heard once it is off
+    procedure WheelGone;
     // Every pad let go has struck; with no pad, at once
     function AllStruck: Boolean;
     function Tick: TThrowCue;
@@ -247,6 +258,7 @@ begin
   FPressed := False;
   FStruck := 0;
   FDown := False;
+  FWheelGone := False;
 end;
 
 procedure TThrowScene.Enter(AStage: TThrowStage);
@@ -288,6 +300,12 @@ procedure TThrowScene.HoneycombDown;
 begin
   if FStage >= tsVolley then
     FDown := True;
+end;
+
+procedure TThrowScene.WheelGone;
+begin
+  if FStage >= tsLoose then
+    FWheelGone := True;
 end;
 
 function TThrowScene.AllStruck: Boolean;
@@ -360,6 +378,15 @@ begin
       begin
         Enter(tsLoose);
         Result.Shed := True;
+      end;
+    tsLoose:
+      if FWheelGone then
+        Enter(tsGone);
+    tsGone:
+      if FTicks >= TakeoffAfterTicks then
+      begin
+        Enter(tsTakenOff);
+        Result.TakeOff := True;
       end;
   end;
   if FStage = tsVolley then

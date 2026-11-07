@@ -16,7 +16,10 @@
 
   The wheel: a breath after the honeycomb is down, and not before, the
   wheel is cued once and he is let go; then the scene stands, cueing
-  nothing more. The honeycomb's fall is heard from the volley on.
+  nothing more. The honeycomb's fall is heard from the volley on. Told
+  the wheel is gone off the screen, a breath on the Ram takes off, cued
+  once, and the scene stands; told before the wheel is off, it is not
+  heard.
 
   The arc of the pads: as many places as pads, all as far from the Ram's
   middle, the first up and left of it, the last right of it and over its
@@ -55,6 +58,8 @@ type
     procedure SpinUpThePads(ACount: Integer);
     // Then pressed, ticked to the volley, every pad struck
     procedure StrikeEveryPad(ACount: Integer);
+    // Every pad struck, the honeycomb down, ticked till the wheel is off
+    procedure LooseTheWheel;
   public
     [Setup]
     procedure Setup;
@@ -99,6 +104,10 @@ type
     procedure TestLetGoAtTheWheelTheSceneStands;
     [Test]
     procedure TestTheHoneycombDownIsHeardFromTheVolleyOn;
+    [Test]
+    procedure TestTheWheelGoneABreathThenTheTakeoff;
+    [Test]
+    procedure TestTheWheelGoneIsHeardOnceItIsOff;
   end;
 
   [TestFixture]
@@ -590,6 +599,48 @@ begin
   for var i := 1 to ManyTicks do
     Assert.IsFalse(FScene.Tick.Shed, Format('The wheel at tick %d', [Integer(i)]));
   Assert.IsTrue(FScene.Holds, 'Held on');
+end;
+
+procedure TThrowSceneTests.LooseTheWheel;
+begin
+  StrikeEveryPad(PadCount);
+  FScene.HoneycombDown;
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.Shed then
+      Exit;
+  Assert.Fail('The wheel never came off');
+end;
+
+procedure TThrowSceneTests.TestTheWheelGoneABreathThenTheTakeoff;
+begin
+  LooseTheWheel;
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FScene.Tick.TakeOff,
+      Format('Off at tick %d, the wheel on the screen', [Integer(i)]));
+  FScene.WheelGone;
+  var TakeOffs := 0;
+  var TakeOffAt := 0;
+  for var i := 1 to ManyTicks do
+    if FScene.Tick.TakeOff then
+    begin
+      Inc(TakeOffs);
+      TakeOffAt := i;
+    end;
+  Assert.AreEqual(1, TakeOffs, 'Once');
+  Assert.IsTrue((TakeOffAt >= TakeoffAfterTicks) and
+    (TakeOffAt <= TakeoffAfterTicks + 1),
+    Format('A breath after, not at tick %d', [TakeOffAt]));
+  Assert.IsTrue(FScene.Running, 'The scene stands');
+  Assert.IsFalse(FScene.Holds, 'Free');
+end;
+
+procedure TThrowSceneTests.TestTheWheelGoneIsHeardOnceItIsOff;
+begin
+  StrikeEveryPad(PadCount);
+  FScene.HoneycombDown;
+  FScene.WheelGone;
+  for var i := 1 to ManyTicks do
+    Assert.IsFalse(FScene.Tick.TakeOff, Format('Off at tick %d', [Integer(i)]));
 end;
 
 { TArcTests }

@@ -159,6 +159,12 @@
   From then on a touch of the hull wounds and throws again. The bare hull
   and the wheel throw bullets off as a tank's armour does, and lose
   nothing to them.
+  Then the game has it take off (Game.Takeoff): fire out of the empty
+  front well lifts the bow, the rear jet spits the rear wheel out to roll
+  after the first, and the hull rises on its two jets, rights itself and
+  hangs. Off the road it is where its pose puts it - turned, raised - and
+  its touch, the bullets it throws off and everything drawn on it go with
+  the pose.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -181,7 +187,7 @@ interface
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
-  Effects.Sparks;
+  Game.Takeoff, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -336,8 +342,21 @@ type
     Vent: Boolean;
     // Its last third: the rows of the hunt are to ride in
     Rows: Boolean;
-    // The wheel it has shed has come down on the road from its hop
+    // A wheel it has shed has come down on the road from its hop
     WheelLands: Boolean;
+    // A jet catches in a well: the fire bursts out of it
+    Ignite: Boolean;
+    // Off the road: its jets roar from now on, in place of the rumble
+    Hover: Boolean;
+  end;
+
+  // Where the hull stands and how: upright on the road with its left edge
+  // at Left, turned Lean degrees clockwise about its rear wheel's touch of
+  // the road, then moved by Shift
+  TRamPose = record
+    Left, Lean: Single;
+    Shift: TSdlFPoint;
+    function Upright: Boolean;
   end;
 
   TRam = class
@@ -464,6 +483,9 @@ type
     FShedTicks: Integer;
     FLean, FLastLean: Single;
     FWheel: TLooseWheel;
+    // Off the road on its jets; its rear wheel spat out on its way
+    FTakeoff: TTakeoff;
+    FRearWheel: TLooseWheel;
     // Ticks since the bare hull or its wheel last threw a bullet off
     FHullHitTicks: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -504,6 +526,9 @@ type
     procedure TickStun;
     procedure TickWithdraw;
     procedure TickShed;
+    procedure TickTakeoff;
+    procedure SpitWheel;
+    function UprightBox(const ABox: TSdlFRect): TSdlFRect;
     function AlarmLight: Single;
     procedure FlickerEye;
     function HuntLine: Single;
@@ -667,15 +692,25 @@ type
     procedure ShedWheel;
     function WheelShed: Boolean;
     property Wheel: TLooseWheel read FWheel;
+    // Its front wheel shed, it takes off: the fire out of the front well,
+    // the bow up, the rear wheel spat out to roll after the first - the
+    // cue tells it - and up on both jets to hang. Once a fight.
+    procedure TakeOff;
+    property Flight: TTakeoff read FTakeoff;
+    property RearWheel: TLooseWheel read FRearWheel;
     // Degrees clockwise the hull leans, AAlpha of the way from the last
     // tick to this one
     function LeanAt(AAlpha: Single): Single;
     // Where its rear wheel meets the road, its left edge at ALeft: the hull
     // leans about it
     function LeanPivot(ALeft: Single): TSdlFPoint;
-    // HullSpot of the hull leaning ALean degrees clockwise
-    function LeanSpot(ALeft: Single; const APoint: THullPoint;
-      ALean: Single): TSdlFPoint;
+    // How it stands, AAlpha of the way from the last tick to this one
+    function PoseAt(AAlpha: Single): TRamPose;
+    // A point of the screen where the upright hull on the road has it, moved
+    // with the hull to where APose puts it
+    function Posed(const APose: TRamPose; const APoint: TSdlFPoint): TSdlFPoint;
+    // HullSpot of the hull standing as APose says
+    function PoseSpot(const APose: TRamPose; const APoint: THullPoint): TSdlFPoint;
     // 1 as the nose meets the road, dying out as the hull settles; 0 - none
     function ScrapeLevel: Single;
     // Its honeycomb gone, the bare hull throws a bullet off and loses
@@ -850,6 +885,10 @@ type
     FArchSmokeTicks: Integer;
     // Off the point of its plough as its nose drops onto the road
     FScrape: TSparkField;
+    // The fire out of a well as it takes off, and the dust it blows off the
+    // road while it reaches it
+    FJetFire: array [TTakeoffJet] of TSmoke;
+    FJetDust: array [TTakeoffJet] of TSmoke;
     FArrivals: Integer;
     procedure TickArrival;
     procedure TickExhausts(ABeltShift: Single);
@@ -859,6 +898,8 @@ type
     procedure TickWaveDust;
     procedure TickArchSmoke(ABeltShift: Single);
     procedure TickScrape;
+    procedure TickJets;
+    procedure DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawLid(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
     procedure DrawColumn(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
@@ -869,8 +910,10 @@ type
       ASway, AAlpha: Single);
     procedure DrawHead(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
-    procedure DrawLamps(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
-    procedure DrawEye(const ASprites: TSpriteRenderer; ALeft, AAlpha: Single);
+    procedure DrawLamps(const ASprites: TSpriteRenderer; const APose: TRamPose;
+      AAlpha: Single);
+    procedure DrawEye(const ASprites: TSpriteRenderer; const APose: TRamPose;
+      AAlpha: Single);
     procedure DrawPeek(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawLens(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
@@ -889,14 +932,15 @@ type
     // wheels roll by it too, the exhausts work as in a drive, and the
     // smoke in the air rides away with the road.
     procedure Tick(ABeltShift: Single);
-    // The exhausts' smoke, before the body: the machine backs into it
+    // The exhausts' smoke and the fire of its jets, before the body: the
+    // machine backs into the one, the other bursts out from under it
     procedure DrawSmoke(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
     // The dust of the wave, the smoke out of the arches, the sparks of the
-    // scrape, the bolts of a head, the shield, the sweeper's plates, the
-    // wave itself and the white of the blast
+    // scrape, the glow of the jets, the bolts of a head, the shield, the
+    // sweeper's plates, the wave itself and the white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     // The eye once more, over a darkness ADepth deep: the body's eye is
@@ -1226,6 +1270,8 @@ const
   // the road line
   LeanDegrees = 3.0;
   LeanTicks = 6;
+  // A jet catching in a well
+  IgniteJolt = 0.35;
   // The point of the plough, which scrapes the road, sparks flying from it
   // for ScrapeTicks, dying out
   NosePoint: THullPoint = (X: 2.0; Y: 127.5);
@@ -1467,6 +1513,28 @@ const
   ExhaustRampTicks = 8;
   ExhaustSeeds: array [0..1] of Cardinal = ($45786831, $45786832); // "Exh1"
 
+  // The fire out of a well, straight down out of its middle where the axle
+  // was; its glow at the mouth of the well under the hull. It reaches about
+  // JetReach down: the road under it that near is blown into dust.
+  JetFireLook: TSmokeLook = (Rate: 140; Life: 0.4; Size: 5; EndSize: 14;
+    Opacity: 0.9; Angle: -90; Cone: 14; Speed: 150; Drag: 0.85; Lift: 0;
+    Wind: 0; Turbulence: 4; Spin: 60; Flow: sfSteady; Frequency: 1;
+    Heat: 1; EndTint: (R: 30; G: 28; B: 28));
+  JetFireTint: TColorTint = (R: 48; G: 46; B: 44);
+  JetFireSeeds: array [TTakeoffJet] of Cardinal = ($4A657446, $4A657452); // "JetF"
+  JetDustLook: TSmokeLook = (Rate: 40; Life: 1.2; Size: 4; EndSize: 24;
+    Opacity: 0.45; Angle: 90; Cone: 150; Speed: 60; Drag: 0.5; Lift: 0;
+    Wind: 0; Turbulence: 4; Spin: 20; Flow: sfGusty; Frequency: 2;
+    Heat: 0; EndTint: (R: 90; G: 86; B: 80));
+  JetDustSeeds: array [TTakeoffJet] of Cardinal = ($4A657444, $4A657464); // "JetD"
+  JetMouthDrop = 12.0;
+  JetReach = 70.0;
+  JetGlowSize = 34.0;
+  JetGlowColor: TRgb = (R: 255; G: 150; B: 60);
+  JetCoreSize = 12.0;
+  JetCoreColor: TRgb = (R: 255; G: 236; B: 200);
+  JetAxles: array [TTakeoffJet] of Integer = (FrontAxle, RearAxle);
+
   // Read off the art: a unit of the grid is solid where the art is this
   // opaque at its middle
   BodyAlpha = 128;
@@ -1698,6 +1766,8 @@ begin
   FLean := 0;
   FLastLean := 0;
   FWheel.Stop;
+  FTakeoff.Stop;
+  FRearWheel.Stop;
   FHullHitTicks := NoHitTicks;
 end;
 
@@ -1820,6 +1890,7 @@ begin
   FLastFlash := 0;
   FWave.Stop;
   FWheel.Stop;
+  FRearWheel.Stop;
 end;
 
 procedure TRam.Reset;
@@ -3360,17 +3431,55 @@ begin
   Result := FShed;
 end;
 
-// The hull drops faster as it goes, to the side it faces; the wheel rolls
+// The hull drops faster as it goes, to the side it faces, till it takes
+// off; the wheels roll
 procedure TRam.TickShed;
 begin
   if FWheel.Tick then
+    FCue.WheelLands := True;
+  if FRearWheel.Tick then
     FCue.WheelLands := True;
   if not FShed then
     Exit;
   if FShedTicks < ScrapeTicks then
     Inc(FShedTicks);
+  if FTakeoff.Running then
+  begin
+    TickTakeoff;
+    Exit;
+  end;
   var Share: Single := Min(FShedTicks / LeanTicks, 1);
   FLean := FHullFacing * LeanDegrees * Sqr(Share);
+end;
+
+procedure TRam.TakeOff;
+begin
+  if not FShed or FTakeoff.Running then
+    Exit;
+  FTakeoff.Start(FLean, FHullFacing);
+end;
+
+procedure TRam.TickTakeoff;
+begin
+  var Step := FTakeoff.Tick;
+  FLean := FTakeoff.LeanAt(1);
+  if Step.Ignite then
+  begin
+    FCue.Ignite := True;
+    FCue.Jolt := Max(FCue.Jolt, IgniteJolt);
+  end;
+  if Step.Spit then
+  begin
+    SpitWheel;
+    FCue.Hover := True;
+  end;
+end;
+
+// Out of its well where the rear axle stands on the road: the bow is up
+// about that wheel's touch, so it has hardly moved
+procedure TRam.SpitWheel;
+begin
+  FRearWheel.Start(HullSpot(FX, Axles[RearAxle]), WheelRadius, WheelSpitKick);
 end;
 
 function TRam.LeanAt(AAlpha: Single): Single;
@@ -3387,10 +3496,61 @@ begin
   Result := HullSpot(ALeft, Touch);
 end;
 
-function TRam.LeanSpot(ALeft: Single; const APoint: THullPoint;
-  ALean: Single): TSdlFPoint;
+function TRamPose.Upright: Boolean;
 begin
-  Result := Turned(HullSpot(ALeft, APoint), LeanPivot(ALeft), ALean);
+  Result := (Lean = 0) and (Shift.X = 0) and (Shift.Y = 0);
+end;
+
+// Off the road it comes to turn about its middle: a turn about its middle
+// is the turn about the wheel's touch, moved by where that turn takes the
+// middle
+function TRam.PoseAt(AAlpha: Single): TRamPose;
+begin
+  Result.Left := LeftAt(AAlpha);
+  Result.Lean := LeanAt(AAlpha);
+  var Middle := UnitPoint(Result.Left + RamWidth / 2, RamTop + RamHeight / 2);
+  var TurnedMiddle := Turned(Middle, LeanPivot(Result.Left), Result.Lean);
+  var Air := FTakeoff.AirAt(AAlpha);
+  Result.Shift.X := Air * (Middle.X - TurnedMiddle.X);
+  Result.Shift.Y := Air * (Middle.Y - TurnedMiddle.Y) - FTakeoff.LiftAt(AAlpha);
+end;
+
+function TRam.Posed(const APose: TRamPose; const APoint: TSdlFPoint): TSdlFPoint;
+begin
+  if APose.Upright then
+    Exit(APoint);
+  Result := Turned(APoint, LeanPivot(APose.Left), APose.Lean);
+  Result.X := Result.X + APose.Shift.X;
+  Result.Y := Result.Y + APose.Shift.Y;
+end;
+
+function TRam.PoseSpot(const APose: TRamPose;
+  const APoint: THullPoint): TSdlFPoint;
+begin
+  Result := Posed(APose, HullSpot(APose.Left, APoint));
+end;
+
+// The box the hero's corners make, brought back into the upright hull on
+// the road: a little wider than the box itself while the hull leans
+function TRam.UprightBox(const ABox: TSdlFRect): TSdlFRect;
+begin
+  var Pose := PoseAt(1);
+  if Pose.Upright then
+    Exit(ABox);
+  var Pivot := LeanPivot(FX);
+  var Least := UnitPoint(MaxSingle, MaxSingle);
+  var Most := UnitPoint(-MaxSingle, -MaxSingle);
+  for var Corner := 0 to 3 do
+  begin
+    var Spot := Turned(UnitPoint(ABox.X + ABox.W * (Corner mod 2) - Pose.Shift.X,
+      ABox.Y + ABox.H * (Corner div 2) - Pose.Shift.Y), Pivot, -Pose.Lean);
+    Least := UnitPoint(Min(Least.X, Spot.X), Min(Least.Y, Spot.Y));
+    Most := UnitPoint(Max(Most.X, Spot.X), Max(Most.Y, Spot.Y));
+  end;
+  Result.X := Least.X;
+  Result.Y := Least.Y;
+  Result.W := Most.X - Least.X;
+  Result.H := Most.Y - Least.Y;
 end;
 
 function TRam.ScrapeLevel: Single;
@@ -3400,8 +3560,8 @@ begin
     Result := 1 - FShedTicks / ScrapeTicks;
 end;
 
-// The body is a grid of the upright hull: the stretch is turned back into
-// it about the rear wheel's touch, and what it meets is turned out again.
+// The body is a grid of the upright hull: the stretch is brought back into
+// it from where the pose puts the hull, and what it meets is posed again.
 // The first solid cell met along it is traced back to the edge the bullet
 // came in through, as a box of armour is.
 function TRam.StrikeHull(const AFrom, ATo: TSdlFPoint; out AAt,
@@ -3414,9 +3574,12 @@ begin
   ANormal := UnitPoint(0, -1);
   if not Present or (FShield.State = sdUp) then
     Exit(False);
+  var Pose := PoseAt(1);
   var Pivot := LeanPivot(FX);
-  var From := Turned(AFrom, Pivot, -FLean);
-  var Till := Turned(ATo, Pivot, -FLean);
+  var From := Turned(UnitPoint(AFrom.X - Pose.Shift.X, AFrom.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
+  var Till := Turned(UnitPoint(ATo.X - Pose.Shift.X, ATo.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
   var WayX: Single := Till.X - From.X;
   var WayY: Single := Till.Y - From.Y;
   var Looks := Max(1, Ceil(Hypot(WayX, WayY) / LookStep));
@@ -3438,9 +3601,9 @@ begin
     Strike.SpeedX := WayX;
     Strike.SpeedY := WayY;
     TraceEntry(Strike, Cell);
-    AAt := Turned(UnitPoint(Strike.X, Strike.Y), Pivot, FLean);
+    AAt := Posed(Pose, UnitPoint(Strike.X, Strike.Y));
     ANormal := Turned(UnitPoint(Strike.NormalX, Strike.NormalY),
-      UnitPoint(0, 0), FLean);
+      UnitPoint(0, 0), Pose.Lean);
     FHullHitTicks := 0;
     Exit(True);
   end;
@@ -3450,7 +3613,8 @@ end;
 function TRam.StrikeWheel(const AFrom, ATo: TSdlFPoint; out AAt,
   ANormal: TSdlFPoint): Boolean;
 begin
-  Result := FWheel.Strike(AFrom, ATo, AAt, ANormal);
+  Result := FWheel.Strike(AFrom, ATo, AAt, ANormal) or
+    FRearWheel.Strike(AFrom, ATo, AAt, ANormal);
   if Result then
     FHullHitTicks := 0;
 end;
@@ -3771,10 +3935,11 @@ end;
 
 function TRam.Overlaps(const ABox: TSdlFRect): Boolean;
 begin
-  var FirstCol := Floor(ABox.X - FX);
-  var LastCol := Ceil(ABox.X + ABox.W - FX) - 1;
-  var FirstRow := Floor(ABox.Y - RamTop);
-  var LastRow := Ceil(ABox.Y + ABox.H - RamTop) - 1;
+  var Box := UprightBox(ABox);
+  var FirstCol := Floor(Box.X - FX);
+  var LastCol := Ceil(Box.X + Box.W - FX) - 1;
+  var FirstRow := Floor(Box.Y - RamTop);
+  var LastRow := Ceil(Box.Y + Box.H - RamTop) - 1;
   for var Row := Max(FirstRow, 0) to Min(LastRow, FBody.Height - 1) do
     for var Col := Max(FirstCol, 0) to Min(LastCol, FBody.Width - 1) do
       if SolidAt(Col, Row) then
@@ -3799,8 +3964,9 @@ function TRam.SpanAcross(const ABox: TSdlFRect; out AFirst,
 begin
   AFirst := FBody.Width;
   ALast := -1;
-  var FirstRow := Max(Floor(ABox.Y - RamTop), 0);
-  var LastRow := Min(Ceil(ABox.Y + ABox.H - RamTop) - 1, FBody.Height - 1);
+  var Box := UprightBox(ABox);
+  var FirstRow := Max(Floor(Box.Y - RamTop), 0);
+  var LastRow := Min(Ceil(Box.Y + Box.H - RamTop) - 1, FBody.Height - 1);
   for var Row := FirstRow to LastRow do
     for var Col := 0 to FBody.Width - 1 do
       if SolidAt(Col, Row) then
@@ -4448,10 +4614,23 @@ begin
       ArchSmokeSeeds[i]);
   FScrape := TSparkField.Create(ScrapeSparkLook, UnderTheRoad, ScrapeCapacity,
     ScrapeSeed);
+  var FirePlacement := Default(TDynamicPlacement);
+  FirePlacement.Tint := JetFireTint;
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    FJetFire[Jet] := TSmoke.CreateLook(FirePlacement, JetFireLook, 1,
+      JetFireSeeds[Jet]);
+    FJetDust[Jet] := TSmoke.CreateLook(DustPlacement, JetDustLook, 1,
+      JetDustSeeds[Jet]);
+  end;
 end;
 
 destructor TRamPainter.Destroy;
 begin
+  for var Smoke in FJetDust do
+    Smoke.Free;
+  for var Smoke in FJetFire do
+    Smoke.Free;
   FScrape.Free;
   for var Smoke in FArchSmoke do
     Smoke.Free;
@@ -4480,6 +4659,7 @@ begin
   TickWaveDust;
   TickArchSmoke(ABeltShift);
   TickScrape;
+  TickJets;
 end;
 
 // A machine come anew left nothing in the air
@@ -4504,6 +4684,10 @@ begin
   for var Smoke in FArchSmoke do
     Smoke.Rewind;
   FScrape.Clear;
+  for var Smoke in FJetFire do
+    Smoke.Rewind;
+  for var Smoke in FJetDust do
+    Smoke.Rewind;
 end;
 
 // One that drives smokes hard, on the road or on the belt
@@ -4525,7 +4709,7 @@ begin
   for var Turned := False to True do
     for var i := Low(ExhaustPoints) to High(ExhaustPoints) do
     begin
-      var Spot := FRam.LeanSpot(FRam.Left, ExhaustPoints[i], FRam.LeanAt(1));
+      var Spot := FRam.PoseSpot(FRam.PoseAt(1), ExhaustPoints[i]);
       FExhausts[Turned][i].Drift(-ABeltShift, 0);
       FExhausts[Turned][i].Tick(Spot.X, Spot.Y, Turned = FRam.HullMirrored);
     end;
@@ -4552,6 +4736,7 @@ begin
     Source := HeadPoint(Well, FRam.Mast, FRam.SwayAt(1), FRam.Head,
       FRam.Facing, 1, Shape.Width / 2, Shape.Height / 2);
   end;
+  Source := FRam.Posed(FRam.PoseAt(1), Source);
   FHeadSmoke.Drift(-ABeltShift, 0);
   FHeadSmoke.Tick(Source.X, Source.Y, True);
 end;
@@ -4642,9 +4827,30 @@ begin
   end;
   for var i := Low(FArchSmoke) to High(FArchSmoke) do
   begin
-    var Spot := FRam.LeanSpot(FRam.Left, ArchSmokePoints[i], FRam.LeanAt(1));
+    var Spot := FRam.PoseSpot(FRam.PoseAt(1), ArchSmokePoints[i]);
     FArchSmoke[i].Drift(-ABeltShift, 0);
     FArchSmoke[i].Tick(Spot.X, Spot.Y, Stunned);
+  end;
+end;
+
+// Out of the middle of each well a jet burns in; the road it reaches is
+// blown into dust
+procedure TRamPainter.TickJets;
+begin
+  if not FRam.Present then
+    Exit;
+  var Pose := FRam.PoseAt(1);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Burning := FRam.Flight.JetAt(Jet, 1) > 0;
+    var Axle := Axles[JetAxles[Jet]];
+    var Source := FRam.PoseSpot(Pose, Axle);
+    FJetFire[Jet].Tick(Source.X, Source.Y, Burning);
+    var Mouth := Axle;
+    Mouth.Y := Mouth.Y + JetMouthDrop;
+    var MouthSpot := FRam.PoseSpot(Pose, Mouth);
+    var Reaches := Burning and (MouthSpot.Y + JetReach >= RamFloorY);
+    FJetDust[Jet].Tick(MouthSpot.X, RamFloorY - WaveDustOverRoad, Reaches);
   end;
 end;
 
@@ -4663,7 +4869,7 @@ begin
   Spray.Cone := ScrapeCone;
   Spray.SlowSpeed := ScrapeSlowSpeed;
   Spray.FastSpeed := ScrapeFastSpeed;
-  var Nose := FRam.LeanSpot(FRam.Left, NosePoint, FRam.LeanAt(1));
+  var Nose := FRam.PoseSpot(FRam.PoseAt(1), NosePoint);
   FScrape.Spray(Nose.X, Nose.Y, Spray);
 end;
 
@@ -4910,26 +5116,26 @@ begin
 end;
 
 procedure TRamPainter.DrawLamps(const ASprites: TSpriteRenderer;
-  ALeft, AAlpha: Single);
+  const APose: TRamPose; AAlpha: Single);
 begin
   var Level := FRam.LampsAt(AAlpha);
   if Level <= 0 then
     Exit;
   for var Lamp in LampPoints do
   begin
-    var Spot := FRam.LeanSpot(ALeft, Lamp, FRam.LeanAt(AAlpha));
+    var Spot := FRam.PoseSpot(APose, Lamp);
     DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + ASprites.Origin.X,
       Spot.Y + ASprites.Origin.Y, LampSize, LampColor, Level);
   end;
 end;
 
 procedure TRamPainter.DrawEye(const ASprites: TSpriteRenderer;
-  ALeft, AAlpha: Single);
+  const APose: TRamPose; AAlpha: Single);
 begin
   var Level := FRam.EyeAt(AAlpha);
   if Level <= 0 then
     Exit;
-  var Spot := FRam.LeanSpot(ALeft, EyePoint, FRam.LeanAt(AAlpha));
+  var Spot := FRam.PoseSpot(APose, EyePoint);
   DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + ASprites.Origin.X,
     Spot.Y + ASprites.Origin.Y, Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)),
     EyeColor, Level);
@@ -4943,7 +5149,7 @@ begin
   var Level := FRam.EyeAt(AAlpha);
   if Level <= 0 then
     Exit;
-  var Spot := FRam.LeanSpot(FRam.LeftAt(AAlpha), EyePoint, FRam.LeanAt(AAlpha));
+  var Spot := FRam.PoseSpot(FRam.PoseAt(AAlpha), EyePoint);
   DrawGlow(FArt.FRenderer, FArt.FGlow, Spot.X + AOrigin.X, Spot.Y + AOrigin.Y,
     Lerp(EyeRestSize, EyeFlashSize, Sqr(Level)), EyeColor, Level * ADepth);
 end;
@@ -4987,23 +5193,29 @@ end;
 // Back to front: the dark of the well, the arches and the wheels, the
 // mast as far as it stays in the hull, the hull with its eye, and what of
 // the mast and the head - and the lens - stands over the middle line of
-// the well once more, over the hull; the wheel it has shed over it all.
-// The mast is cut by level lines, which do not lean with the hull: a hull
-// leans only with its mast at rest, out of sight, and it is not drawn.
+// the well once more, over the hull; the wheels it has shed over it all.
+// The mast is cut by level lines, which neither lean nor rise with the
+// hull: a hull leaves the road's upright only with its mast at rest, out
+// of sight, and it is not drawn.
 procedure TRamPainter.DrawBody(const ASprites: TSpriteRenderer;
   AAlpha: Single);
 begin
   if not FRam.Present then
     Exit;
-  var Left := FRam.LeftAt(AAlpha);
+  var Pose := FRam.PoseAt(AAlpha);
+  var Left := Pose.Left;
   var Stand := Default(THullStand);
-  Stand.Center := UnitPoint(Left + RamWidth / 2, RamTop + RamHeight / 2);
+  Stand.Center := UnitPoint(Left + RamWidth / 2 + Pose.Shift.X,
+    RamTop + RamHeight / 2 + Pose.Shift.Y);
   Stand.Mirrored := FRam.HullMirrored;
-  Stand.Lean := FRam.LeanAt(AAlpha);
-  Stand.Pivot := FRam.LeanPivot(Left);
+  Stand.Lean := Pose.Lean;
+  var Pivot := FRam.LeanPivot(Left);
+  Stand.Pivot := UnitPoint(Pivot.X + Pose.Shift.X, Pivot.Y + Pose.Shift.Y);
   if FRam.WheelShed then
     Stand.Shed := [FrontAxle];
-  var Leaning := Stand.Lean <> 0;
+  if FRam.Flight.Stage >= tkRising then
+    Stand.Shed := Stand.Shed + [RearAxle];
+  var Moved := not Pose.Upright;
   var Well := FRam.WellAt(Left);
   var Mast := FRam.MastAt(AAlpha);
   var Sway := FRam.SwayAt(AAlpha);
@@ -5011,15 +5223,15 @@ begin
   ASprites.DrawSized(FArt.FWell, Stand.TurnedCenter, RamWidth, RamHeight, 1,
     Stand.Mirrored, Stand.Lean);
   FHull.DrawUnder(ASprites, Stand, AAlpha);
-  if not Leaning then
+  if not Moved then
   begin
     ASprites.ClipAbove(RamTop + MastHiddenBelow);
     DrawMast(ASprites, Well, Mast, Sway, AAlpha);
     ASprites.ClearClip;
   end;
   FHull.DrawBody(ASprites, Stand, AAlpha);
-  DrawEye(ASprites, Left, AAlpha);
-  if not Leaning then
+  DrawEye(ASprites, Pose, AAlpha);
+  if not Moved then
   begin
     ASprites.ClipAbove(RamTop + WellY);
     DrawMast(ASprites, Well, Mast, Sway, AAlpha);
@@ -5035,9 +5247,12 @@ begin
     end;
     ASprites.ClearClip;
   end;
-  DrawLamps(ASprites, Left, AAlpha);
+  DrawLamps(ASprites, Pose, AAlpha);
 
   var Wheel := FRam.Wheel;
+  if Wheel.Running then
+    FHull.DrawWheel(ASprites, Wheel.CenterAt(AAlpha), Wheel.TurnAt(AAlpha));
+  Wheel := FRam.RearWheel;
   if Wheel.Running then
     FHull.DrawWheel(ASprites, Wheel.CenterAt(AAlpha), Wheel.TurnAt(AAlpha));
 end;
@@ -5052,6 +5267,34 @@ begin
       Exhaust.Origin.Y + AOrigin.Y, AAlpha);
   FHeadSmoke.Draw(ACanvas, FHeadSmoke.Origin.X + AOrigin.X,
     FHeadSmoke.Origin.Y + AOrigin.Y, AAlpha);
+  for var Dust in FJetDust do
+    Dust.Draw(ACanvas, Dust.Origin.X + AOrigin.X, Dust.Origin.Y + AOrigin.Y,
+      AAlpha);
+  for var Fire in FJetFire do
+    Fire.Draw(ACanvas, Fire.Origin.X + AOrigin.X, Fire.Origin.Y + AOrigin.Y,
+      AAlpha);
+end;
+
+// At the mouth of each well that burns: the fire's glow and its white
+// core, swelling as the jet flares
+procedure TRamPainter.DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Pose := FRam.PoseAt(AAlpha);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Level := FRam.Flight.JetAt(Jet, AAlpha);
+    if Level <= 0 then
+      Continue;
+    var Mouth := Axles[JetAxles[Jet]];
+    Mouth.Y := Mouth.Y + JetMouthDrop;
+    var Spot := FRam.PoseSpot(Pose, Mouth);
+    var X := Spot.X + AOrigin.X;
+    var Y := Spot.Y + AOrigin.Y;
+    DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y, JetGlowSize * Level,
+      JetGlowColor, Level);
+    DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y, JetCoreSize * Level,
+      JetCoreColor, Level);
+  end;
 end;
 
 procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;
@@ -5067,6 +5310,7 @@ begin
       AAlpha);
   FScrape.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
     UnitPoint(AOrigin.X, AOrigin.Y), AAlpha);
+  DrawJetGlow(AOrigin, AAlpha);
   for var Short in FShorts do
     Short.Draw(ACanvas, Short.Origin.X + AOrigin.X, Short.Origin.Y + AOrigin.Y,
       AAlpha);

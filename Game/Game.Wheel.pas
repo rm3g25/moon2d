@@ -1,7 +1,8 @@
 ﻿{
   Game.Wheel - a wheel off its axle: the Ram's front wheel, broken off
-  once its armour is gone. It hops once off the road and rolls on to the
-  right at an even pace, turning by the way it has rolled, and is gone
+  once its armour is gone, and its rear one, spat out of its well by the
+  jet as it takes off - higher. It hops once off the road and rolls on to
+  the right at an even pace, turning by the way it has rolled, and is gone
   once it has rolled off the right edge of the screen. Its touch is the
   hull's: it wounds and throws the hero, away from its middle. A bullet
   that meets its rim is thrown off - it loses nothing.
@@ -23,8 +24,10 @@ const
   // Units a tick it rolls to the right, from the moment it is off
   WheelRollPace = 3.0;
   // Units a tick up as it hops off; the moon's pull, the hero's and the
-  // wrecks', brings it down from about 22 over the road
+  // wrecks', brings it down from about 22 over the road - a spat one from
+  // about 56
   WheelHopKick = 2.5;
+  WheelSpitKick = 4.0;
   WheelGravity = 2 / 14;
 
 type
@@ -43,8 +46,10 @@ type
     procedure Roll;
     function Hop: Boolean;
   public
-    // Off its axle with its middle at ACenter, its bottom on the road
-    procedure Start(const ACenter: TSdlFPoint; ARadius: Single);
+    // Off its axle with its middle at ACenter, its bottom on the road,
+    // hopping off at AKick
+    procedure Start(const ACenter: TSdlFPoint; ARadius: Single;
+      AKick: Single = WheelHopKick);
     procedure Stop;
     // True the tick it comes down on the road from its hop
     function Tick: Boolean;
@@ -67,14 +72,15 @@ implementation
 uses
   System.Math, Game.Space;
 
-procedure TLooseWheel.Start(const ACenter: TSdlFPoint; ARadius: Single);
+procedure TLooseWheel.Start(const ACenter: TSdlFPoint; ARadius: Single;
+  AKick: Single);
 begin
   FRunning := True;
   FCenter := ACenter;
   FLastCenter := ACenter;
   FRadius := ARadius;
   FRollY := ACenter.Y;
-  FRise := WheelHopKick;
+  FRise := AKick;
   FAirborne := True;
   FTurn := 0;
   FLastTurn := 0;

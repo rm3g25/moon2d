@@ -511,6 +511,10 @@ const
   // wheel coming down from its hop
   ScrapeSoundFile = 'scrape.wav';
   WheelLandSoundFile = 'wheelland.wav';
+  // A jet catching in a well of the Ram as it takes off, and its jets'
+  // roar while it is off the road
+  JetFireSoundFile = 'jetfire.wav';
+  JetHoverSoundFile = 'jethover.wav';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -2018,6 +2022,8 @@ begin
   FAudio.Load(SpinHoldSoundFile);
   FAudio.Load(ScrapeSoundFile);
   FAudio.Load(WheelLandSoundFile);
+  FAudio.Load(JetFireSoundFile);
+  FAudio.Load(JetHoverSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -3136,8 +3142,9 @@ end;
 // After the burst: he is caught and carried aside, the orbs grip the pads,
 // the pads glide round the Ram and spin up on the heart, its lights in
 // alarm; the press, and they fly at the honeycomb; the honeycomb down,
-// the front wheel breaks off and he is let go. What flew last tick meets
-// it first: the wrecks move with the Ram, later in the tick.
+// the front wheel breaks off and he is let go; the wheel gone, the Ram
+// takes off. What flew last tick meets it first: the wrecks move with the
+// Ram, later in the tick.
 procedure TMoonGame.TickThrow;
 begin
   if not FThrow.Running then
@@ -3145,6 +3152,8 @@ begin
   StrikeHoneycomb;
   if FRam.Shield.State = sdDown then
     FThrow.HoneycombDown;
+  if FRam.WheelShed and not FRam.Wheel.Running then
+    FThrow.WheelGone;
   var Cue := FThrow.Tick;
   if Cue.Catch then
     CatchHero;
@@ -3160,6 +3169,8 @@ begin
     HurlPad(Number);
   if Cue.Shed then
     ShedWheel;
+  if Cue.TakeOff then
+    FRam.TakeOff;
   if FThrow.Holds then
   begin
     var Hangs := FThrow.HeroAt;
@@ -3531,6 +3542,13 @@ begin
     FAudio.Play(RamHissSoundFile);
   if Cue.WheelLands then
     FAudio.Play(WheelLandSoundFile);
+  if Cue.Ignite then
+    FAudio.Play(JetFireSoundFile);
+  if Cue.Hover then
+  begin
+    StopRamRumble;
+    FRamRumble := FAudio.PlayLooped(JetHoverSoundFile);
+  end;
   if Cue.Jolt > 0 then
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
@@ -3623,14 +3641,16 @@ begin
   FHero.Throw(Away);
 end;
 
-// The wheel the Ram has shed wounds and throws him as the hull's touch
+// A wheel the Ram has shed wounds and throws him as the hull's touch
 // does, away from its middle
 procedure TMoonGame.ResolveWheelContact;
 begin
   if FHero.Dead then
     Exit;
-  var Wheel := FRam.Wheel;
   var Body := HeroBody(FHero);
+  var Wheel := FRam.Wheel;
+  if not Wheel.Touches(Body) then
+    Wheel := FRam.RearWheel;
   if not Wheel.Touches(Body) then
     Exit;
   HurtByRam;

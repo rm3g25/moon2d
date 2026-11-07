@@ -243,6 +243,7 @@
         <DCCReference Include="Game\Game.Hoist.pas"/>
         <DCCReference Include="Game\Game.Throw.pas"/>
         <DCCReference Include="Game\Game.Wheel.pas"/>
+        <DCCReference Include="Game\Game.Takeoff.pas"/>
         <DCCReference Include="Game\Game.Belt.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>

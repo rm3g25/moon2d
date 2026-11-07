@@ -1,7 +1,7 @@
 ﻿{
   Tests.Game.Wheel - the wheel off the Ram's axle: nothing till it is
   off; it hops once off the road and comes down onto it, told once, and
-  rolls on along it; to the right at an even pace, turning clockwise by
+  rolls on along it; one spat out hops higher, and comes down the same; to the right at an even pace, turning clockwise by
   the way it rolls; gone once past the right edge and not before. It
   touches a body in its way and not one over it; it throws away from its
   middle - straight up against the edge of the screen. A stop takes it.
@@ -23,6 +23,9 @@ type
   TLooseWheelTests = class
   private
     FWheel: TLooseWheel;
+    // Off its axle hopping at AKick, rolled till gone: the top of its hop,
+    // and how many times it came down
+    function HighestOfItsHop(AKick: Single; out ALandings: Integer): Single;
   public
     [Setup]
     procedure Setup;
@@ -31,6 +34,8 @@ type
     procedure TestNothingTillItIsOff;
     [Test]
     procedure TestHopsOnceThenRollsOnTheRoad;
+    [Test]
+    procedure TestASpatOneHopsHigher;
     [Test]
     procedure TestRollsRightAtAnEvenPace;
     [Test]
@@ -119,6 +124,30 @@ begin
   end;
   Assert.AreEqual(1, Landings, 'Came down once');
   Assert.IsTrue(Highest < OnItsAxle.Y - 10, 'Off the road');
+end;
+
+function TLooseWheelTests.HighestOfItsHop(AKick: Single;
+  out ALandings: Integer): Single;
+begin
+  FWheel.Start(OnItsAxle, Radius, AKick);
+  ALandings := 0;
+  Result := OnItsAxle.Y;
+  while FWheel.Running do
+  begin
+    if FWheel.Tick then
+      Inc(ALandings);
+    Result := Min(Result, FWheel.CenterAt(1).Y);
+  end;
+end;
+
+procedure TLooseWheelTests.TestASpatOneHopsHigher;
+var
+  Landings: Integer;
+begin
+  var Hopped := HighestOfItsHop(WheelHopKick, Landings);
+  var Spat := HighestOfItsHop(WheelSpitKick, Landings);
+  Assert.IsTrue(Spat < Hopped - 10, 'Higher');
+  Assert.AreEqual(1, Landings, 'Came down once');
 end;
 
 procedure TLooseWheelTests.TestRollsRightAtAnEvenPace;
