@@ -5,11 +5,14 @@
   the rear well spits the rear wheel out, and the hull rises on its two
   jets. Off the road it turns about its middle, no more about the wheel,
   and rights itself as it rises: it swings past level, back, and settles,
-  a spring dying out - then it hangs, steady, its jets burning.
+  a spring dying out - then it hangs on its jets. Hanging it bobs and
+  rocks, ever so little, out of step, and keeps over the hero: told how
+  far he is across, it goes after him with a lag, slower than he runs,
+  and banks into the way it goes.
 
   Not here: where the hull stands across and how it is drawn - the Ram
-  says; the wheel spat out (Game.Wheel); the fire and the dust - the Ram's
-  painter.
+  says, and moves it by the pace this gives; the wheel spat out
+  (Game.Wheel); the fire and the dust - the Ram's painter.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -28,10 +31,28 @@ const
   // of its body just over the top of the moon form's jump
   HangLift = 184.0;
   RiseTicks = 75;
+  // Hanging: up and down by BobUnits over BobTicks, rocking by
+  // WobbleDegrees over WobbleTicks - grown into over SwayRampTicks from
+  // the moment it settles
+  BobUnits = 3.0;
+  BobTicks = 80;
+  WobbleDegrees = 1.2;
+  WobbleTicks = 110;
+  SwayRampTicks = 33;
+  // After the hero: pulled toward him, held back by the drag, gathering or
+  // losing no more than ChaseAccel a tick and never faster than
+  // ChaseMaxPace units a tick - he runs at 2; banked BankPerPace degrees
+  // clockwise for each unit a tick it goes right
+  ChaseSpring = 0.004;
+  ChaseDrag = 0.12;
+  ChaseAccel = 0.06;
+  ChaseMaxPace = 1.6;
+  BankPerPace = 2.5;
 
 type
   // tkBowUp - the front jet, the bow lifting about the rear wheel;
-  // tkRising - both jets, off the road; tkHanging - risen and settled
+  // tkRising - both jets, off the road; tkHanging - risen and settled, it
+  // bobs, rocks and keeps over the hero
   TTakeoffStage = (tkNone, tkBowUp, tkRising, tkHanging);
   TTakeoffJet = (tjFront, tjRear);
 
@@ -57,21 +78,28 @@ type
     FSwing: Single;
     FLift, FLastLift: Single;
     FAir, FLastAir: Single;
+    // Units a tick across, after the hero
+    FPace: Single;
     // Ticks since each jet caught; -1 - out
     FLit: array [TTakeoffJet] of Integer;
     FJets, FLastJets: array [TTakeoffJet] of Single;
     procedure Catch(AJet: TTakeoffJet; var ACue: TTakeoffCue);
     procedure TickBowUp(var ACue: TTakeoffCue);
     procedure TickRising(var ACue: TTakeoffCue);
+    procedure TickHanging(AToward: Single);
     procedure TickJets;
   public
     // From ALean degrees clockwise, the hull facing AFacing - 1 right, -1
     // left: the bow lifts the other way round
     procedure Start(ALean: Single; AFacing: Integer);
     procedure Stop;
-    function Tick: TTakeoffCue;
+    // AToward: units from the middle of the hull to where it is to keep
+    // over, across - right is more; heard only while it hangs
+    function Tick(AToward: Single = 0): TTakeoffCue;
     function Running: Boolean;
     property Stage: TTakeoffStage read FStage;
+    // Units a tick it goes across this tick, right is more
+    property Pace: Single read FPace;
     // AAlpha of the way from the last tick to this one
     function LeanAt(AAlpha: Single): Single;
     function LiftAt(AAlpha: Single): Single;
@@ -137,6 +165,7 @@ begin
   FLastLift := 0;
   FAir := 0;
   FLastAir := 0;
+  FPace := 0;
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     FLit[Jet] := -1;
@@ -150,7 +179,7 @@ begin
   Result := FStage <> tkNone;
 end;
 
-function TTakeoff.Tick: TTakeoffCue;
+function TTakeoff.Tick(AToward: Single): TTakeoffCue;
 begin
   Result := Default(TTakeoffCue);
   if FStage = tkNone then
@@ -168,6 +197,8 @@ begin
       TickBowUp(Result);
     tkRising:
       TickRising(Result);
+    tkHanging:
+      TickHanging(AToward);
   end;
   TickJets;
 end;
@@ -207,6 +238,19 @@ begin
   FStage := tkHanging;
   FTicks := 0;
   ACue.Steady := True;
+end;
+
+// Bob and rock grow in from nothing, so the settled hull does not jump;
+// the bank follows the pace, which starts from rest
+procedure TTakeoff.TickHanging(AToward: Single);
+begin
+  var Pull := EnsureRange(ChaseSpring * AToward - ChaseDrag * FPace,
+    -ChaseAccel, ChaseAccel);
+  FPace := EnsureRange(FPace + Pull, -ChaseMaxPace, ChaseMaxPace);
+  var Sway := Min(FTicks / SwayRampTicks, 1);
+  FLift := HangLift + Sway * BobUnits * Sin(2 * Pi * FTicks / BobTicks);
+  FLean := Sway * WobbleDegrees * Sin(2 * Pi * FTicks / WobbleTicks) +
+    BankPerPace * FPace;
 end;
 
 procedure TTakeoff.TickJets;

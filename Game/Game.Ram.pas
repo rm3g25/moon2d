@@ -162,9 +162,12 @@
   Then the game has it take off (Game.Takeoff): fire out of the empty
   front well lifts the bow, the rear jet spits the rear wheel out to roll
   after the first, and the hull rises on its two jets, rights itself and
-  hangs. Off the road it is where its pose puts it - turned, raised - and
-  its touch, the bullets it throws off and everything drawn on it go with
-  the pose.
+  hangs - bobbing, rocking, keeping over the hero with a lag. The engine
+  is done with: its exhausts smoke no more from the takeoff on. Off the
+  road it is where its pose puts it - turned, raised - and its touch, the
+  bullets it throws off and everything drawn on it go with the pose. Once
+  the bunker is gone and the mast has sunk, a hatch slides shut over the
+  well, and the smoke out of it stops.
 
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
@@ -453,6 +456,10 @@ type
     FHatch: TBunkerHatch;
     FHatchTicks: Integer;
     FLid, FLastLid: Single;
+    // The hatch over the empty well, 0 open to 1 shut: it shuts once the
+    // bunker is gone and the mast has sunk
+    FShutter, FLastShutter: Single;
+    FShutting: Boolean;
     FNextMuzzle: Integer;
     FHeadShield: TTekShield;
     // Its second phase: the step of a fall back, ticks into the step, and
@@ -528,6 +535,7 @@ type
     procedure TickShed;
     procedure TickTakeoff;
     procedure SpitWheel;
+    procedure TickShutter;
     function UprightBox(const ABox: TSdlFRect): TSdlFRect;
     function AlarmLight: Single;
     procedure FlickerEye;
@@ -701,6 +709,8 @@ type
     // Degrees clockwise the hull leans, AAlpha of the way from the last
     // tick to this one
     function LeanAt(AAlpha: Single): Single;
+    // The hatch over the well: 0 open, 1 shut
+    function ShutterAt(AAlpha: Single): Single;
     // Where its rear wheel meets the road, its left edge at ALeft: the hull
     // leans about it
     function LeanPivot(ALeft: Single): TSdlFPoint;
@@ -838,6 +848,7 @@ type
     FSweeperHeat: PSdlTexture;
     FBunker: PSdlTexture;
     FBunkerLid: PSdlTexture;
+    FShutter: PSdlTexture;
     FHullArt: THullArt;
     FShield: TShieldArt;
     // A point of light: the brake lamps, the eye, the lens
@@ -910,6 +921,8 @@ type
       ASway, AAlpha: Single);
     procedure DrawHead(const ASprites: TSpriteRenderer; AWell, AMast,
       ASway, AAlpha: Single);
+    procedure DrawShutter(const ASprites: TSpriteRenderer; const APose: TRamPose;
+      AAlpha: Single);
     procedure DrawLamps(const ASprites: TSpriteRenderer; const APose: TRamPose;
       AAlpha: Single);
     procedure DrawEye(const ASprites: TSpriteRenderer; const APose: TRamPose;
@@ -1272,6 +1285,8 @@ const
   LeanTicks = 6;
   // A jet catching in a well
   IgniteJolt = 0.35;
+  // The hatch over the empty well sliding shut, from the far edge
+  ShutterTicks = 20;
   // The point of the plough, which scrapes the road, sparks flying from it
   // for ScrapeTicks, dying out
   NosePoint: THullPoint = (X: 2.0; Y: 127.5);
@@ -1299,6 +1314,10 @@ const
   WellX = 69.9;
   WellY = 14.6;
   WellPoint: THullPoint = (X: WellX; Y: WellY);
+  // The hatch over the well's mouth, the middle of its face on the well's
+  // centre: its art's 206 x 55 px at 6 a unit
+  ShutterWidth = 34.3;
+  ShutterHeight = 9.2;
   MastRest = -20.0;
   HunterMast = 48.0;
   // Below this line of the hull the sections stay inside it, and drawn
@@ -1768,6 +1787,9 @@ begin
   FWheel.Stop;
   FTakeoff.Stop;
   FRearWheel.Stop;
+  FShutter := 0;
+  FLastShutter := 0;
+  FShutting := False;
   FHullHitTicks := NoHitTicks;
 end;
 
@@ -1868,6 +1890,9 @@ begin
   FChased := True;
   FRowsIn := True;
   Place(-RamWidth - PassBeyond);
+  FShutting := True;
+  FShutter := 1;
+  FLastShutter := 1;
   FEyeLit := True;
   BeginTurn;
 end;
@@ -2052,6 +2077,7 @@ begin
   FLastLid := FLid;
   FLastFlash := FFlash;
   FLastLean := FLean;
+  FLastShutter := FShutter;
   if FHullHitTicks < NoHitTicks then
     Inc(FHullHitTicks);
   FFlash := Max(0, FFlash - 1 / BlastFlashTicks);
@@ -2066,6 +2092,7 @@ begin
   TickMode;
   TickPhase;
   TickShed;
+  TickShutter;
   TickRow;
   TickSway;
   TickAim;
@@ -2324,8 +2351,9 @@ end;
 // The empty mast sinks, a beat, the next head rises and the fight goes
 // on: the sweeper after the hunter, the bunker after the sweeper - and the
 // breath before the chase counts from the bunker's row lit. After the
-// bunker the mast stays down and the hunt goes on where it was; one that
-// had not begun (a bunker killed before its last third) begins now.
+// bunker the mast stays down, the well shuts over it, and the hunt goes on
+// where it was; one that had not begun (a bunker killed before its last
+// third) begins now.
 procedure TRam.TickChange;
 begin
   Inc(FPhaseTicks);
@@ -2339,6 +2367,7 @@ begin
     Exit;
   if FKilled = rhBunker then
   begin
+    FShutting := True;
     if FHunt = htNone then
       BeginHunt;
     BeginRest(0);
@@ -3459,9 +3488,15 @@ begin
   FTakeoff.Start(FLean, FHullFacing);
 end;
 
+// Hanging, after the hero: over him, as far as the screen lets the hull be
 procedure TRam.TickTakeoff;
 begin
-  var Step := FTakeoff.Tick;
+  var Toward: Single := 0;
+  if FHeroSeen then
+    Toward := EnsureRange(FHeroCenter.X, RamWidth / 2, ScreenWidth - RamWidth / 2) -
+      (FX + RamWidth / 2);
+  var Step := FTakeoff.Tick(Toward);
+  FX := FX + FTakeoff.Pace;
   FLean := FTakeoff.LeanAt(1);
   if Step.Ignite then
   begin
@@ -3485,6 +3520,17 @@ end;
 function TRam.LeanAt(AAlpha: Single): Single;
 begin
   Result := Lerp(FLastLean, FLean, AAlpha);
+end;
+
+function TRam.ShutterAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastShutter, FShutter, AAlpha);
+end;
+
+procedure TRam.TickShutter;
+begin
+  if FShutting then
+    FShutter := Min(FShutter + 1 / ShutterTicks, 1);
 end;
 
 function TRam.LeanPivot(ALeft: Single): TSdlFPoint;
@@ -4536,6 +4582,7 @@ begin
   FCache.EnableLinearFilter;
   FCache.AttachSpriteSet(FSpriteSet);
   FWell := FCache.Get('well');
+  FShutter := FCache.Get('wellShutter');
   for var i := Low(FMasts) to High(FMasts) do
     FMasts[i] := FCache.Get('mast' + IntToStr(i));
   FHunter := FCache.Get('hunter');
@@ -4711,7 +4758,8 @@ begin
     begin
       var Spot := FRam.PoseSpot(FRam.PoseAt(1), ExhaustPoints[i]);
       FExhausts[Turned][i].Drift(-ABeltShift, 0);
-      FExhausts[Turned][i].Tick(Spot.X, Spot.Y, Turned = FRam.HullMirrored);
+      FExhausts[Turned][i].Tick(Spot.X, Spot.Y,
+        (Turned = FRam.HullMirrored) and not FRam.Flight.Running);
     end;
 end;
 
@@ -4721,7 +4769,7 @@ procedure TRamPainter.TickHeadSmoke(ABeltShift: Single);
 begin
   if not FRam.Present then
     Exit;
-  var Smoking := FRam.Wounded or (FRam.Head = rhNone);
+  var Smoking := (FRam.Wounded or (FRam.Head = rhNone)) and (FRam.ShutterAt(1) < 1);
   if Smoking <> FHeadSmoking then
   begin
     FHeadSmoking := Smoking;
@@ -5115,6 +5163,22 @@ begin
     @Indices[0], Length(Indices));
 end;
 
+// Over the hull, slid shut from the far edge toward the eye: it shuts with
+// the hull upright on the road, so a level line cuts what is not there yet
+procedure TRamPainter.DrawShutter(const ASprites: TSpriteRenderer;
+  const APose: TRamPose; AAlpha: Single);
+begin
+  var Shut := FRam.ShutterAt(AAlpha);
+  if Shut <= 0 then
+    Exit;
+  var Center := FRam.PoseSpot(APose, WellPoint);
+  if Shut < 1 then
+    ASprites.ClipAbove(Center.Y + ShutterHeight * (Shut - 0.5));
+  ASprites.DrawSized(FArt.FShutter, Center, ShutterWidth, ShutterHeight, 1,
+    FRam.HullMirrored, APose.Lean);
+  ASprites.ClearClip;
+end;
+
 procedure TRamPainter.DrawLamps(const ASprites: TSpriteRenderer;
   const APose: TRamPose; AAlpha: Single);
 begin
@@ -5247,6 +5311,7 @@ begin
     end;
     ASprites.ClearClip;
   end;
+  DrawShutter(ASprites, Pose, AAlpha);
   DrawLamps(ASprites, Pose, AAlpha);
 
   var Wheel := FRam.Wheel;

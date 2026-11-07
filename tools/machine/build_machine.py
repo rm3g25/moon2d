@@ -27,6 +27,9 @@ What comes out, back to front as the game is to draw it:
   tinted red by code as the warning), bunker with bunkerLid (turned and
   moved by code to shut the hatch).
 
+The sprites made after the build (the hatch over the well) are added by
+extend_machine.py, run on the set this writes.
+
 DENSITY is the same 6 px a screen unit as the tank's. The source pictures
 are not kept in the repository; `build` looks for them in the sources dir
 under the names below. The numbers under "measured" belong to those

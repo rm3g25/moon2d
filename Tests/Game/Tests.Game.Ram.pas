@@ -100,8 +100,10 @@
   With its wheels on it does not take off. Its front wheel off, it takes
   off once: two jets catch, the jets' roar once, both wheels come down
   from their hops; it hangs level, risen to its height; hanging, its
-  touch and a bullet meet it up there, not on the road; a new fight puts
-  it back on the road.
+  touch and a bullet meet it up there, not on the road; it goes over the
+  hero no faster than its most, keeping to the screen; a new fight puts it
+  back on the road. After the bunker the well shuts, only once the mast is
+  down; past the bunker it is shut from the start.
 
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
@@ -267,6 +269,8 @@ type
     procedure TestTakesOffOnceTwoJetsAndBothWheelsDown;
     [Test]
     procedure TestHangingItStandsLevelAtItsHeight;
+    [Test]
+    procedure TestHangingItGoesOverTheHero;
     [Test]
     procedure TestHangingItsTouchIsUpThere;
     [Test]
@@ -515,6 +519,10 @@ type
     procedure TestTheHuntGoesOnAfterTheBunker;
     [Test]
     procedure TestPastTheBunkerItTurnsOffTheLeftEdgeAndHunts;
+    [Test]
+    procedure TestAfterTheBunkerTheWellShutsOnceTheMastIsDown;
+    [Test]
+    procedure TestPastTheBunkerTheWellIsShut;
     [Test]
     procedure TestTheHuntLobsOneAtATimeMoreOften;
     [Test]
@@ -3217,6 +3225,44 @@ begin
     True, Throw), 'A touch on the road is still a ram');
 end;
 
+procedure TRamBunkerTests.TestAfterTheBunkerTheWellShutsOnceTheMastIsDown;
+begin
+  var Hero := HeroOnAPad(StepHeroX, ChaseDeckY);
+  WaitForTheHunt(Hero);
+  for var i := 1 to SettleTicks do
+    FRam.Tick(Hero);
+  StrikeTheHatch(FRam.Lives);
+  var Blasted := False;
+  for var i := 1 to ManyTicks do
+    if FRam.Tick(Hero).Blast then
+    begin
+      Blasted := True;
+      Break;
+    end;
+  Assert.IsTrue(Blasted, 'It blows up');
+  Assert.AreEqual(0.0, Double(FRam.ShutterAt(1)), 0.001, 'Open as it blows');
+  var Last: Single := 0;
+  var ShutWhileUp := False;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    var Shutter := FRam.ShutterAt(1);
+    Assert.IsTrue(Shutter >= Last, Format('Opening at tick %d', [Integer(i)]));
+    if (Shutter > 0) and (FRam.MastAt(1) <> FRam.MastAt(0)) then
+      ShutWhileUp := True;
+    Last := Shutter;
+  end;
+  Assert.IsFalse(ShutWhileUp, 'Not over a mast still sinking');
+  Assert.AreEqual(1.0, Double(Last), 0.001, 'Shut');
+end;
+
+procedure TRamBunkerTests.TestPastTheBunkerTheWellIsShut;
+begin
+  FRam.StartPastBunker(OrdersAt(Stop));
+  Assert.AreEqual(1.0, Double(FRam.ShutterAt(0)), 0.001, 'Shut a tick ago');
+  Assert.AreEqual(1.0, Double(FRam.ShutterAt(1)), 0.001, 'Shut');
+end;
+
 procedure TRamBunkerTests.TestPastTheBunkerItTurnsOffTheLeftEdgeAndHunts;
 var
   Throw: TOverTheHull;
@@ -3923,12 +3969,30 @@ procedure TRamBrakeTests.TestHangingItStandsLevelAtItsHeight;
 begin
   var Hero := HeroOnTheRoad(FarHeroX - 100);
   TakeOffAndHang(Hero);
-  FRam.Tick(Hero);
   var Pose := FRam.PoseAt(1);
   Assert.AreEqual(0.0, Double(Pose.Lean), 0.001, 'Level');
   Assert.AreEqual(0.0, Double(Pose.Shift.X), 0.001, 'Where it stood across');
   Assert.AreEqual(-HangLift, Double(Pose.Shift.Y), 0.001, 'Risen');
-  Assert.AreEqual(0.0, Double(FRam.LeanAt(0)), 0.001, 'Level a tick ago');
+end;
+
+// He stands far to the right: it goes after him slower than he runs and
+// comes to hang over him
+procedure TRamBrakeTests.TestHangingItGoesOverTheHero;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  TakeOffAndHang(Hero);
+  var HeroMiddle: Single := Hero.Body.X + Hero.Body.W / 2;
+  var StartedFrom := FRam.Left + RamWidth / 2;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    Assert.IsTrue(Abs(FRam.LeftAt(1) - FRam.LeftAt(0)) <= ChaseMaxPace + 0.001,
+      Format('Too fast at tick %d', [Integer(i)]));
+  end;
+  var Middle := FRam.Left + RamWidth / 2;
+  Assert.IsTrue(Abs(Middle - HeroMiddle) < Abs(StartedFrom - HeroMiddle),
+    'Nearer him');
+  Assert.IsTrue(FRam.Left + RamWidth <= ScreenWidth + 1, 'On the screen');
 end;
 
 procedure TRamBrakeTests.TestHangingItsTouchIsUpThere;

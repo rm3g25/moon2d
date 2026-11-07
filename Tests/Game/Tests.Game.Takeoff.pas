@@ -4,9 +4,12 @@
   the other way round from where the hull faces, about its rear wheel,
   nothing risen yet. The rear jet catches once, a while after, with the
   wheel spat out on the same tick. It rises to its height, never down on
-  the way, and stays there; it rights itself as it rises, swinging past
-  level and back, and settles, told once - then it hangs level. On the
-  road it turns about the wheel, off it about its middle. A jet flares as
+  the way, to its height as it settles; it rights itself as it rises,
+  swinging past level and back, and settles level, told once. On the road
+  it turns about the wheel, off it about its middle. Hanging, it bobs and
+  rocks a little about its height and level; told where the hero is, it
+  goes after him slower than he runs, no faster than its most, banking
+  into the way it goes - rising, it hears none of that. A jet flares as
   it catches and comes down to its steady fire. A stop takes it all.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -27,6 +30,8 @@ type
     // Started from AFrom degrees, facing right, and ticked till the rear
     // jet catches
     procedure SpitTheWheel(AFrom: Single);
+    // Started as off the shed wheel and ticked till it settles
+    procedure HangIt;
   public
     [Setup]
     procedure Setup;
@@ -43,6 +48,12 @@ type
     procedure TestRisesToItsHeightNeverDown;
     [Test]
     procedure TestRightsItselfPastLevelAndSettles;
+    [Test]
+    procedure TestHangingItBobsAndRocksALittle;
+    [Test]
+    procedure TestHangingItGoesAfterTheHeroBanking;
+    [Test]
+    procedure TestRisingItHearsNoneOfTheHero;
     [Test]
     procedure TestOnTheRoadAboutTheWheelOffItAboutItsMiddle;
     [Test]
@@ -76,6 +87,15 @@ begin
     if FTakeoff.Tick.Spit then
       Exit;
   Assert.Fail('The rear jet never caught');
+end;
+
+procedure TTakeoffTests.HangIt;
+begin
+  FTakeoff.Start(ShedLean, 1);
+  for var i := 1 to ManyTicks do
+    if FTakeoff.Tick.Steady then
+      Exit;
+  Assert.Fail('It never settled');
 end;
 
 procedure TTakeoffTests.TestNothingTillItStarts;
@@ -147,13 +167,17 @@ begin
   var Last: Single := 0;
   for var i := 1 to ManyTicks do
   begin
-    FTakeoff.Tick;
+    var Steady := FTakeoff.Tick.Steady;
     var Lift := FTakeoff.LiftAt(1);
     Assert.IsTrue(Lift >= Last - Slop, Format('Down at tick %d', [Integer(i)]));
     Last := Lift;
+    if Steady then
+    begin
+      Assert.AreEqual(HangLift, Double(Lift), Slop, 'At its height');
+      Exit;
+    end;
   end;
-  Assert.AreEqual(HangLift, Double(Last), Slop, 'At its height');
-  Assert.IsTrue(RiseTicks < ManyTicks, 'Watched long enough');
+  Assert.Fail('It never settled');
 end;
 
 // Facing right the bow is up counter-clockwise, below 0: past level is
@@ -166,15 +190,76 @@ begin
   for var i := 1 to ManyTicks do
   begin
     if FTakeoff.Tick.Steady then
+    begin
       Inc(Steadies);
-    if FTakeoff.LeanAt(1) > 0 then
+      Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(1)), Slop, 'Level as it settles');
+    end;
+    if (Steadies = 0) and (FTakeoff.LeanAt(1) > 0) then
       PastLevel := True;
   end;
   Assert.IsTrue(PastLevel, 'Swung past level');
   Assert.AreEqual(1, Steadies, 'Settled, told once');
   Assert.IsTrue(FTakeoff.Stage = tkHanging, 'Hangs');
-  Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(0)), Slop, 'Level a tick ago');
-  Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(1)), Slop, 'Level');
+end;
+
+procedure TTakeoffTests.TestHangingItBobsAndRocksALittle;
+begin
+  HangIt;
+  var Lowest: Single := HangLift;
+  var Highest: Single := HangLift;
+  var MostLean: Single := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    FTakeoff.Tick;
+    Lowest := Min(Lowest, FTakeoff.LiftAt(1));
+    Highest := Max(Highest, FTakeoff.LiftAt(1));
+    MostLean := Max(MostLean, Abs(FTakeoff.LeanAt(1)));
+  end;
+  Assert.IsTrue(Highest - Lowest > BobUnits, 'It bobs');
+  Assert.IsTrue((Lowest >= HangLift - BobUnits - Slop) and
+    (Highest <= HangLift + BobUnits + Slop), 'About its height');
+  Assert.IsTrue(MostLean > WobbleDegrees / 2, 'It rocks');
+  Assert.IsTrue(MostLean <= WobbleDegrees + Slop, 'A little, kept off the hero');
+  Assert.AreEqual(0.0, Double(FTakeoff.Pace), Slop, 'In its place');
+end;
+
+// He stands 200 to the right of it
+procedure TTakeoffTests.TestHangingItGoesAfterTheHeroBanking;
+const
+  Away = 200.0;
+  UnderWay = 60;
+  Settled = 400;
+begin
+  HangIt;
+  var Across: Single := 0;
+  var Last: Single := 0;
+  for var i := 1 to Settled do
+  begin
+    FTakeoff.Tick(Away - Across);
+    Across := Across + FTakeoff.Pace;
+    Assert.IsTrue(FTakeoff.Pace <= ChaseMaxPace + Slop,
+      Format('Too fast at tick %d', [Integer(i)]));
+    if i = 1 then
+      Assert.IsTrue((FTakeoff.Pace > 0) and (FTakeoff.Pace < 0.5),
+        'Off to the right, slowly from rest');
+    // Going its fastest, banked well past its rocking
+    if i = UnderWay then
+      Assert.IsTrue(FTakeoff.LeanAt(1) > WobbleDegrees, 'Banked clockwise, into the way');
+    Last := FTakeoff.Pace;
+  end;
+  Assert.IsTrue(Abs(Away - Across) < 10, Format('Over him, %.1f off', [Away - Across]));
+  Assert.IsTrue(Abs(Last) < 0.2, 'Come to rest over him');
+end;
+
+procedure TTakeoffTests.TestRisingItHearsNoneOfTheHero;
+begin
+  SpitTheWheel(ShedLean);
+  for var i := 1 to RiseTicks do
+  begin
+    FTakeoff.Tick(500);
+    Assert.AreEqual(0.0, Double(FTakeoff.Pace), Slop, Format('Off at tick %d',
+      [Integer(i)]));
+  end;
 end;
 
 procedure TTakeoffTests.TestOnTheRoadAboutTheWheelOffItAboutItsMiddle;
