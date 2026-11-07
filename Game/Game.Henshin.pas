@@ -327,8 +327,11 @@ begin
   while Event <> mvNone do
   begin
     case Event of
+      // Lit through the burst's inhale too: the eclipse's burst draws no
+      // bare figure over the body
       mvDrawingIn:
-        FShroud.Start(ChargeLook(MoonRiteScore.CollapseTicks));
+        FShroud.Start(ChargeLook(MoonRiteScore.CollapseTicks,
+          EclipseBurst.InhaleTicks));
       mvFinished:
         begin
           FBurstForm := hfMoon;

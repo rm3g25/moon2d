@@ -54,6 +54,10 @@ type
     [Test]
     procedure TestLookWithNoFlashHasNoGlow;
     [Test]
+    procedure TestAChargeClimbsThroughTheDrawingInThenFalls;
+    [Test]
+    procedure TestAChargeHoldsItsTopThroughTheInhaleToTheStrike;
+    [Test]
     procedure TestPartTimeTogetherIsOneTimeForTheWholeBody;
     [Test]
     procedure TestPartTimeTopDownLetsTheHeadLead;
@@ -763,6 +767,60 @@ begin
   ExpectNear(0, FShroud.Glow(0), 'No halo at the start');
   ExpectNear(0, FShroud.Glow(0.5), 'none at the peak');
   ExpectNear(0, FShroud.Glow(1), 'none at the end');
+end;
+
+const
+  // The rite of the eclipse draws its orbs in over 30 ticks, its burst
+  // inhales 16
+  ChargeCollapse = 30;
+  ChargeInhale = 16;
+
+// The glow AAge ticks into ALook
+function GlowAtTick(const AShroud: THeroShroud; const ALook: TShroudLook;
+  AAge: Integer): Single;
+begin
+  Result := AShroud.Glow(AAge / ALook.Life);
+end;
+
+procedure THeroShroudTests.TestAChargeClimbsThroughTheDrawingInThenFalls;
+begin
+  var Look := ChargeLook(ChargeCollapse);
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Start(Look);
+
+  var Level := GlowAtTick(FShroud, Look, 0);
+  for var Age := 1 to ChargeCollapse + 1 do
+  begin
+    var Next := GlowAtTick(FShroud, Look, Age);
+    Assert.IsTrue(Next > Level, Format('Still climbing at tick %d', [Age]));
+    Level := Next;
+  end;
+  Assert.IsTrue(GlowAtTick(FShroud, Look, Look.Life) < EndGlowShare * Look.Flash,
+    'Nearly out at the end');
+  Assert.IsTrue(Look.Life < ChargeCollapse + ChargeInhale,
+    'Out before an inhale would end');
+end;
+
+// Lit at the top on every tick from a tick past the drawing in through the
+// inhale and the tick of the strike; the climb is the one without the
+// inhale
+procedure THeroShroudTests.TestAChargeHoldsItsTopThroughTheInhaleToTheStrike;
+begin
+  var Plain := ChargeLook(ChargeCollapse);
+  var Look := ChargeLook(ChargeCollapse, ChargeInhale);
+  FShroud := THeroShroud.Create(nil, DefaultSeed);
+  FTwin := THeroShroud.Create(nil, DefaultSeed);
+  FShroud.Start(Look);
+  FTwin.Start(Plain);
+
+  for var Age := 0 to ChargeCollapse + 1 do
+    ExpectNear(GlowAtTick(FTwin, Plain, Age), GlowAtTick(FShroud, Look, Age),
+      Format('The climb at tick %d', [Age]));
+  for var Age := ChargeCollapse + 2 to ChargeCollapse + ChargeInhale + 2 do
+    ExpectNear(Look.Flash, GlowAtTick(FShroud, Look, Age),
+      Format('At its top at tick %d', [Age]));
+  Assert.IsTrue(GlowAtTick(FShroud, Look, Look.Life) < EndGlowShare * Look.Flash,
+    'Nearly out at the end');
 end;
 
 // ---------------------------------------------------------------------------

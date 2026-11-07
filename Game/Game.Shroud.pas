@@ -56,6 +56,7 @@ type
     Shift: Single; // how far aside a strip is born
     Flash: Single; // the halo at its peak; above 1 it is drawn twice
     FlashAt: Single; // the share of Life the peak falls on, 0..0.95
+    Hold: Single; // the share of Life the peak is held for, after FlashAt
     Motes: Single; // born a tick at the peak
     Lift: Single; // a mote's pull, units a tick per tick; up below zero
     Tint: TRgb;
@@ -190,43 +191,47 @@ const
   PitLook: TShroudLook = (
     Life: 14; Bands: 5; WidthFrom: 150; WidthTo: 30; Travel: -3;
     Order: soTogether; Stagger: 0.15; Smoke: 0.75; Light: 0.70;
-    Reveal: True; Shift: 18; Flash: 0.9; FlashAt: 0.80;
+    Reveal: True; Shift: 18; Flash: 0.9; FlashAt: 0.80; Hold: 0;
     Motes: 1.5; Lift: -0.15; Tint: (R: 236; G: 240; B: 255));
   // The first screen of a level: the body comes together from the head down
   EntryLook: TShroudLook = (
     Life: 40; Bands: 9; WidthFrom: 190; WidthTo: 34; Travel: -4;
     Order: soTopDown; Stagger: 0.55; Smoke: 0.80; Light: 0.60;
-    Reveal: True; Shift: 26; Flash: 1.1; FlashAt: 0.85;
+    Reveal: True; Shift: 26; Flash: 1.1; FlashAt: 0.85; Hold: 0;
     Motes: 2.0; Lift: -0.20; Tint: (R: 236; G: 240; B: 255));
   // Alive again after a death: the body comes together from the feet up
   ReviveLook: TShroudLook = (
     Life: 24; Bands: 7; WidthFrom: 120; WidthTo: 32; Travel: -6;
     Order: soBottomUp; Stagger: 0.40; Smoke: 0.90; Light: 0.50;
-    Reveal: True; Shift: 12; Flash: 0.8; FlashAt: 0.80;
+    Reveal: True; Shift: 12; Flash: 0.8; FlashAt: 0.80; Hold: 0;
     Motes: 1.0; Lift: -0.25; Tint: (R: 236; G: 240; B: 255));
   // The ice suit is on: frost spreads off the body and runs down
   IceOnLook: TShroudLook = (
     Life: 130; Bands: 4; WidthFrom: 26; WidthTo: 110; Travel: 30;
     Order: soTopDown; Stagger: 0.60; Smoke: 0.55; Light: 0.25;
-    Reveal: False; Shift: 0; Flash: 1.3; FlashAt: 0;
+    Reveal: False; Shift: 0; Flash: 1.3; FlashAt: 0; Hold: 0;
     Motes: 2.5; Lift: 0.12; Tint: (R: 120; G: 200; B: 255));
   // Sparks rising off a suit that burns; nothing starts it yet
   HeatOnLook: TShroudLook = (
     Life: 110; Bands: 0; WidthFrom: 30; WidthTo: 30; Travel: 0;
     Order: soTogether; Stagger: 0; Smoke: 0; Light: 0;
-    Reveal: False; Shift: 0; Flash: 1.4; FlashAt: 0;
+    Reveal: False; Shift: 0; Flash: 1.4; FlashAt: 0; Hold: 0;
     Motes: 4.0; Lift: -0.30; Tint: (R: 255; G: 120; B: 48));
   // The ice suit shatters: frost flies off the body
   IceOffLook: TShroudLook = (
     Life: 18; Bands: 4; WidthFrom: 28; WidthTo: 160; Travel: 0;
     Order: soTogether; Stagger: 0.10; Smoke: 0.60; Light: 0.60;
-    Reveal: False; Shift: 0; Flash: 1.0; FlashAt: 0;
+    Reveal: False; Shift: 0; Flash: 1.0; FlashAt: 0; Hold: 0;
     Motes: 5.0; Lift: -0.10; Tint: (R: 120; G: 200; B: 255));
 
 // The body fills with light as the orbs of a rite go in: the look of the
 // suit with no frost and no motes, its light climbing all through the
-// ACollapseTicks of their drawing in. It tops out a tick past them.
-function ChargeLook(ACollapseTicks: Integer): TShroudLook;
+// ACollapseTicks of their drawing in. It tops out a tick past them, and
+// with AInhaleTicks of a burst's inhale after them it is held at its top
+// through the inhale and the tick of the strike, so the body is lit till
+// the blast.
+function ChargeLook(ACollapseTicks: Integer;
+  AInhaleTicks: Integer = 0): TShroudLook;
 
 implementation
 
@@ -312,15 +317,20 @@ const
   StripLightPower: Single = 1.5;
   MoteFadePower: Single = 1.2;
 
-function ChargeLook(ACollapseTicks: Integer): TShroudLook;
+function ChargeLook(ACollapseTicks, AInhaleTicks: Integer): TShroudLook;
 const
-  TopAt = 0.9; // the share of the look's life its top falls on
+  TopAt = 0.9; // the share of the climb and the fall its top falls on
 begin
   Result := IceOnLook;
   Result.Bands := 0;
   Result.Motes := 0;
-  Result.FlashAt := TopAt;
-  Result.Life := Ceil((ACollapseTicks + 1) / TopAt);
+  var ClimbAndFall := Ceil((ACollapseTicks + 1) / TopAt);
+  var HoldTicks := 0;
+  if AInhaleTicks > 0 then
+    HoldTicks := AInhaleTicks + 1;
+  Result.Life := ClimbAndFall + HoldTicks;
+  Result.FlashAt := TopAt * ClimbAndFall / Result.Life;
+  Result.Hold := HoldTicks / Result.Life;
 end;
 
 function Lerp(AFrom, ATo, AAmount: Single): Single;
@@ -562,11 +572,13 @@ function THeroShroud.Glow(ATime: Single): Single;
 begin
   if FLook.Flash <= 0 then
     Exit(0);
+  var FallFrom := FLook.FlashAt + FLook.Hold;
   if ATime < FLook.FlashAt then
     Result := FLook.Flash * Sqr(ATime / FLook.FlashAt)
+  else if ATime < FallFrom then
+    Result := FLook.Flash
   else
-    Result := FLook.Flash *
-      Exp(-GlowDecay * (ATime - FLook.FlashAt) / (1 - FLook.FlashAt));
+    Result := FLook.Flash * Exp(-GlowDecay * (ATime - FallFrom) / (1 - FallFrom));
 end;
 
 function THeroShroud.StripShift(AStrip: Integer; ATime: Single): Single;
