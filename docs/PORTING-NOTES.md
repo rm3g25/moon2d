@@ -1,263 +1,290 @@
-# Moon 2D Remake - передаточная записка (3.0.x: доводка после ухода режима 2008)
+# Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Статус на 2026-11-07: **3.0.112** - арена 3 (финал второго уровня), этап
-18c-2: Таран после взлёта висит над героем и качается. В работе - арена
-3, её файл `docs/mechanics/arena-3.md`; что принесла каждая версия, по
-абзацу - `CHANGELOG.md`. Статус здесь - несколько строк: версия, что в
-работе, где читать; подробности версии живут в CHANGELOG, не здесь.
+Status at 2026-11-07: **3.0.112** - arena 3 (the finale of level 2),
+stage 18c-2: after the takeoff the Ram hangs over the hero and sways. In
+work: arena 3, its file `docs/mechanics/arena-3.md`; what each version
+brought, a paragraph each - `CHANGELOG.md`. The status here is a few
+lines: the version, what is in work, where to read; the details of a
+version live in CHANGELOG, not here.
 
-Что в этом файле: архитектура, константы координат, осознанные
-отступления от 2008, дебаг-клавиши, незакрытые вопросы оригинала - то,
-что есть сейчас. Чего в нём нет: порядка дальнейших шагов
-(`ROADMAP.md`), планов ещё не построенного (`plans/`), журнала порта 2.x
-(`PORT-JOURNAL.md`). Рабочий чат по механике читает этот файл и файл
-своей механики - и не заходит в роадмап и планы: будущее - не его
-контекст.
+What this file holds: the architecture, the coordinate constants, the
+deliberate deviations from 2008, the debug keys, the open questions of
+the original - what is, now. What it does not hold: the order of the
+next steps (`ROADMAP.md`), the plans of things not built yet (`plans/`),
+the journal of the 2.x port (`PORT-JOURNAL.md`). A working chat on a
+mechanic reads this file and its mechanic's file - and does not go into
+the roadmap and the plans: the future is not its context.
 
-Релиз 3.0 - на той 3.0.x, которой закончатся внешние преобразования,
-номер не назначен; состав и оставшиеся дела - `ROADMAP.md`. Захочется
-старого вида - качается релиз 2.5.3, в самой игре музея нет.
+The 3.0 release ships at whichever 3.0.x ends the external
+transformations; no number is set; its contents and what is left -
+`ROADMAP.md`. For the old look, download release 2.5.3; the game itself
+has no museum.
 
-Кодстайл проекта: CODESTYLE.md 4.9 в файлах проекта; 3.x - легаси.
+Code style of the project: CODESTYLE.md 4.9 in the project files; 3.x is
+legacy.
 
-## Архитектура (юниты)
+## Architecture (units)
 
-Юниты лежат в папках Core/, Game/ (с Game/Events/), Hud/, Menu/ (с раскладки
-после 3.0.8);
-какой юнит где и правило слоёв - в CODEBASE-MAP, раздел "Раскладка
-исходников". Таблица ниже - про ответственность, не про пути.
+The units live in the folders Core/, Game/ (with Game/Events/), Hud/,
+Menu/ (since the layout after 3.0.8); which unit lives where and the
+layer rule - CODEBASE-MAP, section "Source layout". The table below is
+about responsibility, not paths.
 
-| Юнит | Ответственность |
+| Unit | Responsibility |
 |---|---|
-| Moon2D.dpr | Старт: конфиг, язык, поиск level*.json (DiscoverLevels по LevelFilePattern из Game.Moon), реестр монстров, SDL-хост, игра; ошибка старта - в окно сообщения. Uses с путями - манифест юнитов проекта: новый юнит идёт сюда и в dproj |
-| Game.Moon | TMoonGame - игра, которую запускает программа (вынесена из Moon2D.dpr слово в слово 2026-10-25, перед этапом 8 арены 3): уровень собирает LoadLevel из меню (наборы, кэши, рендереры, поле, HUD, директоры событий и сцен). TMoonGame: состояния gsMenu/gsIntro/gsPlaying/gsEnding, коллизии пуль, контакты, чекпоинты, события монстров (взрыв и звук ярости тоже здесь), гравел-трайл, бонус-слот, LocateParent для динамики (платформа или монстр; спящая платформа не жива), SceneStage для сцен, порядок слоёв кадра, CreateHud - угловые HUD и ряды над фигурами заново на каждый уровень; церемония - через FHenshin, вид взрывов - через FExplosions |
-| Sdl2.Core | Минимальные SDL2-биндинги (окно/рендер/события/мышь/текстуры) |
-| Game.Loop | TGameHost + fixed timestep (Gaffer), TGameApp-база |
-| Game.Config | Два слоя: bin\config.json поставки (только чтение) и %APPDATA%\Moon2D\settings.json игрока (сложность, язык, полный экран; перекрывает по ключам); tickRate=33 - РЕАЛЬНАЯ частота ориг. WM_Timer(20мс) на живой Windows |
-| Render.Sprites | Кэш текстур из наборов .mset (PNG; чёрный color key по умолчанию, DisableColorKey и EnableLinearFilter для HD-арта; имя с набором set:name), TAnimSet 8+8 из последовательностей набора, TSpriteRenderer: Draw 32x32, DrawTile (кроп 64 px в клетку), DrawTurned - дробный квадрат с поворотом и альфой. TileSize=32 ЮНИТА и TileArtSize=64 ПИКСЕЛЯ - не путать |
-| Levels.Defs | level*.json: сетка grid, тайлы+коллизии (SolidAt), фоны, наборы spriteSets/objectSets, статические объекты (Objects), динамика (Dynamics, список живёт здесь), сущности с overrides/triggers и тегом, события (Events), сцены (Scenes, 3.0.62), сдвиг сущности shiftX (3.0.67), закрытые двери (shutDoors, DoorShutOn, 3.0.66 - на загрузке отказ двери, которую ничто не открывает, и открытию на открытом экране); на загрузке CheckEvents, CheckDynamics и CheckScenes отказывают чужому экрану, тегу и родителю без носителя, кораблю после своего ребёнка, спящей платформе, которую не будит ни одна сцена |
-| Levels.Events | Секция events уровня: TLevelEvent (экран, условие enterScreen/allDead/livesBelow/enraged, тег, порог lives, задержка, действия bigMessage/smallMessage/hint/music/intensity/sun, потом действия арены 3.0.53-3.0.59 и scene 3.0.62, openDoor 3.0.66 (открывает дверь экрана и сам показывает стрелку), условие heroStands 3.0.67 (герой стоит в клетке x, y); у hint необязательный header - голос), словари условий и действий константами, ParseLevelEvents. Модель и парсер, без логики; действие energy 3.0.70 (value 1..100 - заряд формы, орбы из героя в шкалу); действие respawn 3.0.71 (x, y с 1 - чекпойнт на клетку экрана события; на загрузке Levels.Defs держит клетку правил точки возрождения, CheckRespawnCell) |
-| Events.Director | TEventDirector - исполняет события на живой игре: Tick(экран, поле) проверяет условия несработавших событий экрана, отсчитывает задержку, играет действия один раз; ReArm(экран) на рестарт; музыка через колбэк ChangeMusic игры. Рождается с уровнем; действия intensity и sun идут в динамику уровня (TDynamicObjects), ReArm откатывает к значениям файла цели intensity; действие scene - сигнал StartScene директору сцен (3.0.62); с 3.0.70 колбэк Energy (TEnergyCue); с 3.0.71 колбэк Respawn (TRespawnCue, MoveCheckpoint игры) |
-| Render.Tiles | Фон задником + тайлы 64-кроп в клетку; DrawBackground/DrawTiles наружу - тряска двигает их порознь |
-| Render.Shake | Тряска экрана: один метр травмы на игру, три канала сдвига (мир/герой/монстры). Только рендер, логика сдвига не видит |
-| Render.Brush | Кисть панелей, рисуемых примитивами (HUD, ячейки сложности в меню), плюс цвет и случай (TRgb, Mix, TXorShift) для Render.Glow, Render.Globe, Render.Puff, Effects.Debris, динамики, взрывов, диска босса и неба меню: Fill/Glow/Frame/цифры 3x5 через SDL_RenderFillRectF, ячейки рядов здоровья (FullCell/EmptyCell/BonusCell), палитра + HealthColor, геометрия панелей 118x32, свой xorshift. До раскладки по папкам - Hud.Draw; класс пока THudBrush; цифры любого размера пикселя (DrawNumber/NumberWidth с APixel, 3.0.70 - число в диске заряда) |
-| Hud.Vitals | Здоровье: THudVitals - кардиомонитор (ряд 5 ячеек нормы + салатовый бонус за чертой, пульс по здоровью); крыло справа внутри рамки панели (Wing, 3.0.70) - слот заряда формы, рисует его Hud.Energy |
-| Hud.Charge | Очки: THudCharge - заряд бонуса до 50, значок ждущей награды, ряд серии из 10 |
-| Hud.Energy | Заряд формы (3.0.70): TEnergyReading - чтение (Tick(заряд): слот раскрывается с первым зарядом и сворачивается без него, дуга подтягивается к росту со вспышкой, падение - сразу), THudEnergy - затмение в слоте справа у монитора: чёрный диск в ореоле, дуга по ободу полосами света (SDL_RenderGeometry по gsBeam), число в центре; Heart - куда летят орбы, WingWidth - насколько раскрыть панель монитора |
-| Hud.Marks | Ряды здоровья над фигурами: у героя грамматика монитора (норма/контуры/бонус за чертой), у монстра 6 ячеек - по паре на треть, цвет по третям прицела; показ после изменения, тает; едут по каналам тряски фигур |
-| Game.Bonus | TBonusKind + BonusCost=50 - общий словарь рулетки для игры и HUD |
-| Game.Shroud | Покров героя (3.0.47): дым и свет поверх кадра героя на своих часах. TShroudLook - запись вида на сцену (облики PitLook, EntryLook, ReviveLook, IceOnLook, HeatOnLook, IceOffLook); THeroShroud считает (часы, полосы, ломтики, частицы, туман; SDL не трогает, свои кости TXorShift); TShroudPainter рисует (маски, ореолы и точки рождения из 24 кадров героя при загрузке; DrawUnder/DrawBody/DrawOver вокруг отрисовки героя; SeedsOf отдаёт точки кадра обряду и вбиранию, MaskOf (3.0.61) - белую маску кадра силуэту сброса). Полоса, дошедшая до ступней, отрывается и живёт туманом на экране. Героя не знает: размеры и формы берёт с кадров |
-| Game.Henshin | THenshin - церемония трансформации одним автоматом: отсчёт 3..2..1, обряд из орбов (Orbs.Rite, 3.0.49), сброс (Orbs.Burst, 3.0.61), костюм надеть на ударе сброса (Finish) и снять кольцом орбов (RemoveIceForm), Reset на рестарт. Своих часов нет: слушает события обряда и сброса (HearRite, HearBurst). Сцена THenshinStage (герой, звук, доска, тряска, покров, обряд, сброс) + колбэки THenshinCalls (Cure, GrantMercy, BeginRite, ShedSuit, Burst); доза тряски, звуки; свет костюма - облики покрова (ChargeLook, IceOnLook, IceOffLook). Рождается с героем на каждый уровень |
-| Orbs.Flock | TOrb, TOrbFlock - стая орбов, общая для ауры, дождя и обряда: облик, три конца (схлопывание, пыль, отпуск), след на грани, глубина и два слоя вокруг героя (3.0.49). Что бьёт орб, решает dpr (ResolveOrbHits); тёмный орб (TOrbTint.Dark, MoonOrbTint, 3.0.70): чёрное тело поверх мира, белая кромка, густой ореол, на 2 единицы больше ледяного |
-| Orbs.Harvest | Где орбы выходят из материи: TMatter (клетки экрана и тела падов), HarvestSpots - ауре, HarvestAround - обряду, волнами и со всех сторон. Ни уровня, ни падов не знает |
-| Orbs.Aura | TAura - кольцо орбов вокруг героя: награда-аура и клавиша G |
-| Orbs.Rain | TOrbRain - огненный дождь из орбов: награда и клавиша H |
-| Orbs.Patterns | Узоры хеншина (3.0.49): узор - функция места и слово; снежинка (snowflake) и вихрь (vortex), FindPattern; слово - henshinPattern в файле уровня |
-| Orbs.Rite | TOrbRite - обряд хеншина (3.0.49): три волны из материи, полёт в узор, замены, замирание, схлопывание по телу; снятие костюма кольцом (Shed). Все числа - партитура IceRiteScore. Говорит событиями, что они значат - решает Game.Henshin |
-| Orbs.Burst | TOrbBurst - сброс костюма (3.0.61): вдох (мир стоит), удар 24 лучами, полёт сквозь стены за экран со следами на гранях, эхо пылинок. Только вид и время: что бьёт луч, решает dpr по отрезкам (ResolveBurstHits). Облик формы TBurstLook: IceBurstLook, MoonBurstLook |
-| Orbs.Feed | TOrbFeed (3.0.70) - орбы, несущие заряд в шкалу: заряд делится на 5 орбов максимум, выходят из героя по одному, висят над ним и держатся его, улетают в центр диска; TakeLanded - сколько долетело, Pending - сколько в пути, Collapse - смерть. Ничего не бьют |
-| Game.Space | Два размера пространства: ЭКРАН уровня (ScreenCols/Rows 16x12, ScreenWidth/Height 512x384 - клетки, стены, двери, пули) и КАДР окна (FrameWidth/Height - логический размер SDL, углы HUD, центровка, меню). Равны до широкого экрана |
-| Hud.Messages | Тикер, большой заголовок, всплывашки очков и терминал связи (владеет THudTerminal); тикер от 52, пока стоит рамка терминала - съезжает под неё |
-| Hud.Typewriter | TTypewriter - печать по букве за тик: перевод строки = тик, пауза абзаца 12 тиков, щелчок на каждой второй букве, мигание курсора. Только логика; общая для терминала и брифинга |
-| Hud.Terminal | THudTerminal - рамка связи под монитором (x=6, y=40, 360): перенос по словам на 45 глифов, печать, чтение 1 с + тик на букву, затухание |
-| Hud.Briefing | THudBriefing - текст перед уровнем поверх неба меню: авторская вёрстка, подложка без рамки, заголовок "ЖУРНАЛ МИССИИ", подсказка "нажмите клавишу" после печати |
-| Monsters.Defs | monsters.json -> TMonsterDef (с 3.0.67 картинка может вращаться и парить - turn, hover; с 3.0.68 anchored - тело не двигают ни удар, ни взрыв, ни пад под ним, и invulnerable - не теряет жизней): enum'ы движения/атак, spawnTable (PickSpawn), пикапы с параметрами оружия, deathSounds, вид взрыва (explosion: barrel/machine/boss), материал (material: metal - пуля выбивает искры), секция disc (TDiscDef: set, side, muzzle, spin, irisReach, wearFull; кривой диск падает на загрузке), секция hull (THullDef: set, width, height, wearFull, eye, smoke, sparks; кривой корпус и монстр сразу с диском и корпусом падают на загрузке) |
-| Hero | Дословный порт: физика, 6 коллизионных оракулов, мышь-фейсинг, рука+ствол 4 ветки, HENSHIN-форма (hfIce), смерть/Revive. Поза кадра - THeroPose/Pose (единственное место выбора кадра), DrawArm - одна рука на время сборки покрова, SkinSet - набор кадров для покрова. С 3.0.75 Throw - бросок с машины (прыжок вбок, 14 тиков без управления) и InAir |
-| Bullets | Баллистика dy+=g/100, Contact (перехват пуль), вееры k/t (SpawnFan); веер бочки 10×18 ушёл в 3.0.41 |
-| Monsters | Data-driven диспатч, спавн с неба, ярости, взрыв по `blast` (волна - в Game.Blasts); TicksSinceHit/HitWithin - память об ударе для HUD, HealthTier/TierShare - трети прицела; Tag расстановки + AnyAliveTagged для событий; дым и искры подбитых машин; монстр-диск: TickDisc кормит TDisc, выстрел с кромки, поле владеет артом дисков (DiscArtFor); руки сцены (3.0.62): Held (огонь придержан), Dormant (сон), Smite (смерть без награды), Stand, Vanish, по тегу HoldTagged/SmiteTagged/ReleaseTagged/RemoveTagged, SpawnStanding |
-| Monsters.Hull | Монстр, нарисованный корпусом из двух слоёв (летающая платформа): THullArt - слои набора через свой кэш без ключа и блик глаза, THull - износ, глаз с зарядом выстрела, Spot (точка арта на экране). Близнец Monsters.Disc без вращения и ириса; корпус не зеркалится. С 3.0.75 Draw = DrawUnder (арки, колёса) + DrawBody (корпус, износ, глаз): Таран кладёт мачту между ними |
-| Game.Wrecks | Пады, сбитые волной свипера (3.0.81) и снарядами бункера (3.0.94): TPadWrecks - правила полёта обломка (медленный курс, быстрое вращение, ни один не падает на дорогу; новый встаёт на место ушедшего), TPadWreckPainter - картинка пада под углом, огонь, искры, зарево, молнии; сам пад усыплён (TPad.Doze), смерть его возвращает |
-| Game.Capsules | Аптечки шаттла в бою Тарана (3.0.84): TShuttleCapsules - падение капсулы на метку с торможением, приземление, раскрытие скорлупы, метка аптечки; с 3.0.94 едет с лентой погони (Ride); TCapsulePainter - корпус, крест, маячок, факел и половинки скорлупы кодом; аптечку на метку ставит игра |
-| Game.Belt | Беговая дорожка погони Тарана (3.0.86): только движение дороги - старт и стоп плавной ступенькой за 2 с, скорость тика, пройденный путь; Тарана, героя и картинки не знает, мир возит и дорогу двигает игра |
-| Game.FarPlane | Сколько проехал каждый слой дальнего плана погони (3.0.88): правила стенда тик в тик - тоннель и город до ухода скалы, плавный выход на круиз, тормоз города в конце полосы, хребет долей города, земля и клыки (3.0.89) своей скоростью, всё на долю скорости ленты; ленты и героя не знает; с 3.0.92 Clock - часы города, тики с первого движения дороги; с 3.0.93 ClockAt(alpha) - часы между тиками, как OffsetsAt |
-| Game.Fangs | Клыки погони (3.0.89): TFangRow - ряд отрогов базальта по пробегу их слоя, каждое число от костей, высокие изредка и не по два на экране, ни один не висит; TFangPainter - кит из объектов уровня, тинт по уходу тоннеля, зеркало |
-| Pads.Drift | Платформы погони (3.0.87): из пула экрана подаёт их из-за правого края по пробегу дороги группами - одинокая платформа или случайный подъём до высоты люка, страховка подъёмом, не больше 10 разом; аптечка на средней платформе одного подъёма из трёх - метку отдаёт игре (`TDriftCue`); с 3.0.97 по слову игры - волна охоты, три плотных ряда, влетает разом; с 3.0.98 только на проход, на палубах подъёма, ряды с трёх сторон, после неё группы гуще; ленты, героя и монстров не знает |
-| Game.StoneTank | Скрытый бак заряда формы в бою Тарана (3.0.85, 15b - 3.0.94): раны голов - в бак с опозданием, шкала пьёт неровными толчками, капля, потолки голов (30, 55, 95, 100), смерть головы доливает до её потолка, последней - до полного; Тарана и шкалы не знает, раны и смерти сообщает игра |
-| Game.Ram | TeK-R13, Таран (3.0.75): TRam - правила (въезд целиком и с отметки, тормоз, мачта, качание, стоп-сигналы, патруль, контакт с правилом пада, щит по силуэту), TRamArt - арт tek-machine и маска корпуса с альфы, TRamPainter - рисует через THull, мачта с клипом; игра исполняет TRamCue; с 3.0.94 третья голова - бункер (дыхание люка, бросок снаряда, столб, попадание сверху, соты по бокам и спереди); с 3.0.96 его вторая фаза - откат к середине с предупреждением глазом, молчание бункера, бросок через корпус с дороги за кормой, снаряды парой; с 3.0.97 третья - охота, с 3.0.98: смена с тревогой и волной, проход сквозь героя за левый край с броском вправо, разворот за кадром (корпус зеркалом), въезд передом, нос на шаг позади героя в левой половине, изредка рывок почти к правому краю, назад - только к герою за кормой, таран вправо |
-| Game.Shells | Снаряды бункера в погоне Тарана (3.0.94): TBunkerShells - дуга к ногам героя, нацеленная в мир (её везёт дорога), кольцо падения каждый тик, взрыв на палубе (пад сбивает игра), качение влево быстрее дороги и рана при касании; TShellPainter - кольцо, снаряд, след кодом; с 3.0.96 SecondShellMark - куда идёт второй снаряд пары, с 3.0.97 AheadShellMark - он же в охоте, по паду впереди по ряду; падов, героя и бункера не знает |
-| Monsters.Disc | Монстр, нарисованный вращающимся диском из слоёв (босс уровня 1): TDiscArt - слои набора через свой кэш без ключа, TDisc - поза двух тиков и рисование между ними (обод, ядро, ирис, блик, избитые копии, свечение сенсора). Только арт и поза, логики монстра не знает |
-| Game.Blasts | Что взрыв делает: `TBlast` - волна из сердца тела, 8 единиц в тик до радиуса; бьёт тело один раз, в ближайшей к сердцу точке, жизни и толчок падают с расстоянием по прямой, твёрдое на пути укрывает. Монстра и героя не знает: раздаёт игра (`ResolveBlasts`) |
-| Monsters.Damage | Окно потолка урона монстра (`TDamageCap` из monsters.json): `TDamageWindow` - кольцо из `Ticks` ячеек, `Advance` раз в тик, `Admit(потери)` отдаёт засчитанное, лишнее сгорает. Только счёт жизней: толчок, пороги и вспышки удара остаются монстру |
-| Render.Glow | Свет кодом: белые текстуры с формой в альфе (точка, флейр, лучи starburst, штрих искры, любая поверхность), аддитивные, линейный фильтр; DrawGlow/DrawGlowRect - оттенок color mod, уровень alpha mod. BlurImage и CreateGlowFromImage (свечение из картинки уровней, вынесены из Menu.Logo в 3.0.47). Звёзды, угли, ореол, маячки, сенсор босса, ореолы покрова героя; с 3.0.70 диск с чёткой кромкой gsDisc и CreateShadeShape - та же форма смешиванием, чёрным рисует дыру |
-| Menu.Starfield | Звёзды меню: три слоя по плотности на площадь кадра, оттенки по температуре, мерцание, свой xorshift (seed "Moon"); Draw(alpha, zoom) - доля зума на слой (0.4/0.7/1.0) |
-| Render.Globe | Небесное тело на CPU (TGlobe): карта -> пирамида 4 уровня -> таблица диска (строка, долгота-оборот, уровень, нормаль); LightFrom(солнце) - свет реголита (Ломмель-Зеелигер) или матовый (Ламберт), ночная карта, атмосфера (дымка к лимбу, ореол); перерисовка только после изменений; {$O+,R-,Q-} |
-| Menu.Globe | Луна меню - тонкая обёртка над TGlobe: вид MoonLook (512, реголит, пепельный свет, холодный тон 2008), солнце неподвижно, оборот 80 с |
-| Menu.Logo | Логотип и его свет: буквы + ореол (альфа /4, три box-blur и нормировка через Render.Glow, оттенок из чернил, дыхание 16 с) + владеет TEmbers; Draw(dest) - ореол, буквы, угли |
-| Menu.Embers | Угли: контур из альфы (тексель чернил с воздухом рядом, нормаль по склону), одна искра на 200 текселей контура, полёт по нормали с подъёмом и трением, оранжевый -> красный, seed "Fire" |
-| Menu | Главное меню: небесная установка (туманность CoverSource, звёзды, глобус, логотип), state machine экранов (главное/уровни/создатели/выход), сложность кликом на месте + ячейки, флаги, наезд в подменю (Depth 0..1, smoothstep, зумы по планам), полноэкранный тумблер |
-| Sdl2.Image | Биндинги SDL2_image: PNG для всего арта, delayed-load; без DLL игра не стартует (EnsureImageLib) |
-| Sprites.Sets | Контейнер .mset: 'MSET' + версия + оглавление JSON + PNG подряд; TSpriteSet читает картинку по смещению, последовательности кадров вместо .mns; общий для игры, упаковщика и редактора |
-| Localization | Словари `lang\<id>.json` (en, ru): ключи константами, Tr(), LoadLanguage сверяет полный список ключей на старте; TLocalizedText для текстов уровней и монстров |
-| Render.Font | TMoonFont: атлас 16x16 клеток, глиф = CP1251 - 1, DrawSmall/DrawBig/DrawScaled, ориентация и фильтр атласа |
-| Audio | SDL2_mixer (delayed-load): TSoundBank - ваншоты строго, музыка мягко, PlayMusic, ToggleMusicMuted; для сцен (3.0.62) удерживаемые звуки PlayHeld/StopHeld/PauseHeld/ResumeHeld и SetMusicLevel - доля громкости музыки; 3.0.74 HandOverMusic/Tick; 3.0.75 PlayLooped (петля, удерживаемая), Plays (этот трек играет), FadeOutMusic (в тишину) |
-| Game.Version | GameVersion - единственное место версии (угол меню, заголовок окна) |
-| Levels.Tint | "tint": [r, g, b] в процентах - один читатель (ReadTint, TColorTint) для задников, объектов и динамики |
-| Levels.FarPlane | Дальний план погони данными (3.0.88): секция farPlane уровня и layout рядом с ним (bin/chase-backdrop.json) - солнце, скорости, слои с полосой и элементами, четыре движения (хребет, город, тоннель, земля); тинт солнца куполами (SunCover), тень полосы по уходу тоннеля (BandShade); с 3.0.89 клыки (`fangs`, своё движение fmFangs, FangTint); с 3.0.90 камера города (`camera`) - глубина по ступням (DepthY, Nearness, ElementLeft), каркасы куполов (`frames`), их тинт солнца, цвет солнца ColorAt; с 3.0.92 жизнь города - `cityLights` (TCityLights), `emblem` (TCityEmblem), `beacons` (TCityBeacons), `beaconsAbove` каркаса, `paint` элемента (TElementPaint), отказы на кривые данные (CheckCityLife); с 3.0.93 поезд - `train` (TCityTrain), CityElements, без двух станций падает |
-| Levels.Monorail | Где стоит поезд города погони (3.0.93), без SDL: линия на глубине станций (MonorailLine - рты, остановки внутри станций), пробег с разгоном и торможением (TrainRun), место по часам с дробью (TrainLeft, стоянки - кости Levels.CityLife), доля между ртами (TrainShown). Эталон - стенд tools/chase |
-| Levels.CityLife | Часы огней города погони (3.0.92), без SDL: кости стенда до бита (Mix - lowbias32, Roll, RollInt, LightSeed, BeaconSeed), уровни вывески (NeonLevel), окна (WindowLevel), частей эмблемы (EmblemCycle, EmblemPartLevel), маячка (BeaconLevel). Эталон - стенд tools/chase |
-| Render.Objects | Статические объекты уровня: арт любой формы между задником и тайлами, кэш без ключа с линейным фильтром, набор `<assetsDir>-objects` плюс objectSets |
-| Render.FarPlane | Рисует дальний план погони вместо задника экрана (3.0.88): чёрное небо, солнце двумя свечениями и диском, слои геометрией - альфа и цвет в вершинах (растушёвки, shade, зеркало); за слоем, чей задник закрывает экран, не рисует ничего; с 3.0.90 здания города по глубине (ElementLeft), каркасы вокруг них: тени и дальняя половина до зданий, ближняя и блик после; с 3.0.92 Draw берёт тик часов, после каждого видимого здания города DrawLife - краска, огни (gsPoint, gsBeam), эмблема на шпиле; маячки каркасов с их половинами; с 3.0.93 поезд (DrawTrain) на глубине линии, картинка и огни обрезаны у ртов станций (TScreenSpan, GlowWithin) |
-| Render.DomeFrames | Каркасы куполов города погони (3.0.90): TDomeFrames - геометрия без SDL (геодезия один раз на частоту, проекция камерой города, дальняя и ближняя половины от дальних к ближним, кромка к солнцу, тени - с 3.0.91 мазки до глаза, мягчающие по диску солнца), TDomeFramePainter - ленты треугольников без текстуры, цвет и альфа в вершинах, края гаснут за пиксель окна, тени сеткой с обрезкой, блик двумя свечениями. Эталон - стенд tools/chase; с 3.0.92 маячки на узлах выше доли высоты (TFrameBeacon, FarBeacons/NearBeacons), зерно по месту узла |
-| Levels.Dynamics | Секция dynamics уровня: TDynamicObject и все виды в одном юните - TBeacon (маячок), TSmoke (дым), TSparks (искры), TSkyGlobe (небесное тело), TFan (вентилятор), THaze (марево), TLightning (молния), TGraph (график), с 3.0.62 TCraft (корабль из частей: сам не двигается, оси TAxisMotion ведёт сцена, части по тегу следят за меткой) и TBeam (луч, облики scan и tractor), с 3.0.65 TDust (пыль глубины: полосы TDustBand катятся и качаются, видны только в свете поля TDustLight - луч из дыры, отсвет пола, фон; аддитив, слой sky; с 3.0.67 идёт по своим часам с темпом pace - сцена её останавливает), с 3.0.67 TEclipse (чёрное свечение лунного камня: облик void - тёмный диск и мягкий холодный ореол, облик wave - тёмное кольцо, бегущее при росте интенсивности; слой back); у всех видов с 3.0.67 темп часов pace (PaceTo, PaceTagged); ease back - с перелётом; место, родитель по тегу (объект, платформа, монстр, корабль), слой backdrop/sky/aloft/back/front, флаг turns, интенсивность под событиями; ParseDynamics. Родителя не ищет |
-| Levels.Scenes | Секция scenes уровня (3.0.62; с 3.0.67 шаг pace и fly с ease, с 3.0.68 шаг jolt - разовый толчок): сцена - экран, once (level / life), шаги на шкале тиков (at или after + delay; wait until deckEmpty - шаги после него считают от него; Plan и сортировка по нему), aftermath - конечное состояние разом; ParseLevelScenes. Модель и парсер, без логики |
-| Scenes.Director | TSceneDirector (3.0.62) - играет сцены на живой игре по одной: Start по событию (с 3.0.69 сцена, запущенная посреди другой, перехватывает на следующем тике - TakeOver; ReArm сначала перематывает, потом ставит aftermath), Tick - шаги по плану и ожидания, конец, когда всё сыграло; уход с экрана посреди - Finish (свои вещи разом + aftermath), смерть посреди - перемотка к началу, после конца - aftermath на любой смерти, сцена раз за жизнь перематывается. Руки по тегу на поле, Wake/FlyTo падов, корабли и лучи, удерживаемые звуки, тень (DrawShade), дрожь (Trauma), толчки (TakeJolt, 3.0.68 - игра забирает их раз за тик), громкость музыки. Рождается с уровнем |
-| Render.Dynamics | TDynamicScreenRenderer: тик и рисование динамики по слоям; где стоит объект (экран, отрезок экранов, статический родитель, платформа или монстр по тегу через колбэк LocateParent, корабль - по ссылке, ребёнок рисуется от его CornerAt между тиками); точка с turns едет с диском (OriginOf), Reseat на рестарт; щуп твёрдого от игры (TDynamicWorld) доходит до объектов только на экране героя (SolidInView) |
-| Render.Puff | Клубы дыма кодом: 4 формы, белые с формой в альфе, обычное смешивание, не аддитивное; DrawPuff, DrawPuffRect (клуб в прямоугольник, без поворота - полосы покрова) |
-| Effects.Emitter | TParticleSwarm - рой частиц без вида: место, скорость, вращение, жизнь, трение и тяга; хозяин рождает и рисует сам (сейчас дым) |
-| Effects.Sparks | Базовый модуль искр: TSparkField - поле искр одного вида (TSparkLook): полёт, остывание, встреча со стеной (мимо / гаснет / отскок с платой жизнью), вилки на излёте; твёрдое - через пробу TSolidProbe, текстура штриха приходит с отрисовкой; чистая декорация. Клиенты: взрыв, TSparks, Game.Impacts |
-| Effects.Debris | Что бросает взрыв: осколки (летят, звенят о стены, ложатся, остывают, тают) и искры (поле Effects.Sparks); твёрдое - через пробу TSolidProbe; чистая декорация |
-| Game.Explosions | TExplosions - вид взрыва по размеру (explosion в monsters.json): вспышка, огненный шар, осколки, дымовой плюм, дохлопывания у босса; Detonate. Только вид: ранит волна, Game.Blasts |
-| Game.Impacts | TImpacts - что пуля выбивает из брони (material: metal): вспышка, веер искр по рикошету, изредка трассер; под частым огнём - тоньше. TraceEntry / FaceFromCenter - точка и нормаль попадания. Только вид: урон, отброс и звук - в dpr (SpendBullet, SoundArmorHit) |
+| Moon2D.dpr | Startup: config, language, the search for level*.json (DiscoverLevels by LevelFilePattern from Game.Moon), the monster registry, the SDL host, the game; a startup error goes to a message box. The uses clause with paths is the manifest of the project's units: a new unit goes here and into the dproj |
+| Game.Moon | TMoonGame - the game the program runs (moved out of Moon2D.dpr word for word on 2026-10-25, before stage 8 of arena 3): LoadLevel from the menu assembles a level (sets, caches, renderers, field, HUD, event and scene directors). TMoonGame: states gsMenu/gsIntro/gsPlaying/gsEnding, bullet collisions, contacts, checkpoints, monster events (the blast and the rage sound live here too), the gravel trial, the bonus slot, LocateParent for dynamics (a pad or a monster; a sleeping pad is not alive), SceneStage for scenes, the layer order of a frame, CreateHud - the corner HUDs and the rows over the figures anew for every level; the ceremony goes through FHenshin, the look of blasts through FExplosions |
+| Sdl2.Core | Minimal SDL2 bindings (window/render/events/mouse/textures) |
+| Game.Loop | TGameHost + fixed timestep (Gaffer), the TGameApp base |
+| Game.Config | Two layers: the shipped bin\config.json (read only) and the player's %APPDATA%\Moon2D\settings.json (difficulty, language, full screen; overrides key by key); tickRate=33 - the REAL rate of the original WM_Timer(20 ms) on a live Windows |
+| Render.Sprites | Texture cache from .mset sets (PNG; black color key by default, DisableColorKey and EnableLinearFilter for HD art; a name with its set, set:name), TAnimSet 8+8 from the set's sequences, TSpriteRenderer: Draw 32x32, DrawTile (a 64 px crop into a cell), DrawTurned - a fractional square with rotation and alpha. TileSize=32 UNITS and TileArtSize=64 PIXELS - do not mix them up |
+| Levels.Defs | level*.json: the grid, tiles + collisions (SolidAt), backdrops, the spriteSets/objectSets sets, static objects (Objects), dynamics (Dynamics, the list lives here), entities with overrides/triggers and a tag, events (Events), scenes (Scenes, 3.0.62), the entity shift shiftX (3.0.67), closed doors (shutDoors, DoorShutOn, 3.0.66 - the load rejects a door nothing opens, and an opening on an open screen); on load CheckEvents, CheckDynamics and CheckScenes reject a foreign screen, a tag and a parent with no carrier, a craft after its own child, a sleeping pad no scene wakes |
+| Levels.Events | The events section of a level: TLevelEvent (screen, condition enterScreen/allDead/livesBelow/enraged, tag, lives threshold, delay, actions bigMessage/smallMessage/hint/music/intensity/sun, then the arena actions of 3.0.53-3.0.59 and scene 3.0.62, openDoor 3.0.66 (opens the screen's door and shows the arrow itself), condition heroStands 3.0.67 (the hero stands in cell x, y); hint has an optional header - the voice), dictionaries of conditions and actions as constants, ParseLevelEvents. Model and parser, no logic; action energy 3.0.70 (value 1..100 - the form's charge, orbs from the hero into the gauge); action respawn 3.0.71 (x, y from 1 - the checkpoint to a cell of the event's screen; on load Levels.Defs holds the cell to the rules of a respawn point, CheckRespawnCell) |
+| Events.Director | TEventDirector - runs events on the live game: Tick(screen, field) checks the conditions of the screen's unfired events, counts down the delay, plays the actions once; ReArm(screen) on a restart; music through the game's ChangeMusic callback. Born with the level; the actions intensity and sun go to the level's dynamics (TDynamicObjects), ReArm rolls back to the file values of the intensity target; action scene is a StartScene signal to the scene director (3.0.62); since 3.0.70 the Energy callback (TEnergyCue); since 3.0.71 the Respawn callback (TRespawnCue, the game's MoveCheckpoint) |
+| Render.Tiles | Backdrop + tiles cropped 64 into a cell; DrawBackground/DrawTiles are public - the shake moves them apart |
+| Render.Shake | Screen shake: one trauma meter per game, three offset channels (world/hero/monsters). Render only, the logic does not see the offset |
+| Render.Brush | The brush of panels drawn with primitives (HUD, difficulty cells in the menu), plus colour and chance (TRgb, Mix, TXorShift) for Render.Glow, Render.Globe, Render.Puff, Effects.Debris, the dynamics, the blasts, the boss disc and the menu sky: Fill/Glow/Frame/3x5 digits through SDL_RenderFillRectF, the health row cells (FullCell/EmptyCell/BonusCell), palette + HealthColor, the panel geometry 118x32, its own xorshift. Before the folder layout it was Hud.Draw; the class is still THudBrush; digits at any pixel size (DrawNumber/NumberWidth with APixel, 3.0.70 - the number in the charge disc) |
+| Hud.Vitals | Health: THudVitals - the heart monitor (a row of 5 norm cells + the light-green bonus past the divider, the pulse by health); a wing on the right inside the panel frame (Wing, 3.0.70) - the form charge slot, drawn by Hud.Energy |
+| Hud.Charge | Points: THudCharge - the bonus charge up to 50, the badge of a waiting reward, the streak row of 10 |
+| Hud.Energy | Form charge (3.0.70): TEnergyReading - the reading (Tick(charge): the slot opens with the first charge and folds without it, the arc catches up with a rise in a flash, a fall is at once), THudEnergy - the eclipse in the slot right of the monitor: a black disc in a halo, the arc along the rim in strips of light (SDL_RenderGeometry over gsBeam), the number in the middle; Heart - where the orbs fly, WingWidth - how far to open the monitor panel |
+| Hud.Marks | Health rows over figures: the hero's has the monitor's grammar (norm/outlines/bonus past the divider), a monster's has 6 cells - a pair per third, coloured by the crosshair's thirds; shown after a change, fades; rides on the figures' shake channels |
+| Game.Bonus | TBonusKind + BonusCost=50 - the shared roulette vocabulary of the game and the HUD |
+| Game.Shroud | The hero's shroud (3.0.47): smoke and light over the hero's frame on its own clock. TShroudLook - a record of a scene's look (the looks PitLook, EntryLook, ReviveLook, IceOnLook, HeatOnLook, IceOffLook); THeroShroud computes (clock, strips, slices, particles, mist; does not touch SDL, its own dice TXorShift); TShroudPainter draws (masks, halos and birth points from the hero's 24 frames at load; DrawUnder/DrawBody/DrawOver around the hero's drawing; SeedsOf gives a frame's points to the rite and the drawing-in, MaskOf (3.0.61) - a white mask of the frame to the burst's silhouette). A strip that reaches the feet tears off and lives on the screen as mist. Does not know the hero: takes sizes and shapes from the frames |
+| Game.Henshin | THenshin - the transformation ceremony as one state machine: countdown 3..2..1, the rite of orbs (Orbs.Rite, 3.0.49), the burst (Orbs.Burst, 3.0.61), the suit put on at the strike of the burst (Finish) and taken off by a ring of orbs (RemoveIceForm), Reset on a restart. No clock of its own: listens to the events of the rite and the burst (HearRite, HearBurst). The stage THenshinStage (hero, sound, board, shake, shroud, rite, burst) + callbacks THenshinCalls (Cure, GrantMercy, BeginRite, ShedSuit, Burst); the shake dose, sounds; the suit's light - shroud looks (ChargeLook, IceOnLook, IceOffLook). Born with the hero for every level |
+| Orbs.Flock | TOrb, TOrbFlock - the flock of orbs shared by the aura, the rain and the rite: the look, three ends (collapse, dust, release), a trail on the edge, depth and two layers around the hero (3.0.49). What an orb hits is decided by the dpr (ResolveOrbHits); the dark orb (TOrbTint.Dark, MoonOrbTint, 3.0.70): a black body over the world, a white rim, a dense halo, 2 units bigger than the ice one |
+| Orbs.Harvest | Where orbs come out of matter: TMatter (screen cells and pad bodies), HarvestSpots for the aura, HarvestAround for the rite, in waves and from all sides. Knows neither the level nor the pads |
+| Orbs.Aura | TAura - a ring of orbs around the hero: the aura reward and key G |
+| Orbs.Rain | TOrbRain - a fire rain of orbs: the reward and key H |
+| Orbs.Patterns | Henshin patterns (3.0.49): a pattern is a function of place and a word; snowflake and vortex, FindPattern; the word is henshinPattern in the level file |
+| Orbs.Rite | TOrbRite - the henshin rite (3.0.49): three waves out of matter, the flight into the pattern, swaps, the freeze, the collapse over the body; taking the suit off with a ring (Shed). All the numbers are the score IceRiteScore. Speaks in events; what they mean is decided by Game.Henshin |
+| Orbs.Burst | TOrbBurst - the suit's burst (3.0.61): the inhale (the world stands), a strike of 24 rays, the flight through walls past the screen with traces on the edges, an echo of dust motes. Look and timing only: what a ray hits is decided by the dpr over segments (ResolveBurstHits). The form's look TBurstLook: IceBurstLook, MoonBurstLook |
+| Orbs.Feed | TOrbFeed (3.0.70) - orbs carrying charge into the gauge: the charge is split into 5 orbs at most, they come out of the hero one by one, hang over him and keep to him, fly off to the middle of the disc; TakeLanded - how many arrived, Pending - how many are on the way, Collapse - death. They hit nothing |
+| Game.Space | Two sizes of space: the level SCREEN (ScreenCols/Rows 16x12, ScreenWidth/Height 512x384 - cells, walls, doors, bullets) and the window FRAME (FrameWidth/Height - the SDL logical size, HUD corners, centring, menu). Equal until the wide frame |
+| Hud.Messages | Ticker, big headline, point popups and the comms terminal (owns THudTerminal); the ticker at 52 moves down under the terminal frame while the frame stands |
+| Hud.Typewriter | TTypewriter - typing one letter a tick: a line break = a tick, a paragraph pause of 12 ticks, a click on every second letter, a blinking cursor. Logic only; shared by the terminal and the briefing |
+| Hud.Terminal | THudTerminal - the comms frame under the monitor (x=6, y=40, 360): word wrap at 45 glyphs, typing, reading 1 s + a tick per letter, fade-out |
+| Hud.Briefing | THudBriefing - the text before a level over the menu sky: the author's layout, a backing with no frame, the header `briefingHeader` ("ЖУРНАЛ МИССИИ", en "MISSION LOG"), the hint `pressAnyKey` after the typing |
+| Monsters.Defs | monsters.json -> TMonsterDef (since 3.0.67 the picture can turn and hover - turn, hover; since 3.0.68 anchored - the body is moved by no hit, no blast and no pad under it, and invulnerable - loses no lives): movement/attack enums, spawnTable (PickSpawn), pickups with weapon parameters, deathSounds, the blast look (explosion: barrel/machine/boss), the material (material: metal - a bullet knocks out sparks), the disc section (TDiscDef: set, side, muzzle, spin, irisReach, wearFull; a broken disc fails at load), the hull section (THullDef: set, width, height, wearFull, eye, smoke, sparks; a broken hull, and a monster with both a disc and a hull, fail at load) |
+| Hero | A verbatim port: physics, 6 collision oracles, mouse facing, arm + barrel in 4 branches, the HENSHIN form (hfIce), death/Revive. The frame pose - THeroPose/Pose (the only place a frame is chosen), DrawArm - one arm for the time the shroud assembles, SkinSet - the frame set for the shroud. Since 3.0.75 Throw - a throw off the machine (a jump sideways, 14 ticks without control) and InAir |
+| Bullets | Ballistics dy+=g/100, Contact (bullet interception), k/t fans (SpawnFan); the barrel's 10x18 fan left in 3.0.41 |
+| Monsters | Data-driven dispatch, spawn from the sky, rages, the blast by `blast` (the wave - in Game.Blasts); TicksSinceHit/HitWithin - the memory of a hit for the HUD, HealthTier/TierShare - the crosshair's thirds; the placement Tag + AnyAliveTagged for events; smoke and sparks of damaged machines; the disc monster: TickDisc feeds TDisc, a shot from the rim, the field owns the discs' art (DiscArtFor); the scene's hands (3.0.62): Held (fire held), Dormant (sleep), Smite (death with no reward), Stand, Vanish, by tag HoldTagged/SmiteTagged/ReleaseTagged/RemoveTagged, SpawnStanding |
+| Monsters.Hull | A monster drawn as a hull of two layers (the flying platform): THullArt - the set's layers through its own cache with no key and the eye's glint, THull - wear, the eye with its shot charge, Spot (a point of the art on screen). The twin of Monsters.Disc without spin and iris; the hull is not mirrored. Since 3.0.75 Draw = DrawUnder (arches, wheels) + DrawBody (hull, wear, eye): the Ram puts its mast between them |
+| Game.Wrecks | Pads knocked off by the sweeper's wave (3.0.81) and by the bunker's shells (3.0.94): TPadWrecks - the rules of a wreck's flight (slow course, fast spin, none falls onto the road; a new one takes the place of one gone), TPadWreckPainter - the pad's picture at an angle, fire, sparks, glow, lightning; the pad itself is put to sleep (TPad.Doze), a death gives it back |
+| Game.Capsules | The shuttle's medkits in the Ram fight (3.0.84): TShuttleCapsules - a capsule's fall to a mark with braking, the landing, the shell opening, the medkit's mark; since 3.0.94 rides with the chase belt (Ride); TCapsulePainter - hull, cross, beacon, flare and shell halves in code; the game puts the medkit on the mark |
+| Game.Belt | The treadmill of the Ram chase (3.0.86): only the road's motion - start and stop as a smooth step over 2 s, the tick speed, the distance travelled; knows neither the Ram, nor the hero, nor the picture; the game carries the world and moves the road |
+| Game.FarPlane | How far each layer of the chase's far plane has travelled (3.0.88): the bench's rules tick for tick - the tunnel and the city until the rock leaves, a smooth way out to cruise, the city's brake at the end of the band, the ridge at a share of the city, the ground and the fangs (3.0.89) at their own speed, all at a share of the belt's speed; knows neither the belt nor the hero; since 3.0.92 Clock - the city's clock, ticks from the road's first motion; since 3.0.93 ClockAt(alpha) - the clock between ticks, like OffsetsAt |
+| Game.Fangs | The chase's fangs (3.0.89): TFangRow - a row of basalt spurs by the run of their layer, every number from the dice, tall ones rarely and never two on a screen, none hangs; TFangPainter - a kit of level objects, a tint by the tunnel's leaving, a mirror |
+| Pads.Drift | The chase's pads (3.0.87): from the screen's pool feeds them in from beyond the right edge by the road's run, in groups - a lone pad or a random climb to the hatch's height, a safety climb, no more than 10 at once; a medkit on the middle pad of one climb in three - gives the mark to the game (`TDriftCue`); since 3.0.97 at the game's word - the hunt wave, three dense rows, flying in at once; since 3.0.98 only on the pass, on the decks of a climb, rows from three sides, groups denser after it; knows neither the belt, nor the hero, nor the monsters |
+| Game.StoneTank | The hidden tank of form charge in the Ram fight (3.0.85, 15b - 3.0.94): the heads' wounds go into the tank late, the gauge drinks in uneven pulses, a drop, the heads' ceilings (30, 55, 95, 100), a head's death tops up to its ceiling, the last one's to full; knows neither the Ram nor the gauge, the game reports wounds and deaths |
+| Game.Ram | TeK-R13, the Ram (3.0.75): TRam - the rules (the drive-in whole and from a mark, the brake, the mast, the sway, the stop lights, the patrol, the contact with the pad rule, the shield over the silhouette), TRamArt - the tek-machine art and the hull mask from alpha, TRamPainter - draws through THull, the mast with a clip; the game runs TRamCue; since 3.0.94 the third head - the bunker (the hatch breathing, the shell throw, the column, a hit from above, honeycomb on the sides and in front); since 3.0.96 its second phase - falling back to the middle with a warning by the eye, the bunker's silence, a throw over the hull from the road behind the stern, shells in pairs; since 3.0.97 the third - the hunt, since 3.0.98: the change with the alarm and the wave, a pass through the hero past the left edge with a throw to the right, a turn off frame (the hull mirrored), driving in nose first, the nose a step behind the hero in the left half, now and then a dash almost to the right edge, back only toward a hero behind the stern, the ram to the right |
+| Game.Shells | The bunker's shells in the Ram chase (3.0.94): TBunkerShells - an arc to the hero's feet aimed into the world (the road carries it), the fall ring every tick, a blast on the deck (the game knocks the pad off), rolling left faster than the road and a wound on touch; TShellPainter - ring, shell, trail in code; since 3.0.96 SecondShellMark - where the second shell of a pair goes, since 3.0.97 AheadShellMark - the same in the hunt, at a pad ahead along the row; knows neither the pads, nor the hero, nor the bunker |
+| Monsters.Disc | A monster drawn as a spinning disc of layers (the level 1 boss): TDiscArt - the set's layers through its own cache with no key, TDisc - the pose of two ticks and the drawing between them (rim, core, iris, glint, battered copies, the sensor glow). Art and pose only, knows nothing of the monster's logic |
+| Game.Blasts | What a blast does: `TBlast` - a wave from the heart of the body, 8 units a tick up to the radius; hits a body once, at the point nearest the heart, lives and the shove fall off with straight-line distance, something solid on the way gives cover. Knows neither monster nor hero: the game hands out the hits (`ResolveBlasts`) |
+| Monsters.Damage | A monster's damage ceiling window (`TDamageCap` from monsters.json): `TDamageWindow` - a ring of `Ticks` cells, `Advance` once a tick, `Admit(losses)` returns what counts, the excess burns. Only the count of lives: the shove, the thresholds and the hit flashes stay with the monster |
+| Render.Glow | Light in code: white textures with the shape in alpha (point, flare, starburst rays, a spark stroke, any surface), additive, linear filter; DrawGlow/DrawGlowRect - the hue by color mod, the level by alpha mod. BlurImage and CreateGlowFromImage (a glow out of an image of levels, moved out of Menu.Logo in 3.0.47). Stars, embers, halo, beacons, the boss's sensor, the shroud's halos; since 3.0.70 a disc with a sharp rim gsDisc and CreateShadeShape - the same shape by blending, draws a hole in black |
+| Menu.Starfield | The menu stars: three layers by density per frame area, hues by temperature, twinkle, its own xorshift (seed "Moon"); Draw(alpha, zoom) - the share of the zoom per layer (0.4/0.7/1.0) |
+| Render.Globe | A celestial body on the CPU (TGlobe): map -> a 4-level pyramid -> the disc table (row, longitude-turn, level, normal); LightFrom(sun) - regolith light (Lommel-Seeliger) or matte (Lambert), the night map, atmosphere (haze toward the limb, halo); redrawn only after changes; {$O+,R-,Q-} |
+| Menu.Globe | The menu moon - a thin wrapper over TGlobe: the look MoonLook (512, regolith, earthshine, the cold tone of 2008), the sun still, a turn in 80 s |
+| Menu.Logo | The logo and its light: letters + halo (alpha /4, three box blurs and normalisation through Render.Glow, the hue from the ink, a 16 s breath) + owns TEmbers; Draw(dest) - halo, letters, embers |
+| Menu.Embers | Embers: an outline from alpha (an ink texel with air next to it, the normal along the slope), one spark per 200 outline texels, flight along the normal with rise and friction, orange -> red, seed "Fire" |
+| Menu | The main menu: the sky setup (the CoverSource nebula, stars, globe, logo), a state machine of screens (main/levels/credits/exit), difficulty by a click in place + cells, flags, the zoom into a submenu (Depth 0..1, smoothstep, zooms by planes), the full screen toggle |
+| Sdl2.Image | SDL2_image bindings: PNG for all art, delayed-load; without the DLL the game does not start (EnsureImageLib) |
+| Sprites.Sets | The .mset container: 'MSET' + version + a JSON table of contents + PNGs in a row; TSpriteSet reads a picture at an offset, frame sequences in place of .mns; shared by the game, the packer and the editor |
+| Localization | Dictionaries `lang\<id>.json` (en, ru): keys as constants, Tr(), LoadLanguage checks the full key list at startup; TLocalizedText for level and monster texts |
+| Render.Font | TMoonFont: a 16x16-cell atlas, glyph = CP1251 - 1, DrawSmall/DrawBig/DrawScaled, the atlas orientation and filter |
+| Audio | SDL2_mixer (delayed-load): TSoundBank - one-shots strict, music soft, PlayMusic, ToggleMusicMuted; for scenes (3.0.62) held sounds PlayHeld/StopHeld/PauseHeld/ResumeHeld and SetMusicLevel - the music's share of volume; 3.0.74 HandOverMusic/Tick; 3.0.75 PlayLooped (a held loop), Plays (this track is playing), FadeOutMusic (into silence) |
+| Game.Version | GameVersion - the one place of the version (menu corner, window title) |
+| Levels.Tint | "tint": [r, g, b] in percent - one reader (ReadTint, TColorTint) for backdrops, objects and dynamics |
+| Levels.FarPlane | The chase's far plane as data (3.0.88): the level's farPlane section and the layout next to it (bin/chase-backdrop.json) - the sun, speeds, layers with a band and elements, four motions (ridge, city, tunnel, ground); the sun's tint by domes (SunCover), the band's shade by the tunnel's leaving (BandShade); since 3.0.89 the fangs (`fangs`, their own motion fmFangs, FangTint); since 3.0.90 the city camera (`camera`) - depth by the feet (DepthY, Nearness, ElementLeft), the dome frames (`frames`), their sun tint, the sun's colour ColorAt; since 3.0.92 the city's life - `cityLights` (TCityLights), `emblem` (TCityEmblem), `beacons` (TCityBeacons), `beaconsAbove` of a frame, an element's `paint` (TElementPaint), rejections of broken data (CheckCityLife); since 3.0.93 the train - `train` (TCityTrain), CityElements, fails without two stations |
+| Levels.Monorail | Where the chase city's train stands (3.0.93), no SDL: the line at the stations' depth (MonorailLine - mouths, stops inside the stations), a run with acceleration and braking (TrainRun), the place by the clock with a fraction (TrainLeft, the stops - the dice of Levels.CityLife), the share between mouths (TrainShown). The reference is the bench tools/chase |
+| Levels.CityLife | The clock of the chase city's lights (3.0.92), no SDL: the bench's dice to the bit (Mix - lowbias32, Roll, RollInt, LightSeed, BeaconSeed), the levels of a sign (NeonLevel), windows (WindowLevel), emblem parts (EmblemCycle, EmblemPartLevel), a beacon (BeaconLevel). The reference is the bench tools/chase |
+| Render.Objects | Static level objects: art of any shape between the backdrop and the tiles, a cache with no key with a linear filter, the set `<assetsDir>-objects` plus objectSets |
+| Render.FarPlane | Draws the chase's far plane in place of the screen's backdrop (3.0.88): a black sky, the sun as two glows and a disc, layers as geometry - alpha and colour in the vertices (feathering, shade, mirror); behind a layer whose backdrop covers the screen it draws nothing; since 3.0.90 the city's buildings by depth (ElementLeft), the frames around them: the shadows and the far half before the buildings, the near half and the glint after; since 3.0.92 Draw takes the clock tick, after each visible city building DrawLife - paint, lights (gsPoint, gsBeam), the emblem on the spire; the frames' beacons with their halves; since 3.0.93 the train (DrawTrain) at the line's depth, its picture and lights clipped at the stations' mouths (TScreenSpan, GlowWithin) |
+| Render.DomeFrames | The chase city's dome frames (3.0.90): TDomeFrames - geometry without SDL (the geodesic once per frequency, projection by the city camera, far and near halves from far to near, the edge toward the sun, the shadows - since 3.0.91 strokes to the eye, softening over the sun's disc), TDomeFramePainter - triangle strips without a texture, colour and alpha in the vertices, edges fade within a window pixel, the shadows as a mesh with clipping, the glint as two glows. The reference is the bench tools/chase; since 3.0.92 beacons on the nodes above a share of the height (TFrameBeacon, FarBeacons/NearBeacons), the seed by the node's place |
+| Levels.Dynamics | The dynamics section of a level: TDynamicObject and all kinds in one unit - TBeacon (beacon), TSmoke (smoke), TSparks (sparks), TSkyGlobe (celestial body), TFan (fan), THaze (haze), TLightning (lightning), TGraph (graph), since 3.0.62 TCraft (a craft of parts: does not move itself, its TAxisMotion axes are driven by a scene, parts by tag follow a mark) and TBeam (a beam, looks scan and tractor), since 3.0.65 TDust (depth dust: TDustBand strips roll and sway, seen only in the light of the TDustLight field - the beam from the hole, the floor's glow, the background; additive, the sky layer; since 3.0.67 runs on its own clock at the tempo pace - a scene stops it), since 3.0.67 TEclipse (the black glow of the moon stone: look void - a dark disc and a soft cold halo, look wave - a dark ring running as intensity rises; the back layer); since 3.0.67 every kind has the clock tempo pace (PaceTo, PaceTagged); ease back - with an overshoot; place, parent by tag (object, pad, monster, craft), layer backdrop/sky/aloft/back/front, the turns flag, intensity under events; ParseDynamics. Does not look for the parent |
+| Levels.Scenes | The scenes section of a level (3.0.62; since 3.0.67 the steps pace and fly with ease, since 3.0.68 the step jolt - a one-off shove): a scene is a screen, once (level / life), steps on a tick scale (at, or after + delay; wait until deckEmpty - the steps after it count from it; Plan and sorting by it), aftermath - the end state at once; ParseLevelScenes. Model and parser, no logic |
+| Scenes.Director | TSceneDirector (3.0.62) - plays scenes on the live game one at a time: Start by an event (since 3.0.69 a scene started in the middle of another takes over on the next tick - TakeOver; ReArm first rewinds, then sets aftermath), Tick - steps by plan and waits, the end when everything has played; leaving the screen midway - Finish (its own things at once + aftermath), a death midway - rewind to the start, after the end - aftermath on any death, a scene once per life is rewound. Hands by tag on the field, Wake/FlyTo of pads, crafts and beams, held sounds, the shade (DrawShade), the tremor (Trauma), shoves (TakeJolt, 3.0.68 - the game takes them once a tick), music volume. Born with the level |
+| Render.Dynamics | TDynamicScreenRenderer: tick and drawing of the dynamics by layers; where an object stands (a screen, a span of screens, a static parent, a pad or a monster by tag through the LocateParent callback, a craft by reference, a child drawn from its CornerAt between ticks); a point with turns rides with the disc (OriginOf), Reseat on a restart; the game's solid probe (TDynamicWorld) reaches objects only on the hero's screen (SolidInView) |
+| Render.Puff | Smoke puffs in code: 4 shapes, white with the shape in alpha, normal blending, not additive; DrawPuff, DrawPuffRect (a puff into a rectangle, no rotation - the shroud's strips) |
+| Effects.Emitter | TParticleSwarm - a swarm of particles with no look: place, speed, spin, life, friction and thrust; the owner spawns and draws them itself (smoke, for now) |
+| Effects.Sparks | The base sparks module: TSparkField - a field of sparks of one look (TSparkLook): flight, cooling, meeting a wall (past / dies / bounce at a cost of life), forks at the end of flight; solid through the TSolidProbe probe, the stroke texture comes with the drawing; pure decoration. Clients: the blast, TSparks, Game.Impacts |
+| Effects.Debris | What a blast throws: shards (fly, ring off walls, settle, cool, melt away) and sparks (an Effects.Sparks field); solid through the TSolidProbe probe; pure decoration |
+| Game.Explosions | TExplosions - the blast look by size (explosion in monsters.json): flash, fireball, shards, smoke plume, after-pops at the boss; Detonate. Look only: the wave wounds, Game.Blasts |
+| Game.Impacts | TImpacts - what a bullet knocks out of armour (material: metal): a flash, a fan of sparks along the ricochet, now and then a tracer; under heavy fire - thinner. TraceEntry / FaceFromCenter - the hit point and normal. Look only: damage, knockback and sound - in the dpr (SpendBullet, SoundArmorHit) |
 
-## Ключевые константы координатной системы
-- Логика: 512×384 игровых юнита (SetMaxC оригинала), клетка 32, герой/монстр 32
-- Тайловый АРТ 64×64 px (кроп верхнего левого), рисуется в клетку 32 юнита
-- Y — линия НОГ; хитбоксы пуль/контактов — ВНИЗ от Y (y..y+32); тела рисуются ВВЕРХ (y-32..y)
-  ⚠️ ГЛАВНАЯ ЛОВУШКА ПОРТА: у джуна ДВЕ версии каждого оракула (герой/монстр)
-  с разными знаками (герой щупает пол y−3, монстр y+3). Не переиспользовать!
-- HD-арт вне сетки 32: задники и объекты 1440 px на 512 юнитов, слои диска
-  босса 144 px на квадрат 36 юнитов (4 px на юнит), центр диска - середина
-  спрайта (X + 16, Y - 16)
+## Key constants of the coordinate system
+- Logic: 512x384 game units (SetMaxC of the original), a cell 32,
+  hero/monster 32
+- Tile ART 64x64 px (top-left crop), drawn into a 32-unit cell
+- Y is the line of the FEET; bullet/contact hitboxes go DOWN from Y
+  (y..y+32); bodies are drawn UP (y-32..y)
+  THE MAIN TRAP OF THE PORT: the junior code of 2008 has TWO versions of
+  every oracle (hero/monster) with different signs (the hero probes the
+  floor at y-3, the monster at y+3). Do not reuse!
+- HD art off the 32 grid: backdrops and objects 1440 px per 512 units,
+  the boss's disc layers 144 px per 36-unit square (4 px per unit), the
+  disc's centre is the middle of the sprite (X + 16, Y - 16)
 
-## Осознанные отступления от 2008
-1. RoundHalfUp кадров анимации (банковское округление хромало и в оригинале)
-2. Труп подчиняется гравитации + одноразовая посадка (в ориг. висел в воздухе)
-3. Прицел: DX=9 DY=10 — калибровка игроком по живому экрану (NumPad-тюнер)
-4. Лечение до 10 (ориг. 15), договорённость
-5. Телепорты роняют героя (SetY→haFall) — нет стояния на воздухе
-6. Смерть возрождает на чекпоинте текущего экрана, мир перерождается
-   (2008: смерть = меню; чекпоинт служил только лункам) — часть 5.1
-   (`PORT-JOURNAL.md`)
-7. Колонка пунктов меню снова 17, как в 2008 (3.0.3): отступление 15 от
-   2026-07-21 держалось только ради DIFFICULTY:NORMAL, а грейд теперь
-   ячейками, не словом. Заголовок экрана ушёл с колонки 24 / ряда 1 на
-   левый край колонки пунктов, по вертикали на середину флагов
-8. Тряска экрана на взрывах и хеншине (авторское нововведение 2026, в
-   оригинале не было) - сессия 2026-09-26 в `mechanics/engine.md`. Чисто
-   визуальная: ни одна формула 2008 не тронута
-9. HUD здоровья: кардиомонитор примитивами вместо кругалей heroes\health.bmp
-   (2.5.0). Норма 5 на всех сложностях, hard/wild стартуют ранеными по
-   пустым контурам; бонус выше 5 - салатовые ячейки за чертой. С 3.0.0
-   кругалей нет вовсе (в 2.5.x их возвращал режим 2008)
-10. Дорожки текста ушли вниз: бегущая строка 40, тикер 52 (было 24/36) -
-    монитор выше иконок. С 3.0.8 на дорожке 40 - рамка терминала, бегущей
-    строки нет (п. 17)
-11. HUD очков: заряд бонуса примитивами вместо "Score: N" (2.5.2), плюс
-    серия убийств видна рядом из 10 ячеек. С 3.0.0 "Score: N" нет вовсе
-12. Оплата бонуса перенесена с выпадения на активацию (2.5.2): счёт держится
-    на 50+ пока награда ждёт, минус 50 по правой кнопке; следующая награда
-    выпадает сразу, если осталось ≥ 50. Итоговая арифметика та же, другое
-    только число на экране
-13. Подпись лого: "Computer Dragon 2008-2026" (2008 - дословная line2;
-    "2DGames Software 2008 - 2026" жило до 3.0.3) - подпись автора,
-    решение автора. Credits переписаны той же строкой: "Computer Dragon
-    presents", авторы как в 2008, плюс "Released in 2008, remade in 2026";
-    портал 2DGames.ru ушёл (строка и не влезала: 42 крупных глифа = 562
-    юнита)
-14. Ряды здоровья над героем и монстрами (2.5.3): нововведение ремейка,
-    как кардиомонитор; с 3.0.0 показываются всегда. Чисто визуально, ни
-    одна формула не тронута; трети прицела переехали в TMonster.HealthTier
-    без изменения чисел
-15. Сложность в меню (3.0.3): клик по пункту листает грейд по кругу на
-    месте, подменю 2008 (три строки + назад) снято; грейд показан тремя
-    ячейками здоровья рядом с подписью, название и "с рестарта или нового
-    уровня" - мелкой строкой под меню, пока курсор на пункте. Значение -
-    как было; сохраняется с 3.0.9 в settings.json игрока, не в config.json
-16. Небо меню (3.0.3): вместо sky.bmp 512x512 + fullmoon.bmp + 10 спрайтов
-    звёзд - туманность 16:9 с обрезкой по кадру, звёзды и луна кодом
-    (Menu.Starfield, Menu.Globe). Дрейф луны по диагонали - дословно 2008,
-    сама луна - глобус. Логотип без нарисованного свечения: ореол и угли
-    считаются из его альфы (Menu.Logo, Menu.Embers). Вход в подменю -
-    наезд: планы растут от центра на 4/8/14/20% за 0.8 с, назад тем же
-    путём. Чисто визуально
-17. Терминал связи вместо бегущей строки (3.0.8): hintText печатается по
-    буквам в рамке под монитором и держится на чтение, а не ползёт справа
-    налево; тикер съезжает под рамку. Текст перед уровнем печатается тем
-    же ходом на подложке поверх неба (2008 выводил его готовым блоком),
-    первая клавиша допечатывает, вторая начинает уровень. Подсказки двух
-    экранов level1 переставлены: TEK-R1 - на экран 16, перед дверью;
-    медлаб ждал двух танков (hintHoldWhileAlive; снято в 3.0.10, см. 18)
-18. События уровня из JSON (3.0.10): секция events в level*.json - экран,
-    условие (enterScreen, allDead по тегу расстановок), задержка в тиках,
-    список действий (bigMessage, smallMessage, hint, music). Levels.Events -
-    модель и парсер (Core, редактор будет их писать), Events.Director -
-    исполнитель (Game/Events). Подсказка медлаба - первое событие: четыре
-    labGuard (два танка, бетонер над дырой, самка грейвела) мертвы -
-    через секунду печатается текст. С 3.0.14-3.0.16 словарь шире:
-    условия livesBelow и enraged, действия intensity и sun
-19. Босс уровня 1 - диск из HD-слоёв вместо восьми кадров вращения
-    (3.0.19): обод крутит код (9 градусов за тик против примерно 13.3 у
-    кадров 2008, в ярости вдвое быстрее), рисуется между тиками, глаз
-    следит за героем, износ проступает с потерей жизней, на диске две
-    лампы. Кадры смерти прежние. Сам вид - чисто визуально; механику
-    задевают п. 20 и 21
-20. Верх маршрута босса - разворот на y < 96 вместо y < 64 (3.0.19): на
-    64 он уходил под плашки HUD. Верх прямоугольника полёта ниже на
-    клетку, низ прежний; круг короче на 22 тика (432 вместо 454), в ярости
-    на 12
-21. Пули босса вылетают с кромки диска (3.0.19): из точки в 15 единицах
-    от середины в сторону героя, а не из (X + 8, Y + 8). Угол прежний,
-    дословный - от X, Y босса к X, Y героя, поэтому линия выстрела идёт
-    через середину хитбокса героя, а не по его левому краю: босс стал
-    метче
-22. Манёвры босса уровня 1 (3.0.21, правки 3.0.22): круг прежний, но с
-    дыма (ниже 150 жизней) босс время от времени уходит с него - раздумье
-    на месте с залпами из портов диска, потом нырок по клеткам за героем;
-    в ярости - таран по прямой в место героя, удар о стену, оглушение и
-    приз за увёртку; ниже 30 жизней на круг не возвращается и не
-    раздумывает. В манёвре прицельная пушка стреляет вдвое реже, а в
-    раздумье, прицеливании, рывке и оглушении молчит; пуля тело не
-    отбрасывает; после манёвра круг летается в обратную сторону. Без
-    манёвров (тактика laps) движение то же, что до пилота, тик в тик
-23. Настилы сетки на уровне 1 (3.0.60): 17 клеток стены 2008 - балконы
-    экранов 14 и 15, балка экрана 3, уступ экрана 4 - стали настилами
-    ('2'): держат только сверху, снизу и сбоку проходимы, с них можно
-    спрыгнуть по S/вниз. Пули о них бьются, как о стену
-24. Сброс костюма (3.0.61): в 2008 мир не останавливался ни на тик
-    церемонии; теперь он стоит два тика вдоха - монстры, их пули и пушки
-    замирают, герой нет. Лучи сброса ранят монстров (жизнь за сброс) и
-    гасят пули - урона, которого в 2008 в этот момент не было. Костюм,
-    лечение +3, тряска и надпись приходят на два тика позже
-25. Экран 9 первого уровня (3.0.62): дом опущен до уровня уступа и
-    сдвинут на 3 клетки к правому краю, яма - 6 клеток, танк 2008 из
-    файла убран - его привозит сцена кордона; мост через яму - пад, который
-    прилетает со сценой. Бетонер в яме держит огонь, пока жив, и сгорает в
-    луче без очков и без серии. Аптечка рядом с ним убрана
+## Deliberate deviations from 2008
+1. RoundHalfUp for animation frames (banker's rounding limped in the
+   original too)
+2. A corpse obeys gravity + a one-time landing (in the original it hung
+   in the air)
+3. Crosshair: DX=9 DY=10 - calibrated by a player on the live screen
+   (NumPad tuner)
+4. Healing up to 10 (original 15), by agreement
+5. Teleports drop the hero (SetY->haFall) - no standing on air
+6. Death respawns at the checkpoint of the current screen, the world is
+   reborn (2008: death = menu; the checkpoint served only the pits) -
+   part 5.1 (`PORT-JOURNAL.md`)
+7. The menu item column is 17 again, as in 2008 (3.0.3): the deviation
+   to 15 of 2026-07-21 held only for DIFFICULTY:NORMAL, and the grade is
+   now shown in cells, not a word. The screen title left column 24 /
+   row 1 for the left edge of the item column, vertically to the middle
+   of the flags
+8. Screen shake on blasts and henshin (an author's novelty of 2026, not
+   in the original) - session 2026-09-26 in `mechanics/engine.md`.
+   Purely visual: not one 2008 formula touched
+9. Health HUD: a heart monitor in primitives in place of the round icons
+   heroes\health.bmp (2.5.0). Norm 5 on every difficulty, hard/wild
+   start wounded by empty outlines; a bonus above 5 - light-green cells
+   past the divider. Since 3.0.0 the round icons are gone entirely (in
+   2.5.x the 2008 mode brought them back)
+10. The text lanes moved down: the running line 40, the ticker 52 (were
+    24/36) - the monitor is taller than the icons. Since 3.0.8 lane 40
+    holds the terminal frame, there is no running line (item 17)
+11. Points HUD: the bonus charge in primitives in place of "Score: N"
+    (2.5.2), plus the kill streak shown next to it as a row of 10 cells.
+    Since 3.0.0 "Score: N" is gone entirely
+12. The bonus payment moved from the drop to the activation (2.5.2): the
+    score holds at 50+ while the reward waits, minus 50 on the right
+    button; the next reward drops at once if >= 50 remains. The final
+    arithmetic is the same, only the number on screen differs
+13. The logo caption: "Computer Dragon 2008-2026" (2008 is the verbatim
+    line2; "2DGames Software 2008 - 2026" lived until 3.0.3) - the
+    author's signature, the author's decision. The credits rewritten to
+    the same line: "Computer Dragon presents", the authors as in 2008,
+    plus "Released in 2008, remade in 2026"; the 2DGames.ru portal left
+    (the line did not fit anyway: 42 big glyphs = 562 units)
+14. Health rows over the hero and monsters (2.5.3): a novelty of the
+    remake, like the heart monitor; since 3.0.0 always shown. Purely
+    visual, not one formula touched; the crosshair's thirds moved into
+    TMonster.HealthTier with no change to the numbers
+15. Difficulty in the menu (3.0.3): a click on the item cycles the grade
+    in place, the 2008 submenu (three lines + back) is gone; the grade is
+    shown by three health cells next to the caption, the name and
+    `diffHintLive` ("С рестарта или нового уровня", en "On restart or
+    next level") in a small line under the menu while the cursor is on
+    the item. The value is as it was; since 3.0.9 saved in the player's
+    settings.json, not in config.json
+16. The menu sky (3.0.3): in place of sky.bmp 512x512 + fullmoon.bmp +
+    10 star sprites - a 16:9 nebula cropped to the frame, the stars and
+    the moon in code (Menu.Starfield, Menu.Globe). The moon's diagonal
+    drift is verbatim 2008, the moon itself is a globe. The logo without
+    a painted glow: the halo and the embers are computed from its alpha
+    (Menu.Logo, Menu.Embers). Entering a submenu is a zoom: the planes
+    grow from the centre by 4/8/14/20% over 0.8 s, and back the same way.
+    Purely visual
+17. The comms terminal in place of the running line (3.0.8): hintText is
+    typed letter by letter in a frame under the monitor and holds for
+    reading instead of crawling from right to left; the ticker moves
+    down under the frame. The text before a level is typed the same way
+    on a backing over the sky (2008 showed it as a finished block), the
+    first key finishes the typing, the second starts the level. The
+    hints of two level1 screens moved: TEK-R1 to screen 16, before the
+    door; the medlab waited for two tanks (hintHoldWhileAlive; dropped in
+    3.0.10, see 18)
+18. Level events from JSON (3.0.10): the events section in level*.json -
+    screen, condition (enterScreen, allDead by placement tag), delay in
+    ticks, action list (bigMessage, smallMessage, hint, music).
+    Levels.Events - model and parser (Core, the editor will write them),
+    Events.Director - the executor (Game/Events). The medlab hint is the
+    first event: four labGuard (two tanks, a betoner over the hole, a
+    gravel female) dead - a second later the text is typed. Since
+    3.0.14-3.0.16 the vocabulary is wider: conditions livesBelow and
+    enraged, actions intensity and sun
+19. The level 1 boss is a disc of HD layers in place of eight spin
+    frames (3.0.19): code spins the rim (9 degrees a tick against about
+    13.3 in the 2008 frames, twice as fast in rage), drawn between ticks,
+    the eye follows the hero, wear shows through as lives are lost, two
+    lamps on the disc. The death frames are as before. The look itself
+    is purely visual; items 20 and 21 touch the mechanics
+20. The top of the boss's route - the turn at y < 96 in place of y < 64
+    (3.0.19): at 64 it went under the HUD plates. The top of the flight
+    rectangle a cell lower, the bottom as before; the lap shorter by 22
+    ticks (432 in place of 454), by 12 in rage
+21. The boss's bullets leave from the disc's rim (3.0.19): from a point
+    15 units from the middle toward the hero, not from (X + 8, Y + 8).
+    The angle is as before, verbatim - from the boss's X, Y to the
+    hero's X, Y, so the line of fire goes through the middle of the
+    hero's hitbox, not along its left edge: the boss got more accurate
+22. Manoeuvres of the level 1 boss (3.0.21, fixes 3.0.22): the lap as
+    before, but from the smoke on (below 150 lives) the boss leaves it
+    now and then - a ponder in place with volleys from the disc's ports,
+    then a dive by cells after the hero; in rage - a ram in a straight
+    line at the hero's place, a hit on the wall, a stun and a prize for
+    the dodge; below 30 lives it does not return to the lap and does not
+    ponder. In a manoeuvre the aimed gun fires half as often, and in the
+    ponder, the aim, the dash and the stun it is silent; a bullet does
+    not knock the body back; after a manoeuvre the lap is flown the
+    other way. Without manoeuvres (tactic laps) the motion is the same as
+    before the pilot, tick for tick
+23. Grid decks on level 1 (3.0.60): 17 wall cells of 2008 - the
+    balconies of screens 14 and 15, the beam of screen 3, the ledge of
+    screen 4 - became decks ('2'): they hold only from above, are
+    passable from below and from the sides, one can drop off them by
+    S/down. Bullets hit them as a wall
+24. The suit's burst (3.0.61): in 2008 the world did not stop for a
+    single tick of the ceremony; now it stands for the two ticks of the
+    inhale - monsters, their bullets and guns freeze, the hero does not.
+    The burst's rays wound monsters (a life per burst) and put out
+    bullets - damage 2008 did not have at that moment. The suit, the +3
+    heal, the shake and the caption come two ticks later
+25. Screen 9 of the first level (3.0.62): the house lowered to the
+    ledge's level and moved 3 cells toward the right edge, the pit is 6
+    cells, the 2008 tank removed from the file - the cordon scene brings
+    it; the bridge over the pit is a pad that flies in with the scene.
+    The betoner in the pit holds its fire while alive and burns in the
+    beam with no points and no streak. The medkit next to it removed
 
-## Дебаг (под {$DEFINE DEBUGKEYS} в Moon2D.inc; конфигурация Release снимает ключ сама)
-PgUp/PgDn - экраны, End - сразу на экран, который строится (уровень 2,
-экран 10), с музыкой, которую туда принесла бы дорога, T - инспектор
-тайла под курсором, F - сырой атлас
-шрифта, N - фильтр шрифта по кругу, P - тайлы каждого экрана уровня
-картинками в `dump\<id уровня>\` (исходники для перерисовки).
-Орбы и хеншин: G - защитная аура на героя, H - огненный дождь на экран
-героя, J - хеншин сразу (без босса и отсчёта), K - снятие костюма:
-кольцо орбов и его пощада (костюм не нужен), L - сброс костюма на героя
-(без обряда и без костюма: вид, замирание мира, удары), U - тот же сброс
-в облике луны. Пады: R - перестроить группу падов экрана героя сразу, Y -
-вернуть её на места из файла уровня. NumPad 4/6/8/2 и +/- - тюнер дула
-минигана, NumPad 7/9/3/1 - тюнер прицела (откалиброван, оставлен про
-запас), в меню V/B - кадры трейлера (логотип / голое небо); в игре M -
-вкл/выкл всю музыку (звуки остаются; для съёмки трейлера под наложение
-своего трека). Реализация: Mix_VolumeMusic(0/128) - глушится канал
-микшера, игра под капотом продолжает менять треки по триггерам, размут
-возвращает актуальный трек экрана без бухгалтерии. Громкость музыки -
-глобальное состояние микшера, переживает Halt/Load/Play.
+## Debug (under {$DEFINE DEBUGKEYS} in Moon2D.inc; the Release configuration drops the define itself)
+PgUp/PgDn - screens, End - straight to the screen under construction
+(level 2, screen 10), with the music the road there would have brought,
+T - the inspector of the tile under the cursor, F - the raw font atlas,
+N - cycle the font filter, P - the tiles of every screen of the level as
+pictures in `dump\<level id>\` (sources for repainting).
+Orbs and henshin: G - the protective aura on the hero, H - a fire rain
+on the hero's screen, J - henshin at once (no boss, no countdown), K -
+taking the suit off: the ring of orbs and its mercy (no suit needed), L
+- the suit's burst on the hero (no rite and no suit: the look, the
+world's freeze, the hits), U - the same burst in the moon's look. Pads:
+R - rebuild the group of pads on the hero's screen at once, Y - return
+it to its places from the level file. NumPad 4/6/8/2 and +/- - the
+minigun muzzle tuner, NumPad 7/9/3/1 - the crosshair tuner (calibrated,
+kept in reserve), in the menu V/B - trailer frames (the logo / the bare
+sky); in the game M - all music on/off (sounds stay; for shooting the
+trailer under an overlay of one's own track). Implementation:
+Mix_VolumeMusic(0/128) - the mixer channel is muted, under the hood the
+game keeps changing tracks by triggers, unmuting brings back the
+screen's current track with no bookkeeping. Music volume is global
+mixer state, it survives Halt/Load/Play.
 
-## Стратегия, роадмап, инструменты
+## Strategy, roadmap, tools
 
-Переехали из этого файла 2026-11-07:
-- порядок шагов после 3.0, долг версии 3.0, граница релиза 3.0, линейки
-  версий, фазы - `ROADMAP.md`;
-- широкая рамка, герой и монстры из видео, редактор с помощником,
-  уровень 3, поезд, большие комнаты, формы героя, Селена в меню, wad -
-  `plans/<name>.md`, по файлу на план;
-- журнал порта 2.x ("Следующая часть", части 2-7 и очередь багфиксов) -
-  `PORT-JOURNAL.md`.
+Moved out of this file on 2026-11-07:
+- the order of steps after 3.0, the debt of version 3.0, the boundary of
+  the 3.0 release, the version lines, the phases - `ROADMAP.md`;
+- the wide frame, the hero and the monsters from video, the editor with
+  an assistant, level 3, the train, big rooms, the hero's forms, Selene
+  in the menu, wad - `plans/<name>.md`, a file per plan;
+- the journal of the 2.x port (its heading "Следующая часть" - the next
+  part; parts 2-7 and the bugfix queue) - `PORT-JOURNAL.md`.
 
-## Незакрытые вопросы оригинала
-- weapon4/«Оружие 4» — скорострельность решена автором (6, часть 5.2 в
-  `PORT-JOURNAL.md`);
-  остальные статы клонированы с weapon3, сверить с релизным monst.pas
-- Хвост манифеста .moon: «4» + boss2.ogg×2 — вероятно счётчик фонов + музыка босса
-- DeathType 2-3 (брутальные смерти, кадры 17-32) — в .mns только 16 строк, задел
+## Open questions of the original
+- weapon4 / "Оружие 4" - the fire rate decided by the author (6, part
+  5.2 in `PORT-JOURNAL.md`); the other stats are cloned from weapon3,
+  check against the release monst.pas
+- The tail of the .moon manifest: "4" + boss2.ogg x2 - probably a
+  backdrop counter + the boss music
+- DeathType 2-3 (brutal deaths, frames 17-32) - only 16 rows in the
+  .mns, groundwork
