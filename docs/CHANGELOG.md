@@ -4,8 +4,8 @@ What each version brought, newest first. These paragraphs were the
 status chain at the head of `PORTING-NOTES.md`; they are kept as
 written. Where one says "the session below", the session is now in the
 journal of the mechanic's file under `mechanics/` (see `README.md`).
-Versions before 2.2.0 have no entry here: their story is the roadmap in
-`PORTING-NOTES.md`, section "Следующая часть".
+Versions before 2.2.0 have no entry here: their story is
+`PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
 На 2026-11-07: **3.0.112 - Таран висит и качается (этап 18c-2).**
 Успокоившись после взлёта, корпус покачивается: вверх-вниз на 3 ед. за

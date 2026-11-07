@@ -9,7 +9,10 @@ kinds, and the kind decides where a thing goes.
 
 | file | kind | what it holds |
 |---|---|---|
-| `PORTING-NOTES.md` | handoff | the current status, the architecture, the deliberate deviations from 2008, the debug keys, the strategy and the roadmap, the open questions of the original. A new session starts here. |
+| `PORTING-NOTES.md` | handoff | what is: the status in a few lines, the architecture, the deliberate deviations from 2008, the debug keys, the open questions of the original. A session that builds starts here and, with its mechanic's file, stops here. |
+| `ROADMAP.md` | roadmap | what comes next and in what order: the version lines, the boundary of the 3.0 release, the debt of version 3.0, the six steps after 3.0, the ideas without a place, the phases. A session that plans starts here. |
+| `plans/<name>.md` | plan | the design of one thing not built yet (why, what is decided, what is proposed, what is open). When its work begins the file moves to `mechanics/` and grows a journal. |
+| `PORT-JOURNAL.md` | log | the journal of the 2.x port as it was kept, part by part; closed, kept as written |
 | `CHANGELOG.md` | log | what each version brought, newest first, one paragraph a version |
 | `CODEBASE-MAP.md`, `CODEBASE-MAP-ru.md` | reference | every unit, type and data file, and which files a task touches. Regenerated once a release, patched in between; the code wins when they disagree. Both languages change together or neither does. |
 | `mechanics/<name>.md` | mechanic | the design of one mechanic (why, what is decided, the model, the architecture, the stages) and, at the end, the journal of the sessions that built it |
@@ -19,6 +22,22 @@ kinds, and the kind decides where a thing goes.
 | `MSET-FORMAT.md` | reference | the `.mset` sprite set format; the journal of its birth at the end |
 | `lore/LORE.md`, `lore/LORE-ru.md` | canon | the universe; the source of every story text in the game |
 | `moon2dscreen1.png`, `moon2dscreen2.png` | - | the screenshots of the root README |
+
+## The plans
+
+Not built. One file per thing, in the order of `ROADMAP.md`.
+
+| file | what |
+|---|---|
+| `video-sprites.md` | step 1: the hero and the monsters from AI video on a green screen, the utility that cuts the frames |
+| `wide-frame.md` | step 2: the 21x12 frame, a 4:3 level centered in it; what is in place and what is still hard-wired |
+| `level-editor.md` | step 3: the editor on the game's own renderer, the assistant chat inside it, generation by reference |
+| `level-3.md` | step 4: the residential sector, the first wide level |
+| `train-level.md` | step 5: the ore train on the belt and the living backdrop of arena 3 |
+| `big-rooms.md` | step 6: a room larger than the frame, the camera over it; the assessment against the code |
+| `hero-forms.md` | several forms and henshins, the third kind of bullet |
+| `selene-menu.md` | the menu moon becoming Selene; the texture is done |
+| `wad-packing.md` | one container for the resources |
 
 ## The mechanics
 
@@ -65,15 +84,47 @@ version left things.
   the sessions follow under `## Journal` (or `## Журнал`) as `###`
   headings, in the order they happened. A line for it in the table above.
 - A session on an existing mechanic: at the end of its journal.
-- A version: a paragraph at the top of `CHANGELOG.md`, and the status
-  paragraph of `PORTING-NOTES.md` replaced, not stacked.
+- A thing not built yet - a step of the roadmap, an idea waiting for its
+  level: a file in `plans/`, named after the thing; its line in the
+  table above. What is decided and what is only proposed are marked
+  apart. When the work begins, `git mv` the file to `mechanics/`, give it
+  the status line and a `## Journal`; its line moves between the tables.
+- A decision about the order of things, a new step, a change of the
+  release boundary: `ROADMAP.md`, the section that holds its kind.
+- A version: a paragraph at the top of `CHANGELOG.md`, and the status of
+  `PORTING-NOTES.md` replaced, not stacked - a few lines: the version,
+  what is in work, where to read. The paragraph is CHANGELOG's.
 - A test unit: its table in the `testing/` file of its namespace.
 - A deviation from 2008, a debug key, an open question of the original:
   `PORTING-NOTES.md`, the section that already holds its kind.
+
+## What a session reads
+
+The documents are split so that a session takes only what its task
+needs and the future does not leak into the present.
+
+- **Building a mechanic** (a stage of arena 3, say): `PORTING-NOTES.md`,
+  `mechanics/<name>.md`, `CODEBASE-MAP.md` for the units it touches,
+  `TESTING.md` and its `testing/` file when it writes tests. Not
+  `ROADMAP.md`, not `plans/`: a step that is not yet taken is not the
+  context of the step under way, and a plan read beside a mechanic pulls
+  the code toward a future that may still change.
+- **Planning** (the order of steps, the shape of a thing not built):
+  `ROADMAP.md`, the `plans/` file in question, and the mechanics files
+  the plan leans on. The plan says what it leans on.
+- **Opening a step of the roadmap**: its `plans/` file moves to
+  `mechanics/` first (above), and from then on the session is a
+  building one.
+- **Repainting a screen of levels 1-2**: `REPAINT.md`.
+- **The history of the port**: `PORT-JOURNAL.md`, `CHANGELOG.md`. Nobody
+  needs it for current work.
 
 ## The one-line test
 
 Asking "where does X live?" -> `CODEBASE-MAP.md`.
 Asking "how does X work and why is it like that?" -> `mechanics/X.md`.
+Asking "how will X work?" (not built) -> `plans/X.md`.
+Asking "what comes next, and why in that order?" -> `ROADMAP.md`.
 Asking "what state is the project in?" -> `PORTING-NOTES.md`, then
 `CHANGELOG.md`.
+Asking "how did the port go?" -> `PORT-JOURNAL.md`.

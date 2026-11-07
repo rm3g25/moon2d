@@ -2,7 +2,7 @@
 
 How a screen of levels 1-2 goes from the tile art of 2008 to HD art, and
 what was learned doing it. Written for a session that arrives cold: read
-this, then the last repaint session in `PORTING-NOTES.md` for where the
+this, then the last session of the journal at its end for where the
 work stands.
 
 ## What a repaint is

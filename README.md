@@ -252,8 +252,10 @@ Queued:
   a rotated font atlas, and a rendering backend quietly costing you frames.
 - **[`ASSETS.md`](ASSETS.md)** — where the art and audio came from, honestly.
 - **[`docs/CODEBASE-MAP.md`](docs/CODEBASE-MAP.md)** — unit-by-unit structural map.
-- **`docs/PORTING-NOTES.md`** — the unedited working log kept during the port.
-  Russian, session by session, written for nobody.
+- **`docs/PORTING-NOTES.md`** — the handoff note: the architecture, the
+  deliberate deviations from 2008, the debug keys. Russian.
+- **`docs/PORT-JOURNAL.md`** — the unedited working log kept during the port.
+  Russian, part by part, written for nobody.
 
 ## Related
 
