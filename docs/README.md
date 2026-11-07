@@ -98,6 +98,21 @@ version left things.
 - A deviation from 2008, a debug key, an open question of the original:
   `PORTING-NOTES.md`, the section that already holds its kind.
 
+## Language
+
+The documents are in English. New text is English in every file, a
+Russian one included. A Russian file is translated whole the first time
+a session opens it for new work: a commit of its own that changes
+nothing but the language, its numbers checked against the original. A
+file nobody opens for new work stays as it was written.
+
+Russian stays in three places:
+- `lore/LORE-ru.md`: the source of the Russian texts of the game
+  (`bin/lang/ru.json`).
+- Quotes of 2008: names and strings from the original source and data,
+  letter for letter - they are grep anchors to the original.
+- Text the player sees in Russian, quoted as the game shows it.
+
 ## What a session reads
 
 The documents are split so that a session takes only what its task
