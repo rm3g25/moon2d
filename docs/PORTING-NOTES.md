@@ -1,7 +1,8 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-07: **3.0.112** - arena 3 (the finale of level 2),
-stage 18c-2: after the takeoff the Ram hangs over the hero and sways. In
+Status at 2026-11-07: **3.0.113** - arena 3 (the finale of level 2),
+stage 18c-3: the Ram takes off on engine bays and nozzles out of its
+wheel arches, with a new fire. In
 work: arena 3, its file `docs/mechanics/arena-3.md`; what each version
 brought, a paragraph each - `CHANGELOG.md`. The status here is a few
 lines: the version, what is in work, where to read; the details of a

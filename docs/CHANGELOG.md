@@ -7,6 +7,31 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-07: **3.0.113 - the Ram's engine bays and nozzles (stage 18c-3).**
+At the takeoff the arches no longer stay empty: the engine bays come out
+of their depth (growing out of the dark over 14 ticks), then the petal
+nozzles slide down out of the bays' rings (8 ticks), then the front jet
+catches and the takeoff of 18c-1 goes on - 22 ticks later than before;
+the rear bay and nozzle come out behind the rear wheel, which the rear
+jet still spits out (`Game.Takeoff`, stage `tkOpening`, `BayAt`,
+`NozzleAt`). On the road a nozzle slides out no deeper than the road and
+comes out the rest of the way as the hull lifts. The nozzles turn with
+the hull's lean and are lit from below while their fire burns
+(`TRamPainter.DrawEngines`; `TSpriteRenderer.DrawHanging` draws the part
+of a picture slid out of a slot; `THull` draws the chassis and the wheels
+apart). New sprites `engineBay`, `engineNozzle`, `engineNozzleLit` in
+`tek-machine.mset`, made by `tools/machine/extend_machine.py` out of the
+generated `machine-bay.png` and `machine-nozzle.png`: the bay cut by a
+mask read off the hull's own arches, one for both, darkened from half
+its light at the top to three quarters at the bottom; the nozzle not
+darkened. The fire is new: no smoke, a flame texture drawn twice along
+the hull's down out of the nozzle - an orange sheath 30 by 8, a
+white-blue core 12 by 3.2, flickering - ending high over the road; only
+a warm pool of light reaches the road under each jet. A shed wheel's
+well is hollow to bullets and touch till its bay comes out
+(`TRamArt.Wells`, `TRam.WellOpen`). Tests: `TTakeoffTests` +2 and
+reworked for the opening, `TRamBrakeTests` +1.
+
 На 2026-11-07: **3.0.112 - Таран висит и качается (этап 18c-2).**
 Успокоившись после взлёта, корпус покачивается: вверх-вниз на 3 ед. за
 80 тиков и креном 1.2 градуса за 110 тиков, амплитуда нарастает за 33
