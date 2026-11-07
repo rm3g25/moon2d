@@ -17,6 +17,12 @@ Win32/
 Win64/
 Debug/
 Release/
+# The IDE writes a project's .res on every build. Only the ones a
+# program links stay: the game's (its icon will live there) and
+# TitleCard's (version info).
+*.res
+!/Moon2D.res
+!/tools/TitleCard/TitleCard.res
 
 # ---- Per-machine IDE state, not project state ----
 *.local
