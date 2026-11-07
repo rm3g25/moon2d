@@ -116,11 +116,10 @@ c) **`SlotRoll`** (`Levels.Dynamics`) gives one value to two slots that
    changes every roll in the game (the phases of the dust, the blink of
    the beacons, the convoy's schedule) - the picture shifts, a decision
    with a live run; curing only `FaultyLevel` is a one-liner.
-d) **The chronicle and the map:** `CHANGELOG.md` and both codebase maps
+d) **The chronicle and the map:** `CHANGELOG.md` and the codebase map
    are not caught up from 3.0.72 (the sphere, the terminal) and 3.0.73
    (the convoy, the searchlight, `TConvoySchedule`, `TPieceInk`,
-   `DrawLamp` / `DrawLightCone`, `DrawGlowTurned` / `PointGlowLevel`). The
-   map - both languages in one commit.
+   `DrawLamp` / `DrawLightCone`, `DrawGlowTurned` / `PointGlowLevel`).
 e) **`TMoonGame`** - about 3600 lines: 154 methods, about 110 fields, as
    many reasons to change as there are subsystems (§6). The main trouble
    was that the class lived in the program: a test unit cannot `uses` a

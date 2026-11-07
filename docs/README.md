@@ -14,7 +14,7 @@ kinds, and the kind decides where a thing goes.
 | `plans/<name>.md` | plan | the design of one thing not built yet (why, what is decided, what is proposed, what is open). When its work begins the file moves to `mechanics/` and grows a journal. |
 | `PORT-JOURNAL.md` | log | the journal of the 2.x port as it was kept, part by part; closed, kept as written |
 | `CHANGELOG.md` | log | what each version brought, newest first, one paragraph a version |
-| `CODEBASE-MAP.md`, `CODEBASE-MAP-ru.md` | reference | every unit, type and data file, and which files a task touches. Regenerated once a release, patched in between; the code wins when they disagree. Both languages change together or neither does. |
+| `CODEBASE-MAP.md` | reference | every unit, type and data file, and which files a task touches. Regenerated once a release, patched in between; the code wins when they disagree. |
 | `mechanics/<name>.md` | mechanic | the design of one mechanic (why, what is decided, the model, the architecture, the stages) and, at the end, the journal of the sessions that built it |
 | `TESTING.md` | reference | what the test suite is for, its rules and the conveyor that writes it |
 | `testing/<namespace>.md` | reference | the tables of the tests, one section per unit under test |

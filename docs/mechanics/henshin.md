@@ -1206,8 +1206,7 @@ Shot, потом режутся под ту же сетку.
    `Update the docs for the henshin on orbs`; на него встаёт тег
    v3.0.49.
    Как вышло:
-   - `docs/CODEBASE-MAP.md` и `docs/CODEBASE-MAP-ru.md`, заплаткой, обе
-     говорят одно и то же. Новые разделы `Orbs.Patterns` и `Orbs.Rite`;
+   - `docs/CODEBASE-MAP.md`, заплаткой. Новые разделы `Orbs.Patterns` и `Orbs.Rite`;
      раздел `Game.Henshin` переписан; дополнены `Orbs.Flock` (глубина,
      `Arrive`, `DrawLayer`), `Orbs.Harvest` (`HarvestAround`),
      `Levels.Defs` (`HenshinPattern`), `Bullets` (спавнер остался один,
@@ -1412,8 +1411,7 @@ Shot, потом режутся под ту же сетку.
     Коммит: `Update the docs for the burst of the suit`; на него встаёт
     тег версии этапа 8.
     Как вышло:
-    - `docs/CODEBASE-MAP.md` и `docs/CODEBASE-MAP-ru.md`, заплаткой, обе
-      говорят одно и то же. Новый раздел `Orbs.Burst`; дополнены шапка
+    - `docs/CODEBASE-MAP.md`, заплаткой. Новый раздел `Orbs.Burst`; дополнены шапка
       (`v3.0.61`), раскладка (`Game/Orbs/`), граф зависимостей,
       `Orbs.Rite` (тик 154 - конец обряда, костюм на 156; проба тела у
       сброса та же), `Game.Shroud` (`MaskOf`), `Game.Henshin` (сцена,

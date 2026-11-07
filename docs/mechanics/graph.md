@@ -218,7 +218,7 @@ Int64 и складывается с зерном, не xor. Две ловушк
 #### Вокруг
 - `Moon2D.dpr`, `Moon2D.dproj`, `Tests/Moon2D.Tests.dpr`,
   `Tests/Moon2D.Tests.dproj`: новые юниты.
-- `docs/CODEBASE-MAP.md` и `docs/CODEBASE-MAP-ru.md`, `docs/TESTING.md`.
+- `docs/CODEBASE-MAP.md`, `docs/TESTING.md`.
 - Не входит: огонёк-светодиод на мониторе (если захочется живого
   маячка рядом с графиком, это одна строка в `dynamics`).
 
