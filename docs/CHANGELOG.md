@@ -7,6 +7,23 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-07: **3.0.114 - the wheels bounce, the eclipse's charge held.**
+A shed wheel no longer rolls at once: it strikes the road, keeps 0.6 of
+its speed up and bounces lower and lower till a bounce has under 1 a tick
+in it, then rolls (`Game.Wheel`: `Struck`, `Contact`, `Drop`). Every strike
+sparks off the road in the scrape's look and shakes a little, the harder
+the more; it is heard (`wheelland.wav`) from a strike of 2 a tick - the
+front wheel's hop, the rear one's first three. The rear wheel is no
+longer spat out on the road: the rise starts with it in its well, and at
+a lift of 48 the rear jet throws it down out of it (`SpitLift`,
+`TTakeoff.Spat`); it strikes at about 5.5 and bounces to about 40, 16
+and 7. In the eclipse the light on the body is held at its top from the
+end of the orbs' drawing in through the burst's 16 ticks of inhale to
+the strike (`TShroudLook.Hold`, `ChargeLook` with the inhale); the ice
+form's rite is as it was. Tests: `TLooseWheelTests` reworked (13),
+`TTakeoffTests` the rear jet's test reworked, `TRamBrakeTests` +2,
+`THeroShroudTests` +2.
+
 2026-11-07: **3.0.113 - the Ram's engine bays and nozzles (stage 18c-3).**
 At the takeoff the arches no longer stay empty: the engine bays come out
 of their depth (growing out of the dark over 14 ticks), then the petal

@@ -4845,8 +4845,9 @@ project's storage, not the repository).
   band's life, up below zero), `Order` (`TShroudOrder` = `soTogether`,
   `soTopDown`, `soBottomUp`), `Stagger`, `Smoke`, `Light`, `Reveal` (the body
   is put together out of `ShroudStrips`=16 strips), `Shift`, `Flash` (the
-  halo's peak, above 1 drawn twice) at `FlashAt`, `Motes`, `Lift` (a mote's
-  pull, up below zero), `Tint`. What differs between the scenes is numbers
+  halo's peak, above 1 drawn twice) at `FlashAt`, held for `Hold` (3.0.114,
+  a share of `Life`; 0 in every look but the eclipse's charge), `Motes`,
+  `Lift` (a mote's pull, up below zero), `Tint`. What differs between the scenes is numbers
   only, typed constants in the unit: `PitLook` (back from a pit, 14 ticks),
   `EntryLook` (the first screen of a level, 40), `ReviveLook` (alive after a
   death, 24; the three are light smoke, `Tint` 236/240/255 - the body comes
@@ -7502,7 +7503,7 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   `boss1` on one tick takes no more than the cap, and a blow over it still
   shoves him.
 - **`Game/Tests.Game.Shroud.pas`** (~1410 lines) - **`THeroShroudTests`**
-  (47 tests): the counting half of `Game.Shroud`, no SDL - a new shroud is
+  (49 tests): the counting half of `Game.Shroud`, no SDL - a new shroud is
   still and dark, `Start` and the restart on the run, `Clear` and
   `LeaveMotes` against `Start`, the glow's peak, the own clock of a part of
   the body in each order, the strips' sides and their stop at home, the motes
