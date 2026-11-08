@@ -473,9 +473,9 @@
       ]
     },
     {
-      "id": "weaponOrbGun",
-      "displayName": "Орбовое ружьё",
-      "displayNameEn": "Orb Gun",
+      "id": "weaponOrbLauncher",
+      "displayName": "Орбомёт",
+      "displayNameEn": "Orb Launcher",
       "category": "pickup",
       "spriteList": null,
       "dangerous": false,
@@ -495,8 +495,8 @@
         "score": 0
       },
       "animFreq": 0.25,
-      "deathText": "Орбовое ружьё активировано",
-      "deathTextEn": "Orb Gun acquired",
+      "deathText": "Орбомёт активирован",
+      "deathTextEn": "Orb Launcher acquired",
       "deathSounds": [
         "gun.wav"
       ]

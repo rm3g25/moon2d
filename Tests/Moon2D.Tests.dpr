@@ -41,7 +41,7 @@ uses
   Tests.Game.Wheel in 'Game\Tests.Game.Wheel.pas',
   Tests.Game.Takeoff in 'Game\Tests.Game.Takeoff.pas',
   Tests.Game.HullLives in 'Game\Tests.Game.HullLives.pas',
-  Tests.Game.OrbGun in 'Game\Tests.Game.OrbGun.pas',
+  Tests.Game.OrbLauncher in 'Game\Tests.Game.OrbLauncher.pas',
   Tests.Game.Shield in 'Game\Tests.Game.Shield.pas',
   Tests.Game.Belt in 'Game\Tests.Game.Belt.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',

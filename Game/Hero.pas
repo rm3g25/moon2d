@@ -53,8 +53,8 @@ const
   // The weapon type of the Duplet, the double-barrel of level 2: types 0..4
   // are the 2008 guns
   DupletWeapon = 5;
-  // The orb gun, the moon form's weapon of the arena 3 fight
-  OrbGunWeapon = 6;
+  // The orb launcher, the moon form's weapon of the arena 3 fight
+  OrbLauncherWeapon = 6;
 
 type
   // What Draw puts on the screen this tick
@@ -110,10 +110,10 @@ type
     FDupletCache: TSpriteCache;
     FDupletSet: TSpriteSet;
     FDupletHeld: PSdlTexture;
-    // The orb gun in the hands, as the Duplet
-    FOrbGunCache: TSpriteCache;
-    FOrbGunSet: TSpriteSet;
-    FOrbGunHeld: PSdlTexture;
+    // The orb launcher in the hands, as the Duplet
+    FOrbLauncherCache: TSpriteCache;
+    FOrbLauncherSet: TSpriteSet;
+    FOrbLauncherHeld: PSdlTexture;
     FStowed: TStowedGun;
     // Ticks left of a throw, with the controls out of his hands
     FThrownTicks: Integer;
@@ -202,7 +202,7 @@ type
     procedure CarryX(AWay: Double);
     // --- the Duplet ---
     procedure FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
-    // --- the orb gun ---
+    // --- the orb launcher ---
     procedure FireOrb(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
@@ -217,7 +217,7 @@ type
     // elapsed; patterns per weapon type (0 pistol, 1 shotgun x5,
     // 2 grenade cloud x22, 3 chain x3, 4 minigun with alternating
     // side shots; 5 the Duplet, two barrels of red shot, and 6 the orb
-    // gun, one black orb, neither of 2008). Poll while LMB is held, like
+    // launcher, one black orb, neither of 2008). Poll while LMB is held, like
     // everything in 2008.
     // True when a shot actually left the barrel - the caller barks the
     // weapon sound then; held triggers on cooldown fire nothing
@@ -327,11 +327,11 @@ const
   // The held frame's square, units: the gun is 32 long, twice a 2008 gun,
   // and sticks out of the fist
   DupletHeldSide = 48;
-  OrbGunSetName = 'orbgun';
-  OrbGunHeldSprite = 'held';
+  OrbLauncherSetName = 'orblauncher';
+  OrbLauncherHeldSprite = 'held';
   // The held frame's square, units: the gun is 16 long, its grip far back,
   // so most of it sticks out ahead of the fist
-  OrbGunHeldSide = 32;
+  OrbLauncherHeldSide = 32;
 
 const
   // Original constants, names preserved for archaeology
@@ -502,12 +502,12 @@ begin
   FDupletCache.AttachSpriteSet(FDupletSet);
   FDupletHeld := FDupletCache.Get(DupletHeldSprite);
 
-  FOrbGunCache := TSpriteCache.Create(ARenderer);
-  FOrbGunCache.DisableColorKey;
-  FOrbGunCache.EnableLinearFilter;
-  FOrbGunSet := TSpriteSet.Create(SpriteSetsDir + OrbGunSetName + '.mset');
-  FOrbGunCache.AttachSpriteSet(FOrbGunSet);
-  FOrbGunHeld := FOrbGunCache.Get(OrbGunHeldSprite);
+  FOrbLauncherCache := TSpriteCache.Create(ARenderer);
+  FOrbLauncherCache.DisableColorKey;
+  FOrbLauncherCache.EnableLinearFilter;
+  FOrbLauncherSet := TSpriteSet.Create(SpriteSetsDir + OrbLauncherSetName + '.mset');
+  FOrbLauncherCache.AttachSpriteSet(FOrbLauncherSet);
+  FOrbLauncherHeld := FOrbLauncherCache.Get(OrbLauncherHeldSprite);
 
   // The hero's 1..24 is walk, then death, then the transformed frames -
   // named here rather than counted, as the 2008 list required.
@@ -521,11 +521,11 @@ destructor THero.Destroy;
 begin
   FBullets.Free;
   // Caches before the sets they read from, mirroring the living order.
-  FOrbGunCache.Free;
+  FOrbLauncherCache.Free;
   FDupletCache.Free;
   FWeaponCache.Free;
   FCache.Free;
-  FOrbGunSet.Free;
+  FOrbLauncherSet.Free;
   FDupletSet.Free;
   FWeaponSet.Free;
   FSkinSet.Free;
@@ -1578,7 +1578,7 @@ begin
         FireDuplet(Spawn, BaseAngle);
       end;
 
-    OrbGunWeapon:
+    OrbLauncherWeapon:
       begin
         var Spawn: TSdlFPoint;
         Spawn.X := SpawnX;
@@ -1790,9 +1790,9 @@ begin
     DupletWeapon:
       ASprites.DrawRotated(FDupletHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
         DupletHeldSide);
-    OrbGunWeapon:
-      ASprites.DrawRotated(FOrbGunHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
-        OrbGunHeldSide);
+    OrbLauncherWeapon:
+      ASprites.DrawRotated(FOrbLauncherHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
+        OrbLauncherHeldSide);
   else
     ASprites.DrawRotated(FWeaponFrames[FWeaponType + 3], GunX, GunY,
       AngleSign * DrawAngle, Flip);

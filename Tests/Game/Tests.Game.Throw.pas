@@ -2,7 +2,9 @@
   Tests.Game.Throw - the scene of the throw: nothing till the burst
   starts it; a second on he is caught, once, and from then on he is held
   and the heart beats; he is carried along his way and hangs in his place
-  once there, and the orbs go out then, once; the spin waits for every
+  once there, and the orbs go out then, once; still on his way, in his
+  place he sways up and down, growing to its depth over the first swing
+  and never past it; let go at the wheel, he is still; the spin waits for every
   pad to be held, then runs up once over four seconds and stays spun up,
   the hint coming in after it; a beat spins the pads faster, still pads
   not at all; with no pad to hold the spin runs up at once; a clear takes
@@ -74,6 +76,10 @@ type
     procedure TestCarriedAlongHisWayThenInHisPlace;
     [Test]
     procedure TestTheOrbsGoOutOnceHeIsInHisPlace;
+    [Test]
+    procedure TestStillOnHisWaySwayingInHisPlace;
+    [Test]
+    procedure TestStillOnceLetGo;
     [Test]
     procedure TestTheSpinWaitsForEveryPad;
     [Test]
@@ -564,6 +570,45 @@ begin
   Assert.AreEqual(1, Sheds, 'Once');
   Assert.IsTrue((ShedAt >= WheelAfterTicks) and (ShedAt <= WheelAfterTicks + 1),
     Format('A breath after, not at tick %d', [ShedAt]));
+end;
+
+procedure TThrowSceneTests.TestStillOnHisWaySwayingInHisPlace;
+begin
+  CatchAt(200, Road);
+  for var i := 1 to ManyTicks do
+  begin
+    Assert.AreEqual(0.0, Double(FScene.Sway(1)), 0.0001,
+      Format('Still on his way at tick %d', [Integer(i)]));
+    if FScene.Tick.Grip then
+      Break;
+  end;
+  var FirstSwing: Single := 0;
+  for var i := 1 to HeroSwayTicks do
+  begin
+    FScene.Tick;
+    FirstSwing := Max(FirstSwing, Abs(FScene.Sway(0)));
+  end;
+  var Deepest: Single := 0;
+  for var i := 1 to HeroSwayTicks do
+  begin
+    FScene.Tick;
+    Deepest := Max(Deepest, Abs(FScene.Sway(0)));
+    Assert.IsTrue(Abs(FScene.Sway(0.5)) <= HeroSwayDepth + 0.0001,
+      Format('Within its depth at tick %d', [Integer(i)]));
+  end;
+  Assert.IsTrue(FirstSwing < HeroSwayDepth, 'Growing over the first swing');
+  Assert.IsTrue(Deepest > 0.95 * HeroSwayDepth, 'Its full depth after');
+end;
+
+procedure TThrowSceneTests.TestStillOnceLetGo;
+begin
+  LooseTheWheel;
+  for var i := 1 to ManyTicks do
+  begin
+    FScene.Tick;
+    Assert.AreEqual(0.0, Double(FScene.Sway(0.5)), 0.0001,
+      Format('Still at tick %d', [Integer(i)]));
+  end;
 end;
 
 procedure TThrowSceneTests.TestLetGoAtTheWheelTheSceneStands;

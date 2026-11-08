@@ -40,7 +40,7 @@ type
   TBulletStatus = (bsFlying, bsBursting, bsInactive);
 
   // How a bullet is painted: as drawn, or red - the Duplet's shot; or not
-  // at all - the orb gun's, which is an orb (Orbs.Shots)
+  // at all - the orb launcher's, which is an orb (Orbs.Shots)
   TBulletLook = (blPlain, blRed, blOrb);
 
   TBullet = class

@@ -15,7 +15,8 @@
   flying at the Ram's honeycomb. Each that meets it blows up and breaks a
   piece of it off; the last a big blast, and the rest of the honeycomb
   crumbles. He hangs on in his place, the controls not his, till the
-  wheel: the honeycomb down, a breath, and the Ram's front wheel breaks
+  wheel - not still, but swaying up and down in the orbs' hold as one
+  floats: the honeycomb down, a breath, and the Ram's front wheel breaks
   off; he is let go onto the road, the controls his again. The wheel
   rolls off the right edge, a breath, and the Ram takes off - its rear
   wheel after him in its turn, never the two at once - and the scene
@@ -75,6 +76,10 @@ const
   // The hero hangs this far from the right edge, this far over the road
   HeroPlaceEdge = 48;
   HeroHover = 8;
+  // In his place he sways up and down this far either way, once over
+  // this long; the sway grows to it over its first swing
+  HeroSwayDepth = 2.0;
+  HeroSwayTicks = 66;
   // Spun up, the pads go by themselves this long after with no press;
   // each is let go up to this long after the volley's start
   ThrowAfterTicks = 99;
@@ -121,6 +126,8 @@ type
     FStage: TThrowStage;
     // Ticks into the stage
     FTicks: Integer;
+    // Ticks he has hung in his place
+    FSwayTicks: Integer;
     FPath: THoistPath;
     FPads: Integer;
     FHeld: Integer;
@@ -158,6 +165,10 @@ type
     function Beats: Boolean;
     // His left edge and feet line on his way, in his place once there
     function HeroAt: TSdlFPoint;
+    // Units he is drawn lower than HeroAt, higher below zero: his sway in
+    // his place, 0 on his way and once let go. AAlpha of the way from the
+    // last tick to this one.
+    function Sway(AAlpha: Single): Single;
     // How far the spin has run up, 0..1
     function Spin: Single;
     // Degrees a tick a held pad spins at, APulse the heart's pulse
@@ -252,6 +263,7 @@ procedure TThrowScene.Clear;
 begin
   FStage := tsIdle;
   FTicks := 0;
+  FSwayTicks := 0;
   FPath := Default(THoistPath);
   FPads := 0;
   FHeld := 0;
@@ -336,6 +348,8 @@ begin
   if FStage = tsIdle then
     Exit;
   Inc(FTicks);
+  if Holds and (FStage > tsCarrying) then
+    Inc(FSwayTicks);
   case FStage of
     tsWaiting:
       if FTicks >= CatchAfterTicks then
@@ -413,6 +427,15 @@ begin
   if FStage = tsCarrying then
     Exit(FPath.At(FTicks));
   Result := FPath.Place;
+end;
+
+function TThrowScene.Sway(AAlpha: Single): Single;
+begin
+  if not Holds or (FStage = tsCarrying) then
+    Exit(0);
+  var Clock: Single := FSwayTicks + AAlpha;
+  var Grown: Single := Min(Clock / HeroSwayTicks, 1);
+  Result := HeroSwayDepth * Grown * Sin(2 * Pi * Clock / HeroSwayTicks);
 end;
 
 function TThrowScene.Spin: Single;

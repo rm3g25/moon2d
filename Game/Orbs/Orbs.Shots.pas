@@ -1,5 +1,5 @@
 ﻿{
-  Orbs.Shots - the look of the orb gun's shots: a black orb of the moon
+  Orbs.Shots - the look of the orb launcher's shots: a black orb of the moon
   form for every orb-look bullet of a burst (Bullets, blOrb), riding it.
   The bullet is the shot - its flight, what it meets and what that costs
   are the burst's and the game's; the orb is only how it is seen. A
@@ -47,6 +47,10 @@ implementation
 
 uses
   Render.Sprites;
+
+const
+  // Of an orb of the rite: its white rim 7.2 units across, not 9.2
+  ShotSize = 0.78;
 
 { TOrbShots }
 
@@ -106,6 +110,7 @@ begin
     Shot.Bullet := Bullet;
     Shot.Orb := TOrb.Create(Bullet.X, Bullet.Y - SpriteSize);
     Shot.Orb.Armed := False;
+    Shot.Orb.Size := ShotSize;
     FFlock.Add(Shot.Orb);
     FShots.Add(Shot);
   end;

@@ -94,7 +94,7 @@
         <DCCReference Include="Game\Tests.Game.Wheel.pas"/>
         <DCCReference Include="Game\Tests.Game.Takeoff.pas"/>
         <DCCReference Include="Game\Tests.Game.HullLives.pas"/>
-        <DCCReference Include="Game\Tests.Game.OrbGun.pas"/>
+        <DCCReference Include="Game\Tests.Game.OrbLauncher.pas"/>
         <DCCReference Include="Game\Tests.Game.Shield.pas"/>
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>

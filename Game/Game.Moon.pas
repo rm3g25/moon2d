@@ -30,7 +30,7 @@ uses
   Game.Shells,
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
-  Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbGun,
+  Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
@@ -168,18 +168,18 @@ type
     FThrowPainter: TThrowPainter;
     FThrown: TArray<TThrownPad>;
     FSpinHum: THeldSound;
-    // The hull hanging: the orb gun appears on the road under a shroud of
+    // The hull hanging: the orb launcher appears on the road under a shroud of
     // its own; taken, the hull's lives come with it, which only its orbs
     // take
-    FOrbGun: TOrbGunArrival;
-    FOrbGunSkin: TSpriteSet;
-    FOrbGunCache: TSpriteCache;
-    FOrbGunLying: PSdlTexture;
-    FOrbGunLeft: Single;
-    FOrbGunShroud: THeroShroud;
-    FOrbGunShroudPainter: TShroudPainter;
+    FOrbLauncher: TOrbLauncherArrival;
+    FOrbLauncherSkin: TSpriteSet;
+    FOrbLauncherCache: TSpriteCache;
+    FOrbLauncherLying: PSdlTexture;
+    FOrbLauncherLeft: Single;
+    FOrbLauncherShroud: THeroShroud;
+    FOrbLauncherShroudPainter: TShroudPainter;
     FHullLives: THullLives;
-    // How the orb gun's shots are seen: black orbs riding them
+    // How the orb launcher's shots are seen: black orbs riding them
     FOrbShots: TOrbShots;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
@@ -368,9 +368,9 @@ type
     procedure BurstEclipse;
     procedure TearDark;
     procedure TickThrow;
-    procedure TickOrbGun;
-    procedure LayOrbGun;
-    function OrbGunPose: THeroPose;
+    procedure TickOrbLauncher;
+    procedure LayOrbLauncher;
+    function OrbLauncherPose: THeroPose;
     procedure TakeWeapon(const AEffect: TPickupEffectDef);
     procedure CatchHero;
     procedure CallMissingPads(const APath: THoistPath);
@@ -481,11 +481,11 @@ const
   SoundsDir = 'sounds';
   MusicDir = 'music';
   // Verbatim weapon->shot map of moon.dpr 1813-1817, including the
-  // quirk of weapon 3 borrowing the pistol bark; the Duplet and the orb gun
+  // quirk of weapon 3 borrowing the pistol bark; the Duplet and the orb launcher
   // are not of 2008
-  WeaponShotSounds: array [0..OrbGunWeapon] of string =
+  WeaponShotSounds: array [0..OrbLauncherWeapon] of string =
     ('shoot.wav', 'shootgun.wav', 'granade.wav', 'shoot.wav', 'shoot2.wav',
-    'duplet.wav', 'orbgun.wav');
+    'duplet.wav', 'orblauncher.wav');
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
@@ -535,12 +535,12 @@ const
   // roar while it is off the road
   JetFireSoundFile = 'jetfire.wav';
   JetHoverSoundFile = 'jethover.wav';
-  // An orb of the orb gun sinking into the Ram's bare hull
+  // An orb of the orb launcher sinking into the Ram's bare hull
   OrbHitSoundFile = 'orbhit.wav';
-  // The pickup the orb gun comes as, and its frame on the road
-  OrbGunPickupId = 'weaponOrbGun';
-  OrbGunSetName = 'orbgun';
-  OrbGunLyingSprite = 'lying';
+  // The pickup the orb launcher comes as, and its frame on the road
+  OrbLauncherPickupId = 'weaponOrbLauncher';
+  OrbLauncherSetName = 'orblauncher';
+  OrbLauncherLyingSprite = 'lying';
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -761,13 +761,13 @@ begin
   FEclipsePainter := TEclipsePainter.Create(ARenderer, FEclipse);
   FThrow := TThrowScene.Create;
   FThrowPainter := TThrowPainter.Create(ARenderer, FThrow);
-  FOrbGun := TOrbGunArrival.Create;
-  FOrbGunSkin := TSpriteSet.Create(SpriteSetsDir + OrbGunSetName + '.mset');
-  FOrbGunCache := TSpriteCache.Create(ARenderer);
-  FOrbGunCache.DisableColorKey;
-  FOrbGunCache.EnableLinearFilter;
-  FOrbGunCache.AttachSpriteSet(FOrbGunSkin);
-  FOrbGunLying := FOrbGunCache.Get(OrbGunLyingSprite);
+  FOrbLauncher := TOrbLauncherArrival.Create;
+  FOrbLauncherSkin := TSpriteSet.Create(SpriteSetsDir + OrbLauncherSetName + '.mset');
+  FOrbLauncherCache := TSpriteCache.Create(ARenderer);
+  FOrbLauncherCache.DisableColorKey;
+  FOrbLauncherCache.EnableLinearFilter;
+  FOrbLauncherCache.AttachSpriteSet(FOrbLauncherSkin);
+  FOrbLauncherLying := FOrbLauncherCache.Get(OrbLauncherLyingSprite);
   FHullLives := THullLives.Create;
   FOrbShots := TOrbShots.Create;
   FBelt := TBelt.Create;
@@ -820,11 +820,11 @@ begin
   FEclipse.Free;
   FThrowPainter.Free;
   FThrow.Free;
-  FOrbGunShroudPainter.Free;
-  FOrbGunShroud.Free;
-  FOrbGunCache.Free;
-  FOrbGunSkin.Free;
-  FOrbGun.Free;
+  FOrbLauncherShroudPainter.Free;
+  FOrbLauncherShroud.Free;
+  FOrbLauncherCache.Free;
+  FOrbLauncherSkin.Free;
+  FOrbLauncher.Free;
   FHullLives.Free;
   FOrbShots.Free;
   FBelt.Free;
@@ -983,11 +983,11 @@ begin
   FShroud := THeroShroud.Create(SolidUnderPoint, RollDiceSeed);
   FShroudPainter := TShroudPainter.Create(FRenderer, FHero.SkinSet,
     HeroShroudFrames(FHero.SkinSet), FHero.Pose, FShroud);
-  FreeAndNil(FOrbGunShroudPainter);
-  FreeAndNil(FOrbGunShroud);
-  FOrbGunShroud := THeroShroud.Create(SolidUnderPoint, RollDiceSeed);
-  FOrbGunShroudPainter := TShroudPainter.Create(FRenderer, FOrbGunSkin,
-    [OrbGunLyingSprite], OrbGunPose, FOrbGunShroud);
+  FreeAndNil(FOrbLauncherShroudPainter);
+  FreeAndNil(FOrbLauncherShroud);
+  FOrbLauncherShroud := THeroShroud.Create(SolidUnderPoint, RollDiceSeed);
+  FOrbLauncherShroudPainter := TShroudPainter.Create(FRenderer, FOrbLauncherSkin,
+    [OrbLauncherLyingSprite], OrbLauncherPose, FOrbLauncherShroud);
   FUptake := TUptake.Create(SolidUnderPoint, FShroud.Feed, RollDiceSeed);
   FUptakePainter := TUptakePainter.Create(FRenderer, FUptake);
   FSphere := TLifeSphere.Create(FShroud.Feed, RollDiceSeed);
@@ -3233,58 +3233,58 @@ begin
     SeizePad(Number);
 end;
 
-// The hull hangs: a breath, then the orb gun appears in the middle of the
+// The hull hangs: a breath, then the orb launcher appears in the middle of the
 // screen under the shroud of the respawn, and lies on the road once put
 // together. The bar of the hull's lives comes up with the terminal's key
 // once he has taken it
-procedure TMoonGame.TickOrbGun;
+procedure TMoonGame.TickOrbLauncher;
 begin
   if not FHero.Dead and (FRam.Flight.Stage = tkHanging) then
-    FOrbGun.Start;
-  FOrbGunShroud.Tick(OrbGunPose, FOrbGunShroudPainter.SeedsOf(1));
-  var Cue := FOrbGun.Tick(FOrbGunShroud.Assembling);
+    FOrbLauncher.Start;
+  FOrbLauncherShroud.Tick(OrbLauncherPose, FOrbLauncherShroudPainter.SeedsOf(1));
+  var Cue := FOrbLauncher.Tick(FOrbLauncherShroud.Assembling);
   if Cue.Appear then
   begin
-    FOrbGunLeft := OrbGunSpotX(HeroCenter.X) - SpriteSize / 2;
-    FOrbGunShroud.Start(ReviveLook);
+    FOrbLauncherLeft := OrbLauncherSpotX(HeroCenter.X) - SpriteSize / 2;
+    FOrbLauncherShroud.Start(ReviveLook);
   end;
   if Cue.Lay then
-    LayOrbGun;
+    LayOrbLauncher;
   if FHullLives.Tick then
     FAudio.Play(TerminalKeySoundFile);
 end;
 
 // A pickup like any from now on, standing where its shroud put it
 // together; its picture made now, so that the touch does not stop on it
-procedure TMoonGame.LayOrbGun;
+procedure TMoonGame.LayOrbLauncher;
 begin
-  var Gun := FField.SpawnStanding(OrbGunPickupId, OrbGunSetName, FHero.Screen,
-    FOrbGunLeft, RamFloorY, '', False);
+  var Gun := FField.SpawnStanding(OrbLauncherPickupId, OrbLauncherSetName, FHero.Screen,
+    FOrbLauncherLeft, RamFloorY, '', False);
   FUptakePainter.PictureOf(Gun);
 end;
 
 // The cell of the gun on the road, as a hero's pose: its one frame
-function TMoonGame.OrbGunPose: THeroPose;
+function TMoonGame.OrbLauncherPose: THeroPose;
 begin
   Result.Frame := 1;
-  Result.Texture := FOrbGunLying;
-  Result.Left := Round(FOrbGunLeft);
+  Result.Texture := FOrbLauncherLying;
+  Result.Left := Round(FOrbLauncherLeft);
   Result.Top := Round(RamFloorY) - SpriteSize;
   Result.Mirrored := False;
 end;
 
-// The orb gun puts away the gun he holds, and as he takes it the fight
+// The orb launcher puts away the gun he holds, and as he takes it the fight
 // with the bare hull begins
 procedure TMoonGame.TakeWeapon(const AEffect: TPickupEffectDef);
 begin
-  var IsOrbGun := AEffect.WeaponType = OrbGunWeapon;
-  if IsOrbGun then
+  var IsOrbLauncher := AEffect.WeaponType = OrbLauncherWeapon;
+  if IsOrbLauncher then
     FHero.StowGun;
   FHero.ApplyWeaponPickup(AEffect.WeaponType, AEffect.FireCooldown,
     AEffect.BulletSpeed, AEffect.BulletGravity);
-  if not IsOrbGun then
+  if not IsOrbLauncher then
     Exit;
-  FOrbGun.Take;
+  FOrbLauncher.Take;
   FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
 end;
 
@@ -3565,7 +3565,7 @@ begin
 end;
 
 // The throw goes with it: he is let go, the orbs and the hum are gone.
-// The orb gun goes too: put away, its shroud, the hull's lives and their
+// The orb launcher goes too: put away, its shroud, the hull's lives and their
 // bar gone. The paused track goes on before a restart asks whether it plays
 procedure TMoonGame.ClearEclipse;
 begin
@@ -3577,8 +3577,8 @@ begin
   FHero.Release;
   FAudio.StopHeld(FSpinHum);
   FSpinHum.Channel := -1;
-  FOrbGun.Clear;
-  FOrbGunShroud.Clear;
+  FOrbLauncher.Clear;
+  FOrbLauncherShroud.Clear;
   FHullLives.Clear;
   FOrbShots.Clear;
   FHero.UnstowGun;
@@ -4016,7 +4016,7 @@ end;
 // The shield takes the bullet into its light; the hull loses nothing.
 // The honeycomb gone, the bare hull, the nozzles under it and the wheels
 // it has shed throw the bullet off in sparks, as a tank's armour does, and
-// lose nothing either - but for an orb of the orb gun, which sinks into
+// lose nothing either - but for an orb of the orb launcher, which sinks into
 // the bare hull and takes a life of it, while it has one
 function TMoonGame.BulletStruckRam(const ABullet: TBullet): Boolean;
 begin
@@ -4394,7 +4394,7 @@ begin
   TickHeartbeat;
   TickEclipse;
   TickThrow;
-  TickOrbGun;
+  TickOrbLauncher;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
   ResolveHeroBulletHits;
@@ -4539,10 +4539,10 @@ begin
         FCannons.DrawBodies(FSprites, AAlpha);
         FSprites.Origin := FShake.Offset(scMonsters);
         FUptakePainter.DrawBehind(FField, FHero.Screen, FSprites.Origin, AAlpha);
-        FOrbGunShroudPainter.DrawUnder(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
+        FOrbLauncherShroudPainter.DrawUnder(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
         FField.Draw(FSprites, FHero.Screen, AAlpha);
-        FOrbGunShroudPainter.DrawBody(FSprites.Origin, 0, AAlpha);
-        FOrbGunShroudPainter.DrawOver(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
+        FOrbLauncherShroudPainter.DrawBody(FSprites.Origin, 0, AAlpha);
+        FOrbLauncherShroudPainter.DrawOver(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
         FUptakePainter.DrawLoot(FDynamics.Canvas, FField, FHero.Screen,
           FSprites.Origin, AAlpha);
         FSpherePainter.DrawSphere(FDynamics.Canvas, FHero.Screen,
@@ -4563,7 +4563,8 @@ begin
         FEclipsePainter.DrawBeam(BeamFoot, FHeartbeat.Pulse(AAlpha), AAlpha);
         FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
         var HeroShake := FShake.Offset(scHero);
-        var HeroLift := FHero.DeckLift(AAlpha);
+        // Held in the throw, he sways: drawn by it, as a deck lifts him
+        var HeroLift := FHero.DeckLift(AAlpha) + FThrow.Sway(AAlpha);
         FOrbs.DrawVeil(FDynamics.Canvas, HeroShake);
         // The burst's inhale: a bare figure stands for the hero and his
         // shroud
@@ -4594,7 +4595,7 @@ begin
         FMarks.DrawRam(FRam, FShake.Offset(scWorld), AAlpha);
         var HintAt: TSdlFPoint;
         HintAt.X := FHero.X + HeroSize / 2 + HeroShake.X;
-        HintAt.Y := FHero.Y - HeroSize + HeroShake.Y;
+        HintAt.Y := FHero.Y - HeroSize + HeroShake.Y + HeroLift;
         FThrowPainter.DrawHint(HintAt, FHeartbeat.Pulse(AAlpha), AAlpha);
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);

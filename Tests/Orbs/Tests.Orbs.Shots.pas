@@ -1,5 +1,5 @@
 ﻿{
-  Tests.Orbs.Shots - the look of the orb gun's shots: an orb for every
+  Tests.Orbs.Shots - the look of the orb launcher's shots: an orb for every
   orb-look bullet in flight and none for another bullet; one orb a bullet,
   however many ticks; the orb where the bullet's picture is, going where
   the bullet goes; a bullet spent, or gone from the burst, leaves its orb

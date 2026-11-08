@@ -93,7 +93,7 @@ uses
   Game.Wheel in 'Game\Game.Wheel.pas',
   Game.Takeoff in 'Game\Game.Takeoff.pas',
   Game.HullLives in 'Game\Game.HullLives.pas',
-  Game.OrbGun in 'Game\Game.OrbGun.pas',
+  Game.OrbLauncher in 'Game\Game.OrbLauncher.pas',
   Game.Belt in 'Game\Game.Belt.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
   Game.Fangs in 'Game\Game.Fangs.pas',

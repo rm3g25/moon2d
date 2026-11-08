@@ -1,6 +1,6 @@
 ﻿{
   Game.HullLives - the lives of the Ram's bare hull, which only the orb
-  gun takes, and the long bar along the top of the screen that shows
+  launcher takes, and the long bar along the top of the screen that shows
   them.
 
   Armed as the gun comes to the hero: the bar comes down into its place
