@@ -3342,14 +3342,14 @@ begin
   CrumbleHoneycomb;
 end;
 
-// The honeycomb goes out from the pieces broken off, and the boss track
-// starts again from its beginning, fading in under the blast
+// The honeycomb goes out from the pieces broken off, and the track of the
+// fight in the air starts, fading in under the blast
 procedure TMoonGame.CrumbleHoneycomb;
 const
   TrackFadeSeconds = 1.5;
 begin
   FRam.Shield.Crumble;
-  ChangeMusic(FRam.Track, TrackFadeSeconds);
+  ChangeMusic(FRam.FlightTrack, TrackFadeSeconds);
 end;
 
 // The honeycomb down a breath ago: the front wheel breaks off with a crash

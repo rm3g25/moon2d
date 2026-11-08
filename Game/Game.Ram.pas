@@ -849,6 +849,7 @@ type
     property Mast: Single read FMast;
     property Left: Single read FX;
     property Track: string read FOrders.Track;
+    property FlightTrack: string read FOrders.FlightTrack;
   end;
 
   // The art of the Ram through a cache of its own: painted with soft edges,

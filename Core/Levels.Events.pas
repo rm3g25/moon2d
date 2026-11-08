@@ -68,12 +68,14 @@ type
   end;
 
   // TEK-R13, the Ram, of the boss arena (Game.Ram): where its ram stops
-  // after the drive-in, the track that starts as its head locks, the
-  // seconds the track before it takes to fade out to silence, and the
-  // pads the shuttle drops the hunter's medkits onto
+  // after the drive-in, the track that starts as its head locks and the
+  // one that starts as its honeycomb falls, the seconds the track before
+  // it takes to fade out to silence, and the pads the shuttle drops the
+  // hunter's medkits onto
   TRamOrders = record
     Stop: Single; // the tip of the ram, units from the left edge
     Track: string;
+    FlightTrack: string;
     SilenceSeconds: Single;
     MedkitPads: TArray<string>; // tags
   end;
@@ -442,6 +444,8 @@ begin
   if AAction.FileName = '' then
     raise ELevelEventError.CreateFmt(SEventNoRamTrack, [ALevelId, AEventId]);
   AAction.Ram.Track := AAction.FileName;
+  AAction.Ram.FlightTrack := AObj.GetValue<string>('flightFile',
+    AAction.Ram.Track);
   AAction.Ram.SilenceSeconds := AAction.FadeOutSeconds;
   AAction.Ram.MedkitPads := [];
   var Pads := AObj.GetValue('medkitPads');

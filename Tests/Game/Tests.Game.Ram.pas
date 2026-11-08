@@ -10,8 +10,9 @@
   hero on a pad is out of its way, in the air over it too, until he comes
   down onto the floor; a fall onto it from above wounds. The shield takes
   a bullet, an absent machine nothing. And the shield over a body, and
-  the ram action of a level's events with the pads of its medkits, and
-  the Ram of level 2's boss arena.
+  the ram action of a level's events with the pads of its medkits and the
+  track of its flight - the fight's when none is named, and the Ram of
+  level 2's boss arena.
 
   The hunter: its lives follow the grade; its eye and the top of its head
   take a hit, from above or the side but not up through the head, and
@@ -303,6 +304,8 @@ type
   public
     [Test]
     procedure TestRamIsRead;
+    [Test]
+    procedure TestFlightTrackIsRead;
     [Test]
     procedure TestMedkitPadsAreRead;
     [Test]
@@ -1033,9 +1036,19 @@ begin
   Assert.AreEqual<TEventActionKind>(eaRam, Action.Kind, 'The action');
   Assert.AreEqual(260.0, Action.Ram.Stop, 0.001, 'Its stop');
   Assert.AreEqual('b.ogg', Action.Ram.Track, 'Its track');
+  Assert.AreEqual('b.ogg', Action.Ram.FlightTrack,
+    'None of its own for the flight: the fight''s');
   Assert.AreEqual(2.5, Action.Ram.SilenceSeconds, 0.001,
     'The fade-out to silence');
   Assert.AreEqual(0, Length(Action.Ram.MedkitPads), 'No medkit pads named');
+end;
+
+procedure TRamLevelTests.TestFlightTrackIsRead;
+begin
+  var Action := RamEvents(',"stop":260,"file":"b.ogg","flightFile":"f.ogg"')[0].
+    Actions[0];
+  Assert.AreEqual('b.ogg', Action.Ram.Track, 'The fight''s');
+  Assert.AreEqual('f.ogg', Action.Ram.FlightTrack, 'The flight''s');
 end;
 
 procedure TRamLevelTests.TestMedkitPadsAreRead;
@@ -1069,7 +1082,8 @@ end;
 
 // The arena of level 2 brings the Ram, its ram stopping at 260, clear of
 // the pads on the right; the Ram starts the boss track, no event of the
-// screen does; the hunter's medkits come down onto pads of the arena
+// screen does, and the flight has its own; the hunter's medkits come down
+// onto pads of the arena
 procedure TRamLevelTests.TestLevelTwoArenaBringsTheRam;
 begin
   var Level := TLevel.Create;
@@ -1091,6 +1105,8 @@ begin
           'On arrival');
         Assert.AreEqual(260.0, Action.Ram.Stop, 0.001, 'Its stop');
         Assert.AreEqual('boss3.ogg', Action.Ram.Track, 'The boss track');
+        Assert.AreEqual('flight.ogg', Action.Ram.FlightTrack,
+          'The track of the flight');
         Assert.IsTrue(Length(Action.Ram.MedkitPads) > 0, 'Medkit pads named');
         for var Tag in Action.Ram.MedkitPads do
           Assert.IsTrue(ArenaHasPad(Level, Tag),
