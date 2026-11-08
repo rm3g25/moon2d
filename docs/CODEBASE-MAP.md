@@ -2516,6 +2516,9 @@ Projectiles + the one 2008 particle-hack spawner that is left.
   it (plain by default), `Look` reads it back; a red one is the Duplet's
   shot: `DrawBullet` tints the shared texture (`RedShotRed/Green/Blue`
   100/28/22 percent) for its own draw and puts it back.
+- 3.0.116: **`blOrb`** - the orb gun's shot, which is seen as an orb
+  (`Orbs.Shots`): `TBurst.Draw` draws nothing of it, and turns a bursting
+  one inactive at once - it has no frames.
 
 ### `Game/Pads/Pads.Formations.pas` (~450 lines)
 The dice, the judge and the assignment of a pad group's rebuild
@@ -3490,6 +3493,17 @@ moves in comes from `Game.Space`.
   `HuntFlingWay` 3). **`Shove(way)`** - the Ram's bow shoves him along
   the road, `CarryX` as far as no wall stops him.
 - 3.0.98: `Shove` is gone - the pass throws, it does not shove.
+- 3.0.116, **the orb gun** (`arena-3.md`, "Stage 17a as built"):
+  **`OrbGunWeapon`** = 6; it comes as the pickup `weaponOrbGun`.
+  **`TStowedGun`** (record: `Held`, `WeaponType`, `FireCooldown`,
+  `BulletSpeed`, `BulletGravity` - what `ApplyWeaponPickup` takes).
+  **`StowGun`** - the gun he holds put away, the next pickup takes its
+  place for a while; **`UnstowGun`** - it comes back, nothing when none
+  is put away. `FireOrb` - one bullet of the look `blOrb`, `MuzzleReach`
+  22 along the shot from the 2008 spawn point. In the hands:
+  `orbgun.mset` through its own cache (`FOrbGunCache`, `FOrbGunSet`),
+  `held` drawn `OrbGunHeldSide` 32 square; `DrawWeapon` picks the gun's
+  picture by a `case`.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -4218,6 +4232,15 @@ Health rows over the figures, drawn with the brush; built by `CreateHud` in
   offsets are passed by hand. Drawn after the bullets, before the crosshair
   and the corner HUDs.
 
+### `Hud/Hud.HullBar.pas` (~105 lines, 3.0.116)
+The long bar of the Ram's hull along the top of the screen, between the
+monitor (with its wing) and the charge panel: a plate centred on the
+screen and on the panels' height, `HullBarCells` cells of 4 by 6, in the
+head row's grammar (the thirds' colours, the newest booting cell
+glowing, a red frame and a white cell at a wound); it comes down from
+over the top edge (`THullBar.Drop`). **`THudHullBar`** - `Draw(bar)`.
+Reborn with the HUD (`CreateHud`).
+
 ### `Game/Game.Explosions.pas` (~400 lines)
 The one home of "something blew up" - the look, not the mechanics (the
 wave that wounds is `Game.Blasts`). **`TExplosions`**, made once
@@ -4830,6 +4853,17 @@ The orbs that carry a charge into its gauge. **`TOrbFeed`** owns a flock
   The orbs are not armed.
 - Tests: `Tests.Orbs.Feed`.
 
+### `Game/Orbs/Orbs.Shots.pas` (~125 lines, 3.0.116)
+The look of the orb gun's shots. **`TOrbShots`** owns a flock of
+`MoonOrbTint` and the pairs of a bullet and its orb.
+- `Tick(bullets)` - once a tick, after the hits of the bullets are
+  settled: the orb of a bullet no more in flight, no more in the list, or
+  no more of the orb look (another born where a freed one was), is spent
+  to dust before the flock's tick drops it; a `blOrb` bullet in flight
+  with no orb gets one; every orb goes where its bullet's picture is (a
+  sprite over the point). `Clear`, `Draw`, `Flock`. None armed.
+- Tests: `Tests.Orbs.Shots`.
+
 ### `Game/Game.Shroud.pas` (~980 lines)
 The hero's shroud (3.0.47): smoke and light that gather round him when he
 appears and when he changes his suit. A picture over the hero's frame that
@@ -4892,6 +4926,16 @@ project's storage, not the repository).
     0.01 it is 0. `Clear` puts it out; `Start` and `LeaveMotes` do not
     touch it - through a door the light goes with the hero. A feed rolls
     no dice and starts no scene. `Fed` is the level, `FedTint` the tint.
+- 3.0.116, **the figure**: the painter is handed a figure in place of the
+  hero - `Create(renderer, skin, frames, pose, shroud)`: the sprite set
+  the frames are in, their names (frame 1 the first), and
+  **`TShroudPose`** (`reference to function: THeroPose`), where the
+  figure stands now. **`HeroShroudFrames(skin)`** - the hero's frames in
+  the order of his poses' numbers (`HeroFrameSequences`). The hero's
+  painter is made with them and `FHero.Pose`; the orb gun's with its one
+  frame `lying` and `TMoonGame.OrbGunPose`. `THeroShroud` never knew the
+  hero, only a pose and its seeds: unchanged. What is said below of "the
+  hero" is said of the figure.
 - **`TShroudPainter`** draws, and makes at load what the drawing needs from the
   hero's 24 frames: a `TSilhouette` each (`BuildSilhouette` of
   `Render.Silhouette` at `HeroSize` - the seed points, a white mask with the
@@ -5674,6 +5718,13 @@ monster. The game carries out the cue.
   `AheadShellMark`. **`OpenTop`** - a row of cells (`OpenRowsDepth` 5.1)
   under the hatch: `StrikeBunker`'s line, and `OpenAbove` strips the
   honeycomb to it.
+- 3.0.116, **the nozzles meet a shot** (`arena-3.md`, "Stage 17a as
+  built"): **`StrikeNozzles(from, to, at, normal)`** - each nozzle a box of
+  the upright hull under its axle (`NozzleWidth` by `NozzleHeight` times
+  `TTakeoff.NozzleAt`, from `NozzleHang` under the axle), the stretch
+  brought into the upright hull as `StrikeHull` brings it, the face by
+  `TraceEntry`, a hit of the hull for `HullStruckWithin`; nothing while
+  they are in. The game asks it before the hull.
 ### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -5864,6 +5915,31 @@ play layer. The rules and the drawing, as the wrecks and the capsules.
   (`FangTint`; the kit is the level's own objects, whose tint is set on
   every draw, so it is set here on every draw too) and flipped for a
   mirrored one.
+### `Game/Game.OrbGun.pas` (~120 lines, 3.0.116)
+The orb gun coming once the Ram hangs, as a pickup (`arena-3.md`, "Stage
+17a as built"). Knows neither the Ram, the hero nor the shroud.
+- **`TOrbGunStage`** = (`ogNone`, `ogWaiting` - the breath of
+  `OrbGunBreathTicks` 33, `ogAppearing` - put together under its shroud,
+  `ogLying` - on the road, `ogTaken`). **`TOrbGunCue`** - `Appear`, `Lay`.
+- **`TOrbGunArrival`** - `Start` (only from `ogNone`), `Tick(assembling)`
+  (the shroud still putting it together: no `Lay` yet), `Take` (only
+  while it lies), `Clear`, `Stage`.
+- **`OrbGunSpotX(hero's middle)`** - the middle of the screen, or
+  `OrbGunClearance` 32 (the next cell) aside of him when he stands nearer,
+  on the wider side.
+- Tests: `Tests.Game.OrbGun`.
+
+### `Game/Game.HullLives.pas` (~140 lines, 3.0.116)
+The lives of the Ram's bare hull, which only the orb gun takes, and the
+reading of their bar. **`THullLives`** - `Arm(share)` (`RamHullLives` 150
+times the grade's share), `Clear`, `Tick` (True on the ticks the
+terminal's key is heard: every `HullBarKeyCells` 3 of the `HullBarCells`
+30 lit over `HullBarBootTicks` 30, after the drop of `HullBarDropTicks`
+16), `Wound` (a life; False when not armed or none left), `Bar(alpha)` -
+**`THullBar`** (`Shown`, `Drop`, `Lit`, `Share`, `HitTicks`); `Armed`,
+`Lives`, `FullLives`. `HullBarHitTicks` 8.
+- Tests: `Tests.Game.HullLives`.
+
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
 with no pads, no monsters and no SDL - a class a test drives alone
@@ -6904,6 +6980,29 @@ so a unit (and later a test) can reach it. `interface` holds
 - 3.0.98: `ResolveRamShove` is gone. `ShellBlast` radius 40 (half the
   tank's).
 
+- 3.0.116, **the orb gun** (`arena-3.md`, "Stage 17a as built"):
+  `FOrbGun` (`TOrbGunArrival`), the gun's skin and frame on the road
+  (`FOrbGunSkin`, `FOrbGunCache`, `FOrbGunLying`), its place
+  (`FOrbGunLeft`), its shroud (`FOrbGunShroud`, `FOrbGunShroudPainter` -
+  made with the hero's in `LoadLevel`), `FHullLives`, `FOrbShots`,
+  `FHullBar` (in `CreateHud`). **`TickOrbGun`** (after `TickThrow`): the
+  arrival started while the hull hangs (`TTakeoff.Stage = tkHanging`)
+  and the hero lives; the gun's shroud ticked on `OrbGunPose`; `Appear` -
+  its place (`OrbGunSpotX`), its shroud started (`ReviveLook`); `Lay` -
+  **`LayOrbGun`** (`SpawnStanding` of `weaponOrbGun`, its uptake picture
+  made); the bar's key (`terminal.wav`). **`TakeWeapon(effect)`** - every
+  weapon pickup: for the orb gun `StowGun` first, then the pickup, then
+  `FOrbGun.Take` and the hull's lives by the grade. `ClearEclipse` clears
+  the arrival, its shroud, the hull's lives and the shots, and gives the
+  put-away gun back (`UnstowGun`); a door clears the shots with the
+  bullets. `BulletStruckRam`: the nozzles first, then the hull, then the
+  wheels; an orb on the bare hull with lives left - a life,
+  `OrbHitSoundFile` (`orbhit.wav`), no sparks. `FOrbShots.Tick` after
+  `ResolveHeroBulletHits`. `WeaponShotSounds` to `OrbGunWeapon`
+  (`orbgun.wav`). The draw: the gun's shroud about the monsters
+  (`DrawUnder` before them, `DrawBody` and `DrawOver` after), the shots
+  after the hero's bullets, the bar after the monitor.
+
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
 config -> language -> level discovery -> registry -> host -> game),
@@ -7096,6 +7195,13 @@ Builds `duplet.mset` from one generated side view of the gun: `lying`
 (the pickup's `picture` box) and `held` (the grip in the fist of the 2008
 arm frame, a 48-unit square).
 
+### `tools/orbgun/build_orbgun.py` (3.0.116)
+Builds `orbgun.mset` from one generated side view of the orb gun, as the
+Duplet's tool does: `lying` (the pickup - a frame of the 2008 cell, the
+gun 24 units long on its grip's foot), `held` (16 units long in a square
+of 32, the grip in the fist of the 2008 arm frame), `gone`, and the
+Duplet's sequences.
+
 ### `tools/dust/build_dust.py` (3.0.65)
 Builds `dust.mset` from noise, not generated: long white strips, the dust
 in the alpha, seamless across, clear at top and bottom.
@@ -7104,6 +7210,12 @@ in the alpha, seamless across, clear at top and bottom.
 The Duplet's shot (the 2008 shotgun slowed, doubled, over a sliding
 thump); the moon stone's waking drone and its power-down with the rocks'
 far blow - built as the cordon's hum is. Need numpy and `armor.py`.
+
+### `tools/sounds/orbgun.py` (3.0.116)
+The orb gun's shot (`orbgun.wav`: a sliding sub thump, a breath of dark
+noise, a hollow ring of two low partials) and an orb sinking into the
+hull (`orbhit.wav`: the thump lower and longer under a dull clang). Need
+numpy and `armor.py`.
 
 ### `tools/sounds/ram.py` (3.0.75)
 The Ram's three sounds: `ramrumble.wav` - a 2 s loop with no seam (every
@@ -7585,6 +7697,12 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
     audio driver.
   - `Tests.Rooms` grows `RoomFromRows(rows, sections)` (pads of no
     sprite in the room's level) and shows `Level` and `Pads`.
+- 3.0.116: **`Game/Tests.Game.OrbGun.pas`** - **`TOrbGunArrivalTests`**
+  (9), the orb gun's coming and its place; **`Game/Tests.Game.HullLives.pas`**
+  - **`THullLivesTests`** (7), the hull's lives and their bar;
+  **`Orbs/Tests.Orbs.Shots.pas`** - **`TOrbShotsTests`** (7), the orbs
+  riding the orb gun's bullets; `TRamBrakeTests` +2 (the nozzles meet a
+  shot from under the hanging hull; none on the road).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -7922,8 +8040,9 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   13, 6 - the checkpoint by the stone, 3.0.71). Respawns on 9, 10 and 11
   at column 2, row 11.
 
-### `sprites\*.mset` (48 sets)
-Since 3.0.62: `duplet` (3.0.64 - `lying`, the pickup on its pedestal, and
+### `sprites\*.mset` (49 sets)
+3.0.116: `orbgun` (`lying`, the pickup on the road; `held`, the gun in the
+hero's hands; `gone`; `tools/orbgun/build_orbgun.py`). Since 3.0.62: `duplet` (3.0.64 - `lying`, the pickup on its pedestal, and
 `held`, the gun in the hero's hands; `tools/duplet/build_duplet.py`),
 `dust` (3.0.65 - the white bands of the tunnel dust;
 `tools/dust/build_dust.py`), `moonstone` (3.0.67 - the moon stone; no
@@ -8068,7 +8187,8 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 twelve OGG files; 2026-11-07: `flight.ogg` (the Ram's fight after the
 honeycomb, played since 3.0.115) and `credits.ogg` (the end titles, not
 played yet) - fourteen; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`,
-made again in 3.0.83).
+made again in 3.0.83). 3.0.116: `orbgun.wav`, `orbhit.wav`
+(`tools/sounds/orbgun.py`).
 
 ---
 

@@ -1,8 +1,9 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-08: **3.0.115** - arena 3 (the finale of level 2),
-after 18c-3: the flight's own track, `flight.ogg`, from the honeycomb's
-fall. In
+Status at 2026-11-08: **3.0.116** - arena 3 (the finale of level 2),
+stage 17a: the orb gun appears on the road once the Ram hangs, taken it
+fires black orbs that wound the bare hull, its lives on a long bar; the
+world still stands till 17b. In
 work: arena 3, its file `docs/mechanics/arena-3.md`; what each version
 brought, a paragraph each - `CHANGELOG.md`. The status here is a few
 lines: the version, what is in work, where to read; the details of a

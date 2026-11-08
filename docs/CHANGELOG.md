@@ -7,6 +7,27 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-08: **3.0.116 - the orb gun (stage 17a).** Once the Ram hangs,
+a breath, and the orb gun appears in the middle of the road under the
+shroud of the respawn - on the next cell when the hero stands there - and
+lies there, a pickup (`Game.OrbGun`, `weaponOrbGun`). Taken, it is in his
+hands in place of his own gun, which is put away (`THero.StowGun`), and
+the fight with the bare hull begins: the hull's lives - 150 on the first
+grade, by the grade - on a long bar along the top of the screen between
+the HUD's panels, coming down and lighting a cell at a time
+(`Game.HullLives`, `Hud.HullBar`). The art is the generated white
+blaster, `orbgun.mset` (`lying`, `held` 16 units long, `gone`;
+`tools/orbgun/build_orbgun.py`). It fires one black orb a shot, a
+cooldown of 4 (`OrbGunWeapon` 6, `blOrb`, its look `Orbs.Shots`, its
+sound `orbgun.wav`); an orb that meets the bare hull takes a life of it
+(`orbhit.wav`), the nozzles and the wheels throw it off - the nozzles,
+out of the body's grid, now throw any shot off (`TRam.StrikeNozzles`).
+The shroud's painter is handed a figure - its frames and its pose - in
+place of the hero (`TShroudPainter.Create`, `HeroShroudFrames`), so the
+gun wears one too. The world stands till 17b; a death goes to point A,
+the old gun back in his hands. Tests: `TOrbGunArrivalTests` 9,
+`THullLivesTests` 7, `TOrbShotsTests` 7, `TRamBrakeTests` +2.
+
 2026-11-08: **3.0.115 - the flight's own track.** From the fall of the
 Ram's honeycomb `flight.ogg` plays in place of `boss3.ogg` started again:
 from its beginning, fading in over 1.5 s under the blast, looping. Named
