@@ -1,8 +1,8 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-07: **3.0.114** - arena 3 (the finale of level 2),
-after 18c-3: the shed wheels bounce in sparks, the rear one dropped from
-the risen hull; the eclipse's light on the body held to the blast. In
+Status at 2026-11-08: **3.0.115** - arena 3 (the finale of level 2),
+after 18c-3: the flight's own track, `flight.ogg`, from the honeycomb's
+fall. In
 work: arena 3, its file `docs/mechanics/arena-3.md`; what each version
 brought, a paragraph each - `CHANGELOG.md`. The status here is a few
 lines: the version, what is in work, where to read; the details of a

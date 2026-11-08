@@ -1,13 +1,13 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made.
+Status: designed (2026-10-22), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
 
 ## Decided (2026-10-22)
 - No victory track at the end. win.ogg already lied once, at the end of arena 2; a second time would be a joke at the player's expense.
-- The boss's tense track falls silent after the blast.
+- The boss's tense track falls silent after the blast - by then the flight's, `flight.ogg` (arena 3, since 3.0.115).
 - Legendary is the end track and keeps playing after the exit to the main menu.
 - The order of the titles, over the main screen (the arena after the blast, the hero standing in it, no control):
   1. "Computer Dragon presents".
@@ -81,7 +81,7 @@ A camera offset is also what the train level's "screenUp" will need.
 
 ## Sync
 - The track's own time is the clock. Two ways: ticks since `PlayMusic` (33 Hz, drifts a little against the audio device, a constant lead for the mixer's buffer), or `Mix_GetMusicPosition` (SDL_mixer 2.6+, a delayed import with the ticks as its fallback). The first sync-critical moment, the flash, is within seconds of the start, so ticks are enough; measure live before anything more.
-- The beat map: onset and beat times of legendary.ogg by librosa, the cue times of the table above read off it. Needs the track.
+- The beat map: onset and beat times of credits.ogg by librosa, the cue times of the table above read off it. Needs the track.
 - No mixer (the DLL is missing): the titles still run, by ticks; the track's length is kept in the timeline data for that case.
 - The end of the track in the menu: there is no detection today (no `Mix_PlayingMusic` in `Audio.pas`). Added, so the menu theme (moon.ogg) takes over when Legendary ends, instead of a silent menu.
 
@@ -106,7 +106,7 @@ Each its own commit, each run live. The titles are tried on any existing screen 
 - The hero's pose at the finale: where he stood, or a short scripted walk to the middle.
 - The wording of the line under the logo and of the last line.
 - The exit: automatically at the end of the track, or by a click on "Main menu" (the old farewell's two lines, with the author's link), or both; whether Escape skips to the last line.
-- The track: file name, loudness against the other tracks, its length.
+- ~~The track: file name, loudness against the other tracks, its length.~~ `credits.ogg`, about -14.2 LUFS (the boss tracks -14.5 and -14.7, the tunnels' `lunar.ogg` -16.4), 238 s (2026-11-08).
 - Whether the titles are a data file (a timeline in JSON) rather than code: the game has at least two more endings ahead (the shift to Selene, the end of the hero), and each would be a timeline.
 
 ## Risks

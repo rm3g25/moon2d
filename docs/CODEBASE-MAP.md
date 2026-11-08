@@ -1968,6 +1968,8 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   (JSON `"stop"`, units, the tip of the ram after the drive-in, on the
   screen, `SEventBadRamStop`), `Track` (`"file"`, `SEventNoRamTrack`),
   `SilenceSeconds` (`"fadeOut"`).
+- 3.0.115: `TRamOrders.FlightTrack` (`"flightFile"`, the track from the
+  honeycomb's fall on - `TMoonGame.CrumbleHoneycomb`; `Track` when absent).
 - 3.0.84: `TRamOrders.MedkitPads` (`"medkitPads"`, a list of pad tags -
   the hunter's medkits come down onto one; `SEventBadRamPads`).
 
@@ -8063,7 +8065,9 @@ held sound since then). Eleven OGG files, all used. 3.0.64: `duplet.wav`
 `stonefall.py` - the drone of the stone waking and powering down);
 3.0.75: `ramrumble.wav`, `ramhiss.wav`, `ramwhine.wav`
 (`tools/sounds/ram.py`) and `boss3.ogg`, the track of the Ram's fight -
-twelve OGG files; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`,
+twelve OGG files; 2026-11-07: `flight.ogg` (the Ram's fight after the
+honeycomb, played since 3.0.115) and `credits.ogg` (the end titles, not
+played yet) - fourteen; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`,
 made again in 3.0.83).
 
 ---

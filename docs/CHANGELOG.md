@@ -7,6 +7,15 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-08: **3.0.115 - the flight's own track.** From the fall of the
+Ram's honeycomb `flight.ogg` plays in place of `boss3.ogg` started again:
+from its beginning, fading in over 1.5 s under the blast, looping. Named
+in the level: the `ram` action's `"flightFile"` (`TRamOrders.FlightTrack`;
+the fight's `"file"` when absent); screen 13 names `flight.ogg`. A death
+goes back to point A with the boss track, as before. `credits.ogg`, the
+end titles' "Legendary", is in `bin/music/` and in the docs, played by
+nothing yet. Tests: `TRamLevelTests` +1.
+
 2026-11-07: **3.0.114 - the wheels bounce, the eclipse's charge held.**
 A shed wheel no longer rolls at once: it strikes the road, keeps 0.6 of
 its speed up and bounces lower and lower till a bounce has under 1 a tick
