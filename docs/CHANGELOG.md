@@ -7,6 +7,15 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-08: **3.0.117 - the orb launcher; he sways in the throw.** The
+orb gun of 3.0.116 is named the orb launcher ("Орбомёт"), in the game, the
+data, the code and the files (`orblauncher.mset`, `orblauncher.wav`,
+`Game.OrbLauncher`, `weaponOrbLauncher`). Its shot's orb is smaller: a rim
+of 7.2 units, not 9.2 (`Orbs.Shots`, `ShotSize`). Held in his place in the
+throw, the hero sways up and down - 2 units either way over two seconds,
+growing over the first swing - drawn by his lift, not moved
+(`TThrowScene.Sway`). Tests: `TThrowSceneTests` +2.
+
 2026-11-08: **3.0.116 - the orb gun (stage 17a).** Once the Ram hangs,
 a breath, and the orb gun appears in the middle of the road under the
 shroud of the respawn - on the next cell when the hero stands there - and
