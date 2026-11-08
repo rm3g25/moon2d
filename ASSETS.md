@@ -137,6 +137,15 @@ whole to 6 px per screen unit (192x68 and 228x132). The dock is turned
 upside down from the generation, so its lamp hangs under the frame, and
 the lamp glass is painted switched off: a beacon is its light. A set of
 its own because the mechanic is the whole game's, not one level's.
+Since 3.0.118 the set holds the TeK hover-barges of the arena 3 air phase
+(`barge-5`, `barge-4`, `barge-3`, `barge-2`): one generation (ChatGPT's
+image model, the author's prompt - a flat barge in side view, the
+turbine at the stern, the prow to the right, six identical bays of
+hexagonal armour between, the hazard stripe of the pads along the deck)
+cut at the middle of every rib and put together again in four lengths -
+the stern, six, four, three or one bay, the prow - at 6 px per screen
+unit, 160 / 123 / 104 / 67 units long (`tools/barge/build_barge.py`). The
+source picture is not in the repository.
 
 **The fans** (`sprites/ventilation.mset`) - since 3.0.24, generated with
 ChatGPT's image model from the author's prompts (a heavy rotor and a round

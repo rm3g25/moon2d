@@ -247,6 +247,8 @@
         <DCCReference Include="Game\Game.HullLives.pas"/>
         <DCCReference Include="Game\Game.OrbLauncher.pas"/>
         <DCCReference Include="Game\Game.Belt.pas"/>
+        <DCCReference Include="Game\Game.Road.pas"/>
+        <DCCReference Include="Game\Game.Barge.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>
         <DCCReference Include="Game\Game.Explosions.pas"/>

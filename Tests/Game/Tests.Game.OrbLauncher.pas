@@ -43,6 +43,8 @@ type
     [Test]
     procedure TestAClearTakesItAll;
     [Test]
+    procedure TestGrantedItIsTakenAndStartsNoMore;
+    [Test]
     procedure TestInTheMiddleWhenHeStandsAside;
     [Test]
     procedure TestTheNextCellWhenHeStandsThere;
@@ -180,6 +182,19 @@ begin
     Assert.IsTrue((Spot >= 0) and (Spot <= ScreenWidth),
       Format('On the screen, he at %d', [X]));
   end;
+end;
+
+procedure TOrbLauncherArrivalTests.TestGrantedItIsTakenAndStartsNoMore;
+begin
+  FArrival.Grant;
+  Assert.AreEqual(Ord(olTaken), Ord(FArrival.Stage), 'His from the start');
+  FArrival.Start;
+  for var i := 1 to OrbLauncherBreathTicks * 2 do
+  begin
+    var Cue := FArrival.Tick(False);
+    Assert.IsFalse(Cue.Appear or Cue.Lay, 'Nothing appears or lies');
+  end;
+  Assert.AreEqual(Ord(olTaken), Ord(FArrival.Stage), 'Taken still');
 end;
 
 initialization

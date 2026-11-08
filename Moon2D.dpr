@@ -95,6 +95,8 @@ uses
   Game.HullLives in 'Game\Game.HullLives.pas',
   Game.OrbLauncher in 'Game\Game.OrbLauncher.pas',
   Game.Belt in 'Game\Game.Belt.pas',
+  Game.Road in 'Game\Game.Road.pas',
+  Game.Barge in 'Game\Game.Barge.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
   Game.Fangs in 'Game\Game.Fangs.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',

@@ -97,6 +97,8 @@
         <DCCReference Include="Game\Tests.Game.OrbLauncher.pas"/>
         <DCCReference Include="Game\Tests.Game.Shield.pas"/>
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
+        <DCCReference Include="Game\Tests.Game.Road.pas"/>
+        <DCCReference Include="Game\Tests.Game.Barge.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Render\Tests.Render.Monochrome.pas"/>
@@ -110,6 +112,7 @@
         <DCCReference Include="Levels\Tests.Levels.Monorail.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Searchlights.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Doors.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Grid.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Entities.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Events.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Graph.pas"/>

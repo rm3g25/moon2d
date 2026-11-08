@@ -65,6 +65,8 @@ type
     procedure TestAJetFlaresThenBurnsSteady;
     [Test]
     procedure TestAStopTakesItAll;
+    [Test]
+    procedure TestHungItIsSteadyFromTheStart;
   end;
 
 implementation
@@ -357,6 +359,24 @@ begin
   Assert.AreEqual(0.0, Double(FTakeoff.BayAt(1)), Slop, 'No bay');
   Assert.AreEqual(0.0, Double(FTakeoff.NozzleAt(1)), Slop, 'No nozzle');
   Assert.IsFalse(FTakeoff.Tick.Ignite, 'Nothing catches');
+end;
+
+procedure TTakeoffTests.TestHungItIsSteadyFromTheStart;
+begin
+  FTakeoff.Hang;
+  Assert.AreEqual(Ord(tkHanging), Ord(FTakeoff.Stage), 'Hanging');
+  Assert.IsTrue(FTakeoff.Running, 'Running');
+  Assert.IsTrue(FTakeoff.Spat, 'The rear wheel out of its well');
+  Assert.AreEqual(Double(HangLift), Double(FTakeoff.LiftAt(1)), 0.001, 'At its height');
+  Assert.AreEqual(Double(HangLift), Double(FTakeoff.LiftAt(0)), 0.001, 'And a tick ago');
+  Assert.AreEqual(1.0, Double(FTakeoff.AirAt(1)), 0.001, 'Turning about its middle');
+  Assert.AreEqual(1.0, Double(FTakeoff.BayAt(1)), 0.001, 'The bays out');
+  Assert.AreEqual(1.0, Double(FTakeoff.NozzleAt(1)), 0.001, 'The nozzles out');
+  Assert.AreEqual(1.0, Double(FTakeoff.JetAt(tjFront, 1)), 0.001, 'The front jet steady');
+  Assert.AreEqual(1.0, Double(FTakeoff.JetAt(tjRear, 0)), 0.001, 'The rear jet steady a tick ago');
+  var Cue := FTakeoff.Tick(0);
+  Assert.IsFalse(Cue.Ignite or Cue.Spit or Cue.Steady, 'Nothing of the way up');
+  Assert.IsTrue(Abs(FTakeoff.LiftAt(1) - HangLift) <= BobUnits + 0.001, 'Bobbing about its height');
 end;
 
 initialization

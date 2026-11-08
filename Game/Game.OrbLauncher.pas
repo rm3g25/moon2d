@@ -50,6 +50,8 @@ type
     function Tick(AAssembling: Boolean): TOrbLauncherCue;
     // He has taken it; nothing unless it lies
     procedure Take;
+    // His from the start, as after a take: a restart in the air phase
+    procedure Grant;
     // A death, a new level: none of it
     procedure Clear;
     property Stage: TOrbLauncherStage read FStage;
@@ -98,6 +100,11 @@ procedure TOrbLauncherArrival.Take;
 begin
   if FStage = olLying then
     FStage := olTaken;
+end;
+
+procedure TOrbLauncherArrival.Grant;
+begin
+  FStage := olTaken;
 end;
 
 procedure TOrbLauncherArrival.Clear;

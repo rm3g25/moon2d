@@ -66,6 +66,11 @@
   so it takes no x or y and does nothing else: no path, no plunge, no
   shelf, no group, no carousel, no stray, no sleep of a scene's.
 
+  A pad may be stowed: as a dormant one it is not there, but no scene
+  wakes it - the game brings it in by rules of its own, where the level
+  file puts it or wherever it flies it. The pads of the air phase of the
+  chase - the pier and the barge - are stowed.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Pads;
@@ -218,6 +223,9 @@ type
     Rigs: TArray<string>;
     // Not there until a scene wakes it. JSON: "dormant": true.
     Dormant: Boolean;
+    // Not there until the game brings it in by its own rules; no scene
+    // wakes it. JSON: "stowed": true.
+    Stowed: Boolean;
     // In the pool of a chase, asleep until the game sends it. JSON:
     // "drift": true.
     Drift: Boolean;
@@ -714,6 +722,7 @@ begin
     Pad.Group := Obj.GetValue<string>('group', '');
     Pad.Rigs := ReadRigNames(Obj, ALevelId, PadRigName(Pad));
     Pad.Dormant := Obj.GetValue<Boolean>('dormant', False);
+    Pad.Stowed := Obj.GetValue<Boolean>('stowed', False);
 
     if Pad.Width <= 0 then
       raise EPadError.CreateFmt(SPadBadWidth, [ALevelId, Pad.Sprite, Pad.Width]);

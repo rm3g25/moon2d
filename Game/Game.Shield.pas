@@ -132,6 +132,8 @@ type
     // Up again, whole, with no flare on it and no alarm
     procedure Rise;
     procedure Fall;
+    // Down at once, nothing of the fall seen: a restart past its end
+    procedure Vanish;
     // A heavy blow at this point from the middle: a piece of the rim
     // about it breaks off and flies. The shield still holds.
     procedure Shatter(const APoint: TSdlFPoint);
@@ -520,6 +522,13 @@ begin
     Exit;
   FState := sdFalling;
   FFallAge := 0;
+end;
+
+procedure TTekShield.Vanish;
+begin
+  FState := sdDown;
+  FFlares.Clear;
+  FShards.Clear;
 end;
 
 // A point from the middle, in the frame the cells were laid in

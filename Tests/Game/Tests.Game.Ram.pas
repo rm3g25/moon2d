@@ -293,6 +293,10 @@ type
     procedure TestOnTheRoadNoNozzleToMeet;
     [Test]
     procedure TestANewFightPutsItBackOnTheRoad;
+    [Test]
+    procedure TestStartedHangingItHangsBareOverTheMiddleAtOnce;
+    [Test]
+    procedure TestStartedHangingItKeepsOverTheHero;
   end;
 
   [TestFixture]
@@ -4231,6 +4235,50 @@ begin
   Assert.IsFalse(FRam.RearWheel.Running, 'No wheel rolling');
   Assert.IsTrue(FRam.PoseAt(1).Upright, 'Upright on the road');
   Assert.IsTrue(FRam.PoseAt(0).Upright, 'Upright a tick ago');
+end;
+
+// A restart in the air phase: as it stood at the end of the takeoff -
+// hanging level at its height, the honeycomb down, both wheels gone, its
+// middle over the point asked - with nothing of the way there played
+procedure TRamBrakeTests.TestStartedHangingItHangsBareOverTheMiddleAtOnce;
+const
+  MiddleX = 400.0;
+begin
+  var Hero := HeroOnTheRoad(MiddleX - 16);
+  FRam.StartHanging(OrdersAt(Stop), MiddleX);
+  Assert.IsTrue(FRam.Present, 'Present');
+  Assert.AreEqual(Ord(tkHanging), Ord(FRam.Flight.Stage), 'Hanging');
+  Assert.AreEqual(Ord(sdDown), Ord(FRam.Shield.State), 'The honeycomb down');
+  Assert.IsTrue(FRam.WheelShed, 'The front wheel gone');
+  Assert.IsTrue(FRam.Flight.Spat, 'The rear wheel gone');
+  Assert.IsFalse(FRam.Wheel.Running or FRam.RearWheel.Running,
+    'No wheel rolling');
+  Assert.AreEqual(MiddleX, Double(FRam.Left + RamWidth / 2), 0.001,
+    'Its middle over the point');
+  var Cue := FRam.Tick(Hero);
+  Assert.IsFalse(Cue.Ignite or Cue.Blast or Cue.Chase, 'Nothing played anew');
+  var Pose := FRam.PoseAt(1);
+  Assert.IsTrue(Abs(Pose.Lean) < 0.2, 'Level, but for the rock');
+  Assert.IsTrue(Abs(-HangLift - Pose.Shift.Y) < BobUnits + 0.001, 'At its height');
+  Assert.IsFalse(FRam.PoseAt(1).Upright, 'Off the road');
+end;
+
+procedure TRamBrakeTests.TestStartedHangingItKeepsOverTheHero;
+const
+  MiddleX = 400.0;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 300);
+  FRam.StartHanging(OrdersAt(Stop), MiddleX);
+  var HeroMiddle: Single := Hero.Body.X + Hero.Body.W / 2;
+  for var i := 1 to ManyTicks do
+  begin
+    FRam.Tick(Hero);
+    Assert.AreEqual(Ord(tkHanging), Ord(FRam.Flight.Stage),
+      Format('Hanging still at tick %d', [Integer(i)]));
+  end;
+  var Middle := FRam.Left + RamWidth / 2;
+  Assert.IsTrue(Abs(Middle - HeroMiddle) < Abs(MiddleX - HeroMiddle),
+    'Nearer him');
 end;
 
 initialization

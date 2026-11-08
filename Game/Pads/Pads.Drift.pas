@@ -40,6 +40,10 @@
   climbs among them. The wave is not counted among the pads adrift: the
   groups do not wait for it to leave.
 
+  Once the road runs out - the orb launcher taken, the air phase begun -
+  the groups are over (Cease): the road runs on with nothing sent on it,
+  till a clear.
+
   It does not know the belt, the hero, the bunker or the monsters: the
   game tells it how far the road has run, while the road runs, and hears
   back where the medkits go.
@@ -151,6 +155,8 @@ type
     FWave: TArray<TPad>;
     // Since the wave: the guard shorter, more climbs
     FDense: Boolean;
+    // The groups are over: nothing is sent
+    FCeased: Boolean;
     function RollRange(ALeast, AMost: Integer): Integer;
     function RollWidth: Integer;
     function PlanLone: TArray<TDriftStep>;
@@ -182,6 +188,9 @@ type
     // The groups as after the wave, denser, with no wave: a restart past
     // the bunker's death
     procedure BeginAfterWave;
+    // No more groups from now on, whatever the road runs; the pads riding
+    // ride on. A clear undoes it.
+    procedure Cease;
   end;
 
 implementation
@@ -229,6 +238,7 @@ begin
   FRowsComing := 0;
   FWave := [];
   FDense := False;
+  FCeased := False;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
   FWorld.LetGoDrifters;
@@ -401,6 +411,8 @@ end;
 function TPadDrift.Tick(AScreen: Integer; ATravel: Double): TDriftCue;
 begin
   Result := Default(TDriftCue);
+  if FCeased then
+    Exit;
   if FRowsComing > 0 then
   begin
     Dec(FRowsComing);
@@ -426,6 +438,11 @@ begin
       Exit;
     SendStep(AScreen, ATravel, Result);
   until False;
+end;
+
+procedure TPadDrift.Cease;
+begin
+  FCeased := True;
 end;
 
 function TPadDrift.RollRowGap: Integer;

@@ -41,6 +41,8 @@ type
     procedure TestRisenItIsWholeAgain;
     [Test]
     procedure TestAFallingShieldDoesNotCrumble;
+    [Test]
+    procedure TestVanishedItIsDownAtOnce;
   end;
 
 implementation
@@ -172,6 +174,16 @@ begin
   FShield.Crumble;
   Assert.AreEqual<TShieldState>(sdFalling, FShield.State, 'Falling');
   Assert.IsTrue(TicksTillDown(FShield) < ManyTicks, 'Down as a fall');
+end;
+
+procedure TShieldCrumbleTests.TestVanishedItIsDownAtOnce;
+begin
+  FShield.Shatter(LeftEnd);
+  FShield.Vanish;
+  Assert.AreEqual<TShieldState>(sdDown, FShield.State, 'Down with no tick');
+  Assert.IsFalse(Holds(FShield), 'Holds nothing');
+  FShield.Tick;
+  Assert.AreEqual<TShieldState>(sdDown, FShield.State, 'And stays down');
 end;
 
 initialization

@@ -626,6 +626,10 @@ type
     // mast empty, turning round beyond the left edge to come in bow first
     // and hunt, its eye's warning first
     procedure StartPastBunker(const AOrders: TRamOrders);
+    // Back in the air phase, as a restart there asks: the honeycomb and
+    // both wheels gone, the hull hanging level on its jets with its middle
+    // over AMiddleX, facing right, keeping over the hero from now on
+    procedure StartHanging(const AOrders: TRamOrders; AMiddleX: Single);
     // Gone from the screen: a door, a death
     procedure Clear;
     // A new level: gone, and the entrance not seen
@@ -1988,6 +1992,29 @@ begin
   FLastShutter := 1;
   FEyeLit := True;
   BeginTurn;
+end;
+
+procedure TRam.StartHanging(const AOrders: TRamOrders; AMiddleX: Single);
+begin
+  StartPastBunker(AOrders);
+  Place(EnsureRange(AMiddleX - RamWidth / 2, 0, ScreenWidth - RamWidth));
+  FHullFacing := 1;
+  FShield.Mirrored := True;
+  FShield.Vanish;
+  FEyeLit := True;
+  FShutting := True;
+  FShutter := 1;
+  FLastShutter := 1;
+  // Stunned long since, the throw of the stun over, no drive-off asked
+  FHunt := htStunned;
+  FHuntTicks := StunThrowTicks;
+  FStunFrom := FX;
+  FStunSide := -FHullFacing;
+  FWithdraw := Default(TRamWithdraw);
+  // The wheels rolled off long ago; the scrape is over
+  FShed := True;
+  FShedTicks := ScrapeTicks;
+  FTakeoff.Hang;
 end;
 
 procedure TRam.Clear;

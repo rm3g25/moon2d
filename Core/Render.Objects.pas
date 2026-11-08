@@ -8,7 +8,9 @@
   and shadows would vanish through one) and filters linearly. The set is
   <assetsDir>-objects.mset, found by convention like the backdrops.
   The pictures of a belt - the road of a chase - slide left as far as the
-  road has run, wrapped round the width of the screen.
+  road has run, wrapped round the width of the screen - until the road
+  runs out: from then on someone else draws what is left of it, tile by
+  tile, and the belt's pictures here are left out.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -42,8 +44,10 @@ type
     constructor Create(const ASprites: TSpriteRenderer;
       const ACache: TSpriteCache; const ALevel: TLevel);
 
-    // ABeltTravel - units the road of a chase has run to the left
-    procedure Draw(AScreen: Integer; ABeltTravel: Double = 0);
+    // ABeltTravel - units the road of a chase has run to the left;
+    // ABeltShown False - the pictures of the belt are not drawn
+    procedure Draw(AScreen: Integer; ABeltTravel: Double = 0;
+      ABeltShown: Boolean = True);
   end;
 
 // Where a picture placed at AX stands once the road has run ATravel to
@@ -89,11 +93,12 @@ begin
   end;
 end;
 
-procedure TObjectScreenRenderer.Draw(AScreen: Integer; ABeltTravel: Double);
+procedure TObjectScreenRenderer.Draw(AScreen: Integer; ABeltTravel: Double;
+  ABeltShown: Boolean);
 begin
   for var Art in FPlaced do
   begin
-    if Art.Screen <> AScreen then
+    if (Art.Screen <> AScreen) or (Art.OnBelt and not ABeltShown) then
       Continue;
     TintTexture(Art.Texture, Art.Tint.R, Art.Tint.G, Art.Tint.B);
     if Art.OnBelt then

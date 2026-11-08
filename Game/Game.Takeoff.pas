@@ -112,6 +112,10 @@ type
     // From ALean degrees clockwise, the hull facing AFacing - 1 right, -1
     // left: the bow lifts the other way round
     procedure Start(ALean: Single; AFacing: Integer);
+    // Hanging from the start, level, the bays and the nozzles out, both
+    // jets burning steadily, the rear wheel long spat: a restart in the
+    // air phase
+    procedure Hang;
     procedure Stop;
     // AToward: units from the middle of the hull to where it is to keep
     // over, across - right is more; heard only while it hangs
@@ -176,6 +180,27 @@ begin
   FBowUp := -Sign(AFacing) * BowUpDegrees;
   FLean := ALean;
   FLastLean := ALean;
+end;
+
+procedure TTakeoff.Hang;
+begin
+  Stop;
+  FStage := tkHanging;
+  FLift := HangLift;
+  FLastLift := HangLift;
+  FAir := 1;
+  FLastAir := 1;
+  FSpat := True;
+  FBay := 1;
+  FLastBay := 1;
+  FNozzle := 1;
+  FLastNozzle := 1;
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    FLit[Jet] := JetCatchTicks + JetSettleTicks;
+    FJets[Jet] := 1;
+    FLastJets[Jet] := 1;
+  end;
 end;
 
 procedure TTakeoff.Stop;

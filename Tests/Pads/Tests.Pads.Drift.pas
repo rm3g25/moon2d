@@ -112,6 +112,8 @@ type
     [Test]
     procedure TestClearPutsThePoolToSleep;
     [Test]
+    procedure TestCeasedItSendsNothingTillAClear;
+    [Test]
     procedure TestShortPoolRaises;
     [Test]
     procedure TestPadOfAnotherWidthRaises;
@@ -789,6 +791,26 @@ begin
   for var Pad in FWorld.Standing(Screen) do
     Assert.IsTrue(Pad.Left >= ScreenWidth,
       'The road begins again beyond the right edge');
+end;
+
+procedure TPadDriftTests.TestCeasedItSendsNothingTillAClear;
+begin
+  RunRoad(600);
+  Assert.IsTrue(Length(FWorld.Standing(Screen)) > 0, 'Pads on the screen');
+  var SentBefore := Length(FHistory);
+
+  FDrift.Cease;
+
+  RunRoad(600);
+  Assert.AreEqual(SentBefore, Integer(Length(FHistory)),
+    'None sent since the cease');
+  RunRoad(2000);
+  Assert.AreEqual(0, Integer(Length(FWorld.Standing(Screen))),
+    'The pads riding have gone off the left edge, and no other came');
+  FDrift.Clear(7);
+  RunRoad(600);
+  Assert.IsTrue(Length(FWorld.Standing(Screen)) > 0,
+    'The groups come again after a clear');
 end;
 
 procedure TPadDriftTests.TestShortPoolRaises;

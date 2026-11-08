@@ -2918,6 +2918,27 @@
       "drift": true,
       "tag": "s13-drift-high-14",
       "rig": ["cityPadLong"]
+    },
+    {
+      "sprite": "",
+      "screen": 13,
+      "x": 0,
+      "y": 352,
+      "width": 544,
+      "bullets": "block",
+      "stowed": true,
+      "tag": "s13-road"
+    },
+    {
+      "sprite": "barge-5",
+      "screen": 13,
+      "x": 544,
+      "y": 352,
+      "width": 160,
+      "bullets": "block",
+      "bob": 2,
+      "stowed": true,
+      "tag": "s13-barge"
     }
   ],
   "carousels": [

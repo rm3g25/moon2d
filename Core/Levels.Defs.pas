@@ -17,6 +17,11 @@
   a cell that holds the hero from above only. A run of decks in a row is
   loaded as one pad with no picture, so a deck plays by the rules of pads.
 
+  The grid is the level file's, but a row of it may be erased for a while
+  (EraseRow): the road of the chase that runs out is air from then on,
+  and a pad stands in for what is left of it. A restore (RestoreRows)
+  gives every erased row back as the file has it.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.Defs;
@@ -25,7 +30,7 @@ unit Levels.Defs;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils,
+  System.SysUtils, System.Classes, System.Types, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
   Localization, Levels.Events, Levels.Scenes, Levels.Tint, Levels.Dynamics,
   Levels.Pads, Levels.Carousels, Levels.FarPlane;
@@ -196,6 +201,8 @@ type
     FScreenCount: Integer;
     FTiles: TArray<TArray<TArray<Integer>>>; // [screen][row][col], 0-based
     FCollision: TArray<TArray<string>>;       // [screen][row], '1' = solid, '2' = deck
+    // The rows erased, as the file has them, by screen and row
+    FErasedRows: TDictionary<TPoint, string>;
     FTilePalette: TArray<string>;
     FBackgrounds: TArray<TBackgroundChange>;
     FObjects: TArray<TLevelObject>;
@@ -273,6 +280,11 @@ type
     function SolidAt(AScreen, AX, AY: Integer): Boolean;
     // The same for a point of the screen, in screen units
     function SolidAtPoint(AScreen: Integer; AX, AY: Single): Boolean;
+    // The row ARow (0-based) of AScreen is air from now on, until the
+    // rows are restored; nothing for a row erased already
+    procedure EraseRow(AScreen, ARow: Integer);
+    // Every erased row is back as the file has it
+    procedure RestoreRows;
     // Backdrop active on a given screen (last change wins); Image = ''
     // when the level defines none.
     function BackgroundFor(AScreen: Integer): TBackgroundChange;
@@ -531,6 +543,7 @@ end;
 
 destructor TLevel.Destroy;
 begin
+  FErasedRows.Free;
   FDynamics.Free;
   inherited;
 end;
@@ -1960,6 +1973,30 @@ begin
     Exit(False); // off-grid is air, callers need not clamp
 
   Result := FCollision[AScreen - 1][AY][AX + 1] = '1'; // string is 1-based
+end;
+
+procedure TLevel.EraseRow(AScreen, ARow: Integer);
+begin
+  if (AScreen < 1) or (AScreen > FScreenCount) then
+    raise ELevelError.CreateFmt(SLevelBadScreen, [AScreen, FScreenCount]);
+  if (ARow < 0) or (ARow >= FGridHeight) then
+    Exit;
+  if FErasedRows = nil then
+    FErasedRows := TDictionary<TPoint, string>.Create;
+  var Key := Point(AScreen, ARow);
+  if FErasedRows.ContainsKey(Key) then
+    Exit;
+  FErasedRows.Add(Key, FCollision[AScreen - 1][ARow]);
+  FCollision[AScreen - 1][ARow] := StringOfChar(CollisionAir, FGridWidth);
+end;
+
+procedure TLevel.RestoreRows;
+begin
+  if FErasedRows = nil then
+    Exit;
+  for var Pair in FErasedRows do
+    FCollision[Pair.Key.X - 1][Pair.Key.Y] := Pair.Value;
+  FErasedRows.Clear;
 end;
 
 function TLevel.SolidAtPoint(AScreen: Integer; AX, AY: Single): Boolean;

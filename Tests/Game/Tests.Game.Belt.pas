@@ -4,7 +4,8 @@
   with no jerk either way, even when a stop comes in the middle of the
   climb; a second start changes nothing; what it has run is the sum of
   its speeds, and between two ticks it lies between them; a clear stands
-  it and forgets the way. The road's picture on it wraps round the screen.
+  it and forgets the way; run to another pace it goes there over the same
+  ramp, with no jerk. The road's picture on it wraps round the screen.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -49,6 +50,8 @@ type
     procedure TestTravelBetweenTicksLiesBetweenThem;
     [Test]
     procedure TestClearStandsAndForgets;
+    [Test]
+    procedure TestRunToAnotherPaceOverTheRamp;
   end;
 
   [TestFixture]
@@ -215,6 +218,30 @@ begin
   Assert.IsFalse(FBelt.Running, 'Not running');
   Run(10);
   Assert.AreEqual(0.0, Double(FBelt.Speed), 0.0001, 'Stays standing');
+end;
+
+procedure TBeltTests.TestRunToAnotherPaceOverTheRamp;
+begin
+  FBelt.Run(BeltCreep);
+  Assert.IsTrue(FBelt.Running, 'Running at a creep');
+  var Up := Run(PastTheRamp);
+  Assert.AreEqual(Double(BeltCreep), Double(FBelt.Speed), 0.0001,
+    'At the creep when the ramp is over');
+  Assert.IsTrue(SteepestStep(Up, 0) <= MostStep, 'No jerk up to it');
+  FBelt.Run(BeltFlight);
+  var Faster := Run(BeltRampTicks div 2);
+  Assert.IsTrue((FBelt.Speed > BeltCreep) and (FBelt.Speed < BeltFlight),
+    'Halfway up to the flight');
+  Faster := Faster + Run(BeltRampTicks div 2 + 10);
+  Assert.AreEqual(Double(BeltFlight), Double(FBelt.Speed), 0.0001,
+    'At the flight''s pace when the ramp is over');
+  Assert.IsTrue(SteepestStep(Faster, BeltCreep) <=
+    1.5 * (BeltFlight - BeltCreep) / BeltRampTicks + 0.001,
+    'No jerk on the way');
+  FBelt.Run(BeltFlight);
+  Run(10);
+  Assert.AreEqual(Double(BeltFlight), Double(FBelt.Speed), 0.0001,
+    'Run to where it is, it goes on');
 end;
 
 procedure TBeltRoadTests.TestStandsWhereItIsBeforeTheRun;

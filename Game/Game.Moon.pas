@@ -31,7 +31,7 @@ uses
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
-  Game.HullLives,
+  Game.HullLives, Game.Road, Game.Barge,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -183,6 +183,19 @@ type
     FOrbShots: TOrbShots;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
+    // The orb launcher taken, the road runs out: the tiles beyond the break
+    // fall, the pier rides on - the pad trimmed to it is the floor; the
+    // barge comes to the pier's end, the hero's deck over the crater and
+    // his checkpoint. Both pads are the level's, nil on a level without
+    // them, and so is the painter
+    FRoad: TRoadEnd;
+    FRoadPainter: TRoadPainter;
+    FRoadPad: TPad;
+    FBarge: TBargeRide;
+    FBargePad: TPad;
+    // The orb launcher is his: a death comes back aboard the barge, the
+    // hull hanging, the world moving - point B
+    FPastLauncher: Boolean;
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -311,6 +324,7 @@ type
     procedure DebugJumpToTrialEnd;
     procedure DebugJumpToRam;
     procedure DebugJumpPastBunker;
+    procedure DebugJumpAboard;
     procedure DebugSpendTriggers(AScreen: Integer);
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
@@ -358,6 +372,15 @@ type
     function BulletStruckCannon(const ABullet: TBullet): Boolean;
     procedure StartRam(const AOrders: TRamOrders);
     procedure ResumePastBunker(const AOrders: TRamOrders);
+    procedure ResumeAboard(const AOrders: TRamOrders);
+    procedure BeginPier;
+    procedure ClearPier;
+    procedure TickPier(AWay: Double);
+    procedure TrimRoadPad;
+    procedure PinPierCheckpoint;
+    procedure PlaceAtCheckpoint;
+    procedure GiveOrbLauncher;
+    function HeroAboard: Boolean;
     procedure TickHeartbeat;
     procedure TickEclipse;
     procedure StepEclipse;
@@ -470,9 +493,9 @@ type
 implementation
 
 uses
-  Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.IOUtils, Sdl2.Image,
-  Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space, Localization,
-  Orbs.Moonrite, Game.Shield, Game.Wheel, Game.Takeoff;
+  Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.Math, System.IOUtils,
+  Sdl2.Image, Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space,
+  Localization, Orbs.Moonrite, Game.Shield, Game.Wheel, Game.Takeoff;
 
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
@@ -541,6 +564,20 @@ const
   OrbLauncherPickupId = 'weaponOrbLauncher';
   OrbLauncherSetName = 'orblauncher';
   OrbLauncherLyingSprite = 'lying';
+  // The pads of the air phase in the level file: the pier - the floor of
+  // the road that runs out - and the barge; the road tile's picture, for
+  // the tiles that stand and fall
+  RoadPadTag = 's13-road';
+  BargePadTag = 's13-barge';
+  RoadTileSprite = 'tek-road-tile';
+  // The grid row of the road, erased as it runs out
+  RoadRow = ScreenRows - 1;
+  // The checkpoint over a deck hangs this much above it: a hero put there
+  // drops onto the deck, no standing on air
+  CheckpointDrop = 8.0;
+  // A tile of the road breaking off: its thump and the jolt
+  TileBreakSoundFile = 'wheelland.wav';
+  TileBreakTrauma = 0.12;
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -673,7 +710,7 @@ const
   WorkLevel = 2;
   TrialScreen = 9;
   RamScreen = 13;
-  DebugJumpSteps = 3;
+  DebugJumpSteps = 4;
   // The gun a walk to the Ram has taken on screen 10
   DupletPickupId = 'weaponDuplet';
 {$ENDIF}
@@ -771,6 +808,8 @@ begin
   FHullLives := THullLives.Create;
   FOrbShots := TOrbShots.Create;
   FBelt := TBelt.Create;
+  FRoad := TRoadEnd.Create;
+  FBarge := TBargeRide.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
   FPress := TPress.Create;
@@ -828,6 +867,9 @@ begin
   FHullLives.Free;
   FOrbShots.Free;
   FBelt.Free;
+  FBarge.Free;
+  FRoadPainter.Free;
+  FRoad.Free;
   FRamPainter.Free;
   FRam.Free;
   FRamArt.Free;
@@ -966,6 +1008,12 @@ begin
   FPads := TPadWorld.Create(FSprites, FObjectCache, FLevel, JumpReach,
     RollDiceSeed);
   FDrift := TPadDrift.Create(FPads, FLevel.Id, RollDiceSeed);
+  // The air phase's pads, on the level that has them
+  FRoadPad := FPads.FindTagged(RoadPadTag);
+  FBargePad := FPads.FindTagged(BargePadTag);
+  FreeAndNil(FRoadPainter);
+  if FRoadPad <> nil then
+    FRoadPainter := TRoadPainter.Create(FObjectCache.Get(RoadTileSprite));
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -1094,6 +1142,7 @@ begin
   FCannons.Clear;
   FRam.Reset;
   FPastBunker := False;
+  FPastLauncher := False;
   FWrecks.Clear;
   FCapsules.Clear;
   FShells.Clear;
@@ -1101,6 +1150,7 @@ begin
   FHeartbeat.Stop;
   ClearEclipse;
   FBelt.Clear;
+  ClearPier;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
@@ -1411,6 +1461,9 @@ begin
   FShells.Clear;
   FStoneTank.Clear;
   FBelt.Clear;
+  // A door out of the arena: the whole road again
+  FPastLauncher := False;
+  ClearPier;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
@@ -2776,6 +2829,8 @@ begin
   ClearEclipse;
   FEnergyGauge.Dock;
   FBelt.Clear;
+  // The road whole again; a restart past the launcher runs it out anew
+  ClearPier;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
@@ -2848,7 +2903,13 @@ begin
   FireScreenTriggers;
   // The triggers have just written the checkpoint again
   PinRespawnPoint;
-  if FPastBunker then
+  if FPastLauncher then
+  begin
+    // Aboard the barge, which the Ram's cue has put at its station
+    PinPierCheckpoint;
+    PlaceAtCheckpoint;
+  end
+  else if FPastBunker then
   begin
     FCheckpointX := PastBunkerHeroX;
     FHero.SetScreenX(FCheckpointX);
@@ -3013,6 +3074,11 @@ end;
 procedure TMoonGame.StartRam(const AOrders: TRamOrders);
 begin
   FRamMedkitPads := AOrders.MedkitPads;
+  if FPastLauncher then
+  begin
+    ResumeAboard(AOrders);
+    Exit;
+  end;
   if FPastBunker then
   begin
     ResumePastBunker(AOrders);
@@ -3044,6 +3110,155 @@ begin
   FRamRumble := FAudio.PlayLooped(RamRumbleSoundFile);
   if not FAudio.Plays(AOrders.Track) then
     ChangeMusic(AOrders.Track);
+end;
+
+// Point B - aboard the barge, where a death past the launcher comes back
+// and the End key's fourth step goes: the honeycomb and the wheels gone,
+// the hull hanging over the barge at its station; the orb launcher in his
+// hands, the hull's lives and their bar; the road gone, the belt at the
+// flight's pace; the screen's own pads gone; the charge full and the
+// eclipse struck, so none of the henshin plays again
+procedure TMoonGame.ResumeAboard(const AOrders: TRamOrders);
+begin
+  var StationMiddle: Single := StationLeft + BargeLength / 2;
+  FRam.StartHanging(AOrders, StationMiddle);
+  for var Pad in FPads.Standing(FHero.Screen) do
+    Pad.Doze;
+  FFarPlane.RideToEmblem;
+  FDrift.Cease;
+  FBelt.Run(BeltFlight);
+  FStoneTank.BeginPastTheHeads;
+  FOrbs.Charge(FullEnergy - FOrbs.Energy);
+  FEclipse.Start;
+  FEclipse.Strike;
+  FEclipse.StopSparing;
+  FHero.HeroForm := hfMoon;
+  GiveOrbLauncher;
+  FLevel.EraseRow(FHero.Screen, RoadRow);
+  FBarge.Station;
+  if FBargePad <> nil then
+  begin
+    FBargePad.Wake;
+    FBargePad.FlyTo(FBarge.Left, RamFloorY, 0);
+  end;
+  StopRamRumble;
+  FRamRumble := FAudio.PlayLooped(JetHoverSoundFile);
+  if not FAudio.Plays(FRam.FlightTrack) then
+    ChangeMusic(FRam.FlightTrack);
+end;
+
+// The orb launcher in his hands as the take puts it there: the gun he
+// holds put away, the launcher his, the hull's lives armed and their bar
+// coming down
+procedure TMoonGame.GiveOrbLauncher;
+begin
+  var Gun := FMonsters.Find(OrbLauncherPickupId).PickupEffect;
+  FHero.StowGun;
+  FHero.ApplyWeaponPickup(Gun.WeaponType, Gun.FireCooldown, Gun.BulletSpeed,
+    Gun.BulletGravity);
+  FOrbLauncher.Grant;
+  FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
+end;
+
+// The orb launcher taken: the chase goes on. The world moves off at a
+// crawl; the road runs out - the tiles beyond the break fall away, the
+// grid's row is air and the pier's pad stands in for what is left, under
+// the tiles as the belt drew them; no more pads are sent; the barge comes
+// in from beyond the right edge to the pier's end. A death from now on
+// comes back aboard (point B)
+procedure TMoonGame.BeginPier;
+begin
+  // A level with the launcher but no pier and no barge keeps its road
+  if (FRoadPad = nil) or (FBargePad = nil) then
+    Exit;
+  FPastLauncher := True;
+  FBelt.Run(BeltCreep);
+  FDrift.Cease;
+  // The tiles as the belt drew them: wrapped round the screen, so the
+  // first stands a tile short of where the wrap left off
+  var Phase := FMod(BeltX(0, FBelt.Travel, ScreenWidth), Double(TileSize));
+  FRoad.Start(Phase);
+  FLevel.EraseRow(FHero.Screen, RoadRow);
+  FRoadPad.Wake;
+  FRoadPad.FlyTo(FRoad.PierLeft, RamFloorY, 0);
+  TrimRoadPad;
+  FBargePad.Wake;
+  FBargePad.FlyTo(FBarge.Left, RamFloorY, 0);
+  FBarge.Come;
+end;
+
+// The whole road again, of the grid; the pads of the air phase back to
+// the level file's by the pads' own rewind
+procedure TMoonGame.ClearPier;
+begin
+  FRoad.Clear;
+  FBarge.Clear;
+  FLevel.RestoreRows;
+end;
+
+// The pier's pad ends where the last standing tile does - it rides with
+// the tiles, so their span is its width; gone with the last of them
+procedure TMoonGame.TrimRoadPad;
+begin
+  if FRoadPad = nil then
+    Exit;
+  if not FRoad.PierStands then
+  begin
+    FRoadPad.Doze;
+    Exit;
+  end;
+  FRoadPad.Trim(Round(FRoad.PierRight - FRoad.PierLeft));
+end;
+
+function TMoonGame.HeroAboard: Boolean;
+begin
+  Result := (FBargePad <> nil) and not FHero.Dead and not FHero.InAir and
+    (FHero.DeckUnderFeet = FBargePad);
+end;
+
+// Before the pads' tick, which carries their riders: the road's tiles and
+// the pier's pad ride the belt, the barge goes its own way. A tile that
+// breaks off thumps and jolts. The hero aboard, the belt runs up to the
+// flight's pace; the pier falls when the barge says so
+procedure TMoonGame.TickPier(AWay: Double);
+begin
+  if not FPastLauncher or (FRoadPad = nil) or (FBargePad = nil) then
+    Exit;
+  var RoadCue := FRoad.Tick(AWay);
+  if RoadCue.Broke then
+  begin
+    FAudio.Play(TileBreakSoundFile);
+    FShake.AddTrauma(TileBreakTrauma);
+  end;
+  FRoadPad.Carry(AWay);
+  TrimRoadPad;
+  var Cue := FBarge.Tick(FRoad.PierRight, FRoad.PierStands, HeroAboard);
+  FBargePad.Carry(FBarge.Way);
+  if Cue.Boarded then
+    FBelt.Run(BeltFlight);
+  if Cue.PierFalls then
+    FRoad.Collapse;
+  PinPierCheckpoint;
+end;
+
+// Where a pit or a death brings him back past the launcher: onto the
+// barge, wherever it is - onto the pier's last tile while the barge is
+// still on its way in; a little over the deck, so he drops onto it
+procedure TMoonGame.PinPierCheckpoint;
+begin
+  if FBargePad = nil then
+    Exit;
+  var Middle: Double := FBargePad.Left + BargeLength / 2;
+  if (FBarge.Stage in [bsAway, bsComing]) and FRoad.PierStands then
+    Middle := FRoad.PierRight - TileSize / 2;
+  FCheckpointX := EnsureRange(Middle - HeroSize / 2, 0, ScreenWidth - HeroSize);
+  FCheckpointY := RamFloorY - CheckpointDrop;
+end;
+
+procedure TMoonGame.PlaceAtCheckpoint;
+begin
+  FHero.SetScreenX(FCheckpointX);
+  FHero.SetY(FCheckpointY);
 end;
 
 // Past the bunker, from the heartbeat's charge on: its tempo rises with the
@@ -3286,6 +3501,7 @@ begin
     Exit;
   FOrbLauncher.Take;
   FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
+  BeginPier;
 end;
 
 // The controls are not his from now on: the orbs carry him out of the
@@ -3710,7 +3926,10 @@ procedure TMoonGame.TickBelt(AWay: Double);
 begin
   if AWay = 0 then
     Exit;
-  if not FHero.Dead then
+  // Past the launcher the road is no more his: the pier carries him as a
+  // deck, and in the air he is the barge's - a jump off it comes down on
+  // it, not a belt's length to the left
+  if not FHero.Dead and not FPastLauncher then
     FHero.RideBelt(AWay);
   FField.CarryLoot(FHero.Screen, AWay);
 end;
@@ -4331,6 +4550,8 @@ begin
     FFangs.Tick(FFarPlane.Offsets[fmFangs]);
   end;
 
+  // The road that runs out and the barge, before the pads they move
+  TickPier(BeltWay);
   // The pads go first: their riders move with them, then by themselves.
   // A shelf told to spare the hero asks where he stands.
   var HeroDeck: TPad := nil;
@@ -4519,7 +4740,11 @@ begin
         FSprites.Origin := FShake.Offset(scWorld);
         // Objects stand on the tiles, so they jolt with them - a still
         // ship over a shaking floor would float
-        FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha));
+        // Past the launcher the belt's road is gone: what is left of it is
+        // the road end's, tile by tile, and at point B there is none
+        FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha), not FPastLauncher);
+        if FRoadPainter <> nil then
+          FRoadPainter.Draw(FSprites, FRoad, RamFloorY, AAlpha);
         // On the road, behind the pads: it drives behind them
         FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawBody(FSprites, AAlpha);
@@ -4739,7 +4964,8 @@ end;
 
 // End, a step a press through the end of the version: the false ending of
 // level 2, the start of the Ram's fight, the moment right before the
-// henshin. A press past the last does nothing.
+// henshin, aboard the barge in the air phase. A press past the last does
+// nothing.
 procedure TMoonGame.DebugJumpToWork;
 begin
   case FDebugJumps of
@@ -4749,6 +4975,8 @@ begin
       DebugJumpToRam;
     2:
       DebugJumpPastBunker;
+    3:
+      DebugJumpAboard;
   end;
   if FDebugJumps < DebugJumpSteps then
     Inc(FDebugJumps);
@@ -4770,6 +4998,7 @@ begin
   StopVictoryTrack;
   FRam.Reset;
   FPastBunker := False;
+  FPastLauncher := False;
   FEnergyGauge.Dock;
   FWrecks.Clear;
   FCapsules.Clear;
@@ -4778,6 +5007,7 @@ begin
   FHeartbeat.Stop;
   ClearEclipse;
   FBelt.Clear;
+  ClearPier;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
   FDrift.Clear(RollDiceSeed);
@@ -4821,6 +5051,16 @@ procedure TMoonGame.DebugJumpPastBunker;
 begin
   DebugJumpToRam;
   FPastBunker := True;
+  RestartLevel;
+end;
+
+// Aboard the barge in the air phase, as a death past the launcher brings
+// it back
+procedure TMoonGame.DebugJumpAboard;
+begin
+  DebugJumpToRam;
+  FPastBunker := True;
+  FPastLauncher := True;
   RestartLevel;
 end;
 

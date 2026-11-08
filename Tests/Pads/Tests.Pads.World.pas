@@ -3,7 +3,10 @@
   floor nor a body while it sleeps, both once awake, flown straight to a
   place of its screen, and asleep again after a rewind. A pad the game
   puts to sleep is gone the same way, from among the screen's standing
-  pads too, and a rewind gives it back as the file has it.
+  pads too, and a rewind gives it back as the file has it. A stowed pad
+  sleeps with no scene to wake it, till the game does. A pad the game
+  carries takes its riders along; a trimmed deck ends sooner, and a
+  rewind gives it its width back.
 
   The pad names no sprite, so the world asks no art for it, as for a deck
   of the collision grid: no stage is needed. The level wakes a dormant
@@ -54,6 +57,12 @@ type
     procedure TestDozedPadIsGone;
     [Test]
     procedure TestRewindGivesBackADozedPad;
+    [Test]
+    procedure TestStowedPadSleepsTillTheGameWakesIt;
+    [Test]
+    procedure TestCarriedPadTakesItsRidersAlong;
+    [Test]
+    procedure TestTrimmedDeckEndsSoonerTillARewind;
   end;
 
 implementation
@@ -83,6 +92,10 @@ const
   // A pad the file keeps awake, for the game to put to sleep
   StanderSections = '"pads":[{"sprite":"","screen":1,"x":96,"y":224,' +
     '"width":32,"tag":"stander"}]';
+  // A pad stowed for the game, with no scene to wake it
+  StowedSections = '"pads":[{"sprite":"","screen":1,"x":96,"y":224,' +
+    '"width":96,"tag":"stowed","stowed":true}]';
+  StowedWidth = 96;
 
 procedure TPadWorldTests.Setup;
 begin
@@ -304,6 +317,83 @@ begin
 
     Assert.IsFalse(Pad.Dormant, 'Awake again');
     ExpectThere(World, Pad, True, 'Rewound');
+  finally
+    World.Free;
+    Level.Free;
+  end;
+end;
+
+procedure TPadWorldTests.TestStowedPadSleepsTillTheGameWakesIt;
+begin
+  var Level := LevelFromRows(RoomRowsOf(0, 0, 0, 0), StowedSections);
+  var World := TPadWorld.Create(nil, nil, Level, nil, 1);
+  try
+    var Pad := World.FindTagged('stowed');
+    Assert.IsNotNull(Pad, 'The level loads with no scene to wake it');
+    Assert.IsTrue(Pad.Dormant, 'Asleep');
+    ExpectThere(World, Pad, False, 'Born');
+
+    Pad.Wake;
+
+    ExpectThere(World, Pad, True, 'Woken by the game');
+    World.Rewind(1);
+    Assert.IsTrue(Pad.Dormant, 'Asleep again after a rewind');
+  finally
+    World.Free;
+    Level.Free;
+  end;
+end;
+
+procedure TPadWorldTests.TestCarriedPadTakesItsRidersAlong;
+const
+  Way: Double = -2.0;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  for var i := 1 to 5 do
+  begin
+    var Left := FeetLeft(Pad);
+    var FeetY := Pad.Top;
+    Pad.Carry(Way);
+    TickWorld(1);
+    Assert.AreEqual(HomeX + Way * i, Pad.Left, UnitSlack,
+      Format('Tick %d: where it is', [i]));
+    Assert.AreEqual(Way, Pad.MotionX, UnitSlack,
+      Format('Tick %d: the way its riders go', [i]));
+    Assert.IsTrue(FWorld.DeckCarrying(Screen, Left, Left + FeetWidth,
+      FeetY) = Pad, Format('Tick %d: feet where the deck stood a tick ago ' +
+      'are carried', [i]));
+  end;
+end;
+
+procedure TPadWorldTests.TestTrimmedDeckEndsSoonerTillARewind;
+begin
+  var Level := LevelFromRows(RoomRowsOf(0, 0, 0, 0), StowedSections);
+  var World := TPadWorld.Create(nil, nil, Level, nil, 1);
+  try
+    var Pad := World.FindTagged('stowed');
+    Pad.Wake;
+    var Far := HomeX + StowedWidth - 4;
+    Assert.IsTrue(World.DeckUnder(Screen, Far, Far, HomeY) = Pad,
+      'Feet near the far end stand on the whole deck');
+
+    Pad.Trim(32);
+
+    Assert.AreEqual(Double(HomeX + 32), Pad.Right, UnitSlack, 'It ends sooner');
+    Assert.IsNull(World.DeckUnder(Screen, Far, Far, HomeY),
+      'Feet past the end stand on air');
+    Assert.IsTrue(World.DeckUnder(Screen, HomeX + 16, HomeX + 16, HomeY) = Pad,
+      'Feet within it stand on it');
+    Assert.IsFalse(World.BodyAt(Screen, Far, HomeY + 4),
+      'The body ends with the deck');
+    Pad.Trim(StowedWidth * 2);
+    Assert.AreEqual(Double(HomeX + StowedWidth), Pad.Right, UnitSlack,
+      'Never wider than the file has it');
+    Pad.Trim(32);
+    World.Rewind(1);
+    Assert.AreEqual(Double(HomeX + StowedWidth), Pad.Right, UnitSlack,
+      'A rewind gives the width back');
   finally
     World.Free;
     Level.Free;
