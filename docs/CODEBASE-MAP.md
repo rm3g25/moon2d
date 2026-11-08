@@ -59,7 +59,9 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Wrecks`, 3.0.81), the shuttle's medkits in its fight
   (`Game.Capsules`, 3.0.84), the hidden tank of the form's charge in
   it (`Game.StoneTank`, 3.0.85), the road of its chase
-  (`Game.Belt`, 3.0.86), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
+  (`Game.Belt`, 3.0.86), that road running out into the crater
+  (`Game.Road`, 3.0.118) and the hover-barge that comes to its end
+  (`Game.Barge`, 3.0.118), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
   front of it (`Game.Fangs`, 3.0.89). `Game/Events/`
   runs the level events; `Game/Scenes/` plays the level's scenes
@@ -206,6 +208,9 @@ for their orders, `Sprites.Sets` and `Render.Sprites` for their art,
 `Game.StoneTank` (the tank of the charge: over `Render.Brush` for its
 dice) /
 `Game.Belt` (the road of the chase: over nothing) /
+`Game.Road` (the road running out: over `Render.Sprites` for its tiles'
+painter) /
+`Game.Barge` (the barge of the air phase: over `Game.Space` alone) /
 `Game.Shells` (the bunker's shells: over the canvas of `Levels.Dynamics`,
 `Render.Brush`, `Render.Glow` and `Game.Space`) /
 `Game.FarPlane` (how far its far plane has ridden: over `Levels.FarPlane`
@@ -419,6 +424,9 @@ screen dump of `Game.Moon`.
   **`BeltX(x, travel, span)`** - left by what the road of the chase has
   run, wrapped round the screen's width - and once more a screen to the
   left when it hangs over the right edge.
+- 3.0.118: `Draw(screen, beltTravel, beltShown = True)` - with `beltShown`
+  False the pictures of the belt are left out: the road that runs out is
+  drawn tile by tile by `Game.Road`'s painter in their place.
 
 ### `Core/Render.FarPlane.pas` (~940 lines, 3.0.95)
 - **`TFarPlanePainter`** - draws the far plane of a chase
@@ -1081,6 +1089,10 @@ Level data model + JSON parser. No game logic.
   file's folder now, for the layout beside it). Private `CheckFarPlane`
   refuses a screen past the level's (`SLevelFarPlaneBadScreen`) and a set
   the level's `objectSets` do not list (`SLevelFarPlaneNoSet`).
+- 3.0.118: **`EraseRow(screen, row)`** - the row is air from now on (the
+  file's row kept in `FErasedRows`, by screen and row); **`RestoreRows`**
+  gives every erased row back. The road of the chase running out is air,
+  a pad standing in for what is left of it. Tests: `Tests.Levels.Grid`.
 
 ### `Core/Levels.FarPlane.pas` (~1145 lines, 3.0.95)
 The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
@@ -2232,6 +2244,10 @@ the right edge to ride the road left; the game places it, so it takes no
   clear shaft - and what a shelf may not - plunge, join a group - are
   `Levels.Defs`' (`CheckPads`); what a carousel's pad may not, and the room
   of its lap, too (`CheckCarousels`).
+- 3.0.118: **`Stowed`** (`"stowed": true`) - as dormant, but no scene
+  wakes it: the game brings it in by rules of its own (the pier and the
+  barge of the air phase). The level's dormant check does not ask after a
+  stowed pad.
 
 ### `Core/Levels.Carousels.pas` (~610 lines)
 The `carousels` section of level JSON (3.0.52): pads that fly round a
@@ -3229,6 +3245,12 @@ rebuilds new for the new try.
   over the path, so it ends at the road's pace while its place rides the
   road all the while; **`Coming`** keeps `Effort` at 1, the jets hard.
   `SetAdrift` and `Rewind` drop it.
+- 3.0.118: **`Carry(way)`** - the pad is carried across this tick, its
+  riders with it, as the road carries a drifter (told before the tick);
+  **`Trim(width)`** - the deck ends sooner, no wider than the placement
+  (**`FWidth`**, read by the deck, its body and `Right`; the picture and
+  the arena's rebuilds read the placement's; a rewind gives it back); a
+  stowed pad is born dormant.
 
 ### `Game/Pads/Pads.Drift.pas` (~490 lines, 3.0.98)
 The pads of the chase (`docs/mechanics/arena-3.md`, stages 13 and 13b):
@@ -3292,6 +3314,9 @@ stands the medkits it tells back. No SDL.
   ones let go, so the groups do not wait for it. **`FDense`** from the
   wave on: `PlanGroup` takes **`HuntGuardUnits`** 132 and
   **`HuntClimbShare`** 0.7.
+- 3.0.118: **`Cease`** - no more groups from now on, whatever the road
+  runs (`FCeased`); the pads riding ride on; a clear undoes it. The air
+  phase sends barges, not pads.
 
 ### `Game/Pads/Pads.Arena.pas` (~370 lines)
 The director of a boss fight over a pad group that is rebuilt: when the
@@ -5305,6 +5330,8 @@ addition.
 - 3.0.94: **`OpenAbove(y)`** - no cells over `y` from the middle: a shield
   open on top shows none there. The Ram's bunker wears an ellipse open
   over the top of its dome.
+- 3.0.118: **`Vanish`** - down at once, nothing of the fall seen, the
+  flares and shards gone: a restart past the honeycomb's end.
 ### `Game/Game.Cannons.pas` (~900 lines)
 The two TEK cannons of the gravel arena (3.0.56, act 3): guns clamped to
 the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
@@ -5733,6 +5760,12 @@ monster. The game carries out the cue.
   brought into the upright hull as `StrikeHull` brings it, the face by
   `TraceEntry`, a hit of the hull for `HullStruckWithin`; nothing while
   they are in. The game asks it before the hull.
+- 3.0.118: **`StartHanging(orders, middleX)`** - back in the air phase as a
+  restart asks: past the bunker, facing right, the honeycomb vanished,
+  both wheels gone and the scrape over, stunned long since with no
+  drive-off asked, `TTakeoff.Hang` (hanging level at `HangLift`, the bays
+  and the nozzles out, both jets steady, the rear wheel spat) with its
+  middle over `middleX`; it keeps over the hero from the first tick.
 ### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
@@ -5830,6 +5863,52 @@ picture; no SDL.
   nothing run); `Tick` (the ramp, then `Travel` grows by `Speed`);
   `Speed` (units the road went left this tick), `Travel`,
   `TravelAt(alpha)` (between the ticks), `Running`.
+- 3.0.118: **`Run(speed)`** - up or down to any pace over the same ramp,
+  nothing for one bound there; `Start` and `Stop` are runs to the cruise
+  and to 0. The chase's other paces live here: **`BeltCreep`** 0.25 (the
+  world moving off after the orb launcher's take) and **`BeltFlight`** 2.0
+  (the hero aboard the barge).
+
+### `Game/Game.Road.pas` (~260 lines, 3.0.118)
+The road of the chase running out (`docs/mechanics/arena-3.md`, stage
+17b): the orb launcher taken, the tiles beyond the break fall away into
+the crater, the farthest first, and what is left - the pier - rides the
+belt till it falls too. Only the tiles' places; the floor under the hero
+is a pad the game trims to the pier, the grid's row of the road erased.
+- **`TRoadEnd`** - `Start(phase, breakX = RoadBreakX 320)`: `RoadTiles`
+  17 tiles at `phase - 32 + 32 i` (the belt's picture, wrapped, so the
+  first stands a tile short of the wrap), those from the break on to fall
+  `BreakGapTicks` 3 apart, the first on the first tick; `Tick(way)` rides
+  every tile by the belt's way and drops the falling ones (`FallStart`
+  0.6, `FallPull` 0.35 a tick, `FallSpin` 2 degrees a tick alternating,
+  `Gone` at `FallGone` 96) - **`TRoadCue.Broke`** the tick one breaks off;
+  `Collapse` - the pier from its end, `CollapseGapTicks` 5 apart, at once
+  unless a run of falls is under way; `Clear`; `Standing(i)`,
+  `PierStands`, `PierLeft`, `PierRight` (the standing tiles' span),
+  `TileAt(i, alpha)` (**`TRoadTile`**: `Left`, `Falling`, `Gone`, `Drop`,
+  `Tilt`, between the ticks), `Running`, `Collapsing`.
+- **`TRoadPainter`** - `Create(texture)` (the road tile's picture, not
+  owned); `Draw(sprites, road, top, alpha)` - the tiles not gone, the
+  standing ones on the road's line, the falling ones under it, turned.
+- Tests: `Tests.Game.Road`.
+
+### `Game/Game.Barge.pas` (~190 lines, 3.0.118)
+The TeK hover-barge of the air phase (`docs/mechanics/arena-3.md`, stage
+17b): the hero's deck over the crater once the road runs out. Only where
+its left edge is and what it tells; the pad that is the barge is
+`Pads.World`'s, carried by the way this gives.
+- **`TBargeRide`** - `Come` (from `ComeFromX` 544 to the mooring over
+  `ComeTicks` 66, eased); `Station` (at `StationLeft` 320 at once, the
+  pier long gone - a restart); `Clear`; `Tick(pierRight, pierStands,
+  aboard)`: **`TBargeStage`** `bsAway`, `bsComing`, `bsMoored` (at the
+  pier's end plus `MoorGap` 32, never left of `MoorFloorX` 64, riding with
+  the pier while it stands), `bsCasting` (the hero aboard: to the station
+  over `CastOffTicks` 100), `bsStation`; **`TBargeCue`** `Moored`,
+  `Boarded`, `PierFalls` (`GraceTicks` 264 after the mooring or
+  `BoardedPierTicks` 50 after he boards, whichever first, once); `Way`
+  (how far it went this tick), `LeftAt(alpha)`, `Left`, `Stage`.
+  `BargeLength` 160 - the barge of the pier, `barge-5`.
+- Tests: `Tests.Game.Barge`.
 
 ### `Game/Game.Shells.pas` (~630 lines, 3.0.97)
 The bunker's shells in the chase (`docs/mechanics/arena-3.md`, stage
@@ -5936,6 +6015,8 @@ The orb launcher coming once the Ram hangs, as a pickup (`arena-3.md`, "Stage
   `OrbLauncherClearance` 32 (the next cell) aside of him when he stands nearer,
   on the wider side.
 - Tests: `Tests.Game.OrbLauncher`.
+- 3.0.118: **`Grant`** - `olTaken` from the start, as after a take: a
+  restart in the air phase; a `Start` then changes nothing.
 
 ### `Game/Game.HullLives.pas` (~140 lines, 3.0.116)
 The lives of the Ram's bare hull, which only the orb launcher takes, and the
@@ -7022,6 +7103,38 @@ so a unit (and later a test) can reach it. `interface` holds
   after the hero's bullets, the bar after the monitor.
 - 3.0.117: the hero's lift in the draw is his deck's plus the throw's sway
   (`TThrowScene.Sway`), and the hint over him rides with it.
+- 3.0.118, **the pier and the barge** (stage 17b): **`FRoad`**
+  (`TRoadEnd`), **`FRoadPainter`**, **`FRoadPad`** (`s13-road`),
+  **`FBarge`** (`TBargeRide`), **`FBargePad`** (`s13-barge`) - the pads
+  found by tag at load, nil on a level without them; **`FPastLauncher`** -
+  point B. **`BeginPier`** (from `TakeWeapon` of the orb launcher): the
+  belt to `BeltCreep`, the drift ceased, the road end started at the
+  belt's phase (`BeltX(0, travel) mod 32`), the grid's row `RoadRow` 11
+  erased, the pier's pad woken, flown to the pier's left and trimmed, the
+  barge's pad woken beyond the right edge, the barge told to come.
+  **`TickPier(way)`** before the pads' tick: the road end ticked (a tile
+  breaking - `TileBreakSoundFile` `wheelland.wav`, `TileBreakTrauma`
+  0.12), the pier's pad carried and trimmed (**`TrimRoadPad`**; dozed with
+  the last tile), the barge ticked with the pier's end and
+  **`HeroAboard`** (he stands on the barge's deck) and its pad carried by
+  its way; `Boarded` - the belt to `BeltFlight`; `PierFalls` - the road's
+  collapse; **`PinPierCheckpoint`** - the checkpoint over the middle of
+  the barge's deck (`CheckpointDrop` 8 above it), the pier's last tile
+  while the barge is away or coming. `TickBelt` leaves the hero out past
+  the launcher: the pier carries him as a deck, and in the air he is not
+  carried. **`ResumeAboard(orders)`** (`StartRam` with `FPastLauncher`):
+  point B - `TRam.StartHanging` over the station, the screen's pads
+  dozed, the far plane at the emblem, the drift ceased, the belt to the
+  flight, the charge full and the eclipse struck, `hfMoon`,
+  **`GiveOrbLauncher`** (`StowGun`, the pickup's weapon applied, `Grant`,
+  the hull's lives armed), the row erased, `FBarge.Station` and its pad
+  there, the hover loop, the flight's track; `RestartLevel` then pins the
+  checkpoint on the barge and puts him there (**`PlaceAtCheckpoint`**).
+  **`ClearPier`** (the road end, the barge, the rows restored) at a
+  restart, a door, a new level and the debug reload. The draw: the
+  objects without the belt's pictures past the launcher (at point B there
+  is no road), the road end's tiles right after them. `DebugJumpSteps` 4: **`DebugJumpAboard`** - the End
+  key's 4th press, point B.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -7221,6 +7334,17 @@ Duplet's tool does: `lying` (the pickup - a frame of the 2008 cell, the
 gun 24 units long on its grip's foot), `held` (16 units long in a square
 of 32, the grip in the fist of the 2008 arm frame), `gone`, and the
 Duplet's sequences.
+
+### `tools/barge/build_barge.py` (3.0.118)
+Adds the TeK hover-barges to `pads.mset` from one generated side view -
+the turbine on the left, the prow on the right, six identical bays
+between: the body is cut at the middle of every rib found in the band of
+its armour (a smooth column run), and the barges are put together from
+the stern, a number of bays and the prow, never stretched - `barge-5`
+(six bays, 160 units), `barge-4` (four, 122.8), `barge-3` (three,
+104.1), `barge-2` (one, 66.8) - at 6 px a unit, the deck the top row;
+the lengths are in the sprites' descriptions. Reads the set, replaces
+its barges, writes it back.
 
 ### `tools/dust/build_dust.py` (3.0.65)
 Builds `dust.mset` from noise, not generated: long white strips, the dust
@@ -7727,6 +7851,15 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   his place; still once let go.
 - After 3.0.117: **`Render/Tests.Render.Monochrome.pas`** -
   **`TMonochromeTests`** (7), a pixel made monochrome.
+- 3.0.118: **`Game/Tests.Game.Road.pas`** - **`TRoadEndTests`** (10), the
+  road running out; **`Game/Tests.Game.Barge.pas`** - **`TBargeRideTests`**
+  (12), the barge's coming, mooring, casting off and the pier's grace;
+  **`Levels/Tests.Levels.Grid.pas`** - **`TLevelGridTests`** (5), a row of
+  the grid erased and restored; `TBeltTests` +1 (run to another pace),
+  `TPadWorldTests` +3 (a stowed pad, a carried pad, a trimmed deck),
+  `TPadDriftTests` +1 (ceased), `TRamBrakeTests` +2 (started hanging),
+  `TTakeoffTests` +1 (hung), `TShieldCrumbleTests` +1 (vanished),
+  `TOrbLauncherArrivalTests` +1 (granted).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -8065,6 +8198,8 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   at column 2, row 11.
 
 ### `sprites\*.mset` (49 sets)
+3.0.118: `pads` grows the barges - `barge-5`, `barge-4`, `barge-3`,
+`barge-2` (`tools/barge/build_barge.py`), the deck their top row.
 3.0.116: `orblauncher` (`lying`, the pickup on the road; `held`, the gun in the
 hero's hands; `gone`; `tools/orblauncher/build_orblauncher.py`). Since 3.0.62: `duplet` (3.0.64 - `lying`, the pickup on its pedestal, and
 `held`, the gun in the hero's hands; `tools/duplet/build_duplet.py`),
@@ -8284,6 +8419,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TEK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
 | The chase city's searchlights (3.0.95): two warm beams from the main dome wander over the sky - bright in the dome's air, a hot spot and a step down at the glass, a faint tail in the lunar dust, glints on the near ribs they cross; each lamp's own clock eases to a hold now and then; it glides between ticks - tick for tick as on the stand | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
+| The road of the chase running out and the barge of the air phase (3.0.118): the world moving off at a crawl after the orb launcher's take, the tiles beyond the break tumbling into the crater, the pier riding on as a pad and falling behind him, the barge coming to its end and casting off to its station as he boards, the world at the flight's pace, the checkpoint on its deck, point B aboard, the End key's 4th press | Game.Road.pas (`TRoadEnd`, `TRoadPainter`) + Game.Barge.pas (`TBargeRide`) + Game.Belt.pas (`Run`, `BeltCreep`, `BeltFlight`) + Pads.World.pas (`Carry`, `Trim`, `Stowed`) + Pads.Drift.pas (`Cease`) + Levels.Pads.pas (`Stowed`) + Levels.Defs.pas (`EraseRow`, `RestoreRows`) + Render.Objects.pas (`Draw(..., beltShown)`) + Game.Ram.pas (`StartHanging`) + Game.Takeoff.pas (`Hang`) + Game.Shield.pas (`Vanish`) + Game.OrbLauncher.pas (`Grant`) + Game.Moon.pas (`BeginPier`, `TickPier`, `TrimRoadPad`, `PinPierCheckpoint`, `ResumeAboard`, `GiveOrbLauncher`, `ClearPier`, `DebugJumpAboard`) + the pads `s13-road` and `s13-barge` of screen 13 in level2.json + pads.mset (`barge-5`..`barge-2`, tools/barge/build_barge.py) + Tests.Game.Road.pas, Tests.Game.Barge.pas, Tests.Levels.Grid.pas (+docs/mechanics/arena-3.md, stage 17b) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
 | The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
 | The bunker's shells (3.0.94): the arc at the hero's feet aimed in the world, the ring, a burst on a deck knocking the pad off, the roll on the road and its wound | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (a new wreck in a gone one's place) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, the draw of the rings and the shells) + Tests.Game.Shells.pas |

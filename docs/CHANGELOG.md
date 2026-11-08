@@ -7,6 +7,33 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-08: **3.0.118 - the pier and the barge (stage 17b).** The orb
+launcher taken, the chase goes on: the world moves off at a crawl
+(`BeltCreep`, `TBelt.Run`), no more pads are sent (`TPadDrift.Cease`), and
+the road runs out two cells past the gun - the tiles beyond `RoadBreakX`
+break off one after another, the farthest first, and tumble into the
+crater with a thump and a jolt, while what is left - the pier - rides the
+belt as a pad trimmed to its tiles (`Game.Road`: `TRoadEnd`,
+`TRoadPainter`; `TPad.Carry`, `TPad.Trim`; the grid's row erased,
+`TLevel.EraseRow`). A TeK hover-barge five cells long glides in from
+beyond the right edge and moors a jump past the pier's end, riding with
+it; the hero aboard, it casts off to its station and the belt runs up to
+twice the chase's cruise (`Game.Barge`: `TBargeRide`; `BeltFlight`); the
+pier falls behind him. In the air past the launcher the belt carries him
+no more - a jump off the barge lands on it. The checkpoint is the barge's
+deck: a pit brings him back aboard with a wound, a death to point B -
+aboard, the hull hanging bare (`TRam.StartHanging`, `TTakeoff.Hang`,
+`TTekShield.Vanish`), the launcher in his hands (`TOrbLauncherArrival.Grant`),
+the world at the flight's pace; the End key's 4th press goes there. The
+art: four barges cut from one generation at its ribs and put together
+again, never stretched (`pads.mset`: `barge-5`..`barge-2`;
+`tools/barge/build_barge.py`); the pads `s13-road` and `s13-barge` are
+stowed (`"stowed": true` - dormant with no scene to wake them). Tests:
+`TRoadEndTests` 10, `TBargeRideTests` 12, `TLevelGridTests` 5,
+`TBeltTests` +1, `TPadWorldTests` +3, `TPadDriftTests` +1,
+`TRamBrakeTests` +2, `TTakeoffTests` +1, `TShieldCrumbleTests` +1,
+`TOrbLauncherArrivalTests` +1.
+
 2026-11-08: **3.0.117 - the orb launcher; he sways in the throw.** The
 orb gun of 3.0.116 is named the orb launcher ("Орбомёт"), in the game, the
 data, the code and the files (`orblauncher.mset`, `orblauncher.wav`,
