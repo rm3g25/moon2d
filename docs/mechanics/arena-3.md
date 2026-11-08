@@ -1201,6 +1201,8 @@ Decided 2026-11-08, after 3.0.116 was played:
 - Tests: `TThrowSceneTests` +2 (still on his way, swaying in his place - growing over the first swing, its full depth after, never past it; still once let go). The size of the shot's orb and the sway's look: left to the live run.
 - First guesses for the live run: the sway's depth of 2 and its two seconds; the shot's rim of 7.2.
 
+**After 3.0.117, no version of its own: the moon form in black and white.** A stopgap till the hero's animation is drawn anew: the moon form is drawn from its frames made black and white in code, the contrast raised 1.6 times about the middle grey (`THero.MonochromeForms` = `[hfMoon]`, `MonochromeContrast`; `Render.Monochrome`). The frames are made at load beside the hero's own (`FMonoFrames`, all 24 - a death in the moon form is grey too), and `THero.Pose` hands out the monochrome one in a monochrome form - so the shroud's light and the uptake's lie on it as well. The ice form is as it was. Tests: `Tests.Render.Monochrome` (new) - `TMonochromeTests` 7. The grey and the contrast: left to the live run.
+
 ## Stages
 Each its own commit, each run live.
 1. **False ending.** Built (3.0.63), see "Stage 1 as built".

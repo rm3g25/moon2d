@@ -122,6 +122,7 @@ uses
   Localization in 'Core\Localization.pas',
   Render.Glow in 'Core\Render.Glow.pas',
   Render.Silhouette in 'Core\Render.Silhouette.pas',
+  Render.Monochrome in 'Core\Render.Monochrome.pas',
   Render.Globe in 'Core\Render.Globe.pas',
   Menu.Starfield in 'Menu\Menu.Starfield.pas',
   Menu.Globe in 'Menu\Menu.Globe.pas',

@@ -104,6 +104,9 @@ type
     FSkinSet: TSpriteSet;
     FWeaponSet: TSpriteSet;
     FFrames: array [1..24] of PSdlTexture;
+    // The same frames in black and white, the contrast raised: the moon
+    // form's look till the hero is drawn anew
+    FMonoFrames: array [1..24] of PSdlTexture;
     FWeaponFrames: array [1..7] of PSdlTexture;
     // The Duplet in the hands: dense art with its own alpha, in a cache
     // of its own
@@ -149,6 +152,8 @@ type
       out ASpriteSet: TSpriteSet; const ASetName: string;
       const ASequences: array of string;
       ACount: Integer): TArray<PSdlTexture>;
+    procedure BuildMonoFrames(ARenderer: PSdlRenderer);
+    function FrameTexture(AFrame: Integer): PSdlTexture;
     procedure SetWeaponAngle;
     // The arm after the cursor, the cooldown of the gun
     procedure TickGun;
@@ -308,6 +313,9 @@ function JumpReach(ARise: Integer): Integer;
 
 implementation
 
+uses
+  Render.Monochrome;
+
 // Delphi Round is banker's: Round(2.5)=2 but Round(3.5)=4, which made
 // the walk cycle stutter (frames shown 1 or 3 ticks apart). Half-up
 // gives every frame exactly two ticks - the one deliberate improvement
@@ -350,6 +358,10 @@ const
   IceJumpBoost = 1.25;     // the 'прыжок +25%' perk of the ice form
   // In 3.0 the moon form looks like the ice form and jumps as it does
   SuitForms = [hfIce, hfMoon];
+  // A stopgap till the hero is drawn anew: the forms drawn in black and
+  // white, their contrast this many times the frames'
+  MonochromeForms = [hfMoon];
+  MonochromeContrast = 1.6;
   // A throw climbs about 75 units - over a low pad from the floor, under
   // the 100 of a jump - and takes the controls for its first 14 ticks:
   // the jump key the player does not hold would cut its rise short
@@ -515,10 +527,31 @@ begin
     HeroFrameSequences, Length(FFrames)));
   StoreFrames(FWeaponFrames, OpenFrames(FWeaponCache, FWeaponSet, 'weapon',
     ['frames'], Length(FWeaponFrames)));
+  BuildMonoFrames(ARenderer);
+end;
+
+procedure THero.BuildMonoFrames(ARenderer: PSdlRenderer);
+begin
+  var Names: TArray<string> := [];
+  for var Sequence in HeroFrameSequences do
+    Names := Names + FSkinSet.SequenceFrames(Sequence);
+  for var i := Low(FMonoFrames) to High(FMonoFrames) do
+    FMonoFrames[i] := CreateMonochromeTexture(ARenderer, FSkinSet,
+      Names[i - Low(FMonoFrames)], MonochromeContrast);
+end;
+
+function THero.FrameTexture(AFrame: Integer): PSdlTexture;
+begin
+  if FForm in MonochromeForms then
+    Exit(FMonoFrames[AFrame]);
+  Result := FFrames[AFrame];
 end;
 
 destructor THero.Destroy;
 begin
+  for var Texture in FMonoFrames do
+    if Texture <> nil then
+      SDL_DestroyTexture(Texture);
   FBullets.Free;
   // Caches before the sets they read from, mirroring the living order.
   FOrbLauncherCache.Free;
@@ -1669,7 +1702,7 @@ begin
   if FDead then
   begin
     Result.Frame := Min(Round(FDeathFrame), 16);
-    Result.Texture := FFrames[Result.Frame];
+    Result.Texture := FrameTexture(Result.Frame);
     Result.Mirrored := not FDeathFacingRight;
     Exit;
   end;
@@ -1700,7 +1733,7 @@ begin
     Frame := Frame + 16; // the ice skin lives at frames 17..24
 
   Result.Frame := Frame;
-  Result.Texture := FFrames[Frame];
+  Result.Texture := FrameTexture(Frame);
   Result.Mirrored := not FacingRight;
 end;
 

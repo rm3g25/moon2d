@@ -3504,6 +3504,12 @@ moves in comes from `Game.Space`.
   `orblauncher.mset` through its own cache (`FOrbLauncherCache`, `FOrbLauncherSet`),
   `held` drawn `OrbLauncherHeldSide` 32 square; `DrawWeapon` picks the gun's
   picture by a `case`.
+- After 3.0.117 (no version): **the moon form in black and white**, a
+  stopgap till the hero is drawn anew - `MonochromeForms` (`[hfMoon]`),
+  `MonochromeContrast` 1.6; `FMonoFrames` (all 24, made at load by
+  `BuildMonoFrames` through `Render.Monochrome`, destroyed with the hero);
+  `FrameTexture(frame)` picks the frame by the form, and `Pose` hands it
+  out - the shroud and the uptake draw on it.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -6119,6 +6125,16 @@ additive, linear-filtered, so one texture serves every tint and level.
   `Game.Uptake` the cross of a medkit, the crumbs and the spots.
   `EGlowError`.
 
+### `Core/Render.Monochrome.pas` (~95 lines, after 3.0.117)
+A picture made black and white, its contrast raised - the moon form's
+look till the hero is drawn anew. **`MonochromeOf(pixel, contrast)`** -
+one grey of the Rec. 601 weights, stretched `contrast` times about the
+middle grey and clamped, the alpha kept, pure black (what a 2008 cache
+keys out) clear. **`CreateMonochromeTexture(renderer, skin, name,
+contrast)`** - the picture as a texture of its own, blended; the caller
+destroys it. `EMonochromeError`, `TRgbaBytes`. Tests:
+`Tests.Render.Monochrome`.
+
 ### `Core/Render.Silhouette.pas` (~185 lines)
 What is made of the alpha of a picture: the points that lie in its body, a
 white mask in its shape and a blurred halo round it. Lifted out of
@@ -7709,6 +7725,8 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   shot from under the hanging hull; none on the road).
 - 3.0.117: `TThrowSceneTests` +2 - the hero still on his way, swaying in
   his place; still once let go.
+- After 3.0.117: **`Render/Tests.Render.Monochrome.pas`** -
+  **`TMonochromeTests`** (7), a pixel made monochrome.
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
