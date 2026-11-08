@@ -53,6 +53,8 @@ const
   // The weapon type of the Duplet, the double-barrel of level 2: types 0..4
   // are the 2008 guns
   DupletWeapon = 5;
+  // The orb gun, the moon form's weapon of the arena 3 fight
+  OrbGunWeapon = 6;
 
 type
   // What Draw puts on the screen this tick
@@ -70,6 +72,16 @@ type
     hcJump, hcStopJump, hcDrop);
 
   THeroForm = (hfNormal, hfIce, hfMoon);
+
+  // A gun put away while another is in his hands: what ApplyWeaponPickup
+  // takes
+  TStowedGun = record
+    Held: Boolean;
+    WeaponType: Integer;
+    FireCooldown: Integer;
+    BulletSpeed: Integer;
+    BulletGravity: Integer;
+  end;
 
   // Pending side intent when the way is blocked, executed once the
   // barrier clears ('ExtraInstruction' of the original).
@@ -98,6 +110,11 @@ type
     FDupletCache: TSpriteCache;
     FDupletSet: TSpriteSet;
     FDupletHeld: PSdlTexture;
+    // The orb gun in the hands, as the Duplet
+    FOrbGunCache: TSpriteCache;
+    FOrbGunSet: TSpriteSet;
+    FOrbGunHeld: PSdlTexture;
+    FStowed: TStowedGun;
     // Ticks left of a throw, with the controls out of his hands
     FThrownTicks: Integer;
     // A fling's own way across, units a tick, till he lands
@@ -185,6 +202,8 @@ type
     procedure CarryX(AWay: Double);
     // --- the Duplet ---
     procedure FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
+    // --- the orb gun ---
+    procedure FireOrb(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
   public
     constructor Create(const ARenderer: PSdlRenderer; const ALevel: TLevel;
       const APads: TPadWorld);
@@ -197,7 +216,9 @@ type
     // Verbatim TWeapon.Fire: fires only when the cooldown has fully
     // elapsed; patterns per weapon type (0 pistol, 1 shotgun x5,
     // 2 grenade cloud x22, 3 chain x3, 4 minigun with alternating
-    // side shots; 5 the Duplet, two barrels of red shot, not of 2008). Poll while LMB is held, like everything in 2008.
+    // side shots; 5 the Duplet, two barrels of red shot, and 6 the orb
+    // gun, one black orb, neither of 2008). Poll while LMB is held, like
+    // everything in 2008.
     // True when a shot actually left the barrel - the caller barks the
     // weapon sound then; held triggers on cooldown fire nothing
     function Fire: Boolean;
@@ -255,6 +276,11 @@ type
     // intermediate position where any ground verdict is meaningless.
     procedure SettleOnGround;
     procedure ApplyWeaponPickup(AType, ACooldown, ASpeed, AGravity: Integer);
+    // The gun he holds is put away, to come back with UnstowGun: the
+    // next pickup takes its place for a while
+    procedure StowGun;
+    // The gun put away comes back into his hands; nothing when none is
+    procedure UnstowGun;
     procedure Kill;   // death animation starts; Tick keeps advancing it
     procedure Revive; // full reset for a level restart
 
@@ -301,6 +327,11 @@ const
   // The held frame's square, units: the gun is 32 long, twice a 2008 gun,
   // and sticks out of the fist
   DupletHeldSide = 48;
+  OrbGunSetName = 'orbgun';
+  OrbGunHeldSprite = 'held';
+  // The held frame's square, units: the gun is 16 long, its grip far back,
+  // so most of it sticks out ahead of the fist
+  OrbGunHeldSide = 32;
 
 const
   // Original constants, names preserved for archaeology
@@ -471,6 +502,13 @@ begin
   FDupletCache.AttachSpriteSet(FDupletSet);
   FDupletHeld := FDupletCache.Get(DupletHeldSprite);
 
+  FOrbGunCache := TSpriteCache.Create(ARenderer);
+  FOrbGunCache.DisableColorKey;
+  FOrbGunCache.EnableLinearFilter;
+  FOrbGunSet := TSpriteSet.Create(SpriteSetsDir + OrbGunSetName + '.mset');
+  FOrbGunCache.AttachSpriteSet(FOrbGunSet);
+  FOrbGunHeld := FOrbGunCache.Get(OrbGunHeldSprite);
+
   // The hero's 1..24 is walk, then death, then the transformed frames -
   // named here rather than counted, as the 2008 list required.
   StoreFrames(FFrames, OpenFrames(FCache, FSkinSet, 'hero',
@@ -483,9 +521,11 @@ destructor THero.Destroy;
 begin
   FBullets.Free;
   // Caches before the sets they read from, mirroring the living order.
+  FOrbGunCache.Free;
   FDupletCache.Free;
   FWeaponCache.Free;
   FCache.Free;
+  FOrbGunSet.Free;
   FDupletSet.Free;
   FWeaponSet.Free;
   FSkinSet.Free;
@@ -520,6 +560,24 @@ begin
   FBulletSpeed := ASpeed;
   FBulletGravity := AGravity;
   FTimeOfFire := 1;
+end;
+
+procedure THero.StowGun;
+begin
+  FStowed.Held := True;
+  FStowed.WeaponType := FWeaponType;
+  FStowed.FireCooldown := FFireCooldown;
+  FStowed.BulletSpeed := FBulletSpeed;
+  FStowed.BulletGravity := FBulletGravity;
+end;
+
+procedure THero.UnstowGun;
+begin
+  if not FStowed.Held then
+    Exit;
+  FStowed.Held := False;
+  ApplyWeaponPickup(FStowed.WeaponType, FStowed.FireCooldown,
+    FStowed.BulletSpeed, FStowed.BulletGravity);
 end;
 
 procedure THero.Kill;
@@ -1519,6 +1577,14 @@ begin
         Spawn.Y := SpawnY;
         FireDuplet(Spawn, BaseAngle);
       end;
+
+    OrbGunWeapon:
+      begin
+        var Spawn: TSdlFPoint;
+        Spawn.X := SpawnX;
+        Spawn.Y := SpawnY;
+        FireOrb(Spawn, BaseAngle);
+      end;
   end;
 
   FTimeOfFire := 0;
@@ -1638,6 +1704,20 @@ begin
   Result.Mirrored := not FacingRight;
 end;
 
+// One black orb out of the muzzle. ASpawn - where the 2008 guns fire from,
+// at the hand.
+procedure THero.FireOrb(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
+const
+  // From the hand to the muzzle along the shot: the held frame's middle is
+  // 10 ahead of the arm, the muzzle 13.75 ahead of the middle, on the
+  // bore's line within a unit and a half
+  MuzzleReach = 22;
+begin
+  var Rad := ABaseAngle * Pi / 180;
+  FBullets.NewBullet(FBulletSpeed, ASpawn.X + MuzzleReach * Cos(Rad),
+    ASpawn.Y - MuzzleReach * Sin(Rad), ABaseAngle, FBulletGravity, True, blOrb);
+end;
+
 procedure THero.Draw(const ASprites: TSpriteRenderer);
 begin
   var Shown := Pose;
@@ -1706,12 +1786,17 @@ begin
     AngleSign * DrawAngle, Flip);
   var GunX := ArmX + Round(BarrelReachX * Cos(BarrelRad));
   var GunY := Round(FY) + Shift + GunOffsetY - Round(BarrelReachY * Sin(BarrelRad));
-  if FWeaponType = DupletWeapon then
-    ASprites.DrawRotated(FDupletHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
-      DupletHeldSide)
+  case FWeaponType of
+    DupletWeapon:
+      ASprites.DrawRotated(FDupletHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
+        DupletHeldSide);
+    OrbGunWeapon:
+      ASprites.DrawRotated(FOrbGunHeld, GunX, GunY, AngleSign * DrawAngle, Flip,
+        OrbGunHeldSide);
   else
     ASprites.DrawRotated(FWeaponFrames[FWeaponType + 3], GunX, GunY,
       AngleSign * DrawAngle, Flip);
+  end;
 end;
 
 end.

@@ -473,6 +473,35 @@
       ]
     },
     {
+      "id": "weaponOrbGun",
+      "displayName": "Орбовое ружьё",
+      "displayNameEn": "Orb Gun",
+      "category": "pickup",
+      "spriteList": null,
+      "dangerous": false,
+      "movement": {
+        "kind": "static"
+      },
+      "attack": null,
+      "pickupEffect": {
+        "kind": "giveWeapon",
+        "weaponType": 6,
+        "fireCooldown": 4,
+        "bulletSpeed": 10,
+        "bulletGravity": 1
+      },
+      "stats": {
+        "lives": 300,
+        "score": 0
+      },
+      "animFreq": 0.25,
+      "deathText": "Орбовое ружьё активировано",
+      "deathTextEn": "Orb Gun acquired",
+      "deathSounds": [
+        "gun.wav"
+      ]
+    },
+    {
       "id": "moonStone",
       "displayName": "Лунный камень",
       "displayNameEn": "Moon stone",

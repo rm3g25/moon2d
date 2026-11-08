@@ -751,6 +751,11 @@ type
     // The wheel it has shed throws a bullet off as the hull does
     function StrikeWheel(const AFrom, ATo: TSdlFPoint; out AAt,
       ANormal: TSdlFPoint): Boolean;
+    // The nozzles out under the hull throw a bullet off as the hull does:
+    // they hang under it, out of the body's grid, and a shot from under
+    // them would pass on into the bays
+    function StrikeNozzles(const AFrom, ATo: TSdlFPoint; out AAt,
+      ANormal: TSdlFPoint): Boolean;
     // The bare hull or its wheel threw a bullet off within ATicks
     function HullStruckWithin(ATicks: Integer): Boolean;
     // Some of AHeroBody is in the hull or a wheel: AAway - the side to set
@@ -3762,6 +3767,64 @@ begin
     FRearWheel.Strike(AFrom, ATo, AAt, ANormal);
   if Result then
     FHullHitTicks := 0;
+end;
+
+// Each nozzle a box of the upright hull under its axle, as far as it is
+// out; the stretch brought back into the upright hull as StrikeHull brings
+// it
+function TRam.StrikeNozzles(const AFrom, ATo: TSdlFPoint; out AAt,
+  ANormal: TSdlFPoint): Boolean;
+const
+  // Units between two looks along the stretch: finer than a nozzle's wall
+  LookStep = 0.5;
+var
+  Boxes: array [TTakeoffJet] of TSdlFRect;
+begin
+  AAt := ATo;
+  ANormal := UnitPoint(0, 1);
+  var Shown := FTakeoff.NozzleAt(1);
+  if not Present or (Shown <= 0) then
+    Exit(False);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Axle := HullSpot(FX, Axles[JetAxles[Jet]]);
+    Boxes[Jet].X := Axle.X - NozzleWidth / 2;
+    Boxes[Jet].Y := Axle.Y + NozzleHang;
+    Boxes[Jet].W := NozzleWidth;
+    Boxes[Jet].H := NozzleHeight * Shown;
+  end;
+  var Pose := PoseAt(1);
+  var Pivot := LeanPivot(FX);
+  var From := Turned(UnitPoint(AFrom.X - Pose.Shift.X, AFrom.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
+  var Till := Turned(UnitPoint(ATo.X - Pose.Shift.X, ATo.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
+  var WayX: Single := Till.X - From.X;
+  var WayY: Single := Till.Y - From.Y;
+  var Looks := Max(1, Ceil(Hypot(WayX, WayY) / LookStep));
+  for var i := 0 to Looks do
+  begin
+    var Share: Single := i / Looks;
+    var Strike := Default(TStrike);
+    Strike.X := From.X + WayX * Share;
+    Strike.Y := From.Y + WayY * Share;
+    for var Box in Boxes do
+    begin
+      var Inside := (Strike.X >= Box.X) and (Strike.X < Box.X + Box.W) and
+        (Strike.Y >= Box.Y) and (Strike.Y < Box.Y + Box.H);
+      if not Inside then
+        Continue;
+      Strike.SpeedX := WayX;
+      Strike.SpeedY := WayY;
+      TraceEntry(Strike, Box);
+      AAt := Posed(Pose, UnitPoint(Strike.X, Strike.Y));
+      ANormal := Turned(UnitPoint(Strike.NormalX, Strike.NormalY),
+        UnitPoint(0, 0), Pose.Lean);
+      FHullHitTicks := 0;
+      Exit(True);
+    end;
+  end;
+  Result := False;
 end;
 
 function TRam.HullStruckWithin(ATicks: Integer): Boolean;

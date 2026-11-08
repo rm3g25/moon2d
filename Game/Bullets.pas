@@ -39,8 +39,9 @@ type
 
   TBulletStatus = (bsFlying, bsBursting, bsInactive);
 
-  // How a bullet is painted: as drawn, or red - the Duplet's shot
-  TBulletLook = (blPlain, blRed);
+  // How a bullet is painted: as drawn, or red - the Duplet's shot; or not
+  // at all - the orb gun's, which is an orb (Orbs.Shots)
+  TBulletLook = (blPlain, blRed, blOrb);
 
   TBullet = class
   private
@@ -237,6 +238,13 @@ var
 begin
   for var Bullet in FBullets do
   begin
+    // An orb has no burst of frames: spent, it goes to dust at once
+    if Bullet.Look = blOrb then
+    begin
+      if Bullet.Status = bsBursting then
+        Bullet.FStatus := bsInactive;
+      Continue;
+    end;
     // Verbatim quad of TBullet.Put: x-16..x+16, y-48..y-16
     Dest.X := Round(Bullet.FX) - BulletQuad div 2;
     Dest.Y := Round(Bullet.FY) - BulletQuad - BulletQuad div 2;

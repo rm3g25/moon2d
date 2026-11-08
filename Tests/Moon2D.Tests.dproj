@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{4383AE12-C59E-4E51-BF7D-A1D1E1F13497}</ProjectGuid>
         <MainSource>Moon2D.Tests.dpr</MainSource>
@@ -93,6 +93,8 @@
         <DCCReference Include="Game\Tests.Game.Throw.pas"/>
         <DCCReference Include="Game\Tests.Game.Wheel.pas"/>
         <DCCReference Include="Game\Tests.Game.Takeoff.pas"/>
+        <DCCReference Include="Game\Tests.Game.HullLives.pas"/>
+        <DCCReference Include="Game\Tests.Game.OrbGun.pas"/>
         <DCCReference Include="Game\Tests.Game.Shield.pas"/>
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
@@ -127,6 +129,7 @@
         <DCCReference Include="Orbs\Tests.Orbs.Burst.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Feed.pas"/>
         <DCCReference Include="Orbs\Tests.Orbs.Grip.pas"/>
+        <DCCReference Include="Orbs\Tests.Orbs.Shots.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Decks.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Drift.pas"/>
         <DCCReference Include="Pads\Tests.Pads.Flights.pas"/>

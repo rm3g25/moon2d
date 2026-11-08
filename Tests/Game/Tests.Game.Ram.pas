@@ -105,9 +105,10 @@
   roar once, both wheels come down, the rear one heard more than once; the
   rear one is thrown down out of the risen hull onto the road; it hangs
   level, risen to its height; hanging, its
-  touch and a bullet meet it up there, not on the road; it goes over the
-  hero no faster than its most, keeping to the screen; a new fight puts it
-  back on the road. After the bunker the well shuts, only once the mast is
+  touch and a bullet meet it up there, not on the road; a bullet from
+  under it meets its two nozzles, under the hull, and throws off down -
+  none before the takeoff; it goes over the hero no faster than its most,
+  keeping to the screen; a new fight puts it back on the road. After the bunker the well shuts, only once the mast is
   down; past the bunker it is shut from the start.
 
   Turned round, the hull is mirrored: what a touch meets and where the
@@ -286,6 +287,10 @@ type
     procedure TestHangingItsTouchIsUpThere;
     [Test]
     procedure TestHangingABulletMeetsItsRaisedTop;
+    [Test]
+    procedure TestHangingABulletFromUnderMeetsItsTwoNozzles;
+    [Test]
+    procedure TestOnTheRoadNoNozzleToMeet;
     [Test]
     procedure TestANewFightPutsItBackOnTheRoad;
   end;
@@ -4153,6 +4158,68 @@ begin
   Assert.IsTrue(Abs(Where.Y - Top) < NearTheTop,
     Format('Near its top, not at %.1f', [Where.Y]));
   Assert.IsTrue(Normal.Y < -0.99, 'Looking up');
+end;
+
+// Straight up from under the hanging hull, along it: two runs of hits, a
+// nozzle's width each, under the hull's bottom, thrown off down
+procedure TRamBrakeTests.TestHangingABulletFromUnderMeetsItsTwoNozzles;
+const
+  Step = 0.5;
+  Flight = 16.0;
+  NarrowestNozzle = 10.0;
+  WidestNozzle = 18.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  TakeOffAndHang(Hero);
+  var Bottom: Single := RamTop - HangLift + RamHeight;
+  var Runs := 0;
+  var RunWidth: Single := 0;
+  var InRun := False;
+  var X: Single := FRam.Left - 10;
+  while X <= FRam.Left + RamWidth + 10 do
+  begin
+    var Struck := FRam.StrikeNozzles(At(X, Bottom + Flight), At(X, Bottom),
+      Where, Normal);
+    if Struck then
+    begin
+      Assert.IsTrue(Where.Y > Bottom, Format('Under the hull at %.1f', [X]));
+      Assert.IsTrue(Normal.Y > 0.99, Format('Looking down at %.1f', [X]));
+      if not InRun then
+      begin
+        Inc(Runs);
+        RunWidth := 0;
+      end;
+      RunWidth := RunWidth + Step;
+    end
+    else if InRun then
+      Assert.IsTrue((RunWidth >= NarrowestNozzle) and (RunWidth <= WidestNozzle),
+        Format('A nozzle %.1f wide', [RunWidth]));
+    InRun := Struck;
+    X := X + Step;
+  end;
+  Assert.AreEqual(2, Runs, 'Two nozzles');
+end;
+
+procedure TRamBrakeTests.TestOnTheRoadNoNozzleToMeet;
+const
+  Step = 0.5;
+  Flight = 16.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 100);
+  StunAndThrow(Hero);
+  BareTheHull(Hero);
+  var Bottom: Single := RamTop + RamHeight;
+  var X: Single := FRam.Left - 10;
+  while X <= FRam.Left + RamWidth + 10 do
+  begin
+    Assert.IsFalse(FRam.StrikeNozzles(At(X, Bottom + Flight), At(X, Bottom - Flight),
+      Where, Normal), Format('Nothing at %.1f', [X]));
+    X := X + Step;
+  end;
 end;
 
 procedure TRamBrakeTests.TestANewFightPutsItBackOnTheRoad;

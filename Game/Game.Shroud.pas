@@ -16,8 +16,10 @@
   - TShroudPainter draws, and keeps what is made of the hero's art at
     load: the masks, the halos and the points a mote is born at.
 
-  Nothing here knows how the hero looks. Sizes and shapes come from the
-  frames, so a redrawn hero brings its own shroud.
+  Nothing here knows how the hero looks, nor that it is the hero: the
+  painter is handed a figure - its frames and where it stands now - so a
+  redrawn hero brings its own shroud, and a pickup that appears on the
+  road wears one too. Sizes and shapes come from the frames.
 
   The shroud also holds one light that is no scene's: what the hero takes
   in (Game.Uptake) feeds it, it lights the body and dies out by itself,
@@ -32,7 +34,7 @@ interface
 
 uses
   System.SysUtils, Sdl2.Core, Render.Brush, Render.Silhouette, Effects.Emitter,
-  Effects.Sparks, Levels.Dynamics, Hero;
+  Effects.Sparks, Levels.Dynamics, Sprites.Sets, Hero;
 
 const
   ShroudStrips = 16;
@@ -143,10 +145,14 @@ type
     Glow: Single;
   end;
 
+  // Where the figure under the shroud stands now, and in which frame
+  TShroudPose = reference to function: THeroPose;
+
   TShroudPainter = class
   private
     FRenderer: PSdlRenderer;
-    FHero: THero;
+    FSkin: TSpriteSet;
+    FPose: TShroudPose;
     FShroud: THeroShroud;
     FArt: TArray<TSilhouette>;
     procedure BuildFrame(AIndex: Integer; const AName: string);
@@ -168,7 +174,11 @@ type
     procedure DrawMotes(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
   public
-    constructor Create(ARenderer: PSdlRenderer; const AHero: THero;
+    // AFrames - the names of the figure's frames in ASkin, frame 1 the
+    // first; the skin and the shroud belong to the caller and must outlive
+    // the painter
+    constructor Create(ARenderer: PSdlRenderer; const ASkin: TSpriteSet;
+      const AFrames: TArray<string>; const APose: TShroudPose;
       const AShroud: THeroShroud);
     destructor Destroy; override;
     function SeedsOf(AFrame: Integer): TSeedList;
@@ -185,6 +195,9 @@ type
     procedure DrawOver(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       ALift, AAlpha: Single);
   end;
+
+// The hero's frames, in the order of his poses' frame numbers
+function HeroShroudFrames(const ASkin: TSpriteSet): TArray<string>;
 
 const
   // Back from a pit: quick, the body gathers from the sides
@@ -236,7 +249,7 @@ function ChargeLook(ACollapseTicks: Integer;
 implementation
 
 uses
-  System.Math, Sprites.Sets, Render.Sprites, Render.Glow, Render.Puff;
+  System.Math, Render.Sprites, Render.Glow, Render.Puff;
 
 resourcestring
   SShroudFrameFailed = 'Cannot build the shroud of the hero frame "%s": %s';
@@ -697,20 +710,26 @@ end;
 // TShroudPainter
 // ---------------------------------------------------------------------------
 
-constructor TShroudPainter.Create(ARenderer: PSdlRenderer; const AHero: THero;
-  const AShroud: THeroShroud);
+function HeroShroudFrames(const ASkin: TSpriteSet): TArray<string>;
+begin
+  Result := [];
+  for var Sequence in HeroFrameSequences do
+    Result := Result + ASkin.SequenceFrames(Sequence);
+end;
+
+constructor TShroudPainter.Create(ARenderer: PSdlRenderer;
+  const ASkin: TSpriteSet; const AFrames: TArray<string>;
+  const APose: TShroudPose; const AShroud: THeroShroud);
 begin
   inherited Create;
   FRenderer := ARenderer;
-  FHero := AHero;
+  FSkin := ASkin;
+  FPose := APose;
   FShroud := AShroud;
 
-  var Names: TArray<string> := [];
-  for var Sequence in HeroFrameSequences do
-    Names := Names + AHero.SkinSet.SequenceFrames(Sequence);
-  SetLength(FArt, Length(Names));
-  for var i := 0 to High(Names) do
-    BuildFrame(i, Names[i]);
+  SetLength(FArt, Length(AFrames));
+  for var i := 0 to High(AFrames) do
+    BuildFrame(i, AFrames[i]);
 end;
 
 destructor TShroudPainter.Destroy;
@@ -722,7 +741,7 @@ end;
 
 procedure TShroudPainter.BuildFrame(AIndex: Integer; const AName: string);
 begin
-  var Loaded := LoadImageSurface(FHero.SkinSet, AName);
+  var Loaded := LoadImageSurface(FSkin, AName);
   if Loaded = nil then
     raise EShroudError.CreateFmt(SShroudFrameFailed, [AName, SdlErrorText]);
   var Surface := SDL_ConvertSurfaceFormat(Loaded, SdlPixelFormatAbgr8888, 0);
@@ -753,7 +772,7 @@ end;
 function TShroudPainter.ViewOf(AOrigin: TSdlPoint; ALift,
   AAlpha: Single): TShroudView;
 begin
-  Result.Pose := FHero.Pose;
+  Result.Pose := FPose();
   Result.Left := Result.Pose.Left + AOrigin.X;
   Result.Top := Result.Pose.Top + AOrigin.Y + ALift;
   Result.Time := FShroud.Time(AAlpha);
