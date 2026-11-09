@@ -15,7 +15,9 @@ The folder of arena 3: one file per part of the fight, each its design and, unde
 | `ram.md` | screen 13 and the machine TEK-R13: its art, the entrance, act 1 - the hunter and the sweeper, the wave, the shuttle's capsules | 8-10 |
 | `chase.md` | act 2: the belt, the far plane and the city, the fangs, the drifting pads, the bunker in three phases | 11, 13, 14 |
 | `energy.md` | the charge of the form: the gauge, the tank, the ceilings by heads | 6, 15 |
-| `evolution.md` | from the bunker's death to the hero aboard the barge: the last 3%, the rite, the burst, the throw, the wheels, the takeoff, the orb launcher, the cliff and the barge; the first designs of the air phase | 16, 18a-c, 17 |
+| `evolution.md` | from the bunker's death to the hero aboard the barge: the last 3%, the rite, the burst, the throw, the wheels, the takeoff, the orb launcher, the cliff and the barge | 16, 18a-c, 17 |
+| `ram-air.md` | the air fight: the barges, the magnet, the bombs, the charge, the dive, the ladder, the rule of the hot parts | 18d on |
+| `ram-air-sketches.html` | the animated sketches of the air fight's design chat (open in a browser) | - |
 | `plan.md` | the stages in order, the open questions, the risks, the end | all |
 
 ## The idea in one line

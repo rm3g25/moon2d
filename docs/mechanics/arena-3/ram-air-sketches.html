@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Moon2D - arena 3 - the Ram's air fight, sketches</title>
+<style>
+body{margin:0;padding:24px;background:#141413;color:#e8e6dc;font:15px/1.6 system-ui,sans-serif;max-width:720px}
+h1{font-size:20px;font-weight:500;margin:0 0 6px}
+h2{font-size:17px;font-weight:500;margin:32px 0 8px}
+p.note{color:#9c9a92;font-size:13px;margin:0 0 16px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+button{background:transparent;color:#e8e6dc;border:1px solid #5f5e5a;border-radius:8px;padding:6px 12px;font:13px system-ui,sans-serif;cursor:pointer}
+button.on{border-color:#85B7EB;color:#85B7EB}
+canvas{width:100%;border-radius:12px;border:1px solid #3a3a38;display:block}
+.prog{display:flex;align-items:center;gap:10px;margin:10px 0 0}
+.track{flex:1;height:4px;background:#2c2c2a;border-radius:2px;overflow:hidden}
+.fill{height:4px;width:0;background:#9c9a92}
+.cap{min-height:52px;margin:10px 0 4px}
+</style>
+</head>
+<body>
+<h1>Таран: воздушный бой - эскизы</h1>
+<p class="note">Схемы из чата дизайна 2026-11-09, не в масштабе. Где эскиз и ram-air.md расходятся, прав ram-air.md (например, на эскизах лестницы главная баржа стоит - в игре она плавает).</p>
+<h2>Лестница: что добавляется по ступеням</h2>
+<div id="p1"></div>
+<h2>Лифт и правило "горячее = мягкое"</h2>
+<div id="p2"></div>
+<script>
+const W=640,H=320;
+const ease=k=>k<0?0:k>1?1:k*k*(3-2*k),lerp=(a,b,k)=>a+(b-a)*k,seg=(t,a,b)=>ease((t-a)/(b-a)),lin=(t,a,b)=>Math.max(0,Math.min(1,(t-a)/(b-a)));
+const DECK=250;let X;
+function bg(t,sp){sp=sp||1;X.fillStyle='#1b1b1a';X.fillRect(0,0,W,H);X.fillStyle='#2C2C2A';
+for(let i=0;i<7;i++){let x=((i*120-t*30*sp)%840+840)%840-100;X.beginPath();X.moveTo(x,H);X.lineTo(x+60,215);X.lineTo(x+120,H);X.fill();}
+X.strokeStyle='rgba(211,209,199,0.18)';X.lineWidth=1;
+for(let i=0;i<14;i++){let y=30+((i*37)%260),x=((i*97-t*420*sp)%760+760)%760-60;X.beginPath();X.moveTo(x,y);X.lineTo(x+40,y);X.stroke();}}
+function barge(x,y,w,a,main){X.save();X.translate(x,y);X.rotate(a||0);X.fillStyle=main?'#5F5E5A':'#888780';X.fillRect(-w/2,0,w,main?11:8);X.fillStyle='#EF9F27';X.fillRect(-w/2,0,w,2);X.fillStyle='#D85A30';X.fillRect(-w/2-6,2,5,4);X.restore();}
+function hero(x,y){X.fillStyle='#D3D1C7';X.fillRect(x-6,y-24,12,24);X.fillStyle='#444441';X.fillRect(x-4,y-21,8,4);}
+function orb(x,y){X.fillStyle='#AFA9EC';X.beginPath();X.arc(x,y,3.5,0,7);X.fill();}
+function heatCol(h){return h<=0?'#378ADD':'rgb('+Math.round(lerp(55,250,h))+','+Math.round(lerp(138,150,h))+','+Math.round(lerp(221,40,h))+')';}
+function ram(x,y,o){o=o||{};X.save();X.translate(x,y);X.fillStyle='#888780';X.fillRect(-75,-32,150,52);X.fillStyle='#5F5E5A';X.fillRect(-75,10,150,10);
+for(let i=-70;i<75;i+=14){X.fillStyle='#EF9F27';X.fillRect(i,-32,7,4);}
+X.fillStyle=o.flash?'#FCEBEB':'#E24B4A';X.beginPath();X.arc(o.face<0?60:-60,-12,o.flash?9:6,0,7);X.fill();
+let mh=o.mag||0;X.fillStyle=heatCol(mh);X.fillRect(-15,20,30,8);if(mh>0.05){X.strokeStyle='rgba(250,199,117,'+mh+')';X.lineWidth=2;X.strokeRect(-19,17,38,14);}
+[-42,42].forEach(nx=>{let nh=o.noz||0;X.fillStyle=nh>0?heatCol(nh):'#444441';X.fillRect(nx-8,20,16,10);if(nh>0.05){X.strokeStyle='rgba(250,199,117,'+nh+')';X.lineWidth=2;X.strokeRect(nx-11,17,22,16);}if(o.fire){X.fillStyle='#D85A30';X.fillRect(nx-4,30,8,o.fire);}});
+if(o.open){X.strokeStyle='#E24B4A';X.lineWidth=3;X.setLineDash([6,4]);X.strokeRect(-62,6,124,26);X.setLineDash([]);}
+X.restore();}
+function beam(x0,y0,x1,y1){X.strokeStyle='#85B7EB';X.lineWidth=1.5;X.setLineDash([4,4]);X.beginPath();X.moveTo(x0,y0);X.lineTo(x1,y1);X.stroke();X.setLineDash([]);}
+function label(x,y,s,c){X.font='500 12px sans-serif';X.fillStyle=c||'#F09595';X.textAlign='center';X.fillText(s,x,y);}
+function shots(t,f,to,n){for(let i=0;i<n;i++){let k=((t*2.2+i/n)%1);orb(lerp(f[0],to[0],k),lerp(f[1],to[1],k));}}
+function frags(x,y,k,n,col){for(let i=0;i<n;i++){let a=i/n*6.28+0.3,r=k*90;X.fillStyle=col||'#B4B2A9';X.fillRect(x+Math.cos(a)*r,y+Math.sin(a)*r*0.6+k*k*60,5,3);}}
+function arcP(t,a,b,p0,p1,h){let k=seg(t,a,b);return [lerp(p0[0],p1[0],k),lerp(p0[1],p1[1],k)-Math.sin(Math.PI*k)*h];}
+function drifter(t,ph){return [((620-t*35+ph*300)%760+760)%760-60,140+ph*60+Math.sin(t*1.3+ph*4)*14];}
+function bomb(t,a,b,p0,p1){if(t<a||t>b)return;let p=arcP(t,a,b,p0,p1,70);X.fillStyle='#FAC775';X.beginPath();X.arc(p[0],p[1],4,0,7);X.fill();
+X.strokeStyle='rgba(239,159,39,0.8)';X.lineWidth=1.5;X.beginPath();X.ellipse(p1[0],p1[1],22,5,0,0,7);X.stroke();}
+function hud(hot){X.fillStyle='#444441';X.fillRect(220,10,200,10);let on=hot>0.05;for(let i=0;i<20;i++){X.fillStyle=on?'rgba(250,199,117,'+(0.4+0.6*Math.abs(Math.sin(performance.now()/150)))+')':'#5F5E5A';X.fillRect(223+i*9.8,12,7,6);}
+X.font='500 11px sans-serif';X.textAlign='left';X.fillStyle=on?'#FAC775':'#888780';X.fillText(on?'уязвим':'броня',428,20);}
+function volley(t,f,to,hot){for(let i=0;i<4;i++){let k=((t*2.2+i/4)%1);if(hot||k<0.6){let kk=hot?k:k/0.6;orb(lerp(f[0],to[0],kk),lerp(f[1],to[1],kk));if(hot&&k>0.9){X.fillStyle='#CECBF6';X.beginPath();X.arc(to[0],to[1],6,0,7);X.fill();}}
+else{let b=(k-0.6)/0.4;X.fillStyle='#FAC775';for(let j=0;j<3;j++)X.fillRect(to[0]+(j-1)*b*14,to[1]+b*10-j*3,2,2);orb(lerp(to[0],to[0]+(i%2?50:-50),b),lerp(to[1],to[1]+70,b));}}}
+function player(host,S){
+host.innerHTML='<div class="tabs"></div><canvas></canvas><div class="prog"><div class="track"><div class="fill"></div></div><button class="pp">пауза</button></div><p class="cap"></p>';
+const C=host.querySelector('canvas'),ctx=C.getContext('2d'),D=window.devicePixelRatio||1;C.width=W*D;C.height=H*D;ctx.scale(D,D);
+const tabs=host.querySelector('.tabs'),cap=host.querySelector('.cap'),fill=host.querySelector('.fill'),pp=host.querySelector('.pp');
+let cur=0,t0=performance.now(),paused=false,pt=0;
+S.forEach((s,i)=>{let b=document.createElement('button');b.textContent=s.n;b.onclick=()=>{cur=i;t0=performance.now();pt=0;mark();};tabs.appendChild(b);});
+function mark(){[...tabs.children].forEach((b,i)=>b.classList.toggle('on',i===cur));}
+mark();
+pp.onclick=()=>{paused=!paused;if(!paused)t0=performance.now()-pt*1000;pp.textContent=paused?'пуск':'пауза';};
+function loop(n){let s=S[cur];if(!paused)pt=((n-t0)/1000)%s.d;X=ctx;s.dr(pt);
+let c='';s.st.forEach(p=>{if(pt>=p[0])c=p[1];});cap.textContent=c;fill.style.width=(pt/s.d*100)+'%';requestAnimationFrame(loop);}
+requestAnimationFrame(loop);}
+const S1=[
+{n:'Ступень 1: магнит',d:10,st:[[0,'Мелкие баржи летят каждая по своей траектории, герою не подчиняются. Прыгаешь на ту, что сейчас рядом.'],[3,'Магнит хватает баржу вместе с героем. Он едет вверх, как на лифте, - прямо под брюхо, выше щита.'],[4.5,'Риск и награда: в упор, щита между вами нет. Но гул магнита нарастает - он сейчас бросит.'],[6,'Спрыгнул вовремя - баржа летит без тебя. Не спрыгнул - летишь вместе с ней.'],[8,'Магнит пуст, брюхо открыто. А справа уже входит новая баржа взамен брошенной.']],
+dr(t){bg(t,1);barge(320,DECK,170,0,1);let rx=320,ry=78+Math.sin(t*2)*3;
+let bx,by;if(t<3){bx=lerp(620,430,seg(t,0,2));by=170+Math.sin(t*2)*4;}else if(t<6.6){bx=lerp(430,320,seg(t,3,4.3));by=lerp(170,128,seg(t,3,4.3));}else{let k=seg(t,6.6,7.6);bx=lerp(320,380,k);by=lerp(128,DECK-8,k)-Math.sin(Math.PI*k)*30;}
+let hp;if(t<2.2)hp=[300,DECK];else if(t<2.9)hp=arcP(t,2.2,2.9,[300,DECK],[430,170],40);else if(t<6)hp=[bx,by];else if(t<6.7)hp=arcP(t,6,6.7,[bx,by],[255,DECK],10);else hp=[255,DECK];
+ram(rx,ry,{mag:t>8?1-lin(t,8,10):t>2.9&&t<7.6?lin(t,2.9,4.3):0});if(t>2.9&&t<6.6)beam(rx,ry+27,bx,by);
+if(t<7.6)barge(bx,by,70);else frags(380,DECK-6,lin(t,7.6,9),10);
+hero(hp[0],hp[1]);if(t>4.3&&t<6){shots(t,[hp[0],hp[1]-24],[rx,ry+22],3);label(rx,ry-44,'в упор');}
+if(t>4.8&&t<6.6)label(470,110,'гул нарастает','#FAC775');
+if(t>8){shots(t,[255,DECK-24],[rx,ry+22],4);label(rx,ry-44,'окно');barge(lerp(700,520,seg(t,8,10)),165,80);}}},
+{n:'Ступень 2: бомбочки',d:8,st:[[0,'Метод третьей головы: бомба по дуге, кольцо на палубе показывает, куда упадёт.'],[1.6,'Уходишь с мелкой баржи на главную, пока кольцо мигает.'],[2.2,'Подбитая баржа уходит влево и вниз, теряя скорость. Можно успеть спрыгнуть - или уехать в пропасть вместе с ней.'],[3.6,'Бомба на главную баржу просто взрывается, как на земле: она тяжёлая. Просто не стой в кольце.'],[5.5,'Ушедшую баржу заменяет новая справа. На экране всегда есть куда прыгнуть.']],
+dr(t){bg(t,1);barge(320,DECK,170,0,1);let rx=320,ry=78+Math.sin(t*2)*3;ram(rx,ry);
+let bx=430,by=170+Math.sin(t*2)*4,a=0;if(t>2.1){let k=lin(t,2.1,5);bx=lerp(430,150,1-(1-k)*(1-k));by=lerp(170,380,k*k);a=-k*0.8;}
+barge(bx,by,70,a);if(t>2.05&&t<2.6)frags(430,170,lin(t,2.05,2.6)*0.4,6,'#FAC775');
+let hp;if(t<1.6)hp=[430,170+Math.sin(t*2)*4];else if(t<2.3)hp=arcP(t,1.6,2.3,[430,170],[270,DECK],30);else hp=[270,DECK];hero(hp[0],hp[1]);
+bomb(t,0.5,2.05,[rx+30,ry+20],[430,170]);bomb(t,2.8,3.8,[rx-20,ry+20],[370,DECK]);
+if(t>3.8&&t<4.6){X.fillStyle='rgba(216,90,48,0.6)';X.beginPath();X.arc(370,DECK-4,lerp(6,26,lin(t,3.8,4.2)),0,7);X.fill();}
+if(t>5.5)barge(lerp(700,470,seg(t,5.5,8)),160,90);let d=drifter(t,1.1);if(t<5)barge(d[0],d[1]+40,50);}},
+{n:'Ступень 3: разбег',d:8,st:[[0,'Уходит за край на разбег. Красная полоса показывает коридор удара.'],[2.5,'Таран проходит насквозь. Мелкая баржа в коридоре - в щепки. Главная ниже коридора.'],[3.8,'Торможение соплами вперёд - висит низко и боком. Окно.']],
+dr(t){bg(t,t>2.5&&t<3.7?2:1);barge(320,DECK,170,0,1);let rx,ry=185,o={face:-1};
+if(t<1.2){rx=lerp(320,-180,seg(t,0,1.2));ry=lerp(78,185,seg(t,0,1.2));}else if(t<2.5)rx=-180;else if(t<3.7)rx=lerp(-180,820,(t-2.5)/1.2);else if(t<4.5){rx=lerp(820,470,seg(t,3.7,4.5));o.fire=30;}else if(t<7){rx=470;o.noz=1-lin(t,4.5,7);}else{rx=lerp(470,320,seg(t,7,8));ry=lerp(185,78,seg(t,7,8));}
+if(t>1.2&&t<2.5&&Math.sin(t*16)>0){X.fillStyle='rgba(226,75,74,0.3)';X.fillRect(0,150,W,75);X.fillStyle='#E24B4A';X.fillRect(0,150,6,75);label(320,145,'коридор удара');}
+let hit=2.5+(420+180)/1000*1.2;if(t<hit)barge(420,185+Math.sin(t*2)*4,70);else frags(420,185,lin(t,hit,hit+1.2),10);
+ram(rx,ry,o);hero(280,DECK);if(t>4.5&&t<7){shots(t,[280,DECK-24],[440,ry+20],4);label(470,135,'окно');}
+if(t>5)barge(lerp(700,520,seg(t,5,8)),150,80);}},
+{n:'Ступень 4: нырок',d:8,st:[[0,'Висит, баржи кружат вокруг.'],[1,'Внезапно: глаз вспыхивает, сопла глохнут - полсекунды тишины. Это весь телеграф.'],[1.6,'Падает камнем. Мелкие баржи под ним разлетаются шрапнелью - она ранит. Главную только качнуло.'],[2.4,'Низко, сопла раскочегариваются заново - горячие. Окно.'],[5.5,'Поднимается. Новые баржи заходят справа.']],
+dr(t){bg(t,1);let sh=t>1.9&&t<2.4?Math.sin(t*60)*3:0;barge(320,DECK+sh,170,0,1);
+let ry=t<1.6?78+Math.sin(t*2)*3:t<1.95?lerp(78,190,lin(t,1.6,1.95)):t<5.5?190:lerp(190,78,seg(t,5.5,6.5));
+ram(320,ry,{flash:t>1&&t<1.6,fire:t<1||t>2.6?24:0,noz:t>2.4&&t<5.5?1-lin(t,2.4,5.5):0});if(t>1&&t<1.6)label(320,40,'тишина','#FAC775');
+[[255,165],[390,175]].forEach((b,i)=>{let hitT=1.9;if(t<hitT)barge(b[0],b[1]+Math.sin(t*2+i)*4,60);else frags(b[0],b[1],lin(t,hitT,hitT+1.3),9,'#F0997B');});
+hero(200,DECK);if(t>2.4&&t<5.5){shots(t,[200,DECK-24],[278,212],4);label(320,130,'окно');}
+if(t>1.9&&t<2.6)label(140,200,'шрапнель','#F0997B');if(t>5.5){barge(lerp(700,470,seg(t,5.5,8)),160,80);barge(lerp(760,200,seg(t,6,8)),120,60);}}}];
+const S2=[
+{n:'Лифт: атака и ответ',d:10,st:[[0,'Со ступени 2 Таран целится в баржу, на которой стоишь ты. Главная тоже плавает - пол под тобой живой всегда.'],[1,'Захват: баржа с тобой уезжает вверх. Магнит под нагрузкой раскаляется - он горячий, значит его можно бить.'],[2.2,'В упор, щита между вами нет. Но гул растёт: это таймер.'],[4.2,'Прижим: баржу дёргает вплотную к брюху. Кто остался - ранен и сброшен. Ты успел спрыгнуть.'],[4.9,'Бросок пустой баржей по главной. Прыгай с точки удара.'],[6,'Магнит остывает: оранжевый тускнеет в синий. Тускнеет - окно закрывается.']],
+dr(t){bg(t);let mx=320+Math.sin(t*0.6)*70,my=258+Math.sin(t*0.9)*8;barge(mx,my,170,0,1);
+let rx=t<1?lerp(320,430,seg(t,0,1)):t<5.6?430:lerp(430,320,seg(t,5.6,7)),ry=80+Math.sin(t*2)*3;
+let mag=t<1?0:t<4.9?lin(t,1,2.2):t<6?1:1-lin(t,6,9);
+let bx=430,by=170+Math.sin(t*2)*4;if(t>=1&&t<4.2)by=lerp(170,128,seg(t,1,2.2));else if(t>=4.2&&t<4.9)by=108;else if(t>=4.9){let k=seg(t,4.9,5.8);bx=lerp(430,mx+40,k);by=lerp(108,my-8,k)-Math.sin(Math.PI*k)*30;}
+ram(rx,ry,{mag});hud(mag);if(t>1&&t<4.9)beam(rx,ry+28,bx,by);
+if(t<5.8)barge(bx,by,70);else{let k=lin(t,5.8,7);for(let i=0;i<9;i++){let a=i*0.7;X.fillStyle='#B4B2A9';X.fillRect(mx+40+Math.cos(a)*k*80,my-6+Math.sin(a)*k*40+k*k*80,5,3);}}
+let hp;if(t<3.9)hp=[bx,by];else if(t<4.7)hp=arcP(t,3.9,4.7,[bx,by],[mx-50,my],10);else if(t<5)hp=[mx-50,my];else if(t<5.5)hp=arcP(t,5,5.5,[mx-50,my],[mx-60,my],30);else hp=[mx-60,my];hero(hp[0],hp[1]);
+if(t>2.2&&t<3.9){volley(t,[hp[0],hp[1]-24],[rx,ry+26],true);label(rx,ry-44,'в упор');label(560,120,'гул растёт','#FAC775');}
+if(t>4.2&&t<4.9)label(rx,ry-44,'прижим','#F09595');if(t>4.9&&t<5.8)label(mx+40,my+30,'сюда','#FAC775');
+if(t>6&&t<9)volley(t,[hp[0],hp[1]-24],[rx,ry+26],mag>0.15);if(t>6&&t<9)label(rx,ry-44,mag>0.15?'остывает':'остыл','#FAC775');}},
+{n:'Горячее = мягкое',d:12,st:[[0,'Холодный Таран: серая броня. Орбы отскакивают со звоном и искрами, полоса жизней серая.'],[3,'После броска: раскалён магнит. Орбы входят без искр, полоса пульсирует.'],[6,'После нырка: раскалены сопла - перезапуск тяги. Таран низко.'],[9,'После разбега: сопла развёрнуты вперёд и горят на торможении. Одно правило на все окна.']],
+dr(t){bg(t);let mx=320+Math.sin(t*0.6)*50;barge(mx,258,170,0,1);let hx=mx-40;
+let ph=Math.floor(t/3),k=(t%3)/3,cool=1-lin(k,0.15,1);let o={},tx,ty,ry=80,rx=320;
+if(ph===0){tx=rx-40;ty=ry+15;}
+else if(ph===1){o.mag=cool;tx=rx;ty=ry+26;}
+else if(ph===2){ry=180;o.noz=cool;o.fire=k>0.6?10:0;tx=rx-42;ty=ry+26;}
+else{rx=470;ry=180;o.face=-1;o.noz=cool;o.fire=14;tx=rx-42;ty=ry+26;}
+ram(rx,ry,o);hud(ph===0?0:cool);hero(hx,258);volley(t,[hx,234],[tx,ty],ph>0&&cool>0.1);
+label(rx,ry-44,ph===0?'дзинь':cool>0.1?'горячее':'остыло',ph===0?'#B4B2A9':'#FAC775');}}];
+player(document.getElementById('p1'),S1);
+player(document.getElementById('p2'),S2);
+</script>
+</body>
+</html>

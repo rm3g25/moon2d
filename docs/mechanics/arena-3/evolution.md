@@ -1,24 +1,12 @@
 # Arena 3: the evolution, the throw, the takeoff, the orb launcher, the barge
 
-From the bunker's death to the hero aboard the barge under the hanging Ram: the last 3%, the eclipse rite, the burst, the throw of the pads, the wheels, the takeoff, the orb launcher, the cliff and the barge.
+From the bunker's death to the hero aboard the barge under the hanging Ram: the last 3%, the eclipse rite, the burst, the throw of the pads, the wheels, the takeoff, the orb launcher, the cliff and the barge. The air fight that follows is `ram-air.md`.
 
 ## Evolution and the moon form
 - Evolution: black orbs fly to the hero - the henshin rite (docs/mechanics/henshin.md) with black orbs and a third pattern, "eclipse": a black ring closing in (snowflake for arena 1, vortex for the gravels, eclipse here). Healing as the rite heals.
 - The moon form: an orb launcher - black orbs that pierce the TEK armour; jump +25%, as the ice form; the fire rain and the protective aura, both of black orbs.
 - The look of the moon form comes in the next version; in 3.0 it looks like the ice form. It must be felt through the weapon: the orb launcher fires slower but heavier, with visible recoil and sound - a sledgehammer after a pistol.
 - Death after the evolution: the fight restarts from its start (as every death here).
-
-## Air phase
-- No turrets left: the machine takes off, nozzles in place of wheels (the 2026-10-08 idea).
-- Drops grenades on the hero and shoots its guns.
-- The hero shoots the machine itself - the orbs pierce the armour.
-
-**Decided 2026-11-01, the fight in motion and the air phase, over the text above and "End of the chase" where they disagree:**
-- **The fight does not stop.** The chase is long enough to carry the rest of the fight (a live run rode it for minutes with the city still going by): after the bunker the belt runs on, and the evolution and the air phase play in motion. Each act a game of its own, not the same game with bigger numbers: standing ground, the belt, the air.
-- **The road ends.** As the machine takes off - the wheels into the hull, the nozzles out - the road runs out under the hero: its edge rides in from the right, and past it nothing, no floor below. The machine needs the road no more, and the road ends: one reason for both.
-- **Long pads fly on with the hero.** Over the edge the hero jumps onto long pads that fly right with him and the machine, their nozzles turned to the left. On the screen they keep up rather than drift: the belt carries them and the hero no more, and the speed is the far plane's and the fangs'. The pads move among themselves - not a still floor in the sky; how (falling behind, overtaking, coming in) is the stage's design.
-- **A fall is the pit.** Under the pads is the abyss; a fall is a pit, as everywhere in the game, and brings the hero back on a pad - the checkpoint rides with the pads. A death still restarts the fight.
-- **The moon form is made for it**: the jump of +25% is the hop between pads over the abyss.
 
 ## The henshin, the throw and the takeoff (designed 2026-11-04)
 Over "Evolution and the moon form", "Air phase" and "Decided 2026-11-01, the fight in motion" where they disagree: the world stops for the henshin and the throw, and the fight goes on in motion again from the takeoff. Three parts: the last of the charge, the rite, the scene with the Ram.
