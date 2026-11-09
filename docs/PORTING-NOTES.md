@@ -4,7 +4,7 @@ Status at 2026-11-09: **3.0.119** - arena 3 (the finale of level 2),
 after stage 17b-2: the orb launcher taken, the chase goes on to a cliff
 with the barge a cell past it - the hero aboard it, the world at the
 flight's pace, the barge's lamps in turn and its turbine burning, point B
-aboard; the air fight (18d) still to design. In work: arena 3, its file `docs/mechanics/arena-3.md`;
+aboard; the air fight (18d) still to design. In work: arena 3, its folder `docs/mechanics/arena-3/` (the index `README.md`);
 what each version brought, a paragraph each - `CHANGELOG.md`. The status here is a few
 lines: the version, what is in work, where to read; the details of a
 version live in CHANGELOG, not here.

@@ -3,7 +3,7 @@
 Status: an idea (recorded 2026-09-27), no dates and no place in the order
 (`ROADMAP.md`). What a level asks for comes first. The ice form and its
 henshin are built (`mechanics/henshin.md`); the moon form and its rite at
-the end of level 2 are arena 3's (`mechanics/arena-3.md`).
+the end of level 2 are arena 3's (`mechanics/arena-3/`).
 
 ## Forms and ceremonies
 The hero will have several forms and several transformation ceremonies -

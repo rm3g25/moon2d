@@ -1,18 +1,18 @@
 # The chase backdrop: out of the tunnel, past the city
 
-The far plane of act 2 (arena-3.md, "Decided 2026-10-30, the chase"): the
+The far plane of act 2 (arena-3/chase.md, "Decided 2026-10-30, the chase"): the
 end of the tunnel and the city in the crater, built from separate
 elements. The numbers are in `bin/chase-backdrop.json` - game data the
 level names in its `farPlane` section, and the very file the stand plays
 (moved there from `tools/chase/layout.json` with 3.0.88): what is tuned
 on the stand is what the game plays. The code: `Levels.FarPlane`,
-`Game.FarPlane`, `Render.FarPlane` (arena-3.md, "Stage 11b-1 as built"),
-the dome frames `Render.DomeFrames` (arena-3.md, "The city's frames as
+`Game.FarPlane`, `Render.FarPlane` (arena-3/chase.md, "Stage 11b-1 as built"),
+the dome frames `Render.DomeFrames` (arena-3/chase.md, "The city's frames as
 built").
 The numbers below are the ones after the live runs of 3.0.88 ("Decided
-2026-10-31, the far plane" in arena-3.md). The city was rebuilt on
+2026-10-31, the far plane" in arena-3/chase.md). The city was rebuilt on
 2026-11-01 ("The city" below, and "Decided 2026-11-01, the city" in
-arena-3.md): buildings cut from sheets and placed in depth, the dome frames
+arena-3/chase.md): buildings cut from sheets and placed in depth, the dome frames
 drawn by code.
 
 ## The strip, left to right
@@ -73,7 +73,7 @@ of them, and its stop stands them.
 | city | crater floor band (`floor-tex`, y 238-320, its top faded over 16 units, its foot under the hills), the dome frames, the buildings, the rail, the outskirts | 0.5 of the tunnel while the cliff is in sight, then 3; a building k of it by its depth |
 | tunnel | screen 13 and its far ledge, the cliff | 6 |
 | ground | the near hills (`sand-tex`, seamless, y 276 down), in front of the tunnel | 14 |
-| fangs | spurs of basalt at random, behind the play layer, from the start (`Game.Fangs`, arena-3.md "Stage 11b-2 as built") | 20 |
+| fangs | spurs of basalt at random, behind the play layer, from the start (`Game.Fangs`, arena-3/chase.md "Stage 11b-2 as built") | 20 |
 | road | the floor tile | 33 |
 
 - **Depth sets the speed.** The far wall carries tiny convoys - far off, as
@@ -250,8 +250,8 @@ the glare, the sun tinted by the frames. The kit is a key the game does
 not read. The stand's switches (frames, shadows, glare, parallax) are the
 stand's alone: the game draws all of it. Since 3.0.92 it plays the life
 of the city too - the lights, the emblem, its paint, the beacons, tick for
-tick (arena-3.md, "The city's life as built"); since 3.0.93 the train
-(arena-3.md, "The train as built").
+tick (arena-3/chase.md, "The city's life as built"); since 3.0.93 the train
+(arena-3/chase.md, "The train as built").
 
 **The shadows** (3.0.91). A shadow is a rib dropped onto the floor along
 the sun's light. The sun stands 30 units over the horizon at a focal
@@ -466,7 +466,7 @@ the spot and the glints `Render.FarPlane`.
    and 50 x 52 units: the dish is set by its height, the other two by their
    width).
 6. The stand judged whole and the backdrop handed to the code of the chase:
-   done in 3.0.88 (arena-3.md, stage 11b-1); the speeds tuned live.
+   done in 3.0.88 (arena-3/chase.md, stage 11b-1); the speeds tuned live.
 7. The city rebuilt (2026-11-01): the four sheets cut and placed; the domes,
    the satellite dome and the outskirts' hangar, ring and dish taken out of
    the layout and the set; the frames on the stand; the first take's

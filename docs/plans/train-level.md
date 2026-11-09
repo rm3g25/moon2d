@@ -20,7 +20,7 @@ almost no new engine code and is content on ready mechanics:
   moved by offsets per motion kind, elements riding by behind the play
   layer (the fangs of the chase), a sun in code. The land outside the
   windows is such a backdrop.
-- **The chase itself** (`mechanics/arena-3.md`) as the reference for a
+- **The chase itself** (`mechanics/arena-3/`) as the reference for a
   screen in motion: the drifting pads, the pieces let go past the left
   edge, the hero carried in the air by the belt.
 - The wagons of level 1 live in `train.mset` as whole wagons (no cut

@@ -3254,7 +3254,7 @@ rebuilds new for the new try.
   pier is as long as its pad.)
 
 ### `Game/Pads/Pads.Drift.pas` (~490 lines, 3.0.98)
-The pads of the chase (`docs/mechanics/arena-3.md`, stages 13 and 13b):
+The pads of the chase (`docs/mechanics/arena-3/chase.md`, stages 13 and 13b):
 as the road runs, pads of the screen's pool are sent in from beyond the
 right edge, in groups along the road with empty road between - a lone pad
 (any width, any deck from `HighestDeck` 120 to `LowestDeck` 288) or a
@@ -3290,7 +3290,7 @@ stands the medkits it tells back. No SDL.
   run is sent (`SetAdrift`); a width the pool has run out of is made up
   with the other, and a screen with no pool is a road with no pads - and
   no medkits.
-- 3.0.97, **the rows of the hunt** (stage 14c; `arena-3.md`, "Stage 14c
+- 3.0.97, **the rows of the hunt** (stage 14c; `arena-3/chase.md`, "Stage 14c
   as built"). **`BeginRows(screen, travel)`**: from now on the pads come
   in `RowCount` 3 rows at **`RowDecks`** 272, 192, 120, the gaps
   `RowGapLeast` 4 to `RowGapMost` 12 (**`RollRowGap`**), no more climbs
@@ -3303,7 +3303,7 @@ stands the medkits it tells back. No SDL.
   it ends, then **`SendRow`** sends each row at the right edge as the
   road runs. **`TakeRowPad`** - a pad of the width or the other; none is
   a hole (the pool is checked for the climbs, not the rows).
-- 3.0.98, **the wave** (stage 14c reworked; `arena-3.md`, "Stage 14c
+- 3.0.98, **the wave** (stage 14c reworked; `arena-3/chase.md`, "Stage 14c
   reworked"). `BeginRows` lays the three rows only once, at the decks of a
   climb (`RowDecks` `ClimbFootHighest`, 192, `WayUpDeck`), each row flying
   in from its own side (**`RowsComeFrom`**: the right, the left, above):
@@ -3519,7 +3519,7 @@ moves in comes from `Game.Space`.
   `HuntFlingWay` 3). **`Shove(way)`** - the Ram's bow shoves him along
   the road, `CarryX` as far as no wall stops him.
 - 3.0.98: `Shove` is gone - the pass throws, it does not shove.
-- 3.0.116, **the orb launcher** (`arena-3.md`, "Stage 17a as built"):
+- 3.0.116, **the orb launcher** (`arena-3/evolution.md`, "Stage 17a as built"):
   **`OrbLauncherWeapon`** = 6; it comes as the pickup `weaponOrbLauncher`.
   **`TStowedGun`** (record: `Held`, `WeaponType`, `FireCooldown`,
   `BulletSpeed`, `BulletGravity` - what `ApplyWeaponPickup` takes).
@@ -4195,7 +4195,7 @@ outline, blinking a few beats, then gone.
 
 ### `Hud/Hud.Energy.pas` (~340 lines, 3.0.70)
 The charge of the form: a small eclipse in the slot the heart monitor's
-panel grows on its right (`docs/mechanics/arena-3.md`, stage 6).
+panel grows on its right (`docs/mechanics/arena-3/energy.md`, stage 6).
 - `FullEnergy=100` (interface const).
 - **`TEnergyReading`** - `Tick(charge)`; `Charge`; `Wing` (how open the
   slot is, 0..1: up over `WingTicks` 8 once there is a charge, down again
@@ -4822,7 +4822,7 @@ stages 8-10.
   and the inhale is a negative - a light veil, a dark figure), `Flash`,
   `Veil` and `VeilLevel`, `Silhouette`, `Mote`. **`IceBurstLook`** - light
   on light; **`MoonBurstLook`** - the black hole, waiting for the moon form
-  (`docs/mechanics/arena-3.md`); only the U debug key wears it yet.
+  (`docs/mechanics/arena-3/`); only the U debug key wears it yet.
 - **`TBurstEvent`** = (`beNone`, `beStruck`). **`TBurstStretch`** - what a
   ray's head passed this tick, from and to. **`TBurstFigure`** - the
   hero's frame as a bare figure: the white mask (`TShroudPainter.MaskOf`),
@@ -5400,7 +5400,7 @@ and the blast. A 2026 addition.
   `YieldBank`.
 
 ### `Game/Game.Ram.pas` (~4230 lines, 3.0.98)
-TEK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3.md`,
+TEK-R13, the Ram, of level 2's boss arena (`docs/mechanics/arena-3/ram.md`,
 stages 8b and 9): a hull on two wheels that faces left for good and
 drives back and forth, a mast of three sections in a well on its roof
 with a head on top - the hunter, then the sweeper -, an eye, brake lamps,
@@ -5642,7 +5642,7 @@ monster. The game carries out the cue.
   the cue **`Chase`** with `Rumble`, once (`FChased`, false in `Arm`): the
   game starts the road. The machine itself stays at the wall; the road
   is `Game.Belt`.
-- 3.0.94, **the bunker** (stage 14a; `docs/mechanics/arena-3.md`, "Stage
+- 3.0.94, **the bunker** (stage 14a; `docs/mechanics/arena-3/chase.md`, "Stage
   14a as built"). **`rhBunker`**; `TickChange` raises it after the sweeper
   to `BunkerMast` 12, **`LockBunker`** (`BunkerLives` 150 times the share,
   the hatch shut) and rests `RowBootTicks` + `ChaseBreathTicks`: the chase
@@ -5671,7 +5671,7 @@ monster. The game carries out the cue.
   ridden off with the road; the honeycomb of the head in `DrawLight`; a
   third `HeadShorts`. 3.0.94 also: `BeginPatrolLeg`'s first roll out of
   the loop (no value left unused).
-- 3.0.96, **the bunker's second phase** (stage 14b; `arena-3.md`, "Stage
+- 3.0.96, **the bunker's second phase** (stage 14b; `arena-3/chase.md`, "Stage
   14b as built"). **`TFallBack`** (`fbNone`, `fbWarning`, `fbLunging`,
   `fbStanding`, `fbReturning`), `FFallBack`, `FFallBackTicks`,
   `FFallBackWait`. **`BunkerSecondPhase`** - the bunker up, the chase
@@ -5694,7 +5694,7 @@ monster. The game carries out the cue.
   if it died away from it. `AtTheWall`'s comment: the falls back are the
   one way off the wall.
 - 3.0.97, **the bunker's third phase, the hunt** (stage 14c;
-  `arena-3.md`, "Stage 14c as built"). `BunkerSecondPhase` is `Tier` 1
+  `arena-3/chase.md`, "Stage 14c as built"). `BunkerSecondPhase` is `Tier` 1
   only; **`BunkerThirdPhase`** - `Tier` 2. **`TBunkerHunt`** (`htNone`,
   `htCalling`, `htPassing`, `htHunting`), `FHunt`, `FHuntTicks`,
   `FRowsIn`, `FRamStandTicks`. **`TickHunt`** (from `TickPhase`, resting
@@ -5719,7 +5719,7 @@ monster. The game carries out the cue.
   `LockBunker`, `Arm` drop the hunt. `AtTheWall`'s comment: the falls
   back and the hunt take it off the wall.
 - 3.0.98, **the hunt reworked, the hull mirrored** (stage 14c;
-  `arena-3.md`, "Stage 14c reworked"). `TBunkerHunt` gains **`htTurning`**
+  `arena-3/chase.md`, "Stage 14c reworked"). `TBunkerHunt` gains **`htTurning`**
   and **`htEntering`**; property **`Hunt`**. The pass
   `BeginDrive(-RamWidth - PassBeyond, LungeSpeed)` (`PassBeyond` 24);
   `Arrive` in the pass goes straight to **`BeginTurn`** - no hiss, no
@@ -5760,7 +5760,7 @@ monster. The game carries out the cue.
   `AheadShellMark`. **`OpenTop`** - a row of cells (`OpenRowsDepth` 5.1)
   under the hatch: `StrikeBunker`'s line, and `OpenAbove` strips the
   honeycomb to it.
-- 3.0.116, **the nozzles meet a shot** (`arena-3.md`, "Stage 17a as
+- 3.0.116, **the nozzles meet a shot** (`arena-3/evolution.md`, "Stage 17a as
   built"): **`StrikeNozzles(from, to, at, normal)`** - each nozzle a box of
   the upright hull under its axle (`NozzleWidth` by `NozzleHeight` times
   `TTakeoff.NozzleAt`, from `NozzleHang` under the axle), the stretch
@@ -5774,7 +5774,7 @@ monster. The game carries out the cue.
   and the nozzles out, both jets steady, the rear wheel spat) with its
   middle over `middleX`; it keeps over the hero from the first tick.
 ### `Game/Game.Wrecks.pas` (~470 lines, 3.0.94)
-The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3.md`,
+The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3/ram.md`,
 stage 10c-3): a wreck flies off in the pad's picture, the pad itself put
 to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
 - **`TPadWreck`** (record) - `Pad` (whose picture; nil in the tests),
@@ -5811,7 +5811,7 @@ to sleep (`TPad.Doze`). Decoration - no floor, no body, no wound.
   a slot whose wreck's turn changed starts its sources anew
   (`ForgetOrigin`).
 ### `Game/Game.Capsules.pas` (~360 lines, 3.0.94)
-The shuttle's medkits in the Ram's fight (`docs/mechanics/arena-3.md`,
+The shuttle's medkits in the Ram's fight (`docs/mechanics/arena-3/ram.md`,
 stage 10d): a capsule falls onto its mark, lands, parts and leaves the
 medkit there; where and why is the game's. Decoration - no floor, no
 body, no wound.
@@ -5836,7 +5836,7 @@ body, no wound.
   green `OutFlashSize` 36 breath). `Tick` counts the blink.
 ### `Game/Game.StoneTank.pas` (~200 lines, 3.0.98)
 The hidden tank between the Ram's heads and the gauge of the form's
-charge (`docs/mechanics/arena-3.md`, stage 15a): the charge grows with
+charge (`docs/mechanics/arena-3/energy.md`, stage 15a): the charge grows with
 the fight, never read as a hit. Knows neither the Ram nor the gauge, no
 SDL.
 - **`TStoneTank`** - `Start` (the fight is on; once), `Clear` (stopped,
@@ -5860,7 +5860,7 @@ SDL.
   full about 12 s after the blast; `HeadDown` and `Clear` reset them.
 
 ### `Game/Game.Belt.pas` (~125 lines, 3.0.86)
-The treadmill of the chase (`docs/mechanics/arena-3.md`, stage 11a):
+The treadmill of the chase (`docs/mechanics/arena-3/chase.md`, stage 11a):
 only the road's motion. Knows neither the Ram, the hero nor the road's
 picture; no SDL.
 - **`TBelt`** - `Start` (to `BeltCruise` 1 unit a tick, 33 a second),
@@ -5878,7 +5878,7 @@ picture; no SDL.
   cruise.
 
 ### `Game/Game.Road.pas` (~150 lines, 3.0.118, reworked 3.0.119)
-The road of the chase running out (`docs/mechanics/arena-3.md`, stages
+The road of the chase running out (`docs/mechanics/arena-3/evolution.md`, stages
 17b and 17b-2): the orb launcher taken, the road has an end - a cliff over
 the crater that comes in from beyond the right edge with the chase and
 rides on left past the hero, the pier. Only its place; the floor under the
@@ -5897,7 +5897,7 @@ hero is a pad the game carries with it, the grid's row of the road erased.
 - Tests: `Tests.Game.Road`.
 
 ### `Game/Game.Barge.pas` (~150 lines, 3.0.118, reworked 3.0.119)
-The TeK hover-barge of the air phase (`docs/mechanics/arena-3.md`, stages
+The TeK hover-barge of the air phase (`docs/mechanics/arena-3/evolution.md`, stages
 17b and 17b-2): the hero's deck over the crater once the road runs out.
 Only where its left edge is and when he boards; the pad that is the barge
 is `Pads.World`'s, carried by the way this gives.
@@ -5918,7 +5918,7 @@ is `Pads.World`'s, carried by the way this gives.
 - Tests: `Tests.Game.Barge`.
 
 ### `Game/Game.Shells.pas` (~630 lines, 3.0.97)
-The bunker's shells in the chase (`docs/mechanics/arena-3.md`, stage
+The bunker's shells in the chase (`docs/mechanics/arena-3/chase.md`, stage
 14a): lobbed along a low arc seen whole at where the hero's feet were,
 aimed in the world - the road carries the point. A ring marks where a
 shell comes down, every tick anew. On a deck it bursts (the game knocks
@@ -5985,7 +5985,7 @@ tick. Knows neither the belt, the hero nor SDL.
   train glides with the city.
 
 ### `Game/Game.Fangs.pas` (~235 lines, 3.0.89)
-The fangs of the chase (`docs/mechanics/arena-3.md`, "Stage 11b-2 as
+The fangs of the chase (`docs/mechanics/arena-3/chase.md`, "Stage 11b-2 as
 built"): spurs of basalt rising from below the bottom edge, riding by on
 a motion of their own between the near ground and the road, behind the
 play layer. The rules and the drawing, as the wrecks and the capsules.
@@ -6010,7 +6010,7 @@ play layer. The rules and the drawing, as the wrecks and the capsules.
   every draw, so it is set here on every draw too) and flipped for a
   mirrored one.
 ### `Game/Game.OrbLauncher.pas` (~120 lines, 3.0.116)
-The orb launcher coming once the Ram hangs, as a pickup (`arena-3.md`, "Stage
+The orb launcher coming once the Ram hangs, as a pickup (`arena-3/evolution.md`, "Stage
 17a as built"). Knows neither the Ram, the hero nor the shroud.
 - **`TOrbLauncherStage`** = (`olNone`, `olWaiting` - the breath of
   `OrbLauncherBreathTicks` 33, `olAppearing` - put together under its shroud,
@@ -6679,7 +6679,7 @@ so a unit (and later a test) can reach it. `interface` holds
     `LocateParent` gives a dormant pad no life (`Alive` = the look fits
     and not `Dormant`): its rigs are out while it sleeps. Since 3.0.67
     the scene's jolts join the shake once a tick (`FScenes.TakeJolt`).
-  - After arena 2 (3.0.63, `docs/mechanics/arena-3.md`): the trial's
+  - After arena 2 (3.0.63, `docs/mechanics/arena-3/`): the trial's
     victory track plays as a held sound, not as music
     (`PlayVictoryTrack`: `FAudio.StopMusic`, `PlayTrackHeld(VictoryMusicFile)`,
     preloaded by `LoadTrack` in `LoadLevel`), so the music channel is free
@@ -7086,7 +7086,7 @@ so a unit (and later a test) can reach it. `interface` holds
 - 3.0.98: `ResolveRamShove` is gone. `ShellBlast` radius 40 (half the
   tank's).
 
-- 3.0.116, **the orb launcher** (`arena-3.md`, "Stage 17a as built"):
+- 3.0.116, **the orb launcher** (`arena-3/evolution.md`, "Stage 17a as built"):
   `FOrbLauncher` (`TOrbLauncherArrival`), the gun's skin and frame on the road
   (`FOrbLauncherSkin`, `FOrbLauncherCache`, `FOrbLauncherLying`), its place
   (`FOrbLauncherLeft`), its shroud (`FOrbLauncherShroud`, `FOrbLauncherShroudPainter` -
@@ -8211,7 +8211,7 @@ straysLeave, skyFall, press - see `Levels.Events`; the med lab hint,
   sparing the hero, the strays leave). There is no boss monster; the
   victory track plays at the end and the level goes on - the second boss
   of level 2 comes on the screens after it (not yet built).
-- After the arena (3.0.63-3.0.69, `docs/mechanics/arena-3.md`): `"shutDoors":
+- After the arena (3.0.63-3.0.69, `docs/mechanics/arena-3/`): `"shutDoors":
   [9, 10, 11]`. Screen 9: `s09-tunnel-music` (victoryEnds, lead 5: music
   `lunar.ogg` fading in over 5 s) and `s09-go-on` (victoryEnds: openDoor).
   Screen 10 - a layered tunnel with `dust` and a pedestal (`s10-pit-lip`):
@@ -8300,7 +8300,7 @@ build script in the repository); `level2-backdrops` and
   with `hunterBarrel`, `sweeper` with `sweeperHeat`, `bunker` with
   `bunkerLid`. The points are in the descriptions. Built by
   `tools/machine/build_machine.py`; the plan is in
-  docs/mechanics/arena-3.md.
+  docs/mechanics/arena-3/.
 - **Death frames of what blows up** (3.0.42): in `barrel`, `tank`,
   `platform`, `krep` and `boss1` the `death` sequence is the empty frame
   `e8` eight times - the body vanishes in the tick it dies, and what the
@@ -8396,8 +8396,8 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | Task smells like... | Look at |
 | --- | --- |
 | Hero movement / collision / jump feel | Hero.pas |
-| The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3.md) |
-| The boss arena of level 2 (screen 13): the tunnel music faded to silence and the boss track on the Ram's lock (3.0.75; the hand-over of 3.0.74 before it), the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (the `ram` action with fadeOut and file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3.md) |
+| The way on after arena 2: the victory track's end, the tunnel music fading in, the go-right arrow | `events` of screen 9 in level2.json (victoryEnds, music with fade, goRight / openDoor) + Levels.Events.pas + Events.Director.pas (`VictoryLeft`, `GoRight`) + Hud.GoRight.pas + Audio.pas (`LoadTrack`, `PlayTrackHeld`, `SecondsOf`, `PlayMusic` fade) + Game.Moon.pas (`PlayVictoryTrack`, `FVictoryLeft`, `FGoRight`) + Tests.Hud.GoRight.pas (+docs/mechanics/arena-3/) |
+| The boss arena of level 2 (screen 13): the tunnel music faded to silence and the boss track on the Ram's lock (3.0.75; the hand-over of 3.0.74 before it), the city road on 12 and 13, the far ledge, convoys and searchlight of 13, the city pads in the set | `events` of screen 13 in level2.json (the `ram` action with fadeOut and file - Game.Ram) + `sealedDoors` + Levels.Defs.pas (`CheckShutDoors`) + Levels.Events.pas (`FadeOutSeconds`) + Events.Director.pas (`TChangeMusic`) + Audio.pas (`HandOverMusic`, `Tick`) + Game.Moon.pas (`ChangeMusic`) + level2-objects.mset (`tek-road-tile`, `city-pad`, `city-pad-long`) + level2-backdrops.mset (`screen13`) + Tests.Levels.Events.pas, Tests.Levels.Doors.pas (+docs/mechanics/arena-3/) |
 | A screen whose way on is shut until an event opens it, or sealed for good | `shutDoors` / `sealedDoors` + an `openDoor` event in level JSON + Levels.Defs.pas (`DoorShutOn`, `CheckShutDoors`) + Game.Moon.pas (`FDoorOpened`, `HandleScreenTransitions`) + Tests.Levels.Doors.pas |
 | The Duplet: the double-barrel, its red shot, a pickup wider than a cell | Hero.pas (`DupletWeapon`, `FireDuplet`) + Bullets.pas (`TBulletLook`) + Monsters.Defs.pas (`TPictureDef`) + Monsters.pas (`PictureBox`) + Game.Uptake.pas (`PictureOf`) + Render.Sprites.pas (`DrawRotated` side) + monsters.json `weaponDuplet` + duplet.mset (tools/duplet) + tools/sounds/duplet.py |
 | The tunnel dust, its light | `dust` in `dynamics` + Levels.Dynamics.pas (`TDust`, `TDustLight`, `TDustBand`) + dust.mset (tools/dust) + Tests.Levels.Dynamics.pas |
@@ -8454,17 +8454,17 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The shuttle's medkits on the thirds (3.0.84): a capsule falls onto a high pad (the hunter's) or the road at the far wall (the sweeper's), brakes, lands, parts and leaves a medkit | Game.Capsules.pas (`TShuttleCapsules`, `TCapsulePainter`) + Game.Ram.pas (`TickThirds`, cue `Third`) + Game.Moon.pas (`CallTheShuttle`, `TryPickMedkitPad`, `MedkitWallMark`, `TickCapsules`) + Levels.Events.pas (`TRamOrders.MedkitPads`) + `medkitPads` of the `ram` action in level2.json + Tests.Game.Capsules.pas + Tests.Game.Ram.pas (`TestEachThirdCallsTheShuttle`, `TestMedkitPadsAreRead`) |
 | The chase's far plane (3.0.88): the end of the tunnel and the city in the crater ride behind the road at speeds of their own - the wall with its far ledge slow, the near hills fast in front of it, dark in the tunnel and brightening as it leaves, the city slower, the ridge slowest; the sun in code under them all, tinted where a dome stands before it; the city mirrored for the light; no haze on that screen | Levels.FarPlane.pas (`TFarPlaneDef`, `ReadFarPlane`) + Game.FarPlane.pas (`TFarPlane`) + Render.FarPlane.pas (`TFarPlanePainter`) + Levels.Defs.pas (`FarPlane`, `CheckFarPlane`) + Render.Dynamics.pas (`Draw` from a `TSdlFPoint`) + Game.Moon.pas (`DrawBackdrop`, `SkyOrigin`, `HazeBackdrop`, the tick and the clear) + bin/chase-backdrop.json + `farPlane` and `objectSets` in level2.json + chase-backdrop.mset + tools/chase (the stand) + Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md) |
 | The chase's drifting pads and their medkits (3.0.87): lone pads and random climbs to the hatch's height sent in from beyond the right edge as the road runs, ridden left and let go past the left edge; a medkit on the middle pad of one climb in three, riding its pad out | Pads.Drift.pas (`TPadDrift`, `TDriftCue`, the constants) + Pads.World.pas (`SetAdrift`, `Drifts`, `FreeDrifter`, `LetGoDrifters`, `LetGoPastLeft`, `Tick` with `beltWay`) + Levels.Pads.pas (`TPadPlacement.Drift`, `ReadPlace`) + Levels.Defs.pas (`CheckPadDrift`) + Hero.pas (`RideDeck`, `CarryX` - `LeftDoorStop`) + Monsters.pas (`RideBelt`) + Game.Moon.pas (`FDrift`, the road before the pads, `StandMedkitOn`) + `"drift": true` on the pool of screen 13 in level2.json (`s13-drift-step-NN`, `s13-drift-high-NN`) + Tests.Pads.Drift.pas |
-| The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3.md, stage 11b-2) |
+| The chase's fangs (3.0.89): spurs of basalt riding by between the near hills and the road, behind the play layer, mostly low, a tall one now and then, never two tall on the screen, dark in the tunnel | Game.Fangs.pas (`TFangRow`, `TFangPainter`) + Levels.FarPlane.pas (`TFarPlaneFangs`, `FangTint`, `fmFangs`) + Game.FarPlane.pas (the fangs' offset) + Game.Moon.pas (`DrawFangs`, the tick and the clear) + `fangs` in bin/chase-backdrop.json + `s11-fang-*` in level2-objects.mset + Tests.Game.Fangs.pas (+docs/mechanics/arena-3/chase.md, stage 11b-2) |
 | The chase's city in depth and its dome frames (3.0.90): the buildings ride by their feet, the nearer the faster; the frames' ribs in code, the far half behind the buildings and the near half over them, a rim of light toward the sun, the glare over the disc, the sun tinted by a frame; their long shadows, soft strokes down the floor and on over the near ground, cut at the eye (3.0.91) | Levels.FarPlane.pas (`TFarPlaneCamera`, `TDomeFrame`, `DepthY`, `Nearness`, `ElementLeft`, `SunCover`) + Render.DomeFrames.pas (`TDomeFrames`, `TDomeFramePainter`) + Render.FarPlane.pas (`DrawLayer`, `DrawFrameShadows`) + Sdl2.Core.pas (`SDL_RenderGetScale`) + `camera`, `frames`, `groundY` in bin/chase-backdrop.json + tools/chase/stand.template.html (the reference) + Tests.Game.FarPlane.pas + Tests.Render.DomeFrames.pas (+docs/mechanics/chase-backdrop.md, "The city") |
-| The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TEK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
-| The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3.md) |
+| The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TEK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3/) |
+| The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3/) |
 | The chase city's searchlights (3.0.95): two warm beams from the main dome wander over the sky - bright in the dome's air, a hot spot and a step down at the glass, a faint tail in the lunar dust, glints on the near ribs they cross; each lamp's own clock eases to a hold now and then; it glides between ticks - tick for tick as on the stand | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
-| The road of the chase running out and the barge of the air phase (3.0.118, 3.0.119): the chase going on after the orb launcher's take, the cliff coming in from the right with the barge a hop past it, the pier riding on as a pad and away past the left edge, the barge casting off to its station in the middle as he boards, its running lights and its turbine's fire (the rig `barge`), the world at the flight's pace, the checkpoint on its deck, point B aboard, the End key's 4th press | Game.Road.pas (`TRoadEnd`, `TRoadPainter`) + Game.Barge.pas (`TBargeRide`) + Game.Belt.pas (`Run`, `BeltFlight`) + Pads.World.pas (`Carry`, `Stowed`) + Pads.Drift.pas (`Cease`) + Levels.Pads.pas (`Stowed`) + Levels.Defs.pas (`EraseRow`, `RestoreRows`) + Render.Objects.pas (`Draw(..., beltShown)`) + Game.Ram.pas (`StartHanging`) + Game.Takeoff.pas (`Hang`) + Game.Shield.pas (`Vanish`) + Game.OrbLauncher.pas (`Grant`) + Game.Moon.pas (`BeginPier`, `TickPier`, `DozeSpentPier`, `PinPierCheckpoint`, `ResumeAboard`, `GiveOrbLauncher`, `ClearPier`, `DebugJumpAboard`) + the pads `s13-road` and `s13-barge` of screen 13 and the rig `barge` in level2.json + Levels.Dynamics.pas (`phase` of `TBeacon`) + pads.mset (`barge-5`..`barge-2`, tools/barge/build_barge.py) + Tests.Game.Road.pas, Tests.Game.Barge.pas, Tests.Levels.Grid.pas (+docs/mechanics/arena-3.md, stage 17b) |
+| The road of the chase running out and the barge of the air phase (3.0.118, 3.0.119): the chase going on after the orb launcher's take, the cliff coming in from the right with the barge a hop past it, the pier riding on as a pad and away past the left edge, the barge casting off to its station in the middle as he boards, its running lights and its turbine's fire (the rig `barge`), the world at the flight's pace, the checkpoint on its deck, point B aboard, the End key's 4th press | Game.Road.pas (`TRoadEnd`, `TRoadPainter`) + Game.Barge.pas (`TBargeRide`) + Game.Belt.pas (`Run`, `BeltFlight`) + Pads.World.pas (`Carry`, `Stowed`) + Pads.Drift.pas (`Cease`) + Levels.Pads.pas (`Stowed`) + Levels.Defs.pas (`EraseRow`, `RestoreRows`) + Render.Objects.pas (`Draw(..., beltShown)`) + Game.Ram.pas (`StartHanging`) + Game.Takeoff.pas (`Hang`) + Game.Shield.pas (`Vanish`) + Game.OrbLauncher.pas (`Grant`) + Game.Moon.pas (`BeginPier`, `TickPier`, `DozeSpentPier`, `PinPierCheckpoint`, `ResumeAboard`, `GiveOrbLauncher`, `ClearPier`, `DebugJumpAboard`) + the pads `s13-road` and `s13-barge` of screen 13 and the rig `barge` in level2.json + Levels.Dynamics.pas (`phase` of `TBeacon`) + pads.mset (`barge-5`..`barge-2`, tools/barge/build_barge.py) + Tests.Game.Road.pas, Tests.Game.Barge.pas, Tests.Levels.Grid.pas (+docs/mechanics/arena-3/evolution.md, stage 17b) |
 | The chase's road (3.0.86): the Ram drives off after the sweeper, the road slides left under it with a smooth start and stop, the hero, in the air too, and the loot ride it, the wheels turn and the smoke drifts off with it | Game.Belt.pas (`TBelt`) + Game.Ram.pas (`TickSpent`, `ChaseBreathTicks`, cue `Chase`; `TRamPainter.Tick(beltShift)`) + Render.Objects.pas (`BeltX`, `DrawOnBelt`) + Levels.Defs.pas (`TLevelObject.Belt`) + Levels.Dynamics.pas (`TSmoke.Drift`) + Hero.pas (`RideBelt`) + Monsters.pas (`RideBelt`, `CarryLoot`) + Game.Moon.pas (`TickBelt`, `TickRam` - `Chase`, the objects' draw) + `"belt": true` on the road of screen 13 in level2.json + Tests.Game.Belt.pas + Tests.Game.Ram.pas (`TestDrivesOffIntoTheChaseOnce`) |
-| The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3.md) |
+| The Ram's bunker and phase 1 of the chase (3.0.94): it rises after the sweeper and the chase starts from its row; the breath of its hatch (the shell, the column, the window), the lid; hit from above at any time, the honeycomb on its sides and front, the pale band on its top; its death, the road running on | Game.Ram.pas (`LockBunker`, `TickHatch`, `Lob`, `TickLid`, `TickBunkerTurn`, `StrikeBunker`, `ColumnHolds`, `TickChaseStart`, `AtTheWall`; `TRamPainter.DrawLid`, `DrawTop`, `TickColumn`, `DrawColumn`) + Game.Shield.pas (`OpenAbove`) + Game.Moon.pas (`BulletStruckRamBunker`, `ResolveRamColumn`, `MedkitAheadMark`) + Game.Capsules.pas (`Ride`) + Tests.Game.Ram.pas (`TRamBunkerTests`) (+docs/mechanics/arena-3/) |
 | The bunker's shells (3.0.94): the arc at the hero's feet aimed in the world, the ring, a burst on a deck knocking the pad off, the roll on the road and its wound | Game.Shells.pas (`TBunkerShells`, `TShellPainter`) + Game.Wrecks.pas (a new wreck in a gone one's place) + Game.Moon.pas (`TickShells`, `ResolveShellContact`, the draw of the rings and the shells) + Tests.Game.Shells.pas |
-| The bunker's second phase (3.0.96): the eye's warning, the lunge to the middle, the stand and the drive back, the bunker silent meanwhile; the throw back over the hull from the road behind the stern; the shells in pairs, the second at his pad or at a pad past the middle, one wreck a pad; a shell caught in the air, every burst a blast as a tank's; the death away from the wall | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` in the air) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3.md) |
-| The bunker's third phase, the hunt (3.0.97, reworked 3.0.98): the change - the alarm, a wave of three dense rows of pads at the decks of a climb flying in from three sides and coming to the road's pace; the pass through the hero and off the left edge, a hero on the road thrown over the hull to the right; the turn out of sight, the eye's red at the edge, the drive in bow first with the hull mirrored; the bow a step behind him within the left half, now and then a short surge to near the right edge, back only into a hero behind its stern; a ram forward from the road and the stand after it; after the wave the groups again, denser; the shells in pairs, the second at the pad ahead along his row | Game.Ram.pas (`TBunkerHunt`, `Hunt`, `BunkerThirdPhase`, `BeginHunt`, `TickHunt`, `BeginTurn`, `TickHuntDrive`, `HuntMark`, `HuntLine`, `THuntSurge`, `TickSurge`, `PeekLevel`, `RowsArrived`, `Hunts`, `HoldsFire`, `ThrowsOverTheHull` - `TOverTheHull`, `Contact`, `Lob`, `TickEye`, `Arrive`; the mirror `HullMirrored`, `HullSpot`, `WellAt`, `SolidAt`, `MastPivot`, `HeadPoint`; `TRamPainter.DrawPeek`, `TExhaustPair`; cue `Rows`) + Pads.Drift.pas (`BeginRows`, `LayComingRow`, `TakeRowPad`, `SlotTaken`, `RowDecks`, `FWave`, `AdriftOn`, `FDense`, `PlanGroup`, `TDriftCue.RowsIn`) + Pads.World.pas (`SetAdriftComing`, `ComeShare`, `Coming`, `LetGoPastLeft`) + Game.Shield.pas (`TTekShield.Mirrored`) + Game.Shells.pas (`AheadShellMark`) + Hero.pas (`Fling(side, way)`) + Game.Moon.pas (`TickRam`, `ResolveRamThrowOver`) + the pool of screen 13 in level2.json (52) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TAheadShellMarkTests`) + Tests.Pads.Drift.pas (`TPadDriftTests`) (+docs/mechanics/arena-3.md) |
+| The bunker's second phase (3.0.96): the eye's warning, the lunge to the middle, the stand and the drive back, the bunker silent meanwhile; the throw back over the hull from the road behind the stern; the shells in pairs, the second at his pad or at a pad past the middle, one wreck a pad; a shell caught in the air, every burst a blast as a tank's; the death away from the wall | Game.Ram.pas (`TFallBack`, `TickFallBack`, `BunkerSecondPhase`, `HoldsFire`, `FallingBack`, `ThrowsOverTheHull`, `Lob`, `BunkerMuzzle`, `TickEye`, `Arrive`, `TickChange`; `TRamTarget.SecondAt`, cue `SecondLob`) + Game.Shells.pas (`SecondShellMark`) + Hero.pas (`Fling`, `BeginThrow`) + Game.Shells.pas (`Strikes` in the air) + Game.Moon.pas (`ShellDecks`, `TickRam`, `TickShells` - `Knocked`, `ShellBlast`, `ResolveShellContact`, `ResolveRamThrowOver`, `HurtByRam`) + Game.Blasts.pas (`TBlast`) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TSecondShellMarkTests`, `TestInTheAirItIsSpentOnABody`) (+docs/mechanics/arena-3/) |
+| The bunker's third phase, the hunt (3.0.97, reworked 3.0.98): the change - the alarm, a wave of three dense rows of pads at the decks of a climb flying in from three sides and coming to the road's pace; the pass through the hero and off the left edge, a hero on the road thrown over the hull to the right; the turn out of sight, the eye's red at the edge, the drive in bow first with the hull mirrored; the bow a step behind him within the left half, now and then a short surge to near the right edge, back only into a hero behind its stern; a ram forward from the road and the stand after it; after the wave the groups again, denser; the shells in pairs, the second at the pad ahead along his row | Game.Ram.pas (`TBunkerHunt`, `Hunt`, `BunkerThirdPhase`, `BeginHunt`, `TickHunt`, `BeginTurn`, `TickHuntDrive`, `HuntMark`, `HuntLine`, `THuntSurge`, `TickSurge`, `PeekLevel`, `RowsArrived`, `Hunts`, `HoldsFire`, `ThrowsOverTheHull` - `TOverTheHull`, `Contact`, `Lob`, `TickEye`, `Arrive`; the mirror `HullMirrored`, `HullSpot`, `WellAt`, `SolidAt`, `MastPivot`, `HeadPoint`; `TRamPainter.DrawPeek`, `TExhaustPair`; cue `Rows`) + Pads.Drift.pas (`BeginRows`, `LayComingRow`, `TakeRowPad`, `SlotTaken`, `RowDecks`, `FWave`, `AdriftOn`, `FDense`, `PlanGroup`, `TDriftCue.RowsIn`) + Pads.World.pas (`SetAdriftComing`, `ComeShare`, `Coming`, `LetGoPastLeft`) + Game.Shield.pas (`TTekShield.Mirrored`) + Game.Shells.pas (`AheadShellMark`) + Hero.pas (`Fling(side, way)`) + Game.Moon.pas (`TickRam`, `ResolveRamThrowOver`) + the pool of screen 13 in level2.json (52) + Tests.Game.Ram.pas (`TRamBunkerTests`) + Tests.Game.Shells.pas (`TAheadShellMarkTests`) + Tests.Pads.Drift.pas (`TPadDriftTests`) (+docs/mechanics/arena-3/) |
 | The form's charge in the Ram's fight (3.0.85; the bunker's half 3.0.94): the gauge grows with the hits on the heads, late and in uneven pulses, up to 30%, 55% and 95%; a head's death pours the rest, the bunker's to full | Game.StoneTank.pas (`TStoneTank`) + Game.HeroOrbs.pas (`Charge`) + Game.Moon.pas (`TickRam` - `Start`, `HeadDown`, `Tick`; `BulletStruckRamEye`, `BulletStruckRamBarrels` - `Wound`) + Tests.Game.StoneTank.pas + Tests.Game.HeroOrbs.pas (`TestChargeRisesAtOnce`, `TestChargeStopsAtFullCountingOrbsOnTheirWay`, `TestCorpseIsChargedNothing`) |
 | The Ram's act 1 (3.0.76): the press of a hero low and the hunt of one on the pads; the hunter's aim, turn and bursts by the thirds, its eye and lives by the grade, the head's blast and the change to the sweeper | Game.Ram.pas (`TickMode`, `BeginRev`, `BeginHuntLeg`, `TickAim`, `TickFire`, `StrikeEye`, `KillHead`, `TickChange`; `TRamPainter.DrawHead`, `DrawLens`, `TickHeadSmoke`) + Game.Moon.pas (`TickRam` - the target, the shot into the monsters' burst, the blast; `BulletStruckRamEye`; `StartRam` - `DifficultyMonsterLives`) + Tests.Game.Ram.pas (`TRamHunterTests`) |
 | The press of the finale: the conveyor of balconies, the beat, a newcomer onto the top row | Game.Press.pas + the `press` and `waveOnto` actions in level2.json + Game.Moon.pas (`StartPress`, `TellPress`, `TellPressRow`, `LetDownWave`) |
@@ -8478,7 +8478,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | An orb: its look, its three ends (implosion, dust, release), the mark on a face, how it is drawn between ticks, its depth and the two layers about the hero; what an orb strikes and what that costs | Orbs.Flock.pas + Game.HeroOrbs.pas (`ResolveOrbHits`, `TakesAt`, `OrbReach`) + Game.Moon.pas (`PopEnemyBullet`, `EnemyBulletNear`, `DangerousMonsterAt`, `WoundByOrb`) + `dangerous` in monsters.json |
 | Screen size vs frame size; anything for the wide screen | Game.Space.pas (then every reader of `Frame*` / `Screen*`) |
 | Health monitor / bonus charge panels: look, colors, timings | Hud.Vitals.pas / Hud.Charge.pas (+Render.Brush.pas for the brush and palette) |
-| The charge of the form: the eclipse gauge in the monitor's wing, the black orbs that bring it, what a death gives back | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + the `energy` action (Levels.Events.pas, Events.Director.pas) + Game.HeroOrbs.pas (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickAfterCeremony`, `Arrive`, `Rewind`) + Game.Moon.pas (`FEnergyGauge` in `Update`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas, Tests.Game.HeroOrbs.pas (+docs/mechanics/arena-3.md, stage 6) |
+| The charge of the form: the eclipse gauge in the monitor's wing, the black orbs that bring it, what a death gives back | Hud.Energy.pas + Orbs.Feed.pas + Orbs.Flock.pas (`MoonOrbTint`, `DrawDarkBody`) + Hud.Vitals.pas (`Wing`) + the `energy` action (Levels.Events.pas, Events.Director.pas) + Game.HeroOrbs.pas (`FEnergy`, `FEnergyAtEntry`, `FeedEnergy`, `TickAfterCeremony`, `Arrive`, `Rewind`) + Game.Moon.pas (`FEnergyGauge` in `Update`) + Tests.Hud.Energy.pas, Tests.Orbs.Feed.pas, Tests.Game.HeroOrbs.pas (+docs/mechanics/arena-3/energy.md, stage 6) |
 | Health rows over the hero / monsters; the crosshair's thirds | Hud.Marks.pas (+Render.Brush.pas for the cells) + Monsters.pas (`HealthTier`, `TicksSinceHit`) + Game.Moon.pas `CrosshairFrame` |
 | Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Game.Moon.pas (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` and the `respawn` action in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
 | A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Game.Moon.pas `LocateParent` |

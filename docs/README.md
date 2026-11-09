@@ -44,7 +44,7 @@ Not built. One file per thing, in the order of `ROADMAP.md`.
 | file | what |
 |---|---|
 | `arena-2.md` | level 2 screen 9, the gravel arena (first boss of level 2) |
-| `arena-3.md` | level 2 finale: the tunnels and the TEK machine (end of 3.0) |
+| `arena-3/` | level 2 finale: the tunnels and the TEK machine (end of 3.0) - a folder, one file per part of the fight, its index in `arena-3/README.md` |
 | `blasts.md` | the look of an explosion, sparks, the blast wave, the shards |
 | `boss-1.md` | the level 1 boss TEK-R1 in HD, its pilot, the damage ceiling |
 | `engine.md` | the frame: window, frame and screen, shake, settings, unit folders, draw batching, system requirements |
@@ -84,6 +84,12 @@ version left things.
   the sessions follow under `## Journal` (or `## Журнал`) as `###`
   headings, in the order they happened. A line for it in the table above.
 - A session on an existing mechanic: at the end of its journal.
+- A mechanic that outgrows one file (`arena-3/`): a folder named after
+  it, one file per part, each with its design and its `## Journal`, and a
+  `README.md` as the index - the files, the rules that hold for every
+  part, how to read it. Section names stay unique across the folder, so a
+  pointer by name still finds its place. The table above names the
+  folder.
 - A thing not built yet - a step of the roadmap, an idea waiting for its
   level: a file in `plans/`, named after the thing; its line in the
   table above. What is decided and what is only proposed are marked

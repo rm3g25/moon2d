@@ -53,7 +53,7 @@ shroud (`Game.Shroud`, 3.0.47, in place of emitter presets). Over the
 plan: the look of an explosion (3.0.18), the HD boss of level 1 (3.0.19 -
 `Monsters.Disc`, drawn by code from layers, so it needs no frame
 contract), and all of arena 2 and arena 3 (`mechanics/arena-2.md`,
-`mechanics/arena-3.md`). The decisions on the code and the data of the
+`mechanics/arena-3/`). The decisions on the code and the data of the
 release plan are the session "план релиза 3.0" in
 `mechanics/level-objects.md`. A fifth idea that arrives on the third step
 is written into the plans, not into the code.
