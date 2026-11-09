@@ -5,7 +5,10 @@
   the hero aboard it casts off, tells so once, glides to its station in
   the middle of the screen - from either side - and holds it; a restart
   puts it at its station at once; its way is what it went this tick; a
-  clear sends it away.
+  clear sends it away. Aboard at its station it drifts: a gentle start
+  from the station, its middle across the middle three fifths of the
+  screen and its deck half a cell up and down, never still for long, on
+  without him.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -53,17 +56,39 @@ type
     procedure TestWayIsWhatItWentThisTick;
     [Test]
     procedure TestClearSendsItAway;
+    [Test]
+    procedure TestNobodyAboardItHoldsItsStation;
+    [Test]
+    procedure TestAboardAtItsStationItDrifts;
+    [Test]
+    procedure TestDriftSetsOffGentlyFromTheStation;
+    [Test]
+    procedure TestDriftKeepsToTheMiddleThreeFifths;
+    [Test]
+    procedure TestDriftIsNeverStillForLong;
+    [Test]
+    procedure TestDriftGoesOnWithoutHim;
+    [Test]
+    procedure TestWayDownIsWhatItWentThisTick;
+    [Test]
+    procedure TestClearEndsTheDrift;
   end;
 
 implementation
 
 uses
+  System.Math,
   System.SysUtils,
+  Render.Sprites,
   Game.Space;
 
 const
   PierRight: Double = 352.0;
   UnitSlack = 0.001;
+  // Two laps of the eight and some, at 18 s a lap
+  TwoLapsTicks = 1300;
+  // A share of a unit, as the edges of a drift are read
+  EdgeSlack = 0.5;
 
 procedure TBargeRideTests.Setup;
 begin
@@ -155,7 +180,7 @@ begin
   Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'At its station');
   Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Its left edge');
   Assert.IsFalse(Run(20, PierRight, True), 'Told once');
-  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Holding it');
+  Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Drifting with him aboard');
 end;
 
 procedure TBargeRideTests.TestBoardedAtItsFloorItGlidesRightToTheMiddle;
@@ -185,8 +210,9 @@ begin
   FBarge.Station;
   Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'At its station');
   Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Its left edge');
-  Assert.IsFalse(Run(100, 0, True, False), 'Nothing told: he is aboard');
+  Assert.IsFalse(Run(100, 0, False, False), 'Nothing told');
   Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Holding it');
+  Assert.IsFalse(Run(1, 0, True, False), 'Nothing told: he is aboard');
 end;
 
 procedure TBargeRideTests.TestWayIsWhatItWentThisTick;
@@ -215,6 +241,135 @@ begin
   FBarge.Moor(PierRight);
   Assert.AreEqual(PierRight + MoorGap, FBarge.Left, UnitSlack,
     'Moored anew after a clear');
+end;
+
+procedure TBargeRideTests.TestNobodyAboardItHoldsItsStation;
+begin
+  FBarge.Station;
+  for var i := 1 to 200 do
+  begin
+    Run(1, 0, False, False);
+    Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'Tick ' + i.ToString);
+    Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack,
+      'Tick ' + i.ToString + ': its left edge');
+    Assert.AreEqual(0.0, FBarge.Dip, UnitSlack, 'Tick ' + i.ToString + ': its deck');
+  end;
+end;
+
+procedure TBargeRideTests.TestAboardAtItsStationItDrifts;
+begin
+  FBarge.Station;
+  Run(1, 0, True, False);
+  Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Drifting');
+  Run(99, 0, True, False);
+  Assert.IsTrue(Abs(FBarge.Left - StationLeft) > TileSize,
+    'Over a cell off its station in three seconds');
+end;
+
+procedure TBargeRideTests.TestDriftSetsOffGentlyFromTheStation;
+begin
+  FBarge.Station;
+  Run(1, 0, True, False);
+  Run(1, 0, True, False);
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, EdgeSlack,
+    'From the station itself');
+  Assert.AreEqual(0.0, FBarge.Dip, EdgeSlack, 'On its line');
+  var LastWay := 0.0;
+  var LastWayDown := 0.0;
+  for var i := 1 to 100 do
+  begin
+    Run(1, 0, True, False);
+    Assert.IsTrue(Abs(FBarge.Way - LastWay) < 0.1,
+      'Tick ' + i.ToString + ': a jerk across');
+    Assert.IsTrue(Abs(FBarge.WayDown - LastWayDown) < 0.1,
+      'Tick ' + i.ToString + ': a jerk up or down');
+    LastWay := FBarge.Way;
+    LastWayDown := FBarge.WayDown;
+  end;
+end;
+
+procedure TBargeRideTests.TestDriftKeepsToTheMiddleThreeFifths;
+begin
+  FBarge.Station;
+  var Least := Double(ScreenWidth);
+  var Most := 0.0;
+  var Highest := 0.0;
+  var Lowest := 0.0;
+  for var i := 1 to TwoLapsTicks do
+  begin
+    Run(1, 0, True, False);
+    var Middle := FBarge.Left + BargeLength / 2;
+    Least := Min(Least, Middle);
+    Most := Max(Most, Middle);
+    Highest := Min(Highest, FBarge.Dip);
+    Lowest := Max(Lowest, FBarge.Dip);
+  end;
+  Assert.IsTrue(Least >= 0.2 * ScreenWidth - EdgeSlack, 'Not left of a fifth');
+  Assert.IsTrue(Most <= 0.8 * ScreenWidth + EdgeSlack, 'Not right of four fifths');
+  Assert.IsTrue(Least < 0.25 * ScreenWidth, 'Wide to the left');
+  Assert.IsTrue(Most > 0.75 * ScreenWidth, 'Wide to the right');
+  Assert.IsTrue(Highest >= -TileSize / 2 - EdgeSlack, 'No higher than half a cell');
+  Assert.IsTrue(Lowest <= TileSize / 2 + EdgeSlack, 'No lower than half a cell');
+  Assert.IsTrue(Highest < -TileSize / 4, 'Up a good way');
+  Assert.IsTrue(Lowest > TileSize / 4, 'Down a good way');
+end;
+
+procedure TBargeRideTests.TestDriftIsNeverStillForLong;
+const
+  StillPace = 0.2;
+  // A second
+  LongTicks = 33;
+begin
+  FBarge.Station;
+  Run(100, 0, True, False);
+  var StillTicks := 0;
+  for var i := 1 to TwoLapsTicks do
+  begin
+    Run(1, 0, True, False);
+    if Hypot(FBarge.Way, FBarge.WayDown) < StillPace then
+      Inc(StillTicks)
+    else
+      StillTicks := 0;
+    Assert.IsTrue(StillTicks < LongTicks, 'Tick ' + i.ToString + ': still a second');
+  end;
+end;
+
+procedure TBargeRideTests.TestDriftGoesOnWithoutHim;
+begin
+  FBarge.Station;
+  Run(10, 0, True, False);
+  var Left := FBarge.Left;
+  Run(100, 0, False, False);
+  Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Still drifting');
+  Assert.IsTrue(Abs(FBarge.Left - Left) > TileSize, 'And going');
+end;
+
+procedure TBargeRideTests.TestWayDownIsWhatItWentThisTick;
+begin
+  FBarge.Station;
+  for var i := 1 to 400 do
+  begin
+    var Before := FBarge.Dip;
+    var LeftBefore := FBarge.Left;
+    Run(1, 0, True, False);
+    Assert.AreEqual(FBarge.Dip - Before, FBarge.WayDown, UnitSlack,
+      'Tick ' + i.ToString + ': down');
+    Assert.AreEqual(FBarge.Left - LeftBefore, FBarge.Way, UnitSlack,
+      'Tick ' + i.ToString + ': across');
+  end;
+end;
+
+procedure TBargeRideTests.TestClearEndsTheDrift;
+begin
+  FBarge.Station;
+  Run(200, 0, True, False);
+  FBarge.Clear;
+  Assert.AreEqual(Ord(bsAway), Ord(FBarge.Stage), 'Away');
+  Assert.AreEqual(0.0, FBarge.Dip, UnitSlack, 'On its line');
+  FBarge.Station;
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack,
+    'At its station anew');
+  Assert.AreEqual(0.0, FBarge.Dip, UnitSlack, 'On its line anew');
 end;
 
 initialization

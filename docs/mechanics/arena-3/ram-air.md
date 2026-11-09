@@ -1,6 +1,6 @@
 # Arena 3: the Ram's air fight (stage 18d and on)
 
-Status: designed 2026-11-09, nothing built. The last fight of level 2 before the drone (designed later) and the blast (stage 19). This file is the whole of it: a chat that builds a step of 18d reads `PORTING-NOTES.md`, this file and, for the code it touches, `evolution.md` ("Stage 17a as built", "Stage 17b-2 as built") - nothing else of the arena.
+Status: designed 2026-11-09; 18d-1 (the barges) built in 3.0.120, the rest not built. The last fight of level 2 before the drone (designed later) and the blast (stage 19). This file is the whole of it: a chat that builds a step of 18d reads `PORTING-NOTES.md`, this file and, for the code it touches, `evolution.md` ("Stage 17a as built", "Stage 17b-2 as built") - nothing else of the arena.
 
 The animated sketches of the design chat are `ram-air-sketches.html` beside this file: schematic, not to scale, made before every number below was settled. Where a sketch and this file disagree, this file is right (the ladder's sketches, for one, show the main barge standing still; it drifts).
 
@@ -115,8 +115,8 @@ Each its own commit and live run; the version rises by the project's rule.
 - **18d-6. The ladder.** The tiers by the hull's lives, the choice between attacks, the chains of tier 4, point C, the End key's stop at point C; tuning.
 
 ## Open
-- The flock's unit (18d-1, above).
-- The barges' paths: which kinds, how fast, at what lanes; whether one ever comes from below.
+- The flock's unit (18d-1, above) - settled 2026-11-10: a unit of its own, `Game.Flock` (see "Stage 18d-1 as built (3.0.120)").
+- The barges' paths: which kinds, how fast, at what lanes; whether one ever comes from below. A first answer is built in 3.0.120, to be judged live.
 - The magnet's size under the belly and the gap of the lift; the reach of its beam.
 - Where a thrown barge flies if the hero stands on a small barge - at it, or at the main barge.
 - The charge's knock: how hard along its way.
@@ -161,3 +161,25 @@ The design chat, in order:
 - **Damage only in the windows**, and it must be shown where to strike - the rule of the hot parts, the fading heat, the bar, the hint.
 - **The magnet's art** generated and accepted.
 - **The docs**: arena 3 split into the folder `docs/mechanics/arena-3/`, this file opened for the air fight, the sketches kept beside it.
+
+## Journal
+
+### Stage 18d-1 as built (3.0.120)
+The barges, as decided 2026-11-10: the flock is a unit of its own beside `Game.Barge` (not a mode of `Pads.Drift`: the drift sends pads by the road's run, only to the left, and refuses any pad but 32 and 64 wide at load), and the neighbour guarantee is kept by an escort - one small barge always bound to the main one.
+- **The main barge drifts** (`Game.Barge`, `TBargeRide`, stage `bsDrift`): the hero aboard at its station (after the cast-off, or at point B the tick he lands on it), it lets go of the station and flies a figure of eight lying on its side - its middle `256 + DriftReachX sin t` (`DriftReachX` 0.3 of the screen, 153.6: across the middle three fifths), its deck `-DriftReachY sin 2t` from the line it was moored on (`DriftReachY` 16, half a cell), a lap in `DriftLapTicks` 594 (18 s), the pace grown into from a standstill over `LooseTicks` 66 - from the station itself, no jerk. At most about 1.6 units a tick across, never still for long; on without him once started. `Dip` - its deck under its line, `WayDown` - how far down this tick, beside `Way`. The game carries its pad across and down (`TPad.Carry(wayX, wayY)`, new) and the checkpoint follows its deck (`PinPierCheckpoint`: `RamFloorY + Dip`).
+- **The flock** (`Game.Flock`, `TBargeFlock`): a pool the game names by widths - the pads `s13-flock-1`..`-9` of level2.json, stowed, three each of `barge-2`, `barge-3`, `barge-4` (67, 104, 123 wide), `bullets` block, `bob` 1, their rigs `barge2`..`barge4` (the lamps and the fire of `barge`, the prow's lamps moved by the length). `Start(count)` once the main barge drifts - the count `FlockCounts[1]` = 2 (the table 2, 3, 3, 4 waits for 18d-6). The game wakes a pad as its barge comes in (`FlyTo` its place at once), carries it by the barge's way each tick before the pads' tick, puts it to sleep once gone (`TMoonGame.TickFlock`, from `TickPier`); `ClearPier` grounds the flock.
+- **The escort** comes first, at once: its deck `EscortRise` 64 over the main barge's (swelling 4 over 3 s), its middle swaying `EscortSway` 64 either side of the main barge's over 7 s, kept on the screen - always over or beside the main barge, within the jump. After 10-15 s of service the next barge to come in comes as its relief, to the same place; once the relief is in and within the jump, the old escort is let go - a lane from where it is, off to the left.
+- **The free barges**, at decks `LaneHighest` 208 to `LaneLowest` 248 (a hero standing on 208 keeps his head under the Ram's belly at about 168), a free barge's deck at least `LanesApart` 20 off the others' when the dice allow: a lane (left at 1.0-1.4 units a tick, a swell of 6 over 4 s; 35%), a loop (48 by 16, a lap in 4 s, two or three laps in place, then off at a lane's pace; 25%), a climb (from 0.7 of the screen at 1.1, from one end of the lanes to the other; 25%), a pass (right through at 2.6; 15%).
+- **In and out**: every barge comes in with its left edge 8 past the right edge at `EnterPace` 7 and brakes to its path's pace (the way in eases out as a square, `ComeTicks` from the distance); it is gone once wholly past the left edge - a hero still on it is pushed off by the screen's edge and falls into the pit. The next comes in `ReplaceGapLeast` 33 to `ReplaceGapMost` 66 ticks after a barge is gone; the second of the start comes as long after the escort.
+- **Neighbour**: `WithinJump` - a deck no more than `NeighbourRise` 80 up or down from the main barge's, and no more than `NeighbourGap` 64 across, edge to edge; the moon form clears about 100 across at a rise of 80. The escort keeps it from the moment it is in - about a second after the start - on.
+- **Riders and bullets**: the small barges are pads - riders carried as on any pad (across and down now), bullets burst on their bodies both ways.
+- **Tests**: `Tests.Game.Flock` (new) - `TBargeFlockTests` 17; `TBargeRideTests` +8 (the drift) and 2 reworked (the station held with nobody aboard, a drift once he is aboard); `TPadWorldTests` +3 (carried across and down, the glide between the ticks, the deck in fractions). The tables: `docs/testing/game.md` (Game.Barge, Game.Flock), `docs/testing/pads.md` (carried by the game).
+- First guesses for the live run: the drift's reach of 0.3 of the screen and 16, its lap of 18 s and its start of 2 s; the flock of two; the escort's rise of 64, sway of 64 over 7 s and service of 10-15 s, and the relief coming in to the old escort's place (they meet for a moment - watch whether it reads); the lanes of 208-248 and their 20 apart; the paths' shares, paces and sizes; the way in at 7 and the gap of 1-2 s; the neighbour's 80 and 64; the small barges' bob of 1; the prow's lamps of the short barges where the long one's are.
+
+### After the live run of 3.0.120 (2026-11-10)
+The paths were right, but the barges moved in jerks, not smoothly as the Ram does. The cause: a pad was drawn on the tick and on a whole unit (`Round(FLeft)`, `Round(FTop)`), while the Ram is drawn between the ticks (`LeftAt`, `LiftAt`). A barge drifting at a fraction of a unit a tick - the main barge's deck goes up and down at about 0.3 - stood still for a few frames and then stepped a whole unit, about three pixels on a wide window, at 33 ticks a second. Fixed in the same version, before its commit:
+- **`TPad.Glide(alpha)`** - the pad is drawn on its way from where it stood a tick ago, in fractions of a unit (`Draw`: `FLeft + Glide.X`); **`Lift`** carries the deck's fraction and `Glide.Y`, so whatever is drawn with the Lift goes with it.
+- **The riders go with it**: the hero by `THero.DeckSlide` across (the renderer's new `FineX`) and the Lift down (`FineY`, as before); a monster on a deck the same way (`TMonster.DeckSlide`) - the betoners on the carousels included.
+- **The lamps and the fire go with it**: the game gives a pad's `Glide(0)` to its rigs (`TParentStand.Glide`), and `Render.Dynamics` draws them that far back between the ticks.
+- Every moving pad of the game is smoother for it - the paths, the carousels, the drift of the chase, the pier. Tests: `TPadWorldTests` +2 (the glide between the ticks, the deck in fractions). Left to the eye: the hero and the monsters with their decks, the lamps with their barges; a hero who jumps off a moving barge is drawn on his own tick from then on - a step of up to the barge's way in a tick, about 1.6 units, at the jump (to watch).
+

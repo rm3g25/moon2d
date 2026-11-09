@@ -1,0 +1,489 @@
+﻿{
+  Tests.Game.Flock - the small barges of the air fight round the main
+  barge: none till the flock starts; the escort first, at once, the next
+  after a gap; never more than the count; a barge comes in from beyond the
+  right edge fast and brakes, leaves only past the left edge and is
+  replaced after a short gap; a barge within the jump of the main barge on
+  every tick once the escort is in, the escort on the screen, relieved and
+  let go; none up in the Ram's belly; the way is what it went; a clear
+  grounds the flock; the same dice, the same flight.
+
+  The main barge is Game.Barge's own, drifting on its loop from its
+  station with the hero aboard, its deck on the road's line.
+
+  Moon 2D remake. Requires Delphi 10.3+ (inline var).
+}
+unit Tests.Game.Flock;
+
+interface
+
+uses
+  DUnitX.TestFramework,
+  Game.Barge,
+  Game.Flock;
+
+type
+  [TestFixture]
+  TBargeFlockTests = class
+  private
+    FRide: TBargeRide;
+    FFlock: TBargeFlock;
+    function MainNow: TMainBarge;
+    // A tick of the main barge, then of the flock
+    procedure Step;
+    function AnyWithinJump: Boolean;
+    // Ticks until a barge flies within the jump of the main one; fails
+    // past ALimit
+    function TicksTillNeighbour(ALimit: Integer): Integer;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestNothingFliesTillStarted;
+    [Test]
+    procedure TestTheEscortComesFirstAtOnce;
+    [Test]
+    procedure TestTheNextComesAfterAGap;
+    [Test]
+    procedure TestNeverMoreThanTheCount;
+    [Test]
+    procedure TestStartedOnceTillAClear;
+    [Test]
+    procedure TestComesInFromBeyondTheRightEdgeFastAndBrakes;
+    [Test]
+    procedure TestLeavesOnlyPastTheLeftEdge;
+    [Test]
+    procedure TestAGoneBargeIsReplacedSoon;
+    [Test]
+    procedure TestAlwaysABargeWithinJumpOfTheMain;
+    [Test]
+    procedure TestTheEscortKeepsToTheScreen;
+    [Test]
+    procedure TestTheEscortIsRelievedAndLetGo;
+    [Test]
+    procedure TestNoneRisesIntoTheRamsBelly;
+    [Test]
+    procedure TestWayIsWhatItWentThisTick;
+    [Test]
+    procedure TestClearGroundsTheFlock;
+    [Test]
+    procedure TestSameDiceSameFlight;
+    [Test]
+    procedure TestASmallPoolFliesWhatItHas;
+    [Test]
+    procedure TestWithinJumpIsAJumpUpOrDownAndAcross;
+  end;
+
+implementation
+
+uses
+  System.Math,
+  System.SysUtils,
+  Game.Space;
+
+const
+  // The deck of the main barge on its line: the road's
+  MainLine = 352.0;
+  // The pool of the level: three barges of each of the three lengths
+  PoolWidths: array [0..8] of Double = (67, 104, 123, 67, 104, 123, 67, 104,
+    123);
+  Seed = 7;
+  Count = 2;
+  // Four minutes of the fight
+  LongRunTicks = 8000;
+  // The escort is in within this long
+  EscortInTicks = 330;
+  UnitSlack = 0.001;
+
+function Pool: TArray<Double>;
+begin
+  Result := [];
+  for var Width in PoolWidths do
+    Result := Result + [Width];
+end;
+
+procedure TBargeFlockTests.Setup;
+begin
+  FRide := TBargeRide.Create;
+  FRide.Station;
+  FFlock := TBargeFlock.Create(Pool, Seed);
+end;
+
+procedure TBargeFlockTests.TearDown;
+begin
+  FFlock.Free;
+  FRide.Free;
+end;
+
+function TBargeFlockTests.MainNow: TMainBarge;
+begin
+  Result.Left := FRide.Left;
+  Result.Top := MainLine + FRide.Dip;
+  Result.Width := BargeLength;
+end;
+
+procedure TBargeFlockTests.Step;
+begin
+  FRide.Tick(0, False, True);
+  FFlock.Tick(MainNow);
+end;
+
+function TBargeFlockTests.AnyWithinJump: Boolean;
+begin
+  for var i := 0 to FFlock.PoolSize - 1 do
+    if FFlock.Flying(i) and WithinJump(MainNow, FFlock.Left(i), FFlock.Top(i),
+      FFlock.Width(i)) then
+      Exit(True);
+  Result := False;
+end;
+
+function TBargeFlockTests.TicksTillNeighbour(ALimit: Integer): Integer;
+begin
+  Result := 0;
+  while not AnyWithinJump do
+  begin
+    Step;
+    Inc(Result);
+    if Result > ALimit then
+      Assert.Fail(Format('No barge within the jump in %d ticks', [ALimit]));
+  end;
+end;
+
+procedure TBargeFlockTests.TestNothingFliesTillStarted;
+begin
+  for var i := 1 to 200 do
+    Step;
+  Assert.IsFalse(FFlock.Started, 'Not started');
+  Assert.AreEqual(0, FFlock.FlyingCount, 'None flies');
+  Assert.AreEqual(-1, FFlock.Escort, 'No escort');
+end;
+
+procedure TBargeFlockTests.TestTheEscortComesFirstAtOnce;
+begin
+  FFlock.Start(Count);
+  Assert.IsTrue(FFlock.Started, 'Started');
+  Step;
+  Assert.AreEqual(1, FFlock.FlyingCount, 'One at once');
+  var Escort := FFlock.Escort;
+  Assert.IsTrue(Escort >= 0, 'An escort');
+  Assert.IsTrue(FFlock.Flying(Escort), 'The escort flies');
+  Assert.AreEqual(Ord(fpEscort), Ord(FFlock.PathOf(Escort)), 'On the escort''s path');
+end;
+
+procedure TBargeFlockTests.TestTheNextComesAfterAGap;
+begin
+  FFlock.Start(Count);
+  Step;
+  var Ticks := 0;
+  while FFlock.FlyingCount < 2 do
+  begin
+    Step;
+    Inc(Ticks);
+    Assert.IsTrue(Ticks <= ReplaceGapMost + 1, 'Not within two seconds');
+  end;
+  Assert.IsTrue(Ticks >= ReplaceGapLeast, 'Before a second: ' + Ticks.ToString);
+end;
+
+procedure TBargeFlockTests.TestNeverMoreThanTheCount;
+begin
+  FFlock.Start(Count);
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    Assert.IsTrue(FFlock.FlyingCount <= Count, 'Tick ' + i.ToString);
+  end;
+end;
+
+procedure TBargeFlockTests.TestStartedOnceTillAClear;
+begin
+  FFlock.Start(Count);
+  Step;
+  FFlock.Start(4);
+  for var i := 1 to 2000 do
+  begin
+    Step;
+    Assert.IsTrue(FFlock.FlyingCount <= Count, 'Tick ' + i.ToString +
+      ': the second start counts');
+  end;
+end;
+
+procedure TBargeFlockTests.TestComesInFromBeyondTheRightEdgeFastAndBrakes;
+const
+  // A barge on its path goes no faster than this, the escort with the main
+  // barge under it the fastest; five seconds in, it is on its path
+  PathPaceMost = 4.5;
+  OnItsPathTicks = 165;
+var
+  Since: TArray<Integer>;
+begin
+  SetLength(Since, FFlock.PoolSize);
+  FFlock.Start(Count);
+  var Arrivals := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    for var j := 0 to FFlock.PoolSize - 1 do
+    begin
+      if not FFlock.Flying(j) then
+      begin
+        Since[j] := 0;
+        Continue;
+      end;
+      Inc(Since[j]);
+      var When := Format('Tick %d, barge %d', [i, j]);
+      if Since[j] = 1 then
+      begin
+        Inc(Arrivals);
+        Assert.IsTrue(FFlock.Left(j) >= ScreenWidth, When + ': beyond the right edge');
+      end;
+      // Faster than the main barge ever goes, even for an escort coming in
+      // against its drift
+      if Since[j] = 2 then
+        Assert.IsTrue(FFlock.WayX(j) < -2.5, When + ': fast in');
+      if Since[j] = OnItsPathTicks then
+        Assert.IsTrue(Abs(FFlock.WayX(j)) < PathPaceMost, When + ': braked');
+    end;
+  end;
+  Assert.IsTrue(Arrivals > 6, 'Barges come and go');
+end;
+
+procedure TBargeFlockTests.TestLeavesOnlyPastTheLeftEdge;
+var
+  WasFlying: TArray<Boolean>;
+begin
+  SetLength(WasFlying, FFlock.PoolSize);
+  FFlock.Start(Count);
+  var Leavers := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    for var j := 0 to FFlock.PoolSize - 1 do
+    begin
+      if WasFlying[j] and not FFlock.Flying(j) then
+      begin
+        Inc(Leavers);
+        Assert.IsTrue(FFlock.Left(j) + FFlock.Width(j) < 0,
+          Format('Tick %d, barge %d: gone short of the left edge', [i, j]));
+      end;
+      WasFlying[j] := FFlock.Flying(j);
+    end;
+  end;
+  Assert.IsTrue(Leavers > 4, 'Barges leave');
+end;
+
+procedure TBargeFlockTests.TestAGoneBargeIsReplacedSoon;
+begin
+  FFlock.Start(Count);
+  while FFlock.FlyingCount < Count do
+    Step;
+  var ShortTicks := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    if FFlock.FlyingCount < Count then
+      Inc(ShortTicks)
+    else
+      ShortTicks := 0;
+    Assert.IsTrue(ShortTicks <= ReplaceGapMost + 1, 'Tick ' + i.ToString +
+      ': not replaced within two seconds');
+  end;
+end;
+
+procedure TBargeFlockTests.TestAlwaysABargeWithinJumpOfTheMain;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    Assert.IsTrue(AnyWithinJump, 'Tick ' + i.ToString + ': no floor within a jump');
+  end;
+end;
+
+procedure TBargeFlockTests.TestTheEscortKeepsToTheScreen;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  // Done with its way in
+  for var i := 1 to EscortInTicks do
+    Step;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    var Escort := FFlock.Escort;
+    Assert.IsTrue(FFlock.Left(Escort) >= -UnitSlack, 'Tick ' + i.ToString +
+      ': past the left edge');
+    Assert.IsTrue(FFlock.Left(Escort) + FFlock.Width(Escort) <=
+      ScreenWidth + UnitSlack, 'Tick ' + i.ToString + ': past the right edge');
+  end;
+end;
+
+procedure TBargeFlockTests.TestTheEscortIsRelievedAndLetGo;
+begin
+  FFlock.Start(Count);
+  Step;
+  var Escort := FFlock.Escort;
+  var Reliefs := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    if FFlock.Escort = Escort then
+      Continue;
+    Inc(Reliefs);
+    Assert.IsTrue(FFlock.Flying(Escort), 'Tick ' + i.ToString +
+      ': the old escort is let go, not gone');
+    Assert.AreNotEqual(Ord(fpEscort), Ord(FFlock.PathOf(Escort)),
+      'Tick ' + i.ToString + ': the old escort flies free');
+    Assert.IsTrue(WithinJump(MainNow, FFlock.Left(FFlock.Escort),
+      FFlock.Top(FFlock.Escort), FFlock.Width(FFlock.Escort)),
+      'Tick ' + i.ToString + ': the relief is in its place');
+    Escort := FFlock.Escort;
+  end;
+  Assert.IsTrue(Reliefs >= 2, 'Relieved more than once in four minutes');
+end;
+
+procedure TBargeFlockTests.TestNoneRisesIntoTheRamsBelly;
+const
+  // The swell of a lane over its highest deck, loosely
+  SwellSlack = 10;
+begin
+  FFlock.Start(Count);
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    for var j := 0 to FFlock.PoolSize - 1 do
+      if FFlock.Flying(j) then
+        Assert.IsTrue(FFlock.Top(j) >= LaneHighest - SwellSlack,
+          Format('Tick %d, barge %d: at %g', [i, j, FFlock.Top(j)]));
+  end;
+end;
+
+procedure TBargeFlockTests.TestWayIsWhatItWentThisTick;
+var
+  Lefts, Tops: TArray<Double>;
+  WasFlying: TArray<Boolean>;
+begin
+  SetLength(Lefts, FFlock.PoolSize);
+  SetLength(Tops, FFlock.PoolSize);
+  SetLength(WasFlying, FFlock.PoolSize);
+  FFlock.Start(Count);
+  for var i := 1 to 2000 do
+  begin
+    Step;
+    for var j := 0 to FFlock.PoolSize - 1 do
+    begin
+      if WasFlying[j] and FFlock.Flying(j) then
+      begin
+        var When := Format('Tick %d, barge %d', [i, j]);
+        Assert.AreEqual(FFlock.Left(j) - Lefts[j], FFlock.WayX(j), UnitSlack,
+          When + ': across');
+        Assert.AreEqual(FFlock.Top(j) - Tops[j], FFlock.WayY(j), UnitSlack,
+          When + ': down');
+      end;
+      WasFlying[j] := FFlock.Flying(j);
+      Lefts[j] := FFlock.Left(j);
+      Tops[j] := FFlock.Top(j);
+    end;
+  end;
+end;
+
+procedure TBargeFlockTests.TestClearGroundsTheFlock;
+begin
+  FFlock.Start(Count);
+  for var i := 1 to 300 do
+    Step;
+  FFlock.Clear(Seed);
+  Assert.IsFalse(FFlock.Started, 'Not started');
+  Assert.AreEqual(0, FFlock.FlyingCount, 'None flies');
+  Assert.AreEqual(-1, FFlock.Escort, 'No escort');
+  for var i := 1 to 100 do
+    Step;
+  Assert.AreEqual(0, FFlock.FlyingCount, 'None comes in');
+  FFlock.Start(Count);
+  Step;
+  Assert.AreEqual(1, FFlock.FlyingCount, 'Started anew');
+end;
+
+procedure TBargeFlockTests.TestSameDiceSameFlight;
+begin
+  var Ride := TBargeRide.Create;
+  var Twin := TBargeFlock.Create(Pool, Seed);
+  try
+    Ride.Station;
+    FFlock.Start(Count);
+    Twin.Start(Count);
+    for var i := 1 to 3000 do
+    begin
+      Step;
+      Ride.Tick(0, False, True);
+      var Main: TMainBarge;
+      Main.Left := Ride.Left;
+      Main.Top := MainLine + Ride.Dip;
+      Main.Width := BargeLength;
+      Twin.Tick(Main);
+      for var j := 0 to FFlock.PoolSize - 1 do
+      begin
+        Assert.IsTrue(FFlock.Flying(j) = Twin.Flying(j),
+          Format('Tick %d, barge %d: flies', [i, j]));
+        Assert.AreEqual(FFlock.Left(j), Twin.Left(j), UnitSlack,
+          Format('Tick %d, barge %d: across', [i, j]));
+        Assert.AreEqual(FFlock.Top(j), Twin.Top(j), UnitSlack,
+          Format('Tick %d, barge %d: its deck', [i, j]));
+      end;
+    end;
+  finally
+    Twin.Free;
+    Ride.Free;
+  end;
+end;
+
+procedure TBargeFlockTests.TestASmallPoolFliesWhatItHas;
+begin
+  FFlock.Free;
+  FFlock := TBargeFlock.Create([104.0], Seed);
+  FFlock.Start(Count);
+  for var i := 1 to 2000 do
+  begin
+    Step;
+    Assert.IsTrue(FFlock.FlyingCount <= 1, 'Tick ' + i.ToString);
+  end;
+  Assert.AreEqual(0, FFlock.Escort, 'The one barge escorts');
+  Assert.IsTrue(FFlock.Flying(0), 'And flies');
+  FFlock.Free;
+  FFlock := TBargeFlock.Create(nil, Seed);
+  FFlock.Start(Count);
+  for var i := 1 to 100 do
+    Step;
+  Assert.AreEqual(0, FFlock.FlyingCount, 'No pool, no barge');
+end;
+
+procedure TBargeFlockTests.TestWithinJumpIsAJumpUpOrDownAndAcross;
+var
+  Main: TMainBarge;
+begin
+  Main.Left := 176;
+  Main.Top := MainLine;
+  Main.Width := BargeLength;
+  Assert.IsTrue(WithinJump(Main, 200, MainLine - 64, 67), 'Over it, a jump up');
+  Assert.IsTrue(WithinJump(Main, 200, MainLine - NeighbourRise, 67),
+    'The highest it allows');
+  Assert.IsFalse(WithinJump(Main, 200, MainLine - NeighbourRise - 1, 67),
+    'Higher');
+  Assert.IsTrue(WithinJump(Main, 200, MainLine + 64, 67), 'A drop down');
+  Assert.IsTrue(WithinJump(Main, 336 + NeighbourGap, MainLine - 32, 67),
+    'The farthest right');
+  Assert.IsFalse(WithinJump(Main, 337 + NeighbourGap, MainLine - 32, 67),
+    'Farther right');
+  Assert.IsTrue(WithinJump(Main, 176 - NeighbourGap - 67, MainLine - 32, 67),
+    'The farthest left');
+  Assert.IsFalse(WithinJump(Main, 175 - NeighbourGap - 67, MainLine - 32, 67),
+    'Farther left');
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TBargeFlockTests);
+
+end.

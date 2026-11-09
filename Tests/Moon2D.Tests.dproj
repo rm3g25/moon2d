@@ -99,6 +99,7 @@
         <DCCReference Include="Game\Tests.Game.Belt.pas"/>
         <DCCReference Include="Game\Tests.Game.Road.pas"/>
         <DCCReference Include="Game\Tests.Game.Barge.pas"/>
+        <DCCReference Include="Game\Tests.Game.Flock.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Render\Tests.Render.Monochrome.pas"/>

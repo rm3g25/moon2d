@@ -7,6 +7,30 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-10: **3.0.120 - the barges of the air fight (stage 18d-1).** The
+first step of the Ram's air fight. The hero aboard at its station, the
+barge leaves it and drifts on a slow wide loop of its own - a figure of
+eight lying on its side, across the middle three fifths of the screen and
+half a cell up and down, never stopping, on without him (`TBargeRide`,
+`bsDrift`, `Dip`, `WayDown`); the checkpoint rides its deck up and down
+too. Round it flies a flock of small barges (`Game.Flock`, `TBargeFlock`;
+the pads `s13-flock-1`..`-9` of level2.json, stowed, `barge-2`..`barge-4`
+with their own rigs): two at once for now, each in from beyond the right
+edge fast and braking to its path's pace, out past the left edge and
+replaced after a second or two. One is always the escort - over the main
+barge, a jump up, swaying along it - so a floor is within his jump at all
+times; it is relieved by the next to come in and let go. The others fly a
+lane with a swell, a few loops in place, a climb or a descent, or a pass
+straight through. Riders are carried as on pads, across and now up and
+down (`TPad.Carry(wayX, wayY)`); bullets burst on the barges both ways.
+The Ram only hangs, as before. After the first live run, in the same
+version: the pads are drawn between the ticks and in fractions of a unit
+(`TPad.Glide`, `Lift` with the deck's fraction), with their riders
+(`DeckSlide`, the renderer's `FineX`) and their lamps (`TParentStand.Glide`)
+- the barges, and every moving pad, no longer jerk a whole unit at a time.
+Tests: `TBargeFlockTests` 17, new; `TBargeRideTests` +8 and 2 reworked;
+`TPadWorldTests` +3.
+
 2026-11-09: **3.0.119 - the cliff and the barge's lights (stage 17b-2).**
 After 3.0.118 was played: no landslide - the road's tiles no longer break
 off and the pier no longer collapses; the chase goes on at its cruise

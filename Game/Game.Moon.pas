@@ -31,7 +31,7 @@ uses
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
-  Game.HullLives, Game.Road, Game.Barge,
+  Game.HullLives, Game.Road, Game.Barge, Game.Flock,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -198,6 +198,10 @@ type
     FRoadPad: TPad;
     FBarge: TBargeRide;
     FBargePad: TPad;
+    // The small barges round the barge in the air fight, and their pads in
+    // the order the flock knows them; born with the level
+    FFlock: TBargeFlock;
+    FFlockPads: TArray<TPad>;
     // The orb launcher is his: a death comes back aboard the barge, the
     // hull hanging, the world moving - point B
     FPastLauncher: Boolean;
@@ -382,6 +386,8 @@ type
     procedure BeginPier;
     procedure ClearPier;
     procedure TickPier(AWay: Double);
+    procedure BuildFlock;
+    procedure TickFlock;
     procedure DozeSpentPier;
     procedure PinPierCheckpoint;
     procedure PlaceAtCheckpoint;
@@ -467,8 +473,9 @@ type
     procedure AwardRandomBonus;
     procedure ActivateQueuedBonus;
     procedure AdvanceBriefing;
-    procedure DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
-    procedure DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
+    procedure DrawHeroInShroud(AShake: TSdlPoint; ASlide, ALift,
+      AAlpha: Single);
+    procedure DrawHeroSilhouette(AShake: TSdlPoint; ASlide, ALift: Single);
     procedure DrawBackdrop(AAlpha: Single);
     procedure DrawFangs(AAlpha: Single);
     function SkyOrigin(AAlpha: Single): TSdlFPoint;
@@ -575,6 +582,8 @@ const
   // the pier's tiles
   RoadPadTag = 's13-road';
   BargePadTag = 's13-barge';
+  // The small barges of the air fight, numbered from 1 in the level file
+  FlockPadTagPattern = 's13-flock-%d';
   RoadTileSprite = 'tek-road-tile';
   // The grid row of the road, erased as it runs out
   RoadRow = ScreenRows - 1;
@@ -870,6 +879,7 @@ begin
   FOrbShots.Free;
   FBelt.Free;
   FBarge.Free;
+  FFlock.Free;
   FRoadPainter.Free;
   FRoad.Free;
   FRamPainter.Free;
@@ -1013,6 +1023,7 @@ begin
   // The air phase's pads, on the level that has them
   FRoadPad := FPads.FindTagged(RoadPadTag);
   FBargePad := FPads.FindTagged(BargePadTag);
+  BuildFlock;
   FreeAndNil(FRoadPainter);
   if FRoadPad <> nil then
     FRoadPainter := TRoadPainter.Create(FObjectCache.Get(RoadTileSprite));
@@ -2031,6 +2042,7 @@ begin
     AStand.Screen := Pad.Screen;
     AStand.X := Pad.Left;
     AStand.Y := Round(Pad.Top) + Pad.Lift(1);
+    AStand.Glide := Pad.Glide(0);
     // A broken pad puts out its own rigs and lights those of its failing
     // look; a dormant pad has none lit
     AStand.Alive := (Pad.Failed = FailingLook) and not Pad.Dormant;
@@ -3189,12 +3201,66 @@ begin
 end;
 
 // The whole road again, of the grid; the pads of the air phase back to
-// the level file's by the pads' own rewind
+// the level file's by the pads' own rewind, the small barges grounded
 procedure TMoonGame.ClearPier;
 begin
   FRoad.Clear;
   FBarge.Clear;
+  FFlock.Clear(RollDiceSeed);
+  for var Pad in FFlockPads do
+    Pad.Doze;
   FLevel.RestoreRows;
+end;
+
+// The pool of the small barges: the pads tagged s13-flock-1, -2 and on, as
+// many as the level file has in a row; none on a level without the air
+// fight
+procedure TMoonGame.BuildFlock;
+begin
+  FFlockPads := [];
+  var Widths: TArray<Double> := [];
+  var Pad := FPads.FindTagged(Format(FlockPadTagPattern, [1]));
+  while Pad <> nil do
+  begin
+    FFlockPads := FFlockPads + [Pad];
+    Widths := Widths + [Double(Pad.Placement.Width)];
+    Pad := FPads.FindTagged(Format(FlockPadTagPattern, [Length(FFlockPads) + 1]));
+  end;
+  FFlock.Free;
+  FFlock := TBargeFlock.Create(Widths, RollDiceSeed);
+end;
+
+// The small barges, from the moment the barge drifts - the fight on: each
+// pad of the pool where the flock flies it, woken as it comes in, put to
+// sleep once it is gone. The barge's deck is where the pier left it and
+// as far down as its drift has taken it.
+procedure TMoonGame.TickFlock;
+var
+  Main: TMainBarge;
+begin
+  if FBarge.Stage = bsDrift then
+    FFlock.Start(FlockCounts[1]);
+  Main.Left := FBarge.Left;
+  Main.Top := RamFloorY + FBarge.Dip;
+  Main.Width := BargeLength;
+  FFlock.Tick(Main);
+  for var i := 0 to High(FFlockPads) do
+  begin
+    var Pad := FFlockPads[i];
+    if not FFlock.Flying(i) then
+    begin
+      if not Pad.Dormant then
+        Pad.Doze;
+      Continue;
+    end;
+    if Pad.Dormant then
+    begin
+      Pad.Wake;
+      Pad.FlyTo(FFlock.Left(i), FFlock.Top(i), 0);
+      Continue;
+    end;
+    Pad.Carry(FFlock.WayX(i), FFlock.WayY(i));
+  end;
 end;
 
 // The pier's pad is as long as the pier and rides with it; gone once the
@@ -3212,8 +3278,8 @@ begin
 end;
 
 // Before the pads' tick, which carries their riders: the pier and its pad
-// ride the belt, the barge goes its own way. The hero aboard, the belt
-// runs up to the flight's pace
+// ride the belt, the barge goes its own way, and the small barges theirs.
+// The hero aboard, the belt runs up to the flight's pace
 procedure TMoonGame.TickPier(AWay: Double);
 begin
   if not FPastLauncher or (FRoadPad = nil) or (FBargePad = nil) then
@@ -3222,9 +3288,10 @@ begin
   FRoadPad.Carry(AWay);
   DozeSpentPier;
   var Boarded := FBarge.Tick(FRoad.PierRight, FRoad.PierStands, HeroAboard);
-  FBargePad.Carry(FBarge.Way);
+  FBargePad.Carry(FBarge.Way, FBarge.WayDown);
   if Boarded then
     FBelt.Run(BeltFlight);
+  TickFlock;
   PinPierCheckpoint;
 end;
 
@@ -3241,7 +3308,7 @@ begin
   if BargeAway and FRoad.PierStands then
     Middle := Min(FRoad.PierRight, Double(ScreenWidth)) - TileSize / 2;
   FCheckpointX := EnsureRange(Middle - HeroSize / 2, 0, ScreenWidth - HeroSize);
-  FCheckpointY := RamFloorY - CheckpointDrop;
+  FCheckpointY := RamFloorY + FBarge.Dip - CheckpointDrop;
 end;
 
 procedure TMoonGame.PlaceAtCheckpoint;
@@ -4667,11 +4734,13 @@ begin
 end;
 
 // The hero and his shroud, on the hero's shake channel, lifted with the
-// deck under his feet
-procedure TMoonGame.DrawHeroInShroud(AShake: TSdlPoint; ALift, AAlpha: Single);
+// deck under his feet and taken along with it across
+procedure TMoonGame.DrawHeroInShroud(AShake: TSdlPoint; ASlide, ALift,
+  AAlpha: Single);
 begin
   FShroudPainter.DrawUnder(FDynamics.Canvas, AShake, ALift, AAlpha);
   FSprites.Origin := AShake;
+  FSprites.FineX := ASlide;
   FSprites.FineY := ALift;
   if not FShroud.Assembling then
     FHero.Draw(FSprites);
@@ -4679,19 +4748,20 @@ begin
   // The strips make the body, the arm stays his own
   if FShroud.Assembling then
     FHero.DrawArm(FSprites);
+  FSprites.FineX := 0;
   FSprites.FineY := 0;
   FShroudPainter.DrawOver(FDynamics.Canvas, AShake, ALift, AAlpha);
 end;
 
 // The hero as the burst's bare figure: the mask of his frame, where the
 // frame stands
-procedure TMoonGame.DrawHeroSilhouette(AShake: TSdlPoint; ALift: Single);
+procedure TMoonGame.DrawHeroSilhouette(AShake: TSdlPoint; ASlide, ALift: Single);
 var
   Figure: TBurstFigure;
 begin
   var Pose := FHero.Pose;
   Figure.Mask := FShroudPainter.MaskOf(Pose.Frame);
-  Figure.Frame.X := Pose.Left + AShake.X;
+  Figure.Frame.X := Pose.Left + AShake.X + ASlide;
   Figure.Frame.Y := Pose.Top + AShake.Y + ALift;
   Figure.Frame.W := HeroSize;
   Figure.Frame.H := HeroSize;
@@ -4783,13 +4853,14 @@ begin
         var HeroShake := FShake.Offset(scHero);
         // Held in the throw, he sways: drawn by it, as a deck lifts him
         var HeroLift := FHero.DeckLift(AAlpha) + FThrow.Sway(AAlpha);
+        var HeroSlide := FHero.DeckSlide(AAlpha);
         FOrbs.DrawVeil(FDynamics.Canvas, HeroShake);
         // The burst's inhale: a bare figure stands for the hero and his
         // shroud
         if FOrbs.Inhaling then
-          DrawHeroSilhouette(HeroShake, HeroLift)
+          DrawHeroSilhouette(HeroShake, HeroSlide, HeroLift)
         else
-          DrawHeroInShroud(HeroShake, HeroLift, AAlpha);
+          DrawHeroInShroud(HeroShake, HeroSlide, HeroLift, AAlpha);
         FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
           AAlpha);
         FSpherePainter.DrawOver(FDynamics.Canvas, HeroCenter, HeroShake, AAlpha);

@@ -484,3 +484,74 @@ Left to the eye: the picture - the mast between the hull's halves, the
 clips, the sway, the lamps, the honeycomb along the outline; the throw
 (`THero` needs a renderer); the sounds and the music handed over; the
 numbers of the entrance and the patrol.
+
+## Game.Barge
+
+State: written, 19 tests; the drift came with 3.0.120 (stage 18d-1),
+the rest with 3.0.118-3.0.119. Needs no stage: `TBargeRide` only counts
+where its left edge and its deck are. The unit is tried by
+`Tests\Game\Tests.Game.Barge.pas`, fixture `TBargeRideTests`. The table
+holds the drift; the mooring, the cast-off and the station are told in the
+unit's header.
+
+Numbers spelled, as decided: the drift across the middle three fifths of
+the screen (its middle between a fifth and four fifths), half a cell up
+and down. Not spelled: the lap, the start, the pace.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBoardedItCastsOffToItsStation` | reworked: at the station with him aboard, it drifts | the fight never starts from the cast-off |
+| `TestStationIsThereAtOnce` | reworked: held with nobody aboard, nothing told when he boards | point B tells a boarding and runs the belt up again |
+| `TestNobodyAboardItHoldsItsStation` | `Station`, 200 ticks with nobody aboard: `bsStation`, at `StationLeft`, `Dip` 0 | the barge drifts off before the hero has landed at point B |
+| `TestAboardAtItsStationItDrifts` | aboard: `bsDrift` the same tick; 100 ticks on over a cell off the station | the fight's start does not move the barge |
+| `TestDriftSetsOffGentlyFromTheStation` | the first tick of the drift at the station and on its line; the way across and down changes by less than 0.1 a tick over the first 100 ticks | the barge jerks off under the hero |
+| `TestDriftKeepsToTheMiddleThreeFifths` | two laps: the middle between a fifth and four fifths of the screen, past a quarter and three quarters; `Dip` within half a cell, past a quarter cell both ways | the loop leaves the screen, crowds the edges, or is too small to be felt |
+| `TestDriftIsNeverStillForLong` | from tick 100, two laps: never 33 ticks in a row slower than 0.2 a tick | it stands at the ends of its loop |
+| `TestDriftGoesOnWithoutHim` | aboard 10 ticks, then 100 with nobody aboard: still `bsDrift`, over a cell farther | a hero who jumps off stops his harbour |
+| `TestWayDownIsWhatItWentThisTick` | 400 ticks: `WayDown` is `Dip` less the last tick's, `Way` is `Left` less the last tick's | the pad is carried by another step than the barge's: the hero slides or drops |
+| `TestClearEndsTheDrift` | a clear mid-drift: away, `Dip` 0; `Station` - at the station on its line | a death keeps the barge where the drift left it |
+
+Left to the eye: the barge's pad and its riders going up and down with it
+(`TickPier`), the checkpoint on its deck.
+
+## Game.Flock
+
+State: written, 17 tests (3.0.120, stage 18d-1). Needs no stage:
+`TBargeFlock` only counts places. The unit is tried by
+`Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
+
+Shared: the main barge is `Game.Barge`'s own, at its station and drifting
+with the hero aboard, its deck on the road's line 352; the pool is nine
+barges, three each of 67, 104 and 123 units; the dice 7; the count 2. "A
+long run" is 8000 ticks, four minutes. `Step` ticks the main barge, then
+the flock.
+
+Numbers spelled, as decided: a gone barge replaced after 1-2 s
+(`ReplaceGapLeast`, `ReplaceGapMost` read from the unit); the count of the
+first tier, 2. Not spelled: the paces, the paths, the escort's place - the
+tests bound them loosely or read the unit's constants.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNothingFliesTillStarted` | 200 ticks unstarted: not `Started`, none flies, no escort | barges fly in before the fight starts |
+| `TestTheEscortComesFirstAtOnce` | `Start(2)` and a tick: one flies, it is the escort, on `fpEscort` | the first barge is a free one: no floor bound to the main barge |
+| `TestTheNextComesAfterAGap` | the second comes 33 to 67 ticks after the first | both come in at once, or the second never does |
+| `TestNeverMoreThanTheCount` | a long run: never more than two | a relief or a replacement overfills the sky |
+| `TestStartedOnceTillAClear` | `Start(4)` after `Start(2)`: never more than two in 2000 ticks | a second start changes the count mid-fight |
+| `TestComesInFromBeyondTheRightEdgeFastAndBrakes` | a long run, every barge that comes in: its first tick beyond the right edge, its second faster left than 2.5 a tick, 165 ticks in slower than 4.5; over six come in | a barge appears on the screen, drifts in slowly, or never brakes |
+| `TestLeavesOnlyPastTheLeftEdge` | a long run: every barge that stops flying is wholly past the left edge; over four leave | a barge vanishes on the screen, with the hero on it |
+| `TestAGoneBargeIsReplacedSoon` | once full, a long run: never more than 67 ticks in a row short of the count | a gone barge is never replaced |
+| `TestAlwaysABargeWithinJumpOfTheMain` | from the first neighbour (within 330 ticks), a long run: on every tick a flying barge `WithinJump` of the main one | the hero on the main barge has no small barge to jump to - the guarantee |
+| `TestTheEscortKeepsToTheScreen` | from 330 ticks after the first neighbour, a long run: the escort inside the screen | the escort slides off an edge as the main barge swings to it |
+| `TestTheEscortIsRelievedAndLetGo` | a long run: at every change of the escort the old one still flies on a free path and the new one is within the jump; at least two changes | the escort serves forever, vanishes at the hand-over, or hands over from afar |
+| `TestNoneRisesIntoTheRamsBelly` | a long run: every flying barge's deck at 198 or lower down | a lane puts a hero's head into the hanging hull |
+| `TestWayIsWhatItWentThisTick` | 2000 ticks, a barge flying on two ticks running: `WayX`, `WayY` are its step | the pad is carried by another step than the barge's |
+| `TestClearGroundsTheFlock` | a clear mid-fight: not started, none flies, no escort, none comes in 100 ticks; started anew, one at once | a death leaves barges in the sky, or the flock never starts again |
+| `TestSameDiceSameFlight` | two flocks of the same dice over two main barges alike, 3000 ticks: the same barges fly at the same places | the flock reads a clock or `Random` |
+| `TestASmallPoolFliesWhatItHas` | a pool of one: never more than one, it escorts and flies; a pool of none: none flies | a short pool indexes past its end |
+| `TestWithinJumpIsAJumpUpOrDownAndAcross` | over the main barge at 64 and at 80 up - within, 81 - not; 64 down - within; 64 across either side - within, 65 - not | the guarantee is measured with the wrong sign or from the wrong edge |
+
+Left to the eye: the pads following the barges (`TickFlock`), the paths'
+feel, the hand-over's look, the rigs of the short barges, a hero pushed off
+a barge leaving past the left edge.
+

@@ -75,7 +75,8 @@ Tests\
     Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
     Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away
-    Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station
+    Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station, its drift
+    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
     Tests.Game.Shroud.pas

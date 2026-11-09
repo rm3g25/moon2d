@@ -1,10 +1,11 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-09: **3.0.119** - arena 3 (the finale of level 2),
-after stage 17b-2: the orb launcher taken, the chase goes on to a cliff
-with the barge a cell past it - the hero aboard it, the world at the
-flight's pace, the barge's lamps in turn and its turbine burning, point B
-aboard; the air fight (18d) designed, not built. In work: arena 3, its folder `docs/mechanics/arena-3/` (the index `README.md`; the air fight `ram-air.md`);
+Status at 2026-11-10: **3.0.120** - arena 3 (the finale of level 2), the
+Ram's air fight, step 18d-1 built: the hero aboard, the barge drifts on its
+own loop and a flock of two small barges flies round it - an escort always
+within his jump, the other on a free path, each in from the right fast and
+out past the left edge; the Ram only hangs. Next: 18d-2, the magnet and the
+heat. In work: arena 3, its folder `docs/mechanics/arena-3/` (the index `README.md`; the air fight `ram-air.md`);
 what each version brought, a paragraph each - `CHANGELOG.md`. The status here is a few
 lines: the version, what is in work, where to read; the details of a
 version live in CHANGELOG, not here.
@@ -75,7 +76,8 @@ about responsibility, not paths.
 | Game.Capsules | The shuttle's medkits in the Ram fight (3.0.84): TShuttleCapsules - a capsule's fall to a mark with braking, the landing, the shell opening, the medkit's mark; since 3.0.94 rides with the chase belt (Ride); TCapsulePainter - hull, cross, beacon, flare and shell halves in code; the game puts the medkit on the mark |
 | Game.Belt | The treadmill of the Ram chase (3.0.86): only the road's motion - start and stop as a smooth step over 2 s, the tick speed, the distance travelled; knows neither the Ram, nor the hero, nor the picture; the game carries the world and moves the road; since 3.0.118 a run to any pace (Run) - the flight with the hero aboard the barge (BeltFlight, 4.0 since 3.0.119) |
 | Game.Road | The road of the chase running out (3.0.118, a cliff since 3.0.119): its end comes in from beyond the right edge and the pier rides the belt away left; TRoadEnd - its place and its end, TRoadPainter - its tiles; the floor is a pad the game carries with it, the grid's row erased (TLevel.EraseRow); knows neither the belt nor the hero |
-| Game.Barge | The TeK hover-barge of the air phase (3.0.118): TBargeRide - hangs a jump past the pier's end from the take and rides in and on with it, no farther left than its floor; the hero aboard, casts off to its station in the middle; the pad that is the barge is Pads.World's, carried by the way this gives (TPad.Carry); its lamps and its fire are the rig `barge` of level2.json (3.0.119) |
+| Game.Barge | The TeK hover-barge of the air phase (3.0.118): TBargeRide - hangs a jump past the pier's end from the take and rides in and on with it, no farther left than its floor; the hero aboard, casts off to its station in the middle; the pad that is the barge is Pads.World's, carried by the way this gives (TPad.Carry); its lamps and its fire are the rig `barge` of level2.json (3.0.119); since 3.0.120 the drift - aboard at its station it flies a lying figure of eight across the middle three fifths and half a cell up and down (`Dip`, `WayDown`) |
+| Game.Flock | The small barges of the air fight (3.0.120): TBargeFlock - a pool by widths, a count started once the main barge drifts; the escort over the main barge within the jump, relieved and let go; free paths (lane, loop, climb, pass) between the Ram's belly and the escort; in from the right fast and braking, out past the left edge, replaced after a gap; `WithinJump`. Knows no pads: the game moves the pads `s13-flock-N` by it (`TickFlock`) |
 | Game.FarPlane | How far each layer of the chase's far plane has travelled (3.0.88): the bench's rules tick for tick - the tunnel and the city until the rock leaves, a smooth way out to cruise, the city's brake at the end of the band, the ridge at a share of the city, the ground and the fangs (3.0.89) at their own speed, all at a share of the belt's speed; knows neither the belt nor the hero; since 3.0.92 Clock - the city's clock, ticks from the road's first motion; since 3.0.93 ClockAt(alpha) - the clock between ticks, like OffsetsAt |
 | Game.Fangs | The chase's fangs (3.0.89): TFangRow - a row of basalt spurs by the run of their layer, every number from the dice, tall ones rarely and never two on a screen, none hangs; TFangPainter - a kit of level objects, a tint by the tunnel's leaving, a mirror |
 | Pads.Drift | The chase's pads (3.0.87): from the screen's pool feeds them in from beyond the right edge by the road's run, in groups - a lone pad or a random climb to the hatch's height, a safety climb, no more than 10 at once; a medkit on the middle pad of one climb in three - gives the mark to the game (`TDriftCue`); since 3.0.97 at the game's word - the hunt wave, three dense rows, flying in at once; since 3.0.98 only on the pass, on the decks of a climb, rows from three sides, groups denser after it; knows neither the belt, nor the hero, nor the monsters |
