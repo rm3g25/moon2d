@@ -277,6 +277,10 @@ type
     // Units down the picture is drawn: the bob and the sag of the deck
     // underfoot, which the feet do not feel; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
+    // Units across the picture is drawn past his whole unit on a deck: the
+    // fraction of a unit he stands past it and the deck's Glide, AAlpha as
+    // the deck's - he goes with a deck on the move between the ticks
+    function DeckSlide(AAlpha: Single): Single;
     function Pose: THeroPose;
     // DEBUGKEYS live tuner for the weapon-4 muzzle (NumPad, values in
     // the window caption - same workflow as the crosshair calibration)
@@ -1366,6 +1370,14 @@ begin
   if Deck = nil then
     Exit(0);
   Result := Deck.Lift(AAlpha);
+end;
+
+function THero.DeckSlide(AAlpha: Single): Single;
+begin
+  var Deck := DeckUnderFeet;
+  if Deck = nil then
+    Exit(0);
+  Result := FX - Round(FX) + Deck.Glide(AAlpha).X;
 end;
 
 // Down through the deck underfoot - from a stand or a walk, the way a

@@ -188,6 +188,9 @@ type
     // spanning AX, the inset edge the oracle looks at
     function FloorAhead(ACol: Integer; AX: Double): Boolean;
     function StandsOnDeck: Boolean;
+    // The deck the body is drawn standing on; nil in flight or for one that
+    // does not fall
+    function DrawnDeck: TPad;
     procedure FallIfUnsupported;
     procedure RideDeck;
     procedure CarryX(AWay: Double);
@@ -330,6 +333,9 @@ type
     // Units down the picture is drawn: the bob and the sag of the deck
     // underfoot; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
+    // Units across the picture is drawn past its whole unit on a deck: the
+    // fraction of a unit it stands past it and the deck's Glide
+    function DeckSlide(AAlpha: Single): Single;
     function HitWithin(ATicks: Integer): Boolean;
     // A throw along X: the body goes ThrowStep units a tick until the way
     // is spent or a wall stands in it. A throw on top of a throw adds up.
@@ -1155,15 +1161,28 @@ begin
   end;
 end;
 
-function TMonster.DeckLift(AAlpha: Single): Single;
+function TMonster.DrawnDeck: TPad;
 begin
   if (FAction = maFlying) or not FDef.AffectedByGravity then
-    Exit(0);
-  var Deck := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
+    Exit(nil);
+  Result := FPads.DeckUnder(FScreen, FX + MonsterBound + DeckEdgeInset,
     FX + SpriteSize - MonsterBound - DeckEdgeInset, FY);
+end;
+
+function TMonster.DeckLift(AAlpha: Single): Single;
+begin
+  var Deck := DrawnDeck;
   if Deck = nil then
     Exit(0);
   Result := Deck.Lift(AAlpha);
+end;
+
+function TMonster.DeckSlide(AAlpha: Single): Single;
+begin
+  var Deck := DrawnDeck;
+  if Deck = nil then
+    Exit(0);
+  Result := FX - Round(FX) + Deck.Glide(AAlpha).X;
 end;
 
 function TMonster.CanGoLeftEdgeAware: Boolean;
@@ -2378,9 +2397,11 @@ begin
     begin
       if (Monster.Screen <> AScreen) or (IsLoot(Monster) <> LootPass) then
         Continue;
+      ASprites.FineX := Monster.DeckSlide(AAlpha);
       ASprites.FineY := Monster.DeckLift(AAlpha);
       Monster.Draw(ASprites, AAlpha);
     end;
+  ASprites.FineX := 0;
   ASprites.FineY := 0;
 end;
 

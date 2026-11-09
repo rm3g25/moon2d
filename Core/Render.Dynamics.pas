@@ -76,10 +76,14 @@ type
 
   // A parent looked up this tick: its screen, the top-left corner of its
   // picture, whether it still lives and how hard it works, 0..1 - a pad
-  // flying, or about to leave its place, works at 1; Spin only when Spins
+  // flying, or about to leave its place, works at 1; Spin only when Spins.
+  // Glide - where its corner stood a tick ago, from where it stands now:
+  // between the ticks its children go that way back, as its picture does;
+  // zero for a parent drawn on the tick.
   TParentStand = record
     Screen: Integer;
     X, Y: Single;
+    Glide: TSdlFPoint;
     Alive: Boolean;
     Effort: Single;
     Spins: Boolean;
@@ -110,6 +114,8 @@ type
       Spins: Boolean;
       Spin: TParentSpin;
       Depth: TParentDepth;
+      // Where the parent stood a tick ago, from where it stands
+      Glide: TSdlFPoint;
     end;
 
     TPlace = record
@@ -340,6 +346,7 @@ begin
   APlace.Stands[0].Spins := Parent.Spins;
   APlace.Stands[0].Spin := Parent.Spin;
   APlace.Stands[0].Depth := Parent.Depth;
+  APlace.Stands[0].Glide := Parent.Glide;
   APlace.ParentAlive := Parent.Alive;
   APlace.ParentEffort := Parent.Effort;
 end;
@@ -355,8 +362,11 @@ begin
   var Placement := APlace.DynamicObject.Placement;
   var Depth := AStand.Depth;
   var Shrunk := Depth.Shrink * Depth.SunkAt(AAlpha);
-  Result.X := AStand.OriginX + (Depth.Pivot.X - Placement.X) * Shrunk;
-  Result.Y := AStand.OriginY + (Depth.Pivot.Y - Placement.Y) * Shrunk;
+  var Back := 1 - AAlpha;
+  Result.X := AStand.OriginX + AStand.Glide.X * Back +
+    (Depth.Pivot.X - Placement.X) * Shrunk;
+  Result.Y := AStand.OriginY + AStand.Glide.Y * Back +
+    (Depth.Pivot.Y - Placement.Y) * Shrunk;
   if APlace.Craft <> nil then
   begin
     var Corner := APlace.Craft.CornerAt(AAlpha);

@@ -5,7 +5,9 @@
   puts to sleep is gone the same way, from among the screen's standing
   pads too, and a rewind gives it back as the file has it. A stowed pad
   sleeps with no scene to wake it, till the game does. A pad the game
-  carries takes its riders along.
+  carries takes its riders along, across and up and down; between the
+  ticks it is drawn on its way from where it stood a tick ago, and its
+  deck in fractions of a unit.
 
   The pad names no sprite, so the world asks no art for it, as for a deck
   of the collision grid: no stage is needed. The level wakes a dormant
@@ -60,6 +62,12 @@ type
     procedure TestStowedPadSleepsTillTheGameWakesIt;
     [Test]
     procedure TestCarriedPadTakesItsRidersAlong;
+    [Test]
+    procedure TestCarriedAcrossAndDownTakesItsRidersAlong;
+    [Test]
+    procedure TestCarriedPadGlidesBetweenTheTicks;
+    [Test]
+    procedure TestLiftDrawsTheDeckInFractionsOfAUnit;
   end;
 
 implementation
@@ -360,6 +368,75 @@ begin
     Assert.IsTrue(FWorld.DeckCarrying(Screen, Left, Left + FeetWidth,
       FeetY) = Pad, Format('Tick %d: feet where the deck stood a tick ago ' +
       'are carried', [i]));
+  end;
+end;
+
+procedure TPadWorldTests.TestCarriedAcrossAndDownTakesItsRidersAlong;
+const
+  WayX: Double = -2.0;
+  WayY: Double = 1.5;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  for var i := 1 to 5 do
+  begin
+    var Left := FeetLeft(Pad);
+    var FeetY := Pad.Top;
+    Pad.Carry(WayX, WayY);
+    TickWorld(1);
+    Assert.AreEqual(HomeX + WayX * i, Pad.Left, UnitSlack,
+      Format('Tick %d: where it is across', [i]));
+    Assert.AreEqual(HomeY + WayY * i, Pad.Top, UnitSlack,
+      Format('Tick %d: where its deck is', [i]));
+    Assert.AreEqual(FeetY, Pad.PrevTop, UnitSlack,
+      Format('Tick %d: its deck a tick ago', [i]));
+    Assert.IsTrue(FWorld.DeckCarrying(Screen, Left, Left + FeetWidth,
+      FeetY) = Pad, Format('Tick %d: feet where the deck stood a tick ago ' +
+      'are carried', [i]));
+  end;
+end;
+
+procedure TPadWorldTests.TestCarriedPadGlidesBetweenTheTicks;
+const
+  WayX: Double = -2.0;
+  WayY: Double = 1.5;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  Assert.AreEqual(0.0, Double(Pad.Glide(0).X), UnitSlack, 'Still: no glide across');
+  Assert.AreEqual(0.0, Double(Pad.Glide(0).Y), UnitSlack, 'Still: no glide down');
+  Pad.Carry(WayX, WayY);
+  TickWorld(1);
+  Assert.AreEqual(-WayX, Double(Pad.Glide(0).X), UnitSlack,
+    'At the last tick: where it stood across');
+  Assert.AreEqual(-WayY, Double(Pad.Glide(0).Y), UnitSlack,
+    'At the last tick: where its deck stood');
+  Assert.AreEqual(-WayX / 2, Double(Pad.Glide(0.5).X), UnitSlack,
+    'Halfway across');
+  Assert.AreEqual(-WayY / 2, Double(Pad.Glide(0.5).Y), UnitSlack,
+    'Halfway down');
+  Assert.AreEqual(0.0, Double(Pad.Glide(1).X), UnitSlack, 'At this tick, across');
+  Assert.AreEqual(0.0, Double(Pad.Glide(1).Y), UnitSlack, 'At this tick, down');
+  Assert.AreEqual(Pad.Top - WayY / 2, Round(Pad.Top) + Pad.Lift(0.5), UnitSlack,
+    'The deck drawn halfway between where it stood and stands');
+end;
+
+procedure TPadWorldTests.TestLiftDrawsTheDeckInFractionsOfAUnit;
+const
+  WayY: Double = 0.3;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  for var i := 1 to 10 do
+  begin
+    Pad.Carry(0, WayY);
+    TickWorld(1);
+    Assert.AreEqual(Pad.Top, Round(Pad.Top) + Pad.Lift(1), UnitSlack,
+      Format('Tick %d: the deck drawn where it stands, not on a whole unit',
+      [i]));
   end;
 end;
 

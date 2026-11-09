@@ -143,7 +143,7 @@ type
   private
     FRenderer: PSdlRenderer;
     FOrigin: TSdlPoint;
-    FFineY: Single;
+    FFineX, FFineY: Single;
     FWidth: Integer;
   public
     constructor Create(const ARenderer: PSdlRenderer;
@@ -154,9 +154,12 @@ type
     // zero; the caller sets it per layer, nothing here resets it.
     property Origin: TSdlPoint read FOrigin write FOrigin;
     // A fraction of a unit under Origin.Y for Draw, DrawRotated,
-    // DrawTurned and DrawSized: a body riding a swaying pad sways with it,
-    // not in whole units. The caller puts it back to zero.
+    // DrawTurned, DrawSized and DrawHanging: a body riding a swaying pad
+    // sways with it, not in whole units. The caller puts it back to zero.
     property FineY: Single read FFineY write FFineY;
+    // The same across, past Origin.X: a body riding a pad on the move goes
+    // with it between the ticks
+    property FineX: Single read FFineX write FFineX;
 
     // PutStaticSprite: draw at a sprite-grid cell, forced to 32x32.
     procedure DrawCell(ATexture: PSdlTexture; AGridX, AGridY: Integer);
@@ -522,7 +525,7 @@ procedure TSpriteRenderer.Draw(ATexture: PSdlTexture; AX, AY: Integer;
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := AX + FOrigin.X;
+  Dest.X := AX + FOrigin.X + FFineX;
   Dest.Y := AY + FOrigin.Y + FFineY;
   Dest.W := SpriteSize;
   Dest.H := SpriteSize;
@@ -556,7 +559,7 @@ procedure TSpriteRenderer.DrawRotated(ATexture: PSdlTexture;
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := ACenterX - ASide div 2 + FOrigin.X;
+  Dest.X := ACenterX - ASide div 2 + FOrigin.X + FFineX;
   Dest.Y := ACenterY - ASide div 2 + FOrigin.Y + FFineY;
   Dest.W := ASide;
   Dest.H := ASide;
@@ -572,7 +575,7 @@ procedure TSpriteRenderer.DrawTurned(ATexture: PSdlTexture;
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := ACenter.X - ASide / 2 + FOrigin.X;
+  Dest.X := ACenter.X - ASide / 2 + FOrigin.X + FFineX;
   Dest.Y := ACenter.Y - ASide / 2 + FOrigin.Y + FFineY;
   Dest.W := ASide;
   Dest.H := ASide;
@@ -587,7 +590,7 @@ procedure TSpriteRenderer.DrawSized(ATexture: PSdlTexture;
 var
   Dest: TSdlFRect;
 begin
-  Dest.X := ACenter.X - AWidth / 2 + FOrigin.X;
+  Dest.X := ACenter.X - AWidth / 2 + FOrigin.X + FFineX;
   Dest.Y := ACenter.Y - AHeight / 2 + FOrigin.Y + FFineY;
   Dest.W := AWidth;
   Dest.H := AHeight;
@@ -613,7 +616,7 @@ begin
   Source.Y := TextureHeight - Shown;
   Source.W := TextureWidth;
   Source.H := Shown;
-  Dest.X := ATop.X - AWidth / 2 + FOrigin.X;
+  Dest.X := ATop.X - AWidth / 2 + FOrigin.X + FFineX;
   Dest.Y := ATop.Y + FOrigin.Y + FFineY;
   Dest.W := AWidth;
   Dest.H := AHeight * Shown / TextureHeight;

@@ -695,6 +695,16 @@ are 16 units wide, 8 in from its left edge.
 | `TestFlyingPadCarriesWhatStandsOnIt` | on every tick of the flight, `DeckCarrying` for feet where the deck stood a tick ago gives the pad | the tank falls through the pad that brings it down |
 | `TestRewindPutsTheWokenPadBackToSleep` | woken and halfway through a flight, `Rewind(1)`: `Dormant`, not `Flying`, where the file puts it, no floor and no body | a death leaves the pad of the cordon on the dock, or in the air |
 
+### Carried by the game and drawn between the ticks (3.0.118, 3.0.120)
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestStowedPadSleepsTillTheGameWakesIt` | a stowed pad loads with no scene to wake it, asleep; woken by the game it is a floor and a body; asleep again after a rewind | the air phase's pads are there before the road runs out, or a death leaves them |
+| `TestCarriedPadTakesItsRidersAlong` | carried 2 left a tick, 5 ticks: where it is, `MotionX` is the way, feet where the deck stood are carried | the pier slides from under the hero |
+| `TestCarriedAcrossAndDownTakesItsRidersAlong` | carried 2 left and 1.5 down a tick, 5 ticks: where it is across and down, `PrevTop` the deck a tick ago, feet where it stood are carried | a barge of the air fight drops its rider as it goes up or down |
+| `TestCarriedPadGlidesBetweenTheTicks` | still, `Glide(0)` is nothing; carried 2 left and 1.5 down: `Glide(0)` is back where it stood, `Glide(0.5)` halfway, `Glide(1)` nothing; `Round(Top) + Lift(0.5)` is halfway between where the deck stood and stands | a moving pad is drawn on the tick again: the barges jerk |
+| `TestLiftDrawsTheDeckInFractionsOfAUnit` | carried 0.3 down a tick, 10 ticks: `Round(Top) + Lift(1)` is `Top` | the deck is drawn on a whole unit: a slow pad steps a unit at a time |
+
 Left to the eye: the pad drawn at all only once awake, and the rigs it
 wears going out while it sleeps - the parent the game finds for them
 (`LocateParent` in `Game.Moon`) is not alive while the pad is dormant.

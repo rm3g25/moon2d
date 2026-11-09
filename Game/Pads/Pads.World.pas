@@ -20,7 +20,11 @@
   the bob between ticks too - a sway of a unit and a half in whole units
   would jerk from one to the next. The sag stays on the tick, where the
   lamps hung on the pad read it. The riders are drawn with the Lift of
-  their deck.
+  their deck. A pad on the move is drawn the same way: where it stands in
+  fractions of a unit, and between the ticks on its way from where it
+  stood a tick ago (Glide) - a slow pad drawn in whole units on the tick
+  would step from one to the next. Its riders take the Glide across, and
+  the Lift carries it down; its lamps take it from the game.
 
   A blow - the boss's ram - knocks a pad off its place: a cell along the
   blow, or as far as the walls, the other pads and the caller's fence -
@@ -130,7 +134,8 @@
 
   The game may carry any pad across by hand (Carry), a tick at a time, as
   the road carries a drifter: the riders go with it - the road of the
-  chase running out is one.
+  chase running out is one. It may carry it up and down as well: the
+  barges of the air fight fly so.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -327,7 +332,9 @@ type
     procedure SetAdrift(AX, AY: Double);
     // The pad is carried AWay across this tick, below 0 to the left, its
     // riders with it - as the road carries a drifter; told before the tick
-    procedure Carry(AWay: Double);
+    procedure Carry(AWay: Double); overload;
+    // The same, across and down - below 0 up
+    procedure Carry(AWayX, AWayY: Double); overload;
     // The same, but it flies in to AX, AY from AFrom off its place - from
     // any side - over ATicks, its jets hard, and comes to rest on its place
     // at the road's pace: its place rides the road all the while
@@ -371,10 +378,15 @@ type
     // The body moved ADX, ADY from where it stands now would not cut into
     // AOther's; touching is no cut
     function ClearOf(const AOther: TPad; ADX, ADY: Double): Boolean;
-    // Units down from the deck the pad is drawn at: the sag and the
-    // twitch of this tick and the bob AAlpha of the way from the last
-    // tick to this one
+    // Units down from the deck's whole unit the pad is drawn at: the
+    // fraction of a unit the deck stands past it, the sag and the twitch
+    // of this tick, and the bob and the Glide AAlpha of the way from the
+    // last tick to this one
     function Lift(AAlpha: Single): Double;
+    // How far from where it stands the pad is drawn AAlpha of the way from
+    // the last tick to this one: back toward where it stood a tick ago, all
+    // the way at 0, none at 1
+    function Glide(AAlpha: Single): TSdlFPoint;
     // How far the pad went across this tick
     function MotionX: Double;
     procedure Draw(const ASprites: TSpriteRenderer; AAlpha: Single);
@@ -1127,6 +1139,12 @@ begin
   FPathLeft := FPathLeft + AWay;
 end;
 
+procedure TPad.Carry(AWayX, AWayY: Double);
+begin
+  FPathLeft := FPathLeft + AWayX;
+  FPathTop := FPathTop + AWayY;
+end;
+
 procedure TPad.SetAdriftComing(AX, AY: Double; const AFrom: TSdlFPoint;
   ATicks: Integer);
 begin
@@ -1287,13 +1305,21 @@ end;
 
 function TPad.Lift(AAlpha: Single): Double;
 begin
-  Result := FSag + FPlunge.Dip + FStray.Dip;
+  var Fraction := FTop - Round(FTop);
+  Result := Fraction + Glide(AAlpha).Y + FSag + FPlunge.Dip + FStray.Dip;
   if FPlacement.Bob <= 0 then
     Exit;
   var Time := FClock - 1 + AAlpha;
   var Phase := Time / BobPeriodTicks + FBobX / ScreenWidth;
   var Sway := FPlacement.Bob * Smoothstep(FBobShare);
   Result := Result + Sway * Sin(2 * Pi * Phase);
+end;
+
+function TPad.Glide(AAlpha: Single): TSdlFPoint;
+begin
+  var Back := 1 - AAlpha;
+  Result.X := Back * (FPrevLeft - FLeft);
+  Result.Y := Back * (FPrevTop - FTop);
 end;
 
 function TPad.GetRight: Double;
@@ -1352,7 +1378,7 @@ begin
   var Pivot := Middle;
   Dest.W := FPlacement.Width * Scale;
   Dest.H := FPictureHeight * Scale;
-  Dest.X := Round(FLeft) + Pivot.X * (1 - Scale);
+  Dest.X := FLeft + Glide(AAlpha).X + Pivot.X * (1 - Scale);
   // As the riders are drawn, so the feet do not flicker into the deck
   Dest.Y := Round(FTop) + Lift(AAlpha) + Pivot.Y * (1 - Scale) +
     FDeep.Sink * Sunk;
