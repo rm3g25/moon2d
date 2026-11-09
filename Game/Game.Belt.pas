@@ -10,10 +10,9 @@
   starts and stops it, carries the world by its speed and slides the road
   by how far it has run. It does not touch SDL.
 
-  The chase has three paces: the cruise of the road, the creep it goes on
-  at once the orb launcher is taken, and the flight it comes up to once the
-  hero is aboard the barge - any of them is run to the same way, from
-  whatever speed the belt has.
+  The chase has two paces: the cruise of the road, and the flight it comes
+  up to once the hero is aboard the barge - either is run to the same way,
+  from whatever speed the belt has.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -25,11 +24,8 @@ interface
 const
   // The road of the chase: 33 units a second at 33 Hz
   BeltCruise = 1.0;
-  // The world moving off again after the orb launcher is taken: a crawl,
-  // a quarter of the cruise
-  BeltCreep = 0.25;
-  // The air phase, the hero aboard the barge: twice the chase
-  BeltFlight = 2.0;
+  // The air phase, the hero aboard the barge: four times the chase
+  BeltFlight = 4.0;
   // From a standstill to cruise, and from cruise to a standstill: 2 s
   BeltRampTicks = 66;
 

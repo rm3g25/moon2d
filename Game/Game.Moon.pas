@@ -183,10 +183,10 @@ type
     FOrbShots: TOrbShots;
     // The road of the chase, sliding under the Ram
     FBelt: TBelt;
-    // The orb launcher taken, the road runs out: the tiles beyond the break
-    // fall, the pier rides on - the pad trimmed to it is the floor; the
-    // barge comes to the pier's end, the hero's deck over the crater and
-    // his checkpoint. Both pads are the level's, nil on a level without
+    // The orb launcher taken, the road runs out: its end, a cliff, comes in
+    // with the chase and rides on - the pad carried with it is the floor;
+    // the barge hangs a hop past the cliff, the hero's deck over the crater
+    // and his checkpoint. Both pads are the level's, nil on a level without
     // them, and so is the painter
     FRoad: TRoadEnd;
     FRoadPainter: TRoadPainter;
@@ -376,7 +376,7 @@ type
     procedure BeginPier;
     procedure ClearPier;
     procedure TickPier(AWay: Double);
-    procedure TrimRoadPad;
+    procedure DozeSpentPier;
     procedure PinPierCheckpoint;
     procedure PlaceAtCheckpoint;
     procedure GiveOrbLauncher;
@@ -566,7 +566,7 @@ const
   OrbLauncherLyingSprite = 'lying';
   // The pads of the air phase in the level file: the pier - the floor of
   // the road that runs out - and the barge; the road tile's picture, for
-  // the tiles that stand and fall
+  // the pier's tiles
   RoadPadTag = 's13-road';
   BargePadTag = 's13-barge';
   RoadTileSprite = 'tek-road-tile';
@@ -575,9 +575,6 @@ const
   // The checkpoint over a deck hangs this much above it: a hero put there
   // drops onto the deck, no standing on air
   CheckpointDrop = 8.0;
-  // A tile of the road breaking off: its thump and the jolt
-  TileBreakSoundFile = 'wheelland.wav';
-  TileBreakTrauma = 0.12;
 
   // Victory sting on boss death; the walk-out timer below carries the
   // hero into the next level while it plays
@@ -3160,19 +3157,19 @@ begin
   FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
 end;
 
-// The orb launcher taken: the chase goes on. The world moves off at a
-// crawl; the road runs out - the tiles beyond the break fall away, the
-// grid's row is air and the pier's pad stands in for what is left, under
-// the tiles as the belt drew them; no more pads are sent; the barge comes
-// in from beyond the right edge to the pier's end. A death from now on
-// comes back aboard (point B)
+// The orb launcher taken: the chase goes on. The world moves off again;
+// the road runs out - its end, a cliff, comes in from beyond the right
+// edge with the world, the grid's row is air and the pier's pad stands in
+// for the road, under the tiles as the belt drew them; no more pads are
+// sent; the barge hangs a hop past the cliff. A death from now on comes
+// back aboard (point B)
 procedure TMoonGame.BeginPier;
 begin
   // A level with the launcher but no pier and no barge keeps its road
   if (FRoadPad = nil) or (FBargePad = nil) then
     Exit;
   FPastLauncher := True;
-  FBelt.Run(BeltCreep);
+  FBelt.Start;
   FDrift.Cease;
   // The tiles as the belt drew them: wrapped round the screen, so the
   // first stands a tile short of where the wrap left off
@@ -3181,10 +3178,9 @@ begin
   FLevel.EraseRow(FHero.Screen, RoadRow);
   FRoadPad.Wake;
   FRoadPad.FlyTo(FRoad.PierLeft, RamFloorY, 0);
-  TrimRoadPad;
+  FBarge.Moor(FRoad.PierRight);
   FBargePad.Wake;
   FBargePad.FlyTo(FBarge.Left, RamFloorY, 0);
-  FBarge.Come;
 end;
 
 // The whole road again, of the grid; the pads of the air phase back to
@@ -3196,18 +3192,12 @@ begin
   FLevel.RestoreRows;
 end;
 
-// The pier's pad ends where the last standing tile does - it rides with
-// the tiles, so their span is its width; gone with the last of them
-procedure TMoonGame.TrimRoadPad;
+// The pier's pad is as long as the pier and rides with it; gone once the
+// pier has passed the left edge
+procedure TMoonGame.DozeSpentPier;
 begin
-  if FRoadPad = nil then
-    Exit;
-  if not FRoad.PierStands then
-  begin
+  if not FRoad.PierStands and not FRoadPad.Dormant then
     FRoadPad.Doze;
-    Exit;
-  end;
-  FRoadPad.Trim(Round(FRoad.PierRight - FRoad.PierLeft));
 end;
 
 function TMoonGame.HeroAboard: Boolean;
@@ -3216,41 +3206,35 @@ begin
     (FHero.DeckUnderFeet = FBargePad);
 end;
 
-// Before the pads' tick, which carries their riders: the road's tiles and
-// the pier's pad ride the belt, the barge goes its own way. A tile that
-// breaks off thumps and jolts. The hero aboard, the belt runs up to the
-// flight's pace; the pier falls when the barge says so
+// Before the pads' tick, which carries their riders: the pier and its pad
+// ride the belt, the barge goes its own way. The hero aboard, the belt
+// runs up to the flight's pace
 procedure TMoonGame.TickPier(AWay: Double);
 begin
   if not FPastLauncher or (FRoadPad = nil) or (FBargePad = nil) then
     Exit;
-  var RoadCue := FRoad.Tick(AWay);
-  if RoadCue.Broke then
-  begin
-    FAudio.Play(TileBreakSoundFile);
-    FShake.AddTrauma(TileBreakTrauma);
-  end;
+  FRoad.Tick(AWay);
   FRoadPad.Carry(AWay);
-  TrimRoadPad;
-  var Cue := FBarge.Tick(FRoad.PierRight, FRoad.PierStands, HeroAboard);
+  DozeSpentPier;
+  var Boarded := FBarge.Tick(FRoad.PierRight, FRoad.PierStands, HeroAboard);
   FBargePad.Carry(FBarge.Way);
-  if Cue.Boarded then
+  if Boarded then
     FBelt.Run(BeltFlight);
-  if Cue.PierFalls then
-    FRoad.Collapse;
   PinPierCheckpoint;
 end;
 
 // Where a pit or a death brings him back past the launcher: onto the
-// barge, wherever it is - onto the pier's last tile while the barge is
-// still on its way in; a little over the deck, so he drops onto it
+// barge, wherever it is - onto the pier's last tile on the screen while
+// the barge is still beyond the right edge; a little over the deck, so he
+// drops onto it
 procedure TMoonGame.PinPierCheckpoint;
 begin
   if FBargePad = nil then
     Exit;
   var Middle: Double := FBargePad.Left + BargeLength / 2;
-  if (FBarge.Stage in [bsAway, bsComing]) and FRoad.PierStands then
-    Middle := FRoad.PierRight - TileSize / 2;
+  var BargeAway := Middle > ScreenWidth - HeroSize / 2;
+  if BargeAway and FRoad.PierStands then
+    Middle := Min(FRoad.PierRight, Double(ScreenWidth)) - TileSize / 2;
   FCheckpointX := EnsureRange(Middle - HeroSize / 2, 0, ScreenWidth - HeroSize);
   FCheckpointY := RamFloorY - CheckpointDrop;
 end;

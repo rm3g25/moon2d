@@ -2938,7 +2938,8 @@
       "bullets": "block",
       "bob": 2,
       "stowed": true,
-      "tag": "s13-barge"
+      "tag": "s13-barge",
+      "rig": ["barge"]
     }
   ],
   "carousels": [
@@ -2966,6 +2967,195 @@
     }
   ],
   "rigs": {
+    "barge": [
+      {
+        "kind": "beacon",
+        "x": 16.9,
+        "y": 2.5,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 0,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 19.5,
+        "y": 2.5,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 4,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 22.1,
+        "y": 2.5,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 8,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 147.6,
+        "y": 4.8,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 24,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 150.2,
+        "y": 4.8,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 28,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 152.6,
+        "y": 4.8,
+        "tint": [100, 60, 10],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 32,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 16.9,
+        "y": 2.5,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 50,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 19.5,
+        "y": 2.5,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 54,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 22.1,
+        "y": 2.5,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 58,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 147.6,
+        "y": 4.8,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 74,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 150.2,
+        "y": 4.8,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 78,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 152.6,
+        "y": 4.8,
+        "tint": [20, 78, 100],
+        "blink": "flash",
+        "frequency": 0.6,
+        "phase": 82,
+        "intensity": 100,
+        "size": 7
+      },
+      {
+        "kind": "beacon",
+        "x": 2,
+        "y": 8.7,
+        "tint": [100, 58, 16],
+        "blink": "steady",
+        "intensity": 55,
+        "size": 16
+      },
+      {
+        "kind": "beacon",
+        "x": 1,
+        "y": 8.7,
+        "tint": [100, 66, 24],
+        "blink": "pulse",
+        "frequency": 7,
+        "intensity": 35,
+        "size": 26
+      },
+      {
+        "kind": "smoke",
+        "x": 0.5,
+        "y": 8.7,
+        "tint": [100, 72, 28],
+        "endTint": [72, 22, 6],
+        "rate": 160,
+        "life": 0.22,
+        "size": 8,
+        "endSize": 4,
+        "opacity": 90,
+        "angle": 180,
+        "cone": 8,
+        "speed": {"spread": [170, 210]},
+        "drag": 10,
+        "turbulence": 0,
+        "spin": 0,
+        "heat": 100,
+        "heatTint": [100, 96, 74]
+      },
+      {
+        "kind": "smoke",
+        "x": -8,
+        "y": 8.7,
+        "tint": [46, 42, 40],
+        "endTint": [26, 26, 28],
+        "rate": 40,
+        "life": 0.7,
+        "size": 5,
+        "endSize": 15,
+        "opacity": 35,
+        "angle": 180,
+        "cone": 14,
+        "speed": 90,
+        "drag": 30
+      }
+    ],
     "shelfDock": [
       {
         "kind": "beacon",

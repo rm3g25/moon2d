@@ -254,11 +254,14 @@ type
   // stretch with the flash. The tint is the color of the light.
   // Frequency is in blinks per second; glint and rayIntensity are
   // percentages; size is the halo across and rays the reach of a ray
-  // from the center, in screen units (0 = no starburst).
+  // from the center, in screen units (0 = no starburst). Phase, a
+  // percentage of a blink, is how far into its blink the lamp starts:
+  // lamps of one frequency with phases a step apart take turns - a light
+  // running along a row.
   // JSON:
   //   {"kind": "beacon", "parent": "ship", "x": 16.1, "y": 1.2,
   //    "tint": [25, 55, 100], "blink": "double", "frequency": 0.75,
-  //    "intensity": 100, "size": 14, "glint": 50,
+  //    "phase": 25, "intensity": 100, "size": 14, "glint": 50,
   //    "rays": 36, "rayIntensity": 70}
   TBeacon = class(TDynamicObject)
   private
@@ -268,6 +271,7 @@ type
     FGlint: Single; // 0..1
     FRays: Single;
     FRayIntensity: Single; // 0..1
+    FPhase: Single; // 0..1 of a blink
     FSeed: Cardinal;
     FTicks: Integer;
     function BlinkLevel(AAlpha: Single): Single;
@@ -2292,6 +2296,7 @@ begin
   FRays := ReadReach(AObj, 'rays', 0, AOwner);
   FRayIntensity := ReadShare(AObj, 'rayIntensity', DefaultRayIntensity,
     AOwner);
+  FPhase := ReadShare(AObj, 'phase', 0, AOwner);
   FSeed := PlacementSeed(APlacement);
 end;
 
@@ -2308,7 +2313,8 @@ end;
 // 0..1 - how far the lamp is into its flash at this moment
 function TBeacon.BlinkLevel(AAlpha: Single): Single;
 begin
-  var Cycles: Double := (FTicks + AAlpha) * FFrequency / LogicTicksPerSecond;
+  var Cycles: Double := (FTicks + AAlpha) * FFrequency / LogicTicksPerSecond +
+    FPhase;
   var Cycle: Integer := Trunc(Cycles);
   var Phase: Single := Cycles - Cycle;
   case FBlink of

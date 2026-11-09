@@ -222,21 +222,17 @@ end;
 
 procedure TBeltTests.TestRunToAnotherPaceOverTheRamp;
 begin
-  FBelt.Run(BeltCreep);
-  Assert.IsTrue(FBelt.Running, 'Running at a creep');
-  var Up := Run(PastTheRamp);
-  Assert.AreEqual(Double(BeltCreep), Double(FBelt.Speed), 0.0001,
-    'At the creep when the ramp is over');
-  Assert.IsTrue(SteepestStep(Up, 0) <= MostStep, 'No jerk up to it');
+  FBelt.Start;
+  Run(PastTheRamp);
   FBelt.Run(BeltFlight);
   var Faster := Run(BeltRampTicks div 2);
-  Assert.IsTrue((FBelt.Speed > BeltCreep) and (FBelt.Speed < BeltFlight),
+  Assert.IsTrue((FBelt.Speed > BeltCruise) and (FBelt.Speed < BeltFlight),
     'Halfway up to the flight');
   Faster := Faster + Run(BeltRampTicks div 2 + 10);
   Assert.AreEqual(Double(BeltFlight), Double(FBelt.Speed), 0.0001,
     'At the flight''s pace when the ramp is over');
-  Assert.IsTrue(SteepestStep(Faster, BeltCreep) <=
-    1.5 * (BeltFlight - BeltCreep) / BeltRampTicks + 0.001,
+  Assert.IsTrue(SteepestStep(Faster, BeltCruise) <=
+    1.5 * (BeltFlight - BeltCruise) / BeltRampTicks + 0.001,
     'No jerk on the way');
   FBelt.Run(BeltFlight);
   Run(10);

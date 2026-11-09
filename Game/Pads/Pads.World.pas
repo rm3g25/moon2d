@@ -129,9 +129,8 @@
   asleep again, back in the pool. It travels, so a ram only rocks it.
 
   The game may carry any pad across by hand (Carry), a tick at a time, as
-  the road carries a drifter: the riders go with it. A deck with no
-  picture may be trimmed (Trim) - the road of the chase running out is
-  one, shorter every time a tile of it falls.
+  the road carries a drifter: the riders go with it - the road of the
+  chase running out is one.
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -203,10 +202,6 @@ type
     FKnockTicks: Integer;
     FLeft, FTop: Double;
     FPrevLeft, FPrevTop: Double;
-    // The deck's width: the placement's, or less once trimmed. The deck
-    // and its body read it; the arena's rebuilds, which trim no pad, and
-    // the picture read the placement's
-    FWidth: Integer;
     FSag, FSagSpeed: Double; // units down, units a tick
     // The rebuild's flight, and its ticks since the start; NoFlight when
     // the pad is not in one
@@ -333,9 +328,6 @@ type
     // The pad is carried AWay across this tick, below 0 to the left, its
     // riders with it - as the road carries a drifter; told before the tick
     procedure Carry(AWay: Double);
-    // The deck ends AWidth from its left edge from now on, no wider than
-    // the placement has it; a rewind gives the width back
-    procedure Trim(AWidth: Integer);
     // The same, but it flies in to AX, AY from AFrom off its place - from
     // any side - over ATicks, its jets hard, and comes to rest on its place
     // at the road's pace: its place rides the road all the while
@@ -788,7 +780,6 @@ begin
   FTop := FPathTop;
   FPrevLeft := FLeft;
   FPrevTop := FTop;
-  FWidth := FPlacement.Width;
   FSag := 0;
   FSagSpeed := 0;
   FFlightClock := NoFlight;
@@ -1136,11 +1127,6 @@ begin
   FPathLeft := FPathLeft + AWay;
 end;
 
-procedure TPad.Trim(AWidth: Integer);
-begin
-  FWidth := EnsureRange(AWidth, 0, FPlacement.Width);
-end;
-
 procedure TPad.SetAdriftComing(AX, AY: Double; const AFrom: TSdlFPoint;
   ATicks: Integer);
 begin
@@ -1312,7 +1298,7 @@ end;
 
 function TPad.GetRight: Double;
 begin
-  Result := FLeft + FWidth;
+  Result := FLeft + FPlacement.Width;
 end;
 
 function TPad.MotionX: Double;
@@ -1327,7 +1313,7 @@ end;
 
 function TPad.DeckSpannedBefore(ALeft, ARight: Double): Boolean;
 begin
-  Result := (ALeft <= FPrevLeft + FWidth + EdgeSlop) and
+  Result := (ALeft <= FPrevLeft + FPlacement.Width + EdgeSlop) and
     (ARight >= FPrevLeft - EdgeSlop);
 end;
 
@@ -1341,7 +1327,7 @@ function TPad.Body: TSdlFRect;
 begin
   Result.X := FLeft;
   Result.Y := FTop;
-  Result.W := FWidth;
+  Result.W := FPlacement.Width;
   Result.H := FBodyDepth;
 end;
 

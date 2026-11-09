@@ -17,6 +17,9 @@
   The eclipse: what its file says, as far as it is read. Its dark and its
   wave are drawn, never read.
 
+  The beacon: only that its file reads a phase, a percentage of a blink;
+  its light is drawn, never read.
+
   The convoy and the searchlight: the gap of the traffic, the line of a
   lane and the figure of eight of a sweep are records a test builds by
   hand and asks; the schedule of a convoy is built from them and told the
@@ -133,6 +136,15 @@ type
     procedure TestColumnPastTheFinishIsLetGo;
     [Test]
     procedure TestColumnsAreMadeAsTheMakeupSays;
+  end;
+
+  [TestFixture]
+  TBeaconTests = class
+  public
+    [Test]
+    procedure TestBeaconReadsItsPhase;
+    [Test]
+    procedure TestBadPhaseRaises;
   end;
 
   [TestFixture]
@@ -1142,10 +1154,39 @@ begin
     'A craft on another layer');
 end;
 
+// ---------------------------------------------------------------------------
+// TBeaconTests
+// ---------------------------------------------------------------------------
+
+const
+  BeaconJson = '{"kind":"beacon","screen":1,"x":0,"y":0%s}';
+  BeaconPhases: array [0..3] of string = ('', ',"phase":0', ',"phase":50',
+    ',"phase":100');
+
+procedure TBeaconTests.TestBeaconReadsItsPhase;
+begin
+  for var Phase in BeaconPhases do
+  begin
+    var Parsed := DynamicOf(Format(BeaconJson, [Phase]));
+    try
+      Assert.IsTrue(Parsed is TBeacon, 'A beacon of phase "' + Phase + '"');
+    finally
+      Parsed.Free;
+    end;
+  end;
+end;
+
+procedure TBeaconTests.TestBadPhaseRaises;
+begin
+  ExpectRaises(Format(BeaconJson, [',"phase":101']), 'Past a whole blink');
+  ExpectRaises(Format(BeaconJson, [',"phase":-1']), 'Before its start');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TCraftTests);
   TDUnitX.RegisterTestFixture(TDustTests);
   TDUnitX.RegisterTestFixture(TEclipseTests);
+  TDUnitX.RegisterTestFixture(TBeaconTests);
   TDUnitX.RegisterTestFixture(TConvoyTests);
   TDUnitX.RegisterTestFixture(TSearchlightTests);
 
