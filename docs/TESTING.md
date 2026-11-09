@@ -74,8 +74,8 @@ Tests\
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
     Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
-    Tests.Game.Road.pas    the road running out: the tiles' fall, the pier, the collapse
-    Tests.Game.Barge.pas   the barge of the air phase: its coming, mooring, casting off, the pier's grace
+    Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away
+    Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
     Tests.Game.Shroud.pas
@@ -93,7 +93,7 @@ Tests\
     Tests.Levels.Monorail.pas  the chase city's train, against tables made
                                by the stand's own functions
     Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust,
-                               the convoy, the searchlight
+                               the convoy, the searchlight, a beacon's phase
     Tests.Levels.Entities.pas
     Tests.Levels.Events.pas    the events: heroStands, respawn
     Tests.Levels.Graph.pas

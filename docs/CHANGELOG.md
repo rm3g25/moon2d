@@ -7,6 +7,22 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-09: **3.0.119 - the cliff and the barge's lights (stage 17b-2).**
+After 3.0.118 was played: no landslide - the road's tiles no longer break
+off and the pier no longer collapses; the chase goes on at its cruise
+after the orb launcher's take (`BeltCreep` gone), the road's end - a cliff
+- comes in from beyond the right edge and rides away left, and the barge
+hangs a cell past it from the start (`TBargeRide.Moor`; the glide in, the
+pier's grace and `TBargeCue` gone; `TRoadEnd` is a place and an end now;
+`TPad.Trim` gone, the pier as long as its pad). Aboard, the flight is
+twice as fast as before - `BeltFlight` 4.0; the barge's station is the
+middle of the screen (`StationLeft` 176). The barge wears the rig `barge`:
+its six painted lamps flash in turn from the stern to the prow, an amber
+run and a cyan run, by a new `phase` of the beacon (`TBeacon.FPhase`), and
+its turbine burns - glows in the mouth, a hot flame and a grey trail.
+Tests: `TRoadEndTests` 7 and `TBargeRideTests` 11, rewritten;
+`TBeltTests` reworked; `TPadWorldTests` -1; `TBeaconTests` 2, new.
+
 2026-11-08: **3.0.118 - the pier and the barge (stage 17b).** The orb
 launcher taken, the chase goes on: the world moves off at a crawl
 (`BeltCreep`, `TBelt.Run`), no more pads are sent (`TPadDrift.Cease`), and
