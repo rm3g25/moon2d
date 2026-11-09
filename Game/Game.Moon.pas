@@ -66,6 +66,12 @@ type
     Struck: Boolean;
   end;
 
+{$IFDEF DEBUGKEYS}
+  // The stops of the End key on level 2, in their order; dsNone - past the
+  // last
+  TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsNone);
+{$ENDIF}
+
   TMoonGame = class(TGameApp)
   private
     FMonsters: TMonsterRegistry;
@@ -124,7 +130,6 @@ type
     FRenderer: PSdlRenderer; // kept for level restarts
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
-    FDebugJumps: Integer; // End: the steps the key has taken
     FShowAtlas: Boolean; // F: raw font atlas (orientation check)
 {$ENDIF}
     FMouseGX, FMouseGY: Integer;
@@ -320,6 +325,7 @@ type
     procedure DebugBrowseScreen(ADelta: Integer);
     procedure DebugShowScreen(AScreen: Integer);
     procedure DebugJumpToWork;
+    function DebugNextStop: TDebugStop;
     procedure DebugLoadWorkLevel;
     procedure DebugJumpToTrialEnd;
     procedure DebugJumpToRam;
@@ -703,11 +709,10 @@ const
   ScancodeKpMinus = 86;
   ScancodeKpPlus = 87;
   // The End key's walk on level 2: the gravel trial, then the Ram's arena;
-  // its steps - the trial won, the Ram's entrance, past the bunker
+  // its stops - the trial won, the Ram's entrance, past the bunker, aboard
   WorkLevel = 2;
   TrialScreen = 9;
   RamScreen = 13;
-  DebugJumpSteps = 4;
   // The gun a walk to the Ram has taken on screen 10
   DupletPickupId = 'weaponDuplet';
 {$ENDIF}
@@ -3941,7 +3946,8 @@ begin
 end;
 
 // Any touch wounds and throws the hero off - but a hero on a pad is out of
-// its way (Game.Ram)
+// its way (Game.Ram). A hull off the road does not throw him up into
+// itself: it knocks him down and aside
 procedure TMoonGame.ResolveRamContact;
 begin
   if FHero.Dead then
@@ -3951,7 +3957,10 @@ begin
   if not FRam.Contact(HeroBody(FHero), OnDeck, FHero.InAir, Away) then
     Exit;
   HurtByRam;
-  FHero.Throw(Away);
+  if FRam.Flight.Stage in [tkRising, tkHanging] then
+    FHero.Knock(Away)
+  else
+    FHero.Throw(Away);
 end;
 
 // A wheel the Ram has shed wounds and throws him as the hull's touch
@@ -4946,24 +4955,42 @@ begin
   ArriveOnScreen;
 end;
 
-// End, a step a press through the end of the version: the false ending of
-// level 2, the start of the Ram's fight, the moment right before the
-// henshin, aboard the barge in the air phase. A press past the last does
-// nothing.
+// End, a press to the next stop past where the hero is: the false ending
+// of level 2, the start of the Ram's fight, the moment right before the
+// henshin, aboard the barge in the air phase. Aboard, a press does nothing.
 procedure TMoonGame.DebugJumpToWork;
 begin
-  case FDebugJumps of
-    0:
+  case DebugNextStop of
+    dsTrialEnd:
       DebugJumpToTrialEnd;
-    1:
+    dsRam:
       DebugJumpToRam;
-    2:
+    dsPastBunker:
       DebugJumpPastBunker;
-    3:
+    dsAboard:
       DebugJumpAboard;
   end;
-  if FDebugJumps < DebugJumpSteps then
-    Inc(FDebugJumps);
+end;
+
+// The first stop the hero has not reached yet, read off the game as it
+// stands: away from level 2 or before the trial is won - its end
+function TMoonGame.DebugNextStop: TDebugStop;
+begin
+  var OnWorkLevel := SameText(FLevelFile, Format(LevelFilePattern, [WorkLevel]));
+  if not OnWorkLevel then
+    Exit(dsTrialEnd);
+  if FPastLauncher then
+    Exit(dsNone);
+  if FPastBunker then
+    Exit(dsAboard);
+  if FHero.Screen >= RamScreen then
+    Exit(dsPastBunker);
+  var PastTrial := (FHero.Screen > TrialScreen) or
+    ((FHero.Screen = TrialScreen) and FTrialDone);
+  if PastTrial then
+    Result := dsRam
+  else
+    Result := dsTrialEnd;
 end;
 
 // Level 2, and nothing of the finale under way: the trial stopped, the

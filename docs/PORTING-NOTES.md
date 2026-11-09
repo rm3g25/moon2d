@@ -252,7 +252,7 @@ about responsibility, not paths.
     beam with no points and no streak. The medkit next to it removed
 
 ## Debug (under {$DEFINE DEBUGKEYS} in Moon2D.inc; the Release configuration drops the define itself)
-PgUp/PgDn - screens, End - a step a press through the end of the version
+PgUp/PgDn - screens, End - to the next stop past where the hero is, through the end of the version
 (level 2: the trial won, the Ram's entrance, point A before the henshin,
 point B aboard the barge), with the music the road there would have brought,
 T - the inspector of the tile under the cursor, F - the raw font atlas,

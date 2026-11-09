@@ -3536,6 +3536,12 @@ moves in comes from `Game.Space`.
   `BuildMonoFrames` through `Render.Monochrome`, destroyed with the hero);
   `FrameTexture(frame)` picks the frame by the form, and `Pose` hands it
   out - the shroud and the uptake draw on it.
+- 3.0.119: the moon form jumps +15% (`MoonJumpBoost` 1.15, about 130
+  units), the ice form +25% as before (`IceJumpBoost`) - `BeginJumpBoost`
+  by the form; `SuitForms` is the skin alone now. **`Knock(side)`** -
+  knocked off a hull that hangs over him: the rise cut, a straight fall
+  from `FAcceleration` 1, carried `KnockWay` 0.75 a tick aside till he
+  lands (`FFlingWay`), the controls his again after `KnockLockTicks` 10.
 
 ### `Game/Monsters.Disc.pas` (~250 lines)
 A monster drawn as a spinning disc out of layers instead of its `alive`
@@ -7145,6 +7151,14 @@ so a unit (and later a test) can reach it. `interface` holds
   tile breaks, no collapse (`TrimRoadPad`, `TileBreakSoundFile`,
   `TileBreakTrauma` gone). `PinPierCheckpoint`: the pier's last tile on
   the screen while the barge's middle is beyond the right edge.
+  `ResolveRamContact`: a touch of the hull off the road (`TTakeoff.Stage`
+  rising or hanging) knocks him down and aside (`THero.Knock`), not up.
+  The End key reads where the game stands instead of counting its presses
+  (`FDebugJumps`, `DebugJumpSteps` gone): **`DebugNextStop`** -
+  **`TDebugStop`** `dsTrialEnd` (away from level 2, or before the trial is
+  won), `dsRam` (the trial won, or screens 10-12), `dsPastBunker` (on the
+  Ram's screen), `dsAboard` (past the bunker), `dsNone` (aboard - a press
+  does nothing).
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:

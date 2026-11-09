@@ -252,6 +252,11 @@ type
     // top of his own way till he lands. As Throw, nothing for the dead or
     // one still flying.
     procedure Fling(ASide: Integer; AWay: Double);
+    // Knocked off a hull hanging over him: his rise is cut and he drops,
+    // carried KnockWay units a tick toward ASide (0 - straight down) till
+    // he lands, the controls out of his hands for a moment. As Throw,
+    // nothing for the dead or one still flying.
+    procedure Knock(ASide: Integer);
     // The road of a chase has slid AWay under him, below 0 to the left:
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
@@ -356,7 +361,10 @@ const
                            // in 2008 - same digit as JumpDel, presumed
                            // coincidence, kept separate)
   IceJumpBoost = 1.25;     // the 'прыжок +25%' perk of the ice form
-  // In 3.0 the moon form looks like the ice form and jumps as it does
+  // The arena of the moon form asks for no high jump; a higher one would
+  // reach the hull hanging over him
+  MoonJumpBoost = 1.15;
+  // In 3.0 the moon form wears the ice form's skin
   SuitForms = [hfIce, hfMoon];
   // A stopgap till the hero is drawn anew: the forms drawn in black and
   // white, their contrast this many times the frames'
@@ -371,6 +379,10 @@ const
   // square, and the controls stay out of his hands for the whole rise
   FlingBoost = 10.0;
   FlingLockTicks = 30;
+  // A knock off a hanging hull: under a cell aside over a fall from the top
+  // of a jump - he stays on a barge's deck from anywhere but its very edge
+  KnockWay = 0.75;
+  KnockLockTicks = 10;
   DeathFrameAdvance = 0.6; // frames 9 -> 16 in ~12 ticks
   // Left of this the one-way door of 2008 puts him back after every tick
   LeftDoorStop = 2;
@@ -702,6 +714,18 @@ procedure THero.Fling(ASide: Integer; AWay: Double);
 begin
   if BeginThrow(ASide, FlingBoost, FlingLockTicks) then
     FFlingWay := Sign(ASide) * AWay;
+end;
+
+procedure THero.Knock(ASide: Integer);
+begin
+  if FDead or FHeld or (FThrownTicks > 0) then
+    Exit;
+  FPending := psNone;
+  // Straight down: a side fall would walk him aside on top of the knock
+  FAction := haFall;
+  FAcceleration := 1;
+  FThrownTicks := KnockLockTicks;
+  FFlingWay := Sign(ASide) * KnockWay;
 end;
 
 function THero.BeginThrow(ASide: Integer; ABoost: Double;
@@ -1195,8 +1219,12 @@ end;
 procedure THero.BeginJumpBoost;
 begin
   FAcceleration := Step * StartUscor;
-  if FForm in SuitForms then
-    FAcceleration := FAcceleration * IceJumpBoost;
+  case FForm of
+    hfIce:
+      FAcceleration := FAcceleration * IceJumpBoost;
+    hfMoon:
+      FAcceleration := FAcceleration * MoonJumpBoost;
+  end;
 end;
 
 // The landing of a straight fall, after the feet are set: a side held

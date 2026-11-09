@@ -20,7 +20,10 @@ middle of the screen (`StationLeft` 176). The barge wears the rig `barge`:
 its six painted lamps flash in turn from the stern to the prow, an amber
 run and a cyan run, by a new `phase` of the beacon (`TBeacon.FPhase`), and
 its turbine burns - glows in the mouth, a hot flame and a grey trail.
-Tests: `TRoadEndTests` 7 and `TBargeRideTests` 11, rewritten;
+The moon form jumps +15% (`MoonJumpBoost`), the ice form +25% as before;
+a touch of the hull rising or hanging knocks the hero down and a little
+aside (`THero.Knock`), no more up into it. The End key reads the next stop
+off the game instead of counting its presses (`DebugNextStop`). Tests: `TRoadEndTests` 7 and `TBargeRideTests` 11, rewritten;
 `TBeltTests` reworked; `TPadWorldTests` -1; `TBeaconTests` 2, new.
 
 2026-11-08: **3.0.118 - the pier and the barge (stage 17b).** The orb
