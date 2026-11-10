@@ -7,6 +7,32 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-11: **3.0.121 - the magnet and the heat (stage 18d-2).** The Ram
+fights back. He aboard at the station, a breath, and a magnet slides out
+of the belly between the engine bays (`Game.Magnet`, `TMagnet`, the Ram's;
+the art `magnet` and `magnetHeat` in `tek-machine.mset` by
+`tools/machine/add_magnet.py`) - its first move is the start of the fight:
+the barge is let go on its drift (`TBargeRide.Loose`) and the flock comes
+in. From then on the magnet works in a cycle: it takes the small barge he
+stands on, else the nearest (the hull flies over one out of the beam's
+reach); a blue beam draws the barge up under its face - with him aboard a
+hero's height lower, the lift; it holds the barge as a shield, heating,
+the hum rising; then it seizes it - in a lift the press: he is wounded and
+the deck is gone from under him - and throws it at him along the wrecks'
+flight (`TPadWrecks.Fling`); a thrown barge wounds and knocks him, and
+breaks into pieces on the main barge, which rocks (`Game.Pieces`,
+`TBargeRide.Rock`); then the magnet, empty, cools - the window. The hull's
+armour is whole now: an orb takes a life only in the magnet from the hold
+till it is cold, everything else ricochets (17a's wound of the bare hull is
+gone). It is shown: the magnet's housing is tinted hot orange over its art
+and glows, the hull's bar stands grey over the word "armour" and pulses in
+its colours while the magnet is hot (`THullLives.Tick(hot)`,
+`Hud.HullBar`), and at the first throw of a level the terminal types
+"Strike what glows". The flock gives up a taken barge and sends another -
+at once for the escort (`Take`, `GiveBack`). New sounds: `magnethum.wav`,
+`magnetthrow.wav` (`tools/sounds/magnet.py`). No bombs, charge or dive
+yet; the flock stays at two.
+
 2026-11-10: **3.0.120 - the barges of the air fight (stage 18d-1).** The
 first step of the Ram's air fight. The hero aboard at its station, the
 barge leaves it and drifts on a slow wide loop of its own - a figure of

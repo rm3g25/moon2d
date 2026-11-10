@@ -487,8 +487,11 @@ numbers of the entrance and the patrol.
 
 ## Game.Barge
 
-State: written, 19 tests; the drift came with 3.0.120 (stage 18d-1),
-the rest with 3.0.118-3.0.119. Needs no stage: `TBargeRide` only counts
+State: written, 21 tests; the drift came with 3.0.120 (stage 18d-1),
+the rest with 3.0.118-3.0.119; since 3.0.121 (stage 18d-2) the drift
+starts by the caller's word (`Loose`), not by the hero aboard, and a blow
+rocks the deck - 2 tests new, 3 reworked, and every drift test lets the
+barge go itself. Needs no stage: `TBargeRide` only counts
 where its left edge and its deck are. The unit is tried by
 `Tests\Game\Tests.Game.Barge.pas`, fixture `TBargeRideTests`. The table
 holds the drift; the mooring, the cast-off and the station are told in the
@@ -500,10 +503,12 @@ and down. Not spelled: the lap, the start, the pace.
 
 | Test | Holds | Turns red when |
 |---|---|---|
-| `TestBoardedItCastsOffToItsStation` | reworked: at the station with him aboard, it drifts | the fight never starts from the cast-off |
+| `TestBoardedItCastsOffToItsStation` | reworked (3.0.121): at the station with him aboard, it holds it | his boarding starts the fight before the magnet does |
 | `TestStationIsThereAtOnce` | reworked: held with nobody aboard, nothing told when he boards | point B tells a boarding and runs the belt up again |
-| `TestNobodyAboardItHoldsItsStation` | `Station`, 200 ticks with nobody aboard: `bsStation`, at `StationLeft`, `Dip` 0 | the barge drifts off before the hero has landed at point B |
-| `TestAboardAtItsStationItDrifts` | aboard: `bsDrift` the same tick; 100 ticks on over a cell off the station | the fight's start does not move the barge |
+| `TestItHoldsItsStationTillLetGo` | reworked (3.0.121): `Station`, 100 ticks with nobody aboard and 100 with him: `bsStation`, at `StationLeft`, `Dip` 0 | the barge drifts off before the magnet has made its first move |
+| `TestLetGoAtItsStationItDrifts` | reworked (3.0.121): `Loose` at the station: `bsDrift` at once; 100 ticks on over a cell off the station | the fight's start does not move the barge |
+| `TestLetGoElsewhereChangesNothing` | `Loose` away and moored: the stage as it was, the mooring kept | a magnet deployed early sets a moored barge adrift from the pier |
+| `TestABlowRocksItsDeckAndDiesOut` | against a barge let go on the same tick and not struck, `Rock(8)` after 50 ticks, 99 ticks watched: the deck dips more than 4 and less than 16 under the calm one's, the left edge is the same, at the end within a unit of it | a thrown barge does not move the main barge, throws it off its loop, or leaves it bobbing for good |
 | `TestDriftSetsOffGentlyFromTheStation` | the first tick of the drift at the station and on its line; the way across and down changes by less than 0.1 a tick over the first 100 ticks | the barge jerks off under the hero |
 | `TestDriftKeepsToTheMiddleThreeFifths` | two laps: the middle between a fifth and four fifths of the screen, past a quarter and three quarters; `Dip` within half a cell, past a quarter cell both ways | the loop leaves the screen, crowds the edges, or is too small to be felt |
 | `TestDriftIsNeverStillForLong` | from tick 100, two laps: never 33 ticks in a row slower than 0.2 a tick | it stands at the ends of its loop |
@@ -516,12 +521,13 @@ Left to the eye: the barge's pad and its riders going up and down with it
 
 ## Game.Flock
 
-State: written, 17 tests (3.0.120, stage 18d-1). Needs no stage:
+State: written, 24 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
+18d-2 - the barge the magnet takes). Needs no stage:
 `TBargeFlock` only counts places. The unit is tried by
 `Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
 
-Shared: the main barge is `Game.Barge`'s own, at its station and drifting
-with the hero aboard, its deck on the road's line 352; the pool is nine
+Shared: the main barge is `Game.Barge`'s own, let go at its station and
+drifting, its deck on the road's line 352; the pool is nine
 barges, three each of 67, 104 and 123 units; the dice 7; the count 2. "A
 long run" is 8000 ticks, four minutes. `Step` ticks the main barge, then
 the flock.
@@ -550,8 +556,137 @@ tests bound them loosely or read the unit's constants.
 | `TestSameDiceSameFlight` | two flocks of the same dice over two main barges alike, 3000 ticks: the same barges fly at the same places | the flock reads a clock or `Random` |
 | `TestASmallPoolFliesWhatItHas` | a pool of one: never more than one, it escorts and flies; a pool of none: none flies | a short pool indexes past its end |
 | `TestWithinJumpIsAJumpUpOrDownAndAcross` | over the main barge at 64 and at 80 up - within, 81 - not; 64 down - within; 64 across either side - within, 65 - not | the guarantee is measured with the wrong sign or from the wrong edge |
+| `TestATakenBargeFliesNoMore` | a free barge taken: not `Flying`, `Taken`, one fewer flies; 2000 ticks on it never flies | the magnet's barge is flown on by the flock, or sent in again while the magnet holds it |
+| `TestATakenBargeIsReplacedByAnother` | a free barge taken: within 67 ticks the count is full again | the magnet thins the flock for good |
+| `TestATakenEscortIsReplacedAtOnce` | the escort taken: a tick later another barge is the escort and flies; within 330 ticks a barge is within the jump | the taken escort leaves the main barge with no neighbour for a gap and more |
+| `TestTheEscortTakenItsReliefIsTheEscort` | run till a relief is on its way, the escort taken: the relief is the escort at once, flies on 330 ticks, a barge within the jump | the hand-over lets go of an escort that is not there: an index of -1 |
+| `TestGivenBackItFliesAgain` | a pool of two, the escort taken: 330 ticks it never flies; given back - not `Taken`, and in a long run it flies again | a thrown barge is lost to the pool, and the pool runs dry |
+| `TestTakingOneNotFlyingChangesNothing` | an idle barge taken: not `Taken`, the escort and the count as they were | a stale number from the magnet grounds a barge |
+| `TestClearForgetsTheTaken` | the escort taken, a clear: not `Taken`, none flies | a death leaves a barge out of the pool |
 
 Left to the eye: the pads following the barges (`TickFlock`), the paths'
 feel, the hand-over's look, the rigs of the short barges, a hero pushed off
-a barge leaving past the left edge.
+a barge leaving past the left edge; the taken pad carried by the magnet.
+
+## Game.Magnet
+
+State: written, 19 tests (3.0.121, stage 18d-2), not run yet. Needs no
+stage: `TMagnet` only counts. The unit is tried by
+`Tests\Game\Tests.Game.Magnet.pas`, fixture `TMagnetTests`.
+
+Shared: the face stands at 256, 190; the hero's middle at 200, 320, the
+harbour at 256, 352; the barges are 67 wide - the near one (number 3)
+under the face 40 lower, the low one (5) under it 90 lower, the far one
+(7) at the left edge, in sight and out of reach. `Step` ticks the magnet
+and adds up its cues; `StepTill(stage, limit)` steps till a stage;
+`BringOut` deploys and steps till it seeks; `CatchNear` brings it out and
+steps till the near barge is caught. "A cycle" is 330 ticks.
+
+Numbers spelled: none of the timings, gaps or the reach - all first
+guesses; the tests bound them (a breath of more than a tick; under the face
+by less than half a rider's height; a window of 1 to 6 s) or read the
+unit's constants (`RiderHeight`, `NoBarge`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestStowedItDoesNothing` | a cycle of ticks with a barge under it: stowed, not out, no cue, not soft, holds nothing | the magnet fights before the fight is started |
+| `TestDeployedItWaitsThenSlidesOutAndTellsItsStartOnce` | deployed: it is not out till its start is told, more than a tick later; it never slides back; out by the time it seeks; the start told once, and not again in a cycle | the fight starts the tick he lands, the magnet jumps out, or the barge is let go twice |
+| `TestDeployedTwiceItComesOutOnce` | a second `Deploy` ten ticks in: it seeks as soon as one deployed once | the game's word every tick restarts the breath for ever |
+| `TestItCatchesTheNearestBargeInReach` | the low and the near barge in sight: one catch, the near one's number, its load, held, no lift | it takes the farther barge, or tells the caller the wrong number |
+| `TestByItsRuleItTakesHisBargeFirst` | `mrHisBarge`, he on the low barge: the low one, a lift; `mrNearest`, the same sight: the near one | the rule of the tier is not obeyed: no lift at tier 2, or one at tier 1 by design |
+| `TestABargeOutOfSightIsNotTaken` | a barge whose middle is past the right edge, the face beside it, a cycle: no catch, nothing wanted | a barge is plucked from beyond the screen's edge |
+| `TestOutOfReachItOnlyWantsTillItsFaceIsOverIt` | the far barge alone, a cycle: no catch, it wants to be over the middle of its deck; the face moved there: caught on the next tick, nothing wanted | the beam reaches across the whole screen, or the Ram is never sent for a barge |
+| `TestTheBargeIsDrawnUpSmoothlyToJustUnderTheFace` | from where it was caught, every tick: the way is what it went, less than 8 units, never down; held: its middle under the face, its deck under it by less than 16 | the barge jumps to the magnet, sinks on its way, or hangs off to a side |
+| `TestInALiftItStopsARidersHeightLower` | caught with him aboard: a lift; held, a rider's head is under the face by less than 16 | the lift puts his head into the magnet, or leaves him too far to strike point-blank |
+| `TestTheHeldBargeRidesWithTheFace` | held, the face moved 1.5 across and 0.5 up a tick for 10 ticks: the way is the face's | the shield is left behind as the hull flies |
+| `TestItSeizesThenThrowsAtTheHero` | the seize comes before the throw, never by way of seeking: the held barge's number, no press, snug under the face, the barge no more the magnet's, no way left; the hero moved, then the throw: once, at where he is at the throw | the pad is carried on after it became a wreck, the throw aims at where he was at the catch, or comes twice |
+| `TestALiftEndsInAPress` | caught with him aboard: the seize is a press | the lift does him no harm |
+| `TestWithNoHeroItThrowsAtTheHarbour` | he dead at the throw: the aim is the harbour | a throw at the corner of the screen where a dead hero's body was |
+| `TestOneBargeAtATime` | two barges in sight: one catch till the throw | it reaches for a second barge while it holds one |
+| `TestSoftFromTheHoldTillItIsCold` | not soft seeking nor on the barge's way up; soft at every stage from the hold till it seeks again; then not | the window opens early, closes before the heat is gone, or never closes |
+| `TestItHeatsAsItHoldsAndCoolsThroughItsWindow` | cold on the way up; in the hold the heat never falls and is full by its end; in the window it never rises and is none at its end; the window lasts 1 to 6 s | the tint is not the window's timer |
+| `TestColdAgainItTakesTheNext` | after a window, the low barge left in sight: a second catch, its number | one cycle and the magnet is done |
+| `TestAClearStowsIt` | a clear in the hold: stowed, not out, cold, not soft, no load, and nothing told in a cycle | a death leaves a hot magnet holding a barge of the flock that is gone |
+| `TestDeckDistanceIsToTheNearestPointOfTheDeck` | a face 30 over a deck - 30; 40 past either end of it and 30 over - 50 | the reach is measured to a barge's corner or middle: wide barges are out of reach under the face |
+
+Left to the eye: the whole of it on the screen - the pick as he hops
+between barges, the beam, the lift and the press, the throw against his
+dodge, the heat.
+
+## Game.Pieces
+
+State: written, 10 tests (3.0.121, stage 18d-2), not run yet. Needs no
+stage: `TBargePieces` only counts, and a barge of no pad has no picture.
+The unit is tried by `Tests\Game\Tests.Game.Pieces.pas`, fixture
+`TBargePiecesTests`.
+
+Shared: a barge 104 by 14 with its middle at 256, 330; the dice 11.
+Numbers spelled: none.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNothingTillABargeBreaks` | none, none in the air, a tick changes nothing | pieces from nowhere |
+| `TestItBreaksIntoPiecesOfItsWholePicture` | at least four pieces, in the air; every part inside the picture; the parts add up to the picture once, the pieces to the barge's area | a barge breaks into one piece, a strip of it is lost or drawn twice |
+| `TestEachPieceStartsWhereItWasInTheBarge` | unturned: each piece's middle where its part lies in the barge | the pieces start in a heap at the middle, or mirrored |
+| `TestATurnedBargeBreaksTurned` | turned a quarter: each piece turned so, the barge's length running down the screen | a tumbling barge snaps level as it breaks |
+| `TestTheyTumble` | a tick on: every piece has turned by more than a degree | flat pieces sliding off |
+| `TestTheyKeepAShareOfTheBargesWay` | of two barges of the same dice, one going right at 10: a tick on each of its pieces is farther right than its twin, by less than 10 | the pieces stop dead where the barge struck, or fly on as fast as it came |
+| `TestTheyFallAndAreGoneSoon` | within 200 ticks: none in the air, the list empty, and they went down past the bottom edge | pieces hang over the main barge, or pile up in memory through a long fight |
+| `TestASecondBargeBreaksWhileTheFirstFalls` | a second barge a tick after the first: twice the pieces | the second break wipes the first one's pieces |
+| `TestAClearTakesThemAway` | a clear: none | a death leaves pieces falling over the restart |
+| `TestSameDiceSameFlight` | two of the same dice, 20 ticks: the same places and turns | the pieces read `Random` |
+
+Left to the eye: the pieces' picture, their look against the barge.
+
+## Game.Ram: the magnet
+
+State: written, 9 tests (3.0.121, stage 18d-2), not run yet: fixture
+`TRamMagnetTests` in `Tests\Game\Tests.Game.Ram.pas`. The magnet's own
+rules are tried in `Tests.Game.Magnet`; here, what the Ram does with it.
+
+Shared: the body and the orders of the other fixtures; `HangWithTheMagnetOut`
+starts it hanging over a point, deploys and ticks till the magnet seeks;
+`BargeUnderTheFace` - a barge 67 wide under the face, 40 lower.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestOnTheRoadTheMagnetStaysStowed` | past the bunker on the road, told to deploy on every one of 400 ticks: no start, stowed | a magnet under a hull that drives |
+| `TestHangingAndToldItComesOutAndTellsItsStart` | hanging and not told, 400 ticks: no start, stowed; told: the start once in 400 ticks, out | the Ram deploys by itself, or the game never hears the start |
+| `TestItCatchesTheBargeUnderItsFace` | the magnet out, a barge under the face told with the hero: a catch with its number, held | the barges of the target never reach the magnet, or its face is not where the hull's is |
+| `TestWantingABargeTheHullFliesOverIt` | hanging at 400, he at the right, the only barge at the left edge: within 800 ticks a catch, the hull's middle more than 100 left of where it hung | the hull stays over the hero and the fight stalls with every barge out of reach |
+| `TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles` | straight up along the hanging hull: one run of hits 24 to 36 wide, each more than 8 under the hull's bottom, thrown off down, its middle within a quarter of the hull of the hull's | the magnet's box is not where its picture is, or as wide as the belly |
+| `TestStowedNoMagnetToMeet` | hanging, the magnet stowed: no hit anywhere along the hull | orbs ring off a magnet that is not there |
+| `TestTheMagnetIsSoftOnlyWhileHot` | a strike into the face is met at every stage; the magnet is not soft while it seeks, soft in the hold, not soft once it seeks again | the hull can be hurt at any time - the gallery of 17a - or never |
+| `TestTheMagnetIsNoBodyToTouch` | a box under the hull's bottom, wholly within the magnet: not in the hull | a hero on a high lane is wounded by the magnet's side |
+| `TestAClearStowsTheMagnet` | a clear with the magnet out: stowed, not out | a death leaves the magnet out, and the fight starts without its start |
+
+## Game.Wrecks: the fling
+
+State: written, 6 tests (3.0.121, stage 18d-2), not run yet: fixture
+`TPadFlungTests` in `Tests\Game\Tests.Game.Wrecks.pas`.
+
+Shared: a barge 104 wide held at 256, 195 - under the hanging hull - and
+flung at 180, 336, a hero on the main barge. Numbers spelled: none.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestItPassesCloseByItsMark` | within 45 ticks its way passes within 20 of the mark | the throw is not aimed |
+| `TestPastItsMarkItNeverTurnsBack` | once it recedes from the mark it never comes nearer again | a dodged barge circles the place he stood, as a hurled pad would |
+| `TestAMissIsGoneOffTheScreen` | within 200 ticks: gone, none in the air | a missed barge flies on unseen for ever |
+| `TestFlungDownItIsGoneUnderTheScreen` | flung straight down: gone, under the screen | the bottom edge is no edge, as for the wave's wrecks |
+| `TestItTumblesWhateverTheHeldSpinIs` | the same pad of the same turn with the held spin 0 and 20: it turns more than a degree a tick, alike both times | a barge thrown outside the henshin flies stiff, or spins as a propeller with the last scene's spin |
+| `TestAWreckNotHeldIsNotFlung` | a wave's wreck flung: not hurled, not flung | any wreck can be re-aimed |
+
+## Game.HullLives: the bar's heat
+
+State: written, 4 tests (3.0.121, stage 18d-2), not run yet, beside the 7
+of 3.0.116 in `Tests\Game\Tests.Game.HullLives.pas`, fixture
+`THullLivesTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestArmouredTillAPartIsHot` | armed, 1000 ticks with nothing hot: not hot, no pulse; a tick with a hot part: hot; a tick with none: not hot, no pulse | the bar pulses over an armoured hull, or stays hot after the window |
+| `TestHotTheBarPulses` | two pulses' ticks hot: the pulse within 0 and 1, seen under 0.2 and over 0.8 | the bar stands still while the hull can be hurt |
+| `TestANewHeatStartsThePulseAnew` | five ticks hot, two not, five hot: the second five read as the first | a window opens in the middle of a pulse, dim |
+| `TestArmingAndAClearLeaveItArmoured` | armed anew while hot, and cleared and armed: not hot | a restart shows a hot bar over a stowed magnet |
 
