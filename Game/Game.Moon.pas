@@ -383,6 +383,7 @@ type
     procedure StartRam(const AOrders: TRamOrders);
     procedure ResumePastBunker(const AOrders: TRamOrders);
     procedure ResumeAboard(const AOrders: TRamOrders);
+    procedure SeatBarge;
     procedure BeginPier;
     procedure ClearPier;
     procedure TickPier(AWay: Double);
@@ -2919,7 +2920,9 @@ begin
   PinRespawnPoint;
   if FPastLauncher then
   begin
-    // Aboard the barge, which the Ram's cue has put at its station
+    // The Ram's cue comes with the screen's triggers on the next tick: the
+    // barge goes to its station now, or he is put where it is not
+    SeatBarge;
     PinPierCheckpoint;
     PlaceAtCheckpoint;
   end
@@ -3149,16 +3152,21 @@ begin
   FHero.HeroForm := hfMoon;
   GiveOrbLauncher;
   FLevel.EraseRow(FHero.Screen, RoadRow);
-  FBarge.Station;
-  if FBargePad <> nil then
-  begin
-    FBargePad.Wake;
-    FBargePad.FlyTo(FBarge.Left, RamFloorY, 0);
-  end;
+  SeatBarge;
   StopRamRumble;
   FRamRumble := FAudio.PlayLooped(JetHoverSoundFile);
   if not FAudio.Plays(FRam.FlightTrack) then
     ChangeMusic(FRam.FlightTrack);
+end;
+
+// The barge at its station on its line, its pad awake there
+procedure TMoonGame.SeatBarge;
+begin
+  FBarge.Station;
+  if FBargePad = nil then
+    Exit;
+  FBargePad.Wake;
+  FBargePad.FlyTo(FBarge.Left, RamFloorY, 0);
 end;
 
 // The orb launcher in his hands as the take puts it there: the gun he

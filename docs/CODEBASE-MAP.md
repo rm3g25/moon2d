@@ -7227,6 +7227,10 @@ so a unit (and later a test) can reach it. `interface` holds
   slide, lift)`; `HeroSlide` - `THero.DeckSlide`, through the renderer's
   `FineX`); `LocateParent` gives a pad's `Glide(0)` to its rigs
   (`TParentStand.Glide`).
+- 3.0.120: **`SeatBarge`** - the barge at its station, its pad awake there;
+  `ResumeAboard` and `RestartLevel` past the launcher both call it, the
+  restart before `PinPierCheckpoint` - the Ram's cue comes a tick later,
+  with the screen's triggers.
 - 3.0.120, **the barges** (stage 18d-1): `TickPier` carries the barge's
   pad across and down (`Carry(Way, WayDown)`) and runs **`TickFlock`**
   before the checkpoint - the flock started (`FlockCounts[1]`) once the

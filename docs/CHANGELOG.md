@@ -28,6 +28,8 @@ version: the pads are drawn between the ticks and in fractions of a unit
 (`TPad.Glide`, `Lift` with the deck's fraction), with their riders
 (`DeckSlide`, the renderer's `FineX`) and their lamps (`TParentStand.Glide`)
 - the barges, and every moving pad, no longer jerk a whole unit at a time.
+A death in the air fight no longer puts the hero over the abyss first: the
+restart seats the barge at its station before it places him (`SeatBarge`).
 Tests: `TBargeFlockTests` 17, new; `TBargeRideTests` +8 and 2 reworked;
 `TPadWorldTests` +3.
 
