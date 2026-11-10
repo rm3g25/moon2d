@@ -36,6 +36,11 @@
   share, and the bow dies away as it closes, so no two take one way and
   none flies a straight line. It is gone when the game says it struck.
 
+  The Ram's magnet flings a barge the same way, at a mark that may be
+  missed: a flung pad that has passed its mark flies on the way it goes,
+  tumbling at a pace of its own, and is gone past any edge of the screen,
+  the bottom one too.
+
   TPadWrecks is the rules, TPadWreckPainter draws them: the picture of
   the pad turned with the spin, fire and smoke out of its jet, sparks
   behind it, a glow about it, small bolts over its deck - for a held pad
@@ -90,6 +95,9 @@ type
     Hurled: Boolean;
     Aim: TSdlFPoint;
     Swerve: Single;
+    // Flung, not hurled: Passed - it has gone by its mark and flies on
+    Flung: Boolean;
+    Passed: Boolean;
     // Which launch since the clear it is: a new wreck in the place of a
     // gone one has another
     Turn: Integer;
@@ -123,6 +131,11 @@ type
     // The held wreck AIndex is let go at AAim, the point it turns about
     // making for it, its jet burning; nothing for one not held
     procedure Hurl(AIndex: Integer; const AAim: TSdlFPoint);
+    // The held wreck AIndex is let go at AAim as a hurled one is, but the
+    // mark may be missed: past it the wreck flies on, and is gone past the
+    // bottom edge as past the others; it tumbles at a pace of its own,
+    // whatever the held spin is. Nothing for one not held.
+    procedure Fling(AIndex: Integer; const AAim: TSdlFPoint);
     // The wreck AIndex has struck: it is gone
     procedure Smash(AIndex: Integer);
     procedure Tick;
@@ -234,6 +247,10 @@ const
   HurlSwerveSpan = 25.0;
   HurlSwerveFade = 0.92;
   HurlSwerveSalt = 6;
+  // A flung pad tumbles this fast, degrees a tick, and up to FlingSpinSpan
+  // more: slow enough for a barge's picture to read
+  FlingSpinLeast = 4.0;
+  FlingSpinSpan = 5.0;
 
   // The jet leaves the middle of the underside, turned with the picture
   WreckJetDown = 6.0;
@@ -289,6 +306,11 @@ function OffTheScreen(const AMiddle: TSdlFPoint): Boolean;
 begin
   Result := (AMiddle.X < -WreckOffMargin) or
     (AMiddle.X > ScreenWidth + WreckOffMargin) or (AMiddle.Y < -WreckOffMargin);
+end;
+
+function UnderTheScreen(const AMiddle: TSdlFPoint): Boolean;
+begin
+  Result := AMiddle.Y > ScreenHeight + WreckOffMargin;
 end;
 
 // A steady pick in [0, 1) for the wreck of this turn: the same blast throws
@@ -413,6 +435,22 @@ begin
   FWrecks[AIndex] := Wreck;
 end;
 
+// The way round it turned held, so the tumble does not jump back
+procedure TPadWrecks.Fling(AIndex: Integer; const AAim: TSdlFPoint);
+begin
+  if not FWrecks[AIndex].Held then
+    Exit;
+  Hurl(AIndex, AAim);
+  var Wreck := FWrecks[AIndex];
+  Wreck.Flung := True;
+  var Side := 1;
+  if Wreck.HeldShare < 0 then
+    Side := -1;
+  Wreck.SpinRate := Side * (FlingSpinLeast +
+    FlingSpinSpan * WreckVariety(Wreck.Turn, WreckSpinSalt));
+  FWrecks[AIndex] := Wreck;
+end;
+
 procedure TPadWrecks.Smash(AIndex: Integer);
 begin
   FWrecks[AIndex].Gone := True;
@@ -466,18 +504,28 @@ begin
   AWreck.Spin := AWreck.Spin + AWreck.HeldShare * FHeldSpin;
 end;
 
-// The thrust toward the mark, turned aside by what is left of the swerve
+// The thrust toward the mark, turned aside by what is left of the swerve;
+// a flung one past its mark is pushed on along its own way
 procedure TPadWrecks.TickHurled(var AWreck: TPadWreck);
 begin
   AWreck.Swerve := AWreck.Swerve * HurlSwerveFade;
   var Heading := Bearing(AWreck.Middle, AWreck.Aim) + AWreck.Swerve;
+  if AWreck.Flung then
+  begin
+    var Closing := AWreck.Speed.X * (AWreck.Aim.X - AWreck.Middle.X) +
+      AWreck.Speed.Y * (AWreck.Aim.Y - AWreck.Middle.Y);
+    AWreck.Passed := AWreck.Passed or (Closing <= 0);
+    if AWreck.Passed then
+      Heading := ArcTan2(AWreck.Speed.Y, AWreck.Speed.X);
+  end;
   AWreck.Speed.X := (AWreck.Speed.X + HurlThrust * Cos(Heading)) * (1 - WreckDrag);
   AWreck.Speed.Y := (AWreck.Speed.Y + HurlThrust * Sin(Heading) + WreckGravity) *
     (1 - WreckDrag);
   AWreck.Middle.X := AWreck.Middle.X + AWreck.Speed.X;
   AWreck.Middle.Y := AWreck.Middle.Y + AWreck.Speed.Y;
   AWreck.Spin := AWreck.Spin + AWreck.SpinRate;
-  AWreck.Gone := OffTheScreen(AWreck.Middle);
+  AWreck.Gone := OffTheScreen(AWreck.Middle) or
+    (AWreck.Flung and UnderTheScreen(AWreck.Middle));
 end;
 
 procedure TPadWrecks.Clear;

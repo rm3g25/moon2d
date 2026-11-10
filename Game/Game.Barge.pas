@@ -7,13 +7,15 @@
   screen. The hero aboard, it casts off: it glides to its station in the
   middle of the screen and holds it while the world speeds up round it.
 
-  The fight starts once he stands on it at its station: it lets go of the
-  station and drifts on a slow wide loop of its own - a figure of eight
-  lying on its side, its middle across the middle three fifths of the
-  screen and its deck half a cell up and down about the line it was
-  moored on. It sets off gently, from the station itself, and never stops
-  again: it follows neither the hero nor the Ram, and a hero who leaves it
-  does not stop it.
+  The fight on - the caller says when - it lets go of the station and
+  drifts on a slow wide loop of its own - a figure of eight lying on its
+  side, its middle across the middle three fifths of the screen and its
+  deck half a cell up and down about the line it was moored on. It sets
+  off gently, from the station itself, and never stops again: it follows
+  neither the hero nor the Ram, and a hero who leaves it does not stop it.
+
+  A blow from above rocks it: its deck dips and swings back to its line, a
+  spring dying out, on top of the drift.
 
   Only where the barge's left edge and its deck are and when he boards:
   the pad that is the barge (Pads.World) is carried by the way this gives
@@ -70,8 +72,13 @@ type
     FDip, FLastDip: Double;
     // How far round the eight it has gone, in radians
     FTurn: Double;
+    // The rock of a blow: units under where the drift has the deck, and
+    // units a tick
+    FRock: Double;
+    FRockPace: Double;
     function Mooring(APierRight: Double): Double;
     procedure Drift;
+    procedure Swing;
   public
     constructor Create;
     // The road runs out, its end at APierRight: the barge hangs a hop past
@@ -82,10 +89,14 @@ type
     procedure Station;
     // A death, a new level: away again
     procedure Clear;
+    // The fight is on: it lets go of its station and drifts from the next
+    // tick on; nothing unless at its station
+    procedure Loose;
+    // Struck from above: its deck dips by about ADepth and swings back
+    procedure Rock(ADepth: Double);
     // APierRight - the pier's end on the screen, heard while APierStands;
     // AAboard - the hero stands on the barge's deck this tick. True the
-    // tick he comes aboard: it casts off, the world speeds up. Aboard at
-    // its station, it drifts from the next tick on.
+    // tick he comes aboard: it casts off, the world speeds up.
     function Tick(APierRight: Double; APierStands, AAboard: Boolean): Boolean;
     // How far it went across this tick, below 0 to the left
     function Way: Double;
@@ -103,6 +114,14 @@ implementation
 
 uses
   System.Math;
+
+const
+  // The rock's spring: a swing of about a second, all but gone after two
+  RockPull = 0.04;
+  RockDrag = 0.1;
+  // The pace a blow gives for each unit of depth asked: the spring then
+  // goes about that deep
+  RockKick = 0.31;
 
 function SmoothStep(AShare: Single): Single;
 begin
@@ -126,6 +145,8 @@ begin
   FDip := 0;
   FLastDip := 0;
   FTurn := 0;
+  FRock := 0;
+  FRockPace := 0;
 end;
 
 procedure TBargeRide.Moor(APierRight: Double);
@@ -147,6 +168,8 @@ begin
   FDip := 0;
   FLastDip := 0;
   FTurn := 0;
+  FRock := 0;
+  FRockPace := 0;
 end;
 
 function TBargeRide.Mooring(APierRight: Double): Double;
@@ -163,7 +186,27 @@ begin
   FTurn := FTurn + Pace;
   var Middle := ScreenWidth / 2 + DriftReachX * Sin(FTurn);
   FLeft := Middle - BargeLength / 2;
-  FDip := -DriftReachY * Sin(2 * FTurn);
+  FDip := -DriftReachY * Sin(2 * FTurn) + FRock;
+end;
+
+procedure TBargeRide.Loose;
+begin
+  if FStage <> bsStation then
+    Exit;
+  FStage := bsDrift;
+  FTicks := 0;
+  FTurn := 0;
+end;
+
+procedure TBargeRide.Rock(ADepth: Double);
+begin
+  FRockPace := FRockPace + ADepth * RockKick;
+end;
+
+procedure TBargeRide.Swing;
+begin
+  FRockPace := FRockPace - RockPull * FRock - RockDrag * FRockPace;
+  FRock := FRock + FRockPace;
 end;
 
 function TBargeRide.Tick(APierRight: Double; APierStands,
@@ -190,15 +233,11 @@ begin
         if FTicks >= CastOffTicks then
           FStage := bsStation;
       end;
-    bsStation:
-      if AAboard then
-      begin
-        FStage := bsDrift;
-        FTicks := 0;
-        FTurn := 0;
-      end;
     bsDrift:
-      Drift;
+      begin
+        Swing;
+        Drift;
+      end;
   end;
 end;
 

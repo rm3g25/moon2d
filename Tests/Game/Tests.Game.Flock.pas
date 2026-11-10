@@ -6,10 +6,12 @@
   replaced after a short gap; a barge within the jump of the main barge on
   every tick once the escort is in, the escort on the screen, relieved and
   let go; none up in the Ram's belly; the way is what it went; a clear
-  grounds the flock; the same dice, the same flight.
+  grounds the flock; the same dice, the same flight. A barge taken out of
+  the flock flies no more, is not sent again till it is given back, and is
+  replaced - the escort at once, by its relief when one is on its way.
 
-  The main barge is Game.Barge's own, drifting on its loop from its
-  station with the hero aboard, its deck on the road's line.
+  The main barge is Game.Barge's own, let go at its station and drifting
+  on its loop, its deck on the road's line.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -35,6 +37,9 @@ type
     // Ticks until a barge flies within the jump of the main one; fails
     // past ALimit
     function TicksTillNeighbour(ALimit: Integer): Integer;
+    // Steps till a barge that is not the escort flies; its index. Fails
+    // past ALimit.
+    function StepTillAFreeBargeFlies(ALimit: Integer): Integer;
   public
     [Setup]
     procedure Setup;
@@ -75,6 +80,20 @@ type
     procedure TestASmallPoolFliesWhatItHas;
     [Test]
     procedure TestWithinJumpIsAJumpUpOrDownAndAcross;
+    [Test]
+    procedure TestATakenBargeFliesNoMore;
+    [Test]
+    procedure TestATakenBargeIsReplacedByAnother;
+    [Test]
+    procedure TestATakenEscortIsReplacedAtOnce;
+    [Test]
+    procedure TestTheEscortTakenItsReliefIsTheEscort;
+    [Test]
+    procedure TestGivenBackItFliesAgain;
+    [Test]
+    procedure TestTakingOneNotFlyingChangesNothing;
+    [Test]
+    procedure TestClearForgetsTheTaken;
   end;
 
 implementation
@@ -109,6 +128,7 @@ procedure TBargeFlockTests.Setup;
 begin
   FRide := TBargeRide.Create;
   FRide.Station;
+  FRide.Loose;
   FFlock := TBargeFlock.Create(Pool, Seed);
 end;
 
@@ -481,6 +501,139 @@ begin
     'The farthest left');
   Assert.IsFalse(WithinJump(Main, 175 - NeighbourGap - 67, MainLine - 32, 67),
     'Farther left');
+end;
+
+function TBargeFlockTests.StepTillAFreeBargeFlies(ALimit: Integer): Integer;
+begin
+  for var Tick := 1 to ALimit do
+  begin
+    Step;
+    for var i := 0 to FFlock.PoolSize - 1 do
+      if FFlock.Flying(i) and (i <> FFlock.Escort) and
+        (FFlock.PathOf(i) <> fpEscort) then
+        Exit(i);
+  end;
+  Assert.Fail(Format('No free barge in %d ticks', [ALimit]));
+  Result := -1;
+end;
+
+procedure TBargeFlockTests.TestATakenBargeFliesNoMore;
+begin
+  FFlock.Start(Count);
+  var Loner := StepTillAFreeBargeFlies(EscortInTicks);
+  var FlewBefore := FFlock.FlyingCount;
+  FFlock.Take(Loner);
+  Assert.IsFalse(FFlock.Flying(Loner), 'It flies no more');
+  Assert.IsTrue(FFlock.Taken(Loner), 'It is taken');
+  Assert.AreEqual(FlewBefore - 1, FFlock.FlyingCount, 'One fewer flies');
+  for var i := 1 to LongRunTicks div 4 do
+  begin
+    Step;
+    Assert.IsFalse(FFlock.Flying(Loner),
+      'Tick ' + i.ToString + ': sent in while it is taken');
+  end;
+end;
+
+procedure TBargeFlockTests.TestATakenBargeIsReplacedByAnother;
+begin
+  FFlock.Start(Count);
+  var Loner := StepTillAFreeBargeFlies(EscortInTicks);
+  FFlock.Take(Loner);
+  for var i := 1 to ReplaceGapMost + 1 do
+    Step;
+  Assert.AreEqual(Count, FFlock.FlyingCount, 'Another came in for it');
+end;
+
+procedure TBargeFlockTests.TestATakenEscortIsReplacedAtOnce;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  var Old := FFlock.Escort;
+  Assert.IsTrue(Old >= 0, 'An escort flies');
+  FFlock.Take(Old);
+  Assert.IsFalse(FFlock.Flying(Old), 'The old escort flies no more');
+  Step;
+  Assert.IsTrue(FFlock.Escort >= 0, 'A new escort at once');
+  Assert.AreNotEqual(Old, FFlock.Escort, 'Another barge');
+  Assert.IsTrue(FFlock.Flying(FFlock.Escort), 'And it flies');
+  // In its place within the jump as soon as the first one was
+  TicksTillNeighbour(EscortInTicks);
+end;
+
+procedure TBargeFlockTests.TestTheEscortTakenItsReliefIsTheEscort;
+begin
+  FFlock.Start(Count);
+  var Relief := -1;
+  for var Tick := 1 to LongRunTicks do
+  begin
+    Step;
+    for var i := 0 to FFlock.PoolSize - 1 do
+      if FFlock.Flying(i) and (i <> FFlock.Escort) and
+        (FFlock.PathOf(i) = fpEscort) then
+        Relief := i;
+    if Relief >= 0 then
+      Break;
+  end;
+  Assert.IsTrue(Relief >= 0, 'A relief was sent');
+  FFlock.Take(FFlock.Escort);
+  Assert.AreEqual(Relief, FFlock.Escort, 'The relief is the escort');
+  // On it flies, with no hand-over left to make
+  for var i := 1 to EscortInTicks do
+    Step;
+  Assert.IsTrue(FFlock.Flying(Relief), 'Still flying');
+  Assert.IsTrue(AnyWithinJump, 'A barge within the jump');
+end;
+
+procedure TBargeFlockTests.TestGivenBackItFliesAgain;
+begin
+  var Small := TBargeFlock.Create([67.0, 104.0], Seed);
+  try
+    Small.Start(2);
+    Small.Tick(MainNow);
+    var First := Small.Escort;
+    Small.Take(First);
+    for var i := 1 to EscortInTicks do
+      Small.Tick(MainNow);
+    Assert.IsFalse(Small.Flying(First), 'Not sent while taken');
+    Small.GiveBack(First);
+    Assert.IsFalse(Small.Taken(First), 'The pool''s again');
+    var Flew := False;
+    for var i := 1 to LongRunTicks do
+    begin
+      Small.Tick(MainNow);
+      Flew := Flew or Small.Flying(First);
+    end;
+    Assert.IsTrue(Flew, 'It came in anew');
+  finally
+    Small.Free;
+  end;
+end;
+
+procedure TBargeFlockTests.TestTakingOneNotFlyingChangesNothing;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  var Idle := -1;
+  for var i := 0 to FFlock.PoolSize - 1 do
+    if not FFlock.Flying(i) then
+      Idle := i;
+  var Escort := FFlock.Escort;
+  var Flew := FFlock.FlyingCount;
+  FFlock.Take(Idle);
+  Assert.IsFalse(FFlock.Taken(Idle), 'Not taken');
+  Assert.AreEqual(Escort, FFlock.Escort, 'The escort as it was');
+  Assert.AreEqual(Flew, FFlock.FlyingCount, 'As many fly');
+end;
+
+procedure TBargeFlockTests.TestClearForgetsTheTaken;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  var Gone := FFlock.Escort;
+  FFlock.Take(Gone);
+  FFlock.Clear(Seed);
+  Assert.IsFalse(FFlock.Taken(Gone), 'The pool''s again');
+  Assert.AreEqual(0, FFlock.FlyingCount, 'None flies');
 end;
 
 initialization

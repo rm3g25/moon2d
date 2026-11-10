@@ -114,6 +114,13 @@
   Turned round, the hull is mirrored: what a touch meets and where the
   mast stands.
 
+  The magnet under its belly: stowed on the road whatever it is told;
+  hanging and told, it comes out and tells its start; a barge under it is
+  caught and carried; wanting one out of reach, the hull flies over it
+  though the hero is elsewhere; out, it takes a bullet from under between
+  the two nozzles, under the hull's bottom, and none while stowed; it is
+  soft only while it is hot; it is no body to touch; a clear stows it.
+
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid, and for the wells its lower band. The arena is
   read from level2.json beside the executable.
@@ -129,6 +136,7 @@ uses
   DUnitX.TestFramework,
   Levels.Events,
   Game.Shield,
+  Game.Magnet,
   Game.Ram;
 
 type
@@ -306,6 +314,45 @@ type
     procedure TestHoldsTheBodyAndAMarginPastIt;
     [Test]
     procedure TestAStripHoldsItsRow;
+  end;
+
+  [TestFixture]
+  TRamMagnetTests = class
+  private
+    FRam: TRam;
+    // Hanging with its middle over AMiddleX, the magnet out and cold; the
+    // ticks are spent with AHero in sight
+    procedure HangWithTheMagnetOut(AMiddleX: Single; const AHero: TRamTarget);
+    // A small barge under the magnet's face, a lane below it
+    function BargeUnderTheFace: TMagnetBarge;
+    // Ticks with AHero in sight till the magnet is at AStage. Fails past
+    // ALimit.
+    procedure TickTill(AStage: TMagnetStage; const AHero: TRamTarget;
+      ALimit: Integer);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestOnTheRoadTheMagnetStaysStowed;
+    [Test]
+    procedure TestHangingAndToldItComesOutAndTellsItsStart;
+    [Test]
+    procedure TestItCatchesTheBargeUnderItsFace;
+    [Test]
+    procedure TestWantingABargeTheHullFliesOverIt;
+    [Test]
+    procedure TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles;
+    [Test]
+    procedure TestStowedNoMagnetToMeet;
+    [Test]
+    procedure TestTheMagnetIsSoftOnlyWhileHot;
+    [Test]
+    procedure TestTheMagnetIsNoBodyToTouch;
+    [Test]
+    procedure TestAClearStowsTheMagnet;
   end;
 
   [TestFixture]
@@ -4281,7 +4328,246 @@ begin
     'Nearer him');
 end;
 
+{ TRamMagnetTests }
+
+const
+  HangMiddleX = 256.0;
+  // The first barge is caught well within this of the magnet's word
+  MagnetTicks = 400;
+  SmallBarge = 67.0;
+  CaughtBarge = 4;
+
+procedure TRamMagnetTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamMagnetTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+procedure TRamMagnetTests.TickTill(AStage: TMagnetStage; const AHero: TRamTarget;
+  ALimit: Integer);
+begin
+  var Ticks := 0;
+  while FRam.Magnet.Stage <> AStage do
+  begin
+    FRam.Tick(AHero);
+    Inc(Ticks);
+    if Ticks > ALimit then
+      Assert.Fail(Format('The magnet not at stage %d in %d ticks',
+        [Ord(AStage), ALimit]));
+  end;
+end;
+
+procedure TRamMagnetTests.HangWithTheMagnetOut(AMiddleX: Single;
+  const AHero: TRamTarget);
+begin
+  FRam.StartHanging(OrdersAt(Stop), AMiddleX);
+  FRam.DeployMagnet;
+  TickTill(mgSeeking, AHero, MagnetTicks);
+end;
+
+function TRamMagnetTests.BargeUnderTheFace: TMagnetBarge;
+begin
+  var Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  Result.Index := CaughtBarge;
+  Result.Left := Face.X - SmallBarge / 2;
+  Result.Top := Face.Y + 40;
+  Result.Width := SmallBarge;
+  Result.HeroAboard := False;
+end;
+
+procedure TRamMagnetTests.TestOnTheRoadTheMagnetStaysStowed;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX);
+  FRam.StartPastBunker(OrdersAt(Stop));
+  for var i := 1 to MagnetTicks do
+  begin
+    FRam.DeployMagnet;
+    var Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Magnet.Started, 'Tick ' + i.ToString + ': it started');
+  end;
+  Assert.AreEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'Stowed');
+end;
+
+procedure TRamMagnetTests.TestHangingAndToldItComesOutAndTellsItsStart;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  for var i := 1 to MagnetTicks do
+    Assert.IsFalse(FRam.Tick(Hero).Magnet.Started, 'Not told: no start');
+  Assert.AreEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'Stowed till told');
+
+  FRam.DeployMagnet;
+  var Starts := 0;
+  for var i := 1 to MagnetTicks do
+    if FRam.Tick(Hero).Magnet.Started then
+      Inc(Starts);
+  Assert.AreEqual(1, Starts, 'Its start told once');
+  Assert.AreEqual(1.0, Double(FRam.Magnet.OutAt(1)), 0.001, 'Out of the belly');
+end;
+
+procedure TRamMagnetTests.TestItCatchesTheBargeUnderItsFace;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  Hero.Barges := [BargeUnderTheFace];
+  var Caught := 0;
+  var Barge := NoBarge;
+  for var i := 1 to MagnetTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Magnet.Caught then
+    begin
+      Inc(Caught);
+      Barge := Cue.Magnet.Barge;
+      Break;
+    end;
+  end;
+  Assert.AreEqual(1, Caught, 'A catch told');
+  Assert.AreEqual(CaughtBarge, Barge, 'The barge under it');
+  Assert.IsTrue(FRam.Magnet.Holds, 'It holds it');
+end;
+
+// The hero stands to the right, the only barge is at the left edge: the
+// hull leaves him for the barge and catches it
+procedure TRamMagnetTests.TestWantingABargeTheHullFliesOverIt;
+const
+  StartMiddleX = 400.0;
+  BargeLeft = 8.0;
+  FlightTicks = 800;
+begin
+  var Hero := HeroOnTheRoad(FarHeroX - 40);
+  HangWithTheMagnetOut(StartMiddleX, Hero);
+  var Far := BargeUnderTheFace;
+  Far.Left := BargeLeft;
+  Hero.Barges := [Far];
+  var Ticks := 0;
+  while not FRam.Tick(Hero).Magnet.Caught do
+  begin
+    Inc(Ticks);
+    if Ticks > FlightTicks then
+      Assert.Fail('It never reached the barge to catch it');
+  end;
+  Assert.IsTrue(FRam.Left + RamWidth / 2 < StartMiddleX - 100,
+    'It flew left for it, away from the hero');
+end;
+
+// Straight up from under the hanging hull, along it: one run of hits about
+// the magnet's width, under the hull's bottom, thrown off down
+procedure TRamMagnetTests.TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles;
+const
+  Step = 0.5;
+  // From well under the face up to the hull's bottom
+  From = 50.0;
+  NarrowestMagnet = 24.0;
+  WidestMagnet = 36.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  var Bottom: Single := RamTop - HangLift + RamHeight;
+  var Runs := 0;
+  var RunWidth: Single := 0;
+  var RunMiddle: Single := 0;
+  var X: Single := FRam.Left - 10;
+  var InRun := False;
+  while X <= FRam.Left + RamWidth + 10 do
+  begin
+    var Struck := FRam.StrikeMagnet(At(X, Bottom + From), At(X, Bottom), Where,
+      Normal);
+    if Struck then
+    begin
+      Assert.IsTrue(Where.Y > Bottom + 8, Format('Under the hull at %.1f', [X]));
+      Assert.IsTrue(Normal.Y > 0.99, Format('Looking down at %.1f', [X]));
+      if not InRun then
+        Inc(Runs);
+      RunWidth := RunWidth + Step;
+      RunMiddle := X - RunWidth / 2;
+    end;
+    InRun := Struck;
+    X := X + Step;
+  end;
+  Assert.AreEqual(1, Runs, 'One magnet');
+  Assert.IsTrue((RunWidth >= NarrowestMagnet) and (RunWidth <= WidestMagnet),
+    Format('A magnet %.1f wide', [RunWidth]));
+  Assert.IsTrue(Abs(RunMiddle - (FRam.Left + RamWidth / 2)) < RamWidth / 4,
+    'About the middle of the hull, between the nozzles');
+end;
+
+procedure TRamMagnetTests.TestStowedNoMagnetToMeet;
+const
+  Step = 0.5;
+  From = 50.0;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.Tick(Hero);
+  var Bottom: Single := RamTop - HangLift + RamHeight;
+  var X: Single := FRam.Left - 10;
+  while X <= FRam.Left + RamWidth + 10 do
+  begin
+    Assert.IsFalse(FRam.StrikeMagnet(At(X, Bottom + From), At(X, Bottom), Where,
+      Normal), Format('A magnet at %.1f', [X]));
+    X := X + Step;
+  end;
+end;
+
+procedure TRamMagnetTests.TestTheMagnetIsSoftOnlyWhileHot;
+var
+  Where, Normal: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  var Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  Assert.IsTrue(FRam.StrikeMagnet(At(Face.X, Face.Y + 20), At(Face.X, Face.Y - 5),
+    Where, Normal), 'Met cold');
+  Assert.IsFalse(FRam.Magnet.Soft, 'Cold: armour');
+
+  Hero.Barges := [BargeUnderTheFace];
+  TickTill(mgHolding, Hero, MagnetTicks);
+  Hero.Barges := [];
+  FRam.Tick(Hero);
+  Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  Assert.IsTrue(FRam.StrikeMagnet(At(Face.X, Face.Y + 20), At(Face.X, Face.Y - 5),
+    Where, Normal), 'Met holding');
+  Assert.IsTrue(FRam.Magnet.Soft, 'Holding: soft');
+
+  TickTill(mgSeeking, Hero, MagnetTicks);
+  Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  Assert.IsTrue(FRam.StrikeMagnet(At(Face.X, Face.Y + 20), At(Face.X, Face.Y - 5),
+    Where, Normal), 'Met cold again');
+  Assert.IsFalse(FRam.Magnet.Soft, 'Cold again: armour');
+end;
+
+// A body under the hull's bottom, wholly within the magnet: no touch
+procedure TRamMagnetTests.TestTheMagnetIsNoBodyToTouch;
+var
+  Away: Integer;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  var Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  Assert.IsFalse(FRam.InTheHull(Box(Face.X - 4, Face.Y - 12, 8, 10), Away),
+    'In the magnet, not in the hull');
+end;
+
+procedure TRamMagnetTests.TestAClearStowsTheMagnet;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  FRam.Clear;
+  Assert.AreEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'Stowed');
+  Assert.AreEqual(0.0, Double(FRam.Magnet.OutAt(1)), 0.001, 'In the belly');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TRamMagnetTests);
   TDUnitX.RegisterTestFixture(TRamTests);
   TDUnitX.RegisterTestFixture(TRamHunterTests);
   TDUnitX.RegisterTestFixture(TRamSweeperTests);

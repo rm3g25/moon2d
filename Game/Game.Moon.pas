@@ -31,7 +31,7 @@ uses
   Game.StoneTank, Game.Heartbeat, Game.Belt, Game.FarPlane, Render.FarPlane, Game.Fangs,
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
-  Game.HullLives, Game.Road, Game.Barge, Game.Flock,
+  Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -202,6 +202,21 @@ type
     // the order the flock knows them; born with the level
     FFlock: TBargeFlock;
     FFlockPads: TArray<TPad>;
+    // The magnet's catch in the air fight: the pad it holds till it seizes
+    // it, how far it took that pad on the Ram's last tick - the pad goes
+    // that far on the next, before the pads' own tick - the wreck the
+    // seized pad is thrown as (-1 - none), whether that wreck has had its
+    // chance at the hero, and the hum from the catch to the throw
+    FMagnetPad: TPad;
+    FMagnetWay: TSdlFPoint;
+    FMagnetWreck: Integer;
+    FMagnetStruckHero: Boolean;
+    FMagnetHum: THeldSound;
+    // What is left of a barge thrown onto the main barge
+    FPieces: TBargePieces;
+    FPiecePainter: TBargePiecePainter;
+    // The hint of the hot parts has been typed on this level
+    FGlowHintTold: Boolean;
     // The orb launcher is his: a death comes back aboard the barge, the
     // hull hanging, the world moving - point B
     FPastLauncher: Boolean;
@@ -389,6 +404,14 @@ type
     procedure TickPier(AWay: Double);
     procedure BuildFlock;
     procedure TickFlock;
+    function HeroStandsOn(const APad: TPad): Boolean;
+    function MagnetBarges: TArray<TMagnetBarge>;
+    procedure CarryOutMagnet(const ACue: TMagnetCue);
+    procedure SeizeMagnetBarge(const ACue: TMagnetCue);
+    procedure ThrowMagnetBarge(const AAim: TSdlFPoint);
+    procedure ResolveThrownBarge;
+    procedure BreakThrownBarge;
+    procedure ClearMagnet;
     procedure DozeSpentPier;
     procedure PinPierCheckpoint;
     procedure PlaceAtCheckpoint;
@@ -572,8 +595,22 @@ const
   // roar while it is off the road
   JetFireSoundFile = 'jetfire.wav';
   JetHoverSoundFile = 'jethover.wav';
-  // An orb of the orb launcher sinking into the Ram's bare hull
+  // An orb of the orb launcher sinking into a hot part of the Ram
   OrbHitSoundFile = 'orbhit.wav';
+  // The Ram's magnet: its hum from the catch of a barge to the throw, and
+  // the throw
+  MagnetHumSoundFile = 'magnethum.wav';
+  MagnetThrowSoundFile = 'magnetthrow.wav';
+  // Which barge the magnet takes: till the ladder of the air fight sets
+  // it by the tier, the barge he stands on - so the lift is played
+  AirFightMagnetRule = mrHisBarge;
+  // A thrown barge wounds a hero whose middle is within this of the way
+  // its middle went this tick, once a throw
+  ThrownBargeReach = 28.0;
+  // It meets the main barge from this far over its deck
+  ThrownBargeSlack = 4.0;
+  // The main barge struck by a thrown one: how deep it rocks
+  BargeBlowDepth = 8.0;
   // The pickup the orb launcher comes as, and its frame on the road
   OrbLauncherPickupId = 'weaponOrbLauncher';
   OrbLauncherSetName = 'orblauncher';
@@ -669,6 +706,7 @@ const
   CannonSeed = $43616E6E; // "Cann"
   RamSeed = $52616D20; // "Ram "
   StoneTankSeed = $546E6B20; // "Tnk "
+  PieceSeed = $50636520; // "Pce "
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -747,6 +785,7 @@ const
   AftershockTrauma = 0.3; // each pop of the boss's wreck
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
   WheelShedTrauma = 0.5; // the Ram's front wheel breaking off
+  BargeBlowTrauma = 0.45; // a thrown barge breaking on the main barge
   CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
   DupletShotTrauma = 0.2; // every shot of the Duplet: the kick of the stock
   // The smoke of the cannons' blast hangs over the room about this long:
@@ -797,9 +836,14 @@ begin
   FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
   FRamArt := TRamArt.Create(ARenderer);
   FRam := TRam.Create(FRamArt.Body, FRamArt.Wells, RamSeed);
+  FRam.Magnet.Rule := AirFightMagnetRule;
   FRamPainter := TRamPainter.Create(FRamArt, FRam);
   FWrecks := TPadWrecks.Create;
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
+  FPieces := TBargePieces.Create(PieceSeed);
+  FPiecePainter := TBargePiecePainter.Create(ARenderer, FPieces);
+  FMagnetWreck := -1;
+  FMagnetHum.Channel := -1;
   FCapsules := TShuttleCapsules.Create;
   FCapsulePainter := TCapsulePainter.Create(FCapsules);
   FShells := TBunkerShells.Create(RamFloorY);
@@ -859,6 +903,8 @@ begin
   FCannons.Free;
   FCannonArt.Free;
   // The painters before what they draw
+  FPiecePainter.Free;
+  FPieces.Free;
   FWreckPainter.Free;
   FWrecks.Free;
   FCapsulePainter.Free;
@@ -1195,6 +1241,7 @@ begin
   FStreakBonusCount := 0;
   FBonus := bkNone;
   FBonusActivateQueued := False;
+  FGlowHintTold := False;
   FTriggerFired := nil;
   SetLength(FTriggerFired,
     Length(FLevel.Entities) + Length(FLevel.ScreenTriggers));
@@ -1423,7 +1470,7 @@ begin
   FVitals := THudVitals.Create(FRenderer);
   FCharge := THudCharge.Create(FRenderer, FrameWidth);
   FMarks := THudMarks.Create(FRenderer);
-  FHullBar := THudHullBar.Create(FRenderer);
+  FHullBar := THudHullBar.Create(FFont, FRenderer, Tr(SHullArmour));
   FGoRight := THudGoRight.Create(FRenderer);
   FEnergyGauge := THudEnergy.Create(FRenderer);
 end;
@@ -2145,6 +2192,8 @@ begin
   FAudio.Load(JetFireSoundFile);
   FAudio.Load(JetHoverSoundFile);
   FAudio.Load(OrbHitSoundFile);
+  FAudio.Load(MagnetHumSoundFile);
+  FAudio.Load(MagnetThrowSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -3209,7 +3258,8 @@ begin
 end;
 
 // The whole road again, of the grid; the pads of the air phase back to
-// the level file's by the pads' own rewind, the small barges grounded
+// the level file's by the pads' own rewind, the small barges grounded,
+// the magnet's catch let go
 procedure TMoonGame.ClearPier;
 begin
   FRoad.Clear;
@@ -3217,7 +3267,20 @@ begin
   FFlock.Clear(RollDiceSeed);
   for var Pad in FFlockPads do
     Pad.Doze;
+  ClearMagnet;
   FLevel.RestoreRows;
+end;
+
+// The wrecks are cleared with the Ram's, the magnet itself with the Ram
+procedure TMoonGame.ClearMagnet;
+begin
+  FMagnetPad := nil;
+  FMagnetWay := Default(TSdlFPoint);
+  FMagnetWreck := -1;
+  FMagnetStruckHero := False;
+  FAudio.StopHeld(FMagnetHum);
+  FMagnetHum.Channel := -1;
+  FPieces.Clear;
 end;
 
 // The pool of the small barges: the pads tagged s13-flock-1, -2 and on, as
@@ -3240,8 +3303,9 @@ end;
 
 // The small barges, from the moment the barge drifts - the fight on: each
 // pad of the pool where the flock flies it, woken as it comes in, put to
-// sleep once it is gone. The barge's deck is where the pier left it and
-// as far down as its drift has taken it.
+// sleep once it is gone; the one the magnet has taken goes the way the
+// magnet took it. The barge's deck is where the pier left it and as far
+// down as its drift has taken it.
 procedure TMoonGame.TickFlock;
 var
   Main: TMainBarge;
@@ -3255,6 +3319,11 @@ begin
   for var i := 0 to High(FFlockPads) do
   begin
     var Pad := FFlockPads[i];
+    if FFlock.Taken(i) then
+    begin
+      Pad.Carry(FMagnetWay.X, FMagnetWay.Y);
+      Continue;
+    end;
     if not FFlock.Flying(i) then
     begin
       if not Pad.Dormant then
@@ -3269,6 +3338,7 @@ begin
     end;
     Pad.Carry(FFlock.WayX(i), FFlock.WayY(i));
   end;
+  FMagnetWay := Default(TSdlFPoint);
 end;
 
 // The pier's pad is as long as the pier and rides with it; gone once the
@@ -3279,15 +3349,21 @@ begin
     FRoadPad.Doze;
 end;
 
+function TMoonGame.HeroStandsOn(const APad: TPad): Boolean;
+begin
+  Result := (APad <> nil) and not FHero.Dead and not FHero.InAir and
+    (FHero.DeckUnderFeet = APad);
+end;
+
 function TMoonGame.HeroAboard: Boolean;
 begin
-  Result := (FBargePad <> nil) and not FHero.Dead and not FHero.InAir and
-    (FHero.DeckUnderFeet = FBargePad);
+  Result := HeroStandsOn(FBargePad);
 end;
 
 // Before the pads' tick, which carries their riders: the pier and its pad
 // ride the belt, the barge goes its own way, and the small barges theirs.
-// The hero aboard, the belt runs up to the flight's pace
+// The hero aboard, the belt runs up to the flight's pace; aboard at the
+// station, the Ram's magnet is told to come out - the fight
 procedure TMoonGame.TickPier(AWay: Double);
 begin
   if not FPastLauncher or (FRoadPad = nil) or (FBargePad = nil) then
@@ -3299,6 +3375,8 @@ begin
   FBargePad.Carry(FBarge.Way, FBarge.WayDown);
   if Boarded then
     FBelt.Run(BeltFlight);
+  if (FBarge.Stage = bsStation) and HeroAboard then
+    FRam.DeployMagnet;
   TickFlock;
   PinPierCheckpoint;
 end;
@@ -3529,7 +3607,7 @@ begin
   end;
   if Cue.Lay then
     LayOrbLauncher;
-  if FHullLives.Tick then
+  if FHullLives.Tick(FRam.Magnet.Soft) then
     FAudio.Play(TerminalKeySoundFile);
 end;
 
@@ -3895,9 +3973,16 @@ begin
     Target.SecondAt := SecondShellMark(ShellDecks(FPads.Standing(FHero.Screen)),
       Feet, RamFloorY);
   end;
+  if FPastLauncher and (FBargePad <> nil) then
+  begin
+    Target.Barges := MagnetBarges;
+    Target.Harbour.X := FBargePad.Left + BargeLength / 2;
+    Target.Harbour.Y := FBargePad.Top;
+  end;
   var HeadBefore := FRam.Head;
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
+  CarryOutMagnet(Cue.Magnet);
   if Cue.Chase then
     FBelt.Start;
   if Cue.Rows then
@@ -3978,9 +4063,170 @@ begin
     CallTheShuttle;
   FWrecks.Tick;
   FWreckPainter.Tick;
+  ResolveThrownBarge;
+  FPieces.Tick;
   FCapsules.Ride(-FBelt.Speed);
   TickCapsules;
   FOrbs.Charge(FStoneTank.Tick(FOrbs.Energy));
+end;
+
+// The small barges the magnet may take: those the flock flies
+function TMoonGame.MagnetBarges: TArray<TMagnetBarge>;
+begin
+  Result := [];
+  for var i := 0 to High(FFlockPads) do
+  begin
+    var Pad := FFlockPads[i];
+    if not FFlock.Flying(i) or Pad.Dormant then
+      Continue;
+    var Barge: TMagnetBarge;
+    Barge.Index := i;
+    Barge.Left := Pad.Left;
+    Barge.Top := Pad.Top;
+    Barge.Width := Pad.Placement.Width;
+    Barge.HeroAboard := HeroStandsOn(Pad);
+    Result := Result + [Barge];
+  end;
+end;
+
+// What the magnet did this tick, carried out: its first move lets the
+// barge go and so starts the flock; a caught barge leaves the flock and
+// is carried by the magnet from the next tick on, the hum rising
+procedure TMoonGame.CarryOutMagnet(const ACue: TMagnetCue);
+begin
+  if ACue.Started then
+    FBarge.Loose;
+  if ACue.Caught then
+  begin
+    FFlock.Take(ACue.Barge);
+    FMagnetPad := FFlockPads[ACue.Barge];
+    FAudio.StopHeld(FMagnetHum);
+    FMagnetHum := FAudio.PlayHeld(MagnetHumSoundFile);
+  end;
+  if ACue.Seized then
+    SeizeMagnetBarge(ACue);
+  if ACue.Thrown then
+    ThrowMagnetBarge(ACue.Aim);
+  FMagnetWay := Default(TSdlFPoint);
+  if FRam.Magnet.Holds then
+  begin
+    FMagnetWay.X := FRam.Magnet.WayX;
+    FMagnetWay.Y := FRam.Magnet.WayY;
+  end;
+end;
+
+// The held barge snaps up to the magnet's face: its pad goes back to the
+// pool and a wreck flies on in its picture, as the orbs of the throw took
+// pads. A hero still on it in a lift is pressed: wounded, and knocked down
+// and aside - the deck is gone from under him
+procedure TMoonGame.SeizeMagnetBarge(const ACue: TMagnetCue);
+begin
+  var Pad := FMagnetPad;
+  FMagnetPad := nil;
+  if Pad = nil then
+    Exit;
+  var Pressed := ACue.Pressed and HeroStandsOn(Pad);
+  var Aside := 1;
+  if HeroCenter.X < Pad.Left + Pad.Placement.Width / 2 then
+    Aside := -1;
+  Pad.Doze;
+  FFlock.GiveBack(ACue.Barge);
+  FMagnetWreck := FWrecks.Hold(Pad, PadPivot(Pad), Pad.Placement.Width,
+    Pad.PictureHeight, Pad.PictureHeight / 2 - PadBeamDepth / 2);
+  var Snug := ACue.Snug;
+  Snug.Y := Snug.Y + PadBeamDepth / 2;
+  FWrecks.Guide(FMagnetWreck, Snug, MagnetPressTicks);
+  FMagnetStruckHero := False;
+  if not Pressed then
+    Exit;
+  HurtByRam;
+  FHero.Knock(Aside);
+end;
+
+// The first throw of a level opens the first window: the hint is typed,
+// once
+procedure TMoonGame.ThrowMagnetBarge(const AAim: TSdlFPoint);
+begin
+  FAudio.StopHeld(FMagnetHum);
+  FMagnetHum.Channel := -1;
+  if FMagnetWreck < 0 then
+    Exit;
+  FWrecks.Fling(FMagnetWreck, AAim);
+  FAudio.Play(MagnetThrowSoundFile);
+  if FGlowHintTold then
+    Exit;
+  FGlowHintTold := True;
+  FMessages.StartTerminal(Tr(STerminalHeader), Tr(SStrikeWhatGlows));
+end;
+
+// How far APoint is from the stretch AFrom - ATo
+function ApartFromStretch(const APoint, AFrom, ATo: TSdlFPoint): Single;
+begin
+  var WayX: Single := ATo.X - AFrom.X;
+  var WayY: Single := ATo.Y - AFrom.Y;
+  var Share: Single := 0;
+  var Span: Single := Sqr(WayX) + Sqr(WayY);
+  if Span > 0 then
+    Share := EnsureRange(((APoint.X - AFrom.X) * WayX +
+      (APoint.Y - AFrom.Y) * WayY) / Span, 0, 1);
+  Result := Hypot(APoint.X - (AFrom.X + WayX * Share),
+    APoint.Y - (AFrom.Y + WayY * Share));
+end;
+
+// The barge the magnet threw, on its way of this tick: it has one chance
+// at the hero - a wound unless his mercy holds, and the knock down and
+// along its way - and flies on; on the main barge's deck it breaks
+procedure TMoonGame.ResolveThrownBarge;
+begin
+  if FMagnetWreck < 0 then
+    Exit;
+  var Wreck := FWrecks[FMagnetWreck];
+  if not Wreck.Hurled then
+    Exit;
+  if Wreck.Gone then
+  begin
+    FMagnetWreck := -1;
+    Exit;
+  end;
+  var Reached := not FHero.Dead and not FMagnetStruckHero and
+    (ApartFromStretch(HeroCenter, Wreck.LastMiddle, Wreck.Middle) <= ThrownBargeReach);
+  if Reached then
+  begin
+    FMagnetStruckHero := True;
+    if FHurtCooldown = 0 then
+    begin
+      HurtByRam;
+      FHero.Knock(Sign(Wreck.Speed.X));
+    end;
+  end;
+  if FBargePad = nil then
+    Exit;
+  var Deck := FBargePad.Body;
+  var OverDeck := (Wreck.Middle.X >= Deck.X) and (Wreck.Middle.X <= Deck.X + Deck.W);
+  var Crossed := (Wreck.Middle.Y >= Deck.Y - ThrownBargeSlack) and
+    (Wreck.LastMiddle.Y <= Deck.Y + Deck.H);
+  if OverDeck and Crossed then
+    BreakThrownBarge;
+end;
+
+// Into pieces that fall and are gone; the main barge only rocks
+procedure TMoonGame.BreakThrownBarge;
+begin
+  var Wreck := FWrecks[FMagnetWreck];
+  var Broken := Default(TBrokenBarge);
+  Broken.Pad := Wreck.Pad;
+  Broken.Middle := FWrecks.PictureAt(FMagnetWreck, 1);
+  Broken.Width := Wreck.Width;
+  Broken.Height := Wreck.Height;
+  Broken.Spin := Wreck.Spin;
+  Broken.Speed := Wreck.Speed;
+  FPieces.Shatter(Broken);
+  FWrecks.Smash(FMagnetWreck);
+  FMagnetWreck := -1;
+  FBarge.Rock(BargeBlowDepth);
+  FExplosions.Detonate(Broken.Middle.X, Broken.Middle.Y, ekBarrel);
+  FAudio.Play(BossCrashSoundFile);
+  FShake.AddTrauma(BargeBlowTrauma);
 end;
 
 // The chase: the road slides left under the Ram, and the world on it -
@@ -4301,10 +4547,11 @@ begin
 end;
 
 // The shield takes the bullet into its light; the hull loses nothing.
-// The honeycomb gone, the bare hull, the nozzles under it and the wheels
-// it has shed throw the bullet off in sparks, as a tank's armour does, and
-// lose nothing either - but for an orb of the orb launcher, which sinks into
-// the bare hull and takes a life of it, while it has one
+// The honeycomb gone, the magnet, the bare hull, the nozzles under it and
+// the wheels it has shed throw the bullet off in sparks, as a tank's
+// armour does, and lose nothing either - but for an orb of the orb
+// launcher that meets the magnet while it is hot: it sinks in and takes a
+// life of the hull, while it has one
 function TMoonGame.BulletStruckRam(const ABullet: TBullet): Boolean;
 begin
   var Stretch := BulletStretch(ABullet);
@@ -4317,21 +4564,21 @@ begin
   end;
   var Rapid := FRam.HullStruckWithin(RapidHitTicks);
   var Normal: TSdlFPoint;
-  var Bare := False;
-  Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal);
-  if not Result then
+  Result := FRam.StrikeMagnet(Stretch.Start, Stretch.Finish, At, Normal);
+  var Sinks := Result and FRam.Magnet.Soft and (ABullet.Look = blOrb);
+  if Sinks and FHullLives.Wound then
   begin
-    Bare := FRam.StrikeHull(Stretch.Start, Stretch.Finish, At, Normal);
-    Result := Bare or FRam.StrikeWheel(Stretch.Start, Stretch.Finish, At, Normal);
-  end;
-  if not Result then
-    Exit;
-  ABullet.Status := bsInactive;
-  if Bare and (ABullet.Look = blOrb) and FHullLives.Wound then
-  begin
+    ABullet.Status := bsInactive;
     FAudio.Play(OrbHitSoundFile);
     Exit;
   end;
+  if not Result then
+    Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal) or
+      FRam.StrikeHull(Stretch.Start, Stretch.Finish, At, Normal) or
+      FRam.StrikeWheel(Stretch.Start, Stretch.Finish, At, Normal);
+  if not Result then
+    Exit;
+  ABullet.Status := bsInactive;
   var Strike := Default(TStrike);
   Strike.X := At.X;
   Strike.Y := At.Y;
@@ -4829,6 +5076,7 @@ begin
         // The pads knocked off, before the pads in front of them no more
         FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FWreckPainter.DrawBodies(FSprites, AAlpha);
+        FPiecePainter.Draw(FSprites.Origin, AAlpha);
         FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
         FTiles.DrawTiles(FHero.Screen);
         FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);

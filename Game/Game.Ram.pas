@@ -178,6 +178,16 @@
   A shed wheel leaves its arch hollow - a bullet and a touch go into it -
   till the bay comes out and fills it.
 
+  Hanging, it fights with the magnet under its belly, between the two bays
+  (Game.Magnet): told to, the magnet slides out, and from then on takes
+  the small barges the game tells it of, holds them under the belly and
+  throws them - the cue tells each step, the game carries it out. Cold,
+  the magnet wanting a barge out of its reach, the hull keeps over that
+  barge in place of the hero. The magnet takes a bullet as the nozzles
+  do; while it is soft - hot - an orb that meets it takes a life of the
+  hull, which is the game's to carry out. It is no body: its touch is
+  nothing.
+
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
   third.
@@ -199,7 +209,7 @@ interface
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
-  Game.Takeoff, Effects.Sparks;
+  Game.Takeoff, Game.Magnet, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -308,6 +318,10 @@ type
     OnDeck: Boolean;
     // Where the second shell of a pair goes (SecondShellMark)
     SecondAt: TSdlFPoint;
+    // The small barges the magnet may take, and where it throws one with
+    // no hero to throw at
+    Barges: TArray<TMagnetBarge>;
+    Harbour: TSdlFPoint;
   end;
 
   TRamCue = record
@@ -360,6 +374,8 @@ type
     Ignite: Boolean;
     // Off the road: its jets roar from now on, in place of the rumble
     Hover: Boolean;
+    // What the magnet did this tick
+    Magnet: TMagnetCue;
   end;
 
   // Where the hull stands and how: upright on the road with its left edge
@@ -503,6 +519,7 @@ type
     // Off the road on its jets; its rear wheel spat out on its way
     FTakeoff: TTakeoff;
     FRearWheel: TLooseWheel;
+    FMagnet: TMagnet;
     // Ticks since the bare hull or its wheel last threw a bullet off
     FHullHitTicks: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -546,9 +563,12 @@ type
     // Its strike of the road, if it struck, told and felt
     procedure HearStrike(const AWheel: TLooseWheel);
     procedure TickTakeoff;
+    procedure TickMagnet;
     procedure SpitWheel;
     procedure TickShutter;
     function UprightBox(const ABox: TSdlFRect): TSdlFRect;
+    function StrikeBoxes(const ABoxes: array of TSdlFRect; const AFrom,
+      ATo: TSdlFPoint; out AAt, ANormal: TSdlFPoint): Boolean;
     function AlarmLight: Single;
     procedure FlickerEye;
     function HuntLine: Single;
@@ -760,6 +780,18 @@ type
     // them would pass on into the bays
     function StrikeNozzles(const AFrom, ATo: TSdlFPoint; out AAt,
       ANormal: TSdlFPoint): Boolean;
+    // The magnet, as far as it is out of the belly, takes a bullet as the
+    // nozzles do. What the bullet does there is the magnet's to say: soft,
+    // an orb sinks into it and takes a life of the hull.
+    function StrikeMagnet(const AFrom, ATo: TSdlFPoint; out AAt,
+      ANormal: TSdlFPoint): Boolean;
+    // Hanging, its magnet comes out of the belly after a breath - the
+    // start of the air fight; nothing on the road, or once it is out
+    procedure DeployMagnet;
+    property Magnet: TMagnet read FMagnet;
+    // The middle of the magnet's face on the screen, the hull standing as
+    // APose says
+    function MagnetFaceAt(const APose: TRamPose): TSdlFPoint;
     // The bare hull or its wheel threw a bullet off within ATicks
     function HullStruckWithin(ATicks: Integer): Boolean;
     // Some of AHeroBody is in the hull or a wheel: AAway - the side to set
@@ -881,6 +913,9 @@ type
     FBay: PSdlTexture;
     FNozzle: PSdlTexture;
     FNozzleLit: PSdlTexture;
+    FMagnet: PSdlTexture;
+    // Its face and side panels in grey on a clear ground, tinted by code
+    FMagnetHeat: PSdlTexture;
     // The fire out of a nozzle, the mouth at its top
     FFlame: PSdlTexture;
     FHullArt: THullArt;
@@ -956,6 +991,9 @@ type
       AAlpha: Single): TSdlFPoint;
     procedure DrawEngines(const ASprites: TSpriteRenderer;
       const APose: TRamPose; AAlpha: Single);
+    procedure DrawMagnet(const ASprites: TSpriteRenderer;
+      const APose: TRamPose; AAlpha: Single);
+    procedure DrawMagnetLight(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
       AAlpha: Single);
     procedure DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
@@ -1001,8 +1039,8 @@ type
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
     // The dust of the wave, the smoke out of the arches, the sparks of the
-    // scrape, the glow of the jets and their warmth on the road, the bolts
-    // of a head, the shield, the
+    // scrape, the glow of the jets and their warmth on the road, the
+    // magnet's heat and its beam, the bolts of a head, the shield, the
     // sweeper's plates, the wave itself and the white of the blast
     procedure DrawLight(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
@@ -1645,6 +1683,31 @@ const
   WarmColor: TRgb = (R: 255; G: 140; B: 60);
   JetAxles: array [TTakeoffJet] of Integer = (FrontAxle, RearAxle);
 
+  // The magnet under the belly, between the bays (magnet): the middle of
+  // its top edge and of its face. Its collar is sunk in the hull, behind
+  // the belly's edge.
+  MagnetWidth = 30.0;
+  MagnetHeight = 29.5;
+  MagnetTopPoint: THullPoint = (X: 97.2; Y: 120.0);
+  MagnetFacePoint: THullPoint = (X: 97.2; Y: 120.0 + MagnetHeight);
+  // Hot, its face and its side panels (magnetHeat) are tinted this over
+  // the art, and a glow of the same colour hangs at the face
+  MagnetHeatColor: TRgb = (R: 255; G: 122; B: 28);
+  MagnetHeatLevel = 0.85;
+  MagnetGlowSize = 46.0;
+  MagnetGlowLevel = 0.6;
+  MagnetGlowRise = 6.0;
+  // The beam from the face to the deck it holds: a blue sheath and a pale
+  // core, flickering, and a spot where it grips the deck
+  BeamColor: TRgb = (R: 70; G: 150; B: 255);
+  BeamCoreColor: TRgb = (R: 200; G: 228; B: 255);
+  BeamWidth = 9.0;
+  BeamCoreWidth = 3.0;
+  BeamLevel = 0.8;
+  BeamFlicker = 0.25;
+  BeamFlickerPace = 2.3;
+  BeamGripSize = 22.0;
+
   // Read off the art: a unit of the grid is solid where the art is this
   // opaque at its middle
   BodyAlpha = 128;
@@ -1839,10 +1902,12 @@ begin
     HeadShapes[rhBunker].Height / 2);
   FDice.Seed := ASeed;
   FWave.Stop;
+  FMagnet := TMagnet.Create;
 end;
 
 destructor TRam.Destroy;
 begin
+  FMagnet.Free;
   FHeadShield.Free;
   for var Plate in FPlates do
     Plate.Free;
@@ -1884,6 +1949,7 @@ begin
   FWheel.Stop;
   FTakeoff.Stop;
   FRearWheel.Stop;
+  FMagnet.Clear;
   FShutter := 0;
   FLastShutter := 0;
   FShutting := False;
@@ -2036,6 +2102,7 @@ begin
   FWave.Stop;
   FWheel.Stop;
   FRearWheel.Stop;
+  FMagnet.Clear;
 end;
 
 procedure TRam.Reset;
@@ -2212,6 +2279,7 @@ begin
   TickMode;
   TickPhase;
   TickShed;
+  TickMagnet;
   TickShutter;
   TickRow;
   TickSway;
@@ -3608,12 +3676,17 @@ begin
   FTakeoff.Start(FLean, FHullFacing);
 end;
 
-// Hanging, after the hero: over him, as far as the screen lets the hull be
+// Hanging, after the hero: over him, as far as the screen lets the hull
+// be - or over the barge its magnet wants and cannot reach
 procedure TRam.TickTakeoff;
 begin
   var Toward: Single := 0;
-  if FHeroSeen then
-    Toward := EnsureRange(FHeroCenter.X, RamWidth / 2, ScreenWidth - RamWidth / 2) -
+  var Over: Single;
+  var Sought := FMagnet.Wants(Over);
+  if not Sought then
+    Over := FHeroCenter.X;
+  if Sought or FHeroSeen then
+    Toward := EnsureRange(Over, RamWidth / 2, ScreenWidth - RamWidth / 2) -
       (FX + RamWidth / 2);
   var Step := FTakeoff.Tick(Toward);
   FX := FX + FTakeoff.Pace;
@@ -3628,6 +3701,33 @@ begin
     SpitWheel;
     FCue.Hover := True;
   end;
+end;
+
+// Hanging, the magnet sees the barges the game told of and the hero, its
+// face where the pose puts it
+procedure TRam.TickMagnet;
+begin
+  if FTakeoff.Stage <> tkHanging then
+    Exit;
+  var Sight := Default(TMagnetSight);
+  Sight.Face := MagnetFaceAt(PoseAt(1));
+  Sight.Barges := FHero.Barges;
+  Sight.HeroAlive := FHero.Alive;
+  Sight.Hero := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
+    FHero.Body.Y + FHero.Body.H / 2);
+  Sight.Harbour := FHero.Harbour;
+  FCue.Magnet := FMagnet.Tick(Sight);
+end;
+
+procedure TRam.DeployMagnet;
+begin
+  if FTakeoff.Stage = tkHanging then
+    FMagnet.Deploy;
+end;
+
+function TRam.MagnetFaceAt(const APose: TRamPose): TSdlFPoint;
+begin
+  Result := PoseSpot(APose, MagnetFacePoint);
 end;
 
 procedure TRam.HearStrike(const AWheel: TLooseWheel);
@@ -3796,30 +3896,17 @@ begin
     FHullHitTicks := 0;
 end;
 
-// Each nozzle a box of the upright hull under its axle, as far as it is
-// out; the stretch brought back into the upright hull as StrikeHull brings
-// it
-function TRam.StrikeNozzles(const AFrom, ATo: TSdlFPoint; out AAt,
-  ANormal: TSdlFPoint): Boolean;
+// Where the stretch first enters one of ABoxes, boxes of the upright hull
+// on the road: the stretch is brought back into the upright hull as
+// StrikeHull brings it, and what it meets is posed again
+function TRam.StrikeBoxes(const ABoxes: array of TSdlFRect; const AFrom,
+  ATo: TSdlFPoint; out AAt, ANormal: TSdlFPoint): Boolean;
 const
   // Units between two looks along the stretch: finer than a nozzle's wall
   LookStep = 0.5;
-var
-  Boxes: array [TTakeoffJet] of TSdlFRect;
 begin
   AAt := ATo;
   ANormal := UnitPoint(0, 1);
-  var Shown := FTakeoff.NozzleAt(1);
-  if not Present or (Shown <= 0) then
-    Exit(False);
-  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
-  begin
-    var Axle := HullSpot(FX, Axles[JetAxles[Jet]]);
-    Boxes[Jet].X := Axle.X - NozzleWidth / 2;
-    Boxes[Jet].Y := Axle.Y + NozzleHang;
-    Boxes[Jet].W := NozzleWidth;
-    Boxes[Jet].H := NozzleHeight * Shown;
-  end;
   var Pose := PoseAt(1);
   var Pivot := LeanPivot(FX);
   var From := Turned(UnitPoint(AFrom.X - Pose.Shift.X, AFrom.Y - Pose.Shift.Y),
@@ -3835,7 +3922,7 @@ begin
     var Strike := Default(TStrike);
     Strike.X := From.X + WayX * Share;
     Strike.Y := From.Y + WayY * Share;
-    for var Box in Boxes do
+    for var Box in ABoxes do
     begin
       var Inside := (Strike.X >= Box.X) and (Strike.X < Box.X + Box.W) and
         (Strike.Y >= Box.Y) and (Strike.Y < Box.Y + Box.H);
@@ -3852,6 +3939,48 @@ begin
     end;
   end;
   Result := False;
+end;
+
+// Each nozzle a box of the upright hull under its axle, as far as it is
+// out
+function TRam.StrikeNozzles(const AFrom, ATo: TSdlFPoint; out AAt,
+  ANormal: TSdlFPoint): Boolean;
+var
+  Boxes: array [TTakeoffJet] of TSdlFRect;
+begin
+  AAt := ATo;
+  ANormal := UnitPoint(0, 1);
+  var Shown := FTakeoff.NozzleAt(1);
+  if not Present or (Shown <= 0) then
+    Exit(False);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Axle := HullSpot(FX, Axles[JetAxles[Jet]]);
+    Boxes[Jet].X := Axle.X - NozzleWidth / 2;
+    Boxes[Jet].Y := Axle.Y + NozzleHang;
+    Boxes[Jet].W := NozzleWidth;
+    Boxes[Jet].H := NozzleHeight * Shown;
+  end;
+  Result := StrikeBoxes(Boxes, AFrom, ATo, AAt, ANormal);
+end;
+
+// A box of the upright hull under the belly, as far as the magnet is out
+function TRam.StrikeMagnet(const AFrom, ATo: TSdlFPoint; out AAt,
+  ANormal: TSdlFPoint): Boolean;
+var
+  Box: TSdlFRect;
+begin
+  AAt := ATo;
+  ANormal := UnitPoint(0, 1);
+  var Shown := FMagnet.OutAt(1);
+  if not Present or (Shown <= 0) then
+    Exit(False);
+  var Top := HullSpot(FX, MagnetTopPoint);
+  Box.X := Top.X - MagnetWidth / 2;
+  Box.Y := Top.Y;
+  Box.W := MagnetWidth;
+  Box.H := MagnetHeight * Shown;
+  Result := StrikeBoxes([Box], AFrom, ATo, AAt, ANormal);
 end;
 
 function TRam.HullStruckWithin(ATicks: Integer): Boolean;
@@ -4850,6 +4979,8 @@ begin
   FBay := FCache.Get('engineBay');
   FNozzle := FCache.Get('engineNozzle');
   FNozzleLit := FCache.Get('engineNozzleLit');
+  FMagnet := FCache.Get('magnet');
+  FMagnetHeat := FCache.Get('magnetHeat');
   for var i := Low(FMasts) to High(FMasts) do
     FMasts[i] := FCache.Get('mast' + IntToStr(i));
   FHunter := FCache.Get('hunter');
@@ -5509,6 +5640,61 @@ begin
   end;
 end;
 
+// Out of the belly as far as it has come, hung by the middle of its top
+// edge and turned with the hull; hot, its face and panels tinted over it
+procedure TRamPainter.DrawMagnet(const ASprites: TSpriteRenderer;
+  const APose: TRamPose; AAlpha: Single);
+begin
+  var Shown := FRam.Magnet.OutAt(AAlpha);
+  if Shown <= 0 then
+    Exit;
+  var Top := FRam.PoseSpot(APose, MagnetTopPoint);
+  var Mirrored := FRam.HullMirrored;
+  ASprites.DrawHanging(FArt.FMagnet, Top, MagnetWidth, MagnetHeight, Shown, 1,
+    Mirrored, APose.Lean);
+  var Heat := FRam.Magnet.HeatAt(AAlpha);
+  if Heat <= 0 then
+    Exit;
+  SDL_SetTextureColorMod(FArt.FMagnetHeat, MagnetHeatColor.R,
+    MagnetHeatColor.G, MagnetHeatColor.B);
+  ASprites.DrawHanging(FArt.FMagnetHeat, Top, MagnetWidth, MagnetHeight, Shown,
+    MagnetHeatLevel * Heat, Mirrored, APose.Lean);
+end;
+
+// The glow of a hot face; the beam from the face to the middle of the
+// deck it holds, and the spot where it grips it
+procedure TRamPainter.DrawMagnetLight(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Magnet := FRam.Magnet;
+  if Magnet.OutAt(AAlpha) < 1 then
+    Exit;
+  var Face := FRam.MagnetFaceAt(FRam.PoseAt(AAlpha));
+  Face.X := Face.X + AOrigin.X;
+  Face.Y := Face.Y + AOrigin.Y;
+  var Heat := Magnet.HeatAt(AAlpha);
+  if Heat > 0 then
+    DrawGlow(FArt.FRenderer, FArt.FGlow, Face.X, Face.Y - MagnetGlowRise,
+      MagnetGlowSize, MagnetHeatColor, MagnetGlowLevel * Heat);
+  if not Magnet.Holds then
+    Exit;
+  var Deck := Magnet.LoadMiddleAt(AAlpha);
+  Deck.X := Deck.X + AOrigin.X;
+  Deck.Y := Deck.Y + AOrigin.Y;
+  var Span: Single := Hypot(Deck.X - Face.X, Deck.Y - Face.Y);
+  if Span < 1 then
+    Exit;
+  var Angle: Single := RadToDeg(ArcTan2(Deck.Y - Face.Y, Deck.X - Face.X));
+  var Flicker: Single := 1 + BeamFlicker * Sin((FAge + AAlpha) * BeamFlickerPace);
+  var MiddleX: Single := (Face.X + Deck.X) / 2;
+  var MiddleY: Single := (Face.Y + Deck.Y) / 2;
+  DrawGlowTurned(FArt.FRenderer, FArt.FGlow, MiddleX, MiddleY, Span,
+    BeamWidth * Flicker, Angle, BeamColor, BeamLevel);
+  DrawGlowTurned(FArt.FRenderer, FArt.FGlow, MiddleX, MiddleY, Span,
+    BeamCoreWidth, Angle, BeamCoreColor, BeamLevel);
+  DrawGlow(FArt.FRenderer, FArt.FGlow, Deck.X, Deck.Y, BeamGripSize * Flicker,
+    BeamColor, BeamLevel);
+end;
+
 // Over the hull, slid shut from the far edge toward the eye: it shuts with
 // the hull upright on the road, so a level line cuts what is not there yet
 procedure TRamPainter.DrawShutter(const ASprites: TSpriteRenderer;
@@ -5635,6 +5821,7 @@ begin
     Stand.Mirrored, Stand.Lean);
   FHull.DrawChassis(ASprites, Stand);
   DrawEngines(ASprites, Pose, AAlpha);
+  DrawMagnet(ASprites, Pose, AAlpha);
   FHull.DrawWheels(ASprites, Stand, AAlpha);
   if not Moved then
   begin
@@ -5768,6 +5955,7 @@ begin
   FWheelSparks.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
     UnitPoint(AOrigin.X, AOrigin.Y), AAlpha);
   DrawJetGlow(AOrigin, AAlpha);
+  DrawMagnetLight(AOrigin, AAlpha);
   for var Short in FShorts do
     Short.Draw(ACanvas, Short.Origin.X + AOrigin.X, Short.Origin.Y + AOrigin.Y,
       AAlpha);

@@ -89,6 +89,10 @@ const
   STerminalHeader = 'terminalHeader';
   // The header over the story before a level - a narrator, not a radio
   SBriefingHeader = 'briefingHeader';
+  // The Ram's air fight: the hint typed at its first window, and the word
+  // under the hull's bar while no part of the hull is hot
+  SStrikeWhatGlows = 'strikeWhatGlows';
+  SHullArmour = 'hullArmour';
 
   // --- Menu texts ---
   SMainTitle = 'mainTitle';
@@ -183,7 +187,7 @@ const
     SMoonFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
     SBonusAwardFmt, SBrokeThrough, SBonusHudHint, STerminalHeader,
-    SBriefingHeader,
+    SBriefingHeader, SStrikeWhatGlows, SHullArmour,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,

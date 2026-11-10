@@ -17,6 +17,10 @@
   every one leaves past the left edge, and a new one comes in after a
   short gap. How many fly is the caller's, once, at the start.
 
+  The Ram's magnet takes barges out of the flock: a taken one flies no
+  more and is the caller's till it is given back to the pool; another
+  comes in for it as for one gone - at once when it was the escort.
+
   The barges are a pool the caller names by their widths, in its order:
   the flock tells which of them flies, where and how far it went this
   tick, and the caller moves its pads by that - the riders go with them as
@@ -73,6 +77,8 @@ type
   private type
     TFlyer = record
       Flying: Boolean;
+      // Taken out of the flock and not yet given back to the pool
+      Taken: Boolean;
       Path: TFlockPath;
       // Ticks since it came in
       Clock: Integer;
@@ -147,6 +153,15 @@ type
     function WayY(AIndex: Integer): Double;
     function PathOf(AIndex: Integer): TFlockPath;
     function PoolSize: Integer;
+    // The barge AIndex is taken out of the flock where it flies: the
+    // caller's from now on, another comes in for it - at once when it was
+    // the escort, whose relief, if one is on its way, is the escort from
+    // then. Nothing for one that does not fly.
+    procedure Take(AIndex: Integer);
+    // Taken and not yet given back
+    function Taken(AIndex: Integer): Boolean;
+    // The taken barge AIndex is the pool's again, to come in anew
+    procedure GiveBack(AIndex: Integer);
     // The escort's index in the pool, -1 when none flies
     property Escort: Integer read FEscort;
   end;
@@ -258,12 +273,13 @@ begin
   Result := ALeast + (AMost - ALeast) * FDice.NextUnit;
 end;
 
-// One of the pool not flying, as the dice pick it; NoBarge when all fly
+// One of the pool neither flying nor taken, as the dice pick it; NoBarge
+// when there is none
 function TBargeFlock.RollFreeIndex: Integer;
 begin
   var Idle: TArray<Integer> := [];
   for var i := 0 to High(FFlyers) do
-    if not FFlyers[i].Flying then
+    if not FFlyers[i].Flying and not FFlyers[i].Taken then
       Idle := Idle + [i];
   if Length(Idle) = 0 then
     Exit(NoBarge);
@@ -564,6 +580,34 @@ end;
 function TBargeFlock.PoolSize: Integer;
 begin
   Result := Length(FWidths);
+end;
+
+procedure TBargeFlock.Take(AIndex: Integer);
+begin
+  if not FFlyers[AIndex].Flying then
+    Exit;
+  FFlyers[AIndex].Flying := False;
+  FFlyers[AIndex].Taken := True;
+  if AIndex = FRelief then
+    FRelief := NoBarge;
+  if AIndex <> FEscort then
+    Exit;
+  FEscort := FRelief;
+  FRelief := NoBarge;
+  FServed := 0;
+  FServe := Round(RollRange(ServeLeast, ServeMost));
+  if FEscort = NoBarge then
+    FWait := 0;
+end;
+
+function TBargeFlock.Taken(AIndex: Integer): Boolean;
+begin
+  Result := FFlyers[AIndex].Taken;
+end;
+
+procedure TBargeFlock.GiveBack(AIndex: Integer);
+begin
+  FFlyers[AIndex].Taken := False;
 end;
 
 end.

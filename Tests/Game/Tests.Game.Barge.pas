@@ -5,10 +5,11 @@
   the hero aboard it casts off, tells so once, glides to its station in
   the middle of the screen - from either side - and holds it; a restart
   puts it at its station at once; its way is what it went this tick; a
-  clear sends it away. Aboard at its station it drifts: a gentle start
-  from the station, its middle across the middle three fifths of the
-  screen and its deck half a cell up and down, never still for long, on
-  without him.
+  clear sends it away. It holds its station till it is let go, then
+  drifts: a gentle start from the station, its middle across the middle
+  three fifths of the screen and its deck half a cell up and down, never
+  still for long, on without him. A blow rocks its deck down and back to
+  its line.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -57,9 +58,13 @@ type
     [Test]
     procedure TestClearSendsItAway;
     [Test]
-    procedure TestNobodyAboardItHoldsItsStation;
+    procedure TestItHoldsItsStationTillLetGo;
     [Test]
-    procedure TestAboardAtItsStationItDrifts;
+    procedure TestLetGoAtItsStationItDrifts;
+    [Test]
+    procedure TestLetGoElsewhereChangesNothing;
+    [Test]
+    procedure TestABlowRocksItsDeckAndDiesOut;
     [Test]
     procedure TestDriftSetsOffGentlyFromTheStation;
     [Test]
@@ -180,7 +185,7 @@ begin
   Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'At its station');
   Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Its left edge');
   Assert.IsFalse(Run(20, PierRight, True), 'Told once');
-  Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Drifting with him aboard');
+  Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'Holding it with him aboard');
 end;
 
 procedure TBargeRideTests.TestBoardedAtItsFloorItGlidesRightToTheMiddle;
@@ -243,12 +248,13 @@ begin
     'Moored anew after a clear');
 end;
 
-procedure TBargeRideTests.TestNobodyAboardItHoldsItsStation;
+procedure TBargeRideTests.TestItHoldsItsStationTillLetGo;
 begin
   FBarge.Station;
   for var i := 1 to 200 do
   begin
-    Run(1, 0, False, False);
+    // Nobody aboard for the first hundred ticks, he for the second
+    Run(1, 0, i > 100, False);
     Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'Tick ' + i.ToString);
     Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack,
       'Tick ' + i.ToString + ': its left edge');
@@ -256,20 +262,66 @@ begin
   end;
 end;
 
-procedure TBargeRideTests.TestAboardAtItsStationItDrifts;
+procedure TBargeRideTests.TestLetGoAtItsStationItDrifts;
 begin
   FBarge.Station;
-  Run(1, 0, True, False);
+  FBarge.Loose;
   Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Drifting');
-  Run(99, 0, True, False);
+  Run(100, 0, False, False);
   Assert.IsTrue(Abs(FBarge.Left - StationLeft) > TileSize,
     'Over a cell off its station in three seconds');
+end;
+
+procedure TBargeRideTests.TestLetGoElsewhereChangesNothing;
+begin
+  FBarge.Loose;
+  Assert.AreEqual(Ord(bsAway), Ord(FBarge.Stage), 'Still away');
+  FBarge.Moor(PierRight);
+  FBarge.Loose;
+  Run(10, PierRight);
+  Assert.AreEqual(Ord(bsMoored), Ord(FBarge.Stage), 'Still moored');
+  Assert.AreEqual(PierRight + MoorGap, FBarge.Left, UnitSlack, 'Where it hung');
+end;
+
+// Against a barge let go on the same tick and not struck: the drift is the
+// same, so what is left is the rock
+procedure TBargeRideTests.TestABlowRocksItsDeckAndDiesOut;
+const
+  BlowDepth = 8.0;
+  // Three seconds
+  SettleTicks = 99;
+begin
+  var Calm := TBargeRide.Create;
+  try
+    FBarge.Station;
+    FBarge.Loose;
+    Calm.Station;
+    Calm.Loose;
+    Run(50, 0, False, False);
+    for var i := 1 to 50 do
+      Calm.Tick(0, False, False);
+    FBarge.Rock(BlowDepth);
+    var Deepest := 0.0;
+    for var i := 1 to SettleTicks do
+    begin
+      Run(1, 0, False, False);
+      Calm.Tick(0, False, False);
+      Deepest := Max(Deepest, FBarge.Dip - Calm.Dip);
+      Assert.AreEqual(Calm.Left, FBarge.Left, UnitSlack,
+        'Tick ' + i.ToString + ': a blow does not move it across');
+    end;
+    Assert.IsTrue(Deepest > BlowDepth / 2, 'It dipped a good way');
+    Assert.IsTrue(Deepest < 2 * BlowDepth, 'And no deeper than a blow gives');
+    Assert.AreEqual(Calm.Dip, FBarge.Dip, 1.0, 'Back on its line');
+  finally
+    Calm.Free;
+  end;
 end;
 
 procedure TBargeRideTests.TestDriftSetsOffGentlyFromTheStation;
 begin
   FBarge.Station;
-  Run(1, 0, True, False);
+  FBarge.Loose;
   Run(1, 0, True, False);
   Assert.AreEqual(Double(StationLeft), FBarge.Left, EdgeSlack,
     'From the station itself');
@@ -291,6 +343,7 @@ end;
 procedure TBargeRideTests.TestDriftKeepsToTheMiddleThreeFifths;
 begin
   FBarge.Station;
+  FBarge.Loose;
   var Least := Double(ScreenWidth);
   var Most := 0.0;
   var Highest := 0.0;
@@ -321,6 +374,7 @@ const
   LongTicks = 33;
 begin
   FBarge.Station;
+  FBarge.Loose;
   Run(100, 0, True, False);
   var StillTicks := 0;
   for var i := 1 to TwoLapsTicks do
@@ -337,6 +391,7 @@ end;
 procedure TBargeRideTests.TestDriftGoesOnWithoutHim;
 begin
   FBarge.Station;
+  FBarge.Loose;
   Run(10, 0, True, False);
   var Left := FBarge.Left;
   Run(100, 0, False, False);
@@ -347,6 +402,7 @@ end;
 procedure TBargeRideTests.TestWayDownIsWhatItWentThisTick;
 begin
   FBarge.Station;
+  FBarge.Loose;
   for var i := 1 to 400 do
   begin
     var Before := FBarge.Dip;
@@ -362,6 +418,7 @@ end;
 procedure TBargeRideTests.TestClearEndsTheDrift;
 begin
   FBarge.Station;
+  FBarge.Loose;
   Run(200, 0, True, False);
   FBarge.Clear;
   Assert.AreEqual(Ord(bsAway), Ord(FBarge.Stage), 'Away');

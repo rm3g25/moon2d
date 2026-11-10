@@ -6,6 +6,10 @@
   it comes up, a red frame and a white cell where a life was just taken.
   It comes down into its place from over the top edge.
 
+  While no part of the hull is hot the bar stands grey, the word for its
+  armour under it: shooting it is of no use. While a part is hot the cells
+  take their colours and pulse.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Hud.HullBar;
@@ -14,14 +18,19 @@ unit Hud.HullBar;
 interface
 
 uses
-  Sdl2.Core, Render.Brush, Game.HullLives;
+  Sdl2.Core, Render.Brush, Render.Font, Game.HullLives;
 
 type
   THudHullBar = class
   private
     FBrush: THudBrush;
+    FFont: TMoonFont;
+    FArmourWord: string;
   public
-    constructor Create(ARenderer: PSdlRenderer);
+    // AFont belongs to the caller and must outlive the bar; AArmourWord -
+    // what is written under the bar while the hull is armoured
+    constructor Create(const AFont: TMoonFont; ARenderer: PSdlRenderer;
+      const AArmourWord: string);
     destructor Destroy; override;
     procedure Draw(const ABar: THullBar);
   end;
@@ -40,11 +49,21 @@ const
   BarMiddleY = PanelY + PanelH / 2;
   // The newest cell of the bar coming up glows
   BootGlow = 0.8;
+  // Armoured: the cells and the word under the plate
+  ArmourColor: TRgb = (R: 142; G: 152; B: 158);
+  ArmourWordGap = 1;
+  ArmourWordAlpha = 190;
+  // Hot, the cells dim to this between the pulses, and glow at their peak
+  PulseFloor = 0.5;
+  PulseGlow = 0.45;
 
-constructor THudHullBar.Create(ARenderer: PSdlRenderer);
+constructor THudHullBar.Create(const AFont: TMoonFont; ARenderer: PSdlRenderer;
+  const AArmourWord: string);
 begin
   inherited Create;
   FBrush := THudBrush.Create(ARenderer);
+  FFont := AFont;
+  FArmourWord := AArmourWord;
 end;
 
 destructor THudHullBar.Destroy;
@@ -72,6 +91,13 @@ begin
   var Full := 0;
   if ABar.Share > 0 then
     Full := Max(1, Ceil(HullBarCells * ABar.Share));
+  var CellTint := ArmourColor;
+  var CellLevel: Single := 1;
+  if ABar.Hot then
+  begin
+    CellTint := Tint;
+    CellLevel := PulseFloor + (1 - PulseFloor) * ABar.Pulse;
+  end;
 
   FBrush.BeginDraw;
   FBrush.Fill(X - PlatePad, Y - PlatePad, Width + 2 * PlatePad, PlateHeight,
@@ -93,14 +119,22 @@ begin
   begin
     var CellX := X + i * (BarCell + BarGap);
     if i < Full then
-      FBrush.FullCell(CellX, Y, BarCell, BarCellHeight, Tint, 1)
+      FBrush.FullCell(CellX, Y, BarCell, BarCellHeight, CellTint, CellLevel)
     else
-      FBrush.EmptyCell(CellX, Y, BarCell, BarCellHeight, Tint, 1);
+      FBrush.EmptyCell(CellX, Y, BarCell, BarCellHeight, CellTint, 1);
   end;
+  if ABar.Hot and (ABar.Lit >= HullBarCells) and (Full > 0) then
+    FBrush.Glow(X - 1, Y - 1, Full * (BarCell + BarGap) - BarGap + 2,
+      BarCellHeight + 2, Tint, PulseGlow * ABar.Pulse);
   if (ABar.Lit > 0) and (ABar.Lit < HullBarCells) then
     FBrush.Glow(X + (ABar.Lit - 1) * (BarCell + BarGap) - 1, Y - 1,
       BarCell + 2, BarCellHeight + 2, White, BootGlow);
   FBrush.EndDraw;
+
+  if not ABar.Hot and (ABar.Lit >= HullBarCells) then
+    FFont.DrawSmall(FArmourWord,
+      (ScreenWidth - FFont.SmallTextWidth(FArmourWord)) / 2,
+      Y - PlatePad + PlateHeight + ArmourWordGap, ArmourWordAlpha);
 end;
 
 end.

@@ -47,6 +47,8 @@ uses
   Tests.Game.Road in 'Game\Tests.Game.Road.pas',
   Tests.Game.Barge in 'Game\Tests.Game.Barge.pas',
   Tests.Game.Flock in 'Game\Tests.Game.Flock.pas',
+  Tests.Game.Magnet in 'Game\Tests.Game.Magnet.pas',
+  Tests.Game.Pieces in 'Game\Tests.Game.Pieces.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',
   Tests.Render.Monochrome in 'Render\Tests.Render.Monochrome.pas',

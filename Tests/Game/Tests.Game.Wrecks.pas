@@ -22,6 +22,11 @@
   spinning on as it spun held whatever the held ones are told after;
   smashed, it is gone; a wreck not held is not hurled.
 
+  A held pad flung by the Ram's magnet: it passes close by its mark; past
+  it, it never turns back and is gone off the screen - under it too; it
+  tumbles at a pace of its own whatever the held ones are told; a wreck
+  not held is not flung.
+
   The wrecks fly in no picture here: the rules need none.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -32,6 +37,7 @@ interface
 
 uses
   DUnitX.TestFramework,
+  Sdl2.Core,
   Game.Wrecks;
 
 type
@@ -113,12 +119,37 @@ type
     procedure TestAWreckNotHeldIsNotHurled;
   end;
 
+  [TestFixture]
+  TPadFlungTests = class
+  private
+    FWrecks: TPadWrecks;
+    // A pad held under the magnet and flung at AMark; its number
+    function FlingAt(const AMark: TSdlFPoint): Integer;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestItPassesCloseByItsMark;
+    [Test]
+    procedure TestPastItsMarkItNeverTurnsBack;
+    [Test]
+    procedure TestAMissIsGoneOffTheScreen;
+    [Test]
+    procedure TestFlungDownItIsGoneUnderTheScreen;
+    [Test]
+    procedure TestItTumblesWhateverTheHeldSpinIs;
+    [Test]
+    procedure TestAWreckNotHeldIsNotFlung;
+  end;
+
 implementation
 
 uses
   System.Math,
   System.SysUtils,
-  Sdl2.Core,
   Game.Space,
   Game.Throw;
 
@@ -605,9 +636,126 @@ begin
   Assert.IsFalse(FWrecks[0].Hurled, 'Not hurled');
 end;
 
+{ TPadFlungTests }
+
+const
+  // Under the belly of the hanging Ram, where the magnet lets a barge go
+  MagnetPlace: TSdlFPoint = (X: 256; Y: 195);
+  // A hero on the main barge, left of it and under it
+  DeckMark: TSdlFPoint = (X: 180; Y: 336);
+  BargeWidth = 104.0;
+  // It passes this close by its mark, within this many ticks
+  FlungReach = 20.0;
+  FlingReachTicks = 45;
+  // A miss is off the screen within this many ticks: six seconds
+  FlungGoneTicks = 200;
+
+procedure TPadFlungTests.Setup;
+begin
+  FWrecks := TPadWrecks.Create;
+end;
+
+procedure TPadFlungTests.TearDown;
+begin
+  FWrecks.Free;
+end;
+
+function TPadFlungTests.FlingAt(const AMark: TSdlFPoint): Integer;
+begin
+  Result := FWrecks.Hold(nil, MagnetPlace, BargeWidth, PadHeight, NoDrop);
+  FWrecks.Fling(Result, AMark);
+end;
+
+procedure TPadFlungTests.TestItPassesCloseByItsMark;
+begin
+  var Number := FlingAt(DeckMark);
+  Assert.IsTrue(FWrecks[Number].Hurled, 'On its way');
+  var Nearest: Single := MaxSingle;
+  for var i := 1 to FlingReachTicks do
+  begin
+    FWrecks.Tick;
+    Nearest := Min(Nearest, ApartFromStretch(DeckMark, FWrecks[Number].LastMiddle,
+      FWrecks[Number].Middle));
+  end;
+  Assert.IsTrue(Nearest <= FlungReach, Format('It passed %.0f off its mark',
+    [Nearest]));
+end;
+
+procedure TPadFlungTests.TestPastItsMarkItNeverTurnsBack;
+const
+  Slack = 0.01;
+begin
+  var Number := FlingAt(DeckMark);
+  var Apart: Single := MaxSingle;
+  var Receding := False;
+  for var i := 1 to FlungGoneTicks do
+  begin
+    FWrecks.Tick;
+    if FWrecks[Number].Gone then
+      Break;
+    var Distance: Single := Hypot(FWrecks[Number].Middle.X - DeckMark.X,
+      FWrecks[Number].Middle.Y - DeckMark.Y);
+    if Receding then
+      Assert.IsTrue(Distance >= Apart - Slack, 'Tick ' + i.ToString + ': it turned back');
+    Receding := Receding or (Distance > Apart);
+    Apart := Distance;
+  end;
+  Assert.IsTrue(Receding, 'It went by its mark');
+end;
+
+procedure TPadFlungTests.TestAMissIsGoneOffTheScreen;
+begin
+  var Number := FlingAt(DeckMark);
+  for var i := 1 to FlungGoneTicks do
+    FWrecks.Tick;
+  Assert.IsTrue(FWrecks[Number].Gone, 'Gone');
+  Assert.IsFalse(FWrecks.Flying, 'None in the air');
+end;
+
+procedure TPadFlungTests.TestFlungDownItIsGoneUnderTheScreen;
+begin
+  var Number := FlingAt(At(MagnetPlace.X, DeckMark.Y));
+  for var i := 1 to FlungGoneTicks do
+    FWrecks.Tick;
+  Assert.IsTrue(FWrecks[Number].Gone, 'Gone');
+  Assert.IsTrue(FWrecks[Number].Middle.Y > ScreenHeight, 'Under the screen');
+end;
+
+// The same pad of the same turn twice, the held ones told to stand and to
+// spin: a clear starts the turns anew
+procedure TPadFlungTests.TestItTumblesWhateverTheHeldSpinIs;
+const
+  HeldSpins: array [0..1] of Single = (0, 20);
+  SpinSlack = 0.001;
+var
+  Paces: array [0..1] of Single;
+begin
+  for var Run := Low(HeldSpins) to High(HeldSpins) do
+  begin
+    FWrecks.Clear;
+    FWrecks.HeldSpin := HeldSpins[Run];
+    var Number := FlingAt(DeckMark);
+    FWrecks.Tick;
+    FWrecks.Tick;
+    Paces[Run] := FWrecks[Number].Spin - FWrecks[Number].LastSpin;
+  end;
+  Assert.IsTrue(Abs(Paces[0]) > 1, 'It tumbles with the held ones standing');
+  Assert.AreEqual(Paces[0], Paces[1], SpinSlack, 'The same with them spinning');
+end;
+
+procedure TPadFlungTests.TestAWreckNotHeldIsNotFlung;
+begin
+  var Blast := At(250, 180);
+  FWrecks.Launch(nil, At(300, 200), 32, PadHeight, Blast, ReachOf(Blast));
+  FWrecks.Fling(0, DeckMark);
+  Assert.IsFalse(FWrecks[0].Hurled, 'Not flung');
+  Assert.IsFalse(FWrecks[0].Flung, 'Not flung');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TPadWreckTests);
   TDUnitX.RegisterTestFixture(TPadHeldTests);
   TDUnitX.RegisterTestFixture(TPadHurledTests);
+  TDUnitX.RegisterTestFixture(TPadFlungTests);
 
 end.
