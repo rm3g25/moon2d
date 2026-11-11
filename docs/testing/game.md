@@ -521,8 +521,9 @@ Left to the eye: the barge's pad and its riders going up and down with it
 
 ## Game.Flock
 
-State: written, 24 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
-18d-2 - the barge the magnet takes). Needs no stage:
+State: written, 29 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
+18d-2 - the barge the magnet takes; 5 of 3.0.123, stage 18d-3 - the barge
+a shell knocks off). Needs no stage:
 `TBargeFlock` only counts places. The unit is tried by
 `Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
 
@@ -563,14 +564,21 @@ tests bound them loosely or read the unit's constants.
 | `TestGivenBackItFliesAgain` | a pool of two, the escort taken: 330 ticks it never flies; given back - not `Taken`, and in a long run it flies again | a thrown barge is lost to the pool, and the pool runs dry |
 | `TestTakingOneNotFlyingChangesNothing` | an idle barge taken: not `Taken`, the escort and the count as they were | a stale number from the magnet grounds a barge |
 | `TestClearForgetsTheTaken` | the escort taken, a clear: not `Taken`, none flies | a death leaves a barge out of the pool |
+| `TestAKnockedBargeFallsBehindAndSinks` (3.0.123) | a free barge knocked: `Knocked`, on `fpKnocked`; at once left and down; for 20 ticks ever farther behind and ever faster down, never faster than 4 across nor 6 down | the knocked barge stops dead, climbs back, or drops out of sight in a tick - no time to jump off |
+| `TestAKnockedBargeIsGoneSoon` (3.0.123) | knocked: it stops flying within 132 ticks, past the left or the bottom edge, and is knocked no more | a knocked barge falls for ever, or vanishes on the screen with him on it |
+| `TestAKnockedBargeIsReplacedWhileItFalls` (3.0.123) | knocked: one fewer on its path at once; within 67 ticks the count on their paths is full again | a falling barge keeps its place in the count and the flock thins while it falls |
+| `TestAKnockedEscortIsReplacedAtOnce` (3.0.123) | the escort knocked: no escort at once; a tick later another, on its path | the knocked escort leaves the main barge with no neighbour for a gap |
+| `TestKnockingOneNotFlyingOrKnockedChangesNothing` (3.0.123) | an idle barge knocked: not sent in, not knocked; a falling one knocked again: its sink goes on, not thrown anew | a second shell on a falling barge kicks it up again, or a stale number sends a barge in |
 
 Left to the eye: the pads following the barges (`TickFlock`), the paths'
 feel, the hand-over's look, the rigs of the short barges, a hero pushed off
-a barge leaving past the left edge; the taken pad carried by the magnet.
+a barge leaving past the left edge; the taken pad carried by the magnet; a
+hero riding a knocked barge and jumping off it.
 
 ## Game.Magnet
 
-State: written, 19 tests (3.0.121, stage 18d-2), not run yet. Needs no
+State: written, 21 tests (19 of 3.0.121, stage 18d-2; 2 of 3.0.123, stage
+18d-3 - the window told over, the wait). Needs no
 stage: `TMagnet` only counts. The unit is tried by
 `Tests\Game\Tests.Game.Magnet.pas`, fixture `TMagnetTests`.
 
@@ -608,14 +616,69 @@ unit's constants (`RiderHeight`, `NoBarge`).
 | `TestColdAgainItTakesTheNext` | after a window, the low barge left in sight: a second catch, its number | one cycle and the magnet is done |
 | `TestAClearStowsIt` | a clear in the hold: stowed, not out, cold, not soft, no load, and nothing told in a cycle | a death leaves a hot magnet holding a barge of the flock that is gone |
 | `TestDeckDistanceIsToTheNearestPointOfTheDeck` | a face 30 over a deck - 30; 40 past either end of it and 30 over - 50 | the reach is measured to a barge's corner or middle: wide barges are out of reach under the face |
+| `TestItTellsItsWindowOverOnce` (3.0.123) | a barge caught: not told while it cools; told as it seeks again; once in a cycle more | the mortar's turn begins mid-window, or after every tick of the seek |
+| `TestToldToWaitItTakesNoBargeTillTheWaitIsLifted` (3.0.123) | out, the near barge in reach, told to wait: a cycle seeking, nothing caught, cold; the wait lifted: caught on the next tick | the lift meets the mortar's shells, or the magnet never comes back after a turn |
 
 Left to the eye: the whole of it on the screen - the pick as he hops
 between barges, the beam, the lift and the press, the throw against his
 dodge, the heat.
 
+## Game.Mortar
+
+State: written, 13 tests (3.0.123, stage 18d-3). Needs no stage: `TMortar`
+only counts. The unit is tried by `Tests\Game\Tests.Game.Mortar.pas`,
+fixture `TMortarTests`.
+
+Shared: the pivot at 300, 60; his feet at 240, 240, on a deck unless a
+test says not; no shell aloft unless a test says so. `Step` ticks the
+mortar and adds up its cues; `StepTill(stage, limit)`, `StepTillLob(limit)`.
+"A turn" is 330 ticks.
+
+Numbers spelled: none - the timings are read from the unit's constants
+(`MortarRiseTicks`, `MortarAimTicks`, `MortarWaitTicks`, `MortarGapTicks`,
+`MortarFoldTicks`, `MortarKickTicks`, `MortarTiltMost`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFoldedItDoesNothing` | a turn's ticks unbegun: folded, not out, no cue, not busy | shells from a mortar nobody gave a turn |
+| `TestGivenATurnItRisesAndTellsItOnce` | a turn of two: it only rises, out in its rise, the rise told once, no shell while it rises | the mortar pops out, or its sound plays every tick |
+| `TestOutItLobsAtHisFeetOnceAimed` | out: a lob as soon as it is aimed, at his feet; one shell left | it lobs at once with no warning, or at where he is not |
+| `TestOneShellAtATime` | a shell aloft through a turn's ticks: no second lob, waiting | a pair of shells - never in the air fight |
+| `TestTheNextShellComesAGapAfterTheLastIsGone` | the shell gone: the next after the gap and the aim exactly | the shells come at once after one another, or the gap counts from the lob |
+| `TestHeStandsLateItLobsThen` | he in the air through the aim and half the wait: nothing; standing: a lob that tick | a shell is lobbed at a hero in the air, with no deck to ride |
+| `TestHeStaysInTheAirTheShellIsGivenUp` | in the air the whole wait: one tick short both shells are left, at its end one is given up, nothing lobbed, the next aimed | a hero who keeps jumping stalls the fight for ever |
+| `TestItsShellsSpentItFoldsAndTellsIt` | a turn of one: folding after its shell is gone, folded in its fold, told once, behind the block | the turn never ends, and the magnet never comes back |
+| `TestBusyThroughItsTurn` | busy from the turn's start to the fold; two shells | the magnet takes a barge in the middle of a turn |
+| `TestItLeansTowardHisFeetNeverPastItsMost` | `MortarTilt`: upright over him, its most far right and far left; aiming at a hero far right: never past its most, at the end leaning right near it | the tube points away from him, or lies flat |
+| `TestALobKicksItAndTheKickDies` | at the lob the kick is full, a few ticks on none | the mortar stays sunk after a shot |
+| `TestATurnIsNotBegunTwiceNorWithNoShells` | no turn of no shells; a second turn mid-turn: the shells left and the stage kept | the magnet's window gives the mortar a second rise mid-turn |
+| `TestAClearFoldsIt` | a clear mid-turn: folded, no turn, no shells, behind the block, upright | a death leaves the mortar up and aiming |
+
+Left to the eye: the mortar on the hull - its rise from behind the block,
+the lean, the kick, the fold - and its sound under the jets.
+
+## Game.Shells: aloft
+
+State: written, 6 tests (3.0.123, stage 18d-3): fixture `TShellsAloftTests`
+in `Tests\Game\Tests.Game.Shells.pas`, beside the chase's.
+
+Shared: the shells with no road (the chase's road line, 352, given and
+switched off); the mortar's muzzle at 300, 12; a small barge 104 wide at
+160, its deck at 230; the carrier 3, the rise 20. `Fly(deck, way)` moves
+the deck and tells the shells.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestItRidesItsBargeAndBurstsOnIt` | the barge flying 1.5 left and 0.4 down a tick: the burst on it, where it was aimed on the deck as it has flown, on its top | the shell is aimed at where the barge was and falls into the abyss behind it |
+| `TestAnotherBargesWayIsNotItsOwn` | another carrier's way and the road's told every tick, the barge still: the burst where it was aimed | a shell rides every barge's way at once |
+| `TestWithNoRoadItFallsPastTheBottom` | aimed at the road's line over nothing: no ring, never landed, never burst, gone past the bottom edge | a shell rolls along an invisible road in the sky |
+| `TestWithNoRoadTheRingLiesOnlyOnADeck` | a deck under the arc: a ring on it; the deck gone: no ring | the ring stays on the empty air where a barge was |
+| `TestTheRingIsDrawnBetweenTicksAsItsDeckFlies` | five ticks of a barge flying 2 left: the ring went 2 this tick | the ring jumps a step a tick behind its deck |
+| `TestALowerArcOfItsOwn` | from 100 onto the barge: a rise of 10 tops more than 15 lower than the bunker's 40 | the air's arc climbs as high as the chase's, its top far over the screen |
+
 ## Game.Pieces
 
-State: written, 10 tests (3.0.121, stage 18d-2), not run yet. Needs no
+State: written, 10 tests (3.0.121, stage 18d-2). Needs no
 stage: `TBargePieces` only counts, and a barge of no pad has no picture.
 The unit is tried by `Tests\Game\Tests.Game.Pieces.pas`, fixture
 `TBargePiecesTests`.
@@ -640,7 +703,8 @@ Left to the eye: the pieces' picture, their look against the barge.
 
 ## Game.Ram: the magnet
 
-State: written, 9 tests (3.0.121, stage 18d-2), not run yet: fixture
+State: written, 18 tests (12 of 3.0.121-3.0.122, stages 18d-2 and the
+honeycomb; 6 of 3.0.123, stage 18d-3 - the rungs and the mortar): fixture
 `TRamMagnetTests` in `Tests\Game\Tests.Game.Ram.pas`. The magnet's own
 rules are tried in `Tests.Game.Magnet`; here, what the Ram does with it.
 
@@ -662,6 +726,12 @@ starts it hanging over a point, deploys and ticks till the magnet seeks;
 | `TestHangingItsHoneycombIsUp` (3.0.122) | hanging: the hull's honeycomb and the ring up; a bullet into the side of the risen hull is taken at its side; a clear: down | the restart aloft finds the hull bare, or the honeycomb is met where the hull stood on the road |
 | `TestUnderTheHoneycombNothingIsBare` (3.0.122) | the honeycomb up, straight up along the hanging hull: wherever the magnet or a nozzle would take a bullet, `Block` takes it | sparks and a ricochet off the machine through the honeycomb - its outline leaves the nozzles' tips or the magnet's corners bare |
 | `TestTheHoneycombFallsWithTheSoftMagnetAndComesBack` (3.0.122) | a barge caught: as the magnet grows soft both fall, the fall told once; on to the next seek: no second fall, the return told once, both kindling | the honeycomb stands over a soft magnet - the window hidden - or never comes back |
+| `TestTheRungsFollowTheHullsSpentLives` (3.0.123) | spent 0, 0.19, 0.2, 0.5, 0.67, 1: rungs 1, 1, 2, 3, 4, 4 | the ladder counts lives left for lives spent, or a rung by its upper bound |
+| `TestFromTheLiftsRungTheMagnetTakesHisBargeFirst` (3.0.123) | none spent: the nearest; the lift's rung: his barge first | the lift comes on the first rung, or never |
+| `TestOnTheFirstRungNoMortar` (3.0.123) | none spent, 1200 ticks, at least two windows: no rise, no lob, folded | the bombs come before the player has learnt the thrown barges |
+| `TestFromTheBombsRungTheMortarHasATurnAfterTheWindow` (3.0.123) | the bombs' rung: nothing till the window is over; then the rise, busy; through the turn the magnet seeks and catches nothing; two lobs at his feet out of a muzzle over the hull; folded, the magnet catches again | the shells meet the lift, come mid-window, aim off his feet, or the magnet is never given back the turn |
+| `TestTheMuzzleStandsOverTheHull` (3.0.123) | hanging: the muzzle over the hull's top by more than 15, within the hull across | shells come out of the hull's middle |
+| `TestAClearFoldsTheMortar` (3.0.123) | a clear mid-turn: not busy, not out | a death leaves the mortar up |
 
 ## Game.Shield: restored, afloat, hidden
 
@@ -681,7 +751,7 @@ by 20.
 
 ## Game.Wrecks: the fling
 
-State: written, 6 tests (3.0.121, stage 18d-2), not run yet: fixture
+State: written, 6 tests (3.0.121, stage 18d-2): fixture
 `TPadFlungTests` in `Tests\Game\Tests.Game.Wrecks.pas`.
 
 Shared: a barge 104 wide held at 256, 195 - under the hanging hull - and
@@ -698,7 +768,7 @@ flung at 180, 336, a hero on the main barge. Numbers spelled: none.
 
 ## Game.HullLives: the bar's heat
 
-State: written, 4 tests (3.0.121, stage 18d-2), not run yet, beside the 7
+State: written, 4 tests (3.0.121, stage 18d-2), beside the 7
 of 3.0.116 in `Tests\Game\Tests.Game.HullLives.pas`, fixture
 `THullLivesTests`.
 

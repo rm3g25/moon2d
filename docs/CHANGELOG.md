@@ -7,6 +7,26 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-11: **3.0.123 - the bombs.** The air fight climbs its first two
+rungs: the rung follows the share of the hull's lives spent
+(`TRam.AirTier`). On the first the magnet takes the barge nearest its
+face and that is all - the player learns to dodge the thrown barges.
+From the second (a fifth of the lives gone) it takes his barge first -
+the lift - and after each of its windows the stern mortar has a turn
+(`Game.Mortar`, new): it rises from behind the rear block with a
+hydraulic whine and a clank, the magnet waits cold, two shells go one at
+a time at the deck under his feet, each once the last is gone, and it
+folds. A shell rides the barge it was aimed at (`TBunkerShells.Carry`), its
+ring on that deck; with no road aloft one that meets no deck falls past
+the bottom, with no ring. On a small barge it bursts as in the chase and
+knocks the barge off its path: engine dead, it falls behind and sinks ever
+faster till it is gone past the left or the bottom edge - a pad still,
+so he may jump off or ride it into the pit (`TBargeFlock.Knock`); another
+comes in for it, the escort at once. On the main barge it bursts and the
+barge only rocks. The rings of the shells are drawn between ticks now,
+the chase's too. Debug key O aloft takes a fifth of the hull's lives. New
+sound: `mortarrise.wav` (`tools/sounds/mortar.py`).
+
 2026-11-11: **3.0.122 - the honeycomb aloft.** The flying Ram wears its
 honeycomb again, so the player sees why a hit fails. As the rear wheel is
 thrown it kindles back outward from the magnet, cell by cell over a

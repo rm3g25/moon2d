@@ -72,12 +72,13 @@ Tests\
     Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
-    Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll
+    Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll; aloft, the shell riding its barge
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
     Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away
     Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station, its drift
-    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out
-    Tests.Game.Magnet.pas  the magnet under the Ram's belly: the start, the pick, the reach, the lift, the seize and the throw, the heat
+    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off
+    Tests.Game.Magnet.pas  the magnet under the Ram's belly: the start, the pick, the reach, the lift, the seize and the throw, the heat, the wait
+    Tests.Game.Mortar.pas  the Ram's stern mortar: its turn, one shell at a time at the hero's feet, the lean, the fold
     Tests.Game.Pieces.pas  what is left of a barge that breaks
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
