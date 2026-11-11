@@ -7,6 +7,18 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-11: **3.0.124 - the knocked barge burns and lists.** After the
+live run of 3.0.123: a barge knocked off by a shell burns where it was
+struck - a flame, a flickering glow, thick black smoke the flight's wind
+streams back and the shorts of its torn wiring crackling out in small
+bolts (`Game.BargeFire`, new) - and lists to that side, jolted at
+once, then heeling over more and more, the steeper the farther from its
+middle the hit (`TBargeFlock.Heel`). The list is drawn, not felt
+(`TPad.Heel`): the deck stays level, but a rider is drawn on the listing
+picture and slides down it toward its low end, at about 30 degrees as
+fast as he walks (`TPad.RiderSlide`, `THero.RideDeck`); what hangs on the
+barge turns with it, and its dead engine puts its lamps and its jet out.
+
 2026-11-11: **3.0.123 - the bombs.** The air fight climbs its first two
 rungs: the rung follows the share of the hull's lives spent
 (`TRam.AirTier`). On the first the magnet takes the barge nearest its

@@ -705,6 +705,15 @@ are 16 units wide, 8 in from its left edge.
 | `TestCarriedPadGlidesBetweenTheTicks` | still, `Glide(0)` is nothing; carried 2 left and 1.5 down: `Glide(0)` is back where it stood, `Glide(0.5)` halfway, `Glide(1)` nothing; `Round(Top) + Lift(0.5)` is halfway between where the deck stood and stands | a moving pad is drawn on the tick again: the barges jerk |
 | `TestLiftDrawsTheDeckInFractionsOfAUnit` | carried 0.3 down a tick, 10 ticks: `Round(Top) + Lift(1)` is `Top` | the deck is drawn on a whole unit: a slow pad steps a unit at a time |
 
+### Heeled (3.0.124)
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestLevelTillHeeled` | woken: no heel, nothing under the deck at either end, no slide | every pad slides its riders, or is drawn askew |
+| `TestHeeledItsLowEndIsDrawnLowerAndARiderSlidesThere` | heeled 20 clockwise: the right end drawn lower, the left higher, by the width times the sine between them; a rider slides right; heeled the other way, the left end lower and the slide left | the rider is drawn floating over the low end, or slides uphill |
+| `TestTheHeelIsDrawnBetweenTheTicks` | heeled 0, then 10: 0 a tick ago, 5 halfway, 10 now | a listing barge turns in steps |
+| `TestAWokenPadIsLevel` | heeled 15 and 25, put to sleep and woken: level at both ticks, no slide | a barge of the pool comes in again still listing from its last fall |
+
 Left to the eye: the pad drawn at all only once awake, and the rigs it
 wears going out while it sleeps - the parent the game finds for them
 (`LocateParent` in `Game.Moon`) is not alive while the pad is dormant.

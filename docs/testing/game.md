@@ -521,9 +521,9 @@ Left to the eye: the barge's pad and its riders going up and down with it
 
 ## Game.Flock
 
-State: written, 29 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
+State: written, 32 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
 18d-2 - the barge the magnet takes; 5 of 3.0.123, stage 18d-3 - the barge
-a shell knocks off). Needs no stage:
+a shell knocks off; 3 of 3.0.124 - its list). Needs no stage:
 `TBargeFlock` only counts places. The unit is tried by
 `Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
 
@@ -568,6 +568,9 @@ tests bound them loosely or read the unit's constants.
 | `TestAKnockedBargeIsGoneSoon` (3.0.123) | knocked: it stops flying within 132 ticks, past the left or the bottom edge, and is knocked no more | a knocked barge falls for ever, or vanishes on the screen with him on it |
 | `TestAKnockedBargeIsReplacedWhileItFalls` (3.0.123) | knocked: one fewer on its path at once; within 67 ticks the count on their paths is full again | a falling barge keeps its place in the count and the flock thins while it falls |
 | `TestAKnockedEscortIsReplacedAtOnce` (3.0.123) | the escort knocked: no escort at once; a tick later another, on its path | the knocked escort leaves the main barge with no neighbour for a gap |
+| `TestAKnockedBargeListsToTheSideStruckMoreAndMore` (3.0.124) | struck 20 left of its middle: its left end down a tick on; past the blow's jolt, ever steeper till it is gone, never past 40 | the barge lists away from the hit, rights itself, or turns over |
+| `TestTheFartherFromItsMiddleTheSteeper` (3.0.124) | two flocks of the same dice, the same barge struck 5 and half its width right of its middle: both list right, 12 ticks on the far hit more than 5 degrees steeper | every hit lists a barge alike |
+| `TestOnItsPathNoList` (3.0.124) | 330 ticks of the flock: every barge level | a barge on its path flies askew |
 | `TestKnockingOneNotFlyingOrKnockedChangesNothing` (3.0.123) | an idle barge knocked: not sent in, not knocked; a falling one knocked again: its sink goes on, not thrown anew | a second shell on a falling barge kicks it up again, or a stale number sends a barge in |
 
 Left to the eye: the pads following the barges (`TickFlock`), the paths'
