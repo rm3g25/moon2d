@@ -121,6 +121,13 @@
   the two nozzles, under the hull's bottom, and none while stowed; it is
   soft only while it is hot; it is no body to touch; a clear stows it.
 
+  The air fight's ladder: its rungs follow the share of the hull's lives
+  spent; on the first the magnet takes the nearest barge and no mortar
+  comes up, from the second it takes his barge first and after each of
+  its windows the stern mortar has a turn - it rises, the magnet waits,
+  two shells go at his feet out of a muzzle over the hull, and once it
+  has folded the magnet catches again; a clear folds the mortar.
+
   The Ram only counts, so the tests tick it with a body of their own: the
   hull's whole box solid, and for the wells its lower band. The arena is
   read from level2.json beside the executable.
@@ -137,6 +144,7 @@ uses
   Levels.Events,
   Game.Shield,
   Game.Magnet,
+  Game.Mortar,
   Game.Ram;
 
 type
@@ -359,6 +367,18 @@ type
     procedure TestTheHoneycombFallsWithTheSoftMagnetAndComesBack;
     [Test]
     procedure TestUnderTheHoneycombNothingIsBare;
+    [Test]
+    procedure TestTheRungsFollowTheHullsSpentLives;
+    [Test]
+    procedure TestFromTheLiftsRungTheMagnetTakesHisBargeFirst;
+    [Test]
+    procedure TestOnTheFirstRungNoMortar;
+    [Test]
+    procedure TestFromTheBombsRungTheMortarHasATurnAfterTheWindow;
+    [Test]
+    procedure TestTheMuzzleStandsOverTheHull;
+    [Test]
+    procedure TestAClearFoldsTheMortar;
   end;
 
   [TestFixture]
@@ -4710,6 +4730,136 @@ begin
     X := X + Step;
   end;
   Assert.IsTrue(Bare > 0, 'The magnet and the nozzles were in the way');
+end;
+
+// A hero on a deck under the hull, his share of the hull's lives spent
+function HeroAboard(AHullSpent: Single): TRamTarget;
+begin
+  Result := HeroOnTheRoad(HangMiddleX);
+  Result.OnDeck := True;
+  Result.HullSpent := AHullSpent;
+end;
+
+procedure TRamMagnetTests.TestTheRungsFollowTheHullsSpentLives;
+const
+  Spent: array [0..5] of Single = (0, 0.19, 0.2, 0.5, 0.67, 1);
+  Rungs: array [0..5] of Integer = (1, 1, 2, 3, 4, 4);
+begin
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  for var i := 0 to High(Spent) do
+  begin
+    FRam.Tick(HeroAboard(Spent[i]));
+    Assert.AreEqual(Rungs[i], FRam.AirTier, Format('At %g spent', [Spent[i]]));
+  end;
+end;
+
+procedure TRamMagnetTests.TestFromTheLiftsRungTheMagnetTakesHisBargeFirst;
+begin
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.Tick(HeroAboard(0));
+  Assert.AreEqual<TMagnetRule>(mrNearest, FRam.Magnet.Rule, 'The nearest first');
+  FRam.Tick(HeroAboard(AirTierSpent[LiftFromTier]));
+  Assert.AreEqual<TMagnetRule>(mrHisBarge, FRam.Magnet.Rule, 'His barge first');
+end;
+
+procedure TRamMagnetTests.TestOnTheFirstRungNoMortar;
+begin
+  var Hero := HeroAboard(0);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  Hero.Barges := [BargeUnderTheFace];
+  var Windows := 0;
+  for var i := 1 to 3 * MagnetTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Magnet.Cooled then
+      Inc(Windows);
+    Assert.IsFalse(Cue.MortarRises or Cue.Lob, 'No mortar on the first rung');
+    Assert.IsFalse(FRam.Mortar.Busy, 'Folded');
+  end;
+  Assert.IsTrue(Windows >= 2, 'The magnet went round');
+end;
+
+// The magnet catches, throws and cools; then the mortar rises, the magnet
+// waits with a barge under its face, two shells go at his feet one after
+// the other, and once the mortar has folded the magnet catches again
+procedure TRamMagnetTests.TestFromTheBombsRungTheMortarHasATurnAfterTheWindow;
+begin
+  var Hero := HeroAboard(AirTierSpent[BombsFromTier]);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  Hero.Barges := [BargeUnderTheFace];
+  var Cue := FRam.Tick(Hero);
+  var Ticks := 0;
+  while not Cue.Magnet.Cooled do
+  begin
+    Assert.IsFalse(Cue.MortarRises or Cue.Lob, 'Nothing before the window is over');
+    Cue := FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The window never ended');
+  end;
+  Assert.IsTrue(Cue.MortarRises, 'The mortar rises as the window ends');
+  Assert.IsTrue(FRam.Mortar.Busy, 'Its turn');
+  var Lobs := 0;
+  var HullTop: Single := RamTop - HangLift;
+  Ticks := 0;
+  while FRam.Mortar.Busy do
+  begin
+    Cue := FRam.Tick(Hero);
+    Inc(Ticks);
+    Assert.IsFalse(Cue.Magnet.Caught, 'The magnet waits out the turn');
+    Assert.AreEqual<TMagnetStage>(mgSeeking, FRam.Magnet.Stage, 'Cold and empty');
+    if Cue.Lob then
+    begin
+      Inc(Lobs);
+      Assert.AreEqual(Double(Hero.Body.X + Hero.Body.W / 2), Double(Cue.LobAt.X),
+        0.001, 'At his feet across');
+      Assert.AreEqual(Double(Hero.Body.Y + Hero.Body.H), Double(Cue.LobAt.Y),
+        0.001, 'At his feet down');
+      Assert.IsTrue(Cue.LobFrom.Y < HullTop, 'Out of a muzzle over the hull');
+    end;
+    if Ticks > MagnetTicks then
+      Assert.Fail('The turn never ended');
+  end;
+  Assert.AreEqual(MortarShellsPerTurn, Lobs, 'Its shells, one after the other');
+  Ticks := 0;
+  while not FRam.Tick(Hero).Magnet.Caught do
+  begin
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never caught again');
+  end;
+end;
+
+procedure TRamMagnetTests.TestTheMuzzleStandsOverTheHull;
+const
+  // The tube stands this far over the hull's top at the least
+  Over = 15.0;
+begin
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.Tick(HeroAboard(0));
+  var Muzzle := FRam.MortarMuzzleAt(FRam.PoseAt(1));
+  Assert.IsTrue(Muzzle.Y < RamTop - HangLift - Over,
+    Format('Over the hull: %.1f', [Muzzle.Y]));
+  Assert.IsTrue((Muzzle.X > FRam.Left) and (Muzzle.X < FRam.Left + RamWidth),
+    Format('Over the hull across: %.1f', [Muzzle.X]));
+end;
+
+procedure TRamMagnetTests.TestAClearFoldsTheMortar;
+begin
+  var Hero := HeroAboard(AirTierSpent[BombsFromTier]);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  Hero.Barges := [BargeUnderTheFace];
+  var Ticks := 0;
+  while not FRam.Mortar.Busy do
+  begin
+    FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('No turn');
+  end;
+  FRam.Clear;
+  Assert.IsFalse(FRam.Mortar.Busy, 'Folded');
+  Assert.AreEqual(0.0, Double(FRam.Mortar.OutAt(1)), 0.001, 'Behind the block');
 end;
 
 initialization

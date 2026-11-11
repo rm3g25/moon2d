@@ -8,8 +8,9 @@
   lift - and rides with the face while held; then it is seized - pressed,
   in a lift - and thrown, at the hero or, with none, at the harbour; one
   barge at a time; soft from the hold till it is cold, heating as it
-  holds and cooling through its window; cold again it takes the next; a
-  clear stows it.
+  holds and cooling through its window; cold again it tells its window
+  over, once, and takes the next - unless told to wait, when it takes
+  none till the wait is lifted; a clear stows it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -25,7 +26,7 @@ uses
 type
   // The cues of the ticks stepped, added up
   TCuesSeen = record
-    Started, Caught, Seized, Thrown: Integer;
+    Started, Caught, Seized, Thrown, Cooled: Integer;
     // Of the last cue of its kind
     Barge: Integer;
     Pressed: Boolean;
@@ -87,6 +88,10 @@ type
     procedure TestItHeatsAsItHoldsAndCoolsThroughItsWindow;
     [Test]
     procedure TestColdAgainItTakesTheNext;
+    [Test]
+    procedure TestItTellsItsWindowOverOnce;
+    [Test]
+    procedure TestToldToWaitItTakesNoBargeTillTheWaitIsLifted;
     [Test]
     procedure TestAClearStowsIt;
     [Test]
@@ -193,6 +198,8 @@ begin
     Inc(FSeen.Thrown);
     FSeen.Aim := Cue.Aim;
   end;
+  if Cue.Cooled then
+    Inc(FSeen.Cooled);
 end;
 
 function TMagnetTests.StepTill(AStage: TMagnetStage; ALimit: Integer): Integer;
@@ -512,6 +519,34 @@ begin
   StepTill(mgReaching, CycleTicks);
   Assert.AreEqual(2, FSeen.Caught, 'A second catch');
   Assert.AreEqual(LowIndex, FSeen.Barge, 'The barge left');
+end;
+
+procedure TMagnetTests.TestItTellsItsWindowOverOnce;
+begin
+  CatchNear(False);
+  StepTill(mgCooling, CycleTicks);
+  Assert.AreEqual(0, FSeen.Cooled, 'Not while it cools');
+  StepTill(mgSeeking, CycleTicks);
+  Assert.AreEqual(1, FSeen.Cooled, 'Told as it is cold again');
+  See([]);
+  for var i := 1 to CycleTicks do
+    Step;
+  Assert.AreEqual(1, FSeen.Cooled, 'Once a window');
+end;
+
+procedure TMagnetTests.TestToldToWaitItTakesNoBargeTillTheWaitIsLifted;
+begin
+  BringOut;
+  See([NearBarge()]);
+  FSight.Waits := True;
+  for var i := 1 to CycleTicks do
+    Step;
+  Assert.AreEqual<TMagnetStage>(mgSeeking, FMagnet.Stage, 'Still looking');
+  Assert.AreEqual(0, FSeen.Caught, 'Nothing caught while it waits');
+  Assert.IsFalse(FMagnet.Soft, 'Cold while it waits');
+  FSight.Waits := False;
+  Step;
+  Assert.AreEqual(1, FSeen.Caught, 'Caught at once once the wait is lifted');
 end;
 
 procedure TMagnetTests.TestAClearStowsIt;

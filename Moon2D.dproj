@@ -251,6 +251,7 @@
         <DCCReference Include="Game\Game.Barge.pas"/>
         <DCCReference Include="Game\Game.Flock.pas"/>
         <DCCReference Include="Game\Game.Magnet.pas"/>
+        <DCCReference Include="Game\Game.Mortar.pas"/>
         <DCCReference Include="Game\Game.Pieces.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>

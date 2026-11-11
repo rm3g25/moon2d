@@ -188,6 +188,14 @@
   hull, which is the game's to carry out. It is no body: its touch is
   nothing.
 
+  The air fight climbs a ladder by the share of the hull's lives spent,
+  which the game tells it. On the first rung the magnet takes the barge
+  nearest its face; from the second it takes the one the hero stands on
+  first - the lift - and after each of the magnet's windows the stern
+  mortar has a turn (Game.Mortar): it rises from behind the rear block
+  and lobs shells at the deck under his feet, one at a time, while the
+  magnet waits, cold. The shells are the game's (Game.Shells).
+
   Its wheels gone, its honeycomb comes back: kindled outward from the
   magnet as the second wheel is thrown, then over the flying hull - rimmed
   under its belly too, not drawn over the arches, where the fire is - and
@@ -215,7 +223,7 @@ interface
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
-  Game.Takeoff, Game.Magnet, Effects.Sparks;
+  Game.Takeoff, Game.Magnet, Game.Mortar, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -227,6 +235,12 @@ const
   HunterLives = 100;
   SweeperLives = 140;
   BunkerLives = 150;
+  // The rungs of the air fight's ladder: the share of the hull's lives
+  // spent from which each holds. The bombs and the lift come with the
+  // second.
+  AirTierSpent: array [2..4] of Single = (0.2, 0.43, 0.67);
+  BombsFromTier = 2;
+  LiftFromTier = 2;
   // The bunker's last third - the hunt, the hull turned round - holds out
   // this many times its share of the row: a life every this many strikes
   BunkerLastThirdStrikes = 2;
@@ -331,6 +345,10 @@ type
     // no hero to throw at
     Barges: TArray<TMagnetBarge>;
     Harbour: TSdlFPoint;
+    // The share of the hull's lives spent, 0 to 1: the air fight's rung
+    HullSpent: Single;
+    // Shells in the air: the mortar waits them out
+    ShellsAloft: Integer;
   end;
 
   TRamCue = record
@@ -385,6 +403,10 @@ type
     Hover: Boolean;
     // What the magnet did this tick
     Magnet: TMagnetCue;
+    // The mortar starts to rise from behind the rear block; its shells
+    // come as Lob, LobFrom its muzzle, LobAt his feet - aloft the game
+    // lobs at the deck under them
+    MortarRises: Boolean;
     // Aloft, its honeycomb falls as the magnet softens, and kindles back
     // as it hardens
     ArmourDown: Boolean;
@@ -542,6 +564,7 @@ type
     FTakeoff: TTakeoff;
     FRearWheel: TLooseWheel;
     FMagnet: TMagnet;
+    FMortar: TMortar;
     // Ticks since the bare hull or its wheel last threw a bullet off
     FHullHitTicks: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -587,6 +610,7 @@ type
     procedure HearStrike(const AWheel: TLooseWheel);
     procedure TickTakeoff;
     procedure TickMagnet;
+    procedure TickMortar;
     procedure TickArmour;
     procedure StowArmourAloft;
     procedure RestoreArmourAloft(ATicks: Integer);
@@ -817,6 +841,13 @@ type
     // start of the air fight; nothing on the road, or once it is out
     procedure DeployMagnet;
     property Magnet: TMagnet read FMagnet;
+    property Mortar: TMortar read FMortar;
+    // The rung of the air fight's ladder, 1 to 4, by the share of the
+    // hull's lives spent the game told last
+    function AirTier: Integer;
+    // The middle of the mortar's muzzle on the screen, the hull standing
+    // as APose says and the mortar out
+    function MortarMuzzleAt(const APose: TRamPose): TSdlFPoint;
     // The middle of the magnet's face on the screen, the hull standing as
     // APose says
     function MagnetFaceAt(const APose: TRamPose): TSdlFPoint;
@@ -949,6 +980,7 @@ type
     FMagnet: PSdlTexture;
     // Its face and side panels in grey on a clear ground, tinted by code
     FMagnetHeat: PSdlTexture;
+    FMortar: PSdlTexture;
     // The fire out of a nozzle, the mouth at its top
     FFlame: PSdlTexture;
     FHullArt: THullArt;
@@ -1027,6 +1059,8 @@ type
     procedure DrawMagnet(const ASprites: TSpriteRenderer;
       const APose: TRamPose; AAlpha: Single);
     procedure DrawMagnetLight(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawMortar(const ASprites: TSpriteRenderer;
+      const APose: TRamPose; AAlpha: Single);
     procedure DrawArmourAloft(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
       AAlpha: Single);
     procedure DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
@@ -1743,6 +1777,16 @@ const
   BeamFlickerPace = 2.3;
   BeamGripSize = 22.0;
 
+  // The stern mortar (mortar): the bottom middle of its base out, on the
+  // rear block, and its size. Folded it sinks along its tube till its top
+  // is under the block's top; a lob kicks it down a little.
+  MortarPivotPoint: THullPoint = (X: 131.5; Y: 23.3);
+  MortarWidth = 36.1;
+  MortarHeight = 54.4;
+  MortarSink = 36.0;
+  MortarMuzzleDepth = 2.0;
+  MortarKickDepth = 3.0;
+
   // Read off the art: a unit of the grid is solid where the art is this
   // opaque at its middle
   BodyAlpha = 128;
@@ -1988,10 +2032,12 @@ begin
   FDice.Seed := ASeed;
   FWave.Stop;
   FMagnet := TMagnet.Create;
+  FMortar := TMortar.Create;
 end;
 
 destructor TRam.Destroy;
 begin
+  FMortar.Free;
   FMagnet.Free;
   FHeadShield.Free;
   for var Plate in FPlates do
@@ -2038,6 +2084,7 @@ begin
   FTakeoff.Stop;
   FRearWheel.Stop;
   FMagnet.Clear;
+  FMortar.Clear;
   StowArmourAloft;
   FShutter := 0;
   FLastShutter := 0;
@@ -2196,6 +2243,7 @@ begin
   FWheel.Stop;
   FRearWheel.Stop;
   FMagnet.Clear;
+  FMortar.Clear;
   StowArmourAloft;
 end;
 
@@ -2374,6 +2422,7 @@ begin
   TickPhase;
   TickShed;
   TickMagnet;
+  TickMortar;
   TickArmour;
   TickShutter;
   TickRow;
@@ -3835,7 +3884,51 @@ begin
   Sight.Hero := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
     FHero.Body.Y + FHero.Body.H / 2);
   Sight.Harbour := FHero.Harbour;
+  Sight.Waits := FMortar.Busy;
+  FMagnet.Rule := mrNearest;
+  if AirTier >= LiftFromTier then
+    FMagnet.Rule := mrHisBarge;
   FCue.Magnet := FMagnet.Tick(Sight);
+end;
+
+// Hanging, from the bombs' rung on, the mortar has a turn after each of
+// the magnet's windows; a shell of it is lobbed by the cue's Lob
+procedure TRam.TickMortar;
+begin
+  if FTakeoff.Stage <> tkHanging then
+    Exit;
+  if FCue.Magnet.Cooled and (AirTier >= BombsFromTier) then
+    FMortar.BeginTurn(MortarShellsPerTurn);
+  var Sight := Default(TMortarSight);
+  Sight.Pivot := PoseSpot(PoseAt(1), MortarPivotPoint);
+  Sight.Feet := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
+    FHero.Body.Y + FHero.Body.H);
+  Sight.OnDeck := FHero.Alive and FHero.OnDeck;
+  Sight.ShellsAloft := FHero.ShellsAloft;
+  var Step := FMortar.Tick(Sight);
+  FCue.MortarRises := Step.Rises;
+  if not Step.Lob then
+    Exit;
+  FCue.Lob := True;
+  FCue.LobFrom := MortarMuzzleAt(PoseAt(1));
+  FCue.LobAt := Step.LobAt;
+end;
+
+function TRam.AirTier: Integer;
+begin
+  Result := 1;
+  for var i := Low(AirTierSpent) to High(AirTierSpent) do
+    if FHero.HullSpent >= AirTierSpent[i] then
+      Result := i;
+end;
+
+// Up its tube from the pivot, leaning with the hull and its own tilt
+function TRam.MortarMuzzleAt(const APose: TRamPose): TSdlFPoint;
+begin
+  var Pivot := PoseSpot(APose, MortarPivotPoint);
+  var Lean := DegToRad(APose.Lean + FMortar.TiltAt(1));
+  var Reach := MortarHeight - MortarMuzzleDepth;
+  Result := UnitPoint(Pivot.X + Reach * Sin(Lean), Pivot.Y - Reach * Cos(Lean));
 end;
 
 // Aloft, the honeycomb falls as the magnet grows soft, and kindles back
@@ -5190,6 +5283,7 @@ begin
   FNozzleLit := FCache.Get('engineNozzleLit');
   FMagnet := FCache.Get('magnet');
   FMagnetHeat := FCache.Get('magnetHeat');
+  FMortar := FCache.Get('mortar');
   for var i := Low(FMasts) to High(FMasts) do
     FMasts[i] := FCache.Get('mast' + IntToStr(i));
   FHunter := FCache.Get('hunter');
@@ -5870,6 +5964,26 @@ begin
     MagnetHeatLevel * Heat, Mirrored, APose.Lean);
 end;
 
+// Out from behind the rear block as far as it has come, along its own
+// tube, leaning with the hull and toward his feet, kicked down a little by
+// a lob. Behind the hull: the block hides what is not out yet.
+procedure TRamPainter.DrawMortar(const ASprites: TSpriteRenderer;
+  const APose: TRamPose; AAlpha: Single);
+begin
+  var Mortar := FRam.Mortar;
+  var Shown := Mortar.OutAt(AAlpha);
+  if Shown <= 0 then
+    Exit;
+  var Pivot := FRam.PoseSpot(APose, MortarPivotPoint);
+  var Lean := APose.Lean + Mortar.TiltAt(AAlpha);
+  var Up := MortarHeight / 2 - MortarSink * (1 - Shown) -
+    MortarKickDepth * Mortar.KickAt(AAlpha);
+  var Angle := DegToRad(Lean);
+  var Center := UnitPoint(Pivot.X + Up * Sin(Angle), Pivot.Y - Up * Cos(Angle));
+  ASprites.DrawSized(FArt.FMortar, Center, MortarWidth, MortarHeight, 1,
+    FRam.HullMirrored, Lean);
+end;
+
 // The glow of a hot face; the beam from the face to the middle of the
 // deck it holds, and the spot where it grips it
 procedure TRamPainter.DrawMagnetLight(AOrigin: TSdlPoint; AAlpha: Single);
@@ -6031,6 +6145,7 @@ begin
   FHull.DrawChassis(ASprites, Stand);
   DrawEngines(ASprites, Pose, AAlpha);
   DrawMagnet(ASprites, Pose, AAlpha);
+  DrawMortar(ASprites, Pose, AAlpha);
   FHull.DrawWheels(ASprites, Stand, AAlpha);
   if not Moved then
   begin

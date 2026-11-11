@@ -99,6 +99,7 @@ uses
   Game.Barge in 'Game\Game.Barge.pas',
   Game.Flock in 'Game\Game.Flock.pas',
   Game.Magnet in 'Game\Game.Magnet.pas',
+  Game.Mortar in 'Game\Game.Mortar.pas',
   Game.Pieces in 'Game\Game.Pieces.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
   Game.Fangs in 'Game\Game.Fangs.pas',

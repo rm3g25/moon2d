@@ -20,6 +20,12 @@
   goes is SecondShellMark's. In its hunt the second goes ahead of the hero
   along his row, AheadShellMark's.
 
+  Aloft there is no road: a shell is lobbed at a deck that flies its own
+  way - its carrier - and rides that deck's way as a shell of the chase
+  rides the road's, so a hero who keeps standing on it gets it. One that
+  meets no deck falls past the bottom edge, and has no ring while nothing
+  lies under it.
+
   It knows neither the pads, the hero nor the bunker: the game gives it
   the decks of the screen and the road's way of the tick, asks it what
   touches the hero, and carries out the cue. TBunkerShells is the rules,
@@ -39,6 +45,11 @@ const
   // As many as can be in the air and on the road at once
   ShellSlots = 8;
   ShellRadius = 3.5;
+  // The arc's top stands this far over the higher of its two ends: low,
+  // seen whole - lower than the napalm, which climbs out of sight
+  LobRise = 40.0;
+  // A shell that rides no deck's way but the road's
+  NoCarrier = -1;
 
 type
   // The top of a pad's deck: where a shell bursts
@@ -55,10 +66,12 @@ type
     // Units a tick along the road; the road's own way comes on top
     Speed: TSdlFPoint;
     // Where it comes down, and on what: a deck or the road; the ticks till
-    // then
-    Ring: TSdlFPoint;
+    // then. Marked - it comes down on something: a ring to draw. The ring
+    // of the last tick, to draw it between the two as its deck flies.
+    Ring, LastRing: TSdlFPoint;
     RingOnDeck: Boolean;
     RingTicks: Integer;
+    Marked: Boolean;
     // The ticks the whole arc takes, as lobbed
     FlightTicks: Integer;
     // How far it has rolled, below 0 to the right: its picture turns by it
@@ -68,6 +81,10 @@ type
     // Which lob since the clear it is: a new shell in a spent one's slot
     // has another
     Turn: Integer;
+    // The caller's number of the deck whose way it rides, NoCarrier for
+    // the road's; the way that deck went this tick, not yet added
+    Carrier: Integer;
+    Carried: TSdlFPoint;
   end;
 
   TShellBurst = record
@@ -86,18 +103,26 @@ type
   private
     FShells: array [0..ShellSlots - 1] of TShell;
     FRoadY: Single;
+    FHasRoad: Boolean;
     FLobs: Integer;
+    function RoadLine: Single;
     procedure Predict(var AShell: TShell; const ADecks: TArray<TShellDeck>);
     function GetShell(AIndex: Integer): TShell;
-    function Aim(const AFrom, ATarget: TSdlFPoint; out ATicks: Integer): TSdlFPoint;
+    function Aim(const AFrom, ATarget: TSdlFPoint; ARise: Single;
+      out ATicks: Integer): TSdlFPoint;
     function ReachesRoad(const AFrom: TSdlFPoint; AX: Single;
       const ADecks: TArray<TShellDeck>): Boolean;
   public
     // ARoadY - the top of the road the shells roll on
     constructor Create(ARoadY: Single);
     // A shell out of AFrom that comes down on ATarget, both on the screen
-    // now; False when every slot is taken
-    function Lob(const AFrom, ATarget: TSdlFPoint): Boolean;
+    // now, its arc's top ARise over the higher end; riding the way of the
+    // caller's deck ACarrier from now on. False when every slot is taken.
+    function Lob(const AFrom, ATarget: TSdlFPoint;
+      ACarrier: Integer = NoCarrier; ARise: Single = LobRise): Boolean;
+    // The caller's deck ACarrier went AWayX, AWayY this tick: the shells
+    // that ride it go with it at the next Tick
+    procedure Carry(ACarrier: Integer; AWayX, AWayY: Single);
     // Where on the road, nearest AX, a shell out of AFrom comes down with
     // no deck in its way: the road at AX itself when none is clear
     function RoadMark(const AFrom: TSdlFPoint; AX: Single;
@@ -110,6 +135,9 @@ type
     function Strikes(const ABody: TSdlFRect; out AAt: TSdlFPoint): Boolean;
     // A death, a door, a new level: none left
     procedure Clear;
+    // The road the shells roll on, True from the start; aloft there is
+    // none, and a shell that meets no deck falls past the bottom edge
+    property HasRoad: Boolean read FHasRoad write FHasRoad;
     // In the air or on the road
     function Active: Integer;
     function MiddleAt(AIndex: Integer; AAlpha: Single): TSdlFPoint;
@@ -123,7 +151,7 @@ type
     FTurns: array [0..ShellSlots - 1] of Integer;
     FAge: Integer;
     procedure DrawRing(const ACanvas: TDynamicCanvas; const AShell: TShell;
-      AOrigin: TSdlPoint);
+      AOrigin: TSdlPoint; AAlpha: Single);
   public
     // AShells belongs to the caller and must outlive the painter
     constructor Create(AShells: TBunkerShells);
@@ -162,9 +190,6 @@ uses
 const
   // The moon's pull on a shell, units a tick every tick
   ShellGravity = 0.25;
-  // The arc's top stands this far over the higher of its two ends: low,
-  // seen whole - lower than the napalm, which climbs out of sight
-  LobRise = 40.0;
   // An arc takes this long at the least and at the most
   LobLeastTicks = 18;
   LobMostTicks = 60;
@@ -345,7 +370,16 @@ constructor TBunkerShells.Create(ARoadY: Single);
 begin
   inherited Create;
   FRoadY := ARoadY;
+  FHasRoad := True;
   Clear;
+end;
+
+// Out of every arc's reach with no road
+function TBunkerShells.RoadLine: Single;
+begin
+  Result := FRoadY;
+  if not FHasRoad then
+    Result := MaxSingle;
 end;
 
 procedure TBunkerShells.Clear;
@@ -356,8 +390,9 @@ begin
 end;
 
 // Of the arcs that come down on ATarget in a whole number of ticks, the
-// one whose top stands nearest LobRise over the higher end
-function TBunkerShells.Lob(const AFrom, ATarget: TSdlFPoint): Boolean;
+// one whose top stands nearest ARise over the higher end
+function TBunkerShells.Lob(const AFrom, ATarget: TSdlFPoint; ACarrier: Integer;
+  ARise: Single): Boolean;
 begin
   var Slot := -1;
   for var i := 0 to High(FShells) do
@@ -374,11 +409,14 @@ begin
   Shell.State := ssFlying;
   Shell.Middle := AFrom;
   Shell.LastMiddle := AFrom;
-  Shell.Speed := Aim(AFrom, ATarget, Ticks);
+  Shell.Speed := Aim(AFrom, ATarget, ARise, Ticks);
   Shell.Ring := ATarget;
+  Shell.LastRing := ATarget;
   Shell.RingTicks := Ticks;
+  Shell.Marked := True;
   Shell.FlightTicks := Ticks;
   Shell.Turn := FLobs;
+  Shell.Carrier := ACarrier;
   Inc(FLobs);
   FShells[Slot] := Shell;
   Result := True;
@@ -386,11 +424,11 @@ end;
 
 // The speed of the arc out of AFrom that comes down on ATarget, and the
 // ticks it takes: its middle aimed a radius over the target, so it comes
-// down touching it, its top LobRise over the higher end
-function TBunkerShells.Aim(const AFrom, ATarget: TSdlFPoint;
+// down touching it, its top ARise over the higher end
+function TBunkerShells.Aim(const AFrom, ATarget: TSdlFPoint; ARise: Single;
   out ATicks: Integer): TSdlFPoint;
 begin
-  var Wanted := Min(AFrom.Y, ATarget.Y) - LobRise;
+  var Wanted := Min(AFrom.Y, ATarget.Y) - ARise;
   var Drop := ATarget.Y - ShellRadius - AFrom.Y;
   ATicks := LobLeastTicks;
   var Nearest := MaxSingle;
@@ -413,7 +451,7 @@ function TBunkerShells.ReachesRoad(const AFrom: TSdlFPoint; AX: Single;
   const ADecks: TArray<TShellDeck>): Boolean;
 begin
   var Ticks: Integer;
-  var Speed := Aim(AFrom, UnitPoint(AX, FRoadY), Ticks);
+  var Speed := Aim(AFrom, UnitPoint(AX, FRoadY), LobRise, Ticks);
   var Point := AFrom;
   for var i := 1 to PredictTicks do
   begin
@@ -451,7 +489,9 @@ begin
 end;
 
 // The rest of its arc against the decks as they stand: the road carries
-// them and the shell alike, so along the road they keep their places
+// them and the shell alike, so along the road they keep their places -
+// and a deck aloft carries the shells that ride it. Nothing under what is
+// left of the arc: no ring.
 procedure TBunkerShells.Predict(var AShell: TShell;
   const ADecks: TArray<TShellDeck>);
 begin
@@ -464,15 +504,29 @@ begin
     var Share: Single;
     var At: TSdlFPoint;
     var Deck: Integer;
-    if FirstDown(Point, Next, ADecks, FRoadY, Share, At, Deck) then
+    if FirstDown(Point, Next, ADecks, RoadLine, Share, At, Deck) then
     begin
       AShell.Ring := At;
       AShell.RingOnDeck := Deck >= 0;
       AShell.RingTicks := i;
+      AShell.Marked := True;
       Exit;
     end;
     Point := Next;
   end;
+  AShell.Marked := False;
+end;
+
+procedure TBunkerShells.Carry(ACarrier: Integer; AWayX, AWayY: Single);
+begin
+  if ACarrier = NoCarrier then
+    Exit;
+  for var i := 0 to High(FShells) do
+    if (FShells[i].State = ssFlying) and (FShells[i].Carrier = ACarrier) then
+    begin
+      FShells[i].Carried.X := FShells[i].Carried.X + AWayX;
+      FShells[i].Carried.Y := FShells[i].Carried.Y + AWayY;
+    end;
 end;
 
 function TBunkerShells.Tick(const ADecks: TArray<TShellDeck>;
@@ -483,18 +537,22 @@ begin
   begin
     var Shell := FShells[i];
     Shell.LastMiddle := Shell.Middle;
+    Shell.LastRing := Shell.Ring;
     case Shell.State of
       ssFlying:
         begin
           Shell.Speed.Y := Shell.Speed.Y + ShellGravity;
-          // Compared along the road: where it was, carried as the decks were
-          var From := UnitPoint(Shell.Middle.X + AWay, Shell.Middle.Y);
+          // Compared along the road, or along its deck aloft: where it was,
+          // carried as the decks were
+          var From := UnitPoint(Shell.Middle.X + AWay + Shell.Carried.X,
+            Shell.Middle.Y + Shell.Carried.Y);
+          Shell.Carried := UnitPoint(0, 0);
           Shell.Middle := UnitPoint(From.X + Shell.Speed.X,
-            Shell.Middle.Y + Shell.Speed.Y);
+            From.Y + Shell.Speed.Y);
           var Share: Single;
           var At: TSdlFPoint;
           var Deck: Integer;
-          if FirstDown(From, Shell.Middle, ADecks, FRoadY, Share, At, Deck) then
+          if FirstDown(From, Shell.Middle, ADecks, RoadLine, Share, At, Deck) then
           begin
             if Deck >= 0 then
             begin
@@ -515,7 +573,8 @@ begin
             end;
           end
           else if (Shell.Middle.X < -ShellOffMargin) or
-            (Shell.Middle.X > ScreenWidth + ShellOffMargin) then
+            (Shell.Middle.X > ScreenWidth + ShellOffMargin) or
+            (Shell.Middle.Y > ScreenHeight + ShellOffMargin) then
             Shell.State := ssNone
           else
             Predict(Shell, ADecks);
@@ -618,7 +677,7 @@ end;
 
 // A flat ring of triangles, closing as the shell comes, throbbing
 procedure TShellPainter.DrawRing(const ACanvas: TDynamicCanvas;
-  const AShell: TShell; AOrigin: TSdlPoint);
+  const AShell: TShell; AOrigin: TSdlPoint; AAlpha: Single);
 var
   Vertices: array [0..2 * RingSegments + 1] of TSdlVertex;
   Indices: array [0..6 * RingSegments - 1] of Integer;
@@ -626,8 +685,8 @@ begin
   var Coming := EnsureRange(AShell.RingTicks / Max(1, AShell.FlightTicks), 0, 1);
   var Radius := Lerp(RingLeast, RingMost, Coming);
   var Throb := 1 - RingThrob + RingThrob * Sin(2 * Pi * FAge / RingThrobTicks);
-  var CenterX := AShell.Ring.X + AOrigin.X;
-  var CenterY := AShell.Ring.Y + AOrigin.Y;
+  var CenterX := Lerp(AShell.LastRing.X, AShell.Ring.X, AAlpha) + AOrigin.X;
+  var CenterY := Lerp(AShell.LastRing.Y, AShell.Ring.Y, AAlpha) + AOrigin.Y;
   var Color := Default(TSdlColor);
   Color.R := RingColor.R;
   Color.G := RingColor.G;
@@ -664,8 +723,8 @@ procedure TShellPainter.DrawRings(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; AAlpha: Single);
 begin
   for var i := 0 to ShellSlots - 1 do
-    if FShells[i].State = ssFlying then
-      DrawRing(ACanvas, FShells[i], AOrigin);
+    if (FShells[i].State = ssFlying) and FShells[i].Marked then
+      DrawRing(ACanvas, FShells[i], AOrigin, AAlpha);
 end;
 
 procedure TShellPainter.DrawShells(const ACanvas: TDynamicCanvas;

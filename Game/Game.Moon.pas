@@ -467,6 +467,9 @@ type
     procedure ResolveRamWave;
     procedure KnockOffPads;
     procedure TickShells(AWay: Single);
+    procedure TickShellsAloft;
+    function ShellCarrierOf(const APad: TPad): Integer;
+    procedure LobAtHisDeck(const AFrom, AFeet: TSdlFPoint);
     procedure ResolveShellContact;
     procedure ResolveRamColumn;
     procedure CallTheShuttle;
@@ -615,9 +618,13 @@ const
   // back as it hardens
   HoneycombDownSoundFile = 'honeycombdown.wav';
   HoneycombUpSoundFile = 'honeycombup.wav';
-  // Which barge the magnet takes: till the ladder of the air fight sets
-  // it by the tier, the barge he stands on - so the lift is played
-  AirFightMagnetRule = mrHisBarge;
+  // The stern mortar rising from behind the Ram's rear block for its turn
+  MortarRiseSoundFile = 'mortarrise.wav';
+  // Aloft the mortar's shell climbs this far over its muzzle - which
+  // stands near the top of the screen - before it comes down
+  AirLobRise = 20.0;
+  // The main barge struck by a shell: it rocks a little and is whole
+  ShellRockDepth = 4.0;
   // A thrown barge wounds a hero whose middle is within this of the way
   // its middle went this tick, once a throw
   ThrownBargeReach = 28.0;
@@ -854,7 +861,6 @@ begin
   FCannons := TCannonPair.Create(FCannonArt, CannonSeed);
   FRamArt := TRamArt.Create(ARenderer);
   FRam := TRam.Create(FRamArt.Body, FRamArt.Wells, RamSeed);
-  FRam.Magnet.Rule := AirFightMagnetRule;
   FRamPainter := TRamPainter.Create(FRamArt, FRam);
   FWrecks := TPadWrecks.Create;
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
@@ -4036,6 +4042,9 @@ begin
     Target.Barges := MagnetBarges;
     Target.Harbour.X := FBargePad.Left + BargeLength / 2;
     Target.Harbour.Y := FBargePad.Top;
+    if FHullLives.FullLives > 0 then
+      Target.HullSpent := 1 - FHullLives.Lives / FHullLives.FullLives;
+    Target.ShellsAloft := FShells.Active;
   end;
   var HeadBefore := FRam.Head;
   var Cue := FRam.Tick(Target);
@@ -4059,7 +4068,11 @@ begin
     FAudio.Play(RamWhineSoundFile);
   if Cue.Alarm then
     FAudio.Play(PadHumSoundFile);
-  if Cue.Lob then
+  if Cue.MortarRises then
+    FAudio.Play(MortarRiseSoundFile);
+  if Cue.Lob and FPastLauncher then
+    LobAtHisDeck(Cue.LobFrom, Cue.LobAt)
+  else if Cue.Lob then
   begin
     var At := Cue.LobAt;
     if Cue.LobForRoad then
@@ -4139,7 +4152,7 @@ begin
   for var i := 0 to High(FFlockPads) do
   begin
     var Pad := FFlockPads[i];
-    if not FFlock.Flying(i) or Pad.Dormant then
+    if not FFlock.Flying(i) or FFlock.Knocked(i) or Pad.Dormant then
       Continue;
     var Barge: TMagnetBarge;
     Barge.Index := i;
@@ -4406,6 +4419,12 @@ end;
 // tick (as KnockOffPads). The decks are the pads standing on the screen.
 procedure TMoonGame.TickShells(AWay: Single);
 begin
+  FShells.HasRoad := not FPastLauncher;
+  if FPastLauncher then
+  begin
+    TickShellsAloft;
+    Exit;
+  end;
   if FShells.Active = 0 then
   begin
     FShellPainter.Tick(AWay);
@@ -4430,6 +4449,72 @@ begin
       FWrecks.Launch(Pad, Middle, Pad.Placement.Width, Pad.PictureHeight,
         Burst.At, ShellBurstReach);
     end;
+    FBlasts.Add(TBlast.Create(Burst.At, ShellBlast));
+    FExplosions.Detonate(Burst.At.X, Burst.At.Y, ekBarrel);
+    FAudio.Play(BottleSoundFile);
+    FShake.AddTrauma(ShellBurstTrauma);
+  end;
+end;
+
+// The caller's number of a deck a mortar's shell rides: a small barge in
+// the flock by its place in the pool, the main barge one past them;
+// NoCarrier for any other pad
+function TMoonGame.ShellCarrierOf(const APad: TPad): Integer;
+begin
+  if APad = nil then
+    Exit(NoCarrier);
+  if APad = FBargePad then
+    Exit(Length(FFlockPads));
+  for var i := 0 to High(FFlockPads) do
+    if (FFlockPads[i] = APad) and FFlock.Flying(i) then
+      Exit(i);
+  Result := NoCarrier;
+end;
+
+// Aloft the mortar's shell goes at the deck under his feet and rides it:
+// none when he stands on no barge
+procedure TMoonGame.LobAtHisDeck(const AFrom, AFeet: TSdlFPoint);
+begin
+  if FHero.Dead or FHero.InAir then
+    Exit;
+  var Deck := FHero.DeckUnderFeet;
+  var Carrier := ShellCarrierOf(Deck);
+  if Carrier = NoCarrier then
+    Exit;
+  var At := AFeet;
+  At.Y := Deck.Top;
+  if FShells.Lob(AFrom, At, Carrier, AirLobRise) then
+    FAudio.Play(ShellLobSoundFile);
+end;
+
+// Aloft: the shells ride the barges they were lobbed at; the decks are the
+// pads standing on the screen but the one in the magnet. A burst on a
+// small barge knocks it off its path - whoever stays on it goes with it;
+// on the main barge it only rocks it. Either way a blast, as on the road.
+procedure TMoonGame.TickShellsAloft;
+begin
+  if FShells.Active = 0 then
+  begin
+    FShellPainter.Tick(0);
+    Exit;
+  end;
+  for var i := 0 to High(FFlockPads) do
+    if FFlock.Flying(i) then
+      FShells.Carry(i, FFlock.WayX(i), FFlock.WayY(i));
+  FShells.Carry(Length(FFlockPads), FBarge.Way, FBarge.WayDown);
+  var Pads: TArray<TPad> := [];
+  for var Pad in FPads.Standing(FHero.Screen) do
+    if Pad <> FMagnetPad then
+      Pads := Pads + [Pad];
+  var Cue := FShells.Tick(ShellDecks(Pads), 0);
+  FShellPainter.Tick(0);
+  for var Burst in Cue.Bursts do
+  begin
+    var Carrier := ShellCarrierOf(Pads[Burst.Deck]);
+    if Carrier = Length(FFlockPads) then
+      FBarge.Rock(ShellRockDepth)
+    else if Carrier <> NoCarrier then
+      FFlock.Knock(Carrier);
     FBlasts.Add(TBlast.Create(Burst.At, ShellBlast));
     FExplosions.Detonate(Burst.At.X, Burst.At.Y, ekBarrel);
     FAudio.Play(BottleSoundFile);
@@ -5649,7 +5734,12 @@ begin
       begin
         FRam.WoundThird;
         FStoneTank.Wound(1 / 3);
-      end;
+      end
+      // Aloft the ladder's rungs follow the hull's lives - a fifth of them
+      // at once
+      else if FHullLives.Armed then
+        for var i := 1 to FHullLives.FullLives div 5 do
+          FHullLives.Wound;
     ScancodeJ:
       // The boss gives the ceremony once a fight, at two thirds of his
       // lives - too far to tune against

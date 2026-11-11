@@ -10,6 +10,12 @@
   touches, and not on one it passes by; past the left edge it is gone. As many as its slots at
   once; a clear takes them all.
 
+  Aloft: a shell lobbed at a barge rides that barge's way and bursts on it
+  where it was aimed on the deck - another barge's way is not its own;
+  with no road it falls past the bottom edge and has a ring only while a
+  deck lies under it; the ring is drawn between two ticks as its deck
+  flies; an arc may be lobbed lower than the bunker's.
+
   The second shell of a pair: at the pad the hero stands on, wherever it
   is; else at the nearest pad a plain jump up that has ridden past the
   middle of the screen - never one still on the right half, nor one too
@@ -72,6 +78,35 @@ type
     procedure TestAsManyAsItsSlots;
     [Test]
     procedure TestClearTakesThemAll;
+  end;
+
+  [TestFixture]
+  TShellsAloftTests = class
+  private
+    FShells: TBunkerShells;
+    // The barge ACarrier flies AWayX, AWayY this tick: its deck moves, the
+    // shells that ride it are told
+    procedure Fly(var ADeck: TShellDeck; AWayX, AWayY: Single; ACarrier: Integer);
+    // The top of an arc of ARise from AFromY onto the barge, nothing under it
+    function HighestOf(AFromY, ARise: Single): Single;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestItRidesItsBargeAndBurstsOnIt;
+    [Test]
+    procedure TestAnotherBargesWayIsNotItsOwn;
+    [Test]
+    procedure TestWithNoRoadItFallsPastTheBottom;
+    [Test]
+    procedure TestWithNoRoadTheRingLiesOnlyOnADeck;
+    [Test]
+    procedure TestTheRingIsDrawnBetweenTicksAsItsDeckFlies;
+    [Test]
+    procedure TestALowerArcOfItsOwn;
   end;
 
   [TestFixture]
@@ -412,6 +447,158 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Aloft
+// ---------------------------------------------------------------------------
+
+const
+  // The mortar's muzzle on the hanging Ram, near the top of the screen
+  MortarX = 300.0;
+  MortarY = 12.0;
+  // A small barge on a lane
+  BargeLeft = 160.0;
+  BargeWidth = 104.0;
+  BargeTop = 230.0;
+  AloftRise = 20.0;
+  Carrier = 3;
+
+procedure TShellsAloftTests.Setup;
+begin
+  FShells := TBunkerShells.Create(RoadY);
+  FShells.HasRoad := False;
+end;
+
+procedure TShellsAloftTests.TearDown;
+begin
+  FShells.Free;
+end;
+
+procedure TShellsAloftTests.Fly(var ADeck: TShellDeck; AWayX, AWayY: Single;
+  ACarrier: Integer);
+begin
+  ADeck.Left := ADeck.Left + AWayX;
+  ADeck.Right := ADeck.Right + AWayX;
+  ADeck.Top := ADeck.Top + AWayY;
+  FShells.Carry(ACarrier, AWayX, AWayY);
+end;
+
+procedure TShellsAloftTests.TestItRidesItsBargeAndBurstsOnIt;
+const
+  WayX = -1.5;
+  WayY = 0.4;
+  AimX = BargeLeft + 40;
+begin
+  var Decks: TArray<TShellDeck> := [Deck(BargeLeft, BargeWidth, BargeTop)];
+  Assert.IsTrue(FShells.Lob(At(MortarX, MortarY), At(AimX, BargeTop), Carrier,
+    AloftRise), 'Lobbed');
+  for var i := 1 to ManyTicks do
+  begin
+    Fly(Decks[0], WayX, WayY, Carrier);
+    var Cue := FShells.Tick(Decks, Still);
+    if Length(Cue.Bursts) = 0 then
+      Continue;
+    Assert.AreEqual(0, Cue.Bursts[0].Deck, 'On its barge');
+    Assert.AreEqual(Double(AimX + i * WayX), Double(Cue.Bursts[0].At.X), Near,
+      'Where it was aimed on the deck');
+    Assert.AreEqual(Double(Decks[0].Top), Double(Cue.Bursts[0].At.Y), 0.001,
+      'On the deck as it flies');
+    Exit;
+  end;
+  Assert.Fail('No burst');
+end;
+
+procedure TShellsAloftTests.TestAnotherBargesWayIsNotItsOwn;
+const
+  AimX = BargeLeft + 40;
+begin
+  var Decks: TArray<TShellDeck> := [Deck(BargeLeft, BargeWidth, BargeTop)];
+  FShells.Lob(At(MortarX, MortarY), At(AimX, BargeTop), Carrier, AloftRise);
+  for var i := 1 to ManyTicks do
+  begin
+    FShells.Carry(Carrier + 1, -3, 0);
+    FShells.Carry(NoCarrier, -3, 0);
+    var Cue := FShells.Tick(Decks, Still);
+    if Length(Cue.Bursts) = 0 then
+      Continue;
+    Assert.AreEqual(Double(AimX), Double(Cue.Bursts[0].At.X), Near,
+      'Where it was aimed, carried by nothing');
+    Exit;
+  end;
+  Assert.Fail('No burst');
+end;
+
+procedure TShellsAloftTests.TestWithNoRoadItFallsPastTheBottom;
+begin
+  FShells.Lob(At(MortarX, MortarY), At(200, RoadY), Carrier, AloftRise);
+  FShells.Tick(NoDecks, Still);
+  Assert.IsFalse(FShells[0].Marked, 'No ring over the abyss');
+  var Lowest: Single := 0;
+  for var i := 1 to ManyTicks do
+  begin
+    var Cue := FShells.Tick(NoDecks, Still);
+    Assert.IsFalse(Cue.Landed, 'No road to land on');
+    Assert.AreEqual(0, Integer(Length(Cue.Bursts)), 'Nothing to burst on');
+    if FShells.Active = 0 then
+      Break;
+    Lowest := Max(Lowest, FShells[0].Middle.Y);
+  end;
+  Assert.AreEqual(0, FShells.Active, 'Gone');
+  Assert.IsTrue(Lowest > ScreenHeight, Format('Past the bottom: %g', [Lowest]));
+end;
+
+procedure TShellsAloftTests.TestWithNoRoadTheRingLiesOnlyOnADeck;
+begin
+  var Decks: TArray<TShellDeck> := [Deck(BargeLeft, BargeWidth, BargeTop)];
+  FShells.Lob(At(MortarX, MortarY), At(BargeLeft + 40, BargeTop), Carrier,
+    AloftRise);
+  FShells.Tick(Decks, Still);
+  Assert.IsTrue(FShells[0].Marked, 'A ring');
+  Assert.IsTrue(FShells[0].RingOnDeck, 'On the deck');
+  FShells.Tick(NoDecks, Still);
+  Assert.IsFalse(FShells[0].Marked, 'None once the deck is gone');
+end;
+
+procedure TShellsAloftTests.TestTheRingIsDrawnBetweenTicksAsItsDeckFlies;
+const
+  WayX = -2.0;
+begin
+  var Decks: TArray<TShellDeck> := [Deck(BargeLeft, BargeWidth, BargeTop)];
+  FShells.Lob(At(MortarX, MortarY), At(BargeLeft + 40, BargeTop), Carrier,
+    AloftRise);
+  for var i := 1 to 5 do
+  begin
+    Fly(Decks[0], WayX, 0, Carrier);
+    FShells.Tick(Decks, Still);
+  end;
+  var Shell := FShells[0];
+  Assert.AreEqual(Double(WayX), Double(Shell.Ring.X - Shell.LastRing.X), 0.1,
+    'The ring went its deck''s way this tick');
+end;
+
+function TShellsAloftTests.HighestOf(AFromY, ARise: Single): Single;
+begin
+  FShells.Clear;
+  FShells.Lob(At(MortarX, AFromY), At(BargeLeft + 40, BargeTop), Carrier, ARise);
+  Result := AFromY;
+  for var i := 1 to ManyTicks do
+  begin
+    FShells.Tick(NoDecks, Still);
+    if FShells.Active = 0 then
+      Break;
+    Result := Min(Result, FShells[0].Middle.Y);
+  end;
+end;
+
+procedure TShellsAloftTests.TestALowerArcOfItsOwn;
+const
+  FromY = 100.0;
+begin
+  var Low := HighestOf(FromY, 10);
+  var High := HighestOf(FromY, LobRise);
+  Assert.IsTrue(Low > High + 15, Format('A rise of 10 tops at %g, of %g at %g',
+    [Low, Double(LobRise), High]));
+end;
+
+// ---------------------------------------------------------------------------
 // The second shell's mark
 // ---------------------------------------------------------------------------
 
@@ -498,6 +685,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TBunkerShellTests);
+  TDUnitX.RegisterTestFixture(TShellsAloftTests);
   TDUnitX.RegisterTestFixture(TSecondShellMarkTests);
   TDUnitX.RegisterTestFixture(TAheadShellMarkTests);
 

@@ -21,6 +21,13 @@
   more and is the caller's till it is given back to the pool; another
   comes in for it as for one gone - at once when it was the escort.
 
+  A barge a shell bursts on is knocked off: its engine dead, it falls
+  behind the flight - off to the left ever faster - and sinks ever faster,
+  till it is gone past the left or the bottom edge. It still carries
+  whoever stays on it; it is out of the flock's count from the burst on,
+  so another comes in for it as for one gone - at once when it was the
+  escort.
+
   The barges are a pool the caller names by their widths, in its order:
   the flock tells which of them flies, where and how far it went this
   tick, and the caller moves its pads by that - the riders go with them as
@@ -63,8 +70,9 @@ const
 type
   // fpEscort - over the main barge; the rest fly free: fpLane - along a
   // lane with a swell; fpLoop - loops in place, then drifts off; fpClimb -
-  // up or down across the screen; fpPass - right through
-  TFlockPath = (fpEscort, fpLane, fpLoop, fpClimb, fpPass);
+  // up or down across the screen; fpPass - right through. fpKnocked - off
+  // its path for good, falling behind and sinking.
+  TFlockPath = (fpEscort, fpLane, fpLoop, fpClimb, fpPass, fpKnocked);
 
   // Where the main barge is this tick
   TMainBarge = record
@@ -96,6 +104,8 @@ type
       // The way in: how far right of its path it came in, over how long
       ComeFromX: Double;
       ComeTicks: Integer;
+      // Knocked off: its way of the last tick, across and down
+      FallX, FallY: Double;
     end;
   private
     FWidths: TArray<Double>;
@@ -125,8 +135,13 @@ type
     procedure LetGo(AIndex: Integer);
     procedure HandOver(const AMain: TMainBarge);
     procedure Fly(const AMain: TMainBarge);
+    procedure Fall(var AFlyer: TFlyer);
     procedure SendWhenDue(const AMain: TMainBarge);
     function Arrived(AIndex: Integer): Boolean;
+    function InFlock: Integer;
+    // The escort out of the flock: its relief, if one is on its way, is
+    // the escort now; with none, one is sent at once
+    procedure LoseEscort;
   public
     // AWidths - the widths of the pool's barges, in the caller's order;
     // ASeed - the dice of the paths
@@ -162,6 +177,12 @@ type
     function Taken(AIndex: Integer): Boolean;
     // The taken barge AIndex is the pool's again, to come in anew
     procedure GiveBack(AIndex: Integer);
+    // A shell has burst on the barge AIndex: off its path, falling behind
+    // and sinking, out of the flock's count - another comes in for it, at
+    // once when it was the escort. Nothing for one that does not fly or
+    // is knocked off already.
+    procedure Knock(AIndex: Integer);
+    function Knocked(AIndex: Integer): Boolean;
     // The escort's index in the pool, -1 when none flies
     property Escort: Integer read FEscort;
   end;
@@ -213,6 +234,15 @@ const
   LoopFromMost = 0.7;
   ClimbFrom = 0.7;
   PassFrom = 0.6;
+  // Knocked off: thrown this far left and down at once, then it falls
+  // behind and sinks a little more every tick, up to the flight's pace
+  // across and a stone's down
+  KnockKick = 1.0;
+  KnockDrop = 0.6;
+  FallBehind = 0.08;
+  FallBehindMost = 4.0;
+  SinkGain = 0.12;
+  SinkMost = 6.0;
   // Tries for a lane clear of the others' decks
   LaneTries = 8;
   NoBarge = -1;
@@ -308,7 +338,7 @@ begin
     Result := Round(RollRange(AHighest, ALowest));
     var Apart := True;
     for var Other in FFlyers do
-      if Other.Flying and (Other.Path <> fpEscort) and
+      if Other.Flying and not (Other.Path in [fpEscort, fpKnocked]) and
         (Abs(Other.Top - Result) < LanesApart) then
         Apart := False;
     if Apart then
@@ -482,11 +512,31 @@ begin
     FFlyers[i].LastLeft := FFlyers[i].Left;
     FFlyers[i].LastTop := FFlyers[i].Top;
     Inc(FFlyers[i].Clock);
-    Place(i, AMain);
+    if FFlyers[i].Path = fpKnocked then
+      Fall(FFlyers[i])
+    else
+      Place(i, AMain);
     var Right := FFlyers[i].Left + FWidths[i];
-    if Right < 0 then
+    if (Right < 0) or (FFlyers[i].Top > ScreenHeight) then
       FFlyers[i].Flying := False;
   end;
+end;
+
+procedure TBargeFlock.Fall(var AFlyer: TBargeFlock.TFlyer);
+begin
+  AFlyer.FallX := Max(AFlyer.FallX - FallBehind, -FallBehindMost);
+  AFlyer.FallY := Min(AFlyer.FallY + SinkGain, SinkMost);
+  AFlyer.Left := AFlyer.Left + AFlyer.FallX;
+  AFlyer.Top := AFlyer.Top + AFlyer.FallY;
+end;
+
+// The barges flying their paths, the knocked ones left out
+function TBargeFlock.InFlock: Integer;
+begin
+  Result := 0;
+  for var Flyer in FFlyers do
+    if Flyer.Flying and (Flyer.Path <> fpKnocked) then
+      Inc(Result);
 end;
 
 // Short of the count and the gap out: one of the pool comes in - the
@@ -494,7 +544,7 @@ end;
 // else a free one
 procedure TBargeFlock.SendWhenDue(const AMain: TMainBarge);
 begin
-  if FlyingCount >= FCount then
+  if InFlock >= FCount then
     Exit;
   if FWait > 0 then
   begin
@@ -590,14 +640,39 @@ begin
   FFlyers[AIndex].Taken := True;
   if AIndex = FRelief then
     FRelief := NoBarge;
-  if AIndex <> FEscort then
-    Exit;
+  if AIndex = FEscort then
+    LoseEscort;
+end;
+
+procedure TBargeFlock.LoseEscort;
+begin
   FEscort := FRelief;
   FRelief := NoBarge;
   FServed := 0;
   FServe := Round(RollRange(ServeLeast, ServeMost));
   if FEscort = NoBarge then
     FWait := 0;
+end;
+
+// From the way it went the last tick, never to the right
+procedure TBargeFlock.Knock(AIndex: Integer);
+begin
+  var Flyer := FFlyers[AIndex];
+  if not Flyer.Flying or (Flyer.Path = fpKnocked) then
+    Exit;
+  Flyer.Path := fpKnocked;
+  Flyer.FallX := Min(Flyer.Left - Flyer.LastLeft, 0.0) - KnockKick;
+  Flyer.FallY := KnockDrop;
+  FFlyers[AIndex] := Flyer;
+  if AIndex = FRelief then
+    FRelief := NoBarge;
+  if AIndex = FEscort then
+    LoseEscort;
+end;
+
+function TBargeFlock.Knocked(AIndex: Integer): Boolean;
+begin
+  Result := FFlyers[AIndex].Flying and (FFlyers[AIndex].Path = fpKnocked);
 end;
 
 function TBargeFlock.Taken(AIndex: Integer): Boolean;

@@ -12,7 +12,8 @@
   Then it holds the barge, heating. Then it seizes it - the barge snaps up
   to the face, the press of a lift - and throws it at the hero. Then,
   empty, it cools: the window. Cold again and rested, it looks for the
-  next.
+  next - unless its owner has given the turn to another weapon: then it
+  waits, cold, till it may look again.
 
   It is soft - an orb takes a life of the hull - from the hold till it is
   cold; how hot it is drawn follows: up as it holds, fading as it cools.
@@ -83,6 +84,8 @@ type
     Hero: TSdlFPoint;
     // Where a throw goes with no hero to throw at
     Harbour: TSdlFPoint;
+    // Another weapon has the turn: cold, it looks for no barge
+    Waits: Boolean;
   end;
 
   TMagnetCue = record
@@ -99,6 +102,8 @@ type
     // The seized barge is thrown at Aim
     Thrown: Boolean;
     Aim: TSdlFPoint;
+    // The window is over: cold and empty, it rests and looks for the next
+    Cooled: Boolean;
   end;
 
   TMagnet = class
@@ -125,7 +130,7 @@ type
     procedure TickReaching(const ASight: TMagnetSight);
     procedure TickHolding(const ASight: TMagnetSight; var ACue: TMagnetCue);
     procedure TickPressing(const ASight: TMagnetSight; var ACue: TMagnetCue);
-    procedure TickCooling;
+    procedure TickCooling(var ACue: TMagnetCue);
   public
     constructor Create;
     // A death, a new fight: stowed, cold, empty
@@ -252,7 +257,7 @@ begin
     mgPressing:
       TickPressing(ASight, Result);
     mgCooling:
-      TickCooling;
+      TickCooling(Result);
   end;
 end;
 
@@ -297,6 +302,8 @@ begin
     Dec(FRest);
     Exit;
   end;
+  if ASight.Waits then
+    Exit;
   var Pick := Choose(ASight);
   if Pick = NoBarge then
     Exit;
@@ -381,7 +388,7 @@ begin
   FTicks := 0;
 end;
 
-procedure TMagnet.TickCooling;
+procedure TMagnet.TickCooling(var ACue: TMagnetCue);
 begin
   Inc(FTicks);
   FHeat := Max(1 - FTicks / MagnetWindowTicks, 0);
@@ -390,6 +397,7 @@ begin
   FHeat := 0;
   FStage := mgSeeking;
   FRest := MagnetRestTicks;
+  ACue.Cooled := True;
 end;
 
 function TMagnet.Soft: Boolean;
