@@ -7,7 +7,9 @@
   sleeps with no scene to wake it, till the game does. A pad the game
   carries takes its riders along, across and up and down; between the
   ticks it is drawn on its way from where it stood a tick ago, and its
-  deck in fractions of a unit.
+  deck in fractions of a unit. Heeled, its low end is drawn lower and its
+  high end higher by the heel, between the ticks too, and a rider slides
+  toward the low end; level till heeled, and level again once woken.
 
   The pad names no sprite, so the world asks no art for it, as for a deck
   of the collision grid: no stage is needed. The level wakes a dormant
@@ -68,6 +70,14 @@ type
     procedure TestCarriedPadGlidesBetweenTheTicks;
     [Test]
     procedure TestLiftDrawsTheDeckInFractionsOfAUnit;
+    [Test]
+    procedure TestLevelTillHeeled;
+    [Test]
+    procedure TestHeeledItsLowEndIsDrawnLowerAndARiderSlidesThere;
+    [Test]
+    procedure TestTheHeelIsDrawnBetweenTheTicks;
+    [Test]
+    procedure TestAWokenPadIsLevel;
   end;
 
 implementation
@@ -438,6 +448,63 @@ begin
       Format('Tick %d: the deck drawn where it stands, not on a whole unit',
       [i]));
   end;
+end;
+
+procedure TPadWorldTests.TestLevelTillHeeled;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  Assert.AreEqual(0.0, Pad.HeelAt(1), UnitSlack, 'Level');
+  Assert.AreEqual(0.0, Pad.HeelLift(Pad.Left, 1), UnitSlack, 'Its left end');
+  Assert.AreEqual(0.0, Pad.HeelLift(Pad.Right, 1), UnitSlack, 'Its right end');
+  Assert.AreEqual(0.0, Pad.RiderSlide, UnitSlack, 'No slide');
+end;
+
+procedure TPadWorldTests.TestHeeledItsLowEndIsDrawnLowerAndARiderSlidesThere;
+const
+  Degrees = 20.0;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  Pad.Heel(Degrees);
+  var LeftEnd := Pad.HeelLift(Pad.Left, 1);
+  var RightEnd := Pad.HeelLift(Pad.Right, 1);
+  Assert.IsTrue(RightEnd > 0, 'Clockwise, the right end is drawn lower');
+  Assert.IsTrue(LeftEnd < 0, 'And the left end higher');
+  Assert.AreEqual(Double(Pad.Placement.Width * Sin(DegToRad(Degrees))),
+    RightEnd - LeftEnd, UnitSlack, 'By the heel across its width');
+  Assert.IsTrue(Pad.RiderSlide > 0, 'A rider slides right, down the deck');
+  Pad.Heel(-Degrees);
+  Assert.IsTrue(Pad.HeelLift(Pad.Left, 1) > 0, 'The other way, the left end lower');
+  Assert.IsTrue(Pad.RiderSlide < 0, 'And a rider slides left');
+end;
+
+procedure TPadWorldTests.TestTheHeelIsDrawnBetweenTheTicks;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  Pad.Heel(0);
+  Pad.Heel(10);
+  Assert.AreEqual(0.0, Pad.HeelAt(0), UnitSlack, 'Where it was a tick ago');
+  Assert.AreEqual(5.0, Pad.HeelAt(0.5), UnitSlack, 'Halfway');
+  Assert.AreEqual(10.0, Pad.HeelAt(1), UnitSlack, 'Where it is');
+end;
+
+procedure TPadWorldTests.TestAWokenPadIsLevel;
+begin
+  var Pad := Sleeper;
+  Pad.Wake;
+  TickWorld(1);
+  Pad.Heel(15);
+  Pad.Heel(25);
+  Pad.Doze;
+  Pad.Wake;
+  Assert.AreEqual(0.0, Pad.HeelAt(0), UnitSlack, 'Level a tick ago');
+  Assert.AreEqual(0.0, Pad.HeelAt(1), UnitSlack, 'Level now');
+  Assert.AreEqual(0.0, Pad.RiderSlide, UnitSlack, 'No slide');
 end;
 
 initialization

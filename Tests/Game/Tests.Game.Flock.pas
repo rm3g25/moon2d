@@ -12,7 +12,9 @@
   barge knocked off by a shell falls behind and sinks ever faster, is gone
   past the left or the bottom edge, and is out of the count at once -
   another comes in for it, the escort at once; knocking one that does not
-  fly, or one knocked already, changes nothing.
+  fly, or one knocked already, changes nothing. A knocked barge lists to
+  the side struck, more and more, never past its most, the farther from
+  its middle the hit the steeper; one on its path does not list.
 
   The main barge is Game.Barge's own, let go at its station and drifting
   on its loop, its deck on the road's line.
@@ -110,6 +112,12 @@ type
     procedure TestAKnockedEscortIsReplacedAtOnce;
     [Test]
     procedure TestKnockingOneNotFlyingOrKnockedChangesNothing;
+    [Test]
+    procedure TestAKnockedBargeListsToTheSideStruckMoreAndMore;
+    [Test]
+    procedure TestTheFartherFromItsMiddleTheSteeper;
+    [Test]
+    procedure TestOnItsPathNoList;
   end;
 
 implementation
@@ -669,7 +677,7 @@ const
 begin
   FFlock.Start(Count);
   var Loner := StepTillAFreeBargeFlies(EscortInTicks);
-  FFlock.Knock(Loner);
+  FFlock.Knock(Loner, 0);
   Assert.IsTrue(FFlock.Knocked(Loner), 'Knocked off');
   Assert.AreEqual(Ord(fpKnocked), Ord(FFlock.PathOf(Loner)), 'Off its path');
   Step;
@@ -698,7 +706,7 @@ const
 begin
   FFlock.Start(Count);
   var Loner := StepTillAFreeBargeFlies(EscortInTicks);
-  FFlock.Knock(Loner);
+  FFlock.Knock(Loner, 0);
   var Ticks := 0;
   var Left: Double := 0;
   var Top: Double := 0;
@@ -721,7 +729,7 @@ procedure TBargeFlockTests.TestAKnockedBargeIsReplacedWhileItFalls;
 begin
   FFlock.Start(Count);
   var Loner := StepTillAFreeBargeFlies(EscortInTicks);
-  FFlock.Knock(Loner);
+  FFlock.Knock(Loner, 0);
   Assert.AreEqual(Count - 1, OnTheirPaths, 'Out of the count at once');
   for var i := 1 to ReplaceGapMost + 1 do
     Step;
@@ -733,7 +741,7 @@ begin
   FFlock.Start(Count);
   TicksTillNeighbour(EscortInTicks);
   var Old := FFlock.Escort;
-  FFlock.Knock(Old);
+  FFlock.Knock(Old, 0);
   Assert.AreNotEqual(Old, FFlock.Escort, 'The knocked one is no escort');
   Step;
   Assert.IsTrue(FFlock.Escort >= 0, 'A new escort at once');
@@ -750,17 +758,92 @@ begin
     if not FFlock.Flying(i) then
       Idle := i;
   Assert.IsTrue(Idle >= 0, 'One of the pool idle');
-  FFlock.Knock(Idle);
+  FFlock.Knock(Idle, 0);
   Assert.IsFalse(FFlock.Flying(Idle), 'Not sent in by a knock');
   Assert.IsFalse(FFlock.Knocked(Idle), 'Not knocked');
-  FFlock.Knock(Loner);
+  FFlock.Knock(Loner, 0);
   for var i := 1 to 10 do
     Step;
   var Sinking := FFlock.WayY(Loner);
-  FFlock.Knock(Loner);
+  FFlock.Knock(Loner, 0);
   Step;
   Assert.IsTrue(FFlock.WayY(Loner) >= Sinking - UnitSlack,
     'The fall goes on, not thrown anew');
+end;
+
+procedure TBargeFlockTests.TestAKnockedBargeListsToTheSideStruckMoreAndMore;
+const
+  // Its most, degrees
+  HeelMost = 40.0;
+  // Past the jolt of the blow
+  SettleTicks = 20;
+begin
+  FFlock.Start(Count);
+  var Loner := StepTillAFreeBargeFlies(EscortInTicks);
+  FFlock.Knock(Loner, -20);
+  Step;
+  Assert.IsTrue(FFlock.Heel(Loner) < 0, 'Struck left of its middle, its left end down');
+  for var i := 1 to SettleTicks do
+    Step;
+  var LastHeel := FFlock.Heel(Loner);
+  while FFlock.Flying(Loner) do
+  begin
+    Assert.IsTrue(FFlock.Heel(Loner) <= LastHeel + UnitSlack, 'More and more');
+    Assert.IsTrue(FFlock.Heel(Loner) >= -HeelMost - UnitSlack, 'Never past its most');
+    LastHeel := FFlock.Heel(Loner);
+    Step;
+  end;
+end;
+
+procedure TBargeFlockTests.TestTheFartherFromItsMiddleTheSteeper;
+const
+  Settled = 12;
+begin
+  var Near := TBargeFlock.Create(Pool, Seed);
+  var Far := TBargeFlock.Create(Pool, Seed);
+  try
+    Near.Start(Count);
+    Far.Start(Count);
+    var Loner := -1;
+    for var i := 1 to EscortInTicks do
+    begin
+      FRide.Tick(0, False, True);
+      Near.Tick(MainNow);
+      Far.Tick(MainNow);
+      for var j := 0 to Near.PoolSize - 1 do
+        if Near.Flying(j) and (j <> Near.Escort) then
+          Loner := j;
+      if Loner >= 0 then
+        Break;
+    end;
+    Assert.IsTrue(Loner >= 0, 'A free barge flies');
+    Near.Knock(Loner, 5);
+    Far.Knock(Loner, Far.Width(Loner) / 2);
+    for var i := 1 to Settled do
+    begin
+      FRide.Tick(0, False, True);
+      Near.Tick(MainNow);
+      Far.Tick(MainNow);
+    end;
+    Assert.IsTrue(Near.Heel(Loner) > 0, 'Struck right of its middle, its right end down');
+    Assert.IsTrue(Far.Heel(Loner) > Near.Heel(Loner) + 5,
+      Format('At its end %.1f, near its middle %.1f', [Far.Heel(Loner),
+      Near.Heel(Loner)]));
+  finally
+    Far.Free;
+    Near.Free;
+  end;
+end;
+
+procedure TBargeFlockTests.TestOnItsPathNoList;
+begin
+  FFlock.Start(Count);
+  for var i := 1 to EscortInTicks do
+  begin
+    Step;
+    for var j := 0 to FFlock.PoolSize - 1 do
+      Assert.AreEqual(0.0, FFlock.Heel(j), UnitSlack, 'Level on its path');
+  end;
 end;
 
 initialization

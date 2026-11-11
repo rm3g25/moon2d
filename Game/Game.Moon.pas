@@ -32,6 +32,7 @@ uses
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
+  Game.BargeFire,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -210,6 +211,8 @@ type
     // in since the pier was cleared
     FFlockMedkits: TArray<TFlockMedkit>;
     FFlockArrivals: Integer;
+    // The fire on the knocked ones, one a barge
+    FBargeFire: TBargeFire;
     // The magnet's catch in the air fight: the pad it holds till it seizes
     // it, how far it took that pad on the Ram's last tick - the pad goes
     // that far on the next, before the pads' own tick - the wreck the
@@ -412,6 +415,9 @@ type
     procedure TickPier(AWay: Double);
     procedure BuildFlock;
     procedure TickFlock;
+    procedure TickBargeFire(AWind: Double);
+    function FlockPadKnocked(const APad: TPad): Boolean;
+    procedure HeelRigs(const APad: TPad; var AStand: TParentStand);
     procedure TickFlockMedkit(AIndex: Integer);
     procedure DropFlockMedkit(AIndex: Integer);
     function HeroStandsOn(const APad: TPad): Boolean;
@@ -625,6 +631,9 @@ const
   AirLobRise = 20.0;
   // The main barge struck by a shell: it rocks a little and is whole
   ShellRockDepth = 4.0;
+  // A knocked barge's smoke is carried back by this share of the flight's
+  // wind - the world's pace past the barges
+  BargeSmokeWindShare = 0.6;
   // A thrown barge wounds a hero whose middle is within this of the way
   // its middle went this tick, once a throw
   ThrownBargeReach = 28.0;
@@ -950,6 +959,7 @@ begin
   FOrbShots.Free;
   FBelt.Free;
   FBarge.Free;
+  FBargeFire.Free;
   FFlock.Free;
   FRoadPainter.Free;
   FRoad.Free;
@@ -2103,6 +2113,32 @@ end;
 
 // A dynamic object hung on a pad or a monster looks it up here every
 // tick. Levels.Defs has refused a tag both carry.
+// A heeled pad turns what hangs on it about the middle of its picture, as
+// a spinning monster turns its own: the picture turns there too
+procedure TMoonGame.HeelRigs(const APad: TPad; var AStand: TParentStand);
+begin
+  AStand.Spins := (APad.HeelAt(0) <> 0) or (APad.HeelAt(1) <> 0);
+  if not AStand.Spins then
+    Exit;
+  var Glide := APad.Glide(0);
+  AStand.Spin.Axis.X := APad.Placement.Width / 2;
+  AStand.Spin.Axis.Y := APad.PictureHeight / 2;
+  AStand.Spin.Pose.Center.X := AStand.X + AStand.Spin.Axis.X;
+  AStand.Spin.Pose.Center.Y := AStand.Y + AStand.Spin.Axis.Y;
+  AStand.Spin.Pose.Angle := APad.HeelAt(1);
+  AStand.Spin.LastPose.Center.X := AStand.Spin.Pose.Center.X + Glide.X;
+  AStand.Spin.LastPose.Center.Y := AStand.Spin.Pose.Center.Y + Glide.Y;
+  AStand.Spin.LastPose.Angle := APad.HeelAt(0);
+end;
+
+function TMoonGame.FlockPadKnocked(const APad: TPad): Boolean;
+begin
+  for var i := 0 to High(FFlockPads) do
+    if FFlockPads[i] = APad then
+      Exit(FFlock.Knocked(i));
+  Result := False;
+end;
+
 function TMoonGame.LocateParent(const ATag: string;
   out AStand: TParentStand): Boolean;
 begin
@@ -2130,6 +2166,10 @@ begin
     AStand.Depth.Shrink := 1 - DeepScale;
     AStand.Depth.Dim := 1 - DeepTone;
     AStand.Depth.Pivot := Pad.Middle;
+    // A knocked barge's engine is dead: its lamps and its jet go out
+    if FlockPadKnocked(Pad) then
+      AStand.Alive := False;
+    HeelRigs(Pad, AStand);
     Exit(True);
   end;
   for var Monster in FField.Monsters do
@@ -3291,6 +3331,7 @@ begin
   FRoad.Clear;
   FBarge.Clear;
   FFlock.Clear(RollDiceSeed);
+  FBargeFire.Clear;
   for var Pad in FFlockPads do
     Pad.Doze;
   for var i := 0 to High(FFlockMedkits) do
@@ -3328,6 +3369,8 @@ begin
   end;
   FFlock.Free;
   FFlock := TBargeFlock.Create(Widths, RollDiceSeed);
+  FBargeFire.Free;
+  FBargeFire := TBargeFire.Create(Length(FFlockPads));
   FFlockMedkits := nil;
   SetLength(FFlockMedkits, Length(FFlockPads));
   FFlockArrivals := 0;
@@ -3373,6 +3416,7 @@ begin
       Continue;
     end;
     Pad.Carry(FFlock.WayX(i), FFlock.WayY(i));
+    Pad.Heel(FFlock.Heel(i));
     TickFlockMedkit(i);
   end;
   FMagnetWay := Default(TSdlFPoint);
@@ -3442,7 +3486,30 @@ begin
   if (FBarge.Stage = bsStation) and HeroAboard then
     FRam.DeployMagnet;
   TickFlock;
+  TickBargeFire(AWay);
   PinPierCheckpoint;
+end;
+
+// A knocked barge burns where the shell struck its deck, on the listing
+// picture; the flight's wind takes the smoke back
+procedure TMoonGame.TickBargeFire(AWind: Double);
+var
+  Wounds: TArray<TBargeWound>;
+begin
+  SetLength(Wounds, Length(FFlockPads));
+  for var i := 0 to High(FFlockPads) do
+  begin
+    Wounds[i].Burning := FFlock.Knocked(i);
+    if not Wounds[i].Burning then
+      Continue;
+    var Pad := FFlockPads[i];
+    var Middle: Double := FFlock.Left(i) + FFlock.Width(i) / 2;
+    var Across := Middle + FFlock.HitAcross(i);
+    Wounds[i].At.X := Across;
+    Wounds[i].At.Y := FFlock.Top(i) +
+      Pad.HeelLift(Pad.Left + Pad.Placement.Width / 2 + FFlock.HitAcross(i), 1);
+  end;
+  FBargeFire.Tick(Wounds, AWind * BargeSmokeWindShare);
 end;
 
 // Where a pit or a death brings him back past the launcher: onto the
@@ -4514,7 +4581,8 @@ begin
     if Carrier = Length(FFlockPads) then
       FBarge.Rock(ShellRockDepth)
     else if Carrier <> NoCarrier then
-      FFlock.Knock(Carrier);
+      FFlock.Knock(Carrier, Burst.At.X - (Pads[Burst.Deck].Left +
+        Pads[Burst.Deck].Placement.Width / 2));
     FBlasts.Add(TBlast.Create(Burst.At, ShellBlast));
     FExplosions.Detonate(Burst.At.X, Burst.At.Y, ekBarrel);
     FAudio.Play(BottleSoundFile);
@@ -5220,6 +5288,8 @@ begin
         FPads.Draw(FHero.Screen, AAlpha, plFront);
         // Where the shells come down, on the decks and the road
         FShellPainter.DrawRings(FDynamics.Canvas, FSprites.Origin, AAlpha);
+        // The knocked barges burning, before the figures
+        FBargeFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         // The pads knocked off, before the pads in front of them no more
         FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FWreckPainter.DrawBodies(FSprites, AAlpha);

@@ -135,7 +135,10 @@
   The game may carry any pad across by hand (Carry), a tick at a time, as
   the road carries a drifter: the riders go with it - the road of the
   chase running out is one. It may carry it up and down as well: the
-  barges of the air fight fly so.
+  barges of the air fight fly so. It may heel it too (Heel), a tick at a
+  time - a knocked barge lists. The heel is drawn, not felt: the deck
+  stays level, but a rider is drawn on the listing picture (HeelLift) and
+  slides down it, the steeper the faster (RiderSlide).
 
   The world is born with the level; a restart rewinds it, the dice of the
   rebuilds new for the new try.
@@ -236,6 +239,8 @@ type
     FFailLook: TPadFailLook;
     FFailed: Boolean;
     FStray: TStrayCycle;
+    // Degrees clockwise the caller heels it, this tick and the last
+    FHeel, FLastHeel: Double;
     // The tick of the clock the pad breaks at; NoBreak when it is not to
     FBreakAt: Integer;
     FWasBehind: Boolean;
@@ -335,6 +340,16 @@ type
     procedure Carry(AWay: Double); overload;
     // The same, across and down - below 0 up
     procedure Carry(AWayX, AWayY: Double); overload;
+    // Heeled ADegrees clockwise this tick, drawn about its middle; 0
+    // after a rewind or a wake
+    procedure Heel(ADegrees: Double);
+    function HeelAt(AAlpha: Single): Double;
+    // How far under the level deck the heeled picture's top is AX across,
+    // AAlpha of the way from the last tick to this one: where a rider
+    // standing there is drawn
+    function HeelLift(AX: Double; AAlpha: Single): Double;
+    // Units a tick the heel slides a rider across, toward the low end
+    function RiderSlide: Double;
     // The same, but it flies in to AX, AY from AFrom off its place - from
     // any side - over ATicks, its jets hard, and comes to rest on its place
     // at the road's pace: its place rides the road all the while
@@ -661,6 +676,9 @@ const
   KnockReach = TileSize;
   KnockOutTicks = 6;
   KnockBackTicks = 12;
+  // A rider slides down a heeled deck this many units a tick for the
+  // sine of the heel: at about 30 degrees as fast as he walks
+  HeelSlideGain = 4.0;
   // The pad rocks after the blow: the tilt in degrees at its widest, how
   // fast it dies away and one rock in ticks
   KnockTilt = 7.0;
@@ -806,6 +824,8 @@ begin
     ScreenHeight + PlungeDepth - FPlacement.Y, PlungeSeed(FPlacement));
   FStray.Rewind(FPlacement.Stray, FPlacement.Width, FPlacement.X,
     FPlacement.Y);
+  FHeel := 0;
+  FLastHeel := 0;
   FWasBehind := Behind;
 end;
 
@@ -1117,6 +1137,8 @@ end;
 procedure TPad.Wake;
 begin
   FDormant := False;
+  FHeel := 0;
+  FLastHeel := 0;
 end;
 
 procedure TPad.Doze;
@@ -1143,6 +1165,30 @@ procedure TPad.Carry(AWayX, AWayY: Double);
 begin
   FPathLeft := FPathLeft + AWayX;
   FPathTop := FPathTop + AWayY;
+end;
+
+procedure TPad.Heel(ADegrees: Double);
+begin
+  FLastHeel := FHeel;
+  FHeel := ADegrees;
+end;
+
+function TPad.HeelAt(AAlpha: Single): Double;
+begin
+  Result := FLastHeel + (FHeel - FLastHeel) * AAlpha;
+end;
+
+// The picture turns about its middle, half its height under the deck
+function TPad.HeelLift(AX: Double; AAlpha: Single): Double;
+begin
+  var Angle := DegToRad(HeelAt(AAlpha));
+  var Across := AX - (FLeft + FPlacement.Width / 2);
+  Result := Across * Sin(Angle) + FPictureHeight / 2 * (1 - Cos(Angle));
+end;
+
+function TPad.RiderSlide: Double;
+begin
+  Result := HeelSlideGain * Sin(DegToRad(FHeel));
 end;
 
 procedure TPad.SetAdriftComing(AX, AY: Double; const AFrom: TSdlFPoint;
@@ -1387,7 +1433,8 @@ begin
     Texture := FFailLook.Texture;
   TintTexture(Texture, Round(FPlacement.Tint.R * Tone),
     Round(FPlacement.Tint.G * Tone), Round(FPlacement.Tint.B * Tone));
-  ASprites.DrawRectF(Texture, Dest, Tilt(AAlpha) + FPlunge.Lean + FStray.Lean);
+  ASprites.DrawRectF(Texture, Dest, Tilt(AAlpha) + FPlunge.Lean + FStray.Lean +
+    HeelAt(AAlpha));
 end;
 
 // ---------------------------------------------------------------------------

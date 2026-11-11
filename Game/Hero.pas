@@ -275,7 +275,8 @@ type
     // The deck under the hero's middle; nil when there is none
     function DeckUnderFeet: TPad;
     // Units down the picture is drawn: the bob and the sag of the deck
-    // underfoot, which the feet do not feel; AAlpha as the deck's Lift
+    // underfoot, which the feet do not feel, and its heel where he
+    // stands; AAlpha as the deck's Lift
     function DeckLift(AAlpha: Single): Single;
     // Units across the picture is drawn past his whole unit on a deck: the
     // fraction of a unit he stands past it and the deck's Glide, AAlpha as
@@ -1286,7 +1287,7 @@ end;
 // him instead, and he falls; one a wall has pulled from under him leaves
 // him to the ground below, standing or walking - a walk into that wall
 // sees no ledge, the way is shut - and the corpse too. So does a shelf
-// that has slid into its wall.
+// that has slid into its wall. A heeled deck slides him down it.
 procedure THero.RideDeck;
 begin
   var Middle := FX + HeroSize / 2;
@@ -1298,7 +1299,7 @@ begin
     Exit;
   end;
 
-  CarryX(Deck.MotionX);
+  CarryX(Deck.MotionX + Deck.RiderSlide);
 
   var Rising := Deck.Top < FY;
   if Rising and not CanIGoUp then
@@ -1369,7 +1370,7 @@ begin
   var Deck := DeckUnderFeet;
   if Deck = nil then
     Exit(0);
-  Result := Deck.Lift(AAlpha);
+  Result := Deck.Lift(AAlpha) + Deck.HeelLift(FX + HeroSize / 2, AAlpha);
 end;
 
 function THero.DeckSlide(AAlpha: Single): Single;

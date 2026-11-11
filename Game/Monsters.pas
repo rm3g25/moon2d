@@ -331,7 +331,8 @@ type
     // How full the current third is, 0..1
     function TierShare: Single;
     // Units down the picture is drawn: the bob and the sag of the deck
-    // underfoot; AAlpha as the deck's Lift
+    // underfoot, and its heel where the body stands; AAlpha as the deck's
+    // Lift
     function DeckLift(AAlpha: Single): Single;
     // Units across the picture is drawn past its whole unit on a deck: the
     // fraction of a unit it stands past it and the deck's Glide
@@ -1174,7 +1175,7 @@ begin
   var Deck := DrawnDeck;
   if Deck = nil then
     Exit(0);
-  Result := Deck.Lift(AAlpha);
+  Result := Deck.Lift(AAlpha) + Deck.HeelLift(FX + SpriteSize / 2, AAlpha);
 end;
 
 function TMonster.DeckSlide(AAlpha: Single): Single;

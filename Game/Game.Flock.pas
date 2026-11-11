@@ -23,7 +23,9 @@
 
   A barge a shell bursts on is knocked off: its engine dead, it falls
   behind the flight - off to the left ever faster - and sinks ever faster,
-  till it is gone past the left or the bottom edge. It still carries
+  till it is gone past the left or the bottom edge. It lists to the side
+  the shell struck - jolted down at once, then heeling over more and more,
+  the farther from its middle the hit the steeper. It still carries
   whoever stays on it; it is out of the flock's count from the burst on,
   so another comes in for it as for one gone - at once when it was the
   escort.
@@ -104,8 +106,10 @@ type
       // The way in: how far right of its path it came in, over how long
       ComeFromX: Double;
       ComeTicks: Integer;
-      // Knocked off: its way of the last tick, across and down
+      // Knocked off: its way of the last tick, across and down; where the
+      // shell struck, across from its middle
       FallX, FallY: Double;
+      HitAcross: Double;
     end;
   private
     FWidths: TArray<Double>;
@@ -177,12 +181,18 @@ type
     function Taken(AIndex: Integer): Boolean;
     // The taken barge AIndex is the pool's again, to come in anew
     procedure GiveBack(AIndex: Integer);
-    // A shell has burst on the barge AIndex: off its path, falling behind
-    // and sinking, out of the flock's count - another comes in for it, at
-    // once when it was the escort. Nothing for one that does not fly or
-    // is knocked off already.
-    procedure Knock(AIndex: Integer);
+    // A shell has burst on the barge AIndex AHitAcross from the middle of
+    // its deck, below 0 to the left: off its path, falling behind and
+    // sinking, listing to that side, out of the flock's count - another
+    // comes in for it, at once when it was the escort. Nothing for one that
+    // does not fly or is knocked off already.
+    procedure Knock(AIndex: Integer; AHitAcross: Double);
     function Knocked(AIndex: Integer): Boolean;
+    // Degrees clockwise a knocked barge lists; 0 for any other
+    function Heel(AIndex: Integer): Double;
+    // Where the shell struck a knocked barge, across from the middle of its
+    // deck
+    function HitAcross(AIndex: Integer): Double;
     // The escort's index in the pool, -1 when none flies
     property Escort: Integer read FEscort;
   end;
@@ -243,6 +253,19 @@ const
   FallBehindMost = 4.0;
   SinkGain = 0.12;
   SinkMost = 6.0;
+  // Its list: toward the side struck, eased in over about HeelTicks to
+  // HeelLeast degrees for a hit at its middle and HeelSpan more for one
+  // at its end, then over by HeelCreep a tick more, HeelMost at most; on
+  // top, the jolt of the blow - HeelJolt degrees that die out over
+  // HeelJoltTicks, a rock in HeelRockTicks
+  HeelTicks = 10.0;
+  HeelLeast = 6.0;
+  HeelSpan = 10.0;
+  HeelCreep = 0.3;
+  HeelMost = 40.0;
+  HeelJolt = 6.0;
+  HeelJoltTicks = 6.0;
+  HeelRockTicks = 8.0;
   // Tries for a lane clear of the others' decks
   LaneTries = 8;
   NoBarge = -1;
@@ -655,12 +678,14 @@ begin
 end;
 
 // From the way it went the last tick, never to the right
-procedure TBargeFlock.Knock(AIndex: Integer);
+procedure TBargeFlock.Knock(AIndex: Integer; AHitAcross: Double);
 begin
   var Flyer := FFlyers[AIndex];
   if not Flyer.Flying or (Flyer.Path = fpKnocked) then
     Exit;
   Flyer.Path := fpKnocked;
+  Flyer.Clock := 0;
+  Flyer.HitAcross := AHitAcross;
   Flyer.FallX := Min(Flyer.Left - Flyer.LastLeft, 0.0) - KnockKick;
   Flyer.FallY := KnockDrop;
   FFlyers[AIndex] := Flyer;
@@ -673,6 +698,29 @@ end;
 function TBargeFlock.Knocked(AIndex: Integer): Boolean;
 begin
   Result := FFlyers[AIndex].Flying and (FFlyers[AIndex].Path = fpKnocked);
+end;
+
+// A hit at the very middle lists it to the left, the way it falls behind
+function TBargeFlock.Heel(AIndex: Integer): Double;
+begin
+  if not Knocked(AIndex) then
+    Exit(0);
+  var Flyer := FFlyers[AIndex];
+  var Side := 1;
+  if Flyer.HitAcross <= 0 then
+    Side := -1;
+  var Time: Double := Flyer.Clock;
+  var Reach := Min(Abs(Flyer.HitAcross) / (FWidths[AIndex] / 2), 1.0);
+  var Settled := (HeelLeast + HeelSpan * Reach) * (1 - Exp(-Time / HeelTicks));
+  var Listed := Min(Settled + HeelCreep * Time, HeelMost);
+  var Jolt := HeelJolt * Exp(-Time / HeelJoltTicks) *
+    Sin(2 * Pi * Time / HeelRockTicks);
+  Result := Side * (Listed + Jolt);
+end;
+
+function TBargeFlock.HitAcross(AIndex: Integer): Double;
+begin
+  Result := FFlyers[AIndex].HitAcross;
 end;
 
 function TBargeFlock.Taken(AIndex: Integer): Boolean;
