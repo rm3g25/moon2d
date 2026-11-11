@@ -32,7 +32,7 @@ uses
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
-  Game.BargeFire,
+  Game.BargeFire, Game.Charge,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -222,6 +222,8 @@ type
     FMagnetWay: TSdlFPoint;
     FMagnetWreck: Integer;
     FMagnetStruckHero: Boolean;
+    // The charge's wash has rocked the main barge: once a charge
+    FChargeWashed: Boolean;
     FMagnetHum: THeldSound;
     // What is left of a barge thrown onto the main barge
     FPieces: TBargePieces;
@@ -423,6 +425,10 @@ type
     function HeroStandsOn(const APad: TPad): Boolean;
     function MagnetBarges: TArray<TMagnetBarge>;
     procedure CarryOutMagnet(const ACue: TMagnetCue);
+    procedure CarryOutCharge(const ACue: TChargeCue);
+    procedure SmashUnderTheCharge;
+    procedure SmashFlockBarge(AIndex: Integer);
+    procedure ResolveRamCharge;
     procedure SeizeMagnetBarge(const ACue: TMagnetCue);
     procedure ThrowMagnetBarge(const AAim: TSdlFPoint);
     procedure ResolveThrownBarge;
@@ -626,6 +632,15 @@ const
   HoneycombUpSoundFile = 'honeycombup.wav';
   // The stern mortar rising from behind the Ram's rear block for its turn
   MortarRiseSoundFile = 'mortarrise.wav';
+  // The Ram's charge: the alarm with the band at the left edge, the rush
+  // in at speed, the brake with the nozzles thrown ahead
+  ChargeWarnSoundFile = 'chargewarn.wav';
+  ChargeRushSoundFile = 'chargerush.wav';
+  ChargeBrakeSoundFile = 'chargebrake.wav';
+  // The charge knocks a hero it strikes along its way this hard, units a
+  // tick till he lands; its wash rocks the main barge it passes over
+  ChargeKnockWay = 2.0;
+  ChargeWashDepth = 3.0;
   // Aloft the mortar's shell climbs this far over its muzzle - which
   // stands near the top of the screen - before it comes down
   AirLobRise = 20.0;
@@ -820,6 +835,8 @@ const
   BossCrashTrauma = 0.6; // the boss's ram ending in a wall
   WheelShedTrauma = 0.5; // the Ram's front wheel breaking off
   BargeBlowTrauma = 0.45; // a thrown barge breaking on the main barge
+  BargeSmashTrauma = 0.3; // the Ram's charge smashing a small barge
+  ChargeWashTrauma = 0.2; // the charge's wash over the main barge
   CannonBlastTrauma = 0.8; // the two wall cannons blowing up together
   DupletShotTrauma = 0.2; // every shot of the Duplet: the kick of the stock
   // The smoke of the cannons' blast hangs over the room about this long:
@@ -3727,7 +3744,7 @@ end;
 // once he has taken it
 procedure TMoonGame.TickOrbLauncher;
 begin
-  if not FHero.Dead and (FRam.Flight.Stage = tkHanging) then
+  if not FHero.Dead and FRam.Flight.Aloft then
     FOrbLauncher.Start;
   FOrbLauncherShroud.Tick(OrbLauncherPose, FOrbLauncherShroudPainter.SeedsOf(1));
   var Cue := FOrbLauncher.Tick(FOrbLauncherShroud.Assembling);
@@ -3738,7 +3755,7 @@ begin
   end;
   if Cue.Lay then
     LayOrbLauncher;
-  if FHullLives.Tick(FRam.Magnet.Soft) then
+  if FHullLives.Tick(FRam.HotAloft) then
     FAudio.Play(TerminalKeySoundFile);
 end;
 
@@ -4109,6 +4126,7 @@ begin
     Target.Barges := MagnetBarges;
     Target.Harbour.X := FBargePad.Left + BargeLength / 2;
     Target.Harbour.Y := FBargePad.Top;
+    Target.HarbourTopmost := RamFloorY - DriftReachY;
     if FHullLives.FullLives > 0 then
       Target.HullSpent := 1 - FHullLives.Lives / FHullLives.FullLives;
     Target.ShellsAloft := FShells.Active;
@@ -4117,6 +4135,7 @@ begin
   var Cue := FRam.Tick(Target);
   FRamPainter.Tick(FBelt.Speed);
   CarryOutMagnet(Cue.Magnet);
+  CarryOutCharge(Cue.Charge);
   if Cue.Chase then
     FBelt.Start;
   if Cue.Rows then
@@ -4371,6 +4390,73 @@ begin
   FShake.AddTrauma(BargeBlowTrauma);
 end;
 
+function BoxesMeet(const AFirst, ASecond: TSdlFRect): Boolean;
+begin
+  Result := (AFirst.X < ASecond.X + ASecond.W) and
+    (ASecond.X < AFirst.X + AFirst.W) and
+    (AFirst.Y < ASecond.Y + ASecond.H) and (ASecond.Y < AFirst.Y + AFirst.H);
+end;
+
+// What the charge did this tick, carried out: its sounds, no small barge
+// coming in from the band till it is up again, and while it runs low the
+// small barges it meets smashed and the main barge rocked by its wash as
+// it rams over it
+procedure TMoonGame.CarryOutCharge(const ACue: TChargeCue);
+begin
+  if ACue.Warns then
+  begin
+    FChargeWashed := False;
+    FAudio.Play(ChargeWarnSoundFile);
+  end;
+  if ACue.Rushes then
+    FAudio.Play(ChargeRushSoundFile);
+  if ACue.Brakes then
+    FAudio.Play(ChargeBrakeSoundFile);
+  FFlock.Held := FRam.Charge.HoldsFlock;
+  SmashUnderTheCharge;
+end;
+
+procedure TMoonGame.SmashUnderTheCharge;
+var
+  Sweep: TSdlFRect;
+begin
+  if not FRam.ChargeSweep(Sweep) then
+    Exit;
+  for var i := 0 to High(FFlockPads) do
+    if FFlock.Flying(i) and not FFlockPads[i].Dormant and
+      BoxesMeet(Sweep, FFlockPads[i].Body) then
+      SmashFlockBarge(i);
+  if FChargeWashed or not FRam.Charge.Rams or (FBargePad = nil) then
+    Exit;
+  var Deck := FBargePad.Body;
+  if (Sweep.X < Deck.X + Deck.W) and (Deck.X < Sweep.X + Sweep.W) then
+  begin
+    FChargeWashed := True;
+    FBarge.Rock(ChargeWashDepth);
+    FShake.AddTrauma(ChargeWashTrauma);
+  end;
+end;
+
+// Into pieces flung along the charge's way, its medkit gone with it
+procedure TMoonGame.SmashFlockBarge(AIndex: Integer);
+begin
+  var Pad := FFlockPads[AIndex];
+  var Broken := Default(TBrokenBarge);
+  Broken.Pad := Pad;
+  Broken.Middle := PadMiddle(Pad);
+  Broken.Width := Pad.Placement.Width;
+  Broken.Height := Pad.PictureHeight;
+  Broken.Spin := FFlock.Heel(AIndex);
+  Broken.Speed.X := FRam.Charge.Pace;
+  FPieces.Shatter(Broken);
+  FFlock.Smash(AIndex);
+  Pad.Doze;
+  DropFlockMedkit(AIndex);
+  FExplosions.Detonate(Broken.Middle.X, Broken.Middle.Y, ekBarrel);
+  FAudio.Play(BossCrashSoundFile);
+  FShake.AddTrauma(BargeSmashTrauma);
+end;
+
 // The chase: the road slides left under the Ram, and the world on it -
 // the hero, in the air too, and the loot - rides along. The road went AWay
 // at the head of the tick, before the pads, which carry what stands on them
@@ -4390,6 +4476,19 @@ procedure TMoonGame.StopRamRumble;
 begin
   FAudio.StopHeld(FRamRumble);
   FRamRumble.Channel := -1;
+end;
+
+// The charge's sweep strikes him once, on a deck or in the air: a wound,
+// and the knock along its way and down - likely off whatever he stood on
+procedure TMoonGame.ResolveRamCharge;
+begin
+  if FHero.Dead then
+    Exit;
+  var Away: Integer;
+  if not FRam.ChargeStrikes(HeroBody(FHero), Away) then
+    Exit;
+  HurtByRam;
+  FHero.Knock(Away, ChargeKnockWay);
 end;
 
 // The Ram throws a hero over its hull with a wound: falling back, one who
@@ -4420,7 +4519,7 @@ begin
   if not FRam.Contact(HeroBody(FHero), OnDeck, FHero.InAir, Away) then
     Exit;
   HurtByRam;
-  if FRam.Flight.Stage in [tkRising, tkHanging] then
+  if FRam.Flight.Stage in [tkRising, tkHanging, tkCarried] then
     FHero.Knock(Away)
   else
     FHero.Throw(Away);
@@ -4781,6 +4880,11 @@ begin
   var Normal: TSdlFPoint;
   Result := FRam.StrikeMagnet(Stretch.Start, Stretch.Finish, At, Normal);
   var Sinks := Result and FRam.Magnet.Soft and (ABullet.Look = blOrb);
+  if not Result then
+  begin
+    Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal);
+    Sinks := Result and FRam.Charge.Soft and (ABullet.Look = blOrb);
+  end;
   if Sinks and FHullLives.Wound then
   begin
     ABullet.Status := bsInactive;
@@ -4788,8 +4892,7 @@ begin
     Exit;
   end;
   if not Result then
-    Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal) or
-      FRam.StrikeHull(Stretch.Start, Stretch.Finish, At, Normal) or
+    Result := FRam.StrikeHull(Stretch.Start, Stretch.Finish, At, Normal) or
       FRam.StrikeWheel(Stretch.Start, Stretch.Finish, At, Normal);
   if not Result then
     Exit;
@@ -5165,6 +5268,7 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
+  ResolveRamCharge;
   ResolveRamThrowOver;
   ResolveRamContact;
   ResolveWheelContact;

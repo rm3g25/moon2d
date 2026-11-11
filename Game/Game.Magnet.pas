@@ -13,7 +13,9 @@
   to the face, the press of a lift - and throws it at the hero. Then,
   empty, it cools: the window. Cold again and rested, it looks for the
   next - unless its owner has given the turn to another weapon: then it
-  waits, cold, till it may look again.
+  waits, cold, till it may look again. Told to tuck in, for its owner's
+  charge, it slides back into the belly, cold and empty, and out again once
+  let; it looks for nothing till it is all the way out.
 
   It is soft - an orb takes a life of the hull - from the hold till it is
   cold; how hot it is drawn follows: up as it holds, fading as it cools.
@@ -86,6 +88,9 @@ type
     Harbour: TSdlFPoint;
     // Another weapon has the turn: cold, it looks for no barge
     Waits: Boolean;
+    // Cold, it is to be in the belly: it slides in, and out once this is
+    // over
+    Tucked: Boolean;
   end;
 
   TMagnetCue = record
@@ -113,6 +118,9 @@ type
     FTicks: Integer;
     FRest: Integer;
     FOut, FLastOut: Single;
+    // Ticks of the slide out once it has come: DeploySlideTicks out, 0
+    // tucked in
+    FSlideTicks: Integer;
     FHeat, FLastHeat: Single;
     FLoad: Integer;
     FLoadWidth: Single;
@@ -125,6 +133,7 @@ type
     function Choose(const ASight: TMagnetSight): Integer;
     function Berth(const AFace: TSdlFPoint): TSdlFPoint;
     procedure Catch(const ABarge: TMagnetBarge; var ACue: TMagnetCue);
+    function SlideTo(AOut: Boolean): Boolean;
     procedure TickComing(var ACue: TMagnetCue);
     procedure TickSeeking(const ASight: TMagnetSight; var ACue: TMagnetCue);
     procedure TickReaching(const ASight: TMagnetSight);
@@ -217,6 +226,7 @@ begin
   FRest := 0;
   FOut := 0;
   FLastOut := 0;
+  FSlideTicks := 0;
   FHeat := 0;
   FLastHeat := 0;
   FLoad := NoBarge;
@@ -269,8 +279,23 @@ begin
   if FTicks < DeployBreathTicks + DeploySlideTicks then
     Exit;
   FOut := 1;
+  FSlideTicks := DeploySlideTicks;
   FStage := mgSeeking;
   FRest := FirstRestTicks;
+end;
+
+// A tick of the slide out or in, as long as the first slide out; True
+// while it is on its way
+function TMagnet.SlideTo(AOut: Boolean): Boolean;
+begin
+  var Wanted := 0;
+  if AOut then
+    Wanted := DeploySlideTicks;
+  Result := FSlideTicks <> Wanted;
+  if not Result then
+    Exit;
+  FSlideTicks := FSlideTicks + Sign(Wanted - FSlideTicks);
+  FOut := SmoothStep(FSlideTicks / DeploySlideTicks);
 end;
 
 // The number in ASight.Barges of the barge to take; NoBarge when none is
@@ -297,6 +322,13 @@ end;
 
 procedure TMagnet.TickSeeking(const ASight: TMagnetSight; var ACue: TMagnetCue);
 begin
+  if ASight.Tucked then
+  begin
+    SlideTo(False);
+    Exit;
+  end;
+  if SlideTo(True) then
+    Exit;
   if FRest > 0 then
   begin
     Dec(FRest);

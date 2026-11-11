@@ -194,7 +194,17 @@
   first - the lift - and after each of the magnet's windows the stern
   mortar has a turn (Game.Mortar): it rises from behind the rear block
   and lobs shells at the deck under his feet, one at a time, while the
-  magnet waits, cold. The shells are the game's (Game.Shells).
+  magnet waits, cold. The shells are the game's (Game.Shells). From the
+  third the turn after a window goes to the charge and the mortar by
+  turns, the charge first (Game.Charge): the magnet tucked into the belly,
+  the hull falls back past the left edge, a red band blinks there across
+  the corridor it will run along, and it rams across the screen low, bow
+  first, brakes short of the right edge and hangs there low while its
+  nozzles cool - hot, they take an orb as the magnet does - then climbs
+  back to hang. The charge flies the hull: the flight is carried by it. In
+  the run, the sweep of the hull strikes a hero it meets, once a charge,
+  on a deck or not, and knocks him along its way; the small barges it
+  meets low are the game's to smash.
 
   Its wheels gone, its honeycomb comes back: kindled outward from the
   magnet as the second wheel is thrown, then over the flying hull - rimmed
@@ -223,7 +233,7 @@ interface
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
-  Game.Takeoff, Game.Magnet, Game.Mortar, Effects.Sparks;
+  Game.Takeoff, Game.Magnet, Game.Mortar, Game.Charge, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -237,10 +247,11 @@ const
   BunkerLives = 150;
   // The rungs of the air fight's ladder: the share of the hull's lives
   // spent from which each holds. The bombs and the lift come with the
-  // second.
+  // second, the charge with the third.
   AirTierSpent: array [2..4] of Single = (0.2, 0.43, 0.67);
   BombsFromTier = 2;
   LiftFromTier = 2;
+  ChargeFromTier = 3;
   // The bunker's last third - the hunt, the hull turned round - holds out
   // this many times its share of the row: a life every this many strikes
   BunkerLastThirdStrikes = 2;
@@ -345,6 +356,9 @@ type
     // no hero to throw at
     Barges: TArray<TMagnetBarge>;
     Harbour: TSdlFPoint;
+    // The highest the main barge's deck goes: the charge runs over the head
+    // of a hero standing on it there. 0 - the road's line.
+    HarbourTopmost: Single;
     // The share of the hull's lives spent, 0 to 1: the air fight's rung
     HullSpent: Single;
     // Shells in the air: the mortar waits them out
@@ -407,11 +421,16 @@ type
     // come as Lob, LobFrom its muzzle, LobAt his feet - aloft the game
     // lobs at the deck under them
     MortarRises: Boolean;
-    // Aloft, its honeycomb falls as the magnet softens, and kindles back
-    // as it hardens
+    // Aloft, its honeycomb falls as a part of it grows hot, and kindles
+    // back as all is hard again
     ArmourDown: Boolean;
     ArmourUp: Boolean;
+    // What the charge did this tick
+    Charge: TChargeCue;
   end;
+
+  // Whose the turn after the magnet's window was last
+  TAirTurn = (atNone, atMortar, atCharge);
 
   // Where the hull stands and how: upright on the road with its left edge
   // at Left, turned Lean degrees clockwise about its rear wheel's touch of
@@ -565,6 +584,10 @@ type
     FRearWheel: TLooseWheel;
     FMagnet: TMagnet;
     FMortar: TMortar;
+    FCharge: TCharge;
+    FLastTurn: TAirTurn;
+    // The charge has struck the hero: once a charge
+    FChargeStruck: Boolean;
     // Ticks since the bare hull or its wheel last threw a bullet off
     FHullHitTicks: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -610,7 +633,11 @@ type
     procedure HearStrike(const AWheel: TLooseWheel);
     procedure TickTakeoff;
     procedure TickMagnet;
+    procedure TickTurns;
     procedure TickMortar;
+    procedure BeginCharge;
+    procedure CarryCharge;
+    function ChargeLowLift: Single;
     procedure TickArmour;
     procedure StowArmourAloft;
     procedure RestoreArmourAloft(ATicks: Integer);
@@ -842,6 +869,16 @@ type
     procedure DeployMagnet;
     property Magnet: TMagnet read FMagnet;
     property Mortar: TMortar read FMortar;
+    property Charge: TCharge read FCharge;
+    // A part of it is hot aloft: the magnet, or the nozzles after the
+    // charge's brake
+    function HotAloft: Boolean;
+    // Low in its charge: the box the hull swept this tick, from where it
+    // was to where it is, the corridor's height; False otherwise
+    function ChargeSweep(out ABox: TSdlFRect): Boolean;
+    // Its charge runs fast and its sweep meets AHeroBody, on a deck or not:
+    // AAway - the side it knocks him to, the way it goes. Once a charge.
+    function ChargeStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
     // The rung of the air fight's ladder, 1 to 4, by the share of the
     // hull's lives spent the game told last
     function AirTier: Integer;
@@ -1083,6 +1120,7 @@ type
     procedure DrawEye(const ASprites: TSpriteRenderer; const APose: TRamPose;
       AAlpha: Single);
     procedure DrawPeek(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawChargeWarning(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawLens(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
     procedure DrawHeat(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
@@ -1810,6 +1848,22 @@ const
   ArmourRiseTicks = 33;
   ArmourBackTicks = 15;
 
+  // The charge runs this far over the head of a hero standing on the main
+  // barge at its highest
+  ChargeClearance = 8.0;
+  ChargeRushJolt = 0.25;
+  ChargeBrakeJolt = 0.15;
+  // Hot from the brake, the nozzles' lit copy is tinted as the magnet is,
+  // a glow of the same colour at each
+  NozzleHeatLevel = 0.9;
+  NozzleGlowSize = 26.0;
+  NozzleGlowLevel = 0.5;
+  // The band at the left edge before the charge: a hard strip in a soft
+  // glow, the corridor's height
+  ChargeBandWidth = 6.0;
+  ChargeBandGlow = 48.0;
+  ChargeBandGlowLevel = 0.5;
+
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
   Result := AFrom + (ATo - AFrom) * AAmount;
@@ -1835,6 +1889,13 @@ function UnitPoint(AX, AY: Single): TSdlFPoint;
 begin
   Result.X := AX;
   Result.Y := AY;
+end;
+
+function BoxesMeet(const AFirst, ASecond: TSdlFRect): Boolean;
+begin
+  Result := (AFirst.X < ASecond.X + ASecond.W) and
+    (ASecond.X < AFirst.X + AFirst.W) and
+    (AFirst.Y < ASecond.Y + ASecond.H) and (ASecond.Y < AFirst.Y + AFirst.H);
 end;
 
 // The middle of the magnet, as far as it is out of the belly
@@ -2033,10 +2094,12 @@ begin
   FWave.Stop;
   FMagnet := TMagnet.Create;
   FMortar := TMortar.Create;
+  FCharge := TCharge.Create(RamWidth);
 end;
 
 destructor TRam.Destroy;
 begin
+  FCharge.Free;
   FMortar.Free;
   FMagnet.Free;
   FHeadShield.Free;
@@ -2085,6 +2148,9 @@ begin
   FRearWheel.Stop;
   FMagnet.Clear;
   FMortar.Clear;
+  FCharge.Clear;
+  FLastTurn := atNone;
+  FChargeStruck := False;
   StowArmourAloft;
   FShutter := 0;
   FLastShutter := 0;
@@ -2244,6 +2310,7 @@ begin
   FRearWheel.Stop;
   FMagnet.Clear;
   FMortar.Clear;
+  FCharge.Clear;
   StowArmourAloft;
 end;
 
@@ -2422,6 +2489,7 @@ begin
   TickPhase;
   TickShed;
   TickMagnet;
+  TickTurns;
   TickMortar;
   TickArmour;
   TickShutter;
@@ -3844,7 +3912,8 @@ begin
 end;
 
 // Hanging, after the hero: over him, as far as the screen lets the hull
-// be - or over the barge its magnet wants and cannot reach
+// be - or over the barge its magnet wants and cannot reach; in a charge,
+// where the charge flies it
 procedure TRam.TickTakeoff;
 begin
   var Toward: Single := 0;
@@ -3856,6 +3925,8 @@ begin
     Toward := EnsureRange(Over, RamWidth / 2, ScreenWidth - RamWidth / 2) -
       (FX + RamWidth / 2);
   var Step := FTakeoff.Tick(Toward);
+  if FCharge.Running then
+    CarryCharge;
   FX := FX + FTakeoff.Pace;
   FLean := FTakeoff.LeanAt(1);
   if Step.Ignite then
@@ -3871,11 +3942,26 @@ begin
   end;
 end;
 
-// Hanging, the magnet sees the barges the game told of and the hero, its
-// face where the pose puts it
+// The charge says where the hull is this tick and how it leans - its bow
+// down the way it faces; once it is up again the hull hangs as before
+procedure TRam.CarryCharge;
+begin
+  var Step := FCharge.Tick;
+  FCue.Charge := Step;
+  FTakeoff.Carry(FCharge.Left - FX, FCharge.Lift, FHullFacing * FCharge.Bow);
+  if Step.Rushes then
+    FCue.Jolt := Max(FCue.Jolt, ChargeRushJolt);
+  if Step.Brakes then
+    FCue.Jolt := Max(FCue.Jolt, ChargeBrakeJolt);
+  if Step.Done then
+    FTakeoff.Release;
+end;
+
+// Aloft, the magnet sees the barges the game told of and the hero, its
+// face where the pose puts it; in a charge it is tucked in
 procedure TRam.TickMagnet;
 begin
-  if FTakeoff.Stage <> tkHanging then
+  if not FTakeoff.Aloft then
     Exit;
   var Sight := Default(TMagnetSight);
   Sight.Face := MagnetFaceAt(PoseAt(1));
@@ -3884,21 +3970,54 @@ begin
   Sight.Hero := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
     FHero.Body.Y + FHero.Body.H / 2);
   Sight.Harbour := FHero.Harbour;
-  Sight.Waits := FMortar.Busy;
+  Sight.Waits := FMortar.Busy or FCharge.Running;
+  Sight.Tucked := FCharge.Running;
   FMagnet.Rule := mrNearest;
   if AirTier >= LiftFromTier then
     FMagnet.Rule := mrHisBarge;
   FCue.Magnet := FMagnet.Tick(Sight);
 end;
 
-// Hanging, from the bombs' rung on, the mortar has a turn after each of
-// the magnet's windows; a shell of it is lobbed by the cue's Lob
+// After each of the magnet's windows another weapon may have a turn: from
+// the bombs' rung the mortar; from the charge's the charge and the mortar
+// by turns, the charge first
+procedure TRam.TickTurns;
+begin
+  if not FTakeoff.Aloft or not FCue.Magnet.Cooled then
+    Exit;
+  var Rung := AirTier;
+  if (Rung >= ChargeFromTier) and (FLastTurn <> atCharge) then
+    BeginCharge
+  else if Rung >= BombsFromTier then
+  begin
+    FMortar.BeginTurn(MortarShellsPerTurn);
+    FLastTurn := atMortar;
+  end;
+end;
+
+procedure TRam.BeginCharge;
+begin
+  FCharge.Start(FX, FTakeoff.Pace, FTakeoff.LiftAt(1), ChargeLowLift);
+  FChargeStruck := False;
+  FLastTurn := atCharge;
+end;
+
+// Low enough to sweep the lanes, high enough to pass over the head of a
+// hero standing on the main barge at its highest
+function TRam.ChargeLowLift: Single;
+begin
+  var Topmost := FHero.HarbourTopmost;
+  if Topmost <= 0 then
+    Topmost := RamFloorY;
+  Result := RamFloorY - (Topmost - RiderHeight - ChargeClearance);
+end;
+
+// Aloft, the mortar ticks through its turn; a shell of it is lobbed by
+// the cue's Lob
 procedure TRam.TickMortar;
 begin
-  if FTakeoff.Stage <> tkHanging then
+  if not FTakeoff.Aloft then
     Exit;
-  if FCue.Magnet.Cooled and (AirTier >= BombsFromTier) then
-    FMortar.BeginTurn(MortarShellsPerTurn);
   var Sight := Default(TMortarSight);
   Sight.Pivot := PoseSpot(PoseAt(1), MortarPivotPoint);
   Sight.Feet := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
@@ -3912,6 +4031,35 @@ begin
   FCue.Lob := True;
   FCue.LobFrom := MortarMuzzleAt(PoseAt(1));
   FCue.LobAt := Step.LobAt;
+end;
+
+function TRam.HotAloft: Boolean;
+begin
+  Result := FMagnet.Soft or FCharge.Soft;
+end;
+
+function TRam.ChargeSweep(out ABox: TSdlFRect): Boolean;
+begin
+  ABox := Default(TSdlFRect);
+  Result := Present and FCharge.RunsLow;
+  if not Result then
+    Exit;
+  ABox.X := Min(FLastX, FX);
+  ABox.Y := RamTop - FTakeoff.LiftAt(1);
+  ABox.W := Abs(FX - FLastX) + RamWidth;
+  ABox.H := RamHeight;
+end;
+
+function TRam.ChargeStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+begin
+  AAway := 1;
+  if FCharge.Pace < 0 then
+    AAway := -1;
+  var Sweep: TSdlFRect;
+  Result := not FChargeStruck and FCharge.Rams and ChargeSweep(Sweep) and
+    BoxesMeet(Sweep, AHeroBody);
+  if Result then
+    FChargeStruck := True;
 end;
 
 function TRam.AirTier: Integer;
@@ -3931,13 +4079,13 @@ begin
   Result := UnitPoint(Pivot.X + Reach * Sin(Lean), Pivot.Y - Reach * Cos(Lean));
 end;
 
-// Aloft, the honeycomb falls as the magnet grows soft, and kindles back
-// once it is hard again
+// Aloft, the honeycomb falls as a part grows soft, and kindles back once
+// all is hard again
 procedure TRam.TickArmour;
 begin
   if not FArmouredAloft then
     Exit;
-  var Soft := FMagnet.Soft;
+  var Soft := HotAloft;
   if Soft and (FAirShield.State in [sdUp, sdRising]) then
   begin
     FAirShield.Fall;
@@ -5616,15 +5764,15 @@ begin
   Result := EnsureRange(Min(FRam.Flight.NozzleAt(AAlpha), Room), 0.0, 1.0);
 end;
 
-// Where the fire leaves the nozzle: down the hull's own down from the top
-// of the nozzle, as far as it is out
+// Where the fire leaves the nozzle: down the hull's own down, turned by the
+// swivel, from the top of the nozzle, as far as it is out
 function TRamPainter.NozzleMouth(const APose: TRamPose; AJet: TTakeoffJet;
   AAlpha: Single): TSdlFPoint;
 begin
   var Top := NozzleTop(APose, AJet);
   var Reach: Single := Max(NozzleHeight * NozzleOut(APose, AJet, AAlpha) -
     NozzleLipInset, 0);
-  var Angle := DegToRad(APose.Lean);
+  var Angle := DegToRad(APose.Lean + FRam.Flight.SwivelAt(AAlpha));
   Result.X := Top.X - Reach * Sin(Angle);
   Result.Y := Top.Y + Reach * Cos(Angle);
 end;
@@ -5927,6 +6075,8 @@ begin
     Exit;
   var Mirrored := FRam.HullMirrored;
   var Size := Lerp(BayDepth, 1, Bay);
+  var Turn := APose.Lean + FRam.Flight.SwivelAt(AAlpha);
+  var Heat := FRam.Charge.HeatAt(AAlpha);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     var Axle := FRam.PoseSpot(APose, Axles[JetAxles[Jet]]);
@@ -5935,11 +6085,19 @@ begin
     var Top := NozzleTop(APose, Jet);
     var Shown := NozzleOut(APose, Jet, AAlpha);
     ASprites.DrawHanging(FArt.FNozzle, Top, NozzleWidth, NozzleHeight, Shown, 1,
-      Mirrored, APose.Lean);
+      Mirrored, Turn);
     var Fire := Min(FRam.Flight.JetAt(Jet, AAlpha), 1);
     if Fire > 0 then
       ASprites.DrawHanging(FArt.FNozzleLit, Top, NozzleWidth, NozzleHeight,
-        Shown, Fire, Mirrored, APose.Lean);
+        Shown, Fire, Mirrored, Turn);
+    if Heat <= 0 then
+      Continue;
+    // The same lit copy, tinted: set back after, the fire uses it untinted
+    SDL_SetTextureColorMod(FArt.FNozzleLit, MagnetHeatColor.R,
+      MagnetHeatColor.G, MagnetHeatColor.B);
+    ASprites.DrawHanging(FArt.FNozzleLit, Top, NozzleWidth, NozzleHeight,
+      Shown, NozzleHeatLevel * Heat, Mirrored, Turn);
+    SDL_SetTextureColorMod(FArt.FNozzleLit, 255, 255, 255);
   end;
 end;
 
@@ -6084,6 +6242,28 @@ begin
     RamTop + EyePoint.Y + AOrigin.Y, PeekSize, EyeColor, Level);
 end;
 
+// Before the charge comes in from behind: a red band blinking at the left
+// edge across the corridor it will run along, and its eye's red there
+procedure TRamPainter.DrawChargeWarning(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Level := FRam.Charge.WarnAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  var Top: Single := RamTop - FRam.Charge.LowLift;
+  var Band: TSdlFRect;
+  Band.X := AOrigin.X - ChargeBandGlow / 2;
+  Band.Y := Top + AOrigin.Y;
+  Band.W := ChargeBandGlow;
+  Band.H := RamHeight;
+  DrawGlowRect(FArt.FRenderer, FArt.FGlow, Band, EyeColor,
+    ChargeBandGlowLevel * Level);
+  Band.X := AOrigin.X;
+  Band.W := ChargeBandWidth;
+  DrawGlowRect(FArt.FRenderer, FArt.FGlow, Band, EyeColor, Level);
+  DrawGlow(FArt.FRenderer, FArt.FGlow, AOrigin.X, Top + EyePoint.Y + AOrigin.Y,
+    PeekSize, EyeColor, Level);
+end;
+
 // On the hunter's head, turned and squashed as the head is: pale and
 // winking, red and bigger while it burns, a flash when it is struck
 procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; AWell, AMast,
@@ -6198,9 +6378,9 @@ begin
   DrawFlames(ACanvas.Renderer, AOrigin, AAlpha);
 end;
 
-// Straight out of each burning nozzle along the hull's own down, the
-// sheath and the core, longer as the jet flares; each flickers out of
-// step with the other
+// Straight out of each burning nozzle along its own down - the hull's,
+// turned by the swivel - the sheath and the core, longer as the jet flares;
+// each flickers out of step with the other
 procedure TRamPainter.DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
   AAlpha: Single);
 const
@@ -6212,7 +6392,8 @@ const
   JetsApartTicks = 17;
 begin
   var Pose := FRam.PoseAt(AAlpha);
-  var Angle := DegToRad(Pose.Lean);
+  var Turn := Pose.Lean + FRam.Flight.SwivelAt(AAlpha);
+  var Angle := DegToRad(Turn);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     var Level: Single := Min(FRam.Flight.JetAt(Jet, AAlpha), FlareMost);
@@ -6227,12 +6408,12 @@ begin
     DrawGlowTurned(ARenderer, FArt.FFlame,
       Mouth.X - Sheath / 2 * Sin(Angle) + AOrigin.X,
       Mouth.Y + Sheath / 2 * Cos(Angle) + AOrigin.Y,
-      FlameWidth, Sheath, Pose.Lean, FlameColor, Shown);
+      FlameWidth, Sheath, Turn, FlameColor, Shown);
     var Core := FlameCoreLength * Level * Flicker;
     DrawGlowTurned(ARenderer, FArt.FFlame,
       Mouth.X - Core / 2 * Sin(Angle) + AOrigin.X,
       Mouth.Y + Core / 2 * Cos(Angle) + AOrigin.Y,
-      FlameCoreWidth, Core, Pose.Lean, FlameCoreColor, Shown);
+      FlameCoreWidth, Core, Turn, FlameCoreColor, Shown);
   end;
 end;
 
@@ -6242,6 +6423,7 @@ end;
 procedure TRamPainter.DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
 begin
   var Pose := FRam.PoseAt(AAlpha);
+  var Heat := FRam.Charge.HeatAt(AAlpha);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     var Level := FRam.Flight.JetAt(Jet, AAlpha);
@@ -6254,6 +6436,9 @@ begin
       JetGlowColor, Level);
     DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y, JetCoreSize * Level,
       JetCoreColor, Level);
+    if Heat > 0 then
+      DrawGlow(FArt.FRenderer, FArt.FGlow, X, Y - NozzleHeight / 2,
+        NozzleGlowSize, MagnetHeatColor, NozzleGlowLevel * Heat);
     var Warmth := WarmLevel * Min(Level, 1) *
       (1 - EnsureRange((RamFloorY - Mouth.Y) / WarmReach, 0.0, 1.0));
     if Warmth > 0 then
@@ -6304,6 +6489,7 @@ begin
   FOverloadShort.Draw(ACanvas, FOverloadShort.Origin.X + AOrigin.X,
     FOverloadShort.Origin.Y + AOrigin.Y, AAlpha);
   DrawPeek(AOrigin, AAlpha);
+  DrawChargeWarning(AOrigin, AAlpha);
   var Left := FRam.LeftAt(AAlpha);
   var Well := FRam.WellAt(Left);
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,

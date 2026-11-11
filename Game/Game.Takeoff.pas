@@ -13,6 +13,15 @@
   told how far he is across, it goes after him with a lag, slower than he
   runs, and banks into the way it goes.
 
+  Hanging, it can be carried: the caller says each tick how fast it goes
+  across, how high it is and how it leans, and lets it go to hang again
+  where it left it - the Ram's charge flies it so.
+
+  Aloft the nozzles swivel in their rings, within a few degrees either
+  way: with the way it goes and harder with the way it gathers or loses
+  pace - flying right, their bottoms swing left and the fire pushes it on;
+  braking, the other way, the fire thrown ahead.
+
   Not here: where the hull stands across and how it is drawn - the Ram
   says, and moves it by the pace this gives; the wheel spat out
   (Game.Wheel); the bays, the nozzles, the fire and the dust - the Ram's
@@ -60,13 +69,16 @@ const
   ChaseAccel = 0.06;
   ChaseMaxPace = 1.6;
   BankPerPace = 2.5;
+  // The nozzles' swivel, degrees either way at most: the actuators are
+  // painted fixed in the bay
+  SwivelMost = 12.0;
 
 type
   // tkOpening - the bays and the nozzles coming out, no fire yet; tkBowUp -
   // the front jet, the bow lifting about the rear wheel; tkRising - both
   // jets, off the road; tkHanging - risen and settled, it bobs, rocks and
-  // keeps over the hero
-  TTakeoffStage = (tkNone, tkOpening, tkBowUp, tkRising, tkHanging);
+  // keeps over the hero; tkCarried - aloft, flown by the caller
+  TTakeoffStage = (tkNone, tkOpening, tkBowUp, tkRising, tkHanging, tkCarried);
   TTakeoffJet = (tjFront, tjRear);
 
   TTakeoffCue = record
@@ -97,8 +109,12 @@ type
     // their rings
     FBay, FLastBay: Single;
     FNozzle, FLastNozzle: Single;
-    // Units a tick across, after the hero
+    // Units a tick across, after the hero or as carried; how much that
+    // changed this tick
     FPace: Single;
+    FGain: Single;
+    // Degrees clockwise the nozzles turn in their rings
+    FSwivel, FLastSwivel: Single;
     // Ticks since each jet caught; -1 - out
     FLit: array [TTakeoffJet] of Integer;
     FJets, FLastJets: array [TTakeoffJet] of Single;
@@ -108,6 +124,7 @@ type
     procedure TickRising(var ACue: TTakeoffCue);
     procedure TickHanging(AToward: Single);
     procedure TickJets;
+    procedure TickSwivel;
   public
     // From ALean degrees clockwise, the hull facing AFacing - 1 right, -1
     // left: the bow lifts the other way round
@@ -120,7 +137,15 @@ type
     // AToward: units from the middle of the hull to where it is to keep
     // over, across - right is more; heard only while it hangs
     function Tick(AToward: Single = 0): TTakeoffCue;
+    // After the tick's Tick: this tick it goes APace units across, hangs
+    // ALift over the road and leans ALean degrees clockwise. Hanging, it is
+    // carried from now on; nothing on its way up.
+    procedure Carry(APace, ALift, ALean: Single);
+    // Carried, it hangs again from where it was left, its pace kept
+    procedure Release;
     function Running: Boolean;
+    // Hanging or carried
+    function Aloft: Boolean;
     property Stage: TTakeoffStage read FStage;
     // The rear wheel is out of its well
     property Spat: Boolean read FSpat;
@@ -138,6 +163,8 @@ type
     function BayAt(AAlpha: Single): Single;
     // 0 in the ring, 1 out
     function NozzleAt(AAlpha: Single): Single;
+    // Degrees clockwise the nozzles turn in their rings, within SwivelMost
+    function SwivelAt(AAlpha: Single): Single;
   end;
 
 implementation
@@ -160,6 +187,13 @@ const
   JetCatchTicks = 3;
   JetFlare = 0.5;
   JetSettleTicks = 10;
+  // The swivel: degrees for a unit a tick of pace, and for a unit a tick
+  // gained or lost in a tick - the push outweighs the drift, so a brake
+  // throws the fire ahead however fast it still goes; each tick it turns
+  // this share of the way to where it is wanted
+  SwivelPerPace = 0.5;
+  SwivelPerGain = 60.0;
+  SwivelLearn = 0.25;
 
 function SmoothStep(AShare: Single): Single;
 begin
@@ -222,6 +256,9 @@ begin
   FNozzle := 0;
   FLastNozzle := 0;
   FPace := 0;
+  FGain := 0;
+  FSwivel := 0;
+  FLastSwivel := 0;
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     FLit[Jet] := -1;
@@ -246,6 +283,7 @@ begin
   FLastBay := FBay;
   FLastNozzle := FNozzle;
   FLastJets := FJets;
+  FLastSwivel := FSwivel;
   Inc(FTicks);
   case FStage of
     tkOpening:
@@ -255,9 +293,40 @@ begin
     tkRising:
       TickRising(Result);
     tkHanging:
-      TickHanging(AToward);
+      begin
+        TickHanging(AToward);
+        TickSwivel;
+      end;
   end;
   TickJets;
+end;
+
+procedure TTakeoff.Carry(APace, ALift, ALean: Single);
+begin
+  if not Aloft then
+    Exit;
+  FStage := tkCarried;
+  FGain := APace - FPace;
+  FPace := APace;
+  FLift := ALift;
+  FLean := ALean;
+  TickSwivel;
+end;
+
+// The hang's sway grows in again from nothing, so a hull let go level at
+// its height does not jump
+procedure TTakeoff.Release;
+begin
+  if FStage <> tkCarried then
+    Exit;
+  FStage := tkHanging;
+  FTicks := 0;
+  FGain := 0;
+end;
+
+function TTakeoff.Aloft: Boolean;
+begin
+  Result := FStage in [tkHanging, tkCarried];
 end;
 
 procedure TTakeoff.Catch(AJet: TTakeoffJet; var ACue: TTakeoffCue);
@@ -320,7 +389,9 @@ procedure TTakeoff.TickHanging(AToward: Single);
 begin
   var Pull := EnsureRange(ChaseSpring * AToward - ChaseDrag * FPace,
     -ChaseAccel, ChaseAccel);
+  var OldPace := FPace;
   FPace := EnsureRange(FPace + Pull, -ChaseMaxPace, ChaseMaxPace);
+  FGain := FPace - OldPace;
   var Sway := Min(FTicks / SwayRampTicks, 1);
   FLift := HangLift + Sway * BobUnits * Sin(2 * Pi * FTicks / BobTicks);
   FLean := Sway * WobbleDegrees * Sin(2 * Pi * FTicks / WobbleTicks) +
@@ -340,6 +411,16 @@ begin
       FJets[Jet] := 1 + JetFlare *
         Max(0, 1 - (FLit[Jet] - JetCatchTicks) / JetSettleTicks);
   end;
+end;
+
+// Flying right, the bottoms swing left - clockwise - so the fire pushes it
+// on; a gain right swings them further, a loss swings them back past
+// straight down
+procedure TTakeoff.TickSwivel;
+begin
+  var Wanted := EnsureRange(SwivelPerPace * FPace + SwivelPerGain * FGain,
+    -SwivelMost, SwivelMost);
+  FSwivel := FSwivel + SwivelLearn * (Wanted - FSwivel);
 end;
 
 function TTakeoff.LeanAt(AAlpha: Single): Single;
@@ -370,6 +451,11 @@ end;
 function TTakeoff.NozzleAt(AAlpha: Single): Single;
 begin
   Result := Lerp(FLastNozzle, FNozzle, AAlpha);
+end;
+
+function TTakeoff.SwivelAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastSwivel, FSwivel, AAlpha);
 end;
 
 end.

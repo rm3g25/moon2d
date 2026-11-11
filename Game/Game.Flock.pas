@@ -30,6 +30,11 @@
   so another comes in for it as for one gone - at once when it was the
   escort.
 
+  A barge the Ram's charge meets is smashed: gone at once, out of the
+  count, another comes in for it as for one gone. While the caller holds
+  the flock - the charge on its way and low - none comes in; let go, the
+  escort comes first, at once.
+
   The barges are a pool the caller names by their widths, in its order:
   the flock tells which of them flies, where and how far it went this
   tick, and the caller moves its pads by that - the riders go with them as
@@ -126,6 +131,7 @@ type
     // relief is sent
     FServed: Integer;
     FServe: Integer;
+    FHeld: Boolean;
     function RollRange(ALeast, AMost: Double): Double;
     function RollFreeIndex: Integer;
     function RollPath: TFlockPath;
@@ -193,6 +199,12 @@ type
     // Where the shell struck a knocked barge, across from the middle of its
     // deck
     function HitAcross(AIndex: Integer): Double;
+    // The barge AIndex is smashed: gone at once, knocked off or not, out of
+    // the flock's count - another comes in for it, at once when it was the
+    // escort. Nothing for one that does not fly.
+    procedure Smash(AIndex: Integer);
+    // Held, none comes in; the gap is counted down all the same
+    property Held: Boolean read FHeld write FHeld;
     // The escort's index in the pool, -1 when none flies
     property Escort: Integer read FEscort;
   end;
@@ -304,6 +316,7 @@ begin
   FRelief := NoBarge;
   FServed := 0;
   FServe := 0;
+  FHeld := False;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
 end;
@@ -574,6 +587,8 @@ begin
     Dec(FWait);
     Exit;
   end;
+  if FHeld then
+    Exit;
   var Index := RollFreeIndex;
   if Index = NoBarge then
     Exit;
@@ -721,6 +736,17 @@ end;
 function TBargeFlock.HitAcross(AIndex: Integer): Double;
 begin
   Result := FFlyers[AIndex].HitAcross;
+end;
+
+procedure TBargeFlock.Smash(AIndex: Integer);
+begin
+  if not FFlyers[AIndex].Flying then
+    Exit;
+  FFlyers[AIndex].Flying := False;
+  if AIndex = FRelief then
+    FRelief := NoBarge;
+  if AIndex = FEscort then
+    LoseEscort;
 end;
 
 function TBargeFlock.Taken(AIndex: Integer): Boolean;

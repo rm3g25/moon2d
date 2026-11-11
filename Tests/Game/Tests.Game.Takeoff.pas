@@ -15,6 +15,12 @@
   hears none of that. A jet flares as it catches and comes down to its
   steady fire. A stop takes it all, the wheel in again.
 
+  Hanging, it can be carried - where it is told, between the ticks too -
+  and let go to hang on from its height with no jump; on its way up it
+  cannot. Aloft its nozzles swivel with the way it goes and the way it
+  gathers pace, never past their most; a hard brake throws them ahead; on
+  the road they do not swivel.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Takeoff;
@@ -67,6 +73,18 @@ type
     procedure TestAStopTakesItAll;
     [Test]
     procedure TestHungItIsSteadyFromTheStart;
+    [Test]
+    procedure TestCarriedItIsWhereItIsTold;
+    [Test]
+    procedure TestLetGoItHangsOnFromItsHeight;
+    [Test]
+    procedure TestOnItsWayUpItCannotBeCarried;
+    [Test]
+    procedure TestGoingRightTheNozzlesSwingBackNeverPastTheirMost;
+    [Test]
+    procedure TestAHardBrakeThrowsTheNozzlesAhead;
+    [Test]
+    procedure TestOnTheRoadTheNozzlesDoNotSwivel;
   end;
 
 implementation
@@ -377,6 +395,108 @@ begin
   var Cue := FTakeoff.Tick(0);
   Assert.IsFalse(Cue.Ignite or Cue.Spit or Cue.Steady, 'Nothing of the way up');
   Assert.IsTrue(Abs(FTakeoff.LiftAt(1) - HangLift) <= BobUnits + 0.001, 'Bobbing about its height');
+end;
+
+procedure TTakeoffTests.TestCarriedItIsWhereItIsTold;
+const
+  Corridor = 56.0;
+  Bow = -10.0;
+  RunPace = 20.0;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick;
+  FTakeoff.Carry(RunPace, Corridor, Bow);
+  Assert.AreEqual(Ord(tkCarried), Ord(FTakeoff.Stage), 'Carried');
+  Assert.IsTrue(FTakeoff.Aloft, 'Aloft');
+  Assert.AreEqual(Double(RunPace), Double(FTakeoff.Pace), Slop, 'Its pace');
+  Assert.AreEqual(Double(Corridor), Double(FTakeoff.LiftAt(1)), Slop, 'Its height');
+  Assert.AreEqual(Double(Bow), Double(FTakeoff.LeanAt(1)), Slop, 'Its lean');
+  Assert.IsTrue(FTakeoff.LiftAt(0.5) > Corridor, 'Between the ticks, on its way there');
+  // A tick with nothing told: it stays where it was put
+  FTakeoff.Tick(200);
+  Assert.AreEqual(Double(Corridor), Double(FTakeoff.LiftAt(1)), Slop, 'Deaf to the hero');
+  Assert.AreEqual(Double(Bow), Double(FTakeoff.LeanAt(1)), Slop, 'Its lean kept');
+end;
+
+procedure TTakeoffTests.TestLetGoItHangsOnFromItsHeight;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick;
+  FTakeoff.Carry(0, HangLift, 0);
+  FTakeoff.Release;
+  Assert.AreEqual(Ord(tkHanging), Ord(FTakeoff.Stage), 'Hanging');
+  var Last := FTakeoff.LiftAt(1);
+  for var i := 1 to 10 do
+  begin
+    FTakeoff.Tick(0);
+    Assert.IsTrue(Abs(FTakeoff.LiftAt(1) - Last) < 0.5,
+      Format('No jump at tick %d', [Integer(i)]));
+    Last := FTakeoff.LiftAt(1);
+  end;
+  Assert.IsTrue(Abs(FTakeoff.LiftAt(1) - HangLift) <= BobUnits + Slop, 'About its height');
+end;
+
+procedure TTakeoffTests.TestOnItsWayUpItCannotBeCarried;
+begin
+  CatchTheRearJet(ShedLean);
+  FTakeoff.Tick;
+  var Lift := FTakeoff.LiftAt(1);
+  FTakeoff.Carry(5, 100, 0);
+  Assert.AreEqual(Ord(tkRising), Ord(FTakeoff.Stage), 'Still rising');
+  Assert.AreEqual(Double(Lift), Double(FTakeoff.LiftAt(1)), Slop, 'Not moved');
+  Assert.IsFalse(FTakeoff.Aloft, 'Not aloft yet');
+  FTakeoff.Release;
+  Assert.AreEqual(Ord(tkRising), Ord(FTakeoff.Stage), 'A release is nothing');
+end;
+
+procedure TTakeoffTests.TestGoingRightTheNozzlesSwingBackNeverPastTheirMost;
+const
+  RunPace = 20.0;
+begin
+  FTakeoff.Hang;
+  for var i := 1 to 40 do
+  begin
+    FTakeoff.Tick;
+    FTakeoff.Carry(RunPace, HangLift, 0);
+    Assert.IsTrue(Abs(FTakeoff.SwivelAt(1)) <= SwivelMost + Slop,
+      Format('Past its most at tick %d', [Integer(i)]));
+  end;
+  Assert.IsTrue(FTakeoff.SwivelAt(1) > SwivelMost / 2,
+    'Swung clockwise, the fire thrown back');
+end;
+
+procedure TTakeoffTests.TestAHardBrakeThrowsTheNozzlesAhead;
+const
+  RunPace = 20.0;
+  Loss = 0.8;
+begin
+  FTakeoff.Hang;
+  for var i := 1 to 40 do
+  begin
+    FTakeoff.Tick;
+    FTakeoff.Carry(RunPace, HangLift, 0);
+  end;
+  var Speed: Single := RunPace;
+  for var i := 1 to 15 do
+  begin
+    Speed := Speed - Loss;
+    FTakeoff.Tick;
+    FTakeoff.Carry(Speed, HangLift, 0);
+    Assert.IsTrue(Abs(FTakeoff.SwivelAt(1)) <= SwivelMost + Slop, 'Never past its most');
+  end;
+  Assert.IsTrue(Speed > 0, 'Still going right');
+  Assert.IsTrue(FTakeoff.SwivelAt(1) < -SwivelMost / 2,
+    'Swung the other way, the fire thrown ahead');
+end;
+
+procedure TTakeoffTests.TestOnTheRoadTheNozzlesDoNotSwivel;
+begin
+  FTakeoff.Start(ShedLean, 1);
+  for var i := 1 to OpenTicks + 10 do
+  begin
+    FTakeoff.Tick(200);
+    Assert.AreEqual(0.0, Double(FTakeoff.SwivelAt(1)), Slop, 'Straight down');
+  end;
 end;
 
 initialization

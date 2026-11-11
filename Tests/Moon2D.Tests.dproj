@@ -102,6 +102,7 @@
         <DCCReference Include="Game\Tests.Game.Flock.pas"/>
         <DCCReference Include="Game\Tests.Game.Magnet.pas"/>
         <DCCReference Include="Game\Tests.Game.Mortar.pas"/>
+        <DCCReference Include="Game\Tests.Game.Charge.pas"/>
         <DCCReference Include="Game\Tests.Game.Pieces.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>

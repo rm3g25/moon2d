@@ -10,7 +10,9 @@
   barge at a time; soft from the hold till it is cold, heating as it
   holds and cooling through its window; cold again it tells its window
   over, once, and takes the next - unless told to wait, when it takes
-  none till the wait is lifted; a clear stows it.
+  none till the wait is lifted; told to tuck in it slides back into the
+  belly and takes nothing, and let out it slides out again and takes
+  nothing till it is all the way out; a clear stows it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -92,6 +94,8 @@ type
     procedure TestItTellsItsWindowOverOnce;
     [Test]
     procedure TestToldToWaitItTakesNoBargeTillTheWaitIsLifted;
+    [Test]
+    procedure TestToldToTuckInItSlidesInAndOutTakingNothingTillOut;
     [Test]
     procedure TestAClearStowsIt;
     [Test]
@@ -547,6 +551,39 @@ begin
   FSight.Waits := False;
   Step;
   Assert.AreEqual(1, FSeen.Caught, 'Caught at once once the wait is lifted');
+end;
+
+procedure TMagnetTests.TestToldToTuckInItSlidesInAndOutTakingNothingTillOut;
+begin
+  BringOut;
+  See([NearBarge()]);
+  FSight.Tucked := True;
+  var Last := FMagnet.OutAt(1);
+  for var i := 1 to DeploySlideTicks + 10 do
+  begin
+    Step;
+    Assert.IsTrue(FMagnet.OutAt(1) <= Last + Slack, 'Never out while tucked');
+    Last := FMagnet.OutAt(1);
+  end;
+  Assert.AreEqual(0.0, Double(FMagnet.OutAt(1)), Slack, 'In the belly');
+  Assert.AreEqual(0, FSeen.Caught, 'Nothing caught tucked in');
+  Assert.IsFalse(FMagnet.Soft, 'Cold');
+  FSight.Tucked := False;
+  var Ticks := 0;
+  while FMagnet.OutAt(1) < 1 do
+  begin
+    Step;
+    Inc(Ticks);
+    Assert.IsTrue(FMagnet.OutAt(1) >= Last - Slack, 'Never in again on its way out');
+    Last := FMagnet.OutAt(1);
+    if FMagnet.OutAt(1) < 1 then
+      Assert.AreEqual(0, FSeen.Caught, 'Nothing caught on its way out');
+    if Ticks > CycleTicks then
+      Assert.Fail('It never came out');
+  end;
+  Assert.AreEqual(DeploySlideTicks, Ticks, 'As long as its first slide out');
+  StepTill(mgReaching, CycleTicks);
+  Assert.AreEqual(1, FSeen.Caught, 'Out, it takes the barge');
 end;
 
 procedure TMagnetTests.TestAClearStowsIt;

@@ -132,6 +132,14 @@
   hull's whole box solid, and for the wells its lower band. The arena is
   read from level2.json beside the executable.
 
+  Its charge: none before its rung; on it the turn after the magnet's
+  window goes to the charge first, then to the mortar, then the charge
+  again; the magnet tucks in for it. The charge flies the hull off past
+  the left edge, back in low - over the head of a hero on the main barge
+  at its highest - and up to hang again; its sweep strikes a hero in its
+  corridor once, on a deck or not; after the brake the nozzles are hot,
+  the honeycomb falls, and an orb meeting them is the game's to count.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Ram;
@@ -141,6 +149,7 @@ interface
 uses
   System.SysUtils,
   DUnitX.TestFramework,
+  Sdl2.Core,
   Levels.Events,
   Game.Shield,
   Game.Magnet,
@@ -379,6 +388,51 @@ type
     procedure TestTheMuzzleStandsOverTheHull;
     [Test]
     procedure TestAClearFoldsTheMortar;
+  end;
+
+  // What a charge did, tick by tick, from its start to its end
+  TChargeRun = record
+    LeftLeast, LeftMost: Single;
+    // The hull's bottom at its lowest - the most down the screen
+    BottomMost: Single;
+    Rushes, Brakes, Done, Struck, ArmourDowns, ArmourUps: Integer;
+    StruckAway: Integer;
+    HotSeen, TuckedSeen, SweepSeen: Boolean;
+  end;
+
+  [TestFixture]
+  TRamChargeTests = class
+  private
+    FRam: TRam;
+    // Hanging with its middle over the middle of the screen, the magnet
+    // out and cold, a barge under its face from then on
+    procedure HangReady(var AHero: TRamTarget);
+    // Ticks with AHero in sight till the charge begins; fails past ALimit
+    procedure TickTillCharge(const AHero: TRamTarget; ALimit: Integer);
+    // Ticks with AHero in sight till the charge is done, AStruckBody asked
+    // for a strike every tick
+    function RunTheCharge(const AHero: TRamTarget;
+      const AStruckBody: TSdlFRect): TChargeRun;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestBeforeItsRungNoCharge;
+    [Test]
+    procedure TestOnItsRungTheChargeFirstThenTheMortarThenTheCharge;
+    [Test]
+    procedure TestTheMagnetTucksInForTheCharge;
+    [Test]
+    procedure TestItFliesOffAndBackLowOverTheHarbourAndUpToHang;
+    [Test]
+    procedure TestItsSweepStrikesAHeroInItsCorridorOnce;
+    [Test]
+    procedure TestAHeroOnTheMainBargeIsUnderItsCorridor;
+    [Test]
+    procedure TestAfterTheBrakeTheNozzlesAreHotAndTheHoneycombFalls;
   end;
 
   [TestFixture]
@@ -634,7 +688,6 @@ uses
   System.IOUtils,
   System.JSON,
   System.Math,
-  Sdl2.Core,
   Game.Space,
   Game.Wheel,
   Game.Takeoff,
@@ -4862,7 +4915,225 @@ begin
   Assert.AreEqual(0.0, Double(FRam.Mortar.OutAt(1)), 0.001, 'Behind the block');
 end;
 
+{ TRamChargeTests }
+
+const
+  // On the charge's rung
+  ChargeSpent = 0.45;
+  // The main barge's deck at its highest, as the game tells it
+  TopmostDeck = RamFloorY - 16;
+  // A cycle of the magnet and a charge are over well within this
+  ChargeRunTicks = 1500;
+
+function HeroBeforeTheCharge(ASpent: Single): TRamTarget;
+begin
+  Result := HeroAboard(ASpent);
+  Result.HarbourTopmost := TopmostDeck;
+end;
+
+procedure TRamChargeTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamChargeTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+procedure TRamChargeTests.HangReady(var AHero: TRamTarget);
+begin
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.DeployMagnet;
+  var Ticks := 0;
+  while FRam.Magnet.Stage <> mgSeeking do
+  begin
+    FRam.Tick(AHero);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never came out');
+  end;
+  var Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  var Barge: TMagnetBarge;
+  Barge.Index := CaughtBarge;
+  Barge.Left := Face.X - SmallBarge / 2;
+  Barge.Top := Face.Y + 40;
+  Barge.Width := SmallBarge;
+  Barge.HeroAboard := False;
+  AHero.Barges := [Barge];
+end;
+
+procedure TRamChargeTests.TickTillCharge(const AHero: TRamTarget; ALimit: Integer);
+begin
+  var Ticks := 0;
+  while not FRam.Charge.Running do
+  begin
+    FRam.Tick(AHero);
+    Inc(Ticks);
+    if Ticks > ALimit then
+      Assert.Fail('No charge');
+  end;
+end;
+
+function TRamChargeTests.RunTheCharge(const AHero: TRamTarget;
+  const AStruckBody: TSdlFRect): TChargeRun;
+begin
+  Result := Default(TChargeRun);
+  Result.LeftLeast := FRam.Left;
+  Result.LeftMost := FRam.Left;
+  var Ticks := 0;
+  while FRam.Charge.Running do
+  begin
+    var Cue := FRam.Tick(AHero);
+    Result.LeftLeast := Min(Result.LeftLeast, FRam.Left);
+    Result.LeftMost := Max(Result.LeftMost, FRam.Left);
+    Result.BottomMost := Max(Result.BottomMost,
+      RamFloorY - FRam.Flight.LiftAt(1));
+    if Cue.Charge.Rushes then
+      Inc(Result.Rushes);
+    if Cue.Charge.Brakes then
+      Inc(Result.Brakes);
+    if Cue.Charge.Done then
+      Inc(Result.Done);
+    if Cue.ArmourDown then
+      Inc(Result.ArmourDowns);
+    if Cue.ArmourUp then
+      Inc(Result.ArmourUps);
+    if FRam.HotAloft and FRam.Charge.Soft then
+      Result.HotSeen := True;
+    if FRam.Magnet.OutAt(1) <= 0 then
+      Result.TuckedSeen := True;
+    var Sweep: TSdlFRect;
+    if FRam.ChargeSweep(Sweep) then
+      Result.SweepSeen := True;
+    var Away: Integer;
+    if FRam.ChargeStrikes(AStruckBody, Away) then
+    begin
+      Inc(Result.Struck);
+      Result.StruckAway := Away;
+    end;
+    Inc(Ticks);
+    if Ticks > ChargeRunTicks then
+      Assert.Fail('The charge never ended');
+  end;
+end;
+
+procedure TRamChargeTests.TestBeforeItsRungNoCharge;
+begin
+  var Hero := HeroBeforeTheCharge(AirTierSpent[ChargeFromTier] - 0.01);
+  HangReady(Hero);
+  var Windows := 0;
+  for var i := 1 to ChargeRunTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Magnet.Cooled then
+      Inc(Windows);
+    Assert.IsFalse(FRam.Charge.Running, 'No charge before its rung');
+  end;
+  Assert.IsTrue(Windows >= 2, 'The magnet went round');
+end;
+
+procedure TRamChargeTests.TestOnItsRungTheChargeFirstThenTheMortarThenTheCharge;
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  Assert.IsFalse(FRam.Mortar.Busy, 'The charge first, not the mortar');
+  RunTheCharge(Hero, Default(TSdlFRect));
+  var Ticks := 0;
+  while not FRam.Mortar.Busy do
+  begin
+    FRam.Tick(Hero);
+    Assert.IsFalse(FRam.Charge.Running, 'Not two charges running');
+    Inc(Ticks);
+    if Ticks > ChargeRunTicks then
+      Assert.Fail('No mortar after the charge');
+  end;
+  while FRam.Mortar.Busy do
+    FRam.Tick(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  Assert.IsTrue(FRam.Charge.Running, 'The charge again');
+end;
+
+procedure TRamChargeTests.TestTheMagnetTucksInForTheCharge;
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  var Run := RunTheCharge(Hero, Default(TSdlFRect));
+  Assert.IsTrue(Run.TuckedSeen, 'In the belly while it charges');
+  var Ticks := 0;
+  while FRam.Magnet.OutAt(1) < 1 do
+  begin
+    var Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Magnet.Caught, 'Nothing caught on its way out');
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never came out again');
+  end;
+end;
+
+procedure TRamChargeTests.TestItFliesOffAndBackLowOverTheHarbourAndUpToHang;
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  var Run := RunTheCharge(Hero, Default(TSdlFRect));
+  Assert.IsTrue(Run.LeftLeast + RamWidth < 0, 'Off past the left edge');
+  Assert.IsTrue(Run.LeftMost + RamWidth <= ScreenWidth, 'Never off the right edge');
+  Assert.IsTrue(Run.LeftMost > ScreenWidth / 2, 'Across to the right');
+  Assert.AreEqual(1, Run.Rushes, 'In once');
+  Assert.AreEqual(1, Run.Brakes, 'Braked once');
+  Assert.AreEqual(1, Run.Done, 'Done once');
+  Assert.IsTrue(Run.SweepSeen, 'It swept low');
+  var HisHead: Single := TopmostDeck - RiderHeight;
+  Assert.IsTrue(Run.BottomMost > HisHead - 20, 'Low: down among the lanes');
+  Assert.IsTrue(Run.BottomMost <= HisHead, Format('Over his head: %.1f', [Run.BottomMost]));
+  Assert.AreEqual(Ord(tkHanging), Ord(FRam.Flight.Stage), 'Hanging again');
+  Assert.AreEqual(Double(HangLift), Double(FRam.Flight.LiftAt(1)), 0.01, 'At its height');
+end;
+
+procedure TRamChargeTests.TestItsSweepStrikesAHeroInItsCorridorOnce;
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  // On a small barge of a lane, in the middle of the screen
+  var InTheWay := Box(240, 216, 16, 32);
+  var Run := RunTheCharge(Hero, InTheWay);
+  Assert.AreEqual(1, Run.Struck, 'Struck once');
+  Assert.AreEqual(1, Run.StruckAway, 'Knocked along its way');
+end;
+
+procedure TRamChargeTests.TestAHeroOnTheMainBargeIsUnderItsCorridor;
+const
+  Spots: array [0..2] of Single = (40, 240, 440);
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  for var X in Spots do
+  begin
+    TickTillCharge(Hero, ChargeRunTicks);
+    var OnTheHarbour := Box(X, TopmostDeck - RiderHeight, 16, RiderHeight);
+    Assert.AreEqual(0, RunTheCharge(Hero, OnTheHarbour).Struck,
+      Format('At %.0f, on the deck at its highest', [X]));
+  end;
+end;
+
+procedure TRamChargeTests.TestAfterTheBrakeTheNozzlesAreHotAndTheHoneycombFalls;
+begin
+  var Hero := HeroBeforeTheCharge(ChargeSpent);
+  HangReady(Hero);
+  TickTillCharge(Hero, ChargeRunTicks);
+  var Run := RunTheCharge(Hero, Default(TSdlFRect));
+  Assert.IsTrue(Run.HotSeen, 'Hot from the brake');
+  Assert.AreEqual(1, Run.ArmourDowns, 'The honeycomb fell once');
+  Assert.AreEqual(1, Run.ArmourUps, 'And kindled back once');
+  Assert.IsFalse(FRam.HotAloft, 'Cold once it is up again');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TRamChargeTests);
   TDUnitX.RegisterTestFixture(TRamMagnetTests);
   TDUnitX.RegisterTestFixture(TRamTests);
   TDUnitX.RegisterTestFixture(TRamHunterTests);

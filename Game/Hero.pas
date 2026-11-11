@@ -256,7 +256,9 @@ type
     // carried KnockWay units a tick toward ASide (0 - straight down) till
     // he lands, the controls out of his hands for a moment. As Throw,
     // nothing for the dead or one still flying.
-    procedure Knock(ASide: Integer);
+    procedure Knock(ASide: Integer); overload;
+    // As Knock, carried AWay units a tick toward ASide: a harder blow
+    procedure Knock(ASide: Integer; AWay: Double); overload;
     // The road of a chase has slid AWay under him, below 0 to the left:
     // on the floor and in the air he goes with it, as far as no wall
     // stops him; standing on a deck, the deck carries him
@@ -723,6 +725,11 @@ end;
 
 procedure THero.Knock(ASide: Integer);
 begin
+  Knock(ASide, KnockWay);
+end;
+
+procedure THero.Knock(ASide: Integer; AWay: Double);
+begin
   if FDead or FHeld or (FThrownTicks > 0) then
     Exit;
   FPending := psNone;
@@ -730,7 +737,7 @@ begin
   FAction := haFall;
   FAcceleration := 1;
   FThrownTicks := KnockLockTicks;
-  FFlingWay := Sign(ASide) * KnockWay;
+  FFlingWay := Sign(ASide) * AWay;
 end;
 
 function THero.BeginThrow(ASide: Integer; ABoost: Double;
