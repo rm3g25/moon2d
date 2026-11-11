@@ -66,6 +66,10 @@ type
     Struck: Boolean;
   end;
 
+  // A small barge of the air fight and its medkit: none, one to stand on
+  // its deck once it is wholly on the screen, one standing there
+  TFlockMedkit = (fmNone, fmDue, fmAboard);
+
 {$IFDEF DEBUGKEYS}
   // The stops of the End key on level 2, in their order; dsNone - past the
   // last
@@ -202,6 +206,10 @@ type
     // the order the flock knows them; born with the level
     FFlock: TBargeFlock;
     FFlockPads: TArray<TPad>;
+    // The medkits the small barges bring, one a barge, and how many came
+    // in since the pier was cleared
+    FFlockMedkits: TArray<TFlockMedkit>;
+    FFlockArrivals: Integer;
     // The magnet's catch in the air fight: the pad it holds till it seizes
     // it, how far it took that pad on the Ram's last tick - the pad goes
     // that far on the next, before the pads' own tick - the wreck the
@@ -404,6 +412,8 @@ type
     procedure TickPier(AWay: Double);
     procedure BuildFlock;
     procedure TickFlock;
+    procedure TickFlockMedkit(AIndex: Integer);
+    procedure DropFlockMedkit(AIndex: Integer);
     function HeroStandsOn(const APad: TPad): Boolean;
     function MagnetBarges: TArray<TMagnetBarge>;
     procedure CarryOutMagnet(const ACue: TMagnetCue);
@@ -601,6 +611,10 @@ const
   // the throw
   MagnetHumSoundFile = 'magnethum.wav';
   MagnetThrowSoundFile = 'magnetthrow.wav';
+  // The Ram's honeycomb aloft: falling as the magnet softens, kindling
+  // back as it hardens
+  HoneycombDownSoundFile = 'honeycombdown.wav';
+  HoneycombUpSoundFile = 'honeycombup.wav';
   // Which barge the magnet takes: till the ladder of the air fight sets
   // it by the tier, the barge he stands on - so the lift is played
   AirFightMagnetRule = mrHisBarge;
@@ -622,6 +636,10 @@ const
   BargePadTag = 's13-barge';
   // The small barges of the air fight, numbered from 1 in the level file
   FlockPadTagPattern = 's13-flock-%d';
+  // Every this many small barges come in, one brings a medkit on its deck,
+  // tagged by its number - whether he gets to it is his affair
+  FlockMedkitEvery = 4;
+  FlockMedkitTagPattern = 's13-flock-medkit-%d';
   RoadTileSprite = 'tek-road-tile';
   // The grid row of the road, erased as it runs out
   RoadRow = ScreenRows - 1;
@@ -2194,6 +2212,8 @@ begin
   FAudio.Load(OrbHitSoundFile);
   FAudio.Load(MagnetHumSoundFile);
   FAudio.Load(MagnetThrowSoundFile);
+  FAudio.Load(HoneycombDownSoundFile);
+  FAudio.Load(HoneycombUpSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -3267,6 +3287,9 @@ begin
   FFlock.Clear(RollDiceSeed);
   for var Pad in FFlockPads do
     Pad.Doze;
+  for var i := 0 to High(FFlockMedkits) do
+    DropFlockMedkit(i);
+  FFlockArrivals := 0;
   ClearMagnet;
   FLevel.RestoreRows;
 end;
@@ -3299,6 +3322,9 @@ begin
   end;
   FFlock.Free;
   FFlock := TBargeFlock.Create(Widths, RollDiceSeed);
+  FFlockMedkits := nil;
+  SetLength(FFlockMedkits, Length(FFlockPads));
+  FFlockArrivals := 0;
 end;
 
 // The small barges, from the moment the barge drifts - the fight on: each
@@ -3328,17 +3354,49 @@ begin
     begin
       if not Pad.Dormant then
         Pad.Doze;
+      DropFlockMedkit(i);
       Continue;
     end;
     if Pad.Dormant then
     begin
       Pad.Wake;
       Pad.FlyTo(FFlock.Left(i), FFlock.Top(i), 0);
+      Inc(FFlockArrivals);
+      if FFlockArrivals mod FlockMedkitEvery = 0 then
+        FFlockMedkits[i] := fmDue;
       Continue;
     end;
     Pad.Carry(FFlock.WayX(i), FFlock.WayY(i));
+    TickFlockMedkit(i);
   end;
   FMagnetWay := Default(TSdlFPoint);
+end;
+
+// A medkit due stands on the middle of its barge's deck once the barge is
+// wholly on the screen: off it, the field's walls would hold it back as the
+// deck slides out from under it. From then on the deck carries it, and the
+// belt takes it out past the left edge with its barge.
+procedure TMoonGame.TickFlockMedkit(AIndex: Integer);
+begin
+  if FFlockMedkits[AIndex] <> fmDue then
+    Exit;
+  var Left: Double := FFlock.Left(AIndex);
+  var Width: Double := FFlock.Width(AIndex);
+  if Left + Width > ScreenWidth then
+    Exit;
+  FField.SpawnStanding(MedkitMonsterId, '', FHero.Screen,
+    Left + Width / 2 - SpriteSize / 2, FFlock.Top(AIndex),
+    Format(FlockMedkitTagPattern, [AIndex + 1]), False);
+  FFlockMedkits[AIndex] := fmAboard;
+end;
+
+// A barge gone, seized or grounded takes its medkit with it, if he has
+// not taken it first
+procedure TMoonGame.DropFlockMedkit(AIndex: Integer);
+begin
+  if FFlockMedkits[AIndex] = fmAboard then
+    FField.RemoveTagged(Format(FlockMedkitTagPattern, [AIndex + 1]));
+  FFlockMedkits[AIndex] := fmNone;
 end;
 
 // The pier's pad is as long as the pier and rides with it; gone once the
@@ -4024,6 +4082,10 @@ begin
     StopRamRumble;
     FRamRumble := FAudio.PlayLooped(JetHoverSoundFile);
   end;
+  if Cue.ArmourDown then
+    FAudio.Play(HoneycombDownSoundFile);
+  if Cue.ArmourUp then
+    FAudio.Play(HoneycombUpSoundFile);
   if Cue.Jolt > 0 then
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
@@ -4536,7 +4598,7 @@ begin
   ABullet.Status := bsInactive;
   if Guarded then
     Exit;
-  FStoneTank.Wound(1 / FRam.FullLives);
+  FStoneTank.Wound(FRam.HitShare);
   var Strike := Default(TStrike);
   Strike.X := At.X;
   Strike.Y := At.Y;

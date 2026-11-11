@@ -6,6 +6,10 @@
   its middle when none is; risen, it is whole again and the old breaks
   are forgotten; a shield already falling does not crumble.
 
+  Restored: only from down, it holds at once, rises and is up; it may
+  fall while it rises. Over a body afloat it holds under the body's
+  bottom, where over a standing body it does not; hidden cells hold.
+
   The look - the shards, the blinking - is checked live.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -43,6 +47,28 @@ type
     procedure TestAFallingShieldDoesNotCrumble;
     [Test]
     procedure TestVanishedItIsDownAtOnce;
+  end;
+
+  [TestFixture]
+  TShieldRestoreTests = class
+  private
+    FShield: TTekShield;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestRestoredItHoldsAtOnceAndComesUp;
+    [Test]
+    procedure TestOnlyADownShieldIsRestored;
+    [Test]
+    procedure TestARisingShieldFalls;
+    [Test]
+    procedure TestAfloatItHoldsUnderTheBody;
+    [Test]
+    procedure TestHiddenCellsHold;
   end;
 
 implementation
@@ -186,7 +212,109 @@ begin
   Assert.AreEqual<TShieldState>(sdDown, FShield.State, 'And stays down');
 end;
 
+{ TShieldRestoreTests }
+
+const
+  RestoreTicks = 12;
+  BodyWidth = 40;
+  BodyHeight = 20;
+
+function SolidBody: TShieldMask;
+begin
+  Result.Width := BodyWidth;
+  Result.Height := BodyHeight;
+  Result.Middle.X := BodyWidth / 2;
+  Result.Middle.Y := BodyHeight / 2;
+  SetLength(Result.Solid, BodyWidth * BodyHeight);
+  for var i := 0 to High(Result.Solid) do
+    Result.Solid[i] := True;
+end;
+
+// Straight up into the body from just under its bottom
+function HoldsJustUnder(AShield: TTekShield): Boolean;
+begin
+  var Entry: TSdlFPoint;
+  var Under: Single := BodyHeight / 2 + 1;
+  Result := AShield.TryEntry(At(0, Under + 0.5), At(0, Under), Entry);
+end;
+
+procedure TShieldRestoreTests.Setup;
+begin
+  FShield := TTekShield.Create(RadiusX, RadiusY);
+  FShield.Vanish;
+end;
+
+procedure TShieldRestoreTests.TearDown;
+begin
+  FShield.Free;
+end;
+
+procedure TShieldRestoreTests.TestRestoredItHoldsAtOnceAndComesUp;
+begin
+  FShield.Restore(LeftEnd, RestoreTicks);
+  Assert.AreEqual<TShieldState>(sdRising, FShield.State, 'Rising');
+  Assert.IsTrue(Holds(FShield), 'Holds before a tick');
+  var Ticks := 0;
+  while (FShield.State = sdRising) and (Ticks < ManyTicks) do
+  begin
+    FShield.Tick;
+    Inc(Ticks);
+  end;
+  Assert.AreEqual<TShieldState>(sdUp, FShield.State, 'Up');
+  Assert.IsTrue(Ticks >= RestoreTicks, Format('Up in %d ticks', [Ticks]));
+end;
+
+procedure TShieldRestoreTests.TestOnlyADownShieldIsRestored;
+begin
+  FShield.Rise;
+  FShield.Restore(LeftEnd, RestoreTicks);
+  Assert.AreEqual<TShieldState>(sdUp, FShield.State, 'Up stays up');
+  FShield.Fall;
+  FShield.Restore(LeftEnd, RestoreTicks);
+  Assert.AreEqual<TShieldState>(sdFalling, FShield.State, 'Falling goes on');
+end;
+
+procedure TShieldRestoreTests.TestARisingShieldFalls;
+begin
+  FShield.Restore(LeftEnd, RestoreTicks);
+  FShield.Tick;
+  FShield.Fall;
+  Assert.AreEqual<TShieldState>(sdFalling, FShield.State, 'Falling');
+  Assert.IsFalse(Holds(FShield), 'Holds no more');
+  Assert.IsTrue(TicksTillDown(FShield) < ManyTicks, 'Down');
+end;
+
+procedure TShieldRestoreTests.TestAfloatItHoldsUnderTheBody;
+begin
+  var Standing := TTekShield.CreateOver(SolidBody);
+  try
+    Assert.IsFalse(HoldsJustUnder(Standing), 'Standing: the floor, no shield');
+  finally
+    Standing.Free;
+  end;
+  var Afloat := TTekShield.CreateAfloat(SolidBody);
+  try
+    Assert.IsTrue(HoldsJustUnder(Afloat), 'Afloat: shielded under it');
+  finally
+    Afloat.Free;
+  end;
+end;
+
+procedure TShieldRestoreTests.TestHiddenCellsHold;
+var
+  Whole: TSdlFRect;
+begin
+  Whole.X := -2 * RadiusX;
+  Whole.Y := -2 * RadiusY;
+  Whole.W := 4 * RadiusX;
+  Whole.H := 4 * RadiusY;
+  FShield.Rise;
+  FShield.Hide(Whole);
+  Assert.IsTrue(Holds(FShield), 'All hidden, it holds');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TShieldCrumbleTests);
+  TDUnitX.RegisterTestFixture(TShieldRestoreTests);
 
 end.

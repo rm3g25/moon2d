@@ -433,6 +433,7 @@ begin
   var Twin := TBargeFlock.Create(Pool, Seed);
   try
     Ride.Station;
+    Ride.Loose;
     FFlock.Start(Count);
     Twin.Start(Count);
     for var i := 1 to 3000 do

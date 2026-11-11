@@ -188,6 +188,12 @@
   hull, which is the game's to carry out. It is no body: its touch is
   nothing.
 
+  Its wheels gone, its honeycomb comes back: kindled outward from the
+  magnet as the second wheel is thrown, then over the flying hull - rimmed
+  under its belly too, not drawn over the arches, where the fire is - and
+  in a ring about the magnet. As the magnet grows soft the honeycomb
+  blinks out; hard again, it kindles back. A restart aloft finds it up.
+
   Under half its lives either head shorts out: small bolts over it, the
   more often the fewer lives are left. The hunter smokes too at its last
   third.
@@ -221,6 +227,9 @@ const
   HunterLives = 100;
   SweeperLives = 140;
   BunkerLives = 150;
+  // The bunker's last third - the hunt, the hull turned round - holds out
+  // this many times its share of the row: a life every this many strikes
+  BunkerLastThirdStrikes = 2;
   // Units a tick, as TBurst.NewBullet takes them
   HunterBulletSpeed = 6;
   SweeperBulletSpeed = 5;
@@ -376,6 +385,10 @@ type
     Hover: Boolean;
     // What the magnet did this tick
     Magnet: TMagnetCue;
+    // Aloft, its honeycomb falls as the magnet softens, and kindles back
+    // as it hardens
+    ArmourDown: Boolean;
+    ArmourUp: Boolean;
   end;
 
   // Where the hull stands and how: upright on the road with its left edge
@@ -392,6 +405,11 @@ type
     FBody: TShieldMask;
     FWells: TShieldMask;
     FShield: TTekShield;
+    // Aloft: the honeycomb over the flying hull and the ring about its
+    // magnet, raised once the wheels are gone
+    FAirShield: TTekShield;
+    FMagnetShield: TTekShield;
+    FArmouredAloft: Boolean;
     FOrders: TRamOrders;
     FEntered: Boolean; // the whole entrance has begun on this level
     FPhase: TRamPhase;
@@ -436,6 +454,10 @@ type
     FLives, FFullLives: Integer;
     FLivesShare: Single; // the grade's
     FThirds: Integer; // the thirds of the head's lives told so far
+    // The bunker's last third: strikes since it last lost a life; the
+    // share of the head's lives the last strike took
+    FLastThirdStrikes: Integer;
+    FHitShare: Single;
     FHeadKilled: Boolean; // the last life is gone; it blows up next tick
     FKilled: TRamHead; // the head the change of heads began with
     FChangePending: Boolean; // braking to stand for the change of heads
@@ -550,6 +572,7 @@ type
     function HoldsFire: Boolean;
     function NextFallBackWait: Integer;
     function BunkerThirdPhase: Boolean;
+    procedure TakeBunkerLife;
     procedure BeginHunt;
     procedure TickHunt;
     procedure TickHuntDrive;
@@ -564,6 +587,11 @@ type
     procedure HearStrike(const AWheel: TLooseWheel);
     procedure TickTakeoff;
     procedure TickMagnet;
+    procedure TickArmour;
+    procedure StowArmourAloft;
+    procedure RestoreArmourAloft(ATicks: Integer);
+    function BlockAloft(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+    function BlockBareAloft(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
     procedure SpitWheel;
     procedure TickShutter;
     function UprightBox(const ABox: TSdlFRect): TSdlFRect;
@@ -657,8 +685,8 @@ type
     function Tick(const ATarget: TRamTarget): TRamCue; overload;
     // No hero to watch: it roams and holds its fire
     function Tick: TRamCue; overload;
-    // Where a bullet's stretch of this tick first meets the shield, which
-    // flares there; False when it meets nothing
+    // Where a bullet's stretch of this tick first meets the shield - on
+    // the road, or aloft - which flares there; False when it meets nothing
     function Block(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
     // A pad of the throw met the shield at AAt, a point of the screen: a
     // piece of it breaks off there
@@ -863,6 +891,9 @@ type
     property Facing: Integer read FFacing;
     property Lives: Integer read FLives;
     property FullLives: Integer read FFullLives;
+    // The share of the head's lives the last strike into the bunker took -
+    // less than a life's in its last third
+    property HitShare: Single read FHitShare;
     property Pressing: Boolean read FPressing;
     // The whole entrance has begun on this level: the hero has come to the
     // fight, and a death brings him back to it
@@ -874,6 +905,8 @@ type
     property LensHot: Boolean read FLensHot;
     property Body: TShieldMask read FBody;
     property Shield: TTekShield read FShield;
+    property AirShield: TTekShield read FAirShield;
+    property MagnetShield: TTekShield read FMagnetShield;
     // The sweeper's plates, under its barrels
     function Plate(AIndex: Integer): TTekShield;
     property Phase: TRamPhase read FPhase;
@@ -994,6 +1027,8 @@ type
     procedure DrawMagnet(const ASprites: TSpriteRenderer;
       const APose: TRamPose; AAlpha: Single);
     procedure DrawMagnetLight(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawArmourAloft(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint;
+      AAlpha: Single);
     procedure DrawFlames(ARenderer: PSdlRenderer; AOrigin: TSdlPoint;
       AAlpha: Single);
     procedure DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
@@ -1717,6 +1752,20 @@ const
   WheelSide = 41.0;
   EyePoint: THullPoint = (X: 22.2; Y: 54.8);
 
+  // Aloft the hull's honeycomb is not drawn over the arches, where the
+  // bays and the fire of the nozzles are: this far either side of an
+  // axle, from this far over it down. It holds there all the same.
+  ArchHideReach = WheelRadius + 4;
+  ArchHideRise = 12.0;
+  // The ring about the magnet, cut at the belly, where the hull's
+  // honeycomb takes over
+  MagnetShieldRadiusX = 22.0;
+  MagnetShieldRadiusY = 21.0;
+  // The honeycomb aloft kindles back over this long: once at the
+  // takeoff, then each time the magnet hardens
+  ArmourRiseTicks = 33;
+  ArmourBackTicks = 15;
+
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
   Result := AFrom + (ATo - AFrom) * AAmount;
@@ -1742,6 +1791,36 @@ function UnitPoint(AX, AY: Single): TSdlFPoint;
 begin
   Result.X := AX;
   Result.Y := AY;
+end;
+
+// The middle of the magnet, as far as it is out of the belly
+function MagnetMiddle(AShown: Single): THullPoint;
+begin
+  Result.X := MagnetTopPoint.X;
+  Result.Y := MagnetTopPoint.Y + MagnetHeight * AShown / 2;
+end;
+
+// The hidden part of the honeycomb over the arch about AAxle, from the
+// middle of the body
+function ArchBox(const AAxle: THullPoint; const AMiddle: TSdlFPoint): TSdlFRect;
+begin
+  Result.X := AAxle.X - ArchHideReach - AMiddle.X;
+  Result.Y := AAxle.Y - ArchHideRise - AMiddle.Y;
+  Result.W := 2 * ArchHideReach;
+  Result.H := RamHeight;
+end;
+
+// Where a stretch, both its ends on the screen, comes into AShield whose
+// middle is at AMiddle - on the screen; the shield flares there
+function StrikeArmour(AShield: TTekShield; const AMiddle, AFrom,
+  ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+begin
+  var Entry: TSdlFPoint;
+  Result := AShield.TryEntry(UnitPoint(AFrom.X - AMiddle.X, AFrom.Y - AMiddle.Y),
+    UnitPoint(ATo.X - AMiddle.X, ATo.Y - AMiddle.Y), Entry);
+  AAt := UnitPoint(AMiddle.X + Entry.X, AMiddle.Y + Entry.Y);
+  if Result then
+    AShield.Strike(Entry);
 end;
 
 // The height of an edge AX across, between its two points about it; False
@@ -1893,6 +1972,12 @@ begin
   FBody := ABody;
   FWells := AWells;
   FShield := TTekShield.CreateOver(ABody);
+  FAirShield := TTekShield.CreateAfloat(ABody);
+  for var Axle in Axles do
+    FAirShield.Hide(ArchBox(Axle, ABody.Middle));
+  FMagnetShield := TTekShield.Create(MagnetShieldRadiusX, MagnetShieldRadiusY);
+  FMagnetShield.OpenAbove(MagnetTopPoint.Y - MagnetMiddle(1).Y);
+  StowArmourAloft;
   for var i := Low(FPlates) to High(FPlates) do
     FPlates[i] := TTekShield.CreateStrip(PlateCells, PlateScale);
   FHeadShield := TTekShield.Create(BunkerShieldRadiusX, BunkerShieldRadiusY);
@@ -1911,6 +1996,8 @@ begin
   FHeadShield.Free;
   for var Plate in FPlates do
     Plate.Free;
+  FMagnetShield.Free;
+  FAirShield.Free;
   FShield.Free;
   inherited;
 end;
@@ -1921,6 +2008,7 @@ begin
   FLastX := AX;
   FHullFacing := -1;
   FShield.Mirrored := False;
+  FAirShield.Mirrored := False;
   FSpeed := 0;
   FAccel := 0;
   FBraking := False;
@@ -1950,6 +2038,7 @@ begin
   FTakeoff.Stop;
   FRearWheel.Stop;
   FMagnet.Clear;
+  StowArmourAloft;
   FShutter := 0;
   FLastShutter := 0;
   FShutting := False;
@@ -2066,6 +2155,7 @@ begin
   Place(EnsureRange(AMiddleX - RamWidth / 2, 0, ScreenWidth - RamWidth));
   FHullFacing := 1;
   FShield.Mirrored := True;
+  FAirShield.Mirrored := True;
   FShield.Vanish;
   FEyeLit := True;
   FShutting := True;
@@ -2081,6 +2171,9 @@ begin
   FShed := True;
   FShedTicks := ScrapeTicks;
   FTakeoff.Hang;
+  FArmouredAloft := True;
+  FAirShield.Rise;
+  FMagnetShield.Rise;
 end;
 
 procedure TRam.Clear;
@@ -2103,6 +2196,7 @@ begin
   FWheel.Stop;
   FRearWheel.Stop;
   FMagnet.Clear;
+  StowArmourAloft;
 end;
 
 procedure TRam.Reset;
@@ -2280,6 +2374,7 @@ begin
   TickPhase;
   TickShed;
   TickMagnet;
+  TickArmour;
   TickShutter;
   TickRow;
   TickSway;
@@ -2293,6 +2388,8 @@ begin
   for var Plate in FPlates do
     Plate.Tick;
   FHeadShield.Tick;
+  FAirShield.Tick;
+  FMagnetShield.Tick;
   Result := FCue;
 end;
 
@@ -2618,6 +2715,8 @@ begin
   FFullLives := Max(1, Round(BunkerLives * FLivesShare));
   FLives := FFullLives;
   FThirds := 0;
+  FLastThirdStrikes := 0;
+  FHitShare := 0;
   FHurtTicks := 0;
   FHitTicks := NoHitTicks;
   FGoneTicks := -1;
@@ -3289,6 +3388,24 @@ begin
     (Tier = 2);
 end;
 
+// A strike that goes in: a life, but in the last third only every
+// BunkerLastThirdStrikes-th strike takes one
+procedure TRam.TakeBunkerLife;
+begin
+  FHitShare := 1 / FFullLives;
+  if Tier = 2 then
+  begin
+    FHitShare := FHitShare / BunkerLastThirdStrikes;
+    Inc(FLastThirdStrikes);
+    if FLastThirdStrikes < BunkerLastThirdStrikes then
+      Exit;
+    FLastThirdStrikes := 0;
+  end;
+  Dec(FLives);
+  if FLives <= 0 then
+    FHeadKilled := True;
+end;
+
 // At the wall it waits out the gap and the hatch's breath, warns and
 // lunges; at the middle it stands, then drives back. The two drives end
 // in Arrive.
@@ -3400,6 +3517,7 @@ begin
   FHuntTicks := 0;
   FHullFacing := 1;
   FShield.Mirrored := True;
+  FAirShield.Mirrored := True;
   BeginRest(0);
 end;
 
@@ -3700,6 +3818,7 @@ begin
   begin
     SpitWheel;
     FCue.Hover := True;
+    RestoreArmourAloft(ArmourRiseTicks);
   end;
 end;
 
@@ -3717,6 +3836,43 @@ begin
     FHero.Body.Y + FHero.Body.H / 2);
   Sight.Harbour := FHero.Harbour;
   FCue.Magnet := FMagnet.Tick(Sight);
+end;
+
+// Aloft, the honeycomb falls as the magnet grows soft, and kindles back
+// once it is hard again
+procedure TRam.TickArmour;
+begin
+  if not FArmouredAloft then
+    Exit;
+  var Soft := FMagnet.Soft;
+  if Soft and (FAirShield.State in [sdUp, sdRising]) then
+  begin
+    FAirShield.Fall;
+    FMagnetShield.Fall;
+    FCue.ArmourDown := True;
+  end;
+  if not Soft and (FAirShield.State = sdDown) then
+  begin
+    RestoreArmourAloft(ArmourBackTicks);
+    FCue.ArmourUp := True;
+  end;
+end;
+
+procedure TRam.StowArmourAloft;
+begin
+  FArmouredAloft := False;
+  FAirShield.Vanish;
+  FMagnetShield.Vanish;
+end;
+
+// Outward from the magnet, out or not; its ring from the belly down
+procedure TRam.RestoreArmourAloft(ATicks: Integer);
+begin
+  FArmouredAloft := True;
+  var Clamp := HullSpot(0, MagnetMiddle(1));
+  FAirShield.Restore(UnitPoint(Clamp.X - FBody.Middle.X,
+    Clamp.Y - RamTop - FBody.Middle.Y), ATicks);
+  FMagnetShield.Restore(UnitPoint(0, -MagnetShieldRadiusY), ATicks);
 end;
 
 procedure TRam.DeployMagnet;
@@ -4097,9 +4253,7 @@ begin
     begin
       FHurtTicks := HurtFlashTicks;
       FHitTicks := 0;
-      Dec(FLives);
-      if FLives <= 0 then
-        FHeadKilled := True;
+      TakeBunkerLife;
       Exit(True);
     end;
     AGuarded := True;
@@ -4452,10 +4606,65 @@ begin
   var Entry: TSdlFPoint;
   Result := FShield.TryEntry(From, Till, Entry);
   if not Result then
-    Exit;
+    Exit(BlockAloft(AFrom, ATo, AAt));
   FShield.Strike(Entry);
   AAt.X := MiddleX + Entry.X;
   AAt.Y := MiddleY + Entry.Y;
+end;
+
+// Aloft the honeycomb leans and rises with the hull: the stretch is
+// brought back into the upright hull, as StrikeBoxes brings it, and the
+// point it comes in at is posed again
+function TRam.BlockAloft(const AFrom, ATo: TSdlFPoint; out AAt: TSdlFPoint): Boolean;
+begin
+  AAt := ATo;
+  var Pose := PoseAt(1);
+  var Pivot := LeanPivot(FX);
+  var From := Turned(UnitPoint(AFrom.X - Pose.Shift.X, AFrom.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
+  var Till := Turned(UnitPoint(ATo.X - Pose.Shift.X, ATo.Y - Pose.Shift.Y),
+    Pivot, -Pose.Lean);
+  var Entry: TSdlFPoint;
+  Result := StrikeArmour(FAirShield, UnitPoint(FX + FBody.Middle.X,
+    RamTop + FBody.Middle.Y), From, Till, Entry);
+  var Shown := FMagnet.OutAt(1);
+  if not Result and (Shown > 0) then
+    Result := StrikeArmour(FMagnetShield, HullSpot(FX, MagnetMiddle(Shown)),
+      From, Till, Entry);
+  if Result then
+  begin
+    AAt := Posed(Pose, Entry);
+    Exit;
+  end;
+  if FAirShield.State in [sdUp, sdRising] then
+    Result := BlockBareAloft(AFrom, ATo, AAt);
+end;
+
+// Where the honeycomb's outline leaves a part bare - the tips of the
+// nozzles under it, the corners of the magnet's face - the armour holds
+// all the same: a bullet that would strike the machine there is taken,
+// and the honeycomb flares at that point
+function TRam.BlockBareAloft(const AFrom, ATo: TSdlFPoint;
+  out AAt: TSdlFPoint): Boolean;
+var
+  Normal: TSdlFPoint;
+begin
+  var OnMagnet := StrikeMagnet(AFrom, ATo, AAt, Normal);
+  Result := OnMagnet or StrikeNozzles(AFrom, ATo, AAt, Normal) or
+    StrikeHull(AFrom, ATo, AAt, Normal);
+  if not Result then
+    Exit;
+  var Pose := PoseAt(1);
+  var Upright := Turned(UnitPoint(AAt.X - Pose.Shift.X, AAt.Y - Pose.Shift.Y),
+    LeanPivot(FX), -Pose.Lean);
+  if OnMagnet then
+  begin
+    var Clamp := HullSpot(FX, MagnetMiddle(FMagnet.OutAt(1)));
+    FMagnetShield.Strike(UnitPoint(Upright.X - Clamp.X, Upright.Y - Clamp.Y));
+  end
+  else
+    FAirShield.Strike(UnitPoint(Upright.X - FX - FBody.Middle.X,
+      Upright.Y - RamTop - FBody.Middle.Y));
 end;
 
 // From the middle of the hull, as the shield has its points
@@ -5939,6 +6148,24 @@ begin
   end;
 end;
 
+// The honeycomb aloft leans and rises with the hull; the magnet's ring
+// rides out of the belly with the magnet
+procedure TRamPainter.DrawArmourAloft(const ACanvas: TDynamicCanvas;
+  AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Pose := FRam.PoseAt(AAlpha);
+  var Middle := FRam.Posed(Pose, UnitPoint(Pose.Left + FRam.Body.Middle.X,
+    RamTop + FRam.Body.Middle.Y));
+  FRam.AirShield.Draw(ACanvas, FArt.FShield,
+    UnitPoint(Middle.X + AOrigin.X, Middle.Y + AOrigin.Y), AAlpha, Pose.Lean);
+  var Shown := FRam.Magnet.OutAt(AAlpha);
+  if Shown <= 0 then
+    Exit;
+  var Clamp := FRam.PoseSpot(Pose, MagnetMiddle(Shown));
+  FRam.MagnetShield.Draw(ACanvas, FArt.FShield,
+    UnitPoint(Clamp.X + AOrigin.X, Clamp.Y + AOrigin.Y), AAlpha, Pose.Lean);
+end;
+
 procedure TRamPainter.DrawLight(const ACanvas: TDynamicCanvas;
   AOrigin: TSdlPoint; AAlpha: Single);
 begin
@@ -5967,6 +6194,7 @@ begin
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,
     RamTop + FRam.Body.Middle.Y + AOrigin.Y);
   FRam.Shield.Draw(ACanvas, FArt.FShield, Middle, AAlpha);
+  DrawArmourAloft(ACanvas, AOrigin, AAlpha);
   if (FRam.Head = rhBunker) and FRam.Armed then
   begin
     var Shape := HeadShapes[rhBunker];

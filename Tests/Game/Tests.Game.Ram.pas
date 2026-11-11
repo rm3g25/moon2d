@@ -353,6 +353,12 @@ type
     procedure TestTheMagnetIsNoBodyToTouch;
     [Test]
     procedure TestAClearStowsTheMagnet;
+    [Test]
+    procedure TestHangingItsHoneycombIsUp;
+    [Test]
+    procedure TestTheHoneycombFallsWithTheSoftMagnetAndComesBack;
+    [Test]
+    procedure TestUnderTheHoneycombNothingIsBare;
   end;
 
   [TestFixture]
@@ -495,6 +501,8 @@ type
     procedure RaiseTheBunker(const ATarget: TRamTarget; ALivesShare: Single = 1);
     procedure WaitForTheWindow(const ATarget: TRamTarget);
     procedure StrikeTheHatch(ATimes: Integer);
+    // Till its last life is gone: the last third takes more strikes a life
+    procedure StrikeTheHatchTillItDies;
     procedure EnterTheSecondPhase(const ATarget: TRamTarget);
     function WaitForTheFallBack(const ATarget: TRamTarget): Integer;
     procedure WaitForTheStand(const ATarget: TRamTarget);
@@ -538,6 +546,8 @@ type
     procedure TestEachThirdCallsTheShuttle;
     [Test]
     procedure TestTheLastLifeBlowsItUpAndTheHuntBegins;
+    [Test]
+    procedure TestTheLastThirdTakesTwiceTheStrikes;
     [Test]
     procedure TestNoFallBackInTheFirstPhase;
     [Test]
@@ -2344,6 +2354,18 @@ begin
   end;
 end;
 
+procedure TRamBunkerTests.StrikeTheHatchTillItDies;
+begin
+  var Strikes := 0;
+  while FRam.Lives > 0 do
+  begin
+    StrikeTheHatch(1);
+    Inc(Strikes);
+    if Strikes > BunkerLastThirdStrikes * FRam.FullLives then
+      Assert.Fail('It never died');
+  end;
+end;
+
 // The chase under way, then a third of its lives gone at a window
 procedure TRamBunkerTests.EnterTheSecondPhase(const ATarget: TRamTarget);
 begin
@@ -2745,6 +2767,35 @@ begin
   Assert.AreEqual(0, Rest, 'The last third and the blast: none');
 end;
 
+// Twelve lives: eight strikes take the first two thirds, a life each;
+// the last four take twice as many, and each tells the stone half a life
+procedure TRamBunkerTests.TestTheLastThirdTakesTwiceTheStrikes;
+const
+  // 150 times this is 12
+  LivesShare = 0.08;
+begin
+  var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
+  RaiseTheBunker(Hero, LivesShare);
+  WaitForTheWindow(Hero);
+  Assert.AreEqual(12, FRam.FullLives, 'Twelve lives');
+  StrikeTheHatch(8);
+  Assert.AreEqual(4, FRam.Lives, 'A life a strike till the last third');
+  Assert.AreEqual(1 / 12, Double(FRam.HitShare), 0.0001, 'A whole life told');
+  StrikeTheHatch(1);
+  Assert.AreEqual(4, FRam.Lives, 'The first strike of the last third: no life');
+  Assert.AreEqual(1 / 24, Double(FRam.HitShare), 0.0001, 'Half a life told');
+  StrikeTheHatch(1);
+  Assert.AreEqual(3, FRam.Lives, 'The second: a life');
+  var Strikes := 2;
+  while FRam.Lives > 0 do
+  begin
+    StrikeTheHatch(1);
+    Inc(Strikes);
+  end;
+  Assert.AreEqual(BunkerLastThirdStrikes * 4, Strikes,
+    'The last third took twice its lives in strikes');
+end;
+
 procedure TRamBunkerTests.TestTheLastLifeBlowsItUpAndTheHuntBegins;
 const
   LivesShare = 0.02;
@@ -2752,7 +2803,7 @@ begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
   RaiseTheBunker(Hero, LivesShare);
   WaitForTheWindow(Hero);
-  StrikeTheHatch(FRam.Lives);
+  StrikeTheHatchTillItDies;
   var Cue := FRam.Tick(Hero);
   Assert.IsTrue(Cue.Blast, 'It blows up');
   Assert.IsFalse(Cue.Shock, 'No wave');
@@ -2962,7 +3013,7 @@ begin
   EnterTheSecondPhase(Hero);
   WaitForTheStand(Hero);
   Assert.IsTrue(FRam.Left < ScreenWidth - RamWidth - 1, 'Away from the wall');
-  StrikeTheHatch(FRam.Lives);
+  StrikeTheHatchTillItDies;
   var Blasted := False;
   for var i := 1 to ManyTicks do
     if FRam.Tick(Hero).Blast then
@@ -3292,7 +3343,7 @@ begin
   WaitForTheHunt(Hero);
   for var i := 1 to SettleTicks do
     FRam.Tick(Hero);
-  StrikeTheHatch(FRam.Lives);
+  StrikeTheHatchTillItDies;
   var Blasted := False;
   var Moved := False;
   for var i := 1 to ManyTicks do
@@ -3323,7 +3374,7 @@ begin
   WaitForTheHunt(Hero);
   for var i := 1 to SettleTicks do
     FRam.Tick(Hero);
-  StrikeTheHatch(FRam.Lives);
+  StrikeTheHatchTillItDies;
   var Blasted := False;
   for var i := 1 to ManyTicks do
     if FRam.Tick(Hero).Blast then
@@ -4456,7 +4507,9 @@ begin
 end;
 
 // Straight up from under the hanging hull, along it: one run of hits about
-// the magnet's width, under the hull's bottom, thrown off down
+// the magnet's width, under the hull's bottom, thrown off down - but at
+// its very sides, where the rocking hull turns the stretch a hair aslant
+// and it comes in through a side face
 procedure TRamMagnetTests.TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles;
 const
   Step = 0.5;
@@ -4481,8 +4534,10 @@ begin
       Normal);
     if Struck then
     begin
-      Assert.IsTrue(Where.Y > Bottom + 8, Format('Under the hull at %.1f', [X]));
-      Assert.IsTrue(Normal.Y > 0.99, Format('Looking down at %.1f', [X]));
+      if Normal.Y > 0.99 then
+        Assert.IsTrue(Where.Y > Bottom + 8, Format('Under the hull at %.1f', [X]))
+      else
+        Assert.IsTrue(Abs(Normal.X) > 0.99, Format('Through a side at %.1f', [X]));
       if not InRun then
         Inc(Runs);
       RunWidth := RunWidth + Step;
@@ -4564,6 +4619,97 @@ begin
   FRam.Clear;
   Assert.AreEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'Stowed');
   Assert.AreEqual(0.0, Double(FRam.Magnet.OutAt(1)), 0.001, 'In the belly');
+end;
+
+// From the left into the side of the risen hull, halfway up it
+procedure TRamMagnetTests.TestHangingItsHoneycombIsUp;
+var
+  Struck: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.Tick(Hero);
+  Assert.AreEqual<TShieldState>(sdUp, FRam.AirShield.State, 'The hull''s up');
+  Assert.AreEqual<TShieldState>(sdUp, FRam.MagnetShield.State, 'The ring up');
+  var Y: Single := RamTop - HangLift + RamHeight / 2;
+  Assert.IsTrue(FRam.Block(At(FRam.Left - 20, Y), At(FRam.Left + 10, Y), Struck),
+    'It takes the bullet');
+  Assert.IsTrue(Struck.X < FRam.Left + 2, 'At the side of the hull');
+
+  FRam.Clear;
+  Assert.AreEqual<TShieldState>(sdDown, FRam.AirShield.State, 'Cleared: down');
+end;
+
+procedure TRamMagnetTests.TestTheHoneycombFallsWithTheSoftMagnetAndComesBack;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  Hero.Barges := [BargeUnderTheFace];
+  var Downs := 0;
+  var Ups := 0;
+  var Ticks := 0;
+  while not FRam.Magnet.Soft do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.ArmourDown then
+      Inc(Downs);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never grew soft');
+  end;
+  Assert.AreEqual(1, Downs, 'Its fall told once, as it softened');
+  Assert.AreEqual<TShieldState>(sdFalling, FRam.AirShield.State, 'The hull''s falls');
+  Assert.AreEqual<TShieldState>(sdFalling, FRam.MagnetShield.State, 'The ring falls');
+
+  Hero.Barges := [];
+  Ticks := 0;
+  while FRam.Magnet.Stage <> mgSeeking do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.ArmourDown then
+      Inc(Downs);
+    if Cue.ArmourUp then
+      Inc(Ups);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never grew cold');
+  end;
+  Assert.AreEqual(1, Downs, 'No second fall');
+  Assert.AreEqual(1, Ups, 'Its return told once, as it hardened');
+  Assert.AreEqual<TShieldState>(sdRising, FRam.AirShield.State, 'The hull''s kindles');
+  Assert.AreEqual<TShieldState>(sdRising, FRam.MagnetShield.State, 'The ring kindles');
+end;
+
+// The honeycomb up, straight up along the hanging hull from under it:
+// wherever the magnet or a nozzle would take the bullet, the honeycomb
+// takes it first - the corners and the tips past its outline too
+procedure TRamMagnetTests.TestUnderTheHoneycombNothingIsBare;
+const
+  Step = 0.5;
+  From = 50.0;
+  Into = 20.0;
+var
+  Where, Normal, Struck: TSdlFPoint;
+begin
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  HangWithTheMagnetOut(HangMiddleX, Hero);
+  var Bottom: Single := RamTop - HangLift + RamHeight;
+  var Bare := 0;
+  var X: Single := FRam.Left - 10;
+  while X <= FRam.Left + RamWidth + 10 do
+  begin
+    var Under := At(X, Bottom + From);
+    var Inside := At(X, Bottom - Into);
+    if FRam.StrikeMagnet(Under, Inside, Where, Normal) or
+      FRam.StrikeNozzles(Under, Inside, Where, Normal) then
+    begin
+      Inc(Bare);
+      Assert.IsTrue(FRam.Block(Under, Inside, Struck),
+        Format('A bare part at %.1f', [X]));
+    end;
+    X := X + Step;
+  end;
+  Assert.IsTrue(Bare > 0, 'The magnet and the nozzles were in the way');
 end;
 
 initialization

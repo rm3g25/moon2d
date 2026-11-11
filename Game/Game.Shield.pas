@@ -6,8 +6,10 @@
   sign of a wound, and a shield takes none.
 
   A shield that falls blinks its cells a few times and goes out; it does
-  not come back by itself. The rules and the look of one shield; the
-  machine says where its middle is.
+  not come back by itself. Told to, it is restored: its cells kindle one
+  by one outward from a point, each with a flash, and it holds from the
+  first of them. The rules and the look of one shield; the machine says
+  where its middle is.
 
   In alarm the whole rim lights and throbs, as strongly as its owner
   says: the light of a flare all round, the flares of hits over it.
@@ -21,7 +23,10 @@
   over the body of a big one (the Ram) a little past its outline: the rim
   is then the outline itself, and an ellipse round a long low hull would
   hang its cells in the air over the hull and leave its corners bare. A
-  body that stands on the floor shows no rim along the floor.
+  body that stands on the floor shows no rim along the floor; a body
+  afloat is rimmed all round. Cells may be hidden: they hold as the rest
+  do, and only a hit's light shows them - where the machine's fire would
+  burn through a honeycomb drawn over it.
 
   Or it is a strip: a short row of small cells, every one of them rim -
   a plate that guards one side of a gun (the Ram's sweeper from below).
@@ -48,7 +53,7 @@ type
     destructor Destroy; override;
   end;
 
-  TShieldState = (sdUp, sdFalling, sdCrumbling, sdDown);
+  TShieldState = (sdUp, sdFalling, sdCrumbling, sdDown, sdRising);
 
   // The body of a machine on a grid of units, row by row from its top-left
   // corner, and where its middle is on that grid
@@ -69,6 +74,10 @@ type
       // Broken off by a blow; crumbling, the tick it goes out
       Broken: Boolean;
       OutAt: Integer;
+      // Restored, the tick it kindles
+      InAt: Integer;
+      // Not drawn but by a hit's light
+      Hidden: Boolean;
     end;
 
     // A cell of a piece broken off, flying, from the middle
@@ -84,8 +93,10 @@ type
     end;
   private
     FRadiusX, FRadiusY: Single;
-    // Over a body: the body a margin wider, its corner from the middle
+    // Over a body: the body a margin wider, its corner from the middle;
+    // afloat, wider below too and rimmed along its bottom
     FOverBody: Boolean;
+    FAfloat: Boolean;
     FField: TShieldMask;
     FFieldX, FFieldY: Single;
     // A strip: a row of cells along X, its half-length and half-height in
@@ -104,6 +115,9 @@ type
     FBreaks: TArray<TSdlFPoint>;
     FShards: TList<TShard>;
     FCrumbleAge: Integer;
+    FRiseAge: Integer;
+    FRiseTicks: Integer;
+    procedure InitOver(const ABody: TShieldMask);
     function Own(const APoint: TSdlFPoint): TSdlFPoint;
     procedure LayCells;
     procedure LayCellsOverBody;
@@ -114,26 +128,37 @@ type
     procedure SetAlarm(AValue: Single);
     procedure TickShards;
     procedure TickCrumble;
+    procedure TickRising;
     function CellLit(const ACell: TCell): Boolean;
+    function KindleShare(const ACell: TCell; AAlpha: Single): Single;
     procedure DrawShards(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
-      const ACenter: TSdlFPoint; AAlpha: Single);
+      const ACenter: TSdlFPoint; AAlpha, ATurn: Single);
   public
     // An ellipse of these half-axes about the middle of the machine
     constructor Create(ARadiusX, ARadiusY: Single);
     // Over the body, a margin past its outline; the middle of the machine
     // is the body's
     constructor CreateOver(const ABody: TShieldMask);
+    // Over a body that hangs in the air: rimmed along its bottom as well
+    constructor CreateAfloat(const ABody: TShieldMask);
     // ACells in a row about the middle, at AScale of the full cell
     constructor CreateStrip(ACells: Integer; AScale: Single);
     // No cells over AY from the middle: a shield open on top, where the
     // machine is to be hit, shows none there
     procedure OpenAbove(AY: Single);
+    // The cells within ABox, from the middle as the cells are laid, are
+    // drawn only by a hit's light; they hold as the others do
+    procedure Hide(const ABox: TSdlFRect);
     destructor Destroy; override;
     // Up again, whole, with no flare on it and no alarm
     procedure Rise;
     procedure Fall;
     // Down at once, nothing of the fall seen: a restart past its end
     procedure Vanish;
+    // Down, it comes back whole: the cells kindle outward from AFrom, from
+    // the middle, over ATicks; it holds from the first tick. Nothing
+    // unless down.
+    procedure Restore(const AFrom: TSdlFPoint; ATicks: Integer);
     // A heavy blow at this point from the middle: a piece of the rim
     // about it breaks off and flies. The shield still holds.
     procedure Shatter(const APoint: TSdlFPoint);
@@ -149,9 +174,10 @@ type
     function TryEntry(const AFrom, ATo: TSdlFPoint;
       out AEntry: TSdlFPoint): Boolean;
     procedure Tick;
-    // ACenter - the middle of the machine on the screen, shake included
+    // ACenter - the middle of the machine on the screen, shake included;
+    // ATurn - degrees clockwise the machine is turned about it
     procedure Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
-      const ACenter: TSdlFPoint; AAlpha: Single);
+      const ACenter: TSdlFPoint; AAlpha: Single; ATurn: Single = 0);
     property State: TShieldState read FState;
     // The cells are laid on the machine as drawn; turned round, every point
     // asked and every cell drawn is mirrored across its middle
@@ -212,6 +238,8 @@ const
   CrumblePace = 3.0;
   CrumbleBlinkTicks = 3;
   CrumbleGlow = 0.5;
+  // Restored, a cell kindles with a flash that dies out over this long
+  KindleTicks = 6;
   // Along a stretch the shield is looked for this often
   EntryStep = 1.0;
   // Over a body: units the shield stands past its outline, and the depth
@@ -275,6 +303,14 @@ begin
   Result.B := Round(AFrom.B + (ATo.B - AFrom.B) * AShare);
 end;
 
+// AX, AY from the middle, turned ATurn degrees clockwise about it
+function TurnedAbout(AX, AY, ATurn: Single): TSdlFPoint;
+begin
+  var Angle := DegToRad(ATurn);
+  Result.X := AX * Cos(Angle) - AY * Sin(Angle);
+  Result.Y := AX * Sin(Angle) + AY * Cos(Angle);
+end;
+
 // ---------------------------------------------------------------------------
 // TShieldMask
 // ---------------------------------------------------------------------------
@@ -286,11 +322,15 @@ begin
   Result := Solid[ARow * Width + ACol];
 end;
 
-// The body a margin wider on every side but the floor
-function Widen(const ABody: TShieldMask; AMargin: Integer): TShieldMask;
+// The body a margin wider on every side but the floor - and below it too
+// when it is afloat
+function Widen(const ABody: TShieldMask; AMargin: Integer;
+  AAfloat: Boolean): TShieldMask;
 begin
   Result.Width := ABody.Width + 2 * AMargin;
   Result.Height := ABody.Height + AMargin;
+  if AAfloat then
+    Result.Height := Result.Height + AMargin;
   Result.Middle.X := ABody.Middle.X + AMargin;
   Result.Middle.Y := ABody.Middle.Y + AMargin;
   SetLength(Result.Solid, Result.Width * Result.Height);
@@ -309,18 +349,20 @@ end;
 
 // How deep under the outline every cell of the field lies, in units:
 // a chamfer of two passes. Off the grid is open to the sides and above,
-// and solid below - the floor the body stands on is no outline.
-function DepthsOf(const AField: TShieldMask): TArray<Single>;
+// and solid below - the floor the body stands on is no outline - unless
+// the body is afloat.
+function DepthsOf(const AField: TShieldMask; AAfloat: Boolean): TArray<Single>;
 const
   Diagonal = 1.414;
   Deep = 1E6;
 var
   Depths: TArray<Single>;
+  Below: Single;
 
   function DepthAt(ACol, ARow: Integer): Single;
   begin
     if ARow >= AField.Height then
-      Exit(Deep);
+      Exit(Below);
     if (ACol < 0) or (ARow < 0) or (ACol >= AField.Width) then
       Exit(0);
     Result := Depths[ARow * AField.Width + ACol];
@@ -340,6 +382,9 @@ var
   end;
 
 begin
+  Below := Deep;
+  if AAfloat then
+    Below := 0;
   SetLength(Depths, Length(AField.Solid));
   for var i := 0 to High(Depths) do
     if AField.Solid[i] then
@@ -401,9 +446,21 @@ end;
 constructor TTekShield.CreateOver(const ABody: TShieldMask);
 begin
   inherited Create;
+  InitOver(ABody);
+end;
+
+constructor TTekShield.CreateAfloat(const ABody: TShieldMask);
+begin
+  inherited Create;
+  FAfloat := True;
+  InitOver(ABody);
+end;
+
+procedure TTekShield.InitOver(const ABody: TShieldMask);
+begin
   FOverBody := True;
   FScale := 1;
-  FField := Widen(ABody, BodyMargin);
+  FField := Widen(ABody, BodyMargin, FAfloat);
   FFieldX := -FField.Middle.X;
   FFieldY := -FField.Middle.Y;
   FFlares := TList<TFlare>.Create;
@@ -457,7 +514,7 @@ end;
 // how close to the outline a cell lies
 procedure TTekShield.LayCellsOverBody;
 begin
-  var Depths := DepthsOf(FField);
+  var Depths := DepthsOf(FField, FAfloat);
   var StepX := Sqrt(3) * HexSize;
   var StepY := 1.5 * HexSize;
   var Rows := Ceil(FField.Height / StepY);
@@ -518,7 +575,7 @@ end;
 
 procedure TTekShield.Fall;
 begin
-  if FState <> sdUp then
+  if not (FState in [sdUp, sdRising]) then
     Exit;
   FState := sdFalling;
   FFallAge := 0;
@@ -529,6 +586,27 @@ begin
   FState := sdDown;
   FFlares.Clear;
   FShards.Clear;
+end;
+
+procedure TTekShield.Restore(const AFrom: TSdlFPoint; ATicks: Integer);
+begin
+  if FState <> sdDown then
+    Exit;
+  Rise;
+  FState := sdRising;
+  FRiseAge := 0;
+  FRiseTicks := ATicks;
+  var From := Own(AFrom);
+  var Farthest: Single := 0;
+  for var Cell in FCells do
+    Farthest := Max(Farthest, Hypot(Cell.X - From.X, Cell.Y - From.Y));
+  for var i := 0 to High(FCells) do
+  begin
+    FCells[i].InAt := 0;
+    if Farthest > 0 then
+      FCells[i].InAt := Round(ATicks *
+        Hypot(FCells[i].X - From.X, FCells[i].Y - From.Y) / Farthest);
+  end;
 end;
 
 // A point from the middle, in the frame the cells were laid in
@@ -593,7 +671,7 @@ end;
 
 procedure TTekShield.Strike(const APoint: TSdlFPoint);
 begin
-  if FState <> sdUp then
+  if not (FState in [sdUp, sdRising]) then
     Exit;
   var Point := Own(APoint);
   var Flare: TFlare;
@@ -617,7 +695,7 @@ function TTekShield.TryEntry(const AFrom, ATo: TSdlFPoint;
   out AEntry: TSdlFPoint): Boolean;
 begin
   AEntry := AFrom;
-  if FState <> sdUp then
+  if not (FState in [sdUp, sdRising]) then
     Exit(False);
   var Span := Sqrt(Sqr(ATo.X - AFrom.X) + Sqr(ATo.Y - AFrom.Y));
   var Steps := Max(1, Ceil(Span / EntryStep));
@@ -645,6 +723,7 @@ begin
   end;
   TickShards;
   TickCrumble;
+  TickRising;
 
   if FState <> sdFalling then
     Exit;
@@ -687,11 +766,31 @@ begin
   FFlares.Clear;
 end;
 
-// Not broken off, and not yet gone out in a crumble
+// Up once the last cell has kindled and its flash died out
+procedure TTekShield.TickRising;
+begin
+  if FState <> sdRising then
+    Exit;
+  Inc(FRiseAge);
+  if FRiseAge >= FRiseTicks + KindleTicks then
+    FState := sdUp;
+end;
+
+// Not broken off, not yet gone out in a crumble, and kindled if rising
 function TTekShield.CellLit(const ACell: TCell): Boolean;
 begin
-  Result := not ACell.Broken and
-    ((FState <> sdCrumbling) or (FCrumbleAge < ACell.OutAt));
+  var GoneOut := (FState = sdCrumbling) and (FCrumbleAge >= ACell.OutAt);
+  var Unkindled := (FState = sdRising) and (FRiseAge < ACell.InAt);
+  Result := not ACell.Broken and not GoneOut and not Unkindled;
+end;
+
+// The flash of a cell just kindled, 1 as it kindles to 0
+function TTekShield.KindleShare(const ACell: TCell; AAlpha: Single): Single;
+begin
+  if FState <> sdRising then
+    Exit(0);
+  var Age: Single := FRiseAge + AAlpha - ACell.InAt;
+  Result := EnsureRange(1 - Age / KindleTicks, 0.0, 1.0);
 end;
 
 // How much of a flare's light the cell takes, 0..1
@@ -724,7 +823,7 @@ end;
 function TTekShield.FallLevel(AAlpha: Single): Single;
 begin
   case FState of
-    sdUp:
+    sdUp, sdRising:
       Result := 1;
     sdFalling:
       begin
@@ -745,7 +844,7 @@ end;
 
 // Flying off, shrinking and dimming as they burn out
 procedure TTekShield.DrawShards(const ACanvas: TDynamicCanvas;
-  AArt: TShieldArt; const ACenter: TSdlFPoint; AAlpha: Single);
+  AArt: TShieldArt; const ACenter: TSdlFPoint; AAlpha, ATurn: Single);
 begin
   var CellSize: Single := 2 * HexSize * CellSpan * FScale;
   for var Shard in FShards do
@@ -756,10 +855,10 @@ begin
     var ShardX := Shard.X - Shard.SpeedX * (1 - AAlpha);
     if FMirrored then
       ShardX := -ShardX;
-    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + ShardX,
-      ACenter.Y + Shard.Y - Shard.SpeedY * (1 - AAlpha),
-      CellSize * (0.5 + 0.5 * Left), MixColor(ShieldColor, FlareColor, Left),
-      FlareLevel * Left);
+    var Spot := TurnedAbout(ShardX, Shard.Y - Shard.SpeedY * (1 - AAlpha), ATurn);
+    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + Spot.X,
+      ACenter.Y + Spot.Y, CellSize * (0.5 + 0.5 * Left),
+      MixColor(ShieldColor, FlareColor, Left), FlareLevel * Left);
   end;
 end;
 
@@ -772,10 +871,21 @@ begin
   FCells := Kept;
 end;
 
-procedure TTekShield.Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
-  const ACenter: TSdlFPoint; AAlpha: Single);
+procedure TTekShield.Hide(const ABox: TSdlFRect);
 begin
-  DrawShards(ACanvas, AArt, ACenter, AAlpha);
+  for var i := 0 to High(FCells) do
+  begin
+    var Cell := FCells[i];
+    if (Cell.X >= ABox.X) and (Cell.X < ABox.X + ABox.W) and
+      (Cell.Y >= ABox.Y) and (Cell.Y < ABox.Y + ABox.H) then
+      FCells[i].Hidden := True;
+  end;
+end;
+
+procedure TTekShield.Draw(const ACanvas: TDynamicCanvas; AArt: TShieldArt;
+  const ACenter: TSdlFPoint; AAlpha: Single; ATurn: Single);
+begin
+  DrawShards(ACanvas, AArt, ACenter, AAlpha, ATurn);
   var Whole := FallLevel(AAlpha);
   if Whole <= 0 then
     Exit;
@@ -787,17 +897,23 @@ begin
   begin
     if not CellLit(Cell) then
       Continue;
-    var Flare := Max(FlareShare(Cell, AAlpha), Glow) *
-      RimBand(Cell.Rim, FlareRimFrom);
-    var Rest := RestLevel * RimBand(Cell.Rim, RestRimFrom);
+    var Flare := FlareShare(Cell, AAlpha);
+    var Rest: Single := 0;
+    if not Cell.Hidden then
+    begin
+      Flare := Max(Max(Flare, Glow), KindleShare(Cell, AAlpha));
+      Rest := RestLevel * RimBand(Cell.Rim, RestRimFrom);
+    end;
+    Flare := Flare * RimBand(Cell.Rim, FlareRimFrom);
     var Level := Whole * (Rest + (FlareLevel - Rest) * Flare);
     if Level < DimmestLevel then
       Continue;
     var CellX := Cell.X;
     if FMirrored then
       CellX := -CellX;
-    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + CellX,
-      ACenter.Y + Cell.Y, CellSize, MixColor(ShieldColor, FlareColor, Flare),
+    var Spot := TurnedAbout(CellX, Cell.Y, ATurn);
+    DrawGlow(ACanvas.Renderer, AArt.FCell, ACenter.X + Spot.X,
+      ACenter.Y + Spot.Y, CellSize, MixColor(ShieldColor, FlareColor, Flare),
       Min(Level, 1));
   end;
 end;
