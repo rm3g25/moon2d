@@ -7,6 +7,27 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-11: **3.0.122 - the honeycomb aloft.** The flying Ram wears its
+honeycomb again, so the player sees why a hit fails. As the rear wheel is
+thrown it kindles back outward from the magnet, cell by cell over a
+second (`TTekShield.Restore`, the new state `sdRising`): over the flying
+hull - rimmed under the belly too (`CreateAfloat`), its cells over the
+arches, where the bays and the fire are, hidden but holding and lit by a
+hit (`Hide`) - and in a ring about the magnet. Both lean and rise with
+the hull (`Draw(turn)`, `TRam.BlockAloft`). As the magnet grows soft they
+blink out with the window; hard again, they kindle back from the magnet
+in half a second, holding from the first cell. Point B finds them up.
+The bar, its word and the rules of the fight are unchanged: the magnet
+alone takes a life. While the honeycomb is up no bullet rings off the
+machine through it: where its outline leaves a part bare - the nozzles'
+tips, the magnet's corners - it takes the bullet all the same
+(`TRam.BlockBareAloft`). Every fourth small barge to come in brings a
+medkit on its deck, carried with it and gone with it. The bunker's last
+third - the hunt, the hull turned round - holds out twice as long: a life
+every second strike (`BunkerLastThirdStrikes`), the stone's charge told
+half a life a strike (`TRam.HitShare`). New sounds:
+`honeycombdown.wav`, `honeycombup.wav` (`tools/sounds/honeycomb.py`).
+
 2026-11-11: **3.0.121 - the magnet and the heat (stage 18d-2).** The Ram
 fights back. He aboard at the station, a breath, and a magnet slides out
 of the belly between the engine bays (`Game.Magnet`, `TMagnet`, the Ram's;

@@ -5321,7 +5321,7 @@ its own, not the hero's shroud (decided). A 2026 addition.
   `Render.Glow`, on the monsters' channel), `Clear` (a door or a death:
   nothing follows the hero to the next screen).
 
-### `Game/Game.Shield.pas` (~545 lines)
+### `Game/Game.Shield.pas` (~920 lines)
 The shield of a TEK machine while it cannot be hit (3.0.56): a pale gold
 honeycomb about it, always seen, on its rim alone - the machine inside
 stays in plain view (asked after the first look: a full honeycomb hid the
@@ -5334,7 +5334,7 @@ the mast-turret machine's hull, which is invulnerable always). A 2026
 addition.
 - **`TShieldArt`** (class) - one hex cell texture in additive light
   (`FillCell`, `CellSide` 48 px), one for every shield of the game.
-- **`TShieldState`** = (`sdUp`, `sdFalling`, `sdDown`).
+- **`TShieldState`** = (`sdUp`, `sdFalling`, `sdCrumbling`, `sdDown`, `sdRising`).
 - **`TTekShield`** (class) - `Create(radiusX, radiusY)`: an ellipse of
   pointy-topped cells (`HexSize` 3.4, `LayCells`) about the machine's
   middle, each with its `Rim` share (0 middle .. 1 edge). At rest only the
@@ -5368,6 +5368,18 @@ addition.
   over the top of its dome.
 - 3.0.118: **`Vanish`** - down at once, nothing of the fall seen, the
   flares and shards gone: a restart past the honeycomb's end.
+- 3.0.122: **coming back, afloat, hidden, turned** - `sdRising` and
+  **`Restore(from, ticks)`**: only from down, whole again, each cell
+  kindling (`InAt`) at its distance from `from` over `ticks` with a flash
+  over `KindleTicks` 6 (`KindleShare`); it holds and flares from the first
+  tick and is up once the last flash dies (`TickRising`); `Fall` takes a
+  rising shield too. **`CreateAfloat(body)`** - `Widen` and `DepthsOf`
+  take the body as hanging (the margin below as well, off the grid below
+  open): a rim along its bottom. **`Hide(box)`** - cells within a box,
+  as laid from the middle, drawn only by a hit's flare, holding as the
+  rest (`TCell.Hidden`). `Draw(..., turn)` - the cells and the shards
+  turned `turn` degrees clockwise about the middle (`TurnedAbout`). The
+  Ram's honeycomb aloft wears all four.
 ### `Game/Game.Cannons.pas` (~900 lines)
 The two TEK cannons of the gravel arena (3.0.56, act 3): guns clamped to
 the side faces of the wall pillars (cols 1-2 and 13-14, the muzzle two
@@ -5824,6 +5836,28 @@ monster. The game carries out the cue.
   `DrawMagnetLight` (in `DrawLight`: the glow at a hot face, the beam to
   the middle of the held deck - `BeamColor` sheath, `BeamCoreColor` core,
   `DrawGlowTurned` - and the spot where it grips).
+- 3.0.122: **the honeycomb aloft** (`ram-air.md`, "The honeycomb aloft
+  as built"). **`AirShield`** - `CreateAfloat` over the body, hidden over
+  the arches (`ArchBox`, `ArchHideReach` 24.5, `ArchHideRise` 12);
+  **`MagnetShield`** - an ellipse 20 by 19 about `MagnetMiddle(shown)`,
+  open over the belly. Stowed till the takeoff and by `Place` and `Clear`
+  (`StowArmourAloft`); restored outward from the magnet as the rear wheel
+  is thrown (`RestoreArmourAloft`, `ArmourRiseTicks` 33), raised at once
+  by `StartHanging`. `TickArmour` (after `TickMagnet`): both fall as the
+  magnet grows soft (`TRamCue.ArmourDown`), and are restored over
+  `ArmourBackTicks` 15 once it is hard (`ArmourUp`). `Block` asks the
+  road's shield, then `BlockAloft` (the stretch in the upright hull, as
+  `StrikeBoxes`; `StrikeArmour` per shield; the point posed again), and
+  with the honeycomb up `BlockBareAloft` - a bullet that would strike the
+  magnet, a nozzle or the hull past the outline is taken there, the
+  honeycomb flaring. The bunker's last third takes a life every
+  `BunkerLastThirdStrikes` 2 strikes (`TakeBunkerLife`; `HitShare` - the
+  share of the lives a strike took, which the game tells the stone tank).
+  The game: a medkit on every fourth small barge
+  (`TFlockMedkit`, `FlockMedkitEvery`, `TickFlockMedkit`,
+  `DropFlockMedkit` in `Game.Moon`).
+  `TRamPainter.DrawArmourAloft` (in `DrawLight`) draws both posed and
+  turned with the hull.
 - Tests: `Tests.Game.Ram` (`TRamMagnetTests` since 3.0.121).
 
 ### `Game/Game.Wrecks.pas` (~720 lines, 3.0.94)
@@ -7592,6 +7626,14 @@ sliding down, a dull clang of three inharmonic partials, a breath of dark
 noise. Need numpy, `armor.py` and `orblauncher.py` (its `slide` and
 `dark_noise`).
 
+### `tools/sounds/honeycomb.py` (3.0.122)
+The Ram's honeycomb aloft: a field - a G3 tone and three overtones, each
+beating against a sharp twin. `honeycombdown.wav` - sliding an octave
+down, gated in step with the fall's blink, dying; `honeycombup.wav` -
+sliding an octave up from silence with a quickening tremor, locking with
+a low blow as the last cell kindles. Need numpy, `armor.py` and
+`orblauncher.py` (its `slide`).
+
 ### `tools/sounds/orblauncher.py` (3.0.116)
 The orb launcher's shot (`orblauncher.wav`: a sliding sub thump, a breath of dark
 noise, a hollow ring of two low partials) and an orb sinking into the
@@ -8128,6 +8170,8 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   `TBargeFlockTests` +7 (the taken barge); `THullLivesTests` +4 (the bar's
   heat); `TBargeRideTests` +2 and 3 reworked (let go by the caller's word,
   the rock).
+- 3.0.122: **`TShieldRestoreTests`** (5, new in `Tests.Game.Shield` -
+  restored, afloat, hidden); `TRamMagnetTests` +2 (the honeycomb aloft).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -8626,7 +8670,8 @@ honeycomb, played since 3.0.115) and `credits.ogg` (the end titles, not
 played yet) - fourteen; 3.0.79: `sweeperblast.wav` (`tools/sounds/sweeperblast.py`,
 made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 (`tools/sounds/orblauncher.py`). 3.0.121: `magnethum.wav`,
-`magnetthrow.wav` (`tools/sounds/magnet.py`).
+`magnetthrow.wav` (`tools/sounds/magnet.py`). 3.0.122: `honeycombdown.wav`,
+`honeycombup.wav` (`tools/sounds/honeycomb.py`).
 
 ---
 
@@ -8698,6 +8743,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The chase city's life (3.0.92): its signs flickering, its windows waking, red lamps on the masts, the TEK emblem in neon on the central spire going out and lighting again part by part, the emblem as worn paint on two walls, red beacons on the frames' upper nodes - tick for tick as on the stand | Levels.CityLife.pas (`Mix`, `Roll`, `NeonLevel`, `WindowLevel`, `EmblemPartLevel`, `BeaconLevel`, `BeaconSeed`) + Levels.FarPlane.pas (`TCityLights`, `TCityEmblem`, `TCityBeacons`, `TElementPaint`, `BeaconsAbove`) + Render.FarPlane.pas (`DrawLife`, `DrawLight`, `DrawPaint`, `DrawEmblem`, `DrawBeacons`) + Render.DomeFrames.pas (`TFrameBeacon`, `BeaconNodes`) + Game.FarPlane.pas (`Clock`) + bin/chase-backdrop.json (`cityLights`, `emblem`, `beacons`) + chase-backdrop.mset (`tek-*`, tools/chase/make_emblem.py) + Tests.Levels.CityLife.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3/) |
 | The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3/) |
 | The chase city's searchlights (3.0.95): two warm beams from the main dome wander over the sky - bright in the dome's air, a hot spot and a step down at the glass, a faint tail in the lunar dust, glints on the near ribs they cross; each lamp's own clock eases to a hold now and then; it glides between ticks - tick for tick as on the stand | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
+| The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |
 | The magnet of the air fight (3.0.121): the start of the fight, the pick and the reach, the beam, the shield, the lift and the press, the throw and its hit, the pieces and the rock of the main barge, the window; hot is soft - the heat's tint, the bar's two states, the hint; the hum | Game.Magnet.pas (`TMagnet`, the timings and gaps, `TMagnetRule`) + Game.Ram.pas (`TickMagnet`, `DeployMagnet`, `StrikeMagnet`, `MagnetTopPoint`, `DrawMagnet`, `DrawMagnetLight`) + Game.Moon.pas (`CarryOutMagnet`, `SeizeMagnetBarge`, `ThrowMagnetBarge`, `ResolveThrownBarge`, `BreakThrownBarge`, `BulletStruckRam`, `AirFightMagnetRule`, `ThrownBargeReach`) + Game.Flock.pas (`Take`, `GiveBack`) + Game.Wrecks.pas (`Fling`) + Game.Pieces.pas + Game.Barge.pas (`Loose`, `Rock`) + Game.HullLives.pas (`Tick(hot)`) + Hud.HullBar.pas + `magnet`, `magnetHeat` in tek-machine.mset (tools/machine/add_magnet.py) + tools/sounds/magnet.py + `strikeWhatGlows`, `hullArmour` in bin/lang + Tests.Game.Magnet.pas, Tests.Game.Pieces.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-2) |
 | The barges of the air fight (3.0.120): pads on the move drawn between the ticks (after its live run: `TPad.Glide`, `Lift` with the fraction, `THero.DeckSlide`, `TMonster.DeckSlide` / `DrawnDeck`, `TSpriteRenderer.FineX`, `TParentStand.Glide` in Render.Dynamics `OriginOf`); the main barge drifting on its loop from his boarding, the small barges round it - the escort within his jump, relieved and let go, the free paths, in fast from the right and out past the left, replaced; riders and bullets as on pads | Game.Barge.pas (`bsDrift`, `Dip`, `WayDown`) + Game.Flock.pas (`TBargeFlock`, `TMainBarge`, `WithinJump`, `FlockCounts`) + Pads.World.pas (`Carry(wayX, wayY)`) + Game.Moon.pas (`BuildFlock`, `TickFlock`, `TickPier`, `ClearPier`, `PinPierCheckpoint`) + the pads `s13-flock-1`..`-9` and the rigs `barge2`..`barge4` in level2.json + Tests.Game.Flock.pas, Tests.Game.Barge.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-1) |
 | The road of the chase running out and the barge of the air phase (3.0.118, 3.0.119): the chase going on after the orb launcher's take, the cliff coming in from the right with the barge a hop past it, the pier riding on as a pad and away past the left edge, the barge casting off to its station in the middle as he boards, its running lights and its turbine's fire (the rig `barge`), the world at the flight's pace, the checkpoint on its deck, point B aboard, the End key's 4th press | Game.Road.pas (`TRoadEnd`, `TRoadPainter`) + Game.Barge.pas (`TBargeRide`) + Game.Belt.pas (`Run`, `BeltFlight`) + Pads.World.pas (`Carry`, `Stowed`) + Pads.Drift.pas (`Cease`) + Levels.Pads.pas (`Stowed`) + Levels.Defs.pas (`EraseRow`, `RestoreRows`) + Render.Objects.pas (`Draw(..., beltShown)`) + Game.Ram.pas (`StartHanging`) + Game.Takeoff.pas (`Hang`) + Game.Shield.pas (`Vanish`) + Game.OrbLauncher.pas (`Grant`) + Game.Moon.pas (`BeginPier`, `TickPier`, `DozeSpentPier`, `PinPierCheckpoint`, `ResumeAboard`, `GiveOrbLauncher`, `ClearPier`, `DebugJumpAboard`) + the pads `s13-road` and `s13-barge` of screen 13 and the rig `barge` in level2.json + Levels.Dynamics.pas (`phase` of `TBeacon`) + pads.mset (`barge-5`..`barge-2`, tools/barge/build_barge.py) + Tests.Game.Road.pas, Tests.Game.Barge.pas, Tests.Levels.Grid.pas (+docs/mechanics/arena-3/evolution.md, stage 17b) |

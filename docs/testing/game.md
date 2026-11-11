@@ -654,11 +654,30 @@ starts it hanging over a point, deploys and ticks till the magnet seeks;
 | `TestHangingAndToldItComesOutAndTellsItsStart` | hanging and not told, 400 ticks: no start, stowed; told: the start once in 400 ticks, out | the Ram deploys by itself, or the game never hears the start |
 | `TestItCatchesTheBargeUnderItsFace` | the magnet out, a barge under the face told with the hero: a catch with its number, held | the barges of the target never reach the magnet, or its face is not where the hull's is |
 | `TestWantingABargeTheHullFliesOverIt` | hanging at 400, he at the right, the only barge at the left edge: within 800 ticks a catch, the hull's middle more than 100 left of where it hung | the hull stays over the hero and the fight stalls with every barge out of reach |
-| `TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles` | straight up along the hanging hull: one run of hits 24 to 36 wide, each more than 8 under the hull's bottom, thrown off down, its middle within a quarter of the hull of the hull's | the magnet's box is not where its picture is, or as wide as the belly |
+| `TestABulletFromUnderMeetsTheMagnetBetweenTheNozzles` | straight up along the hanging hull: one run of hits 24 to 36 wide, each from below more than 8 under the hull's bottom (at its very sides the rocking hull may take one through a side face), its middle within a quarter of the hull of the hull's | the magnet's box is not where its picture is, or as wide as the belly |
 | `TestStowedNoMagnetToMeet` | hanging, the magnet stowed: no hit anywhere along the hull | orbs ring off a magnet that is not there |
 | `TestTheMagnetIsSoftOnlyWhileHot` | a strike into the face is met at every stage; the magnet is not soft while it seeks, soft in the hold, not soft once it seeks again | the hull can be hurt at any time - the gallery of 17a - or never |
 | `TestTheMagnetIsNoBodyToTouch` | a box under the hull's bottom, wholly within the magnet: not in the hull | a hero on a high lane is wounded by the magnet's side |
 | `TestAClearStowsTheMagnet` | a clear with the magnet out: stowed, not out | a death leaves the magnet out, and the fight starts without its start |
+| `TestHangingItsHoneycombIsUp` (3.0.122) | hanging: the hull's honeycomb and the ring up; a bullet into the side of the risen hull is taken at its side; a clear: down | the restart aloft finds the hull bare, or the honeycomb is met where the hull stood on the road |
+| `TestUnderTheHoneycombNothingIsBare` (3.0.122) | the honeycomb up, straight up along the hanging hull: wherever the magnet or a nozzle would take a bullet, `Block` takes it | sparks and a ricochet off the machine through the honeycomb - its outline leaves the nozzles' tips or the magnet's corners bare |
+| `TestTheHoneycombFallsWithTheSoftMagnetAndComesBack` (3.0.122) | a barge caught: as the magnet grows soft both fall, the fall told once; on to the next seek: no second fall, the return told once, both kindling | the honeycomb stands over a soft magnet - the window hidden - or never comes back |
+
+## Game.Shield: restored, afloat, hidden
+
+State: written, 5 tests (3.0.122): fixture `TShieldRestoreTests` in
+`Tests\Game\Tests.Game.Shield.pas`, beside `TShieldCrumbleTests`.
+
+Shared: the crumble fixture's ellipse 40 by 20, vanished; a solid body 40
+by 20.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestRestoredItHoldsAtOnceAndComesUp` | restored over 12 ticks: rising, holding before a tick; up, in no fewer than 12 | the window stays open while the cells kindle, or it never comes up |
+| `TestOnlyADownShieldIsRestored` | up: stays up; falling: the fall goes on | a restore cuts a fall short, or restarts a whole shield |
+| `TestARisingShieldFalls` | a tick into the rise, a fall: falling, holding no more, then down | a window that opens during the kindle is shut |
+| `TestAfloatItHoldsUnderTheBody` | just under the body's bottom: no shield over a standing body, a shield under one afloat | the flying hull's belly is bare |
+| `TestHiddenCellsHold` | every cell hidden: it holds | hiding cells over the fire opens a hole in the armour |
 
 ## Game.Wrecks: the fling
 
