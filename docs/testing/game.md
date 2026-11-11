@@ -521,9 +521,10 @@ Left to the eye: the barge's pad and its riders going up and down with it
 
 ## Game.Flock
 
-State: written, 32 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
+State: written, 36 tests (17 of 3.0.120, stage 18d-1; 7 of 3.0.121, stage
 18d-2 - the barge the magnet takes; 5 of 3.0.123, stage 18d-3 - the barge
-a shell knocks off; 3 of 3.0.124 - its list). Needs no stage:
+a shell knocks off; 3 of 3.0.124 - its list; 4 of 3.0.125, stage 18d-4 -
+the barge the charge smashes, the flock held). Needs no stage:
 `TBargeFlock` only counts places. The unit is tried by
 `Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
 
@@ -571,6 +572,10 @@ tests bound them loosely or read the unit's constants.
 | `TestAKnockedBargeListsToTheSideStruckMoreAndMore` (3.0.124) | struck 20 left of its middle: its left end down a tick on; past the blow's jolt, ever steeper till it is gone, never past 40 | the barge lists away from the hit, rights itself, or turns over |
 | `TestTheFartherFromItsMiddleTheSteeper` (3.0.124) | two flocks of the same dice, the same barge struck 5 and half its width right of its middle: both list right, 12 ticks on the far hit more than 5 degrees steeper | every hit lists a barge alike |
 | `TestOnItsPathNoList` (3.0.124) | 330 ticks of the flock: every barge level | a barge on its path flies askew |
+| `TestASmashedBargeIsGoneAndReplaced` (3.0.125) | a free barge smashed: flying no more, not taken, out of the count; within the longest gap and a tick another is in | a smashed barge flies on behind its pieces, or is never replaced |
+| `TestASmashedKnockedBargeIsGoneToo` (3.0.125) | a knocked barge smashed a tick later: gone, knocked no more | a falling barge the charge meets falls on through its own pieces |
+| `TestSmashingOneNotFlyingChangesNothing` (3.0.125) | an idle barge smashed: as many fly, the escort kept | a stale number loses the escort |
+| `TestHeldNoneComesInLetGoTheEscortAtOnce` (3.0.125) | held, every flying barge smashed: three of the longest gaps and none came in; let go: the escort the next tick, flying | a barge comes in through the low hull during the charge, or the floor stays empty after it |
 | `TestKnockingOneNotFlyingOrKnockedChangesNothing` (3.0.123) | an idle barge knocked: not sent in, not knocked; a falling one knocked again: its sink goes on, not thrown anew | a second shell on a falling barge kicks it up again, or a stale number sends a barge in |
 
 Left to the eye: the pads following the barges (`TickFlock`), the paths'
@@ -580,8 +585,9 @@ hero riding a knocked barge and jumping off it.
 
 ## Game.Magnet
 
-State: written, 21 tests (19 of 3.0.121, stage 18d-2; 2 of 3.0.123, stage
-18d-3 - the window told over, the wait). Needs no
+State: written, 22 tests (19 of 3.0.121, stage 18d-2; 2 of 3.0.123, stage
+18d-3 - the window told over, the wait; 1 of 3.0.125, stage 18d-4 - tucked
+in). Needs no
 stage: `TMagnet` only counts. The unit is tried by
 `Tests\Game\Tests.Game.Magnet.pas`, fixture `TMagnetTests`.
 
@@ -621,6 +627,7 @@ unit's constants (`RiderHeight`, `NoBarge`).
 | `TestDeckDistanceIsToTheNearestPointOfTheDeck` | a face 30 over a deck - 30; 40 past either end of it and 30 over - 50 | the reach is measured to a barge's corner or middle: wide barges are out of reach under the face |
 | `TestItTellsItsWindowOverOnce` (3.0.123) | a barge caught: not told while it cools; told as it seeks again; once in a cycle more | the mortar's turn begins mid-window, or after every tick of the seek |
 | `TestToldToWaitItTakesNoBargeTillTheWaitIsLifted` (3.0.123) | out, the near barge in reach, told to wait: a cycle seeking, nothing caught, cold; the wait lifted: caught on the next tick | the lift meets the mortar's shells, or the magnet never comes back after a turn |
+| `TestToldToTuckInItSlidesInAndOutTakingNothingTillOut` (3.0.125) | out, the near barge in reach, tucked: never out more, in the belly within the slide and ten ticks, nothing caught, cold; let out: never in again, nothing caught on the way, out in `DeploySlideTicks`; then it takes the barge | the magnet hangs out under a hull that rams across the lanes, or snatches a barge as it slides out |
 
 Left to the eye: the whole of it on the screen - the pick as he hops
 between barges, the beam, the lift and the press, the throw against his
@@ -782,3 +789,79 @@ of 3.0.116 in `Tests\Game\Tests.Game.HullLives.pas`, fixture
 | `TestANewHeatStartsThePulseAnew` | five ticks hot, two not, five hot: the second five read as the first | a window opens in the middle of a pulse, dim |
 | `TestArmingAndAClearLeaveItArmoured` | armed anew while hot, and cleared and armed: not hot | a restart shows a hot bar over a stowed magnet |
 
+## Game.Charge
+
+State: written, 13 tests (3.0.125, stage 18d-4). Needs no stage:
+`TCharge` only counts. The unit is tried by
+`Tests\Game\Tests.Game.Charge.pas`, fixture `TChargeTests`.
+
+Shared: a hull 169 wide; begun from a hang with its left edge at 170, at
+rest, at `HangLift`, its corridor at a lift of 56. `Step` ticks it and
+adds up its cues; `StepTill(stage, limit)`. "A charge" is 500 ticks.
+
+Numbers spelled: the hull's width, its place and the corridor's lift - the
+caller's; the rest is read from the unit's constants (`ChargeWarnTicks`,
+`ChargePace`, `ChargeLeaveMost`, `ChargeBeyond`, `ChargeHoldInset`,
+`ChargeRamPace`, `ChargeBrakeBow`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNotBegunItDoesNothing` | a charge's ticks unbegun: not running, nothing told, not low, not ramming, not soft, the flock not held | a charge from a Ram nobody gave the turn |
+| `TestItFallsBackPastTheLeftEdgeEverFaster` | leaving: the pace never gains to the right, never past its most to the left, at its height while seen; its fall back told once; off past the left edge | the Ram jumps off the screen, or drops before it is gone |
+| `TestOutThereTheBandBlinksAtItsCorridor` | the band told once, down to its corridor, the corridor told; through the band out there, standing, the band lit and dark; in after its while, the band gone | no warning, a band that does not blink, or one that lasts into the pass |
+| `TestItRushesInAtItsPace` | the rush told once, at its pace at once, coming in; at its pace through the pass | it creeps in, or comes in from nowhere |
+| `TestItBrakesShortOfTheRightEdgeSlowingAllTheWay` | the brake told once, fast as it starts; slowing every tick, never back, never past where it stops; at a stand with its right edge just inside the screen's | the brake overshoots off the right edge, jerks, or stops mid-screen |
+| `TestItRamsInThePassAndTheFastPartOfTheBrakeOnly` | ramming only in the pass and the brake, and only at its ram pace or faster; it does ram | the hero is struck by a hull that hangs still, or never |
+| `TestLowFromThePassTillItClimbs` | low exactly in the pass, the brake and the hold, at its corridor then | the barges are smashed by a hull out of the lanes, or spared by one in them |
+| `TestHotFromTheBrakeCoolingAsItHolds` | soft as it brakes; hot as it stops; soft and cooling every tick of the hold; hard and cold as it climbs | no window, or one that stays open as it climbs |
+| `TestItsBowDipsInThePassAndIsThrownUpInTheBrake` | bow down in the pass; bow up past half its brake's lean as it stops | a charge that flies flat - the brake does not read |
+| `TestItClimbsToItsHeightLevelAndIsDone` | never down in the climb, straight up; done told once, not running, at its height, level; still once after a charge's ticks | the hull is let go mid-air or tilted, and jumps as it hangs again |
+| `TestItHoldsTheFlockFromTheBandTillItIsUp` | the flock held exactly from the band to the climb | a barge comes in through the low hull, or none ever again |
+| `TestAStartWhileItChargesIsNothing` | a start in the pass: still in the pass, where it was | a second window restarts a charge mid-run |
+| `TestAClearStopsIt` | a clear in the brake: not running, not soft, not low, the flock not held, cold | a death leaves the hull low and hot |
+
+Left to the eye: the charge on the screen - the band and the eye, the
+rush, the brake's swivel and fire, the heat of the nozzles - and its
+three sounds.
+
+## Game.Takeoff: the carry and the swivel
+
+State: written, 6 tests (3.0.125, stage 18d-4), beside the takeoff's own
+in `Tests\Game\Tests.Game.Takeoff.pas`, fixture `TTakeoffTests`.
+
+Numbers spelled: the corridor's lift 56, a run of 20 a tick, a loss of 0.8
+a tick; the swivel's most is read (`SwivelMost`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestCarriedItIsWhereItIsTold` | hung, a tick, carried: carried, aloft, its pace, height and lean as told, between the ticks on its way there; a tick told nothing, the hero far: where it was put | the charge's hull is pulled back over the hero, or jumps between the ticks |
+| `TestLetGoItHangsOnFromItsHeight` | carried to its height and let go: hanging, ten ticks with no step of half a unit, about its height | the hull jumps as the charge hands it back |
+| `TestOnItsWayUpItCannotBeCarried` | rising: a carry moves nothing, still rising, not aloft; a release is nothing | a charge begun mid-takeoff tears the hull off its rise |
+| `TestGoingRightTheNozzlesSwingBackNeverPastTheirMost` | carried right at 20 for 40 ticks: never past its most; swung clockwise past half of it | the nozzles turn into the actuators painted fixed, or stay straight in the pass |
+| `TestAHardBrakeThrowsTheNozzlesAhead` | then losing 0.8 a tick for 15 ticks, still going right: never past its most; swung the other way past half of it | the brake's fire still pushes it on |
+| `TestOnTheRoadTheNozzlesDoNotSwivel` | from the start of a takeoff, the hero far: straight down every tick | the nozzles wag as they come out of the arches |
+
+Left to the eye: the swivel in the hang - whether it reads.
+
+## Game.Ram: the charge
+
+State: written, 7 tests (3.0.125, stage 18d-4): fixture `TRamChargeTests`
+in `Tests\Game\Tests.Game.Ram.pas`. The charge's own rules are tried in
+`Tests.Game.Charge`; here, what the Ram does with it.
+
+Shared: the body and the orders of the other fixtures; the hero aboard
+over the middle, the main barge's deck at its highest 16 over the road's
+line; `HangReady` starts it hanging, brings the magnet out and puts a
+barge under its face; `TickTillCharge`; `RunTheCharge(hero, body)` ticks
+the charge to its end, adding up what it did and asking for a strike of
+`body` every tick.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBeforeItsRungNoCharge` | a hair short of the charge's rung, 1500 ticks, at least two windows: never a charge | the charge comes on the second rung |
+| `TestOnItsRungTheChargeFirstThenTheMortarThenTheCharge` | on its rung: the charge first, not the mortar; after it the mortar, never two charges; after the mortar the charge again | the mortar is never given a turn again, or the charge comes back to back |
+| `TestTheMagnetTucksInForTheCharge` | in the belly while it charges; out again after, nothing caught on its way out | the magnet hangs under the ramming hull |
+| `TestItFliesOffAndBackLowOverTheHarbourAndUpToHang` | off past the left edge, across past the middle, never off the right edge; in, braked and done once each; it swept low; its bottom within 20 under a rider's head at the harbour's highest, never down to it; hanging at its height after | the corridor covers the main barge's deck, misses the lanes, or the hull is lost off the screen |
+| `TestItsSweepStrikesAHeroInItsCorridorOnce` | a hero on a lane in the middle: struck once, knocked along its way | the charge passes through him, or wounds him every tick it overlaps |
+| `TestAHeroOnTheMainBargeIsUnderItsCorridor` | a hero on the deck at its highest at 40, 240 and 440, a charge each: never struck | the main barge is no harbour |
+| `TestAfterTheBrakeTheNozzlesAreHotAndTheHoneycombFalls` | hot from the brake; the honeycomb fell and kindled back once each; cold once it is up | the window after the charge is hidden under the honeycomb, or never shuts |

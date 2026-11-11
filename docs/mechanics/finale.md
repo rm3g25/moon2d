@@ -18,6 +18,8 @@ The machine blows up, the tense music dies with it, and in the silence after the
   6. A new line of text (not written yet).
   7. The exit to the main menu.
 
+**Decided 2026-11-12, over the order above where they disagree**: between the blast and the titles comes the drone - a small drone tears loose out of the burst of the Ram's hull and runs for an edge of the screen; the hero may shoot it down or let it go, and the titles come either way. It does not fight and wounds nobody, so "from the blast on the hero cannot die" holds, but his input is not cut till the drone is down or gone. The whole decision is in `arena-3/ram-air.md`, "Decided 2026-11-12, the drone".
+
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:
 - A key in the boss def (`"ending": "finale"`, `"advance"` by default) turns the victory track off and, when the timer dries, starts the titles instead of loading the next level.

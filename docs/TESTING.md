@@ -79,6 +79,7 @@ Tests\
     Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off
     Tests.Game.Magnet.pas  the magnet under the Ram's belly: the start, the pick, the reach, the lift, the seize and the throw, the heat, the wait
     Tests.Game.Mortar.pas  the Ram's stern mortar: its turn, one shell at a time at the hero's feet, the lean, the fold
+    Tests.Game.Charge.pas  the Ram's charge: the fall back, the band, the run, the brake, the hot nozzles, the climb
     Tests.Game.Pieces.pas  what is left of a barge that breaks
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read

@@ -7,6 +7,23 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-12: **3.0.125 - the charge.** The air fight's third rung (`AirTierSpent`
+0.43): the turn after the magnet's window goes to the charge and the
+mortar by turns, the charge first (`Game.Charge`, new). The magnet tucks
+into the belly, the Ram falls back past the left edge, and a red band
+blinks at that edge across the corridor it will run along, its eye red
+there, for 1.3 s; then it rams in from behind at speed, low - its belly
+just over the head of a hero on the main barge - smashing every small
+barge it meets into pieces and knocking a hero in its way along and down
+with a wound; it brakes short of the right edge, bow up, its nozzles
+swivelled ahead and the fire thrown forward, and hangs there low for
+2.5 s with its nozzles hot - an orb on a nozzle takes a life, the
+honeycomb down - then climbs back to hang. While it runs no small barge
+comes in. The charge carries the flight (`TTakeoff.Carry`); the nozzles
+swivel with the flight from now on, within 12 degrees
+(`TTakeoff.SwivelAt`). New sounds: `chargewarn.wav`, `chargerush.wav`,
+`chargebrake.wav` (`tools/sounds/charge.py`).
+
 2026-11-11: **3.0.124 - the knocked barge burns and lists.** After the
 live run of 3.0.123: a barge knocked off by a shell burns where it was
 struck - a flame, a flickering glow, thick black smoke the flight's wind
