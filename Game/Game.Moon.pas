@@ -32,7 +32,8 @@ uses
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
-  Game.BargeFire, Game.Charge, Game.Dive, Game.Ladder,
+  Game.BargeFire, Game.Charge, Game.Dive, Game.Ladder, Game.Breakup,
+  Game.Wreckage, Game.Landing,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -228,6 +229,16 @@ type
     // What is left of a barge thrown onto the main barge
     FPieces: TBargePieces;
     FPiecePainter: TBargePiecePainter;
+    // The end of the flight, from the hull's last life on; what is left of
+    // the hull and the fire trailing each piece; the orbs carrying him onto
+    // the main barge at the burst, and how far along
+    FLanding: TLanding;
+    FWreckage: TWreckage;
+    FWreckagePainter: TWreckagePainter;
+    FWreckFire: TBargeFire;
+    FLandingCarry: THoistPath;
+    FLandingCarryTicks: Integer;
+    FLandingCarries: Boolean;
     // The hint of the hot parts has been typed on this level
     FGlowHintTold: Boolean;
     // The orb launcher is his: a death comes back aboard the barge, the
@@ -433,6 +444,18 @@ type
     procedure CarryOutCharge(const ACue: TChargeCue);
     procedure CarryOutDive(const ACue: TDiveCue);
     procedure SmashUnderTheHull;
+    function WoundHull: Boolean;
+    procedure EndTheFight;
+    procedure LetGoOfTheCatch;
+    procedure QuenchTheFire;
+    procedure CarryHeroAboard;
+    function DeckSpot(AX: Single): TSdlFPoint;
+    procedure TickLandingCarry;
+    procedure TickLanding;
+    procedure CarryOutBreakup(const ACue: TBreakupCue);
+    procedure BurstTheHull;
+    procedure BlowWreckPiece(AIndex: Integer);
+    procedure TickWreckage;
     procedure SmashFlockBarge(AIndex: Integer);
     procedure SprayShrapnel(const AMiddle: TSdlFPoint);
     procedure ResolveRamSweep;
@@ -447,6 +470,8 @@ type
     procedure PlaceAtCheckpoint;
     procedure GiveOrbLauncher;
     function HeroAboard: Boolean;
+    function HeroOnTheHarbour: Boolean;
+    procedure DockBarge(AWay: Double);
     // The share of the hull's lives spent, 0 to 1; 0 unarmed
     function HullSpent: Single;
     procedure TickHeartbeat;
@@ -681,6 +706,29 @@ const
   ThrownBargeSlack = 4.0;
   // The main barge struck by a thrown one: how deep it rocks
   BargeBlowDepth = 8.0;
+  // The end of the flight: the hull's throe, its burst, the wind of the
+  // flight dying as it slows, the main barge coming to rest against the
+  // road's edge; the end track over the still picture, in from silence
+  HullGroanSoundFile = 'hullgroan.wav';
+  HullBreakSoundFile = 'hullbreak.wav';
+  FlightDownSoundFile = 'flightdown.wav';
+  BargeDockSoundFile = 'bargedock.wav';
+  EndMusicFile = 'credits.ogg';
+  EndMusicFadeSeconds = 2.0;
+  // A piece of the hull blowing up in the series shakes the screen this
+  // much; the main barge rocks this deep as the road docks against it
+  WreckBlastTrauma = 0.25;
+  // A piece fallen lower than this blows up no more: the decks are under
+  // it, and the hero's head over the main barge's deck about 320
+  WreckBlastFloor = 280.0;
+  BargeDockDepth = 3.0;
+  BargeDockTrauma = 0.1;
+  // The orbs set him down on the main barge's deck no nearer its ends than
+  // this
+  LandingDeckInset = 8.0;
+  // The barge the magnet held as a wreck at the burst falls this far past
+  // the bottom edge
+  DroppedWreckFall = 160.0;
   // The pickup the orb launcher comes as, and its frame on the road
   OrbLauncherPickupId = 'weaponOrbLauncher';
   OrbLauncherSetName = 'orblauncher';
@@ -784,6 +832,7 @@ const
   RamSeed = $52616D20; // "Ram "
   StoneTankSeed = $546E6B20; // "Tnk "
   PieceSeed = $50636520; // "Pce "
+  WreckageSeed = $5772636B; // "Wrck"
 
   // The 2008 GL loader displayed a 90-degrees-clockwise atlas correctly
   // (see Render.Font header). If F shows readable glyphs already upright,
@@ -920,6 +969,10 @@ begin
   FWreckPainter := TPadWreckPainter.Create(ARenderer, FWrecks);
   FPieces := TBargePieces.Create(PieceSeed);
   FPiecePainter := TBargePiecePainter.Create(ARenderer, FPieces);
+  FLanding := TLanding.Create;
+  FWreckage := TWreckage.Create(WreckageSeed);
+  FWreckagePainter := TWreckagePainter.Create(ARenderer, FWreckage);
+  FWreckFire := TBargeFire.Create(WreckParts);
   FMagnetWreck := -1;
   FMagnetHum.Channel := -1;
   FCapsules := TShuttleCapsules.Create;
@@ -983,6 +1036,10 @@ begin
   // The painters before what they draw
   FPiecePainter.Free;
   FPieces.Free;
+  FWreckagePainter.Free;
+  FWreckage.Free;
+  FWreckFire.Free;
+  FLanding.Free;
   FWreckPainter.Free;
   FWrecks.Free;
   FCapsulePainter.Free;
@@ -1194,6 +1251,7 @@ begin
   Calls.GrantMercy := GrantMercy;
   Calls.BeginRite := FOrbs.BeginRite;
   Calls.ShedSuit := FOrbs.ShedSuit;
+  Calls.ShedMoonSuit := FOrbs.ShedMoonSuit;
   Calls.Burst := FOrbs.BurstSuit;
   Calls.BeginMoonRite := BeginMoonRite;
   Calls.BurstEclipse := BurstEclipse;
@@ -1684,6 +1742,9 @@ begin
     FHero.SetScreenX(FCheckpointX);
     FHero.SetY(FCheckpointY);
     FShroud.Start(PitLook);
+    // Past the hull's burst the pit only brings him back
+    if FLanding.Running then
+      Exit;
     FMessages.AddTicker(Tr(SFellIntoPit), TickerPitTicks);
     FAudio.Play(PitSoundFile); // the pit plays down.wav, not pain (780)
     HurtHero;
@@ -2085,7 +2146,7 @@ begin
   // nobody collided with.
   if FHero.HeroForm <> hfNormal then
     FAudio.Play(BottleSoundFile);
-  FHenshin.RemoveIceForm;
+  FHenshin.RemoveForm;
   // The level goes on: no timer of its end, the events of the screen
   // take over at the end of the track. A restart brings back
   // FCurrentMusic, the trial's own track.
@@ -2309,6 +2370,10 @@ begin
   FAudio.Load(MagnetThrowSoundFile);
   FAudio.Load(HoneycombDownSoundFile);
   FAudio.Load(HoneycombUpSoundFile);
+  FAudio.Load(HullGroanSoundFile);
+  FAudio.Load(HullBreakSoundFile);
+  FAudio.Load(FlightDownSoundFile);
+  FAudio.Load(BargeDockSoundFile);
   // Decoded whole at the trial's end it would stall the victory a frame
   FAudio.LoadTrack(VictoryMusicFile);
   for var Name in WeaponShotSounds do
@@ -2770,7 +2835,7 @@ begin
     else if BulletStruckWall(Enemy) then
       Enemy.StartBurstSliding
     else if (FHurtCooldown = 0) and not FHero.Dead and
-      (Enemy.X > FHero.X + 8) and
+      not FLanding.Running and (Enemy.X > FHero.X + 8) and
       (Enemy.X < FHero.X - 8 + SpriteSize) and
       (Enemy.Y > FHero.Y) and (Enemy.Y < FHero.Y + SpriteSize) then
     begin
@@ -2885,7 +2950,7 @@ end;
 
 procedure TMoonGame.StrikeHero(const ABlast: TBlast);
 begin
-  if FHero.Dead then
+  if FHero.Dead or FLanding.Running then
     Exit;
   var Near := NearestPoint(HeroBody(FHero), ABlast.Heart);
   if not ABlast.Strikes(FHero, Near, BlastStoppedAt) then
@@ -2953,8 +3018,9 @@ procedure TMoonGame.HurtHero;
 begin
   if FHero.Dead then
     Exit;
-  // From the brake of the henshin on nothing wounds him
-  if FEclipse.Spares then
+  // From the brake of the henshin on nothing wounds him, nor from the
+  // hull's burst on
+  if FEclipse.Spares or FLanding.Running then
     Exit;
   FKillStreak := 0; // 2008 reset it at every damage site (752/781/985)
   Dec(FHeroHealth);
@@ -3390,6 +3456,10 @@ begin
   FFlockArrivals := 0;
   ClearMagnet;
   FLevel.RestoreRows;
+  FLanding.Clear;
+  FWreckage.Clear;
+  FWreckFire.Clear;
+  FLandingCarries := False;
 end;
 
 // The wrecks are cleared with the Ram's, the magnet itself with the Ram
@@ -3527,6 +3597,30 @@ begin
   Result := HeroStandsOn(FBargePad);
 end;
 
+// The main barge and the road over the crater: under either is the
+// abyss, so the key down does not drop him through them
+function TMoonGame.HeroOnTheHarbour: Boolean;
+begin
+  Result := HeroAboard or HeroStandsOn(FRoadPad);
+end;
+
+// The end of the flight: docked, the barge rides the world with the road;
+// berthed or on its way there, it docks the tick the road's edge comes
+// against its right side
+procedure TMoonGame.DockBarge(AWay: Double);
+begin
+  FBarge.Ride(AWay);
+  var Waits := FBarge.Stage in [bsBerthing, bsBerthed];
+  if not Waits or not FRoad.PierStands then
+    Exit;
+  if FRoad.PierLeft > FBarge.Left + BargeLength then
+    Exit;
+  FBarge.Dock(FRoad.PierLeft - BargeLength);
+  FAudio.Play(BargeDockSoundFile);
+  FBarge.Rock(BargeDockDepth);
+  FShake.AddTrauma(BargeDockTrauma);
+end;
+
 // Before the pads' tick, which carries their riders: the pier and its pad
 // ride the belt, the barge goes its own way, and the small barges theirs.
 // The hero aboard, the belt runs up to the flight's pace; aboard at the
@@ -3539,6 +3633,8 @@ begin
   FRoadPad.Carry(AWay);
   DozeSpentPier;
   var Boarded := FBarge.Tick(FRoad.PierRight, FRoad.PierStands, HeroAboard);
+  if FLanding.Running then
+    DockBarge(AWay);
   FBargePad.Carry(FBarge.Way, FBarge.WayDown);
   if Boarded then
     FBelt.Run(BeltFlight);
@@ -4180,6 +4276,7 @@ begin
   CarryOutMagnet(Cue.Magnet);
   CarryOutCharge(Cue.Charge);
   CarryOutDive(Cue.Dive);
+  CarryOutBreakup(Cue.Breakup);
   FFlock.Held := FRam.HoldsFlock;
   SmashUnderTheHull;
   if Cue.Chase then
@@ -4272,6 +4369,7 @@ begin
   FWreckPainter.Tick;
   ResolveThrownBarge;
   FPieces.Tick;
+  TickWreckage;
   FCapsules.Ride(-FBelt.Speed);
   TickCapsules;
   FOrbs.Charge(FStoneTank.Tick(FOrbs.Energy));
@@ -4395,7 +4493,8 @@ begin
     FMagnetWreck := -1;
     Exit;
   end;
-  var Reached := not FHero.Dead and not FMagnetStruckHero and
+  var Reached := not FHero.Dead and not FLanding.Running and
+    not FMagnetStruckHero and
     (ApartFromStretch(HeroCenter, Wreck.LastMiddle, Wreck.Middle) <= ThrownBargeReach);
   if Reached then
   begin
@@ -4434,6 +4533,214 @@ begin
   FExplosions.Detonate(Broken.Middle.X, Broken.Middle.Y, ekBarrel);
   FAudio.Play(BossCrashSoundFile);
   FShake.AddTrauma(BargeBlowTrauma);
+end;
+
+// An orb sank into a hot part: a life of the hull - none while he lies
+// dead, so the win is never a corpse's. The last one ends the fight.
+function TMoonGame.WoundHull: Boolean;
+begin
+  if FHero.Dead then
+    Exit(False);
+  Result := FHullLives.Wound;
+  if Result and (FHullLives.Lives = 0) then
+    EndTheFight;
+end;
+
+// The hull's last life is gone in the air: the fight is over. The flight's
+// track is cut with the crack, the hull's bar goes, and from now on
+// nothing wounds the hero; what flies at him bursts
+// harmless, no small barge comes in, the barge the magnet held falls. The
+// moon form comes off in its dark orbs, and they carry him onto the main
+// barge if he is not on it.
+procedure TMoonGame.EndTheFight;
+begin
+  if FLanding.Running then
+    Exit;
+  FLanding.Start;
+  FAudio.StopMusic;
+  FCurrentMusic := '';
+  StopRamRumble;
+  FHullLives.Retire;
+  LetGoOfTheCatch;
+  QuenchTheFire;
+  FFlock.Close;
+  FRam.Wreck;
+  FHenshin.RemoveForm;
+  CarryHeroAboard;
+end;
+
+// A barge in the magnet's beam falls as a knocked one does, burning; one
+// seized - a wreck at its face - falls away under the screen; one thrown
+// flies on
+procedure TMoonGame.LetGoOfTheCatch;
+begin
+  FAudio.StopHeld(FMagnetHum);
+  FMagnetHum.Channel := -1;
+  if FMagnetPad <> nil then
+  begin
+    for var i := 0 to High(FFlockPads) do
+      if FFlockPads[i] = FMagnetPad then
+        FFlock.Drop(i, FMagnetPad.Left, FMagnetPad.Top);
+    FMagnetPad := nil;
+  end;
+  FMagnetWay := Default(TSdlFPoint);
+  if (FMagnetWreck < 0) or FWrecks[FMagnetWreck].Hurled then
+    Exit;
+  var Below := FWrecks[FMagnetWreck].Middle;
+  Below.Y := ScreenHeight + DroppedWreckFall;
+  FWrecks.Fling(FMagnetWreck, Below);
+end;
+
+// The monsters' bullets and the shrapnel burst where they fly, the shells
+// in the air with a harmless bang
+procedure TMoonGame.QuenchTheFire;
+begin
+  for var Enemy in FMonsterBullets.Bullets do
+    if Enemy.Status = bsFlying then
+      Enemy.StartBurst;
+  for var i := 0 to ShellSlots - 1 do
+    if FShells[i].State <> ssNone then
+      FExplosions.Detonate(FShells[i].Middle.X, FShells[i].Middle.Y, ekBarrel);
+  FShells.Clear;
+end;
+
+// Off whatever he is on, or out of the air, onto the main barge's deck -
+// held by the orbs as the throw held him
+procedure TMoonGame.CarryHeroAboard;
+begin
+  FLandingCarries := False;
+  if FHero.Dead or (FBargePad = nil) or HeroAboard then
+    Exit;
+  FHero.Hold;
+  var From: TSdlFPoint;
+  From.X := FHero.X;
+  From.Y := FHero.Y;
+  FLandingCarry := PlanHoist(From, DeckSpot(From.X));
+  FLandingCarryTicks := 0;
+  FLandingCarries := True;
+end;
+
+// Where on the main barge's deck, as it is now, he comes down from AX:
+// as near it as the deck goes, short of its ends
+function TMoonGame.DeckSpot(AX: Single): TSdlFPoint;
+begin
+  var Least: Single := FBargePad.Left + LandingDeckInset;
+  var Most: Single := FBargePad.Left + BargeLength - LandingDeckInset - HeroSize;
+  Result.X := EnsureRange(AX, Least, Most);
+  Result.Y := FBargePad.Top;
+end;
+
+// The deck goes on moving while he is carried: the way ends where it is
+// now. On it, he is let go and stands.
+procedure TMoonGame.TickLandingCarry;
+begin
+  if not FLandingCarries then
+    Exit;
+  Inc(FLandingCarryTicks);
+  FLandingCarry.Place := DeckSpot(FLandingCarry.From.X);
+  var At := FLandingCarry.At(FLandingCarryTicks);
+  FHero.HoldAt(At.X, At.Y);
+  if FLandingCarryTicks < FLandingCarry.Ticks then
+    Exit;
+  FLandingCarries := False;
+  FHero.Release;
+end;
+
+// The end of the flight, carried out: the world slows, the small barges
+// leave, the main barge berths and the road comes back - the barge docks
+// against it in TickPier; at rest, a breath, then the end track
+procedure TMoonGame.TickLanding;
+begin
+  TickLandingCarry;
+  var Stands := (FBelt.Speed = 0) and not FBelt.Running;
+  var Cue := FLanding.Tick(FBelt.RampTravelLeft, Stands);
+  if Cue.SlowsDown then
+  begin
+    FBelt.Run(0, LandingSlowTicks);
+    FBarge.Berth(LandingBerthTicks);
+    FFlock.Disperse;
+    FAudio.Play(FlightDownSoundFile);
+  end;
+  if Cue.RoadIn and (FRoadPad <> nil) then
+  begin
+    FRoad.Arrive(Cue.RoadLeft);
+    FRoadPad.Wake;
+    FRoadPad.FlyTo(FRoad.PierLeft, RamFloorY, 0);
+  end;
+  if Cue.HandsOver then
+  begin
+    FCurrentMusic := EndMusicFile;
+    FAudio.PlayMusic(EndMusicFile, mmOnce, EndMusicFadeSeconds);
+  end;
+end;
+
+// What the hull's end did this tick, carried out: the crack's flash and
+// groan, the small blasts of the throe, its jets coughing, the burst and
+// the series on its pieces
+procedure TMoonGame.CarryOutBreakup(const ACue: TBreakupCue);
+begin
+  if ACue.Cracks then
+  begin
+    var Heart := FRam.HullMiddle;
+    FExplosions.Detonate(Heart.X, Heart.Y, ekMachine);
+    FAudio.Play(HullGroanSoundFile);
+  end;
+  if ACue.Pops then
+  begin
+    var At := FRam.ThroePopAt(ACue.PopPlace);
+    FExplosions.Detonate(At.X, At.Y, ekBarrel);
+    FAudio.Play(BottleSoundFile);
+  end;
+  if ACue.JetsCatch then
+    FAudio.Play(JetFireSoundFile);
+  if ACue.Breaks then
+    BurstTheHull;
+  if ACue.PieceBlows then
+    BlowWreckPiece(ACue.Piece);
+end;
+
+// The hull is gone: its pieces fly from where it stood, and a boss's blast
+// where its heart was, its after-pops with it
+procedure TMoonGame.BurstTheHull;
+begin
+  var Heart := FRam.HullMiddle;
+  var Way: TSdlFPoint;
+  Way.X := FRam.Flight.Pace;
+  Way.Y := 0;
+  FWreckage.Shatter(FRamPainter.Shatter, Heart, Way);
+  FExplosions.Detonate(Heart.X, Heart.Y, ekBoss);
+  FAudio.Play(HullBreakSoundFile);
+  FAudio.Play(RageBlastSoundFile);
+end;
+
+// A piece blows up where it flies - but not once it has fallen to the
+// decks, where the blast would stand on the hero's head; one gone is spared
+procedure TMoonGame.BlowWreckPiece(AIndex: Integer);
+begin
+  if (AIndex >= FWreckage.Count) or FWreckage[AIndex].Gone then
+    Exit;
+  if FWreckage[AIndex].Middle.Y > WreckBlastFloor then
+    Exit;
+  var At := FWreckage[AIndex].Middle;
+  FExplosions.Detonate(At.X, At.Y, ekMachine);
+  FAudio.Play(RageBlastSoundFile);
+  FShake.AddTrauma(WreckBlastTrauma);
+end;
+
+// The pieces fall behind with the flight's wind, each burning where it is
+// while it is on the screen; the smoke streams back
+procedure TMoonGame.TickWreckage;
+var
+  Wounds: TArray<TBargeWound>;
+begin
+  FWreckage.Tick(FBelt.Speed);
+  SetLength(Wounds, WreckParts);
+  for var i := 0 to Min(FWreckage.Count, WreckParts) - 1 do
+  begin
+    Wounds[i].Burning := not FWreckage[i].Gone;
+    Wounds[i].At := FWreckage[i].Middle;
+  end;
+  FWreckFire.Tick(Wounds, -FBelt.Speed * BargeSmokeWindShare);
 end;
 
 function BoxesMeet(const AFirst, ASecond: TSdlFRect): Boolean;
@@ -4995,7 +5302,7 @@ begin
     Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal);
     Sinks := Result and FRam.NozzlesSoft and (ABullet.Look = blOrb);
   end;
-  if Sinks and FHullLives.Wound then
+  if Sinks and WoundHull then
   begin
     ABullet.Status := bsInactive;
     FAudio.Play(OrbHitSoundFile);
@@ -5196,7 +5503,7 @@ begin
             // The suit comes off in a ring of orbs, the victory track
             // plays over the wreckage, and 'ToEndLev := 400' (949) starts
             // the walk-out timer - Update loads the next level when it dries
-            FHenshin.RemoveIceForm;
+            FHenshin.RemoveForm;
             FAudio.PlayMusic(VictoryMusicFile, mmOnce);
             FEndLevelTimer := LevelEndLingerTicks;
           end;
@@ -5276,7 +5583,7 @@ begin
       FHero.Command(hcJump)
     else
       FHero.Command(hcStopJump);
-    if FHeldDown then
+    if FHeldDown and not HeroOnTheHarbour then
       FHero.Command(hcDrop);
   end;
 
@@ -5358,6 +5665,7 @@ begin
   TickHeartbeat;
   TickEclipse;
   TickThrow;
+  TickLanding;
   TickOrbLauncher;
   if FArmorPings.WaitTicks > 0 then
     Dec(FArmorPings.WaitTicks);
@@ -5378,14 +5686,18 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
-  ResolveRamSweep;
-  ResolveRamFire;
-  ResolveRamThrowOver;
-  ResolveRamContact;
-  ResolveWheelContact;
-  ResolveRamWave;
-  ResolveRamColumn;
-  ResolveShellContact;
+  // From the hull's burst on nothing of the fight touches him
+  if not FLanding.Running then
+  begin
+    ResolveRamSweep;
+    ResolveRamFire;
+    ResolveRamThrowOver;
+    ResolveRamContact;
+    ResolveWheelContact;
+    ResolveRamWave;
+    ResolveRamColumn;
+    ResolveShellContact;
+  end;
   // The verdicts of the tick are in; the dead watch no events and direct
   // no arena - the restart re-arms the screen anyway
   if not FHero.Dead then
@@ -5496,6 +5808,9 @@ begin
         // On the road, behind the pads: it drives behind them
         FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawBody(FSprites, AAlpha);
+        // What is left of the hull, each piece in its fire and smoke
+        FWreckagePainter.Draw(FSprites.Origin, AAlpha);
+        FWreckFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         // The pads in the depth with what hangs on them, then the pads
         // in front, which pass before both
         FPads.Draw(FHero.Screen, AAlpha, plDeep);
@@ -5852,6 +6167,16 @@ end;
 // are - a rung, then the finisher's stretch; past the last, nothing
 procedure TMoonGame.DebugHullToNextDoor;
 begin
+  // Past the last door: down to the last life, and that one too - the
+  // hull's end with no window to wait for
+  if OnFinisherStretch(HullSpent) then
+  begin
+    if FHullLives.Lives > 1 then
+      FHullLives.Resume(1)
+    else
+      WoundHull;
+    Exit;
+  end;
   var Doors: TArray<Single> := nil;
   for var Tier := Low(AirTierSpent) to High(AirTierSpent) do
     Doors := Doors + [AirTierSpent[Tier]];

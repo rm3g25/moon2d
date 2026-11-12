@@ -257,6 +257,9 @@
         <DCCReference Include="Game\Game.Ladder.pas"/>
         <DCCReference Include="Game\Game.BargeFire.pas"/>
         <DCCReference Include="Game\Game.Pieces.pas"/>
+        <DCCReference Include="Game\Game.Breakup.pas"/>
+        <DCCReference Include="Game\Game.Wreckage.pas"/>
+        <DCCReference Include="Game\Game.Landing.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>
         <DCCReference Include="Game\Game.Fangs.pas"/>
         <DCCReference Include="Game\Game.Explosions.pas"/>

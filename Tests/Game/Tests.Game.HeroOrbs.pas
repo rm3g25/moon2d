@@ -5,7 +5,8 @@
   to carry it, and what its orbs and its burst strike through the targets
   the game hands in. The eclipse's burst holds the world with the hero in
   his own shape, strikes nothing, and leaves the next burst of the suit
-  striking again.
+  striking again. The moon form comes off in an armed ring of its own, not
+  the ice form's.
 
   The hero is a point in a walled room, his body has no points, and the
   targets are the fixture's: a bullet or a monster stands everywhere or
@@ -103,6 +104,8 @@ type
     procedure TestASuitsBurstAfterTheEclipsesStrikesAgain;
     [Test]
     procedure TestCorpseBurstsNoEclipse;
+    [Test]
+    procedure TestTheMoonFormComesOffInARingOfItsOwn;
   end;
 
 implementation
@@ -241,11 +244,20 @@ begin
   FOrbs.PourRain;
   FOrbs.BeginRite;
   FOrbs.ShedSuit;
+  FOrbs.ShedMoonSuit;
   FOrbs.StartBurst(IceBurstLook);
   Assert.IsFalse(FOrbs.Holding, 'No burst holds the world');
   Run(ArmLimit);
   Assert.AreEqual(0, ArmedOrbs, 'No armed orb');
   Assert.AreEqual(0, FOrbs.Rite.Flock.Orbs.Count, 'No orb of the rite');
+end;
+
+procedure THeroOrbsTests.TestTheMoonFormComesOffInARingOfItsOwn;
+begin
+  FOrbs.ShedMoonSuit;
+  RunUntilArmed;
+  Assert.IsTrue(ArmedOrbs > 0, 'An armed ring');
+  Assert.AreEqual(0, FOrbs.Rite.Flock.Orbs.Count, 'Not the ice form''s');
 end;
 
 procedure THeroOrbsTests.TestCastAuraTellsWhetherItCast;

@@ -160,6 +160,14 @@
   and smokes there, thicker on the last; thick bolts burst out of it only
   on the finisher's stretch, more as its last lives go.
 
+  Its end in the air (Game.Breakup for the clock of it): on the road a
+  wreck is nothing. Wrecked aloft it cracks on the next tick and fights no
+  more - the magnet stowed and cold, no charge, no dive, nothing hot; it is
+  there to be seen as it lurches over the middle of the screen, and from
+  its burst on it is no more to be seen or touched, wherever it died. The
+  series blows up every piece that blows once, of the pieces there are; a
+  clear makes it whole for the next fight.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Ram;
@@ -530,6 +538,32 @@ type
   end;
 
   [TestFixture]
+  TRamBreakupTests = class
+  private
+    FRam: TRam;
+    // Hanging with its middle over AMiddleX, the hero under it
+    procedure HangOver(AMiddleX: Single);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestOnTheRoadAWreckIsNothing;
+    [Test]
+    procedure TestWreckedAloftItCracksAndFightsNoMore;
+    [Test]
+    procedure TestItBurstsOverTheMiddleWhereverItDied;
+    [Test]
+    procedure TestBurstItIsNoMoreToBeSeenOrTouched;
+    [Test]
+    procedure TestTheSeriesBlowsEachPieceOnce;
+    [Test]
+    procedure TestAClearMakesItWhole;
+  end;
+
+  [TestFixture]
   TRamLevelTests = class
   public
     [Test]
@@ -787,6 +821,7 @@ uses
   Game.Takeoff,
   Game.Charge,
   Game.Dive,
+  Game.Breakup,
   Levels.Defs;
 
 const
@@ -5671,7 +5706,143 @@ begin
   Assert.AreEqual(1.0, Double(FRam.HullBurstLevel), 0.001, 'Full bursts');
 end;
 
+// ---------------------------------------------------------------------------
+// TRamBreakupTests
+// ---------------------------------------------------------------------------
+
+const
+  // Its throe and series are over well within this
+  BreakupTicks = 300;
+  // Off the middle, to see it lurch there
+  DiedMiddleX = 120.0;
+
+procedure TRamBreakupTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamBreakupTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+procedure TRamBreakupTests.HangOver(AMiddleX: Single);
+begin
+  FRam.StartHanging(OrdersAt(Stop), AMiddleX);
+  FRam.DeployMagnet;
+  var Hero := HeroOnTheRoad(AMiddleX);
+  for var i := 1 to MagnetTicks do
+    FRam.Tick(Hero);
+end;
+
+procedure TRamBreakupTests.TestOnTheRoadAWreckIsNothing;
+begin
+  FRam.StartPastBunker(OrdersAt(Stop));
+  FRam.Wreck;
+  Assert.AreEqual<TBreakupStage>(buIdle, FRam.Breakup.Stage, 'Whole');
+  var Cue := FRam.Tick(HeroOnTheRoad(HangMiddleX));
+  Assert.IsFalse(Cue.Breakup.Cracks, 'No crack');
+end;
+
+procedure TRamBreakupTests.TestWreckedAloftItCracksAndFightsNoMore;
+begin
+  HangOver(HangMiddleX);
+  Assert.AreNotEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'The magnet out');
+  FRam.Wreck;
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  var Cue := FRam.Tick(Hero);
+  Assert.IsTrue(Cue.Breakup.Cracks, 'It cracks on the next tick');
+  Assert.IsTrue(Cue.Jolt > 0, 'A jolt with it');
+  for var i := 1 to ThroeTicks - 2 do
+  begin
+    Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Magnet.Caught or Cue.Lob or Cue.Charge.Warns or
+      Cue.Dive.Hushes, 'Tick ' + i.ToString + ': it fights');
+    Assert.AreEqual<TMagnetStage>(mgStowed, FRam.Magnet.Stage, 'The magnet stowed');
+    Assert.IsFalse(FRam.HotAloft, 'Nothing hot');
+    Assert.IsFalse(FRam.Charge.Running or FRam.Dive.Running, 'No charge, no dive');
+    Assert.IsTrue(FRam.Present, 'There to be seen in its throe');
+  end;
+end;
+
+procedure TRamBreakupTests.TestItBurstsOverTheMiddleWhereverItDied;
+begin
+  HangOver(DiedMiddleX);
+  FRam.Wreck;
+  var Hero := HeroOnTheRoad(DiedMiddleX);
+  var Burst := False;
+  for var i := 1 to ThroeTicks do
+  begin
+    var Middle := FRam.HullMiddle;
+    Burst := FRam.Tick(Hero).Breakup.Breaks;
+    if Burst then
+    begin
+      Assert.AreEqual(Double(ScreenWidth / 2), Double(FRam.HullMiddle.X), 1.0,
+        'Over the middle of the screen');
+      Assert.IsTrue(FRam.HullMiddle.Y < Middle.Y + BobUnits + 1,
+        'Not lower than it was, but for its bob');
+      Break;
+    end;
+  end;
+  Assert.IsTrue(Burst, 'It burst');
+end;
+
+procedure TRamBreakupTests.TestBurstItIsNoMoreToBeSeenOrTouched;
+begin
+  HangOver(HangMiddleX);
+  FRam.Wreck;
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  for var i := 1 to ThroeTicks do
+    FRam.Tick(Hero);
+  Assert.IsFalse(FRam.Present, 'Not to be seen');
+  var Away: Integer;
+  var Under := Hero.Body;
+  Under.Y := FRam.HullMiddle.Y;
+  Assert.IsFalse(FRam.Contact(Under, False, True, Away), 'Not to be touched');
+  var Sweep: TSdlFRect;
+  Assert.IsFalse(FRam.HullSweep(Sweep), 'No sweep');
+  for var i := 1 to BreakupTicks do
+    FRam.Tick(Hero);
+  Assert.IsFalse(FRam.Present, 'Never again');
+end;
+
+procedure TRamBreakupTests.TestTheSeriesBlowsEachPieceOnce;
+begin
+  HangOver(HangMiddleX);
+  FRam.Wreck;
+  var Hero := HeroOnTheRoad(HangMiddleX);
+  var Seen: TArray<Integer>;
+  SetLength(Seen, WreckParts);
+  for var i := 1 to BreakupTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Breakup.PieceBlows then
+      Inc(Seen[Cue.Breakup.Piece]);
+  end;
+  var Blown := 0;
+  for var Piece := 0 to WreckParts - 1 do
+  begin
+    Assert.IsTrue(Seen[Piece] <= 1, 'Once at most: piece ' + Piece.ToString);
+    Inc(Blown, Seen[Piece]);
+  end;
+  Assert.AreEqual(WreckBlasts, Blown, 'As many as blow');
+  Assert.AreEqual<TBreakupStage>(buOver, FRam.Breakup.Stage, 'Over');
+end;
+
+procedure TRamBreakupTests.TestAClearMakesItWhole;
+begin
+  HangOver(HangMiddleX);
+  FRam.Wreck;
+  for var i := 1 to BreakupTicks do
+    FRam.Tick(HeroOnTheRoad(HangMiddleX));
+  FRam.Clear;
+  Assert.AreEqual<TBreakupStage>(buIdle, FRam.Breakup.Stage, 'Whole');
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  Assert.IsTrue(FRam.Present, 'There again');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TRamBreakupTests);
   TDUnitX.RegisterTestFixture(TRamLadderTests);
   TDUnitX.RegisterTestFixture(TRamDiveTests);
   TDUnitX.RegisterTestFixture(TRamChargeTests);

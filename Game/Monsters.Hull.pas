@@ -54,6 +54,11 @@ type
     // and says whether the set holds wheels
     constructor Create(ARenderer: PSdlRenderer; const ADef: THullDef);
     destructor Destroy; override;
+    // The whole hull, its worn copy and - on wheels - its chassis: what is
+    // left of a hull that bursts is drawn in parts of them
+    property Whole: PSdlTexture read FWhole;
+    property Worn: PSdlTexture read FWorn;
+    property Chassis: PSdlTexture read FChassis;
   end;
 
   // The axles of a hull on wheels, by their order in its def

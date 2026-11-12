@@ -3,7 +3,9 @@
   stands a tile short of the belt's phase; its end, the cliff, starts
   beyond the right edge; the pier rides the belt and is gone once its end
   passes the left edge; a place between the ticks lies between them; a
-  clear is a whole road again.
+  clear is a whole road again. Come back at the end of the flight, its
+  edge stands where it is told, the tiles past the right edge, and rides
+  the belt to where the world stops.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -41,6 +43,8 @@ type
     procedure TestAPlaceBetweenTicksLiesBetweenThem;
     [Test]
     procedure TestClearIsAWholeRoadAgain;
+    [Test]
+    procedure TestComeBackItsEdgeIsWhereToldAndRidesTheBelt;
   end;
 
 implementation
@@ -66,6 +70,23 @@ procedure TRoadEndTests.Run(ATicks: Integer; AWay: Double);
 begin
   for var i := 1 to ATicks do
     FRoad.Tick(AWay);
+end;
+
+procedure TRoadEndTests.TestComeBackItsEdgeIsWhereToldAndRidesTheBelt;
+const
+  EdgeIn: Double = 516.0;
+  Way: Double = -2.0;
+  Ticks = 30;
+begin
+  FRoad.Arrive(EdgeIn);
+  Assert.IsTrue(FRoad.Running, 'Running');
+  Assert.AreEqual(EdgeIn, FRoad.PierLeft, UnitSlack, 'Its edge where told');
+  Assert.AreEqual(EdgeIn, FRoad.LeftAt(0), UnitSlack, 'Not flown there');
+  Run(Ticks, Way);
+  Assert.AreEqual(EdgeIn + Ticks * Way, FRoad.PierLeft, UnitSlack,
+    'Riding the belt');
+  Assert.IsTrue(FRoad.PierStands, 'On the screen');
+  Assert.IsTrue(FRoad.PierRight > ScreenWidth, 'Its tiles past the right edge');
 end;
 
 procedure TRoadEndTests.TestNothingTillTheStart;

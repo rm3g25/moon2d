@@ -11,6 +11,9 @@
   the fight the caller resumes it with the lives of that door, not all of
   them.
 
+  The hull burst, the bar retires: it goes up out of sight as it came
+  down, and is not shown again till the next arming.
+
   The bar tells whether the hull can be hurt: armoured while no part of it
   is hot, pulsing while one is - which parts are hot is the caller's to
   say, every tick.
@@ -66,6 +69,9 @@ type
     FHitTicks: Integer;
     FHot: Boolean;
     FHotTicks: Integer;
+    // Retiring: ticks since it began to go, this tick and the last
+    FRetiring: Boolean;
+    FRetireTicks, FLastRetireTicks: Integer;
     function LitAt(ATicks: Integer): Integer;
   public
     constructor Create;
@@ -77,6 +83,10 @@ type
     procedure Resume(ALives: Integer);
     // A death, a new fight: no lives, no bar
     procedure Clear;
+    // The hull has burst: the bar goes up out of sight over
+    // HullBarDropTicks and is gone; no life is taken any more. Nothing
+    // unless armed.
+    procedure Retire;
     // AHot - a part of the hull is hot this tick. True on the ticks the
     // terminal's key is heard: every HullBarKeyCells cells lit.
     function Tick(AHot: Boolean = False): Boolean;
@@ -111,6 +121,9 @@ begin
   FHitTicks := HullBarHitTicks;
   FHot := False;
   FHotTicks := 0;
+  FRetiring := False;
+  FRetireTicks := 0;
+  FLastRetireTicks := 0;
 end;
 
 procedure THullLives.Resume(ALives: Integer);
@@ -130,6 +143,18 @@ begin
   FHitTicks := HullBarHitTicks;
   FHot := False;
   FHotTicks := 0;
+  FRetiring := False;
+  FRetireTicks := 0;
+  FLastRetireTicks := 0;
+end;
+
+procedure THullLives.Retire;
+begin
+  if not FArmed or FRetiring then
+    Exit;
+  FRetiring := True;
+  FRetireTicks := 0;
+  FLastRetireTicks := 0;
 end;
 
 function THullLives.LitAt(ATicks: Integer): Integer;
@@ -145,6 +170,9 @@ begin
   Result := False;
   if not FArmed then
     Exit;
+  FLastRetireTicks := FRetireTicks;
+  if FRetiring and (FRetireTicks < HullBarDropTicks) then
+    Inc(FRetireTicks);
   if FHitTicks < HullBarHitTicks then
     Inc(FHitTicks);
   // The pulse starts anew with every heat
@@ -162,7 +190,7 @@ end;
 
 function THullLives.Wound: Boolean;
 begin
-  if not FArmed or (FLives = 0) then
+  if not FArmed or FRetiring or (FLives = 0) then
     Exit(False);
   Dec(FLives);
   FHitTicks := 0;
@@ -174,9 +202,18 @@ begin
   Result := Default(THullBar);
   if not FArmed then
     Exit;
+  if FRetiring and (FLastRetireTicks >= HullBarDropTicks) then
+    Exit;
   Result.Shown := True;
   var Clock: Single := FLastTicks + (FTicks - FLastTicks) * AAlpha;
   Result.Drop := EnsureRange(Clock / HullBarDropTicks, 0, 1);
+  if FRetiring then
+  begin
+    var Gone: Single := FLastRetireTicks +
+      (FRetireTicks - FLastRetireTicks) * AAlpha;
+    var Left: Single := 1 - Gone / HullBarDropTicks;
+    Result.Drop := Min(Result.Drop, Left);
+  end;
   Result.Lit := LitAt(FTicks);
   Result.Share := FLives / FFullLives;
   Result.HitTicks := FHitTicks;

@@ -8,7 +8,9 @@
   a part is hot, pulses while one is, and is armoured again after; a new
   heat starts the pulse anew; arming and a clear leave it armoured.
   Resumed after arming, the lives are those told, within none and the
-  full, the full kept; not armed, a resume is nothing.
+  full, the full kept; not armed, a resume is nothing. Retired, the bar
+  goes up out of sight and is gone, and no life is taken any more; not
+  armed, a retire is nothing; armed again, the bar comes back.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -58,6 +60,14 @@ type
     procedure TestResumedTheLivesAreThoseToldWithinTheFull;
     [Test]
     procedure TestNotArmedAResumeIsNothing;
+    [Test]
+    procedure TestRetiredTheBarGoesUpAndIsGone;
+    [Test]
+    procedure TestRetiredNoLifeIsTaken;
+    [Test]
+    procedure TestNotArmedARetireIsNothing;
+    [Test]
+    procedure TestArmedAgainTheBarComesBack;
   end;
 
 implementation
@@ -83,6 +93,56 @@ procedure THullLivesTests.TickTimes(ACount: Integer);
 begin
   for var i := 1 to ACount do
     FLives.Tick;
+end;
+
+procedure THullLivesTests.TestRetiredTheBarGoesUpAndIsGone;
+begin
+  FLives.Arm(1);
+  TickTimes(HullBarDropTicks + HullBarBootTicks);
+  FLives.Retire;
+  var Last: Single := FLives.Bar(1).Drop;
+  for var i := 1 to HullBarDropTicks - 1 do
+  begin
+    FLives.Tick;
+    var Bar := FLives.Bar(1);
+    Assert.IsTrue(Bar.Shown, Format('Shown on its way up, tick %d', [i]));
+    Assert.IsTrue(Bar.Drop < Last, Format('Going up, tick %d', [i]));
+    Last := Bar.Drop;
+  end;
+  TickTimes(2);
+  Assert.IsFalse(FLives.Bar(1).Shown, 'Gone');
+  TickTimes(ManyTicks);
+  Assert.IsFalse(FLives.Bar(1).Shown, 'Gone for good');
+end;
+
+procedure THullLivesTests.TestRetiredNoLifeIsTaken;
+begin
+  FLives.Arm(1);
+  FLives.Retire;
+  var Lives := FLives.Lives;
+  Assert.IsFalse(FLives.Wound, 'None taken');
+  Assert.AreEqual(Lives, FLives.Lives, 'As many as before');
+end;
+
+procedure THullLivesTests.TestNotArmedARetireIsNothing;
+begin
+  FLives.Retire;
+  FLives.Arm(1);
+  TickTimes(HullBarDropTicks);
+  Assert.IsTrue(FLives.Bar(1).Shown, 'Shown');
+  Assert.AreEqual(1.0, Double(FLives.Bar(1).Drop), Slop, 'In its place');
+  Assert.IsTrue(FLives.Wound, 'A life taken');
+end;
+
+procedure THullLivesTests.TestArmedAgainTheBarComesBack;
+begin
+  FLives.Arm(1);
+  FLives.Retire;
+  TickTimes(ManyTicks);
+  FLives.Arm(1);
+  TickTimes(HullBarDropTicks);
+  Assert.IsTrue(FLives.Bar(1).Shown, 'Shown');
+  Assert.AreEqual(1.0, Double(FLives.Bar(1).Drop), Slop, 'In its place');
 end;
 
 procedure THullLivesTests.TestNothingTillArmed;

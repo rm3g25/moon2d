@@ -5,7 +5,10 @@
   climb; a second start changes nothing; what it has run is the sum of
   its speeds, and between two ticks it lies between them; a clear stands
   it and forgets the way; run to another pace it goes there over the same
-  ramp, with no jerk. The road's picture on it wraps round the screen.
+  ramp, with no jerk; run over a longer ramp of its own it takes that long,
+  and what the ramp has still to run is what it then runs, to a stop;
+  with no ramp under way none is left. The road's picture on it wraps
+  round the screen.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -52,6 +55,12 @@ type
     procedure TestClearStandsAndForgets;
     [Test]
     procedure TestRunToAnotherPaceOverTheRamp;
+    [Test]
+    procedure TestALongerRampTakesItsTicks;
+    [Test]
+    procedure TestTheRampLeftIsWhatItRunsToTheStop;
+    [Test]
+    procedure TestNoRampUnderWayNoneLeft;
   end;
 
   [TestFixture]
@@ -238,6 +247,46 @@ begin
   Run(10);
   Assert.AreEqual(Double(BeltFlight), Double(FBelt.Speed), 0.0001,
     'Run to where it is, it goes on');
+end;
+
+procedure TBeltTests.TestALongerRampTakesItsTicks;
+const
+  LongRamp = 165;
+begin
+  FBelt.Run(BeltFlight);
+  Run(PastTheRamp);
+  FBelt.Run(0, LongRamp);
+  var Down := Run(LongRamp - 1);
+  Assert.IsTrue(FBelt.Speed > 0, 'Still moving a tick short of its ramp');
+  Assert.IsTrue(SteepestStep(Down, BeltFlight) <= 1.5 * BeltFlight / LongRamp + 0.001,
+    'Gentler than the usual ramp');
+  Run(1);
+  Assert.AreEqual(0.0, Double(FBelt.Speed), 0.0001, 'At a stand when it is over');
+  Assert.IsFalse(FBelt.Running, 'Not running');
+end;
+
+procedure TBeltTests.TestTheRampLeftIsWhatItRunsToTheStop;
+const
+  LongRamp = 165;
+  Into = 40;
+begin
+  FBelt.Run(BeltFlight);
+  Run(PastTheRamp);
+  FBelt.Run(0, LongRamp);
+  Run(Into);
+  var Left := FBelt.RampTravelLeft;
+  var From := FBelt.Travel;
+  Run(LongRamp);
+  Assert.AreEqual(Left, FBelt.Travel - From, 0.001, 'All of it, and no more');
+  Assert.AreEqual(0.0, FBelt.RampTravelLeft, 0.0001, 'None left at a stand');
+end;
+
+procedure TBeltTests.TestNoRampUnderWayNoneLeft;
+begin
+  Assert.AreEqual(0.0, FBelt.RampTravelLeft, 0.0001, 'Standing');
+  FBelt.Start;
+  Run(PastTheRamp);
+  Assert.AreEqual(0.0, FBelt.RampTravelLeft, 0.0001, 'At cruise');
 end;
 
 procedure TBeltRoadTests.TestStandsWhereItIsBeforeTheRun;

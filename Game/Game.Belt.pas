@@ -12,7 +12,9 @@
 
   The chase has two paces: the cruise of the road, and the flight it comes
   up to once the hero is aboard the barge - either is run to the same way,
-  from whatever speed the belt has.
+  from whatever speed the belt has. The flight's end runs it down over a
+  ramp of its own, longer; the caller may ask how much of the ramp's way
+  is still to run - to bring something it carries to a stop exactly.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -36,8 +38,9 @@ type
     // The ramp under way: from, to, ticks into it
     FRampFrom, FRampTo: Single;
     FRampTicks: Integer;
+    FRampLength: Integer;
     FTravel, FLastTravel: Double;
-    procedure RampTo(ASpeed: Single);
+    procedure RampTo(ASpeed: Single; ATicks: Integer);
   public
     constructor Create;
     // Up to cruise; nothing for one that runs or speeds up already
@@ -46,7 +49,9 @@ type
     procedure Stop;
     // Up or down to ASpeed over the ramp, from the speed it has; nothing
     // for one bound there already
-    procedure Run(ASpeed: Single);
+    procedure Run(ASpeed: Single); overload;
+    // The same over a ramp of ATicks
+    procedure Run(ASpeed: Single; ATicks: Integer); overload;
     // A death, a door, a new level: standing, and nothing run
     procedure Clear;
     procedure Tick;
@@ -55,12 +60,18 @@ type
     // How far it has run between the last tick and this one, AAlpha of
     // the way; units, growing as the road goes left
     function TravelAt(AAlpha: Single): Double;
+    // How far the ramp under way has still to run, after this tick: all
+    // the way to a standstill once bound for one; 0 with no ramp under way
+    function RampTravelLeft: Double;
     // Units the road has gone left this tick: what it carries goes as far
     property Speed: Single read FSpeed;
     property Travel: Double read FTravel;
   end;
 
 implementation
+
+uses
+  System.Math;
 
 function SmoothStep(AShare: Single): Single;
 begin
@@ -78,11 +89,12 @@ begin
   Clear;
 end;
 
-procedure TBelt.RampTo(ASpeed: Single);
+procedure TBelt.RampTo(ASpeed: Single; ATicks: Integer);
 begin
   FRampFrom := FSpeed;
   FRampTo := ASpeed;
   FRampTicks := 0;
+  FRampLength := ATicks;
 end;
 
 procedure TBelt.Start;
@@ -97,8 +109,13 @@ end;
 
 procedure TBelt.Run(ASpeed: Single);
 begin
+  Run(ASpeed, BeltRampTicks);
+end;
+
+procedure TBelt.Run(ASpeed: Single; ATicks: Integer);
+begin
   if FRampTo <> ASpeed then
-    RampTo(ASpeed);
+    RampTo(ASpeed, Max(ATicks, 1));
 end;
 
 procedure TBelt.Clear;
@@ -106,7 +123,8 @@ begin
   FSpeed := 0;
   FRampFrom := 0;
   FRampTo := 0;
-  FRampTicks := BeltRampTicks;
+  FRampLength := BeltRampTicks;
+  FRampTicks := FRampLength;
   FTravel := 0;
   FLastTravel := 0;
 end;
@@ -114,11 +132,11 @@ end;
 procedure TBelt.Tick;
 begin
   FLastTravel := FTravel;
-  if FRampTicks < BeltRampTicks then
+  if FRampTicks < FRampLength then
   begin
     Inc(FRampTicks);
     FSpeed := FRampFrom +
-      (FRampTo - FRampFrom) * SmoothStep(FRampTicks / BeltRampTicks);
+      (FRampTo - FRampFrom) * SmoothStep(FRampTicks / FRampLength);
   end;
   FTravel := FTravel + FSpeed;
 end;
@@ -131,6 +149,18 @@ end;
 function TBelt.TravelAt(AAlpha: Single): Double;
 begin
   Result := FLastTravel + (FTravel - FLastTravel) * AAlpha;
+end;
+
+// The speeds of the ticks to come, as Tick will give them - a Single each
+function TBelt.RampTravelLeft: Double;
+begin
+  Result := 0;
+  for var Ticks := FRampTicks + 1 to FRampLength do
+  begin
+    var Speed: Single := FRampFrom +
+      (FRampTo - FRampFrom) * SmoothStep(Ticks / FRampLength);
+    Result := Result + Speed;
+  end;
 end;
 
 end.

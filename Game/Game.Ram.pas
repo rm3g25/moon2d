@@ -225,6 +225,14 @@
   the harder the higher the rung; on the finisher's stretch thick bolts
   burst out of it, more and more as its last lives go.
 
+  Its last life gone in the air, the fight is over (Game.Breakup): the
+  hull cracks and, its jets coughing, lurches to its place over the middle
+  of the screen, a blast or two on it, and bursts there - into a few big
+  pieces the game sends flying (Game.Wreckage), which blow up one after
+  another. From the crack on it fights no more - the magnet, the mortar,
+  the charge and the dive are done with - and once it has burst it is no
+  more to be seen or touched.
+
   Its wheels gone, its honeycomb comes back: kindled outward from the
   magnet as the second wheel is thrown, then over the flying hull - rimmed
   under its belly too, not drawn over the arches, where the fire is - and
@@ -253,7 +261,7 @@ uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
   Game.Takeoff, Game.Magnet, Game.Mortar, Game.Charge, Game.Dive,
-  Game.Ladder, Effects.Sparks;
+  Game.Ladder, Game.Breakup, Game.Wreckage, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -273,6 +281,14 @@ const
   SweeperBulletSpeed = 5;
   // The head's row of lives: three thirds of four cells
   HeadRowCells = 12;
+  // What the hull bursts into: its picture cut into a grid of this many
+  // columns and rows, then the two engine bays, the two nozzles, the
+  // magnet and the mortar. The grid's pieces and the bays blow up in the
+  // series, the small ones only fly.
+  WreckCols = 3;
+  WreckRows = 2;
+  WreckParts = WreckCols * WreckRows + 6;
+  WreckBlasts = WreckCols * WreckRows + 2;
 
 type
   // rpWaiting - the music fades out, the machine is not on the screen yet;
@@ -442,6 +458,8 @@ type
     Charge: TChargeCue;
     // What the dive did this tick
     Dive: TDiveCue;
+    // Its end in the air, once its last life is gone
+    Breakup: TBreakupCue;
   end;
 
   // Where the hull stands and how: upright on the road with its left edge
@@ -599,6 +617,7 @@ type
     FCharge: TCharge;
     FDive: TDive;
     FLadder: TAirLadder;
+    FBreakup: TBreakup;
     // This cycle of the magnet chains, and how: told as it catches
     FChain: TAirChain;
     // The charge or the dive has struck the hero: once a run
@@ -658,6 +677,7 @@ type
     procedure BeginDive;
     procedure CarryDive;
     function DiveFloor: Single;
+    procedure TickBreakup;
     procedure TickArmour;
     procedure StowArmourAloft;
     procedure RestoreArmourAloft(ATicks: Integer);
@@ -891,6 +911,14 @@ type
     property Mortar: TMortar read FMortar;
     property Charge: TCharge read FCharge;
     property Dive: TDive read FDive;
+    // Its last life gone aloft: it cracks and bursts as Game.Breakup says,
+    // fighting no more from now on; nothing unless it is aloft and whole
+    procedure Wreck;
+    property Breakup: TBreakup read FBreakup;
+    // Where the hull is this tick, its middle: the heart of its burst
+    function HullMiddle: TSdlFPoint;
+    // The place APlace of ThroePops on the hull, on the screen
+    function ThroePopAt(APlace: Integer): TSdlFPoint;
     // A part of it is hot aloft: the magnet, or the nozzles after the
     // charge's brake or the dive's fall
     function HotAloft: Boolean;
@@ -946,7 +974,7 @@ type
     function WellAt(ALeft: Single): Single;
     // A point of the hull's art on the screen, the hull's left edge at ALeft
     function HullSpot(ALeft: Single; const APoint: THullPoint): TSdlFPoint;
-    // On the screen to be seen and touched
+    // On the screen to be seen and touched: present, and not burst
     function Present: Boolean;
     // Between the last tick and this one, AAlpha of the way
     function LeftAt(AAlpha: Single): Single;
@@ -1180,6 +1208,8 @@ type
       ASway: Single);
     procedure DrawFlash(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawWave(AOrigin: TSdlPoint; AAlpha: Single);
+    function WholePart(ATexture: PSdlTexture; const AAt: TSdlFPoint; AWidth,
+      AHeight, ASpin: Single): TWreckPart;
   public
     // Both belong to the caller and must outlive the painter
     constructor Create(AArt: TRamArt; ARam: TRam);
@@ -1196,6 +1226,11 @@ type
       AAlpha: Single);
     // The machine, on the world's shake channel the sprites stand at
     procedure DrawBody(const ASprites: TSpriteRenderer; AAlpha: Single);
+    // What the hull bursts into, where it stands this tick: its picture -
+    // the well, the chassis, the hull and its worn copy - cut in the
+    // grid of WreckCols by WreckRows, then the bays, the nozzles, the
+    // magnet and the mortar, in that order (WreckParts)
+    function Shatter: TArray<TWreckPart>;
     // The dust of the wave, the smoke out of the arches, the sparks of the
     // scrape, the glow of the jets and their warmth on the road, the
     // magnet's heat and its beam, the bolts of a head, the shield, the
@@ -1959,6 +1994,19 @@ const
   HullSmokeLevels: array [1..AirTopTier] of Single = (0, 0, 0.45, 1);
   // The bursts come in at this share of their fullest as the stretch opens
   HullBurstFloor = 0.4;
+  // Its end: it bursts with its left edge here and its height the hang's,
+  // over the middle of the screen - over the head of a hero on the main
+  // barge by about 150 units; the small blasts of its throe at these
+  // places; the jolts of the crack, of a small blast and of the burst
+  BurstLeft = (ScreenWidth - RamWidth) / 2;
+  BurstLift = HangLift;
+  ThroePopPoints: array [0..2] of THullPoint = ((X: 68.0; Y: 44.0),
+    (X: 130.0; Y: 22.0), (X: 40.0; Y: 96.0));
+  CrackJolt = 0.35;
+  ThroePopJolt = 0.15;
+  BreakJolt = 1.0;
+  // The breakup's dice, apart from the hull's own
+  BreakupSeedSalt = $42726B75; // "Brku"
 
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
@@ -2193,10 +2241,12 @@ begin
   FCharge := TCharge.Create(RamWidth);
   FDive := TDive.Create;
   FLadder := TAirLadder.Create(ASeed xor LadderSeedSalt);
+  FBreakup := TBreakup.Create(ASeed xor BreakupSeedSalt);
 end;
 
 destructor TRam.Destroy;
 begin
+  FBreakup.Free;
   FLadder.Free;
   FDive.Free;
   FCharge.Free;
@@ -2251,6 +2301,7 @@ begin
   FCharge.Clear;
   FDive.Clear;
   FLadder.Clear;
+  FBreakup.Clear;
   FChain := acNone;
   FSweepStruck := False;
   StowArmourAloft;
@@ -2415,6 +2466,7 @@ begin
   FCharge.Clear;
   FDive.Clear;
   FLadder.Clear;
+  FBreakup.Clear;
   FChain := acNone;
   StowArmourAloft;
 end;
@@ -2427,7 +2479,7 @@ end;
 
 function TRam.Present: Boolean;
 begin
-  Result := not (FPhase in [rpAbsent, rpWaiting]);
+  Result := not (FPhase in [rpAbsent, rpWaiting]) and not FBreakup.Broken;
 end;
 
 procedure TRam.BeginDrive(ATarget, ACruise: Single; AEntering: Boolean);
@@ -2586,6 +2638,11 @@ begin
   if (FClearTicks > 0) and not FHeroThrown then
     Dec(FClearTicks);
   FAccel := 0;
+  if FBreakup.Stage <> buIdle then
+  begin
+    TickBreakup;
+    Exit(FCue);
+  end;
   SeeHero(ATarget);
   TickThirds;
   TickKill;
@@ -4047,6 +4104,57 @@ begin
     FCue.Hover := True;
     RestoreArmourAloft(ArmourRiseTicks);
   end;
+end;
+
+// Its weapons done with, its armour gone; it cracks where it is
+procedure TRam.Wreck;
+begin
+  if not FTakeoff.Aloft or (FBreakup.Stage <> buIdle) then
+    Exit;
+  FMagnet.Clear;
+  FMortar.Clear;
+  FCharge.Clear;
+  FDive.Clear;
+  FChain := acNone;
+  StowArmourAloft;
+  FBreakup.Start(FX, FTakeoff.LiftAt(1), FTakeoff.LeanAt(1), BurstLeft,
+    BurstLift, WreckBlasts);
+end;
+
+// The throe flies the hull to where it bursts, its jets coughing; burst,
+// it flies no more - the series is the game's to carry out
+procedure TRam.TickBreakup;
+begin
+  var Step := FBreakup.Tick;
+  FCue.Breakup := Step;
+  if Step.Cracks then
+    FCue.Jolt := Max(FCue.Jolt, CrackJolt);
+  if Step.Pops then
+    FCue.Jolt := Max(FCue.Jolt, ThroePopJolt);
+  if Step.Breaks then
+    FCue.Jolt := Max(FCue.Jolt, BreakJolt);
+  // The throe's last pose is the one it bursts in
+  var InThroe := (FBreakup.Stage = buThroe) or Step.Breaks;
+  if not InThroe then
+    Exit;
+  FTakeoff.Tick(0);
+  FTakeoff.Carry(FBreakup.Left - FX, FBreakup.Lift, FBreakup.Lean);
+  FX := FX + FTakeoff.Pace;
+  FLean := FTakeoff.LeanAt(1);
+  if Step.JetsDie then
+    FTakeoff.Douse;
+  if Step.JetsCatch then
+    FTakeoff.Relight;
+end;
+
+function TRam.HullMiddle: TSdlFPoint;
+begin
+  Result := Posed(PoseAt(1), UnitPoint(FX + RamWidth / 2, RamTop + RamHeight / 2));
+end;
+
+function TRam.ThroePopAt(APlace: Integer): TSdlFPoint;
+begin
+  Result := PoseSpot(PoseAt(1), ThroePopPoints[APlace]);
 end;
 
 // The charge says where the hull is this tick and how it leans - its bow
@@ -6693,6 +6801,67 @@ begin
   Wheel := FRam.RearWheel;
   if Wheel.Running then
     FHull.DrawWheel(ASprites, Wheel.CenterAt(AAlpha), Wheel.TurnAt(AAlpha));
+end;
+
+// A piece in one picture, the whole of it
+function TRamPainter.WholePart(ATexture: PSdlTexture; const AAt: TSdlFPoint;
+  AWidth, AHeight, ASpin: Single): TWreckPart;
+begin
+  Result := Default(TWreckPart);
+  Result.Layers := [ATexture];
+  Result.Part.W := 1;
+  Result.Part.H := 1;
+  Result.Width := AWidth;
+  Result.Height := AHeight;
+  Result.Middle := AAt;
+  Result.Spin := ASpin;
+  Result.Mirrored := FRam.HullMirrored;
+end;
+
+function TRamPainter.Shatter: TArray<TWreckPart>;
+begin
+  Result := nil;
+  var Pose := FRam.PoseAt(1);
+  var Hull := FArt.FHullArt;
+  var Cut := Default(TWreckPart);
+  Cut.Layers := [FArt.FWell, Hull.Chassis, Hull.Whole, Hull.Worn];
+  Cut.Part.W := 1 / WreckCols;
+  Cut.Part.H := 1 / WreckRows;
+  Cut.Width := RamWidth / WreckCols;
+  Cut.Height := RamHeight / WreckRows;
+  Cut.Spin := Pose.Lean;
+  Cut.Mirrored := FRam.HullMirrored;
+  for var Row := 0 to WreckRows - 1 do
+    for var Col := 0 to WreckCols - 1 do
+    begin
+      Cut.Part.X := Col / WreckCols;
+      Cut.Part.Y := Row / WreckRows;
+      var Spot: THullPoint;
+      Spot.X := (Col + 0.5) * Cut.Width;
+      Spot.Y := (Row + 0.5) * Cut.Height;
+      Cut.Middle := FRam.PoseSpot(Pose, Spot);
+      Result := Result + [Cut];
+    end;
+
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+    Result := Result + [WholePart(FArt.FBay,
+      FRam.PoseSpot(Pose, Axles[JetAxles[Jet]]), BayWidth, BayHeight,
+      Pose.Lean)];
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Hang := Axles[JetAxles[Jet]];
+    Hang.Y := Hang.Y + NozzleHang + NozzleHeight / 2;
+    Result := Result + [WholePart(FArt.FNozzle, FRam.PoseSpot(Pose, Hang),
+      NozzleWidth, NozzleHeight, Pose.Lean)];
+  end;
+  var Clamp := MagnetTopPoint;
+  Clamp.Y := Clamp.Y + MagnetHeight / 2;
+  Result := Result + [WholePart(FArt.FMagnet, FRam.PoseSpot(Pose, Clamp),
+    MagnetWidth, MagnetHeight, Pose.Lean)];
+  var Breech := MortarPivotPoint;
+  Breech.Y := Breech.Y - MortarHeight / 2 + MortarSink;
+  Result := Result + [WholePart(FArt.FMortar, FRam.PoseSpot(Pose, Breech),
+    MortarWidth, MortarHeight, Pose.Lean)];
 end;
 
 procedure TRamPainter.DrawSmoke(const ACanvas: TDynamicCanvas;

@@ -9,7 +9,12 @@
   drifts: a gentle start from the station, its middle across the middle
   three fifths of the screen and its deck half a cell up and down, never
   still for long, on without him. A blow rocks its deck down and back to
-  its line.
+  its line. Told to berth, it glides from its drift to its station and
+  its line - going on a little the way it went at first, never far - and
+  waits there, a blow still rocking it; neither away nor moored nor
+  casting off does it berth. Docked, it is where it is told at once and
+  rides with the world, its way the world's; only berthing or berthed
+  does it dock, and only docked does it ride.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -77,6 +82,18 @@ type
     procedure TestWayDownIsWhatItWentThisTick;
     [Test]
     procedure TestClearEndsTheDrift;
+    [Test]
+    procedure TestBerthedItGlidesToItsStationAndLineAndStands;
+    [Test]
+    procedure TestBerthingItGoesOnTheWayItWentAtFirstNotFar;
+    [Test]
+    procedure TestBerthedABlowStillRocksIt;
+    [Test]
+    procedure TestOnlyAtItsStationOrDriftingDoesItBerth;
+    [Test]
+    procedure TestDockedItRidesWithTheWorld;
+    [Test]
+    procedure TestOnlyBerthingOrBerthedDoesItDockOnlyDockedRide;
   end;
 
 implementation
@@ -285,6 +302,123 @@ end;
 
 // Against a barge let go on the same tick and not struck: the drift is the
 // same, so what is left is the rock
+procedure TBargeRideTests.TestBerthedItGlidesToItsStationAndLineAndStands;
+const
+  BerthTicks = 165;
+begin
+  FBarge.Station;
+  FBarge.Loose;
+  Run(200, 0, False, False);
+  Assert.IsTrue(Abs(FBarge.Left - StationLeft) > 10, 'Away from the station');
+  FBarge.Berth(BerthTicks);
+  Assert.AreEqual(Ord(bsBerthing), Ord(FBarge.Stage), 'Berthing');
+  Run(BerthTicks - 1, 0, False, False);
+  Assert.IsFalse(FBarge.Berthed, 'Not yet a tick short');
+  Run(1, 0, False, False);
+  Assert.IsTrue(FBarge.Berthed, 'Berthed');
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'At its station');
+  Assert.AreEqual(0.0, FBarge.Dip, UnitSlack, 'On its line');
+  Run(100, 0, False, False);
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'And stands there');
+  Assert.AreEqual(0.0, FBarge.Way, UnitSlack, 'Still');
+end;
+
+procedure TBargeRideTests.TestBerthingItGoesOnTheWayItWentAtFirstNotFar;
+const
+  BerthTicks = 165;
+begin
+  FBarge.Station;
+  FBarge.Loose;
+  // A quarter lap: the middle swinging right at its fastest
+  Run(DriftLapTicks div 8, 0, False, False);
+  Run(1, 0, False, False);
+  var Went := FBarge.Way;
+  Assert.IsTrue(Went > 0.5, 'Going right');
+  var From := FBarge.Left;
+  FBarge.Berth(BerthTicks);
+  Run(1, 0, False, False);
+  Assert.IsTrue(FBarge.Way > 0, 'On to the right at first');
+  var Farthest := From;
+  for var i := 2 to BerthTicks do
+  begin
+    Run(1, 0, False, False);
+    Farthest := Max(Farthest, FBarge.Left);
+  end;
+  Assert.IsTrue(Farthest - From <= BerthCarryX, 'Not far');
+end;
+
+procedure TBargeRideTests.TestBerthedABlowStillRocksIt;
+const
+  BlowDepth = 8.0;
+begin
+  FBarge.Station;
+  FBarge.Berth(10);
+  Run(10, 0, False, False);
+  FBarge.Rock(BlowDepth);
+  var Deepest := 0.0;
+  for var i := 1 to 60 do
+  begin
+    Run(1, 0, False, False);
+    Deepest := Max(Deepest, FBarge.Dip);
+  end;
+  Assert.IsTrue(Deepest > BlowDepth / 2, 'It dipped');
+  Run(200, 0, False, False);
+  Assert.AreEqual(0.0, FBarge.Dip, 0.5, 'Back on its line');
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack, 'Not moved across');
+end;
+
+procedure TBargeRideTests.TestOnlyAtItsStationOrDriftingDoesItBerth;
+begin
+  FBarge.Berth(10);
+  Assert.AreEqual(Ord(bsAway), Ord(FBarge.Stage), 'Not away');
+  FBarge.Moor(PierRight);
+  FBarge.Berth(10);
+  Assert.AreEqual(Ord(bsMoored), Ord(FBarge.Stage), 'Not moored');
+  Run(1, PierRight, True);
+  FBarge.Berth(10);
+  Assert.AreEqual(Ord(bsCasting), Ord(FBarge.Stage), 'Not casting off');
+end;
+
+procedure TBargeRideTests.TestDockedItRidesWithTheWorld;
+const
+  DockLeft: Double = 150.0;
+  WorldWay: Double = -1.5;
+begin
+  FBarge.Station;
+  FBarge.Berth(10);
+  Run(10, 0, False, False);
+  FBarge.Dock(DockLeft);
+  Assert.AreEqual(Ord(bsDocked), Ord(FBarge.Stage), 'Docked');
+  Assert.AreEqual(DockLeft, FBarge.Left, UnitSlack, 'Where told, at once');
+  for var i := 1 to 20 do
+  begin
+    Run(1, 0, False, False);
+    FBarge.Ride(WorldWay);
+    Assert.AreEqual(WorldWay, FBarge.Way, UnitSlack,
+      'Tick ' + i.ToString + ': the world''s way');
+  end;
+  Assert.AreEqual(DockLeft + 20 * WorldWay, FBarge.Left, UnitSlack, 'Carried');
+  Assert.AreEqual(0.0, FBarge.Dip, 0.5, 'On its line');
+end;
+
+procedure TBargeRideTests.TestOnlyBerthingOrBerthedDoesItDockOnlyDockedRide;
+begin
+  FBarge.Station;
+  FBarge.Ride(-5);
+  Assert.AreEqual(Double(StationLeft), FBarge.Left, UnitSlack,
+    'At its station it rides nothing');
+  FBarge.Dock(0);
+  Assert.AreEqual(Ord(bsStation), Ord(FBarge.Stage), 'Not docked from its station');
+  FBarge.Loose;
+  Run(10, 0, False, False);
+  FBarge.Dock(0);
+  Assert.AreEqual(Ord(bsDrift), Ord(FBarge.Stage), 'Not docked drifting');
+  FBarge.Berth(30);
+  Run(5, 0, False, False);
+  FBarge.Dock(100);
+  Assert.AreEqual(Ord(bsDocked), Ord(FBarge.Stage), 'Docked on its way to its berth');
+end;
+
 procedure TBargeRideTests.TestABlowRocksItsDeckAndDiesOut;
 const
   BlowDepth = 8.0;

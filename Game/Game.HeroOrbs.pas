@@ -65,6 +65,7 @@ type
     FRite: TOrbRite; // the orbs of the henshin
     FPattern: TOrbPattern; // the figure the rite builds
     FMoonRite: TMoonRite; // the orbs of the moon form's henshin
+    FMoonShed: TOrbRite; // the moon form coming off, in its dark orbs
     FBurst: TOrbBurst; // the light the suit cannot hold
     FGrip: TOrbGrip; // the orbs that take the pads at the throw
     // The burst under way strikes what its rays meet; what it has wounded
@@ -110,6 +111,8 @@ type
     procedure BeginMoonRite(const AMatter: TMatter;
       const ADeep: TArray<TSdlFPoint>);
     procedure ShedSuit;
+    // The moon form comes off as the suit does, in its own dark orbs
+    procedure ShedMoonSuit;
     // The suit's burst in ALook, as arenas 1 and 2 have it
     procedure StartBurst(const ALook: TBurstLook);
     // The ice suit's burst, as the ceremony asks for it
@@ -193,6 +196,7 @@ begin
   FAura := TAura.Create(IceOrbTint);
   FRite := TOrbRite.Create(IceOrbTint, FProbes.Body);
   FMoonRite := TMoonRite.Create(FProbes.Body);
+  FMoonShed := TOrbRite.Create(MoonOrbTint, FProbes.Body);
   FBurst := TOrbBurst.Create(FProbes.Body);
   FGrip := TOrbGrip.Create;
   FBurstWounded := TList<TMonster>.Create;
@@ -207,6 +211,7 @@ begin
   FBurstWounded.Free;
   FGrip.Free;
   FBurst.Free;
+  FMoonShed.Free;
   FMoonRite.Free;
   FRite.Free;
   FAura.Free;
@@ -218,6 +223,7 @@ begin
   FAura.Clear;
   FRite.Clear;
   FMoonRite.Clear;
+  FMoonShed.Clear;
   FBurst.Clear;
   FBurstWounded.Clear;
   FGrip.Clear;
@@ -252,6 +258,7 @@ begin
   FAura.Collapse;
   FRite.Collapse;
   FMoonRite.Collapse;
+  FMoonShed.Collapse;
   FBurst.Clear;
   FGrip.Collapse;
   FRain.Collapse;
@@ -261,6 +268,7 @@ end;
 procedure THeroOrbs.CarryRite(AStepX, AStepY: Single);
 begin
   FRite.Carry(AStepX, AStepY);
+  FMoonShed.Carry(AStepX, AStepY);
 end;
 
 procedure THeroOrbs.CarryAura(AStepX, AStepY: Single);
@@ -294,6 +302,13 @@ begin
   if not FProbes.Alive() then
     Exit;
   FRite.Shed(IceRiteScore, FProbes.Center());
+end;
+
+procedure THeroOrbs.ShedMoonSuit;
+begin
+  if not FProbes.Alive() then
+    Exit;
+  FMoonShed.Shed(IceRiteScore, FProbes.Center());
 end;
 
 // The burst is the living hero's, like the rite's: over the corpse it is
@@ -384,6 +399,7 @@ begin
   var Center := FProbes.Center();
   FAura.Tick(Center);
   FRite.Tick(Center);
+  FMoonShed.Tick(Center);
   FBurst.Tick(Center);
 end;
 
@@ -413,6 +429,7 @@ procedure THeroOrbs.Strike;
 begin
   ResolveOrbHits(FAura.Flock);
   ResolveOrbHits(FRite.Flock);
+  ResolveOrbHits(FMoonShed.Flock);
   ResolveBurstHits;
   ResolveOrbHits(FRain.Flock);
 end;
@@ -484,7 +501,7 @@ begin
     Nearer := AToX - OrbReach;
     Farther := AFromX + OrbReach;
   end;
-  Flocks := [FAura.Flock, FRite.Flock, FRain.Flock];
+  Flocks := [FAura.Flock, FRite.Flock, FMoonShed.Flock, FRain.Flock];
   for var Flock in Flocks do
     for var Orb in Flock.Orbs do
     begin
@@ -515,6 +532,7 @@ procedure THeroOrbs.DrawBehind(const ACanvas: TDynamicCanvas;
 begin
   FRite.DrawBehind(ACanvas, AOrigin, AAlpha);
   FMoonRite.DrawBehind(ACanvas, AOrigin, AAlpha);
+  FMoonShed.DrawBehind(ACanvas, AOrigin, AAlpha);
 end;
 
 procedure THeroOrbs.DrawVeil(const ACanvas: TDynamicCanvas; AOrigin: TSdlPoint);
@@ -534,6 +552,7 @@ begin
   FAura.Draw(ACanvas, AOrigin, AAlpha);
   FRite.DrawInFront(ACanvas, AOrigin, AAlpha);
   FMoonRite.DrawInFront(ACanvas, AOrigin, AAlpha);
+  FMoonShed.DrawInFront(ACanvas, AOrigin, AAlpha);
   FGrip.Draw(ACanvas, AOrigin, AAlpha);
   FBurst.DrawWorld(ACanvas, AOrigin, AAlpha);
   FRain.Draw(ACanvas, AOrigin, AAlpha);

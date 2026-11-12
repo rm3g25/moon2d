@@ -17,6 +17,12 @@
   A blow from above rocks it: its deck dips and swings back to its line, a
   spring dying out, on top of the drift.
 
+  The fight over, it berths: from wherever its drift has taken it, going on
+  a little the way it went, it glides to its station and to its line as
+  the world slows, and waits there. Docked - the road come back against
+  its right side - it rides with the world, as the road does, to where
+  the world stops.
+
   Only where the barge's left edge and its deck are and when he boards:
   the pad that is the barge (Pads.World) is carried by the way this gives
   and bobs by itself, the belt's paces are Game.Belt's, the checkpoint on
@@ -54,12 +60,19 @@ const
   DriftReachY = 16.0;
   DriftLapTicks = 594;
   LooseTicks = 66;
+  // Berthing, it goes on the way it went by this much at most, across and
+  // down - then turns to its berth
+  BerthCarryX = 24.0;
+  BerthCarryY = 8.0;
 
 type
   // bsAway - not there; bsMoored - a hop past the pier's end, riding with
   // it; bsCasting - the hero aboard, gliding to its station; bsStation -
-  // holding it; bsDrift - the fight on, drifting on its loop
-  TBargeStage = (bsAway, bsMoored, bsCasting, bsStation, bsDrift);
+  // holding it; bsDrift - the fight on, drifting on its loop; bsBerthing -
+  // the fight over, gliding to its berth; bsBerthed - waiting there;
+  // bsDocked - against the road, riding with the world
+  TBargeStage = (bsAway, bsMoored, bsCasting, bsStation, bsDrift, bsBerthing,
+    bsBerthed, bsDocked);
 
   TBargeRide = class
   private
@@ -76,7 +89,13 @@ type
     // units a tick
     FRock: Double;
     FRockPace: Double;
+    // Berthing: over how long, from where its deck was off the rock, and
+    // how far it would have gone on the way it went
+    FBerthTicks: Integer;
+    FFromDip: Double;
+    FCarryX, FCarryY: Double;
     function Mooring(APierRight: Double): Double;
+    procedure Glide;
     procedure Drift;
     procedure Swing;
   public
@@ -94,6 +113,17 @@ type
     procedure Loose;
     // Struck from above: its deck dips by about ADepth and swings back
     procedure Rock(ADepth: Double);
+    // The fight is over: from where it is it glides to its station and its
+    // line over ATicks, and waits there; nothing unless at its station or
+    // drifting
+    procedure Berth(ATicks: Integer);
+    // The road has come against its right side: its left edge at ALeft at
+    // once, on its line, riding with the world from now on; nothing unless
+    // berthing or berthed
+    procedure Dock(ALeft: Double);
+    // Docked, the world went AWay this tick, below 0 to the left: it goes
+    // with it - after the tick's Tick, so Way has it; nothing else docked
+    procedure Ride(AWay: Double);
     // APierRight - the pier's end on the screen, heard while APierStands;
     // AAboard - the hero stands on the barge's deck this tick. True the
     // tick he comes aboard: it casts off, the world speeds up.
@@ -105,6 +135,8 @@ type
     // Its left edge AAlpha of the way from the last tick to this one
     function LeftAt(AAlpha: Single): Double;
     property Stage: TBargeStage read FStage;
+    // At its berth: the glide is over
+    function Berthed: Boolean;
     property Left: Double read FLeft;
     // Units its deck is under the line it was moored on, below 0 over it
     property Dip: Double read FDip;
@@ -147,6 +179,10 @@ begin
   FTurn := 0;
   FRock := 0;
   FRockPace := 0;
+  FBerthTicks := 0;
+  FFromDip := 0;
+  FCarryX := 0;
+  FCarryY := 0;
 end;
 
 procedure TBargeRide.Moor(APierRight: Double);
@@ -198,6 +234,54 @@ begin
   FTurn := 0;
 end;
 
+procedure TBargeRide.Berth(ATicks: Integer);
+begin
+  if not (FStage in [bsStation, bsDrift]) then
+    Exit;
+  FStage := bsBerthing;
+  FBerthTicks := Max(ATicks, 1);
+  FTicks := 0;
+  FFrom := FLeft;
+  FFromDip := FDip - FRock;
+  FCarryX := EnsureRange(Way * FBerthTicks, -BerthCarryX, BerthCarryX);
+  FCarryY := EnsureRange(WayDown * FBerthTicks, -BerthCarryY, BerthCarryY);
+end;
+
+// Along a curve from where it was, at first the way it went, to its berth
+// at a stand: the two ends of a cubic, the end still
+procedure TBargeRide.Glide;
+begin
+  Inc(FTicks);
+  var Share: Double := Min(FTicks / FBerthTicks, 1.0);
+  var FromShare := 2 * Share * Share * Share - 3 * Share * Share + 1;
+  var WayShare := Share * Share * Share - 2 * Share * Share + Share;
+  var ToShare := 1 - FromShare;
+  FLeft := FromShare * FFrom + WayShare * FCarryX + ToShare * StationLeft;
+  FDip := FromShare * FFromDip + WayShare * FCarryY + FRock;
+  if FTicks >= FBerthTicks then
+    FStage := bsBerthed;
+end;
+
+procedure TBargeRide.Dock(ALeft: Double);
+begin
+  if not (FStage in [bsBerthing, bsBerthed]) then
+    Exit;
+  FStage := bsDocked;
+  FLeft := ALeft;
+  FDip := FRock;
+end;
+
+procedure TBargeRide.Ride(AWay: Double);
+begin
+  if FStage = bsDocked then
+    FLeft := FLeft + AWay;
+end;
+
+function TBargeRide.Berthed: Boolean;
+begin
+  Result := FStage = bsBerthed;
+end;
+
 procedure TBargeRide.Rock(ADepth: Double);
 begin
   FRockPace := FRockPace + ADepth * RockKick;
@@ -237,6 +321,16 @@ begin
       begin
         Swing;
         Drift;
+      end;
+    bsBerthing:
+      begin
+        Swing;
+        Glide;
+      end;
+    bsBerthed, bsDocked:
+      begin
+        Swing;
+        FDip := FRock;
       end;
   end;
 end;

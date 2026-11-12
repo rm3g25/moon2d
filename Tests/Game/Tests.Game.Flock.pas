@@ -19,7 +19,12 @@
   the escort at once; smashing one that does not fly changes nothing.
   Held, the flock sends none in; let go, the escort comes at once. Grown,
   more fly from then on and never more than the new count; grown to fewer
-  or before the start, nothing changes.
+  or before the start, nothing changes. Closed at the fight's end, none
+  comes in any more; let go, every barge on its path - the escort too -
+  leaves fast off the left edge, no escort kept, and none comes in; a
+  clear opens it again. A taken barge dropped falls as a knocked one from
+  where it was held, out of the count; dropping one not taken changes
+  nothing.
 
   The main barge is Game.Barge's own, let go at its station and drifting
   on its loop, its deck on the road's line.
@@ -135,6 +140,16 @@ type
     procedure TestGrownMoreFlyNeverMoreThanTheNewCount;
     [Test]
     procedure TestGrownToFewerOrBeforeTheStartNothingChanges;
+    [Test]
+    procedure TestClosedNoneComesIn;
+    [Test]
+    procedure TestLetGoAllLeaveFastAndNoneComesIn;
+    [Test]
+    procedure TestAClearOpensItAgain;
+    [Test]
+    procedure TestADroppedBargeFallsFromWhereItWasHeld;
+    [Test]
+    procedure TestDroppingOneNotTakenChangesNothing;
   end;
 
 implementation
@@ -557,6 +572,84 @@ begin
   end;
   Assert.Fail(Format('No free barge in %d ticks', [ALimit]));
   Result := -1;
+end;
+
+procedure TBargeFlockTests.TestClosedNoneComesIn;
+begin
+  FFlock.Start(Count);
+  TicksTillNeighbour(EscortInTicks);
+  FFlock.Close;
+  Assert.IsTrue(FFlock.Closed, 'Closed');
+  var Flew: TArray<Boolean>;
+  SetLength(Flew, FFlock.PoolSize);
+  for var i := 0 to FFlock.PoolSize - 1 do
+    Flew[i] := FFlock.Flying(i);
+  for var Tick := 1 to LongRunTicks div 4 do
+  begin
+    Step;
+    for var i := 0 to FFlock.PoolSize - 1 do
+      Assert.IsFalse(FFlock.Flying(i) and not Flew[i],
+        Format('Tick %d: barge %d came in', [Tick, i]));
+  end;
+end;
+
+procedure TBargeFlockTests.TestLetGoAllLeaveFastAndNoneComesIn;
+const
+  // From anywhere on the screen at the pace let go, its length too, and a
+  // little more
+  GoneTicks = 260;
+begin
+  FFlock.Start(Count);
+  StepTillAFreeBargeFlies(EscortInTicks);
+  FFlock.Disperse;
+  Assert.AreEqual(-1, FFlock.Escort, 'No escort');
+  Step;
+  for var i := 0 to FFlock.PoolSize - 1 do
+    if FFlock.Flying(i) then
+      Assert.AreEqual(Double(-DispersePace), FFlock.WayX(i), 0.01,
+        Format('Barge %d leaves fast', [i]));
+  for var Tick := 1 to GoneTicks do
+    Step;
+  Assert.AreEqual(0, FFlock.FlyingCount, 'All gone, none came in');
+end;
+
+procedure TBargeFlockTests.TestAClearOpensItAgain;
+begin
+  FFlock.Start(Count);
+  FFlock.Disperse;
+  FFlock.Clear(Seed);
+  Assert.IsFalse(FFlock.Closed, 'Open');
+  FFlock.Start(Count);
+  Assert.IsTrue(TicksTillNeighbour(EscortInTicks) >= 0, 'The escort comes');
+end;
+
+procedure TBargeFlockTests.TestADroppedBargeFallsFromWhereItWasHeld;
+const
+  HeldLeft: Double = 200.0;
+  HeldTop: Double = 160.0;
+begin
+  FFlock.Start(Count);
+  var Loner := StepTillAFreeBargeFlies(EscortInTicks);
+  FFlock.Take(Loner);
+  FFlock.Drop(Loner, HeldLeft, HeldTop);
+  Assert.IsFalse(FFlock.Taken(Loner), 'Not taken');
+  Assert.IsTrue(FFlock.Knocked(Loner), 'Falling as a knocked one');
+  Assert.AreEqual(HeldLeft, FFlock.Left(Loner), UnitSlack, 'Where it was held');
+  Assert.AreEqual(HeldTop, FFlock.Top(Loner), UnitSlack, 'At its height');
+  Step;
+  Assert.IsTrue(FFlock.WayX(Loner) < 0, 'Falling behind');
+  Assert.IsTrue(FFlock.WayY(Loner) > 0, 'And down');
+  Assert.IsTrue(OnTheirPaths < FFlock.FlyingCount, 'Out of the count');
+end;
+
+procedure TBargeFlockTests.TestDroppingOneNotTakenChangesNothing;
+begin
+  FFlock.Start(Count);
+  var Loner := StepTillAFreeBargeFlies(EscortInTicks);
+  var Left := FFlock.Left(Loner);
+  FFlock.Drop(Loner, 0, 0);
+  Assert.IsFalse(FFlock.Knocked(Loner), 'On its path');
+  Assert.AreEqual(Left, FFlock.Left(Loner), UnitSlack, 'Where it was');
 end;
 
 procedure TBargeFlockTests.TestATakenBargeFliesNoMore;

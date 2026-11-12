@@ -15,7 +15,8 @@
 
   The suit comes off the way it went on, in orbs: the game is asked to
   have the rite give them back, they come out of the body into a ring
-  about the hero, and the mercy lasts as long as the ring does. The fan of
+  about the hero, and the mercy lasts as long as the ring does. The moon
+  form comes off the same way, its ring of its own dark orbs. The fan of
   bullets the suit shattered into in 2008 is gone.
 
   The moon form comes by the rite of the eclipse (Orbs.Moonrite), in a
@@ -87,6 +88,8 @@ type
     GrantMercy: TGrantMercy;
     BeginRite: TBeginRite;
     ShedSuit: TShedSuit;
+    // The moon form's orbs come out about the hero, owned by his orbs
+    ShedMoonSuit: TShedSuit;
     Burst: TBurstSuit;
     BeginMoonRite: TBeginMoonRite;
     // The burst at the end of the rite of the eclipse, owned by the game
@@ -134,9 +137,10 @@ type
     procedure Tick;
     // The digit of the prelude, topmost on the display
     procedure DrawCountdown(const AFont: TMoonFont; AAlpha: Double);
-    // The suit comes off as a ring of orbs and the hero is spared as long
-    // as it stands; nothing if he is not wearing it
-    procedure RemoveIceForm;
+    // The form he wears comes off as a ring of its orbs - the ice form's
+    // or the moon form's - and the hero is spared as long as it stands;
+    // nothing if he wears none
+    procedure RemoveForm;
     // A fresh boss means a fresh ceremony: the countdown and the ice
     // form die with the hero - the suit comes off silently. The rite is
     // the game's to clear.
@@ -388,15 +392,19 @@ begin
   FCalls.TearDark();
 end;
 
-procedure THenshin.RemoveIceForm;
+procedure THenshin.RemoveForm;
 begin
-  if FHero.HeroForm = hfNormal then
+  var Form := FHero.HeroForm;
+  if Form = hfNormal then
     Exit;
   FHero.HeroForm := hfNormal;
   FShroud.Start(IceOffLook);
   // The ring stands against what a dying boss throws in this very tick,
   // and the mercy lasts as long as the ring does
-  FCalls.ShedSuit();
+  if Form = hfMoon then
+    FCalls.ShedMoonSuit()
+  else
+    FCalls.ShedSuit();
   FCalls.GrantMercy(IceRiteScore.ShedTicks);
 end;
 

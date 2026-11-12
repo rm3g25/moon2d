@@ -5,6 +5,11 @@
   of the world and rides on left past the hero - the pier. The barge
   waits a hop past it (Game.Barge).
 
+  At the end of the flight the road comes back: its edge rides in from
+  beyond the right edge with the slowing world, the tiles beyond it, and
+  stands where the world stops - the same tiles, cut on their left this
+  time.
+
   Only the pier's place: where its first tile's left edge is and where it
   ends. The floor under the hero is a pad the game carries with it
   (Pads.World), the grid's row of the road erased (Levels.Defs); the
@@ -34,6 +39,10 @@ type
     // The road runs out: its first tile stands at APhase - TileSize, the
     // rest a tile apart from there
     procedure Start(APhase: Double);
+    // The road comes back: its first tile's left edge - its edge over the
+    // crater - at ALeft, the rest a tile apart from there, past the right
+    // edge
+    procedure Arrive(ALeft: Double);
     // A death, a new level: a whole road again, of the grid
     procedure Clear;
     // The belt went AWay this tick, below 0 to the left: the pier rides it
@@ -75,6 +84,13 @@ procedure TRoadEnd.Start(APhase: Double);
 begin
   FRunning := True;
   FLeft := APhase - TileSize;
+  FLastLeft := FLeft;
+end;
+
+procedure TRoadEnd.Arrive(ALeft: Double);
+begin
+  FRunning := True;
+  FLeft := ALeft;
   FLastLeft := FLeft;
 end;
 

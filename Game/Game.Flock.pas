@@ -36,6 +36,11 @@
   the flock - the charge on its way and low - none comes in; let go, the
   escort comes first, at once.
 
+  The fight over, the flock is closed: none comes in any more; then it is
+  let go - every barge on a path of the flock leaves along a lane at its
+  deck, fast, off to the left, the escort too. The barge the magnet held
+  as the hull burst falls as a knocked one does, from where it was held.
+
   The barges are a pool the caller names by their widths, in its order:
   the flock tells which of them flies, where and how far it went this
   tick, and the caller moves its pads by that - the riders go with them as
@@ -74,6 +79,8 @@ const
   // or down from the main barge's, and no farther across, edge to edge
   NeighbourRise = 80.0;
   NeighbourGap = 64.0;
+  // Let go at the fight's end, they leave this fast
+  DispersePace = 3.0;
 
 type
   // fpEscort - over the main barge; the rest fly free: fpLane - along a
@@ -133,6 +140,8 @@ type
     FServed: Integer;
     FServe: Integer;
     FHeld: Boolean;
+    // None comes in any more; the escort is not kept either
+    FClosed: Boolean;
     function RollRange(ALeast, AMost: Double): Double;
     function RollFreeIndex: Integer;
     function RollPath: TFlockPath;
@@ -211,6 +220,17 @@ type
     procedure Smash(AIndex: Integer);
     // Held, none comes in; the gap is counted down all the same
     property Held: Boolean read FHeld write FHeld;
+    // The fight is over: none comes in from now on, till a clear
+    procedure Close;
+    property Closed: Boolean read FClosed;
+    // Closed, and every barge on a path of the flock - the escort too -
+    // leaves along a lane at its deck at DispersePace, off to the left; the
+    // knocked ones fall on as they fall
+    procedure Disperse;
+    // The taken barge AIndex flies again, knocked off, from ALeft, ATop -
+    // where the caller held it: falling behind and sinking, out of the
+    // flock's count. Nothing for one not taken.
+    procedure Drop(AIndex: Integer; ALeft, ATop: Double);
     // The escort's index in the pool, -1 when none flies
     property Escort: Integer read FEscort;
   end;
@@ -323,6 +343,7 @@ begin
   FServed := 0;
   FServe := 0;
   FHeld := False;
+  FClosed := False;
   // An xorshift seeded with zero stays at zero
   FDice.Seed := ASeed or 1;
 end;
@@ -592,7 +613,7 @@ end;
 // else a free one
 procedure TBargeFlock.SendWhenDue(const AMain: TMainBarge);
 begin
-  if InFlock >= FCount then
+  if FClosed or (InFlock >= FCount) then
     Exit;
   if FWait > 0 then
   begin
@@ -628,7 +649,8 @@ begin
   if not Started then
     Exit;
   Fly(AMain);
-  HandOver(AMain);
+  if not FClosed then
+    HandOver(AMain);
   if FEscort <> NoBarge then
     Inc(FServed);
   SendWhenDue(AMain);
@@ -759,6 +781,42 @@ begin
     FRelief := NoBarge;
   if AIndex = FEscort then
     LoseEscort;
+end;
+
+procedure TBargeFlock.Close;
+begin
+  FClosed := True;
+end;
+
+procedure TBargeFlock.Disperse;
+begin
+  Close;
+  for var i := 0 to High(FFlyers) do
+  begin
+    var Flyer := FFlyers[i];
+    if not Flyer.Flying or (Flyer.Path = fpKnocked) then
+      Continue;
+    LetGo(i);
+    FFlyers[i].Pace := DispersePace;
+  end;
+  FEscort := NoBarge;
+  FRelief := NoBarge;
+end;
+
+procedure TBargeFlock.Drop(AIndex: Integer; ALeft, ATop: Double);
+begin
+  if not FFlyers[AIndex].Taken then
+    Exit;
+  var Flyer := Default(TFlyer);
+  Flyer.Flying := True;
+  Flyer.Path := fpKnocked;
+  Flyer.Left := ALeft;
+  Flyer.Top := ATop;
+  Flyer.LastLeft := ALeft;
+  Flyer.LastTop := ATop;
+  Flyer.FallX := -KnockKick;
+  Flyer.FallY := KnockDrop;
+  FFlyers[AIndex] := Flyer;
 end;
 
 function TBargeFlock.Taken(AIndex: Integer): Boolean;
