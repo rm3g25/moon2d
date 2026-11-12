@@ -1,6 +1,6 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
+Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
@@ -28,6 +28,14 @@ The fight ends aloft now (arena 3's air fight, `docs/mechanics/arena-3/ram-air.m
 What this changes in the rest of the file: "the arena after the blast" of the titles' order is the picture of step 3; "the blast" of Part 1's table is the hull's burst; the wreck (Part 1, "Art", "Open") is gone - the hull bursts in the air; the extension of the climb is outpainted from the air fight's backdrop where the barge stops, not from screen 13's.
 
 Open, for the build: whether the hero keeps control between the burst and the slowdown (and with it, from the burst on, no wound and nothing left firing - the rule of Part 1 moves to the burst); what the hero's shots do to the drone; how the Cordon flies at the flight's speed with a world that moves (the level-1 scene stands on a still screen); the sound under the Cordon - its hum, its track or silence - between the flight's track cut at the burst and Legendary.
+
+## Decided 2026-11-12, after 3.0.126: the drone put off
+The drone and the Cordon (steps 1 and 2 above) are put off to a later version and kept as they are written - not built in 3.0. The titles and the climb into the stars stand. The end of 3.0, in order:
+1. The hull's lives run out: it cracks and bursts in the air. Nothing flies out of it.
+2. **The flight slows down**, and from here the hero is not his own (input cut). The tiles of the road come in again, and the main barge with him on it stops beside them.
+3. The titles over that picture, and the climb into the stars of the menu (Part 2).
+
+Of "Open, for the build" above, what stays for 3.0: whether the hero keeps control between the burst and the slowdown (and with it, from the burst on, no wound and nothing left firing); the sound between the flight's track cut at the burst and Legendary. The drone's and the Cordon's questions go with them.
 
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:
