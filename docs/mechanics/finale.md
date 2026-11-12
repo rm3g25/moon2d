@@ -1,6 +1,6 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
+Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ), nothing built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
@@ -18,7 +18,16 @@ The machine blows up, the tense music dies with it, and in the silence after the
   6. A new line of text (not written yet).
   7. The exit to the main menu.
 
-**Decided 2026-11-12, over the order above where they disagree**: between the blast and the titles comes the drone - a small drone tears loose out of the burst of the Ram's hull and runs for an edge of the screen; the hero may shoot it down or let it go, and the titles come either way. It does not fight and wounds nobody, so "from the blast on the hero cannot die" holds, but his input is not cut till the drone is down or gone. The whole decision is in `arena-3/ram-air.md`, "Decided 2026-11-12, the drone".
+## Decided 2026-11-12: the end in the air
+The fight ends aloft now (arena 3's air fight, `docs/mechanics/arena-3/ram-air.md`), not on the road of screen 13. In order:
+1. The hull's lives run out: it cracks and bursts, and a small fast drone flies out of it. **The drone cannot be killed** here - it is kept for a half-boss of a later level.
+2. **The flight does not slow.** The Cordon (TEK-Q6, `docs/mechanics/scenes.md` - the ship of level 1's screen 9) catches up at the flight's speed with its bay open - the bay the tank of screen 9 came out of. The drone flies into the bay and the Cordon flies off.
+3. **The flight slows down**, and from here the hero is not his own (input cut). The tiles of the road come in again, and the main barge with him on it stops beside them.
+4. The titles, over that picture: the main barge at rest by the road's edge, the hero standing on it.
+
+What this changes in the rest of the file: "the arena after the blast" of the titles' order is the picture of step 3; "the blast" of Part 1's table is the hull's burst; the wreck (Part 1, "Art", "Open") is gone - the hull bursts in the air; the extension of the climb is outpainted from the air fight's backdrop where the barge stops, not from screen 13's.
+
+Open, for the build: whether the hero keeps control between the burst and the slowdown (and with it, from the burst on, no wound and nothing left firing - the rule of Part 1 moves to the burst); what the hero's shots do to the drone; how the Cordon flies at the flight's speed with a world that moves (the level-1 scene stands on a still screen); the sound under the Cordon - its hum, its track or silence - between the flight's track cut at the burst and Legendary.
 
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:
@@ -104,7 +113,7 @@ Each its own commit, each run live. The titles are tried on any existing screen 
 - F8. **Sync, tests, docs.** The beat map in the timeline, the black-box tests of the timeline director, the codebase maps, the version.
 
 ## Open
-- The wreck: stays (darkened, smoking) or a clean floor.
+- ~~The wreck: stays (darkened, smoking) or a clean floor.~~ None: the hull bursts in the air (2026-11-12).
 - The hero's pose at the finale: where he stood, or a short scripted walk to the middle.
 - The wording of the line under the logo and of the last line.
 - The exit: automatically at the end of the track, or by a click on "Main menu" (the old farewell's two lines, with the author's link), or both; whether Escape skips to the last line.

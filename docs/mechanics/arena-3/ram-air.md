@@ -1,6 +1,6 @@
 # Arena 3: the Ram's air fight (stage 18d and on)
 
-Status: designed 2026-11-09; 18d-1 (the barges) built in 3.0.120, 18d-2 (the magnet and the heat) in 3.0.121, the honeycomb aloft in 3.0.122, 18d-3 (the bombs, with the first two rungs of the ladder) in 3.0.123 - the knocked barge burning and listing in 3.0.124 -, 18d-4 (the charge, with the third rung) in 3.0.125, the rest not built. The last fight of level 2 before the drone (designed later) and the blast (stage 19). This file is the whole of it: a chat that builds a step of 18d reads `PORTING-NOTES.md`, this file and, for the code it touches, `evolution.md` ("Stage 17a as built", "Stage 17b-2 as built") - nothing else of the arena.
+Status: designed 2026-11-09; 18d-1 (the barges) built in 3.0.120, 18d-2 (the magnet and the heat) in 3.0.121, the honeycomb aloft in 3.0.122, 18d-3 (the bombs, with the first two rungs of the ladder) in 3.0.123 - the knocked barge burning and listing in 3.0.124 -, 18d-4 (the charge, with the third rung) in 3.0.125, the rest not built. The last fight of level 2, before the hull's end - the drone carried off by the Cordon, decided 2026-11-12 - and the titles (stage 19). This file is the whole of it: a chat that builds a step of 18d reads `PORTING-NOTES.md`, this file and, for the code it touches, `evolution.md` ("Stage 17a as built", "Stage 17b-2 as built") - nothing else of the arena.
 
 The animated sketches of the design chat are `ram-air-sketches.html` beside this file: schematic, not to scale, made before every number below was settled. Where a sketch and this file disagree, this file is right (the ladder's sketches, for one, show the main barge standing still; it drifts).
 
@@ -102,7 +102,7 @@ The attacks are learned one at a time and then mixed. The tier follows the hull'
 - **Point C**: a restart point at the door of tier 3. A death after it brings the hero back on the main barge with the hull's lives at the tier's door, not at full - one death must not replay the whole air fight (the old risk, "Carried over"). With points A and B that is three.
 
 ## What comes after
-- **The hull's end**: at no lives the hull cracks and bursts, and a small fast drone with few lives flies out of it (the Batpod out of the Tumbler) - the very last part of the fight, designed later in its own chat. Then the blast and the titles (stage 19, `docs/mechanics/finale.md`).
+- **The hull's end** (decided 2026-11-12, supersedes the drone with few lives): at no lives the hull cracks and bursts, and a small fast drone flies out of it (the Batpod out of the Tumbler). Here it cannot be killed - it is kept for a half-boss of a later level. The flight does not slow: the Cordon (TEK-Q6, the ship of level 1's screen 9) catches up at the flight's speed, its bay open - the bay the tank of screen 9 came out of; the drone flies into it and the Cordon flies off. Then the flight slows down and the hero is no longer his own: the tiles of the road come in again, and the main barge with him on it stops beside them. Then the titles (stage 19, `docs/mechanics/finale.md`, "Decided 2026-11-12").
 - **Proposed, not decided**: in the windows of tiers 3 and 4, a rotor glimpsed turning inside the open bay - the drone shown before it comes.
 
 ## Art
