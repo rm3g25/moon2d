@@ -36,7 +36,10 @@ picture, and Legendary comes in over two seconds - the hand-over to the
 titles, which are still to come; till then the picture stands and Escape
 opens the menu. Four new sounds (`tools/sounds/finale.py`): the crack's
 groan, the burst, the flight winding down, the dock. The key O on the
-finisher's stretch takes the hull to its last life, then that one.
+finisher's stretch takes the hull to its last life, then that one. And
+from the live run: a small barge the dive smashes over the main barge is
+crushed with no shrapnel - its fan rained on a hero under the hull, out
+of a barge the hull hid, too close to dodge (`OverTheHarbour`).
 
 2026-11-12: **3.0.127 - the ladder.** The air fight's rungs, the choice of
 the turn and its chains are a unit of their own (`Game.Ladder`, new): the

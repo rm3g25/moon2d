@@ -458,6 +458,7 @@ type
     procedure TickWreckage;
     procedure SmashFlockBarge(AIndex: Integer);
     procedure SprayShrapnel(const AMiddle: TSdlFPoint);
+    function OverTheHarbour(const AMiddle: TSdlFPoint): Boolean;
     procedure ResolveRamSweep;
     procedure ResolveRamFire;
     procedure SeizeMagnetBarge(const ACue: TMagnetCue);
@@ -4794,8 +4795,8 @@ begin
 end;
 
 // While the hull runs low in a charge or a dive, the small barges it meets
-// are smashed - in a dive into shrapnel too - and the charge's wash rocks
-// the main barge as it rams over it
+// are smashed - in a dive into shrapnel too, but for one over the main
+// barge - and the charge's wash rocks the main barge as it rams over it
 procedure TMoonGame.SmashUnderTheHull;
 var
   Sweep: TSdlFRect;
@@ -4811,7 +4812,7 @@ begin
       Continue;
     var Middle := PadMiddle(Pad);
     SmashFlockBarge(i);
-    if FRam.Dive.Running then
+    if FRam.Dive.Running and not OverTheHarbour(Middle) then
       SprayShrapnel(Middle);
   end;
   if FChargeWashed or not FRam.Charge.Rams or (FBargePad = nil) then
@@ -4855,6 +4856,17 @@ begin
   var MeanDown: Single := 8 + ShrapnelFan.Rows + 1;
   FMonsterBullets.SpawnFan(AMiddle.X - MeanAcross,
     AMiddle.Y + SpriteSize - MeanDown, ShrapnelFan);
+end;
+
+// A barge smashed over the main barge's deck is crushed with no shrapnel:
+// from there the fan would rain on a hero standing under the hull, out of
+// a barge hidden by it, too close to dodge
+function TMoonGame.OverTheHarbour(const AMiddle: TSdlFPoint): Boolean;
+begin
+  if FBargePad = nil then
+    Exit(False);
+  var Deck := FBargePad.Body;
+  Result := (AMiddle.X > Deck.X) and (AMiddle.X < Deck.X + Deck.W);
 end;
 
 // The chase: the road slides left under the Ram, and the world on it -
