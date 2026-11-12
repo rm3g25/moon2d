@@ -32,7 +32,7 @@ uses
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
-  Game.BargeFire, Game.Charge,
+  Game.BargeFire, Game.Charge, Game.Dive,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -426,9 +426,12 @@ type
     function MagnetBarges: TArray<TMagnetBarge>;
     procedure CarryOutMagnet(const ACue: TMagnetCue);
     procedure CarryOutCharge(const ACue: TChargeCue);
-    procedure SmashUnderTheCharge;
+    procedure CarryOutDive(const ACue: TDiveCue);
+    procedure SmashUnderTheHull;
     procedure SmashFlockBarge(AIndex: Integer);
-    procedure ResolveRamCharge;
+    procedure SprayShrapnel(const AMiddle: TSdlFPoint);
+    procedure ResolveRamSweep;
+    procedure ResolveRamFire;
     procedure SeizeMagnetBarge(const ACue: TMagnetCue);
     procedure ThrowMagnetBarge(const AAim: TSdlFPoint);
     procedure ResolveThrownBarge;
@@ -641,6 +644,21 @@ const
   // tick till he lands; its wash rocks the main barge it passes over
   ChargeKnockWay = 2.0;
   ChargeWashDepth = 3.0;
+  // The Ram's dive: its jets cut, its fall, its blow on the main barge,
+  // its jets catching again
+  DiveCutSoundFile = 'divecut.wav';
+  DiveFallSoundFile = 'divefall.wav';
+  DiveSlamSoundFile = 'diveslam.wav';
+  DiveRelightSoundFile = 'diverelight.wav';
+  // The dive knocks a hero it strikes aside this hard, and rocks the main
+  // barge under it this deep as it lands; the fire of its jets throws a
+  // hero it burns aside as hard
+  DiveKnockWay = 2.0;
+  DiveBlowDepth = 8.0;
+  JetFireKnockWay = 2.0;
+  // A small barge the dive smashes bursts into the bullets of a fan of
+  // 2008, the monsters' own: they wound as theirs do
+  ShrapnelFan: TFanShape = (Rows: 4; Cols: 10; BaseSpeed: 3; SpeedSpread: 3);
   // Aloft the mortar's shell climbs this far over its muzzle - which
   // stands near the top of the screen - before it comes down
   AirLobRise = 20.0;
@@ -4136,6 +4154,9 @@ begin
   FRamPainter.Tick(FBelt.Speed);
   CarryOutMagnet(Cue.Magnet);
   CarryOutCharge(Cue.Charge);
+  CarryOutDive(Cue.Dive);
+  FFlock.Held := FRam.HoldsFlock;
+  SmashUnderTheHull;
   if Cue.Chase then
     FBelt.Start;
   if Cue.Rows then
@@ -4397,10 +4418,7 @@ begin
     (AFirst.Y < ASecond.Y + ASecond.H) and (ASecond.Y < AFirst.Y + AFirst.H);
 end;
 
-// What the charge did this tick, carried out: its sounds, no small barge
-// coming in from the band till it is up again, and while it runs low the
-// small barges it meets smashed and the main barge rocked by its wash as
-// it rams over it
+// What the charge did this tick, carried out: its sounds
 procedure TMoonGame.CarryOutCharge(const ACue: TChargeCue);
 begin
   if ACue.Warns then
@@ -4412,20 +4430,53 @@ begin
     FAudio.Play(ChargeRushSoundFile);
   if ACue.Brakes then
     FAudio.Play(ChargeBrakeSoundFile);
-  FFlock.Held := FRam.Charge.HoldsFlock;
-  SmashUnderTheCharge;
 end;
 
-procedure TMoonGame.SmashUnderTheCharge;
+// What the dive did this tick, carried out: the roar of its jets cut for
+// the silence and back as they catch, its sounds, and the main barge
+// rocked as it lands over it
+procedure TMoonGame.CarryOutDive(const ACue: TDiveCue);
+begin
+  if ACue.Hushes then
+  begin
+    StopRamRumble;
+    FAudio.Play(DiveCutSoundFile);
+  end;
+  if ACue.Drops then
+    FAudio.Play(DiveFallSoundFile);
+  if ACue.Lands then
+  begin
+    FAudio.Play(DiveSlamSoundFile);
+    FBarge.Rock(DiveBlowDepth);
+  end;
+  if ACue.Relights then
+  begin
+    FAudio.Play(DiveRelightSoundFile);
+    FRamRumble := FAudio.PlayLooped(JetHoverSoundFile);
+  end;
+end;
+
+// While the hull runs low in a charge or a dive, the small barges it meets
+// are smashed - in a dive into shrapnel too - and the charge's wash rocks
+// the main barge as it rams over it
+procedure TMoonGame.SmashUnderTheHull;
 var
   Sweep: TSdlFRect;
 begin
-  if not FRam.ChargeSweep(Sweep) then
+  if not FRam.HullSweep(Sweep) then
     Exit;
   for var i := 0 to High(FFlockPads) do
-    if FFlock.Flying(i) and not FFlockPads[i].Dormant and
-      BoxesMeet(Sweep, FFlockPads[i].Body) then
-      SmashFlockBarge(i);
+  begin
+    var Pad := FFlockPads[i];
+    var Met := FFlock.Flying(i) and not Pad.Dormant and
+      BoxesMeet(Sweep, Pad.Body);
+    if not Met then
+      Continue;
+    var Middle := PadMiddle(Pad);
+    SmashFlockBarge(i);
+    if FRam.Dive.Running then
+      SprayShrapnel(Middle);
+  end;
   if FChargeWashed or not FRam.Charge.Rams or (FBargePad = nil) then
     Exit;
   var Deck := FBargePad.Body;
@@ -4437,7 +4488,7 @@ begin
   end;
 end;
 
-// Into pieces flung along the charge's way, its medkit gone with it
+// Into pieces flung along the hull's way, its medkit gone with it
 procedure TMoonGame.SmashFlockBarge(AIndex: Integer);
 begin
   var Pad := FFlockPads[AIndex];
@@ -4447,7 +4498,8 @@ begin
   Broken.Width := Pad.Placement.Width;
   Broken.Height := Pad.PictureHeight;
   Broken.Spin := FFlock.Heel(AIndex);
-  Broken.Speed.X := FRam.Charge.Pace;
+  Broken.Speed.X := FRam.Rolled;
+  Broken.Speed.Y := FRam.Dive.Fall;
   FPieces.Shatter(Broken);
   FFlock.Smash(AIndex);
   Pad.Doze;
@@ -4455,6 +4507,17 @@ begin
   FExplosions.Detonate(Broken.Middle.X, Broken.Middle.Y, ekBarrel);
   FAudio.Play(BossCrashSoundFile);
   FShake.AddTrauma(BargeSmashTrauma);
+end;
+
+// The fan of 2008 about AMiddle. Its bullets come out right of and under
+// the point it is given - 8 + t + Random(7) - 7 across, 8 + 2k down - and
+// each is met a sprite over its own Y.
+procedure TMoonGame.SprayShrapnel(const AMiddle: TSdlFPoint);
+begin
+  var MeanAcross: Single := 4 + (ShrapnelFan.Cols + 1) / 2;
+  var MeanDown: Single := 8 + ShrapnelFan.Rows + 1;
+  FMonsterBullets.SpawnFan(AMiddle.X - MeanAcross,
+    AMiddle.Y + SpriteSize - MeanDown, ShrapnelFan);
 end;
 
 // The chase: the road slides left under the Ram, and the world on it -
@@ -4478,17 +4541,34 @@ begin
   FRamRumble.Channel := -1;
 end;
 
-// The charge's sweep strikes him once, on a deck or in the air: a wound,
-// and the knock along its way and down - likely off whatever he stood on
-procedure TMoonGame.ResolveRamCharge;
+// The sweep of a charge or a dive strikes him once, on a deck or in the
+// air: a wound, and the knock along the charge's way or aside from the
+// dive, and down - likely off whatever he stood on
+procedure TMoonGame.ResolveRamSweep;
 begin
   if FHero.Dead then
     Exit;
   var Away: Integer;
-  if not FRam.ChargeStrikes(HeroBody(FHero), Away) then
+  if not FRam.HullStrikes(HeroBody(FHero), Away) then
     Exit;
   HurtByRam;
-  FHero.Knock(Away, ChargeKnockWay);
+  if FRam.Dive.Running then
+    FHero.Knock(Away, DiveKnockWay)
+  else
+    FHero.Knock(Away, ChargeKnockWay);
+end;
+
+// Low after the dive, the fire of a hot jet burns him and throws him out
+// of it, aside from the nozzle
+procedure TMoonGame.ResolveRamFire;
+begin
+  if FHero.Dead then
+    Exit;
+  var Away: Integer;
+  if not FRam.JetFireBurns(HeroBody(FHero), Away) then
+    Exit;
+  HurtByRam;
+  FHero.Knock(Away, JetFireKnockWay);
 end;
 
 // The Ram throws a hero over its hull with a wound: falling back, one who
@@ -4883,7 +4963,7 @@ begin
   if not Result then
   begin
     Result := FRam.StrikeNozzles(Stretch.Start, Stretch.Finish, At, Normal);
-    Sinks := Result and FRam.Charge.Soft and (ABullet.Look = blOrb);
+    Sinks := Result and FRam.NozzlesSoft and (ABullet.Look = blOrb);
   end;
   if Sinks and FHullLives.Wound then
   begin
@@ -5268,7 +5348,8 @@ begin
     TickRam;
   end;
   ResolveCannonContact;
-  ResolveRamCharge;
+  ResolveRamSweep;
+  ResolveRamFire;
   ResolveRamThrowOver;
   ResolveRamContact;
   ResolveWheelContact;

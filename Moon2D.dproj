@@ -253,6 +253,7 @@
         <DCCReference Include="Game\Game.Magnet.pas"/>
         <DCCReference Include="Game\Game.Mortar.pas"/>
         <DCCReference Include="Game\Game.Charge.pas"/>
+        <DCCReference Include="Game\Game.Dive.pas"/>
         <DCCReference Include="Game\Game.BargeFire.pas"/>
         <DCCReference Include="Game\Game.Pieces.pas"/>
         <DCCReference Include="Game\Game.FarPlane.pas"/>

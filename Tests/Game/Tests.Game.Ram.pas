@@ -140,6 +140,14 @@
   corridor once, on a deck or not; after the brake the nozzles are hot,
   the honeycomb falls, and an orb meeting them is the game's to count.
 
+  Its dive: none before its rung; on it the turn after the magnet's window
+  goes to the dive first, then the charge, then the mortar, then the dive
+  again. The eye flashes and the jets go out, the magnet tucks in; it
+  falls to just over the head of a hero standing on the main barge, never
+  striking him there, and hangs low with its jets lit again and hot -
+  their fire burns under a nozzle, not under the belly or past the hull -
+  then rises to hang. Its fall strikes a hero under it once.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Ram;
@@ -433,6 +441,56 @@ type
     procedure TestAHeroOnTheMainBargeIsUnderItsCorridor;
     [Test]
     procedure TestAfterTheBrakeTheNozzlesAreHotAndTheHoneycombFalls;
+  end;
+
+  // Whose turn a test of the dive waits for
+  TDiveAwait = (daDive, daCharge, daMortar);
+
+  // What a dive did, tick by tick, from its start to its end
+  TDiveRun = record
+    // The hull's bottom at its lowest - the most down the screen
+    BottomMost: Single;
+    Lands, Relights, Done, Struck, ArmourDowns, ArmourUps: Integer;
+    StruckAway: Integer;
+    FlashSeen, DarkSeen, TuckedSeen, HotSeen: Boolean;
+  end;
+
+  [TestFixture]
+  TRamDiveTests = class
+  private
+    FRam: TRam;
+    function Holds(AWhat: TDiveAwait): Boolean;
+    // Whose turn it is, if not AWhat's; False when none is under way
+    function AnotherHolds(AWhat: TDiveAwait; out AOther: TDiveAwait): Boolean;
+    // Ticks with AHero in sight till AWhat holds, no weapon but its own
+    // running on the way; fails past the limit
+    procedure TickTill(const AHero: TRamTarget; AWhat: TDiveAwait);
+    // Ticks with AHero in sight while AWhat holds; fails past the limit
+    procedure TickOut(const AHero: TRamTarget; AWhat: TDiveAwait);
+    // Ticks with AHero in sight till the dive is done, AStruckBody asked
+    // for a strike every tick
+    function RunTheDive(const AHero: TRamTarget;
+      const AStruckBody: TSdlFRect): TDiveRun;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestBeforeItsRungNoDive;
+    [Test]
+    procedure TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar;
+    [Test]
+    procedure TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn;
+    [Test]
+    procedure TestItDropsOverTheHeadOfAHeroOnTheMainBargeAndHangsAgain;
+    [Test]
+    procedure TestItsFallStrikesAHeroUnderItOnce;
+    [Test]
+    procedure TestLowItsFireBurnsUnderANozzleNotUnderTheBelly;
+    [Test]
+    procedure TestAfterTheBlowTheNozzlesAreHotAndTheHoneycombFalls;
   end;
 
   [TestFixture]
@@ -4941,19 +4999,21 @@ begin
   FRam.Free;
 end;
 
-procedure TRamChargeTests.HangReady(var AHero: TRamTarget);
+// Hanging with its middle over the middle of the screen, the magnet out
+// and cold, a barge under its face from then on
+procedure HangWithTheMagnetOut(ARam: TRam; var AHero: TRamTarget);
 begin
-  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
-  FRam.DeployMagnet;
+  ARam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  ARam.DeployMagnet;
   var Ticks := 0;
-  while FRam.Magnet.Stage <> mgSeeking do
+  while ARam.Magnet.Stage <> mgSeeking do
   begin
-    FRam.Tick(AHero);
+    ARam.Tick(AHero);
     Inc(Ticks);
     if Ticks > MagnetTicks then
       Assert.Fail('The magnet never came out');
   end;
-  var Face := FRam.MagnetFaceAt(FRam.PoseAt(1));
+  var Face := ARam.MagnetFaceAt(ARam.PoseAt(1));
   var Barge: TMagnetBarge;
   Barge.Index := CaughtBarge;
   Barge.Left := Face.X - SmallBarge / 2;
@@ -4961,6 +5021,11 @@ begin
   Barge.Width := SmallBarge;
   Barge.HeroAboard := False;
   AHero.Barges := [Barge];
+end;
+
+procedure TRamChargeTests.HangReady(var AHero: TRamTarget);
+begin
+  HangWithTheMagnetOut(FRam, AHero);
 end;
 
 procedure TRamChargeTests.TickTillCharge(const AHero: TRamTarget; ALimit: Integer);
@@ -5004,10 +5069,10 @@ begin
     if FRam.Magnet.OutAt(1) <= 0 then
       Result.TuckedSeen := True;
     var Sweep: TSdlFRect;
-    if FRam.ChargeSweep(Sweep) then
+    if FRam.HullSweep(Sweep) then
       Result.SweepSeen := True;
     var Away: Integer;
-    if FRam.ChargeStrikes(AStruckBody, Away) then
+    if FRam.HullStrikes(AStruckBody, Away) then
     begin
       Inc(Result.Struck);
       Result.StruckAway := Away;
@@ -5132,7 +5197,251 @@ begin
   Assert.IsFalse(FRam.HotAloft, 'Cold once it is up again');
 end;
 
+{ TRamDiveTests }
+
+const
+  // On the dive's rung
+  DiveSpent = 0.7;
+  // A cycle of the magnet and a turn of any weapon are over well within
+  // this
+  DiveRunTicks = 1500;
+  // The main barge's deck where the game says it is now
+  HarbourDeck = RamFloorY - 6;
+
+function HeroBeforeTheDive(ASpent: Single): TRamTarget;
+begin
+  Result := HeroAboard(ASpent);
+  Result.Body := Box(HangMiddleX, HarbourDeck - RiderHeight, 16, RiderHeight);
+  Result.Harbour := At(HangMiddleX, HarbourDeck);
+  Result.HarbourTopmost := TopmostDeck;
+end;
+
+procedure TRamDiveTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamDiveTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+function TRamDiveTests.Holds(AWhat: TDiveAwait): Boolean;
+begin
+  case AWhat of
+    daDive:
+      Result := FRam.Dive.Running;
+    daCharge:
+      Result := FRam.Charge.Running;
+  else
+    Result := FRam.Mortar.Busy;
+  end;
+end;
+
+function TRamDiveTests.AnotherHolds(AWhat: TDiveAwait;
+  out AOther: TDiveAwait): Boolean;
+begin
+  AOther := AWhat;
+  for var Other := Low(TDiveAwait) to High(TDiveAwait) do
+    if (Other <> AWhat) and Holds(Other) then
+    begin
+      AOther := Other;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TRamDiveTests.TickTill(const AHero: TRamTarget; AWhat: TDiveAwait);
+begin
+  var Ticks := 0;
+  while not Holds(AWhat) do
+  begin
+    var Other: TDiveAwait;
+    if AnotherHolds(AWhat, Other) then
+      Assert.Fail(Format('Waiting for %d, %d came', [Ord(AWhat), Ord(Other)]));
+    FRam.Tick(AHero);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail(Format('Never %d', [Ord(AWhat)]));
+  end;
+end;
+
+procedure TRamDiveTests.TickOut(const AHero: TRamTarget; AWhat: TDiveAwait);
+begin
+  var Ticks := 0;
+  while Holds(AWhat) do
+  begin
+    FRam.Tick(AHero);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail(Format('%d never over', [Ord(AWhat)]));
+  end;
+end;
+
+function TRamDiveTests.RunTheDive(const AHero: TRamTarget;
+  const AStruckBody: TSdlFRect): TDiveRun;
+begin
+  Result := Default(TDiveRun);
+  var Ticks := 0;
+  while FRam.Dive.Running do
+  begin
+    var Cue := FRam.Tick(AHero);
+    Result.BottomMost := Max(Result.BottomMost,
+      RamFloorY - FRam.Flight.LiftAt(1));
+    if Cue.Dive.Lands then
+      Inc(Result.Lands);
+    if Cue.Dive.Relights then
+      Inc(Result.Relights);
+    if Cue.Dive.Done then
+      Inc(Result.Done);
+    if Cue.ArmourDown then
+      Inc(Result.ArmourDowns);
+    if Cue.ArmourUp then
+      Inc(Result.ArmourUps);
+    if FRam.Dive.Flashes and (FRam.EyeAt(1) >= 1) then
+      Result.FlashSeen := True;
+    var Dark := (FRam.Flight.JetAt(tjFront, 1) <= 0) and
+      (FRam.Flight.JetAt(tjRear, 1) <= 0);
+    if Dark then
+      Result.DarkSeen := True;
+    if FRam.Magnet.OutAt(1) <= 0 then
+      Result.TuckedSeen := True;
+    if FRam.HotAloft and FRam.NozzlesSoft then
+      Result.HotSeen := True;
+    var Away: Integer;
+    if FRam.HullStrikes(AStruckBody, Away) then
+    begin
+      Inc(Result.Struck);
+      Result.StruckAway := Away;
+    end;
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('The dive never ended');
+  end;
+end;
+
+procedure TRamDiveTests.TestBeforeItsRungNoDive;
+begin
+  var Hero := HeroBeforeTheDive(AirTierSpent[DiveFromTier] - 0.01);
+  HangWithTheMagnetOut(FRam, Hero);
+  var Turns := 0;
+  for var i := 1 to 2 * DiveRunTicks do
+  begin
+    var Cue := FRam.Tick(Hero);
+    if Cue.Magnet.Cooled then
+      Inc(Turns);
+    Assert.IsFalse(FRam.Dive.Running, 'No dive before its rung');
+  end;
+  Assert.IsTrue(Turns >= 2, 'The magnet went round');
+end;
+
+procedure TRamDiveTests.TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  TickOut(Hero, daDive);
+  TickTill(Hero, daCharge);
+  TickOut(Hero, daCharge);
+  TickTill(Hero, daMortar);
+  TickOut(Hero, daMortar);
+  TickTill(Hero, daDive);
+  Assert.IsTrue(FRam.Dive.Running, 'The dive again');
+end;
+
+procedure TRamDiveTests.TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  var Run := RunTheDive(Hero, Default(TSdlFRect));
+  Assert.IsTrue(Run.FlashSeen, 'Its eye flashed');
+  Assert.IsTrue(Run.DarkSeen, 'Its jets went out');
+  Assert.IsTrue(Run.TuckedSeen, 'In the belly while it dives');
+  Assert.AreEqual(1, Run.Relights, 'Lit again once');
+  Assert.AreEqual(1.0, Double(FRam.Flight.JetAt(tjFront, 1)), 0.01, 'Burning as it hangs');
+end;
+
+procedure TRamDiveTests.TestItDropsOverTheHeadOfAHeroOnTheMainBargeAndHangsAgain;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  var Run := RunTheDive(Hero, Hero.Body);
+  var HisHead: Single := HarbourDeck - RiderHeight;
+  Assert.IsTrue(Run.BottomMost > HisHead - 20, 'Low: just over his head');
+  Assert.IsTrue(Run.BottomMost <= HisHead, Format('Over his head: %.1f', [Run.BottomMost]));
+  Assert.AreEqual(1, Run.Lands, 'Landed once');
+  Assert.AreEqual(1, Run.Done, 'Done once');
+  Assert.AreEqual(0, Run.Struck, 'Never struck standing on the main barge');
+  Assert.AreEqual(Ord(tkHanging), Ord(FRam.Flight.Stage), 'Hanging again');
+  Assert.AreEqual(Double(HangLift), Double(FRam.Flight.LiftAt(1)), 0.01, 'At its height');
+end;
+
+procedure TRamDiveTests.TestItsFallStrikesAHeroUnderItOnce;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  // On a small barge of a lane, under the left half of the hull
+  var Under := Box(FRam.Left + RamWidth / 4, 216, 16, 32);
+  var Run := RunTheDive(Hero, Under);
+  Assert.AreEqual(1, Run.Struck, 'Struck once');
+  Assert.AreEqual(-1, Run.StruckAway, 'Knocked aside, away from its middle');
+end;
+
+procedure TRamDiveTests.TestLowItsFireBurnsUnderANozzleNotUnderTheBelly;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  var Away: Integer;
+  var Top: Single := HarbourDeck - RiderHeight;
+  var Ticks := 0;
+  while not FRam.Dive.Soft do
+  begin
+    var Anywhere := Box(FRam.Left, Top, RamWidth, RiderHeight);
+    Assert.IsFalse(FRam.JetFireBurns(Anywhere, Away), 'No fire before it is hot');
+    FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('Never hot after the blow');
+  end;
+  var Middle := Box(FRam.Left + RamWidth / 2 - 8, Top, 16, RiderHeight);
+  Assert.IsFalse(FRam.JetFireBurns(Middle, Away), 'Under the belly');
+  var PastTheBow := Box(FRam.Left - 20, Top, 16, RiderHeight);
+  Assert.IsFalse(FRam.JetFireBurns(PastTheBow, Away), 'Past the hull');
+  var Burnt := 0;
+  var X: Single := FRam.Left;
+  while X < FRam.Left + RamWidth do
+  begin
+    if FRam.JetFireBurns(Box(X, Top, 16, RiderHeight), Away) then
+    begin
+      Inc(Burnt);
+      Assert.AreNotEqual(0, Away, Format('Thrown out of the fire at %.0f', [X]));
+    end;
+    X := X + 4;
+  end;
+  Assert.IsTrue(Burnt > 0, 'Somewhere under a nozzle');
+  RunTheDive(Hero, Default(TSdlFRect));
+  Assert.IsFalse(FRam.JetFireBurns(Box(FRam.Left, Top, RamWidth, RiderHeight), Away),
+    'None once it is up');
+end;
+
+procedure TRamDiveTests.TestAfterTheBlowTheNozzlesAreHotAndTheHoneycombFalls;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTill(Hero, daDive);
+  var Run := RunTheDive(Hero, Default(TSdlFRect));
+  Assert.IsTrue(Run.HotSeen, 'Hot after the blow');
+  Assert.AreEqual(1, Run.ArmourDowns, 'The honeycomb fell once');
+  Assert.AreEqual(1, Run.ArmourUps, 'And kindled back once');
+  Assert.IsFalse(FRam.HotAloft, 'Cold once it is up again');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TRamDiveTests);
   TDUnitX.RegisterTestFixture(TRamChargeTests);
   TDUnitX.RegisterTestFixture(TRamMagnetTests);
   TDUnitX.RegisterTestFixture(TRamTests);

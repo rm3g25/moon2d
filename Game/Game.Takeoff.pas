@@ -15,7 +15,9 @@
 
   Hanging, it can be carried: the caller says each tick how fast it goes
   across, how high it is and how it leans, and lets it go to hang again
-  where it left it - the Ram's charge flies it so.
+  where it left it - the Ram's charge and its dive fly it so. Aloft its
+  jets can be put out - the fire dies in a few ticks - and lit again,
+  catching as they did at the takeoff; the dive does both.
 
   Aloft the nozzles swivel in their rings, within a few degrees either
   way: with the way it goes and harder with the way it gathers or loses
@@ -143,6 +145,10 @@ type
     procedure Carry(APace, ALift, ALean: Single);
     // Carried, it hangs again from where it was left, its pace kept
     procedure Release;
+    // Aloft: both jets go out, the fire dying over a few ticks; both catch
+    // again, flaring up as at the takeoff. Nothing on the road.
+    procedure Douse;
+    procedure Relight;
     function Running: Boolean;
     // Hanging or carried
     function Aloft: Boolean;
@@ -187,6 +193,8 @@ const
   JetCatchTicks = 3;
   JetFlare = 0.5;
   JetSettleTicks = 10;
+  // Put out, a jet's fire is gone over this long
+  JetOutTicks = 4;
   // The swivel: degrees for a unit a tick of pace, and for a unit a tick
   // gained or lost in a tick - the push outweighs the drift, so a brake
   // throws the fire ahead however fast it still goes; each tick it turns
@@ -329,6 +337,22 @@ begin
   Result := FStage in [tkHanging, tkCarried];
 end;
 
+procedure TTakeoff.Douse;
+begin
+  if not Aloft then
+    Exit;
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+    FLit[Jet] := -1;
+end;
+
+procedure TTakeoff.Relight;
+begin
+  if not Aloft then
+    Exit;
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+    FLit[Jet] := 0;
+end;
+
 procedure TTakeoff.Catch(AJet: TTakeoffJet; var ACue: TTakeoffCue);
 begin
   FLit[AJet] := 0;
@@ -403,7 +427,10 @@ begin
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     if FLit[Jet] < 0 then
+    begin
+      FJets[Jet] := Max(0, FJets[Jet] - 1 / JetOutTicks);
       Continue;
+    end;
     Inc(FLit[Jet]);
     if FLit[Jet] <= JetCatchTicks then
       FJets[Jet] := (1 + JetFlare) * FLit[Jet] / JetCatchTicks

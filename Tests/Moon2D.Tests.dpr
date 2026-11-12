@@ -50,6 +50,7 @@ uses
   Tests.Game.Magnet in 'Game\Tests.Game.Magnet.pas',
   Tests.Game.Mortar in 'Game\Tests.Game.Mortar.pas',
   Tests.Game.Charge in 'Game\Tests.Game.Charge.pas',
+  Tests.Game.Dive in 'Game\Tests.Game.Dive.pas',
   Tests.Game.Pieces in 'Game\Tests.Game.Pieces.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',

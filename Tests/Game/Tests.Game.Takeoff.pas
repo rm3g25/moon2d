@@ -19,7 +19,9 @@
   and let go to hang on from its height with no jump; on its way up it
   cannot. Aloft its nozzles swivel with the way it goes and the way it
   gathers pace, never past their most; a hard brake throws them ahead; on
-  the road they do not swivel.
+  the road they do not swivel. Aloft its jets go out when put out - the
+  fire gone in a few ticks, never back by itself - and catch again when
+  lit, flaring as they did; on its way up neither is anything.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -85,6 +87,12 @@ type
     procedure TestAHardBrakeThrowsTheNozzlesAhead;
     [Test]
     procedure TestOnTheRoadTheNozzlesDoNotSwivel;
+    [Test]
+    procedure TestPutOutTheFireIsGoneInAFewTicksAndStaysOut;
+    [Test]
+    procedure TestLitAgainTheJetsCatchFlaring;
+    [Test]
+    procedure TestOnItsWayUpTheJetsCannotBePutOut;
   end;
 
 implementation
@@ -497,6 +505,62 @@ begin
     FTakeoff.Tick(200);
     Assert.AreEqual(0.0, Double(FTakeoff.SwivelAt(1)), Slop, 'Straight down');
   end;
+end;
+
+procedure TTakeoffTests.TestPutOutTheFireIsGoneInAFewTicksAndStaysOut;
+const
+  FewTicks = 6;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick;
+  FTakeoff.Douse;
+  var Last := FTakeoff.JetAt(tjFront, 1);
+  for var i := 1 to FewTicks do
+  begin
+    FTakeoff.Tick;
+    Assert.IsTrue(FTakeoff.JetAt(tjFront, 1) <= Last + Slop, 'Dying, never back');
+    Last := FTakeoff.JetAt(tjFront, 1);
+  end;
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+    Assert.AreEqual(0.0, Double(FTakeoff.JetAt(Jet, 1)), Slop,
+      Format('Jet %d out', [Ord(Jet)]));
+  for var i := 1 to ManyTicks do
+    FTakeoff.Tick;
+  Assert.AreEqual(0.0, Double(FTakeoff.JetAt(tjRear, 1)), Slop, 'Still out');
+  Assert.IsTrue(FTakeoff.Aloft, 'Aloft all the same');
+end;
+
+procedure TTakeoffTests.TestLitAgainTheJetsCatchFlaring;
+const
+  Settled = 30;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick;
+  FTakeoff.Douse;
+  for var i := 1 to 10 do
+    FTakeoff.Tick;
+  FTakeoff.Relight;
+  var Brightest: Single := 0;
+  for var i := 1 to Settled do
+  begin
+    FTakeoff.Tick;
+    Brightest := Max(Brightest, FTakeoff.JetAt(tjRear, 1));
+  end;
+  Assert.IsTrue(Brightest > 1, 'A flare as they catch');
+  Assert.AreEqual(1.0, Double(FTakeoff.JetAt(tjFront, 1)), Slop, 'Steady again');
+  Assert.AreEqual(1.0, Double(FTakeoff.JetAt(tjRear, 1)), Slop, 'Both');
+end;
+
+procedure TTakeoffTests.TestOnItsWayUpTheJetsCannotBePutOut;
+begin
+  CatchTheRearJet(ShedLean);
+  for var i := 1 to 20 do
+    FTakeoff.Tick;
+  FTakeoff.Douse;
+  for var i := 1 to 10 do
+    FTakeoff.Tick;
+  Assert.IsTrue(FTakeoff.JetAt(tjFront, 1) > 0, 'The front jet burns on');
+  Assert.IsTrue(FTakeoff.JetAt(tjRear, 1) > 0, 'The rear jet burns on');
 end;
 
 initialization

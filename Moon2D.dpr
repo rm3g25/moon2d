@@ -101,6 +101,7 @@ uses
   Game.Magnet in 'Game\Game.Magnet.pas',
   Game.Mortar in 'Game\Game.Mortar.pas',
   Game.Charge in 'Game\Game.Charge.pas',
+  Game.Dive in 'Game\Game.Dive.pas',
   Game.BargeFire in 'Game\Game.BargeFire.pas',
   Game.Pieces in 'Game\Game.Pieces.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',

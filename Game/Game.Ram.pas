@@ -204,7 +204,14 @@
   back to hang. The charge flies the hull: the flight is carried by it. In
   the run, the sweep of the hull strikes a hero it meets, once a charge,
   on a deck or not, and knocks him along its way; the small barges it
-  meets low are the game's to smash.
+  meets low are the game's to smash. On the fourth rung the dive joins
+  them, first in their round (Game.Dive): all but no warning - its eye
+  flashes and its jets go out for half a second - then it drops like a
+  stone, straight down, to just over the head of a hero standing on the
+  main barge, and hangs there low while its jets catch again, hot - they
+  take an orb as after the brake, and the fire under them burns a hero in
+  it - then climbs back to hang. Falling, it strikes a hero it meets, once
+  a dive; the small barges it meets low are the game's to smash.
 
   Its wheels gone, its honeycomb comes back: kindled outward from the
   magnet as the second wheel is thrown, then over the flying hull - rimmed
@@ -233,7 +240,8 @@ interface
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
-  Game.Takeoff, Game.Magnet, Game.Mortar, Game.Charge, Effects.Sparks;
+  Game.Takeoff, Game.Magnet, Game.Mortar, Game.Charge, Game.Dive,
+  Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -247,11 +255,12 @@ const
   BunkerLives = 150;
   // The rungs of the air fight's ladder: the share of the hull's lives
   // spent from which each holds. The bombs and the lift come with the
-  // second, the charge with the third.
+  // second, the charge with the third, the dive with the fourth.
   AirTierSpent: array [2..4] of Single = (0.2, 0.43, 0.67);
   BombsFromTier = 2;
   LiftFromTier = 2;
   ChargeFromTier = 3;
+  DiveFromTier = 4;
   // The bunker's last third - the hunt, the hull turned round - holds out
   // this many times its share of the row: a life every this many strikes
   BunkerLastThirdStrikes = 2;
@@ -427,10 +436,12 @@ type
     ArmourUp: Boolean;
     // What the charge did this tick
     Charge: TChargeCue;
+    // What the dive did this tick
+    Dive: TDiveCue;
   end;
 
   // Whose the turn after the magnet's window was last
-  TAirTurn = (atNone, atMortar, atCharge);
+  TAirTurn = (atNone, atMortar, atCharge, atDive);
 
   // Where the hull stands and how: upright on the road with its left edge
   // at Left, turned Lean degrees clockwise about its rear wheel's touch of
@@ -585,9 +596,10 @@ type
     FMagnet: TMagnet;
     FMortar: TMortar;
     FCharge: TCharge;
+    FDive: TDive;
     FLastTurn: TAirTurn;
-    // The charge has struck the hero: once a charge
-    FChargeStruck: Boolean;
+    // The charge or the dive has struck the hero: once a run
+    FSweepStruck: Boolean;
     // Ticks since the bare hull or its wheel last threw a bullet off
     FHullHitTicks: Integer;
     // The hunt's surge, and the ticks of its step - left of the wait,
@@ -638,6 +650,9 @@ type
     procedure BeginCharge;
     procedure CarryCharge;
     function ChargeLowLift: Single;
+    procedure BeginDive;
+    procedure CarryDive;
+    function DiveFloor: Single;
     procedure TickArmour;
     procedure StowArmourAloft;
     procedure RestoreArmourAloft(ATicks: Integer);
@@ -870,15 +885,26 @@ type
     property Magnet: TMagnet read FMagnet;
     property Mortar: TMortar read FMortar;
     property Charge: TCharge read FCharge;
+    property Dive: TDive read FDive;
     // A part of it is hot aloft: the magnet, or the nozzles after the
-    // charge's brake
+    // charge's brake or the dive's fall
     function HotAloft: Boolean;
-    // Low in its charge: the box the hull swept this tick, from where it
-    // was to where it is, the corridor's height; False otherwise
-    function ChargeSweep(out ABox: TSdlFRect): Boolean;
-    // Its charge runs fast and its sweep meets AHeroBody, on a deck or not:
-    // AAway - the side it knocks him to, the way it goes. Once a charge.
-    function ChargeStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+    // The nozzles are hot: an orb that meets one takes a life of the hull
+    function NozzlesSoft: Boolean;
+    // AAlpha of the way from the last tick to this one: 0 cold to 1 hot
+    function NozzleHeatAt(AAlpha: Single): Single;
+    // A charge or a dive runs: no small barge comes in
+    function HoldsFlock: Boolean;
+    // Low in its charge or its dive: the box the hull swept this tick, from
+    // where it was to where it is; False otherwise
+    function HullSweep(out ABox: TSdlFRect): Boolean;
+    // Its charge runs fast or its dive falls, and its sweep meets
+    // AHeroBody, on a deck or not: AAway - the side it knocks him to, the
+    // way a charge goes, away from the hull's middle in a dive. Once a run.
+    function HullStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+    // Low after its dive, its jets hot: the fire under a nozzle meets
+    // AHeroBody - AAway, the side away from that nozzle
+    function JetFireBurns(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
     // The rung of the air fight's ladder, 1 to 4, by the share of the
     // hull's lives spent the game told last
     function AirTier: Integer;
@@ -1849,10 +1875,16 @@ const
   ArmourBackTicks = 15;
 
   // The charge runs this far over the head of a hero standing on the main
-  // barge at its highest
-  ChargeClearance = 8.0;
+  // barge at its highest; the dive stops this far over the head of one
+  // standing on it where it is
+  HeadClearance = 8.0;
   ChargeRushJolt = 0.25;
   ChargeBrakeJolt = 0.15;
+  DiveLandJolt = 0.35;
+  // The fire under a hot nozzle burns this far down from its mouth, this
+  // far either side of its axis
+  JetBurnReach = 30.0;
+  JetBurnHalfWidth = 7.0;
   // Hot from the brake, the nozzles' lit copy is tinted as the magnet is,
   // a glow of the same colour at each
   NozzleHeatLevel = 0.9;
@@ -2095,10 +2127,12 @@ begin
   FMagnet := TMagnet.Create;
   FMortar := TMortar.Create;
   FCharge := TCharge.Create(RamWidth);
+  FDive := TDive.Create;
 end;
 
 destructor TRam.Destroy;
 begin
+  FDive.Free;
   FCharge.Free;
   FMortar.Free;
   FMagnet.Free;
@@ -2149,8 +2183,9 @@ begin
   FMagnet.Clear;
   FMortar.Clear;
   FCharge.Clear;
+  FDive.Clear;
   FLastTurn := atNone;
-  FChargeStruck := False;
+  FSweepStruck := False;
   StowArmourAloft;
   FShutter := 0;
   FLastShutter := 0;
@@ -2311,6 +2346,7 @@ begin
   FMagnet.Clear;
   FMortar.Clear;
   FCharge.Clear;
+  FDive.Clear;
   StowArmourAloft;
 end;
 
@@ -3912,8 +3948,8 @@ begin
 end;
 
 // Hanging, after the hero: over him, as far as the screen lets the hull
-// be - or over the barge its magnet wants and cannot reach; in a charge,
-// where the charge flies it
+// be - or over the barge its magnet wants and cannot reach; in a charge
+// or a dive, where that flies it
 procedure TRam.TickTakeoff;
 begin
   var Toward: Single := 0;
@@ -3926,7 +3962,9 @@ begin
       (FX + RamWidth / 2);
   var Step := FTakeoff.Tick(Toward);
   if FCharge.Running then
-    CarryCharge;
+    CarryCharge
+  else if FDive.Running then
+    CarryDive;
   FX := FX + FTakeoff.Pace;
   FLean := FTakeoff.LeanAt(1);
   if Step.Ignite then
@@ -3957,8 +3995,25 @@ begin
     FTakeoff.Release;
 end;
 
+// The dive says how high the hull is this tick and how it leans; it puts
+// the jets out and lights them again, and once it is up the hull hangs
+procedure TRam.CarryDive;
+begin
+  var Step := FDive.Tick(DiveFloor);
+  FCue.Dive := Step;
+  FTakeoff.Carry(FDive.Pace, FDive.Lift, FHullFacing * FDive.Bow);
+  if Step.Hushes then
+    FTakeoff.Douse;
+  if Step.Lands then
+    FCue.Jolt := Max(FCue.Jolt, DiveLandJolt);
+  if Step.Relights then
+    FTakeoff.Relight;
+  if Step.Done then
+    FTakeoff.Release;
+end;
+
 // Aloft, the magnet sees the barges the game told of and the hero, its
-// face where the pose puts it; in a charge it is tucked in
+// face where the pose puts it; in a charge or a dive it is tucked in
 procedure TRam.TickMagnet;
 begin
   if not FTakeoff.Aloft then
@@ -3970,23 +4025,29 @@ begin
   Sight.Hero := UnitPoint(FHero.Body.X + FHero.Body.W / 2,
     FHero.Body.Y + FHero.Body.H / 2);
   Sight.Harbour := FHero.Harbour;
-  Sight.Waits := FMortar.Busy or FCharge.Running;
-  Sight.Tucked := FCharge.Running;
+  Sight.Waits := FMortar.Busy or FCharge.Running or FDive.Running;
+  Sight.Tucked := FCharge.Running or FDive.Running;
   FMagnet.Rule := mrNearest;
   if AirTier >= LiftFromTier then
     FMagnet.Rule := mrHisBarge;
   FCue.Magnet := FMagnet.Tick(Sight);
 end;
 
-// After each of the magnet's windows another weapon may have a turn: from
-// the bombs' rung the mortar; from the charge's the charge and the mortar
-// by turns, the charge first
+// After each of the magnet's windows another weapon may have a turn, round
+// the rung's weapons, the newest first: from the bombs' rung the mortar;
+// from the charge's the charge, then the mortar; from the dive's the dive,
+// the charge, the mortar
 procedure TRam.TickTurns;
 begin
   if not FTakeoff.Aloft or not FCue.Magnet.Cooled then
     Exit;
   var Rung := AirTier;
-  if (Rung >= ChargeFromTier) and (FLastTurn <> atCharge) then
+  var DiveDue := (Rung >= DiveFromTier) and
+    (FLastTurn in [atNone, atMortar]);
+  var ChargeDue := (Rung >= ChargeFromTier) and (FLastTurn <> atCharge);
+  if DiveDue then
+    BeginDive
+  else if ChargeDue then
     BeginCharge
   else if Rung >= BombsFromTier then
   begin
@@ -3998,8 +4059,26 @@ end;
 procedure TRam.BeginCharge;
 begin
   FCharge.Start(FX, FTakeoff.Pace, FTakeoff.LiftAt(1), ChargeLowLift);
-  FChargeStruck := False;
+  FSweepStruck := False;
   FLastTurn := atCharge;
+end;
+
+procedure TRam.BeginDive;
+begin
+  FDive.Start(FTakeoff.Pace, FTakeoff.LiftAt(1),
+    FHullFacing * FTakeoff.LeanAt(1));
+  FSweepStruck := False;
+  FLastTurn := atDive;
+end;
+
+// Over the head of a hero standing on the main barge where its deck is
+// now, so the hull rides its drift and its rock
+function TRam.DiveFloor: Single;
+begin
+  var Deck := FHero.Harbour.Y;
+  if Deck <= 0 then
+    Deck := RamFloorY;
+  Result := RamFloorY - (Deck - RiderHeight - HeadClearance);
 end;
 
 // Low enough to sweep the lanes, high enough to pass over the head of a
@@ -4009,7 +4088,7 @@ begin
   var Topmost := FHero.HarbourTopmost;
   if Topmost <= 0 then
     Topmost := RamFloorY;
-  Result := RamFloorY - (Topmost - RiderHeight - ChargeClearance);
+  Result := RamFloorY - (Topmost - RiderHeight - HeadClearance);
 end;
 
 // Aloft, the mortar ticks through its turn; a shell of it is lobbed by
@@ -4035,31 +4114,81 @@ end;
 
 function TRam.HotAloft: Boolean;
 begin
-  Result := FMagnet.Soft or FCharge.Soft;
+  Result := FMagnet.Soft or NozzlesSoft;
 end;
 
-function TRam.ChargeSweep(out ABox: TSdlFRect): Boolean;
+function TRam.NozzlesSoft: Boolean;
+begin
+  Result := FCharge.Soft or FDive.Soft;
+end;
+
+function TRam.NozzleHeatAt(AAlpha: Single): Single;
+begin
+  Result := Max(FCharge.HeatAt(AAlpha), FDive.HeatAt(AAlpha));
+end;
+
+function TRam.HoldsFlock: Boolean;
+begin
+  Result := FCharge.HoldsFlock or FDive.HoldsFlock;
+end;
+
+function TRam.HullSweep(out ABox: TSdlFRect): Boolean;
 begin
   ABox := Default(TSdlFRect);
-  Result := Present and FCharge.RunsLow;
+  var RunsLow := FCharge.RunsLow or FDive.RunsLow;
+  Result := Present and RunsLow;
   if not Result then
     Exit;
+  var Lift := FTakeoff.LiftAt(1);
+  var LastLift := FTakeoff.LiftAt(0);
   ABox.X := Min(FLastX, FX);
-  ABox.Y := RamTop - FTakeoff.LiftAt(1);
+  ABox.Y := RamTop - Max(Lift, LastLift);
   ABox.W := Abs(FX - FLastX) + RamWidth;
-  ABox.H := RamHeight;
+  ABox.H := RamHeight + Abs(Lift - LastLift);
 end;
 
-function TRam.ChargeStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+function TRam.HullStrikes(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
 begin
   AAway := 1;
-  if FCharge.Pace < 0 then
+  if FDive.Slams then
+  begin
+    if AHeroBody.X + AHeroBody.W / 2 < FX + RamWidth / 2 then
+      AAway := -1;
+  end
+  else if FCharge.Pace < 0 then
     AAway := -1;
-  var Sweep: TSdlFRect;
-  Result := not FChargeStruck and FCharge.Rams and ChargeSweep(Sweep) and
-    BoxesMeet(Sweep, AHeroBody);
+  var Strikes := FCharge.Rams or FDive.Slams;
+  var Box: TSdlFRect;
+  Result := not FSweepStruck and Strikes and HullSweep(Box) and
+    BoxesMeet(Box, AHeroBody);
   if Result then
-    FChargeStruck := True;
+    FSweepStruck := True;
+end;
+
+function TRam.JetFireBurns(const AHeroBody: TSdlFRect; out AAway: Integer): Boolean;
+begin
+  AAway := 0;
+  if not Present or not FDive.Soft then
+    Exit(False);
+  var Pose := PoseAt(1);
+  for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
+  begin
+    var Mouth := Axles[JetAxles[Jet]];
+    Mouth.Y := Mouth.Y + NozzleHang + NozzleHeight - NozzleLipInset;
+    var At := PoseSpot(Pose, Mouth);
+    var Fire: TSdlFRect;
+    Fire.X := At.X - JetBurnHalfWidth;
+    Fire.Y := At.Y;
+    Fire.W := 2 * JetBurnHalfWidth;
+    Fire.H := JetBurnReach;
+    if not BoxesMeet(Fire, AHeroBody) then
+      Continue;
+    AAway := 1;
+    if AHeroBody.X + AHeroBody.W / 2 < At.X then
+      AAway := -1;
+    Exit(True);
+  end;
+  Result := False;
 end;
 
 function TRam.AirTier: Integer;
@@ -4593,11 +4722,14 @@ end;
 
 // Lit, it breathes; while a head rises, through a change of heads, through
 // the sweeper's end, before the bunker's fall back, through the change to
-// its hunt and as it turns round off the screen, it blinks - the warning
+// its hunt and as it turns round off the screen, it blinks - the warning;
+// in the silence before its dive it flashes
 procedure TRam.TickEye;
 begin
   if not FEyeLit then
     FEye := 0
+  else if FDive.Flashes then
+    FEye := 1
   else if (FHunt = htStunned) and (FLightsAlarm > 0) then
     FEye := Max(EyeBlinkLow, AlarmLight)
   else if FHunt = htStunned then
@@ -6076,7 +6208,7 @@ begin
   var Mirrored := FRam.HullMirrored;
   var Size := Lerp(BayDepth, 1, Bay);
   var Turn := APose.Lean + FRam.Flight.SwivelAt(AAlpha);
-  var Heat := FRam.Charge.HeatAt(AAlpha);
+  var Heat := FRam.NozzleHeatAt(AAlpha);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     var Axle := FRam.PoseSpot(APose, Axles[JetAxles[Jet]]);
@@ -6423,7 +6555,7 @@ end;
 procedure TRamPainter.DrawJetGlow(AOrigin: TSdlPoint; AAlpha: Single);
 begin
   var Pose := FRam.PoseAt(AAlpha);
-  var Heat := FRam.Charge.HeatAt(AAlpha);
+  var Heat := FRam.NozzleHeatAt(AAlpha);
   for var Jet := Low(TTakeoffJet) to High(TTakeoffJet) do
   begin
     var Level := FRam.Flight.JetAt(Jet, AAlpha);
