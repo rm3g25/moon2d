@@ -76,11 +76,12 @@ Tests\
     Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
     Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away
     Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station, its drift
-    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off
+    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off, the count grown
     Tests.Game.Magnet.pas  the magnet under the Ram's belly: the start, the pick, the reach, the lift, the seize and the throw, the heat, the wait
     Tests.Game.Mortar.pas  the Ram's stern mortar: its turn, one shell at a time at the hero's feet, the lean, the fold
-    Tests.Game.Charge.pas  the Ram's charge: the fall back, the band, the run, the brake, the hot nozzles, the climb
-    Tests.Game.Dive.pas    the Ram's dive: the silence, the fall, the floor, the hot jets, the rise
+    Tests.Game.Charge.pas  the Ram's charge: the fall back, the band, the run, the brake, the hot nozzles, the climb; through
+    Tests.Game.Dive.pas    the Ram's dive: the silence, the fall, the floor, the hot jets, the rise; from above
+    Tests.Game.Ladder.pas  the ladder of the air fight: the rungs, whose the turn is, the chains, the door of point C
     Tests.Game.Pieces.pas  what is left of a barge that breaks
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read

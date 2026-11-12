@@ -7,6 +7,33 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-12: **3.0.127 - the ladder.** The air fight's rungs, the choice of
+the turn and its chains are a unit of their own (`Game.Ladder`, new): the
+hull's lives are 240 on the first grade (the grades' share for the hull
+1.0, 1.25, 1.5), the rungs at 15%, 33% and 60% spent and the finisher's
+stretch from 85%. After each window of the magnet the turn goes to one
+of the rung's weapons at random, never the last one, the rung's newest
+first; the mortar lobs two shells on its own rung, one after. On the
+last rung, once the dive has been seen, about half the magnet's cycles
+chain: the dive the moment the barge is thrown - the magnet tucked in
+hot, its window lost - or a shell at his feet while the magnet holds its
+shield. On the last stretch the finisher: the charge goes right through
+the screen without a brake, then a red band blinks along the top edge
+over where he stands and the hull drops out of the sky as the dive does
+(`TChargeEnd.ceThrough`, `TDive.StartAbove`, `TTakeoff.Settle`). The
+flock grows by the rung, 2, 3, 3, 4. Point C at the door of the third
+rung: a death after it comes back aboard with the hull's lives of that
+door; the End key's fifth stop; the key O aloft goes to the next door.
+The hull shows its wounds: its worn copy, never shown before, fades in
+with the lives spent, and from the third rung it shorts out over its
+cracks and smokes, harder rung by rung; on the finisher's stretch thick
+bolts burst out of it, more as its last lives go. Fixed after the first
+live run: a hero whose barge was taken from under him by the magnet or
+smashed by the charge or the dive hung in the air - the deck put to sleep
+after his tick was never seen gone; now the hero remembers standing on a
+deck and falls when it is not there (`THero.FRidden`), and a door onto a
+screen with a lower floor drops him too (`THero.LookDown`).
+
 2026-11-12: **3.0.126 - the dive.** The air fight's fourth rung
 (`AirTierSpent` 0.67): the turn after the magnet's window goes round the
 rung's weapons - the dive, the charge, the mortar - the dive first

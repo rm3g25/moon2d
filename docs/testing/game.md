@@ -736,10 +736,10 @@ starts it hanging over a point, deploys and ticks till the magnet seeks;
 | `TestHangingItsHoneycombIsUp` (3.0.122) | hanging: the hull's honeycomb and the ring up; a bullet into the side of the risen hull is taken at its side; a clear: down | the restart aloft finds the hull bare, or the honeycomb is met where the hull stood on the road |
 | `TestUnderTheHoneycombNothingIsBare` (3.0.122) | the honeycomb up, straight up along the hanging hull: wherever the magnet or a nozzle would take a bullet, `Block` takes it | sparks and a ricochet off the machine through the honeycomb - its outline leaves the nozzles' tips or the magnet's corners bare |
 | `TestTheHoneycombFallsWithTheSoftMagnetAndComesBack` (3.0.122) | a barge caught: as the magnet grows soft both fall, the fall told once; on to the next seek: no second fall, the return told once, both kindling | the honeycomb stands over a soft magnet - the window hidden - or never comes back |
-| `TestTheRungsFollowTheHullsSpentLives` (3.0.123) | spent 0, 0.19, 0.2, 0.5, 0.67, 1: rungs 1, 1, 2, 3, 4, 4 | the ladder counts lives left for lives spent, or a rung by its upper bound |
+| `TestTheRungsFollowTheHullsSpentLives` (3.0.123, reworked 3.0.127) | none spent: rung 1; a hair short of each door of `AirTierSpent`: the rung below, at it: its rung; all spent: the top rung | the ladder counts lives left for lives spent, or a rung by its upper bound |
 | `TestFromTheLiftsRungTheMagnetTakesHisBargeFirst` (3.0.123) | none spent: the nearest; the lift's rung: his barge first | the lift comes on the first rung, or never |
 | `TestOnTheFirstRungNoMortar` (3.0.123) | none spent, 1200 ticks, at least two windows: no rise, no lob, folded | the bombs come before the player has learnt the thrown barges |
-| `TestFromTheBombsRungTheMortarHasATurnAfterTheWindow` (3.0.123) | the bombs' rung: nothing till the window is over; then the rise, busy; through the turn the magnet seeks and catches nothing; two lobs at his feet out of a muzzle over the hull; folded, the magnet catches again | the shells meet the lift, come mid-window, aim off his feet, or the magnet is never given back the turn |
+| `TestFromTheBombsRungTheMortarHasATurnAfterTheWindow` (3.0.123) | the bombs' rung: nothing till the window is over; then the rise, busy; through the turn the magnet seeks and catches nothing; the rung's lobs (`MortarShells`, two) at his feet out of a muzzle over the hull; folded, the magnet catches again | the shells meet the lift, come mid-window, aim off his feet, or the magnet is never given back the turn |
 | `TestTheMuzzleStandsOverTheHull` (3.0.123) | hanging: the muzzle over the hull's top by more than 15, within the hull across | shells come out of the hull's middle |
 | `TestAClearFoldsTheMortar` (3.0.123) | a clear mid-turn: not busy, not out | a death leaves the mortar up |
 
@@ -928,9 +928,121 @@ the dive to its end, adding up what it did and asking for a strike of
 | Test | Holds | Turns red when |
 |---|---|---|
 | `TestBeforeItsRungNoDive` | a hair short of the dive's rung, 3000 ticks, at least two windows: never a dive | the dive comes on the charge's rung |
-| `TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar` | on its rung: the dive, then the charge, then the mortar, each with no other on the way, then the dive again | a weapon of the round is skipped, or two come back to back |
+| `TestOnItsRungTheDiveFirstThenNotTheDive` (reworked 3.0.127) | on its rung: the dive first, with no other on the way; after it, the charge or the mortar before any dive | the newest weapon is not seen alone first, or the dive comes back to back |
 | `TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn` | its eye at full in the silence, both jets out, the magnet in the belly; lit again once, burning as it hangs after | the dive comes with no flash, with the jets burning, or leaves them out |
 | `TestItDropsOverTheHeadOfAHeroOnTheMainBargeAndHangsAgain` | its bottom within 20 over the head of a hero standing on the deck where it is, never down to it; landed and done once; that hero never struck; hanging at its height after | the dive crushes the main barge's rider, or stops high over him |
 | `TestItsFallStrikesAHeroUnderItOnce` | a hero on a lane under the left half of the hull: struck once, knocked left - away from its middle | the fall passes through him, wounds him every tick, or throws him under the hull |
 | `TestLowItsFireBurnsUnderANozzleNotUnderTheBelly` | before its jets are hot no fire anywhere under it; hot: none under the middle of the belly nor past the bow, some under a nozzle, a hero burnt there thrown aside; none once it is up | the window has no place to stand, the fire burns before it is lit, or it burns on after |
 | `TestAfterTheBlowTheNozzlesAreHotAndTheHoneycombFalls` | hot after the blow; the honeycomb fell and kindled back once each; cold once it is up | the window after the dive is hidden under the honeycomb, or never shuts |
+
+## Game.Charge: through
+
+State: written, 1 test (3.0.127, stage 18d-6), beside the charge's own in
+`Tests\Game\Tests.Game.Charge.pas`, fixture `TChargeTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestThroughItIsGonePastTheRightEdgeAtItsPace` | begun to go through: from the pass on never braking nor hot, at `ChargePace` every tick it runs; then past the right edge, gone told once, no brake and no climb told, the flock let go; still once 500 ticks on | the finisher brakes at the edge, stops short, or is told gone twice |
+
+## Game.Dive: from above
+
+State: written, 3 tests (3.0.127, stage 18d-6), beside the dive's own in
+`Tests\Game\Tests.Game.Dive.pas`, fixture `TDiveTests`. Over the top edge is
+a lift of 376, as the finisher puts it.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFromAboveTheBandBlinksStillThenItFalls` | begun from above: the band first, `DiveMarkTicks` long, still up there with no way across, nothing of a dive yet but the flock held, the band lit; told once; no silence; then the fall told, the band out, from a standstill | the finisher falls with no warning, drifts while it warns, or flashes an eye that is off the screen |
+| `TestFromAboveItGoesOnAsAnyDive` | from above: ever faster, never past its floor; the blow, the relight and the rise once each, at its height after | the drop from the sky ends anywhere but just over the main barge |
+| `TestAStartFromAboveWhileItDivesIsNothing` | a start from above in the fall: still falling, where it was | a finisher's drop snatches a dive mid-fall up off the screen |
+
+## Game.Takeoff: settled
+
+State: written, 2 tests (3.0.127, stage 18d-6), beside the takeoff's own
+in `Tests\Game\Tests.Game.Takeoff.pas`, fixture `TTakeoffTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSettledItIsWhereItWasPutBetweenTheTicks` | carried at a run, swivelled; carried over the top edge, level, and settled: there and level at the last tick too, still, the nozzles straight then and now | the hull streaks across the screen between two ticks as it is put over the top edge, or swings its nozzles there |
+| `TestHangingSettlingIsNothing` | hanging, settled: still hanging, its pace and its last height kept | a hanging hull stops dead between ticks |
+
+## Game.Magnet: tucked while it cools
+
+State: written, 1 test (3.0.127, stage 18d-6), beside the magnet's own in
+`Tests\Game\Tests.Game.Magnet.pas`, fixture `TMagnetTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestToldToTuckInWhileItCoolsItsWindowIsLost` | a barge thrown, a tick into the window: soft; tucked: seeking, not soft, no heat at once; in the belly 30 ticks on; no window told | the chained dive comes down with a hot magnet out under it, or the lost window still gives the slot a turn |
+
+## Game.Flock: grown
+
+State: written, 2 tests (3.0.127, stage 18d-6), beside the flock's own in
+`Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestGrownMoreFlyNeverMoreThanTheNewCount` | started at 2, the escort in, grown to 4: the count is 4; four minutes never more than 4 flying, more than 2 at some time | the ladder's rungs leave the flock at two, or overfill it |
+| `TestGrownToFewerOrBeforeTheStartNothingChanges` | grown before the start: not started, no count; started at 3, grown to 2: still 3 | a growth starts the fight's flock, or a lower rung after a restart thins it |
+
+## Game.HullLives: resumed
+
+State: written, 2 tests (3.0.127, stage 18d-6), beside the others in
+`Tests\Game\Tests.Game.HullLives.pas`, fixture `THullLivesTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestResumedTheLivesAreThoseToldWithinTheFull` | armed at the first grade, resumed at 160: those lives, the full kept, the bar's share by them; resumed past the full: the full; below none: none | point C brings the hull back whole, or past whole |
+| `TestNotArmedAResumeIsNothing` | not armed, resumed: not armed, no lives | a death in the road phase arms the hull |
+
+## Game.Ladder
+
+State: written, 17 tests (3.0.127, stage 18d-6). Needs no stage:
+`TAirLadder` only counts. The unit is tried by
+`Tests\Game\Tests.Game.Ladder.pas`, fixture `TAirLadderTests`.
+
+Shared: a ladder seeded 7; the second rung at 0.2 spent, the third at
+0.45, the last at 0.7, the finisher's stretch at 0.9; "many" is 200 asks.
+`TurnsAt(spent, count)` asks one turn after another.
+
+Numbers spelled: the spent shares of the rungs and the stretch, the tries;
+the doors themselves are read from the unit (`AirTierSpent`,
+`FinisherSpent`, `AirDoorTier`, `MortarShells`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTheRungFollowsTheSpentLives` | none spent: 1; a hair short of each door: the rung below, at it: its rung; all spent: the top | a rung by its upper bound, or the ladder off by one |
+| `TestTheFinishersStretchClosesTheLastRung` | short of `FinisherSpent`: not on it; at it: on it, and on the top rung | the finisher comes before the dive's rung, or never |
+| `TestOnTheFirstRungNoTurn` | five asks at 0.1: none | the mortar before the player has learnt the thrown barges |
+| `TestOnTheSecondRungTheMortarEveryTime` | five asks: the mortar each time | the rule of no repeats leaves the second rung with no turn |
+| `TestOnTheThirdRungTheChargeFirstThenByTurns` | the charge first; then one of the two, never the same twice | the charge is not seen alone first, or two come back to back |
+| `TestOnTheLastRungTheDiveFirstThenNeverTwiceInARow` | 200 asks: the dive first; each of the three, never the same twice | the dive is not seen first, or a weapon back to back |
+| `TestOnTheLastRungEachWeaponComesNowAndThen` | 200 asks: all three came | a weapon of the rung never chosen |
+| `TestOnItsStretchTheFinisherFirstThenAmongTheRest` | after the dive, on the stretch: the finisher first; never twice in a row; all four came | the finisher hidden among the others, or gone after its first |
+| `TestNoChainBeforeTheLastRung` | at 0, 0.2, 0.45: 200 asks each, no chain | two threats at once before the last rung |
+| `TestNoChainBeforeTheDiveIsSeen` | on the last rung, no turn yet: no chain | the dive comes chained before it was ever seen alone |
+| `TestOnTheLastRungChainsComeNowAndThen` | after the dive: of 200 catches more than a fifth and fewer than four fifths chain; both chains came | chains every cycle, never, or only one of the two |
+| `TestNoShieldChainInALift` | 200 catches in a lift: never the shells | the shells and the lift meet |
+| `TestAChainCountsAsItsWeaponsTurn` | after a chain: the last turn is its weapon's, and the next turn not that weapon | a chained dive followed at once by a dive |
+| `TestNoChainOnTheStretchTillTheFinisherIsSeen` | on the stretch before the finisher: no chain; then the finisher; then chains | a chain swallows the finisher's first turn |
+| `TestAClearForgetsWhatWasSeen` | five asks, a clear: no last turn, the dive first again | a restart at point C skips the newest weapon's lone turn |
+| `TestTheDoorOfPointCIsOnItsRung` | of 50, 240, 300, 360, 361: the door's lives are on its rung, a life more is the rung below | point C brings him back a rung below its door, or a life short |
+| `TestTheMortarsShellsGoByTheRung` | two on the bombs' rung, one on the charge's and the last | the mortar's long turn of two shells on the mixed rungs |
+
+## Game.Ram: the ladder
+
+State: written, 4 tests (3.0.127, stage 18d-6): fixture `TRamLadderTests`
+in `Tests\Game\Tests.Game.Ram.pas`. The ladder's choice is tried in
+`Tests.Game.Ladder`; here, what the Ram does with it.
+
+Shared: the body and the orders of the other fixtures, the hero of the
+dive's fixture on the main barge; `HangWithTheMagnetOut`;
+`TickTillChain(hero, chain)` ticks till a catch is told with that chain,
+failing past 12000 ticks.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestAChainedDiveComesAtTheThrowAndTheWindowIsLost` | on the last rung, a throw-and-dive chain: no dive till the throw; the dive the tick it throws; the magnet not soft a tick on; through the dive no window told, nothing else; after it no turn till the next catch | the chain waits out the magnet's window, gives a second turn, or the magnet hangs hot under the dive |
+| `TestAChainedShellIsLobbedWhileTheMagnetHoldsItsShield` | a shield-and-shells chain: a shield, not a lift; the mortar up at the catch; its one shell lobbed while the magnet holds, before the throw | the shells come in a lift, or only after the window |
+| `TestTheFinisherGoesThroughAndDropsFromAboveOverTheHero` | on the stretch, the hero at 100: the finisher first; the charge never brakes and goes past the right edge; then over the top edge, the hull's middle over his, there between the ticks too, out of sight; the band blinked, its jets out up there; down to within 20 over the head of a hero on the main barge, never down to it; hanging after | the hull streaks across the screen, drops off where he is not, or crushes the main barge's rider |
+| `TestTheHullWearsShortsAndSmokesByTheRung` | none spent: whole, no bolts, no smoke; short of the charge's rung: worn, no bolts, no smoke; at it: bolts and smoke; at the dive's: both more, no bursts; at the finisher's stretch: bursts; all spent: all worn, full bolts, full bursts, more than at the stretch's door | the damage shows before the charge, never, or not harder as the fight goes; the bursts come before the end |
