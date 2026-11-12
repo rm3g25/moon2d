@@ -368,7 +368,6 @@ end;
 // the last try when none is
 function TBargeFlock.RollLaneDeck(AHighest, ALowest: Double): Double;
 begin
-  Result := AHighest;
   for var i := 1 to LaneTries do
   begin
     Result := Round(RollRange(AHighest, ALowest));
