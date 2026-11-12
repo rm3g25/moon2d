@@ -65,7 +65,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Flock`, 3.0.120), the magnet under its belly that takes and throws
   them (`Game.Magnet`, 3.0.121), the stern mortar that lobs shells at the
   deck under the hero (`Game.Mortar`, 3.0.123), its charge across the
-  screen (`Game.Charge`, 3.0.125), the fire on a barge a
+  screen (`Game.Charge`, 3.0.125), its dive like a stone (`Game.Dive`,
+  3.0.126), the fire on a barge a
   shell knocks off (`Game.BargeFire`, 3.0.124) and what is left of one that breaks
   (`Game.Pieces`, 3.0.121), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
@@ -225,6 +226,8 @@ its dice and `Game.Space`) /
 alone; `Game.Ram` is over it) /
 `Game.Charge` (the Ram's charge: over `Game.Space` and `Game.Takeoff` for
 the height it climbs back to; `Game.Ram` is over it) /
+`Game.Dive` (the Ram's dive: over `Game.Takeoff` for the height it rises
+back to; `Game.Ram` is over it) /
 `Game.BargeFire` (the fire on a knocked barge: over the smoke, the
 lightning and the canvas of `Levels.Dynamics`, `Render.Brush`, `Render.Glow` and
 `Levels.Tint`) /
@@ -5927,8 +5930,35 @@ monster. The game carries out the cue.
   (in `DrawLight` after `DrawPeek`) - the band at the left edge
   (`ChargeBandGlow` 48 at `ChargeBandGlowLevel` 0.5, `ChargeBandWidth` 6),
   the eye's red there.
+- 3.0.126: **the dive** (`ram-air.md`, "Stage 18d-5 as built"). It owns a
+  `TDive` (`Game.Dive`; **`Dive`**, cleared by `Place` and `Clear`).
+  **`TickTurns`** goes round the rung's weapons, the newest first: from
+  `DiveFromTier` 4 the dive after a mortar's turn or none, else from
+  `ChargeFromTier` the charge unless the last was the charge, else the
+  mortar (`TAirTurn` + `atDive`) - on the fourth rung dive, charge,
+  mortar. **`BeginDive`** - from where it hangs, its pace, height and lean;
+  **`CarryDive`** (in `TickTakeoff`, while the dive runs): its tick with
+  **`DiveFloor`** - the road's line less (`TRamTarget.Harbour.Y` less
+  `RiderHeight` and **`HeadClearance`** 8, the charge's clearance
+  renamed) - `TTakeoff.Carry` by its `Pace`, `Lift` and `Bow`,
+  `TTakeoff.Douse` at `Hushes`, `Relight` at `Relights`, `DiveLandJolt`
+  0.35 at `Lands`, `Release` at `Done`; **`TRamCue.Dive`**. The magnet
+  waits and is tucked while it runs; `TickEye` flashes it at full in the
+  silence (before the stunned flicker of the hang). **`NozzlesSoft`**
+  (the charge's or the dive's), **`NozzleHeatAt`** (the hotter) - the
+  painter's nozzle tint and glow; `HotAloft` by them. **`HoldsFlock`**.
+  `ChargeSweep` and `ChargeStrikes` became **`HullSweep(box)`** - low in a
+  charge or a dive, the hull's box from where it was a tick ago to where
+  it is, across and up and down - and **`HullStrikes(body, away)`** - a
+  ramming charge or a falling dive, once a run (`FSweepStruck`), `away`
+  the charge's way or the side of the hull's middle he is on.
+  **`JetFireBurns(body, away)`** - while `Dive.Soft`, a box under each
+  nozzle's mouth (posed), `JetBurnHalfWidth` 7 either side and
+  `JetBurnReach` 30 down; `away` from that mouth. The takeoff
+  (`Game.Takeoff`): **`Douse`**, **`Relight`** (aloft only), the fire
+  dying over `JetOutTicks` 4 while out.
 - Tests: `Tests.Game.Ram` (`TRamMagnetTests` since 3.0.121,
-  `TRamChargeTests` since 3.0.125).
+  `TRamChargeTests` since 3.0.125, `TRamDiveTests` since 3.0.126).
 
 ### `Game/Game.Wrecks.pas` (~720 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3/ram.md`,
@@ -6254,6 +6284,28 @@ hull, no barges, no hero, and draws nothing.
   `ChargeRamPace` 4 a tick or more), `Soft` (the brake and the hold),
   `HoldsFlock` (the band to the climb), `HeatAt`, `WarnAt`.
 - Tests: `Tests.Game.Charge`.
+
+### `Game/Game.Dive.pas` (~270 lines, 3.0.126)
+The Ram's dive (`docs/mechanics/arena-3/ram-air.md`, stage 18d-5): the
+rules of a drop. The Ram owns it and flies the hull by it; it knows no
+hull, no barges, no hero, and draws nothing.
+- **`TDive`** - `Create`, `Clear`, **`Start(pace, lift, bow)`** (nothing
+  while it runs), **`Tick(floor)`** - the lift it is to stop at, told every
+  tick - returns **`TDiveCue`** (`Hushes`, `Drops`, `Lands`, `Relights`,
+  `Done`).
+- **`TDiveStage`**: `dvNone`; `dvHush` (`DiveHushTicks` 16: the pace kept
+  `DivePaceKeep` 0.7 a tick, a sag of `DiveSag` 4 growing as a square);
+  `dvFalling` (from the sag's pace, `DiveGravity` 1 a tick more every
+  tick, to the floor); `dvHolding` (riding the floor `DiveFollow` 0.3 of
+  the way a tick; the jets caught `DiveRelightTicks` 5 after the blow, then
+  hot `DiveHoldTicks` 99, the heat fading); `dvRising` (to `HangLift`
+  over `DiveRiseTicks` 50). The bow eased to level a fifth of the way a
+  tick.
+- Reads: `Stage`, `Running`, `Lift`, `Pace`, `Bow`, `Fall` (down this
+  tick), `Flashes` (the silence), `Slams` (the fall), `RunsLow` (the fall
+  and the hold), `Soft` (the hold from the relight), `HoldsFlock` (while it
+  runs), `HeatAt`.
+- Tests: `Tests.Game.Dive`.
 
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
 What is left of a barge that breaks in the air fight
@@ -7610,6 +7662,23 @@ so a unit (and later a test) can reach it. `interface` holds
   takes an orb while `Charge.Soft`; the hull bar's heat is `HotAloft`;
   the orb launcher starts while `Flight.Aloft`; `ResolveRamContact`
   knocks in `tkCarried` too. `BoxesMeet` (free).
+- 3.0.126, the dive (`ram-air.md`, stage 18d-5). `TickRam` hands the cue's
+  `Dive` to **`CarryOutDive`**: at `Hushes` the jets' loop stopped
+  (`StopRamRumble`) and `DiveCutSoundFile`; `DiveFallSoundFile` at
+  `Drops`; `DiveSlamSoundFile` and the main barge rocked `DiveBlowDepth` 8
+  at `Lands`; `DiveRelightSoundFile` and the jets' loop again at
+  `Relights`. Then, for the charge and the dive alike, `FFlock.Held` by
+  `TRam.HoldsFlock` and **`SmashUnderTheHull`** (was `SmashUnderTheCharge`)
+  over `HullSweep`: a flock pad met is `SmashFlockBarge` - its pieces now
+  with the hull's way across (`Rolled`) and down (`Dive.Fall`) - and in a
+  dive **`SprayShrapnel`** at its middle: **`ShrapnelFan`** (4 by 10,
+  speed 3-5) of 2008 into `FMonsterBullets`, placed so the fan's mean comes
+  out at the barge's middle - the monsters' own bullets, wounding through
+  `ResolveMonsterBulletHits`. **`ResolveRamSweep`** (was
+  `ResolveRamCharge`): `HullStrikes` - `HurtByRam`, the knock
+  `ChargeKnockWay` or `DiveKnockWay` 2; **`ResolveRamFire`** after it:
+  `JetFireBurns` - `HurtByRam`, `Knock(away, JetFireKnockWay)` 2.
+  `BulletStruckRam`: a nozzle takes an orb while `NozzlesSoft`.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -8411,6 +8480,10 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   charge's run; **`TRamChargeTests`** (7, new in `Tests.Game.Ram` - the
   charge on the hull); `TTakeoffTests` +6 (carried, the swivel);
   `TMagnetTests` +1 (tucked); `TBargeFlockTests` +4 (smashed, held).
+- 3.0.126: **`Game/Tests.Game.Dive.pas`** - **`TDiveTests`** (11), the
+  dive's drop; **`TRamDiveTests`** (7, new in `Tests.Game.Ram` - the dive
+  on the hull, the round of the fourth rung, the fire); `TTakeoffTests` +3
+  (the jets put out and lit again).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -8986,6 +9059,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The chase city's train (3.0.93): one train shuttling on the monorail between the two stations - a dwell, a push up to cruise, a roll, a push down; its nose goes into a station and is cut at the mouth, its tail stands out on the beam; its strip of lights rides with it; it glides between ticks - tick for tick as on the stand | Levels.Monorail.pas (`MonorailLine`, `TrainRun`, `TrainLeft`, `TrainShown`) + Levels.FarPlane.pas (`TCityTrain`, `CityElements`) + Render.FarPlane.pas (`DrawTrain`, `GlowWithin`, `TScreenSpan`) + Game.FarPlane.pas (`ClockAt`) + Game.Moon.pas (`DrawBackdrop`) + bin/chase-backdrop.json (`train`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Monorail.pas (+docs/mechanics/chase-backdrop.md, docs/mechanics/arena-3/) |
 | The chase city's searchlights (3.0.95): two warm beams from the main dome wander over the sky - bright in the dome's air, a hot spot and a step down at the glass, a faint tail in the lunar dust, glints on the near ribs they cross; each lamp's own clock eases to a hold now and then; it glides between ticks - tick for tick as on the stand | Levels.Searchlights.pas (`SearchlightClock`, `SearchlightAngle`, `SearchlightBeam`, `BeamLevel`, `TailLevel`) + Levels.FarPlane.pas (`TCitySearchlights`, `ReadSearchlights`) + Render.FarPlane.pas (`DrawBeam`, `DrawBeamsBefore`, `DrawBeamGlints`) + bin/chase-backdrop.json (`searchlights`) + tools/chase/stand.template.html (the reference) + Tests.Levels.Searchlights.pas (+docs/mechanics/chase-backdrop.md) |
 | The charge of the air fight (3.0.125): the third rung - the charge and the mortar by turns after the window, the charge first; the magnet tucked in; the fall back past the left edge, the band and the eye's red there, the rush in low from behind, the corridor over the main barge, the sweep striking the hero and smashing the small barges, the wash, the brake with the nozzles swivelled ahead, the hot nozzles - the window - and the climb; the flight carried; the nozzles' swivel | Game.Charge.pas (`TCharge`) + Game.Takeoff.pas (`tkCarried`, `Carry`, `Release`, `Aloft`, `SwivelAt`) + Game.Ram.pas (`TickTurns`, `BeginCharge`, `CarryCharge`, `ChargeLowLift`, `ChargeSweep`, `ChargeStrikes`, `HotAloft`, `ChargeFromTier`, `TRamTarget.HarbourTopmost`, cue `Charge`, `DrawChargeWarning`, the nozzles' swivel and heat in `DrawEngines`, `NozzleMouth`, `DrawFlames`, `DrawJetGlow`) + Game.Magnet.pas (`Tucked`) + Game.Flock.pas (`Smash`, `Held`) + Hero.pas (`Knock(side, way)`) + Game.Moon.pas (`CarryOutCharge`, `SmashUnderTheCharge`, `SmashFlockBarge`, `ResolveRamCharge`, `ChargeKnockWay`, `ChargeWashDepth`, the sound files) + tools/sounds/charge.py + Tests.Game.Charge.pas, Tests.Game.Takeoff.pas, Tests.Game.Magnet.pas, Tests.Game.Flock.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-4) |
+| The dive of the air fight (3.0.126): the fourth rung - dive, charge and mortar round after the window, the dive first; the eye's flash and the jets out for half a second, the magnet tucked in; the fall like a stone to just over the head of a hero on the main barge, the sweep striking a hero under it and smashing the small barges into shrapnel - bullets of a 2008 fan; the blow rocking the main barge; low, riding its deck, the jets caught again hot - the window - their fire burning under a nozzle; the rise | Game.Dive.pas (`TDive`) + Game.Takeoff.pas (`Douse`, `Relight`) + Game.Ram.pas (`TickTurns`, `BeginDive`, `CarryDive`, `DiveFloor`, `HeadClearance`, `HullSweep`, `HullStrikes`, `JetFireBurns`, `NozzlesSoft`, `NozzleHeatAt`, `HoldsFlock`, `DiveFromTier`, `TAirTurn.atDive`, cue `Dive`, the flash in `TickEye`) + Game.Moon.pas (`CarryOutDive`, `SmashUnderTheHull`, `SmashFlockBarge`, `SprayShrapnel`, `ShrapnelFan`, `ResolveRamSweep`, `ResolveRamFire`, `DiveKnockWay`, `DiveBlowDepth`, `JetFireKnockWay`, the sound files) + Bullets.pas (`SpawnFan`) + tools/sounds/dive.py + Tests.Game.Dive.pas, Tests.Game.Takeoff.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-5) |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
 | The bombs of the air fight (3.0.123): the first two rungs by the hull's lives - the nearest barge, then his barge first and a turn of the stern mortar after every window; the mortar rising, leaning, lobbing one shell at a time at the deck under his feet, folding; the shell riding its barge, no road aloft; a small barge knocked off, falling behind and sinking; the main barge rocked | Game.Mortar.pas (`TMortar`, `MortarTilt`) + Game.Ram.pas (`AirTier`, `AirTierSpent`, `TickMortar`, `MortarMuzzleAt`, `MortarPivotPoint`, `DrawMortar`, cue `MortarRises`, `TRamTarget.HullSpent`, `ShellsAloft`) + Game.Magnet.pas (`Waits`, `Cooled`) + Game.Shells.pas (`Lob` with a carrier, `Carry`, `HasRoad`, `Marked`, `LastRing`) + Game.Flock.pas (`Knock`, `Knocked`, `fpKnocked`) + Game.Moon.pas (`LobAtHisDeck`, `ShellCarrierOf`, `TickShellsAloft`, `AirLobRise`, `ShellRockDepth`, `MortarRiseSoundFile`, the debug key O) + `mortar` in tek-machine.mset + tools/sounds/mortar.py + Tests.Game.Mortar.pas, Tests.Game.Shells.pas, Tests.Game.Flock.pas, Tests.Game.Magnet.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-3) |
 | The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |

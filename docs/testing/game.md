@@ -851,10 +851,12 @@ in `Tests\Game\Tests.Game.Ram.pas`. The charge's own rules are tried in
 
 Shared: the body and the orders of the other fixtures; the hero aboard
 over the middle, the main barge's deck at its highest 16 over the road's
-line; `HangReady` starts it hanging, brings the magnet out and puts a
-barge under its face; `TickTillCharge`; `RunTheCharge(hero, body)` ticks
+line; `HangReady` (`HangWithTheMagnetOut`, shared with the dive's
+fixture) starts it hanging, brings the magnet out and puts a barge under
+its face; `TickTillCharge`; `RunTheCharge(hero, body)` ticks
 the charge to its end, adding up what it did and asking for a strike of
-`body` every tick.
+`body` every tick (`HullSweep`, `HullStrikes` since 3.0.126 - the charge's
+and the dive's).
 
 | Test | Holds | Turns red when |
 |---|---|---|
@@ -865,3 +867,70 @@ the charge to its end, adding up what it did and asking for a strike of
 | `TestItsSweepStrikesAHeroInItsCorridorOnce` | a hero on a lane in the middle: struck once, knocked along its way | the charge passes through him, or wounds him every tick it overlaps |
 | `TestAHeroOnTheMainBargeIsUnderItsCorridor` | a hero on the deck at its highest at 40, 240 and 440, a charge each: never struck | the main barge is no harbour |
 | `TestAfterTheBrakeTheNozzlesAreHotAndTheHoneycombFalls` | hot from the brake; the honeycomb fell and kindled back once each; cold once it is up | the window after the charge is hidden under the honeycomb, or never shuts |
+
+## Game.Dive
+
+State: written, 11 tests (3.0.126, stage 18d-5). Needs no stage: `TDive`
+only counts. The unit is tried by `Tests\Game\Tests.Game.Dive.pas`,
+fixture `TDiveTests`.
+
+Shared: begun from a hang at `HangLift`, drifting right at 1.5, its bow 3
+down; its floor at a lift of 40, told every tick (`FFloor`, moved by one
+test). `Step` ticks it and adds up its cues; `StepTill(stage, limit)`. "A
+dive" is 330 ticks.
+
+Numbers spelled: the hang's pace, bow and the floor - the caller's; the
+rest is read from the unit's constants (`DiveSag`, `DiveRelightTicks`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNotBegunItDoesNothing` | a dive's ticks unbegun: not running, no cue, no flash, not falling, not low, not soft, the flock not held | a dive from a Ram nobody gave the turn |
+| `TestTheSilenceFlashesAndOnlySags` | through the silence: the eye flashes, its way across dies out, it never rises and sags no more than `DiveSag`, not low, not hot, not striking; the silence told once, then the fall; straight down from there, the flash over | no warning at all, a warning that drags, or a hull that drifts on across as it falls |
+| `TestItFallsEverFasterNeverPastItsFloor` | every tick of the fall faster than the last, straight down, never past its floor; the blow told once, on its floor, falling over 10 a tick at the end | a fall that floats, or a hull that sinks into the main barge |
+| `TestItStrikesOnlyWhileItFalls` | striking exactly in the fall | a hero struck by a hull that hangs low and still, or never |
+| `TestLowItRidesTheFloor` | low, the floor raised 20, then lowered again: 30 ticks later on it each time | the hull stays put as the main barge rises into it, or floats off as it dips |
+| `TestItsJetsCatchAFewTicksOnThenItIsHotAndCools` | not hot the tick it lands nor before its jets catch; they catch `DiveRelightTicks` after the blow, told once; hot at full then, soft and cooling all the hold; hard and cold as it rises | no window, one open in the silence, or one that stays open as it rises |
+| `TestItRisesToItsHeightLevelAndIsDone` | never down on the way up; done told once, not running, at its height, level | the hull is let go mid-air or tilted, and jumps as it hangs again |
+| `TestLowFromTheFallTillItRises` | low exactly in the fall and the hold | small barges smashed by a hull out of their lanes, or spared by one in them |
+| `TestItHoldsTheFlockFromTheSilenceTillItIsUp` | the flock held from its start while it runs, not once it is up | a barge comes in under the low hull, or none ever again |
+| `TestAStartWhileItDivesIsNothing` | a start in the hold: still low, where it was | a second window restarts a dive mid-run |
+| `TestAClearStopsIt` | a clear in the hot hold: not running, not soft, not low, the flock not held, no flash, cold | a death leaves the hull low and hot |
+
+Left to the eye: the dive on the screen - the flash, the jets dying and
+catching, the fall, the blow and the shake - and its four sounds.
+
+## Game.Takeoff: the jets put out and lit again
+
+State: written, 3 tests (3.0.126, stage 18d-5), beside the takeoff's own
+in `Tests\Game\Tests.Game.Takeoff.pas`, fixture `TTakeoffTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestPutOutTheFireIsGoneInAFewTicksAndStaysOut` | hung, put out: the fire dying, never back, both out in 6 ticks; out still 600 ticks later, aloft all the same | the jets flicker back by themselves in the silence, or cut off at once with no fade |
+| `TestLitAgainTheJetsCatchFlaring` | out for 10 ticks, lit: a flare past 1, both steady at 1 within 30 ticks | the relight is a switch, not a catch |
+| `TestOnItsWayUpTheJetsCannotBePutOut` | rising, put out: both still burn 10 ticks on | a dive begun mid-takeoff drops the rising hull |
+
+## Game.Ram: the dive
+
+State: written, 7 tests (3.0.126, stage 18d-5): fixture `TRamDiveTests`
+in `Tests\Game\Tests.Game.Ram.pas`. The dive's own rules are tried in
+`Tests.Game.Dive`; here, what the Ram does with it.
+
+Shared: the body and the orders of the other fixtures; the hero standing
+on the main barge over the middle, its deck 6 over the road's line where
+the game says it is now (`Harbour`), 16 over at its highest;
+`HangWithTheMagnetOut`; `TickTill(hero, whose)` - ticks till the dive,
+the charge or the mortar has its turn, failing if another comes first;
+`TickOut(hero, whose)` - while it lasts; `RunTheDive(hero, body)` ticks
+the dive to its end, adding up what it did and asking for a strike of
+`body` every tick.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBeforeItsRungNoDive` | a hair short of the dive's rung, 3000 ticks, at least two windows: never a dive | the dive comes on the charge's rung |
+| `TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar` | on its rung: the dive, then the charge, then the mortar, each with no other on the way, then the dive again | a weapon of the round is skipped, or two come back to back |
+| `TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn` | its eye at full in the silence, both jets out, the magnet in the belly; lit again once, burning as it hangs after | the dive comes with no flash, with the jets burning, or leaves them out |
+| `TestItDropsOverTheHeadOfAHeroOnTheMainBargeAndHangsAgain` | its bottom within 20 over the head of a hero standing on the deck where it is, never down to it; landed and done once; that hero never struck; hanging at its height after | the dive crushes the main barge's rider, or stops high over him |
+| `TestItsFallStrikesAHeroUnderItOnce` | a hero on a lane under the left half of the hull: struck once, knocked left - away from its middle | the fall passes through him, wounds him every tick, or throws him under the hull |
+| `TestLowItsFireBurnsUnderANozzleNotUnderTheBelly` | before its jets are hot no fire anywhere under it; hot: none under the middle of the belly nor past the bow, some under a nozzle, a hero burnt there thrown aside; none once it is up | the window has no place to stand, the fire burns before it is lit, or it burns on after |
+| `TestAfterTheBlowTheNozzlesAreHotAndTheHoneycombFalls` | hot after the blow; the honeycomb fell and kindled back once each; cold once it is up | the window after the dive is hidden under the honeycomb, or never shuts |

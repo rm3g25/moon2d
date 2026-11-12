@@ -7,6 +7,25 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-12: **3.0.126 - the dive.** The air fight's fourth rung
+(`AirTierSpent` 0.67): the turn after the magnet's window goes round the
+rung's weapons - the dive, the charge, the mortar - the dive first
+(`Game.Dive`, new). All but no warning: the Ram's eye flashes, its jets
+go out and for half a second it only sags in the silence; then it drops
+like a stone, straight down, to just over the head of a hero standing on
+the main barge - he is never struck there. A small barge in its way is
+smashed into shrapnel: the bullets of a 2008 fan, the monsters' own, that
+wound; a hero under it in the air or on a small barge is struck once and
+knocked aside. The main barge rocks and the screen shakes. Low, riding
+the main barge's deck, its jets catch again hot for about 3 s - an orb on
+a nozzle takes a life, the honeycomb down - and their fire burns a hero
+standing under a nozzle and throws him out of it: the place to stand is
+under the belly between them. Then it rises to hang. The takeoff's jets
+can be put out and lit again (`TTakeoff.Douse`, `Relight`); the charge's
+and the dive's sweep are one (`TRam.HullSweep`, `HullStrikes`). New
+sounds: `divecut.wav`, `divefall.wav`, `diveslam.wav`, `diverelight.wav`
+(`tools/sounds/dive.py`).
+
 2026-11-12: **3.0.125 - the charge.** The air fight's third rung (`AirTierSpent`
 0.43): the turn after the magnet's window goes to the charge and the
 mortar by turns, the charge first (`Game.Charge`, new). The magnet tucks
