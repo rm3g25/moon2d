@@ -68,21 +68,24 @@ Tests\
   Game\
     Tests.Game.Blasts.pas
     Tests.Game.Press.pas
-    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter, sweeper and bunker, the shield over a body and a strip
+    Tests.Game.Ram.pas     the Ram of the boss arena, its hunter, sweeper and bunker, the shield over a body and a strip; its end in the air
     Tests.Game.Wrecks.pas  the pads the sweeper's wave knocks off
     Tests.Game.Capsules.pas  the shuttle's medkits in the Ram's fight
     Tests.Game.StoneTank.pas  the hidden tank of the form's charge in the Ram's fight
     Tests.Game.Shells.pas  the bunker's shells: the arc, the ring, the burst on a deck, the roll; aloft, the shell riding its barge
-    Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen
-    Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away
-    Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station, its drift
-    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off, the count grown
+    Tests.Game.Belt.pas    the road of the chase and its picture wrapped round the screen; a ramp of its own and the way it has left
+    Tests.Game.Road.pas    the road running out: the cliff coming in, the pier riding away; the road come back
+    Tests.Game.Barge.pas   the barge of the air phase: its mooring, casting off, its station, its drift, its berth, the dock
+    Tests.Game.Flock.pas   the small barges of the air fight: in and out, the count, the escort and the jump, the barge taken out, the barge knocked off, the count grown, the flock closed, let go and the held barge dropped
     Tests.Game.Magnet.pas  the magnet under the Ram's belly: the start, the pick, the reach, the lift, the seize and the throw, the heat, the wait
     Tests.Game.Mortar.pas  the Ram's stern mortar: its turn, one shell at a time at the hero's feet, the lean, the fold
     Tests.Game.Charge.pas  the Ram's charge: the fall back, the band, the run, the brake, the hot nozzles, the climb; through
     Tests.Game.Dive.pas    the Ram's dive: the silence, the fall, the floor, the hot jets, the rise; from above
     Tests.Game.Ladder.pas  the ladder of the air fight: the rungs, whose the turn is, the chains, the door of point C
     Tests.Game.Pieces.pas  what is left of a barge that breaks
+    Tests.Game.Breakup.pas  the end of the Ram's hull: the crack, the throe, the burst, the series
+    Tests.Game.Wreckage.pas  what is left of the Ram's hull: its pieces flying, falling slowly, taken back by the wind
+    Tests.Game.Landing.pas  the end of the flight: the slowdown, the road's stop, the stand, the end track
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
     Tests.Game.Shroud.pas
@@ -329,3 +332,11 @@ the line of the pit, y = 450.
   side of that contract is in the table of `Orbs.Rite`: three waves told
   seated, the finish as far from the pause as the mercy is long, a shed
   that tells nothing.
+- The end of the Ram's fight in `Game.Moon` (3.0.128): the last life
+  ending the fight, the bullets and shells quenched, the magnet's barge let
+  go, the hero carried onto the main barge and spared, the controls cut,
+  the road and the barge carried out by the landing's cues, the end track.
+  The rules under it are in the tables (`Game.Breakup`, `Game.Wreckage`,
+  `Game.Landing`, the belt's ramp, the road come back, the berth, the
+  flock let go, the bar retired); the game's side is a live run, as all of
+  `TMoonGame`. So are the pieces' pictures and their fire.

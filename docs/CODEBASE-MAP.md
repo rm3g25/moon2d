@@ -67,7 +67,10 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   deck under the hero (`Game.Mortar`, 3.0.123), its charge across the
   screen (`Game.Charge`, 3.0.125), its dive like a stone (`Game.Dive`,
   3.0.126), the ladder that says whose the turn is between the magnet's
-  cycles (`Game.Ladder`, 3.0.127), the fire on a barge a
+  cycles (`Game.Ladder`, 3.0.127), the end of its hull in the air
+  (`Game.Breakup`, 3.0.128) and what is left of it (`Game.Wreckage`,
+  3.0.128), the end of the flight down to the still picture the titles
+  will stand on (`Game.Landing`, 3.0.128), the fire on a barge a
   shell knocks off (`Game.BargeFire`, 3.0.124) and what is left of one that breaks
   (`Game.Pieces`, 3.0.121), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
@@ -231,6 +234,13 @@ the height it climbs back to; `Game.Ram` is over it) /
 back to; `Game.Ram` is over it) /
 `Game.Ladder` (the ladder of the air fight: over `Render.Brush` for its
 dice alone; `Game.Ram` and `Game.Moon` are over it) /
+`Game.Breakup` (the end of the Ram's hull: over `Render.Brush` for its
+dice alone; `Game.Ram` is over it) /
+`Game.Wreckage` (the pieces of the burst hull: over `Sdl2.Core` for the
+pictures, `Render.Brush` for its dice and `Game.Space`; `Game.Ram`'s
+painter makes their parts) /
+`Game.Landing` (the end of the flight: over `Game.Barge` for the berth's
+place and `Game.Space`; `Game.Moon` carries it out) /
 `Game.BargeFire` (the fire on a knocked barge: over the smoke, the
 lightning and the canvas of `Levels.Dynamics`, `Render.Brush`, `Render.Glow` and
 `Levels.Tint`) /
@@ -3695,6 +3705,9 @@ every monster does.
   Ram's mast - draws the two in turn. `Opaque` is a constant of the
   unit.
 
+- 3.0.128: **`THullArt.Whole`**, **`Worn`**, **`Chassis`** - the layers
+  read, for what is left of a hull that bursts (`Game.Wreckage`).
+
 ### `Game/Monsters.Pilot.pas` (~1075 lines)
 The one who flies a monster of the `mkBossFly` kind - the level-1 boss:
 where its body goes this tick and what it is up to. The monster keeps its
@@ -5290,6 +5303,11 @@ Reborn with the hero on every level load.
   bonus explosion and the pops of the boss's wreck, and `Game.Moon` reads the
   name from here.
 
+- 3.0.128: **`RemoveForm`** (was `RemoveIceForm`) - the form he wears
+  comes off as a ring of its orbs: the ice form's by `ShedSuit`, the moon
+  form's by the new call **`ShedMoonSuit`**; the shroud and the mercy as
+  before.
+
 ### `Game/Game.Trial.pas` (~400 lines)
 The rules of the gravel trial of level 2's screen 9 (3.0.53, reworked
 into acts; `docs/mechanics/arena-2.md` holds the whole design): no monster field,
@@ -6004,9 +6022,25 @@ monster. The game carries out the cue.
   `DrawChargeWarning`) - the band at the top edge over the hull's span,
   the charge band's strip and glow, and a column down at
   `DiveMarkColumnLevel` 0.15.
+- 3.0.128: **its end** (`finale.md`, "Stage 19 as built"). It owns a
+  **`TBreakup`** (`Game.Breakup`; **`Breakup`**, seeded `ASeed xor
+  BreakupSeedSalt`, cleared by `Place` and `Clear`). **`Wreck`** - aloft
+  and whole only: the magnet, the mortar, the charge and the dive cleared,
+  no chain, the armour stowed, the breakup started from where the hull is
+  to `BurstLeft` (the middle of the screen) and `BurstLift` (`HangLift`),
+  `WreckBlasts` pieces to blow. **`Tick`** - with the breakup begun, only
+  **`TickBreakup`**: the cue's **`Breakup`** (`TBreakupCue`), the jolts
+  `CrackJolt` 0.35, `ThroePopJolt` 0.15, `BreakJolt` 1; in the throe and
+  on the burst's tick the flight carried by its `Left`, `Lift`, `Lean`,
+  the jets put out and lit by its cough. **`Present`** - not once burst.
+  **`HullMiddle`**, **`ThroePopAt(place)`** (`ThroePopPoints`).
+  `WreckCols` 3, `WreckRows` 2, **`WreckParts`** 12, **`WreckBlasts`** 8.
+  `TRamPainter.Shatter` - the parts of the burst hull where it stands: the
+  well, the chassis, the hull and its worn copy cut 3 by 2, the bays, the
+  nozzles, the magnet, the mortar (`WholePart`).
 - Tests: `Tests.Game.Ram` (`TRamMagnetTests` since 3.0.121,
   `TRamChargeTests` since 3.0.125, `TRamDiveTests` since 3.0.126,
-  `TRamLadderTests` since 3.0.127).
+  `TRamLadderTests` since 3.0.127, `TRamBreakupTests` since 3.0.128).
 
 ### `Game/Game.Wrecks.pas` (~720 lines, 3.0.94)
 The pads the sweeper's shock wave knocks off (`docs/mechanics/arena-3/ram.md`,
@@ -6120,6 +6154,13 @@ picture; no SDL.
   the orb launcher's take is gone in 3.0.119 - the chase goes on at the
   cruise.
 
+- 3.0.128: **`Run(speed, ticks)`** - over a ramp of its own length
+  (`FRampLength`; `Run(speed)` is `BeltRampTicks`); **`RampTravelLeft`** -
+  what the ramp under way has still to run, the speeds of the ticks to
+  come summed as `Tick` gives them, 0 with none under way: the road come
+  back stops exactly against the barge (`Game.Landing`).
+- Tests: `Tests.Game.Belt`.
+
 ### `Game/Game.Road.pas` (~150 lines, 3.0.118, reworked 3.0.119)
 The road of the chase running out (`docs/mechanics/arena-3/evolution.md`, stages
 17b and 17b-2): the orb launcher taken, the road has an end - a cliff over
@@ -6138,6 +6179,11 @@ hero is a pad the game carries with it, the grid's row of the road erased.
   owned); `Draw(sprites, road, top, alpha)` - the pier's tiles on the
   screen, on the road's line.
 - Tests: `Tests.Game.Road`.
+
+- 3.0.128: **`Arrive(left)`** - the road comes back at the end of the
+  flight: its first tile's left edge - its edge over the crater - at
+  `left`, the tiles on past the right edge; it rides the belt as the pier
+  did, the same painter and pad.
 
 ### `Game/Game.Barge.pas` (~260 lines, 3.0.118, reworked 3.0.119)
 The TeK hover-barge of the air phase (`docs/mechanics/arena-3/evolution.md`, stages
@@ -6175,6 +6221,15 @@ is `Pads.World`'s, carried by the way this gives.
   **`Rock(depth)`** - a blow from above: the deck dips about that deep and
   a spring (`RockPull`, `RockDrag`, `Swing`) brings it back, dying out, on
   top of the drift; in `Dip` and `WayDown`.
+
+- 3.0.128: **`Berth(ticks)`** - at its station or drifting:
+  **`bsBerthing`**, a cubic from where it is to `StationLeft` and its line,
+  starting the way it went (`Way` times the ticks, within `BerthCarryX` 24
+  across and `BerthCarryY` 8 down), the rock swinging on (**`Glide`**);
+  **`bsBerthed`** - standing there, the rock still. **`Berthed`**.
+  **`Dock(left)`** - berthing or berthed only: set at that left, standing,
+  **`bsDocked`**; **`Ride(way)`** - docked only: carried that far with the
+  world (the road it is docked against).
 
 ### `Game/Game.Flock.pas` (~610 lines, 3.0.120)
 The small barges of the Ram's air fight (`docs/mechanics/arena-3/ram-air.md`,
@@ -6238,6 +6293,12 @@ and moves the pads by what it gives.
   once, knocked or not, out of the count, the escort lost as a taken one
   is; nothing for one not flying. **`Held`** - while it holds,
   `SendWhenDue` sends none in (the gap is counted down all the same).
+
+- 3.0.128: **`Close`** (**`Closed`**) - none comes in, no hand-over;
+  **`Disperse`** - closed, every barge on a path of the flock let go along
+  a lane at its deck at **`DispersePace`** 3, no escort, no relief;
+  **`Drop(i, left, top)`** - a taken barge flies again knocked off, from
+  where the caller held it; nothing for one not taken.
 
 ### `Game/Game.Magnet.pas` (~440 lines, 3.0.121)
 The magnet under the Ram's belly (`docs/mechanics/arena-3/ram-air.md`,
@@ -6397,6 +6458,60 @@ cycles. It knows no hull, no magnet, no barges; no SDL.
   turn. `LastTurn`.
 - Tests: `Tests.Game.Ladder`.
 
+### `Game/Game.Breakup.pas` (~250 lines, 3.0.128)
+The end of the Ram's hull in the air (`docs/mechanics/finale.md`, stage
+19): only the clock and the order. No hull, no drawing, no SDL.
+- **`ThroeTicks`** 33, **`ThroePops`** (6, 15, 24), `SeriesFirstTicks` 8,
+  `SeriesGapLeast` 9, `SeriesGapMost` 14.
+- **`TBreakupStage`**: `buIdle`, `buThroe`, `buSeries`, `buOver`.
+- **`TBreakup`** - `Create(seed)`, `Clear`, **`Start(left, lift, lean,
+  toLeft, toLift, pieces)`** (nothing unless whole), **`Tick`** returns
+  **`TBreakupCue`** (`Cracks` on the first tick; `Pops` with `PopPlace`;
+  `JetsCatch`, `JetsDie`; `Breaks` as the throe ends; `PieceBlows` with
+  `Piece`; `Over` on the last blast). The throe: `Left`, `Lift` by a
+  smooth step to the place, `Lean` from its own to a shudder of 4 degrees
+  in 5 ticks grown into over 10; the jets lit 4 of every 7 ticks, dead the
+  last 8. The series: every piece once, shuffled by the dice, the first
+  `SeriesFirstTicks` after the burst, the gaps within 9-14. `Running`
+  (throe or series), `Broken` (series or over), `Stage`, `JetsLit`.
+- Tests: `Tests.Game.Breakup`.
+
+### `Game/Game.Wreckage.pas` (~250 lines, 3.0.128)
+What is left of the Ram's hull once it bursts (`docs/mechanics/finale.md`,
+stage 19). Decoration: no floor, no body, no wound.
+- **`TWreckPart`** - `Layers` (pictures drawn one over the other), `Part`
+  (shares of each), `Width`, `Height`, `Middle`, `Spin`, `Mirrored`.
+- **`TWreckage`** - `Create(seed)`; **`Shatter(parts, heart, way)`** - the
+  pieces in place of any before, each **`TWreckPiece`** from its part's
+  place with `KeptWay` 0.5 of the hull's way, out from the heart at
+  0.3-1.0 and up at 0.5-1.3, tumbling 1-4 degrees a tick; **`Tick(wind)`**
+  - `WreckGravity` 0.05 (a fifth of a barge piece's), the speed across
+  closing `WindDrag` 0.008 of its gap to the world's pace a tick, gone
+  `WreckOffMargin` 64 past the screen; `Clear`, `Count`, `Falling`,
+  `MiddleAt`, `SpinAt`, `Pieces[i]`.
+- **`TWreckagePainter`** - `Draw(origin, alpha)`: each piece its part of
+  each layer, flipped when mirrored, turned.
+- Tests: `Tests.Game.Wreckage`.
+
+### `Game/Game.Landing.pas` (~150 lines, 3.0.128)
+The end of the flight, from the hull's burst to the picture the titles
+stand on (`docs/mechanics/finale.md`, stage 19): only the clock and the
+cues; the belt, the road, the barge, the hero and the sound are the
+caller's. No SDL.
+- `LandingSlowAfterTicks` 66, **`LandingSlowTicks`** 198,
+  **`LandingBerthTicks`** 50, `LandingHandOverAfterTicks` 66,
+  **`LandingRoadStop`** (`BargeLength`: the barge docked against it ends at
+  the left edge), `LandingRoadEnterGap` 8.
+- **`TLandingStage`**: `lgIdle`, `lgFlying`, `lgSlowing`, `lgStanding`.
+- **`TLanding`** - `Start` (nothing once begun), `Clear`,
+  **`Tick(travelLeft, stands)`** returns **`TLandingCue`** (`SlowsDown`;
+  `RoadIn` with `RoadLeft` - the stop plus what the slowdown has left to
+  run, once that is within the gap beyond the right edge; `Stands` once the
+  world stands; `HandsOver` a breath later). `Running` (from the start
+  till a clear: nothing wounds him), `Stage`,
+  `HandedOver`.
+- Tests: `Tests.Game.Landing`.
+
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
 What is left of a barge that breaks in the air fight
 (`docs/mechanics/arena-3/ram-air.md`, stage 18d-2; made for the charge and
@@ -6549,6 +6664,10 @@ terminal's key is heard: every `HullBarKeyCells` 3 of the `HullBarCells`
   (default not); `THullBar.Hot` and `Pulse` (0 to 1 and back once in
   `HullBarPulseTicks` 16, anew with every heat). `Wound` is now an orb
   sunk into a hot part.
+
+- 3.0.128: **`Retire`** - the hull burst: the bar goes up over
+  `HullBarDropTicks` (`THullBar.Drop` down to 0) and is not shown after;
+  `Wound` takes none; nothing unless armed. `Arm` and `Clear` end it.
 
 ### `Game/Game.Press.pas` (~205 lines)
 The press of the gravel trial's finale (3.0.59, stage 6.2): its rules,
@@ -6986,6 +7105,11 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
     rain), `DrawGlass`, `DrawFeed` (over the gauge). `Energy`; `Rite` and
     `Burst` - the ceremony's stage watches them.
 - Tests: `Tests/Game/Tests.Game.HeroOrbs.pas`.
+
+- 3.0.128: **`FMoonShed`** - a second `TOrbRite` in `MoonOrbTint`;
+  **`ShedMoonSuit`** - the moon form's ring, as `ShedSuit` (the living
+  hero's); ticked, struck, drawn, carried through a door, taken by
+  `TakesAt`, cleared and collapsed with the others.
 
 ### `Game/Game.Moon.pas` (~5810 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
@@ -7785,6 +7909,46 @@ so a unit (and later a test) can reach it. `interface` holds
   death's restart); `dsNone` past it. The key O aloft is
   **`DebugHullToNextDoor`** - down to the next of `AirTierSpent` and
   `FinisherSpent`.
+
+- 3.0.128, **the end of the fight** (`finale.md`, "Stage 19 as built").
+  **`WoundHull`** - `BulletStruckRam`'s orb on a hot part (none while he is
+  dead); the last life **`EndTheFight`**: **`FLanding`** (`TLanding`)
+  started, the music stopped (`FCurrentMusic` none), the jets' loop
+  stopped, **`FHullLives.Retire`**, **`LetGoOfTheCatch`** (the magnet's
+  pad `FFlock.Drop`ped, a seized wreck flung under the screen,
+  `DroppedWreckFall` 160), **`QuenchTheFire`** (the monsters' bullets burst,
+  the shells in the air detonated and cleared), `FFlock.Close`,
+  `FRam.Wreck`, `FHenshin.RemoveForm`, **`CarryHeroAboard`** (held, a
+  `PlanHoist` to **`DeckSpot`** - the deck where it is, `LandingDeckInset`
+  8 from its ends - **`TickLandingCarry`** following the deck, `Release`
+  at the end). **`TickLanding`** (after `TickThrow`): the landing's cue
+  with `FBelt.RampTravelLeft` and whether the belt stands - `SlowsDown`:
+  `FBelt.Run(0, LandingSlowTicks)`, `FBarge.Berth(LandingBerthTicks)`,
+  `FFlock.Disperse`, `FlightDownSoundFile`; `RoadIn`: `FRoad.Arrive`, the
+  road's pad woken and flown there; `HandsOver`: **`EndMusicFile`** (`credits.ogg`)
+  once, in over `EndMusicFadeSeconds` 2. **`CarryOutBreakup`** (in
+  `TickRam`): the crack - `ekMachine` at `HullMiddle` and
+  `HullGroanSoundFile`; a pop - `ekBarrel` at `ThroePopAt`; a cough -
+  `JetFireSoundFile`; the burst - **`BurstTheHull`** (**`FWreckage`**
+  shattered from `FRamPainter.Shatter` at the heart with the flight's pace,
+  `ekBoss`, `HullBreakSoundFile` and `RageBlastSoundFile`); a piece -
+  **`BlowWreckPiece`** (`ekMachine`, `WreckBlastTrauma` 0.25; none for a
+  piece fallen under `WreckBlastFloor` 280).
+  **`TickWreckage`** - the pieces by the belt's wind, **`FWreckFire`** (a
+  `TBargeFire` of `WreckParts`) at each piece on the screen, the smoke by
+  `BargeSmokeWindShare`. **`FWreckagePainter`** and the fire drawn after
+  the Ram's body. While the landing runs: `HurtHero`, `StrikeHero`, the
+  monsters' bullets, the thrown barge, the Ram's touches, sweeps, fire,
+  column and shells wound nothing; the pit brings him back with no word.
+  **`DockBarge`** (in `TickPier`, while the landing runs): the docked
+  barge `Ride`s the world's way; berthing or berthed, once the standing
+  road's edge reaches its right side it `Dock`s against it -
+  `BargeDockSoundFile`, `FBarge.Rock(BargeDockDepth)` 3, `BargeDockTrauma`
+  0.1. **`HeroOnTheHarbour`** (aboard, or on the road's pad): the key down
+  drops him through neither, the whole air fight.
+  `ClearPier` clears the landing, the wreckage and its fire. Debug: the key
+  O on the finisher's stretch takes the hull to its last life, then that
+  one.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -8599,6 +8763,15 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   (from above); `TTakeoffTests` +2 (settled); `TMagnetTests` +1 (tucked
   while it cools); `TBargeFlockTests` +2 (grown); `THullLivesTests` +2
   (resumed).
+- 3.0.128: **`Game/Tests.Game.Breakup.pas`** - **`TBreakupTests`** (13),
+  the hull's end; **`Game/Tests.Game.Wreckage.pas`** -
+  **`TWreckageTests`** (11), its pieces; **`Game/Tests.Game.Landing.pas`**
+  - **`TLandingTests`** (8), the end of the flight with a belt of its own;
+  **`TRamBreakupTests`** (6, new in `Tests.Game.Ram` - the end on the
+  hull); `TBeltTests` +3 (a ramp of its own, the way left); `TRoadEndTests`
+  +1 (come back); `TBargeRideTests` +6 (the berth, the dock, the ride); `TBargeFlockTests` +5
+  (closed, let go, dropped); `THullLivesTests` +4 (retired);
+  `THeroOrbsTests` +1 and one more ask (the moon form shed).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -9176,6 +9349,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The charge of the air fight (3.0.125): the third rung - the charge and the mortar by turns after the window, the charge first; the magnet tucked in; the fall back past the left edge, the band and the eye's red there, the rush in low from behind, the corridor over the main barge, the sweep striking the hero and smashing the small barges, the wash, the brake with the nozzles swivelled ahead, the hot nozzles - the window - and the climb; the flight carried; the nozzles' swivel | Game.Charge.pas (`TCharge`) + Game.Takeoff.pas (`tkCarried`, `Carry`, `Release`, `Aloft`, `SwivelAt`) + Game.Ram.pas (`TickTurns`, `BeginCharge`, `CarryCharge`, `ChargeLowLift`, `ChargeSweep`, `ChargeStrikes`, `HotAloft`, `ChargeFromTier`, `TRamTarget.HarbourTopmost`, cue `Charge`, `DrawChargeWarning`, the nozzles' swivel and heat in `DrawEngines`, `NozzleMouth`, `DrawFlames`, `DrawJetGlow`) + Game.Magnet.pas (`Tucked`) + Game.Flock.pas (`Smash`, `Held`) + Hero.pas (`Knock(side, way)`) + Game.Moon.pas (`CarryOutCharge`, `SmashUnderTheCharge`, `SmashFlockBarge`, `ResolveRamCharge`, `ChargeKnockWay`, `ChargeWashDepth`, the sound files) + tools/sounds/charge.py + Tests.Game.Charge.pas, Tests.Game.Takeoff.pas, Tests.Game.Magnet.pas, Tests.Game.Flock.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-4) |
 | The dive of the air fight (3.0.126): the fourth rung - dive, charge and mortar round after the window, the dive first; the eye's flash and the jets out for half a second, the magnet tucked in; the fall like a stone to just over the head of a hero on the main barge, the sweep striking a hero under it and smashing the small barges into shrapnel - bullets of a 2008 fan; the blow rocking the main barge; low, riding its deck, the jets caught again hot - the window - their fire burning under a nozzle; the rise | Game.Dive.pas (`TDive`) + Game.Takeoff.pas (`Douse`, `Relight`) + Game.Ram.pas (`TickTurns`, `BeginDive`, `CarryDive`, `DiveFloor`, `HeadClearance`, `HullSweep`, `HullStrikes`, `JetFireBurns`, `NozzlesSoft`, `NozzleHeatAt`, `HoldsFlock`, `DiveFromTier`, `TAirTurn.atDive`, cue `Dive`, the flash in `TickEye`) + Game.Moon.pas (`CarryOutDive`, `SmashUnderTheHull`, `SmashFlockBarge`, `SprayShrapnel`, `ShrapnelFan`, `ResolveRamSweep`, `ResolveRamFire`, `DiveKnockWay`, `DiveBlowDepth`, `JetFireKnockWay`, the sound files) + Bullets.pas (`SpawnFan`) + tools/sounds/dive.py + Tests.Game.Dive.pas, Tests.Game.Takeoff.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-5) |
 | The ladder of the air fight (3.0.127): the turn after the magnet's window at random among the rung's weapons, never twice in a row, the newest first; the chains of the last rung - the dive at the throw, a shell under the shield; the finisher on the last stretch - the charge through and the dive out of the sky; the flock growing by the rung; point C and the End key's stop at it; the hull worn, shorting out and smoking by the rung | Game.Ladder.pas (`TAirLadder`, `AirTierOf`, `AirTurnsOf`, `AirDoorLives`) + Game.Ram.pas (`TickTurns`, `BeginAirTurn`, `DropFromAbove`, `HullWear`, `HullShortLevel`, `HullSmokeLevel`, `TickHullDamage`, `DrawDiveMark`) + Game.Charge.pas (`ceThrough`, `Gone`) + Game.Dive.pas (`StartAbove`, `dvMarking`, `MarkAt`) + Game.Takeoff.pas (`Settle`) + Game.Magnet.pas (tucked while cooling) + Game.Flock.pas (`Grow`) + Game.HullLives.pas (`Resume`, `RamHullLives` 240) + Game.Moon.pas (`FPastAirDoor`, `HullLivesShare`, `HullSpent`, `DebugJumpToAirDoor`, `DebugHullToNextDoor`) + Tests.Game.Ladder.pas and the other units' tests (+docs/mechanics/arena-3/ram-air.md, stage 18d-6) |
+| The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
 | The bombs of the air fight (3.0.123): the first two rungs by the hull's lives - the nearest barge, then his barge first and a turn of the stern mortar after every window; the mortar rising, leaning, lobbing one shell at a time at the deck under his feet, folding; the shell riding its barge, no road aloft; a small barge knocked off, falling behind and sinking; the main barge rocked | Game.Mortar.pas (`TMortar`, `MortarTilt`) + Game.Ram.pas (`AirTier`, `AirTierSpent`, `TickMortar`, `MortarMuzzleAt`, `MortarPivotPoint`, `DrawMortar`, cue `MortarRises`, `TRamTarget.HullSpent`, `ShellsAloft`) + Game.Magnet.pas (`Waits`, `Cooled`) + Game.Shells.pas (`Lob` with a carrier, `Carry`, `HasRoad`, `Marked`, `LastRing`) + Game.Flock.pas (`Knock`, `Knocked`, `fpKnocked`) + Game.Moon.pas (`LobAtHisDeck`, `ShellCarrierOf`, `TickShellsAloft`, `AirLobRise`, `ShellRockDepth`, `MortarRiseSoundFile`, the debug key O) + `mortar` in tek-machine.mset + tools/sounds/mortar.py + Tests.Game.Mortar.pas, Tests.Game.Shells.pas, Tests.Game.Flock.pas, Tests.Game.Magnet.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-3) |
 | The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |

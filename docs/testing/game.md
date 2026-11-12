@@ -1046,3 +1046,171 @@ failing past 12000 ticks.
 | `TestAChainedShellIsLobbedWhileTheMagnetHoldsItsShield` | a shield-and-shells chain: a shield, not a lift; the mortar up at the catch; its one shell lobbed while the magnet holds, before the throw | the shells come in a lift, or only after the window |
 | `TestTheFinisherGoesThroughAndDropsFromAboveOverTheHero` | on the stretch, the hero at 100: the finisher first; the charge never brakes and goes past the right edge; then over the top edge, the hull's middle over his, there between the ticks too, out of sight; the band blinked, its jets out up there; down to within 20 over the head of a hero on the main barge, never down to it; hanging after | the hull streaks across the screen, drops off where he is not, or crushes the main barge's rider |
 | `TestTheHullWearsShortsAndSmokesByTheRung` | none spent: whole, no bolts, no smoke; short of the charge's rung: worn, no bolts, no smoke; at it: bolts and smoke; at the dive's: both more, no bursts; at the finisher's stretch: bursts; all spent: all worn, full bolts, full bursts, more than at the stretch's door | the damage shows before the charge, never, or not harder as the fight goes; the bursts come before the end |
+
+## Game.Breakup
+
+State: written, 13 tests (3.0.128, stage 19). Needs no stage: `TBreakup`
+only counts. The unit is tried by `Tests\Game\Tests.Game.Breakup.pas`,
+fixture `TBreakupTests`.
+
+Shared: a breakup seeded 7, started from 40 across, 60 up, leaning 6, to
+burst at 171.5 across and 184 up; 8 pieces unless a test says; `Throe`
+ticks `ThroeTicks` and gives the cues, `Series` ticks till it is over,
+failing past 400 ticks.
+
+Numbers spelled: the places and the pieces, the shudder's 4 degrees and
+the jets' last 8 dead ticks; the ticks of the throe, the small blasts and
+the series' gaps are read from the unit (`ThroeTicks`, `ThroePops`,
+`SeriesFirstTicks`, `SeriesGapLeast`, `SeriesGapMost`).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestWholeItDoesNothing` | 66 ticks unstarted: no cue, idle, neither running nor broken | the hull bursts by itself |
+| `TestItCracksOnceAtOnce` | started: running, not broken; the crack on the first tick, never again | the crack's flash and groan come late or twice |
+| `TestTheThroeTakesItToWhereItBursts` | through the throe: never back across, never back down, never past its place; at its end there, across and up | the hull bursts short of its place, or overshoots it |
+| `TestItShuddersInItsThroe` | within its lean and the shudder; in the second half both ways | it lurches over stiff, or shakes past its lean |
+| `TestTheSmallBlastsComeOnceEachAtTheirPlaces` | each place of `ThroePops` once, at its tick | a blast on the hull missed or doubled |
+| `TestTheJetsCoughThenAreDeadBeforeTheBurst` | they catch again at least twice and die at least three times; dead the last 8 ticks | the jets burn steady to the burst, or never catch |
+| `TestItBurstsOnceAsTheThroeEnds` | no burst in the throe; on its last tick; broken from then, still once the series is over | the hull bursts twice, or stays to be seen |
+| `TestEveryPieceBlowsUpOnce` | each of 8 pieces once; over once; not in the order of their numbers | a piece blows twice, never, or the series reads as a row |
+| `TestTheBlastsComeOneAtATimeWithGaps` | the first `SeriesFirstTicks` after the burst; the gaps between `SeriesGapLeast` and `SeriesGapMost` | one bang, or the series drags |
+| `TestNoPiecesItIsOverAtTheBurst` | no pieces: burst and over on the throe's last tick | an empty series hangs |
+| `TestAStartWhileItRunsIsNothing` | started again ten ticks in: no second crack, on its way as it was | a second last life restarts the throe |
+| `TestAClearMakesItWhole` | after the throe, cleared: idle, neither running nor broken; started, it cracks again | a restart leaves the hull broken |
+| `TestSameDiceSameSeries` | two breakups seeded alike: the same blasts on the same pieces | the series is not the dice's |
+
+## Game.Wreckage
+
+State: written, 11 tests (3.0.128, stage 19). Needs no stage: `TWreckage`
+only counts; the pictures are left out. The unit is tried by
+`Tests\Game\Tests.Game.Wreckage.pas`, fixture `TWreckageTests`.
+
+Shared: a wreckage seeded 11; `Parts(heart)` cuts a hull of 169 by 128
+about the heart into a grid of 3 by 2, as the painter does, turned 3
+degrees; the heart at 256, 104; the flight's wind 4.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNothingTillItBursts` | a tick before any burst: none, nothing falls | pieces out of nowhere |
+| `TestEachPartFliesFromItsPlace` | as many as the parts, each from its place, turned as the hull was; on the screen | the pieces jump at the burst |
+| `TestOutFromTheHeart` | 20 ticks, no way, no wind: the left column went left, the right one right | the burst does not throw its pieces out |
+| `TestUpFirstThenFallingSlowly` | the top row going up after a tick; none gone two seconds on; all falling four seconds on | the moon's pull too strong, or none |
+| `TestTheyTumble` | 10 ticks: each turned more than a degree | the pieces fly stiff |
+| `TestTheWindTakesThemBack` | 150 ticks against a calm twin: each going left more than a unit faster, never faster than the world | the smoke streams back and the pieces do not |
+| `TestBetweenTicksAPieceLiesBetweenThem` | halfway between two ticks: the middle and the turn halfway | the pieces step on the tick |
+| `TestAllGoneUnderTheScreenInTheEnd` | ticked till none falls, within 1000: each gone | a piece hangs on the screen forever |
+| `TestANewBurstReplacesTheOld` | a second burst of one part: one piece | the pieces of two bursts pile up |
+| `TestAClearEmptiesTheAir` | cleared: none, nothing falls | a restart leaves pieces in the air |
+| `TestSameDiceSameFlight` | two wreckages seeded alike, 30 ticks: in the same places | the flight is not the dice's |
+
+## Game.Landing
+
+State: written, 8 tests (3.0.128, stage 19). Needs no stage: `TLanding`
+only counts. The unit is tried by `Tests\Game\Tests.Game.Landing.pas`,
+fixture `TLandingTests`, with a `TBelt` of its own run as the game runs
+it.
+
+Shared: the belt run up to the flight's pace and past its ramp; `Step` -
+the belt's tick, the road's edge riding it once in, then the landing told
+what the belt has left to run and whether it stands, the slowdown carried
+out on the belt; 600 ticks are enough for all of it.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestIdleItTellsNothing` | 600 ticks unstarted: not running, no cue, the flight at its pace | the flight ends with no burst |
+| `TestBegunItRunsTheFlightGoesOnThenSlowsOnce` | running from the start; at the flight's pace a tick short of `LandingSlowAfterTicks`; the slowdown once, then | the world stops under the burst, or never |
+| `TestTheRoadComesInOnceFromBeyondTheRightEdge` | once; no farther than `LandingRoadEnterGap` beyond the edge, and from beyond it | the road pops up on the screen, or twice |
+| `TestTheRoadStopsABargesLengthFromTheLeftEdge` | where the world stops: its edge at `BargeLength`, within 0.01; it came in right of the barge at its berth | the barge docked against it stops off the left edge, or the road comes in short of the barge and never meets it |
+| `TestItTellsOnceThatTheWorldStands` | once, `LandingSlowTicks` after the slowdown; standing | the stand before the stop, or never |
+| `TestTheEndTrackABreathAfterTheStand` | once, `LandingHandOverAfterTicks` after the stand; handed over | the end track over the slowdown, or never |
+| `TestAStartWhileItRunsIsNothing` | started again ten ticks short of the slowdown: the slowdown on time | a second last life sets the clock back |
+| `TestAClearMakesItIdle` | cleared: not running, idle, nothing handed over | a restart keeps the hero spared |
+
+## Game.Ram: its end
+
+State: written, 6 tests (3.0.128, stage 19): fixture `TRamBreakupTests`
+in `Tests\Game\Tests.Game.Ram.pas`. The clock of the end is tried in
+`Tests.Game.Breakup`; here, what the Ram does with it.
+
+Shared: the body and the orders of the other fixtures; `HangOver(x)` -
+hanging over x, the magnet told out, 400 ticks with the hero on the road
+under it; 300 ticks hold the throe and the series.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestOnTheRoadAWreckIsNothing` | past the bunker on the road, wrecked: whole, no crack | the hull bursts before the air phase |
+| `TestWreckedAloftItCracksAndFightsNoMore` | the magnet out, wrecked: the crack on the next tick with a jolt; through the throe no catch, no lob, no charge, no dive, the magnet stowed, nothing hot; there to be seen | the dead hull still fights, or vanishes at the crack |
+| `TestItBurstsOverTheMiddleWhereverItDied` | wrecked hanging over 120: it bursts with its middle over the middle of the screen, no lower than it was | it bursts on the hero's head after a dive, or off the screen |
+| `TestBurstItIsNoMoreToBeSeenOrTouched` | after the throe: not present, no touch where it was, no sweep; 300 ticks on, never again | the burst hull still wounds, or comes back |
+| `TestTheSeriesBlowsEachPieceOnce` | each of `WreckParts` once at most, `WreckBlasts` in all; over | a piece blows twice, or the bays and the hull's pieces are skipped |
+| `TestAClearMakesItWhole` | after its end, cleared: whole; hanging again, present | a restart after the end leaves no Ram |
+
+## Game.Belt: a ramp of its own, the way left
+
+State: written, 3 tests (3.0.128, stage 19), beside the belt's own in
+`Tests\Game\Tests.Game.Belt.pas`, fixture `TBeltTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestALongerRampTakesItsTicks` | from the flight's pace, run to a stand over 165: moving a tick short, gentler than the usual ramp; at a stand when it is over | the flight stops over the usual two seconds |
+| `TestTheRampLeftIsWhatItRunsToTheStop` | 40 ticks into it: what is left is what it then runs, within 0.001; none at a stand | the road comes back short of the barge, or over it |
+| `TestNoRampUnderWayNoneLeft` | standing, and at cruise: none | a road comes in while the belt runs on |
+
+## Game.Road: come back
+
+State: written, 1 test (3.0.128, stage 19), beside the road's own in
+`Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestComeBackItsEdgeIsWhereToldAndRidesTheBelt` | come back at 516: there, between the ticks too; 30 ticks at 2 left: 60 farther; on the screen, its tiles past the right edge | the road comes back flown in, or short |
+
+## Game.Barge: the berth
+
+State: written, 6 tests (3.0.128, stage 19), beside the others in
+`Tests\Game\Tests.Game.Barge.pas`, fixture `TBargeRideTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestBerthedItGlidesToItsStationAndLineAndStands` | drifted away from the station, berthed over 165: berthing; not berthed a tick short; then at its station, on its line, and there still, no way, 100 ticks on | the barge stops anywhere but against the road |
+| `TestBerthingItGoesOnTheWayItWentAtFirstNotFar` | berthed going right: on to the right on its first tick; never farther than `BerthCarryX` past where it was | the barge jerks to a stop and turns, or sails off |
+| `TestBerthedABlowStillRocksIt` | berthed, struck: it dips more than half the blow; back on its line, not moved across | the dock's rock is lost, or moves it |
+| `TestOnlyAtItsStationOrDriftingDoesItBerth` | away, moored and casting off: told to berth, it stays so | a restart's end berths a barge not yet boarded |
+| `TestDockedItRidesWithTheWorld` | berthing, docked at 150: docked, there at once; 20 ticks ridden at 1.5 left: the world's way each tick, carried 30, on its line | the docked barge stands while the road runs on, or bobs off the road |
+| `TestOnlyBerthingOrBerthedDoesItDockOnlyDockedRide` | at its station: a ride and a dock do nothing; drifting, a dock does nothing; berthing, it docks | the world drags a barge not docked, or the drift docks one the road never touched |
+
+## Game.Flock: closed, let go, dropped
+
+State: written, 5 tests (3.0.128, stage 19), beside the flock's own in
+`Tests\Game\Tests.Game.Flock.pas`, fixture `TBargeFlockTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestClosedNoneComesIn` | the escort in, closed: 2000 ticks, none came in | new barges come in after the burst |
+| `TestLetGoAllLeaveFastAndNoneComesIn` | let go: no escort; each flying going left at `DispersePace`; 260 ticks on none flies | the barges linger over the still picture |
+| `TestAClearOpensItAgain` | let go, cleared: open; started, the escort comes | a restart leaves the flock shut |
+| `TestADroppedBargeFallsFromWhereItWasHeld` | taken, dropped at 200, 160: not taken, knocked, there; then behind and down; out of the count | the magnet's barge hangs in the air at the burst |
+| `TestDroppingOneNotTakenChangesNothing` | a free one dropped: on its path where it was | a barge on its path falls for nothing |
+
+## Game.HullLives: retired
+
+State: written, 4 tests (3.0.128, stage 19), beside the others in
+`Tests\Game\Tests.Game.HullLives.pas`, fixture `THullLivesTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestRetiredTheBarGoesUpAndIsGone` | armed, lit, retired: shown and going up each tick of `HullBarDropTicks`; then gone, and gone 1000 ticks on | the bar hangs over the burst, or blinks out |
+| `TestRetiredNoLifeIsTaken` | retired: no life taken, as many left | an orb in the air ends the fight twice |
+| `TestNotArmedARetireIsNothing` | retired unarmed, then armed: in its place, a life taken | a retire before the gun spoils the bar |
+| `TestArmedAgainTheBarComesBack` | retired, armed again: in its place | the next fight has no bar |
+
+## Game.HeroOrbs: the moon form shed
+
+State: written, 1 test and an ask more in another (3.0.128, stage 19),
+beside the others in `Tests\Game\Tests.Game.HeroOrbs.pas`, fixture
+`THeroOrbsTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTheMoonFormComesOffInARingOfItsOwn` | shed: an armed ring; no orb of the ice form's rite | the moon form comes off in ice-white orbs, or in a ring that shields nothing |
+| `TestCorpseCallsUpNoOrbs` | asks the moon form's shed too: no armed orb over the corpse | a dead hero sheds a ring |

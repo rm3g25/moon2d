@@ -7,6 +7,37 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-12: **3.0.128 - the end in the air.** Stage 19 of arena 3: the
+fight ends at the hull's last life. The hull cracks - a flash, a groan of
+torn plates - and for a second lurches to its place over the middle of
+the screen, shuddering, its jets coughing, a few small blasts on it; then
+it bursts with a boss's blast into twelve big pieces - its picture cut
+three by two, the engine bays, the nozzles, the magnet and the mortar -
+which fall slowly, as the moon pulls, each in a trail of fire and smoke
+the flight's wind streams back, while the series blows them up one after
+another (`Game.Breakup`, `Game.Wreckage`, new). The flight's track is cut
+at the crack and the hull's bar goes up out of sight. From the crack on
+the hero is spared: the moon form comes off in a ring of
+its own dark orbs, which carry him onto the main barge if he is not on it;
+what flew at him bursts harmless, no small barge comes in, the barge the
+magnet held falls burning. Two seconds after the burst the flight slows to
+a stand over six seconds, the small barges leave off the left edge, the
+main barge glides to its berth in the middle of the screen and waits; the
+road comes back from beyond the right edge, the barge docks against its
+edge and rides on with it, and the world stops with the barge against the
+left edge of the screen - nowhere left to fall. His keys stay his; the key
+down drops him through neither the main barge nor the road, the whole air
+fight (`HeroOnTheHarbour`, `TMoonGame.DockBarge`)
+(`Game.Landing`, new; `TBelt.Run(speed, ticks)`, `RampTravelLeft`,
+`TRoadEnd.Arrive`, `TBargeRide.Berth`, `Dock`, `Ride`, `TBargeFlock.Close`, `Disperse`,
+`Drop`, `THullLives.Retire`, `THenshin.RemoveForm`,
+`THeroOrbs.ShedMoonSuit`). A dock, two seconds of silence over the still
+picture, and Legendary comes in over two seconds - the hand-over to the
+titles, which are still to come; till then the picture stands and Escape
+opens the menu. Four new sounds (`tools/sounds/finale.py`): the crack's
+groan, the burst, the flight winding down, the dock. The key O on the
+finisher's stretch takes the hull to its last life, then that one.
+
 2026-11-12: **3.0.127 - the ladder.** The air fight's rungs, the choice of
 the turn and its chains are a unit of their own (`Game.Ladder`, new): the
 hull's lives are 240 on the first grade (the grades' share for the hull
