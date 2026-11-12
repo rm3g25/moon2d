@@ -12,6 +12,10 @@
   from the brake, the window - while they cool. Then it climbs straight up
   to its height and is let go to hang.
 
+  The finisher's charge does not brake: at speed it goes on right through
+  the screen and is gone past the right edge - what comes after is the
+  caller's.
+
   The corridor is the caller's: how high the hull is to hang as it runs,
   given with the start. The way across, the height and the lean are this
   unit's; the caller flies the hull by them. While it runs low - from the
@@ -54,6 +58,10 @@ const
   ChargeHoldBow = -2.0;
 
 type
+  // How a charge ends: ceBrake - short of the right edge, low, the window,
+  // then up to its height; ceThrough - on at speed past the right edge
+  TChargeEnd = (ceBrake, ceThrough);
+
   // csNone - not charging; csLeaving - falling back past the left edge;
   // csWarning - out there, the band blinking; csPassing - in at speed;
   // csBraking - slowing hard short of the right edge; csHolding - low, the
@@ -70,6 +78,9 @@ type
     Rushes: Boolean;
     // It brakes, the nozzles thrown ahead
     Brakes: Boolean;
+    // Through the screen and gone past the right edge: the end of a charge
+    // that does not brake
+    Gone: Boolean;
     // Up at its height: to be let go to hang
     Done: Boolean;
   end;
@@ -77,6 +88,7 @@ type
   TCharge = class
   private
     FWidth: Single;
+    FEnd: TChargeEnd;
     FStage: TChargeStage;
     FTicks: Integer;
     FLowLift: Single;
@@ -106,8 +118,10 @@ type
     procedure Clear;
     // From where it hangs: its left edge at ALeft, going APace units a tick
     // across, ALift over the road; it is to run along the corridor that
-    // ALowLift puts it in. Nothing while it charges.
-    procedure Start(ALeft, APace, ALift, ALowLift: Single);
+    // ALowLift puts it in, and to end as AEnd says. Nothing while it
+    // charges.
+    procedure Start(ALeft, APace, ALift, ALowLift: Single;
+      AEnd: TChargeEnd = ceBrake);
     function Tick: TChargeCue;
     function Running: Boolean;
     property Stage: TChargeStage read FStage;
@@ -168,6 +182,7 @@ end;
 procedure TCharge.Clear;
 begin
   FStage := csNone;
+  FEnd := ceBrake;
   FTicks := 0;
   FLowLift := 0;
   FLeft := 0;
@@ -183,11 +198,13 @@ begin
   FLastWarn := 0;
 end;
 
-procedure TCharge.Start(ALeft, APace, ALift, ALowLift: Single);
+procedure TCharge.Start(ALeft, APace, ALift, ALowLift: Single;
+  AEnd: TChargeEnd);
 begin
   if Running then
     Exit;
   Clear;
+  FEnd := AEnd;
   FLowLift := ALowLift;
   FLeft := ALeft;
   // So the first tick goes on at the pace it hung at
@@ -276,10 +293,20 @@ begin
 end;
 
 // At speed till the brake can stop it short of the right edge; the brake
-// from where it is then, so it comes in at the pace it ran
+// from where it is then, so it comes in at the pace it ran. With no brake,
+// on till it is gone past the right edge.
 procedure TCharge.TickPassing(var ACue: TChargeCue);
 begin
   BowToward(ChargePassBow);
+  if FEnd = ceThrough then
+  begin
+    FLeft := FLeft + ChargePace;
+    if FLeft < ScreenWidth + ChargeBeyond then
+      Exit;
+    Enter(csNone);
+    ACue.Gone := True;
+    Exit;
+  end;
   var BrakeReach: Single := ChargePace * ChargeBrakeTicks / 2;
   if FLeft + ChargePace < HoldLeft - BrakeReach then
   begin

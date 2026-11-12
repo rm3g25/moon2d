@@ -33,7 +33,6 @@ const
   MortarWaitTicks = 40;
   // Its last shell gone, this long before the next is aimed
   MortarGapTicks = 20;
-  MortarShellsPerTurn = 2;
   // It leans toward his feet, degrees either way at most, the whole lean
   // this far across from its pivot
   MortarTiltMost = 15.0;

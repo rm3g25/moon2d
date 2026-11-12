@@ -125,7 +125,7 @@
   spent; on the first the magnet takes the nearest barge and no mortar
   comes up, from the second it takes his barge first and after each of
   its windows the stern mortar has a turn - it rises, the magnet waits,
-  two shells go at his feet out of a muzzle over the hull, and once it
+  its shells go at his feet out of a muzzle over the hull, and once it
   has folded the magnet catches again; a clear folds the mortar.
 
   The Ram only counts, so the tests tick it with a body of their own: the
@@ -141,12 +141,24 @@
   the honeycomb falls, and an orb meeting them is the game's to count.
 
   Its dive: none before its rung; on it the turn after the magnet's window
-  goes to the dive first, then the charge, then the mortar, then the dive
-  again. The eye flashes and the jets go out, the magnet tucks in; it
-  falls to just over the head of a hero standing on the main barge, never
-  striking him there, and hangs low with its jets lit again and hot -
+  goes to the dive first, then not the dive. The eye flashes and the jets
+  go out, the magnet tucks in; it falls to just over the head of a hero
+  standing on the main barge, never striking him there, and hangs low
+  with its jets lit again and hot -
   their fire burns under a nozzle, not under the belly or past the hull -
   then rises to hang. Its fall strikes a hero under it once.
+
+  The ladder in the air (Game.Ladder for the choice itself): on the last
+  rung a chained dive comes the tick the barge is thrown, the magnet's
+  window lost, no turn after it; a chained shell is lobbed at his feet
+  while the magnet holds its shield, before the throw. On the finisher's
+  stretch the finisher comes first: the charge never brakes and goes off
+  past the right edge, then the hull is put over the top edge over the
+  hero, still, its jets out, the band blinking, and drops to just over the
+  head of a hero on the main barge and rises to hang. The hull wears with
+  the lives spent, shorts out from the charge's rung, harder as they go,
+  and smokes there, thicker on the last; thick bolts burst out of it only
+  on the finisher's stretch, more as its last lives go.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -162,6 +174,7 @@ uses
   Game.Shield,
   Game.Magnet,
   Game.Mortar,
+  Game.Ladder,
   Game.Ram;
 
 type
@@ -480,7 +493,7 @@ type
     [Test]
     procedure TestBeforeItsRungNoDive;
     [Test]
-    procedure TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar;
+    procedure TestOnItsRungTheDiveFirstThenNotTheDive;
     [Test]
     procedure TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn;
     [Test]
@@ -491,6 +504,29 @@ type
     procedure TestLowItsFireBurnsUnderANozzleNotUnderTheBelly;
     [Test]
     procedure TestAfterTheBlowTheNozzlesAreHotAndTheHoneycombFalls;
+  end;
+
+  [TestFixture]
+  TRamLadderTests = class
+  private
+    FRam: TRam;
+    // Ticks with AHero in sight, the magnet going round, till its cycle
+    // chains as AChain says - the tick it is told; fails past the limit
+    procedure TickTillChain(const AHero: TRamTarget; AChain: TAirChain);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestAChainedDiveComesAtTheThrowAndTheWindowIsLost;
+    [Test]
+    procedure TestAChainedShellIsLobbedWhileTheMagnetHoldsItsShield;
+    [Test]
+    procedure TestTheFinisherGoesThroughAndDropsFromAboveOverTheHero;
+    [Test]
+    procedure TestTheHullWearsShortsAndSmokesByTheRung;
   end;
 
   [TestFixture]
@@ -749,6 +785,8 @@ uses
   Game.Space,
   Game.Wheel,
   Game.Takeoff,
+  Game.Charge,
+  Game.Dive,
   Levels.Defs;
 
 const
@@ -4852,16 +4890,19 @@ begin
 end;
 
 procedure TRamMagnetTests.TestTheRungsFollowTheHullsSpentLives;
-const
-  Spent: array [0..5] of Single = (0, 0.19, 0.2, 0.5, 0.67, 1);
-  Rungs: array [0..5] of Integer = (1, 1, 2, 3, 4, 4);
 begin
   FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
-  for var i := 0 to High(Spent) do
+  FRam.Tick(HeroAboard(0));
+  Assert.AreEqual(1, FRam.AirTier, 'Untouched');
+  for var Tier: Integer := Low(AirTierSpent) to High(AirTierSpent) do
   begin
-    FRam.Tick(HeroAboard(Spent[i]));
-    Assert.AreEqual(Rungs[i], FRam.AirTier, Format('At %g spent', [Spent[i]]));
+    FRam.Tick(HeroAboard(AirTierSpent[Tier] - 0.01));
+    Assert.AreEqual(Tier - 1, FRam.AirTier, Format('Short of %d', [Tier]));
+    FRam.Tick(HeroAboard(AirTierSpent[Tier]));
+    Assert.AreEqual(Tier, FRam.AirTier, Format('At the door of %d', [Tier]));
   end;
+  FRam.Tick(HeroAboard(1));
+  Assert.AreEqual(AirTopTier, FRam.AirTier, 'All spent');
 end;
 
 procedure TRamMagnetTests.TestFromTheLiftsRungTheMagnetTakesHisBargeFirst;
@@ -4931,7 +4972,7 @@ begin
     if Ticks > MagnetTicks then
       Assert.Fail('The turn never ended');
   end;
-  Assert.AreEqual(MortarShellsPerTurn, Lobs, 'Its shells, one after the other');
+  Assert.AreEqual(MortarShells[BombsFromTier], Lobs, 'Its shells, one after the other');
   Ticks := 0;
   while not FRam.Tick(Hero).Magnet.Caught do
   begin
@@ -5335,18 +5376,21 @@ begin
   Assert.IsTrue(Turns >= 2, 'The magnet went round');
 end;
 
-procedure TRamDiveTests.TestOnItsRungTheDiveFirstThenTheChargeThenTheMortar;
+procedure TRamDiveTests.TestOnItsRungTheDiveFirstThenNotTheDive;
 begin
   var Hero := HeroBeforeTheDive(DiveSpent);
   HangWithTheMagnetOut(FRam, Hero);
   TickTill(Hero, daDive);
   TickOut(Hero, daDive);
-  TickTill(Hero, daCharge);
-  TickOut(Hero, daCharge);
-  TickTill(Hero, daMortar);
-  TickOut(Hero, daMortar);
-  TickTill(Hero, daDive);
-  Assert.IsTrue(FRam.Dive.Running, 'The dive again');
+  var Ticks := 0;
+  while not (Holds(daCharge) or Holds(daMortar)) do
+  begin
+    Assert.IsFalse(FRam.Dive.Running, 'Not the dive twice in a row');
+    FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('No turn after the dive');
+  end;
 end;
 
 procedure TRamDiveTests.TestTheEyeFlashesTheJetsGoOutAndTheMagnetTucksIn;
@@ -5440,7 +5484,195 @@ begin
   Assert.IsFalse(FRam.HotAloft, 'Cold once it is up again');
 end;
 
+{ TRamLadderTests }
+
+const
+  // On the finisher's stretch
+  FinisherRunSpent = 0.9;
+  // Enough cycles of the magnet for a chance of a half to come
+  ChainTicks = 12000;
+
+procedure TRamLadderTests.Setup;
+begin
+  FRam := TRam.Create(SolidBody(Round(RamWidth), Round(RamHeight)), Seed);
+end;
+
+procedure TRamLadderTests.TearDown;
+begin
+  FRam.Free;
+end;
+
+procedure TRamLadderTests.TickTillChain(const AHero: TRamTarget;
+  AChain: TAirChain);
+begin
+  var Ticks := 0;
+  repeat
+    var Cue := FRam.Tick(AHero);
+    if Cue.Magnet.Caught and (FRam.Chain = AChain) then
+      Exit;
+    Inc(Ticks);
+  until Ticks > ChainTicks;
+  Assert.Fail(Format('Never chained as %d', [Ord(AChain)]));
+end;
+
+procedure TRamLadderTests.TestAChainedDiveComesAtTheThrowAndTheWindowIsLost;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTillChain(Hero, acThrowDive);
+  var Ticks := 0;
+  var Cue := FRam.Tick(Hero);
+  while not Cue.Magnet.Thrown do
+  begin
+    Assert.IsFalse(FRam.Dive.Running, 'No dive before the throw');
+    Cue := FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('Never thrown');
+  end;
+  Assert.IsTrue(FRam.Dive.Running, 'The dive the tick it throws');
+  FRam.Tick(Hero);
+  Assert.IsFalse(FRam.Magnet.Soft, 'The magnet''s window lost');
+  Ticks := 0;
+  while FRam.Dive.Running do
+  begin
+    Cue := FRam.Tick(Hero);
+    Assert.IsFalse(Cue.Magnet.Cooled, 'No window told');
+    Assert.IsFalse(FRam.Charge.Running or FRam.Mortar.Busy, 'Nothing else');
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('The dive never ended');
+  end;
+  Ticks := 0;
+  while not FRam.Tick(Hero).Magnet.Caught do
+  begin
+    Assert.IsFalse(FRam.Charge.Running or FRam.Mortar.Busy or FRam.Dive.Running,
+      'No turn after a chained cycle');
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('The magnet never caught again');
+  end;
+end;
+
+procedure TRamLadderTests.TestAChainedShellIsLobbedWhileTheMagnetHoldsItsShield;
+begin
+  var Hero := HeroBeforeTheDive(DiveSpent);
+  HangWithTheMagnetOut(FRam, Hero);
+  TickTillChain(Hero, acShieldShells);
+  Assert.IsFalse(FRam.Magnet.Lifts, 'A shield, not a lift');
+  Assert.IsTrue(FRam.Mortar.Busy, 'The mortar rises as it catches');
+  var Lobs := 0;
+  var Ticks := 0;
+  var Cue := FRam.Tick(Hero);
+  while not Cue.Magnet.Thrown do
+  begin
+    if Cue.Lob then
+    begin
+      Inc(Lobs);
+      Assert.IsTrue(FRam.Magnet.Holds, 'While it holds');
+    end;
+    Cue := FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > MagnetTicks then
+      Assert.Fail('Never thrown');
+  end;
+  Assert.AreEqual(ShieldShells, Lobs, 'Its shell before the throw');
+end;
+
+procedure TRamLadderTests.TestTheFinisherGoesThroughAndDropsFromAboveOverTheHero;
+const
+  HeroX = 100.0;
+begin
+  var Hero := HeroBeforeTheDive(FinisherRunSpent);
+  Hero.Body := Box(HeroX, HarbourDeck - RiderHeight, 16, RiderHeight);
+  HangWithTheMagnetOut(FRam, Hero);
+  var Ticks := 0;
+  while not FRam.Charge.Running do
+  begin
+    Assert.IsFalse(FRam.Dive.Running or FRam.Mortar.Busy, 'The finisher first');
+    FRam.Tick(Hero);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('No finisher');
+  end;
+  var LeftMost := FRam.Left;
+  Ticks := 0;
+  while FRam.Charge.Running do
+  begin
+    FRam.Tick(Hero);
+    Assert.IsFalse(FRam.Charge.Stage in [csBraking..csClimbing], 'Never brakes');
+    LeftMost := Max(LeftMost, FRam.Left);
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('The charge never ended');
+  end;
+  Assert.IsTrue(LeftMost >= ScreenWidth, 'Off past the right edge');
+  Assert.AreEqual<TDiveStage>(dvMarking, FRam.Dive.Stage, 'Over the top edge');
+  // His middle, the hull's middle over it; well inside the screen
+  var Aim: Single := HeroX + 8 - RamWidth / 2;
+  Assert.AreEqual(Double(Aim), Double(FRam.Left), 0.01, 'Over the hero');
+  Assert.AreEqual(Double(FRam.LeftAt(0)), Double(FRam.LeftAt(1)), 0.01,
+    'Put there, not flown');
+  Assert.IsTrue(RamFloorY - FRam.Flight.LiftAt(0) < 0, 'Out of sight above');
+  Assert.IsTrue(RamFloorY - FRam.Flight.LiftAt(1) < 0, 'Out of sight above now');
+  var BottomMost: Single := 0;
+  var Marked := False;
+  var DarkMarking := False;
+  Ticks := 0;
+  while FRam.Dive.Running do
+  begin
+    FRam.Tick(Hero);
+    if FRam.Dive.MarkAt(1) > 0 then
+      Marked := True;
+    var Dark := (FRam.Flight.JetAt(tjFront, 1) <= 0) and
+      (FRam.Flight.JetAt(tjRear, 1) <= 0);
+    if (FRam.Dive.Stage = dvMarking) and Dark then
+      DarkMarking := True;
+    BottomMost := Max(BottomMost, RamFloorY - FRam.Flight.LiftAt(1));
+    Inc(Ticks);
+    if Ticks > DiveRunTicks then
+      Assert.Fail('The dive never ended');
+  end;
+  Assert.IsTrue(Marked, 'The band blinked');
+  Assert.IsTrue(DarkMarking, 'Its jets out up there');
+  var HisHead: Single := HarbourDeck - RiderHeight;
+  Assert.IsTrue(BottomMost > HisHead - 20, 'Low: just over his head');
+  Assert.IsTrue(BottomMost <= HisHead, Format('Over his head: %.1f', [BottomMost]));
+  Assert.AreEqual(Ord(tkHanging), Ord(FRam.Flight.Stage), 'Hanging again');
+end;
+
+procedure TRamLadderTests.TestTheHullWearsShortsAndSmokesByTheRung;
+begin
+  FRam.StartHanging(OrdersAt(Stop), HangMiddleX);
+  FRam.Tick(HeroAboard(0));
+  Assert.AreEqual(0.0, Double(FRam.HullWear), 0.001, 'Whole');
+  Assert.AreEqual(0.0, Double(FRam.HullShortLevel), 0.001, 'No bolts');
+  Assert.AreEqual(0.0, Double(FRam.HullSmokeLevel), 0.001, 'No smoke');
+  FRam.Tick(HeroAboard(AirTierSpent[ChargeFromTier] - 0.01));
+  Assert.IsTrue(FRam.HullWear > 0.3, 'Worn');
+  Assert.AreEqual(0.0, Double(FRam.HullShortLevel), 0.001, 'No bolts short of the charge');
+  Assert.AreEqual(0.0, Double(FRam.HullSmokeLevel), 0.001, 'No smoke short of it');
+  FRam.Tick(HeroAboard(AirTierSpent[ChargeFromTier]));
+  var Shorts := FRam.HullShortLevel;
+  var Smoke := FRam.HullSmokeLevel;
+  Assert.IsTrue(Shorts > 0, 'Bolts on the charge''s rung');
+  Assert.IsTrue(Smoke > 0, 'Smoke on it');
+  FRam.Tick(HeroAboard(AirTierSpent[DiveFromTier]));
+  Assert.IsTrue(FRam.HullShortLevel > Shorts, 'Harder on the last');
+  Assert.IsTrue(FRam.HullSmokeLevel > Smoke, 'Thicker on the last');
+  Assert.AreEqual(0.0, Double(FRam.HullBurstLevel), 0.001, 'No bursts short of the stretch');
+  FRam.Tick(HeroAboard(FinisherSpent));
+  var Bursts := FRam.HullBurstLevel;
+  Assert.IsTrue(Bursts > 0, 'Bursts on the stretch');
+  FRam.Tick(HeroAboard(1));
+  Assert.AreEqual(1.0, Double(FRam.HullWear), 0.001, 'All worn');
+  Assert.AreEqual(1.0, Double(FRam.HullShortLevel), 0.001, 'Full bolts');
+  Assert.IsTrue(FRam.HullBurstLevel > Bursts, 'More bursts at the last life');
+  Assert.AreEqual(1.0, Double(FRam.HullBurstLevel), 0.001, 'Full bursts');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TRamLadderTests);
   TDUnitX.RegisterTestFixture(TRamDiveTests);
   TDUnitX.RegisterTestFixture(TRamChargeTests);
   TDUnitX.RegisterTestFixture(TRamMagnetTests);

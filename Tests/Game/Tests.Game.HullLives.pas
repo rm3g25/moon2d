@@ -7,6 +7,8 @@
   the last; a clear takes it all. The bar is armoured till the caller says
   a part is hot, pulses while one is, and is armoured again after; a new
   heat starts the pulse anew; arming and a clear leave it armoured.
+  Resumed after arming, the lives are those told, within none and the
+  full, the full kept; not armed, a resume is nothing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -52,6 +54,10 @@ type
     procedure TestANewHeatStartsThePulseAnew;
     [Test]
     procedure TestArmingAndAClearLeaveItArmoured;
+    [Test]
+    procedure TestResumedTheLivesAreThoseToldWithinTheFull;
+    [Test]
+    procedure TestNotArmedAResumeIsNothing;
   end;
 
 implementation
@@ -245,6 +251,29 @@ begin
   FLives.Clear;
   FLives.Arm(1);
   Assert.IsFalse(FLives.Bar(1).Hot, 'Cleared and armed: armoured');
+end;
+
+procedure THullLivesTests.TestResumedTheLivesAreThoseToldWithinTheFull;
+const
+  Door = 160;
+begin
+  FLives.Arm(1);
+  FLives.Resume(Door);
+  Assert.AreEqual(Door, FLives.Lives, 'The door''s lives');
+  Assert.AreEqual(RamHullLives, FLives.FullLives, 'The full kept');
+  Assert.AreEqual(Double(Door) / RamHullLives, Double(FLives.Bar(1).Share), Slop,
+    'The bar shows them');
+  FLives.Resume(RamHullLives + 10);
+  Assert.AreEqual(RamHullLives, FLives.Lives, 'Never past the full');
+  FLives.Resume(-3);
+  Assert.AreEqual(0, FLives.Lives, 'Never below none');
+end;
+
+procedure THullLivesTests.TestNotArmedAResumeIsNothing;
+begin
+  FLives.Resume(10);
+  Assert.IsFalse(FLives.Armed, 'Not armed');
+  Assert.AreEqual(0, FLives.Lives, 'No lives');
 end;
 
 initialization

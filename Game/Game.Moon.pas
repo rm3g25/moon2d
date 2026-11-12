@@ -32,7 +32,7 @@ uses
   Game.Explosions, Game.Blasts,
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
-  Game.BargeFire, Game.Charge, Game.Dive,
+  Game.BargeFire, Game.Charge, Game.Dive, Game.Ladder,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -74,7 +74,7 @@ type
 {$IFDEF DEBUGKEYS}
   // The stops of the End key on level 2, in their order; dsNone - past the
   // last
-  TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsNone);
+  TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsAirDoor, dsNone);
 {$ENDIF}
 
   TMoonGame = class(TGameApp)
@@ -233,6 +233,9 @@ type
     // The orb launcher is his: a death comes back aboard the barge, the
     // hull hanging, the world moving - point B
     FPastLauncher: Boolean;
+    // The air fight has climbed to the door of point C: a death comes back
+    // aboard with the hull's lives of that door
+    FPastAirDoor: Boolean;
     FRamRumble: THeldSound; // loops while the Ram drives
     FOrbs: THeroOrbs; // the hero's orbs and the charge of the form
     FArmorPings: TArmorPings;
@@ -363,6 +366,8 @@ type
     procedure DebugJumpToRam;
     procedure DebugJumpPastBunker;
     procedure DebugJumpAboard;
+    procedure DebugJumpToAirDoor;
+    procedure DebugHullToNextDoor;
     procedure DebugSpendTriggers(AScreen: Integer);
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
@@ -442,6 +447,8 @@ type
     procedure PlaceAtCheckpoint;
     procedure GiveOrbLauncher;
     function HeroAboard: Boolean;
+    // The share of the hull's lives spent, 0 to 1; 0 unarmed
+    function HullSpent: Single;
     procedure TickHeartbeat;
     procedure TickEclipse;
     procedure StepEclipse;
@@ -730,6 +737,9 @@ const
   // (monsters.json, "tank"); it throws no shards
   ShellBlast: TBlastDef = (Radius: 40; Lives: 100; ShardLives: 0);
   DifficultyMonsterLives: array [TDifficulty] of Double = (1.0, 1.5, 2.0);
+  // The hull's lives grow slower with the grade than a monster's: the air
+  // fight is long, and a death in it replays much of it
+  HullLivesShare: array [TDifficulty] of Double = (1.0, 1.25, 1.5);
   // The gravel trial ('Атака грейвелов' of 2008).
   // FEMALES on purpose: patrolNoEdgeCheck walks off ledges, so they
   // descend and besiege the hero - edge-checked males would idle on the
@@ -1272,6 +1282,7 @@ begin
   FRam.Reset;
   FPastBunker := False;
   FPastLauncher := False;
+  FPastAirDoor := False;
   FWrecks.Clear;
   FCapsules.Clear;
   FShells.Clear;
@@ -1593,6 +1604,7 @@ begin
   FBelt.Clear;
   // A door out of the arena: the whole road again
   FPastLauncher := False;
+  FPastAirDoor := False;
   ClearPier;
   FFarPlane.Clear;
   FFangs.Clear(RollDiceSeed);
@@ -1636,6 +1648,8 @@ begin
       // to the rite, and it knows leaps.
       FOrbs.CarryRite(FHero.X - LeftX, FHero.Y - LeftY);
       ArriveOnScreen;
+      // A floor lower than the one he left: standing, he would hang over it
+      FHero.LookDown;
       // The aura crosses with him, by the door's step and that of a
       // trigger of the new screen: a leap would fly the orbs after him
       FOrbs.CarryAura(FHero.X - LeftX, FHero.Y - LeftY);
@@ -3321,7 +3335,7 @@ end;
 
 // The orb launcher in his hands as the take puts it there: the gun he
 // holds put away, the launcher his, the hull's lives armed and their bar
-// coming down
+// coming down - past point C with the lives of its door
 procedure TMoonGame.GiveOrbLauncher;
 begin
   var Gun := FMonsters.Find(OrbLauncherPickupId).PickupEffect;
@@ -3329,7 +3343,9 @@ begin
   FHero.ApplyWeaponPickup(Gun.WeaponType, Gun.FireCooldown, Gun.BulletSpeed,
     Gun.BulletGravity);
   FOrbLauncher.Grant;
-  FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
+  FHullLives.Arm(HullLivesShare[FDifficulty]);
+  if FPastAirDoor then
+    FHullLives.Resume(AirDoorLives(FHullLives.FullLives));
 end;
 
 // The orb launcher taken: the chase goes on. The world moves off again;
@@ -3421,7 +3437,8 @@ var
   Main: TMainBarge;
 begin
   if FBarge.Stage = bsDrift then
-    FFlock.Start(FlockCounts[1]);
+    FFlock.Start(FlockCounts[FRam.AirTier]);
+  FFlock.Grow(FlockCounts[FRam.AirTier]);
   Main.Left := FBarge.Left;
   Main.Top := RamFloorY + FBarge.Dip;
   Main.Width := BargeLength;
@@ -3496,6 +3513,13 @@ function TMoonGame.HeroStandsOn(const APad: TPad): Boolean;
 begin
   Result := (APad <> nil) and not FHero.Dead and not FHero.InAir and
     (FHero.DeckUnderFeet = APad);
+end;
+
+function TMoonGame.HullSpent: Single;
+begin
+  if FHullLives.FullLives = 0 then
+    Exit(0);
+  Result := 1 - FHullLives.Lives / FHullLives.FullLives;
 end;
 
 function TMoonGame.HeroAboard: Boolean;
@@ -3808,7 +3832,7 @@ begin
   if not IsOrbLauncher then
     Exit;
   FOrbLauncher.Take;
-  FHullLives.Arm(DifficultyMonsterLives[FDifficulty]);
+  FHullLives.Arm(HullLivesShare[FDifficulty]);
   BeginPier;
 end;
 
@@ -4145,12 +4169,13 @@ begin
     Target.Harbour.X := FBargePad.Left + BargeLength / 2;
     Target.Harbour.Y := FBargePad.Top;
     Target.HarbourTopmost := RamFloorY - DriftReachY;
-    if FHullLives.FullLives > 0 then
-      Target.HullSpent := 1 - FHullLives.Lives / FHullLives.FullLives;
+    Target.HullSpent := HullSpent;
     Target.ShellsAloft := FShells.Active;
   end;
   var HeadBefore := FRam.Head;
   var Cue := FRam.Tick(Target);
+  if FPastLauncher and (FRam.AirTier >= AirDoorTier) then
+    FPastAirDoor := True;
   FRamPainter.Tick(FBelt.Speed);
   CarryOutMagnet(Cue.Magnet);
   CarryOutCharge(Cue.Charge);
@@ -4437,6 +4462,11 @@ end;
 // rocked as it lands over it
 procedure TMoonGame.CarryOutDive(const ACue: TDiveCue);
 begin
+  if ACue.Marks then
+  begin
+    StopRamRumble;
+    FAudio.Play(ChargeWarnSoundFile);
+  end;
   if ACue.Hushes then
   begin
     StopRamRumble;
@@ -5686,7 +5716,8 @@ end;
 
 // End, a press to the next stop past where the hero is: the false ending
 // of level 2, the start of the Ram's fight, the moment right before the
-// henshin, aboard the barge in the air phase. Aboard, a press does nothing.
+// henshin, aboard the barge in the air phase, aboard at the door of point C.
+// There, a press does nothing.
 procedure TMoonGame.DebugJumpToWork;
 begin
   case DebugNextStop of
@@ -5698,6 +5729,8 @@ begin
       DebugJumpPastBunker;
     dsAboard:
       DebugJumpAboard;
+    dsAirDoor:
+      DebugJumpToAirDoor;
   end;
 end;
 
@@ -5708,8 +5741,10 @@ begin
   var OnWorkLevel := SameText(FLevelFile, Format(LevelFilePattern, [WorkLevel]));
   if not OnWorkLevel then
     Exit(dsTrialEnd);
-  if FPastLauncher then
+  if FPastAirDoor then
     Exit(dsNone);
+  if FPastLauncher then
+    Exit(dsAirDoor);
   if FPastBunker then
     Exit(dsAboard);
   if FHero.Screen >= RamScreen then
@@ -5739,6 +5774,7 @@ begin
   FRam.Reset;
   FPastBunker := False;
   FPastLauncher := False;
+  FPastAirDoor := False;
   FEnergyGauge.Dock;
   FWrecks.Clear;
   FCapsules.Clear;
@@ -5802,6 +5838,33 @@ begin
   FPastBunker := True;
   FPastLauncher := True;
   RestartLevel;
+end;
+
+// Aboard at the door of point C, as a death past it brings it back: the
+// stop comes only aboard, so the death's own restart is the jump
+procedure TMoonGame.DebugJumpToAirDoor;
+begin
+  FPastAirDoor := True;
+  RestartLevel;
+end;
+
+// The hull's lives down to the next door of the ladder past where they
+// are - a rung, then the finisher's stretch; past the last, nothing
+procedure TMoonGame.DebugHullToNextDoor;
+begin
+  var Doors: TArray<Single> := nil;
+  for var Tier := Low(AirTierSpent) to High(AirTierSpent) do
+    Doors := Doors + [AirTierSpent[Tier]];
+  Doors := Doors + [FinisherSpent];
+  for var Door in Doors do
+  begin
+    if HullSpent >= Door then
+      Continue;
+    while HullSpent < Door do
+      if not FHullLives.Wound then
+        Exit;
+    Exit;
+  end;
 end;
 
 // The triggers of AScreen count as fired, and their track as changed to:
@@ -5990,11 +6053,10 @@ begin
         FRam.WoundThird;
         FStoneTank.Wound(1 / 3);
       end
-      // Aloft the ladder's rungs follow the hull's lives - a fifth of them
-      // at once
+      // Aloft the ladder's rungs follow the hull's lives - down to the
+      // next door at once
       else if FHullLives.Armed then
-        for var i := 1 to FHullLives.FullLives div 5 do
-          FHullLives.Wound;
+        DebugHullToNextDoor;
     ScancodeJ:
       // The boss gives the ceremony once a fight, at two thirds of his
       // lives - too far to tune against

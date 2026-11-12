@@ -10,6 +10,11 @@
   low, riding the floor as the caller moves it, while they cool; then it
   climbs straight up to its height and is let go to hang.
 
+  The finisher's dive comes out of the sky: begun over the top edge, out of
+  sight and its jets already out, a red band blinks at the top edge over
+  the place it will strike, the length of its hull; then it falls from
+  there as from its hang.
+
   The floor is the caller's, told every tick. The height and the lean are
   this unit's; the caller flies the hull by them, and puts its jets out
   and lights them again by its cues. While it falls a hero it meets is
@@ -40,14 +45,19 @@ const
   DiveFollow = 0.3;
   // Up to its height and level again
   DiveRiseTicks = 50;
+  // From over the top edge: the band blinks this long before the fall
+  DiveMarkTicks = 20;
 
 type
-  // dvNone - not diving; dvHush - its jets out, sagging; dvFalling - like
-  // a stone; dvHolding - low, its jets catching again and cooling;
+  // dvNone - not diving; dvMarking - over the top edge, the band blinking
+  // over where it will strike; dvHush - its jets out, sagging; dvFalling -
+  // like a stone; dvHolding - low, its jets catching again and cooling;
   // dvRising - up to its height
-  TDiveStage = (dvNone, dvHush, dvFalling, dvHolding, dvRising);
+  TDiveStage = (dvNone, dvMarking, dvHush, dvFalling, dvHolding, dvRising);
 
   TDiveCue = record
+    // Over the top edge, the band blinks over where it will strike
+    Marks: Boolean;
     // Its eye flashes and its jets go out
     Hushes: Boolean;
     // It falls
@@ -72,6 +82,8 @@ type
     // Units a tick down while it falls
     FSpeed: Single;
     FHeat, FLastHeat: Single;
+    FMark, FLastMark: Single;
+    procedure TickMarking(var ACue: TDiveCue);
     procedure TickHush(var ACue: TDiveCue);
     procedure TickFalling(AFloor: Single; var ACue: TDiveCue);
     procedure TickHolding(AFloor: Single; var ACue: TDiveCue);
@@ -84,6 +96,9 @@ type
     // From where it hangs: going APace units a tick across, ALift over the
     // road, its bow ABow degrees down. Nothing while it dives.
     procedure Start(APace, ALift, ABow: Single);
+    // Over the top edge, ALift over the road, level and still, its jets out:
+    // the band, then the fall. Nothing while it dives.
+    procedure StartAbove(ALift: Single);
     // AFloor - the lift it is to stop at this tick, units over the road
     function Tick(AFloor: Single): TDiveCue;
     function Running: Boolean;
@@ -106,8 +121,10 @@ type
     function Soft: Boolean;
     // From the silence till it is up again: no small barge comes in
     function HoldsFlock: Boolean;
-    // AAlpha of the way from the last tick to this one: 0 cold to 1 hot
+    // AAlpha of the way from the last tick to this one: 0 cold to 1 hot;
+    // the band's light over where it will strike, 0 none to 1
     function HeatAt(AAlpha: Single): Single;
+    function MarkAt(AAlpha: Single): Single;
   end;
 
 implementation
@@ -118,6 +135,9 @@ uses
 const
   // Each tick the bow goes this share of the way to level
   BowLearn = 0.2;
+  // The band blinks once in this long, brighter as it comes
+  MarkBlinkTicks = 8;
+  MarkFirstLevel = 0.5;
 
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
@@ -148,6 +168,8 @@ begin
   FSpeed := 0;
   FHeat := 0;
   FLastHeat := 0;
+  FMark := 0;
+  FLastMark := 0;
 end;
 
 procedure TDive.Start(APace, ALift, ABow: Single);
@@ -161,6 +183,17 @@ begin
   FFrom := ALift;
   FBow := ABow;
   Enter(dvHush);
+end;
+
+procedure TDive.StartAbove(ALift: Single);
+begin
+  if Running then
+    Exit;
+  Clear;
+  FLift := ALift;
+  FLastLift := ALift;
+  FFrom := ALift;
+  Enter(dvMarking);
 end;
 
 function TDive.Running: Boolean;
@@ -181,9 +214,12 @@ begin
     Exit;
   FLastLift := FLift;
   FLastHeat := FHeat;
+  FLastMark := FMark;
   Inc(FTicks);
   FBow := FBow - BowLearn * FBow;
   case FStage of
+    dvMarking:
+      TickMarking(Result);
     dvHush:
       TickHush(Result);
     dvFalling:
@@ -193,6 +229,22 @@ begin
     dvRising:
       TickRising(Result);
   end;
+end;
+
+// Out of sight, still: the band blinks, brighter as the fall comes; then
+// it falls from a standstill
+procedure TDive.TickMarking(var ACue: TDiveCue);
+begin
+  ACue.Marks := FTicks = 1;
+  var Share: Single := FTicks / DiveMarkTicks;
+  var Blink := 0.5 + 0.5 * Cos(2 * Pi * FTicks / MarkBlinkTicks);
+  FMark := Lerp(MarkFirstLevel, 1, Share) * Sqr(Blink);
+  if FTicks < DiveMarkTicks then
+    Exit;
+  FMark := 0;
+  FSpeed := 0;
+  Enter(dvFalling);
+  ACue.Drops := True;
 end;
 
 // Its way across dies out and it sags, the sag growing as a fall does,
@@ -282,6 +334,11 @@ end;
 function TDive.HeatAt(AAlpha: Single): Single;
 begin
   Result := Lerp(FLastHeat, FHeat, AAlpha);
+end;
+
+function TDive.MarkAt(AAlpha: Single): Single;
+begin
+  Result := Lerp(FLastMark, FMark, AAlpha);
 end;
 
 end.

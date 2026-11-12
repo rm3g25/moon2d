@@ -104,6 +104,7 @@
         <DCCReference Include="Game\Tests.Game.Mortar.pas"/>
         <DCCReference Include="Game\Tests.Game.Charge.pas"/>
         <DCCReference Include="Game\Tests.Game.Dive.pas"/>
+        <DCCReference Include="Game\Tests.Game.Ladder.pas"/>
         <DCCReference Include="Game\Tests.Game.Pieces.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>

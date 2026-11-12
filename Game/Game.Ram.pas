@@ -189,29 +189,41 @@
   nothing.
 
   The air fight climbs a ladder by the share of the hull's lives spent,
-  which the game tells it. On the first rung the magnet takes the barge
-  nearest its face; from the second it takes the one the hero stands on
-  first - the lift - and after each of the magnet's windows the stern
-  mortar has a turn (Game.Mortar): it rises from behind the rear block
-  and lobs shells at the deck under his feet, one at a time, while the
-  magnet waits, cold. The shells are the game's (Game.Shells). From the
-  third the turn after a window goes to the charge and the mortar by
-  turns, the charge first (Game.Charge): the magnet tucked into the belly,
-  the hull falls back past the left edge, a red band blinks there across
-  the corridor it will run along, and it rams across the screen low, bow
-  first, brakes short of the right edge and hangs there low while its
+  which the game tells it; whose the turn is between the magnet's cycles
+  is the ladder's to say (Game.Ladder). On the first rung the magnet takes
+  the barge nearest its face; from the second it takes the one the hero
+  stands on first - the lift - and after each of the magnet's windows the
+  stern mortar has a turn (Game.Mortar): it rises from behind the rear
+  block and lobs shells at the deck under his feet, one at a time, while
+  the magnet waits, cold. The shells are the game's (Game.Shells). From
+  the third the charge joins it (Game.Charge): the magnet tucked into the
+  belly, the hull falls back past the left edge, a red band blinks there
+  across the corridor it will run along, and it rams across the screen
+  low, bow first, brakes short of the right edge and hangs there low while its
   nozzles cool - hot, they take an orb as the magnet does - then climbs
   back to hang. The charge flies the hull: the flight is carried by it. In
   the run, the sweep of the hull strikes a hero it meets, once a charge,
   on a deck or not, and knocks him along its way; the small barges it
   meets low are the game's to smash. On the fourth rung the dive joins
-  them, first in their round (Game.Dive): all but no warning - its eye
+  them, seen first (Game.Dive): all but no warning - its eye
   flashes and its jets go out for half a second - then it drops like a
   stone, straight down, to just over the head of a hero standing on the
   main barge, and hangs there low while its jets catch again, hot - they
   take an orb as after the brake, and the fire under them burns a hero in
   it - then climbs back to hang. Falling, it strikes a hero it meets, once
   a dive; the small barges it meets low are the game's to smash.
+  On the fourth rung a cycle of the magnet may chain: the dive the moment
+  the barge is thrown, the magnet's window lost, or a shell at his feet
+  while the magnet holds its shield. On its last stretch the finisher
+  joins the turns: the charge goes right through the screen without a
+  brake, and once it is gone past the right edge the hull is put over the
+  top edge where the hero stands, a red band blinking there, and drops out
+  of the sky as the dive does.
+
+  The hull wears as its lives go: its worn copy shows through as they are
+  spent; from the charge's rung it shorts out over its cracks, and smokes,
+  the harder the higher the rung; on the finisher's stretch thick bolts
+  burst out of it, more and more as its last lives go.
 
   Its wheels gone, its honeycomb comes back: kindled outward from the
   magnet as the second wheel is thrown, then over the flying hull - rimmed
@@ -241,7 +253,7 @@ uses
   Sdl2.Core, Render.Brush, Render.Sprites, Sprites.Sets, Levels.Events,
   Levels.Dynamics, Monsters.Defs, Monsters.Hull, Game.Shield, Game.Wheel,
   Game.Takeoff, Game.Magnet, Game.Mortar, Game.Charge, Game.Dive,
-  Effects.Sparks;
+  Game.Ladder, Effects.Sparks;
 
 const
   RamWidth = 169.0;
@@ -253,14 +265,6 @@ const
   HunterLives = 100;
   SweeperLives = 140;
   BunkerLives = 150;
-  // The rungs of the air fight's ladder: the share of the hull's lives
-  // spent from which each holds. The bombs and the lift come with the
-  // second, the charge with the third, the dive with the fourth.
-  AirTierSpent: array [2..4] of Single = (0.2, 0.43, 0.67);
-  BombsFromTier = 2;
-  LiftFromTier = 2;
-  ChargeFromTier = 3;
-  DiveFromTier = 4;
   // The bunker's last third - the hunt, the hull turned round - holds out
   // this many times its share of the row: a life every this many strikes
   BunkerLastThirdStrikes = 2;
@@ -440,9 +444,6 @@ type
     Dive: TDiveCue;
   end;
 
-  // Whose the turn after the magnet's window was last
-  TAirTurn = (atNone, atMortar, atCharge, atDive);
-
   // Where the hull stands and how: upright on the road with its left edge
   // at Left, turned Lean degrees clockwise about its rear wheel's touch of
   // the road, then moved by Shift
@@ -597,7 +598,9 @@ type
     FMortar: TMortar;
     FCharge: TCharge;
     FDive: TDive;
-    FLastTurn: TAirTurn;
+    FLadder: TAirLadder;
+    // This cycle of the magnet chains, and how: told as it catches
+    FChain: TAirChain;
     // The charge or the dive has struck the hero: once a run
     FSweepStruck: Boolean;
     // Ticks since the bare hull or its wheel last threw a bullet off
@@ -646,8 +649,10 @@ type
     procedure TickTakeoff;
     procedure TickMagnet;
     procedure TickTurns;
+    procedure BeginAirTurn(ATurn: TAirTurn);
     procedure TickMortar;
-    procedure BeginCharge;
+    procedure BeginCharge(AEnd: TChargeEnd);
+    procedure DropFromAbove;
     procedure CarryCharge;
     function ChargeLowLift: Single;
     procedure BeginDive;
@@ -908,6 +913,18 @@ type
     // The rung of the air fight's ladder, 1 to 4, by the share of the
     // hull's lives spent the game told last
     function AirTier: Integer;
+    property Ladder: TAirLadder read FLadder;
+    // The cycle of the magnet under way chains, and how
+    property Chain: TAirChain read FChain;
+    // How worn the hull shows, 0 whole to 1 all its worn copy, by the
+    // share of its lives spent; how hard it shorts out and how much it
+    // smokes, 0 none to 1
+    function HullWear: Single;
+    function HullShortLevel: Single;
+    function HullSmokeLevel: Single;
+    // On the finisher's stretch the bolts that burst out of it, 0 none to
+    // 1 as the last life goes
+    function HullBurstLevel: Single;
     // The middle of the mortar's muzzle on the screen, the hull standing
     // as APose says and the mortar out
     function MortarMuzzleAt(const APose: TRamPose): TSdlFPoint;
@@ -1091,6 +1108,12 @@ type
     // The dust the wave kicks up where its front runs along the road, one
     // a side of the blast
     FWaveDust: array [0..1] of TSmoke;
+    // Aloft, the hull's own bolts and smoke, and the level the smoke was
+    // last faded to
+    FHullShorts: array [0..1] of TLightning;
+    FHullBursts: array [0..1] of TLightning;
+    FHullSmoke: TSmoke;
+    FHullSmokeLevel: Single;
     // Out of the wheel arches of a stunned machine; ticks since the stun
     FArchSmoke: array [0..1] of TSmoke;
     FArchSmoking: Boolean;
@@ -1108,6 +1131,7 @@ type
     procedure TickColumn(ABeltShift: Single);
     procedure TickWaveDust;
     procedure TickArchSmoke(ABeltShift: Single);
+    procedure TickHullDamage(ABeltShift: Single);
     procedure TickScrape;
     procedure TickWheelSparks;
     procedure SprayStrike(const AWheel: TLooseWheel);
@@ -1147,6 +1171,7 @@ type
       AAlpha: Single);
     procedure DrawPeek(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawChargeWarning(AOrigin: TSdlPoint; AAlpha: Single);
+    procedure DrawDiveMark(AOrigin: TSdlPoint; AAlpha: Single);
     procedure DrawLens(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
       AAlpha: Single);
     procedure DrawHeat(const ASprites: TSpriteRenderer; AWell, AMast, ASway,
@@ -1721,6 +1746,33 @@ const
   ArchSmokeThin = 0.35;
   ArchSmokeThinTicks = 66;
 
+  // Aloft its wounds show: the bolts over the torn top plate and the split
+  // plough of its worn copy, as a head's; the smoke out of the top plate,
+  // rising slow and streamed back by the flight
+  HullShortPoints: array [0..1] of THullPoint = ((X: 68.0; Y: 44.0),
+    (X: 14.0; Y: 112.0));
+  HullShortLook: TLightningLook = (Reach: 18; Spread: (X: 14; Y: 10);
+    Angle: 90; Cone: 360; Collide: lcNone; Size: 1.1; Jag: 0.26; Fork: 0.2;
+    Frequency: 2.2; Strokes: 2; Life: 0.11; Leader: 0; Spell: 0; Pause: 0;
+    Flash: 0.55; Jolt: 0; Tint: (R: 66; G: 74; B: 100));
+  HullShortSeeds: array [0..1] of Cardinal = ($48756C31, $48756C32); // "Hul1"
+  HullSmokePoint: THullPoint = (X: 68.0; Y: 40.0);
+  HullSmokeLook: TSmokeLook = (Rate: 20; Life: 1.8; Size: 4; EndSize: 26;
+    Opacity: 0.55; Angle: 90; Cone: 40; Speed: 12; Drag: 0.5; Lift: 0;
+    Wind: 0; Turbulence: 5; Spin: 30; Flow: sfGusty; Frequency: 1;
+    Heat: 0; EndTint: (R: 34; G: 34; B: 38));
+  HullSmokeSeed = $48536D6B; // "HSmk"
+  HullSmokeRampTicks = 33;
+  // On the finisher's stretch: thick bolts, as the sweeper's overload, out
+  // of the top plate's tear and the rear block's
+  HullBurstPoints: array [0..1] of THullPoint = ((X: 68.0; Y: 44.0),
+    (X: 130.0; Y: 22.0));
+  HullBurstLook: TLightningLook = (Reach: 34; Spread: (X: 20; Y: 12);
+    Angle: 90; Cone: 360; Collide: lcNone; Size: 1.8; Jag: 0.3; Fork: 0.35;
+    Frequency: 6; Strokes: 3; Life: 0.09; Leader: 0; Spell: 0; Pause: 0;
+    Flash: 0.8; Jolt: 0; Tint: (R: 80; G: 88; B: 100));
+  HullBurstSeeds: array [0..1] of Cardinal = ($48427331, $48427332); // "HBs1"
+
   // The scrape of the nose on the road: as many sparks a tick at its
   // strongest, thrown forward along the road and up off it, cooling fast
   ScrapeSparks = 5;
@@ -1895,6 +1947,18 @@ const
   ChargeBandWidth = 6.0;
   ChargeBandGlow = 48.0;
   ChargeBandGlowLevel = 0.5;
+  // The finisher's dive starts with the hull's bottom this far over the
+  // top edge; its band at the top edge has a faint column down under it
+  AboveClearance = 24.0;
+  DiveMarkColumnLevel = 0.15;
+  // The ladder's dice, apart from the hull's own
+  LadderSeedSalt = $4C616464; // "Ladd"
+  // The hull's own damage: the bolts from the charge's rung; the smoke by
+  // the rung, none on the first two
+  HullShortsFromTier = 3;
+  HullSmokeLevels: array [1..AirTopTier] of Single = (0, 0, 0.45, 1);
+  // The bursts come in at this share of their fullest as the stretch opens
+  HullBurstFloor = 0.4;
 
 function Lerp(AFrom, ATo, AAmount: Single): Single;
 begin
@@ -2128,10 +2192,12 @@ begin
   FMortar := TMortar.Create;
   FCharge := TCharge.Create(RamWidth);
   FDive := TDive.Create;
+  FLadder := TAirLadder.Create(ASeed xor LadderSeedSalt);
 end;
 
 destructor TRam.Destroy;
 begin
+  FLadder.Free;
   FDive.Free;
   FCharge.Free;
   FMortar.Free;
@@ -2184,7 +2250,8 @@ begin
   FMortar.Clear;
   FCharge.Clear;
   FDive.Clear;
-  FLastTurn := atNone;
+  FLadder.Clear;
+  FChain := acNone;
   FSweepStruck := False;
   StowArmourAloft;
   FShutter := 0;
@@ -2347,6 +2414,8 @@ begin
   FMortar.Clear;
   FCharge.Clear;
   FDive.Clear;
+  FLadder.Clear;
+  FChain := acNone;
   StowArmourAloft;
 end;
 
@@ -3993,6 +4062,22 @@ begin
     FCue.Jolt := Max(FCue.Jolt, ChargeBrakeJolt);
   if Step.Done then
     FTakeoff.Release;
+  if Step.Gone then
+    DropFromAbove;
+end;
+
+// The finisher's charge gone past the right edge: the hull is put over the
+// top edge where the hero is, still, its jets out, and drops from there.
+// Placed, not flown: nothing between where it was and where it is.
+procedure TRam.DropFromAbove;
+begin
+  var Aim := EnsureRange(FHeroCenter.X - RamWidth / 2, 0, ScreenWidth - RamWidth);
+  FX := Aim;
+  FLastX := Aim;
+  FDive.StartAbove(RamFloorY + AboveClearance);
+  FTakeoff.Carry(0, FDive.Lift, 0);
+  FTakeoff.Settle;
+  FSweepStruck := False;
 end;
 
 // The dive says how high the hull is this tick and how it leans; it puts
@@ -4002,7 +4087,7 @@ begin
   var Step := FDive.Tick(DiveFloor);
   FCue.Dive := Step;
   FTakeoff.Carry(FDive.Pace, FDive.Lift, FHullFacing * FDive.Bow);
-  if Step.Hushes then
+  if Step.Hushes or Step.Marks then
     FTakeoff.Douse;
   if Step.Lands then
     FCue.Jolt := Max(FCue.Jolt, DiveLandJolt);
@@ -4033,34 +4118,48 @@ begin
   FCue.Magnet := FMagnet.Tick(Sight);
 end;
 
-// After each of the magnet's windows another weapon may have a turn, round
-// the rung's weapons, the newest first: from the bombs' rung the mortar;
-// from the charge's the charge, then the mortar; from the dive's the dive,
-// the charge, the mortar
+// The ladder says whose the turn is: as the magnet catches, whether the
+// cycle chains - a shell under the shield at once, the dive at the throw;
+// after its window, unless the cycle chained, which weapon has the turn
 procedure TRam.TickTurns;
 begin
-  if not FTakeoff.Aloft or not FCue.Magnet.Cooled then
+  if not FTakeoff.Aloft then
     Exit;
-  var Rung := AirTier;
-  var DiveDue := (Rung >= DiveFromTier) and
-    (FLastTurn in [atNone, atMortar]);
-  var ChargeDue := (Rung >= ChargeFromTier) and (FLastTurn <> atCharge);
-  if DiveDue then
-    BeginDive
-  else if ChargeDue then
-    BeginCharge
-  else if Rung >= BombsFromTier then
+  var Spent := FHero.HullSpent;
+  if FCue.Magnet.Caught then
   begin
-    FMortar.BeginTurn(MortarShellsPerTurn);
-    FLastTurn := atMortar;
+    FChain := FLadder.ChainAt(Spent, FMagnet.Lifts);
+    if FChain = acShieldShells then
+      FMortar.BeginTurn(ShieldShells);
+  end;
+  if FCue.Magnet.Thrown and (FChain = acThrowDive) then
+    BeginDive;
+  if not FCue.Magnet.Cooled then
+    Exit;
+  if FChain <> acNone then
+    FChain := acNone
+  else
+    BeginAirTurn(FLadder.NextTurn(Spent));
+end;
+
+procedure TRam.BeginAirTurn(ATurn: TAirTurn);
+begin
+  case ATurn of
+    atMortar:
+      FMortar.BeginTurn(MortarShells[AirTier]);
+    atCharge:
+      BeginCharge(ceBrake);
+    atDive:
+      BeginDive;
+    atFinisher:
+      BeginCharge(ceThrough);
   end;
 end;
 
-procedure TRam.BeginCharge;
+procedure TRam.BeginCharge(AEnd: TChargeEnd);
 begin
-  FCharge.Start(FX, FTakeoff.Pace, FTakeoff.LiftAt(1), ChargeLowLift);
+  FCharge.Start(FX, FTakeoff.Pace, FTakeoff.LiftAt(1), ChargeLowLift, AEnd);
   FSweepStruck := False;
-  FLastTurn := atCharge;
 end;
 
 procedure TRam.BeginDive;
@@ -4068,7 +4167,6 @@ begin
   FDive.Start(FTakeoff.Pace, FTakeoff.LiftAt(1),
     FHullFacing * FTakeoff.LeanAt(1));
   FSweepStruck := False;
-  FLastTurn := atDive;
 end;
 
 // Over the head of a hero standing on the main barge where its deck is
@@ -4193,10 +4291,37 @@ end;
 
 function TRam.AirTier: Integer;
 begin
-  Result := 1;
-  for var i := Low(AirTierSpent) to High(AirTierSpent) do
-    if FHero.HullSpent >= AirTierSpent[i] then
-      Result := i;
+  Result := AirTierOf(FHero.HullSpent);
+end;
+
+function TRam.HullWear: Single;
+begin
+  Result := EnsureRange(FHero.HullSpent / FinisherSpent, 0, 1);
+end;
+
+// From the charge's rung, from the heads' floor up to full as the last of
+// the hull's lives goes
+function TRam.HullShortLevel: Single;
+begin
+  if AirTier < HullShortsFromTier then
+    Exit(0);
+  var FromDoor := AirTierSpent[HullShortsFromTier];
+  Result := ShortFloor + ShortSpan * EnsureRange((FHero.HullSpent - FromDoor) /
+    (1 - FromDoor), 0, 1);
+end;
+
+function TRam.HullSmokeLevel: Single;
+begin
+  Result := HullSmokeLevels[AirTier];
+end;
+
+function TRam.HullBurstLevel: Single;
+begin
+  if not OnFinisherStretch(FHero.HullSpent) then
+    Exit(0);
+  var Share := EnsureRange((FHero.HullSpent - FinisherSpent) / (1 - FinisherSpent),
+    0, 1);
+  Result := HullBurstFloor + (1 - HullBurstFloor) * Share;
 end;
 
 // Up its tube from the pivot, leaning with the hull and its own tilt
@@ -5644,6 +5769,13 @@ begin
   for var i := Low(FArchSmoke) to High(FArchSmoke) do
     FArchSmoke[i] := TSmoke.CreateLook(Placement, ArchSmokeLook, 0,
       ArchSmokeSeeds[i]);
+  for var i := Low(FHullShorts) to High(FHullShorts) do
+    FHullShorts[i] := TLightning.CreateLook(Default(TDynamicPlacement),
+      HullShortLook, 0, HullShortSeeds[i]);
+  for var i := Low(FHullBursts) to High(FHullBursts) do
+    FHullBursts[i] := TLightning.CreateLook(Default(TDynamicPlacement),
+      HullBurstLook, 0, HullBurstSeeds[i]);
+  FHullSmoke := TSmoke.CreateLook(Placement, HullSmokeLook, 0, HullSmokeSeed);
   FScrape := TSparkField.Create(ScrapeSparkLook, UnderTheRoad, ScrapeCapacity,
     ScrapeSeed);
   FWheelSparks := TSparkField.Create(ScrapeSparkLook, UnderTheRoad,
@@ -5659,6 +5791,11 @@ begin
     Smoke.Free;
   FWheelSparks.Free;
   FScrape.Free;
+  FHullSmoke.Free;
+  for var Burst in FHullBursts do
+    Burst.Free;
+  for var Short in FHullShorts do
+    Short.Free;
   for var Smoke in FArchSmoke do
     Smoke.Free;
   for var Dust in FWaveDust do
@@ -5677,7 +5814,7 @@ end;
 procedure TRamPainter.Tick(ABeltShift: Single);
 begin
   Inc(FAge);
-  FHull.Tick(0, 0, FRam.Rolled + ABeltShift);
+  FHull.Tick(FRam.HullWear, 0, FRam.Rolled + ABeltShift);
   TickArrival;
   TickExhausts(ABeltShift);
   TickHeadSmoke(ABeltShift);
@@ -5685,6 +5822,7 @@ begin
   TickColumn(ABeltShift);
   TickWaveDust;
   TickArchSmoke(ABeltShift);
+  TickHullDamage(ABeltShift);
   TickScrape;
   TickWheelSparks;
   TickJets;
@@ -5711,6 +5849,12 @@ begin
   FArchSmoking := False;
   for var Smoke in FArchSmoke do
     Smoke.Rewind;
+  for var Short in FHullShorts do
+    Short.Rewind;
+  for var Burst in FHullBursts do
+    Burst.Rewind;
+  FHullSmoke.Rewind;
+  FHullSmokeLevel := 0;
   FScrape.Clear;
   FWheelSparks.Clear;
   for var Smoke in FJetDust do
@@ -5859,6 +6003,39 @@ begin
     FArchSmoke[i].Drift(-ABeltShift, 0);
     FArchSmoke[i].Tick(Spot.X, Spot.Y, Stunned);
   end;
+end;
+
+// Its bolts over its cracks as hard as the rung says, its smoke out of the
+// top plate as thick; the smoke in the air rides away with the flight
+procedure TRamPainter.TickHullDamage(ABeltShift: Single);
+begin
+  if not FRam.Present then
+    Exit;
+  var Pose := FRam.PoseAt(1);
+  var ShortLevel := FRam.HullShortLevel;
+  for var i := Low(FHullShorts) to High(FHullShorts) do
+  begin
+    FHullShorts[i].FadeTo(ShortLevel, 0);
+    var Spot := FRam.PoseSpot(Pose, HullShortPoints[i]);
+    FHullShorts[i].Tick(Spot.X, Spot.Y, ShortLevel > 0);
+  end;
+  var BurstLevel := FRam.HullBurstLevel;
+  for var i := Low(FHullBursts) to High(FHullBursts) do
+  begin
+    FHullBursts[i].FadeTo(BurstLevel, 0);
+    var Spot := FRam.PoseSpot(Pose, HullBurstPoints[i]);
+    FHullBursts[i].Tick(Spot.X, Spot.Y, BurstLevel > 0);
+  end;
+
+  var SmokeLevel := FRam.HullSmokeLevel;
+  if SmokeLevel <> FHullSmokeLevel then
+  begin
+    FHullSmokeLevel := SmokeLevel;
+    FHullSmoke.FadeTo(SmokeLevel, HullSmokeRampTicks);
+  end;
+  var Source := FRam.PoseSpot(Pose, HullSmokePoint);
+  FHullSmoke.Drift(-ABeltShift, 0);
+  FHullSmoke.Tick(Source.X, Source.Y, SmokeLevel > 0);
 end;
 
 // The road a burning jet reaches is blown into dust
@@ -6396,6 +6573,30 @@ begin
     PeekSize, EyeColor, Level);
 end;
 
+// Before the finisher drops out of the sky: a red band blinking at the
+// top edge the length of the hull over where it will strike, and a faint
+// column down from it
+procedure TRamPainter.DrawDiveMark(AOrigin: TSdlPoint; AAlpha: Single);
+begin
+  var Level := FRam.Dive.MarkAt(AAlpha);
+  if Level <= 0 then
+    Exit;
+  var Band: TSdlFRect;
+  Band.X := FRam.LeftAt(AAlpha) + AOrigin.X;
+  Band.Y := AOrigin.Y;
+  Band.W := RamWidth;
+  Band.H := ScreenHeight;
+  DrawGlowRect(FArt.FRenderer, FArt.FGlow, Band, EyeColor,
+    DiveMarkColumnLevel * Level);
+  Band.Y := AOrigin.Y - ChargeBandGlow / 2;
+  Band.H := ChargeBandGlow;
+  DrawGlowRect(FArt.FRenderer, FArt.FGlow, Band, EyeColor,
+    ChargeBandGlowLevel * Level);
+  Band.Y := AOrigin.Y;
+  Band.H := ChargeBandWidth;
+  DrawGlowRect(FArt.FRenderer, FArt.FGlow, Band, EyeColor, Level);
+end;
+
 // On the hunter's head, turned and squashed as the head is: pale and
 // winking, red and bigger while it burns, a flash when it is struck
 procedure TRamPainter.DrawLens(const ASprites: TSpriteRenderer; AWell, AMast,
@@ -6609,6 +6810,8 @@ begin
   for var Smoke in FArchSmoke do
     Smoke.Draw(ACanvas, Smoke.Origin.X + AOrigin.X, Smoke.Origin.Y + AOrigin.Y,
       AAlpha);
+  FHullSmoke.Draw(ACanvas, FHullSmoke.Origin.X + AOrigin.X,
+    FHullSmoke.Origin.Y + AOrigin.Y, AAlpha);
   FScrape.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
     UnitPoint(AOrigin.X, AOrigin.Y), AAlpha);
   FWheelSparks.Draw(SparkBrush(ACanvas.Renderer, ACanvas.StreakGlow),
@@ -6620,8 +6823,15 @@ begin
       AAlpha);
   FOverloadShort.Draw(ACanvas, FOverloadShort.Origin.X + AOrigin.X,
     FOverloadShort.Origin.Y + AOrigin.Y, AAlpha);
+  for var Short in FHullShorts do
+    Short.Draw(ACanvas, Short.Origin.X + AOrigin.X, Short.Origin.Y + AOrigin.Y,
+      AAlpha);
+  for var Burst in FHullBursts do
+    Burst.Draw(ACanvas, Burst.Origin.X + AOrigin.X, Burst.Origin.Y + AOrigin.Y,
+      AAlpha);
   DrawPeek(AOrigin, AAlpha);
   DrawChargeWarning(AOrigin, AAlpha);
+  DrawDiveMark(AOrigin, AAlpha);
   var Left := FRam.LeftAt(AAlpha);
   var Well := FRam.WellAt(Left);
   var Middle := UnitPoint(Left + FRam.Body.Middle.X + AOrigin.X,

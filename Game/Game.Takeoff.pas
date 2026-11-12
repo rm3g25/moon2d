@@ -145,6 +145,9 @@ type
     procedure Carry(APace, ALift, ALean: Single);
     // Carried, it hangs again from where it was left, its pace kept
     procedure Release;
+    // Carried, it is where it is now between the ticks too, still, its
+    // nozzles straight: put there out of sight, not flown there
+    procedure Settle;
     // Aloft: both jets go out, the fire dying over a few ticks; both catch
     // again, flaring up as at the takeoff. Nothing on the road.
     procedure Douse;
@@ -330,6 +333,18 @@ begin
   FStage := tkHanging;
   FTicks := 0;
   FGain := 0;
+end;
+
+procedure TTakeoff.Settle;
+begin
+  if FStage <> tkCarried then
+    Exit;
+  FLastLift := FLift;
+  FLastLean := FLean;
+  FPace := 0;
+  FGain := 0;
+  FSwivel := 0;
+  FLastSwivel := 0;
 end;
 
 function TTakeoff.Aloft: Boolean;

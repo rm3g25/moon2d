@@ -15,7 +15,8 @@
   through. Every barge comes in from beyond the right edge fast and brakes
   to its path's pace - the one place the flight's speed is felt in play;
   every one leaves past the left edge, and a new one comes in after a
-  short gap. How many fly is the caller's, once, at the start.
+  short gap. How many fly is the caller's: given at the start, and grown
+  as the fight climbs its ladder - never fewer once more have flown.
 
   The Ram's magnet takes barges out of the flock: a taken one flies no
   more and is the caller's till it is given back to the pool; another
@@ -162,6 +163,11 @@ type
     // The fight is on: from now on ACount fly, the escort first, at once.
     // Nothing once started, till a clear.
     procedure Start(ACount: Integer);
+    // Started, ACount fly from now on if that is more: the new ones come
+    // in as for ones gone. Nothing not started, nor for fewer.
+    procedure Grow(ACount: Integer);
+    // How many fly at once; 0 - not started
+    property Count: Integer read FCount;
     // A step: the barges fly their paths, the main barge where AMain says;
     // those wholly past the left edge are gone, a new one comes in when
     // its gap is out
@@ -327,6 +333,13 @@ begin
     Exit;
   FCount := Max(ACount, 0);
   FWait := 0;
+end;
+
+procedure TBargeFlock.Grow(ACount: Integer);
+begin
+  if not Started then
+    Exit;
+  FCount := Max(FCount, ACount);
 end;
 
 function TBargeFlock.Started: Boolean;

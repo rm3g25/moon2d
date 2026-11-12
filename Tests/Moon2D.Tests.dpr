@@ -51,6 +51,7 @@ uses
   Tests.Game.Mortar in 'Game\Tests.Game.Mortar.pas',
   Tests.Game.Charge in 'Game\Tests.Game.Charge.pas',
   Tests.Game.Dive in 'Game\Tests.Game.Dive.pas',
+  Tests.Game.Ladder in 'Game\Tests.Game.Ladder.pas',
   Tests.Game.Pieces in 'Game\Tests.Game.Pieces.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',

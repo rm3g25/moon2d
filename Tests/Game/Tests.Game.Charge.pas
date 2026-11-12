@@ -11,7 +11,9 @@
   cold as it climbs. Its bow dips in the pass and is thrown up in the
   brake. It climbs to its height, level, told once, and is done. No small
   barge comes in from the band till it is up again. A start while it
-  charges is nothing; a clear stops it.
+  charges is nothing; a clear stops it. Begun to go through, it never
+  brakes nor holds nor climbs, is never hot, runs on at its pace and is
+  gone past the right edge, told once.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -26,7 +28,7 @@ uses
 type
   // The cues of the ticks stepped, added up
   TChargeCuesSeen = record
-    Leaves, Warns, Rushes, Brakes, Done: Integer;
+    Leaves, Warns, Rushes, Brakes, Done, Gone: Integer;
   end;
 
   [TestFixture]
@@ -71,6 +73,8 @@ type
     procedure TestAStartWhileItChargesIsNothing;
     [Test]
     procedure TestAClearStopsIt;
+    [Test]
+    procedure TestThroughItIsGonePastTheRightEdgeAtItsPace;
   end;
 
 implementation
@@ -112,6 +116,8 @@ begin
     Inc(FSeen.Brakes);
   if Cue.Done then
     Inc(FSeen.Done);
+  if Cue.Gone then
+    Inc(FSeen.Gone);
 end;
 
 procedure TChargeTests.StartFromItsHang;
@@ -331,6 +337,31 @@ begin
   Assert.IsFalse(FCharge.Running, 'Stopped');
   Assert.IsFalse(FCharge.Soft or FCharge.RunsLow or FCharge.HoldsFlock, 'Nothing of it');
   Assert.AreEqual(0.0, Double(FCharge.HeatAt(1)), Slack, 'Cold');
+end;
+
+procedure TChargeTests.TestThroughItIsGonePastTheRightEdgeAtItsPace;
+begin
+  FCharge.Start(HangLeft, 0, HangLift, LowLift, ceThrough);
+  StepTill(csPassing, ChargeTicks);
+  var Ticks := 0;
+  while FCharge.Running do
+  begin
+    Step;
+    Assert.IsFalse(FCharge.Stage in [csBraking..csClimbing], 'Never brakes');
+    Assert.IsFalse(FCharge.Soft, 'Never hot');
+    if FCharge.Running then
+      Assert.AreEqual(Double(ChargePace), Double(FCharge.Pace), Slack, 'At its pace');
+    Inc(Ticks);
+    if Ticks > ChargeTicks then
+      Assert.Fail('Never gone');
+  end;
+  Assert.IsTrue(FCharge.Left >= ScreenWidth, 'Past the right edge');
+  Assert.AreEqual(1, FSeen.Gone, 'Gone, told once');
+  Assert.AreEqual(0, FSeen.Brakes + FSeen.Done, 'No brake, no climb');
+  Assert.IsFalse(FCharge.HoldsFlock, 'The flock let go');
+  for var i := 1 to ChargeTicks do
+    Step;
+  Assert.AreEqual(1, FSeen.Gone, 'Still once');
 end;
 
 initialization

@@ -21,7 +21,9 @@
   gathers pace, never past their most; a hard brake throws them ahead; on
   the road they do not swivel. Aloft its jets go out when put out - the
   fire gone in a few ticks, never back by itself - and catch again when
-  lit, flaring as they did; on its way up neither is anything.
+  lit, flaring as they did; on its way up neither is anything. Carried and
+  settled, it is where it was put between the ticks too, still, its
+  nozzles straight; hanging, settling is nothing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -93,6 +95,10 @@ type
     procedure TestLitAgainTheJetsCatchFlaring;
     [Test]
     procedure TestOnItsWayUpTheJetsCannotBePutOut;
+    [Test]
+    procedure TestSettledItIsWhereItWasPutBetweenTheTicks;
+    [Test]
+    procedure TestHangingSettlingIsNothing;
   end;
 
 implementation
@@ -561,6 +567,39 @@ begin
     FTakeoff.Tick;
   Assert.IsTrue(FTakeoff.JetAt(tjFront, 1) > 0, 'The front jet burns on');
   Assert.IsTrue(FTakeoff.JetAt(tjRear, 1) > 0, 'The rear jet burns on');
+end;
+
+procedure TTakeoffTests.TestSettledItIsWhereItWasPutBetweenTheTicks;
+const
+  Above = 376.0;
+  RunPace = 20.0;
+  Bow = -6.0;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick;
+  FTakeoff.Carry(RunPace, 56, Bow);
+  FTakeoff.Tick;
+  FTakeoff.Carry(RunPace, 56, Bow);
+  Assert.IsTrue(Abs(FTakeoff.SwivelAt(1)) > 0, 'Swivelled by its run');
+  FTakeoff.Carry(0, Above, 0);
+  FTakeoff.Settle;
+  Assert.AreEqual(Double(Above), Double(FTakeoff.LiftAt(0)), Slop, 'There at the last tick too');
+  Assert.AreEqual(0.0, Double(FTakeoff.LeanAt(0)), Slop, 'Level at the last tick too');
+  Assert.AreEqual(0.0, Double(FTakeoff.Pace), Slop, 'Still');
+  Assert.AreEqual(0.0, Double(FTakeoff.SwivelAt(0)), Slop, 'Nozzles straight');
+  Assert.AreEqual(0.0, Double(FTakeoff.SwivelAt(1)), Slop, 'Nozzles straight now');
+end;
+
+procedure TTakeoffTests.TestHangingSettlingIsNothing;
+begin
+  FTakeoff.Hang;
+  FTakeoff.Tick(200);
+  var Pace := FTakeoff.Pace;
+  var LastLift := FTakeoff.LiftAt(0);
+  FTakeoff.Settle;
+  Assert.AreEqual(Ord(tkHanging), Ord(FTakeoff.Stage), 'Hanging');
+  Assert.AreEqual(Double(Pace), Double(FTakeoff.Pace), Slop, 'Its pace kept');
+  Assert.AreEqual(Double(LastLift), Double(FTakeoff.LiftAt(0)), Slop, 'Its last height kept');
 end;
 
 initialization

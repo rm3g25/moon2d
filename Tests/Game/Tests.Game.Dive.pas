@@ -8,7 +8,10 @@
   and from then it is hot, cooling as it holds, cold as it rises. It rises
   to its height, level, told once, and is done. No small barge comes in
   from the silence till it is up again. A start while it dives is nothing;
-  a clear stops it.
+  a clear stops it. Begun from over the top edge, it tells its band once
+  and blinks it there, still and out of sight, with no silence and no
+  flash; then it falls from a standstill to its floor and goes on as any
+  dive; a start from above while it dives is nothing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -23,7 +26,7 @@ uses
 type
   // The cues of the ticks stepped, added up
   TDiveCuesSeen = record
-    Hushes, Drops, Lands, Relights, Done: Integer;
+    Marks, Hushes, Drops, Lands, Relights, Done: Integer;
   end;
 
   [TestFixture]
@@ -65,6 +68,12 @@ type
     procedure TestAStartWhileItDivesIsNothing;
     [Test]
     procedure TestAClearStopsIt;
+    [Test]
+    procedure TestFromAboveTheBandBlinksStillThenItFalls;
+    [Test]
+    procedure TestFromAboveItGoesOnAsAnyDive;
+    [Test]
+    procedure TestAStartFromAboveWhileItDivesIsNothing;
   end;
 
 implementation
@@ -80,6 +89,8 @@ const
   HangBow = 3.0;
   // A whole dive is over well within this: ten seconds
   DiveTicks = 330;
+  // Over the top edge, as the finisher puts it
+  AboveLift = 376.0;
   Slack = 0.01;
 
 procedure TDiveTests.Setup;
@@ -97,6 +108,8 @@ end;
 procedure TDiveTests.Step;
 begin
   var Cue := FDive.Tick(FFloor);
+  if Cue.Marks then
+    Inc(FSeen.Marks);
   if Cue.Hushes then
     Inc(FSeen.Hushes);
   if Cue.Drops then
@@ -299,6 +312,67 @@ begin
   Assert.IsFalse(FDive.Soft or FDive.RunsLow or FDive.HoldsFlock or FDive.Flashes,
     'Nothing of it');
   Assert.AreEqual(0.0, Double(FDive.HeatAt(1)), Slack, 'Cold');
+end;
+
+procedure TDiveTests.TestFromAboveTheBandBlinksStillThenItFalls;
+begin
+  FDive.StartAbove(AboveLift);
+  Assert.IsTrue(FDive.Running, 'Running');
+  Assert.AreEqual<TDiveStage>(dvMarking, FDive.Stage, 'The band first');
+  var Lit := False;
+  var Ticks := 0;
+  while FDive.Stage = dvMarking do
+  begin
+    Step;
+    Inc(Ticks);
+    if FDive.Stage <> dvMarking then
+      Break;
+    Assert.AreEqual(Double(AboveLift), Double(FDive.Lift), Slack, 'Still, up there');
+    Assert.AreEqual(0.0, Double(FDive.Pace), Slack, 'No way across');
+    Assert.IsFalse(FDive.Flashes or FDive.Slams or FDive.RunsLow or FDive.Soft,
+      'Nothing of a dive yet');
+    Assert.IsTrue(FDive.HoldsFlock, 'The flock held');
+    if FDive.MarkAt(1) > 0 then
+      Lit := True;
+  end;
+  Assert.AreEqual(DiveMarkTicks, Ticks, 'The band''s while');
+  Assert.IsTrue(Lit, 'The band blinked');
+  Assert.AreEqual(1, FSeen.Marks, 'Told once');
+  Assert.AreEqual(0, FSeen.Hushes, 'No silence: its jets were out');
+  Assert.AreEqual(1, FSeen.Drops, 'Then the fall');
+  Assert.AreEqual<TDiveStage>(dvFalling, FDive.Stage, 'Falling');
+  Assert.AreEqual(0.0, Double(FDive.MarkAt(1)), Slack, 'The band out');
+  Assert.IsTrue(FDive.Fall < 2, 'From a standstill');
+end;
+
+procedure TDiveTests.TestFromAboveItGoesOnAsAnyDive;
+begin
+  FDive.StartAbove(AboveLift);
+  StepTill(dvFalling, DiveTicks);
+  var LastFall: Single := 0;
+  while FDive.Stage = dvFalling do
+  begin
+    Step;
+    Assert.IsTrue(FDive.Lift >= FFloor - Slack, 'Never past its floor');
+    if FDive.Stage <> dvFalling then
+      Break;
+    Assert.IsTrue(FDive.Fall > LastFall, 'Ever faster');
+    LastFall := FDive.Fall;
+  end;
+  StepTill(dvNone, DiveTicks);
+  Assert.AreEqual(1, FSeen.Lands, 'The blow');
+  Assert.AreEqual(1, FSeen.Relights, 'Its jets caught');
+  Assert.AreEqual(1, FSeen.Done, 'Up and done');
+  Assert.AreEqual(Double(HangLift), Double(FDive.Lift), Slack, 'At its height');
+end;
+
+procedure TDiveTests.TestAStartFromAboveWhileItDivesIsNothing;
+begin
+  StartFromItsHang;
+  StepTill(dvFalling, DiveTicks);
+  FDive.StartAbove(AboveLift);
+  Assert.AreEqual<TDiveStage>(dvFalling, FDive.Stage, 'Still falling');
+  Assert.IsTrue(FDive.Lift < HangLift, 'Where it was');
 end;
 
 initialization

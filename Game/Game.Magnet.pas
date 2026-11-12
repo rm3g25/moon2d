@@ -15,7 +15,9 @@
   next - unless its owner has given the turn to another weapon: then it
   waits, cold, till it may look again. Told to tuck in, for its owner's
   charge, it slides back into the belly, cold and empty, and out again once
-  let; it looks for nothing till it is all the way out.
+  let; it looks for nothing till it is all the way out. Told to tuck in
+  while it cools after a throw - its owner dives on the throw - its window
+  is lost: cold at once, it slides in.
 
   It is soft - an orb takes a life of the hull - from the hold till it is
   cold; how hot it is drawn follows: up as it holds, fading as it cools.
@@ -88,8 +90,8 @@ type
     Harbour: TSdlFPoint;
     // Another weapon has the turn: cold, it looks for no barge
     Waits: Boolean;
-    // Cold, it is to be in the belly: it slides in, and out once this is
-    // over
+    // It is to be in the belly: cold, it slides in, and out once this is
+    // over; cooling, it goes cold at once, its window lost
     Tucked: Boolean;
   end;
 
@@ -139,7 +141,7 @@ type
     procedure TickReaching(const ASight: TMagnetSight);
     procedure TickHolding(const ASight: TMagnetSight; var ACue: TMagnetCue);
     procedure TickPressing(const ASight: TMagnetSight; var ACue: TMagnetCue);
-    procedure TickCooling(var ACue: TMagnetCue);
+    procedure TickCooling(const ASight: TMagnetSight; var ACue: TMagnetCue);
   public
     constructor Create;
     // A death, a new fight: stowed, cold, empty
@@ -267,7 +269,7 @@ begin
     mgPressing:
       TickPressing(ASight, Result);
     mgCooling:
-      TickCooling(Result);
+      TickCooling(ASight, Result);
   end;
 end;
 
@@ -420,8 +422,16 @@ begin
   FTicks := 0;
 end;
 
-procedure TMagnet.TickCooling(var ACue: TMagnetCue);
+procedure TMagnet.TickCooling(const ASight: TMagnetSight; var ACue: TMagnetCue);
 begin
+  if ASight.Tucked then
+  begin
+    FHeat := 0;
+    FStage := mgSeeking;
+    FRest := MagnetRestTicks;
+    SlideTo(False);
+    Exit;
+  end;
   Inc(FTicks);
   FHeat := Max(1 - FTicks / MagnetWindowTicks, 0);
   if FTicks < MagnetWindowTicks then

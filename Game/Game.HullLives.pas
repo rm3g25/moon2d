@@ -7,7 +7,9 @@
   between the HUD's panels, then lights a cell at a time, as a head's row
   does after its lock. Each orb that sinks into a hot part of the hull
   takes a life and flashes the bar. With no life left it takes none more:
-  the blast that ends the fight is not here.
+  the blast that ends the fight is not here. After a death past a door of
+  the fight the caller resumes it with the lives of that door, not all of
+  them.
 
   The bar tells whether the hull can be hurt: armoured while no part of it
   is hot, pulsing while one is - which parts are hot is the caller's to
@@ -21,9 +23,9 @@ unit Game.HullLives;
 interface
 
 const
-  // The first grade's; the others' by the grade's share, as the heads'.
-  // A first guess, to be tuned in the live run.
-  RamHullLives = 150;
+  // The first grade's; the others' by the grade's share. A first guess,
+  // to be tuned in the live run.
+  RamHullLives = 240;
   HullBarCells = 30;
   // The bar comes down into its place over this long, then lights its
   // cells over HullBarBootTicks
@@ -70,6 +72,9 @@ type
     // The gun has come: RamHullLives times ALivesShare, the bar coming
     // down and up from none
     procedure Arm(ALivesShare: Single);
+    // Armed, ALives of the full are left: a restart past a door of the
+    // fight. Within none and the full.
+    procedure Resume(ALives: Integer);
     // A death, a new fight: no lives, no bar
     procedure Clear;
     // AHot - a part of the hull is hot this tick. True on the ticks the
@@ -106,6 +111,13 @@ begin
   FHitTicks := HullBarHitTicks;
   FHot := False;
   FHotTicks := 0;
+end;
+
+procedure THullLives.Resume(ALives: Integer);
+begin
+  if not FArmed then
+    Exit;
+  FLives := EnsureRange(ALives, 0, FFullLives);
 end;
 
 procedure THullLives.Clear;

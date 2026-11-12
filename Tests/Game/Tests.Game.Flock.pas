@@ -17,7 +17,9 @@
   its middle the hit the steeper; one on its path does not list. A barge
   the charge smashes is gone at once, knocked off or not, and replaced -
   the escort at once; smashing one that does not fly changes nothing.
-  Held, the flock sends none in; let go, the escort comes at once.
+  Held, the flock sends none in; let go, the escort comes at once. Grown,
+  more fly from then on and never more than the new count; grown to fewer
+  or before the start, nothing changes.
 
   The main barge is Game.Barge's own, let go at its station and drifting
   on its loop, its deck on the road's line.
@@ -129,6 +131,10 @@ type
     procedure TestSmashingOneNotFlyingChangesNothing;
     [Test]
     procedure TestHeldNoneComesInLetGoTheEscortAtOnce;
+    [Test]
+    procedure TestGrownMoreFlyNeverMoreThanTheNewCount;
+    [Test]
+    procedure TestGrownToFewerOrBeforeTheStartNothingChanges;
   end;
 
 implementation
@@ -915,6 +921,36 @@ begin
   Step;
   Assert.IsTrue(FFlock.Escort >= 0, 'The escort at once');
   Assert.IsTrue(FFlock.Flying(FFlock.Escort), 'And it flies');
+end;
+
+procedure TBargeFlockTests.TestGrownMoreFlyNeverMoreThanTheNewCount;
+const
+  Grown = 4;
+begin
+  FFlock.Start(Count);
+  for var i := 1 to EscortInTicks do
+    Step;
+  FFlock.Grow(Grown);
+  Assert.AreEqual(Grown, FFlock.Count, 'The new count');
+  var Most := 0;
+  for var i := 1 to LongRunTicks do
+  begin
+    Step;
+    Assert.IsTrue(FFlock.FlyingCount <= Grown, 'Tick ' + i.ToString);
+    if FFlock.FlyingCount > Most then
+      Most := FFlock.FlyingCount;
+  end;
+  Assert.IsTrue(Most > Count, 'More flew: ' + Most.ToString);
+end;
+
+procedure TBargeFlockTests.TestGrownToFewerOrBeforeTheStartNothingChanges;
+begin
+  FFlock.Grow(4);
+  Assert.IsFalse(FFlock.Started, 'Not started by a growth');
+  Assert.AreEqual(0, FFlock.Count, 'No count');
+  FFlock.Start(3);
+  FFlock.Grow(Count);
+  Assert.AreEqual(3, FFlock.Count, 'Never fewer');
 end;
 
 initialization

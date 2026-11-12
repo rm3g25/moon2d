@@ -12,7 +12,9 @@
   over, once, and takes the next - unless told to wait, when it takes
   none till the wait is lifted; told to tuck in it slides back into the
   belly and takes nothing, and let out it slides out again and takes
-  nothing till it is all the way out; a clear stows it.
+  nothing till it is all the way out; told to tuck in while it cools, its
+  window is lost - cold at once, not soft, no window told - and it slides
+  in; a clear stows it.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -96,6 +98,8 @@ type
     procedure TestToldToWaitItTakesNoBargeTillTheWaitIsLifted;
     [Test]
     procedure TestToldToTuckInItSlidesInAndOutTakingNothingTillOut;
+    [Test]
+    procedure TestToldToTuckInWhileItCoolsItsWindowIsLost;
     [Test]
     procedure TestAClearStowsIt;
     [Test]
@@ -584,6 +588,23 @@ begin
   Assert.AreEqual(DeploySlideTicks, Ticks, 'As long as its first slide out');
   StepTill(mgReaching, CycleTicks);
   Assert.AreEqual(1, FSeen.Caught, 'Out, it takes the barge');
+end;
+
+procedure TMagnetTests.TestToldToTuckInWhileItCoolsItsWindowIsLost;
+begin
+  CatchNear(False);
+  StepTill(mgCooling, CycleTicks);
+  Step;
+  Assert.IsTrue(FMagnet.Soft, 'Cooling: soft');
+  FSight.Tucked := True;
+  Step;
+  Assert.AreEqual<TMagnetStage>(mgSeeking, FMagnet.Stage, 'Cold at once');
+  Assert.IsFalse(FMagnet.Soft, 'Not soft');
+  Assert.AreEqual(0.0, Double(FMagnet.HeatAt(1)), Slack, 'No heat');
+  for var i := 1 to DeploySlideTicks + 10 do
+    Step;
+  Assert.AreEqual(0.0, Double(FMagnet.OutAt(1)), Slack, 'In the belly');
+  Assert.AreEqual(0, FSeen.Cooled, 'No window told');
 end;
 
 procedure TMagnetTests.TestAClearStowsIt;

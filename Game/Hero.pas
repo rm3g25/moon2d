@@ -93,6 +93,9 @@ type
     FPads: TPadWorld;
     // The deck the feet are dropping through, until they are under it
     FDropFrom: TPad;
+    // The deck under the feet as the last tick left them; only asked
+    // whether there was one
+    FRidden: TPad;
     // Weapon-4 muzzle geometry (see the comment in Create); fields so
     // the DEBUGKEYS NumPad tuner can move them live
     FMinigunBaseX: Double;
@@ -204,6 +207,7 @@ type
     procedure DropThroughDeck;
     procedure RideDeck;
     procedure LoseDeck;
+    procedure TickMotion;
     procedure CarryX(AWay: Double);
     // --- the Duplet ---
     procedure FireDuplet(const ASpawn: TSdlFPoint; ABaseAngle: Integer);
@@ -218,6 +222,10 @@ type
     // One logic tick, verbatim OurHero.Timer (33 Hz - the REAL rate
     // of the 2008 20 ms timer, see PORTING-NOTES)
     procedure Tick;
+    // Put somewhere new - through a door: standing or walking with
+    // neither a deck nor ground under his feet, he falls the way he was
+    // going
+    procedure LookDown;
     // Verbatim TWeapon.Fire: fires only when the cooldown has fully
     // elapsed; patterns per weapon type (0 pistol, 1 shotgun x5,
     // 2 grenade cloud x22, 3 chain x3, 4 minigun with alternating
@@ -650,6 +658,7 @@ begin
   FThrownTicks := 0;
   FFlingWay := 0;
   FDropFrom := nil;
+  FRidden := nil;
   FCorpseSettled := False;
   FDeathFrame := 9;
   FAction := haStand;
@@ -1301,7 +1310,12 @@ begin
   var Deck := FPads.DeckCarrying(FScreen, Middle, Middle, FY);
   if Deck = nil then
   begin
-    if FPads.DeckWithdrawn(FScreen, Middle, Middle, FY) then
+    // Withdrawn is seen in the pads' own tick; a deck taken away outside
+    // it - put to sleep after his tick, or left on another screen - is
+    // seen only by having stood on one
+    var Lost := (FRidden <> nil) or FPads.DeckWithdrawn(FScreen, Middle,
+      Middle, FY);
+    if Lost then
       LoseDeck;
     Exit;
   end;
@@ -1348,6 +1362,13 @@ begin
     Exit;
   end;
   FAcceleration := 1;
+end;
+
+procedure THero.LookDown;
+begin
+  if FDead or (DeckUnderFeet <> nil) then
+    Exit;
+  LoseDeck;
 end;
 
 // A unit at a time, the wall asked before every one, as ShoveX: a knocked
@@ -1417,6 +1438,12 @@ begin
 end;
 
 procedure THero.Tick;
+begin
+  TickMotion;
+  FRidden := DeckUnderFeet;
+end;
+
+procedure THero.TickMotion;
 var
   PrevY: Double; // the feet where the last tick left them
 begin
