@@ -1310,3 +1310,34 @@ farm of the day.
 | `TestACapsuleOfOddRowsRaises` | 11 rows: raises | the crown falls between rows |
 | `TestACapsuleDeeperThanLongRaises` | 700 deep: raises | the barrel turns inside out |
 | `TestAFarmUnderADomeRaises` | the farm under a dome: raises | the farm lights a geodesic it cannot read |
+
+## The gate
+
+State: written, 10 tests (3.0.130, `docs/mechanics/finale.md`, "The gate
+as built"). The picture, its shade and the lamp's light are the painter's:
+a live run.
+
+### Game.Gate
+
+Fixture `TGateTests` in `Tests\Game\Tests.Game.Gate.pas`, a gate of its
+own; the place tests ride a road of their own.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSealedTheLampStaysRed` | new: sealed; 32 ticks on: sealed, the turn 0 | the lamp turns by itself |
+| `TestPromisedTheLampTurnsAmberOverItsTicks` | promised: soon, the turn 0 till a tick; 8 ticks: 0.5; 16: 1 | the lamp jumps, or never turns |
+| `TestTheTurnStopsAtAmber` | 48 ticks after the promise: 1, at rest between the ticks | the lamp goes on past amber |
+| `TestASecondPromiseDoesNotStartTheTurnAgain` | promised again halfway: still 0.5; 8 ticks on: 1 | a second flare blinks the lamp back to red |
+| `TestATurnBetweenTicksLiesBetweenThem` | 3 ticks in: the last tick 2/16, this one 3/16, halfway 2.5/16 | the lamp steps at 33 Hz |
+| `TestClearSealsItAgainAtOnce` | amber, cleared: sealed, the turn 0 at both ends of the tick; 16 ticks on: 0 | a restart keeps the amber, or fades it back |
+| `TestTheFacadeEndsAtTheRightEdgeOnceTheRoadStands` | the road at its stop: the left side 392, the right side 512 | the facade stands off the stand's place, or over the logo's |
+| `TestTheFacadeComesInAfterTheRoadAndRidesWithIt` | the road come in at the gap: the facade beyond the right edge; 30 ticks at 2 left: 60 farther, between the ticks too | the facade pops in with the road's edge, or lags the road |
+| `TestTheLampColorGoesFromRedToAmber` | green rises from red through halfway to amber, red the same, amber's blue under its green | the turn passes through another colour |
+
+### Game.Road: arrived
+
+In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestItHasArrivedOnlyComeBack` | new, and running out: not arrived; come back: arrived; running out again, and cleared: not | the pier of the road running out carries a gate |

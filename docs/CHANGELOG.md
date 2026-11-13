@@ -7,6 +7,25 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-14: **3.0.130 - the gate.** The sealed door of arena 3 has a
+body: a facade with a gate in the manner of the city - a capsule roof, a
+ribbon of windows, a burnt-orange stripe, two ribbed leaves shut - on the
+far end of the road that comes back at the end of the flight (`Game.Gate`,
+new; the picture `s13-gate` in `level2-objects.mset`, packed by
+`tools/gate/build_gate.py`). It has no place of its own: it stands a fixed
+way along the road, rides in with it in the slowdown - its edge showing
+after the last blast of the hull - and stops with it, its right side at
+the right edge of the screen, 392..512; the road knows it came back
+(`TRoadEnd.Arrived`), so the pier of the road running out has no gate. Its
+front-lit picture is put in the night at 35%. Over its unlit lamp housing
+burns the game's light, a signal lamp as the beacons are drawn (`DrawLamp`
+of `Levels.Dynamics`, public now): red while the gate is sealed, amber over
+half a second once it is promised to open (`TGate.Promise`) - the cue of
+the titles' flare, which is not built; the debug key X gives it till then.
+The gate stays shut: it opens in level 3. On the stand a `gate.png`
+dropped on the stage is taken now (its id was not among those the stage
+takes). 10 tests more.
+
 2026-11-13: **3.0.129 - the farm under the long dome.** Stage 19a of
 arena 3: at the end of the city's strip, where the crater had an empty
 tail, stands a long dome - a capsule, a barrel vault with a quarter dome at

@@ -1,13 +1,14 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-13: **3.0.129** - arena 3 (the finale of level 2),
-stage 19a built - the farm under a long dome at the end of the city's
-strip, the picture the flight stands on: a capsule frame, greenhouses whose
-glass glows on clocks of their own and lights the dome's air, its far ribs
-and the floor, the sun's glare softened behind it (`chase-backdrop.md`,
-"The farm"). Before it, 3.0.128 - the end of the fight in the air
-(`finale.md`, "Stage 19 as built"). Next: the live run of the end and the
-farm, then the titles (F1-F6, its stage F7 is stage 19's hand-over). In
+Status at 2026-11-14: **3.0.130** - arena 3 (the finale of level 2), the
+gate built - the sealed door of the arena given a body, a facade with a
+gate on the far end of the road come back, its status lamp red, amber on
+a promise (`finale.md`, "The gate as built"). Before it, 3.0.129 - the
+farm under a long dome at the end of the city's strip (`chase-backdrop.md`,
+"The farm") - and 3.0.128 - the end of the fight in the air
+(`finale.md`, "Stage 19 as built"). Next: the live run of the end, the
+farm and the gate, then the flight to the stars (T1-T6 of `finale.md`,
+"Decided 2026-11-13"). In
 work: arena 3, its folder `docs/mechanics/arena-3/` (the index
 `README.md`; the air fight `ram-air.md`);
 what each version brought, a paragraph each - `CHANGELOG.md`. The status here is a few
@@ -89,6 +90,7 @@ about responsibility, not paths.
 | Game.Breakup | The end of the Ram's hull in the air (3.0.128): TBreakup - the crack, the throe (to its place over the middle of the screen, shuddering, its jets coughing, a few small blasts), the burst, then the series - every piece blown once, in the dice's order, uneven gaps; the clock and the order only. The Ram's (`TRam.Breakup`); no hull, no SDL |
 | Game.Wreckage | What is left of the burst hull (3.0.128): TWreckage - big pieces from their places on the hull, out from the heart and up, falling slowly as the moon pulls, tumbling, taken back by the flight's wind; TWreckagePainter - each its part of the hull's layers, turned. Decoration; the parts are the Ram's painter's (`Shatter`), their fire the game's (a `TBargeFire`) |
 | Game.Landing | The end of the flight (3.0.128): TLanding - from the burst on the hero spared, his keys his own; the flight on at its pace, then slowing over six seconds; the road's edge in where the slowdown stops it exactly a barge's length from the left edge - the main barge docks against it on the way (`Game.Moon`) and rides to the left edge; the world stands; a breath, then the end track - the hand-over to the titles. The clock and the cues only; `Game.Moon` carries them out |
+| Game.Gate | The facade with the gate on the road come back (3.0.130): the sealed door of the arena given a body, a decoration. No place of its own - a fixed way along the road from its edge over the crater (`GateLeft`), there only once the road has arrived; TGate - its status lamp, red while sealed, amber over half a second once promised (`Promise`), red again on a clear; TGatePainter - the picture put in the night and the lamp's light over its unlit housing (`DrawLamp` of `Levels.Dynamics`). The lamp's rules know no SDL |
 | Game.Ladder | The ladder of the air fight (3.0.127): the rungs by the share of the hull's lives spent (`AirTierSpent` 0.15, 0.33, 0.6; `AirTierOf`), the finisher's stretch (`FinisherSpent` 0.85); TAirLadder - whose the turn is after the magnet's window (`NextTurn`: the rung's newest first, then at random, never the last), whether a cycle chains as the magnet catches (`ChainAt`: the dive at the throw, a shell under the shield; on the last rung, once the dive was seen, about half the time); the mortar's shells by the rung (`MortarShells`); the lives at the door of point C (`AirDoorTier`, `AirDoorLives`). The Ram's (`TRam.Ladder`); knows no hull, no magnet, no barges; no SDL |
 | Game.BargeFire | The fire on a knocked barge (3.0.124): TBargeFire - one for each barge of the pool, a flame, a flickering glow, black smoke and small bolts of a short at the wound the game gives each tick, the smoke streamed back by the flight's wind and fading once its barge is gone. Decoration; knows neither the flock nor the pads |
 | Game.Pieces | What is left of a barge that breaks (3.0.121): TBargePieces - its picture in pieces, each from its place with a share of the barge's way, out, up, tumbling, falling, gone under the screen; TBargePiecePainter - each piece its part of the pad's picture, turned. Decoration only |
@@ -292,7 +294,7 @@ it to its places from the level file. NumPad 4/6/8/2 and +/- - the
 minigun muzzle tuner, NumPad 7/9/3/1 - the crosshair tuner (calibrated,
 kept in reserve), in the game O - a third of the lives of the Ram's head on the mast (and
 its share into the stone's tank), aloft the hull's lives down to the next
-door of the air fight's ladder (two presses reach the charge, three the dive, four the finisher; on the finisher's stretch the last life, then the hull's end); in the menu V/B - trailer frames (the logo / the bare
+door of the air fight's ladder (two presses reach the charge, three the dive, four the finisher; on the finisher's stretch the last life, then the hull's end), X - the gate's lamp to amber, as the titles' flare will turn it; in the menu V/B - trailer frames (the logo / the bare
 sky); in the game M - all music on/off (sounds stay; for shooting the
 trailer under an overlay of one's own track). Implementation:
 Mix_VolumeMusic(0/128) - the mixer channel is muted, under the hood the

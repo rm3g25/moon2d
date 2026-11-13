@@ -1,6 +1,6 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the titles not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
+Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the gate built (3.0.130, see "The gate as built"); the titles not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
@@ -83,6 +83,164 @@ sun stands behind the dome, pink; its glare over the dome is softened to
 the dome in the frame by the end of a fight of two minutes and more; a
 shorter fight stands with the dome coming in on the right. The titles
 (F1-F6) and the climb will stand on this picture.
+
+## Decided 2026-11-13: the gate, and the flight to the stars
+Supersedes Part 2 where they differ: its order of the titles, "The climb",
+the lines and "Open" on the exit. The climb straight up is gone; a flight
+of the camera through the city takes its place.
+
+### The gate
+- **What**: the sealed door of the arena (`sealedDoors: [13]`, `ram.md`)
+  given a body - a facade with a gate on the road's tiles at the right
+  edge, in the style of the city (the space age as the 1970s saw it: a
+  capsule roof, off-white panels in the night, a ribbon of windows, a
+  burnt-orange stripe, a small neon sign). Keep simple: one picture of a
+  facade, no building behind it.
+- **Where**: on the play plane, at the hero's scale, from x 392 to the
+  right edge, its foot on the road (352). The logo's place - x 136..376,
+  y 60..156, above the farm's crown with room for its fire - is kept
+  clear. The first generation (`gate.png`, trimmed to 973 by 890 px) came
+  lower and wider than asked: fitted to the strip it stands about 110
+  units tall, the gate about 75 by 55 - a hangar's gate, the farm's right
+  end showing over its roof. Kept as it came (decided 2026-11-14, on the
+  stand's frame at 240 s): the farm and the logo's place stay clear, no
+  taller one is generated. Its shade 0.35 puts its front-lit face in the
+  night; a rim of contre-jour on its left edge and roof may come from
+  code, as the frames have theirs.
+- **When**: it stands on the road's right end and rides in with the road
+  in the slowdown, stopping with it.
+- **The gate in 3.0**: shut, a decoration; a status lamp over it, red, goes
+  amber on the logo's flare - "soon", not "never". It opens at the start of
+  level 3, which begins on this picture without the pit and the barge: the
+  gate is the door to the right there.
+- **On the stand**: the mode "the flight", the switches "the gate's
+  facade" and "its lamp amber"; `gate.png` dropped on the stage draws the
+  generation (`GateArt`: its shade, its lamp housing's place in its
+  pixels), without it a placeholder drawn by code. The generation was made
+  with the city's pieces attached (`land-01..05`, three of `house`) as the
+  style reference. Packed since 3.0.130 (`s13-gate`, below).
+
+### The gate as built (3.0.130)
+- **The picture**: `s13-gate` in `level2-objects.mset`, put there by
+  `tools/gate/build_gate.py` from `gate.png` - cut to its body, scaled
+  whole to 6 px a unit: 720 by 659 px, 120 by 109.8 units. The source
+  picture is not kept in the repository.
+- **Its place** (`Game.Gate`, `GateLeft`): none of its own - a fixed way
+  along the road from the road's edge over the crater (232 units: the
+  screen less the road's stop less its width), its foot on the road's
+  line 352. With the road at its stop, 160, it stands 392..512. It is
+  there only on the road come back (`TRoadEnd.Arrived`), never on the pier
+  of the road running out.
+- **When it shows**: its left side crosses the right edge of the screen
+  about 2.4 s into the slowdown - 4.4 s after the last orb, after the last
+  blast of the series and the dock's jolt - and creeps in over the 3.6 s
+  the world still rolls.
+- **Its layer**: right after the road's tiles and before the hull's
+  pieces, the pads and the figures - all that passes over the road passes
+  before it. On the world's shake channel, with the road.
+- **The night**: the texture's colour taken down to 35% once
+  (`TGatePainter.Create`); no rim of contre-jour yet.
+- **The lamp** (`TGate`, `TGatePainter.Draw`): the game's light over the
+  unlit housing, at 69.7, 47.3 units from the picture's top-left - a
+  signal lamp as the beacons are drawn (`DrawLamp` of `Levels.Dynamics`,
+  public since this version), 16 units across, steady. Red (255, 60, 48)
+  while sealed; `TGate.Promise` turns it amber (255, 176, 64) over
+  `GateLampTurnTicks` 16 (half a second), once - a second promise changes
+  nothing; a clear (a death, a new level) seals it red at once.
+- **Its cue**: the logo's flare is to call `Promise` (the titles, not
+  built). Till then the debug key X does.
+- **A decoration**: it stops nothing; the wall is the right edge of the
+  screen, as before.
+- **Tests**: `Tests.Game.Gate` (new) - `TGateTests` 9; `TRoadEndTests` +1
+  (arrived only come back). The tables: `docs/testing/game.md`, "The
+  gate". Written without a compiler, as all here.
+- First guesses for the live run: the shade; the lamp's size, its light
+  and the half second of its turn; whether the facade wants its rim.
+
+### The order, from the hand-over
+1. Legendary comes in (T0, as before). "Computer Dragon presents" fades in
+   and out.
+2. **The flash**: the menu's logo flares with fire as on the menu, but
+   hard, then calms to the menu's breathing. The line under it: "The
+   Master will return in a new form" / "Мастер вернётся в новом облике".
+   The gate's lamp goes amber.
+3. The hero is still his own - keys and gun - till the camera moves.
+4. **The flight** starts on a musical turn (beat map). From its first
+   tick the hero is not his own (input cut; one in the air lands and
+   stands). The logo and its line stand in the world with the hero, at the
+   play plane's depth, and ride away with it. Escape does nothing from
+   here to the end.
+5. The flight (below) ends on the stars of the menu: the very sky of the
+   menu, no cut.
+6. **The last screen**, over that sky (the farewell of 2.x, `gsEnding`,
+   reworked - mouse only, the hero's crosshair): "The mission on the Moon
+   is not over. The Master will return in a new form." / "Миссия на Луне
+   не закончена. Мастер вернётся в новом облике."; under it "Ilia Kuzmin
+   [LinkedIn - blocked, but we hope for the best]" / "Ilia Kuzmin
+   [Linkedin - заблокирован, но мы надеемся на лучшее]", the link kept; and
+   "Main menu" / "Главное меню". The author's line is too long for the big
+   font in one line (about 63 glyphs against 512 units): two lines, the
+   joke in the small font.
+7. "Main menu": the items of the menu come in over the same sky. No
+   "continue" - the campaign is over (`HasActiveGame` false, as 2.x), no
+   checkpoint kept. Legendary plays on in the menu; the menu's theme takes
+   over when it ends.
+- **The Earth in place of the Moon**: we left the Moon, so the sky of this
+  menu shows the Earth of level 1 (its map, its night lights where they
+  show), moving by the menu moon's own rules - drift, spin, the dolly.
+  Only in this menu: once the player leaves it (a new game, the exit), the
+  Moon is back.
+
+### The flight
+Timings from the flight's start are first guesses; the whole is tuned to
+the track.
+
+| time | what |
+|---|---|
+| 0-4 s | **Away**: the camera pushes in and rises a little; the play plane (the barge, the road, the gate, the hero, the logo) grows fastest and leaves through the bottom and the right, the near hills sink. The void left of the barge never enters the frame: push first, turn after. |
+| 4-16 s | **Back to the left, low**: over the crater floor along the strip - the outskirts, the satellite dome and its plant, the train racing the camera on the monorail, the searchlights - drawing in toward the main dome. |
+| 16-22 s | **Through the lattice**: the main dome grows; the camera banks into the turn (about 25 degrees, the frame canted to the right as we go left), peaks in the cell and threads it close past a rib - the rib sweeps half the frame at its edge in its rim light, a whoosh, a small jolt. |
+| 22-30 s | **Inside, low among the towers**: past the neon of the city close by - the TEK sign on the spire - and it flickers as we pass, on cue, not by its own dice. The bank levels out with a degree or two of overshoot. The sun is hidden behind the capsule tower. |
+| 30-38 s | **The sunrise of Episode III**: the camera climbs; the sun comes out over the tower's top edge (the sun at infinity, the tower near - the climb lowers it) and floods the frame: a white-gold bloom a third of the frame, an anamorphic streak across all of it, the frame near white for a moment, settling. On a peak of the track. Out through the dome's crown - the lattice a second time, from inside. |
+| 38-50 s | **The Moon below**: the city falls away into a pattern of lights, the farm a magenta spark; the floor curves into the limb. The sun stays in the frame, its halo growing. |
+| 50-58 s | **The sun goes down**: the camera pitches up; the sun and the limb slide down out of the frame, the glare fades, the eye adapts - the stars of the menu come out. |
+
+### How (the stand first, then the game)
+- **One camera, in 3D**: x, y, z, bank, pitch, as a path in data (keys:
+  time, place, bank, pitch; eased) - the stand plays it in a mode "the
+  titles", the game plays the same file (this answers "Open": the titles
+  are a timeline in data). The backdrop is 2.5D already - the buildings
+  are cards placed in depth by their feet, the frames true 3D through the
+  camera of the layout (focal 1024); the camera generalizes what is there:
+  pan, push and climb give the right parallax for nothing.
+- **Bank**: the frame drawn into a target texture (F1's spike) and turned
+  as one. Its strength comes from the path's curve (a bank is a roll the
+  turn makes), plus a knob to peak it in the cell.
+- **Pitch**: only when nothing but the sky, the sun and the limb are in
+  the frame - a card of a building seen from above is a flat picture.
+- **The city must not read flat**: the path passes in front of the cards,
+  never beside them; no higher than the roofs while they are near; a card
+  left behind is gone before its edge can show. Above the roofs the
+  buildings melt into their own lights (the windows, the neon, the farm's
+  glass - drawn apart already): a night city from high up is its lights.
+- **Through a cell**: the ribs crossing the eye are cut already
+  (`cutAtEye`); the path is laid through a chosen cell, close to one rib.
+- **The ground**: the crater floor is a picture in a band and will not open
+  up as the camera climbs - it becomes a plane (its texture on a mesh,
+  `SDL_RenderGeometry`, as the farm's light). The ridge stays a band.
+- **The Moon from high**: the plane carries the limb near; a globe
+  (`Render.Globe`) only once it is small, being soft up close.
+- **The flare**: code - additive halos, the streak, an exposure curve. No
+  art.
+- **The home**: a game state of its own (`gsFinale`, as Part 2 had it),
+  the camera and the path in units of their own; the names come with the
+  build plan.
+
+### Stages (each on the stand, then in the game)
+T1 the camera on the stand (push, pan, climb of the layers there are); T2
+the ground plane; T3 the lattice and the bank; T4 the flare; T5 the climb
+out, the pitch, the stars and the Earth in the menu; T6 the last screen and
+the exit. The gate's art and its place in the game go before them.
 
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:

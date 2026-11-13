@@ -70,7 +70,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   cycles (`Game.Ladder`, 3.0.127), the end of its hull in the air
   (`Game.Breakup`, 3.0.128) and what is left of it (`Game.Wreckage`,
   3.0.128), the end of the flight down to the still picture the titles
-  will stand on (`Game.Landing`, 3.0.128), the fire on a barge a
+  will stand on (`Game.Landing`, 3.0.128), the facade with the gate on
+  the road come back (`Game.Gate`, 3.0.130), the fire on a barge a
   shell knocks off (`Game.BargeFire`, 3.0.124) and what is left of one that breaks
   (`Game.Pieces`, 3.0.121), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
@@ -244,6 +245,9 @@ pictures, `Render.Brush` for its dice and `Game.Space`; `Game.Ram`'s
 painter makes their parts) /
 `Game.Landing` (the end of the flight: over `Game.Barge` for the berth's
 place and `Game.Space`; `Game.Moon` carries it out) /
+`Game.Gate` (the facade with the gate: over `Game.Road` for its place,
+`Game.Landing` for the road's stop, the canvas and the signal lamp of
+`Levels.Dynamics`, `Render.Brush` and `Game.Space`) /
 `Game.BargeFire` (the fire on a knocked barge: over the smoke, the
 lightning and the canvas of `Levels.Dynamics`, `Render.Brush`, `Render.Glow` and
 `Levels.Tint`) /
@@ -1965,6 +1969,10 @@ in `CreateDynamic`.
   it. **`NameRoll(name)`** - 0..1 by a name, the 1 left out, the same at
   every load (`TagSalt` - a name as a number - and `Scramble` twice): the
   dice of a rig's spreads.
+- **`DrawLamp(canvas, x, y, size, color, light, flash)`** - a signal
+  lamp's light, as `TBeacon` and the searchlights' lamps draw theirs: a
+  spill while it flashes, a halo `size` across, a hot core. Public since
+  3.0.130: the gate's status lamp (`Game.Gate`) is drawn by it, steady.
 - **`ParseDynamics(root, levelId)`** - reads the section (absent = empty
   list, the caller owns it); an unknown kind, layer, blink, flow,
   surface, collide or run, none or more than one of screen, screens and parent, a broken
@@ -6291,6 +6299,9 @@ hero is a pad the game carries with it, the grid's row of the road erased.
   flight: its first tile's left edge - its edge over the crater - at
   `left`, the tiles on past the right edge; it rides the belt as the pier
   did, the same painter and pad.
+- 3.0.130: **`Arrived`** - come back, not running out (`Arrive` sets it,
+  `Start` and `Clear` take it away): what stands at its far end - the gate
+  (`Game.Gate`) - stands only then.
 
 ### `Game/Game.Barge.pas` (~260 lines, 3.0.118, reworked 3.0.119)
 The TeK hover-barge of the air phase (`docs/mechanics/arena-3/evolution.md`, stages
@@ -6618,6 +6629,31 @@ caller's. No SDL.
   till a clear: nothing wounds him), `Stage`,
   `HandedOver`.
 - Tests: `Tests.Game.Landing`.
+
+### `Game/Game.Gate.pas` (~170 lines, 3.0.130)
+The sealed door of the arena given a body (`docs/mechanics/finale.md`,
+"The gate as built"): a facade with a gate on the far end of the road come
+back, part of the picture the titles stand on. A decoration - it stops
+nothing. The lamp's rules know no SDL.
+- `GateWidth` 120, `GateHeight` 659 / 6 (the picture `s13-gate`, 720 by
+  659 px at 6 px a unit), **`GateLampTurnTicks`** 16.
+- **`GateLeft(roadLeft)`** - its left side for the road's edge over the
+  crater: a fixed way along the road (the screen less `LandingRoadStop`
+  less its width, 232), so with the road at its stop its right side is at
+  the right edge of the screen. No place of its own.
+- **`TGateLamp`**: `glSealed` (red), `glSoon` (amber).
+- **`TGate`** - `Promise` (the lamp turns amber; nothing once promised),
+  `Clear` (sealed, red at once), `Tick`, **`LampTurn(alpha)`** (0 red .. 1
+  amber, between the ticks), `Lamp`. **`GateLampColor(turn)`** - red
+  (255, 60, 48) to amber (255, 176, 64).
+- **`TGatePainter`** - `Create(texture, gate, road)` (the picture, not
+  owned, its colour taken down to 35% once: the night);
+  `Draw(sprites, canvas, foot, alpha)` - nothing till the road has
+  `Arrived` or while the facade is past the right edge; the picture on the
+  road's line, then the lamp over its housing (69.7, 47.3 units from the
+  picture's top-left) by `DrawLamp` of `Levels.Dynamics`, 16 across,
+  steady.
+- Tests: `Tests.Game.Gate`.
 
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
 What is left of a barge that breaks in the air fight
@@ -8057,6 +8093,13 @@ so a unit (and later a test) can reach it. `interface` holds
   `ClearPier` clears the landing, the wreckage and its fire. Debug: the key
   O on the finisher's stretch takes the hull to its last life, then that
   one.
+- 3.0.130, **the gate** (`finale.md`, "The gate as built"): **`FGate`**
+  (`TGate`, born with the game) and **`FGatePainter`** (the level's, made
+  beside the road's painter from **`GateSprite`** `s13-gate`, nil on a
+  level without the road's pad). `TickLanding` ticks the lamp, `ClearPier`
+  clears it. Drawn right after the road's tiles, before the Ram, the
+  wreckage and the pads, on the world's shake. Debug: the key X is
+  `FGate.Promise`, till the titles' flare calls it.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -8890,6 +8933,10 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   (the farm read, a capsule's faults); `TMonsterTests` +1 (a body in the
   pit hangs at its bottom). 41 in all; the tables are in
   `docs/testing/game.md`, "The farm".
+- 3.0.130: **`Game/Tests.Game.Gate.pas`** - **`TGateTests`** (9), the
+  gate's lamp, the facade's place along the road and the lamp's colour;
+  `TRoadEndTests` +1 (arrived only come back). 10 in all; the tables are
+  in `docs/testing/game.md`, "The gate".
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -9318,7 +9365,8 @@ build script in the repository); `level2-backdrops` and
   since 3.0.11: 1440x1080 (4:3, the playfield of a 1080p screen 1:1), drawn
   linear-filtered and tinted per change; `_black` stays a 512x512 fill.
 - **Objects**: `level1-objects` (`ship`) and `level2-objects`
-  (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s03-room`,
+  (`tunnel-gate` and `s04-tek-crates`, 6 px a unit; `s13-gate`, the facade
+  with the gate of the end of the flight, 6 px a unit, 3.0.130; `s03-room`,
   `s04-room` and the rooms of the screens repainted after them up to
   `s09-room` - 3.0.54 -, whole screens at backdrop density, with
   `s09-doorstep` and `s09-lamp-off`) - the `<assetsDir>-objects` convention, never declared,
@@ -9469,6 +9517,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The ladder of the air fight (3.0.127): the turn after the magnet's window at random among the rung's weapons, never twice in a row, the newest first; the chains of the last rung - the dive at the throw, a shell under the shield; the finisher on the last stretch - the charge through and the dive out of the sky; the flock growing by the rung; point C and the End key's stop at it; the hull worn, shorting out and smoking by the rung | Game.Ladder.pas (`TAirLadder`, `AirTierOf`, `AirTurnsOf`, `AirDoorLives`) + Game.Ram.pas (`TickTurns`, `BeginAirTurn`, `DropFromAbove`, `HullWear`, `HullShortLevel`, `HullSmokeLevel`, `TickHullDamage`, `DrawDiveMark`) + Game.Charge.pas (`ceThrough`, `Gone`) + Game.Dive.pas (`StartAbove`, `dvMarking`, `MarkAt`) + Game.Takeoff.pas (`Settle`) + Game.Magnet.pas (tucked while cooling) + Game.Flock.pas (`Grow`) + Game.HullLives.pas (`Resume`, `RamHullLives` 240) + Game.Moon.pas (`FPastAirDoor`, `HullLivesShare`, `HullSpent`, `DebugJumpToAirDoor`, `DebugHullToNextDoor`) + Tests.Game.Ladder.pas and the other units' tests (+docs/mechanics/arena-3/ram-air.md, stage 18d-6) |
 | The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
 | The farm under the long dome (3.0.129): a capsule frame at the end of the city's strip, greenhouses whose glass glows on clocks of their own, their light in the dome's air, on its far ribs and on the floor in front of it, the sun's glare giving way to the glass - tick for tick as on the stand | Levels.Capsule.pas (`CapsulePoint`, `CapsuleShape`) + Levels.Farm.pas (`FarmGlowLevel`, `FarmView`, `FarmLight`, `Exposed`, `FarmAirMesh`, `FarmApronMesh`) + Levels.FarPlane.pas (`TDomeFrameKind`, `TCityFarm`, `GlareLevel`, `FramePoint`) + Render.DomeFrames.pas (`FrameEdges`, `CapsuleBeaconNodes`, `TFrameRib.Farm`, `Dark`, `DrawGlare`) + Render.FarPlane.pas (`LoadFarm`, `DrawGlass`, `DrawAir`, `DrawApron`, `DrawLightMesh`, `LightFarRibs`) + bin/chase-backdrop.json (`frames` dome-farm, `farm`) + chase-backdrop.mset (`agro-*`, `hall-*`, `svc-*` and their `-glow`) + tools/chase (`stand.template.html` - the reference, `make_glow.py`, `place_farm.py`, `pack_set.py`) + Tests.Levels.Capsule.pas, Tests.Levels.Farm.pas, Tests.Render.DomeFrames.pas, Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md, "The farm") |
+| The gate at the end of the flight (3.0.130): the sealed door of the arena given a body - a facade with a gate on the far end of the road come back, riding in with it and stopping at the right edge of the screen, put in the night; its status lamp red, amber over half a second on a promise - the titles' flare, the debug key X till then | Game.Gate.pas (`TGate`, `TGatePainter`, `GateLeft`, `GateLampColor`) + Game.Road.pas (`Arrived`) + Levels.Dynamics.pas (`DrawLamp` public) + Game.Moon.pas (`FGate`, `FGatePainter`, `GateSprite`, `TickLanding`, `ClearPier`, the key X) + tools/gate/build_gate.py + level2-objects.mset (`s13-gate`) + Tests.Game.Gate (+docs/mechanics/finale.md) |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
 | The bombs of the air fight (3.0.123): the first two rungs by the hull's lives - the nearest barge, then his barge first and a turn of the stern mortar after every window; the mortar rising, leaning, lobbing one shell at a time at the deck under his feet, folding; the shell riding its barge, no road aloft; a small barge knocked off, falling behind and sinking; the main barge rocked | Game.Mortar.pas (`TMortar`, `MortarTilt`) + Game.Ram.pas (`AirTier`, `AirTierSpent`, `TickMortar`, `MortarMuzzleAt`, `MortarPivotPoint`, `DrawMortar`, cue `MortarRises`, `TRamTarget.HullSpent`, `ShellsAloft`) + Game.Magnet.pas (`Waits`, `Cooled`) + Game.Shells.pas (`Lob` with a carrier, `Carry`, `HasRoad`, `Marked`, `LastRing`) + Game.Flock.pas (`Knock`, `Knocked`, `fpKnocked`) + Game.Moon.pas (`LobAtHisDeck`, `ShellCarrierOf`, `TickShellsAloft`, `AirLobRise`, `ShellRockDepth`, `MortarRiseSoundFile`, the debug key O) + `mortar` in tek-machine.mset + tools/sounds/mortar.py + Tests.Game.Mortar.pas, Tests.Game.Shells.pas, Tests.Game.Flock.pas, Tests.Game.Magnet.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-3) |
 | The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |
