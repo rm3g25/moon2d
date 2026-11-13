@@ -95,10 +95,14 @@ Tests\
     Tests.Hud.GoRight.pas
     Tests.Hud.Energy.pas   the reading of the gauge, and the energy action
   Levels\
+    Tests.Levels.Capsule.pas   the shape of the farm's capsule frame, the
+                               stand's edge for edge
     Tests.Levels.Carousels.pas
     Tests.Levels.CityLife.pas  the clock of the chase city's lights, against
                                tables made by the stand's own functions
     Tests.Levels.Doors.pas     the doors a level shuts
+    Tests.Levels.Farm.pas      the farm's grow lights against the stand's
+                               ticks, its light and its meshes
     Tests.Levels.Grid.pas      the collision grid's rows erased and restored
     Tests.Levels.Monorail.pas  the chase city's train, against tables made
                                by the stand's own functions
@@ -131,7 +135,8 @@ Tests\
     Tests.Pads.Stray.pas
     Tests.Pads.World.pas    the dormant pad, and the pad the game puts to sleep
   Render\
-    Tests.Render.DomeFrames.pas  the geometry of the chase city's dome frames and their beacons
+    Tests.Render.DomeFrames.pas  the geometry of the chase city's dome frames and their beacons,
+                                 the farm's capsule among them
   Scenes\
     Tests.Scenes.Director.pas
   Sprites\

@@ -1214,3 +1214,99 @@ beside the others in `Tests\Game\Tests.Game.HeroOrbs.pas`, fixture
 |---|---|---|
 | `TestTheMoonFormComesOffInARingOfItsOwn` | shed: an armed ring; no orb of the ice form's rite | the moon form comes off in ice-white orbs, or in a ring that shields nothing |
 | `TestCorpseCallsUpNoOrbs` | asks the moon form's shed too: no armed orb over the corpse | a dead hero sheds a ring |
+
+## The farm
+
+State: written, 40 tests (3.0.129, stage 19a of arena 3,
+`chase-backdrop.md`, "The farm"). The capsule and the farm's light are no
+`Game` units, but they close the chase's far plane, whose tests live here.
+Needs no stage: all of it is numbers. The stand
+(`tools/chase/stand.template.html`) is the reference; the numbers marked
+"the stand's" were taken from it over the layout's dome-farm and glow of
+the day, set in the tests, so tuning the layout breaks nothing.
+
+### Levels.Capsule
+
+Fixture `TCapsuleTests` in `Tests\Levels\Tests.Levels.Capsule.pas`, over
+the dome-farm: 640 by 220 by 90, 12 rows, 16 cells, a belt every 4, 5 cells
+of turn.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFeetStandOnTheBaseLine` | rows 0 and 12 at three places along: Y exactly 0 | a foot lifts by the noise of a cosine and throws a shadow |
+| `TestFarFootBehindNearFootInFront` | Z half the depth at row 0, minus it at row 12 | the arch goes round the wrong way |
+| `TestCrownIsItsHeightHalfwayBetweenTheHalves` | row 6: Y the height, Z exactly 0 | the crown changes halves with the FPU |
+| `TestEndsTurnDownToTheirTips` | at the tips, the crown's row: Y exactly 0, X a quarter turn past the barrel | the ends stand open or stick out |
+| `TestShapeIsTheStands` | 1272 edges, 291 nodes, 240 of the belts, 128 of the ring | an edge is added, lost or thickened apart from the stand |
+| `TestNoEdgeIsAPoint` | every edge has a length | the poles' collapsed purlins come back |
+| `TestBeltsCrossTheBarrelEveryBeltEveryCells` | five belts, at the barrel's ends and every 4 cells, within 0.001 | a belt is lost or shifted |
+| `TestNodesStandAboveTheFeet` | no node under the ground or on a foot | a beacon sits on the ground |
+| `TestEveryNodeHasAKeyOfItsOwn` | no two nodes share a seed's key | the crown's beacons blink in pairs again |
+
+### Levels.Farm: the grow lights
+
+Fixture `TFarmGlowTests` in `Tests\Levels\Tests.Levels.Farm.pas`, over the
+layout's glow: spans of 900-2400 ticks, 0.85 lit, a warm-up of 90, a
+flicker of 12.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestGlowMatchesTheStand` | eight of the stand's ticks of greenhouses 0 and 7: full, dark, the flicker's dark tick, the warm-up's steps | a hall lights on another tick than on the stand |
+| `TestGlowNeverPastItsLevel` | ten halls over 40000 ticks: within 0 and the level | the warm-up overshoots |
+| `TestGlowLitAboutItsShare` | twenty halls: lit 0.85 of the time, within 0.1 | the dice or the share are read wrong |
+| `TestGlowSwitchedOnFlickersAndWarmsUp` | the first switch on: dark ticks in its first 12, then never down, at its level by the warm-up's end | it comes on at full, or flickers for good |
+| `TestGlowSwitchedOffGoesOutAtOnce` | each switch off for good: at full the tick before | a light fades out |
+
+### Levels.Farm: the light
+
+Fixture `TFarmLightTests`, over a far plane of its own: the stand's
+camera, the dome-farm, one greenhouse 40 wide and 20 tall near the dome's
+middle, its glass at a quarter across and halfway down, half of it lit -
+lit at tick 0, as the stand has the first hall.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNoFarmLightsNothing` | no farm: no source | a farm lights a city with none |
+| `TestLitGreenhouseIsASourceAtItsGlass` | one source at full: at the glass's centre, its power the share times the area over a hall's, its nearness | the light stands off the glass or is too strong |
+| `TestMirrorMovesTheSource` | mirrored: the source the other side of the piece | a mirrored hall lights from its blank side |
+| `TestGreenhouseFarOffTheScreenIsDark` | far off: no source, the glass dark | halls off the screen light the dome |
+| `TestLightAtTheGlassIsItsColourTimesItsPower` | at the glass: each channel the colour times the power | the colour is lost |
+| `TestLightFallsToAShareOfOneOverEAtItsReach` | a reach away at its nearness: times 1 / e | the falloff or the nearness is wrong |
+| `TestLightFarOffIsNothing` | ten reaches away: nothing | a far hall tints the whole dome |
+| `TestExposedNeverPastFull` | a huge light: under full; none stays none | many halls burn white past full |
+| `TestExposedKeepsTheHue` | the channels in their order | the light changes colour as it brightens |
+| `TestAirCoversTheNearHalf` | 65 by 7 corners, two triangles a cell; between the crown and the near foot on the screen; lit somewhere | the air spills over the dome or misses its half |
+| `TestApronLitAtTheFootDarkTowardTheEye` | every quad dark at its outer corners, which lie lower on the screen; lit at a foot | the apron runs away from the eye or is lit to its end |
+| `TestApronNoneWithTheDomeOffTheScreen` | the dome far off: nothing | light lies on the floor with no dome |
+
+### Render.DomeFrames: the capsule
+
+Fixture `TCapsuleFrameTests` in `Tests\Render\Tests.Render.DomeFrames.pas`,
+over the frames' far plane with the dome-farm alone, its beacons above 0.9,
+centred on the screen.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestRibsAreTheStands` | 623 far, 649 near; the far behind the centre | the frame is built or split apart from the stand |
+| `TestCrownStandsWithTheNearHalf` | the crown's 26 purlins (Z exactly 0) among the near | the crown changes halves |
+| `TestShadowsAreTheStands` | 320 shadows | a foot throws a shadow, or a lifted rib none |
+| `TestBeaconsAreTheStandsEachItsOwnSeed` | 18 behind, 37 in front, no seed twice | the crown's beacons blink in pairs |
+| `TestRibsAreTheFarmsUnderTheFarm` | no farm: none the farm's; the farm under it: all | a city dome is lit by the farm, or the farm's is not |
+| `TestRibsCarryTheFramesDark` | every rib the frames' dark, 26, 23, 21 | the painter draws a rib in no colour |
+
+### Levels.FarPlane: the glare and the farm read
+
+In `Tests\Game\Tests.Game.FarPlane.pas`: `TFarPlaneSunTests` +2,
+`TFarPlaneReadTests` +6, over the depth layout with the dome-farm and the
+farm of the day.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestGlareWholeWithoutAFarm` | deep inside the main dome, no farm: 1 | the city's glare is cut |
+| `TestGlareGivesWayToTheFarmsDome` | before it 1; deep inside 0.3; halfway up the ramp 0.65 | the glare jumps, or never gives way |
+| `TestLevelTwoReadsItsFarm` | a farm under a capsule, with glass, its glare under 1 | the layout's farm is lost |
+| `TestACapsuleAndItsFarmRead` | the capsule's numbers, the farm's frame, glare, span and glass by piece | a key is read wrong |
+| `TestAFrameOfAnUnknownKindRaises` | "tent": raises | a typo draws a geodesic dome |
+| `TestACapsuleOfOddRowsRaises` | 11 rows: raises | the crown falls between rows |
+| `TestACapsuleDeeperThanLongRaises` | 700 deep: raises | the barrel turns inside out |
+| `TestAFarmUnderADomeRaises` | the farm under a dome: raises | the farm lights a geodesic it cannot read |

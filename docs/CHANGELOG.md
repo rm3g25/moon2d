@@ -7,6 +7,31 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-13: **3.0.129 - the farm under the long dome.** Stage 19a of
+arena 3: at the end of the city's strip, where the crater had an empty
+tail, stands a long dome - a capsule, a barrel vault with a quarter dome at
+each end, its glass on a diagrid with heavy belts every four cells, its
+ends' ribs fanning out of the poles at the foot - and under it 86
+greenhouses of their own sheets, their glass glowing magenta, amber and
+blue (`Levels.Capsule`, new). Each greenhouse's grow light burns on a clock
+of its own: lit for most of its spans, dark for some, catching with a
+flicker and warming up like a sodium lamp when it comes on; the lit glass
+fills the dome's air with its colour, lights the inner face of the far
+ribs and spills onto the crater floor in front of the dome, gapped by the
+ribs' feet (`Levels.Farm`, new; the glass a picture of its own,
+`<id>-glow`, drawn over the shaded piece and not shaded). The city's brake
+parks the dome in the frame by the end of the air fight, the sun behind it
+turning pink; while the dome stands before the sun its glare gives way to
+the glass, down to 0.3 of itself, so the greenhouses round the disc do not
+wash out. Built on the stand first (the mode "the flight"), then in the
+game tick for tick, checked against the stand by the numbers. On the
+stand, the capsule's feet, crown and ends' tips are exact zeros now - the
+crown no longer changes halves with the sign of a `cos(PI / 2)`, the feet
+throw no shadow of no length - and a beacon's seed takes its row, so the
+crown's lights no longer blink in pairs. `Render.DomeFrames` holds every
+frame's edges in units and draws a rib in its own dark; the frames'
+projection is `TFarPlaneDef.FramePoint` now. 40 tests more.
+
 2026-11-12: **3.0.128 - the end in the air.** Stage 19 of arena 3: the
 fight ends at the hull's last life. The hull cracks - a flash, a groan of
 torn plates - and for a second lurches to its place over the middle of

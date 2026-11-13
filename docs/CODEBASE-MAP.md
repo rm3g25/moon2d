@@ -121,6 +121,9 @@ chase as data: over `Render.Brush` for the colours of its sun) /
 `Levels.FarPlane` and the dice of `Levels.CityLife`) /
 `Levels.Searchlights` (where the chase city's searchlights point, 3.0.95:
 over `Levels.FarPlane` and the dice of `Levels.CityLife`) /
+`Levels.Capsule` (the shape of the farm's capsule frame, 3.0.129: over
+`Levels.FarPlane`) / `Levels.Farm` (the light of the farm, 3.0.129: over
+`Levels.FarPlane`, `Levels.Capsule` and the dice of `Levels.CityLife`) /
 `Levels.Events` (over `Monsters.Defs`
 for the tactics an event sets and the side a body comes in from, and over
 `Levels.Pads` for the shelf programs and bank orders an event tells) / `Effects.Emitter` / `Render.Puff` /
@@ -161,12 +164,12 @@ window of a monster's damage cap: over `Monsters.Defs`) -> `Hero` /
 for the orders of a body an event lets in) / `Hud.Messages` / `Render.Tiles` / `Render.Objects` /
 `Render.DomeFrames` (the dome frames of a chase's city, 3.0.90: over
 `Levels.FarPlane`, `Render.Brush` and `Render.Glow`; the beacons' seeds
-from `Levels.CityLife`) /
+from `Levels.CityLife`, a capsule's frame from `Levels.Capsule`) /
 `Render.FarPlane` (over `Levels.FarPlane`, the backdrop view of
 `Levels.Dynamics`, `Render.Sprites` and `Render.DomeFrames`; the sun and
 the city's lights through `Render.Glow`, their levels from
 `Levels.CityLife`, the train's place from `Levels.Monorail`, the beams
-from `Levels.Searchlights`) /
+from `Levels.Searchlights`, the farm's light from `Levels.Farm`) /
 `Render.Dynamics` / `Game.Explosions` (over `Effects.Debris`,
 `Levels.Dynamics` and `Monsters.Defs`) / `Game.Blasts` (the wave of an
 explosion: over `Monsters.Defs`, `Effects.Sparks` for the probe type and
@@ -466,7 +469,7 @@ screen dump of `Game.Moon`.
   False the pictures of the belt are left out: the road that runs out is
   drawn tile by tile by `Game.Road`'s painter in their place.
 
-### `Core/Render.FarPlane.pas` (~940 lines, 3.0.95)
+### `Core/Render.FarPlane.pas` (~1095 lines, 3.0.129)
 - **`TFarPlanePainter`** - draws the far plane of a chase
   (`Levels.FarPlane`) where its offsets have taken it, in place of the
   screen's backdrop: the black sky, the sun, then the layers back to
@@ -554,7 +557,24 @@ screen dump of `Game.Moon`.
   their beacons, before the glare, `DrawBeamGlints`: the spot where the
   beam leaves the glass, and a point glow on each near rib it crosses
   inside the dome, at the beam's level there over its own.
-### `Core/Render.DomeFrames.pas` (~935 lines, 3.0.92)
+- 3.0.129, **the farm** (`chase-backdrop.md`, "The farm"): `LoadFarm` -
+  for the city's layer, each element's height (`FCityHeights`, its
+  picture's) and, for a piece with glass, its `<id>-glow`
+  (`FGlassPictures`, `FarmGlassSprite`; a missing one raises at load).
+  `Draw` takes the farm's view once a frame (`FFarm`, `FarmView`), the
+  city's and the near ground's layers both draw from it; `FarmLit` - any
+  source. The city's layer: after the floor's shadows the apron clipped to
+  the floor's band (`DrawApron`) and the farm's far ribs lit
+  (`LightFarRibs` - `Exposed(FarmLight(middle), RibLevel)` over each one's
+  dark), then the far ribs; after each piece drawn, its glass
+  (`DrawGlass` - the glow over the piece's place, mirrored with it, the
+  vertices white and their alpha the level, not shaded), then its life;
+  after the beams the air (`DrawAir`); the glare at
+  `TFarPlaneDef.GlareLevel`. The near ground's layer: after its shadows,
+  the apron again, clipped from its band's top down. `DrawLightMesh` - a
+  `TFarmMesh` as `TSdlVertex` (the light in the colour, alpha full), no
+  texture, the draw blend `ADD` and back to `BLEND`, an optional clip.
+### `Core/Render.DomeFrames.pas` (~965 lines, 3.0.129)
 The dome frames of a chase's city (`docs/mechanics/chase-backdrop.md`,
 "The city"): geodesic half-ellipsoids drawn by code through the city's
 camera, riding with the city past the fixed sun. The stand
@@ -573,12 +593,15 @@ camera, riding with the city past the fixed sun. The stand
   a corner stands at the top, each face cut `Frequency` times and pushed
   out onto the sphere, every edge once by a key of its rounded ends, an
   edge across the equator cut at it, the lower half dropped, the equator
-  added as a ring of 96, `RingThickening` 1.6); frames of one frequency
-  share it (`SharedEdges`). `Present` - any frame. `View(cityOffset)` -
-  `Project` (X across, Y up, Z into the screen from the frame's centre on
-  its base line; nearer than `NearestShare` 0.15 of the focal length is
-  behind the eye), a frame off the screen skipped (`AddFrame`), each edge
-  scaled to the frame's width and height (`AddEdge`), split by the sign of
+  added as a ring of 96, `FrameRingThickening` 1.6) and holds its edges
+  in units, stretched to the frame's width and height (`FrameEdges`,
+  `Stretched`; since 3.0.129 - before, frames of one frequency shared a
+  unit geodesic and `AddEdge` scaled it every frame). `Present` - any
+  frame. `View(cityOffset)` - `TFarPlaneDef.FramePoint` (X across, Y up, Z
+  into the screen from the frame's centre on its base line; nearer than
+  `FrameNearestShare` 0.15 of the focal length is behind the eye; the
+  frames' own `Project` until 3.0.129), a frame off the screen skipped
+  (`AddFrame`), each edge projected (`AddEdge`), split by the sign of
   `Z`, lit (`LightRim`: 0.12 to 1 by the sun over `RimReach` 150 units,
   times 0.35 to 1 as it faces it), sorted far to near (`DeeperFirst` -
   exact, not `CompareValue`, whose slack leaves the ribs on the equator
@@ -617,6 +640,17 @@ camera, riding with the city past the fixed sun. The stand
   `BeaconSeed(frame, x, z)` - by its place, not the order of the nodes.
   `View` projects them with the frame (`AddBeacons`), the far ones (Z over
   0) apart from the near.
+- 3.0.129, **the capsule** (`chase-backdrop.md`, "The farm"): a frame of
+  `Kind` `fkCapsule` takes its edges from `Levels.Capsule.CapsuleShape`
+  (**`TEdge.Thickening`** - 1, the ring's 1.6, a belt's 2.2 - in place of
+  `Ring`) and its beacons from its nodes above `BeaconsAbove` of its height
+  (`CapsuleBeaconNodes`, the seed `BeaconSeed(frame, KeyX, KeyZ)` - the
+  node's place along and its row). The crown (Z exactly 0) goes with the
+  near half. **`TFrameRib.Farm`** - a rib of the farm's dome
+  (`AddEdge(..., ofFarm)`), **`TFrameRib.Dark`** - its colour, the frames'
+  dark (26, 23, 21) till `Render.FarPlane` lights the farm's far ribs;
+  `DrawRibs` draws each in its own. **`DrawGlare(cover, level)`** - both
+  glows times the level (`TFarPlaneDef.GlareLevel`).
 
 ### `Core/Render.Dynamics.pas` (~515 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
@@ -1132,7 +1166,7 @@ Level data model + JSON parser. No game logic.
   gives every erased row back. The road of the chase running out is air,
   a pad standing in for what is left of it. Tests: `Tests.Levels.Grid`.
 
-### `Core/Levels.FarPlane.pas` (~1145 lines, 3.0.95)
+### `Core/Levels.FarPlane.pas` (~1380 lines, 3.0.129)
 The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
 strip of layers riding left behind the play layer at speeds of their own,
 and a sun under them all. A level names the screen and the layout in its
@@ -1232,6 +1266,79 @@ No SDL.
   ease under a tick; the window and hold ticks out of order
   (`ReadWholeRange`); (`SFarPlaneBadSearchlight`) a lamp without two
   sweeps and two periods above zero.
+- 3.0.129, **the capsule and the farm** (`chase-backdrop.md`, "The
+  farm"): **`TDomeFrameKind`** (`fkDome`, `fkCapsule`; a frame's `"kind"`,
+  `ParseFrameKind`, a dome when absent); a capsule's `D`, `Rows`, `Cells`,
+  `BeltEvery`, `CapCells` (`ReadCapsule`). **`TCityFarm`** (`farm`,
+  `ReadFarm`, `PlaceFarm`) - `Frame` (its capsule's place among the
+  frames), `GlareKeep` (1 when absent), `Glow` (**`TFarmGlow`** - `Level`,
+  the span ticks, `OnShare`, `WarmTicks`, `FlickerTicks`), `AirReach`,
+  `AirLevel`, `RibLevel`, `ApronLength`, `ApronLevel`, `ApronGap`, `Glass`
+  (**`TFarmGlass`** - `Piece`, `Color`, `AtU`, `AtV`, `Share`;
+  `GlassOf(piece)`). **`GlareLevel(offsets)`** - 1, or less as the farm's
+  dome takes the disc: `1 - (1 - GlareKeep) * SpanCover`, the tint's ramp.
+  **`TFramePoint`** and **`FramePoint(frame, cityOffset, at)`** - the
+  frames' projection, lifted out of `Render.DomeFrames` (its second user is
+  `Levels.Farm`); `FrameNearestShare` 0.15, `FrameRingThickening` 1.6 in
+  the interface. Raise: a frame of an unknown kind
+  (`SFarPlaneBadFrameKind`); a capsule with no depth or one not under its
+  length, rows odd or under 2, no cells, belts or ends
+  (`SFarPlaneBadCapsule`); a farm whose frame is no capsule of the frames
+  (`SFarPlaneFarmNoCapsule`); its span ticks out of order
+  (`ReadWholeRange`).
+
+### `Core/Levels.Capsule.pas` (~240 lines, 3.0.129)
+The shape of a capsule frame - the farm's long dome
+(`docs/mechanics/chase-backdrop.md`, "The farm"). No SDL. The stand's
+`capsule` and `capsulePoint` are the reference, edge for edge and in their
+order.
+- **`CapsulePoint(frame, along, row)`** - a point in units from the
+  centre on the base line: the arch from the far foot (row 0) over the
+  crown (`Rows / 2`) to the near foot (`Rows`) in two quarter turns
+  (`QuarterTurn` - exact at 0 and 1, so the feet, the crown and the end of
+  an end's turn are exact zeros); past the barrel (`CapsuleBarrel` - half
+  the length less half the depth) the end turns down over `CapCells`
+  cells to its tip (`CapsuleEnd`).
+- **`CapsuleShape(frame)`** - **`TCapsuleEdge`** (`A`, `B`, `Thickening`)
+  and **`TCapsuleNode`** (`At`, `KeyX` - its place along over the length,
+  `KeyZ` - its row over the rows): the rows from the far foot, an even row
+  from tip to tip and an odd one between; the purlins along each (the
+  feet's the ring's 1.6), each node tied to its two neighbours in the row
+  above; then the ends' feet as arcs on the ground; then the belts (2.2)
+  every `BeltEvery` cells, the barrel's ends among them; an edge shorter
+  than 1e-6 dropped (the ends' feet rows collapse onto the poles).
+
+### `Core/Levels.Farm.pas` (~375 lines, 3.0.129)
+The light of the farm at a ride of the city and a tick of the far plane's
+clock (`docs/mechanics/chase-backdrop.md`, "The farm"). No SDL. The
+stand's functions of the same names are the reference.
+- **`FarmSeed(element)`** - `Mix(4096 + element)`.
+  **`FarmGlowLevel(glow, seed, tick)`** - the spans from
+  `-RollInt(seed, 6, 0, SpanMost)`, each `RollInt(seed, 10 + n, ...)` long,
+  lit when `Roll(seed, 500 + n)` is under `OnShare`; inside a lit span
+  after a dark one, out two ticks of every four over `FlickerTicks`, then
+  `Level` times `(inside + 1) / WarmTicks` up to it; a lit span after a lit
+  one at once at `Level`.
+- **`FarmView(def, offsets, tick, heights)`** - **`TFarmView`**:
+  `Sources` (**`TFarmSource`** - `X`, `Y` at the glass's centre, moved
+  with a mirror, `Color`, `Power` - the level times the glass's share
+  times the picture's area over 400, `Nearness`) and `Glass` (each city
+  element's level; 0 dark, without glass, or farther off the screen than
+  twice `AirReach`).
+- **`FarmLight(farm, sources, x, y)`** - **`TFarmLight`** (`R`, `G`, `B`):
+  each source's colour times its power times `exp(-(d / reach)^2)`, the
+  reach `AirReach` at its nearness, a share under 1e-4 skipped.
+  **`Exposed(light, level)`** - `1 - exp(-c * level)` a channel.
+- **`FarmAirMesh(def, sources, cityOffset)`** - **`TFarmMesh`**
+  (**`TFarmCorner`** - `X`, `Y`, `Light`; `Indices`, three a triangle):
+  `FarmAirAlong` 64 by `FarmAirRound` 6 cells over the near half, the
+  corners projected by `FramePoint`, lit at `AirLevel`.
+  **`FarmApronMesh(def, sources, cityOffset)`** - a quad a foot
+  (`ApronFeet`, **`TApronFoot`**): the barrel's near foot a cell each, the
+  ends' near quarters in quads of half a row (`EndFootAt`), a gap of
+  `ApronGap` at every rib's foot; lit at the foot by the light 4 units over
+  it at `ApronLevel`, dark `ApronLength` out toward the eye; a foot off the
+  screen or behind the eye skipped.
 
 ### `Core/Levels.CityLife.pas` (~270 lines, 3.0.92)
 How bright each light of the chase's city is at a tick of the far plane's
@@ -8773,6 +8880,15 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   +1 (come back); `TBargeRideTests` +6 (the berth, the dock, the ride); `TBargeFlockTests` +5
   (closed, let go, dropped); `THullLivesTests` +4 (retired);
   `THeroOrbsTests` +1 and one more ask (the moon form shed).
+- 3.0.129: **`Levels/Tests.Levels.Capsule.pas`** - **`TCapsuleTests`** (9),
+  the capsule's shape against the stand's; **`Levels/Tests.Levels.Farm.pas`**
+  - **`TFarmGlowTests`** (5), the grow lights against the stand's ticks, and
+  **`TFarmLightTests`** (12), the sources, the light and the meshes;
+  **`TCapsuleFrameTests`** (6, new in `Tests.Render.DomeFrames` - the
+  stand's ribs, shadows and beacons of the capsule, the farm's ribs and
+  their dark); `TFarPlaneSunTests` +2 (the glare); `TFarPlaneReadTests` +6
+  (the farm read, a capsule's faults). 40 in all; the tables are in
+  `docs/testing/game.md`, "The farm".
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -9351,6 +9467,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The dive of the air fight (3.0.126): the fourth rung - dive, charge and mortar round after the window, the dive first; the eye's flash and the jets out for half a second, the magnet tucked in; the fall like a stone to just over the head of a hero on the main barge, the sweep striking a hero under it and smashing the small barges into shrapnel - bullets of a 2008 fan; the blow rocking the main barge; low, riding its deck, the jets caught again hot - the window - their fire burning under a nozzle; the rise | Game.Dive.pas (`TDive`) + Game.Takeoff.pas (`Douse`, `Relight`) + Game.Ram.pas (`TickTurns`, `BeginDive`, `CarryDive`, `DiveFloor`, `HeadClearance`, `HullSweep`, `HullStrikes`, `JetFireBurns`, `NozzlesSoft`, `NozzleHeatAt`, `HoldsFlock`, `DiveFromTier`, `TAirTurn.atDive`, cue `Dive`, the flash in `TickEye`) + Game.Moon.pas (`CarryOutDive`, `SmashUnderTheHull`, `SmashFlockBarge`, `SprayShrapnel`, `ShrapnelFan`, `OverTheHarbour`, `ResolveRamSweep`, `ResolveRamFire`, `DiveKnockWay`, `DiveBlowDepth`, `JetFireKnockWay`, the sound files) + Bullets.pas (`SpawnFan`) + tools/sounds/dive.py + Tests.Game.Dive.pas, Tests.Game.Takeoff.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-5) |
 | The ladder of the air fight (3.0.127): the turn after the magnet's window at random among the rung's weapons, never twice in a row, the newest first; the chains of the last rung - the dive at the throw, a shell under the shield; the finisher on the last stretch - the charge through and the dive out of the sky; the flock growing by the rung; point C and the End key's stop at it; the hull worn, shorting out and smoking by the rung | Game.Ladder.pas (`TAirLadder`, `AirTierOf`, `AirTurnsOf`, `AirDoorLives`) + Game.Ram.pas (`TickTurns`, `BeginAirTurn`, `DropFromAbove`, `HullWear`, `HullShortLevel`, `HullSmokeLevel`, `TickHullDamage`, `DrawDiveMark`) + Game.Charge.pas (`ceThrough`, `Gone`) + Game.Dive.pas (`StartAbove`, `dvMarking`, `MarkAt`) + Game.Takeoff.pas (`Settle`) + Game.Magnet.pas (tucked while cooling) + Game.Flock.pas (`Grow`) + Game.HullLives.pas (`Resume`, `RamHullLives` 240) + Game.Moon.pas (`FPastAirDoor`, `HullLivesShare`, `HullSpent`, `DebugJumpToAirDoor`, `DebugHullToNextDoor`) + Tests.Game.Ladder.pas and the other units' tests (+docs/mechanics/arena-3/ram-air.md, stage 18d-6) |
 | The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
+| The farm under the long dome (3.0.129): a capsule frame at the end of the city's strip, greenhouses whose glass glows on clocks of their own, their light in the dome's air, on its far ribs and on the floor in front of it, the sun's glare giving way to the glass - tick for tick as on the stand | Levels.Capsule.pas (`CapsulePoint`, `CapsuleShape`) + Levels.Farm.pas (`FarmGlowLevel`, `FarmView`, `FarmLight`, `Exposed`, `FarmAirMesh`, `FarmApronMesh`) + Levels.FarPlane.pas (`TDomeFrameKind`, `TCityFarm`, `GlareLevel`, `FramePoint`) + Render.DomeFrames.pas (`FrameEdges`, `CapsuleBeaconNodes`, `TFrameRib.Farm`, `Dark`, `DrawGlare`) + Render.FarPlane.pas (`LoadFarm`, `DrawGlass`, `DrawAir`, `DrawApron`, `DrawLightMesh`, `LightFarRibs`) + bin/chase-backdrop.json (`frames` dome-farm, `farm`) + chase-backdrop.mset (`agro-*`, `hall-*`, `svc-*` and their `-glow`) + tools/chase (`stand.template.html` - the reference, `make_glow.py`, `place_farm.py`, `pack_set.py`) + Tests.Levels.Capsule.pas, Tests.Levels.Farm.pas, Tests.Render.DomeFrames.pas, Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md, "The farm") |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
 | The bombs of the air fight (3.0.123): the first two rungs by the hull's lives - the nearest barge, then his barge first and a turn of the stern mortar after every window; the mortar rising, leaning, lobbing one shell at a time at the deck under his feet, folding; the shell riding its barge, no road aloft; a small barge knocked off, falling behind and sinking; the main barge rocked | Game.Mortar.pas (`TMortar`, `MortarTilt`) + Game.Ram.pas (`AirTier`, `AirTierSpent`, `TickMortar`, `MortarMuzzleAt`, `MortarPivotPoint`, `DrawMortar`, cue `MortarRises`, `TRamTarget.HullSpent`, `ShellsAloft`) + Game.Magnet.pas (`Waits`, `Cooled`) + Game.Shells.pas (`Lob` with a carrier, `Carry`, `HasRoad`, `Marked`, `LastRing`) + Game.Flock.pas (`Knock`, `Knocked`, `fpKnocked`) + Game.Moon.pas (`LobAtHisDeck`, `ShellCarrierOf`, `TickShellsAloft`, `AirLobRise`, `ShellRockDepth`, `MortarRiseSoundFile`, the debug key O) + `mortar` in tek-machine.mset + tools/sounds/mortar.py + Tests.Game.Mortar.pas, Tests.Game.Shells.pas, Tests.Game.Flock.pas, Tests.Game.Magnet.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-3) |
 | The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |

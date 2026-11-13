@@ -20,7 +20,7 @@ drawn by code.
 ```
 ground layer  near hills, a seamless band, y 276 down - in front of the tunnel, from the arena's first frame
 tunnel layer  |== screen 13 wall ==|~cliff~>
-city layer          (behind the cliff)  [ main dome frame + city ]==monorail==[ sat dome frame + industry ]  . ..  .  (outskirts)
+city layer          (behind the cliff)  [ main dome frame + city ]==monorail==[ sat dome frame + industry ]  . ..  .  (outskirts)  [==== farm under the long dome ====]
 ridge layer   ~~~~~~~~~~~~~~~~~~~~~~~~ far crater rim (seamless) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sky           black; the sun is code, fixed on the screen at (288, 208)
 ```
@@ -57,7 +57,12 @@ sky           black; the sun is code, fixed on the screen at (288, 208)
 - **The satellite dome**, industry (1300-1660): a coarser frame over the
   plant.
 - **The outskirts** - small clusters of low buildings on the open crater
-  (1700-2470), then empty crater: the last screen is the brake zone.
+  (1700-2290).
+- **The farm** (2290-2930, 3.0.129) - a long dome, a capsule, at the
+  depth of the domes, greenhouses under it glowing magenta, amber and blue:
+  the lantern on the horizon the flight runs into after the fight ("The
+  farm", below). Its far half lies past the city layer's end: the brake
+  parks the dome in the frame as the flight stands.
 
 The city layer is 2688 units long, 5.25 screens.
 
@@ -452,6 +457,115 @@ looks, written back by the download. The game (3.0.95) plays them tick
 for tick: the clock and the beam are `Levels.Searchlights`, the strip,
 the spot and the glints `Render.FarPlane`.
 
+## The farm (3.0.129)
+
+Stage 19a of arena 3 (`arena-3/plan.md`): the flight, slowing after the
+fight, runs into a second, long dome full of greenhouses - a lantern on the
+horizon where the strip had an empty tail. Decided 2026-11-12/13
+(direction 1, "the lantern on the horizon"): the strip keeps its length
+(2688), the city's brake parks the dome by the end of the air fight (the
+fight lasts over two minutes); a dome brought in by the Ram's lives was
+weighed and left.
+
+**The dome is a capsule** (`frames`, `"kind": "capsule"`, `Levels.Capsule`):
+a barrel vault with a quarter dome at each end, 640 long, 90 high, 220 deep
+(`w`, `h`, `d`), its centre line at the domes' base line, at x 2290 of the
+city layer. Glass on a frame, the frame a diagrid: `rows` (12) of nodes go
+round the arch from the far foot over the crown to the near one, every
+other row shifted by half a cell, each node tied to its two neighbours in
+the row above - triangles in a slant, a purlin along each row; `cells`
+(16) along the barrel; at the ends the rows run on into the quarter domes
+(`capCells` 5 of turn) and close onto the ends' feet, so the ribs fan out
+of the two poles at the dome's foot. Every `beltEvery` (4) cells a heavy
+arch, a belt (2.2 ribs thick), crosses the barrel, at its ends too; the
+foot is the ring (1.6). `rib` 0.85. It is lit, shaded and throws its
+shadows as the city's frames do; `tintsSun` - pink-orange while it stands
+before the sun; `beaconsAbove` 0.9 - red lights along its crown, each with
+a seed of its own (the seed's key carries the node's row since 3.0.129:
+before, the two rows either side of the crown blinked in pairs).
+
+The feet, the crown and the end of an end's turn are exact zeros, on the
+stand and in the game: a `cos(PI / 2)` of the arithmetic carries a sign of
+its own (`6e-17` in JavaScript, `-2.5e-20` on the game's x87), and the
+crown changed halves and the feet threw a shadow of no length.
+
+**The greenhouses come from sheets** (`agro-01..05`, `hall-01..32`,
+`svc-01..12` of the kit, cut by `cut_sheet.py`): long glass halls, vaults,
+racks and the service pieces between them, their glass glowing from inside.
+The palette is the grow light's: hot magenta, amber sodium and blue (the
+blue came out in place of a cold white and was kept). `place_farm.py` made
+the first placement - 86 pieces in rows at six depths inside the capsule's
+footprint, the big ones in the middle rows, the deeper rows darker (shade
+0.30 at the back to 0.45 at the front), seed 19; the outskirts' three
+houses under the dome taken out. From there by hand on the stand.
+
+**The glass is a picture of its own** (`make_glow.py`): the shade puts a
+greenhouse in the night with the rest of the city, and the glass with it;
+the glass is the one thing of the farm that shines. So `<id>-glow` is the
+piece's own pixels where its glass is lit - found by its colour, saturated
+and bright in one of the three hues - its alpha the share of the glow. It
+is drawn over the shaded piece at the grow light's level, not shaded
+(the game: the vertices white, the alpha the level). Its mean colour, the
+centre of its glass and its share of the picture go into the layout
+(`farm.glass`): the light of the air is gathered from them.
+`pack_set.py` packs each `<id>-glow` after its piece.
+
+**The grow lights** (`farm.glow`): each greenhouse on a clock of its own,
+seeded by its place in the city's list (`Mix(4096 + i)`, the dice of
+`Levels.CityLife`): its time cut into spans of `spanTicks` (900-2400), a
+share `onShare` (0.85) of them lit; a light switched on after a dark span
+catches with a flicker over `flickerTicks` (12 - two ticks out of every
+four) and warms up over `warmTicks` (90), a sodium lamp's way; one
+switched off goes out at once. The halls burn out of step.
+
+**The light** (`farm.air`, `farm.apron`). Each lit greenhouse is a source:
+its glass's colour, at its glass's centre, as strong as its glass's share
+of its picture times the picture's size over a hall's (400 square units),
+falling off as `exp(-(d / reach)^2)`, `reach` (40) at its nearness. Many
+halls together brighten a light toward full and never past it, so it keeps
+its colour: `1 - exp(-light * level)`. With it:
+- **the air** of the dome (`level` 0.07): taken at the corners of a mesh
+  over the dome's near half - the half that covers its silhouette, 64
+  along by 6 round - and added over the buildings, under the near ribs;
+- **the far ribs** (`ribLevel` 0.1): they turn their inner face to the
+  eye, and the light at a rib's middle lightens its dark;
+- **the apron** (`length` 160, `level` 0.2, `gap` 1.2): the light out of
+  the glass on the floor in front of the dome, from its near foot toward
+  the eye, the air's light at the foot fading to nothing; the ribs' feet
+  throw gaps - the barrel's at every cell, the ends' at their rows. Drawn
+  twice, clipped as the shadows are: on the crater floor's band after the
+  frames' shadows, and over the near hills after theirs.
+
+**The sun behind it** (decided 2026-11-13, fork (b)): in the flight's end
+the sun stands behind the farm, pink. The glare over the ribs that cross
+its disc washed the greenhouses round it into a haze; so while the farm's
+dome stands before the disc the glare gives way to the glass - down to
+`farm.glareKeep` (0.3) of itself, eased in by the tint's own ramp, so it
+goes as the sun turns pink. 0.5 left a halo on the ribs; 0 made the ribs
+across the disc dark sticks and the sun a sticker. The other domes keep
+their glare whole.
+
+**On the stand**: the farm shows in the mode "the flight" (from point B,
+the flight at four times, the fight over at N seconds, 2 s on, 6 s of the
+slowdown). With the fight over at 220 s: the dome comes in on the right at
+about 111 s, takes the sun from 146.7 s (half at 153, whole at 160.5),
+the world stands at 228 s. With the fight over at 150 s the world stands
+at 158 s. The switch "farm light" turns off the glass and its light; the
+farm's numbers are in the bar of the looks ("glare over the farm" among
+them), written back by the download. Guides show the barge, the docked
+road and where the titles' logo will flare.
+
+**What the game plays** (3.0.129): what the stand plays, tick for tick -
+the capsule through `Render.DomeFrames` (its edges and nodes
+`Levels.Capsule`'s, the far ribs of the farm marked and lit by
+`Render.FarPlane`), the grow lights, the sources, the air's and the apron's
+meshes (`Levels.Farm`), the glass over each piece, the air and the apron
+added through `SDL_RenderGeometry` (`SDL_BLENDMODE_ADD`, no texture), the
+glare by `TFarPlaneDef.GlareLevel`. Checked against the stand by the
+numbers: the capsule's 1272 edges and 291 nodes to the bit, 5612 ticks of
+the grow lights, the sources and both meshes at 150, 200 and 230 s within
+1e-13.
+
 ## The order of work
 
 1. The cliff - it joins screen 13 and sets the tone. **In the set.**
@@ -482,6 +596,8 @@ python tools/chase/make_seamless.py <in>.png <work>/<id>.png     (bands only)
 python tools/chase/cut_sheet.py <sheet>.png <prefix> <work> <n>   (the city's sheets)
 python tools/chase/find_lights.py [--write] [--skip id,id] [--windows id,id]   (the city's lights, from the set)
 python tools/chase/make_emblem.py <emblem>.png                   (the TEK sign, into the set; after pack_set)
+python tools/chase/make_glow.py <work> agro,hall,svc [--write]   (the farm's glass, beside its pieces)
+python tools/chase/place_farm.py [seed]                          (the farm's first placement)
 python tools/chase/pack_set.py <work>
 python tools/chase/build_stand.py chase-stand.html
 ```
@@ -512,7 +628,14 @@ python tools/chase/build_stand.py chase-stand.html
   them, so the emblem is made again after a repack.
 - `pack_set.py` packs `<work>` into `bin/sprites/chase-backdrop.mset` in the
   layout's order, each picture once, every piece of the kit placed or not; an
-  element not generated yet is left out. The tools read the layout from
+  element not generated yet is left out. Each `<id>-glow` goes after its
+  piece; the set's pictures the layout does not name (the emblem's) are kept.
+- `make_glow.py` finds the lit glass of the farm's pieces by its colour and
+  writes `<id>-glow.png` beside each; `--write` puts each piece's light -
+  colour, centre, share - into the layout's `farm.glass`.
+- `place_farm.py` places the farm's pieces in rows at six depths inside the
+  capsule's footprint and takes the city's buildings out of it; the city
+  layer is written one element to a line, the rest of the file as it was. The tools read the layout from
   `bin/chase-backdrop.json`.
 - `build_stand.py` writes one HTML page from `stand.template.html`, the
   layout, the set and screen 13's backdrop: the chase played over time,
@@ -682,6 +805,10 @@ BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no
 ```
 
 ## Open
+
+- The farm's numbers (3.0.129): the grow lights' spans, the air's, the
+  ribs' and the apron's levels, the glare's 0.3 - the stand's tuning, for
+  the live run.
 
 - The searchlights' numbers (3.0.95): levels, spread and pauses are the
   stand's first tuning, for the live run.

@@ -71,6 +71,19 @@ As decided above; the numbers are first guesses for the live run.
 - First guesses for the live run: the throe's second and its shudder; where it bursts; the pieces' cut (3 by 2), their scatter, hop, tumble and the moon's 0.05; the wind's 0.008; the fire's look on a piece (the barges'); the series' 8 blasts and their 9-14 ticks; the two seconds before the slowdown and its six; the road's coming in and the dock (about 1.8 s into it); the ride to the left edge; the dock's rock; the silence of two seconds before Legendary; the four sounds' levels; the bar retiring as the hull cracks; the carry's pace (the hoist's 3 a tick) from a small barge high up.
 - Not built, on purpose: the titles (F1-F6) and with them `gsFinale`; the boss def's `ending` key of Part 1 - the Ram is no monster of `monsters.json`, its end is its own; the scene `s13-end` - the belt, the road and the barge are not the scenes' vocabulary.
 
+## The final picture (3.0.129)
+Stage 19a of arena 3 (`chase-backdrop.md`, "The farm"): the picture the
+world stands on at the end of the flight is no longer the empty tail of the
+crater. Behind the docked barge and the road, at the end of the city's
+strip, stands the farm - a long dome of glass on a diagrid, the greenhouses
+under it glowing magenta, amber and blue, burning out of step; their light
+fills the dome's air and spills onto the crater floor in front of it. The
+sun stands behind the dome, pink; its glare over the dome is softened to
+0.3 so it does not wash the greenhouses into a haze. The city's brake parks
+the dome in the frame by the end of a fight of two minutes and more; a
+shorter fight stands with the dome coming in on the right. The titles
+(F1-F6) and the climb will stand on this picture.
+
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:
 - A key in the boss def (`"ending": "finale"`, `"advance"` by default) turns the victory track off and, when the timer dries, starts the titles instead of loading the next level.
