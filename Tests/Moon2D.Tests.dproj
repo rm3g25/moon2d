@@ -121,6 +121,8 @@
         <DCCReference Include="Levels\Tests.Levels.CityLife.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Monorail.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Searchlights.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Capsule.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Farm.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Doors.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Grid.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Entities.pas"/>

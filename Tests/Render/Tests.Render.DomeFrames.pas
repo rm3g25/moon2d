@@ -19,8 +19,14 @@
   so - none on a frame without a share; the far ones behind its centre, the
   near ones in front; they ride with the city.
 
-  How the ribs look - the dark, the rim's colour, the smoothing of their
-  edges, the glare - has no test here: none of it shows without drawing.
+  A capsule - the farm's long dome of the layout - is the stand's rib for
+  rib: as many far and near, the crown in front with the near half, as many
+  shadows - its feet throw none - and as many beacons behind and in front,
+  each with a seed of its own. Its ribs are the farm's when the farm stands
+  under it, and every rib carries the frames' dark till the farm lights it.
+
+  How the ribs look - the rim's colour, the smoothing of their edges, the
+  glare - has no test here: none of it shows without drawing.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -90,6 +96,30 @@ type
     procedure TestBeaconsFarBehindNearInFront;
     [Test]
     procedure TestBeaconsRideWithTheCity;
+  end;
+
+  [TestFixture]
+  TCapsuleFrameTests = class
+  private
+    FDef: TFarPlaneDef;
+    function Centred: Double;
+    function View: TFrameView;
+  public
+    [Setup]
+    procedure Setup;
+
+    [Test]
+    procedure TestRibsAreTheStands;
+    [Test]
+    procedure TestCrownStandsWithTheNearHalf;
+    [Test]
+    procedure TestShadowsAreTheStands;
+    [Test]
+    procedure TestBeaconsAreTheStandsEachItsOwnSeed;
+    [Test]
+    procedure TestRibsAreTheFarmsUnderTheFarm;
+    [Test]
+    procedure TestRibsCarryTheFramesDark;
   end;
 
 implementation
@@ -492,7 +522,126 @@ begin
   end;
 end;
 
+// TCapsuleFrameTests
+
+const
+  // The layout's dome-farm of the day the tests were written
+  CapsuleX = 2290;
+  CapsuleLength = 640;
+  CapsuleDepth = 220;
+  CapsuleHeight = 90;
+  CapsuleRows = 12;
+  CapsuleCells = 16;
+  CapsuleBeltEvery = 4;
+  CapsuleCapCells = 5;
+  CapsuleRib = 0.85;
+  CapsuleBeaconsAbove = 0.9;
+  // The stand's frameRibs over it, centred
+  StandCapsuleFar = 623;
+  StandCapsuleNear = 649;
+  StandCapsuleCrown = 26;
+  StandCapsuleShadows = 320;
+  StandCapsuleFarBeacons = 18;
+  StandCapsuleNearBeacons = 37;
+  FrameDark: TSdlColor = (R: 26; G: 23; B: 21; A: 255);
+
+procedure TCapsuleFrameTests.Setup;
+begin
+  FDef := StandDef;
+  var Capsule := Default(TDomeFrame);
+  Capsule.Id := 'dome-farm';
+  Capsule.Kind := fkCapsule;
+  Capsule.X := CapsuleX;
+  Capsule.W := CapsuleLength;
+  Capsule.D := CapsuleDepth;
+  Capsule.H := CapsuleHeight;
+  Capsule.Rows := CapsuleRows;
+  Capsule.Cells := CapsuleCells;
+  Capsule.BeltEvery := CapsuleBeltEvery;
+  Capsule.CapCells := CapsuleCapCells;
+  Capsule.Rib := CapsuleRib;
+  Capsule.Beacons := True;
+  Capsule.BeaconsAbove := CapsuleBeaconsAbove;
+  FDef.Frames := [Capsule];
+end;
+
+function TCapsuleFrameTests.Centred: Double;
+begin
+  Result := CapsuleX + CapsuleLength / 2 - Middle;
+end;
+
+function TCapsuleFrameTests.View: TFrameView;
+begin
+  var Frames := TDomeFrames.Create(FDef);
+  try
+    Result := Frames.View(Centred);
+  finally
+    Frames.Free;
+  end;
+end;
+
+procedure TCapsuleFrameTests.TestRibsAreTheStands;
+begin
+  var Shown := View;
+  Assert.AreEqual(StandCapsuleFar, Integer(Length(Shown.Far)), 'Far');
+  Assert.AreEqual(StandCapsuleNear, Integer(Length(Shown.Near)), 'Near');
+  for var Rib in Shown.Far do
+    Assert.IsTrue(Rib.Z > 0, 'Behind its centre');
+end;
+
+procedure TCapsuleFrameTests.TestCrownStandsWithTheNearHalf;
+begin
+  var Crown := 0;
+  for var Rib in View.Near do
+    if Rib.Z = 0 then
+      Inc(Crown);
+  Assert.AreEqual(StandCapsuleCrown, Crown, 'The crown''s purlins, exactly between');
+end;
+
+procedure TCapsuleFrameTests.TestShadowsAreTheStands;
+begin
+  Assert.AreEqual(StandCapsuleShadows, Integer(Length(View.Shadows)));
+end;
+
+procedure TCapsuleFrameTests.TestBeaconsAreTheStandsEachItsOwnSeed;
+begin
+  var Shown := View;
+  Assert.AreEqual(StandCapsuleFarBeacons, Integer(Length(Shown.FarBeacons)), 'Behind');
+  Assert.AreEqual(StandCapsuleNearBeacons, Integer(Length(Shown.NearBeacons)), 'In front');
+  var Seeds := TList<Cardinal>.Create;
+  try
+    for var Beacon in AllBeacons(Shown) do
+    begin
+      Assert.IsFalse(Seeds.Contains(Beacon.Seed), 'A seed of its own');
+      Seeds.Add(Beacon.Seed);
+    end;
+  finally
+    Seeds.Free;
+  end;
+end;
+
+procedure TCapsuleFrameTests.TestRibsAreTheFarmsUnderTheFarm;
+begin
+  for var Rib in AllRibs(View) do
+    Assert.IsFalse(Rib.Farm, 'No farm, no farm''s rib');
+  FDef.Farm.Present := True;
+  FDef.Farm.Frame := 0;
+  for var Rib in AllRibs(View) do
+    Assert.IsTrue(Rib.Farm, 'The farm''s');
+end;
+
+procedure TCapsuleFrameTests.TestRibsCarryTheFramesDark;
+begin
+  for var Rib in AllRibs(View) do
+  begin
+    Assert.AreEqual(Integer(FrameDark.R), Integer(Rib.Dark.R), 'Red');
+    Assert.AreEqual(Integer(FrameDark.G), Integer(Rib.Dark.G), 'Green');
+    Assert.AreEqual(Integer(FrameDark.B), Integer(Rib.Dark.B), 'Blue');
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TDomeFramesTests);
+  TDUnitX.RegisterTestFixture(TCapsuleFrameTests);
 
 end.

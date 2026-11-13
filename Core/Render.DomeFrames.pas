@@ -1,16 +1,17 @@
 ﻿{
   Render.DomeFrames - the dome frames of a chase's city (Levels.FarPlane):
-  geodesic half-ellipsoids drawn by code in a 3D of their own, riding with
-  the city past the sun that stands still.
+  geodesic half-ellipsoids and capsules drawn by code in a 3D of their own,
+  riding with the city past the sun that stands still.
 
   A frame is an icosahedron cut Frequency times along each side and pushed
   out onto the sphere, a vertex at the top, cut at the equator; the equator
   itself is the ring it stands on. It is built once, then stretched to the
-  frame's width and height and seen through the city's camera: the far half
-  stands behind the buildings, the near half over them, so the city stands
-  inside. Lit from behind, nothing of a frame faces the eye in the light: a
-  rib is a dark silhouette with a thin rim on its side toward the sun,
-  brighter the nearer the sun it runs. The ribs throw long shadows toward
+  frame's width and height; a capsule's frame is Levels.Capsule's. A frame
+  is seen through the city's camera: the far half stands behind the
+  buildings, the near half over them, so the city stands inside. Lit from
+  behind, nothing of a frame faces the eye in the light: a rib is a dark
+  silhouette with a thin rim on its side toward the sun, brighter the
+  nearer the sun it runs. The ribs throw long shadows toward
   the eye: the sun is low, so a shadow streams down the crater floor and on
   over the near ground, cut where it passes the eye. The sun is a disc, not
   a point: past its rib a shadow softens and widens, its penumbra spread by
@@ -20,7 +21,9 @@
   the ribs that cross its disc. A frame may carry red beacons on its nodes
   above a share of its height: they ride in 3D with it, the far ones
   behind the buildings, the near ones with the near ribs; each one's seed
-  is its place on the frame (Levels.CityLife). The stand
+  is its place on the frame (Levels.CityLife). The far ribs of the farm's
+  dome turn their inner face to the eye: the caller lights their dark
+  (TFrameRib.Dark, Levels.Farm). The stand
   (tools/chase/stand.template.html) is the reference, number for number.
 
   TDomeFrames is the geometry: it does not touch SDL - the ribs, the
@@ -56,6 +59,10 @@ type
     Z: Single;
     Normal: TSdlFPoint;
     Light: Single;
+    // A rib of the farm's dome
+    Farm: Boolean;
+    // Its colour, the rim's aside
+    Dark: TSdlColor;
   end;
 
   // A point along a rib's shadow, in units: its middle, the half width of
@@ -95,16 +102,14 @@ type
 
   TDomeFrames = class
   private type
-    TPoint3 = record
-      X, Y, Z: Double;
-    end;
-    // An edge on the unit half-sphere: Y up, Z into the screen
+    TPoint3 = TFramePoint;
+    // An edge in units from its frame's centre on the base line: Y up, Z
+    // into the screen; its thickness in ribs
     TEdge = record
       A, B: TPoint3;
-      // The ring the frame stands on, thicker than a rib
-      Ring: Boolean;
+      Thickening: Single;
     end;
-    // A node of a frame that carries a beacon, on the unit half-sphere
+    // A node of a frame that carries a beacon, in units as an edge's
     TBeaconNode = record
       At: TPoint3;
       Seed: Cardinal;
@@ -119,7 +124,7 @@ type
     end;
   private
     FDef: TFarPlaneDef;
-    // By frame; frames of one frequency share them
+    // By frame
     FEdges: TArray<TArray<TEdge>>;
     // By frame; empty for a frame without beacons
     FBeaconNodes: TArray<TBeaconNodes>;
@@ -127,18 +132,18 @@ type
     FToSun: TPoint3;
     // The sun's disc as seen from the scene: its radius over the focal length
     FSunSpread: Double;
-    function SharedEdges(AFrame: Integer): TArray<TEdge>;
+    function FrameEdges(AFrame: Integer): TArray<TEdge>;
     function BeaconNodes(AFrame: Integer): TBeaconNodes;
-    function Project(const AFrame: TDomeFrame; ACityOffset: Double;
-      const AAt: TPoint3; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
+    function CapsuleBeaconNodes(AFrame: Integer): TBeaconNodes;
     function DropToFloor(const AAt: TPoint3): TPoint3;
     function CutAtEye(const AFrom, ATo: TPoint3;
       out AFromShare, AToShare: Double): Boolean;
     procedure LightRim(var ARib: TFrameRib);
     procedure AddFrame(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
     procedure AddBeacons(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
+    // AOfFarm - the frame is the farm's dome
     procedure AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
-      const AEdge: TEdge; var AFill: TViewFill);
+      const AEdge: TEdge; AOfFarm: Boolean; var AFill: TViewFill);
     // AThickness - the rib's own, at the frame's centre
     procedure AddShadow(const AFrame: TDomeFrame; ACityOffset: Double;
       const AFrom, ATo: TPoint3; AThickness: Single; var AFill: TViewFill);
@@ -192,15 +197,16 @@ type
     procedure DrawShadows(const AShadows: TArray<TRibShadow>; const AClip: TSdlRect);
     procedure DrawRibs(const ARibs: TArray<TFrameRib>);
     // ACover - how far the domes before the sun have turned it
-    // (TFarPlaneDef.SunCover)
-    procedure DrawGlare(ACover: Single);
+    // (TFarPlaneDef.SunCover), ALevel - how much of itself it keeps
+    // (TFarPlaneDef.GlareLevel)
+    procedure DrawGlare(ACover, ALevel: Single);
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
-  System.Generics.Defaults, Render.Brush, Render.Glow, Levels.CityLife;
+  System.Generics.Defaults, Render.Brush, Render.Glow, Levels.CityLife, Levels.Capsule;
 
 type
   TPoint3 = TDomeFrames.TPoint3;
@@ -226,9 +232,6 @@ const
   UnderEquator = -1E-6;
   OverEquator = 1E-6;
   RingSegments = 96;
-  RingThickening = 1.6;
-  // A point nearer the eye than this share of the focal length is behind it
-  NearestShare = 0.15;
   // A shadow is cut this many units in front of that plane: cut on it, the
   // arithmetic could put its end behind it
   EyeCutMargin = 1E-3;
@@ -277,11 +280,18 @@ begin
     Round(APoint.Y * PointKeyScale), Round(APoint.Z * PointKeyScale)]);
 end;
 
-function Edge(const AFrom, ATo: TPoint3; ARing: Boolean): TEdge;
+// A point of the unit half-sphere on a frame ARadius wide each way and
+// AHeight tall
+function Stretched(const APoint: TPoint3; ARadius, AHeight: Double): TPoint3;
+begin
+  Result := Point3(APoint.X * ARadius, APoint.Y * AHeight, APoint.Z * ARadius);
+end;
+
+function Edge(const AFrom, ATo: TPoint3; AThickening: Single): TEdge;
 begin
   Result.A := AFrom;
   Result.B := ATo;
-  Result.Ring := ARing;
+  Result.Thickening := AThickening;
 end;
 
 // The corners on the unit sphere, turned about X so that the top corner
@@ -323,7 +333,7 @@ var
       Exit;
     if (AFrom.Y >= UnderEquator) and (ATo.Y >= UnderEquator) then
     begin
-      Edges.Add(Edge(AFrom, ATo, False));
+      Edges.Add(Edge(AFrom, ATo, 1));
       Exit;
     end;
     var Under := AFrom;
@@ -335,7 +345,7 @@ var
     end;
     var Cut: Double := Over.Y / (Over.Y - Under.Y);
     Edges.Add(Edge(Over, Point3(Over.X + (Under.X - Over.X) * Cut, 0,
-      Over.Z + (Under.Z - Over.Z) * Cut), False));
+      Over.Z + (Under.Z - Over.Z) * Cut), 1));
   end;
 
   // A point of a face's grid, AAlong steps toward its second corner and
@@ -380,7 +390,7 @@ begin
       var FromAngle := i / RingSegments * 2 * Pi;
       var ToAngle := (i + 1) / RingSegments * 2 * Pi;
       Edges.Add(Edge(Point3(Cos(FromAngle), 0, Sin(FromAngle)),
-        Point3(Cos(ToAngle), 0, Sin(ToAngle)), True));
+        Point3(Cos(ToAngle), 0, Sin(ToAngle)), FrameRingThickening));
     end;
     Result := Edges.ToArray;
   finally
@@ -438,8 +448,11 @@ begin
   SetLength(FBeaconNodes, Length(FDef.Frames));
   for var i := 0 to High(FDef.Frames) do
   begin
-    FEdges[i] := SharedEdges(i);
-    FBeaconNodes[i] := BeaconNodes(i);
+    FEdges[i] := FrameEdges(i);
+    if FDef.Frames[i].Kind = fkCapsule then
+      FBeaconNodes[i] := CapsuleBeaconNodes(i)
+    else
+      FBeaconNodes[i] := BeaconNodes(i);
   end;
 
   var Focal: Double := FDef.Camera.Focal;
@@ -455,17 +468,31 @@ begin
   Result := Length(FDef.Frames) > 0;
 end;
 
-function TDomeFrames.SharedEdges(AFrame: Integer): TArray<TEdge>;
+// A capsule's are its own; a dome's the geodesic's on the unit half-sphere,
+// stretched to its width and height
+function TDomeFrames.FrameEdges(AFrame: Integer): TArray<TEdge>;
 begin
-  var Frequency := FDef.Frames[AFrame].Frequency;
-  for var i := 0 to AFrame - 1 do
-    if FDef.Frames[i].Frequency = Frequency then
-      Exit(FEdges[i]);
-  Result := BuildGeodesic(Frequency);
+  var Frame := FDef.Frames[AFrame];
+  if Frame.Kind = fkCapsule then
+  begin
+    var Shape := CapsuleShape(Frame);
+    SetLength(Result, Length(Shape.Edges));
+    for var i := 0 to High(Shape.Edges) do
+      Result[i] := Edge(Shape.Edges[i].A, Shape.Edges[i].B, Shape.Edges[i].Thickening);
+    Exit;
+  end;
+
+  Result := BuildGeodesic(Frame.Frequency);
+  var Radius: Double := Frame.W / 2;
+  for var i := 0 to High(Result) do
+  begin
+    Result[i].A := Stretched(Result[i].A, Radius, Frame.H);
+    Result[i].B := Stretched(Result[i].B, Radius, Frame.H);
+  end;
 end;
 
 // Every end of an edge above the equator once, the ones above the frame's
-// share of its height kept
+// share of its height kept; the seed by the place on the unit half-sphere
 function TDomeFrames.BeaconNodes(AFrame: Integer): TBeaconNodes;
 var
   Frame: TDomeFrame;
@@ -481,7 +508,7 @@ var
     if APoint.Y <= Frame.BeaconsAbove then
       Exit;
     var Node: TBeaconNode;
-    Node.At := APoint;
+    Node.At := Stretched(APoint, Frame.W / 2, Frame.H);
     Node.Seed := BeaconSeed(AFrame, APoint.X, APoint.Z);
     Nodes := Nodes + [Node];
   end;
@@ -493,7 +520,7 @@ begin
     Exit(Nodes);
   Seen := TDictionary<string, Boolean>.Create;
   try
-    for var Edge in FEdges[AFrame] do
+    for var Edge in BuildGeodesic(Frame.Frequency) do
     begin
       Take(Edge.A);
       Take(Edge.B);
@@ -504,20 +531,22 @@ begin
   Result := Nodes;
 end;
 
-// AAt - X across, Y up, Z into the screen, from the frame's centre on its
-// base line; False - behind the eye
-function TDomeFrames.Project(const AFrame: TDomeFrame; ACityOffset: Double;
-  const AAt: TPoint3; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
+// The capsule's nodes above the frame's share of its height
+function TDomeFrames.CapsuleBeaconNodes(AFrame: Integer): TBeaconNodes;
 begin
-  var Camera := FDef.Camera;
-  Result := Camera.Focal + AAt.Z >= Camera.Focal * NearestShare;
-  if not Result then
+  Result := [];
+  var Frame := FDef.Frames[AFrame];
+  if not Frame.Beacons then
     Exit;
-  ANearness := Camera.Focal / (Camera.Focal + AAt.Z);
-  var Middle: Double := FDef.ScreenWidth / 2;
-  var Centre: Double := AFrame.X + AFrame.W / 2 - ACityOffset - Middle;
-  AScreen.X := Middle + (Centre + AAt.X) * ANearness;
-  AScreen.Y := Camera.Horizon + (Camera.BaseY - Camera.Horizon - AAt.Y) * ANearness;
+  for var Node in CapsuleShape(Frame).Nodes do
+  begin
+    if Node.At.Y / Frame.H <= Frame.BeaconsAbove then
+      Continue;
+    var Beacon: TBeaconNode;
+    Beacon.At := Node.At;
+    Beacon.Seed := BeaconSeed(AFrame, Node.KeyX, Node.KeyZ);
+    Result := Result + [Beacon];
+  end;
 end;
 
 // Along the sun's light down to the floor: toward the eye, and long - the
@@ -535,7 +564,7 @@ end;
 function TDomeFrames.CutAtEye(const AFrom, ATo: TPoint3;
   out AFromShare, AToShare: Double): Boolean;
 begin
-  var Plane: Double := FDef.Camera.Focal * (NearestShare - 1) + EyeCutMargin;
+  var Plane: Double := FDef.Camera.Focal * (FrameNearestShare - 1) + EyeCutMargin;
   AFromShare := 0;
   AToShare := 1;
   Result := (AFrom.Z >= Plane) or (ATo.Z >= Plane);
@@ -587,7 +616,7 @@ begin
   begin
     var Share: Double := FromShare + (ToShare - FromShare) * i / (ShadowSamples - 1);
     var Caster := PointBetween(AFrom, ATo, Share);
-    if not Project(AFrame, ACityOffset, DropToFloor(Caster), Shadow.Samples[i].At,
+    if not FDef.FramePoint(AFrame, ACityOffset, DropToFloor(Caster), Shadow.Samples[i].At,
       Nearness) then
       Exit;
     var Spread: Double := FSunSpread * Caster.Y / FToSun.Y;
@@ -603,22 +632,21 @@ begin
 end;
 
 procedure TDomeFrames.AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
-  const AEdge: TEdge; var AFill: TViewFill);
+  const AEdge: TEdge; AOfFarm: Boolean; var AFill: TViewFill);
 var
   Rib: TFrameRib;
   NearnessA, NearnessB: Single;
 begin
-  var Radius: Double := AFrame.W / 2;
-  var From := Point3(AEdge.A.X * Radius, AEdge.A.Y * AFrame.H, AEdge.A.Z * Radius);
-  var Till := Point3(AEdge.B.X * Radius, AEdge.B.Y * AFrame.H, AEdge.B.Z * Radius);
-  if not Project(AFrame, ACityOffset, From, Rib.A, NearnessA) or
-    not Project(AFrame, ACityOffset, Till, Rib.B, NearnessB) then
+  var From := AEdge.A;
+  var Till := AEdge.B;
+  if not FDef.FramePoint(AFrame, ACityOffset, From, Rib.A, NearnessA) or
+    not FDef.FramePoint(AFrame, ACityOffset, Till, Rib.B, NearnessB) then
     Exit;
   Rib.Z := (From.Z + Till.Z) / 2;
-  var Thickness: Single := AFrame.Rib;
-  if AEdge.Ring then
-    Thickness := Thickness * RingThickening;
+  var Thickness: Single := AFrame.Rib * AEdge.Thickening;
   Rib.W := Thickness * (NearnessA + NearnessB) / 2;
+  Rib.Farm := AOfFarm;
+  Rib.Dark := RibDark;
   LightRim(Rib);
 
   if Rib.Z > 0 then
@@ -645,12 +673,13 @@ var
 begin
   var Frame := FDef.Frames[AFrame];
   var Radius: Double := Frame.W / 2;
-  Project(Frame, ACityOffset, Point3(-Radius, 0, 0), Left, Nearness);
-  Project(Frame, ACityOffset, Point3(Radius, 0, 0), Right, Nearness);
+  FDef.FramePoint(Frame, ACityOffset, Point3(-Radius, 0, 0), Left, Nearness);
+  FDef.FramePoint(Frame, ACityOffset, Point3(Radius, 0, 0), Right, Nearness);
   if (Right.X < -Radius) or (Left.X > FDef.ScreenWidth + Radius) then
     Exit;
+  var OfFarm := FDef.Farm.Present and (FDef.Farm.Frame = AFrame);
   for var Edge in FEdges[AFrame] do
-    AddEdge(Frame, ACityOffset, Edge, AFill);
+    AddEdge(Frame, ACityOffset, Edge, OfFarm, AFill);
   AddBeacons(AFrame, ACityOffset, AFill);
 end;
 
@@ -660,11 +689,9 @@ var
   Beacon: TFrameBeacon;
 begin
   var Frame := FDef.Frames[AFrame];
-  var Radius: Double := Frame.W / 2;
   for var Node in FBeaconNodes[AFrame] do
   begin
-    var At := Point3(Node.At.X * Radius, Node.At.Y * Frame.H, Node.At.Z * Radius);
-    if not Project(Frame, ACityOffset, At, Beacon.At, Beacon.Nearness) then
+    if not FDef.FramePoint(Frame, ACityOffset, Node.At, Beacon.At, Beacon.Nearness) then
       Continue;
     Beacon.Seed := Node.Seed;
     // The top stands at Z 0, near on the stand; the FPU's extended
@@ -908,9 +935,9 @@ begin
   for var Rib in ARibs do
   begin
     var Width: Single := Max(Rib.W, FPixel);
-    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, 0, Width / 2), RibDark);
-    AddDisc(Rib.A, Width / 2, RibDark);
-    AddDisc(Rib.B, Width / 2, RibDark);
+    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, 0, Width / 2), Rib.Dark);
+    AddDisc(Rib.A, Width / 2, Rib.Dark);
+    AddDisc(Rib.B, Width / 2, Rib.Dark);
     if Rib.Light < LeastRim then
       Continue;
     var Rim := RimColor;
@@ -924,14 +951,14 @@ begin
   Flush;
 end;
 
-procedure TDomeFramePainter.DrawGlare(ACover: Single);
+procedure TDomeFramePainter.DrawGlare(ACover, ALevel: Single);
 begin
   var Color := FSun.ColorAt(ACover);
   var Reach: Single := FSun.Disc * GlareReach;
   DrawGlow(FRenderer, FGlow, FSun.X, FSun.Y, Reach * GlareWideSize, Color,
-    GlareWideLevel);
+    GlareWideLevel * ALevel);
   DrawGlow(FRenderer, FGlow, FSun.X, FSun.Y, Reach * GlareCoreSize, Color,
-    GlareCoreLevel);
+    GlareCoreLevel * ALevel);
 end;
 
 end.

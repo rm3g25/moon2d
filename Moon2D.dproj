@@ -182,6 +182,8 @@
         <DCCReference Include="Core\Levels.CityLife.pas"/>
         <DCCReference Include="Core\Levels.Monorail.pas"/>
         <DCCReference Include="Core\Levels.Searchlights.pas"/>
+        <DCCReference Include="Core\Levels.Capsule.pas"/>
+        <DCCReference Include="Core\Levels.Farm.pas"/>
         <DCCReference Include="Core\Levels.Defs.pas"/>
         <DCCReference Include="Core\Levels.Events.pas"/>
         <DCCReference Include="Core\Levels.Scenes.pas"/>

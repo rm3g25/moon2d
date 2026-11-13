@@ -263,14 +263,16 @@ function wave(x, seed) {
 const U = v => v * Px;
 
 // ---- the sun ----
+// How far the span of E stands before the sun's disc, 0..1, ramped over
+// tintRamp at each end
+function spanCover(E, oC) {
+  const Inside = Math.min(Sun.x - (E.x - oC), E.x + E.w - oC - Sun.x);
+  return Math.min(1, Math.max(0, Inside / Sun.tintRamp));
+}
 function sunCover(oC) {
   let Cover = 0;
-  for (const E of [...City.elements, ...Frames]) {
-    if (!E.tintsSun) continue;
-    const X0 = E.x - oC, X1 = E.x + E.w - oC;
-    const Inside = Math.min(Sun.x - X0, X1 - Sun.x);
-    Cover = Math.max(Cover, Math.min(1, Math.max(0, Inside / Sun.tintRamp)));
-  }
+  for (const E of [...City.elements, ...Frames])
+    if (E.tintsSun) Cover = Math.max(Cover, spanCover(E, oC));
   return Cover;
 }
 function drawSun(oC) {
@@ -1223,15 +1225,25 @@ function geodesic(AFrequency) {
 // centre on the base line, each with its thickness in ribs.
 const Capsules = new Map();
 const BeltThickening = 2.2, RingThickening = 1.6, BeltSteps = 4;
+// The feet, the crown and the end of the ends' quarter turn are exact: a
+// cos(PI / 2) of the arithmetic carries a sign of its own, and the game's
+// FPU gives it another - the crown would change halves and a foot would
+// throw a shadow
+function quarterTurn(AShare) {
+  if (AShare <= 0) return [0, 1];
+  if (AShare >= 1) return [1, 0];
+  return [Math.sin(Math.PI / 2 * AShare), Math.cos(Math.PI / 2 * AShare)];
+}
 function capsulePoint(F, AAlong, ARow) {
   const R = F.d / 2, Barrel = F.w / 2 - R;
   const Cap = F.capCells * 2 * Barrel / F.cells;
-  const Phi = Math.PI * ARow / F.rows;
-  const Depth = R * Math.cos(Phi), Round = Math.sin(Phi);
+  // the arch from the far foot over the crown to the near one: two quarter turns
+  const Up = 2 * ARow <= F.rows ? quarterTurn(2 * ARow / F.rows) : quarterTurn(2 - 2 * ARow / F.rows);
+  const Round = Up[0], Depth = 2 * ARow <= F.rows ? R * Up[1] : -R * Up[1];
   const Along = Math.abs(AAlong);
   if (Along <= Barrel) return [AAlong, F.h * Round, Depth];
-  const Turn = Math.PI / 2 * Math.min(1, (Along - Barrel) / Cap);
-  return [Math.sign(AAlong) * (Barrel + R * Round * Math.sin(Turn)), F.h * Round * Math.cos(Turn), Depth];
+  const [TurnSin, TurnCos] = quarterTurn((Along - Barrel) / Cap);
+  return [Math.sign(AAlong) * (Barrel + R * Round * TurnSin), F.h * Round * TurnCos, Depth];
 }
 function capsule(F) {
   if (Capsules.has(F)) return Capsules.get(F);
@@ -1254,7 +1266,8 @@ function capsule(F) {
       Add(capsulePoint(F, Row[i], j), capsulePoint(F, Row[i + 1], j), Foot ? RingThickening : 1);
     for (const Along of Row) {
       const At = capsulePoint(F, Along, j);
-      if (j > 0 && j < F.rows) Nodes.push({ At, Key: [Along / F.w, j / F.rows, 0] });
+      // the seed takes the first and the last of the key: the row goes last
+      if (j > 0 && j < F.rows) Nodes.push({ At, Key: [Along / F.w, 0, j / F.rows] });
       if (j === F.rows) continue;
       for (const Step of [-Cell / 2, Cell / 2])
         if (Math.abs(Along + Step) <= End + 1e-9) Add(At, capsulePoint(F, Along + Step, j + 1), 1);
@@ -1492,15 +1505,22 @@ function drawShadows(ATop, ABottom) {
 }
 // The sun's own glare over what stands before it: a thin rib across the disc
 // is eaten by the light, as a lens sees it
-function drawGlare(Cover) {
+function drawGlare(Cover, ALevel) {
   const Col = Sun.white.map((v, i) => Math.round(v + (Sun.tint[i] - v) * Cover));
   const X = U(Sun.x), Y = U(Sun.y), Rad = U(Sun.disc * 3.2);
   Ctx.save();
   Ctx.globalCompositeOperation = 'lighter';
   const G = Ctx.createRadialGradient(X, Y, 0, X, Y, Rad);
-  G.addColorStop(0, `rgba(${Col},0.55)`); G.addColorStop(0.35, `rgba(${Col},0.22)`); G.addColorStop(1, `rgba(${Col},0)`);
+  G.addColorStop(0, `rgba(${Col},${0.55 * ALevel})`); G.addColorStop(0.35, `rgba(${Col},${0.22 * ALevel})`);
+  G.addColorStop(1, `rgba(${Col},0)`);
   Ctx.fillStyle = G; Ctx.fillRect(X - Rad, Y - Rad, Rad * 2, Rad * 2);
   Ctx.restore();
+}
+// The farm's glass shines through the glare: as its dome takes the disc the
+// glare gives way, down to glareKeep of itself, by the tint's own ramp
+function glareLevel(oC) {
+  if (!FarmFrame || Farm.glareKeep === undefined) return 1;
+  return 1 - (1 - Farm.glareKeep) * spanCover(FarmFrame, oC);
 }
 // Drawn in place of a picture not generated yet; none is waited for now
 const Placeholders = {};
@@ -1638,7 +1658,7 @@ function frame(Stamp) {
   if (Sources.length && renderLight(farmAirMesh(Sources, S.oC))) addLight(0, Layout.screen.h);
   if (Ribs) { drawRibs(Ribs.Near); drawBeacons(Ribs.NearBeacons, LifeTick); }
   for (const B of Beams) addBeamGlints(B, Ribs?.Near);
-  if (document.getElementById('g-glare').checked) drawGlare(Cover);
+  if (document.getElementById('g-glare').checked) drawGlare(Cover, glareLevel(S.oC));
   drawPicked();
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
   if (Cliff.x + Cliff.w - S.oT > 0) Ctx.drawImage(CliffCanvas, U(Cliff.x - S.oT), 0);
@@ -1692,7 +1712,7 @@ const OwnFields = [['emblem', 'coreLevel', 'TEK core'], ['emblem', 'haloLevel', 
   ['train', 'inside', 'train inside'], ['train', 'y', 'train feet'],
   ['searchlights', 'level', 'beam'], ['searchlights', 'glassLevel', 'beam at glass'],
   ['searchlights', 'tailShare', 'beam tail share'], ['searchlights', 'spotLevel', 'beam spot'],
-  ['searchlights', 'glintLevel', 'rib glints']];
+  ['searchlights', 'glintLevel', 'rib glints'], ['farm', 'glareKeep', 'glare over the farm']];
 const OwnSteps = { w: '1', cruise: '0.5', accelTicks: '1', inside: '1', y: '0.1' };
 // A train that never moves or never speeds up would stand on the line for good
 const OwnLeast = { cruise: 0.5, accelTicks: 1 };

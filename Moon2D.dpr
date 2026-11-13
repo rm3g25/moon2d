@@ -30,6 +30,8 @@ uses
   Levels.CityLife in 'Core\Levels.CityLife.pas',
   Levels.Monorail in 'Core\Levels.Monorail.pas',
   Levels.Searchlights in 'Core\Levels.Searchlights.pas',
+  Levels.Capsule in 'Core\Levels.Capsule.pas',
+  Levels.Farm in 'Core\Levels.Farm.pas',
   Levels.Defs in 'Core\Levels.Defs.pas',
   Levels.Events in 'Core\Levels.Events.pas',
   Levels.Scenes in 'Core\Levels.Scenes.pas',

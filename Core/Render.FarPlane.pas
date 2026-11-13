@@ -38,6 +38,14 @@
   a faint tail past its glass. After the near ribs, a hot spot where the
   beam leaves the glass and a glint on each near rib it crosses.
 
+  The farm stands under its long dome (Levels.Farm, on the far plane's
+  clock): each greenhouse's lit glass - the picture <id>-glow of the set,
+  made by tools/chase/make_glow.py - over its shaded picture at its glow's
+  level, not shaded; the air of the dome and the floor in front of it as
+  strips of triangles whose light lies in their corners, added; the far
+  ribs of its dome lit on their inner face. While its dome stands before
+  the sun, the sun's glare gives way to the glass (TFarPlaneDef.GlareLevel).
+
   While the screen's own backdrop covers the whole screen, nothing behind
   its layer is drawn: the arena before the chase costs one picture more,
   the cliff's end over the wall.
@@ -51,7 +59,7 @@ interface
 
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Levels.FarPlane, Levels.Dynamics,
-  Levels.Monorail, Levels.Searchlights, Render.DomeFrames;
+  Levels.Monorail, Levels.Searchlights, Levels.Farm, Render.DomeFrames;
 
 type
   TFarPlanePainter = class
@@ -105,6 +113,13 @@ type
     // layer has drawn so far
     FBeams: TArray<TSearchlightBeam>;
     FBeamsDrawn: TArray<Boolean>;
+    // By element of the city's layer: its lit glass, nil for one without;
+    // its height in units
+    FGlassPictures: TArray<PSdlTexture>;
+    FCityHeights: TArray<Double>;
+    // The farm at this frame's clock and ride: the city's layer and the
+    // near ground's both draw from it
+    FFarm: TFarmView;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
@@ -147,6 +162,17 @@ type
     // Each beam not drawn yet whose lamp stands behind ADepth
     procedure DrawBeamsBefore(ADepth: Single);
     procedure DrawBeamGlints(const ABeam: TSearchlightBeam);
+    procedure LoadFarm(ACache: TSpriteCache);
+    function FarmLit: Boolean;
+    // Added over the scene, clipped to ATop..ABottom when AClipped
+    procedure DrawLightMesh(const AMesh: TFarmMesh; AClipped: Boolean; ATop, ABottom: Single);
+    // The floor in front of the farm's dome, between ATop and ABottom
+    procedure DrawApron(ACityOffset: Double; ATop, ABottom: Single);
+    procedure DrawAir(ACityOffset: Double);
+    // AHeight - its piece's height in units
+    procedure DrawGlass(AIndex: Integer; const AElement: TFarPlaneElement;
+      ALeft, AHeight: Double);
+    procedure LightFarRibs;
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
       ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
   public
@@ -180,6 +206,8 @@ const
   EmblemTubeSprite = 'tek-%d';
   EmblemHaloSprite = 'tek-%d-halo';
   EmblemPaintSprite = 'tek-paint';
+  // A greenhouse's lit glass, tools/chase/make_glow.py
+  FarmGlassSprite = '%s-glow';
   // The halo is two glows fitted to the stand's radial gradient (0.55 at
   // the disc's edge, 0.16 a quarter of the way out, nothing at the halo's
   // rim): a core and a wide glare, sized by the halo's radius
@@ -188,6 +216,7 @@ const
   HaloGlareSize = 3.1;
   HaloGlareLevel = 0.19;
   SolidAlpha = 255;
+  Unshaded = 1.0;
   NoStart = -MaxInt;
   // The stand's samples of a beam: inside the dome and along its tail
   BeamInsideSamples = 20;
@@ -296,6 +325,8 @@ begin
     FTrainElement.W := FDef.Train.W;
     FTrainElement.DepthY := FTrainLine.Depth;
   end;
+  if FDef.Farm.Present then
+    LoadFarm(ACache);
   FPointGlow := CreateGlowShape(ARenderer, gsPoint, PointGlowSide);
   FDiscGlow := CreateGlowShape(ARenderer, gsDisc, DiscGlowSide);
   FBeamGlow := CreateGlowShape(ARenderer, gsBeam, BeamGlowSide);
@@ -845,6 +876,116 @@ begin
   end;
 end;
 
+procedure TFarPlanePainter.LoadFarm(ACache: TSpriteCache);
+var
+  Glass: TFarmGlass;
+begin
+  for var i := 0 to High(FDef.Layers) do
+  begin
+    var Layer := FDef.Layers[i];
+    if Layer.Motion <> fmCity then
+      Continue;
+    SetLength(FGlassPictures, Length(Layer.Elements));
+    SetLength(FCityHeights, Length(Layer.Elements));
+    for var j := 0 to High(Layer.Elements) do
+    begin
+      if FPictures[i][j] <> nil then
+        FCityHeights[j] := Layer.Elements[j].W * TextureAspect(FPictures[i][j]);
+      if FDef.Farm.GlassOf(Layer.Elements[j].Id, Glass) then
+        FGlassPictures[j] := ACache.Get(FDef.SpriteName(Format(FarmGlassSprite,
+          [Layer.Elements[j].Id])));
+    end;
+    Exit;
+  end;
+end;
+
+// The farm lights nothing while none of its greenhouses near the screen is lit
+function TFarPlanePainter.FarmLit: Boolean;
+begin
+  Result := Length(FFarm.Sources) > 0;
+end;
+
+// No texture: the triangles take the renderer's draw blend
+procedure TFarPlanePainter.DrawLightMesh(const AMesh: TFarmMesh; AClipped: Boolean;
+  ATop, ABottom: Single);
+var
+  Clip: TSdlRect;
+begin
+  if Length(AMesh.Indices) = 0 then
+    Exit;
+  var Vertices: TArray<TSdlVertex>;
+  SetLength(Vertices, Length(AMesh.Corners));
+  for var i := 0 to High(AMesh.Corners) do
+  begin
+    var Corner := AMesh.Corners[i];
+    Vertices[i].Position.X := Corner.X;
+    Vertices[i].Position.Y := Corner.Y;
+    Vertices[i].Color.R := Round(255 * EnsureRange(Corner.Light.R, 0.0, 1.0));
+    Vertices[i].Color.G := Round(255 * EnsureRange(Corner.Light.G, 0.0, 1.0));
+    Vertices[i].Color.B := Round(255 * EnsureRange(Corner.Light.B, 0.0, 1.0));
+    Vertices[i].Color.A := SolidAlpha;
+    Vertices[i].TexCoord.X := 0;
+    Vertices[i].TexCoord.Y := 0;
+  end;
+  if AClipped then
+  begin
+    Clip.X := 0;
+    Clip.Y := Round(ATop);
+    Clip.W := Round(FDef.ScreenWidth);
+    Clip.H := Round(ABottom - ATop);
+    SDL_RenderSetClipRect(FRenderer, @Clip);
+  end;
+  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeAdd);
+  SDL_RenderGeometry(FRenderer, nil, @Vertices[0], Length(Vertices),
+    @AMesh.Indices[0], Length(AMesh.Indices));
+  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeBlend);
+  if AClipped then
+    SDL_RenderSetClipRect(FRenderer, nil);
+end;
+
+procedure TFarPlanePainter.DrawApron(ACityOffset: Double; ATop, ABottom: Single);
+begin
+  DrawLightMesh(FarmApronMesh(FDef, FFarm.Sources, ACityOffset), True, ATop, ABottom);
+end;
+
+procedure TFarPlanePainter.DrawAir(ACityOffset: Double);
+begin
+  DrawLightMesh(FarmAirMesh(FDef, FFarm.Sources, ACityOffset), False, 0, 0);
+end;
+
+// Over its shaded picture, at its glow's level and not shaded: the glass is
+// the one thing of the farm that shines
+procedure TFarPlanePainter.DrawGlass(AIndex: Integer; const AElement: TFarPlaneElement;
+  ALeft, AHeight: Double);
+begin
+  var Level := FFarm.Glass[AIndex];
+  if (FGlassPictures[AIndex] = nil) or (Level <= 0) then
+    Exit;
+  var Color := ShadeColor(Unshaded);
+  Color.A := Round(SolidAlpha * Min(Level, 1.0));
+  AddQuad(FloatRect(ALeft, AElement.Y - AHeight, AElement.W, AHeight), Across(AElement, 0, 1),
+    Color, QuadAlpha(1, 1, 1, 1));
+  Flush(FGlassPictures[AIndex]);
+end;
+
+// The farm's far ribs turn their inner face to the eye, and its light lands
+// there: the dark of a rib, and the light at its middle times RibLevel
+procedure TFarPlanePainter.LightFarRibs;
+begin
+  for var i := 0 to High(FFrameView.Far) do
+  begin
+    var Rib := FFrameView.Far[i];
+    if not Rib.Farm then
+      Continue;
+    var Light := Exposed(FarmLight(FDef.Farm, FFarm.Sources, (Rib.A.X + Rib.B.X) / 2,
+      (Rib.A.Y + Rib.B.Y) / 2), FDef.Farm.RibLevel);
+    Rib.Dark.R := Round(Rib.Dark.R + (255 - Rib.Dark.R) * Light.R);
+    Rib.Dark.G := Round(Rib.Dark.G + (255 - Rib.Dark.G) * Light.G);
+    Rib.Dark.B := Round(Rib.Dark.B + (255 - Rib.Dark.B) * Light.B);
+    FFrameView.Far[i] := Rib;
+  end;
+end;
+
 // The city stands inside its frames: their shadows on its floor and their
 // far half before its buildings, their near half and the glare after. The
 // shadows run on over the near ground's band: over the sky between its
@@ -856,7 +997,11 @@ begin
   if Layer.Band.Present then
     DrawBand(ALayer, AOffsets);
   if Layer.Band.Present and (Layer.Motion = fmGround) and FFrames.Present then
+  begin
     DrawFrameShadows(Layer.Band.Top, FDef.ScreenHeight);
+    if FarmLit then
+      DrawApron(AOffsets[fmCity], Layer.Band.Top, FDef.ScreenHeight);
+  end;
 
   var Framed := (Layer.Motion = fmCity) and FFrames.Present;
   if Framed then
@@ -869,6 +1014,11 @@ begin
       FloorBottom := Layer.Band.Bottom;
     end;
     DrawFrameShadows(FloorTop, FloorBottom);
+    if FarmLit then
+    begin
+      DrawApron(AOffsets[fmCity], FloorTop, FloorBottom);
+      LightFarRibs;
+    end;
     FFramePainter.DrawRibs(FFrameView.Far);
     DrawBeacons(FFrameView.FarBeacons, ATick);
   end;
@@ -903,12 +1053,18 @@ begin
     end;
     var Picture := FPictures[ALayer][j];
     var Shown := DrawElement(Element, Picture, Left, ShadeColor(Element.Shade));
-    if Shown and (Layer.Motion = fmCity) then
-      DrawLife(Element, j, Left, Element.W * TextureAspect(Picture), ATick);
+    if not Shown or (Layer.Motion <> fmCity) then
+      Continue;
+    var Height := Element.W * TextureAspect(Picture);
+    if Length(FGlassPictures) > 0 then
+      DrawGlass(j, Element, Left, Height);
+    DrawLife(Element, j, Left, Height, ATick);
   end;
   if TrainDue then
     DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
   DrawBeamsBefore(MaxSingle);
+  if (Layer.Motion = fmCity) and FarmLit then
+    DrawAir(AOffsets[fmCity]);
 
   if Framed then
   begin
@@ -916,7 +1072,7 @@ begin
     DrawBeacons(FFrameView.NearBeacons, ATick);
     for var Beam in FBeams do
       DrawBeamGlints(Beam);
-    FFramePainter.DrawGlare(FDef.SunCover(AOffsets));
+    FFramePainter.DrawGlare(FDef.SunCover(AOffsets), FDef.GlareLevel(AOffsets));
   end;
 end;
 
@@ -925,6 +1081,7 @@ procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer
 begin
   if FFrames.Present then
     FFrameView := FFrames.View(AOffsets[fmCity]);
+  FFarm := FarmView(FDef, AOffsets, ATick, FCityHeights);
   var First := FirstSeenLayer(AOffsets);
   if First < 0 then
   begin

@@ -8,7 +8,9 @@
   city, the near ground at its own speed; a stopped belt stands it all, the
   brake's floor included; between ticks it lies between them; a clear
   brings it back to the start. The sun is white until a dome stands before
-  it, then takes the dome's tint - a frame drawn by code as well. A band
+  it, then takes the dome's tint - a frame drawn by code as well. Its glare
+  is whole without a farm, and gives way to the farm's glass as the farm's
+  dome takes the disc, by the tint's ramp. A band
   dark in the tunnel brightens to the full as the tunnel leaves. The city
   has a depth by the feet: a building on the domes' base line rides with
   its layer, one halfway to the horizon at half its speed, the lower the
@@ -26,7 +28,8 @@
   eclipse calls its orbs out of, the spire's among them and none off the
   screen; a layout that does not make sense raises, and so does
   a city's life that cannot play - a train and the searchlights among
-  them.
+  them. Level 2 reads its farm under a capsule; a frame of an unknown kind,
+  a capsule of odd rows or deeper than long, and a farm under a dome raise.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -111,6 +114,10 @@ type
     procedure TestRampedInAtTheDomesEdge;
     [Test]
     procedure TestTintedDeepInsideAFrame;
+    [Test]
+    procedure TestGlareWholeWithoutAFarm;
+    [Test]
+    procedure TestGlareGivesWayToTheFarmsDome;
   end;
 
   [TestFixture]
@@ -224,6 +231,18 @@ type
     procedure TestSearchlightsWithoutAnEaseRaise;
     [Test]
     procedure TestASearchlightWithOneSweepRaises;
+    [Test]
+    procedure TestLevelTwoReadsItsFarm;
+    [Test]
+    procedure TestACapsuleAndItsFarmRead;
+    [Test]
+    procedure TestAFrameOfAnUnknownKindRaises;
+    [Test]
+    procedure TestACapsuleOfOddRowsRaises;
+    [Test]
+    procedure TestACapsuleDeeperThanLongRaises;
+    [Test]
+    procedure TestAFarmUnderADomeRaises;
   end;
 
 implementation
@@ -277,6 +296,20 @@ const
   StandCamera = '"camera": {"horizon": 238, "baseY": 266, "focal": 1024},';
   StandFrames = '"frames": {"items": [{"id": "dome", "x": 468, "w": 512, "h": 170,'
     + ' "frequency": 4, "rib": 2.2, "tintsSun": true}]},';
+
+// The layout's farm of the day the tests were written, under its capsule;
+// its one greenhouse is the depth layout's "base"
+const
+  CapsuleFrames = '"frames": {"items": [{"id": "dome-farm", "kind": "capsule",'
+    + ' "x": 2290, "w": 640, "d": 220, "h": 90, "rows": 12, "cells": 16,'
+    + ' "beltEvery": 4, "capCells": 5, "rib": 0.85, "tintsSun": true}]},';
+  FarmSection = '"farm": {"frame": "dome-farm", "glareKeep": 0.3,'
+    + ' "glow": {"level": 1, "spanTicks": [900, 2400], "onShare": 0.85, "warmTicks": 90,'
+    + ' "flickerTicks": 12},'
+    + ' "air": {"reach": 40, "level": 0.07, "ribLevel": 0.1},'
+    + ' "apron": {"length": 160, "level": 0.2, "gap": 1.2},'
+    + ' "glass": {"base": {"color": [255, 105, 176], "at": [0.5, 0.5], "share": 0.4}}},';
+  FarmGlareKeep = 0.3;
 
 function StandLayout(const ALayers: string): string;
 begin
@@ -625,6 +658,24 @@ begin
   Assert.AreEqual(1.0, Double(Def.SunCover(Offsets)), 0.0001, 'Deep inside it');
   Assert.AreEqual(0.0, Double(Def.SunCover(Default(TFarPlaneOffsets))), 0.0001,
     'Before it comes');
+end;
+
+procedure TFarPlaneSunTests.TestGlareWholeWithoutAFarm;
+begin
+  Assert.AreEqual(1.0, Double(FDef.GlareLevel(DomeInside(ElementById(FDef, 'dome-main').W / 2))),
+    0.0001);
+end;
+
+procedure TFarPlaneSunTests.TestGlareGivesWayToTheFarmsDome;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + CapsuleFrames + FarmSection));
+  var Offsets := Default(TFarPlaneOffsets);
+  Assert.AreEqual(1.0, Double(Def.GlareLevel(Offsets)), 0.0001, 'Before it comes');
+  Offsets[fmCity] := Def.Frames[0].X + Def.Frames[0].W / 2 - Def.Sun.X;
+  Assert.AreEqual(FarmGlareKeep, Double(Def.GlareLevel(Offsets)), 0.0001, 'Deep inside it');
+  Offsets[fmCity] := Def.Frames[0].X - Def.Sun.X + Def.Sun.TintRamp / 2;
+  Assert.AreEqual(1 - (1 - FarmGlareKeep) / 2, Double(Def.GlareLevel(Offsets)), 0.0001,
+    'Halfway up the ramp');
 end;
 
 // TFarPlaneDepthTests
@@ -1167,6 +1218,82 @@ procedure TFarPlaneReadTests.TestASearchlightWithOneSweepRaises;
 begin
   AssertLifeRaises(SearchlightsHead + ' "tail": 150, "spread": 0.15,' + SearchlightsPause
     + StringReplace(SearchlightLamp, '"sweep": [28, 8]', '"sweep": [28]', []));
+end;
+
+procedure TFarPlaneReadTests.TestLevelTwoReadsItsFarm;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Farm := Level.FarPlane.Farm;
+    Assert.IsTrue(Farm.Present, 'A farm');
+    Assert.IsTrue(Level.FarPlane.Frames[Farm.Frame].Kind = fkCapsule, 'Under a capsule');
+    Assert.IsTrue(Length(Farm.Glass) > 0, 'Greenhouses with glass');
+    Assert.IsTrue(Farm.GlareKeep < 1, 'The glare gives way to it');
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestACapsuleAndItsFarmRead;
+var
+  Glass: TFarmGlass;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + CapsuleFrames + FarmSection));
+  var Capsule := Def.Frames[0];
+  Assert.IsTrue(Capsule.Kind = fkCapsule, 'A capsule');
+  Assert.AreEqual(220.0, Double(Capsule.D), 0.0001, 'Its depth');
+  Assert.AreEqual(12, Capsule.Rows, 'Its rows');
+  Assert.AreEqual(16, Capsule.Cells, 'Its cells');
+  Assert.AreEqual(4, Capsule.BeltEvery, 'Its belts');
+  Assert.AreEqual(5, Capsule.CapCells, 'Its ends');
+  Assert.IsTrue(Def.Farm.Present, 'A farm');
+  Assert.AreEqual(0, Def.Farm.Frame, 'Under it');
+  Assert.AreEqual(FarmGlareKeep, Double(Def.Farm.GlareKeep), 0.0001, 'Its glare');
+  Assert.AreEqual(2400, Def.Farm.Glow.SpanMost, 'Its longest span');
+  Assert.IsTrue(Def.Farm.GlassOf('base', Glass), 'The glass of a piece');
+  Assert.AreEqual(105, Integer(Glass.Color.G), 'Its colour');
+  Assert.IsFalse(Def.Farm.GlassOf('beam', Glass), 'None of another');
+end;
+
+procedure TFarPlaneReadTests.TestAFrameOfAnUnknownKindRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(DepthLayout(StandCamera
+        + StringReplace(CapsuleFrames, '"capsule"', '"tent"', [])));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestACapsuleOfOddRowsRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(DepthLayout(StandCamera
+        + StringReplace(CapsuleFrames, '"rows": 12', '"rows": 11', [])));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestACapsuleDeeperThanLongRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(DepthLayout(StandCamera
+        + StringReplace(CapsuleFrames, '"d": 220', '"d": 700', [])));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestAFarmUnderADomeRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(DepthLayout(StandCamera + StandFrames
+        + StringReplace(FarmSection, '"dome-farm"', '"dome"', [])));
+    end, EFarPlaneError);
 end;
 
 initialization

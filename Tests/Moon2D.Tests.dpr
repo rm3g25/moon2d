@@ -66,6 +66,8 @@ uses
   Tests.Levels.CityLife in 'Levels\Tests.Levels.CityLife.pas',
   Tests.Levels.Monorail in 'Levels\Tests.Levels.Monorail.pas',
   Tests.Levels.Searchlights in 'Levels\Tests.Levels.Searchlights.pas',
+  Tests.Levels.Capsule in 'Levels\Tests.Levels.Capsule.pas',
+  Tests.Levels.Farm in 'Levels\Tests.Levels.Farm.pas',
   Tests.Levels.Doors in 'Levels\Tests.Levels.Doors.pas',
   Tests.Levels.Grid in 'Levels\Tests.Levels.Grid.pas',
   Tests.Levels.Entities in 'Levels\Tests.Levels.Entities.pas',

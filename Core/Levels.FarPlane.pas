@@ -26,9 +26,15 @@
   rides - k times the layer, k = 1 at the base line. A picture's width in
   the layout is already its width at its depth; a thing hanging in the air
   gives the feet of what it stands on as "groundY". Without a camera the
-  city is flat. The dome frames ("frames") are geodesic half-ellipsoids
-  drawn by code over that camera (Render.DomeFrames); one marked tintsSun
-  turns the sun while it stands before it, as an element marked so does.
+  city is flat. The dome frames ("frames") are geodesic half-ellipsoids, or
+  a capsule ("kind": "capsule", Levels.Capsule), drawn by code over that
+  camera (Render.DomeFrames); one marked tintsSun turns the sun while it
+  stands before it, as an element marked so does.
+
+  The farm ("farm") stands under a capsule: greenhouses of the kit whose
+  glass shines on a clock of each one's own and lights the air in the dome,
+  its far ribs and the floor in front of it (Levels.Farm); while its dome
+  stands before the sun, the sun's glare gives way to the glass.
 
   The fangs are no layer: separate pictures of basalt rising from below
   the bottom edge, riding by on a motion of their own between the near
@@ -60,6 +66,13 @@ interface
 uses
   System.SysUtils, System.JSON, Sdl2.Core, Render.Brush, Levels.Tint;
 
+const
+  // A point of a frame nearer the eye than this share of the focal length
+  // stands behind it
+  FrameNearestShare = 0.15;
+  // The ring a frame stands on is this many ribs thick
+  FrameRingThickening = 1.6;
+
 type
   EFarPlaneError = class(Exception);
 
@@ -88,13 +101,23 @@ type
     Focal: Single;
   end;
 
+  // A dome is a geodesic half-ellipsoid; a capsule a barrel vault with a
+  // quarter dome at each end, its frame a diagrid (Levels.Capsule)
+  TDomeFrameKind = (fkDome, fkCapsule);
+
   // A dome frame drawn by code: X its left edge along the city's layer, W
-  // and H its size at the base line
+  // and H its size at the base line - a capsule's W its length
   TDomeFrame = record
     Id: string;
+    Kind: TDomeFrameKind;
     X, W, H: Single;
+    // A capsule's depth across, units
+    D: Single;
     // How many times each side of the icosahedron is cut
     Frequency: Integer;
+    // A capsule's frame: Rows of nodes round its arch, Cells along its
+    // barrel, a belt every BeltEvery cells, CapCells cells to each end's turn
+    Rows, Cells, BeltEvery, CapCells: Integer;
     // The thickness of a rib, units
     Rib: Single;
     TintsSun: Boolean;
@@ -250,6 +273,52 @@ type
     Lamps: TArray<TSearchlightLamp>;
   end;
 
+  // A greenhouse's lit glass, found by tools/chase/make_glow.py and drawn
+  // as the picture <Piece>-glow: its colour, its centre in shares of the
+  // piece's picture, its share of the picture
+  TFarmGlass = record
+    Piece: string;
+    Color: TRgb;
+    AtU, AtV: Single;
+    Share: Single;
+  end;
+
+  // A greenhouse's grow light: its time cut into spans of
+  // SpanLeast..SpanMost ticks, OnShare of them lit; one switched on after a
+  // dark span flickers over FlickerTicks and warms up over WarmTicks;
+  // Level - the glass at full
+  TFarmGlow = record
+    Level: Single;
+    SpanLeast, SpanMost: Integer;
+    OnShare: Double;
+    WarmTicks, FlickerTicks: Integer;
+  end;
+
+  // The farm under the long dome: greenhouses of the kit whose glass shines.
+  // Its lit glass lights the air in the dome (AirReach units at the dome's
+  // nearness, at AirLevel), the inner face of its far ribs (RibLevel) and
+  // the floor in front of it (ApronLength units toward the eye, at
+  // ApronLevel, the ribs' feet throwing gaps of ApronGap); while its dome
+  // stands before the sun the glare keeps GlareKeep of itself
+  TCityFarm = record
+    Present: Boolean;
+    // Its dome's place among the frames: a capsule
+    Frame: Integer;
+    GlareKeep: Single;
+    Glow: TFarmGlow;
+    AirReach, AirLevel, RibLevel: Single;
+    ApronLength, ApronLevel, ApronGap: Single;
+    Glass: TArray<TFarmGlass>;
+    // False for a piece without lit glass
+    function GlassOf(const APiece: string; out AGlass: TFarmGlass): Boolean;
+  end;
+
+  // A point of a frame: X across, Y up, Z into the screen, units from its
+  // centre on its base line
+  TFramePoint = record
+    X, Y, Z: Double;
+  end;
+
   // The emblem as old paint on a wall: at U, V of the picture, W of its
   // width, Alpha opaque
   TElementPaint = record
@@ -354,6 +423,7 @@ type
     Beacons: TCityBeacons;
     Train: TCityTrain;
     Searchlights: TCitySearchlights;
+    Farm: TCityFarm;
     function Present: Boolean;
     // How near a thing of the city whose feet stand at AY is, the domes'
     // centres 1: it rides that share of its layer's speed
@@ -375,6 +445,14 @@ type
     function TunnelEnd: Single;
     // How far the domes before the sun have turned it, 0 (white) .. 1
     function SunCover(const AOffsets: TFarPlaneOffsets): Single;
+    // How much of itself the sun's glare keeps: the farm's glass shines
+    // through it, so as the farm's dome takes the disc the glare gives way,
+    // down to GlareKeep, by the tint's own ramp; 1 without a farm
+    function GlareLevel(const AOffsets: TFarPlaneOffsets): Single;
+    // Where a point of a frame stands on the screen with the city's layer
+    // ridden ACityOffset, and how near it is; False - behind the eye
+    function FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
+      const AAt: TFramePoint; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
     // How much of the tunnel has left the screen, 0 .. 1
     function TunnelPassed(const AOffsets: TFarPlaneOffsets): Single;
     // How much of its colour a band keeps where the offsets have taken it
@@ -398,7 +476,10 @@ type
 // emblem without parts, lamps or frame beacons without "beacons", an
 // emblem without "cityLights", a train without size or speed, of a dwell
 // of no ticks or without two stations in the city, and searchlights without
-// a level, a tail or an ease, or a lamp whose waves do not turn.
+// a level, a tail or an ease, or a lamp whose waves do not turn. A frame of
+// an unknown kind, a capsule deeper than long or without an even count of
+// rows, its cells, belts or ends, and a farm whose dome is no capsule of
+// the frames or whose clock is shorter than it needs raise too.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
 
@@ -449,6 +530,12 @@ resourcestring
     + 'spread above zero and an ease of a tick at the least';
   SFarPlaneBadSearchlight = 'Level "%s": searchlight %d needs two sweeps and two '
     + 'periods above zero';
+  SFarPlaneBadFrameKind = 'Level "%s": frame "%s" is of kind "%s" - dome or capsule';
+  SFarPlaneBadCapsule = 'Level "%s": capsule "%s" needs a depth above zero and under '
+    + 'its length, an even count of rows from 2, and cells, a belt and ends of 1 or '
+    + 'more';
+  SFarPlaneFarmNoCapsule = 'Level "%s": its farm stands under "%s", and no capsule '
+    + 'of the frames is called so';
   SLightOfPiece = 'a light of piece "%s"';
   SEmblemPart = 'emblem part %d';
   SEmblemHalo = 'emblem halo %d';
@@ -545,6 +632,40 @@ begin
   for var Frame in Frames do
     if Frame.TintsSun then
       Result := Max(Result, SpanCover(Sun, Frame.X - AOffsets[fmCity], Frame.W));
+end;
+
+function TFarPlaneDef.GlareLevel(const AOffsets: TFarPlaneOffsets): Single;
+begin
+  Result := 1;
+  if not Farm.Present or (Sun.TintRamp <= 0) then
+    Exit;
+  var Dome := Frames[Farm.Frame];
+  var Cover := SpanCover(Sun, Dome.X - AOffsets[fmCity], Dome.W);
+  Result := 1 - (1 - Farm.GlareKeep) * Cover;
+end;
+
+function TFarPlaneDef.FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
+  const AAt: TFramePoint; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
+begin
+  Result := Camera.Focal + AAt.Z >= Camera.Focal * FrameNearestShare;
+  if not Result then
+    Exit;
+  ANearness := Camera.Focal / (Camera.Focal + AAt.Z);
+  var Middle: Double := ScreenWidth / 2;
+  var Centre: Double := AFrame.X + AFrame.W / 2 - ACityOffset - Middle;
+  AScreen.X := Middle + (Centre + AAt.X) * ANearness;
+  AScreen.Y := Camera.Horizon + (Camera.BaseY - Camera.Horizon - AAt.Y) * ANearness;
+end;
+
+function TCityFarm.GlassOf(const APiece: string; out AGlass: TFarmGlass): Boolean;
+begin
+  for var Own in Glass do
+    if Own.Piece = APiece then
+    begin
+      AGlass := Own;
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 function TFarPlaneDef.Nearness(AY: Single): Single;
@@ -809,14 +930,44 @@ begin
     raise EFarPlaneError.CreateFmt(SFarPlaneBadCamera, [ALevelId]);
 end;
 
+function ParseFrameKind(const AWord, ALevelId, AFrameId: string): TDomeFrameKind;
+begin
+  if AWord = 'dome' then
+    Result := fkDome
+  else if AWord = 'capsule' then
+    Result := fkCapsule
+  else
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadFrameKind, [ALevelId, AFrameId, AWord]);
+end;
+
+// Its rows go round the arch in two quarter turns, so they are even
+procedure ReadCapsule(const AObj: TJSONObject; const ALevelId: string;
+  var AFrame: TDomeFrame);
+begin
+  AFrame.D := AObj.GetValue<Double>('d', 0);
+  AFrame.Rows := AObj.GetValue<Integer>('rows', 0);
+  AFrame.Cells := AObj.GetValue<Integer>('cells', 0);
+  AFrame.BeltEvery := AObj.GetValue<Integer>('beltEvery', 0);
+  AFrame.CapCells := AObj.GetValue<Integer>('capCells', 0);
+  var Sized := (AFrame.D > 0) and (AFrame.D < AFrame.W);
+  var Rowed := (AFrame.Rows >= 2) and not Odd(AFrame.Rows);
+  var Cut := (AFrame.Cells >= 1) and (AFrame.BeltEvery >= 1) and (AFrame.CapCells >= 1);
+  if not Sized or not Rowed or not Cut then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadCapsule, [ALevelId, AFrame.Id]);
+end;
+
 function ReadFrame(const AObj: TJSONObject; const ALevelId: string): TDomeFrame;
 begin
+  Result := Default(TDomeFrame);
   Result.Id := AObj.GetValue<string>('id');
+  Result.Kind := ParseFrameKind(AObj.GetValue<string>('kind', 'dome'), ALevelId, Result.Id);
   Result.X := AObj.GetValue<Double>('x');
   Result.W := AObj.GetValue<Double>('w', 0);
   Result.H := AObj.GetValue<Double>('h', 0);
   Result.Frequency := AObj.GetValue<Integer>('frequency', DefaultFrequency);
   Result.Rib := AObj.GetValue<Double>('rib', DefaultRib);
+  if Result.Kind = fkCapsule then
+    ReadCapsule(AObj, ALevelId, Result);
   Result.TintsSun := AObj.GetValue<Boolean>('tintsSun', False);
   var Above: TJSONValue := AObj.GetValue('beaconsAbove');
   Result.Beacons := Above <> nil;
@@ -1093,6 +1244,68 @@ begin
         [ReadSearchlightLamp(Items.Items[i] as TJSONObject, i, ALevelId)];
 end;
 
+function ReadFarmGlass(const APiece: string; const AObj: TJSONObject;
+  const ALevelId: string): TFarmGlass;
+begin
+  Result.Piece := APiece;
+  Result.Color := ReadColor(AObj, 'color', ALevelId);
+  ReadPair(AObj, 'at', ALevelId, Result.AtU, Result.AtV);
+  Result.Share := AObj.GetValue<Double>('share');
+end;
+
+function ReadFarmGlow(const AObj: TJSONObject; const ALevelId: string): TFarmGlow;
+begin
+  Result.Level := AObj.GetValue<Double>('level');
+  ReadWholeRange(AObj, 'spanTicks', ALevelId, 1, Result.SpanLeast, Result.SpanMost);
+  Result.OnShare := AObj.GetValue<Double>('onShare');
+  Result.WarmTicks := Max(1, AObj.GetValue<Integer>('warmTicks', 1));
+  Result.FlickerTicks := AObj.GetValue<Integer>('flickerTicks', 0);
+end;
+
+// The frame is named: its place among the frames is found once they are read
+function ReadFarm(const ARoot: TJSONObject; const ALevelId: string;
+  out AFrameId: string): TCityFarm;
+var
+  Obj, GlassObj: TJSONObject;
+begin
+  Result := Default(TCityFarm);
+  AFrameId := '';
+  if not ARoot.TryGetValue<TJSONObject>('farm', Obj) then
+    Exit;
+  Result.Present := True;
+  AFrameId := Obj.GetValue<string>('frame');
+  Result.GlareKeep := EnsureRange(Obj.GetValue<Double>('glareKeep', 1), 0.0, 1.0);
+  Result.Glow := ReadFarmGlow(Obj.GetValue<TJSONObject>('glow'), ALevelId);
+
+  var Air := Obj.GetValue<TJSONObject>('air');
+  Result.AirReach := Air.GetValue<Double>('reach');
+  Result.AirLevel := Air.GetValue<Double>('level');
+  Result.RibLevel := Air.GetValue<Double>('ribLevel', 0);
+
+  var Apron := Obj.GetValue<TJSONObject>('apron');
+  Result.ApronLength := Apron.GetValue<Double>('length');
+  Result.ApronLevel := Apron.GetValue<Double>('level');
+  Result.ApronGap := Apron.GetValue<Double>('gap', 0);
+
+  if Obj.TryGetValue<TJSONObject>('glass', GlassObj) then
+    for var Pair in GlassObj do
+      Result.Glass := Result.Glass + [ReadFarmGlass(Pair.JsonString.Value,
+        Pair.JsonValue as TJSONObject, ALevelId)];
+end;
+
+procedure PlaceFarm(var ADef: TFarPlaneDef; const AFrameId, ALevelId: string);
+begin
+  if not ADef.Farm.Present then
+    Exit;
+  for var i := 0 to High(ADef.Frames) do
+    if (ADef.Frames[i].Id = AFrameId) and (ADef.Frames[i].Kind = fkCapsule) then
+    begin
+      ADef.Farm.Frame := i;
+      Exit;
+    end;
+  raise EFarPlaneError.CreateFmt(SFarPlaneFarmNoCapsule, [ALevelId, AFrameId]);
+end;
+
 // The parts of the city's life lean on each other: a lamp blinks as the
 // beacons do, the emblem flickers by the signs' clock
 procedure CheckCityLife(const ADef: TFarPlaneDef; const ALevelId: string);
@@ -1113,6 +1326,8 @@ begin
 end;
 
 function ReadLayout(const AFileName, ALevelId: string): TFarPlaneDef;
+var
+  FarmFrameId: string;
 begin
   Result := Default(TFarPlaneDef);
   if not FileExists(AFileName) then
@@ -1137,6 +1352,7 @@ begin
     Result.Beacons := ReadBeacons(Root, ALevelId);
     Result.Train := ReadTrain(Root, ALevelId);
     Result.Searchlights := ReadSearchlights(Root, ALevelId);
+    Result.Farm := ReadFarm(Root, ALevelId, FarmFrameId);
   finally
     Root.Free;
   end;
@@ -1144,6 +1360,7 @@ begin
     raise EFarPlaneError.CreateFmt(SFarPlaneNoCity, [ALevelId]);
   if (Length(Result.Frames) > 0) and not Result.Camera.Present then
     raise EFarPlaneError.CreateFmt(SFarPlaneFramesNoCamera, [ALevelId]);
+  PlaceFarm(Result, FarmFrameId, ALevelId);
   CheckCityLife(Result, ALevelId);
 end;
 
