@@ -100,7 +100,11 @@ inserted over its foot as a palindrome, then re-cut onto its matter: a
 column cut out of each step, the parts resampled a few percent, the rows
 over the steps stretched, so steps, top and walls stand on the grid. They replaced the 2008 tiles of those screens, which stay in
 their sets unplaced. Screen 10 is new, not a repaint: no 2008 tiles stood
-there. How such a screen is made: `docs/REPAINT.md`.
+there. How such a screen is made: `docs/REPAINT.md`. `s13-gate`
+(3.0.130): the facade with the gate at the end of the road of screen 13,
+generated with the pieces of the chase city attached as the style, cut to
+its body and scaled whole to 6 px per screen unit; its lamp housing is
+painted unlit - the game lights it.
 
 **The level-1 boss disc** (`sprites/boss1-disc.mset`) - since 3.0.19,
 generated with ChatGPT's image model to the author's direction (a clean and a

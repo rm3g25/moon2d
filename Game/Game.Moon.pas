@@ -33,7 +33,7 @@ uses
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
   Game.BargeFire, Game.Charge, Game.Dive, Game.Ladder, Game.Breakup,
-  Game.Wreckage, Game.Landing,
+  Game.Wreckage, Game.Landing, Game.Gate,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
@@ -204,6 +204,10 @@ type
     FRoadPad: TPad;
     FBarge: TBargeRide;
     FBargePad: TPad;
+    // The facade with the gate at the far end of the road come back, and
+    // its lamp; the painter is the level's, as the road's
+    FGate: TGate;
+    FGatePainter: TGatePainter;
     // The small barges round the barge in the air fight, and their pads in
     // the order the flock knows them; born with the level
     FFlock: TBargeFlock;
@@ -746,6 +750,7 @@ const
   FlockMedkitEvery = 4;
   FlockMedkitTagPattern = 's13-flock-medkit-%d';
   RoadTileSprite = 'tek-road-tile';
+  GateSprite = 's13-gate';
   // The grid row of the road, erased as it runs out
   RoadRow = ScreenRows - 1;
   // The checkpoint over a deck hangs this much above it: a hero put there
@@ -869,6 +874,7 @@ const
   ScancodeT = 23; // tile inspector in the window title
   ScancodeU = 24; // the burst at once in the moon's look: no rite, no suit
   ScancodeV = 25; // trailer frame, centered logo (menu only)
+  ScancodeX = 27; // the gate's lamp to amber, as the logo's flare will turn it
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
@@ -997,6 +1003,7 @@ begin
   FOrbShots := TOrbShots.Create;
   FBelt := TBelt.Create;
   FRoad := TRoadEnd.Create;
+  FGate := TGate.Create;
   FBarge := TBargeRide.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
@@ -1065,6 +1072,8 @@ begin
   FBargeFire.Free;
   FFlock.Free;
   FRoadPainter.Free;
+  FGatePainter.Free;
+  FGate.Free;
   FRoad.Free;
   FRamPainter.Free;
   FRam.Free;
@@ -1209,8 +1218,13 @@ begin
   FBargePad := FPads.FindTagged(BargePadTag);
   BuildFlock;
   FreeAndNil(FRoadPainter);
+  FreeAndNil(FGatePainter);
   if FRoadPad <> nil then
+  begin
     FRoadPainter := TRoadPainter.Create(FObjectCache.Get(RoadTileSprite));
+    FGatePainter := TGatePainter.Create(FObjectCache.Get(GateSprite), FGate,
+      FRoad);
+  end;
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -3458,6 +3472,7 @@ begin
   ClearMagnet;
   FLevel.RestoreRows;
   FLanding.Clear;
+  FGate.Clear;
   FWreckage.Clear;
   FWreckFire.Clear;
   FLandingCarries := False;
@@ -4653,6 +4668,7 @@ end;
 procedure TMoonGame.TickLanding;
 begin
   TickLandingCarry;
+  FGate.Tick;
   var Stands := (FBelt.Speed = 0) and not FBelt.Running;
   var Cue := FLanding.Tick(FBelt.RampTravelLeft, Stands);
   if Cue.SlowsDown then
@@ -5817,6 +5833,9 @@ begin
         FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha), not FPastLauncher);
         if FRoadPainter <> nil then
           FRoadPainter.Draw(FSprites, FRoad, RamFloorY, AAlpha);
+        // On the road's far end, behind all that passes over the road
+        if FGatePainter <> nil then
+          FGatePainter.Draw(FSprites, FDynamics.Canvas, RamFloorY, AAlpha);
         // On the road, behind the pads: it drives behind them
         FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FRamPainter.DrawBody(FSprites, AAlpha);
@@ -6422,6 +6441,9 @@ begin
       DebugRebuildPads;
     ScancodeY:
       DebugRestorePads;
+    ScancodeX:
+      // The logo's flare turns the lamp, and the titles are not built
+      FGate.Promise;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

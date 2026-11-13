@@ -110,6 +110,7 @@ uses
   Game.Breakup in 'Game\Game.Breakup.pas',
   Game.Wreckage in 'Game\Game.Wreckage.pas',
   Game.Landing in 'Game\Game.Landing.pas',
+  Game.Gate in 'Game\Game.Gate.pas',
   Game.FarPlane in 'Game\Game.FarPlane.pas',
   Game.Fangs in 'Game\Game.Fangs.pas',
   Game.Explosions in 'Game\Game.Explosions.pas',

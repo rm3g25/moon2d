@@ -34,6 +34,7 @@ type
   TRoadEnd = class
   private
     FRunning: Boolean;
+    FArrived: Boolean;
     FLeft, FLastLeft: Double;
   public
     // The road runs out: its first tile stands at APhase - TileSize, the
@@ -57,6 +58,9 @@ type
     // this one
     function LeftAt(AAlpha: Single): Double;
     property Running: Boolean read FRunning;
+    // Come back at the end of the flight, not running out: what stands at
+    // its far end - the gate - stands only then
+    property Arrived: Boolean read FArrived;
   end;
 
   // The tiles of the pier, drawn in the road tile's picture on the road's
@@ -83,6 +87,7 @@ uses
 procedure TRoadEnd.Start(APhase: Double);
 begin
   FRunning := True;
+  FArrived := False;
   FLeft := APhase - TileSize;
   FLastLeft := FLeft;
 end;
@@ -90,6 +95,7 @@ end;
 procedure TRoadEnd.Arrive(ALeft: Double);
 begin
   FRunning := True;
+  FArrived := True;
   FLeft := ALeft;
   FLastLeft := FLeft;
 end;
@@ -97,6 +103,7 @@ end;
 procedure TRoadEnd.Clear;
 begin
   FRunning := False;
+  FArrived := False;
   FLeft := 0;
   FLastLeft := 0;
 end;

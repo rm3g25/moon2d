@@ -94,6 +94,8 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label><input id="g-searchlights" type="checkbox" checked> searchlights</label>
     <label><input id="g-farm" type="checkbox" checked> farm light</label>
     <label><input id="g-flight" type="checkbox"> the flight from point B, the fight over at <input id="p-fightEnd" type="number" step="5" value="150" style="width: 4.5em"> s</label>
+    <label><input id="g-gate" type="checkbox" checked> the gate's facade</label>
+    <label><input id="g-gate-amber" type="checkbox"> its lamp amber (after the logo's flare)</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -1601,11 +1603,133 @@ function drawFlightGuides(S) {
   const BargeLeft = Standing ? 0 : 176;
   Ctx.strokeRect(U(BargeLeft), U(336), U(160), U(16));
   Ctx.strokeRect(U(BargeLeft + 72), U(304), U(16), U(32));
-  if (Standing) Ctx.strokeRect(U(136), U(120), U(240), U(96));
+  if (Standing) Ctx.strokeRect(U(136), U(60), U(240), U(96));
   Ctx.setLineDash([]);
   Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
   Ctx.fillText('main barge', U(BargeLeft + 4), U(348)); Ctx.fillText('hero', U(BargeLeft + 70), U(300));
-  if (Standing) Ctx.fillText('about where the titles\' logo flares', U(140), U(130));
+  if (Standing) Ctx.fillText('about where the titles\' logo flares', U(140), U(70));
+  if (Standing && document.getElementById('g-gate').checked)
+    (Images[GateArt.id] ? drawGateArt() : drawGateFacade());
+}
+
+// The generation of the facade (`gate.png`, trimmed to the building): its
+// left edge at the gate's left, its right edge at the screen's, its foot on
+// the road; put in the night by its shade, as the city's pieces are. Its
+// lamp housing is unlit in the picture - the lamp's light is code.
+const GateArt = { id: 'gate', shade: 0.35, lampAt: [565, 383], lampRadius: 26 };
+function drawGateArt() {
+  const Img = Images[GateArt.id];
+  const Scale = (Layout.screen.w - Gate.left) / Img.width;
+  const Top = Gate.foot - Img.height * Scale;
+  Ctx.drawImage(shadedImage(GateArt.id, GateArt.shade), U(Gate.left), U(Top),
+    U(Img.width * Scale), U(Img.height * Scale));
+  drawGateLamp(Gate.left + GateArt.lampAt[0] * Scale, Top + GateArt.lampAt[1] * Scale,
+    GateArt.lampRadius * Scale);
+}
+function drawGateLamp(AX, AY, ARadius) {
+  const Amber = document.getElementById('g-gate-amber').checked;
+  const LampColour = Amber ? [255, 176, 64] : [255, 60, 48];
+  const Glow = Ctx.createRadialGradient(U(AX), U(AY), 0, U(AX), U(AY), U(ARadius * 5));
+  Glow.addColorStop(0, `rgba(${LampColour},0.55)`);
+  Glow.addColorStop(1, `rgba(${LampColour},0)`);
+  Ctx.globalCompositeOperation = 'lighter';
+  Ctx.fillStyle = Glow;
+  Ctx.fillRect(U(AX - ARadius * 5), U(AY - ARadius * 5), U(ARadius * 10), U(ARadius * 10));
+  Ctx.globalCompositeOperation = 'source-over';
+  Ctx.fillStyle = `rgb(${LampColour})`;
+  Ctx.beginPath(); Ctx.arc(U(AX), U(AY), U(ARadius * 0.6), 0, Math.PI * 2); Ctx.fill();
+}
+
+// The gate at the road's right end: the sealed door of the arena made a
+// building - a placeholder for the generation, to set its size and place.
+// Its face stands in the night; the sun behind on the left lays a thin rim
+// on its left edges and its top.
+const Gate = {
+  left: 392, top: 168, capTop: 150, foot: 352,
+  portal: { left: 426, right: 486, top: 280, radius: 22 },
+  leaves: { left: 432, right: 480, top: 288 },
+  lamp: { x: 456, y: 271, r: 2.6 },
+  stripeY: 204, windows: { top: 178, bottom: 190 },
+};
+function gatePortalPath(ALeft, ARight, ATop, ARadius) {
+  Ctx.beginPath();
+  Ctx.moveTo(U(ALeft), U(Gate.foot));
+  Ctx.lineTo(U(ALeft), U(ATop + ARadius));
+  Ctx.arcTo(U(ALeft), U(ATop), U(ALeft + ARadius), U(ATop), U(ARadius));
+  Ctx.lineTo(U(ARight - ARadius), U(ATop));
+  Ctx.arcTo(U(ARight), U(ATop), U(ARight), U(ATop + ARadius), U(ARadius));
+  Ctx.lineTo(U(ARight), U(Gate.foot));
+  Ctx.closePath();
+}
+function drawGateFacade() {
+  const Right = Layout.screen.w;
+  const Rim = 'rgba(255,150,128,0.85)';
+  const Cap = Gate.top - Gate.capTop;
+
+  // the block and its capsule roof, rounded toward the sun
+  Ctx.fillStyle = '#26252b';
+  Ctx.beginPath();
+  Ctx.moveTo(U(Gate.left), U(Gate.foot));
+  Ctx.lineTo(U(Gate.left), U(Gate.top));
+  Ctx.lineTo(U(Gate.left + 8), U(Gate.top));
+  Ctx.arcTo(U(Gate.left + 8), U(Gate.capTop), U(Gate.left + 8 + Cap), U(Gate.capTop), U(Cap));
+  Ctx.lineTo(U(Right), U(Gate.capTop));
+  Ctx.lineTo(U(Right), U(Gate.foot));
+  Ctx.closePath();
+  Ctx.fill();
+  Ctx.strokeStyle = Rim; Ctx.lineWidth = Math.max(1, U(0.7));
+  Ctx.beginPath();
+  Ctx.moveTo(U(Gate.left), U(Gate.foot - 4));
+  Ctx.lineTo(U(Gate.left), U(Gate.top));
+  Ctx.lineTo(U(Gate.left + 8), U(Gate.top));
+  Ctx.arcTo(U(Gate.left + 8), U(Gate.capTop), U(Gate.left + 8 + Cap), U(Gate.capTop), U(Cap));
+  Ctx.lineTo(U(Right), U(Gate.capTop));
+  Ctx.stroke();
+
+  // a ribbon of windows under the roof, a burnt-orange stripe below it
+  Ctx.fillStyle = '#1a2a33';
+  Ctx.fillRect(U(Gate.left + 6), U(Gate.windows.top), U(Right - Gate.left - 6), U(Gate.windows.bottom - Gate.windows.top));
+  for (let X = Gate.left + 10; X < Right; X += 9) {
+    Ctx.fillStyle = hash(X) < 0.45 ? 'rgba(120,220,235,0.55)' : 'rgba(60,90,100,0.5)';
+    Ctx.fillRect(U(X), U(Gate.windows.top + 2), U(6), U(Gate.windows.bottom - Gate.windows.top - 4));
+  }
+  Ctx.fillStyle = '#8a4426';
+  Ctx.fillRect(U(Gate.left), U(Gate.stripeY), U(Right - Gate.left), U(3));
+
+  // the portal: a thick capsule-topped frame, the two ribbed leaves shut
+  const P = Gate.portal;
+  Ctx.fillStyle = '#3a3840';
+  gatePortalPath(P.left, P.right, P.top, P.radius);
+  Ctx.fill();
+  Ctx.strokeStyle = Rim; Ctx.lineWidth = Math.max(1, U(0.6));
+  Ctx.beginPath();
+  Ctx.moveTo(U(P.left), U(Gate.foot - 2));
+  Ctx.lineTo(U(P.left), U(P.top + P.radius));
+  Ctx.arcTo(U(P.left), U(P.top), U(P.left + P.radius), U(P.top), U(P.radius));
+  Ctx.stroke();
+  const L = Gate.leaves;
+  const LeafRadius = P.radius - (L.top - P.top);
+  Ctx.save();
+  gatePortalPath(L.left, L.right, L.top, LeafRadius);
+  Ctx.clip();
+  Ctx.fillStyle = '#4a4752';
+  Ctx.fillRect(U(L.left), U(L.top), U(L.right - L.left), U(Gate.foot - L.top));
+  Ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  for (let Y = L.top + 6; Y < Gate.foot; Y += 6) Ctx.fillRect(U(L.left), U(Y), U(L.right - L.left), U(1));
+  const Seam = (L.left + L.right) / 2;
+  Ctx.fillStyle = '#121116';
+  Ctx.fillRect(U(Seam - 0.5), U(L.top), U(1), U(Gate.foot - L.top));
+  Ctx.fillStyle = '#e07a2e';
+  Ctx.fillRect(U(L.left), U(Gate.foot - 14), U(L.right - L.left), U(2));
+  Ctx.restore();
+
+  // the status lamp over the portal: red while sealed, amber after the flare
+  drawGateLamp(Gate.lamp.x, Gate.lamp.y, Gate.lamp.r / 0.6);
+
+  // a small cyan sign on the block, left of the portal
+  Ctx.fillStyle = 'rgba(110,230,240,0.9)';
+  Ctx.font = `${U(6)}px IBM Plex Mono, monospace`;
+  Ctx.fillText('L-3', U(Gate.left + 8), U(Gate.stripeY + 16));
 }
 function drawSpans(oC) {
   Ctx.fillStyle = 'rgba(255,138,112,0.18)';
@@ -1746,7 +1870,7 @@ function lookLine(AKind) {
 }
 
 const Ids = [...new Set([...LayerById.tunnel.elements.filter(E => !E.existing).map(E => E.id),
-  ...City.elements.map(E => E.id), ...Object.keys(Kit)])].concat(['ridge-tex', 'floor-tex', 'sand-tex']);
+  ...City.elements.map(E => E.id), ...Object.keys(Kit)])].concat(['ridge-tex', 'floor-tex', 'sand-tex', GateArt.id]);
 function listSlots() {
   const Box = document.getElementById('slots'); Box.innerHTML = '';
   for (const Id of Ids) {

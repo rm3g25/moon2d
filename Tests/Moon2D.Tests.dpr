@@ -56,6 +56,7 @@ uses
   Tests.Game.Breakup in 'Game\Tests.Game.Breakup.pas',
   Tests.Game.Wreckage in 'Game\Tests.Game.Wreckage.pas',
   Tests.Game.Landing in 'Game\Tests.Game.Landing.pas',
+  Tests.Game.Gate in 'Game\Tests.Game.Gate.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',
   Tests.Render.Monochrome in 'Render\Tests.Render.Monochrome.pas',

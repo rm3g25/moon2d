@@ -5,7 +5,8 @@
   passes the left edge; a place between the ticks lies between them; a
   clear is a whole road again. Come back at the end of the flight, its
   edge stands where it is told, the tiles past the right edge, and rides
-  the belt to where the world stops.
+  the belt to where the world stops; only then has it arrived - running
+  out or cleared, it has not.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -45,6 +46,8 @@ type
     procedure TestClearIsAWholeRoadAgain;
     [Test]
     procedure TestComeBackItsEdgeIsWhereToldAndRidesTheBelt;
+    [Test]
+    procedure TestItHasArrivedOnlyComeBack;
   end;
 
 implementation
@@ -171,6 +174,22 @@ begin
   Assert.IsFalse(FRoad.PierStands, 'No pier of its own: the grid is the road');
   Run(10, -1);
   Assert.AreEqual(0.0, FRoad.PierLeft, UnitSlack, 'Nothing rides');
+end;
+
+procedure TRoadEndTests.TestItHasArrivedOnlyComeBack;
+const
+  EdgeIn: Double = 516.0;
+begin
+  Assert.IsFalse(FRoad.Arrived, 'Not before anything');
+  FRoad.Start(Phase);
+  Assert.IsFalse(FRoad.Arrived, 'Not running out');
+  FRoad.Arrive(EdgeIn);
+  Assert.IsTrue(FRoad.Arrived, 'Come back');
+  FRoad.Start(Phase);
+  Assert.IsFalse(FRoad.Arrived, 'Not running out again');
+  FRoad.Arrive(EdgeIn);
+  FRoad.Clear;
+  Assert.IsFalse(FRoad.Arrived, 'Not once cleared');
 end;
 
 initialization

@@ -1390,6 +1390,11 @@ function ParseDynamic(AObj: TJSONObject;
 function NameRoll(const AName: string): Single;
 // The share of the way a motion has come at AShare (0..1) of its ticks
 function EasedShare(AEase: TMotionEase; AShare: Single): Single;
+// A signal lamp's light: a spill on what is around it while it flashes,
+// a colored halo ASize units across and a hot core. AFlash 0..1 is how far
+// it is into its flash, ALight how bright it burns.
+procedure DrawLamp(const ACanvas: TDynamicCanvas; AX, AY, ASize: Single;
+  const AColor: TRgb; ALight, AFlash: Single);
 
 implementation
 
@@ -2269,9 +2274,6 @@ begin
     Result := 1;
 end;
 
-// A signal lamp's light: a spill on what is around it while it flashes,
-// a colored halo ASize units across and a hot core. AFlash 0..1 is how far
-// it is into its flash, ALight how bright it burns.
 procedure DrawLamp(const ACanvas: TDynamicCanvas; AX, AY, ASize: Single;
   const AColor: TRgb; ALight, AFlash: Single);
 begin
