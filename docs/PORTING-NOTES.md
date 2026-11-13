@@ -268,6 +268,12 @@ about responsibility, not paths.
     it; the bridge over the pit is a pad that flies in with the scene.
     The betoner in the pit holds its fire while alive and burns in the
     beam with no points and no streak. The medkit next to it removed
+26. The pit has a bottom (3.0.129): a body fallen out of the room falls
+    to a screen under the floor and hangs there, still in the pit, for an
+    event to bring back (`TMonster.MoveFalling`, `PitBottomY`). In 2008 it
+    fell for good; after half an hour the feet passed the reach of an
+    Integer cell and `CellOfY` overflowed - the game fell over at the end
+    of the flight, the world standing still.
 
 ## Debug (under {$DEFINE DEBUGKEYS} in Moon2D.inc; the Release configuration drops the define itself)
 PgUp/PgDn - screens, End - to the next stop past where the hero is, through the end of the version

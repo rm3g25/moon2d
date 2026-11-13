@@ -8887,7 +8887,8 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   **`TCapsuleFrameTests`** (6, new in `Tests.Render.DomeFrames` - the
   stand's ribs, shadows and beacons of the capsule, the farm's ribs and
   their dark); `TFarPlaneSunTests` +2 (the glare); `TFarPlaneReadTests` +6
-  (the farm read, a capsule's faults). 40 in all; the tables are in
+  (the farm read, a capsule's faults); `TMonsterTests` +1 (a body in the
+  pit hangs at its bottom). 41 in all; the tables are in
   `docs/testing/game.md`, "The farm".
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).

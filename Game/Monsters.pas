@@ -1574,7 +1574,16 @@ const
   // Verbatim: below this line the original kept falling out of the
   // world instead of snapping to a cell
   BelowFloorY = ScreenHeight - 17; // 367
+  // The bottom of the pit, a screen under the floor: what fell there
+  // hangs, still in the pit, for an event to bring back. Falling on, half
+  // an hour of gravity takes the feet past the reach of an Integer cell
+  PitBottomY = 2 * ScreenHeight;
 begin
+  if FY >= PitBottomY then
+  begin
+    FY := PitBottomY;
+    Exit;
+  end;
   // A fall starts at no speed and the feet stay level with the deck for a
   // few ticks: without the drift a deck moving the same way slides back
   // under them and lands them, over and over

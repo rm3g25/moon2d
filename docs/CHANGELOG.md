@@ -30,7 +30,11 @@ crown no longer changes halves with the sign of a `cos(PI / 2)`, the feet
 throw no shadow of no length - and a beacon's seed takes its row, so the
 crown's lights no longer blink in pairs. `Render.DomeFrames` holds every
 frame's edges in units and draws a rib in its own dark; the frames'
-projection is `TFarPlaneDef.FramePoint` now. 40 tests more.
+projection is `TFarPlaneDef.FramePoint` now. The pit has a bottom: a body
+fallen out of a room hangs a screen under the floor, still in the pit,
+where in 2008 it fell for good - after half an hour of the world standing
+at the end of the flight its feet passed the reach of an Integer cell and
+the game fell over. 41 tests more.
 
 2026-11-12: **3.0.128 - the end in the air.** Stage 19 of arena 3: the
 fight ends at the hull's last life. The hull cracks - a flash, a groan of

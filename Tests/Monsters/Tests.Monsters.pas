@@ -8,6 +8,9 @@
   walker), in rooms of a few solid cells. Blows are struck with no losses
   and into a nil burst, so nothing here dies.
 
+  A body fallen into the pit falls to its bottom, a screen under the
+  floor, and hangs there for good: an hour of ticks raises nothing.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Monsters;
@@ -52,6 +55,8 @@ type
     procedure TestKnockKeepsBodyOnTheScreen;
     [Test]
     procedure TestHitCostsTheLosses;
+    [Test]
+    procedure TestBodyInThePitHangsAtItsBottom;
   end;
 
 implementation
@@ -73,6 +78,12 @@ const
   FallTicks = 150;
   // The most blows any test below strikes before it looks
   Plenty = 50;
+  // An hour of the game's ticks: falling on, the feet passed the reach of
+  // an Integer cell after half of it
+  PitTicks = 33 * 3600;
+  // A room with no floor: all of it the pit's mouth
+  PitRow = '................';
+  PitBottom = 2 * 384;
 
 // Round gives an Int64, and AreEqual takes two of one type: the places
 // of a body are read as Integer
@@ -257,6 +268,19 @@ begin
   Body.TakeDamage(0, 1, nil);
 
   Assert.AreEqual(Before - 1, Body.Lives);
+end;
+
+procedure TMonsterTests.TestBodyInThePitHangsAtItsBottom;
+begin
+  UseRoom([PitRow, PitRow, PitRow, PitRow, PitRow, PitRow, PitRow, PitRow,
+    PitRow, PitRow, PitRow, PitRow]);
+  var Body := Medkit(8, 2);
+
+  for var i := 1 to PitTicks do
+    Body.Tick(0, 0, nil);
+
+  Assert.IsTrue(PlaceY(Body) > 384, 'Still in the pit, for an event to bring back');
+  Assert.AreEqual(PitBottom, PlaceY(Body), 'Hanging at its bottom');
 end;
 
 initialization
