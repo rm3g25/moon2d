@@ -7,7 +7,10 @@ check_element.py and make_seamless.py left them. A solid texture (the floor)
 may be a .jpg; it is stored as PNG, the only image the sets carry. The order
 of the set is the order of the layout, the textures last. The city's
 buildings (the layout's cityKit) are packed once each, placed or not: the
-stand offers the unplaced ones to place.
+stand offers the unplaced ones to place; a piece's lit glass (<id>-glow,
+make_glow.py) follows it. The pictures the set holds and the layout does
+not name - the emblem's, which make_emblem.py writes into the set itself -
+are kept from the set as it was.
 
   python pack_set.py <folder> [out.mset]
 
@@ -44,7 +47,21 @@ def ordered_ids():
       Textures.append((Band['texture'], f"seamless band of layer {Layer['id']}"))
   for Id, (W, H) in Kit.items():
     Ids.append((Id, f'{W} x {H} units at k = 1, the city kit'))
+    Ids.append((Id + '-glow', f'the lit glass of {Id}, drawn over it unshaded'))
   return Ids + Textures
+
+
+def old_sprites(APath):
+  if not os.path.exists(APath):
+    return {}
+  with open(APath, 'rb') as Source:
+    Data = Source.read()
+  Size = struct.unpack('<I', Data[6:10])[0]
+  Manifest = json.loads(Data[10:10 + Size])
+  Base = 10 + Size
+  return {Sprite['name']: (Sprite['description'],
+    Data[Base + Sprite['offset']:Base + Sprite['offset'] + Sprite['size']])
+    for Sprite in Manifest['sprites']}
 
 
 def png_bytes(APath):
@@ -63,15 +80,24 @@ def main():
   Folder = sys.argv[1]
   OutPath = sys.argv[2] if len(sys.argv) > 2 else DefaultOut
   Sprites, Blobs, Offset = [], [], 0
-  for Id, Description in ordered_ids():
+  Named = ordered_ids()
+  Old = old_sprites(OutPath)
+  Kept = [(Id, Description, Blob) for Id, (Description, Blob) in Old.items()
+    if Id not in {Name for Name, _ in Named}]
+  Packed = []
+  for Id, Description in Named:
     Found = [Name for Name in (Id + '.png', Id + '.jpg') if os.path.exists(os.path.join(Folder, Name))]
     if not Found:
-      print(f'missing {Id} - not generated yet')
+      if not Id.endswith('-glow'):
+        print(f'missing {Id} - not generated yet')
       continue
-    Blob = png_bytes(os.path.join(Folder, Found[0]))
+    Packed.append((Id, Description, png_bytes(os.path.join(Folder, Found[0]))))
+  for Id, Description, Blob in Packed + Kept:
     Sprites.append({'name': Id, 'description': Description, 'offset': Offset, 'size': len(Blob)})
     Blobs.append(Blob)
     Offset += len(Blob)
+  if Kept:
+    print(f'kept from the set as it was: {", ".join(Id for Id, _, _ in Kept)}')
   Manifest = json.dumps({'id': SetId, 'description': SetDescription, 'sprites': Sprites},
     indent=2).encode('utf-8')
   with open(OutPath, 'wb') as Out:

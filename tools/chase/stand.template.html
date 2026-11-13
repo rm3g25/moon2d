@@ -64,7 +64,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 <div class="wrap">
   <header>
     <h1>Chase Backdrop Stand</h1>
-    <p>Screen 13, act 2: the tunnel ends, the city rides past. The buildings are pictures, the dome frames are code.</p>
+    <p>Screen 13, act 2: the tunnel ends, the city rides past; at the end of the strip the farm under its long dome. The buildings are pictures, the dome frames are code.</p>
   </header>
 
   <div class="stage">
@@ -92,6 +92,8 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label><input id="g-parallax" type="checkbox" checked> depth parallax</label>
     <label><input id="g-lights" type="checkbox" checked> city lights</label>
     <label><input id="g-searchlights" type="checkbox" checked> searchlights</label>
+    <label><input id="g-farm" type="checkbox" checked> farm light</label>
+    <label><input id="g-flight" type="checkbox"> the flight from point B, the fight over at <input id="p-fightEnd" type="number" step="5" value="150" style="width: 4.5em"> s</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -168,8 +170,40 @@ for (const [Id, Src] of Object.entries(Shipped)) {
 // ---- the speeds, simulated once per change ----
 let Track = [];
 function smooth(k) { k = Math.min(1, Math.max(0, k)); return k * k * (3 - 2 * k); }
+// The flight of the air fight, as the game rides it: from point B - the
+// city's emblem over the middle of the screen, the tunnel long gone - the
+// belt runs up to four times its cruise over its ramp; the fight over, it
+// runs on for 2 s and slows to a stand over 6 s (finale.md, "Stage 19 as
+// built"). The far plane rides at the belt's share, its brake included.
+const FlightShare = 4, LandingRunSec = 2, LandingSlowSec = 6;
+function flightShare(ASeconds, AFightEnd) {
+  const Up = smooth(ASeconds / Sp.rampSec) * FlightShare;
+  const Slowing = ASeconds - AFightEnd - LandingRunSec;
+  return Slowing <= 0 ? Up : FlightShare * (1 - smooth(Slowing / LandingSlowSec));
+}
+function emblemOffset() {
+  const Spire = City.elements.find(E => E.id === Layout.emblem?.on);
+  return Spire ? Spire.x + Spire.w / 2 - Layout.screen.w / 2 : 0;
+}
+let Flight = false, FightEnd = 150;
+function simulateFlight() {
+  let oC = emblemOffset(), oR = 0, oG = 0, oRoad = 0;
+  const oT = Cliff.x + Cliff.w + Layout.screen.w;
+  for (let i = 0; i <= SimSeconds * 33; i++) {
+    const t = i * Tick;
+    const Share = flightShare(t, FightEnd);
+    let C = Sp.cityCruise;
+    const rem = CityLength - Layout.screen.w - oC;
+    if (rem < Sp.cityBrakeZone) C = rem > 0 ? Math.max(Sp.cityLeast, C * rem / Sp.cityBrakeZone) : 0;
+    C *= Share;
+    Track.push({ t, oT, oC, oR, oG, oRoad, T: 0, C, Share });
+    oC += C * Tick; oR += C * Sp.ridgeShareOfCity * Tick; oRoad += Sp.road * Share * Tick;
+    oG += (Sp.ground || 0) * Share * Tick;
+  }
+}
 function simulate() {
   Track = [];
+  if (Flight) { simulateFlight(); listEvents(); return; }
   let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oG = 0, oRoad = 0, phase = 'tunnel', eased = 0;
   const cliffRight = Cliff.x + Cliff.w;
   for (let i = 0; i <= SimSeconds * 33; i++) {
@@ -200,6 +234,10 @@ function listEvents() {
     ['the cliff is gone, speeds ease to cruise', s => Cliff.x + Cliff.w - s.oT < 0],
     ['the brake zone begins', s => CityLength - Layout.screen.w - s.oC < Sp.cityBrakeZone],
   ];
+  if (Flight) Checks.push(['the fight is over: 2 s on, then the slowdown', s => s.t >= FightEnd],
+    ['the world stands', s => s.t >= FightEnd + LandingRunSec + LandingSlowSec]);
+  if (FarmFrame) Checks.push(['the farm\'s dome comes in on the right',
+    s => FarmFrame.x - s.oC < Layout.screen.w]);
   for (const F of Frames) {
     Checks.push([`${F.id} takes the sun`, s => F.x - s.oC < Sun.x]);
     Checks.push([`${F.id} leaves the sun`, s => F.x + F.w - s.oC < Sun.x]);
@@ -407,6 +445,7 @@ function drawElement(E, Offset, InCity, Index) {
       Ctx.drawImage(Pic, 0, U(E.y) - H, W, H);
       Ctx.restore();
     } else Ctx.drawImage(Pic, U(X), U(E.y) - H, W, H);
+    if (InCity) drawFarmGlass(E, U(X), U(E.y) - H, W, H);
     if (InCity) {
       Drawn.push({ E, X0: U(X), Y0: U(E.y) - H, X1: U(X) + W, Y1: U(E.y) });
       drawPaint(E, X, E.w * Img.height / Img.width);
@@ -654,6 +693,201 @@ function drawEmblem(E, ALeft, AHeight, ATick) {
     if (Tube) addPicture(tinted(`tek-${i + 1}`, Tube, Emblem.color), Left + Box[0] * W, Top + Box[1] * H,
       Box[2] * W, Box[3] * H, Emblem.coreLevel * Level);
   });
+}
+
+// ---- the farm under the long dome ----
+// The greenhouses of the kit carry their lit glass as a picture of their
+// own (<id>-glow, tools/chase/make_glow.py), drawn over the shaded piece and
+// not shaded: the glass is the one thing of the farm that shines. Each
+// greenhouse's grow light runs on a clock of its own; the lit ones light
+// the air in the dome, the inner face of its far ribs and the floor in
+// front of its glass - every light of the farm is theirs.
+const Farm = Layout.farm || null;
+const FarmFrame = Farm ? Frames.find(F => F.id === Farm.frame) : null;
+const FarmSeedBase = 4096;
+function farmSeed(AIndex) { return mix(FarmSeedBase + AIndex); }
+const FarmFirstSpanKey = 6, FarmSpanKeys = 10, FarmSpanOnKeys = 500;
+// How bright a greenhouse's glass is at the tick, 0..level: its time cut
+// into spans, onShare of them lit; a light switched on after a dark span
+// catches with a flicker and warms up over warmTicks, a sodium lamp's way;
+// one switched off goes out at once
+function farmGlowLevel(ASeed, ATick) {
+  const G = Farm.glow;
+  let Start = -rollInt(ASeed, FarmFirstSpanKey, 0, G.spanTicks[1]);
+  let WasLit = true;
+  for (let n = 0; ; n++) {
+    const Length = rollInt(ASeed, FarmSpanKeys + n, G.spanTicks[0], G.spanTicks[1]);
+    const Lit = roll(ASeed, FarmSpanOnKeys + n) < G.onShare;
+    if (ATick < Start + Length) {
+      if (!Lit) return 0;
+      if (WasLit) return G.level;
+      const Inside = ATick - Start;
+      if (Inside < G.flickerTicks && Inside % 4 < 2) return 0;
+      return G.level * Math.min(1, (Inside + 1) / G.warmTicks);
+    }
+    WasLit = Lit;
+    Start += Length;
+  }
+}
+// The lit greenhouses on the screen this frame: where their glass is, its
+// colour, and how much light it gives - its glass's share of the picture,
+// the picture's size in units over a hall's (400), its level
+const FarmHall = 400;
+function farmSources(AOffset, ATick) {
+  const Sources = [];
+  if (!Farm || !document.getElementById('g-farm').checked) return Sources;
+  City.elements.forEach((E, i) => {
+    const Glass = Farm.glass[E.id], Img = Images[E.id];
+    if (!Glass || !Img) return;
+    const Left = cityLeft(E, AOffset);
+    if (Left > Layout.screen.w + Farm.air.reach * 2 || Left + E.w < -Farm.air.reach * 2) return;
+    const Level = farmGlowLevel(farmSeed(i), ATick);
+    E.FarmLevel = Level;
+    if (Level <= 0) return;
+    const H = E.w * Img.height / Img.width;
+    const U0 = E.mirror ? 1 - Glass.at[0] : Glass.at[0];
+    Sources.push({ X: Left + U0 * E.w, Y: E.y - H + Glass.at[1] * H, Color: Glass.color,
+      Power: Level * Glass.share * E.w * H / FarmHall, K: nearness(depthY(E)) });
+  });
+  return Sources;
+}
+// The light of the farm at a point of the screen, in units: each source's
+// colour times its power, falling off as exp(-(d / reach)^2), reach at the
+// source's nearness; a channel at 1 is one hall's glass at full
+function farmLight(ASources, AX, AY) {
+  const Light = [0, 0, 0];
+  for (const S of ASources) {
+    const Reach = Farm.air.reach * S.K;
+    const Dx = (AX - S.X) / Reach, Dy = (AY - S.Y) / Reach;
+    const F = S.Power * Math.exp(-(Dx * Dx + Dy * Dy));
+    if (F < 1e-4) continue;
+    for (let c = 0; c < 3; c++) Light[c] += S.Color[c] / 255 * F;
+  }
+  return Light;
+}
+// A light as drawn at ALevel: many halls together brighten it toward full,
+// never past it, so it keeps its colour - 1 - exp(-light * level)
+function exposed(ALight, ALevel) { return ALight.map(c => 1 - Math.exp(-c * ALevel)); }
+// The light of the air in the dome, taken at the corners of its near half -
+// the half that covers its silhouette - and added over the buildings
+const AirAlong = 64, AirRound = 6;
+function farmAirMesh(ASources, AOffset) {
+  const F = FarmFrame, Shape = capsule(F), Level = Farm.air.level;
+  const Vertices = [], Indices = [];
+  for (let a = 0; a <= AirAlong; a++)
+    for (let r = 0; r <= AirRound; r++) {
+      const P = capsulePoint(F, -Shape.End + 2 * Shape.End * a / AirAlong, F.rows / 2 + F.rows / 2 * r / AirRound);
+      const S = frameProject(F, AOffset, ...P);
+      const Light = farmLight(ASources, S[0], S[1]);
+      Vertices.push(U(S[0]), U(S[1]), ...exposed(Light, Level));
+      if (a > 0 && r > 0) {
+        const Here = a * (AirRound + 1) + r, Back = Here - (AirRound + 1);
+        Indices.push(Back - 1, Here - 1, Here, Back - 1, Here, Back);
+      }
+    }
+  return { Vertices, Indices };
+}
+// The light out of the glass on the floor in front of the dome: from its
+// near foot toward the eye, fading out over length units of the floor, the
+// air's light at the foot times level; the ribs' feet throw gaps of gap
+// units - the barrel's at every cell, the ends' at their rows
+function farmApronMesh(ASources, AOffset) {
+  const F = FarmFrame, Shape = capsule(F), A = Farm.apron;
+  const R = F.d / 2, Barrel = F.w / 2 - R, Cell = 2 * Barrel / F.cells;
+  // the near foot as stretches between the ribs' feet: [from, to, outward]
+  const Feet = [];
+  for (let i = 0; i < F.cells; i++) {
+    const From = -Barrel + i * Cell, To = From + Cell;
+    Feet.push([[From + A.gap / 2, 0, -R], [To - A.gap / 2, 0, -R], [0, 0, -1], [0, 0, -1]]);
+  }
+  for (const Side of [-1, 1])
+    for (let j = F.rows / 2; j < F.rows; j += 2) {
+      const At = k => { const Phi = Math.PI * k / F.rows;
+        return [[Side * (Barrel + R * Math.sin(Phi)), 0, R * Math.cos(Phi)], [Side * Math.sin(Phi), 0, Math.cos(Phi)]]; };
+      for (let k = 0; k < 4; k++) {
+        // the gap in rows: a row is a quarter turn over rows / 2 of the arc
+        const Shrink = A.gap / 2 / (Math.PI * R / F.rows);
+        const [Pa, Na] = At(j + (k === 0 ? Shrink : 0) + 2 * k / 4);
+        const [Pb, Nb] = At(j + 2 * (k + 1) / 4 - (k === 3 ? Shrink : 0));
+        Feet.push([Pa, Pb, Na, Nb]);
+      }
+    }
+  const Vertices = [], Indices = [];
+  const Corner = (P, Light) => { const S = frameProject(F, AOffset, ...P); if (!S) return false;
+    Vertices.push(U(S[0]), U(S[1]), ...Light); return true; };
+  for (const [Pa, Pb, Na, Nb] of Feet) {
+    const Sa = frameProject(F, AOffset, ...Pa), Sb = frameProject(F, AOffset, ...Pb);
+    if (!Sa || !Sb || Math.max(Sa[0], Sb[0]) < 0 || Math.min(Sa[0], Sb[0]) > Layout.screen.w) continue;
+    const La = exposed(farmLight(ASources, Sa[0], Sa[1] - 4), A.level);
+    const Lb = exposed(farmLight(ASources, Sb[0], Sb[1] - 4), A.level);
+    const Base = Vertices.length / 5;
+    const Oa = Pa.map((c, n) => c + Na[n] * A.length), Ob = Pb.map((c, n) => c + Nb[n] * A.length);
+    if (!Corner(Pa, La) || !Corner(Pb, Lb) || !Corner(Ob, [0, 0, 0]) || !Corner(Oa, [0, 0, 0])) {
+      Vertices.length = Base * 5;
+      continue;
+    }
+    Indices.push(Base, Base + 1, Base + 2, Base, Base + 2, Base + 3);
+  }
+  return { Vertices, Indices };
+}
+// Triangles whose colour lies in their corners, as the game's
+// SDL_RenderGeometry draws them, onto a canvas of their own; added over the
+// scene with 'lighter' - SDL_BLENDMODE_ADD
+const LightCanvas = document.createElement('canvas');
+const LightGl = LightCanvas.getContext('webgl', { premultipliedAlpha: true, preserveDrawingBuffer: true });
+const LightProgram = (() => {
+  const Make = (Kind, Src) => { const Sh = LightGl.createShader(Kind); LightGl.shaderSource(Sh, Src); LightGl.compileShader(Sh); return Sh; };
+  const P = LightGl.createProgram();
+  LightGl.attachShader(P, Make(LightGl.VERTEX_SHADER, `attribute vec2 At; attribute vec3 Col; uniform vec2 Size; varying vec3 V;
+    void main() { gl_Position = vec4(At.x / Size.x * 2.0 - 1.0, 1.0 - At.y / Size.y * 2.0, 0.0, 1.0); V = Col; }`));
+  LightGl.attachShader(P, Make(LightGl.FRAGMENT_SHADER, `precision mediump float; varying vec3 V;
+    void main() { gl_FragColor = vec4(V, 1.0); }`));
+  LightGl.linkProgram(P);
+  return P;
+})();
+const LightBuffer = LightGl.createBuffer(), LightIndices = LightGl.createBuffer();
+function renderLight(AMesh) {
+  if (LightCanvas.width !== View.width || LightCanvas.height !== View.height) {
+    LightCanvas.width = View.width; LightCanvas.height = View.height;
+  }
+  const G = LightGl;
+  G.viewport(0, 0, View.width, View.height);
+  G.clearColor(0, 0, 0, 0); G.clear(G.COLOR_BUFFER_BIT);
+  if (!AMesh.Indices.length) return false;
+  G.useProgram(LightProgram);
+  G.bindBuffer(G.ARRAY_BUFFER, LightBuffer);
+  G.bufferData(G.ARRAY_BUFFER, new Float32Array(AMesh.Vertices), G.STREAM_DRAW);
+  G.bindBuffer(G.ELEMENT_ARRAY_BUFFER, LightIndices);
+  G.bufferData(G.ELEMENT_ARRAY_BUFFER, new Uint16Array(AMesh.Indices), G.STREAM_DRAW);
+  const At = G.getAttribLocation(LightProgram, 'At'), Col = G.getAttribLocation(LightProgram, 'Col');
+  G.enableVertexAttribArray(At); G.vertexAttribPointer(At, 2, G.FLOAT, false, 20, 0);
+  G.enableVertexAttribArray(Col); G.vertexAttribPointer(Col, 3, G.FLOAT, false, 20, 8);
+  G.uniform2f(G.getUniformLocation(LightProgram, 'Size'), View.width, View.height);
+  G.disable(G.BLEND);
+  G.drawElements(G.TRIANGLES, AMesh.Indices.length, G.UNSIGNED_SHORT, 0);
+  return true;
+}
+// The light canvas added over the scene between ATop and ABottom, units
+function addLight(ATop, ABottom) {
+  Ctx.save();
+  Ctx.beginPath(); Ctx.rect(0, U(ATop), View.width, U(ABottom - ATop)); Ctx.clip();
+  Ctx.globalCompositeOperation = 'lighter';
+  Ctx.drawImage(LightCanvas, 0, 0);
+  Ctx.restore();
+}
+// A greenhouse's lit glass over its shaded picture, at its level, not shaded
+function drawFarmGlass(E, ALeft, ATop, AWidth, AHeight) {
+  const Glow = Images[E.id + '-glow'];
+  if (!Glow || !Farm || !document.getElementById('g-farm').checked) return;
+  const Level = E.FarmLevel ?? 0;
+  if (Level <= 0) return;
+  Ctx.globalAlpha = Math.min(1, Level);
+  if (E.mirror) {
+    Ctx.save(); Ctx.translate(ALeft + AWidth, 0); Ctx.scale(-1, 1);
+    Ctx.drawImage(Glow, 0, ATop, AWidth, AHeight);
+    Ctx.restore();
+  } else Ctx.drawImage(Glow, ALeft, ATop, AWidth, AHeight);
+  Ctx.globalAlpha = 1;
 }
 
 // ---- the warning lights on the frames ----
@@ -978,6 +1212,86 @@ function geodesic(AFrequency) {
   Geodesics.set(AFrequency, G);
   return G;
 }
+// The farm's long dome: a capsule - a barrel vault with a quarter dome at
+// each end - its frame a diagrid. Rows of nodes round the arch, every other
+// row shifted by half a cell, each node tied to its two neighbours in the
+// row above: triangles in a slant, a purlin along each row. At the ends the
+// rows run on into the quarter domes and close onto the ends' feet, so the
+// ribs fan out of the two poles at the dome's foot. Every beltEvery cells a
+// heavy arch - a belt - crosses the barrel, at its ends too; the ring is the
+// foot. w is its length, d its depth, h its height; edges in units from its
+// centre on the base line, each with its thickness in ribs.
+const Capsules = new Map();
+const BeltThickening = 2.2, RingThickening = 1.6, BeltSteps = 4;
+function capsulePoint(F, AAlong, ARow) {
+  const R = F.d / 2, Barrel = F.w / 2 - R;
+  const Cap = F.capCells * 2 * Barrel / F.cells;
+  const Phi = Math.PI * ARow / F.rows;
+  const Depth = R * Math.cos(Phi), Round = Math.sin(Phi);
+  const Along = Math.abs(AAlong);
+  if (Along <= Barrel) return [AAlong, F.h * Round, Depth];
+  const Turn = Math.PI / 2 * Math.min(1, (Along - Barrel) / Cap);
+  return [Math.sign(AAlong) * (Barrel + R * Round * Math.sin(Turn)), F.h * Round * Math.cos(Turn), Depth];
+}
+function capsule(F) {
+  if (Capsules.has(F)) return Capsules.get(F);
+  const Barrel = F.w / 2 - F.d / 2, Cell = 2 * Barrel / F.cells;
+  const Cells = F.cells + 2 * F.capCells, End = Barrel + F.capCells * Cell;
+  const Edges = [], Nodes = [];
+  const Add = (A, B, Thick) => {
+    if (Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]) > 1e-6) Edges.push({ A, B, Thick });
+  };
+  // the nodes of row j: an even row from end to end, an odd one between
+  const RowNodes = j => {
+    const Shift = (j % 2) / 2, List = [];
+    for (let i = 0; i + Shift <= Cells + 1e-9; i++) List.push(-End + (i + Shift) * Cell);
+    return List;
+  };
+  for (let j = 0; j <= F.rows; j++) {
+    const Row = RowNodes(j);
+    const Foot = j === 0 || j === F.rows;
+    for (let i = 0; i + 1 < Row.length; i++)
+      Add(capsulePoint(F, Row[i], j), capsulePoint(F, Row[i + 1], j), Foot ? RingThickening : 1);
+    for (const Along of Row) {
+      const At = capsulePoint(F, Along, j);
+      if (j > 0 && j < F.rows) Nodes.push({ At, Key: [Along / F.w, j / F.rows, 0] });
+      if (j === F.rows) continue;
+      for (const Step of [-Cell / 2, Cell / 2])
+        if (Math.abs(Along + Step) <= End + 1e-9) Add(At, capsulePoint(F, Along + Step, j + 1), 1);
+    }
+  }
+  // the ends' feet: an arc on the ground through the ends of the even rows
+  for (const Side of [-1, 1])
+    for (let k = 0; k < F.rows * BeltSteps; k++)
+      Add(capsulePoint(F, Side * End, k / BeltSteps), capsulePoint(F, Side * End, (k + 1) / BeltSteps), RingThickening);
+  // the belts, the barrel's ends among them
+  for (let n = 0; n * F.beltEvery <= F.cells; n++) {
+    const Along = -Barrel + n * F.beltEvery * Cell;
+    for (let k = 0; k < F.rows * BeltSteps; k++)
+      Add(capsulePoint(F, Along, k / BeltSteps), capsulePoint(F, Along, (k + 1) / BeltSteps), BeltThickening);
+  }
+  const Shape = { Edges, Nodes, End };
+  Capsules.set(F, Shape);
+  return Shape;
+}
+// Every frame as edges in units from its centre, a thickness in ribs each,
+// and its nodes for the beacons: At in units, Key - the place the beacon's
+// seed is taken from, Share - its height as a share of the frame's
+function frameShape(F) {
+  if (F.kind === 'capsule') {
+    const Shape = capsule(F);
+    return { Edges: Shape.Edges, Nodes: Shape.Nodes.map(N => ({ ...N, Share: N.At[1] / F.h })) };
+  }
+  const R = F.w / 2, H = F.h, G = geodesic(F.frequency || 3);
+  const Scale = P => [P[0] * R, P[1] * H, P[2] * R];
+  return {
+    Edges: [...G.Edges.map(([Pa, Pb]) => ({ A: Scale(Pa), B: Scale(Pb), Thick: 1 })),
+      ...G.Ring.map(([Pa, Pb]) => ({ A: Scale(Pa), B: Scale(Pb), Thick: RingThickening }))],
+    Nodes: G.Nodes.map(N => ({ At: Scale(N), Key: N, Share: N[1] })),
+  };
+}
+// The half of a frame across: a capsule's is its depth, a dome's its width
+function frameHalfDepth(F) { return F.kind === 'capsule' ? F.d / 2 : F.w / 2; }
 // A point nearer the eye than this share of the focal length is behind it
 const NearestShare = 0.15;
 // A shadow is cut this far in front of that plane: cut on it, the
@@ -1039,34 +1353,34 @@ function frameRibs(Offset) {
   const L = Math.hypot(Sx, Sy, Camera.focal);
   const D = [Sx / L, Sy / L, Camera.focal / L];
   for (const F of Frames) {
-    const R = F.w / 2, H = F.h;
+    const R = F.w / 2;
     const Left = frameProject(F, Offset, -R, 0, 0), Right = frameProject(F, Offset, R, 0, 0);
     if (Right[0] < -R || Left[0] > Layout.screen.w + R) continue;
-    const G = geodesic(F.frequency || 3);
-    const Put = (Pa, Pb, Ring) => {
-      const A = [Pa[0] * R, Pa[1] * H, Pa[2] * R], B = [Pb[0] * R, Pb[1] * H, Pb[2] * R];
+    const Shape = frameShape(F);
+    const Farm = F === FarmFrame;
+    const Put = (A, B, Thickening) => {
       const Sa = frameProject(F, Offset, ...A), Sb = frameProject(F, Offset, ...B);
       if (!Sa || !Sb) return;
       const Z = (A[2] + B[2]) / 2;
-      const Rib = { A: Sa, B: Sb, Z, W: (F.rib || 2) * (Ring ? 1.6 : 1) * (Sa[2] + Sb[2]) / 2 };
+      const Thick = (F.rib || 2) * Thickening;
+      const Rib = { A: Sa, B: Sb, Z, W: Thick * (Sa[2] + Sb[2]) / 2, Farm };
       (Z > 0 ? Far : Near).push(Rib);
       // its shadow on the crater floor: thrown toward the eye, long - the sun is low
       if (A[1] > 0 || B[1] > 0) {
         const Drop = P => [P[0] - D[0] * P[1] / D[1], 0, P[2] - D[2] * P[1] / D[1]];
         const Shares = cutAtEye(Drop(A), Drop(B));
-        const Thick = (F.rib || 2) * (Ring ? 1.6 : 1);
         const Stroke = Shares && shadowStroke(F, Offset, A, B, Shares, Thick, D);
         if (Stroke) Shadows.push(Stroke);
       }
     };
-    for (const [Pa, Pb] of G.Edges) Put(Pa, Pb, false);
+    for (const E of Shape.Edges) if (E.Thick === 1) Put(E.A, E.B, 1);
     if (F.beaconsAbove !== undefined)
-      for (const N of G.Nodes) {
-        if (N[1] <= F.beaconsAbove) continue;
-        const S = frameProject(F, Offset, N[0] * R, N[1] * H, N[2] * R);
-        if (S) (N[2] > 0 ? FarBeacons : NearBeacons).push({ X: S[0], Y: S[1], K: S[2], Seed: beaconSeed(Frames.indexOf(F), N) });
+      for (const N of Shape.Nodes) {
+        if (N.Share <= F.beaconsAbove) continue;
+        const S = frameProject(F, Offset, ...N.At);
+        if (S) (N.At[2] > 0 ? FarBeacons : NearBeacons).push({ X: S[0], Y: S[1], K: S[2], Seed: beaconSeed(Frames.indexOf(F), N.Key) });
       }
-    for (const [Pa, Pb] of G.Ring) Put(Pa, Pb, true);
+    for (const E of Shape.Edges) if (E.Thick !== 1) Put(E.A, E.B, E.Thick);
   }
   Far.sort((a, b) => b.Z - a.Z);
   Near.sort((a, b) => b.Z - a.Z);
@@ -1077,13 +1391,21 @@ function frameRibs(Offset) {
 // Lit from behind, nothing of the frame faces the eye in the light; only the
 // edges catch it.
 const RibDark = 'rgb(26,23,21)';
-function drawRibs(Ribs) {
+const RibDarkRgb = [26, 23, 21];
+// The far ribs of the farm's dome turn their inner face to the eye, and the
+// farm lights it: the dark of a rib, and the light there times ribLevel
+function ribColour(ARib, ASources) {
+  if (!ARib.Farm || ARib.Z <= 0 || !ASources?.length) return RibDark;
+  const Light = exposed(farmLight(ASources, (ARib.A[0] + ARib.B[0]) / 2, (ARib.A[1] + ARib.B[1]) / 2), Farm.air.ribLevel);
+  return `rgb(${RibDarkRgb.map((c, n) => Math.round(c + (255 - c) * Light[n])).join(',')})`;
+}
+function drawRibs(Ribs, ASources) {
   const Sx = U(Sun.x), Sy = U(Sun.y);
   Ctx.lineCap = 'round';
   for (const R of Ribs) {
     const Ax = U(R.A[0]), Ay = U(R.A[1]), Bx = U(R.B[0]), By = U(R.B[1]);
     const W = Math.max(1, U(R.W));
-    Ctx.strokeStyle = RibDark; Ctx.lineWidth = W;
+    Ctx.strokeStyle = ribColour(R, ASources); Ctx.lineWidth = W;
     Ctx.beginPath(); Ctx.moveTo(Ax, Ay); Ctx.lineTo(Bx, By); Ctx.stroke();
     // the side toward the sun
     let Nx = -(By - Ay), Ny = Bx - Ax;
@@ -1247,6 +1569,24 @@ function drawGuides(oRoad) {
   Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
   Ctx.fillText('the Ram', U(347), U(234)); Ctx.fillText('hero', U(78), U(316));
 }
+// The flight's play layer: the main barge, the road come back at the end
+// and docked, and where the titles' logo will flare
+function drawFlightGuides(S) {
+  const Standing = S.t >= FightEnd + LandingRunSec + LandingSlowSec;
+  if (Standing) {
+    const Floor = U(Layout.screen.floorLine);
+    Ctx.fillStyle = '#262830'; Ctx.fillRect(U(160), Floor, View.width - U(160), View.height - Floor);
+  }
+  Ctx.strokeStyle = 'rgba(111,216,232,0.8)'; Ctx.lineWidth = 2; Ctx.setLineDash([8, 6]);
+  const BargeLeft = Standing ? 0 : 176;
+  Ctx.strokeRect(U(BargeLeft), U(336), U(160), U(16));
+  Ctx.strokeRect(U(BargeLeft + 72), U(304), U(16), U(32));
+  if (Standing) Ctx.strokeRect(U(136), U(120), U(240), U(96));
+  Ctx.setLineDash([]);
+  Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
+  Ctx.fillText('main barge', U(BargeLeft + 4), U(348)); Ctx.fillText('hero', U(BargeLeft + 70), U(300));
+  if (Standing) Ctx.fillText('about where the titles\' logo flares', U(140), U(130));
+}
 function drawSpans(oC) {
   Ctx.fillStyle = 'rgba(255,138,112,0.18)';
   for (const E of [...City.elements, ...Frames]) if (E.tintsSun) Ctx.fillRect(U(E.x - oC), U(16), U(E.w), U(6));
@@ -1273,7 +1613,10 @@ function frame(Stamp) {
   }
   LifeTick = Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)));
   TrainTime = Now * 33;
-  if (Ribs) { drawRibs(Ribs.Far); drawBeacons(Ribs.FarBeacons, LifeTick); }
+  const Sources = FarmFrame ? farmSources(S.oC, LifeTick) : [];
+  const Apron = Sources.length > 0 && renderLight(farmApronMesh(Sources, S.oC));
+  if (Apron) addLight(City.band.top, City.band.bottom);
+  if (Ribs) { drawRibs(Ribs.Far, Sources); drawBeacons(Ribs.FarBeacons, LifeTick); }
   Drawn = [];
   // the train at its depth: before the first building in front of the line
   const Line = Train && monorailLine();
@@ -1292,6 +1635,7 @@ function frame(Stamp) {
   });
   if (TrainDue) drawTrain(Line, S.oC, City.elements.length);
   BeamsDue.forEach(addBeam);
+  if (Sources.length && renderLight(farmAirMesh(Sources, S.oC))) addLight(0, Layout.screen.h);
   if (Ribs) { drawRibs(Ribs.Near); drawBeacons(Ribs.NearBeacons, LifeTick); }
   for (const B of Beams) addBeamGlints(B, Ribs?.Near);
   if (document.getElementById('g-glare').checked) drawGlare(Cover);
@@ -1303,7 +1647,9 @@ function frame(Stamp) {
   // their crests a stroke falls on the crater floor, which it shades too
   if (ShowShadows && document.getElementById('g-hill-shadows').checked && LayerById.ground)
     drawShadows(LayerById.ground.band.top, Layout.screen.h);
-  if (document.getElementById('g-play').checked) drawGuides(S.oRoad);
+  if (Apron && LayerById.ground && renderLight(farmApronMesh(Sources, S.oC)))
+    addLight(LayerById.ground.band.top, Layout.screen.h);
+  if (document.getElementById('g-play').checked) (Flight ? drawFlightGuides(S) : drawGuides(S.oRoad));
   if (document.getElementById('g-spans').checked) drawSpans(S.oC);
   document.getElementById('hud').innerHTML =
     (Editing ? 'placing - paused<br>' : '') + `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%<br>tick ${LifeTick}${Line ? `<br>train run ${(trainRun(Line.RightStop - Line.LeftStop).Ticks / 33).toFixed(1)} s` : ''}`;
@@ -1321,6 +1667,11 @@ document.querySelectorAll('.rate').forEach(B => B.onclick = () => {
 });
 document.getElementById('scrub').oninput = Ev => { Now = +Ev.target.value; };
 
+document.getElementById('g-flight').onchange = Ev => { Flight = Ev.target.checked; Now = 0; simulate(); };
+document.getElementById('p-fightEnd').onchange = Ev => {
+  const V = parseFloat(Ev.target.value);
+  if (V > 0 && V < SimSeconds - 20) { FightEnd = V; simulate(); }
+};
 for (const Key of ['tunnelPeak', 'tunnelCruise', 'cityCruise', 'cityShareInTunnel', 'ground']) {
   const Input = document.getElementById('p-' + Key);
   Input.value = Sp[Key];
