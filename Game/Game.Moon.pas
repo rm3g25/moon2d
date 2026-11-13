@@ -713,13 +713,13 @@ const
   BargeBlowDepth = 8.0;
   // The end of the flight: the hull's throe, its burst, the wind of the
   // flight dying as it slows, the main barge coming to rest against the
-  // road's edge; the end track over the still picture, in from silence
+  // road's edge; the end track in with the hull's burst - its own first
+  // bars come from far off, under the blasts
   HullGroanSoundFile = 'hullgroan.wav';
   HullBreakSoundFile = 'hullbreak.wav';
   FlightDownSoundFile = 'flightdown.wav';
   BargeDockSoundFile = 'bargedock.wav';
   EndMusicFile = 'credits.ogg';
-  EndMusicFadeSeconds = 2.0;
   // A piece of the hull blowing up in the series shakes the screen this
   // much; the main barge rocks this deep as the road docks against it
   WreckBlastTrauma = 0.25;
@@ -4664,7 +4664,7 @@ end;
 
 // The end of the flight, carried out: the world slows, the small barges
 // leave, the main barge berths and the road comes back - the barge docks
-// against it in TickPier; at rest, a breath, then the end track
+// against it in TickPier
 procedure TMoonGame.TickLanding;
 begin
   TickLandingCarry;
@@ -4683,11 +4683,6 @@ begin
     FRoad.Arrive(Cue.RoadLeft);
     FRoadPad.Wake;
     FRoadPad.FlyTo(FRoad.PierLeft, RamFloorY, 0);
-  end;
-  if Cue.HandsOver then
-  begin
-    FCurrentMusic := EndMusicFile;
-    FAudio.PlayMusic(EndMusicFile, mmOnce, EndMusicFadeSeconds);
   end;
 end;
 
@@ -4717,7 +4712,8 @@ begin
 end;
 
 // The hull is gone: its pieces fly from where it stood, and a boss's blast
-// where its heart was, its after-pops with it
+// where its heart was, its after-pops with it; the end track comes in under
+// them
 procedure TMoonGame.BurstTheHull;
 begin
   var Heart := FRam.HullMiddle;
@@ -4728,6 +4724,9 @@ begin
   FExplosions.Detonate(Heart.X, Heart.Y, ekBoss);
   FAudio.Play(HullBreakSoundFile);
   FAudio.Play(RageBlastSoundFile);
+
+  FCurrentMusic := EndMusicFile;
+  FAudio.PlayMusic(EndMusicFile, mmOnce);
 end;
 
 // A piece blows up where it flies - but not once it has fallen to the

@@ -8,8 +8,9 @@
   the slowing world up against the barge's right side. Docked there, the
   barge rides on with the road, and the world comes to rest with the barge
   against the left edge of the screen and the road from its side on: no
-  abyss left to fall into. A breath of silence over the still picture, and
-  the end track comes in: the hand-over to the titles.
+  abyss left to fall into. A breath over the still picture, and the titles
+  take over: the hand-over. The end track is not the landing's - it came in
+  with the hull's burst.
 
   Only the clock and what each tick tells: the belt, the road, the barge,
   the hero and the sound are the caller's. The road's edge comes in where
@@ -36,7 +37,7 @@ const
   // The main barge glides to its berth this fast: there well before the
   // road reaches it
   LandingBerthTicks = 50;
-  // The still picture holds its breath this long before the end track
+  // The still picture holds its breath this long before the titles
   LandingHandOverAfterTicks = 66;
   // The road's edge stops a barge's length from the left edge: the main
   // barge, docked against it, stops against the left edge
@@ -59,7 +60,7 @@ type
     RoadLeft: Double;
     // The world stands
     Stands: Boolean;
-    // The end track: the titles take over
+    // The titles take over
     HandsOver: Boolean;
   end;
 

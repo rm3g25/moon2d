@@ -6,7 +6,7 @@
   from just beyond the right edge, and rides the slowing world to stop a
   barge's length from the left edge - the main barge docked against it
   stops against the left edge; once the world stands it tells so once,
-  and a breath later the hand-over to the end track, once. A start while
+  and a breath later the hand-over to the titles, once. A start while
   it runs is nothing; a clear makes it idle.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -60,7 +60,7 @@ type
     [Test]
     procedure TestItTellsOnceThatTheWorldStands;
     [Test]
-    procedure TestTheEndTrackABreathAfterTheStand;
+    procedure TestTheHandOverABreathAfterTheStand;
     [Test]
     procedure TestAStartWhileItRunsIsNothing;
     [Test]
@@ -187,7 +187,7 @@ begin
   Assert.AreEqual<TLandingStage>(lgStanding, FLanding.Stage, 'Standing');
 end;
 
-procedure TLandingTests.TestTheEndTrackABreathAfterTheStand;
+procedure TLandingTests.TestTheHandOverABreathAfterTheStand;
 begin
   FLanding.Start;
   StepTicks(ManyTicks);

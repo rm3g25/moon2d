@@ -8069,13 +8069,14 @@ so a unit (and later a test) can reach it. `interface` holds
   with `FBelt.RampTravelLeft` and whether the belt stands - `SlowsDown`:
   `FBelt.Run(0, LandingSlowTicks)`, `FBarge.Berth(LandingBerthTicks)`,
   `FFlock.Disperse`, `FlightDownSoundFile`; `RoadIn`: `FRoad.Arrive`, the
-  road's pad woken and flown there; `HandsOver`: **`EndMusicFile`** (`credits.ogg`)
-  once, in over `EndMusicFadeSeconds` 2. **`CarryOutBreakup`** (in
+  road's pad woken and flown there; `HandsOver`: nothing since 3.0.130 -
+  the titles' cue (the end track is the burst's). **`CarryOutBreakup`** (in
   `TickRam`): the crack - `ekMachine` at `HullMiddle` and
   `HullGroanSoundFile`; a pop - `ekBarrel` at `ThroePopAt`; a cough -
   `JetFireSoundFile`; the burst - **`BurstTheHull`** (**`FWreckage`**
   shattered from `FRamPainter.Shatter` at the heart with the flight's pace,
-  `ekBoss`, `HullBreakSoundFile` and `RageBlastSoundFile`); a piece -
+  `ekBoss`, `HullBreakSoundFile` and `RageBlastSoundFile`; since 3.0.130
+  **`EndMusicFile`** (`credits.ogg`) once, at once, no fade); a piece -
   **`BlowWreckPiece`** (`ekMachine`, `WreckBlastTrauma` 0.25; none for a
   piece fallen under `WreckBlastFloor` 280).
   **`TickWreckage`** - the pieces by the belt's wind, **`FWreckFire`** (a
@@ -8099,7 +8100,9 @@ so a unit (and later a test) can reach it. `interface` holds
   level without the road's pad). `TickLanding` ticks the lamp, `ClearPier`
   clears it. Drawn right after the road's tiles, before the Ram, the
   wreckage and the pads, on the world's shake. Debug: the key X is
-  `FGate.Promise`, till the titles' flare calls it.
+  `FGate.Promise`, till the titles' flare calls it. In the same version
+  the end track moved from the landing's hand-over to `BurstTheHull`
+  (`finale.md`, "Decided 2026-11-14"); `EndMusicFadeSeconds` is gone.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:

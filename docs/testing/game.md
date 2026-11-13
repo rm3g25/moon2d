@@ -1122,7 +1122,7 @@ out on the belt; 600 ticks are enough for all of it.
 | `TestTheRoadComesInOnceFromBeyondTheRightEdge` | once; no farther than `LandingRoadEnterGap` beyond the edge, and from beyond it | the road pops up on the screen, or twice |
 | `TestTheRoadStopsABargesLengthFromTheLeftEdge` | where the world stops: its edge at `BargeLength`, within 0.01; it came in right of the barge at its berth | the barge docked against it stops off the left edge, or the road comes in short of the barge and never meets it |
 | `TestItTellsOnceThatTheWorldStands` | once, `LandingSlowTicks` after the slowdown; standing | the stand before the stop, or never |
-| `TestTheEndTrackABreathAfterTheStand` | once, `LandingHandOverAfterTicks` after the stand; handed over | the end track over the slowdown, or never |
+| `TestTheHandOverABreathAfterTheStand` | once, `LandingHandOverAfterTicks` after the stand; handed over | the titles take over the slowdown, or never |
 | `TestAStartWhileItRunsIsNothing` | started again ten ticks short of the slowdown: the slowdown on time | a second last life sets the clock back |
 | `TestAClearMakesItIdle` | cleared: not running, idle, nothing handed over | a restart keeps the hero spared |
 

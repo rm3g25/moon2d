@@ -24,7 +24,11 @@ half a second once it is promised to open (`TGate.Promise`) - the cue of
 the titles' flare, which is not built; the debug key X gives it till then.
 The gate stays shut: it opens in level 3. On the stand a `gate.png`
 dropped on the stage is taken now (its id was not among those the stage
-takes). 10 tests more.
+takes). The end track comes in with the hull's burst now, a second after
+the last orb, at once and with no fade of ours - it came 10 s after, over
+a fade of two more, and its own first bars come from far off: too much
+silence; the hand-over a breath after the stand stays, the titles' cue.
+10 tests more.
 
 2026-11-13: **3.0.129 - the farm under the long dome.** Stage 19a of
 arena 3: at the end of the city's strip, where the crater had an empty

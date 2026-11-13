@@ -85,7 +85,7 @@ Tests\
     Tests.Game.Pieces.pas  what is left of a barge that breaks
     Tests.Game.Breakup.pas  the end of the Ram's hull: the crack, the throe, the burst, the series
     Tests.Game.Wreckage.pas  what is left of the Ram's hull: its pieces flying, falling slowly, taken back by the wind
-    Tests.Game.Landing.pas  the end of the flight: the slowdown, the road's stop, the stand, the end track
+    Tests.Game.Landing.pas  the end of the flight: the slowdown, the road's stop, the stand, the hand-over
     Tests.Game.Gate.pas    the gate at the end of the flight: its lamp's turn, the facade's place along the road
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read

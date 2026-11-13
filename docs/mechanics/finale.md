@@ -1,6 +1,6 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the gate built (3.0.130, see "The gate as built"); the titles not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
+Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the gate built (3.0.130, see "The gate as built"), the end track moved to the hull's burst in the same version ("Decided 2026-11-14"); the titles not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
@@ -158,8 +158,9 @@ of the camera through the city takes its place.
   and the half second of its turn; whether the facade wants its rim.
 
 ### The order, from the hand-over
-1. Legendary comes in (T0, as before). "Computer Dragon presents" fades in
-   and out.
+1. Legendary plays already - since the hull's burst, nine seconds before
+   the hand-over ("Decided 2026-11-14"; its T0 is the burst). "Computer
+   Dragon presents" fades in and out.
 2. **The flash**: the menu's logo flares with fire as on the menu, but
    hard, then calms to the menu's breathing. The line under it: "The
    Master will return in a new form" / "Мастер вернётся в новом облике".
@@ -241,6 +242,27 @@ T1 the camera on the stand (push, pan, climb of the layers there are); T2
 the ground plane; T3 the lattice and the bank; T4 the flare; T5 the climb
 out, the pitch, the stars and the Earth in the menu; T6 the last screen and
 the exit. The gate's art and its place in the game go before them.
+
+## Decided 2026-11-14, after the first look at 3.0.130: the end track with the burst
+Changed in the same version, before its commit. Supersedes "The sound" of
+"Decided 2026-11-12, stage 19" and "The hand-over" of "Stage 19 as built"
+where they differ.
+- **Too much silence**: the track came in 10 s after the last orb, over
+  two seconds of fade more - and its own first bars come from far off. It
+  comes in with the hull's burst now, a second after the last orb
+  (`TMoonGame.BurstTheHull`), at once and at its level: its quiet opening
+  runs under the burst, the series and the slowdown, and by the stand it
+  is there. No fade of ours (`EndMusicFadeSeconds` is gone), no two
+  seconds of silence kept for it.
+- **The gap left**: one second, from the track's cut at the crack to the
+  burst - the throe, with its groan, its pops and its coughing jets.
+- **The hand-over** (`TLanding.HandsOver`) stays where it was, 2 s after
+  the stand, and starts nothing now: it is the titles' cue, for `gsFinale`
+  to take. The titles' T0 - the track's own clock - is the burst, 9 s
+  before it; the cues of "The order, from the hand-over" are to be read
+  off the beat map with that lead.
+- **The lamp**: red till the flare; the debug key X stays its only cue
+  till the titles are built.
 
 ## Part 1 - the end of the fight
 What the code does at a boss's death today (`meLevelComplete`): the suit comes off, win.ogg plays through, a timer of 400 ticks runs, then the next level loads - past the last one, the menu opens. Two of the three are wrong here, so this boss gets an ending of its own:
