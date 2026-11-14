@@ -5993,6 +5993,9 @@
     "screen": 13,
     "layout": "chase-backdrop.json"
   },
+  "titles": {
+    "file": "finale.json"
+  },
   "events": [
     {
       "id": "breachWarning",

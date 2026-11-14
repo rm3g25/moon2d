@@ -33,11 +33,11 @@ uses
   Game.Impacts, Game.Eclipse, Game.Throw, Game.Hoist, Game.OrbLauncher,
   Game.HullLives, Game.Road, Game.Barge, Game.Flock, Game.Magnet, Game.Pieces,
   Game.BargeFire, Game.Charge, Game.Dive, Game.Ladder, Game.Breakup,
-  Game.Wreckage, Game.Landing, Game.Gate,
+  Game.Wreckage, Game.Landing, Game.Gate, Game.Titles,
   Game.HeroOrbs, Orbs.Harvest, Orbs.Patterns, Orbs.Rite, Orbs.Burst,
   Orbs.Grip, Orbs.Shots,
   Events.Director, Scenes.Director, Hud.Charge,
-  Hud.Marks, Hud.GoRight, Hud.Energy, Hud.HullBar, Audio, Menu;
+  Hud.Marks, Hud.GoRight, Hud.Energy, Hud.HullBar, Hud.Titles, Audio, Menu;
 
 const
   // Levels are discovered by this pattern at startup; the menu lists
@@ -208,6 +208,10 @@ type
     // its lamp; the painter is the level's, as the road's
     FGate: TGate;
     FGatePainter: TGatePainter;
+    // The titles over the picture the flight ends on: their clock, from
+    // the hull's burst, and what it shows
+    FTitles: TTitles;
+    FTitlesPainter: THudTitles;
     // The small barges round the barge in the air fight, and their pads in
     // the order the flock knows them; born with the level
     FFlock: TBargeFlock;
@@ -383,6 +387,7 @@ type
     procedure DebugJumpAboard;
     procedure DebugJumpToAirDoor;
     procedure DebugHullToNextDoor;
+    procedure DebugNextTitlesCue;
     procedure DebugSpendTriggers(AScreen: Integer);
     procedure CycleFontFiltering;
     function SaveScreenPictures(const ADir: string): Integer;
@@ -456,6 +461,7 @@ type
     function DeckSpot(AX: Single): TSdlFPoint;
     procedure TickLandingCarry;
     procedure TickLanding;
+    procedure TickTitles;
     procedure CarryOutBreakup(const ACue: TBreakupCue);
     procedure BurstTheHull;
     procedure BlowWreckPiece(AIndex: Integer);
@@ -567,6 +573,7 @@ type
     procedure DrawHeroSilhouette(AShake: TSdlPoint; ASlide, ALift: Single);
     procedure DrawBackdrop(AAlpha: Single);
     procedure DrawFangs(AAlpha: Single);
+    procedure DrawPanels(AAlpha: Single);
     function SkyOrigin(AAlpha: Single): TSdlFPoint;
     function HazeBackdrop(AScreen: Integer): TBackdropView;
     procedure LoadLevel(const AFileName: string);
@@ -728,6 +735,10 @@ const
   WreckBlastFloor = 280.0;
   BargeDockDepth = 3.0;
   BargeDockTrauma = 0.1;
+  // The logo of the titles flares this many times over its breathing, and
+  // the flash jolts the screen this much
+  TitlesFlareStrength = 3.0;
+  TitlesFlashTrauma = 0.3;
   // The orbs set him down on the main barge's deck no nearer its ends than
   // this
   LandingDeckInset = 8.0;
@@ -874,7 +885,7 @@ const
   ScancodeT = 23; // tile inspector in the window title
   ScancodeU = 24; // the burst at once in the moon's look: no rite, no suit
   ScancodeV = 25; // trailer frame, centered logo (menu only)
-  ScancodeX = 27; // the gate's lamp to amber, as the logo's flare will turn it
+  ScancodeX = 27; // the titles on to a breath before their next cue
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
@@ -1004,6 +1015,7 @@ begin
   FBelt := TBelt.Create;
   FRoad := TRoadEnd.Create;
   FGate := TGate.Create;
+  FTitles := TTitles.Create;
   FBarge := TBargeRide.Create;
   FOrbs := CreateOrbs;
   FTrial := TGravelTrial.Create;
@@ -1019,6 +1031,7 @@ begin
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet);
   FMenu.Difficulty := FDifficulty;
+  FTitlesPainter := THudTitles.Create(ARenderer, FFont, FMenu.Logo, FTitles);
   FState := gsMenu;
   FResumeState := gsMenu;
   FAudio.PlayMusic(MenuMusicFile, mmLoop); // moon.ogg of 2008 (1857)
@@ -1026,6 +1039,8 @@ end;
 
 destructor TMoonGame.Destroy;
 begin
+  // Before the menu: it draws the menu's logo
+  FTitlesPainter.Free;
   FMenu.Free;
   // Before the bank: it stops what it holds
   FScenes.Free;
@@ -1074,6 +1089,7 @@ begin
   FRoadPainter.Free;
   FGatePainter.Free;
   FGate.Free;
+  FTitles.Free;
   FRoad.Free;
   FRamPainter.Free;
   FRam.Free;
@@ -1225,6 +1241,7 @@ begin
     FGatePainter := TGatePainter.Create(FObjectCache.Get(GateSprite), FGate,
       FRoad);
   end;
+  FTitles.Arm(FLevel.Titles);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -1550,6 +1567,9 @@ begin
   FAudio.PauseHeld(FVictory);
   FAudio.PauseHeld(FRamRumble);
   FAudio.PauseHeld(FSpinHum);
+  // The titles go by their track: it waits with them
+  if FTitles.Running then
+    FAudio.PauseMusic(0);
 end;
 
 // Back from the menu to where Escape came from; a scene waits there
@@ -1563,6 +1583,8 @@ begin
   FAudio.ResumeHeld(FVictory);
   FAudio.ResumeHeld(FRamRumble);
   FAudio.ResumeHeld(FSpinHum);
+  if FTitles.Running then
+    FAudio.ResumeMusic(0);
 end;
 
 procedure TMoonGame.SetFullscreen(AValue: Boolean);
@@ -3473,6 +3495,7 @@ begin
   FLevel.RestoreRows;
   FLanding.Clear;
   FGate.Clear;
+  FTitles.Clear;
   FWreckage.Clear;
   FWreckFire.Clear;
   FLandingCarries := False;
@@ -4669,6 +4692,7 @@ procedure TMoonGame.TickLanding;
 begin
   TickLandingCarry;
   FGate.Tick;
+  TickTitles;
   var Stands := (FBelt.Speed = 0) and not FBelt.Running;
   var Cue := FLanding.Tick(FBelt.RampTravelLeft, Stands);
   if Cue.SlowsDown then
@@ -4684,6 +4708,26 @@ begin
     FRoadPad.Wake;
     FRoadPad.FlyTo(FRoad.PierLeft, RamFloorY, 0);
   end;
+end;
+
+// The titles' clock goes by the end track where the mixer tells its place
+// and by the ticks where it does not. At the flash the logo flares, the
+// screen jolts and the gate's lamp turns amber
+procedure TMoonGame.TickTitles;
+begin
+  if not FTitles.Running then
+    Exit;
+  var TrackSeconds: Double := NoTrackSeconds;
+  if FAudio.Plays(EndMusicFile) then
+    TrackSeconds := FAudio.MusicSeconds;
+  var Cue := FTitles.Tick(TrackSeconds);
+  if FTitles.LogoShown then
+    FMenu.Logo.Tick;
+  if not Cue.Flashes then
+    Exit;
+  FMenu.Logo.Flare(TitlesFlareStrength);
+  FShake.AddTrauma(TitlesFlashTrauma);
+  FGate.Promise;
 end;
 
 // What the hull's end did this tick, carried out: the crack's flash and
@@ -4727,6 +4771,7 @@ begin
 
   FCurrentMusic := EndMusicFile;
   FAudio.PlayMusic(EndMusicFile, mmOnce);
+  FTitles.Start;
 end;
 
 // A piece blows up where it flies - but not once it has fallen to the
@@ -5909,6 +5954,8 @@ begin
         FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
         FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
         FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
+        // The titles stand in the world, over all that moves in it
+        FTitlesPainter.Draw(FShake.Offset(scWorld), AAlpha);
         // Over the world, under the HUD
         FOrbs.DrawGlass(FDynamics.Canvas, AAlpha);
         FScenes.DrawShade(ARenderer);
@@ -5921,14 +5968,9 @@ begin
         FThrowPainter.DrawHint(HintAt, FHeartbeat.Pulse(AAlpha), AAlpha);
         FSprites.Origin := NoShake;
         FHero.DrawCrosshair(FSprites, CrosshairFrame);
-        FVitals.Draw;
-        FHullBar.Draw(FHullLives.Bar(AAlpha));
-        FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha),
-          FEclipse.Fade(AAlpha));
-        // Over the gauge: the orbs go into it
-        FOrbs.DrawFeed(FDynamics.Canvas, NoShake, AAlpha);
-        FCharge.Draw;
-        FGoRight.Draw(AAlpha);
+        // The picture the titles stand on is clear of the panels
+        if not FLanding.HandedOver then
+          DrawPanels(AAlpha);
         FMessages.Draw(AAlpha);
         // Topmost: the ceremony outranks the news
         FHenshin.DrawCountdown(FFont, AAlpha);
@@ -5936,6 +5978,19 @@ begin
   end;
 
   DrawAtlasOverlay;
+end;
+
+// The panels of the HUD in the corners and along the top, glass over the
+// world
+procedure TMoonGame.DrawPanels(AAlpha: Single);
+begin
+  FVitals.Draw;
+  FHullBar.Draw(FHullLives.Bar(AAlpha));
+  FEnergyGauge.Draw(AAlpha, FHeartbeat.Pulse(AAlpha), FEclipse.Fade(AAlpha));
+  // Over the gauge: the orbs go into it
+  FOrbs.DrawFeed(FDynamics.Canvas, NoShake, AAlpha);
+  FCharge.Draw;
+  FGoRight.Draw(AAlpha);
 end;
 
 // On the screen of a chase the far plane stands for the backdrop: the
@@ -6193,6 +6248,21 @@ begin
   RestartLevel;
 end;
 
+// The titles' clock and their track on to a breath before the next cue;
+// past the last, nothing
+procedure TMoonGame.DebugNextTitlesCue;
+const
+  LeadSeconds = 2.0;
+begin
+  if not FTitles.Running then
+    Exit;
+  var Cue := FTitles.CueAfter(FTitles.Seconds + LeadSeconds);
+  if Cue < 0 then
+    Exit;
+  FTitles.JumpTo(Cue - LeadSeconds);
+  FAudio.SeekMusic(Cue - LeadSeconds);
+end;
+
 // The hull's lives down to the next door of the ladder past where they
 // are - a rung, then the finisher's stretch; past the last, nothing
 procedure TMoonGame.DebugHullToNextDoor;
@@ -6441,8 +6511,9 @@ begin
     ScancodeY:
       DebugRestorePads;
     ScancodeX:
-      // The logo's flare turns the lamp, and the titles are not built
-      FGate.Promise;
+      // Two minutes of the titles pass before their flight - too long to
+      // tune against
+      DebugNextTitlesCue;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

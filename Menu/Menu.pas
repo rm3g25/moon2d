@@ -166,6 +166,8 @@ type
 
     property HasActiveGame: Boolean read FHasActiveGame
       write SetHasActiveGame;
+    // Lent to the titles, which flare it over the world (Hud.Titles)
+    property Logo: TMenuLogo read FLogo;
     property Difficulty: TDifficulty read FDifficulty write FDifficulty;
     // Set by the composition root AFTER it swapped the dictionary -
     // the setter rebuilds the current screen's captions through Tr

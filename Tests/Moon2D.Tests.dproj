@@ -110,6 +110,7 @@
         <DCCReference Include="Game\Tests.Game.Wreckage.pas"/>
         <DCCReference Include="Game\Tests.Game.Landing.pas"/>
         <DCCReference Include="Game\Tests.Game.Gate.pas"/>
+        <DCCReference Include="Game\Tests.Game.Titles.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Render\Tests.Render.Monochrome.pas"/>
@@ -132,6 +133,7 @@
         <DCCReference Include="Levels\Tests.Levels.Dynamics.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Scenes.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.Titles.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Bodies.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Damage.pas"/>

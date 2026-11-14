@@ -1,6 +1,6 @@
 # The flight to the stars: the build of the titles
 
-Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); nothing of the titles in the game yet. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
+Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); the game's build decided ("Decided 2026-11-15: the game") and its first stage built - the titles' head, 3.0.131 ("The titles' head as built"), cut down to the card and the logo, the promise and the credits moved to the stars ("Decided 2026-11-15, later"); the flight itself not in the game yet. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
 
 ## Decided 2026-11-14: the build
 
@@ -33,23 +33,20 @@ A trap of the analysis: the strongest onset of the band's entry is its snare at 
 
 ## The timeline
 
-Seconds of the track, which starts with the hull's burst (T0; `finale.md`). They are the `cues` of `bin/finale.json`; every one but the hand-over stands on a downbeat.
+Seconds of the track, which starts with the hull's burst (T0; `finale.md`); the `cues` of `bin/finale.json`. As it stands since "Decided 2026-11-15, later": the flight leaves a bar after the flash and is flown under the track's first verse, so its own cues - the sign, the rib, the sun - stand by the flight's seconds and on no beat of the track. It was laid on the track's break, the flight starting at 122.74: the kick back at F+6.34, the band at F+8.43, the sign a bar and a beat before the loudest chorus and the sun on it, the drums gone at F+42.17, the band back at F+59.05.
 
 | track | flight | what |
 |---|---|---|
 | 0 | | the hull bursts, the track starts |
-| 9.0 | | the hand-over (`TLanding.HandsOver`): the world has stood for two seconds |
+| 9.0 | | the hand-over (`TLanding.HandsOver`): the world has stood for two seconds; the panels of the HUD leave |
 | 10.84 | | "Computer Dragon presents" in; gone by 16.7 |
 | 17.21 | | **the flash**: the logo flares, the gate's lamp goes amber (`TGate.Promise`) |
-| 19.32 | | the promise under the logo |
-| 36.22, 67.94, 91.14 | | the three lines of the credits, each gone before the next; the last gone by 120.65 |
-| 122.74 | 0 | **the flight starts**: away - the push and the rise |
-| 129.08 | 6.34 | the kick comes back: the eye goes left |
-| 131.17 | 8.43 | the band is in: low along the strip, at speed |
-| 143.45 | 20.71 | the TEK sign stutters as the eye goes by it (a bar and a beat before the chorus) |
-| 145.94 | 23.20 | out through a cell of the main dome's back, close past its ribs, banked - and the sun floods the frame on the same beat |
-| 164.91 | 42.17 | the drums leave: out through the dome's crown, the Moon below |
-| 181.79 | 59.05 | the band comes back: the stars of the menu, the last screen |
+| 19.32 | 0 | **the flight starts**, a bar after the flash: the cast-off to the left |
+| 36.22 | 16.9 | the track's second section begins; the eye is in its turn toward the dome |
+| 40.03 | 20.71 | the TEK sign stutters as the eye goes by it |
+| 42.52 | 23.20 | out through a cell of the main dome's back, close past its ribs, banked - and the sun floods the frame |
+| 50.3 | 31 | the sun gone under the frame: the black, and the stars of the menu |
+| 67.94, 91.14, 122.74 | 48.6, 71.8, 103.4 | the next sections' downbeats and the break: where the lines at the stars may hang ("A sketch of the stars") |
 | 236.3 | | the track ends; the menu's theme takes over |
 
 The flight of `finale.md` was laid out in 58 s by guess: lattice at 16-22, inside to 30, the sunrise to 38, the Moon below to 50, the pitch to 58. The track asks for nearly the same, a little later through the dome.
@@ -78,17 +75,17 @@ The flight of `finale.md` was laid out in 58 s by guess: lattice at 16-22, insid
 
 ## The homes
 
-Proposed for the game's stages; none written yet.
+As proposed, with the names of "Decided 2026-11-15: the game"; written so far - `Levels.Titles` (the cues), `Game.Titles`, `Hud.Titles`, the logo's flare and the track's place (3.0.131).
 
 | unit | what |
 |---|---|
 | `Levels.EyePath` (Core, new) | the path: its keys and the cubic, the eye at a second. No SDL |
-| `Levels.Finale` (Core, new) | `bin/finale.json`: the track, the cues, the path; the level names the file in a `finale` section, as `farPlane` names its layout |
+| `Levels.Titles` (Core, new) | `bin/finale.json`: the track, the cues, the path; the level names the file in a `titles` section, as `farPlane` names its layout |
 | `Levels.FarPlane` | the eye in the projection - `Nearness`, `ElementLeft`, `FramePoint`; at rest the chase's numbers to the bit, held by a test |
 | `Render.FarPlane`, `Render.DomeFrames`, `Levels.Farm` | take the eye; draw wider than the screen for a bank |
 | `Render.Target` (Core, new) | a frame drawn into a target texture and put on the screen moved, scaled and turned - the product of the spike |
 | `Render.Flare` (Core, new, T4) | the sunrise: halos, the streak, the exposure curve |
-| `Game.Finale` (Game, new) | `TFinale` - the clock from T0 and the cues. No SDL |
+| `Game.Titles` (Game, new) | `TTitles` - the clock from T0 and the cues. No SDL |
 | `Hud.Titles` (Hud, new) | the card, the promise, the credits, the last screen |
 | `Menu` | `TMenuLogo.Flare`, an opacity for `DrawSky`, the Earth in the Moon's place |
 | `Audio` | the track's position, the end of a track |
@@ -186,6 +183,40 @@ The author's brief, after T1 was taken: a flight close by the flickering TEK sig
 - The tall fang that happens to stand in the turn's way: the dice's.
 - The flare's numbers are first guesses; so are the stutter's.
 - Nothing here is measured against the game: the target texture's spike decides the bank there.
+
+## Decided 2026-11-15: the game
+
+The flight is taken on the stand; what follows is the game. As answered to the forks of the build's talk:
+- **The bank as on the stand**: 14 degrees and the frame grown 1.293 with it - the picture that was taken, the game's frame being 4:3 as the stand's stage. The target texture is made with that room and drawn a texel to a pixel. A frame drawn wider than the screen, for the design's 25 degrees, is left for later, if at all.
+- **The half minute after the black** (the sun is gone at F+31, the band is back at F+59): to F+42, while the loudest chorus still plays, the nose goes on coming up - the stars of the menu come out and run down the frame in their three layers, slowing to their own drift by the bar the drums leave on; the nebula last; no more than a second and a half of plain black. From F+42 to F+59, the bridge with no drums, the Earth comes in from the right by the rules of the menu's moon - a unit of drift a tick brings it nearly to the middle in those 17 s - its night side lit; no text. On the band's return the lines of the last screen come in on the downbeat, and the crosshair. No line for the music.
+- **The names**: "finale" is taken in the code by the gravel trial (`TTrialFinale`, the trigger `"finale"` of level 2), so the titles' data and their director are `Levels.Titles`, `Game.Titles`, `Hud.Titles`, and a level names its file in a `titles` section; the state of the flight is `gsFinale` and the file `bin/finale.json`, as written here.
+- **The soft buildings near the eye** stay as they are for now; a piece may be redrawn larger later.
+- **The order**: the titles' head (3.0.131); the spike of the target texture behind a debug key; T1 in the game - `gsFinale`, the cast-off and the pan to 12.7 s, ending for the time being in a fade to the menu (3.0.132); the dome - the eye lifted and pushed, the plane, the band melting, the ribs at the eye, the sign on its cue, the flare, the bank, the pitch, the black (3.0.133); the end - the sky, the Earth, the last screen, the exit, the end of the track (3.0.134). One at a time, each run live.
+
+## Decided 2026-11-15, later: the head is the card and the logo, the lines go to the stars
+
+Said of the head as first written, before its commit. Supersedes "The wait is filled with credits" and "The flight keeps its 58 seconds" of "Decided 2026-11-14: the build", and "The half minute after the black" above; "The timeline" is rewritten to it.
+- **The head** is the studio's card, then the logo - flaring harder than it did - and nothing more: no promise under it, no credits. The logo holds a couple of seconds and the camera leaves at once.
+- **At the stars**, once the flight has come to the menu's sky: the two phrases - "The mission on the Moon is not over." / "Миссия на Луне не закончена." and "The Master will return in a new form" / "Мастер вернётся в новом облике" - then the credits, a line at a time, quicker than they were laid (each stood half a minute).
+- **The track is not cut.** The flight was laid on the track's break at 122.74 s: the lone pulse under the cast-off, the kick at F+6.34, the band at F+8.43, the sign's stutter and the flare on the loudest chorus. Leaving a bar after the flash, at 19.32 s, it flies under the first verse, and those meetings are lost - a little off the beat, and taken so. Tried and left: the track cut, its first bar of the band joined to the break, 103 s taken out. The first join brought the tail of the last sung word with it - it lies over the break's first second and a half; a second, with that bar rebuilt from the break's clean second bar and the highs of the real one, was made and not taken: a good cut is not to be had, and none is to be made by hand.
+- **The path's keys stand as taken**: their notes still name the kick and the band of the break they were laid on.
+- **A sketch of the stars**, for the last stage, hung on the uncut track's sections: the black at F+31 (50.3 s of the track) and the stars out of it; the Earth in from the right soon after, by the rules of the menu's moon; on the section's downbeat at 67.94 the mission's phrase, the promise two bars later, both gone a bar before the next section; at 91.14 the credits, three bars a line - 6.3 s -, gone by 110; then the last screen - the author's line with its link, and "Main menu" - by the break at 122.74 at the latest. Not decided.
+
+## The titles' head as built (3.0.131)
+
+Stage 1 of the game: the titles before the flight, in `gsPlaying` - the hero is his own through it. Written with a promise and three lines of credits under the logo; those were taken out before the commit ("Decided 2026-11-15, later").
+- **The data** (`Levels.Titles`): the level's `titles` section names `finale.json`; of it the game reads the cues `card`, `cardOut` and `flash`, each after the one before it or the level does not load. The rest of the file is let be.
+- **The clock** (`Game.Titles`, `TTitles`): started in `TMoonGame.BurstTheHull` with the track, cleared with the pier. It goes a tick on every tick and leans toward the track's own place (`TSoundBank.MusicSeconds` - `Mix_GetMusicPosition`, bound delayed; the DLL shipped is 2.8.2 and has it) by a tenth of its way, half a tick at the most, so it never stands and never goes back; further than half a second from the track it jumps to it. With no mixer, or one that tells no place, it counts ticks alone. The place is asked only while the end track is the music that plays: a track played through tells none.
+- **The pause**: Escape opens the menu as before; while the titles run the track is paused with them (`PauseMusic(0)`) and "continue" resumes both.
+- **The card**: "Computer Dragon presents" (`creditsLine1`), the big font, on the middle of the logo's place; in over a second from 10.84, gone by 16.7.
+- **The flash** (17.21, the band's kick): the menu's own logo (`TMoonMenu.Logo`, lent) stands from this tick in its place over the farm's crown - 96 tall, as wide as its letters make it, about x 160..352, y 60..156 - and flares (`TMenuLogo.Flare(3)`: the halo four times its breathing and a third wider at once, 6% of the flare gone a tick, all but none in two seconds; 390 sparks off the letters' outline at once and some 140 more as it calms, three a tick for each one of the flare left - each thrown one and a half to five times as hard as the ones that drift and upward besides, as a fire stirred throws them, each flying once); the frame goes white at 0.85 for three ticks; a jolt of 0.3; the gate's lamp turns amber (`TGate.Promise`).
+- **After the flash** nothing more comes: the logo stands, breathing, till the flight is built to take the camera away two seconds later.
+- **The panels of the HUD** are not drawn from the hand-over on (`TLanding.HandedOver`, 9 s): the picture the titles stand on is clear. A cut, not a fade: the panels have no level of their own. The crosshair stays - he aims still.
+- **Where it is drawn** (`Hud.Titles`, `THudTitles`): after the last layer of the world and before the glass and the HUD, on the world's shake - the titles stand in the world, and will ride away with its play layer.
+- **Debug**: the key X takes the titles' clock and the track (`TSoundBank.SeekMusic`) to two seconds before the next cue - the card, then the flash; it no longer turns the lamp, the flash does.
+- **Tests**: `Tests.Game.Titles` (new) - `TTitlesTests` 17; `Tests.Levels.Titles` (new) - `TTitlesReadTests` 6. The tables: `docs/testing/game.md`, "The titles". Written without a compiler, as all here.
+- **After the first live run** (2026-11-15): a good stage; the flare was to be another - more of the fire's sparks at the logo's first coming, the halo kept. The sparks went from 180 thrown alike to the 530 above.
+- First guesses for the live run: the flare's strength, its spread, its sparks and how long it calms; the white of the flash and its jolt; the logo's size in its place; the second of the card's fades; whether the card wants the logo's place or the frame's middle; the panels' cut at the hand-over; the lean of the clock - whether the flash lands on the kick.
 
 ## Decided 2026-11-14: the ground for a lifted eye
 

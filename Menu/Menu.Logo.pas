@@ -34,15 +34,24 @@ type
     FEmbers: TEmbers;
     FLettersWidth, FLettersHeight: Integer; // texels
     FPhase: Single; // radians of the breathing
+    // How much brighter than its breathing the halo burns, falling to 0
+    FFlare: Single;
     procedure BuildHalo(ASurface: PSdlSurface);
+    function GetAspect: Single;
   public
     constructor Create(ARenderer: PSdlRenderer; const ASpriteSet: TSpriteSet;
       const AFileName: string);
     destructor Destroy; override;
     procedure Tick;
+    // The fire flares: the halo 1 + AStrength times its breathing and
+    // spread wider at once, calming back, and sparks off the letters - a
+    // burst at once, then fewer and fewer as it calms
+    procedure Flare(AStrength: Single);
     // Letters into ADest, the halo beneath them and around, the
     // embers over everything
     procedure Draw(const ADest: TSdlFRect; AAlpha: Double);
+    // The letters' width over their height
+    property Aspect: Single read GetAspect;
   end;
 
 implementation
@@ -72,6 +81,16 @@ const
   HaloBaseLevel = 0.55;
   HaloSwing = 0.2;
   HaloBreathTicks = 528;
+  // A flare keeps this much of itself a tick: all but gone in two seconds
+  FlareKeep = 0.94;
+  FlareGone = 0.01;
+  // A flare spreads the halo too: by this share of its size for each one
+  // of the flare's strength
+  FlareSpread = 0.12;
+  // The sparks a flare of strength one throws at once, and the ones it
+  // goes on throwing every tick while it burns
+  FlareSparks = 130;
+  FlareSparksATick = 3;
 
 // The letters' hue at full brightness: the mean color of the ink,
 // scaled so its strongest channel is 255
@@ -192,6 +211,22 @@ begin
   if FPhase > 2 * Pi then
     FPhase := FPhase - 2 * Pi;
   FEmbers.Tick;
+  FEmbers.Burst(Round(FlareSparksATick * FFlare));
+  FFlare := FFlare * FlareKeep;
+  if FFlare < FlareGone then
+    FFlare := 0;
+end;
+
+procedure TMenuLogo.Flare(AStrength: Single);
+begin
+  if AStrength > FFlare then
+    FFlare := AStrength;
+  FEmbers.Burst(Round(FlareSparks * AStrength));
+end;
+
+function TMenuLogo.GetAspect: Single;
+begin
+  Result := FLettersWidth / FLettersHeight;
 end;
 
 procedure TMenuLogo.Draw(const ADest: TSdlFRect; AAlpha: Double);
@@ -208,7 +243,19 @@ begin
 
   var Phase := FPhase + 2 * Pi / HaloBreathTicks * AAlpha;
   var Level: Single := HaloBaseLevel + HaloSwing * Sin(Phase);
-  DrawGlowRect(FRenderer, FHalo, HaloDest, FHaloTint, Level);
+  Level := Level * (1 + FFlare);
+  var Spread: Single := FlareSpread * FFlare;
+  HaloDest.X := HaloDest.X - HaloDest.W * Spread / 2;
+  HaloDest.Y := HaloDest.Y - HaloDest.H * Spread / 2;
+  HaloDest.W := HaloDest.W * (1 + Spread);
+  HaloDest.H := HaloDest.H * (1 + Spread);
+  // A glow is drawn at one at the most: a brighter one is laid again
+  // over itself
+  while Level > 0 do
+  begin
+    DrawGlowRect(FRenderer, FHalo, HaloDest, FHaloTint, Level);
+    Level := Level - 1;
+  end;
 
   SDL_RenderCopyF(FRenderer, FLetters, nil, @ADest);
   FEmbers.Draw(ADest, AAlpha, FLettersWidth, FLettersHeight);

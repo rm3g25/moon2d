@@ -33,7 +33,7 @@ uses
   System.SysUtils, System.Classes, System.Types, System.IOUtils,
   System.Generics.Collections, System.JSON, Game.Config,
   Localization, Levels.Events, Levels.Scenes, Levels.Tint, Levels.Dynamics,
-  Levels.Pads, Levels.Carousels, Levels.FarPlane;
+  Levels.Pads, Levels.Carousels, Levels.FarPlane, Levels.Titles;
 
 const
   EmptyTile = 0; // grid value 0 = nothing; N >= 1 -> TilePalette[N - 1]
@@ -218,6 +218,7 @@ type
     FScenes: TArray<TLevelScene>;
     FDynamics: TDynamicObjects;
     FFarPlane: TFarPlaneDef;
+    FTitles: TTitlesDef;
     procedure ParseRoot(const ARoot: TJSONObject; const ALevelDir: string);
     procedure ParseTiles(const ATiles: TJSONObject);
     procedure ParseEntities(const AArr: TJSONArray);
@@ -347,6 +348,8 @@ type
     property Dynamics: TDynamicObjects read FDynamics;
     // The far plane of a chase (Levels.FarPlane); Screen 0 - none
     property FarPlane: TFarPlaneDef read FFarPlane;
+    // The titles that close the level (Levels.Titles); not Present - none
+    property Titles: TTitlesDef read FTitles;
   end;
 
 implementation
@@ -795,6 +798,7 @@ begin
   CheckShutDoors;
   FFarPlane := ReadFarPlane(ARoot, FId, ALevelDir);
   CheckFarPlane;
+  FTitles := ReadTitles(ARoot, FId, ALevelDir);
 end;
 
 function AnyPlacementTagged(const AEntities: TArray<TEntityPlacement>;

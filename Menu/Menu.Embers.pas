@@ -41,14 +41,22 @@ type
     FTexture: PSdlTexture;
     FSeeds: TArray<TEmberSeed>;
     FEmbers: TArray<TEmber>;
+    // The sparks of a burst: each flies once and is gone
+    FSparks: TArray<TEmber>;
     FRandom: TXorShift;
     procedure ReadOutline(ASurface: PSdlSurface);
     function Spawn: TEmber;
+    procedure Fly(var AEmber: TEmber);
+    procedure TickSparks;
   public
     // The surface is the locked letters art, ABGR8888
     constructor Create(ARenderer: PSdlRenderer; ASurface: PSdlSurface);
     destructor Destroy; override;
     procedure Tick;
+    // ACount sparks off the outline at once, over the ones that drift:
+    // thrown harder, each by its own measure, and upward, as a fire
+    // stirred throws them
+    procedure Burst(ACount: Integer);
     procedure Draw(const ADest: TSdlFRect; AAlpha: Double;
       ALettersWidth, ALettersHeight: Integer);
   end;
@@ -82,6 +90,12 @@ const
   EmberLifeMax = 140;
   EmberLevel = 0.7;
   EmberFadeShare = 0.4; // the last share of the life fades out
+
+  // A spark of a burst leaves the outline this many times as fast, and
+  // rises this fast besides, texels per tick
+  BurstSpeedMin = 1.5;
+  BurstSpeedMax = 5.0;
+  BurstRiseMax = 1.5;
 
   EmberBirthColor: TRgb = (R: 255; G: 170; B: 60);
   EmberDeathColor: TRgb = (R: 255; G: 40; B: 20);
@@ -179,6 +193,14 @@ begin
   Result.Life := Round(Lerp(EmberLifeMin, EmberLifeMax, FRandom.NextUnit));
 end;
 
+procedure TEmbers.Fly(var AEmber: TEmber);
+begin
+  AEmber.X := AEmber.X + AEmber.SpeedX;
+  AEmber.Y := AEmber.Y + AEmber.SpeedY;
+  AEmber.SpeedX := AEmber.SpeedX * EmberDrag;
+  AEmber.SpeedY := AEmber.SpeedY * EmberDrag - EmberLift;
+end;
+
 procedure TEmbers.Tick;
 begin
   for var i := 0 to High(FEmbers) do
@@ -190,31 +212,68 @@ begin
       FEmbers[i] := Spawn;
       Continue;
     end;
-    Ember.X := Ember.X + Ember.SpeedX;
-    Ember.Y := Ember.Y + Ember.SpeedY;
-    Ember.SpeedX := Ember.SpeedX * EmberDrag;
-    Ember.SpeedY := Ember.SpeedY * EmberDrag - EmberLift;
+    Fly(Ember);
     FEmbers[i] := Ember;
+  end;
+  TickSparks;
+end;
+
+procedure TEmbers.TickSparks;
+var
+  Kept: TArray<TEmber>;
+begin
+  if Length(FSparks) = 0 then
+    Exit;
+  Kept := [];
+  for var Spark in FSparks do
+  begin
+    var Flying := Spark;
+    Inc(Flying.Age);
+    if Flying.Age >= Flying.Life then
+      Continue;
+    Fly(Flying);
+    Kept := Kept + [Flying];
+  end;
+  FSparks := Kept;
+end;
+
+procedure TEmbers.Burst(ACount: Integer);
+begin
+  for var i := 1 to ACount do
+  begin
+    var Spark := Spawn;
+    var Thrown := Lerp(BurstSpeedMin, BurstSpeedMax, FRandom.NextUnit);
+    Spark.SpeedX := Spark.SpeedX * Thrown;
+    Spark.SpeedY := Spark.SpeedY * Thrown - BurstRiseMax * FRandom.NextUnit;
+    FSparks := FSparks + [Spark];
   end;
 end;
 
 procedure TEmbers.Draw(const ADest: TSdlFRect; AAlpha: Double;
   ALettersWidth, ALettersHeight: Integer);
-begin
-  var UnitsX := ADest.W / ALettersWidth;
-  var UnitsY := ADest.H / ALettersHeight;
-  for var Ember in FEmbers do
+var
+  UnitsX, UnitsY: Double;
+
+  procedure DrawEmber(const AEmber: TEmber);
   begin
-    var Heat: Single := Ember.Age / Ember.Life; // 0 at birth, 1 at death
+    var Heat: Single := AEmber.Age / AEmber.Life; // 0 at birth, 1 at death
     var Fade: Single := (1 - Heat) / EmberFadeShare;
     if Fade > 1 then
       Fade := 1;
     var Tint := Mix(EmberBirthColor, EmberDeathColor, Heat);
     DrawGlow(FRenderer, FTexture,
-      ADest.X + (Ember.X + Ember.SpeedX * AAlpha) * UnitsX,
-      ADest.Y + (Ember.Y + Ember.SpeedY * AAlpha) * UnitsY,
-      Ember.Size, Tint, EmberLevel * Fade);
+      ADest.X + (AEmber.X + AEmber.SpeedX * AAlpha) * UnitsX,
+      ADest.Y + (AEmber.Y + AEmber.SpeedY * AAlpha) * UnitsY,
+      AEmber.Size, Tint, EmberLevel * Fade);
   end;
+
+begin
+  UnitsX := ADest.W / ALettersWidth;
+  UnitsY := ADest.H / ALettersHeight;
+  for var Ember in FEmbers do
+    DrawEmber(Ember);
+  for var Spark in FSparks do
+    DrawEmber(Spark);
 end;
 
 end.

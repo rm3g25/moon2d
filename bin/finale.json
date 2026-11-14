@@ -1,17 +1,17 @@
 {
-  "about": "The titles that close level 2 (docs/mechanics/finale-flight.md): the end track, its cues, and the way of the camera's flight to the stars. The stand (tools/chase) plays the flight from this file; the game does not read it yet.",
+  "about": "The titles that close level 2 (docs/mechanics/finale-flight.md): the end track, its cues, and the way of the camera's flight to the stars. The stand (tools/chase) plays the flight from this file; the game plays the card and the flash (Levels.Titles) and does not fly yet.",
   "track": {
     "about": "bin/music/credits.ogg as tools/finale/beat_map.py hears it: its length in seconds, its tempo, and its first downbeat - the kick the band comes in on. A bar is four beats.",
     "file": "credits.ogg", "seconds": 238.36, "bpm": 112.35, "downbeat": 17.21
   },
   "cues": {
-    "about": "Seconds of the track, which starts with the hull's burst; every cue but handOver stands on a downbeat. card - the first pulse heard; flash - the band comes in; credits - the starts of three sections; flight - the band drops out; turn - its kick comes back alone, bandIn - all of it; neon - a bar and a beat before the loudest chorus: the sign stutters as the eye goes by; rib - the loudest chorus begins: the eye leaves the dome close past a rib, and flare - the sun comes out of the glass on the same beat; crown - the drums leave; sky - the band comes back.",
+    "about": "Seconds of the track, which starts with the hull's burst. card - the first pulse heard; flash - the band comes in on its kick: the logo flares; flight - a bar later: the camera leaves. The flight was laid on the track's break (122.74) and is flown under its first verse instead, the track uncut: its own cues stand by the flight's seconds, not on the track's beats - neon, 20.71 s of the flight: the sign stutters as the eye goes by; rib and flare, 23.20 s: the eye leaves the dome close past a rib, and the sun comes out of the glass. sections - where the track's next sections begin, the last of them its break: the downbeats the lines at the stars may hang on.",
     "handOver": 9.0,
     "card": 10.84, "cardOut": 16.7,
-    "flash": 17.21, "line": 19.32,
-    "credits": [36.22, 67.94, 91.14], "creditsOut": 120.65,
-    "flight": 122.74,
-    "turn": 129.08, "bandIn": 131.17, "neon": 143.45, "rib": 145.94, "flare": 145.94, "crown": 164.91, "sky": 181.79
+    "flash": 17.21,
+    "flight": 19.32,
+    "neon": 40.03, "rib": 42.52, "flare": 42.52,
+    "sections": [36.22, 67.94, 91.14, 122.74]
   },
   "path": {
     "about": "The eye's way, by the seconds of the flight. x - the place along the city's strip that stands in the middle of the screen at the domes' base line; null - where the world stood. dx in the stead of x - so far from where the world stood, below 0 to the left: the eye's way off the picture is the same after a fight of any length. A key to the right of the one before it is held at that one's place: the eye never flies to the right. y - up, z - into the screen, in the units of the layout's camera, from its rest (the eye rests 28 over the crater floor; the play layer stands 93 in, the near hills 219, the domes' base line 1024). bank - degrees, the left wing down turns the picture clockwise; pitch - degrees, the nose up. note - for the reader. Between the keys a monotone cubic, a channel at a time: through every key, never past one, still at the two ends. The way: cast off to the left through the track's break; the pan; the turn into the main dome at the pan's pace, the way to the left giving over to the way in; in through a cell of its front, up over the roofs, past the TEK sign on the spire; out through a cell of its back close under a node of the frame, banked, into the sun; the climb.",

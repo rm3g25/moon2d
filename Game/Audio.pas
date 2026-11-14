@@ -105,7 +105,18 @@ procedure Mix_PauseMusic; cdecl;
   external MixerLib name 'Mix_PauseMusic' delayed;
 procedure Mix_ResumeMusic; cdecl;
   external MixerLib name 'Mix_ResumeMusic' delayed;
+// The place of the stream in its track, seconds; below zero for a codec
+// that tells none. SDL_mixer 2.6
+function Mix_GetMusicPosition(AMusic: PMixMusic): Double; cdecl;
+  external MixerLib name 'Mix_GetMusicPosition' delayed;
+// The music that plays, to APosition seconds from its start; 0 - done
+function Mix_SetMusicPosition(APosition: Double): Integer; cdecl;
+  external MixerLib name 'Mix_SetMusicPosition' delayed;
 {$WARN SYMBOL_PLATFORM DEFAULT}
+
+const
+  // MusicSeconds of a bank that cannot tell the place of its music
+  NoMusicSeconds = -1.0;
 
 type
   TMusicMode = (mmLoop, mmOnce);
@@ -138,6 +149,8 @@ type
     FHush: Single;
     FHushStep: Single;
     FMusicPaused: Boolean;
+    // The mixer has no call for the music's place: older than 2.6
+    FMusicPlaceUnknown: Boolean;
     FSounds: TDictionary<string, PMixChunk>;
     // Tracks of the music folder played as sounds; nil for a missing one
     FTracks: TDictionary<string, PMixChunk>;
@@ -208,6 +221,11 @@ type
     // Back from the pause, fading in over AFadeSeconds; at once with 0.
     // Nothing for a track not paused or pausing.
     procedure ResumeMusic(AFadeSeconds: Single);
+    // The place of the music that plays in its track, seconds;
+    // NoMusicSeconds with none playing, or with a mixer that cannot tell
+    function MusicSeconds: Double;
+    // The music that plays goes on from ASeconds of its track
+    procedure SeekMusic(ASeconds: Double);
     // Mutes the music channel at the mixer, effects untouched. The game
     // keeps switching tracks normally underneath - unmuting resumes
     // whatever the current screen ordered, no bookkeeping needed.
@@ -566,6 +584,33 @@ begin
     FHushStep := 0;
     FMusicPaused := True;
     Mix_PauseMusic;
+  end;
+end;
+
+function TSoundBank.MusicSeconds: Double;
+begin
+  Result := NoMusicSeconds;
+  if not FEnabled or FMusicPlaceUnknown or (FMusic = nil) then
+    Exit;
+  // A track played through to its end tells a place no more
+  if Mix_PlayingMusic = 0 then
+    Exit;
+  try
+    Result := Mix_GetMusicPosition(FMusic);
+  except
+    // Delay-loaded import: a mixer without the call surfaces exactly here
+    FMusicPlaceUnknown := True;
+  end;
+end;
+
+procedure TSoundBank.SeekMusic(ASeconds: Double);
+begin
+  if not FEnabled or FMusicPlaceUnknown or (FMusic = nil) then
+    Exit;
+  try
+    Mix_SetMusicPosition(ASeconds);
+  except
+    FMusicPlaceUnknown := True;
   end;
 end;
 

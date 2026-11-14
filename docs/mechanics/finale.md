@@ -1,6 +1,6 @@
 # Finale: the end of arena 3 and the titles that close 3.0
 
-Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the gate built (3.0.130, see "The gate as built"), the end track moved to the hull's burst in the same version ("Decided 2026-11-14"); the titles not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
+Status: designed (2026-10-22), the end of the fight moved into the air (2026-11-12, see "Decided 2026-11-12" - it supersedes Part 1 where they differ; its drone and Cordon put off to a later version, "Decided 2026-11-12, after 3.0.126"); the end of the fight built (stage 19 of arena 3, 3.0.128, see "Decided 2026-11-12, stage 19" and "Stage 19 as built (3.0.128)" - they supersede Part 1 and F7 where they differ); the gate built (3.0.130, see "The gate as built"), the end track moved to the hull's burst in the same version ("Decided 2026-11-14"); of the titles, the head built - the card and the logo's flash (3.0.131, `finale-flight.md`, "The titles' head as built"); the promise and the credits go to the stars at the flight's end ("Decided 2026-11-15, later" there), and the flight is not built. Part 1 hangs on the boss (arena 3, stages 8-19). Part 2, the titles, needs nothing but a picture to stand on and can be built first. The end track, "Legendary" (Suno, indie psychedelic of the 80s, male vocal), is made: `bin/music/credits.ogg` (since 2026-11-07; Vorbis, stereo, 48 kHz, 160 kbit/s, 3:58, about -14.2 LUFS - as loud as the boss tracks, -14.5 and -14.7). Nothing plays it yet: the titles are not built.
 
 ## The idea in one line
 The machine blows up, the tense music dies with it, and in the silence after the blast the end track comes in over the very picture of the victory: a studio card, the logo flaring on a beat, a promise under it - then the camera climbs out of the tunnel into the stars of the menu, and the stars turn into the menu.
@@ -147,8 +147,8 @@ of the camera through the city takes its place.
   while sealed; `TGate.Promise` turns it amber (255, 176, 64) over
   `GateLampTurnTicks` 16 (half a second), once - a second promise changes
   nothing; a clear (a death, a new level) seals it red at once.
-- **Its cue**: the logo's flare is to call `Promise` (the titles, not
-  built). Till then the debug key X does.
+- **Its cue**: the logo's flare calls `Promise` (the titles' head,
+  3.0.131). Till then the debug key X did.
 - **A decoration**: it stops nothing; the wall is the right edge of the
   screen, as before.
 - **Tests**: `Tests.Game.Gate` (new) - `TGateTests` 9; `TRoadEndTests` +1
