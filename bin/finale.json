@@ -1,0 +1,39 @@
+{
+  "about": "The titles that close level 2 (docs/mechanics/finale-flight.md): the end track, its cues, and the way of the camera's flight to the stars. The stand (tools/chase) plays the flight from this file; the game does not read it yet.",
+  "track": {
+    "about": "bin/music/credits.ogg as tools/finale/beat_map.py hears it: its length in seconds, its tempo, and its first downbeat - the kick the band comes in on. A bar is four beats.",
+    "file": "credits.ogg", "seconds": 238.36, "bpm": 112.35, "downbeat": 17.21
+  },
+  "cues": {
+    "about": "Seconds of the track, which starts with the hull's burst; every cue but handOver stands on a downbeat. card - the first pulse heard; flash - the band comes in; credits - the starts of three sections; flight - the band drops out; turn - its kick comes back alone, bandIn - all of it; neon - a bar and a beat before the loudest chorus: the sign stutters as the eye goes by; rib - the loudest chorus begins: the eye leaves the dome close past a rib, and flare - the sun comes out of the glass on the same beat; crown - the drums leave; sky - the band comes back.",
+    "handOver": 9.0,
+    "card": 10.84, "cardOut": 16.7,
+    "flash": 17.21, "line": 19.32,
+    "credits": [36.22, 67.94, 91.14], "creditsOut": 120.65,
+    "flight": 122.74,
+    "turn": 129.08, "bandIn": 131.17, "neon": 143.45, "rib": 145.94, "flare": 145.94, "crown": 164.91, "sky": 181.79
+  },
+  "path": {
+    "about": "The eye's way, by the seconds of the flight. x - the place along the city's strip that stands in the middle of the screen at the domes' base line; null - where the world stood. dx in the stead of x - so far from where the world stood, below 0 to the left: the eye's way off the picture is the same after a fight of any length. A key to the right of the one before it is held at that one's place: the eye never flies to the right. y - up, z - into the screen, in the units of the layout's camera, from its rest (the eye rests 28 over the crater floor; the play layer stands 93 in, the near hills 219, the domes' base line 1024). bank - degrees, the left wing down turns the picture clockwise; pitch - degrees, the nose up. note - for the reader. Between the keys a monotone cubic, a channel at a time: through every key, never past one, still at the two ends. The way: cast off to the left through the track's break; the pan; the turn into the main dome at the pan's pace, the way to the left giving over to the way in; in through a cell of its front, up over the roofs, past the TEK sign on the spire; out through a cell of its back close under a node of the frame, banked, into the sun; the climb.",
+    "keys": [
+      { "t": 0, "x": null, "y": 0, "z": 0, "bank": 0, "pitch": 0, "note": "the picture the world stands on" },
+      { "t": 6.34, "dx": -45, "y": 0, "z": 0, "bank": 0, "pitch": 0, "note": "cast off through the break: the gate, the logo, then the hero on the barge ride off to the right; the kick comes back" },
+      { "t": 8.43, "dx": -200, "y": 0, "z": 0, "bank": 0, "pitch": 0, "note": "the band is in: at speed along the strip" },
+      { "t": 11.6, "x": 1730, "y": 0, "z": 0, "bank": 0, "pitch": 0, "note": "over the outskirts, the satellite dome coming" },
+      { "t": 12.7, "x": 1554, "y": 0, "z": 0, "bank": 0, "pitch": 0, "note": "the last of the level pan: from here the eye turns in" },
+      { "t": 14.84, "x": 1215, "y": 2, "z": 25, "bank": 0, "pitch": 0, "note": "past the satellite dome, the way in beginning" },
+      { "t": 16.97, "x": 925, "y": 12, "z": 190, "bank": 0, "pitch": 0, "note": "the turn: as much in as to the left; the near hills and the fangs go under the eye" },
+      { "t": 19.11, "x": 808, "y": 44, "z": 540, "bank": 0, "pitch": 0, "note": "straight at the main dome, at the pan's pace, rising to its slope" },
+      { "t": 20.7, "x": 776, "y": 72, "z": 800, "bank": 0, "pitch": 0, "note": "over the dome's foot: in through a cell of its front, a rib close on the right" },
+      { "t": 21.25, "x": 769, "y": 80.5, "z": 890, "bank": 0, "pitch": 0, "note": "over the roofs, between the spire and the pyramid: the TEK sign goes by on the left, stuttering" },
+      { "t": 22.3, "x": 762, "y": 92, "z": 1054, "bank": 5, "pitch": 0, "note": "abreast of the spire; the bank begins" },
+      { "t": 23.2, "x": 760, "y": 97, "z": 1187, "bank": 14, "pitch": 0, "note": "out through a cell of the dome's back, a rib close over and one close under; the sun" },
+      { "t": 24.6, "x": 757, "y": 140, "z": 1370, "bank": 10, "pitch": 0, "note": "the climb: up faster and faster, the bank let go slowly" },
+      { "t": 26, "x": 755, "y": 210, "z": 1490, "bank": 6, "pitch": 0, "note": "the ridge goes down the frame, the sun stays" },
+      { "t": 27.6, "x": 754, "y": 310, "z": 1570, "bank": 2.5, "pitch": 3, "note": "the ridge's skyline leaves by the bottom edge; the nose comes up, the sun sinks" },
+      { "t": 29.2, "x": 754, "y": 420, "z": 1620, "bank": 0.5, "pitch": 7, "note": "the sun low in the frame, alone" },
+      { "t": 31, "x": 754, "y": 560, "z": 1650, "bank": 0, "pitch": 13, "note": "the sun leaves by the bottom edge" },
+      { "t": 32.6, "x": 754, "y": 680, "z": 1665, "bank": 0, "pitch": 20, "note": "the black; the path stands still only here, where nothing shows it. From here the game: the stars of the menu" }
+    ]
+  }
+}

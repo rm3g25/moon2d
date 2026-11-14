@@ -195,6 +195,12 @@ of the camera through the city takes its place.
 ### The flight
 Timings from the flight's start are first guesses; the whole is tuned to
 the track.
+Its first two rows are superseded (2026-11-14, `finale-flight.md`, "Decided
+after the second look"): no push and no rise - the eye goes left at once,
+at its rest, and the play plane rides off to the right through the track's
+break; the void left of the barge is the open crater, and is shown.
+The order inside the dome is reworked too ("The flight through the dome"
+there): the sign first, the rib on the way out, the sun on that beat.
 
 | time | what |
 |---|---|

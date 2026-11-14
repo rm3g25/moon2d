@@ -47,8 +47,11 @@ Not built. One file per thing, in the order of `ROADMAP.md`.
 | `arena-3/` | level 2 finale: the tunnels and the TEK machine (end of 3.0) - a folder, one file per part of the fight, its index in `arena-3/README.md` |
 | `blasts.md` | the look of an explosion, sparks, the blast wave, the shards |
 | `boss-1.md` | the level 1 boss TEK-R1 in HD, its pilot, the damage ceiling |
+| `chase-backdrop.md` | the far plane of arena 3's chase: the city in the crater, its dome frames, its life, the farm; the stand and the art pipeline |
 | `engine.md` | the frame: window, frame and screen, shake, settings, unit folders, draw batching, system requirements |
 | `fans.md` | the `fan` dynamics |
+| `finale.md` | the end of arena 3 and the titles that close 3.0: the design, the end of the fight, the gate |
+| `finale-flight.md` | the titles' build: the end track's beat map, the timeline on it, the camera of the flight to the stars, its path's file, the stages |
 | `font.md` | the bitmap font in HD |
 | `graph.md` | the `graph` dynamics (the medlab monitor) |
 | `henshin.md` | the henshin ceremony on orbs, the suit coming on and off |

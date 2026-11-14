@@ -599,7 +599,7 @@ python tools/chase/make_emblem.py <emblem>.png                   (the TEK sign, 
 python tools/chase/make_glow.py <work> agro,hall,svc [--write]   (the farm's glass, beside its pieces)
 python tools/chase/place_farm.py [seed]                          (the farm's first placement)
 python tools/chase/pack_set.py <work>
-python tools/chase/build_stand.py chase-stand.html
+python tools/chase/build_stand.py chase-stand.html [--track]
 ```
 
 - `check_element.py` fails a missing alpha (a solid texture - the floor - is
@@ -642,7 +642,16 @@ python tools/chase/build_stand.py chase-stand.html
   1080p or 4K, "real pixels" for a 1:1 look; a PNG named by its id dropped
   on the stage tries a take before it is packed; the frames, the depth and
   the placing of the buildings ("The city"). The working folder of checked
-  PNGs is not kept: the set holds them.
+  PNGs is not kept: the set holds them. For the titles it takes the camera's
+  path and the track's cues (`bin/finale.json`) and the play layer's
+  pictures from their sets - the road's tile and the gate's facade
+  (`tek-road-tile`, `s13-gate` of `level2-objects.mset`), the main barge
+  (`barge-5` of `pads.mset`), the hero (`1` of `hero.mset`) and the menu's
+  logo (`logo` of `ui.mset`); `--track` puts the end track inside too. The
+  fangs' kit comes from the sets the layout names, at half its pixels; the
+  stand plays the fangs by the game's rules and dice of its own. The mode "the
+  titles", the eye that carries every layer and the address bar's keys for
+  shots: `finale-flight.md`, "Stage T1 on the stand".
 
 ## The prompts
 

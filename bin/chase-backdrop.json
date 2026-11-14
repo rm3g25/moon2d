@@ -9,7 +9,7 @@
     "ridgeShareOfCity": 0.35, "ground": 14, "fangs": 20
   },
   "fangs": {
-    "about": "Spurs of basalt riding by behind the play layer, rising from below the bottom edge. w and h - a picture's size in units at the scale of 1. A low one's top stands where the near ground hides the city's feet; a tall one (only the kinds marked tall) over the city, never two on the screen. The game only, the stand does not play them.",
+    "about": "Spurs of basalt riding by behind the play layer, rising from below the bottom edge. w and h - a picture's size in units at the scale of 1. A low one's top stands where the near ground hides the city's feet; a tall one (only the kinds marked tall) over the city, never two on the screen. The stand plays them by dice of its own.",
     "kit": [
       { "sprite": "level2-objects:s11-fang-needle", "w": 46, "h": 248, "tall": true },
       { "sprite": "level2-objects:s11-fang-crown", "w": 230, "h": 128 },

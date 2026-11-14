@@ -57,6 +57,15 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 .kit span { font: 10px var(--mono); color: var(--dim); }
 .stage.editing canvas { cursor: crosshair; }
 .drop { margin-top: 10px; color: var(--dim); font-size: 13px; }
+.bar label.keys { flex: 1 1 100%; display: grid; gap: 6px; }
+textarea { width: 100%; font: 12px/1.5 var(--mono); background: #0f1116; color: var(--fg); border: 1px solid var(--line); padding: 6px 8px; white-space: pre; }
+/* ?shot: the stage alone at its own pixels, for a headless screenshot */
+body.shot { margin: 0; overflow: hidden; }
+body.shot .wrap { display: block; padding: 0; max-width: none; }
+body.shot .wrap > :not(.stage) { display: none; }
+body.shot .stage { border: 0; width: auto; aspect-ratio: auto; }
+body.shot .stage canvas { width: auto; height: auto; }
+body.shot .hud { display: none; }
 .drop input { font-size: 12px; color: var(--dim); max-width: 100%; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>
@@ -83,7 +92,8 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
   </div>
 
   <div class="bar">
-    <label><input id="g-play" type="checkbox" checked> play layer guides</label>
+    <label><input id="g-play" type="checkbox" checked> the play layer</label>
+    <label><input id="g-fangs" type="checkbox" checked> the fangs</label>
     <label><input id="g-spans" type="checkbox"> dome spans</label>
     <label><input id="g-frames" type="checkbox" checked> frames</label>
     <label><input id="g-shadows" type="checkbox" checked> frame shadows</label>
@@ -96,6 +106,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <label><input id="g-flight" type="checkbox"> the flight from point B, the fight over at <input id="p-fightEnd" type="number" step="5" value="150" style="width: 4.5em"> s</label>
     <label><input id="g-gate" type="checkbox" checked> the gate's facade</label>
     <label><input id="g-gate-amber" type="checkbox"> its lamp amber (after the logo's flare)</label>
+    <label><input id="g-titles" type="checkbox"> the titles: the camera flies from where the world stands</label>
     <label>screen <button data-res="1080" class="res on">1080p</button><button data-res="2160" class="res">4K</button></label>
     <label><input id="g-real" type="checkbox"> real pixels (scroll the stage)</label>
     <label>tunnel peak <input id="p-tunnelPeak" type="number" step="1"></label>
@@ -110,6 +121,13 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
     <button id="edit">Place buildings</button>
     <output id="picked" style="font: 12px var(--mono); color: var(--dim)">drag a building: sideways along the street, up and down into the depth (it grows and shrinks with it); M mirror, + and - size, [ and ] shade, D copy, Delete remove</output>
     <button id="export">Download chase-backdrop.json</button>
+  </div>
+
+  <div class="bar" id="titles-bar" hidden>
+    <label class="keys">the path's keys, one to a line, as bin/finale.json has them: t - seconds of the flight; x - along the city's strip (null - where the world stood), or dx in its stead - from where the world stood, below 0 to the left; y - up, z - into the screen, the camera's units; bank and pitch - degrees
+      <textarea id="t-keys" rows="9" spellcheck="false"></textarea></label>
+    <button id="t-apply">Fly these keys</button>
+    <output id="t-note" style="font: 12px var(--mono); color: var(--dim)"></output>
   </div>
 
   <div class="bar" id="looks">
@@ -189,7 +207,7 @@ function emblemOffset() {
 }
 let Flight = false, FightEnd = 150;
 function simulateFlight() {
-  let oC = emblemOffset(), oR = 0, oG = 0, oRoad = 0;
+  let oC = emblemOffset(), oR = 0, oG = 0, oF = 0, oRoad = 0;
   const oT = Cliff.x + Cliff.w + Layout.screen.w;
   for (let i = 0; i <= SimSeconds * 33; i++) {
     const t = i * Tick;
@@ -198,15 +216,15 @@ function simulateFlight() {
     const rem = CityLength - Layout.screen.w - oC;
     if (rem < Sp.cityBrakeZone) C = rem > 0 ? Math.max(Sp.cityLeast, C * rem / Sp.cityBrakeZone) : 0;
     C *= Share;
-    Track.push({ t, oT, oC, oR, oG, oRoad, T: 0, C, Share });
+    Track.push({ t, oT, oC, oR, oG, oF, oRoad, T: 0, C, Share });
     oC += C * Tick; oR += C * Sp.ridgeShareOfCity * Tick; oRoad += Sp.road * Share * Tick;
-    oG += (Sp.ground || 0) * Share * Tick;
+    oG += (Sp.ground || 0) * Share * Tick; oF += (Sp.fangs || 0) * Share * Tick;
   }
 }
 function simulate() {
   Track = [];
   if (Flight) { simulateFlight(); listEvents(); return; }
-  let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oG = 0, oRoad = 0, phase = 'tunnel', eased = 0;
+  let T = 0, C = 0, oT = 0, oC = 0, oR = 0, oG = 0, oF = 0, oRoad = 0, phase = 'tunnel', eased = 0;
   const cliffRight = Cliff.x + Cliff.w;
   for (let i = 0; i <= SimSeconds * 33; i++) {
     const t = i * Tick;
@@ -222,14 +240,15 @@ function simulate() {
     }
     const rem = CityLength - Layout.screen.w - oC;
     if (rem < Sp.cityBrakeZone) C = rem > 0 ? Math.max(Sp.cityLeast, C * rem / Sp.cityBrakeZone) : 0;
-    Track.push({ t, oT, oC, oR, oG, oRoad, T, C });
+    Track.push({ t, oT, oC, oR, oG, oF, oRoad, T, C });
     oT += T * Tick; oC += C * Tick; oR += C * Sp.ridgeShareOfCity * Tick; oRoad += Sp.road * ramp * Tick;
-    oG += (Sp.ground || 0) * ramp * Tick;
+    oG += (Sp.ground || 0) * ramp * Tick; oF += (Sp.fangs || 0) * ramp * Tick;
   }
   listEvents();
 }
 
 function listEvents() {
+  if (Titles) return listTitles();
   const Checks = [
     ['the city opens on the right', s => (Cliff.edgeLeast ?? Cliff.edgeAt) - s.oT < 400],
     ['the sun comes out from behind the cliff', s => Cliff.edgeAt - s.oT < Sun.x],
@@ -264,17 +283,96 @@ function wave(x, seed) {
 }
 const U = v => v * Px;
 
+// ---- the eye: the camera of the titles' flight ----
+// At rest the eye is the layout's camera, and every number of the chase is
+// as it was. In the titles it leaves its place: Lift up and Push into the
+// screen, in the camera's units; its way along the strip is in the offsets;
+// Bank and Pitch, degrees, turn the whole frame. A layer of the nearness K
+// stands Camera.focal / K from the eye at rest, so a push brings the near
+// layers on faster than the far ones, and a lift sinks them faster. The eye
+// never turns its head: it looks straight into the depth, so a flat picture
+// is always seen face on.
+const Eye = { Lift: 0, Push: 0, Bank: 0, Pitch: 0 };
+function eyeHeight() { return Camera.baseY - Camera.horizon + Eye.Lift; }
+function eyeAtRest() { return Eye.Lift === 0 && Eye.Push === 0; }
+// A layer nearer the eye than this is behind it, the camera's units
+const EyeNearest = 12;
+// How near a layer of the nearness AK at rest stands now; 0 - behind the eye
+function eyeNearness(AK) {
+  const Depth = Camera.focal / AK - Eye.Push;
+  return Depth > EyeNearest ? Camera.focal / Depth : 0;
+}
+// A point drawn at rest on a layer of the nearness AK, where the eye sees it
+// now: [x, y, its nearness], units
+function eyePoint(AK, AX, AY) {
+  if (eyeAtRest()) return [AX, AY, AK];
+  const K = eyeNearness(AK), Half = Layout.screen.w / 2;
+  return [Half + (AX - Half) * K / AK, Camera.horizon + (AY - Camera.horizon) * K / AK + Eye.Lift * K, K];
+}
+// What stands on a layer of the nearness AK, as the eye sees it: ADraw draws
+// it where it stands at rest. False - the layer is behind the eye
+function underEye(AK, ADraw) {
+  if (eyeAtRest()) { ADraw(); return true; }
+  const K = eyeNearness(AK);
+  if (K === 0) return false;
+  const Scale = K / AK, Half = U(Layout.screen.w / 2), Horizon = U(Camera.horizon);
+  Ctx.save();
+  Ctx.transform(Scale, 0, 0, Scale, Half * (1 - Scale), Horizon * (1 - Scale) + U(Eye.Lift * K));
+  ADraw();
+  Ctx.restore();
+  return true;
+}
+// The span of a layer the eye has on the screen, in the layer's units at
+// rest: [left, right]
+function eyeSpan(AK) {
+  if (eyeAtRest()) return [0, Layout.screen.w];
+  const K = eyeNearness(AK), Half = Layout.screen.w / 2;
+  return K === 0 ? [Half, Half] : [Half - Half * AK / K, Half + Half * AK / K];
+}
+// What AFind finds with the eye back at its rest: a thing drawn at rest and
+// carried by underEye measures itself there
+function atRest(AFind) {
+  const Lift = Eye.Lift, Push = Eye.Push;
+  Eye.Lift = 0; Eye.Push = 0;
+  try { return AFind(); } finally { Eye.Lift = Lift; Eye.Push = Push; }
+}
+// How near the layers that are no part of the city stand, by their speeds:
+// a layer riding K times the city's cruise stands K times as near
+function ridgeNearness() { return Sp.ridgeShareOfCity; }
+function groundNearness() { return (Sp.ground || 0) / Sp.cityCruise; }
+function fangNearness() { return (Sp.fangs || 0) / Sp.cityCruise; }
+function playNearness() { return Sp.road / Sp.cityCruise; }
+
 // ---- the sun ----
+// Where the span of E along the city stands on the screen, at the domes'
+// base line: [left, right], units
+function spanOnScreen(E, oC) {
+  if (eyeAtRest()) return [E.x - oC, E.x + E.w - oC];
+  const K = eyeNearness(1), Half = Layout.screen.w / 2;
+  return [Half + (E.x - oC - Half) * K, Half + (E.x + E.w - oC - Half) * K];
+}
 // How far the span of E stands before the sun's disc, 0..1, ramped over
 // tintRamp at each end
 function spanCover(E, oC) {
-  const Inside = Math.min(Sun.x - (E.x - oC), E.x + E.w - oC - Sun.x);
+  const [Left, Right] = spanOnScreen(E, oC);
+  const Inside = Math.min(Sun.x - Left, Right - Sun.x);
   return Math.min(1, Math.max(0, Inside / Sun.tintRamp));
+}
+// The eye inside a dome's glass: wherever it looks from there, it looks
+// through the dome
+function eyeInside(F, oC) {
+  if (F.kind === 'capsule' || eyeAtRest()) return false;
+  const R = F.w / 2;
+  const Across = (oC + Layout.screen.w / 2 - F.x - R) / R, Into = (Eye.Push - Camera.focal) / R;
+  const Up = eyeHeight() / F.h;
+  return Across * Across + Into * Into + Up * Up < 1;
 }
 function sunCover(oC) {
   let Cover = 0;
-  for (const E of [...City.elements, ...Frames])
+  for (const E of City.elements)
     if (E.tintsSun) Cover = Math.max(Cover, spanCover(E, oC));
+  for (const F of Frames)
+    if (F.tintsSun) Cover = Math.max(Cover, eyeInside(F, oC) ? 1 : spanCover(F, oC));
   return Cover;
 }
 function drawSun(oC) {
@@ -364,6 +462,186 @@ function drawFloor(oC) {
     Ctx.stroke();
   }
 }
+// The crater floor is a picture in a band, and a band rides as one sheet:
+// the buildings and the frames' rings, each riding by its own depth, would
+// slide over it. So under the eye the band is cut across into slabs, each
+// carried along the strip by the nearness of its middle - the way a
+// building's feet standing there are: rows of dunes, the nearer overtaking
+// the farther, each row whole. A slab is as deep as the painted relief is
+// tall: thinner, and every row riding by itself, a long pan shears the
+// painting into streaks; deeper, and the rings slide on it again. A slab's
+// far edge fades in over the one behind it, a near dune before a far one.
+// AStandOffset is where the city stood, ARide the eye's way from there.
+// The lift stretches the band down from the horizon and the push grows it
+// about its middle, as a plane's would; both are kept small on the pan,
+// for they stretch the painted relief. The band's far edge, faded into the
+// ridge for the chase, is drawn sharp in the titles (floorFade): two layers
+// showing through each other read as one sliding on the other.
+const FloorSlabDeep = 6, FloorSlabFeather = 2;
+// The band is a painting true for the eye's rest alone: lifted or pushed,
+// it gives way to the plane under it (drawPlane) - all of it kept up to the
+// first of each pair, none past the second, units of the camera
+const FloorMeltLift = [2, 14], FloorMeltPush = [30, 200];
+function floorKeep() {
+  const Gone = ([AFrom, ATo], AValue) => smooth((AValue - AFrom) / (ATo - AFrom));
+  return (1 - Gone(FloorMeltLift, Eye.Lift)) * (1 - Gone(FloorMeltPush, Eye.Push));
+}
+function drawFloorUnderEye(AStandOffset, ARide) {
+  if (eyeAtRest() && ARide === 0 && !Titles) return drawFloor(AStandOffset);
+  const Tex = Images[City.band.texture];
+  const K = eyeNearness(1), Keep = floorKeep();
+  if (!Tex || K === 0 || Keep === 0) return;
+  const Band = City.band, Deep = Band.bottom - Band.top;
+  const Strip = bandStrip(Tex, { ...Band, fadeTop: 0 });
+  const Height = Camera.baseY - Camera.horizon + Eye.Lift;
+  const Stretch = K * Height / (Camera.baseY - Camera.horizon);
+  const Fade = floorFade(), Half = U(Layout.screen.w / 2);
+  // The ridge rises from the floor's far edge, so no slab rides slower than
+  // the ridge: a far slab left to its own depth stands still against the
+  // mountains behind it
+  const RidgeRide = eyeNearness(ridgeNearness());
+  const TileWidth = Strip.width * U(Deep) / Strip.height * K;
+  const RowsARow = Strip.height / (U(Deep) * Stretch);
+  for (let Row = Math.floor(U(Camera.horizon)); Row < View.height; Row++) {
+    const Down = (Row + 0.5) / Px - Camera.horizon;
+    if (Down < 0) continue;
+    const Into = Down / Stretch;
+    if (Into >= Deep) break;
+    const Slab = Math.floor(Into / FloorSlabDeep), IntoSlab = Into - Slab * FloorSlabDeep;
+    const From = Math.min(Strip.height - 1, Into / Deep * Strip.height);
+    const Edge = Fade > 0 ? Math.min(1, Into / Fade) : 1;
+    // the row as the slab ASlab carries it, at ALevel of itself
+    const DrawRow = (ASlab, ALevel) => {
+      const Shift = ARide * Math.max(RidgeRide, (ASlab + 0.5) * FloorSlabDeep * Stretch / Height);
+      const Start = Half - (U(AStandOffset) + Half) * K - U(Shift);
+      Ctx.globalAlpha = Edge * ALevel * Keep;
+      for (let X = ((Start % TileWidth) - TileWidth) % TileWidth; X < View.width; X += TileWidth)
+        Ctx.drawImage(Strip, 0, From, Strip.width, Math.max(1, Math.min(RowsARow, Strip.height - From)),
+          X, Row, TileWidth, 1);
+    };
+    const Feathered = Slab > 0 && IntoSlab < FloorSlabFeather;
+    if (Feathered) DrawRow(Slab - 1, 1);
+    DrawRow(Slab, Feathered ? IntoSlab / FloorSlabFeather : 1);
+  }
+  const Foot = Camera.horizon + Deep * Stretch;
+  if (Foot < Layout.screen.h) {
+    Ctx.globalAlpha = Keep;
+    Ctx.fillStyle = floorFootColour();
+    Ctx.fillRect(0, U(Foot) - 1, View.width, View.height - U(Foot) + 1);
+  }
+  Ctx.globalAlpha = 1;
+}
+
+// ---- the ground under a lifted eye: a plane, a picture of it from above ----
+// The crater floor from under the eye to the horizon: a tile of the ground
+// seen from straight above (ground-top, its top edge the far one), laid on
+// the plane the city's feet stand on and put in perspective a row of the
+// screen at a time. A row far off covers many rows of the tile: it is taken
+// from a copy of the tile squeezed that many times, or the plane shimmers
+// in motion; past the deepest copy the row goes to the tile's mean colour.
+// At the eye's rest the band and the near hills cover the plane whole, and
+// it is not drawn.
+const Plane = { tile: 'ground-top', tileUnits: 448, gain: 1.25 };
+const PlaneDeepest = 7;
+// A copy keeps its width till it is squeezed four times, then halves with
+// its height: across, a row is foreshortened far less than into the depth
+const PlaneWideLevels = 2;
+// From the first of these to the second, units from the eye, the tile gives
+// way to its mean colour too: that far the same dunes come round again and
+// again across the frame, a grid - till a map of the crater takes the far
+// ground (finale-flight.md, "The ground for a lifted eye")
+const PlaneFar = [1500, 3000];
+// The far ground keeps this much of the mean's light: at its own level it
+// stands lighter than the ridge before it, a bank of fog on an airless Moon
+const PlaneFarShade = 0.45;
+const PlaneLevels = [];
+let PlaneMean = null;
+function planeLevels() {
+  const Img = Images[Plane.tile];
+  if (!Img || PlaneLevels.length) return PlaneLevels;
+  for (let Level = 0; Level <= PlaneDeepest; Level++) {
+    const C = document.createElement('canvas');
+    C.width = Math.max(1, Img.width >> Math.max(0, Level - PlaneWideLevels));
+    C.height = Math.max(1, Img.height >> Level);
+    const G = C.getContext('2d');
+    G.imageSmoothingQuality = 'high';
+    if (Level === 0) G.filter = `brightness(${Plane.gain})`;
+    G.drawImage(Level === 0 ? Img : PlaneLevels[Level - 1].Canvas, 0, 0, C.width, C.height);
+    PlaneLevels.push({ Canvas: C, Pattern: Ctx.createPattern(C, 'repeat') });
+  }
+  const Dot = document.createElement('canvas');
+  Dot.width = 1; Dot.height = 1;
+  const G = Dot.getContext('2d');
+  G.drawImage(PlaneLevels[PlaneDeepest].Canvas, 0, 0, 1, 1);
+  PlaneMean = [...G.getImageData(0, 0, 1, 1).data].slice(0, 3).map(C => Math.round(C * PlaneFarShade));
+  return PlaneLevels;
+}
+// AEyeX - where the eye stands along the city's strip
+function drawPlane(AEyeX) {
+  const Levels = planeLevels();
+  if (!Levels.length || eyeAtRest()) return;
+  const Height = eyeHeight(), Half = Layout.screen.w / 2;
+  const TexelsAUnit = Levels[0].Canvas.height / Plane.tileUnits;
+  // the ridge is the edge of the world: no ground is drawn beyond its foot,
+  // and as the eye climbs the ridge goes down into the black with the sun
+  // over it
+  const WorldEnd = Camera.focal / ridgeNearness() - Eye.Push;
+  for (let Row = Math.ceil(U(Camera.horizon)); Row < View.height; Row++) {
+    const Down = (Row + 0.5) / Px - Camera.horizon;
+    const Depth = Height * Camera.focal / Down;
+    if (Depth > WorldEnd) continue;
+    // how many rows of the tile this row of the screen covers
+    const RowDeep = Depth * Depth / (Height * Camera.focal) / Px * TexelsAUnit;
+    const Squeeze = Math.log2(Math.max(1, RowDeep));
+    const Level = Levels[Math.min(PlaneDeepest, Math.round(Squeeze))];
+    const PxAUnit = Camera.focal / Depth * Px;
+    const Across = PxAUnit * Plane.tileUnits / Level.Canvas.width;
+    const Left = AEyeX - Half * Depth / Camera.focal;
+    const Tiles = (Eye.Push + Depth) / Plane.tileUnits;
+    const TexRow = (1 - (Tiles - Math.floor(Tiles))) * Level.Canvas.height;
+    Level.Pattern.setTransform(new DOMMatrix([Across, 0, 0, 1, -Left * PxAUnit, Row + 0.5 - TexRow]));
+    Ctx.fillStyle = Level.Pattern;
+    Ctx.fillRect(0, Row, View.width, 1);
+    const Far = Math.max(smooth((Squeeze - PlaneDeepest + 1) / 2),
+      smooth((Depth - PlaneFar[0]) / (PlaneFar[1] - PlaneFar[0])));
+    if (Far === 0) continue;
+    Ctx.fillStyle = `rgba(${PlaneMean},${Far})`;
+    Ctx.fillRect(0, Row, View.width, 1);
+  }
+}
+// How deep the floor's far edge fades into the ridge, units of the band: the
+// layout's in the chase; in the titles it sharpens over the flight's first
+// seconds to a soft line
+const FloorSharpSec = 4, FloorSharpFade = 1.5;
+function floorFade() {
+  const Soft = City.band.fadeTop || 0;
+  if (!Titles) return Soft;
+  return Soft + (Math.min(Soft, FloorSharpFade) - Soft) * smooth(Now / FloorSharpSec);
+}
+// The mean colour of the floor texture's lowest rows
+let FloorFoot = null;
+function floorFootColour() {
+  const Tex = Images[City.band.texture];
+  if (!Tex) return '#2a2622';
+  if (FloorFoot) return FloorFoot;
+  const Dot = document.createElement('canvas');
+  Dot.width = 1; Dot.height = 1;
+  const G = Dot.getContext('2d');
+  G.drawImage(Tex, 0, Tex.height - 4, Tex.width, 4, 0, 0, 1, 1);
+  FloorFoot = `rgb(${[...G.getImageData(0, 0, 1, 1).data].slice(0, 3)})`;
+  return FloorFoot;
+}
+// The floor's part of the screen, units: its band at rest, from the horizon
+// down under the eye
+function floorSpan() {
+  return eyeAtRest() ? [City.band.top, City.band.bottom] : [Camera.horizon, Layout.screen.h];
+}
+// The near hills' part of the screen, units, from their band's top down;
+// null - they are behind the eye
+function groundSpan() {
+  const Top = eyePoint(groundNearness(), 0, LayerById.ground.band.top);
+  return Top[2] === 0 ? null : [Top[1], Math.max(Top[1], Layout.screen.h)];
+}
 // The near ground: in front of the tunnel, its start coming in from the
 // right and fading in over its feather; drawn on a canvas of its own, so
 // the fade cuts the band alone
@@ -397,6 +675,94 @@ function drawGround(oG) {
     G.globalCompositeOperation = 'source-over';
   }
   Ctx.drawImage(GroundCanvas, 0, 0);
+}
+
+// ---- the fangs: spurs of basalt between the near ground and the play layer ----
+// The game's rules (Game.Fangs): one after another along their layer, the
+// road between two rolled by the dice, and every number of every fang the
+// dice's - which of the kit, how big, how high its top, mirrored or not, a
+// little off the common tint; most low, a few tall and never two tall ones
+// on a screen; a fang too short to reach below the bottom edge from its top
+// is made bigger, as far as the kit's scale lets it, then sunk. The dice
+// are the stand's own - the game's are new with every try - and the row is
+// rolled once, both ways from the layer's start: the game lets a fang go
+// once past the left edge, and the titles' eye flies back over them.
+const FangDef = Layout.fangs || null;
+const FangSeed = 0xfa9;
+const FangMirrorShare = 0.5;
+function fangSprite(AKind) { return FangDef.kit[AKind].sprite.split(':').pop(); }
+function fangRow() {
+  if (!FangDef) return [];
+  const Width = Layout.screen.w, Height = Layout.screen.h;
+  let Die = 0;
+  const Roll = () => roll(FangSeed, Die++);
+  const Between = ([ALeast, AMost]) => ALeast + (AMost - ALeast) * Roll();
+  const Kinds = FangDef.kit.map((Kind, i) => i);
+  const TallKinds = Kinds.filter(i => FangDef.kit[i].tall);
+  // as far back as the eye flies over the whole city, as far on as the
+  // flight rides in the stand's time
+  const Start = -(CityLength * fangNearness() + Width);
+  const End = SimSeconds * Sp.fangs * FlightShare + Width;
+  const Row = [];
+  let Cursor = Start, TallEnd = -Infinity;
+  while (Cursor < End) {
+    const Tall = Cursor - TallEnd >= Width && Roll() < FangDef.tallShare && TallKinds.length > 0;
+    const Candidates = Tall ? TallKinds : Kinds;
+    const Kind = Candidates[Math.min(Math.floor(Roll() * Candidates.length), Candidates.length - 1)];
+    const Piece = FangDef.kit[Kind];
+    const Top = Between(Tall ? FangDef.tallTop : FangDef.lowTop);
+    const Scale = Math.min(Math.max(Between(FangDef.scale), (Height - Top) / Piece.h), FangDef.scale[1]);
+    const W = Piece.w * Scale, H = Piece.h * Scale;
+    const Mirror = Roll() < FangMirrorShare;
+    const Jitter = Math.round(Between([-FangDef.tintJitter, FangDef.tintJitter]));
+    Row.push({ Kind, X: Cursor, Top: Math.max(Top, Height - H), W, H, Mirror, Jitter });
+    if (Tall) TallEnd = Cursor + W;
+    Cursor += W + Between(FangDef.gap);
+  }
+  return Row;
+}
+const Fangs = fangRow();
+// A fang's picture under its tint, percent a channel, as the game's colour
+// mod has it: dark in the tunnel, lighter out of it, as the near ground
+const FangPictures = new Map();
+function fangPicture(AKind, AJitter) {
+  const Img = Images[fangSprite(AKind)];
+  if (!Img) return null;
+  const Passed = Math.min(1, Math.max(0, TunnelNow / (Cliff.x + Cliff.w)));
+  const Tint = FangDef.tint.map((Outside, i) => {
+    const InTunnel = FangDef.tintInTunnel[i];
+    return Math.min(100, Math.max(0, Math.round(InTunnel + (Outside - InTunnel) * Passed) + AJitter));
+  });
+  const Key = AKind + ':' + Tint.join(',');
+  if (FangPictures.has(Key)) return FangPictures.get(Key);
+  const C = document.createElement('canvas');
+  C.width = Img.width; C.height = Img.height;
+  const G = C.getContext('2d');
+  G.drawImage(Img, 0, 0);
+  G.globalCompositeOperation = 'multiply';
+  G.fillStyle = `rgb(${Tint.map(Level => Level * 2.55).join(',')})`;
+  G.fillRect(0, 0, C.width, C.height);
+  G.globalCompositeOperation = 'destination-in';
+  G.drawImage(Img, 0, 0);
+  FangPictures.set(Key, C);
+  return C;
+}
+// AOffset - how far the fangs' layer has ridden. In the chase the first
+// fang waits at the right edge from the start, so none before it is there
+function drawFangs(AOffset) {
+  const [Left, Right] = eyeSpan(fangNearness());
+  for (const Fang of Fangs) {
+    const X = Fang.X - AOffset;
+    if (X >= Right || X + Fang.W <= Left) continue;
+    if (!Flight && Fang.X < Layout.screen.w) continue;
+    const Picture = fangPicture(Fang.Kind, Fang.Jitter);
+    if (!Picture) continue;
+    if (!Fang.Mirror) { Ctx.drawImage(Picture, U(X), U(Fang.Top), U(Fang.W), U(Fang.H)); continue; }
+    Ctx.save();
+    Ctx.translate(U(X + Fang.W), 0); Ctx.scale(-1, 1);
+    Ctx.drawImage(Picture, 0, U(Fang.Top), U(Fang.W), U(Fang.H));
+    Ctx.restore();
+  }
 }
 
 // ---- elements: a real picture with its feet on y, or a placeholder ----
@@ -438,7 +804,8 @@ function shadedImage(Id, Shade) {
 let Drawn = [];
 function drawElement(E, Offset, InCity, Index) {
   const X = InCity ? cityLeft(E, Offset) : E.x - Offset;
-  if (X > Layout.screen.w || X + E.w < 0) return;
+  const [SeenFrom, SeenTill] = InCity ? eyeSpan(nearness(depthY(E))) : [0, Layout.screen.w];
+  if (X > SeenTill || X + E.w < SeenFrom) return;
   const Img = Images[E.id];
   if (Img) {
     const W = U(E.w), H = W * Img.height / Img.width;
@@ -676,6 +1043,18 @@ function emblemPartLevel(APart, ATick) {
   }
   return neonLevel(mix(EmblemSeed + APart + 1), ATick, Emblem.faultShare);
 }
+// The titles' eye passes the sign on a cue of the track (the cue neon): the
+// sign burns steady about the cue, whatever its own dice say, and stutters
+// as the eye goes by - from, to, seconds about the cue, and its level there
+const NeonCueReach = 4;
+const NeonStutter = [[-0.12, 0, 0.12], [0.1, 0.16, 0.12], [0.3, 0.5, 0], [0.58, 0.63, 0.12]];
+function neonOnCue(ALevel) {
+  if (!Titles) return ALevel;
+  const Since = Now - (Finale.cues.neon - Finale.cues.flight);
+  if (Math.abs(Since) > NeonCueReach) return ALevel;
+  const Dip = NeonStutter.find(([AFrom, ATo]) => Since >= AFrom && Since < ATo);
+  return Dip ? Dip[2] : 1;
+}
 // The emblem stands on the lower point of its frame on the tip of its
 // building (Emblem.on, at Emblem.at of its picture), as near as the building
 function drawEmblem(E, ALeft, AHeight, ATick) {
@@ -689,7 +1068,7 @@ function drawEmblem(E, ALeft, AHeight, ATick) {
   Ctx.drawImage(shadedImage('tek-emblem', Emblem.shade), U(Left), U(Top), U(W), U(H));
   if (!document.getElementById('g-lights').checked) return;
   Emblem.parts.forEach((Box, i) => {
-    const Level = emblemPartLevel(i, ATick);
+    const Level = neonOnCue(emblemPartLevel(i, ATick));
     const Tube = Images[`tek-${i + 1}`], Halo = Images[`tek-${i + 1}-halo`];
     const Hb = Emblem.halos[i];
     if (Halo) addPicture(tinted(`tek-${i + 1}-halo`, Halo, Emblem.color), Left + Hb[0] * W, Top + Hb[1] * H,
@@ -743,15 +1122,17 @@ function farmSources(AOffset, ATick) {
   City.elements.forEach((E, i) => {
     const Glass = Farm.glass[E.id], Img = Images[E.id];
     if (!Glass || !Img) return;
-    const Left = cityLeft(E, AOffset);
-    if (Left > Layout.screen.w + Farm.air.reach * 2 || Left + E.w < -Farm.air.reach * 2) return;
+    const Left = cityLeft(E, AOffset), Rest = nearness(depthY(E));
+    const [SeenFrom, SeenTill] = eyeSpan(Rest);
+    if (Left > SeenTill + Farm.air.reach * 2 || Left + E.w < SeenFrom - Farm.air.reach * 2) return;
     const Level = farmGlowLevel(farmSeed(i), ATick);
     E.FarmLevel = Level;
     if (Level <= 0) return;
     const H = E.w * Img.height / Img.width;
     const U0 = E.mirror ? 1 - Glass.at[0] : Glass.at[0];
-    Sources.push({ X: Left + U0 * E.w, Y: E.y - H + Glass.at[1] * H, Color: Glass.color,
-      Power: Level * Glass.share * E.w * H / FarmHall, K: nearness(depthY(E)) });
+    const [X, Y, K] = eyePoint(Rest, Left + U0 * E.w, E.y - H + Glass.at[1] * H);
+    if (K === 0) return;
+    Sources.push({ X, Y, Color: Glass.color, Power: Level * Glass.share * E.w * H / FarmHall, K });
   });
   return Sources;
 }
@@ -990,7 +1371,8 @@ function drawTrain(ALine, AOffset, AIndex) {
   if (Till <= From) return;
   const Left = Place - AOffset * ALine.K, H = Train.w * Img.height / Img.width;
   const Cut = [Left + From * Train.w, Left + Till * Train.w];
-  if (Cut[1] < 0 || Cut[0] > Layout.screen.w) return;
+  const [SeenFrom, SeenTill] = eyeSpan(ALine.K);
+  if (Cut[1] < SeenFrom || Cut[0] > SeenTill) return;
   const Pic = shadedImage(Train.piece, Train.shade);
   Ctx.drawImage(Pic, From * Pic.width, 0, (Till - From) * Pic.width, Pic.height,
     U(Cut[0]), U(Train.y - H), U(Cut[1] - Cut[0]), U(H));
@@ -1071,7 +1453,7 @@ function searchlightBeams(AOffset, AClock) {
     const Angle = searchlightAngle(Item, i, AClock);
     const Direction = [Math.cos(Angle), Math.sin(Angle)];
     const Dome = searchlightDome(Item);
-    const Glass = Dome && Camera ? glassDistance(Dome, AOffset, From, Direction) : 0;
+    const Glass = Dome && Camera ? atRest(() => glassDistance(Dome, AOffset, From, Direction)) : 0;
     const Samples = [];
     for (let n = 0; n <= InsideSamples && Glass > 0; n++)
       Samples.push([Glass * n / InsideSamples, S.level + (S.glassLevel - S.level) * n / InsideSamples]);
@@ -1144,11 +1526,14 @@ function beamLevel(ABeam, ADistance) {
 }
 // After the near ribs: the hot spot on the glass, and a glint on every near
 // rib the beam crosses inside the dome - a rib in front, lit from behind
-function addBeamGlints(ABeam, ANearRibs) {
+function addBeamGlints(ARestBeam, ANearRibs) {
   const S = Searchlights;
-  if (ABeam.Glass <= 0) return;
+  if (ARestBeam.Glass <= 0) return;
+  const ABeam = beamUnderEye(ARestBeam);
+  if (!ABeam) return;
   const [Fx, Fy] = ABeam.From, [Dx, Dy] = ABeam.Direction;
-  addGlow('point', S.color, Fx + Dx * ABeam.Glass, Fy + Dy * ABeam.Glass, S.spotSize, S.spotSize, S.spotLevel);
+  const SpotSize = S.spotSize * ABeam.Scale, GlintSize = S.glintSize * ABeam.Scale;
+  addGlow('point', S.color, Fx + Dx * ABeam.Glass, Fy + Dy * ABeam.Glass, SpotSize, SpotSize, S.spotLevel);
   if (!ANearRibs) return;
   for (const R of ANearRibs) {
     const Ex = R.B[0] - R.A[0], Ey = R.B[1] - R.A[1];
@@ -1157,9 +1542,21 @@ function addBeamGlints(ABeam, ANearRibs) {
     const Wx = R.A[0] - Fx, Wy = R.A[1] - Fy;
     const Along = (Wx * Ey - Wy * Ex) / Cross, OnRib = (Wx * Dy - Wy * Dx) / Cross;
     if (OnRib < 0 || OnRib > 1 || Along <= 0 || Along >= ABeam.Glass) continue;
-    addGlow('point', S.color, Fx + Dx * Along, Fy + Dy * Along, S.glintSize, S.glintSize,
+    addGlow('point', S.color, Fx + Dx * Along, Fy + Dy * Along, GlintSize, GlintSize,
       S.glintLevel * beamLevel(ABeam, Along) / S.level);
   }
+}
+// A beam as the eye sees it: it is drawn at its lamp's nearness at rest, and
+// its glints are found among the ribs where the eye has them. null - behind
+// the eye
+function beamUnderEye(ABeam) {
+  if (eyeAtRest()) return { ...ABeam, Scale: 1 };
+  const Rest = nearness(ABeam.Item.y);
+  const [X, Y, K] = eyePoint(Rest, ...ABeam.From);
+  if (K === 0) return null;
+  const Scale = K / Rest;
+  return { ...ABeam, From: [X, Y], Glass: ABeam.Glass * Scale, Scale,
+    Samples: ABeam.Samples.map(([Distance, Level]) => [Distance * Scale, Level]) };
 }
 
 // ---- the dome frames: geodesic half-ellipsoids, drawn by code ----
@@ -1314,19 +1711,21 @@ const NearestShare = 0.15;
 const EyeCutMargin = 1e-3;
 // A point of a frame on the screen, in units: X across, Y up, Z into the
 // screen, from the frame's centre on its base line; null behind the eye
-function frameProject(F, Offset, X, Y, Z) {
+function frameProject(F, Offset, X, Y, Z, ANearest = Camera.focal * NearestShare) {
   const Half = Layout.screen.w / 2;
   const Focal = Camera.focal;
-  if (Focal + Z < Focal * NearestShare) return null;
-  const K = Focal / (Focal + Z);
+  const Depth = Focal + Z - Eye.Push;
+  if (Depth < ANearest) return null;
+  const K = Focal / Depth;
   const Centre = F.x + F.w / 2 - Offset - Half;
-  return [Half + (Centre + X) * K, Camera.horizon + (Camera.baseY - Camera.horizon) * K - Y * K, K];
+  return [Half + (Centre + X) * K,
+    Camera.horizon + (Camera.baseY - Camera.horizon) * K - Y * K + Eye.Lift * K, K];
 }
 // The part of a shadow on the floor in front of the eye, as shares of the
 // way from Pa to Pb; null - none of it. A lifted rib drops an end behind
 // the eye: the shadow streams toward the bottom of the screen
 function cutAtEye(Pa, Pb) {
-  const Plane = Camera.focal * (NearestShare - 1) + EyeCutMargin;
+  const Plane = Camera.focal * (NearestShare - 1) + EyeCutMargin + Eye.Push;
   if (Pa[2] < Plane && Pb[2] < Plane) return null;
   const At = (Plane - Pa[2]) / (Pb[2] - Pa[2]);
   if (Pa[2] < Plane) return [At, 1];
@@ -1339,6 +1738,30 @@ function cutAtEye(Pa, Pb) {
 // a part of the disc. Dark and sharp at a dome's foot, wide and faint
 // toward the eye.
 const StrokeSamples = 16;
+// A rib is drawn up to this far from the eye, the camera's units: close past
+// one, it is cut there, not dropped - it sweeps the frame as the eye goes by
+const RibNearest = 4;
+// The part of a rib from A to B in front of the eye, both points from the
+// frame's centre; null - none of it
+function ribInFront(A, B) {
+  const Deep = P => Camera.focal + P[2] - Eye.Push;
+  const Da = Deep(A), Db = Deep(B);
+  if (Da < RibNearest && Db < RibNearest) return null;
+  if (Da >= RibNearest && Db >= RibNearest) return [A, B];
+  const At = (RibNearest - Da) / (Db - Da);
+  const Cut = A.map((c, i) => c + (B[i] - c) * At);
+  return Da < RibNearest ? [Cut, B] : [A, Cut];
+}
+// How far in front of the eye the nearest building of the city stands: a
+// rib of a frame's far half nearer than that is drawn over the buildings
+function frontCard() {
+  let Front = Infinity;
+  for (const E of City.elements) {
+    const Depth = Camera.focal / nearness(depthY(E)) - Eye.Push;
+    if (Depth > EyeNearest) Front = Math.min(Front, Depth);
+  }
+  return Front;
+}
 const ShadowWidening = 1.4;
 const ShadowLevel = 0.45;
 function shadowStroke(F, Offset, Pa, Pb, Shares, Thick, D) {
@@ -1367,19 +1790,23 @@ function frameRibs(Offset) {
   // the sun's direction, from the scene toward it: low, straight behind
   const L = Math.hypot(Sx, Sy, Camera.focal);
   const D = [Sx / L, Sy / L, Camera.focal / L];
+  const Front = frontCard();
   for (const F of Frames) {
     const R = F.w / 2;
     const Left = frameProject(F, Offset, -R, 0, 0), Right = frameProject(F, Offset, R, 0, 0);
-    if (Right[0] < -R || Left[0] > Layout.screen.w + R) continue;
+    // near a frame the eye sees it far to the sides: out of its rest it culls none
+    if (eyeAtRest() && (Right[0] < -R || Left[0] > Layout.screen.w + R)) continue;
     const Shape = frameShape(F);
     const Farm = F === FarmFrame;
     const Put = (A, B, Thickening) => {
-      const Sa = frameProject(F, Offset, ...A), Sb = frameProject(F, Offset, ...B);
-      if (!Sa || !Sb) return;
+      const Seen = ribInFront(A, B);
+      if (!Seen) return;
+      const Sa = frameProject(F, Offset, ...Seen[0], 0), Sb = frameProject(F, Offset, ...Seen[1], 0);
       const Z = (A[2] + B[2]) / 2;
       const Thick = (F.rib || 2) * Thickening;
-      const Rib = { A: Sa, B: Sb, Z, W: Thick * (Sa[2] + Sb[2]) / 2, Farm };
-      (Z > 0 ? Far : Near).push(Rib);
+      const Rib = { A: Sa, B: Sb, Z, W: Thick * (Sa[2] + Sb[2]) / 2, Wa: Thick * Sa[2], Wb: Thick * Sb[2], Farm };
+      const Deepest = Camera.focal + Math.max(A[2], B[2]) - Eye.Push;
+      (Z > 0 && Deepest >= Front ? Far : Near).push(Rib);
       // its shadow on the crater floor: thrown toward the eye, long - the sun is low
       if (A[1] > 0 || B[1] > 0) {
         const Drop = P => [P[0] - D[0] * P[1] / D[1], 0, P[2] - D[2] * P[1] / D[1]];
@@ -1406,6 +1833,7 @@ function frameRibs(Offset) {
 // Lit from behind, nothing of the frame faces the eye in the light; only the
 // edges catch it.
 const RibDark = 'rgb(26,23,21)';
+const RibWedgeFrom = 1.3;
 const RibDarkRgb = [26, 23, 21];
 // The far ribs of the farm's dome turn their inner face to the eye, and the
 // farm lights it: the dark of a rib, and the light there times ribLevel
@@ -1420,11 +1848,22 @@ function drawRibs(Ribs, ASources) {
   for (const R of Ribs) {
     const Ax = U(R.A[0]), Ay = U(R.A[1]), Bx = U(R.B[0]), By = U(R.B[1]);
     const W = Math.max(1, U(R.W));
-    Ctx.strokeStyle = ribColour(R, ASources); Ctx.lineWidth = W;
-    Ctx.beginPath(); Ctx.moveTo(Ax, Ay); Ctx.lineTo(Bx, By); Ctx.stroke();
-    // the side toward the sun
     let Nx = -(By - Ay), Ny = Bx - Ax;
     const Len = Math.hypot(Nx, Ny) || 1; Nx /= Len; Ny /= Len;
+    // running at the eye, a rib is far thicker at its near end: a wedge
+    const Wedge = Math.max(R.Wa, R.Wb) > RibWedgeFrom * Math.min(R.Wa, R.Wb);
+    if (Wedge) {
+      const Ha = U(R.Wa) / 2, Hb = U(R.Wb) / 2;
+      Ctx.fillStyle = ribColour(R, ASources);
+      Ctx.beginPath();
+      Ctx.moveTo(Ax + Nx * Ha, Ay + Ny * Ha); Ctx.lineTo(Bx + Nx * Hb, By + Ny * Hb);
+      Ctx.lineTo(Bx - Nx * Hb, By - Ny * Hb); Ctx.lineTo(Ax - Nx * Ha, Ay - Ny * Ha);
+      Ctx.closePath(); Ctx.fill();
+    } else {
+      Ctx.strokeStyle = ribColour(R, ASources); Ctx.lineWidth = W;
+      Ctx.beginPath(); Ctx.moveTo(Ax, Ay); Ctx.lineTo(Bx, By); Ctx.stroke();
+    }
+    // the side toward the sun
     const Mx = (Ax + Bx) / 2, My = (Ay + By) / 2;
     let Tx = Sx - Mx, Ty = Sy - My;
     const Dist = Math.hypot(Tx, Ty) || 1; Tx /= Dist; Ty /= Dist;
@@ -1433,10 +1872,10 @@ function drawRibs(Ribs, ASources) {
     const Near = Math.exp(-Dist / U(150));
     const Level = Math.min(1, 0.12 + 0.88 * Near) * (0.35 + 0.65 * Facing);
     if (Level < 0.03) continue;
-    const Off = W * 0.35;
+    const OffA = (Wedge ? U(R.Wa) : W) * 0.35, OffB = (Wedge ? U(R.Wb) : W) * 0.35;
     Ctx.strokeStyle = `rgba(255,226,180,${Level.toFixed(3)})`;
-    Ctx.lineWidth = Math.max(1, W * 0.3);
-    Ctx.beginPath(); Ctx.moveTo(Ax + Nx * Off, Ay + Ny * Off); Ctx.lineTo(Bx + Nx * Off, By + Ny * Off); Ctx.stroke();
+    Ctx.lineWidth = Math.max(1, (Wedge ? Math.min(U(R.Wa), U(R.Wb)) : W) * 0.3);
+    Ctx.beginPath(); Ctx.moveTo(Ax + Nx * OffA, Ay + Ny * OffA); Ctx.lineTo(Bx + Nx * OffB, By + Ny * OffB); Ctx.stroke();
   }
 }
 // The strokes as the game draws them: triangles whose alpha lies in their
@@ -1591,43 +2030,66 @@ function drawGuides(oRoad) {
   Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
   Ctx.fillText('the Ram', U(347), U(234)); Ctx.fillText('hero', U(78), U(316));
 }
-// The flight's play layer: the main barge, the road come back at the end
-// and docked, and where the titles' logo will flare
-function drawFlightGuides(S) {
-  const Standing = S.t >= FightEnd + LandingRunSec + LandingSlowSec;
-  if (Standing) {
-    const Floor = U(Layout.screen.floorLine);
-    Ctx.fillStyle = '#262830'; Ctx.fillRect(U(160), Floor, View.width - U(160), View.height - Floor);
-  }
-  Ctx.strokeStyle = 'rgba(111,216,232,0.8)'; Ctx.lineWidth = 2; Ctx.setLineDash([8, 6]);
-  const BargeLeft = Standing ? 0 : 176;
-  Ctx.strokeRect(U(BargeLeft), U(336), U(160), U(16));
-  Ctx.strokeRect(U(BargeLeft + 72), U(304), U(16), U(32));
-  if (Standing) Ctx.strokeRect(U(136), U(60), U(240), U(96));
+// The harbour - the play layer of the picture the world stands on, as the
+// game has it (finale.md, "Stage 19 as built"): the road come back, its
+// tiles from the pier's edge on past the right edge; the main barge docked
+// against that edge, its deck on the road's line; the hero on its deck,
+// units from its stern. The barge in the air hangs at its station
+const Harbour = { pier: 160, tile: 32, tiles: 17, bargeLong: 160, bargeDeep: 18, station: 176, heroAt: 64, heroSize: 32 };
+const GuideInk = 'rgba(111,216,232,0.8)';
+// A picture of the play layer where the game draws it, or - the stand
+// built without its set - a dashed box named in its stead
+function drawPlayPiece(AId, AName, ALeft, ATop, AWidth, AHeight) {
+  if (Images[AId]) { Ctx.drawImage(Images[AId], U(ALeft), U(ATop), U(AWidth), U(AHeight)); return; }
+  Ctx.strokeStyle = GuideInk; Ctx.lineWidth = 2; Ctx.setLineDash([8, 6]);
+  Ctx.strokeRect(U(ALeft), U(ATop), U(AWidth), U(AHeight));
   Ctx.setLineDash([]);
-  Ctx.fillStyle = 'rgba(111,216,232,0.9)'; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
-  Ctx.fillText('main barge', U(BargeLeft + 4), U(348)); Ctx.fillText('hero', U(BargeLeft + 70), U(300));
-  if (Standing) Ctx.fillText('about where the titles\' logo flares', U(140), U(70));
-  if (Standing && document.getElementById('g-gate').checked)
-    (Images[GateArt.id] ? drawGateArt() : drawGateFacade());
+  Ctx.fillStyle = GuideInk; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
+  Ctx.fillText(AName, U(ALeft), U(ATop - 4));
+}
+function drawBarge(ALeft) {
+  const Line = Layout.screen.floorLine;
+  drawPlayPiece('barge', 'main barge', ALeft, Line, Harbour.bargeLong, Harbour.bargeDeep);
+  drawPlayPiece('hero', 'hero', ALeft + Harbour.heroAt, Line - Harbour.heroSize, Harbour.heroSize, Harbour.heroSize);
+}
+// In the game's order: the road's tiles, the gate on them, the barge, the hero
+function drawHarbour() {
+  const Line = Layout.screen.floorLine;
+  for (let i = 0; i < Harbour.tiles; i++)
+    drawPlayPiece('road-tile', 'road', Harbour.pier + i * Harbour.tile, Line, Harbour.tile, Harbour.tile);
+  if (document.getElementById('g-gate').checked) (Images[GateArt.id] ? drawGateArt() : drawGateFacade());
+  drawBarge(Harbour.pier - Harbour.bargeLong);
+}
+// The flight's play layer: in the air the main barge at its station; the
+// world standing - the harbour, and where the titles' logo flares
+function drawFlightGuides(S) {
+  const Standing = Titles || S.t >= FightEnd + LandingRunSec + LandingSlowSec;
+  if (!Standing) return drawBarge(Harbour.station);
+  drawHarbour();
+  if (Titles) return drawTitlesLogo();
+  Ctx.strokeStyle = GuideInk; Ctx.lineWidth = 2; Ctx.setLineDash([8, 6]);
+  Ctx.strokeRect(U(LogoPlace.left), U(LogoPlace.top), U(LogoPlace.w), U(LogoPlace.h));
+  Ctx.setLineDash([]);
+  Ctx.fillStyle = GuideInk; Ctx.font = `${U(7)}px IBM Plex Mono, monospace`;
+  Ctx.fillText('about where the titles\' logo flares', U(140), U(70));
 }
 
-// The generation of the facade (`gate.png`, trimmed to the building): its
-// left edge at the gate's left, its right edge at the screen's, its foot on
-// the road; put in the night by its shade, as the city's pieces are. Its
-// lamp housing is unlit in the picture - the lamp's light is code.
-const GateArt = { id: 'gate', shade: 0.35, lampAt: [565, 383], lampRadius: 26 };
+// The facade (`s13-gate` of level2-objects.mset, put in by build_stand.py):
+// its left edge at the gate's left, its right edge at the screen's, its foot
+// on the road; put in the night by its shade, as the city's pieces are. Its
+// lamp housing is unlit in the picture - the lamp's light is code, at its
+// place in units from the picture's top-left, as Game.Gate has it.
+const GateArt = { id: 'gate', shade: 0.35, lampAt: [69.7, 47.3], lampRadius: 3.2 };
 function drawGateArt() {
   const Img = Images[GateArt.id];
-  const Scale = (Layout.screen.w - Gate.left) / Img.width;
-  const Top = Gate.foot - Img.height * Scale;
-  Ctx.drawImage(shadedImage(GateArt.id, GateArt.shade), U(Gate.left), U(Top),
-    U(Img.width * Scale), U(Img.height * Scale));
-  drawGateLamp(Gate.left + GateArt.lampAt[0] * Scale, Top + GateArt.lampAt[1] * Scale,
-    GateArt.lampRadius * Scale);
+  const Width = Layout.screen.w - Gate.left, Height = Width * Img.height / Img.width;
+  const Top = Gate.foot - Height;
+  Ctx.drawImage(shadedImage(GateArt.id, GateArt.shade), U(Gate.left), U(Top), U(Width), U(Height));
+  drawGateLamp(Gate.left + GateArt.lampAt[0], Top + GateArt.lampAt[1], GateArt.lampRadius);
 }
+// Amber since the logo's flare: by the titles' flight, always
 function drawGateLamp(AX, AY, ARadius) {
-  const Amber = document.getElementById('g-gate-amber').checked;
+  const Amber = Titles || document.getElementById('g-gate-amber').checked;
   const LampColour = Amber ? [255, 176, 64] : [255, 60, 48];
   const Glow = Ctx.createRadialGradient(U(AX), U(AY), 0, U(AX), U(AY), U(ARadius * 5));
   Glow.addColorStop(0, `rgba(${LampColour},0.55)`);
@@ -1737,65 +2199,333 @@ function drawSpans(oC) {
   Ctx.fillStyle = '#ff8a70'; Ctx.fillRect(U(Sun.x) - 1, U(12), 2, U(14));
 }
 
+// ---- the titles: the flight of the camera to the stars ----
+// The end track's cues and the eye's way (bin/finale.json, put in by
+// build_stand.py; docs/mechanics/finale-flight.md). In the titles the world
+// stands where the flight left it and the eye flies: the time of the stage
+// is the flight's own, from its first tick.
+const Finale = /*FINALE*/null;
+let Titles = false;
+let PathKeys = Finale ? Finale.path.keys : [];
+// The hull bursts this long after the last orb, and the track starts with it
+const BurstAfterSec = 1;
+function titlesEnd() { return PathKeys.length ? PathKeys[PathKeys.length - 1].t : 0; }
+// The world's own second at the flight's second: the city's clocks run on
+function titlesClock() { return FightEnd + BurstAfterSec + Finale.cues.flight + Now; }
+// The world as it stands at the end of the flight
+function standState() {
+  return Track[Math.min(Track.length - 1, Math.ceil((FightEnd + LandingRunSec + LandingSlowSec) * 33) + 1)];
+}
+// The eye's way: keys of time, place, bank and pitch, and a monotone cubic
+// between them, a channel at a time (Fritsch-Carlson): it passes through
+// every key, never past one, and stands still at its two ends
+const PathChannels = ['x', 'y', 'z', 'bank', 'pitch'];
+function pathTangents(ATimes, AValues) {
+  const Slopes = [], Tangents = new Array(ATimes.length).fill(0);
+  for (let i = 0; i + 1 < ATimes.length; i++)
+    Slopes.push((AValues[i + 1] - AValues[i]) / (ATimes[i + 1] - ATimes[i]));
+  for (let i = 1; i + 1 < ATimes.length; i++) {
+    if (Slopes[i - 1] * Slopes[i] <= 0) continue;
+    const Before = ATimes[i] - ATimes[i - 1], After = ATimes[i + 1] - ATimes[i];
+    const NearWeight = 2 * After + Before, FarWeight = After + 2 * Before;
+    Tangents[i] = (NearWeight + FarWeight) / (NearWeight / Slopes[i - 1] + FarWeight / Slopes[i]);
+  }
+  return Tangents;
+}
+function pathValue(ATimes, AValues, ATangents, ATime) {
+  const Last = ATimes.length - 1;
+  if (ATime <= ATimes[0]) return AValues[0];
+  if (ATime >= ATimes[Last]) return AValues[Last];
+  let i = 0;
+  while (ATimes[i + 1] < ATime) i++;
+  const Span = ATimes[i + 1] - ATimes[i], Share = (ATime - ATimes[i]) / Span;
+  const Square = Share * Share, Cube = Square * Share;
+  return (2 * Cube - 3 * Square + 1) * AValues[i] + (Cube - 2 * Square + Share) * Span * ATangents[i] +
+    (3 * Square - 2 * Cube) * AValues[i + 1] + (Cube - Square) * Span * ATangents[i + 1];
+}
+// Where a key has the eye along the city's strip: x is the place that
+// stands in the middle of the screen at the domes' base line; dx in its
+// stead - so far from where the world stood (AStandX), below 0 to the left:
+// the eye's way off the picture is the same after a fight of any length. A
+// key with neither stands where the world stood
+function keyPlace(AKey, AStandX) {
+  if (typeof AKey.dx === 'number') return AStandX + AKey.dx;
+  return AKey.x === null ? AStandX : AKey.x;
+}
+// The places of the path's keys: none to the right of the one before it,
+// nor of where the world stood - a short fight stops the world early, and
+// the eye never flies to the right
+function pathPlaces(AStandX) {
+  let Leftmost = AStandX;
+  return PathKeys.map(K => Leftmost = Math.min(Leftmost, keyPlace(K, AStandX)));
+}
+// Where the path has the eye at ASeconds of the flight
+function eyeAt(ASeconds, AStandX) {
+  const Times = PathKeys.map(K => K.t), At = {};
+  for (const Channel of PathChannels) {
+    const Values = Channel === 'x' ? pathPlaces(AStandX) : PathKeys.map(K => K[Channel]);
+    At[Channel] = pathValue(Times, Values, pathTangents(Times, Values), ASeconds);
+  }
+  return At;
+}
+// Puts the eye where the path has it now; gives its way along the strip
+// from where the world stands, the city's units
+function flyEye(AStand) {
+  const StandX = AStand.oC + Layout.screen.w / 2;
+  const At = eyeAt(Now, StandX);
+  Eye.Lift = At.y; Eye.Push = At.z; Eye.Bank = At.bank; Eye.Pitch = At.pitch;
+  return At.x - StandX;
+}
+function restEye() { Eye.Lift = 0; Eye.Push = 0; Eye.Bank = 0; Eye.Pitch = 0; }
+// The eye's bank and pitch turn the frame as one: the bank about its middle
+// - the left wing down turns the picture clockwise - the pitch along the
+// world's own vertical, the nose up taking the picture down. The corners a
+// bank bares want a frame drawn wider than the screen (finale.md, stage T3)
+function turnFrame() {
+  if (Eye.Bank === 0 && Eye.Pitch === 0) return;
+  const MiddleX = View.width / 2, MiddleY = View.height / 2;
+  // a banked frame is grown till it covers the screen's corners - a stand-in
+  // for the frame drawn wider than the screen
+  const Turn = Math.abs(Eye.Bank) * Math.PI / 180;
+  const Cover = Math.cos(Turn) + Math.max(View.width / View.height, View.height / View.width) * Math.sin(Turn);
+  Ctx.translate(MiddleX, MiddleY); Ctx.rotate(Eye.Bank * Math.PI / 180); Ctx.scale(Cover, Cover);
+  Ctx.translate(-MiddleX, -MiddleY);
+  Ctx.translate(0, U(Camera.focal * Math.tan(Eye.Pitch * Math.PI / 180)));
+}
+// The sunrise: the sun comes out of the dome's glass on a cue of the track
+// (the cue flare) and floods the lens - a bloom about the disc, a streak
+// across the whole frame, ghosts on the line through the frame's middle,
+// and the exposure blown for a moment, then gone. The lens's, not the
+// world's: drawn over the turned frame, its streak level on the screen.
+// ACover - how much of the sun the domes still take: none of it flares.
+const FlareAttackSec = 0.12, FlareSettleSec = 1.4, FlareHold = 0.42;
+const FlareBloom = 150, FlareStreakFlat = 0.035, FlareVeil = 0.6;
+const FlareGhosts = [[0.55, 9, '120,170,255', 0.12], [1.35, 22, '255,170,90', 0.08], [1.8, 6, '160,255,220', 0.12],
+  [2.3, 34, '120,150,255', 0.06]];
+// The flare now: Burst - the blown moment, 1 at its peak and gone as the
+// lens settles; Level - all of it, the burst over what it settles to
+function flareNow(ACover) {
+  const Since = Titles ? Now - (Finale.cues.flare - Finale.cues.flight) : 0;
+  if (Since <= 0) return { Level: 0, Burst: 0 };
+  const Up = smooth(Since / FlareAttackSec) * (1 - ACover);
+  const Burst = Up * Math.exp(-Math.max(0, Since - FlareAttackSec) / FlareSettleSec * 3);
+  return { Level: FlareHold * Up + (1 - FlareHold) * Burst, Burst };
+}
+// AX, AY - the sun on the screen, pixels
+function drawFlare({ Level: ALevel, Burst: ABurst }, AX, AY) {
+  if (ALevel <= 0) return;
+  Ctx.save();
+  Ctx.globalCompositeOperation = 'lighter';
+  const Reach = U(FlareBloom * (0.55 + 0.45 * ALevel));
+  const Bloom = Ctx.createRadialGradient(AX, AY, 0, AX, AY, Reach);
+  Bloom.addColorStop(0, `rgba(255,246,224,${0.95 * ALevel})`);
+  Bloom.addColorStop(0.22, `rgba(255,236,200,${0.5 * ALevel})`);
+  Bloom.addColorStop(1, 'rgba(255,220,170,0)');
+  Ctx.fillStyle = Bloom; Ctx.fillRect(AX - Reach, AY - Reach, Reach * 2, Reach * 2);
+  const Long = View.width;
+  Ctx.save();
+  Ctx.translate(AX, AY); Ctx.scale(1, FlareStreakFlat);
+  const Streak = Ctx.createRadialGradient(0, 0, 0, 0, 0, Long);
+  Streak.addColorStop(0, `rgba(235,244,255,${ALevel})`);
+  Streak.addColorStop(0.3, `rgba(170,205,255,${0.5 * ALevel})`);
+  Streak.addColorStop(1, 'rgba(120,170,255,0)');
+  Ctx.fillStyle = Streak; Ctx.fillRect(-Long, -Long, Long * 2, Long * 2);
+  Ctx.restore();
+  const MiddleX = View.width / 2, MiddleY = View.height / 2;
+  for (const [Along, Size, Colour, Level] of FlareGhosts) {
+    const X = AX + (MiddleX - AX) * Along, Y = AY + (MiddleY - AY) * Along;
+    const Ghost = Ctx.createRadialGradient(X, Y, 0, X, Y, U(Size));
+    Ghost.addColorStop(0, `rgba(${Colour},${Level * ALevel})`);
+    Ghost.addColorStop(0.8, `rgba(${Colour},${Level * ALevel})`);
+    Ghost.addColorStop(1, `rgba(${Colour},0)`);
+    Ctx.fillStyle = Ghost; Ctx.fillRect(X - U(Size), Y - U(Size), U(Size * 2), U(Size * 2));
+  }
+  Ctx.fillStyle = `rgba(255,244,220,${FlareVeil * ABurst * ABurst})`;
+  Ctx.fillRect(0, 0, View.width, View.height);
+  Ctx.restore();
+}
+// Where the titles' logo flares (finale.md, "The gate"): over the farm's
+// crown, with room for its fire
+const LogoPlace = { left: 136, top: 60, w: 240, h: 96 };
+// The logo of the titles and the line under it: the menu's letters in a
+// glow for their fire - a stand-in for TMenuLogo, to see them ride away
+// with the play layer
+function drawTitlesLogo() {
+  const Img = Images.logo;
+  const MiddleX = LogoPlace.left + LogoPlace.w / 2, MiddleY = LogoPlace.top + LogoPlace.h / 2;
+  const Reach = LogoPlace.w * 0.6;
+  const Fire = Ctx.createRadialGradient(U(MiddleX), U(MiddleY), 0, U(MiddleX), U(MiddleY), U(Reach));
+  Fire.addColorStop(0, 'rgba(255,120,40,0.3)'); Fire.addColorStop(1, 'rgba(255,120,40,0)');
+  Ctx.save();
+  Ctx.globalCompositeOperation = 'lighter';
+  Ctx.fillStyle = Fire;
+  Ctx.fillRect(U(MiddleX - Reach), U(MiddleY - Reach), U(Reach * 2), U(Reach * 2));
+  Ctx.restore();
+  if (Img) {
+    const W = LogoPlace.h * Img.width / Img.height;
+    Ctx.drawImage(Img, U(MiddleX - W / 2), U(LogoPlace.top), U(W), U(LogoPlace.h));
+  }
+  Ctx.fillStyle = 'rgb(188,255,0)'; Ctx.font = `${U(9)}px IBM Plex Mono, monospace`; Ctx.textAlign = 'center';
+  Ctx.fillText('The Master will return in a new form', U(MiddleX), U(LogoPlace.top + LogoPlace.h + 14));
+  Ctx.textAlign = 'start';
+}
+// The play layer of the titles - the harbour and the logo - as the eye sees
+// it: the nearest layer of all, it rides the eye's way along the strip at
+// its own nearness
+function drawTitlesPlay(AStand, ARide) {
+  const K = eyeNearness(playNearness());
+  if (K === 0) return;
+  Ctx.save();
+  Ctx.translate(-U(ARide * K), 0);
+  underEye(playNearness(), () => drawFlightGuides(AStand));
+  Ctx.restore();
+}
+// The end track under the flight, when the stand was built with it: at the
+// flight's own second while the stage plays at 1x
+const TrackSrc = /*TRACK*/'';
+const Song = TrackSrc ? new Audio(TrackSrc) : null;
+const SongSlack = 0.12;
+function syncSong() {
+  if (!Song) return;
+  if (!(Titles && Playing && Rate === 1 && Now < titlesEnd())) {
+    if (!Song.paused) Song.pause();
+    return;
+  }
+  const At = Finale.cues.flight + Now;
+  if (Math.abs(Song.currentTime - At) > SongSlack) Song.currentTime = At;
+  if (Song.paused) Song.play().catch(() => {});
+}
+// The timeline of the titles: the path's keys and the track's cues inside
+// the flight, by the flight's own seconds
+function listTitles() {
+  const Marks = PathKeys.map((K, i) => [K.t, `key ${i + 1}${K.note ? ': ' + K.note : ''}`]);
+  for (const [Name, At] of Object.entries(Finale.cues))
+    if (typeof At === 'number' && At > Finale.cues.flight) Marks.push([At - Finale.cues.flight, `the track: ${Name}`]);
+  Marks.sort((a, b) => a[0] - b[0]);
+  const List = document.getElementById('events');
+  List.innerHTML = '';
+  for (const [At, Name] of Marks) {
+    const Item = document.createElement('li');
+    const B = document.createElement('button');
+    B.innerHTML = `<span class="t">${At.toFixed(2)} s</span><span>${Name}</span>`;
+    B.onclick = () => { Now = Math.min(At, titlesEnd()); Playing = false; syncPlay(); };
+    Item.appendChild(B);
+    List.appendChild(Item);
+  }
+}
+// A key as a line of bin/finale.json
+function keyLine(AKey) {
+  const Parts = Object.entries(AKey).map(([Name, Value]) => `"${Name}": ${JSON.stringify(Value)}`);
+  return `      { ${Parts.join(', ')} }`;
+}
+function showKeys() { document.getElementById('t-keys').value = PathKeys.map(keyLine).join(',\n'); }
+// The keys of the box, flown at once; a broken line leaves the path as it was
+function takeKeys(AText) {
+  const Note = document.getElementById('t-note');
+  try {
+    const Keys = JSON.parse('[' + AText.trim().replace(/,\s*$/, '') + ']');
+    const Whole = Keys.length >= 2 && Keys.every((K, i) => typeof K.t === 'number' && (i === 0 || K.t > Keys[i - 1].t) &&
+      PathChannels.every(C => typeof K[C] === 'number' || (C === 'x' && (K.x === null || typeof K.dx === 'number'))));
+    if (!Whole) throw new Error('every key wants t, x or dx, y, z, bank, pitch, and the times in order');
+    PathKeys = Keys;
+    Note.textContent = `${Keys.length} keys, ${titlesEnd()} s`;
+  } catch (Fault) {
+    Note.textContent = Fault.message;
+    return;
+  }
+  document.getElementById('scrub').max = titlesEnd();
+  Now = Math.min(Now, titlesEnd());
+  listTitles();
+}
+function setTitles(AOn) {
+  Titles = AOn && !!Finale;
+  document.getElementById('g-titles').checked = Titles;
+  document.getElementById('titles-bar').hidden = !Titles;
+  if (Titles) { Flight = true; document.getElementById('g-flight').checked = true; showKeys(); }
+  else restEye();
+  Now = 0;
+  document.getElementById('scrub').max = Titles ? titlesEnd() : SimSeconds;
+  simulate();
+}
+
 // ---- the frame ----
 let Now = 0, Playing = true, Rate = 1, Last = performance.now();
 function frame(Stamp) {
   const Dt = Math.min(0.1, (Stamp - Last) / 1000); Last = Stamp;
-  if (Playing) Now = Math.min(SimSeconds, Now + Dt * Rate);
-  const S = Track[Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)))];
+  if (Playing) Now = Math.min(Titles ? titlesEnd() : SimSeconds, Now + Dt * Rate);
+  syncSong();
+  const S = Titles ? standState() : Track[Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)))];
+  // the eye's way along the strip carries every layer at its own nearness
+  const Ride = Titles ? flyEye(S) : 0;
+  const oC = S.oC + Ride, oR = S.oR + Ride * ridgeNearness(), oG = S.oG + Ride * groundNearness();
+  const oF = S.oF + Ride * fangNearness();
   TunnelNow = S.oT;
   Ctx.fillStyle = '#000'; Ctx.fillRect(0, 0, View.width, View.height);
-  const Cover = drawSun(S.oC);
-  drawRidge(S.oR);
-  drawFloor(S.oC);
+  Ctx.save();
+  turnFrame();
+  const Cover = drawSun(oC);
+  drawPlane(oC + Layout.screen.w / 2);
+  underEye(ridgeNearness(), () => drawRidge(oR));
+  drawFloorUnderEye(S.oC, Ride);
   const ShowFrames = Camera && document.getElementById('g-frames').checked;
-  const Ribs = ShowFrames ? frameRibs(S.oC) : null;
+  const Ribs = ShowFrames ? frameRibs(oC) : null;
   const ShowShadows = Ribs && document.getElementById('g-shadows').checked;
   if (ShowShadows) {
     renderShadows(Ribs.Shadows);
-    drawShadows(City.band.top, City.band.bottom);
+    drawShadows(...floorSpan());
   }
-  LifeTick = Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)));
-  TrainTime = Now * 33;
-  const Sources = FarmFrame ? farmSources(S.oC, LifeTick) : [];
-  const Apron = Sources.length > 0 && renderLight(farmApronMesh(Sources, S.oC));
-  if (Apron) addLight(City.band.top, City.band.bottom);
+  LifeTick = Titles ? Math.round(titlesClock() * 33) : Math.min(Track.length - 1, Math.max(0, Math.round(Now * 33)));
+  TrainTime = (Titles ? titlesClock() : Now) * 33;
+  const Sources = FarmFrame ? farmSources(oC, LifeTick) : [];
+  const Apron = Sources.length > 0 && renderLight(farmApronMesh(Sources, oC));
+  if (Apron) addLight(...floorSpan());
   if (Ribs) { drawRibs(Ribs.Far, Sources); drawBeacons(Ribs.FarBeacons, LifeTick); }
   Drawn = [];
   // the train at its depth: before the first building in front of the line
   const Line = Train && monorailLine();
   let TrainDue = !!Line;
+  const DrawTrain = () => underEye(Line.K, () => drawTrain(Line, oC, City.elements.length));
   // each beam at its lamp's depth: the buildings in front hide the lamp
-  const Beams = Searchlights && document.getElementById('g-searchlights').checked ? searchlightBeams(S.oC, TrainTime) : [];
+  const Beams = Searchlights && document.getElementById('g-searchlights').checked ? searchlightBeams(oC, TrainTime) : [];
   let BeamsDue = Beams.slice();
+  const AddBeam = Beam => underEye(nearness(Beam.Item.y), () => addBeam(Beam));
   const DrawBeamsBefore = Depth => {
-    BeamsDue.filter(B => B.Item.y < Depth).forEach(addBeam);
+    BeamsDue.filter(B => B.Item.y < Depth).forEach(AddBeam);
     BeamsDue = BeamsDue.filter(B => B.Item.y >= Depth);
   };
   City.elements.forEach((E, i) => {
-    if (TrainDue && depthY(E) > Line.Depth) { drawTrain(Line, S.oC, City.elements.length); TrainDue = false; }
+    if (TrainDue && depthY(E) > Line.Depth) { DrawTrain(); TrainDue = false; }
     DrawBeamsBefore(depthY(E));
-    drawElement(E, S.oC, true, i);
+    underEye(nearness(depthY(E)), () => drawElement(E, oC, true, i));
   });
-  if (TrainDue) drawTrain(Line, S.oC, City.elements.length);
-  BeamsDue.forEach(addBeam);
-  if (Sources.length && renderLight(farmAirMesh(Sources, S.oC))) addLight(0, Layout.screen.h);
+  if (TrainDue) DrawTrain();
+  BeamsDue.forEach(AddBeam);
+  if (Sources.length && renderLight(farmAirMesh(Sources, oC))) addLight(0, Layout.screen.h);
   if (Ribs) { drawRibs(Ribs.Near); drawBeacons(Ribs.NearBeacons, LifeTick); }
   for (const B of Beams) addBeamGlints(B, Ribs?.Near);
-  if (document.getElementById('g-glare').checked) drawGlare(Cover, glareLevel(S.oC));
+  if (document.getElementById('g-glare').checked) drawGlare(Cover, glareLevel(oC));
   drawPicked();
   if (Screen13.complete && S.oT < Layout.screen.w) Ctx.drawImage(Screen13, U(-S.oT), 0, View.width, View.height);
   if (Cliff.x + Cliff.w - S.oT > 0) Ctx.drawImage(CliffCanvas, U(Cliff.x - S.oT), 0);
-  drawGround(S.oG);
+  const HillsSeen = underEye(groundNearness(), () => drawGround(oG));
   // on over the near hills, from the top of their band: over the sky between
   // their crests a stroke falls on the crater floor, which it shades too
-  if (ShowShadows && document.getElementById('g-hill-shadows').checked && LayerById.ground)
-    drawShadows(LayerById.ground.band.top, Layout.screen.h);
-  if (Apron && LayerById.ground && renderLight(farmApronMesh(Sources, S.oC)))
-    addLight(LayerById.ground.band.top, Layout.screen.h);
-  if (document.getElementById('g-play').checked) (Flight ? drawFlightGuides(S) : drawGuides(S.oRoad));
-  if (document.getElementById('g-spans').checked) drawSpans(S.oC);
-  document.getElementById('hud').innerHTML =
+  const Hills = HillsSeen && LayerById.ground ? groundSpan() : null;
+  if (ShowShadows && document.getElementById('g-hill-shadows').checked && Hills) drawShadows(...Hills);
+  if (Apron && Hills && renderLight(farmApronMesh(Sources, oC))) addLight(...Hills);
+  // in front of the near ground, behind the play layer
+  if (document.getElementById('g-fangs').checked) underEye(fangNearness(), () => drawFangs(oF));
+  if (document.getElementById('g-play').checked) {
+    if (Titles) drawTitlesPlay(S, Ride);
+    else if (Flight) drawFlightGuides(S);
+    else drawGuides(S.oRoad);
+  }
+  if (document.getElementById('g-spans').checked) drawSpans(oC);
+  const SunAt = Ctx.getTransform().transformPoint(new DOMPoint(U(Sun.x), U(Sun.y)));
+  Ctx.restore();
+  drawFlare(flareNow(Cover), SunAt.x, SunAt.y);
+  const Flown = Titles ? `the titles: ${Now.toFixed(2)} s of the flight, the track at ${(Finale.cues.flight + Now).toFixed(2)} s<br>eye x ${(oC + Layout.screen.w / 2).toFixed(0)}  lift ${Eye.Lift.toFixed(1)}  push ${Eye.Push.toFixed(1)}<br>bank ${Eye.Bank.toFixed(1)}  pitch ${Eye.Pitch.toFixed(1)}<br>` : '';
+  document.getElementById('hud').innerHTML = Flown +
     (Editing ? 'placing - paused<br>' : '') + `t ${S.t.toFixed(1)} s<br>tunnel ${S.T.toFixed(1)} u/s  x ${S.oT.toFixed(0)}<br>city ${S.C.toFixed(2)} u/s  x ${S.oC.toFixed(0)} / ${CityLength - Layout.screen.w}<br>ridge ${(S.C * Sp.ridgeShareOfCity).toFixed(2)} u/s<br>ground ${((Sp.ground || 0)).toFixed(1)} u/s  x ${S.oG.toFixed(0)}<br>sun tint ${(Cover * 100).toFixed(0)}%<br>tick ${LifeTick}${Line ? `<br>train run ${(trainRun(Line.RightStop - Line.LeftStop).Ticks / 33).toFixed(1)} s` : ''}`;
   document.getElementById('scrub').value = Now;
   document.getElementById('clock').textContent = Now.toFixed(1) + ' s';
@@ -1805,13 +2535,23 @@ function frame(Stamp) {
 // ---- controls ----
 const PlayButton = document.getElementById('play');
 function syncPlay() { PlayButton.textContent = Playing ? 'Pause' : 'Play'; PlayButton.classList.toggle('on', Playing); }
-PlayButton.onclick = () => { if (Now >= SimSeconds) Now = 0; Playing = !Playing; syncPlay(); };
+PlayButton.onclick = () => {
+  if (Now >= (Titles ? titlesEnd() : SimSeconds)) Now = 0;
+  Playing = !Playing; syncPlay();
+};
 document.querySelectorAll('.rate').forEach(B => B.onclick = () => {
   Rate = +B.dataset.rate; document.querySelectorAll('.rate').forEach(O => O.classList.toggle('on', O === B));
 });
 document.getElementById('scrub').oninput = Ev => { Now = +Ev.target.value; };
 
-document.getElementById('g-flight').onchange = Ev => { Flight = Ev.target.checked; Now = 0; simulate(); };
+document.getElementById('g-flight').onchange = Ev => {
+  Flight = Ev.target.checked;
+  // the titles stand on the end of the flight
+  if (!Flight && Titles) return setTitles(false);
+  Now = 0; simulate();
+};
+document.getElementById('g-titles').onchange = Ev => setTitles(Ev.target.checked);
+document.getElementById('t-apply').onclick = () => takeKeys(document.getElementById('t-keys').value);
 document.getElementById('p-fightEnd').onchange = Ev => {
   const V = parseFloat(Ev.target.value);
   if (V > 0 && V < SimSeconds - 20) { FightEnd = V; simulate(); }
@@ -2044,6 +2784,24 @@ document.getElementById('files').onchange = Ev => takeFiles(Ev.target.files);
 const Stage = document.querySelector('.stage');
 Stage.addEventListener('dragover', Ev => Ev.preventDefault());
 Stage.addEventListener('drop', Ev => { Ev.preventDefault(); takeFiles(Ev.dataTransfer.files); });
+
+// ---- the address bar: one frame for a shot ----
+// ?flight=220 plays the flight with the fight over at 220 s; ?titles - the
+// titles on its end, ?keys=[...] - with these keys for the path's; ?t=235
+// stands paused at that second; ?bare takes the play layer's guides off;
+// ?shot leaves the stage alone on the page at its own pixels
+const Query = new URLSearchParams(location.search);
+if (Query.has('flight')) {
+  Flight = true;
+  FightEnd = parseFloat(Query.get('flight')) || FightEnd;
+  document.getElementById('g-flight').checked = true;
+  document.getElementById('p-fightEnd').value = FightEnd;
+}
+if (Query.has('titles')) setTitles(true);
+if (Query.has('keys')) takeKeys(Query.get('keys').replace(/^\[|\]$/g, ''));
+if (Query.has('t')) { Now = parseFloat(Query.get('t')) || 0; Playing = false; syncPlay(); }
+if (Query.has('bare')) document.getElementById('g-play').checked = false;
+if (Query.has('shot')) document.body.classList.add('shot');
 
 simulate();
 Ctx.imageSmoothingQuality = 'high';
