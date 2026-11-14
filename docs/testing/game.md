@@ -1341,3 +1341,51 @@ In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
 | Test | Holds | Turns red when |
 |---|---|---|
 | `TestItHasArrivedOnlyComeBack` | new, and running out: not arrived; come back: arrived; running out again, and cleared: not | the pier of the road running out carries a gate |
+
+## The titles
+
+State: written, 23 tests (3.0.131, `docs/mechanics/finale-flight.md`, "The
+titles' head as built"). The logo's flare, the card's font and place are
+the painter's, and whether the flash lands on the band's kick is the
+mixer's: a live run.
+
+### Game.Titles
+
+Fixture `TTitlesTests` in `Tests\Game\Tests.Game.Titles.pas`, titles of
+its own on whole seconds: the card 10 to 16, the flash 17. A level is set
+with `JumpTo`, the clock run with no place told.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNotStartedItDoesNotRun` | armed: not running; 33 ticks on: the clock at 0 | the titles run by themselves, over the fight |
+| `TestWithoutTitlesStartStartsNothing` | armed with no titles, started: not running | a level without the section plays titles of zeroes |
+| `TestStartingTwiceDoesNotSetTheClockBack` | 10 ticks, started again: 10 ticks still | a second burst cue restarts the titles |
+| `TestByTicksASecondIsThirtyThreeTicks` | started: running; 33 ticks: 1 s | the clock without a mixer runs at another rate |
+| `TestBetweenTicksTheClockLiesBetweenThem` | 5 ticks in: the last tick 4, this one 5, halfway 4.5 | a fade steps at 33 Hz |
+| `TestTheClockLeansTowardTheTrackByHalfATickAtTheMost` | the track 0.3 s ahead: a tick and a half on; 0.3 behind: half a tick on | the clock snaps to the track's buffer steps, or does not follow it |
+| `TestTheClockComesToATrackCloseBy` | the track 0.05 s ahead for 200 ticks: on it within a millisecond | the lean never closes the gap: the cues drift off the beat |
+| `TestTheClockNeverGoesBack` | the track up to 0.4 s behind, 60 ticks: each tick later than the last | the card fades backward, the flash's cue is crossed twice |
+| `TestATrackFarOffTakesTheClockAtOnce` | the track at 30 s: the clock at 30, nothing between the ticks | a seek leaves the clock creeping after the track for minutes |
+| `TestTheFlashComesOnceAtItsCue` | none two ticks before 17 and no logo; one by a tick past it; none to 180 | no flash, a flash early, or one every tick |
+| `TestAJumpPastTheFlashStillFlashes` | jumped to 18: the next tick flashes, the one after does not | the debug key skips the logo and the lamp |
+| `TestTheLogoStandsFromTheFlash` | past the flash: shown; at 180: shown | the logo goes out with the white |
+| `TestTheWhiteOfTheFlashIsGoneInItsTicks` | none before; 1 on the flash's tick; above 0 two ticks on; 0 three on | the frame stays white, or never flashes |
+| `TestTheCardComesInAndIsGoneByItsOut` | 0 before 10; 0.5 at 10.5; 1 at 13; 0.5 at 15.5; 0 at 16 and at the flash | the card stands under the logo |
+| `TestNotRunningNothingShows` | armed, the clock put mid-card and at 180: no card, no logo, no flash | a restart leaves the card or the logo on the screen |
+| `TestClearStopsItAndItCanStartAgain` | past the flash, cleared: not running, no logo, the clock 0; started: the flash again | a second win of the fight has no flash |
+| `TestTheNextCueIsTheFirstPastASecond` | after 0 the card; after it the flash; none past it | the debug key jumps back, or past a cue |
+
+### Levels.Titles
+
+Fixture `TTitlesReadTests` in `Tests\Levels\Tests.Levels.Titles.pas`; a
+file of its own is written to the temp folder, the shipped one is read from
+beside the tests.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNoSectionNoTitles` | a level without `titles`: not present | every level wants a file of titles |
+| `TestAMissingFileRaises` | a file that is not there: `ETitlesError` | a typo in the section plays no titles and says nothing |
+| `TestAFileThatDoesNotReadRaises` | a file that is no JSON: `ETitlesError` | a broken file crashes with an access violation |
+| `TestTheCuesAreReadAsWritten` | present; the three seconds as in the file | a cue is read into another's place |
+| `TestACueNotAfterTheOneBeforeItRaises` | the flash before the card is out; the card out as it comes in: `ETitlesError` | the card and the logo stand together, or the card never shows |
+| `TestTheFileOfLevelTwoReads` | `finale.json` beside the tests: present, the flash at 17.21 | the shipped titles do not load |

@@ -7,6 +7,25 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.131 - the titles' head.** The end of level 2 has the
+head of its titles (`finale-flight.md`, "The titles' head as built"), over
+the picture the flight ends on and with the hero still his own. A clock
+starts with the end track at the hull's burst (`Game.Titles`, new) and
+goes by the track's own place where the mixer tells it
+(`TSoundBank.MusicSeconds`, `Mix_GetMusicPosition` bound delayed), by the
+ticks where it does not; the cues are the level's (`Levels.Titles`, new:
+the `titles` section of level 2 names `bin/finale.json`). On it: "Computer
+Dragon presents" comes and goes, and on the band's kick the menu's logo
+flares hard where the card stood, over the farm's crown
+(`TMenuLogo.Flare` - the halo four times its breathing and wider, a burst
+of sparks off the letters, `TEmbers.Burst`), the frame flashes white, the
+screen jolts and the gate's lamp turns amber (`Hud.Titles`, new). Nothing
+more: the promise and the credits, first written under the logo, go to the
+stars at the flight's end. The panels of the HUD leave the picture at the
+hand-over. Escape pauses the track with the titles. The debug key X no
+longer turns the lamp: it takes the titles to two seconds before their
+next cue. The flight is not built: the logo stands on.
+
 2026-11-14: **3.0.130 - the gate.** The sealed door of arena 3 has a
 body: a facade with a gate in the manner of the city - a capsule roof, a
 ribbon of windows, a burnt-orange stripe, two ribbed leaves shut - on the

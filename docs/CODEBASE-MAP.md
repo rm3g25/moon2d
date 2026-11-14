@@ -71,7 +71,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   (`Game.Breakup`, 3.0.128) and what is left of it (`Game.Wreckage`,
   3.0.128), the end of the flight down to the still picture the titles
   will stand on (`Game.Landing`, 3.0.128), the facade with the gate on
-  the road come back (`Game.Gate`, 3.0.130), the fire on a barge a
+  the road come back (`Game.Gate`, 3.0.130), the clock and the cues of
+  the titles that stand on that picture (`Game.Titles`, 3.0.131), the fire on a barge a
   shell knocks off (`Game.BargeFire`, 3.0.124) and what is left of one that breaks
   (`Game.Pieces`, 3.0.121), its bunker's shells (`Game.Shells`, 3.0.94), how far the far plane behind the road has
   ridden (`Game.FarPlane`, 3.0.88) and the fangs of basalt riding by in
@@ -91,7 +92,8 @@ The units live in four folders under the root; `Moon2D.dpr`, `.dproj` and
   rite that builds them about the hero (`Orbs.Rite`) and the burst of the
   light the suit cannot hold (`Orbs.Burst`).
 - `Hud/` - everything drawn over the playfield, plus the story screen and the
-  typewriter they share.
+  typewriter they share. What the titles show is here too (`Hud.Titles`,
+  3.0.131).
 - `Menu/` - the main menu and its sky rig.
 - `Tests/` - the test suite, a console project of its own (see Tests
   below). Its folders mirror the folders of what it tries; no game unit
@@ -122,6 +124,8 @@ chase as data: over `Render.Brush` for the colours of its sun) /
 `Levels.FarPlane` and the dice of `Levels.CityLife`) /
 `Levels.Searchlights` (where the chase city's searchlights point, 3.0.95:
 over `Levels.FarPlane` and the dice of `Levels.CityLife`) /
+`Levels.Titles` (the titles of a level as data, 3.0.131: over no unit of
+the game) /
 `Levels.Capsule` (the shape of the farm's capsule frame, 3.0.129: over
 `Levels.FarPlane`) / `Levels.Farm` (the light of the farm, 3.0.129: over
 `Levels.FarPlane`, `Levels.Capsule` and the dice of `Levels.CityLife`) /
@@ -248,6 +252,10 @@ place and `Game.Space`; `Game.Moon` carries it out) /
 `Game.Gate` (the facade with the gate: over `Game.Road` for its place,
 `Game.Landing` for the road's stop, the canvas and the signal lamp of
 `Levels.Dynamics`, `Render.Brush` and `Game.Space`) /
+`Game.Titles` (the titles' clock: over `Levels.Titles` alone) /
+`Hud.Titles` (what the titles show: over `Game.Titles`, `Menu.Logo` for
+the logo it is lent, `Render.Font`, `Render.Brush`, `Localization` and
+`Game.Space`) /
 `Game.BargeFire` (the fire on a knocked barge: over the smoke, the
 lightning and the canvas of `Levels.Dynamics`, `Render.Brush`, `Render.Glow` and
 `Levels.Tint`) /
@@ -845,6 +853,12 @@ the sound bank.
   one that plays (`FMusicName` emptied), so asked for again it waits for
   the silence and starts over. The game's restart asks `Plays` before it
   plays its track: a death no longer starts the track that plays over.
+- 3.0.131, for the titles' clock: **`MusicSeconds`** - the place of the
+  music that plays in its track (`Mix_GetMusicPosition`, SDL_mixer 2.6,
+  bound delayed), `NoMusicSeconds` (-1) with none playing - a track played
+  through tells none - or with a mixer without the call
+  (`FMusicPlaceUnknown`, found on the first call); **`SeekMusic(seconds)`**
+  (`Mix_SetMusicPosition`) - the debug key of the titles.
 
 ### `Game/Game.Version.pas` (~20 lines)
 One constant, `GameVersion`, the only place the game knows its own version.
@@ -1290,6 +1304,21 @@ No SDL.
   (`SFarPlaneBadCapsule`); a farm whose frame is no capsule of the frames
   (`SFarPlaneFarmNoCapsule`); its span ticks out of order
   (`ReadWholeRange`).
+
+### `Core/Levels.Titles.pas` (~105 lines, 3.0.131)
+The titles that close a level, as data (`docs/mechanics/finale-flight.md`,
+"The timeline"): the cues of its end track. A level names the file in its
+`titles` section (`"file"`); the file lies beside the level file
+(`bin/finale.json` for level 2) and is the one the stand plays. The keys
+the game does not play yet - the flight's cues, the path of its camera,
+the lines at the stars - are let be. No SDL.
+- **`TTitlesCues`** - seconds of the track: `Card`, `CardOut`, `Flash`.
+  **`TTitlesDef`** - `Present`, `Cues`.
+- **`ReadTitles(root, levelId, levelDir)`** - no section, no titles;
+  raises `ETitlesError` on a file missing or unreadable and on a cue that
+  does not come after the one before it (`CheckOrder`). `TLevel.Titles`
+  holds it.
+- Tests: `Tests.Levels.Titles`.
 
 ### `Core/Levels.Capsule.pas` (~240 lines, 3.0.129)
 The shape of a capsule frame - the farm's long dome
@@ -4474,6 +4503,17 @@ the plate once the bar has come up (`DrawSmall`, centred); hot, the cells
 take the thirds' colours and pulse between `PulseFloor` 0.5 and full, a
 glow over the full ones at the peak.
 
+### `Hud/Hud.Titles.pas` (~115 lines, 3.0.131)
+What the titles show (`docs/mechanics/finale-flight.md`, "The titles' head
+as built"), as `TTitles` says. **`THudTitles`** -
+`Create(renderer, font, logo, titles)` (none owned but its `THudBrush`),
+`Draw(origin, alpha)` - the origin is the world's shake: the card
+(`creditsLine1`, the big font) on the middle of the logo's place
+(`PlaceLeft` 136, `PlaceTop` 60, 240 by 96), from the flash the menu's
+logo in it (96 tall, as wide as `TMenuLogo.Aspect` makes it), and over
+the frame the white of the flash (`FlashWhite` 0.85 at the most). Nothing
+while the titles do not run.
+
 ### `Game/Game.Explosions.pas` (~400 lines)
 The one home of "something blew up" - the look, not the mechanics (the
 wave that wounds is `Game.Blasts`). **`TExplosions`**, made once
@@ -6655,6 +6695,28 @@ nothing. The lamp's rules know no SDL.
   steady.
 - Tests: `Tests.Game.Gate`.
 
+### `Game/Game.Titles.pas` (~200 lines, 3.0.131)
+The titles over the picture the flight ends on
+(`docs/mechanics/finale-flight.md`, "The titles' head as built"): their
+clock and what it tells. The track, the logo, the gate's lamp and the
+drawing are the caller's. No SDL.
+- `TitlesTicksPerSecond` 33, **`TitlesFadeSeconds`** 1, `TitlesFlashTicks`
+  3, `NoTrackSeconds` (-1).
+- **`TTitles`** - `Arm(def)` (the level's; cleared), `Start` (nothing
+  without titles, nothing once running), `Clear`,
+  **`Tick(trackSeconds)`** returns **`TTitlesCue`** (`Flashes`, once, on
+  the tick the clock reaches the flash - a jump past it included): the
+  clock goes a tick on and leans toward the track by `TrackPull` 0.1 of
+  its way, half a tick at the most (`Lean`), so it never stands and never
+  goes back; further off than `TrackJumpSeconds` 0.5 it jumps; below zero
+  - no place told, the ticks alone. `JumpTo(seconds)`,
+  `CueAfter(seconds)` (the card, then the flash; below zero - none),
+  `SecondsAt(alpha)`, `Seconds`, `Running`, `LogoShown` (from the flash).
+  `CardLevel` - how much of the card shows between the ticks, in over a
+  fade from its cue and gone by `CardOut`; `FlashLevel` - the white of
+  the flash, gone in its ticks. Nothing shows while it does not run.
+- Tests: `Tests.Game.Titles`.
+
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
 What is left of a barge that breaks in the air fight
 (`docs/mechanics/arena-3/ram-air.md`, stage 18d-2; made for the charge and
@@ -7103,6 +7165,14 @@ redrawn logo brings its own glow.
 - Owns a `TEmbers`. `Tick`, `Draw(dest, alpha)` - halo under, letters, embers
   over; the halo reaches `HaloApron` texels past the letters' rectangle,
   scaled by the same factor the letters are.
+- 3.0.131, for the titles: **`Flare(strength)`** - the halo burns
+  1 + strength times its breathing at once (`FFlare`, `FlareKeep` 0.94 of
+  it left a tick; a level above one is the halo laid again over itself)
+  and spreads `FlareSpread` 0.12 of its size wider for each one of the
+  strength; `FlareSparks` 130 times the strength of sparks leave the
+  letters at once and `FlareSparksATick` 3 times what is left of the flare
+  every tick after (`TEmbers.Burst`). `Aspect` - the letters' width over
+  their height.
 
 ### `Menu/Menu.Embers.pas` (~220 lines)
 Sparks drifting off the outline of the logo. **`TEmbers`** takes the locked
@@ -7114,6 +7184,11 @@ with air beside it is a `TEmberSeed` with the alpha slope as its normal).
   `EmberDrag` slows it, it cools `EmberBirthColor` -> `EmberDeathColor` and
   fades over the last `EmberFadeShare` of a 70..140-tick life, then is
   reborn elsewhere. Ages staggered at start. Own `TXorShift`, seed "Fire".
+- 3.0.131: **`Burst(count)`** - sparks off the outline at once, each
+  `BurstSpeedMin` 1.5 to `BurstSpeedMax` 5 times as fast as the ones that
+  drift and rising up to `BurstRiseMax` 1.5 texels a tick besides, each
+  flying once (`FSparks`, `TickSparks`); `Fly` moves an ember of either
+  kind.
 - `Tick` flies them. Everything in letter texels;
   `Draw(dest, alpha, lettersW, lettersH)` scales
   to the units of the rectangle, so the trailer's larger logo scales its
@@ -7160,7 +7235,7 @@ The main menu: the sky rig, the screens, the dolly between them.
     `ItemWidth` = caption plus whatever rides after it, one width for drawing
     and hit-testing. Properties `HasActiveGame`, `Difficulty`, `Language`
     (the setter rebuilds captions through `Tr` - set it AFTER the dictionary
-    swap).
+    swap), `Logo` (3.0.131: lent to the titles, `Hud.Titles`).
 
 ### `Game/Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
@@ -8103,6 +8178,22 @@ so a unit (and later a test) can reach it. `interface` holds
   `FGate.Promise`, till the titles' flare calls it. In the same version
   the end track moved from the landing's hand-over to `BurstTheHull`
   (`finale.md`, "Decided 2026-11-14"); `EndMusicFadeSeconds` is gone.
+- 3.0.131, **the titles' head** (`finale-flight.md`, "The titles' head as
+  built"): **`FTitles`** (`TTitles`, born with the game, armed with the
+  level's `Titles` in `LoadLevel`) and **`FTitlesPainter`** (`THudTitles`
+  over the menu's logo, made after the menu and freed before it).
+  `BurstTheHull` starts the clock with the end track; `ClearPier` clears
+  it. **`TickTitles`** (in `TickLanding`): the track's place while the end
+  track is the music that plays (`FAudio.Plays`, `MusicSeconds`), else
+  none; the logo ticked from the flash on; at the flash
+  `FMenu.Logo.Flare(TitlesFlareStrength)` (3), a jolt of
+  `TitlesFlashTrauma` 0.3 and `FGate.Promise`. `OpenMenu` pauses the track while the titles
+  run, `ResumeGame` resumes it. `Render`: the titles after the arrivals,
+  on the world's shake, before the glass; **`DrawPanels`** - the vitals,
+  the hull's bar, the gauge with its feed, the charge and the arrow - not
+  drawn once the landing has handed over. Debug: the key X is
+  **`DebugNextTitlesCue`** - the clock and the track
+  (`FAudio.SeekMusic`) to two seconds before the next cue.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -8940,6 +9031,12 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   gate's lamp, the facade's place along the road and the lamp's colour;
   `TRoadEndTests` +1 (arrived only come back). 10 in all; the tables are
   in `docs/testing/game.md`, "The gate".
+- 3.0.131: **`Game/Tests.Game.Titles.pas`** - **`TTitlesTests`** (17), the
+  titles' clock - by the ticks, leaning toward the track, never back, the
+  jump -, the flash once, the white of it and the level of the card;
+  **`Levels/Tests.Levels.Titles.pas`** - **`TTitlesReadTests`** (6), the
+  titles read and their faults, the shipped file. 23 in all; the tables
+  are in `docs/testing/game.md`, "The titles".
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -9521,6 +9618,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
 | The farm under the long dome (3.0.129): a capsule frame at the end of the city's strip, greenhouses whose glass glows on clocks of their own, their light in the dome's air, on its far ribs and on the floor in front of it, the sun's glare giving way to the glass - tick for tick as on the stand | Levels.Capsule.pas (`CapsulePoint`, `CapsuleShape`) + Levels.Farm.pas (`FarmGlowLevel`, `FarmView`, `FarmLight`, `Exposed`, `FarmAirMesh`, `FarmApronMesh`) + Levels.FarPlane.pas (`TDomeFrameKind`, `TCityFarm`, `GlareLevel`, `FramePoint`) + Render.DomeFrames.pas (`FrameEdges`, `CapsuleBeaconNodes`, `TFrameRib.Farm`, `Dark`, `DrawGlare`) + Render.FarPlane.pas (`LoadFarm`, `DrawGlass`, `DrawAir`, `DrawApron`, `DrawLightMesh`, `LightFarRibs`) + bin/chase-backdrop.json (`frames` dome-farm, `farm`) + chase-backdrop.mset (`agro-*`, `hall-*`, `svc-*` and their `-glow`) + tools/chase (`stand.template.html` - the reference, `make_glow.py`, `place_farm.py`, `pack_set.py`) + Tests.Levels.Capsule.pas, Tests.Levels.Farm.pas, Tests.Render.DomeFrames.pas, Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md, "The farm") |
 | The gate at the end of the flight (3.0.130): the sealed door of the arena given a body - a facade with a gate on the far end of the road come back, riding in with it and stopping at the right edge of the screen, put in the night; its status lamp red, amber over half a second on a promise - the titles' flare, the debug key X till then | Game.Gate.pas (`TGate`, `TGatePainter`, `GateLeft`, `GateLampColor`) + Game.Road.pas (`Arrived`) + Levels.Dynamics.pas (`DrawLamp` public) + Game.Moon.pas (`FGate`, `FGatePainter`, `GateSprite`, `TickLanding`, `ClearPier`, the key X) + tools/gate/build_gate.py + level2-objects.mset (`s13-gate`) + Tests.Game.Gate (+docs/mechanics/finale.md) |
+| The titles' head (3.0.131): the clock from the hull's burst on the end track's place, the studio's card, the logo's flare on the band's kick with the white flash, the jolt and the gate's lamp, the HUD's panels gone at the hand-over, the debug key X | Game.Titles.pas (`TTitles`) + Levels.Titles.pas (`ReadTitles`, the `titles` section of level2.json, bin/finale.json) + Hud.Titles.pas (`THudTitles`) + Menu.Logo.pas (`Flare`) + Menu.Embers.pas (`Burst`) + Audio.pas (`MusicSeconds`, `SeekMusic`) + Game.Moon.pas (`TickTitles`, `DrawPanels`, `DebugNextTitlesCue`) + Tests.Game.Titles, Tests.Levels.Titles (+docs/mechanics/finale-flight.md) |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
 | The bombs of the air fight (3.0.123): the first two rungs by the hull's lives - the nearest barge, then his barge first and a turn of the stern mortar after every window; the mortar rising, leaning, lobbing one shell at a time at the deck under his feet, folding; the shell riding its barge, no road aloft; a small barge knocked off, falling behind and sinking; the main barge rocked | Game.Mortar.pas (`TMortar`, `MortarTilt`) + Game.Ram.pas (`AirTier`, `AirTierSpent`, `TickMortar`, `MortarMuzzleAt`, `MortarPivotPoint`, `DrawMortar`, cue `MortarRises`, `TRamTarget.HullSpent`, `ShellsAloft`) + Game.Magnet.pas (`Waits`, `Cooled`) + Game.Shells.pas (`Lob` with a carrier, `Carry`, `HasRoad`, `Marked`, `LastRing`) + Game.Flock.pas (`Knock`, `Knocked`, `fpKnocked`) + Game.Moon.pas (`LobAtHisDeck`, `ShellCarrierOf`, `TickShellsAloft`, `AirLobRise`, `ShellRockDepth`, `MortarRiseSoundFile`, the debug key O) + `mortar` in tek-machine.mset + tools/sounds/mortar.py + Tests.Game.Mortar.pas, Tests.Game.Shells.pas, Tests.Game.Flock.pas, Tests.Game.Magnet.pas, Tests.Game.Ram.pas (+docs/mechanics/arena-3/ram-air.md, stage 18d-3) |
 | The honeycomb aloft (3.0.122): restored at the takeoff, over the flying hull and about the magnet, falling with the soft magnet and kindling back, hidden over the arches | Game.Shield.pas (`Restore`, `CreateAfloat`, `Hide`, `Draw(turn)`) + Game.Ram.pas (`AirShield`, `MagnetShield`, `TickArmour`, `RestoreArmourAloft`, `BlockAloft`, `DrawArmourAloft`) + Game.Moon.pas (`HoneycombDownSoundFile`, `HoneycombUpSoundFile`) + tools/sounds/honeycomb.py (+docs/mechanics/arena-3/ram-air.md) |
