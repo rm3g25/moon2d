@@ -21,7 +21,6 @@ kinds, and the kind decides where a thing goes.
 | `REPAINT.md` | guide | how a screen of levels 1-2 goes from 2008 tiles to HD art; its journal at the end |
 | `MSET-FORMAT.md` | reference | the `.mset` sprite set format; the journal of its birth at the end |
 | `lore/LORE.md`, `lore/LORE-ru.md` | canon | the universe; the source of every story text in the game |
-| `moon2dscreen1.png`, `moon2dscreen2.png` | - | the screenshots of the root README |
 
 ## The plans
 
