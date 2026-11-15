@@ -7,6 +7,13 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.137 - the release of 3.0.** The debug keyboard is off
+(`Moon2D.inc`: the dot back on `DEBUGKEYS`): the End key's stops, the X
+of the titles, the tuners and the inspectors are compiled out. Nothing
+of the game needed them - the gate's lamp turns on the logo's flash, the
+titles run on the track. Tagged `v3.0` along with `v3.0.137`: the whole
+of 3.0 - the port, levels 1 and 2 remade, arena 3 and the titles.
+
 2026-11-15: **3.0.136 - the way back to the stone.** Two holes of screen 11
 from a live run (`arena-3/tunnels.md`, "The way back and the dust"). From
 the edge of the step the hero could fly over the stone and drop to the
