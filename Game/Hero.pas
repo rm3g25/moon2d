@@ -206,6 +206,7 @@ type
     function LandOnDeck(APrevY: Double): Boolean;
     procedure DropThroughDeck;
     procedure RideDeck;
+    function SinkTo(ADeckTop: Double): Boolean;
     procedure LoseDeck;
     procedure TickMotion;
     procedure CarryX(AWay: Double);
@@ -1300,7 +1301,8 @@ end;
 // Before the tick: the deck the feet stood on a tick ago takes them where
 // it went - across while no wall stands in the way, up while the head is
 // clear. A deck that would crush the hero into the ceiling rises through
-// him instead, and he falls; one a wall has pulled from under him leaves
+// him instead, and he falls; one going down through the grid leaves him
+// standing on it and goes on alone; one a wall has pulled from under him leaves
 // him to the ground below, standing or walking - a walk into that wall
 // sees no ledge, the way is shut - and the corpse too. So does a shelf
 // that has slid into its wall. A heeled deck slides him down it.
@@ -1330,6 +1332,12 @@ begin
     FAcceleration := 1;
     Exit;
   end;
+  if not SinkTo(Deck.Top) then
+  begin
+    FDropFrom := Deck;
+    LandExactly;
+    Exit;
+  end;
   FY := Deck.Top;
 
   if DeckUnderFeet <> nil then
@@ -1339,6 +1347,23 @@ begin
     SettleOnGround
   else
     LoseDeck;
+end;
+
+// Down with the deck a unit at a time, the floor asked before every one,
+// as ShoveX asks the wall: False when the grid holds the feet above
+// ADeckTop. A deck level with them or above them takes nothing from here.
+function THero.SinkTo(ADeckTop: Double): Boolean;
+begin
+  while FY < ADeckTop do
+  begin
+    if GroundUnderFeet then
+      Exit(False);
+    if ADeckTop - FY > 1 then
+      FY := FY + 1
+    else
+      FY := ADeckTop;
+  end;
+  Result := True;
 end;
 
 // The deck is underfoot no more: it slid into its wall, or the hero was

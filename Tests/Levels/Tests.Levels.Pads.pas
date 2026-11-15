@@ -145,6 +145,8 @@ type
     procedure TestDeckRunsLoadAsPadsWithNoPicture;
     [Test]
     procedure TestBadCollisionLetterRaises;
+    [Test]
+    procedure TestLevelTwoStoneShardIsAWayBackUp;
   end;
 
 implementation
@@ -155,6 +157,7 @@ uses
   Levels.Carousels,
   Levels.Events,
   Levels.Pads,
+  Levels.Scenes,
   Render.Sprites,
   Tests.Rooms;
 
@@ -1438,6 +1441,56 @@ begin
   ExpectRaises(ELevelError, RowsWithCells(5, '....x...........'), '',
     'A letter that is none');
   ExpectLoads(RowsWithCells(5, '....2...........'), '', 'A deck is known');
+end;
+
+// The shard of the stone's screen stops over the way out, low enough to be
+// a step back up to the stone: a hero who jumped over the stone and fell
+// to the shut door climbs back by it. A fly of the waking and a fly of its
+// aftermath, both to the same place; the shard does not bob.
+procedure TLevelPadsTests.TestLevelTwoStoneShardIsAWayBackUp;
+const
+  WakeScene = 's11-wake';
+  ShardTag = 's11-rock-shard';
+  // The way out, cells 14 and 15 of row 11, and the top of column C
+  WayOutLeft = 448;
+  WayOutRight = 512;
+  WayOutFloor = 352;
+  ColumnCTop = 192;
+  // The hero's arc tops out 100 units over his feet; the deck he lands on
+  // must stand a Bound (8) under that, as JumpReach asks
+  ArcPeak = 100;
+  HeroBound = 8;
+begin
+  UseLevelTwo;
+
+  var ShardWidth := -1;
+  for var Pad in FLevel.Pads do
+    if Pad.Tag = ShardTag then
+    begin
+      ShardWidth := Pad.Width;
+      Assert.IsTrue(Pad.Bob = 0, 'The shard does not bob');
+    end;
+  Assert.IsTrue(ShardWidth > 0, 'No pad ' + ShardTag);
+
+  var Flies := 0;
+  for var Scene in FLevel.Scenes do
+  begin
+    if Scene.Id <> WakeScene then
+      Continue;
+    for var Cue in Scene.Cues + Scene.Aftermath do
+    begin
+      if (Cue.Kind <> ckFly) or (Cue.Target <> ShardTag) then
+        Continue;
+      Inc(Flies);
+      Assert.IsTrue(Cue.X >= WayOutLeft, 'Left of the way out');
+      Assert.IsTrue(Cue.X + ShardWidth <= WayOutRight, 'Right of the way out');
+      Assert.IsTrue(WayOutFloor - Cue.Y + HeroBound <= ArcPeak,
+        'Out of reach from the way out');
+      Assert.IsTrue(Cue.Y - ColumnCTop + HeroBound <= ArcPeak,
+        'Column C out of reach from the shard');
+    end;
+  end;
+  Assert.AreEqual(2, Flies, 'A fly of the waking and one of its aftermath');
 end;
 
 initialization
