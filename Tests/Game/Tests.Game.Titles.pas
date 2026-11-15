@@ -14,8 +14,9 @@
   goes by the ticks alone, a track close by leaning it no more, and a
   track far off takes it still. The eye goes the path by the flight's
   seconds and stands where the world stood before it. The flight ends
-  once, where the eye leaves its rest, the frame gone dark over the second
-  before; a clear ends it. Titles without a path never fly.
+  once, at the second the titles' file has it flown to, the frame gone
+  dark over the second before; a clear ends it. Titles without a path
+  never fly.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -113,7 +114,7 @@ type
     [Test]
     procedure TestTheEyeGoesThePathByTheFlightsSeconds;
     [Test]
-    procedure TestTheFlightEndsOnceWhereTheEyeLeavesItsRest;
+    procedure TestTheFlightEndsOnceWhereItIsFlownTo;
     [Test]
     procedure TestTheFrameGoesDarkOverTheLastSecond;
     [Test]
@@ -142,6 +143,8 @@ const
   LiftedSeconds = 9.0;
   LiftedWay = -500.0;
   Lifted = 40.0;
+  // The titles' file has the path flown short of its end
+  FlownTill = 8.0;
   // Where the world of the tests stands
   Stand = 2400.0;
 
@@ -172,6 +175,7 @@ begin
     KeyFromStand(CastOffSeconds, CastOffWay, 0),
     KeyFromStand(RestTill, RestTillWay, 0),
     KeyFromStand(LiftedSeconds, LiftedWay, Lifted)];
+  Result.FlightTill := FlownTill;
 end;
 
 procedure TTitlesTests.Setup;
@@ -516,7 +520,7 @@ begin
   Assert.IsTrue(FTitles.EyeAt(1, Stand).Lift > 0, 'Lifted past its rest');
 end;
 
-procedure TTitlesFlightTests.TestTheFlightEndsOnceWhereTheEyeLeavesItsRest;
+procedure TTitlesFlightTests.TestTheFlightEndsOnceWhereItIsFlownTo;
 begin
   RunToFlight;
   var Ends := 0;
@@ -528,21 +532,21 @@ begin
       EndedAt := FTitles.FlightSeconds(1);
     end;
   Assert.AreEqual(1, Ends, 'Once');
-  Assert.IsTrue(EndedAt >= RestTill, 'Not before the eye leaves its rest');
-  Assert.IsTrue(EndedAt < RestTill + Tick + ClockSlack, 'On that tick');
+  Assert.IsTrue(EndedAt >= FlownTill, 'Not before the second it is flown to');
+  Assert.IsTrue(EndedAt < FlownTill + Tick + ClockSlack, 'On that tick');
 end;
 
 procedure TTitlesFlightTests.TestTheFrameGoesDarkOverTheLastSecond;
 begin
   RunToFlight;
-  FlyPast(RestTill - TitlesTailSeconds - 2 * Tick);
+  FlyPast(FlownTill - TitlesTailSeconds - 2 * Tick);
   Assert.IsTrue(Abs(Double(FTitles.TailLevel(1))) < LevelSlack, 'None before the last second');
 
-  FlyPast(RestTill - TitlesTailSeconds / 2);
+  FlyPast(FlownTill - TitlesTailSeconds / 2);
   var Halfway: Double := FTitles.TailLevel(1);
   Assert.IsTrue((Halfway > 0.45) and (Halfway < 0.6), 'Half dark halfway');
 
-  FlyPast(RestTill);
+  FlyPast(FlownTill);
   Assert.IsTrue(Abs(Double(FTitles.TailLevel(1)) - 1) < LevelSlack, 'Dark at its end');
 end;
 

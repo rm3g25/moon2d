@@ -56,6 +56,16 @@
   (TFarPlaneDef.FloorSlabs), far to near, each slab's far edge fading in
   over the one behind it. Not flying, the frame is the chase's own.
 
+  Once the eye leaves its rest, what stands on a layer is drawn where it
+  stands at rest and carried (TFarPlaneDef.Carry): every quad and every
+  glow goes through the carry of what is being drawn - a building with its
+  lights, its paint, its glass and the emblem by the depth of its feet,
+  the train and a searchlight's beam by theirs, the ridge and the near
+  ground each as one. What the frames give is on the screen already, the
+  eye in their own projection. Under it all lies the plane
+  (Render.GroundPlane); the floor's band melts into it, and what the eye
+  has passed is not drawn.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.FarPlane;
@@ -65,7 +75,8 @@ interface
 
 uses
   Sdl2.Core, Render.Brush, Render.Sprites, Levels.FarPlane, Levels.Dynamics,
-  Levels.Monorail, Levels.Searchlights, Levels.Farm, Render.DomeFrames;
+  Levels.Monorail, Levels.Searchlights, Levels.Farm, Render.DomeFrames,
+  Render.GroundPlane;
 
 type
   TFarPlanePainter = class
@@ -135,8 +146,16 @@ type
     // The titles' eye of this frame, and where the world stands under it
     FEye: TFarPlaneEye;
     FStand: TFarPlaneOffsets;
+    // How the eye has what is being drawn now: every quad and every glow
+    // goes through it
+    FCarry: TEyeCarry;
+    FGround: TGroundPlanePainter;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
+    function Carried(const APlace: TSdlFRect): TSdlFRect;
+    // How the eye carries what stands on a layer: a thing of the city by
+    // the depth of its feet, any other layer as one
+    function CarryOf(AMotion: TFarPlaneMotion; ADepthY: Single): TEyeCarry;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
       const AAlpha: TQuadAlpha);
     procedure AddBandPiece(const ATurn: TBandTurn; const ARows: TArray<TBandRows>;
@@ -152,6 +171,8 @@ type
     // The crater floor under the titles' eye; AOffsets - where the eye has
     // the layers
     procedure DrawFloorSlabs(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
+    // Under the band's foot, as much of it as the band keeps of itself
+    procedure DrawFloorFoot(const ABand: TFarPlaneBand; AKeep: Single);
     // False - it stands off the screen, nothing drawn
     function DrawElement(const AElement: TFarPlaneElement;
       ATexture: PSdlTexture; ALeft: Double; AColor: TSdlColor): Boolean;
@@ -183,7 +204,8 @@ type
     procedure DrawBeam(const ABeam: TSearchlightBeam);
     // Each beam not drawn yet whose lamp stands behind ADepth
     procedure DrawBeamsBefore(ADepth: Single);
-    procedure DrawBeamGlints(const ABeam: TSearchlightBeam);
+    // ALamp - the beam's place among the lamps
+    procedure DrawBeamGlints(ALamp: Integer);
     procedure LoadFarm(ACache: TSpriteCache);
     function FarmLit: Boolean;
     // Added over the scene, clipped to ATop..ABottom when AClipped
@@ -195,6 +217,17 @@ type
     procedure DrawGlass(AIndex: Integer; const AElement: TFarPlaneElement;
       ALeft, AHeight: Double);
     procedure LightFarRibs;
+    // The frames' shadows and the farm's light on the ground of a layer,
+    // from ATop down to ABottom of the screen
+    procedure DrawOnGround(ACityOffset: Double; ATop, ABottom: Single);
+    // The city's layer before its buildings: the shadows and the farm's
+    // light on its floor, the frames' far half
+    procedure DrawBehindCity(const ALayer: TFarPlaneLayer; ACityOffset: Double;
+      ATick: Integer);
+    // And after them: the air of the farm, the frames' near half, the glare
+    procedure DrawOverCity(const AOffsets: TFarPlaneOffsets; ATick: Integer);
+    procedure DrawElements(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
+      ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
     procedure DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
       ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
   public
@@ -356,10 +389,13 @@ begin
   FBeamGlow := CreateGlowShape(ARenderer, gsBeam, BeamGlowSide);
   FFrames := TDomeFrames.Create(ADef);
   FFramePainter := TDomeFramePainter.Create(ARenderer, ADef.Sun, FPointGlow);
+  FGround := TGroundPlanePainter.Create(ARenderer, ACache, ADef);
+  FCarry := Uncarried;
 end;
 
 destructor TFarPlanePainter.Destroy;
 begin
+  FGround.Free;
   // The frame painter borrows the point glow
   FFramePainter.Free;
   FFrames.Free;
@@ -396,6 +432,21 @@ begin
   end;
 end;
 
+function TFarPlanePainter.Carried(const APlace: TSdlFRect): TSdlFRect;
+begin
+  Result.X := FCarry.ScreenX(APlace.X);
+  Result.Y := FCarry.ScreenY(APlace.Y);
+  Result.W := APlace.W * FCarry.ScaleX;
+  Result.H := APlace.H * FCarry.ScaleY;
+end;
+
+function TFarPlanePainter.CarryOf(AMotion: TFarPlaneMotion; ADepthY: Single): TEyeCarry;
+begin
+  if AMotion = fmCity then
+    Exit(FDef.Carry(FEye, FDef.Nearness(ADepthY)));
+  Result := FDef.Carry(FEye, FDef.MotionNearness(AMotion));
+end;
+
 procedure TFarPlanePainter.AddQuad(const APlace, ASource: TSdlFRect;
   AColor: TSdlColor; const AAlpha: TQuadAlpha);
 const
@@ -404,6 +455,7 @@ const
   CornerY: array [0..3] of Integer = (0, 0, 1, 1);
   Triangles: array [0..5] of Integer = (0, 1, 2, 0, 2, 3);
 begin
+  var Place := Carried(APlace);
   var First := Length(FVertices);
   SetLength(FVertices, First + 4);
   for var i := 0 to 3 do
@@ -415,8 +467,8 @@ begin
     if CornerY[i] = 1 then
       Down := AAlpha.Bottom;
     var Vertex: TSdlVertex;
-    Vertex.Position.X := APlace.X + APlace.W * CornerX[i];
-    Vertex.Position.Y := APlace.Y + APlace.H * CornerY[i];
+    Vertex.Position.X := Place.X + Place.W * CornerX[i];
+    Vertex.Position.Y := Place.Y + Place.H * CornerY[i];
     Vertex.TexCoord.X := ASource.X + ASource.W * CornerX[i];
     Vertex.TexCoord.Y := ASource.Y + ASource.H * CornerY[i];
     Vertex.Color := AColor;
@@ -473,7 +525,7 @@ end;
 procedure TFarPlanePainter.DrawSun(const AOffsets: TFarPlaneOffsets);
 begin
   var Sun := FDef.Sun;
-  var Color := Sun.ColorAt(FDef.SunCover(AOffsets));
+  var Color := Sun.ColorAt(FDef.SunCover(AOffsets, FEye));
 
   DrawGlow(FRenderer, FPointGlow, Sun.X, Sun.Y, Sun.Halo * HaloGlareSize, Color,
     HaloGlareLevel);
@@ -650,23 +702,46 @@ procedure TFarPlanePainter.DrawFloorSlabs(ALayer: Integer;
   const AOffsets: TFarPlaneOffsets);
 begin
   var Band := FDef.Layers[ALayer].Band;
+  var Keep := FDef.FloorKeep(FEye);
+  FCarry := FDef.FloorCarry(FEye);
+  if not FCarry.Seen or (Keep <= 0) then
+    Exit;
   var Deep: Single := Band.Bottom - Band.Top;
+  var SlabFeather := FDef.Plane.Floor.SlabFeather;
   var Fade := FDef.FloorFadeAt(Band, FEye.Seconds);
   var Color := ShadeColor(FDef.BandShade(Band, AOffsets));
-  var Slabs := FDef.FloorSlabs(Band, FStand[fmCity], FEye.Ride);
+  Color.A := Round(SolidAlpha * Keep);
+  var Slabs := FDef.FloorSlabs(Band, FStand[fmCity], FEye);
   for var i := 0 to High(Slabs) do
   begin
     var Feather: Single := 0;
     if i > 0 then
-      Feather := FloorSlabFeather;
+      Feather := SlabFeather;
     var Foot := Slabs[i].Bottom;
     if i < High(Slabs) then
-      Foot := Foot + FloorSlabFeather;
+      Foot := Foot + SlabFeather;
     if Foot > Deep then
       Foot := Deep;
     DrawBandRows(ALayer, Slabs[i].Offset, Color,
       SlabRows(Slabs[i].Top, Foot, Feather, Fade));
   end;
+  if FDef.Plane.Present then
+    DrawFloorFoot(Band, Keep);
+end;
+
+// The band is a picture of the floor as far as its foot; under the foot
+// the floor runs on in the mean of the band's lowest rows
+procedure TFarPlanePainter.DrawFloorFoot(const ABand: TFarPlaneBand; AKeep: Single);
+begin
+  var Foot: Single := FCarry.ScreenY(ABand.Bottom);
+  if Foot >= FDef.ScreenHeight then
+    Exit;
+  var Color := FDef.Plane.Floor.Foot;
+  var Alpha: Byte := Round(SolidAlpha * AKeep);
+  var Place := FloatRect(0, Foot, FDef.ScreenWidth, FDef.ScreenHeight - Foot);
+  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeBlend);
+  SDL_SetRenderDrawColor(FRenderer, Color.R, Color.G, Color.B, Alpha);
+  SDL_RenderFillRectF(FRenderer, @Place);
 end;
 
 function TFarPlanePainter.DrawElement(const AElement: TFarPlaneElement;
@@ -674,7 +749,8 @@ function TFarPlanePainter.DrawElement(const AElement: TFarPlaneElement;
 var
   Height, Feather, FeatherShare: Double;
 begin
-  Result := (ALeft < FDef.ScreenWidth) and (ALeft + AElement.W > 0);
+  Result := (FCarry.ScreenX(ALeft) < FDef.ScreenWidth) and
+    (FCarry.ScreenX(ALeft + AElement.W) > 0);
   if not Result then
     Exit;
   Height := AElement.W * TextureAspect(ATexture);
@@ -705,7 +781,7 @@ procedure TFarPlanePainter.GlowInto(ATexture: PSdlTexture; const APlace: TSdlFRe
   const AColor: TRgb; ALevel: Single);
 begin
   if ALevel > 0 then
-    DrawGlowRect(FRenderer, ATexture, APlace, AColor, ALevel);
+    DrawGlowRect(FRenderer, ATexture, Carried(APlace), AColor, ALevel);
 end;
 
 procedure TFarPlanePainter.GlowAround(ATexture: PSdlTexture; ACentreX, ACentreY,
@@ -750,9 +826,11 @@ begin
   GlowAround(FPointGlow, AX, AY, Size, Size, AColor, ALevel);
 end;
 
+// A frame's beacons are where the eye has them already
 procedure TFarPlanePainter.DrawBeacons(const ABeacons: TArray<TFrameBeacon>;
   ATick: Integer);
 begin
+  FCarry := Uncarried;
   for var Beacon in ABeacons do
     DrawBeacon(FDef.Beacons.Color, Beacon.At.X, Beacon.At.Y, Beacon.Nearness,
       BeaconLevel(FDef.Beacons, Beacon.Seed, ATick));
@@ -884,13 +962,16 @@ begin
   var Train := FDef.Train;
   var Place := TrainLeft(Train, FTrainLine, AClock);
   var Shown := TrainShown(Train, FTrainLine, Place);
-  if not Shown.Any then
+  FCarry := FDef.Carry(FEye, FTrainLine.Nearness);
+  if not Shown.Any or not FCarry.Seen then
     Exit;
   var Left: Double := Place - ACityOffset * FTrainLine.Nearness;
   var Span: TScreenSpan;
   Span.Left := Left + Shown.From * Train.W;
   Span.Right := Left + Shown.Till * Train.W;
-  if (Span.Right < 0) or (Span.Left > FDef.ScreenWidth) then
+  var OffScreen := (FCarry.ScreenX(Span.Right) < 0) or
+    (FCarry.ScreenX(Span.Left) > FDef.ScreenWidth);
+  if OffScreen then
     Exit;
 
   var Height: Double := Train.W * TextureAspect(FTrain);
@@ -940,8 +1021,8 @@ begin
       Sample := ATill;
     var Half: Double := Lights.RootHalf + Lights.Spread * Sample.Distance;
     var Vertex: TSdlVertex;
-    Vertex.Position.X := ABeam.AtX(Sample.Distance) + NormalX * Half * Side[i];
-    Vertex.Position.Y := ABeam.AtY(Sample.Distance) + NormalY * Half * Side[i];
+    Vertex.Position.X := FCarry.ScreenX(ABeam.AtX(Sample.Distance) + NormalX * Half * Side[i]);
+    Vertex.Position.Y := FCarry.ScreenY(ABeam.AtY(Sample.Distance) + NormalY * Half * Side[i]);
     Vertex.TexCoord.X := 0.5;
     Vertex.TexCoord.Y := (Side[i] + 1) / 2;
     Vertex.Color.R := Lights.Color.R;
@@ -975,39 +1056,54 @@ procedure TFarPlanePainter.DrawBeamsBefore(ADepth: Single);
 begin
   for var i := 0 to High(FBeams) do
   begin
-    if FBeamsDrawn[i] or (FDef.Searchlights.Lamps[i].Y >= ADepth) then
+    var Lamp := FDef.Searchlights.Lamps[i];
+    if FBeamsDrawn[i] or (Lamp.Y >= ADepth) then
       Continue;
-    DrawBeam(FBeams[i]);
     FBeamsDrawn[i] := True;
+    FCarry := FDef.Carry(FEye, FDef.Nearness(Lamp.Y));
+    if FCarry.Seen then
+      DrawBeam(FBeams[i]);
   end;
 end;
 
 // A near rib stands in front of the beam and is lit from behind where the
-// beam crosses it inside the dome
-procedure TFarPlanePainter.DrawBeamGlints(const ABeam: TSearchlightBeam);
+// beam crosses it inside the dome. The beam was laid out at its lamp's
+// depth at rest; the ribs are where the eye has them, so the beam is
+// carried to them: its lamp's place, its length to the glass and the size
+// of its glints, by the lamp's carry
+procedure TFarPlanePainter.DrawBeamGlints(ALamp: Integer);
 begin
-  if ABeam.Glass <= 0 then
-    Exit;
+  var Beam := FBeams[ALamp];
   var Lights := FDef.Searchlights;
-  GlowAround(FPointGlow, ABeam.AtX(ABeam.Glass), ABeam.AtY(ABeam.Glass), Lights.SpotSize,
-    Lights.SpotSize, Lights.Color, Lights.SpotLevel);
+  var Lamp := FDef.Carry(FEye, FDef.Nearness(Lights.Lamps[ALamp].Y));
+  if (Beam.Glass <= 0) or not Lamp.Seen then
+    Exit;
+  FCarry := Uncarried;
+  var Grown: Double := Lamp.ScaleX;
+  var FromX: Double := Lamp.ScreenX(Beam.FromX);
+  var FromY: Double := Lamp.ScreenY(Beam.FromY);
+  var Glass: Double := Beam.Glass * Grown;
+  var SpotSize: Single := Lights.SpotSize * Grown;
+  var GlintSize: Single := Lights.GlintSize * Grown;
+  GlowAround(FPointGlow, FromX + Beam.DirX * Glass, FromY + Beam.DirY * Glass, SpotSize,
+    SpotSize, Lights.Color, Lights.SpotLevel);
   for var Rib in FFrameView.Near do
   begin
     var RibX: Double := Rib.B.X - Rib.A.X;
     var RibY: Double := Rib.B.Y - Rib.A.Y;
-    var Cross := ABeam.DirX * RibY - ABeam.DirY * RibX;
+    var Cross := Beam.DirX * RibY - Beam.DirY * RibX;
     if Abs(Cross) < ParallelSlack then
       Continue;
-    var ToRibX: Double := Rib.A.X - ABeam.FromX;
-    var ToRibY: Double := Rib.A.Y - ABeam.FromY;
+    var ToRibX: Double := Rib.A.X - FromX;
+    var ToRibY: Double := Rib.A.Y - FromY;
     var Along := (ToRibX * RibY - ToRibY * RibX) / Cross;
-    var OnRib := (ToRibX * ABeam.DirY - ToRibY * ABeam.DirX) / Cross;
-    var Crosses := (OnRib >= 0) and (OnRib <= 1) and (Along > 0) and (Along < ABeam.Glass);
+    var OnRib := (ToRibX * Beam.DirY - ToRibY * Beam.DirX) / Cross;
+    var Crosses := (OnRib >= 0) and (OnRib <= 1) and (Along > 0) and (Along < Glass);
     if not Crosses then
       Continue;
-    GlowAround(FPointGlow, ABeam.AtX(Along), ABeam.AtY(Along), Lights.GlintSize,
-      Lights.GlintSize, Lights.Color,
-      Lights.GlintLevel * BeamLevel(Lights, ABeam, Along) / Lights.Level);
+    GlowAround(FPointGlow, FromX + Beam.DirX * Along, FromY + Beam.DirY * Along, GlintSize,
+      GlintSize, Lights.Color,
+      Lights.GlintLevel * BeamLevel(Lights, Beam, Along / Grown) / Lights.Level);
   end;
 end;
 
@@ -1080,12 +1176,12 @@ end;
 
 procedure TFarPlanePainter.DrawApron(ACityOffset: Double; ATop, ABottom: Single);
 begin
-  DrawLightMesh(FarmApronMesh(FDef, FFarm.Sources, ACityOffset), True, ATop, ABottom);
+  DrawLightMesh(FarmApronMesh(FDef, FFarm.Sources, ACityOffset, FEye), True, ATop, ABottom);
 end;
 
 procedure TFarPlanePainter.DrawAir(ACityOffset: Double);
 begin
-  DrawLightMesh(FarmAirMesh(FDef, FFarm.Sources, ACityOffset), False, 0, 0);
+  DrawLightMesh(FarmAirMesh(FDef, FFarm.Sources, ACityOffset, FEye), False, 0, 0);
 end;
 
 // Over its shaded picture, at its glow's level and not shaded: the glass is
@@ -1121,51 +1217,67 @@ begin
   end;
 end;
 
+// The shadows fall and the farm's light lies where the ground is seen:
+// nothing of them where it has sunk under the screen
+procedure TFarPlanePainter.DrawOnGround(ACityOffset: Double; ATop, ABottom: Single);
+begin
+  if not FFrames.Present or (ATop >= ABottom) then
+    Exit;
+  DrawFrameShadows(ATop, ABottom);
+  if FarmLit then
+    DrawApron(ACityOffset, ATop, ABottom);
+end;
+
 // The city stands inside its frames: their shadows on its floor and their
-// far half before its buildings, their near half and the glare after. The
-// shadows run on over the near ground's band: over the sky between its
-// crests they fall on the crater floor, which they shade too
-procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
-  ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
+// far half before its buildings. At the eye's rest the floor is its band;
+// out of it, all of the screen under the horizon
+procedure TFarPlanePainter.DrawBehindCity(const ALayer: TFarPlaneLayer;
+  ACityOffset: Double; ATick: Integer);
+begin
+  if not FFrames.Present then
+    Exit;
+  var FloorTop: Single := 0;
+  var FloorBottom: Single := FDef.ScreenHeight;
+  if ALayer.Band.Present and FEye.AtRest then
+  begin
+    FloorTop := ALayer.Band.Top;
+    FloorBottom := ALayer.Band.Bottom;
+  end
+  else if ALayer.Band.Present then
+    FloorTop := FDef.Camera.Horizon;
+  DrawOnGround(ACityOffset, FloorTop, FloorBottom);
+  if FarmLit then
+    LightFarRibs;
+  FFramePainter.DrawRibs(FFrameView.Far);
+  DrawBeacons(FFrameView.FarBeacons, ATick);
+end;
+
+procedure TFarPlanePainter.DrawOverCity(const AOffsets: TFarPlaneOffsets;
+  ATick: Integer);
+begin
+  if FarmLit then
+    DrawAir(AOffsets[fmCity]);
+  if not FFrames.Present then
+    Exit;
+  FFramePainter.DrawRibs(FFrameView.Near);
+  DrawBeacons(FFrameView.NearBeacons, ATick);
+  for var i := 0 to High(FBeams) do
+    DrawBeamGlints(i);
+  FFramePainter.DrawGlare(FDef.SunCover(AOffsets, FEye), FDef.GlareLevel(AOffsets, FEye));
+end;
+
+// Each element under its own carry. In the city the train goes at its
+// depth, before the first building in front of the line, and each beam at
+// its lamp's: the buildings in front hide the lamp
+procedure TFarPlanePainter.DrawElements(ALayer: Integer;
+  const AOffsets: TFarPlaneOffsets; ATick: Integer; AClock: Double;
+  const ABackdrop: TBackdropView);
 begin
   var Layer := FDef.Layers[ALayer];
-  var FloorUnderEye := FEye.Flying and (Layer.Motion = fmCity);
-  if Layer.Band.Present and FloorUnderEye then
-    DrawFloorSlabs(ALayer, AOffsets)
-  else if Layer.Band.Present then
-    DrawBand(ALayer, AOffsets);
-  if Layer.Band.Present and (Layer.Motion = fmGround) and FFrames.Present then
-  begin
-    DrawFrameShadows(Layer.Band.Top, FDef.ScreenHeight);
-    if FarmLit then
-      DrawApron(AOffsets[fmCity], Layer.Band.Top, FDef.ScreenHeight);
-  end;
-
-  var Framed := (Layer.Motion = fmCity) and FFrames.Present;
-  if Framed then
-  begin
-    var FloorTop: Single := 0;
-    var FloorBottom: Single := FDef.ScreenHeight;
-    if Layer.Band.Present then
-    begin
-      FloorTop := Layer.Band.Top;
-      FloorBottom := Layer.Band.Bottom;
-    end;
-    DrawFrameShadows(FloorTop, FloorBottom);
-    if FarmLit then
-    begin
-      DrawApron(AOffsets[fmCity], FloorTop, FloorBottom);
-      LightFarRibs;
-    end;
-    FFramePainter.DrawRibs(FFrameView.Far);
-    DrawBeacons(FFrameView.FarBeacons, ATick);
-  end;
-
-  // The train at its depth: before the first building in front of the line
-  var TrainDue := (Layer.Motion = fmCity) and FDef.Train.Present;
-  // Each beam at its lamp's depth: the buildings in front hide the lamp
+  var OfCity := Layer.Motion = fmCity;
+  var TrainDue := OfCity and FDef.Train.Present;
   FBeams := nil;
-  if (Layer.Motion = fmCity) and FDef.Searchlights.Present then
+  if OfCity and FDef.Searchlights.Present then
   begin
     SetLength(FBeams, Length(FDef.Searchlights.Lamps));
     for var i := 0 to High(FBeams) do
@@ -1182,6 +1294,9 @@ begin
       TrainDue := False;
     end;
     DrawBeamsBefore(Element.DepthY);
+    FCarry := CarryOf(Layer.Motion, Element.DepthY);
+    if not FCarry.Seen then
+      Continue;
     var Left := FDef.ElementLeft(Layer, Element, AOffsets);
     if Element.Backdrop then
     begin
@@ -1191,7 +1306,7 @@ begin
     end;
     var Picture := FPictures[ALayer][j];
     var Shown := DrawElement(Element, Picture, Left, ShadeColor(Element.Shade));
-    if not Shown or (Layer.Motion <> fmCity) then
+    if not Shown or not OfCity then
       Continue;
     var Height := Element.W * TextureAspect(Picture);
     if Length(FGlassPictures) > 0 then
@@ -1201,17 +1316,37 @@ begin
   if TrainDue then
     DrawTrain(AOffsets[fmCity], Length(Layer.Elements), ATick, AClock);
   DrawBeamsBefore(MaxSingle);
-  if (Layer.Motion = fmCity) and FarmLit then
-    DrawAir(AOffsets[fmCity]);
+end;
 
-  if Framed then
-  begin
-    FFramePainter.DrawRibs(FFrameView.Near);
-    DrawBeacons(FFrameView.NearBeacons, ATick);
-    for var Beam in FBeams do
-      DrawBeamGlints(Beam);
-    FFramePainter.DrawGlare(FDef.SunCover(AOffsets), FDef.GlareLevel(AOffsets));
-  end;
+// A layer's band, what lies on it, its elements. The frames' shadows run
+// on from the city's floor over the near ground's band: over the sky
+// between its crests they fall on the crater floor, which they shade too.
+// A layer the eye has passed is not drawn
+procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneOffsets;
+  ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
+begin
+  var Layer := FDef.Layers[ALayer];
+  var OfCity := Layer.Motion = fmCity;
+  var Whole := Uncarried;
+  if not OfCity then
+    Whole := CarryOf(Layer.Motion, 0);
+  if not Whole.Seen then
+    Exit;
+
+  FCarry := Whole;
+  if Layer.Band.Present and OfCity and FEye.Flying then
+    DrawFloorSlabs(ALayer, AOffsets)
+  else if Layer.Band.Present then
+    DrawBand(ALayer, AOffsets);
+  if Layer.Band.Present and (Layer.Motion = fmGround) then
+    DrawOnGround(AOffsets[fmCity], Whole.ScreenY(Layer.Band.Top), FDef.ScreenHeight);
+
+  if OfCity then
+    DrawBehindCity(Layer, AOffsets[fmCity], ATick);
+  DrawElements(ALayer, AOffsets, ATick, AClock, ABackdrop);
+  if OfCity then
+    DrawOverCity(AOffsets, ATick);
+  FCarry := Uncarried;
 end;
 
 procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets;
@@ -1220,18 +1355,20 @@ procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets;
 begin
   FEye := AEye;
   FStand := AOffsets;
+  FCarry := Uncarried;
   var Offsets := AOffsets;
   if AEye.Flying then
     Offsets := FDef.Ridden(AOffsets, AEye.Ride);
 
   if FFrames.Present then
-    FFrameView := FFrames.View(Offsets[fmCity]);
-  FFarm := FarmView(FDef, Offsets, ATick, FCityHeights);
+    FFrameView := FFrames.View(Offsets[fmCity], AEye);
+  FFarm := FarmView(FDef, Offsets, AEye, ATick, FCityHeights);
   var First := FirstSeenLayer(Offsets);
   if First < 0 then
   begin
     DrawSky;
     DrawSun(Offsets);
+    FGround.Draw(AEye, Offsets[fmCity] + FDef.ScreenWidth / 2);
     First := 0;
   end;
   for var i := First to High(FDef.Layers) do

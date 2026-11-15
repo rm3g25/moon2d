@@ -65,8 +65,18 @@
   standing there are, and none slower than the ridge that rises from the
   floor's far edge (FloorSlabs); that edge, faded into the ridge for the
   chase, sharpens over the flight's first seconds (FloorFadeAt). The
-  arithmetic is the stand's (drawFloorUnderEye, floorFade). The eye of
-  these lines keeps its rest: lifted or pushed, it is not played yet.
+  arithmetic is the stand's (drawFloorUnderEye, floorFade).
+
+  The eye leaves its rest: lifted and pushed into the screen (TFarPlaneEye)
+  it sees a layer that stood Focal / K from it so much nearer, grown about
+  the middle of the horizon and sunk by the lift (EyeNearness, Carry - the
+  stand's eyeNearness, underEye); the frames' points go through the same
+  eye (FramePoint), and so does the span a dome takes of the sun. A layer
+  the eye has passed stands behind it. The floor's band is a painting true
+  for the eye's rest alone: lifted or pushed, it melts (FloorKeep) into the
+  plane under it - the "plane" section, a tile of the ground from straight
+  above (Levels.GroundPlane); the numbers of the slabs, of the sharp edge
+  and of the melt are that section's.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -84,18 +94,9 @@ const
   FrameNearestShare = 0.15;
   // The ring a frame stands on is this many ribs thick
   FrameRingThickening = 1.6;
-  // Under the titles' eye the crater floor rides in slabs this deep, units
-  // of its band - as deep as the painted relief is tall: thinner, a long
-  // pan shears the painting into streaks; deeper, the domes' rings slide
-  // on it. A slab's far edge fades in over the one behind it across the
-  // feather
-  FloorSlabDeep = 6;
-  FloorSlabFeather = 2;
-  // The floor's far edge sharpens to a soft line this deep over this many
-  // seconds of the flight: two layers showing through each other read as
-  // one sliding on the other
-  FloorSharpFade = 1.5;
-  FloorSharpSeconds = 4;
+  // A layer nearer the titles' eye than this, the camera's units, stands
+  // behind it
+  EyeNearest = 12;
 
 type
   EFarPlaneError = class(Exception);
@@ -107,12 +108,31 @@ type
 
   // The titles' eye over a far plane that stands. Ride - how far along the
   // strip it has flown from where the world stood, the city's units, below
-  // 0 to the left; Seconds - of its flight. Not Flying - the chase: the far
+  // 0 to the left; Lift - up from its rest, Push - into the screen, the
+  // camera's units; Seconds - of its flight. Not Flying - the chase: the far
   // plane is where its offsets have it
   TFarPlaneEye = record
     Flying: Boolean;
     Ride: Double;
+    Lift, Push: Double;
     Seconds: Double;
+    // Neither lifted nor pushed: every number of the chase is as it was
+    function AtRest: Boolean;
+  end;
+
+  // A layer drawn where it stands at the eye's rest, as the eye has it
+  // now: grown about the middle of the horizon and sunk by the eye's lift;
+  // the crater floor's band grows down from the horizon by a share of its
+  // own. Not Seen - the layer stands behind the eye
+  TEyeCarry = record
+    Seen: Boolean;
+    ScaleX, ScaleY: Double;
+    ShiftX, ShiftY: Double;
+    // A place of the layer at rest, on the screen
+    function ScreenX(AX: Double): Double;
+    function ScreenY(AY: Double): Double;
+    // The place of the layer at rest that stands at AScreenX
+    function RestX(AScreenX: Double): Double;
   end;
 
   // A slab of the crater floor under the titles' eye: Top to Bottom of its
@@ -355,6 +375,43 @@ type
     function GlassOf(const APiece: string; out AGlass: TFarmGlass): Boolean;
   end;
 
+  // The painted band of the crater floor under the titles' eye, over the
+  // plane. All of it is kept up to MeltLiftFrom of the eye's lift and
+  // MeltPushFrom of its push, none past MeltLiftTill or MeltPushTill. It
+  // rides in slabs SlabDeep deep, units of the band - as deep as the
+  // painted relief is tall: thinner, a long pan shears the painting into
+  // streaks; deeper, the domes' rings slide on it - a slab's far edge
+  // fading in over the one behind it across SlabFeather. Its top sharpens
+  // to a line SharpFade deep over SharpSeconds of the flight: two layers
+  // showing through each other read as one sliding on the other. Foot -
+  // the colour under its foot
+  TPlaneFloor = record
+    MeltLiftFrom, MeltLiftTill: Single;
+    MeltPushFrom, MeltPushTill: Single;
+    SlabDeep, SlabFeather: Single;
+    SharpSeconds, SharpFade: Single;
+    Foot: TRgb;
+  end;
+
+  // The crater floor as a plane under the titles' eye once it leaves its
+  // rest: a tile of the ground seen from straight above, TileUnits a turn,
+  // packed as Levels copies - <Tile>-0 on, each squeezed twice the one
+  // before in height, and in width too past the first WideLevels of them
+  // (tools/chase/make_ground.py). From FarFrom to FarTill units off the
+  // eye the tile gives way to its Mean colour at FarShade of its light
+  TGroundPlaneDef = record
+    Present: Boolean;
+    Tile: string;
+    TileUnits: Single;
+    Levels, WideLevels: Integer;
+    FarFrom, FarTill: Single;
+    FarShade: Single;
+    Mean: TRgb;
+    Floor: TPlaneFloor;
+    // What the far ground goes to
+    function FarColor: TRgb;
+  end;
+
   // A point of a frame: X across, Y up, Z into the screen, units from its
   // centre on its base line
   TFramePoint = record
@@ -468,6 +525,7 @@ type
     Train: TCityTrain;
     Searchlights: TCitySearchlights;
     Farm: TCityFarm;
+    Plane: TGroundPlaneDef;
     function Present: Boolean;
     // How near a thing of the city whose feet stand at AY is, the domes'
     // centres 1: it rides that share of its layer's speed
@@ -487,16 +545,18 @@ type
     // Where the tunnel's last element ends along its layer: once that is
     // past the left edge, the tunnel is gone
     function TunnelEnd: Single;
-    // How far the domes before the sun have turned it, 0 (white) .. 1
-    function SunCover(const AOffsets: TFarPlaneOffsets): Single;
+    // How far the domes before the sun have turned it, 0 (white) .. 1, as
+    // AEye sees them stand before it
+    function SunCover(const AOffsets: TFarPlaneOffsets; const AEye: TFarPlaneEye): Single;
     // How much of itself the sun's glare keeps: the farm's glass shines
     // through it, so as the farm's dome takes the disc the glare gives way,
     // down to GlareKeep, by the tint's own ramp; 1 without a farm
-    function GlareLevel(const AOffsets: TFarPlaneOffsets): Single;
-    // Where a point of a frame stands on the screen with the city's layer
+    function GlareLevel(const AOffsets: TFarPlaneOffsets; const AEye: TFarPlaneEye): Single;
+    // Where AEye sees a point of a frame on the screen with the city's layer
     // ridden ACityOffset, and how near it is; False - behind the eye
     function FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
-      const AAt: TFramePoint; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
+      const AEye: TFarPlaneEye; const AAt: TFramePoint; out AScreen: TSdlFPoint;
+      out ANearness: Single): Boolean;
     // How much of the tunnel has left the screen, 0 .. 1
     function TunnelPassed(const AOffsets: TFarPlaneOffsets): Single;
     // How much of its colour a band keeps where the offsets have taken it
@@ -517,10 +577,24 @@ type
     // The offsets as the eye has them ARide along the strip from where
     // they stand: each motion carried by its nearness
     function Ridden(const AOffsets: TFarPlaneOffsets; ARide: Double): TFarPlaneOffsets;
+    // How high the eye stands over the crater floor, the camera's units
+    function EyeHeight(const AEye: TFarPlaneEye): Double;
+    // How near a layer stands to the eye that stood ARestNearness near at
+    // its rest; 0 - behind the eye
+    function EyeNearness(const AEye: TFarPlaneEye; ARestNearness: Double): Double;
+    // What stands on a layer of ARestNearness, as the eye has it
+    function Carry(const AEye: TFarPlaneEye; ARestNearness: Double): TEyeCarry;
+    // The crater floor's band as the eye has it: across as the domes' base
+    // line, down from the horizon as a plane under the eye would lie
+    function FloorCarry(const AEye: TFarPlaneEye): TEyeCarry;
+    // How much of itself the floor's band keeps over the plane, 0..1
+    function FloorKeep(const AEye: TFarPlaneEye): Single;
     // The band of the crater floor in slabs, far to near, with the city
-    // standing at ACityOffset and the eye ARide along the strip from there
-    function FloorSlabs(const ABand: TFarPlaneBand;
-      ACityOffset, ARide: Double): TArray<TFloorSlab>;
+    // standing at ACityOffset and the eye flown from there; each slab's
+    // offset is its picture's at rest, to be carried by FloorCarry. None -
+    // the floor stands behind the eye
+    function FloorSlabs(const ABand: TFarPlaneBand; ACityOffset: Double;
+      const AEye: TFarPlaneEye): TArray<TFloorSlab>;
     // Over how many units the top of the floor's band fades in at
     // ASeconds of the eye's flight
     function FloorFadeAt(const ABand: TFarPlaneBand; ASeconds: Double): Single;
@@ -539,9 +613,18 @@ type
 // a level, a tail or an ease, or a lamp whose waves do not turn. A frame of
 // an unknown kind, a capsule deeper than long or without an even count of
 // rows, its cells, belts or ends, and a farm whose dome is no capsule of
-// the frames or whose clock is shorter than it needs raise too.
+// the frames or whose clock is shorter than it needs raise too; and a plane
+// with no camera to lie under, a tile of no size, no copies of it, or a
+// floor that melts or is cut over nothing.
 function ReadFarPlane(const ARoot: TJSONObject;
   const ALevelId, ALevelDir: string): TFarPlaneDef;
+// 0 up to AFrom, 1 from ATill on, eased between the two; a span of no
+// length never begins
+function SmoothShare(AValue, AFrom, ATill: Double): Double;
+
+const
+  // A layer the eye does not carry: it stands as at rest
+  Uncarried: TEyeCarry = (Seen: True; ScaleX: 1; ScaleY: 1; ShiftX: 0; ShiftY: 0);
 
 implementation
 
@@ -596,6 +679,9 @@ resourcestring
     + 'more';
   SFarPlaneFarmNoCapsule = 'Level "%s": its farm stands under "%s", and no capsule '
     + 'of the frames is called so';
+  SFarPlaneBadPlane = 'Level "%s": the plane of its far plane needs a camera, a tile '
+    + 'of a size above zero and a copy of it at the least, and a floor that melts '
+    + 'over a span, cut into slabs of a depth and sharpened over a time above zero';
   SLightOfPiece = 'a light of piece "%s"';
   SEmblemPart = 'emblem part %d';
   SEmblemHalo = 'emblem halo %d';
@@ -608,6 +694,45 @@ const
   // As the stand draws a frame missing them
   DefaultFrequency = 3;
   DefaultRib = 2;
+
+function SmoothShare(AValue, AFrom, ATill: Double): Double;
+begin
+  if ATill <= AFrom then
+    Exit(0);
+  var Share: Double := (AValue - AFrom) / (ATill - AFrom);
+  if Share < 0 then
+    Share := 0
+  else if Share > 1 then
+    Share := 1;
+  Result := Share * Share * (3 - 2 * Share);
+end;
+
+function TFarPlaneEye.AtRest: Boolean;
+begin
+  Result := (Lift = 0) and (Push = 0);
+end;
+
+function TEyeCarry.ScreenX(AX: Double): Double;
+begin
+  Result := AX * ScaleX + ShiftX;
+end;
+
+function TEyeCarry.ScreenY(AY: Double): Double;
+begin
+  Result := AY * ScaleY + ShiftY;
+end;
+
+function TEyeCarry.RestX(AScreenX: Double): Double;
+begin
+  Result := (AScreenX - ShiftX) / ScaleX;
+end;
+
+function TGroundPlaneDef.FarColor: TRgb;
+begin
+  Result.R := Round(Mean.R * FarShade);
+  Result.G := Round(Mean.G * FarShade);
+  Result.B := Round(Mean.B * FarShade);
+end;
 
 function TFarPlaneSun.ColorAt(ACover: Single): TRgb;
 begin
@@ -677,44 +802,59 @@ begin
   Result := EnsureRange(Min(FromLeftEdge, ToRightEdge) / ASun.TintRamp, 0.0, 1.0);
 end;
 
+// A span of the domes' base line as a carry has it; one behind the eye
+// covers nothing
+function CarriedCover(const ASun: TFarPlaneSun; const ABase: TEyeCarry;
+  ALeft, AWidth: Double): Single;
+begin
+  Result := 0;
+  if ABase.Seen then
+    Result := SpanCover(ASun, ABase.ScreenX(ALeft), AWidth * ABase.ScaleX);
+end;
+
 // Deepest of the domes: the sun is as covered as the dome it is furthest
 // inside
-function TFarPlaneDef.SunCover(const AOffsets: TFarPlaneOffsets): Single;
+function TFarPlaneDef.SunCover(const AOffsets: TFarPlaneOffsets;
+  const AEye: TFarPlaneEye): Single;
 begin
   Result := 0;
   if Sun.TintRamp <= 0 then
     Exit;
+  var Base := Carry(AEye, 1);
   for var Layer in Layers do
     for var Element in Layer.Elements do
       if Element.TintsSun then
         Result := Max(Result,
-          SpanCover(Sun, Element.X - AOffsets[Layer.Motion], Element.W));
+          CarriedCover(Sun, Base, Element.X - AOffsets[Layer.Motion], Element.W));
   for var Frame in Frames do
     if Frame.TintsSun then
-      Result := Max(Result, SpanCover(Sun, Frame.X - AOffsets[fmCity], Frame.W));
+      Result := Max(Result, CarriedCover(Sun, Base, Frame.X - AOffsets[fmCity], Frame.W));
 end;
 
-function TFarPlaneDef.GlareLevel(const AOffsets: TFarPlaneOffsets): Single;
+function TFarPlaneDef.GlareLevel(const AOffsets: TFarPlaneOffsets;
+  const AEye: TFarPlaneEye): Single;
 begin
   Result := 1;
   if not Farm.Present or (Sun.TintRamp <= 0) then
     Exit;
   var Dome := Frames[Farm.Frame];
-  var Cover := SpanCover(Sun, Dome.X - AOffsets[fmCity], Dome.W);
+  var Cover := CarriedCover(Sun, Carry(AEye, 1), Dome.X - AOffsets[fmCity], Dome.W);
   Result := 1 - (1 - Farm.GlareKeep) * Cover;
 end;
 
 function TFarPlaneDef.FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
-  const AAt: TFramePoint; out AScreen: TSdlFPoint; out ANearness: Single): Boolean;
+  const AEye: TFarPlaneEye; const AAt: TFramePoint; out AScreen: TSdlFPoint;
+  out ANearness: Single): Boolean;
 begin
-  Result := Camera.Focal + AAt.Z >= Camera.Focal * FrameNearestShare;
+  Result := Camera.Focal + AAt.Z - AEye.Push >= Camera.Focal * FrameNearestShare;
   if not Result then
     Exit;
-  ANearness := Camera.Focal / (Camera.Focal + AAt.Z);
+  ANearness := Camera.Focal / (Camera.Focal + AAt.Z - AEye.Push);
   var Middle: Double := ScreenWidth / 2;
   var Centre: Double := AFrame.X + AFrame.W / 2 - ACityOffset - Middle;
   AScreen.X := Middle + (Centre + AAt.X) * ANearness;
-  AScreen.Y := Camera.Horizon + (Camera.BaseY - Camera.Horizon - AAt.Y) * ANearness;
+  AScreen.Y := Camera.Horizon +
+    (Camera.BaseY - Camera.Horizon - AAt.Y + AEye.Lift) * ANearness;
 end;
 
 function TCityFarm.GlassOf(const APiece: string; out AGlass: TFarmGlass): Boolean;
@@ -816,51 +956,123 @@ begin
     Result[Motion] := AOffsets[Motion] + ARide * MotionNearness(Motion);
 end;
 
+function TFarPlaneDef.EyeHeight(const AEye: TFarPlaneEye): Double;
+begin
+  Result := Camera.BaseY - Camera.Horizon + AEye.Lift;
+end;
+
+// A layer of the nearness K stands Focal / K from the eye at rest, and the
+// push brings it that much nearer. With no camera, or for a layer of no
+// nearness, there is no depth to push through
+function TFarPlaneDef.EyeNearness(const AEye: TFarPlaneEye;
+  ARestNearness: Double): Double;
+begin
+  if AEye.AtRest or not Camera.Present or (ARestNearness <= 0) then
+    Exit(ARestNearness);
+  var Depth: Double := Camera.Focal / ARestNearness - AEye.Push;
+  Result := 0;
+  if Depth > EyeNearest then
+    Result := Camera.Focal / Depth;
+end;
+
+function TFarPlaneDef.Carry(const AEye: TFarPlaneEye;
+  ARestNearness: Double): TEyeCarry;
+begin
+  Result := Uncarried;
+  if AEye.AtRest or not Camera.Present or (ARestNearness <= 0) then
+    Exit;
+  var Nearness: Double := EyeNearness(AEye, ARestNearness);
+  Result.Seen := Nearness > 0;
+  if not Result.Seen then
+    Exit;
+  var Scale: Double := Nearness / ARestNearness;
+  var Middle: Double := ScreenWidth / 2;
+  Result.ScaleX := Scale;
+  Result.ScaleY := Scale;
+  Result.ShiftX := Middle * (1 - Scale);
+  Result.ShiftY := Camera.Horizon * (1 - Scale) + AEye.Lift * Nearness;
+end;
+
+function TFarPlaneDef.FloorCarry(const AEye: TFarPlaneEye): TEyeCarry;
+begin
+  Result := Uncarried;
+  if AEye.AtRest or not Camera.Present then
+    Exit;
+  var Nearness: Double := EyeNearness(AEye, 1);
+  Result.Seen := Nearness > 0;
+  if not Result.Seen then
+    Exit;
+  var RestHeight: Double := Camera.BaseY - Camera.Horizon;
+  var Stretch: Double := Nearness * EyeHeight(AEye) / RestHeight;
+  var Middle: Double := ScreenWidth / 2;
+  Result.ScaleX := Nearness;
+  Result.ScaleY := Stretch;
+  Result.ShiftX := Middle * (1 - Nearness);
+  Result.ShiftY := Camera.Horizon * (1 - Stretch);
+end;
+
+function TFarPlaneDef.FloorKeep(const AEye: TFarPlaneEye): Single;
+begin
+  var LiftGone: Double := SmoothShare(AEye.Lift, Plane.Floor.MeltLiftFrom,
+    Plane.Floor.MeltLiftTill);
+  var PushGone: Double := SmoothShare(AEye.Push, Plane.Floor.MeltPushFrom,
+    Plane.Floor.MeltPushTill);
+  Result := (1 - LiftGone) * (1 - PushGone);
+end;
+
 // A slab rides by the nearness of its middle, as feet standing there
 // would; the last one, cut short by the band's foot, by the middle it
-// would have whole. Without a camera the floor has no depth: one sheet
-function TFarPlaneDef.FloorSlabs(const ABand: TFarPlaneBand;
-  ACityOffset, ARide: Double): TArray<TFloorSlab>;
+// would have whole. Without a camera, or with no depth to cut it by, the
+// floor is one sheet. Its picture is carried by the domes' base line, so
+// its offset at rest is its ride over that line's nearness
+function TFarPlaneDef.FloorSlabs(const ABand: TFarPlaneBand; ACityOffset: Double;
+  const AEye: TFarPlaneEye): TArray<TFloorSlab>;
 var
   Slab: TFloorSlab;
 begin
   Result := [];
   var Deep: Single := ABand.Bottom - ABand.Top;
-  if not Camera.Present then
+  var SlabDeep: Single := Plane.Floor.SlabDeep;
+  if not Camera.Present or (SlabDeep <= 0) then
   begin
     Slab.Top := 0;
     Slab.Bottom := Deep;
-    Slab.Offset := ACityOffset + ARide;
+    Slab.Offset := ACityOffset + AEye.Ride;
     Result := [Slab];
     Exit;
   end;
 
-  var RidgeShare := MotionNearness(fmRidge);
-  var EyeHeight: Double := Camera.BaseY - Camera.Horizon;
+  var BaseNearness: Double := EyeNearness(AEye, 1);
+  if BaseNearness <= 0 then
+    Exit;
+  var RidgeNearness: Double := EyeNearness(AEye, MotionNearness(fmRidge));
+  var RestHeight: Double := Camera.BaseY - Camera.Horizon;
   var Top: Single := 0;
   while Top < Deep do
   begin
-    var Middle: Double := ABand.Top + Top + FloorSlabDeep / 2;
-    var Share: Double := (Middle - Camera.Horizon) / EyeHeight;
-    if Share < RidgeShare then
-      Share := RidgeShare;
+    var Middle: Double := ABand.Top + Top + SlabDeep / 2;
+    var Share: Double := (Middle - Camera.Horizon) / RestHeight * BaseNearness;
+    if Share < RidgeNearness then
+      Share := RidgeNearness;
     Slab.Top := Top;
-    Slab.Bottom := Top + FloorSlabDeep;
+    Slab.Bottom := Top + SlabDeep;
     if Slab.Bottom > Deep then
       Slab.Bottom := Deep;
-    Slab.Offset := ACityOffset + ARide * Share;
+    Slab.Offset := ACityOffset + AEye.Ride * Share / BaseNearness;
     Result := Result + [Slab];
-    Top := Top + FloorSlabDeep;
+    Top := Top + SlabDeep;
   end;
 end;
 
 function TFarPlaneDef.FloorFadeAt(const ABand: TFarPlaneBand;
   ASeconds: Double): Single;
 begin
-  var Sharp: Single := FloorSharpFade;
+  if Plane.Floor.SharpSeconds <= 0 then
+    Exit(ABand.FadeTop);
+  var Sharp: Single := Plane.Floor.SharpFade;
   if ABand.FadeTop < Sharp then
     Sharp := ABand.FadeTop;
-  var Share: Double := ASeconds / FloorSharpSeconds;
+  var Share: Double := ASeconds / Plane.Floor.SharpSeconds;
   if Share < 0 then
     Share := 0
   else if Share > 1 then
@@ -1075,6 +1287,43 @@ begin
   Result.Focal := Obj.GetValue<Double>('focal');
   if (Result.BaseY <= Result.Horizon) or (Result.Focal <= 0) then
     raise EFarPlaneError.CreateFmt(SFarPlaneBadCamera, [ALevelId]);
+end;
+
+function ReadPlaneFloor(const AObj: TJSONObject; const ALevelId: string): TPlaneFloor;
+begin
+  ReadRange(AObj, 'meltLift', ALevelId, Result.MeltLiftFrom, Result.MeltLiftTill);
+  ReadRange(AObj, 'meltPush', ALevelId, Result.MeltPushFrom, Result.MeltPushTill);
+  Result.SlabDeep := AObj.GetValue<Double>('slabDeep');
+  Result.SlabFeather := AObj.GetValue<Double>('slabFeather', 0);
+  Result.SharpSeconds := AObj.GetValue<Double>('sharpSeconds');
+  Result.SharpFade := AObj.GetValue<Double>('sharpFade');
+  Result.Foot := ReadColor(AObj, 'foot', ALevelId);
+end;
+
+function ReadPlane(const ARoot: TJSONObject; const ALevelId: string): TGroundPlaneDef;
+var
+  Obj: TJSONObject;
+begin
+  Result := Default(TGroundPlaneDef);
+  if not ARoot.TryGetValue<TJSONObject>('plane', Obj) then
+    Exit;
+  Result.Present := True;
+  Result.Tile := Obj.GetValue<string>('tile');
+  Result.TileUnits := Obj.GetValue<Double>('tileUnits');
+  Result.Levels := Obj.GetValue<Integer>('levels');
+  Result.WideLevels := Obj.GetValue<Integer>('wideLevels', 0);
+  ReadRange(Obj, 'far', ALevelId, Result.FarFrom, Result.FarTill);
+  Result.FarShade := EnsureRange(Obj.GetValue<Double>('farShade', FullShade), 0.0, 1.0);
+  Result.Mean := ReadColor(Obj, 'mean', ALevelId);
+  Result.Floor := ReadPlaneFloor(Obj.GetValue<TJSONObject>('floor'), ALevelId);
+
+  var Band := Result.Floor;
+  var Laid := (Result.TileUnits > 0) and (Result.Levels >= 1);
+  var Melts := (Band.MeltLiftTill > Band.MeltLiftFrom) and
+    (Band.MeltPushTill > Band.MeltPushFrom);
+  var Cut := (Band.SlabDeep > 0) and (Band.SlabFeather >= 0) and (Band.SharpSeconds > 0);
+  if not Laid or not Melts or not Cut then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadPlane, [ALevelId]);
 end;
 
 function ParseFrameKind(const AWord, ALevelId, AFrameId: string): TDomeFrameKind;
@@ -1490,6 +1739,7 @@ begin
     Result.Sun := ReadSun(Root.GetValue<TJSONObject>('sun'), ALevelId);
     Result.Speeds := ReadSpeeds(Root.GetValue<TJSONObject>('speeds'));
     Result.Camera := ReadCamera(Root, ALevelId);
+    Result.Plane := ReadPlane(Root, ALevelId);
     Result.Frames := ReadFrames(Root, ALevelId);
     for var Item in Root.GetValue<TJSONArray>('layers') do
       Result.Layers := Result.Layers + [ReadLayer(Item as TJSONObject, ALevelId)];
@@ -1507,6 +1757,8 @@ begin
     raise EFarPlaneError.CreateFmt(SFarPlaneNoCity, [ALevelId]);
   if (Length(Result.Frames) > 0) and not Result.Camera.Present then
     raise EFarPlaneError.CreateFmt(SFarPlaneFramesNoCamera, [ALevelId]);
+  if Result.Plane.Present and not Result.Camera.Present then
+    raise EFarPlaneError.CreateFmt(SFarPlaneBadPlane, [ALevelId]);
   PlaceFarm(Result, FarmFrameId, ALevelId);
   CheckCityLife(Result, ALevelId);
 end;

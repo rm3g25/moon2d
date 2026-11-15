@@ -135,6 +135,7 @@
         <DCCReference Include="Levels\Tests.Levels.Pads.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Scenes.pas"/>
         <DCCReference Include="Levels\Tests.Levels.EyePath.pas"/>
+        <DCCReference Include="Levels\Tests.Levels.GroundPlane.pas"/>
         <DCCReference Include="Levels\Tests.Levels.Titles.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.pas"/>
         <DCCReference Include="Monsters\Tests.Monsters.Bodies.pas"/>

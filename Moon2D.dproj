@@ -180,6 +180,7 @@
         <DCCReference Include="Core\Levels.Dynamics.pas"/>
         <DCCReference Include="Core\Levels.FarPlane.pas"/>
         <DCCReference Include="Core\Levels.EyePath.pas"/>
+        <DCCReference Include="Core\Levels.GroundPlane.pas"/>
         <DCCReference Include="Core\Levels.Titles.pas"/>
         <DCCReference Include="Core\Levels.CityLife.pas"/>
         <DCCReference Include="Core\Levels.Monorail.pas"/>
@@ -195,6 +196,7 @@
         <DCCReference Include="Core\Render.Tiles.pas"/>
         <DCCReference Include="Core\Render.Objects.pas"/>
         <DCCReference Include="Core\Render.FarPlane.pas"/>
+        <DCCReference Include="Core\Render.GroundPlane.pas"/>
         <DCCReference Include="Core\Render.DomeFrames.pas"/>
         <DCCReference Include="Core\Render.Puff.pas"/>
         <DCCReference Include="Core\Effects.Emitter.pas"/>

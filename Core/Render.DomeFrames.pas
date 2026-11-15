@@ -26,6 +26,13 @@
   (TFrameRib.Dark, Levels.Farm). The stand
   (tools/chase/stand.template.html) is the reference, number for number.
 
+  The titles' eye sees the frames too, lifted and pushed into the screen
+  (TFarPlaneDef.FramePoint): a shadow is cut where it passes the eye where
+  the eye now is, and out of its rest the eye may stand near a frame and
+  see it far to its sides, so only the eye at rest culls one by the
+  screen. A rib with an end nearer the eye than FrameNearestShare of the
+  focal length is still dropped whole.
+
   TDomeFrames is the geometry: it does not touch SDL - the ribs, the
   shadows and the beacons on the screen, in units, for a ride of the city.
   TDomeFramePainter draws them as strips of triangles, the colour and the
@@ -122,6 +129,12 @@ type
       FarCount, NearCount, ShadowCount: Integer;
       FarBeaconCount, NearBeaconCount: Integer;
     end;
+    // Where the frames are seen from: how far the city's layer has ridden
+    // left, and the titles' eye over it
+    TSight = record
+      CityOffset: Double;
+      Eye: TFarPlaneEye;
+    end;
   private
     FDef: TFarPlaneDef;
     // By frame
@@ -136,23 +149,24 @@ type
     function BeaconNodes(AFrame: Integer): TBeaconNodes;
     function CapsuleBeaconNodes(AFrame: Integer): TBeaconNodes;
     function DropToFloor(const AAt: TPoint3): TPoint3;
-    function CutAtEye(const AFrom, ATo: TPoint3;
+    function CutAtEye(const ASight: TSight; const AFrom, ATo: TPoint3;
       out AFromShare, AToShare: Double): Boolean;
     procedure LightRim(var ARib: TFrameRib);
-    procedure AddFrame(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
-    procedure AddBeacons(AFrame: Integer; ACityOffset: Double; var AFill: TViewFill);
+    procedure AddFrame(AFrame: Integer; const ASight: TSight; var AFill: TViewFill);
+    procedure AddBeacons(AFrame: Integer; const ASight: TSight; var AFill: TViewFill);
     // AOfFarm - the frame is the farm's dome
-    procedure AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
+    procedure AddEdge(const AFrame: TDomeFrame; const ASight: TSight;
       const AEdge: TEdge; AOfFarm: Boolean; var AFill: TViewFill);
     // AThickness - the rib's own, at the frame's centre
-    procedure AddShadow(const AFrame: TDomeFrame; ACityOffset: Double;
+    procedure AddShadow(const AFrame: TDomeFrame; const ASight: TSight;
       const AFrom, ATo: TPoint3; AThickness: Single; var AFill: TViewFill);
   public
     // ADef - the level's far plane; one without frames shows none
     constructor Create(const ADef: TFarPlaneDef);
     function Present: Boolean;
-    // ACityOffset - how far the city's layer has ridden left
-    function View(ACityOffset: Double): TFrameView;
+    // ACityOffset - how far the city's layer has ridden left; AEye - the
+    // titles' eye over it
+    function View(ACityOffset: Double; const AEye: TFarPlaneEye): TFrameView;
   end;
 
   TDomeFramePainter = class
@@ -561,10 +575,11 @@ end;
 // shares of the way between them; False - none of it. A lifted rib drops
 // an end behind the eye, and its shadow streams toward the bottom of the
 // screen
-function TDomeFrames.CutAtEye(const AFrom, ATo: TPoint3;
+function TDomeFrames.CutAtEye(const ASight: TSight; const AFrom, ATo: TPoint3;
   out AFromShare, AToShare: Double): Boolean;
 begin
-  var Plane: Double := FDef.Camera.Focal * (FrameNearestShare - 1) + EyeCutMargin;
+  var Plane: Double := FDef.Camera.Focal * (FrameNearestShare - 1) + EyeCutMargin +
+    ASight.Eye.Push;
   AFromShare := 0;
   AToShare := 1;
   Result := (AFrom.Z >= Plane) or (ATo.Z >= Plane);
@@ -602,22 +617,22 @@ end;
 // A sample a share of the way along the rib: the light runs from there down
 // to the floor, and the farther it runs, the wider the penumbra and the
 // less of the disc the rib hides
-procedure TDomeFrames.AddShadow(const AFrame: TDomeFrame; ACityOffset: Double;
+procedure TDomeFrames.AddShadow(const AFrame: TDomeFrame; const ASight: TSight;
   const AFrom, ATo: TPoint3; AThickness: Single; var AFill: TViewFill);
 var
   Shadow: TRibShadow;
   FromShare, ToShare: Double;
   Nearness: Single;
 begin
-  if not CutAtEye(DropToFloor(AFrom), DropToFloor(ATo), FromShare, ToShare) then
+  if not CutAtEye(ASight, DropToFloor(AFrom), DropToFloor(ATo), FromShare, ToShare) then
     Exit;
   var Width: Double := AThickness * ShadowWidening;
   for var i := 0 to ShadowSamples - 1 do
   begin
     var Share: Double := FromShare + (ToShare - FromShare) * i / (ShadowSamples - 1);
     var Caster := PointBetween(AFrom, ATo, Share);
-    if not FDef.FramePoint(AFrame, ACityOffset, DropToFloor(Caster), Shadow.Samples[i].At,
-      Nearness) then
+    if not FDef.FramePoint(AFrame, ASight.CityOffset, ASight.Eye, DropToFloor(Caster),
+      Shadow.Samples[i].At, Nearness) then
       Exit;
     var Spread: Double := FSunSpread * Caster.Y / FToSun.Y;
     var Penumbra: Double := 2 * Spread;
@@ -631,7 +646,7 @@ begin
   Inc(AFill.ShadowCount);
 end;
 
-procedure TDomeFrames.AddEdge(const AFrame: TDomeFrame; ACityOffset: Double;
+procedure TDomeFrames.AddEdge(const AFrame: TDomeFrame; const ASight: TSight;
   const AEdge: TEdge; AOfFarm: Boolean; var AFill: TViewFill);
 var
   Rib: TFrameRib;
@@ -639,8 +654,9 @@ var
 begin
   var From := AEdge.A;
   var Till := AEdge.B;
-  if not FDef.FramePoint(AFrame, ACityOffset, From, Rib.A, NearnessA) or
-    not FDef.FramePoint(AFrame, ACityOffset, Till, Rib.B, NearnessB) then
+  var Seen := FDef.FramePoint(AFrame, ASight.CityOffset, ASight.Eye, From, Rib.A, NearnessA) and
+    FDef.FramePoint(AFrame, ASight.CityOffset, ASight.Eye, Till, Rib.B, NearnessB);
+  if not Seen then
     Exit;
   Rib.Z := (From.Z + Till.Z) / 2;
   var Thickness: Single := AFrame.Rib * AEdge.Thickening;
@@ -662,10 +678,10 @@ begin
 
   var Lifted := (AEdge.A.Y > OverEquator) or (AEdge.B.Y > OverEquator);
   if Lifted and (FToSun.Y > 0) then
-    AddShadow(AFrame, ACityOffset, From, Till, Thickness, AFill);
+    AddShadow(AFrame, ASight, From, Till, Thickness, AFill);
 end;
 
-procedure TDomeFrames.AddFrame(AFrame: Integer; ACityOffset: Double;
+procedure TDomeFrames.AddFrame(AFrame: Integer; const ASight: TSight;
   var AFill: TViewFill);
 var
   Left, Right: TSdlFPoint;
@@ -673,17 +689,20 @@ var
 begin
   var Frame := FDef.Frames[AFrame];
   var Radius: Double := Frame.W / 2;
-  FDef.FramePoint(Frame, ACityOffset, Point3(-Radius, 0, 0), Left, Nearness);
-  FDef.FramePoint(Frame, ACityOffset, Point3(Radius, 0, 0), Right, Nearness);
-  if (Right.X < -Radius) or (Left.X > FDef.ScreenWidth + Radius) then
+  FDef.FramePoint(Frame, ASight.CityOffset, ASight.Eye, Point3(-Radius, 0, 0), Left, Nearness);
+  FDef.FramePoint(Frame, ASight.CityOffset, ASight.Eye, Point3(Radius, 0, 0), Right, Nearness);
+  // Out of its rest the eye may stand near a frame and see it far to its
+  // sides: only the eye at rest culls one
+  var OffScreen := (Right.X < -Radius) or (Left.X > FDef.ScreenWidth + Radius);
+  if ASight.Eye.AtRest and OffScreen then
     Exit;
   var OfFarm := FDef.Farm.Present and (FDef.Farm.Frame = AFrame);
   for var Edge in FEdges[AFrame] do
-    AddEdge(Frame, ACityOffset, Edge, OfFarm, AFill);
-  AddBeacons(AFrame, ACityOffset, AFill);
+    AddEdge(Frame, ASight, Edge, OfFarm, AFill);
+  AddBeacons(AFrame, ASight, AFill);
 end;
 
-procedure TDomeFrames.AddBeacons(AFrame: Integer; ACityOffset: Double;
+procedure TDomeFrames.AddBeacons(AFrame: Integer; const ASight: TSight;
   var AFill: TViewFill);
 var
   Beacon: TFrameBeacon;
@@ -691,7 +710,8 @@ begin
   var Frame := FDef.Frames[AFrame];
   for var Node in FBeaconNodes[AFrame] do
   begin
-    if not FDef.FramePoint(Frame, ACityOffset, Node.At, Beacon.At, Beacon.Nearness) then
+    if not FDef.FramePoint(Frame, ASight.CityOffset, ASight.Eye, Node.At, Beacon.At,
+      Beacon.Nearness) then
       Continue;
     Beacon.Seed := Node.Seed;
     // The top stands at Z 0, near on the stand; the FPU's extended
@@ -709,10 +729,13 @@ begin
   end;
 end;
 
-function TDomeFrames.View(ACityOffset: Double): TFrameView;
+function TDomeFrames.View(ACityOffset: Double; const AEye: TFarPlaneEye): TFrameView;
 var
   Fill: TViewFill;
+  Sight: TSight;
 begin
+  Sight.CityOffset := ACityOffset;
+  Sight.Eye := AEye;
   Fill := Default(TViewFill);
   var Most := 0;
   for var Edges in FEdges do
@@ -727,7 +750,7 @@ begin
   SetLength(Fill.View.NearBeacons, MostBeacons);
 
   for var i := 0 to High(FDef.Frames) do
-    AddFrame(i, ACityOffset, Fill);
+    AddFrame(i, Sight, Fill);
 
   SetLength(Fill.View.Far, Fill.FarCount);
   SetLength(Fill.View.Near, Fill.NearCount);

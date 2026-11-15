@@ -6086,8 +6086,11 @@ begin
     Exit;
   var Stand: Double := FFarPlane.OffsetsAt(AAlpha)[fmCity] +
     FLevel.FarPlane.ScreenWidth / 2;
+  var Eye := FTitles.EyeAt(AAlpha, Stand);
   Result.Flying := True;
-  Result.Ride := FTitles.EyeAt(AAlpha, Stand).Along - Stand;
+  Result.Ride := Eye.Along - Stand;
+  Result.Lift := Eye.Lift;
+  Result.Push := Eye.Push;
   Result.Seconds := FTitles.FlightSeconds(AAlpha);
 end;
 
@@ -6153,7 +6156,7 @@ end;
 procedure TMoonGame.DrawFangs(AAlpha: Single);
 begin
   if FHero.Screen = FLevel.FarPlane.Screen then
-    FFangPainter.Draw(EyeOffsets(AAlpha));
+    FFangPainter.Draw(EyeOffsets(AAlpha), FlightEye(AAlpha));
 end;
 
 // The far ledge stands on the backdrop, so on the screen of a chase it
@@ -6622,9 +6625,10 @@ begin
 {$IFDEF DEBUGKEYS}
   if not FShowFlight or not FTitles.Flying then
     Exit;
+  var Eye := FlightEye(AAlpha);
   var Along: Double := EyeOffsets(AAlpha)[fmCity] + FLevel.FarPlane.ScreenWidth / 2;
-  FFont.DrawSmall(Format('flight %.2f  track %.2f  eye %.0f',
-    [FTitles.FlightSeconds(AAlpha), FAudio.MusicSeconds, Along]),
+  FFont.DrawSmall(Format('flight %.2f  track %.2f  eye %.0f  lift %.1f  push %.1f',
+    [FTitles.FlightSeconds(AAlpha), FAudio.MusicSeconds, Along, Eye.Lift, Eye.Push]),
     FlightReadoutLeft, FlightReadoutTop);
 {$ENDIF}
 end;

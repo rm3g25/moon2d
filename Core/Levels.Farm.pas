@@ -18,6 +18,10 @@
   and the floor in front of it from its near foot toward the eye, fading
   out, the ribs' feet throwing gaps.
 
+  Under the titles' eye a source stands where the eye sees its glass, as
+  near as the eye has its greenhouse - one the eye has passed gives no
+  light - and the meshes take the dome's points through the same eye.
+
   The stand (tools/chase/stand.template.html, the farm) is the reference,
   number for number. No SDL: Render.FarPlane draws the glass and the
   meshes, added.
@@ -76,21 +80,22 @@ function FarmSeed(AElement: Integer): Cardinal;
 // 0 .. the glow's level
 function FarmGlowLevel(const AGlow: TFarmGlow; ASeed: Cardinal; ATick: Integer): Double;
 // AHeights - the height of each element of the city's layer in units, as
-// its picture has it. Nothing without a farm
+// its picture has it; AEye - the titles' eye: the sources stand where it
+// sees them. Nothing without a farm
 function FarmView(const ADef: TFarPlaneDef; const AOffsets: TFarPlaneOffsets;
-  ATick: Integer; const AHeights: TArray<Double>): TFarmView;
+  const AEye: TFarPlaneEye; ATick: Integer; const AHeights: TArray<Double>): TFarmView;
 // At a point of the screen, units: a channel at 1 is a hall's glass at full
 function FarmLight(const AFarm: TCityFarm; const ASources: TArray<TFarmSource>;
   AX, AY: Double): TFarmLight;
 // As drawn at ALevel, 0..1 a channel
 function Exposed(const ALight: TFarmLight; ALevel: Double): TFarmLight;
-// The light of the air over the dome's near half
+// The light of the air over the dome's near half, as AEye sees the dome
 function FarmAirMesh(const ADef: TFarPlaneDef; const ASources: TArray<TFarmSource>;
-  ACityOffset: Double): TFarmMesh;
+  ACityOffset: Double; const AEye: TFarPlaneEye): TFarmMesh;
 // The light on the floor in front of the dome, a quad between each two feet
 // of its near ribs: lit at the foot, dark the apron's length toward the eye
 function FarmApronMesh(const ADef: TFarPlaneDef; const ASources: TArray<TFarmSource>;
-  ACityOffset: Double): TFarmMesh;
+  ACityOffset: Double; const AEye: TFarPlaneEye): TFarmMesh;
 
 implementation
 
@@ -154,7 +159,7 @@ begin
 end;
 
 function FarmView(const ADef: TFarPlaneDef; const AOffsets: TFarPlaneOffsets;
-  ATick: Integer; const AHeights: TArray<Double>): TFarmView;
+  const AEye: TFarPlaneEye; ATick: Integer; const AHeights: TArray<Double>): TFarmView;
 var
   Glass: TFarmGlass;
 begin
@@ -172,7 +177,13 @@ begin
     if not ADef.Farm.GlassOf(Element.Id, Glass) then
       Continue;
     var Left := ADef.ElementLeft(Layer, Element, AOffsets);
-    if (Left > ADef.ScreenWidth + Margin) or (Left + Element.W < -Margin) then
+    var Rest: Double := ADef.Nearness(Element.DepthY);
+    var Carried := ADef.Carry(AEye, Rest);
+    if not Carried.Seen then
+      Continue;
+    var SeenFrom := Carried.RestX(0);
+    var SeenTill := Carried.RestX(ADef.ScreenWidth);
+    if (Left > SeenTill + Margin) or (Left + Element.W < SeenFrom - Margin) then
       Continue;
     var Level := FarmGlowLevel(ADef.Farm.Glow, FarmSeed(i), ATick);
     Result.Glass[i] := Level;
@@ -184,11 +195,11 @@ begin
     if Element.Mirror then
       AtU := 1 - Glass.AtU;
     var Source: TFarmSource;
-    Source.X := Left + AtU * Element.W;
-    Source.Y := Element.Y - Height + Glass.AtV * Height;
+    Source.X := Carried.ScreenX(Left + AtU * Element.W);
+    Source.Y := Carried.ScreenY(Element.Y - Height + Glass.AtV * Height);
     Source.Color := Glass.Color;
     Source.Power := Level * Glass.Share * Element.W * Height / HallArea;
-    Source.Nearness := ADef.Nearness(Element.DepthY);
+    Source.Nearness := ADef.EyeNearness(AEye, Rest);
     Result.Sources := Result.Sources + [Source];
   end;
 end;
@@ -245,7 +256,7 @@ begin
 end;
 
 function FarmAirMesh(const ADef: TFarPlaneDef; const ASources: TArray<TFarmSource>;
-  ACityOffset: Double): TFarmMesh;
+  ACityOffset: Double; const AEye: TFarPlaneEye): TFarmMesh;
 var
   Screen: TSdlFPoint;
   Nearness: Single;
@@ -260,7 +271,7 @@ begin
     begin
       var At := CapsulePoint(Dome, -Tip + 2 * Tip * a / FarmAirAlong,
         Half + Half * r / FarmAirRound);
-      ADef.FramePoint(Dome, ACityOffset, At, Screen, Nearness);
+      ADef.FramePoint(Dome, ACityOffset, AEye, At, Screen, Nearness);
       var Light := Exposed(FarmLight(ADef.Farm, ASources, Screen.X, Screen.Y),
         ADef.Farm.AirLevel);
       var Here := a * (FarmAirRound + 1) + r;
@@ -342,7 +353,7 @@ begin
 end;
 
 function FarmApronMesh(const ADef: TFarPlaneDef; const ASources: TArray<TFarmSource>;
-  ACityOffset: Double): TFarmMesh;
+  ACityOffset: Double; const AEye: TFarPlaneEye): TFarmMesh;
 var
   FootA, FootB, OutA, OutB: TSdlFPoint;
   Nearness: Single;
@@ -353,13 +364,14 @@ begin
   var Dome := ADef.Frames[Farm.Frame];
   for var Foot in ApronFeet(Dome, Farm.ApronGap) do
   begin
-    var Seen := ADef.FramePoint(Dome, ACityOffset, Foot.A, FootA, Nearness) and
-      ADef.FramePoint(Dome, ACityOffset, Foot.B, FootB, Nearness);
+    var Seen := ADef.FramePoint(Dome, ACityOffset, AEye, Foot.A, FootA, Nearness) and
+      ADef.FramePoint(Dome, ACityOffset, AEye, Foot.B, FootB, Nearness);
     if not Seen or (Max(FootA.X, FootB.X) < 0) or (Min(FootA.X, FootB.X) > ADef.ScreenWidth) then
       Continue;
-    var Reached := ADef.FramePoint(Dome, ACityOffset, Moved(Foot.B, Foot.OutB, Farm.ApronLength),
-      OutB, Nearness) and ADef.FramePoint(Dome, ACityOffset,
-      Moved(Foot.A, Foot.OutA, Farm.ApronLength), OutA, Nearness);
+    var Reached := ADef.FramePoint(Dome, ACityOffset, AEye,
+      Moved(Foot.B, Foot.OutB, Farm.ApronLength), OutB, Nearness) and
+      ADef.FramePoint(Dome, ACityOffset, AEye, Moved(Foot.A, Foot.OutA, Farm.ApronLength),
+      OutA, Nearness);
     if not Reached then
       Continue;
     var LightA := Exposed(FarmLight(Farm, ASources, FootA.X, FootA.Y - ApronLift),

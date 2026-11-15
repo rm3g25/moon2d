@@ -80,6 +80,7 @@ uses
   Tests.Levels.Pads in 'Levels\Tests.Levels.Pads.pas',
   Tests.Levels.Scenes in 'Levels\Tests.Levels.Scenes.pas',
   Tests.Levels.EyePath in 'Levels\Tests.Levels.EyePath.pas',
+  Tests.Levels.GroundPlane in 'Levels\Tests.Levels.GroundPlane.pas',
   Tests.Levels.Titles in 'Levels\Tests.Levels.Titles.pas',
   Tests.Monsters in 'Monsters\Tests.Monsters.pas',
   Tests.Monsters.Bodies in 'Monsters\Tests.Monsters.Bodies.pas',

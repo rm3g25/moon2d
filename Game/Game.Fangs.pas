@@ -24,7 +24,9 @@
 
   TFangRow is the rules: it does not know the belt or SDL - the game hands
   in how far the fangs' layer has ridden (Game.FarPlane). TFangPainter
-  draws them, dark in the tunnel and lighter out of it, as the near ground.
+  draws them, dark in the tunnel and lighter out of it, as the near ground;
+  under the titles' eye the row is carried as one layer of the fangs'
+  nearness (TFarPlaneDef.Carry), and once the eye has passed it, not drawn.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -105,7 +107,9 @@ type
       ARow: TFangRow);
     // AOffsets - the far plane's, between ticks: the fangs ride by their
     // own, the tunnel's tells how dark they are
-    procedure Draw(const AOffsets: TFarPlaneOffsets);
+    // AOffsets - where the far plane's layers stand, the fangs' among
+    // them; AEye - the titles' eye over them
+    procedure Draw(const AOffsets: TFarPlaneOffsets; const AEye: TFarPlaneEye);
   end;
 
 implementation
@@ -277,19 +281,25 @@ end;
 
 // The kit is shared with the level's own objects, which set their tint on
 // every draw, so the colour mod is set here on every draw as well
-procedure TFangPainter.Draw(const AOffsets: TFarPlaneOffsets);
+// The fangs stand on a layer of their own nearness: the eye carries the
+// row as one, and one it has passed is not drawn
+procedure TFangPainter.Draw(const AOffsets: TFarPlaneOffsets;
+  const AEye: TFarPlaneEye);
 var
   Dest: TSdlFRect;
 begin
   var Def := FRow.Def;
+  var Carry := Def.Carry(AEye, Def.MotionNearness(fmFangs));
+  if not Carry.Seen then
+    Exit;
   for var Fang in FRow.Fangs do
   begin
-    Dest.X := Fang.X - AOffsets[fmFangs];
-    if (Dest.X >= Def.ScreenWidth) or (Dest.X + Fang.W <= 0) then
+    Dest.X := Carry.ScreenX(Fang.X - AOffsets[fmFangs]);
+    Dest.W := Fang.W * Carry.ScaleX;
+    if (Dest.X >= Def.ScreenWidth) or (Dest.X + Dest.W <= 0) then
       Continue;
-    Dest.Y := Fang.Top;
-    Dest.W := Fang.W;
-    Dest.H := Fang.H;
+    Dest.Y := Carry.ScreenY(Fang.Top);
+    Dest.H := Fang.H * Carry.ScaleY;
     var Picture := FPictures[Fang.Kind];
     var Tint := Def.FangTint(Fang.Jitter, AOffsets);
     TintTexture(Picture, Tint.R, Tint.G, Tint.B);

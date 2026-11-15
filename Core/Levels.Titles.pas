@@ -5,9 +5,11 @@
   path"). A level names the file in its "titles" section ("file"); the file
   lies beside the level file (bin/finale.json for level 2) and is the one
   tools/chase/build_stand.py plays on the stand. Titles without a path do
-  not fly: the card and the logo are all of them. The keys the game does
-  not play yet - the flight's own cues, the lines at the stars - are let
-  be.
+  not fly: the card and the logo are all of them. A path may say how far
+  it is flown ("flownTill", a second of the flight) while the game does not
+  fly all of it; with none it is flown to its last key. The keys the game
+  does not play yet - the flight's own cues, the lines at the stars - are
+  let be.
 
   No SDL.
 
@@ -38,6 +40,9 @@ type
     Cues: TTitlesCues;
     // The way of the camera's flight, by the seconds from the cue Flight
     Path: TEyePath;
+    // The second of the flight the path is flown to: its last key's, or
+    // the path's "flownTill" while the game does not fly all of it
+    FlightTill: Double;
     function Flies: Boolean;
   end;
 
@@ -60,6 +65,8 @@ resourcestring
     + 'least';
   STitlesKeyOutOfOrder = 'Level "%s": key %d of the path of its titles is not '
     + 'after the one before it';
+  STitlesFlownNowhere = 'Level "%s": the path of its titles is flown till %g s - '
+    + 'a second of the flight above zero';
 
 function TTitlesDef.Flies: Boolean;
 begin
@@ -147,6 +154,10 @@ begin
     begin
       Result.Path := ReadPath(PathObj);
       CheckPath(Result.Path, ALevelId);
+      var LastKey := Result.Path.Keys[High(Result.Path.Keys)].Seconds;
+      Result.FlightTill := PathObj.GetValue<Double>('flownTill', LastKey);
+      if Result.FlightTill <= 0 then
+        raise ETitlesError.CreateFmt(STitlesFlownNowhere, [ALevelId, Result.FlightTill]);
     end;
     CheckOrder(Result, ALevelId);
     Result.Present := True;

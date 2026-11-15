@@ -41,6 +41,18 @@
   without a camera the floor is one sheet. The floor's far edge sharpens
   over the flight's first seconds, and one sharper than that stays.
 
+  Lifted and pushed, the eye sees every layer nearer, as the stand has it
+  16 s into the flight, and one it has passed not at all; at its rest it
+  carries nothing, to the bit. A carried place stands where the stand has
+  it. The floor's band melts as the stand's does, grows down from the
+  horizon, its slabs start where the stand's rows do, and behind the eye
+  it has none. A dome takes less of the sun for an eye pushed toward it; a
+  frame's point stands where the stand projects it, and one at the eye is
+  not seen. Level 2 reads its plane; a plane is read as written, and one
+  without a camera, with a floor that melts over nothing or is cut into
+  no slabs raises. Till the titles' path is flown to, no frame of level 2
+  comes so near the eye that a rib would be dropped.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.FarPlane;
@@ -191,6 +203,28 @@ type
     procedure TestTheFloorsEdgeSharpensOverTheFirstSeconds;
     [Test]
     procedure TestAnEdgeSharperThanTheLineStays;
+    [Test]
+    procedure TestAtItsRestTheEyeCarriesNothing;
+    [Test]
+    procedure TestThePushBringsEveryLayerNearer;
+    [Test]
+    procedure TestALayerTheEyeHasPassedIsNotSeen;
+    [Test]
+    procedure TestACarriedPlaceStandsWhereTheStandHasIt;
+    [Test]
+    procedure TestTheFloorMeltsAsTheEyeLeavesItsRest;
+    [Test]
+    procedure TestTheFloorGrowsDownFromTheHorizon;
+    [Test]
+    procedure TestUnderTheEyeTheSlabsStartWhereTheStandsDo;
+    [Test]
+    procedure TestBehindTheEyeTheFloorHasNoSlabs;
+    [Test]
+    procedure TestThePushedEyeSeesADomeTakeLessOfTheSun;
+    [Test]
+    procedure TestTheEyeSeesAFramesPointWhereTheStandHasIt;
+    [Test]
+    procedure TestAFramesPointAtTheEyeIsNotSeen;
   end;
 
   [TestFixture]
@@ -286,12 +320,24 @@ type
     procedure TestACapsuleDeeperThanLongRaises;
     [Test]
     procedure TestAFarmUnderADomeRaises;
+    [Test]
+    procedure TestLevelTwoReadsItsPlane;
+    [Test]
+    procedure TestThePlaneIsReadAsWritten;
+    [Test]
+    procedure TestAPlaneWithoutACameraRaises;
+    [Test]
+    procedure TestAFloorThatMeltsOverNothingRaises;
+    [Test]
+    procedure TestAFloorCutIntoNoSlabsRaises;
+    [Test]
+    procedure TestTillItIsFlownNoFrameStandsAtTheEye;
   end;
 
 implementation
 
 uses
-  System.IOUtils, System.JSON, System.Math,
+  System.IOUtils, System.JSON, System.Math, Sdl2.Core,
   Levels.Defs, Levels.Monorail, Levels.Searchlights;
 
 const
@@ -325,6 +371,12 @@ begin
     Root.Free;
     TFile.Delete(TPath.Combine(Dir, Name));
   end;
+end;
+
+// The titles' eye at its rest: the chase's own
+function RestEye: TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
 end;
 
 // The stand's first tuning: the tunnel fast past the cliff, then easing.
@@ -678,18 +730,18 @@ end;
 
 procedure TFarPlaneSunTests.TestWhiteWithNoDomeBeforeIt;
 begin
-  Assert.AreEqual(0.0, Double(FDef.SunCover(Default(TFarPlaneOffsets))), 0.0001);
+  Assert.AreEqual(0.0, Double(FDef.SunCover(Default(TFarPlaneOffsets), RestEye)), 0.0001);
 end;
 
 procedure TFarPlaneSunTests.TestTintedDeepInsideADome;
 begin
-  var Cover := FDef.SunCover(DomeInside(ElementById(FDef, 'dome-main').W / 2));
+  var Cover := FDef.SunCover(DomeInside(ElementById(FDef, 'dome-main').W / 2), RestEye);
   Assert.AreEqual(1.0, Double(Cover), 0.0001);
 end;
 
 procedure TFarPlaneSunTests.TestRampedInAtTheDomesEdge;
 begin
-  var Cover := FDef.SunCover(DomeInside(FDef.Sun.TintRamp / 2));
+  var Cover := FDef.SunCover(DomeInside(FDef.Sun.TintRamp / 2), RestEye);
   Assert.AreEqual(0.5, Double(Cover), 0.0001);
 end;
 
@@ -698,26 +750,27 @@ begin
   var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
   var Offsets := Default(TFarPlaneOffsets);
   Offsets[fmCity] := Def.Frames[0].X + Def.Frames[0].W / 2 - Def.Sun.X;
-  Assert.AreEqual(1.0, Double(Def.SunCover(Offsets)), 0.0001, 'Deep inside it');
-  Assert.AreEqual(0.0, Double(Def.SunCover(Default(TFarPlaneOffsets))), 0.0001,
+  Assert.AreEqual(1.0, Double(Def.SunCover(Offsets, RestEye)), 0.0001, 'Deep inside it');
+  Assert.AreEqual(0.0, Double(Def.SunCover(Default(TFarPlaneOffsets), RestEye)), 0.0001,
     'Before it comes');
 end;
 
 procedure TFarPlaneSunTests.TestGlareWholeWithoutAFarm;
 begin
-  Assert.AreEqual(1.0, Double(FDef.GlareLevel(DomeInside(ElementById(FDef, 'dome-main').W / 2))),
-    0.0001);
+  var Inside := DomeInside(ElementById(FDef, 'dome-main').W / 2);
+  Assert.AreEqual(1.0, Double(FDef.GlareLevel(Inside, RestEye)), 0.0001);
 end;
 
 procedure TFarPlaneSunTests.TestGlareGivesWayToTheFarmsDome;
 begin
   var Def := ReadFromLayout(DepthLayout(StandCamera + CapsuleFrames + FarmSection));
   var Offsets := Default(TFarPlaneOffsets);
-  Assert.AreEqual(1.0, Double(Def.GlareLevel(Offsets)), 0.0001, 'Before it comes');
+  Assert.AreEqual(1.0, Double(Def.GlareLevel(Offsets, RestEye)), 0.0001, 'Before it comes');
   Offsets[fmCity] := Def.Frames[0].X + Def.Frames[0].W / 2 - Def.Sun.X;
-  Assert.AreEqual(FarmGlareKeep, Double(Def.GlareLevel(Offsets)), 0.0001, 'Deep inside it');
+  Assert.AreEqual(FarmGlareKeep, Double(Def.GlareLevel(Offsets, RestEye)), 0.0001,
+    'Deep inside it');
   Offsets[fmCity] := Def.Frames[0].X - Def.Sun.X + Def.Sun.TintRamp / 2;
-  Assert.AreEqual(1 - (1 - FarmGlareKeep) / 2, Double(Def.GlareLevel(Offsets)), 0.0001,
+  Assert.AreEqual(1 - (1 - FarmGlareKeep) / 2, Double(Def.GlareLevel(Offsets, RestEye)), 0.0001,
     'Halfway up the ramp');
 end;
 
@@ -810,6 +863,14 @@ const
     + ' "cityShareInTunnel": 0.5, "cityCruise": 3, "cityBrakeZone": 512,'
     + ' "cityLeast": 0.3, "ridgeShareOfCity": 0.35, "ground": 14, "fangs": 20},';
   EyeFloor = '"band": {"texture": "floor-tex", "fadeTop": 16, "top": 238, "bottom": 320}';
+  // And its plane, with its comma
+  EyePlane = '"plane": {"tile": "ground-top", "tileUnits": 448, "gain": 1.25, "levels": 8,'
+    + ' "wideLevels": 2, "far": [1500, 3000], "farShade": 0.45, "mean": [38, 36, 36],'
+    + ' "floor": {"meltLift": [2, 14], "meltPush": [30, 200], "slabDeep": 6,'
+    + ' "slabFeather": 2, "sharpSeconds": 4, "sharpFade": 1.5, "foot": [20, 21, 25]}},';
+  FloorSlabDeep = 6;
+  FloorSharpSeconds = 4;
+  FloorSharpFade = 1.5;
   FloorDeep = 82;
   FloorSlabCount = 14;
   FloorOwnFade = 16;
@@ -822,6 +883,46 @@ const
   // The shares are a Single's
   ShareSlack = 0.00001;
   RideSlack = 0.001;
+  Horizon = 238;
+  FloorFoot = 320;
+  Focal = 1024;
+  // The city's offset where the world stood after a fight of 220 s, the
+  // eye at 2412 along the strip
+  StandCity = 2156;
+  // The eye of the stand 16 s into the flight from there: its ride, its
+  // lift, its push
+  StandRide = -1374.124500353776;
+  StandLift = 5.987421179872983;
+  StandPush = 93.15872323809313;
+  // How near the stand has the layers under that eye
+  StandCityNearness = 1.100080137789078;
+  StandRidgeNearness = 0.36151100213717574;
+  StandGroundNearness = 8.109616148863141;
+  StandFangNearness = 16.942064345096302;
+  // Where it has the place 600, 200 of the domes' base line and the place
+  // 100, 300 of the near ground
+  StandBaseX = 634.4275673994429;
+  StandBaseY = 202.78359788057094;
+  StandGroundX = -15.09288269056782;
+  StandGroundY = 394.2977306109534;
+  // How much of itself the floor's band keeps there, and half a second
+  // earlier (lifted 3.77, pushed 54.26)
+  StandKeep = 0.5109434647847241;
+  EarlierLift = 3.767485695286531;
+  EarlierPush = 54.260257434837584;
+  EarlierKeep = 0.8892684565329658;
+  // How far the band is stretched down from the horizon, where its foot
+  // lies, and where the slabs 0, 2 and 10 start on the screen
+  StandStretch = 1.3353173919517893;
+  StandFoot = 347.4960261400467;
+  StandSlabStarts: array [0..2] of Double = (-1900.6321671631167, -1587.5823621569723,
+    1003.8126144519365);
+  StandSlabs: array [0..2] of Integer = (0, 2, 10);
+  // Where the stand has the point 30, 80, -120 of the main dome under
+  // that eye, and how near
+  StandFrameX = -102.50236041090227;
+  StandFrameY = 179.89136386843649;
+  StandFrameNearness = 1.2628858808093022;
 
 // ACamera - that section with its comma, or none
 function EyeLayout(const ACamera: string): string;
@@ -843,9 +944,29 @@ begin
   Result[fmFangs] := 12000;
 end;
 
+// The eye at its rest, flown ARide along the strip
+function Riding(ARide: Double): TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
+  Result.Flying := True;
+  Result.Ride := ARide;
+end;
+
+function Lifted(ALift, APush: Double): TFarPlaneEye;
+begin
+  Result := Riding(StandRide);
+  Result.Lift := ALift;
+  Result.Push := APush;
+end;
+
+function StandEye: TFarPlaneEye;
+begin
+  Result := Lifted(StandLift, StandPush);
+end;
+
 procedure TFarPlaneEyeTests.Setup;
 begin
-  FDef := ReadFromLayout(EyeLayout(StandCamera));
+  FDef := ReadFromLayout(EyeLayout(StandCamera + EyePlane));
   FFloor := FDef.Layers[0].Band;
 end;
 
@@ -893,7 +1014,7 @@ end;
 
 procedure TFarPlaneEyeTests.TestTheFloorIsCutIntoSlabsToItsFoot;
 begin
-  var Slabs := FDef.FloorSlabs(FFloor, 2156, -100);
+  var Slabs := FDef.FloorSlabs(FFloor, 2156, Riding(-100));
   Assert.AreEqual(FloorSlabCount, Integer(Length(Slabs)), 'As many as the band is deep');
   var Top: Double := Slabs[0].Top;
   Assert.IsTrue(Abs(Top) < ShareSlack, 'From the band''s top');
@@ -912,7 +1033,7 @@ procedure TFarPlaneEyeTests.TestUnriddenEverySlabStandsWhereTheBandStood;
 const
   City = 2156.25;
 begin
-  for var Slab in FDef.FloorSlabs(FFloor, City, 0) do
+  for var Slab in FDef.FloorSlabs(FFloor, City, Riding(0)) do
     Assert.IsTrue(Slab.Offset = City, 'To the bit');
 end;
 
@@ -925,7 +1046,7 @@ const
   ThirdMiddle = 15;
   LastMiddle = 81;
 begin
-  var Slabs := FDef.FloorSlabs(FFloor, City, -EyeHeight);
+  var Slabs := FDef.FloorSlabs(FFloor, City, Riding(-EyeHeight));
   Assert.IsTrue(Abs(Slabs[Third].Offset - (City - ThirdMiddle)) < RideSlack, 'The third');
   Assert.IsTrue(Abs(Slabs[High(Slabs)].Offset - (City - LastMiddle)) < RideSlack,
     'The last, by the middle it would have whole');
@@ -938,7 +1059,7 @@ const
   City = 2156;
   Way = -280;
 begin
-  var Slabs := FDef.FloorSlabs(FFloor, City, Way);
+  var Slabs := FDef.FloorSlabs(FFloor, City, Riding(Way));
   var WithTheRidge: Double := City + Way * RidgeShare;
   Assert.IsTrue(Abs(Slabs[0].Offset - WithTheRidge) < RideSlack, 'The first: as the ridge');
   Assert.IsTrue(Abs(Slabs[1].Offset - WithTheRidge) < RideSlack, 'The second: as the ridge');
@@ -951,7 +1072,7 @@ const
   Way = -280;
 begin
   var Def := ReadFromLayout(EyeLayout(''));
-  var Slabs := Def.FloorSlabs(Def.Layers[0].Band, City, Way);
+  var Slabs := Def.FloorSlabs(Def.Layers[0].Band, City, Riding(Way));
   Assert.AreEqual(1, Integer(Length(Slabs)), 'One');
   var Foot: Double := Slabs[0].Bottom;
   Assert.IsTrue(Abs(Foot - FloorDeep) < ShareSlack, 'All of the band');
@@ -977,6 +1098,162 @@ begin
   Band.FadeTop := 1;
   var Sharp: Double := FDef.FloorFadeAt(Band, FloorSharpSeconds);
   Assert.IsTrue(Abs(Sharp - 1) < ShareSlack, 'As it was');
+end;
+
+procedure TFarPlaneEyeTests.TestAtItsRestTheEyeCarriesNothing;
+const
+  Rests: array [0..3] of Double = (1, RidgeShare, GroundNearness, FangNearness);
+begin
+  var Eye := Riding(StandRide);
+  for var Rest in Rests do
+  begin
+    Assert.IsTrue(FDef.EyeNearness(Eye, Rest) = Rest, 'As near as it stood, to the bit');
+    var Carried := FDef.Carry(Eye, Rest);
+    var Still := Carried.Seen and (Carried.ScaleX = 1) and (Carried.ScaleY = 1) and
+      (Carried.ShiftX = 0) and (Carried.ShiftY = 0);
+    Assert.IsTrue(Still, 'Where it stood');
+  end;
+  var Band := FDef.FloorCarry(Eye);
+  Assert.IsTrue(Band.Seen and (Band.ScaleX = 1) and (Band.ScaleY = 1), 'The floor too');
+  Assert.IsTrue(FDef.FloorKeep(Eye) = 1, 'All of its band kept');
+end;
+
+procedure TFarPlaneEyeTests.TestThePushBringsEveryLayerNearer;
+begin
+  var Eye := StandEye;
+  var City: Double := FDef.EyeNearness(Eye, 1);
+  var Ridge: Double := FDef.EyeNearness(Eye, FDef.MotionNearness(fmRidge));
+  var Ground: Double := FDef.EyeNearness(Eye, FDef.MotionNearness(fmGround));
+  var Fangs: Double := FDef.EyeNearness(Eye, FDef.MotionNearness(fmFangs));
+  Assert.IsTrue(Abs(City - StandCityNearness) < ShareSlack, 'The domes'' base line');
+  Assert.IsTrue(Abs(Ridge - StandRidgeNearness) < ShareSlack, 'The ridge, barely');
+  Assert.IsTrue(Abs(Ground - StandGroundNearness) < ShareSlack, 'The near ground');
+  Assert.IsTrue(Abs(Fangs - StandFangNearness) < ShareSlack, 'The fangs most of all');
+end;
+
+// The fangs stand 153.6 from the eye at rest
+procedure TFarPlaneEyeTests.TestALayerTheEyeHasPassedIsNotSeen;
+const
+  FangDepth = Focal / FangNearness;
+begin
+  var Rest: Double := FangNearness;
+  var Before := Lifted(0, FangDepth - EyeNearest - 1);
+  var Past := Lifted(0, FangDepth - EyeNearest + 1);
+  Assert.IsTrue(FDef.Carry(Before, Rest).Seen, 'A little over the nearest: seen');
+  Assert.IsFalse(FDef.Carry(Past, Rest).Seen, 'Nearer than that: behind the eye');
+  Assert.IsTrue(FDef.EyeNearness(Past, Rest) = 0, 'No nearness to it');
+  Assert.IsTrue(FDef.Carry(Past, 1).Seen, 'The city is still ahead');
+end;
+
+procedure TFarPlaneEyeTests.TestACarriedPlaceStandsWhereTheStandHasIt;
+begin
+  var Eye := StandEye;
+  var Base := FDef.Carry(Eye, 1);
+  var Ground := FDef.Carry(Eye, FDef.MotionNearness(fmGround));
+  Assert.IsTrue(Abs(Base.ScreenX(600) - StandBaseX) < RideSlack, 'The base line, across');
+  Assert.IsTrue(Abs(Base.ScreenY(200) - StandBaseY) < RideSlack, 'The base line, down');
+  Assert.IsTrue(Abs(Ground.ScreenX(100) - StandGroundX) < RideSlack, 'The near ground, across');
+  Assert.IsTrue(Abs(Ground.ScreenY(300) - StandGroundY) < RideSlack, 'The near ground, down');
+  Assert.IsTrue(Abs(Base.RestX(StandBaseX) - 600) < RideSlack, 'And back to its rest');
+end;
+
+procedure TFarPlaneEyeTests.TestTheFloorMeltsAsTheEyeLeavesItsRest;
+begin
+  var Barely: Double := FDef.FloorKeep(Lifted(2, 30));
+  var Earlier: Double := FDef.FloorKeep(Lifted(EarlierLift, EarlierPush));
+  var Later: Double := FDef.FloorKeep(StandEye);
+  var LiftedOff: Double := FDef.FloorKeep(Lifted(14, 0));
+  var PushedOff: Double := FDef.FloorKeep(Lifted(0, 200));
+  Assert.IsTrue(Abs(Barely - 1) < ShareSlack, 'All of it up to the first of each pair');
+  Assert.IsTrue(Abs(Earlier - EarlierKeep) < ShareSlack, 'As the stand has it at 15.5 s');
+  Assert.IsTrue(Abs(Later - StandKeep) < ShareSlack, 'And at 16 s');
+  Assert.IsTrue(Abs(LiftedOff) < ShareSlack, 'None past the lift''s second');
+  Assert.IsTrue(Abs(PushedOff) < ShareSlack, 'None past the push''s second');
+end;
+
+procedure TFarPlaneEyeTests.TestTheFloorGrowsDownFromTheHorizon;
+begin
+  var Band := FDef.FloorCarry(StandEye);
+  Assert.IsTrue(Abs(Band.ScaleX - StandCityNearness) < ShareSlack, 'Across: as the base line');
+  Assert.IsTrue(Abs(Band.ScaleY - StandStretch) < ShareSlack, 'Down: as a plane under the eye');
+  Assert.IsTrue(Abs(Band.ScreenY(Horizon) - Horizon) < RideSlack, 'Its top stays on the horizon');
+  Assert.IsTrue(Abs(Band.ScreenY(FloorFoot) - StandFoot) < RideSlack, 'Its foot as the stand''s');
+end;
+
+procedure TFarPlaneEyeTests.TestUnderTheEyeTheSlabsStartWhereTheStandsDo;
+begin
+  var Eye := StandEye;
+  var Band := FDef.FloorCarry(Eye);
+  var Slabs := FDef.FloorSlabs(FFloor, StandCity, Eye);
+  Assert.AreEqual(FloorSlabCount, Integer(Length(Slabs)), 'As many as at rest');
+  for var i := 0 to High(StandSlabs) do
+  begin
+    var Start: Double := Band.ScreenX(-Slabs[StandSlabs[i]].Offset);
+    Assert.IsTrue(Abs(Start - StandSlabStarts[i]) < RideSlack, 'A slab''s picture');
+  end;
+end;
+
+procedure TFarPlaneEyeTests.TestBehindTheEyeTheFloorHasNoSlabs;
+begin
+  var Eye := Lifted(0, Focal);
+  Assert.AreEqual(0, Integer(Length(FDef.FloorSlabs(FFloor, StandCity, Eye))), 'None');
+  Assert.IsFalse(FDef.FloorCarry(Eye).Seen, 'Its band behind the eye');
+end;
+
+// The dome's left edge stands 24 units left of the sun, half the ramp:
+// pushed half the way to the base line the eye sees it twice as far from
+// the middle of the screen, 16 left of the sun
+procedure TFarPlaneEyeTests.TestThePushedEyeSeesADomeTakeLessOfTheSun;
+const
+  DomeLeft = 468;
+  SunX = 288;
+  HalfRamp = 24;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  var Offsets := Default(TFarPlaneOffsets);
+  Offsets[fmCity] := DomeLeft - (SunX - HalfRamp);
+  var AtRest: Double := Def.SunCover(Offsets, RestEye);
+  var Pushed: Double := Def.SunCover(Offsets, Lifted(0, Focal / 2));
+  var Passed: Double := Def.SunCover(Offsets, Lifted(0, Focal));
+  Assert.IsTrue(Abs(AtRest - 1 / 2) < ShareSlack, 'Half the ramp at rest');
+  Assert.IsTrue(Abs(Pushed - 1 / 3) < ShareSlack, 'A third of it pushed');
+  Assert.IsTrue(Abs(Passed) < ShareSlack, 'None of it once the eye is past');
+end;
+
+procedure TFarPlaneEyeTests.TestTheEyeSeesAFramesPointWhereTheStandHasIt;
+var
+  At: TFramePoint;
+  Screen: TSdlFPoint;
+  Nearness: Single;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  At.X := 30;
+  At.Y := 80;
+  At.Z := -120;
+  var Seen := Def.FramePoint(Def.Frames[0], StandCity + StandRide, StandEye, At, Screen,
+    Nearness);
+  Assert.IsTrue(Seen, 'Before the eye');
+  Assert.IsTrue(Abs(Screen.X - StandFrameX) < RideSlack, 'Across');
+  Assert.IsTrue(Abs(Screen.Y - StandFrameY) < RideSlack, 'Down');
+  Assert.IsTrue(Abs(Nearness - StandFrameNearness) < ShareSlack, 'As near');
+end;
+
+// The dome's near foot stands 768 from the eye at rest
+procedure TFarPlaneEyeTests.TestAFramesPointAtTheEyeIsNotSeen;
+var
+  At: TFramePoint;
+  Screen: TSdlFPoint;
+  Nearness: Single;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  var Dome := Def.Frames[0];
+  At.X := 0;
+  At.Y := 0;
+  At.Z := -Dome.W / 2;
+  Assert.IsTrue(Def.FramePoint(Dome, StandCity, Lifted(0, 500), At, Screen, Nearness),
+    'Still before the eye');
+  Assert.IsFalse(Def.FramePoint(Dome, StandCity, Lifted(0, 700), At, Screen, Nearness),
+    'Too near it: behind');
 end;
 
 // TFarPlaneShadeTests
@@ -1514,6 +1791,102 @@ begin
       ReadFromLayout(DepthLayout(StandCamera + StandFrames
         + StringReplace(FarmSection, '"dome-farm"', '"dome"', [])));
     end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestLevelTwoReadsItsPlane;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Plane := Level.FarPlane.Plane;
+    Assert.IsTrue(Plane.Present, 'A plane under the eye');
+    Assert.IsTrue(Plane.Tile <> '', 'Its tile named');
+    Assert.IsTrue(Plane.Levels >= 1, 'A copy of it at the least');
+    Assert.IsTrue(Plane.Floor.SlabDeep > 0, 'A floor cut into slabs');
+  finally
+    Level.Free;
+  end;
+end;
+
+procedure TFarPlaneReadTests.TestThePlaneIsReadAsWritten;
+begin
+  var Plane := ReadFromLayout(EyeLayout(StandCamera + EyePlane)).Plane;
+  Assert.IsTrue(Plane.Present, 'Read');
+  Assert.AreEqual('ground-top', Plane.Tile, 'Its tile');
+  Assert.AreEqual(8, Plane.Levels, 'Its copies');
+  Assert.AreEqual(2, Plane.WideLevels, 'The copies of the tile''s width');
+  Assert.IsTrue(Abs(Plane.TileUnits - 448) < ShareSlack, 'A turn of the tile');
+  Assert.IsTrue(Abs(Plane.FarFrom - 1500) < ShareSlack, 'Where the far ground begins');
+  Assert.IsTrue(Abs(Plane.FarTill - 3000) < ShareSlack, 'And where the tile is gone');
+  Assert.AreEqual(17, Integer(Plane.FarColor.R), 'The mean at its shade: 38 by 0.45');
+  Assert.IsTrue(Abs(Plane.Floor.MeltLiftFrom - 2) < ShareSlack, 'The melt by the lift begins');
+  Assert.IsTrue(Abs(Plane.Floor.MeltPushTill - 200) < ShareSlack, 'The melt by the push ends');
+  Assert.IsTrue(Abs(Plane.Floor.SlabDeep - FloorSlabDeep) < ShareSlack, 'A slab deep');
+  Assert.IsTrue(Abs(Plane.Floor.SharpFade - FloorSharpFade) < ShareSlack, 'The sharp edge');
+  Assert.AreEqual(25, Integer(Plane.Floor.Foot.B), 'The colour under the foot');
+  Assert.IsFalse(ReadFromLayout(EyeLayout(StandCamera)).Plane.Present,
+    'None without the section');
+end;
+
+procedure TFarPlaneReadTests.TestAPlaneWithoutACameraRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(EyeLayout(EyePlane));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestAFloorThatMeltsOverNothingRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(EyeLayout(StandCamera
+        + StringReplace(EyePlane, '"meltLift": [2, 14]', '"meltLift": [2, 2]', [])));
+    end, EFarPlaneError);
+end;
+
+procedure TFarPlaneReadTests.TestAFloorCutIntoNoSlabsRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromLayout(EyeLayout(StandCamera
+        + StringReplace(EyePlane, '"slabDeep": 6', '"slabDeep": 0', [])));
+    end, EFarPlaneError);
+end;
+
+// A rib with an end nearer the eye than FrameNearestShare of the focal
+// length is dropped whole: the flight is flown only as far as no frame
+// comes that near
+procedure TFarPlaneReadTests.TestTillItIsFlownNoFrameStandsAtTheEye;
+const
+  Step = 0.05;
+begin
+  var Level := TLevel.Create;
+  try
+    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
+    var Plane := Level.FarPlane;
+    var Nearest: Double := Plane.Camera.Focal * FrameNearestShare;
+    var Stand: Double := Plane.CityLength;
+    var Seconds: Double := 0;
+    while Seconds <= Level.Titles.FlightTill do
+    begin
+      var Push := Level.Titles.Path.EyeAt(Seconds, Stand).Push;
+      for var Frame in Plane.Frames do
+      begin
+        var HalfDepth: Double := Frame.W / 2;
+        if Frame.Kind = fkCapsule then
+          HalfDepth := Frame.D / 2;
+        Assert.IsTrue(Plane.Camera.Focal - HalfDepth - Push >= Nearest,
+          'Its nearest rib is whole before the eye');
+      end;
+      Seconds := Seconds + Step;
+    end;
+  finally
+    Level.Free;
+  end;
 end;
 
 initialization

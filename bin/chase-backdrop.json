@@ -26,6 +26,17 @@
     "baseY": 266,
     "focal": 1024
   },
+  "plane": {
+    "about": "The crater floor under the titles' eye once it leaves its rest (docs/mechanics/finale-flight.md, \"The ground for a lifted eye\"). tile - the ground from straight above, its top edge the far one, laid tileUnits a turn from under the eye to the ridge's foot; tools/chase/make_ground.py packs it into the set under gain of its light as levels copies, <tile>-0 on, each squeezed twice the one before in height, and in width too past the first wideLevels of them. From far[0] to far[1] units off the tile gives way to its mean colour at farShade of its light. floor - the painted band over the plane: it melts as the eye lifts (meltLift: all of it kept to the first, none past the second) or pushes (meltPush); under the eye it rides in slabs slabDeep deep, a slab's far edge fading in over slabFeather; its top sharpens to a line sharpFade deep over sharpSeconds of the flight; foot - the mean of its lowest rows, the fill under it. mean and foot are make_ground.py's. The stand and the game play it.",
+    "tile": "ground-top", "tileUnits": 448, "gain": 1.25, "levels": 8, "wideLevels": 2,
+    "far": [1500, 3000], "farShade": 0.45, "mean": [38, 36, 36],
+    "floor": {
+      "meltLift": [2, 14], "meltPush": [30, 200],
+      "slabDeep": 6, "slabFeather": 2,
+      "sharpSeconds": 4, "sharpFade": 1.5,
+      "foot": [20, 21, 25]
+    }
+  },
   "frames": {
     "about": "The dome frames, drawn by code: geodesic half-ellipsoids, x the left edge along the city layer, w the width and h the height at the base line, frequency how finely the icosahedron is cut, rib the thickness of a rib in units. Their far half is drawn behind the buildings, the near half over them. The stand and the game play them.",
     "items": [

@@ -25,6 +25,10 @@
   each with a seed of its own. Its ribs are the farm's when the farm stands
   under it, and every rib carries the frames' dark till the farm lights it.
 
+  The titles' eye pushed toward a frame sees its ribs thicker, lifted it
+  sees the frame sink by more than its lift, and out of its rest it culls
+  no frame by the screen's sides.
+
   How the ribs look - the rim's colour, the smoothing of their edges, the
   glare - has no test here: none of it shows without drawing.
 
@@ -46,10 +50,18 @@ type
     // the screen
     function Centred: Double;
     function ViewOf(const ADef: TFarPlaneDef; AOffset: Double): TFrameView;
+    // The frame as the titles' eye sees it
+    function ViewUnder(const AEye: TFarPlaneEye; AOffset: Double): TFrameView;
   public
     [Setup]
     procedure Setup;
 
+    [Test]
+    procedure TestThePushedEyeSeesTheFrameNearer;
+    [Test]
+    procedure TestTheLiftedEyeSeesTheFrameSink;
+    [Test]
+    procedure TestOutOfItsRestTheEyeCullsNoFrame;
     [Test]
     procedure TestNoFramesShowNothing;
     [Test]
@@ -159,6 +171,12 @@ const
     22849282, 130681901, 184482304, 216005431, 376524091, 470226707, 508778340, 882786705,
     1150238390, 1441563046, 1540583311, 1668231194, 1689678975, 1693691114, 2237285661,
     3185708816, 3533269019, 3546826322, 3798457710, 3937259466, 3983871065, 4132272264);
+
+// The titles' eye at its rest: the chase's own
+function RestEye: TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
+end;
 
 function StandDef: TFarPlaneDef;
 var
@@ -274,10 +292,71 @@ function TDomeFramesTests.ViewOf(const ADef: TFarPlaneDef; AOffset: Double): TFr
 begin
   var Frames := TDomeFrames.Create(ADef);
   try
-    Result := Frames.View(AOffset);
+    Result := Frames.View(AOffset, RestEye);
   finally
     Frames.Free;
   end;
+end;
+
+function TDomeFramesTests.ViewUnder(const AEye: TFarPlaneEye; AOffset: Double): TFrameView;
+begin
+  var Frames := TDomeFrames.Create(FDef);
+  try
+    Result := Frames.View(AOffset, AEye);
+  finally
+    Frames.Free;
+  end;
+end;
+
+function LowestRibEnd(const AView: TFrameView): Single;
+begin
+  Result := 0;
+  for var Rib in AllRibs(AView) do
+  begin
+    if Rib.A.Y > Result then
+      Result := Rib.A.Y;
+    if Rib.B.Y > Result then
+      Result := Rib.B.Y;
+  end;
+end;
+
+procedure TDomeFramesTests.TestThePushedEyeSeesTheFrameNearer;
+const
+  // A quarter of the way to the frame's centre: its nearest rib is still
+  // well before the eye
+  Push = Focal / 4;
+begin
+  var Eye := RestEye;
+  Eye.Push := Push;
+  var AtRest := AllRibs(ViewOf(FDef, Centred));
+  var Pushed := AllRibs(ViewUnder(Eye, Centred));
+  Assert.AreEqual(Integer(Length(AtRest)), Integer(Length(Pushed)), 'Every rib still seen');
+  var RestWidth: Double := 0;
+  var PushedWidth: Double := 0;
+  for var Rib in AtRest do
+    RestWidth := RestWidth + Rib.W;
+  for var Rib in Pushed do
+    PushedWidth := PushedWidth + Rib.W;
+  Assert.IsTrue(PushedWidth > RestWidth, 'Its ribs thicker');
+end;
+
+procedure TDomeFramesTests.TestTheLiftedEyeSeesTheFrameSink;
+const
+  Lift = 20;
+begin
+  var Eye := RestEye;
+  Eye.Lift := Lift;
+  var AtRest: Double := LowestRibEnd(ViewOf(FDef, Centred));
+  var Lifted: Double := LowestRibEnd(ViewUnder(Eye, Centred));
+  Assert.IsTrue(Lifted > AtRest + Lift, 'Its near foot sinks by more than the lift');
+end;
+
+procedure TDomeFramesTests.TestOutOfItsRestTheEyeCullsNoFrame;
+begin
+  var Eye := RestEye;
+  Eye.Push := 1;
+  Assert.AreEqual(0, RibCount(ViewOf(FDef, -2 * ScreenWidth)), 'At rest: off the screen');
+  Assert.IsTrue(RibCount(ViewUnder(Eye, -2 * ScreenWidth)) > 0, 'Out of it: all the same');
 end;
 
 procedure TDomeFramesTests.TestNoFramesShowNothing;
@@ -286,7 +365,7 @@ begin
   var Frames := TDomeFrames.Create(FDef);
   try
     Assert.IsFalse(Frames.Present, 'No frame to show');
-    var View := Frames.View(Centred);
+    var View := Frames.View(Centred, RestEye);
     Assert.AreEqual(0, RibCount(View), 'No ribs');
     Assert.AreEqual(0, Integer(Length(View.Shadows)), 'No shadows');
   finally
@@ -574,7 +653,7 @@ function TCapsuleFrameTests.View: TFrameView;
 begin
   var Frames := TDomeFrames.Create(FDef);
   try
-    Result := Frames.View(Centred);
+    Result := Frames.View(Centred, RestEye);
   finally
     Frames.Free;
   end;

@@ -47,8 +47,9 @@ SpritesPath = os.path.join(Root, 'bin', 'sprites')
 # of the bytes and still over that
 FangShipScale = 0.5
 # The ground from above, for the plane under a lifted eye: checked, its weave
-# taken out, not packed into the set yet
-GroundTopPath = os.path.join(Here, 'ground-top.png')
+# taken out. The set holds the game's copies of it (make_ground.py)
+GroundTopId = 'ground-top'
+GroundTopPath = os.path.join(Here, GroundTopId + '.png')
 
 
 def read_set(APath):
@@ -90,8 +91,12 @@ def main():
   with open(LayoutPath, encoding='utf-8') as Source:
     Layout = Source.read().strip()
   Shipped = {}
+  # The game's squeezed copies of the plane's tile (make_ground.py) stay in
+  # the set: the stand squeezes the tile itself
+  Squeezed = json.loads(Layout).get('plane', {}).get('tile', GroundTopId) + '-'
   if os.path.exists(ChaseSet):
-    Shipped = {Id: data_url(Png, Id in SolidTextures) for Id, Png in read_set(ChaseSet).items()}
+    Shipped = {Id: data_url(Png, Id in SolidTextures) for Id, Png in read_set(ChaseSet).items()
+      if not Id.startswith(Squeezed)}
   for Id, SetPath, Sprite in TitlePictures:
     Shipped[Id] = data_url(read_set(SetPath)[Sprite])
   for Kind in json.loads(Layout).get('fangs', {}).get('kit', []):
@@ -100,7 +105,7 @@ def main():
     Shipped[Sprite] = data_url(scaled(Picture, FangShipScale))
   if os.path.exists(GroundTopPath):
     with open(GroundTopPath, 'rb') as Source:
-      Shipped['ground-top'] = data_url(Source.read(), AJpeg=True)
+      Shipped[GroundTopId] = data_url(Source.read(), AJpeg=True)
   Screen13 = data_url(read_set(BackdropSet)['screen13'], AJpeg=True)
   with open(FinalePath, encoding='utf-8') as Source:
     Finale = Source.read().strip()

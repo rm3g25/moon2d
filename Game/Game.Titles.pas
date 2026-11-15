@@ -12,9 +12,9 @@
   mixer's buffer, and a clock leaning after it would shake the camera. A
   track far off still takes it at once.
 
-  For the time being the flight is flown as far as the eye keeps its rest
-  (TEyePath.RestTill); the frame goes dark over its last second, and there
-  it ends.
+  The flight is flown as far as the titles' file has it flown
+  (TTitlesDef.FlightTill) - for the time being short of the path's end; the
+  frame goes dark over its last second, and there it ends.
 
   Only the clock, its cues, the eye and how much of the card shows: the
   track, the logo, the gate's lamp and the drawing are the caller's. No SDL.
@@ -151,7 +151,7 @@ end;
 procedure TTitles.Arm(const ADef: TTitlesDef);
 begin
   FDef := ADef;
-  FFlightTill := ADef.Path.RestTill;
+  FFlightTill := ADef.FlightTill;
   Clear;
 end;
 

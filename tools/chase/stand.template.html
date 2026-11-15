@@ -477,11 +477,13 @@ function drawFloor(oC) {
 // for they stretch the painted relief. The band's far edge, faded into the
 // ridge for the chase, is drawn sharp in the titles (floorFade): two layers
 // showing through each other read as one sliding on the other.
-const FloorSlabDeep = 6, FloorSlabFeather = 2;
+// The numbers of the plane and of the band over it are the layout's (plane)
+const PlaneDef = Layout.plane, FloorDef = PlaneDef.floor;
+const FloorSlabDeep = FloorDef.slabDeep, FloorSlabFeather = FloorDef.slabFeather;
 // The band is a painting true for the eye's rest alone: lifted or pushed,
 // it gives way to the plane under it (drawPlane) - all of it kept up to the
 // first of each pair, none past the second, units of the camera
-const FloorMeltLift = [2, 14], FloorMeltPush = [30, 200];
+const FloorMeltLift = FloorDef.meltLift, FloorMeltPush = FloorDef.meltPush;
 function floorKeep() {
   const Gone = ([AFrom, ATo], AValue) => smooth((AValue - AFrom) / (ATo - AFrom));
   return (1 - Gone(FloorMeltLift, Eye.Lift)) * (1 - Gone(FloorMeltPush, Eye.Push));
@@ -541,19 +543,19 @@ function drawFloorUnderEye(AStandOffset, ARide) {
 // in motion; past the deepest copy the row goes to the tile's mean colour.
 // At the eye's rest the band and the near hills cover the plane whole, and
 // it is not drawn.
-const Plane = { tile: 'ground-top', tileUnits: 448, gain: 1.25 };
-const PlaneDeepest = 7;
+const Plane = { tile: PlaneDef.tile, tileUnits: PlaneDef.tileUnits, gain: PlaneDef.gain };
+const PlaneDeepest = PlaneDef.levels - 1;
 // A copy keeps its width till it is squeezed four times, then halves with
 // its height: across, a row is foreshortened far less than into the depth
-const PlaneWideLevels = 2;
+const PlaneWideLevels = PlaneDef.wideLevels;
 // From the first of these to the second, units from the eye, the tile gives
 // way to its mean colour too: that far the same dunes come round again and
 // again across the frame, a grid - till a map of the crater takes the far
 // ground (finale-flight.md, "The ground for a lifted eye")
-const PlaneFar = [1500, 3000];
+const PlaneFar = PlaneDef.far;
 // The far ground keeps this much of the mean's light: at its own level it
 // stands lighter than the ridge before it, a bank of fog on an airless Moon
-const PlaneFarShade = 0.45;
+const PlaneFarShade = PlaneDef.farShade;
 const PlaneLevels = [];
 let PlaneMean = null;
 function planeLevels() {
@@ -612,7 +614,7 @@ function drawPlane(AEyeX) {
 // How deep the floor's far edge fades into the ridge, units of the band: the
 // layout's in the chase; in the titles it sharpens over the flight's first
 // seconds to a soft line
-const FloorSharpSec = 4, FloorSharpFade = 1.5;
+const FloorSharpSec = FloorDef.sharpSeconds, FloorSharpFade = FloorDef.sharpFade;
 function floorFade() {
   const Soft = City.band.fadeTop || 0;
   if (!Titles) return Soft;

@@ -5,7 +5,9 @@
   it raises. Titles without a path do not fly; a path is read as written,
   each key placed where the world stood, from there or along the strip; a
   path wants its flight's cue after the flash, two keys at the least and
-  each after the one before it. The file level 2 ships reads, and flies.
+  each after the one before it. A path is flown to its last key, or
+  short of it as far as the file says, and one flown nowhere raises. The
+  file level 2 ships reads, and flies on past the eye's rest.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -46,6 +48,12 @@ type
     [Test]
     procedure TestAKeyNotAfterTheOneBeforeItRaises;
     [Test]
+    procedure TestAPathIsFlownToItsLastKey;
+    [Test]
+    procedure TestAPathMayBeFlownShortOfItsEnd;
+    [Test]
+    procedure TestAPathFlownNowhereRaises;
+    [Test]
     procedure TestTheFileOfLevelTwoFlies;
   end;
 
@@ -80,6 +88,13 @@ end;
 function FlyingTitlesFile(const ACues, AKeys: string): string;
 begin
   Result := '{"cues": {' + ACues + '}, "path": {"keys": [' + AKeys + ']}}';
+end;
+
+// The same, its path flown as far as the second AFlownTill
+function ShortFlownFile(const AFlownTill: string): string;
+begin
+  Result := '{"cues": {' + FlyingCues + '}, "path": {"flownTill": ' + AFlownTill
+    + ', "keys": [' + GoodKeys + ']}}';
 end;
 
 // The titles of a level whose section names AFile in ADir
@@ -234,6 +249,28 @@ begin
     end, ETitlesError);
 end;
 
+procedure TTitlesReadTests.TestAPathIsFlownToItsLastKey;
+begin
+  var Titles := ReadFromText(FlyingTitlesFile(FlyingCues, GoodKeys));
+  Assert.IsTrue(Abs(Titles.FlightTill - 9.5) < Slack, 'The second of its last key');
+end;
+
+procedure TTitlesReadTests.TestAPathMayBeFlownShortOfItsEnd;
+begin
+  var Titles := ReadFromText(ShortFlownFile('6.5'));
+  Assert.IsTrue(Abs(Titles.FlightTill - 6.5) < Slack, 'As far as the file says');
+  Assert.AreEqual(3, Integer(Length(Titles.Path.Keys)), 'All of its keys read');
+end;
+
+procedure TTitlesReadTests.TestAPathFlownNowhereRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(ShortFlownFile('0'));
+    end, ETitlesError);
+end;
+
 procedure TTitlesReadTests.TestTheFileOfLevelTwoFlies;
 begin
   var Titles := ReadNamed(ShippedFile, BinDir);
@@ -242,6 +279,7 @@ begin
     'The camera leaves a logo that has flared');
   Assert.IsTrue(Titles.Path.Keys[0].Placing = epStand, 'From where the world stood');
   Assert.IsTrue(Titles.Path.RestTill > 0, 'It leaves along the strip, at its rest');
+  Assert.IsTrue(Titles.FlightTill > Titles.Path.RestTill, 'Flown on past its rest');
 end;
 
 initialization

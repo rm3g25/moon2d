@@ -14,7 +14,9 @@
   1 / e at its reach and to nothing far off; drawn, it never passes full
   and keeps its hue. The air's mesh covers the dome's near half, corner to
   corner; the apron is lit at the foot and dark toward the eye, and none is
-  drawn while the dome is off the screen.
+  drawn while the dome is off the screen. The titles' eye pushed half the
+  way to a greenhouse sees its source twice as near, twice as far from the
+  middle of the horizon and sunk by its lift; one it has passed is dark.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -66,6 +68,10 @@ type
     procedure TestMirrorMovesTheSource;
     [Test]
     procedure TestGreenhouseFarOffTheScreenIsDark;
+    [Test]
+    procedure TestThePushedEyeSeesTheSourceNearer;
+    [Test]
+    procedure TestAGreenhouseTheEyeHasPassedIsDark;
     [Test]
     procedure TestLightAtTheGlassIsItsColourTimesItsPower;
     [Test]
@@ -128,6 +134,12 @@ const
   Slack = 1E-9;
   // Screen points are Single
   PointSlack = 1E-3;
+
+// The titles' eye at its rest: the chase's own
+function RestEye: TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
+end;
 
 { TFarmGlowTests }
 
@@ -301,14 +313,14 @@ end;
 procedure TFarmLightTests.TestNoFarmLightsNothing;
 begin
   FDef.Farm.Present := False;
-  var View := FarmView(FDef, Offsets(Centred), 0, FHeights);
+  var View := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights);
   Assert.AreEqual(0, Length(View.Sources), 'No source');
 end;
 
 // The first greenhouse of the city is lit at tick 0 (the stand's)
 procedure TFarmLightTests.TestLitGreenhouseIsASourceAtItsGlass;
 begin
-  var View := FarmView(FDef, Offsets(Centred), 0, FHeights);
+  var View := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights);
   Assert.AreEqual(1, Length(View.Sources), 'One source');
   Assert.AreEqual(Double(1), View.Glass[0], Slack, 'Its glass at full');
   var Left := FDef.ElementLeft(FDef.Layers[0], FDef.Layers[0].Elements[0], Offsets(Centred));
@@ -323,23 +335,52 @@ end;
 
 procedure TFarmLightTests.TestMirrorMovesTheSource;
 begin
-  var Plain := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources[0];
+  var Plain := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
   FDef.Layers[0].Elements[0].Mirror := True;
-  var Mirrored := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources[0];
+  var Mirrored := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
   Assert.AreEqual(Plain.X + (1 - 2 * GlassAtU) * HallWidth, Mirrored.X, Slack,
     'Left for right');
 end;
 
 procedure TFarmLightTests.TestGreenhouseFarOffTheScreenIsDark;
 begin
-  var View := FarmView(FDef, Offsets(Centred + FarOff), 0, FHeights);
+  var View := FarmView(FDef, Offsets(Centred + FarOff), RestEye, 0, FHeights);
   Assert.AreEqual(0, Length(View.Sources), 'No source');
   Assert.AreEqual(Double(0), View.Glass[0], Double(0), 'Its glass dark');
 end;
 
+// Pushed half the way to the hall the eye sees it twice as near: its
+// source twice as far from the middle of the horizon, and sunk by the lift
+// times its nearness
+procedure TFarmLightTests.TestThePushedEyeSeesTheSourceNearer;
+const
+  Lift = 10;
+begin
+  var AtRest := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
+  var Eye := RestEye;
+  Eye.Push := Focal / AtRest.Nearness / 2;
+  Eye.Lift := Lift;
+  var Seen := FarmView(FDef, Offsets(Centred), Eye, 0, FHeights).Sources[0];
+  var Middle: Double := ScreenWidth / 2;
+  Assert.IsTrue(Abs(Seen.Nearness - 2 * AtRest.Nearness) < PointSlack, 'Twice as near');
+  Assert.IsTrue(Abs(Seen.X - (Middle + (AtRest.X - Middle) * 2)) < PointSlack,
+    'Twice as far from the middle');
+  Assert.IsTrue(Abs(Seen.Y - (Horizon + (AtRest.Y - Horizon) * 2 + Lift * Seen.Nearness))
+    < PointSlack, 'Twice as far under the horizon, and sunk');
+  Assert.IsTrue(Abs(Seen.Power - AtRest.Power) < Slack, 'As strong as it was');
+end;
+
+procedure TFarmLightTests.TestAGreenhouseTheEyeHasPassedIsDark;
+begin
+  var Eye := RestEye;
+  Eye.Push := Focal * 2;
+  var View := FarmView(FDef, Offsets(Centred), Eye, 0, FHeights);
+  Assert.AreEqual(0, Length(View.Sources), 'No source behind the eye');
+end;
+
 procedure TFarmLightTests.TestLightAtTheGlassIsItsColourTimesItsPower;
 begin
-  var Source := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources[0];
+  var Source := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
   var Light := FarmLight(FDef.Farm, [Source], Source.X, Source.Y);
   Assert.AreEqual(Source.Power, Light.R, Slack, 'Red');
   Assert.AreEqual(105 / 255 * Source.Power, Light.G, Slack, 'Green');
@@ -348,7 +389,7 @@ end;
 
 procedure TFarmLightTests.TestLightFallsToAShareOfOneOverEAtItsReach;
 begin
-  var Source := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources[0];
+  var Source := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
   var Reach := AirReach * Source.Nearness;
   var Light := FarmLight(FDef.Farm, [Source], Source.X + Reach, Source.Y);
   Assert.AreEqual(Source.Power * Exp(-1), Light.R, Slack, 'One over e');
@@ -356,7 +397,7 @@ end;
 
 procedure TFarmLightTests.TestLightFarOffIsNothing;
 begin
-  var Source := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources[0];
+  var Source := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources[0];
   var Light := FarmLight(FDef.Farm, [Source], Source.X + AirReach * 10, Source.Y);
   Assert.AreEqual(Double(0), Light.R + Light.G + Light.B, Double(0), 'Nothing');
 end;
@@ -389,10 +430,10 @@ var
   Nearness: Single;
 begin
   var Dome := FDef.Frames[0];
-  FDef.FramePoint(Dome, Centred, CapsulePoint(Dome, 0, Dome.Rows / 2), Crown, Nearness);
-  FDef.FramePoint(Dome, Centred, CapsulePoint(Dome, 0, Dome.Rows), NearFoot, Nearness);
-  var Sources := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources;
-  var Mesh := FarmAirMesh(FDef, Sources, Centred);
+  FDef.FramePoint(Dome, Centred, RestEye, CapsulePoint(Dome, 0, Dome.Rows / 2), Crown, Nearness);
+  FDef.FramePoint(Dome, Centred, RestEye, CapsulePoint(Dome, 0, Dome.Rows), NearFoot, Nearness);
+  var Sources := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources;
+  var Mesh := FarmAirMesh(FDef, Sources, Centred, RestEye);
   Assert.AreEqual((FarmAirAlong + 1) * (FarmAirRound + 1), Length(Mesh.Corners), 'Corners');
   Assert.AreEqual(FarmAirAlong * FarmAirRound * 6, Length(Mesh.Indices), 'Two triangles a cell');
   var Lit := False;
@@ -407,8 +448,8 @@ end;
 
 procedure TFarmLightTests.TestApronLitAtTheFootDarkTowardTheEye;
 begin
-  var Sources := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources;
-  var Mesh := FarmApronMesh(FDef, Sources, Centred);
+  var Sources := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources;
+  var Mesh := FarmApronMesh(FDef, Sources, Centred, RestEye);
   Assert.IsTrue(Length(Mesh.Corners) > 0, 'Some of it');
   var Lit := False;
   for var Quad := 0 to Length(Mesh.Corners) div 4 - 1 do
@@ -425,8 +466,8 @@ end;
 
 procedure TFarmLightTests.TestApronNoneWithTheDomeOffTheScreen;
 begin
-  var Sources := FarmView(FDef, Offsets(Centred), 0, FHeights).Sources;
-  var Mesh := FarmApronMesh(FDef, Sources, Centred + FarOff);
+  var Sources := FarmView(FDef, Offsets(Centred), RestEye, 0, FHeights).Sources;
+  var Mesh := FarmApronMesh(FDef, Sources, Centred + FarOff, RestEye);
   Assert.AreEqual(0, Length(Mesh.Indices), 'Nothing drawn');
 end;
 
