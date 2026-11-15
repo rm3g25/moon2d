@@ -7,8 +7,9 @@
   The header line names who speaks. Today it is the channel itself, or
   the voice a level gives a transmission; voiced lines later keep the
   same box. Where the box stands is the caller's word: under the heart
-  monitor, or along the bottom edge on a screen where the hero comes
-  in at the top and the monitor corner would sit on him.
+  monitor, along the bottom edge on a screen where the hero comes in at
+  the top and the monitor corner would sit on him, or at a spot of its
+  own - a piece of the room no one plays in - as wide as that piece.
 
   One text at a time: a newcomer waits in line until the text in the box
   has been typed and read, then takes the box in place of its fade. A
@@ -31,13 +32,22 @@ uses
 
 type
   TTerminalPhase = (tpOff, tpTyping, tpHolding, tpFading);
-  TTerminalPlace = (tlTop, tlBottom);
+  TTerminalPlace = (tlTop, tlBottom, tlAt);
+
+  // Where the box stands and how wide it is. tlAt holds its top-left
+  // corner at X, Y, game units; the edges keep the box of the channel.
+  TTerminalBox = record
+    Place: TTerminalPlace;
+    X, Y, Width: Single;
+    class function OnEdge(APlace: TTerminalPlace): TTerminalBox; static;
+    class function At(AX, AY, AWidth: Single): TTerminalBox; static;
+  end;
 
   // A text for the box, and the ticket its caller holds
   TTerminalText = record
     Header: string;
     Lines: TArray<string>;
-    Place: TTerminalPlace;
+    Box: TTerminalBox;
     Ticket: Integer;
   end;
 
@@ -48,7 +58,7 @@ type
     FTypewriter: TTypewriter;
     FHeader: string;
     FPhase: TTerminalPhase;
-    FPlace: TTerminalPlace;
+    FBox: TTerminalBox;
     FPhaseTicksLeft: Integer;
     FKeyStruck: Boolean;
     FWaiting: TArray<TTerminalText>;
@@ -61,6 +71,7 @@ type
     procedure EnterPhase(APhase: TTerminalPhase; ATicks: Integer);
     procedure CountDown(ANextPhase: TTerminalPhase; ANextTicks: Integer);
     function BoxHeight: Single;
+    function BoxX: Single;
     function BoxY: Single;
     function TextTop: Single;
     function Opacity: Single;
@@ -73,7 +84,7 @@ type
     destructor Destroy; override;
     // The text's ticket, 0 for a text with no words, which is ignored
     function Start(const AHeader, AText: string;
-      APlace: TTerminalPlace = tlTop): Integer;
+      const ABox: TTerminalBox): Integer;
     // Drops the box and the line, and forgets every ticket given so far
     procedure Clear;
     // The text of the ticket has been typed to its end
@@ -85,7 +96,7 @@ type
     function Bottom: Single;
     property KeyStruck: Boolean read FKeyStruck;
     // Where the box stands now; the ticker steps aside only for the top
-    property Place: TTerminalPlace read FPlace;
+    property Place: TTerminalPlace read FBox.Place;
   end;
 
 implementation
@@ -94,14 +105,13 @@ uses
   System.SysUtils, Game.Space;
 
 const
-  BoxX = PanelMargin;
+  EdgeBoxX = PanelMargin;
   TopBoxY = PanelY + PanelH + 4;
   BottomGap = PanelMargin;
-  BoxW = 360;
+  EdgeBoxW = 360;
   Padding = 6;
   LineStep = SmallLineStep + 3;
   HeaderGap = 3;
-  MaxLineChars = Trunc((BoxW - 2 * Padding) / SmallAdvance);
 
   // Reading time on top of the typing: a second to find the box, then a
   // tick per letter
@@ -136,6 +146,27 @@ begin
     Result := Result + [Line];
 end;
 
+function LineCharsOf(AWidth: Single): Integer;
+begin
+  Result := Trunc((AWidth - 2 * Padding) / SmallAdvance);
+end;
+
+class function TTerminalBox.OnEdge(APlace: TTerminalPlace): TTerminalBox;
+begin
+  Result := Default(TTerminalBox);
+  Result.Place := APlace;
+  Result.X := EdgeBoxX;
+  Result.Width := EdgeBoxW;
+end;
+
+class function TTerminalBox.At(AX, AY, AWidth: Single): TTerminalBox;
+begin
+  Result.Place := tlAt;
+  Result.X := AX;
+  Result.Y := AY;
+  Result.Width := AWidth;
+end;
+
 constructor THudTerminal.Create(const AFont: TMoonFont;
   ARenderer: PSdlRenderer);
 begin
@@ -154,16 +185,16 @@ begin
 end;
 
 function THudTerminal.Start(const AHeader, AText: string;
-  APlace: TTerminalPlace): Integer;
+  const ABox: TTerminalBox): Integer;
 begin
-  var Lines := WrapWords(AText, MaxLineChars);
+  var Lines := WrapWords(AText, LineCharsOf(ABox.Width));
   if Lines = nil then
     Exit(0);
   Inc(FLastTicket);
   var Text: TTerminalText;
   Text.Header := AHeader;
   Text.Lines := Lines;
-  Text.Place := APlace;
+  Text.Box := ABox;
   Text.Ticket := FLastTicket;
   Result := FLastTicket;
 
@@ -176,7 +207,7 @@ end;
 procedure THudTerminal.Show(const AText: TTerminalText);
 begin
   FHeader := AText.Header;
-  FPlace := AText.Place;
+  FBox := AText.Box;
   FTicket := AText.Ticket;
   FTypewriter.Start(AText.Lines);
   EnterPhase(tpTyping, 0);
@@ -260,14 +291,23 @@ begin
     Length(FTypewriter.Lines) * LineStep - (LineStep - SmallGlyphHeight);
 end;
 
+function THudTerminal.BoxX: Single;
+begin
+  Result := FBox.X;
+end;
+
 // The bottom box grows upward from the edge, so its top follows the
 // number of lines it holds
 function THudTerminal.BoxY: Single;
 begin
-  if FPlace = tlBottom then
-    Result := FrameHeight - BottomGap - BoxHeight
+  case FBox.Place of
+    tlBottom:
+      Result := FrameHeight - BottomGap - BoxHeight;
+    tlAt:
+      Result := FBox.Y;
   else
     Result := TopBoxY;
+  end;
 end;
 
 function THudTerminal.TextTop: Single;
@@ -312,8 +352,10 @@ end;
 
 procedure THudTerminal.DrawBox(AOpacity: Single);
 begin
-  FBrush.Fill(BoxX, BoxY, BoxW, BoxHeight, PanelColor, BoxAlpha * AOpacity);
-  FBrush.Frame(BoxX, BoxY, BoxW, BoxHeight, CalmColor, FrameAlpha * AOpacity);
+  FBrush.Fill(BoxX, BoxY, FBox.Width, BoxHeight, PanelColor,
+    BoxAlpha * AOpacity);
+  FBrush.Frame(BoxX, BoxY, FBox.Width, BoxHeight, CalmColor,
+    FrameAlpha * AOpacity);
 end;
 
 procedure THudTerminal.DrawCursor(AOpacity: Single);

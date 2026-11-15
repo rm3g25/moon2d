@@ -116,6 +116,13 @@ type
     EverySeconds: Single;
   end;
 
+  // A hint box held at a spot of the screen: its top-left corner and its
+  // width, game units. Its height is the lines' - it grows downward.
+  THintSpot = record
+    Held: Boolean;
+    X, Y, Width: Single;
+  end;
+
   TEventAction = record
     Kind: TEventActionKind;
     Text: TLocalizedText; // the message kinds; localized like the triggers
@@ -206,12 +213,14 @@ type
     // the hunter's medkits come down onto; none - the road).
     // eaHint: Header names who speaks, empty for the channel itself;
     // AtBottom puts the box on the bottom edge instead of under the
-    // heart monitor, for a screen where the hero comes in at the top.
+    // heart monitor, for a screen where the hero comes in at the top;
+    // Spot holds it anywhere else, on a piece of the room no one plays in.
     // JSON: "header" (localized like "text"), "place" ("top" by
-    // default, or "bottom").
+    // default, "bottom", or {"x", "y", "width"} for a spot).
     Target: string;
     Header: TLocalizedText;
     AtBottom: Boolean;
+    Spot: THintSpot;
     Level: Single;
     Angle: Single;
     Ticks: Integer;
@@ -315,8 +324,10 @@ resourcestring
   SEventGroupNoTarget = 'Level "%s": event "%s": %s names no target';
   SEventBadAction = 'Level "%s": event "%s": unknown action "%s"';
   SEventNoActions = 'Level "%s": event "%s" has no actions';
-  SEventBadPlace = 'Level "%s": event "%s": a hint takes "place" top or '
-    + 'bottom, not "%s"';
+  SEventBadPlace = 'Level "%s": event "%s": a hint takes "place" top, '
+    + 'bottom or a spot, not "%s"';
+  SEventBadSpot = 'Level "%s": event "%s": a hint''s spot x %g, y %g, '
+    + 'width %g leaves the screen';
   SEventBadProgram = 'Level "%s": event "%s": unknown shelf program "%s"';
   SEventNoProgram = 'Level "%s": event "%s": shelvesProgram names no program';
   SEventBadOrder = 'Level "%s": event "%s": unknown bank order "%s"';
@@ -672,10 +683,30 @@ begin
     Format('spawn of event "%s"', [AEventId]));
 end;
 
+function ReadHintSpot(const AObj: TJSONObject;
+  const ALevelId, AEventId: string): THintSpot;
+begin
+  Result.Held := True;
+  Result.X := AObj.GetValue<Double>('x', -1);
+  Result.Y := AObj.GetValue<Double>('y', -1);
+  Result.Width := AObj.GetValue<Double>('width', 0);
+  var Inside := (Result.X >= 0) and (Result.Y >= 0) and (Result.Width > 0) and
+    (Result.X + Result.Width <= ScreenWidth) and (Result.Y < ScreenHeight);
+  if not Inside then
+    raise ELevelEventError.CreateFmt(SEventBadSpot,
+      [ALevelId, AEventId, Result.X, Result.Y, Result.Width]);
+end;
+
 procedure ReadHint(const AObj: TJSONObject; const ALevelId, AEventId: string;
   var AAction: TEventAction);
 begin
   AAction.Header := ReadLocalizedText(AObj, 'header');
+  var PlaceValue := AObj.Values['place'];
+  if PlaceValue is TJSONObject then
+  begin
+    AAction.Spot := ReadHintSpot(TJSONObject(PlaceValue), ALevelId, AEventId);
+    Exit;
+  end;
   var Place := AObj.GetValue<string>('place', 'top');
   if SameText(Place, 'bottom') then
     AAction.AtBottom := True

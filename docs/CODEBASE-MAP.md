@@ -2382,7 +2382,11 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
     and `AtBottom` (JSON `"place": "bottom"`, `"top"` by default - the
     comm box on the bottom edge for a screen where the hero comes in at
     the top; `SEventBadPlace` for another word; `ReadHint`; added for the
-    transmission of level 2's screen 7, between 3.0.52 and 3.0.53);
+    transmission of level 2's screen 7, between 3.0.52 and 3.0.53) or
+    `Spot` (**`THintSpot`**: `Held`, `X`, `Y`, `Width` - JSON `"place":
+    {"x", "y", "width"}`, game units, the box's top-left corner; it must
+    stay on the screen, `SEventBadSpot`; `ReadHintSpot`; after 3.0.135,
+    for the same transmission, now on the rock low on the left);
   - music: `FileName`, `FadeSeconds` (3.0.63, JSON `fade`, 0 by
     default - at once; `SEventBadFade` below 0: the track comes in from
     silence), `FadeOutSeconds` (3.0.74, JSON `fadeOut`, 0 by default - the
@@ -4641,10 +4645,14 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   (45 per line - the small font is monospaced), typed by its own `TTypewriter`,
   held for 1 s plus a tick per letter, then faded in 1 s.
   `TTerminalPhase` = (`tpOff`, `tpTyping`, `tpHolding`, `tpFading`);
-  `TTerminalPlace` = (`tlTop`, `tlBottom`) - under the heart monitor, or
+  `TTerminalPlace` = (`tlTop`, `tlBottom`, `tlAt`) - under the heart monitor,
   along the bottom edge (a gap of `PanelMargin`, the box growing upward
   from it: `BoxY`) on a screen where the hero comes in at the top and the
-  monitor corner would sit on him. `Start` (header, text, place; a
+  monitor corner would sit on him, or at a spot. **`TTerminalBox`** (record:
+  `Place`, `X`, `Y`, `Width`; `OnEdge`, `At`) - the box the text gets; the
+  edges are 360 wide, a spot is as wide as it says and the lines wrap to
+  that width (`LineCharsOf`), growing downward from `Y`. `Start` (header,
+  text, box; a
   newcomer replaces the current and takes its place with it), `Place`, `Clear`, `Tick`, `Draw`,
   `Visible`, `Bottom` (the ticker lane reads it), `KeyStruck` (every second
   typed letter that is not a space - the terminal makes no sound itself).

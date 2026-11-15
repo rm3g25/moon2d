@@ -4,7 +4,8 @@
   cell it waits on, a cell missing or under 1, a cell off the grid. And of
   the action respawn: the cell it moves the checkpoint to, held to the
   rules of a respawn point - on the grid, out of a wall, over a floor. And
-  of the action music: its fade-out, none by default, never below 0.
+  of the action music: its fade-out, none by default, never below 0. And
+  of the action hint: the spot its box is held at, kept on the screen.
 
   The parser is tried over a root of JSON with the events of the test and
   nothing else; the grid is the load's, tried through a one-screen room
@@ -49,6 +50,12 @@ type
     procedure TestMusicWithoutFadeOutCutsAtOnce;
     [Test]
     procedure TestMusicFadeOutBelowZeroRaises;
+    [Test]
+    procedure TestHintReadsItsSpot;
+    [Test]
+    procedure TestHintOnAnEdgeHoldsNoSpot;
+    [Test]
+    procedure TestHintSpotOffTheScreenRaises;
   end;
 
 implementation
@@ -70,6 +77,9 @@ const
   // One event that changes the track; the format puts its fades
   MusicJson = '"events":[{"id":"boss","screen":1,"when":"enterScreen",' +
     '"then":[{"action":"music","file":"boss.ogg"%s}]}]';
+  // One event that speaks; the format puts its place
+  HintJson = '"events":[{"id":"warn","screen":1,"when":"enterScreen",' +
+    '"then":[{"action":"hint","text":"!"%s}]}]';
   PitCol = 5;
 
 function EventsOf(const ASection: string): TArray<TLevelEvent>;
@@ -110,6 +120,16 @@ begin
     begin
       LevelFromRows(ARows, Format(RespawnJson, [ACell])).Free;
     end, ELevelError, AWhat);
+end;
+
+// By value, not const: an anonymous method captures it
+procedure ExpectHintParseRaises(APlace, AWhat: string);
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      EventsOf(Format(HintJson, [APlace]));
+    end, ELevelEventError, AWhat);
 end;
 
 function RoomWithPit: TArray<string>;
@@ -215,6 +235,40 @@ begin
     begin
       EventsOf(Format(MusicJson, [',"fadeOut":-1']));
     end, ELevelEventError, 'A fade-out below 0');
+end;
+
+procedure TLevelEventsTests.TestHintReadsItsSpot;
+begin
+  var Events := EventsOf(Format(HintJson,
+    [',"place":{"x":392,"y":126,"width":120}']));
+  var Spot := Events[0].Actions[0].Spot;
+  Assert.IsTrue(Spot.Held, 'An object for a place holds the box at a spot');
+  Assert.AreEqual(392.0, Spot.X, 0.0001, 'x');
+  Assert.AreEqual(126.0, Spot.Y, 0.0001, 'y');
+  Assert.AreEqual(120.0, Spot.Width, 0.0001, 'width');
+  Assert.IsFalse(Events[0].Actions[0].AtBottom, 'A spot is not the bottom');
+end;
+
+procedure TLevelEventsTests.TestHintOnAnEdgeHoldsNoSpot;
+begin
+  var Events := EventsOf(Format(HintJson, [',"place":"bottom"']));
+  Assert.IsTrue(Events[0].Actions[0].AtBottom, 'bottom');
+  Assert.IsFalse(Events[0].Actions[0].Spot.Held, 'An edge is not a spot');
+  Events := EventsOf(Format(HintJson, ['']));
+  Assert.IsFalse(Events[0].Actions[0].AtBottom, 'No place - the top');
+  Assert.IsFalse(Events[0].Actions[0].Spot.Held, 'No place - no spot');
+end;
+
+procedure TLevelEventsTests.TestHintSpotOffTheScreenRaises;
+begin
+  ExpectHintParseRaises(',"place":{"y":126,"width":120}', 'No x');
+  ExpectHintParseRaises(',"place":{"x":392,"width":120}', 'No y');
+  ExpectHintParseRaises(',"place":{"x":392,"y":126}', 'No width');
+  ExpectHintParseRaises(',"place":{"x":400,"y":126,"width":120}',
+    'Past the right edge');
+  ExpectHintParseRaises(',"place":{"x":392,"y":384,"width":120}',
+    'Below the bottom edge');
+  ExpectHintParseRaises(',"place":"middle"', 'An unknown word');
 end;
 
 initialization

@@ -293,6 +293,17 @@ begin
   end;
 end;
 
+function HintBoxOf(const AAction: TEventAction): TTerminalBox;
+begin
+  var Spot := AAction.Spot;
+  if Spot.Held then
+    Result := TTerminalBox.At(Spot.X, Spot.Y, Spot.Width)
+  else if AAction.AtBottom then
+    Result := TTerminalBox.OnEdge(tlBottom)
+  else
+    Result := TTerminalBox.OnEdge(tlTop);
+end;
+
 // A hint speaks in the voice its event gives it, the channel's own when
 // the event gives none
 procedure TEventDirector.PlayHint(AIndex: Integer; const AAction: TEventAction);
@@ -300,11 +311,8 @@ begin
   var Header := AAction.Header.Current;
   if Header = '' then
     Header := Tr(STerminalHeader);
-  var Place := tlTop;
-  if AAction.AtBottom then
-    Place := tlBottom;
   FHintTickets[AIndex] := FMessages.StartTerminal(Header, AAction.Text.Current,
-    Place);
+    HintBoxOf(AAction));
 end;
 
 procedure TEventDirector.Play(AIndex: Integer; const AField: TMonsterField);

@@ -130,3 +130,19 @@ ticker. The hint that waits for the fight to end is part of it.
 #### Тег
 Коммиты серии: Type hints and briefings in a terminal (3.0.8); Update
 the docs for 3.0.8. **3.0.8** - тег на последнем.
+
+### Session: the hint box at a spot (2026-11-15, after 3.0.135)
+
+The transmission of level 2's screen 7 stood on the bottom edge and lay
+over the room the hero plays in. A hint's box may now stand anywhere:
+`"place": {"x": 6, "y": 252, "width": 148}` beside `"top"` and
+`"bottom"` - game units, the top-left corner and the width; the lines wrap
+to the width and the box grows downward. The parser keeps the spot on the
+screen (`SEventBadSpot`). The ticker steps aside only for the top box, as
+before.
+
+- Screen 7: the box stands on the rock low on the left (x 5..154,
+  y 246..379 in the picture), where the hero never goes: 17 glyphs a
+  line, 8 lines in either language, 122 units tall, from 252 to 374.
+- Scenes keep "top" and "bottom" only; a spot for a scene's line is the
+  same reader away when one needs it.

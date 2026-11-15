@@ -98,11 +98,13 @@ type
     procedure ShowBig(const AText: string; ATicks: Integer;
       const ANote: string = '');
     // A long text for the comm terminal under AHeader; it waits in line
-    // while another is typed and read. '' is ignored. APlace says where
-    // the box stands. The result is the text's ticket for TerminalTyped,
-    // 0 for an ignored one.
+    // while another is typed and read. '' is ignored. APlace (an edge) or
+    // ABox says where the box stands. The result is the text's ticket for
+    // TerminalTyped, 0 for an ignored one.
     function StartTerminal(const AHeader, AText: string;
-      APlace: TTerminalPlace = tlTop): Integer;
+      APlace: TTerminalPlace = tlTop): Integer; overload;
+    function StartTerminal(const AHeader, AText: string;
+      const ABox: TTerminalBox): Integer; overload;
     // The text of the ticket has been typed to its end
     function TerminalTyped(ATicket: Integer): Boolean;
     // True on a tick the terminal typed a clicking key - the game owns
@@ -213,7 +215,13 @@ end;
 function TMessageBoard.StartTerminal(const AHeader, AText: string;
   APlace: TTerminalPlace): Integer;
 begin
-  Result := FTerminal.Start(AHeader, AText, APlace);
+  Result := StartTerminal(AHeader, AText, TTerminalBox.OnEdge(APlace));
+end;
+
+function TMessageBoard.StartTerminal(const AHeader, AText: string;
+  const ABox: TTerminalBox): Integer;
+begin
+  Result := FTerminal.Start(AHeader, AText, ABox);
 end;
 
 function TMessageBoard.TerminalTyped(ATicket: Integer): Boolean;
