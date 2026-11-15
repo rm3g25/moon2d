@@ -8,8 +8,11 @@ promise and the credits go to the stars, "Decided 2026-11-15, later"). Before it
 gate (`finale.md`, "The gate as built") -, 3.0.129 - the
 farm under a long dome at the end of the city's strip (`chase-backdrop.md`,
 "The farm") - and 3.0.128 - the end of the fight in the air
-(`finale.md`, "Stage 19 as built"). Next: the spike of the target texture,
-then the flight to the stars in the game (`finale-flight.md`, "Decided
+(`finale.md`, "Stage 19 as built"). After it, with no version: the spike
+of the target texture - the frame of the play through a texture comes to
+the window as drawn straight, banked or not (`Render.Target`;
+`finale-flight.md`, "The spike of the target texture"). Next: the flight
+to the stars in the game, T1 first (`finale-flight.md`, "Decided
 2026-11-15: the game"). In
 work: arena 3, its folder `docs/mechanics/arena-3/` (the index
 `README.md`; the air fight `ram-air.md`);
@@ -53,6 +56,7 @@ about responsibility, not paths.
 | Events.Director | TEventDirector - runs events on the live game: Tick(screen, field) checks the conditions of the screen's unfired events, counts down the delay, plays the actions once; ReArm(screen) on a restart; music through the game's ChangeMusic callback. Born with the level; the actions intensity and sun go to the level's dynamics (TDynamicObjects), ReArm rolls back to the file values of the intensity target; action scene is a StartScene signal to the scene director (3.0.62); since 3.0.70 the Energy callback (TEnergyCue); since 3.0.71 the Respawn callback (TRespawnCue, the game's MoveCheckpoint) |
 | Render.Tiles | Backdrop + tiles cropped 64 into a cell; DrawBackground/DrawTiles are public - the shake moves them apart |
 | Render.Shake | Screen shake: one trauma meter per game, three offset channels (world/hero/monsters). Render only, the logic does not see the offset |
+| Render.Target | The frame through a target texture (after 3.0.131): TFrameTarget - Open(bank, background), the drawing in the frame's units at the window's scale times the bank's growth (BankCover: 1.293 at 14 degrees of 4:3); ShiftLayers - a layer moved by whole pixels; Close - the texture on the window a texel to a pixel, turned about the frame's middle. Only the debug keyboard (Z, C, Q) uses it yet |
 | Render.Brush | The brush of panels drawn with primitives (HUD, difficulty cells in the menu), plus colour and chance (TRgb, Mix, TXorShift) for Render.Glow, Render.Globe, Render.Puff, Effects.Debris, the dynamics, the blasts, the boss disc and the menu sky: Fill/Glow/Frame/3x5 digits through SDL_RenderFillRectF, the health row cells (FullCell/EmptyCell/BonusCell), palette + HealthColor, the panel geometry 118x32, its own xorshift. Before the folder layout it was Hud.Draw; the class is still THudBrush; digits at any pixel size (DrawNumber/NumberWidth with APixel, 3.0.70 - the number in the charge disc) |
 | Hud.Vitals | Health: THudVitals - the heart monitor (a row of 5 norm cells + the light-green bonus past the divider, the pulse by health); a wing on the right inside the panel frame (Wing, 3.0.70) - the form charge slot, drawn by Hud.Energy |
 | Hud.Charge | Points: THudCharge - the bonus charge up to 50, the badge of a waiting reward, the streak row of 10 |

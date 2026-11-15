@@ -289,7 +289,7 @@ side: `Render.Brush` -> `Render.Glow` -> `Menu.Starfield` / `Menu.Embers` ->
 
 ## Game units
 
-### `Core/Sdl2.Core.pas` (~420 lines)
+### `Core/Sdl2.Core.pas` (~445 lines)
 Hand-written SDL2 bindings. No classes - constants, records, `external`
 declarations against `SDL2.dll`.
 - **Constants**: init flags, window flags (incl. `SdlWindowHidden` for the
@@ -329,6 +329,13 @@ declarations against `SDL2.dll`.
 - 3.0.90: `SDL_RenderGetScale` - the pixels of the window to a logical
   unit, as the logical size has set them; the dome frames fade their
   edges over one pixel by it.
+- After 3.0.131, for the frame's target (`Render.Target`):
+  `SDL_RenderSetScale` (in the stead of the scale the logical size has
+  set, till the logical size is set again or the target changes),
+  `SDL_RenderSetViewport` and `SDL_RenderGetViewport` - a viewport is
+  told in the units of the scale, in pixels only at a scale of 1;
+  `SdlPixelFormatArgb8888` - the one 32-bit format the Direct3D 11
+  backend holds as it is.
 
 ### `Core/Sprites.Sets.pas` (~445 lines)
 The `.mset` sprite set container: a JSON manifest followed by every image
@@ -775,6 +782,38 @@ offset per layer. Draw-side only: the world's arithmetic never sees it.
   bonuses in `Game.Moon`, the suit going on in `Game.Henshin`), not
   here - what shakes how much is game-flow policy; this unit is the
   mechanism.
+
+### `Core/Render.Target.pas` (~230 lines, after 3.0.131)
+A frame drawn into a target texture and put on the window turned: the
+bank of the titles' flight (`finale-flight.md`, "The spike of the target
+texture"). Knows nothing of what is drawn.
+- **`BankCover(degrees, frameWidth, frameHeight)`** - how many times a
+  banked frame is grown to cover its own unbanked place: the cosine of
+  the bank plus the longer side over the shorter times the sine; 1
+  unbanked, 1.293 at 14 degrees of 4:3. The stand's `turnFrame`.
+- **`TFrameTarget`** - `Create(renderer, frameWidth, frameHeight,
+  maxBankDegrees)`: the frame in units and the steepest bank the texture
+  has room for. **`Open(bankDegrees, background)`** - from here to
+  `Close` the drawing lands in the texture, in the frame's units, at the
+  window's scale times the bank's growth (a steeper bank than the room
+  is held to it); False - no texture, nothing changed, the frame is the
+  caller's to draw straight. **`ShiftLayers(unitsX, unitsY)`** - what is
+  drawn next lands so far from the frame's place, rounded to whole
+  pixels, cut at the frame's edge moved with it; 0, 0 puts it back.
+  **`Close`** - the window is on the receiving end again as it was, the
+  texture copied to it a texel to a pixel, turned about the frame's
+  middle (nearest unbanked - the picture drawn straight, to the pixel;
+  linear banked). `Rebuilt` (the last `Open` made the texture anew),
+  `TextureSize`, `Cover` (the growth of the last `Open`).
+- The texture: ARGB8888, opaque (blend none), the frame at the steepest
+  bank and `MarginPixels` 2 round it, cleared whole every `Open`. Its
+  size is the window's scale's (`SDL_RenderGetScale`), checked every
+  `Open`: Alt+Enter makes it anew. A size the card refuses is kept as
+  asked for, so it is not asked for every frame.
+- The viewport is set at a scale of 1 (`PlaceLayers`) and the scale put
+  back: SDL tells a viewport in the scale's units.
+- What goes to the window after `Close` - the HUD - stands level.
+- Tests: `Tests.Render.Target` (the growth; the rest is the card's).
 
 ### `Core/Render.Font.pas` (~405 lines)
 Bitmap font: a square atlas holding a 16x16 glyph grid (CP1251 layout). The
@@ -7329,7 +7368,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
   hero's); ticked, struck, drawn, carried through a door, taken by
   `TakesAt`, cleared and collapsed with the others.
 
-### `Game/Game.Moon.pas` (~5810 lines)
+### `Game/Game.Moon.pas` (~7100 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -7793,8 +7832,9 @@ so a unit (and later a test) can reach it. `interface` holds
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
     through a pad).
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
-    `DrawAtlasOverlay` - the four doors the debug keyboard uses, and nothing
-    else. All four exist in every build; their bodies compile away, so no
+    `DrawAtlasOverlay`, `DebugDrawThroughTarget` - the five doors the debug
+    keyboard uses, and nothing
+    else. All five exist in every build; their bodies compile away, so no
     caller needs an ifdef. Behind them: `CastAura` (G: the aura straight
     onto the hero, the slot untouched), `FOrbs.PourRain` (H: the fire rain over
     the hero's screen, the slot untouched), `CureHero` (I, `ScancodeI`,
@@ -8194,6 +8234,38 @@ so a unit (and later a test) can reach it. `interface` holds
   drawn once the landing has handed over. Debug: the key X is
   **`DebugNextTitlesCue`** - the clock and the track
   (`FAudio.SeekMusic`) to two seconds before the next cue.
+
+- After 3.0.131, **the spike of the target texture** (`finale-flight.md`,
+  "The spike of the target texture"). **`Render`** clears the frame
+  (**`ClearFrame`**, `FrameBackground`) and its playing branch is three
+  methods in the order the layers had: **`DrawFarLayers`** (the
+  backdrop, the haze of `dlBackdrop`, the sky's layer, the fangs),
+  **`DrawPlayLayers`** (from `dlAloft` to the titles) and **`DrawHud`**
+  (the glass of the orbs, the scenes' shade, the marks, the throw's
+  hint, the crosshair, the panels, the news, the countdown).
+  **`HeroLiftAt`** - the deck's lift and the throw's sway, for the hero
+  and for the hint. **`FFrameTarget`** (`TFrameTarget`) - made by the
+  debug keyboard only, freed with the game. **`DebugDrawThroughTarget`**
+  (the fifth door, called by `Render` before the layers): True - it drew
+  the far and the play layers through the target. Behind it, in
+  `FDebugFrame` (`TDebugFrame`, `TDebugFrameWay` `fwDirect`, `fwTarget`,
+  `fwBanked`, `fwSwinging`): Z - `DebugCycleFrameWay`, the bank
+  `DebugBank` (`DebugBankDegrees` 14, `DebugSwingSeconds` 6); C -
+  `DebugToggleCastOff`, the play layer moved by `DebugCastOff`
+  (`DebugCastOffSeconds` 6.34, `DebugCastOffHoldSeconds` 1.5) through
+  `ShiftLayers`; Q - `DebugCompareFrameWays`, the frame drawn both ways,
+  read back (`ReadWindowFrame`, `WindowViewInPixels`) and counted
+  (`CountFrameDifferences`, `ColorGap` - the colors, not the alpha;
+  `DescribeFrameDifferences` leaves frames that differ in `dump\`).
+  `DebugSay` - a report to the caption and the ticker; `DebugSayFrameWay`
+  on the Z key and whenever the texture is made anew; `DebugRefuseTarget`
+  - no texture, the straight way. The End key: **`TDebugStop`** ends in
+  `dsHullEnd` (`dsNone` gone) - **`DebugJumpToHullEnd`**, aboard with the
+  lives armed: `DebugRideToFightEnd` (the far plane and the fangs ticked
+  at the flight's share till the clock of point B plus
+  `DebugFightSeconds` 220), then the hull's last life taken; with the
+  landing running `DebugNextStop` tells `dsAirDoor`, so a press past the
+  end is the door of point C again.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -9037,6 +9109,9 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   **`Levels/Tests.Levels.Titles.pas`** - **`TTitlesReadTests`** (6), the
   titles read and their faults, the shipped file. 23 in all; the tables
   are in `docs/testing/game.md`, "The titles".
+- After 3.0.131: **`Render/Tests.Render.Target.pas`** -
+  **`TBankCoverTests`** (6), how many times a banked frame is grown; the
+  table is in `docs/testing/game.md`, "The frame's target".
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 

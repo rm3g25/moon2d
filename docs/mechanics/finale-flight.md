@@ -218,6 +218,36 @@ Stage 1 of the game: the titles before the flight, in `gsPlaying` - the hero is 
 - **After the first live run** (2026-11-15): a good stage; the flare was to be another - more of the fire's sparks at the logo's first coming, the halo kept. The sparks went from 180 thrown alike to the 530 above.
 - First guesses for the live run: the flare's strength, its spread, its sparks and how long it calms; the white of the flash and its jolt; the logo's size in its place; the second of the card's fades; whether the card wants the logo's place or the frame's middle; the panels' cut at the hand-over; the lean of the clock - whether the flash lands on the kick.
 
+## The spike of the target texture (2026-11-15)
+
+Stage 2a of the game, behind debug keys, no version: whether the frame of the play can go through a target texture and come to the window banked. It can. What it answered, on Direct3D 11 under SDL 2.32.10 with the logical size:
+- **Through the target the picture is the one drawn straight** to the window. One frame drawn both ways and read back from the window: 463 pixels of 1 555 200 differ (a view of 1440 by 1080 in a fullscreen of 1920 by 1080), the widest gap of a color 2 of 255 - none the eye finds. The flight may take the frame through the target from any tick on: the change does not show.
+- **Banked 14 degrees and grown 1.293, a texel to a pixel**: taken in the live run with no remark - still, and swinging to the bank and back, the growth changing with it every frame.
+- **A layer moved by whole pixels** rides off through the viewport of the target, cut at its own edge moved with it. No card of its own, no blend of its own: `SDL_ComposeCustomBlendMode` stays unbound.
+- **The window's size** (Alt+Enter): the texture is made anew when the window's scale changes, by itself. The HUD and the crosshair go to the window after the frame and stand level whatever the bank.
+
+How it is built (`Render.Target`, `TFrameTarget`):
+- **The growth is drawn, not stretched.** `BankCover` is the stand's `turnFrame`: the cosine of the bank plus the frame's longer side over its shorter times the sine - 1 unbanked, 1.293 at 14 degrees of 4:3. The frame is drawn into the texture at the window's scale times the growth, so every sprite is sampled once at the pixels it will have, and the texture comes to the window unscaled, turned about the frame's middle. `MeasurePixel` of the dome frames reads the renderer's scale and gets the grown pixel by itself.
+- **The texture** is ARGB8888 - the one 32-bit format the Direct3D 11 backend of SDL holds as it is - as large as the frame at the steepest bank and a margin of two pixels, cleared whole to the frame's background every frame: what the turned copy's filter reads past the frame's edge is the background. Its size follows the window's scale, asked every frame; one the card refuses is not asked for again, and `Open` tells False - the frame is then the caller's to draw straight, unbanked.
+- **The viewport in pixels**: SDL takes and gives a viewport in the units of the scale, so the target sets its own at a scale of 1 and puts the scale back. `SDL_SetRenderTarget` keeps the window's viewport, scale and logical size by itself and gives them back.
+- **Unbanked the copy is taken texel for pixel** (nearest); banked - through the linear filter.
+- **Why not the bank by the vertices**: the far plane, the dome frames and the sprites cut their drawing with clip rectangles, and a clip does not turn.
+
+In the game: `TMoonGame.Render` is cut into `DrawFarLayers` (the backdrop, the far plane, the fangs), `DrawPlayLayers` (from the shuttle's layer to the titles) and `DrawHud` (the glass, the marks, the crosshair, the panels, the news), in the order the layers had. The haze of `dlBackdrop` is among the far layers though it is placed with the world: it lies between the backdrop and the sky's layer, and no titles have it.
+
+The debug keys (DEBUGKEYS), their reports in the window's caption and the ticker:
+- **Z** - the frame's way to the window, round and round: straight, through the target, banked 14 degrees, swinging to 14 and back over 6 s.
+- **C** - the play layer cast off to the right over 6.34 s, slow at both ends, held away for a breath, and again; from the straight way the frame goes through the target.
+- **Q** - the frame of one moment drawn both ways and compared; frames that differ are left in `dump\` as `frame-direct.png` and `frame-target.png`.
+- **End** has a last stop, the hull's end: aboard at the door of point C a press rides the far plane on at the flight's pace to where a fight of 220 s from point B - the stand's - leaves it, the farm's dome in and the sun behind it, and takes the hull's last life; the crack, the burst, the end track and the titles follow by themselves. Past it a press is the door of point C again, so the end is played over. The key O aloft ends the fight where the far plane happens to be - the city still behind.
+
+Tests: `Tests.Render.Target` (new) - `TBankCoverTests` 6. The table: `docs/testing/game.md`, "The frame's target".
+
+Left for the stages to come:
+- A card whose textures end at 2048 (Direct3D feature level 9_1) has no target for a view taller than some 1180 pixels: the flight then goes unbanked.
+- The growth covers the corners with nothing to spare: the pixel of a corner may take a little of the background. Not seen in the run.
+- A play layer moved through the viewport is cut at its own left edge: smoke or sparks left of it are cut with it.
+
 ## Decided 2026-11-14: the ground for a lifted eye
 
 Stage T2; the plane is on the stand since the first laying of the flight through the dome (above), the rest not built. What the push to the dome, the climb out of it and the Moon below stand on.
@@ -231,7 +261,7 @@ Stage T2; the plane is on the stand since the first laying of the flight through
 
 ## Risks and doubts
 
-- **The target texture** under D3D11 with a logical size: not known till the spike. A play layer drawn into a texture with a clear ground comes out premultiplied; it is put over the far plane with a blend of its own (`SDL_ComposeCustomBlendMode`, not bound yet).
+- **The target texture**: answered - "The spike of the target texture". What it left open is listed there.
 - **The Moon below (T5)** - the least solved. A flat floor's horizon stays at the eye's height however high the eye goes, and the eye may not pitch down (a card from above is a flat picture). The limb is to be made: the horizon bent and sunk by the height. A globe may not be needed at all.
 - **Cards close by**: the kit is 5.9 px a unit; nearer than three times its rest a building is soft at 4K.
 - **The sync**: 123 s by ticks drifts against the audio device; the track's position is the cure, to be measured live.

@@ -1389,3 +1389,23 @@ beside the tests.
 | `TestTheCuesAreReadAsWritten` | present; the three seconds as in the file | a cue is read into another's place |
 | `TestACueNotAfterTheOneBeforeItRaises` | the flash before the card is out; the card out as it comes in: `ETitlesError` | the card and the logo stand together, or the card never shows |
 | `TestTheFileOfLevelTwoReads` | `finale.json` beside the tests: present, the flash at 17.21 | the shipped titles do not load |
+
+## The frame's target
+
+State: written, 6 tests (after 3.0.131, `docs/mechanics/finale-flight.md`,
+"The spike of the target texture"). The texture, the viewport and the
+copy to the window are the card's: a live run, and the Q key's count.
+
+### Render.Target
+
+Fixture `TBankCoverTests` in `Tests\Render\Tests.Render.Target.pas`: the
+game's frame, 512 by 384, and the 14 degrees of the titles' flight.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestUnbankedNotGrown` | no bank: 1 | a level frame is drawn larger than the window: the picture through the target is not the one drawn straight |
+| `TestTheFlightsBankOfTheGamesFrame` | 14 degrees of 512 by 384: 1.2929 | the flight's frame is not the one taken on the stand |
+| `TestEitherWayAlike` | 14 and -14 degrees: the same | a bank to the right bares the corners, or shrinks the frame |
+| `TestASteeperBankGrowsMore` | 1 < 5 degrees < 14 < 25 | the growth stands still or falls as the bank steepens |
+| `TestAnUprightFrameAsOneOnItsSide` | 384 by 512 as 512 by 384 | a frame taller than wide is grown by its shorter side: bare corners |
+| `TestTheGrownFrameCoversTheCornersAndNoMore` | grown and banked 14 degrees, both corners of the unbanked frame lie inside it, the upper one on its edge | a corner of the window is bare, or the frame is grown past what the bank asks |
