@@ -4048,6 +4048,10 @@ moves in comes from `Game.Space`.
   left door puts him back on after the tick: a deck is judged under the
   feet he keeps, or a pad of the chase carried off from under them at the
   left edge is never seen to go.
+- 3.0.136: `SinkTo(deckTop)` in `RideDeck` - a deck going down takes the
+  feet a unit at a time, `GroundUnderFeet` asked before each; where the
+  grid holds them the deck goes on alone (`LandExactly`, `FDropFrom`). The
+  mirror of the rising deck that `CanIGoUp` stops.
 - 3.0.97: **`Fling(side, way)`** - the way of its own across is the
   caller's now (`FlingWay` is gone: the Ram's `FallBackFlingWay` 1 and
   `HuntFlingWay` 3). **`Shove(way)`** - the Ram's bow shoves him along

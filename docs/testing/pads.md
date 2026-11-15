@@ -385,8 +385,12 @@ to sleep twice, not once: act 5 puts it to sleep too.
 | `TestStraysOfAnUnknownFlockRaise` | a `strays` action of "flock" loads; of "nobody" it raises `ELevelError` | a typo of a flock loads: the act comes and no pad strays |
 | `TestLevelTwoArenaStraysAreLetGoInActFive` | some pad strays in `s09-strays`, every one of them on screen 9; one `strays` action lets the flock go, in act 5 | the flock is let go in another act, twice, or strays off the arena |
 
+| `TestLevelTwoStoneShardIsAWayBackUp` | `s11-rock-shard` does not bob; both its flies in `s11-wake` (the cue and the aftermath) stop it over the way out of screen 11 (448..512), its deck within the hero's arc from the way out's floor (352) and with column C (192) within the arc from it - the peak 100 over the feet, a Bound (8) of room, as `JumpReach` asks | the shard goes back up out of reach: a hero who jumped over the stone to the shut door is shut in for good (3.0.136) |
+
 Left to the eye: what the world makes of a bank told to sleep or wake, a
 broken carousel and a flock let go - `Pads.World`, which needs the stage.
+So is the hero left on the grid by a deck going down through it
+(`THero.SinkTo`, 3.0.136): the hero needs the stage too.
 
 ## Levels.Carousels
 

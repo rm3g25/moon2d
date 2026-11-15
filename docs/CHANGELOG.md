@@ -7,6 +7,18 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.136 - the way back to the stone.** Two holes of screen 11
+from a live run (`arena-3/tunnels.md`, "The way back and the dust"). From
+the edge of the step the hero could fly over the stone and drop to the
+way out, its door shut until the stone is taken - shut in for good: the
+shard now stops over the way out at y 264 in place of 70, a step back up
+to column C, and bobs no more. A deck going down through the grid took
+its rider with it - the falling shard carried the hero through the way
+out's floor into the pit: `THero.SinkTo` takes the feet down with the
+deck a unit at a time and leaves them on the grid where it holds them,
+for every pad. The dust of screens 10 and 11 four times as fast (48, 32
+and 20 units a second). Tests: 1 new.
+
 2026-11-15: **3.0.135 - the end at the stars.** The titles are whole
 (`finale-flight.md`, "Decided 2026-11-15: the end at the stars", "The end
 at the stars in the game"). At F+31, while the eye still climbs, the

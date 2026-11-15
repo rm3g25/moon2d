@@ -1,7 +1,10 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-15: **3.0.135** - arena 3 (the finale of level 2), the
-titles whole: the end at the stars - the menu's sky coming down into the
+Status at 2026-11-15: **3.0.136** - the way back to the stone on screen 11
+(the shard a step back up, a deck going down through the grid leaves its
+rider on it) and the tunnels' dust four times as fast
+(`arena-3/tunnels.md`, "The way back and the dust"). Before it, 3.0.135 -
+arena 3 (the finale of level 2), the titles whole: the end at the stars - the menu's sky coming down into the
 frame as the eye climbs, the Earth of level 1 in the moon's place, the two
 phrases, the credits, the last screen with the author's link, the track's
 end into the menu (`finale-flight.md`, "The end at the stars in the
@@ -20,7 +23,7 @@ the target texture, with no version ("The spike of the target texture"),
 3.0.130 - the gate (`finale.md`, "The gate as built") -, 3.0.129 - the
 farm under a long dome at the end of the city's strip (`chase-backdrop.md`,
 "The farm") - and 3.0.128 - the end of the fight in the air
-(`finale.md`, "Stage 19 as built"). Next: the live run of 3.0.135; then
+(`finale.md`, "Stage 19 as built"). Next: the live run of 3.0.136 and 3.0.135; then
 the level editor (`ROADMAP.md`). In
 work: arena 3, its folder `docs/mechanics/arena-3/` (the index
 `README.md`; the air fight `ram-air.md`);
