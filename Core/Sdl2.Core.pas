@@ -61,6 +61,9 @@ const
   // SDL_PIXELFORMAT_ABGR8888 = RGBA32 on little-endian (the only kind of
   // endian this game will ever meet): memory byte order R, G, B, A.
   SdlPixelFormatAbgr8888 = $16762004;
+  // SDL_PIXELFORMAT_ARGB8888: what the Direct3D 11 backend makes its own
+  // textures of - a target of this format is drawn into as it is
+  SdlPixelFormatArgb8888 = $16362004;
 
   // SDL_BlendMode
   SdlBlendModeNone = 0;  // dst = src, alpha included: the only way a
@@ -366,6 +369,19 @@ function SDL_RenderSetLogicalSize(ARenderer: PSdlRenderer;
 procedure SDL_RenderGetScale(ARenderer: PSdlRenderer;
   AScaleX, AScaleY: PSingle); cdecl;
   external SdlLib name 'SDL_RenderGetScale';
+// In the stead of the scale the logical size has set, until the logical
+// size is set again or the target changes
+function SDL_RenderSetScale(ARenderer: PSdlRenderer;
+  AScaleX, AScaleY: Single): Integer; cdecl;
+  external SdlLib name 'SDL_RenderSetScale';
+// Where the drawing lands, and its origin. ARect is in the units of the
+// scale - in pixels only while the scale is 1; nil is the whole target
+function SDL_RenderSetViewport(ARenderer: PSdlRenderer;
+  const ARect: PSdlRect): Integer; cdecl;
+  external SdlLib name 'SDL_RenderSetViewport';
+procedure SDL_RenderGetViewport(ARenderer: PSdlRenderer;
+  ARect: PSdlRect); cdecl;
+  external SdlLib name 'SDL_RenderGetViewport';
 // ARect in logical units, as a copy's destination; nil lets the drawing
 // land anywhere again
 function SDL_RenderSetClipRect(ARenderer: PSdlRenderer;

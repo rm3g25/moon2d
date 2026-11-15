@@ -23,7 +23,7 @@ uses
   Monsters.Defs, Render.Sprites, Levels.Defs, Levels.Events, Levels.Dynamics,
   Render.Tiles, Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero,
   Bullets, Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
-  Render.Font,
+  Render.Font, Render.Target,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
@@ -73,9 +73,26 @@ type
   TFlockMedkit = (fmNone, fmDue, fmAboard);
 
 {$IFDEF DEBUGKEYS}
-  // The stops of the End key on level 2, in their order; dsNone - past the
-  // last
-  TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsAirDoor, dsNone);
+  // The stops of the End key on level 2, in their order
+  TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsAirDoor,
+    dsHullEnd);
+
+  // The ways of the Z key: the frame of the play drawn straight to the
+  // window, through the target unbanked, banked, and swinging to the bank
+  // and back
+  TDebugFrameWay = (fwDirect, fwTarget, fwBanked, fwSwinging);
+
+  // What the Z, C and Q keys have set. WaySince and CastOffSince - the
+  // performance counter at the key; Unsaid - the caption is owed what the
+  // target came to; CompareDue - the comparison is owed, at the next frame
+  TDebugFrame = record
+    Way: TDebugFrameWay;
+    WaySince: UInt64;
+    CastOff: Boolean;
+    CastOffSince: UInt64;
+    Unsaid: Boolean;
+    CompareDue: Boolean;
+  end;
 {$ENDIF}
 
   TMoonGame = class(TGameApp)
@@ -134,9 +151,12 @@ type
     FGoRight: THudGoRight;
     FEnergyGauge: THudEnergy;
     FRenderer: PSdlRenderer; // kept for level restarts
+    // The frame of the play through a texture; made at the Z key
+    FFrameTarget: TFrameTarget;
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
     FShowAtlas: Boolean; // F: raw font atlas (orientation check)
+    FDebugFrame: TDebugFrame;
 {$ENDIF}
     FMouseGX, FMouseGY: Integer;
     FWindow: PSdlWindow;
@@ -366,13 +386,14 @@ type
     procedure HurtHero;
     procedure RestartLevel;
     function CrosshairFrame: Integer;
-    // The debug keyboard reaches the game through these four and
-    // nothing else. All four exist in every build - their BODIES
+    // The debug keyboard reaches the game through these five and
+    // nothing else. All five exist in every build - their BODIES
     // compile away, so no caller needs an ifdef (codestyle 11).
     function HandleDebugKey(AScancode: Integer): Boolean;
     function HandleDebugMenuKey(AScancode: Integer): Boolean;
     procedure UpdateInspectorCaption;
     procedure DrawAtlasOverlay;
+    function DebugDrawThroughTarget(AAlpha: Double): Boolean;
 {$IFDEF DEBUGKEYS}
     procedure NudgeCrosshair(ADX, ADY: Integer);
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
@@ -386,6 +407,8 @@ type
     procedure DebugJumpPastBunker;
     procedure DebugJumpAboard;
     procedure DebugJumpToAirDoor;
+    procedure DebugRideToFightEnd;
+    procedure DebugJumpToHullEnd;
     procedure DebugHullToNextDoor;
     procedure DebugNextTitlesCue;
     procedure DebugSpendTriggers(AScreen: Integer);
@@ -394,6 +417,14 @@ type
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
     procedure DebugRestorePads;
+    procedure DebugSay(const AReport: string);
+    procedure DebugCycleFrameWay;
+    procedure DebugToggleCastOff;
+    function DebugBank: Single;
+    function DebugCastOff: Single;
+    procedure DebugSayFrameWay;
+    procedure DebugRefuseTarget;
+    procedure DebugCompareFrameWays(AAlpha: Double);
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -571,6 +602,11 @@ type
     procedure DrawHeroInShroud(AShake: TSdlPoint; ASlide, ALift,
       AAlpha: Single);
     procedure DrawHeroSilhouette(AShake: TSdlPoint; ASlide, ALift: Single);
+    procedure ClearFrame;
+    function HeroLiftAt(AAlpha: Single): Single;
+    procedure DrawFarLayers(AAlpha: Double);
+    procedure DrawPlayLayers(AAlpha: Double);
+    procedure DrawHud(AAlpha: Double);
     procedure DrawBackdrop(AAlpha: Single);
     procedure DrawFangs(AAlpha: Single);
     procedure DrawPanels(AAlpha: Single);
@@ -609,6 +645,8 @@ uses
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
   FontFileName = 'fonty.png';
+  // What a frame is cleared to: bare wherever nothing is drawn over it
+  FrameBackground: TSdlColor = (R: 10; G: 12; B: 40; A: 255);
 
   SoundsDir = 'sounds';
   MusicDir = 'music';
@@ -870,6 +908,7 @@ const
   // minigun muzzle on the arrow cluster (4/6/8/2, +/-), the retired
   // crosshair calibrator on the corners (7/9/1/3).
   ScancodeB = 5;  // trailer frame, bare sky (menu only)
+  ScancodeC = 6; // the play layer cast off in the frame's target, over and over
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
@@ -881,15 +920,19 @@ const
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeO = 18; // a third of the lives of the Ram's head at once
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
+  ScancodeQ = 20; // the frame drawn both ways and compared, pixel by pixel
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
   ScancodeU = 24; // the burst at once in the moon's look: no rite, no suit
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodeX = 27; // the titles on to a breath before their next cue
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
+  ScancodeZ = 29; // the frame's way to the window: straight, a target, banked
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
-  ScancodeEnd = 77; // a step a press: the trial won, the Ram, past the bunker
+  // A step a press: the trial won, the Ram, past the bunker, aboard, the
+  // door of point C, the hull's end
+  ScancodeEnd = 77;
   ScancodeKp1 = 89;
   ScancodeKp2 = 90;
   ScancodeKp3 = 91;
@@ -907,6 +950,17 @@ const
   RamScreen = 13;
   // The gun a walk to the Ram has taken on screen 10
   DupletPickupId = 'weaponDuplet';
+  // The Z key's bank - the steepest of the titles' flight - and how long
+  // a swing to it and back takes
+  DebugBankDegrees = 14;
+  DebugSwingSeconds = 6;
+  // The C key's cast-off: as long as the end track's break, where the
+  // titles' flight casts off, and how long the play layer stays away
+  DebugCastOffSeconds = 6.34;
+  DebugCastOffHoldSeconds = 1.5;
+  // How long from point B the fight of the End key's last stop has been
+  // on: the one the chase's stand plays the titles after
+  DebugFightSeconds = 220;
 {$ENDIF}
 
 // Every player-facing string lives in lang\*.json now (part 6): the
@@ -1039,6 +1093,7 @@ end;
 
 destructor TMoonGame.Destroy;
 begin
+  FFrameTarget.Free;
   // Before the menu: it draws the menu's logo
   FTitlesPainter.Free;
   FMenu.Free;
@@ -5838,10 +5893,16 @@ begin
   FOrbs.DrawSilhouette(FDynamics.Canvas, Figure);
 end;
 
+procedure TMoonGame.ClearFrame;
+begin
+  SDL_SetRenderDrawColor(FRenderer, FrameBackground.R, FrameBackground.G,
+    FrameBackground.B, FrameBackground.A);
+  SDL_RenderClear(FRenderer);
+end;
+
 procedure TMoonGame.Render(ARenderer: PSdlRenderer; AAlpha: Double);
 begin
-  SDL_SetRenderDrawColor(ARenderer, 10, 12, 40, 255);
-  SDL_RenderClear(ARenderer);
+  ClearFrame;
 
   case FState of
     gsMenu:
@@ -5857,127 +5918,152 @@ begin
       DrawEnding;
     gsPlaying:
       begin
-        // Back to front, each layer on its own shake channel. The
-        // backdrop stands still - what a jolt bares at the edge is sky,
-        // not void; cursor and HUD are glass over the world and stand too
-        FSprites.Origin := NoShake;
-        DrawBackdrop(AAlpha);
-        // The haze bends the still backdrop where its pad has been jolted
-        // to: placed with the world, it reads the backdrop as it stands
-        FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
-          dlBackdrop);
-        FDynamics.Draw(FHero.Screen, SkyOrigin(AAlpha), AAlpha, dlSky);
-        DrawFangs(AAlpha);
-        FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha, dlAloft);
-        FSprites.Origin := FShake.Offset(scWorld);
-        // Objects stand on the tiles, so they jolt with them - a still
-        // ship over a shaking floor would float
-        // Past the launcher the belt's road is gone: what is left of it is
-        // the road end's, tile by tile, and at point B there is none
-        FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha), not FPastLauncher);
-        if FRoadPainter <> nil then
-          FRoadPainter.Draw(FSprites, FRoad, RamFloorY, AAlpha);
-        // On the road's far end, behind all that passes over the road
-        if FGatePainter <> nil then
-          FGatePainter.Draw(FSprites, FDynamics.Canvas, RamFloorY, AAlpha);
-        // On the road, behind the pads: it drives behind them
-        FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FRamPainter.DrawBody(FSprites, AAlpha);
-        // What is left of the hull, each piece in its fire and smoke
-        FWreckagePainter.Draw(FSprites.Origin, AAlpha);
-        FWreckFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        // The pads in the depth with what hangs on them, then the pads
-        // in front, which pass before both
-        FPads.Draw(FHero.Screen, AAlpha, plDeep);
-        FDynamics.DrawSunk(FHero.Screen, FSprites.Origin, AAlpha);
-        FPads.Draw(FHero.Screen, AAlpha, plFront);
-        // Where the shells come down, on the decks and the road
-        FShellPainter.DrawRings(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        // The knocked barges burning, before the figures
-        FBargeFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        // The pads knocked off, before the pads in front of them no more
-        FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FWreckPainter.DrawBodies(FSprites, AAlpha);
-        FPiecePainter.Draw(FSprites.Origin, AAlpha);
-        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
-        FTiles.DrawTiles(FHero.Screen);
-        FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FCannons.DrawBodies(FSprites, AAlpha);
-        FSprites.Origin := FShake.Offset(scMonsters);
-        FUptakePainter.DrawBehind(FField, FHero.Screen, FSprites.Origin, AAlpha);
-        FOrbLauncherShroudPainter.DrawUnder(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
-        FField.Draw(FSprites, FHero.Screen, AAlpha);
-        FOrbLauncherShroudPainter.DrawBody(FSprites.Origin, 0, AAlpha);
-        FOrbLauncherShroudPainter.DrawOver(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
-        FUptakePainter.DrawLoot(FDynamics.Canvas, FField, FHero.Screen,
-          FSprites.Origin, AAlpha);
-        FSpherePainter.DrawSphere(FDynamics.Canvas, FHero.Screen,
-          FSprites.Origin, AAlpha);
-        FCapsulePainter.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
-          AAlpha);
-        FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
-          AAlpha);
-        FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
-        // The eclipse: the world under the dark, the Ram's eye through it;
-        // the hero, his orbs and the HUD over it
-        FEclipsePainter.DrawDark(AAlpha);
-        FRamPainter.DrawEyeOverDark(FShake.Offset(scWorld), AAlpha,
-          FEclipse.Darkness(AAlpha));
-        FEclipsePainter.DrawRipple(HeroCenter, FHeartbeat.SinceBeat(AAlpha),
-          AAlpha);
-        FEclipsePainter.DrawBeam(BeamFoot, FHeartbeat.Pulse(AAlpha), AAlpha);
-        FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
-        var HeroShake := FShake.Offset(scHero);
-        // Held in the throw, he sways: drawn by it, as a deck lifts him
-        var HeroLift := FHero.DeckLift(AAlpha) + FThrow.Sway(AAlpha);
-        var HeroSlide := FHero.DeckSlide(AAlpha);
-        FOrbs.DrawVeil(FDynamics.Canvas, HeroShake);
-        // The burst's inhale: a bare figure stands for the hero and his
-        // shroud
-        if FOrbs.Inhaling then
-          DrawHeroSilhouette(HeroShake, HeroSlide, HeroLift)
-        else
-          DrawHeroInShroud(HeroShake, HeroSlide, HeroLift, AAlpha);
-        FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
-          AAlpha);
-        FSpherePainter.DrawOver(FDynamics.Canvas, HeroCenter, HeroShake, AAlpha);
-        FSprites.Origin := FShake.Offset(scWorld);
-        FHero.Bullets.Draw(FSprites);
-        FOrbShots.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FMonsterBullets.Draw(FSprites);
-        FShellPainter.DrawShells(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FWreckPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FRamPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FOrbs.DrawOrbs(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
-        FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
-        FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
-        // The titles stand in the world, over all that moves in it
-        FTitlesPainter.Draw(FShake.Offset(scWorld), AAlpha);
-        // Over the world, under the HUD
-        FOrbs.DrawGlass(FDynamics.Canvas, AAlpha);
-        FScenes.DrawShade(ARenderer);
-        FMarks.Draw(FHero, FField, FShake.Offset(scHero),
-          FShake.Offset(scMonsters));
-        FMarks.DrawRam(FRam, FShake.Offset(scWorld), AAlpha);
-        var HintAt: TSdlFPoint;
-        HintAt.X := FHero.X + HeroSize / 2 + HeroShake.X;
-        HintAt.Y := FHero.Y - HeroSize + HeroShake.Y + HeroLift;
-        FThrowPainter.DrawHint(HintAt, FHeartbeat.Pulse(AAlpha), AAlpha);
-        FSprites.Origin := NoShake;
-        FHero.DrawCrosshair(FSprites, CrosshairFrame);
-        // The picture the titles stand on is clear of the panels
-        if not FLanding.HandedOver then
-          DrawPanels(AAlpha);
-        FMessages.Draw(AAlpha);
-        // Topmost: the ceremony outranks the news
-        FHenshin.DrawCountdown(FFont, AAlpha);
+        if not DebugDrawThroughTarget(AAlpha) then
+        begin
+          DrawFarLayers(AAlpha);
+          DrawPlayLayers(AAlpha);
+        end;
+        DrawHud(AAlpha);
       end;
   end;
 
   DrawAtlasOverlay;
+end;
+
+// Held in the throw, he sways: drawn by it, as a deck lifts him
+function TMoonGame.HeroLiftAt(AAlpha: Single): Single;
+begin
+  Result := FHero.DeckLift(AAlpha) + FThrow.Sway(AAlpha);
+end;
+
+// What lies behind the play layer, back to front. The backdrop stands
+// still - what a jolt bares at the edge is sky, not void
+procedure TMoonGame.DrawFarLayers(AAlpha: Double);
+begin
+  FSprites.Origin := NoShake;
+  DrawBackdrop(AAlpha);
+  // The haze bends the still backdrop where its pad has been jolted
+  // to: placed with the world, it reads the backdrop as it stands
+  FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha,
+    dlBackdrop);
+  FDynamics.Draw(FHero.Screen, SkyOrigin(AAlpha), AAlpha, dlSky);
+  DrawFangs(AAlpha);
+end;
+
+// The play layer back to front, each part on its own shake channel
+procedure TMoonGame.DrawPlayLayers(AAlpha: Double);
+begin
+  FDynamics.Draw(FHero.Screen, FShake.Offset(scWorld), AAlpha, dlAloft);
+  FSprites.Origin := FShake.Offset(scWorld);
+  // Objects stand on the tiles, so they jolt with them - a still
+  // ship over a shaking floor would float
+  // Past the launcher the belt's road is gone: what is left of it is
+  // the road end's, tile by tile, and at point B there is none
+  FObjects.Draw(FHero.Screen, FBelt.TravelAt(AAlpha), not FPastLauncher);
+  if FRoadPainter <> nil then
+    FRoadPainter.Draw(FSprites, FRoad, RamFloorY, AAlpha);
+  // On the road's far end, behind all that passes over the road
+  if FGatePainter <> nil then
+    FGatePainter.Draw(FSprites, FDynamics.Canvas, RamFloorY, AAlpha);
+  // On the road, behind the pads: it drives behind them
+  FRamPainter.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FRamPainter.DrawBody(FSprites, AAlpha);
+  // What is left of the hull, each piece in its fire and smoke
+  FWreckagePainter.Draw(FSprites.Origin, AAlpha);
+  FWreckFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  // The pads in the depth with what hangs on them, then the pads
+  // in front, which pass before both
+  FPads.Draw(FHero.Screen, AAlpha, plDeep);
+  FDynamics.DrawSunk(FHero.Screen, FSprites.Origin, AAlpha);
+  FPads.Draw(FHero.Screen, AAlpha, plFront);
+  // Where the shells come down, on the decks and the road
+  FShellPainter.DrawRings(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  // The knocked barges burning, before the figures
+  FBargeFire.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  // The pads knocked off, before the pads in front of them no more
+  FWreckPainter.DrawFire(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FWreckPainter.DrawBodies(FSprites, AAlpha);
+  FPiecePainter.Draw(FSprites.Origin, AAlpha);
+  FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlBack);
+  FTiles.DrawTiles(FHero.Screen);
+  FExplosions.DrawSmoke(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FCannons.DrawBodies(FSprites, AAlpha);
+  FSprites.Origin := FShake.Offset(scMonsters);
+  FUptakePainter.DrawBehind(FField, FHero.Screen, FSprites.Origin, AAlpha);
+  FOrbLauncherShroudPainter.DrawUnder(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
+  FField.Draw(FSprites, FHero.Screen, AAlpha);
+  FOrbLauncherShroudPainter.DrawBody(FSprites.Origin, 0, AAlpha);
+  FOrbLauncherShroudPainter.DrawOver(FDynamics.Canvas, FSprites.Origin, 0, AAlpha);
+  FUptakePainter.DrawLoot(FDynamics.Canvas, FField, FHero.Screen,
+    FSprites.Origin, AAlpha);
+  FSpherePainter.DrawSphere(FDynamics.Canvas, FHero.Screen,
+    FSprites.Origin, AAlpha);
+  FCapsulePainter.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FField.DrawSmoke(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
+    AAlpha);
+  FField.DrawSparks(FDynamics.Canvas, FHero.Screen, FSprites.Origin,
+    AAlpha);
+  FDynamics.Draw(FHero.Screen, FSprites.Origin, AAlpha, dlFront);
+  // The eclipse: the world under the dark, the Ram's eye through it;
+  // the hero, his orbs and the HUD over it
+  FEclipsePainter.DrawDark(AAlpha);
+  FRamPainter.DrawEyeOverDark(FShake.Offset(scWorld), AAlpha,
+    FEclipse.Darkness(AAlpha));
+  FEclipsePainter.DrawRipple(HeroCenter, FHeartbeat.SinceBeat(AAlpha),
+    AAlpha);
+  FEclipsePainter.DrawBeam(BeamFoot, FHeartbeat.Pulse(AAlpha), AAlpha);
+  FOrbs.DrawBehind(FDynamics.Canvas, FShake.Offset(scWorld), AAlpha);
+  var HeroShake := FShake.Offset(scHero);
+  var HeroLift := HeroLiftAt(AAlpha);
+  var HeroSlide := FHero.DeckSlide(AAlpha);
+  FOrbs.DrawVeil(FDynamics.Canvas, HeroShake);
+  // The burst's inhale: a bare figure stands for the hero and his
+  // shroud
+  if FOrbs.Inhaling then
+    DrawHeroSilhouette(HeroShake, HeroSlide, HeroLift)
+  else
+    DrawHeroInShroud(HeroShake, HeroSlide, HeroLift, AAlpha);
+  FUptakePainter.DrawOver(FDynamics.Canvas, FHero.Pose, HeroShake, HeroLift,
+    AAlpha);
+  FSpherePainter.DrawOver(FDynamics.Canvas, HeroCenter, HeroShake, AAlpha);
+  FSprites.Origin := FShake.Offset(scWorld);
+  FHero.Bullets.Draw(FSprites);
+  FOrbShots.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FMonsterBullets.Draw(FSprites);
+  FShellPainter.DrawShells(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FCannons.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FWreckPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FRamPainter.DrawLight(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FOrbs.DrawOrbs(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FExplosions.Draw(FDynamics.Canvas, FSprites.Origin, AAlpha);
+  FImpacts.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
+  FArrivals.Draw(FDynamics.Canvas, FShake.Offset(scMonsters), AAlpha);
+  // The titles stand in the world, over all that moves in it
+  FTitlesPainter.Draw(FShake.Offset(scWorld), AAlpha);
+end;
+
+// Cursor and HUD are glass over the world: they stand while it shakes
+procedure TMoonGame.DrawHud(AAlpha: Double);
+begin
+  // Over the world, under the HUD
+  FOrbs.DrawGlass(FDynamics.Canvas, AAlpha);
+  FScenes.DrawShade(FRenderer);
+  FMarks.Draw(FHero, FField, FShake.Offset(scHero),
+    FShake.Offset(scMonsters));
+  FMarks.DrawRam(FRam, FShake.Offset(scWorld), AAlpha);
+  var HeroShake := FShake.Offset(scHero);
+  var HintAt: TSdlFPoint;
+  HintAt.X := FHero.X + HeroSize / 2 + HeroShake.X;
+  HintAt.Y := FHero.Y - HeroSize + HeroShake.Y + HeroLiftAt(AAlpha);
+  FThrowPainter.DrawHint(HintAt, FHeartbeat.Pulse(AAlpha), AAlpha);
+  FSprites.Origin := NoShake;
+  FHero.DrawCrosshair(FSprites, CrosshairFrame);
+  // The picture the titles stand on is clear of the panels
+  if not FLanding.HandedOver then
+    DrawPanels(AAlpha);
+  FMessages.Draw(AAlpha);
+  // Topmost: the ceremony outranks the news
+  FHenshin.DrawCountdown(FFont, AAlpha);
 end;
 
 // The panels of the HUD in the corners and along the top, glass over the
@@ -6042,7 +6128,7 @@ end;
 
 // ---------------------------------------------------------------------------
 // THE DEBUG KEYBOARD - everything below is compiled out unless DEBUGKEYS
-// is on in Moon2D.inc. The four entry points keep their signatures in
+// is on in Moon2D.inc. The five entry points keep their signatures in
 // every build so that Update, Render and HandleKey read the same either
 // way; only the bodies vanish.
 // ---------------------------------------------------------------------------
@@ -6116,8 +6202,9 @@ end;
 
 // End, a press to the next stop past where the hero is: the false ending
 // of level 2, the start of the Ram's fight, the moment right before the
-// henshin, aboard the barge in the air phase, aboard at the door of point C.
-// There, a press does nothing.
+// henshin, aboard the barge in the air phase, aboard at the door of point C,
+// the hull's end. Past it, a press is the door of point C again: the end is
+// there to be played over.
 procedure TMoonGame.DebugJumpToWork;
 begin
   case DebugNextStop of
@@ -6131,6 +6218,8 @@ begin
       DebugJumpAboard;
     dsAirDoor:
       DebugJumpToAirDoor;
+    dsHullEnd:
+      DebugJumpToHullEnd;
   end;
 end;
 
@@ -6141,8 +6230,10 @@ begin
   var OnWorkLevel := SameText(FLevelFile, Format(LevelFilePattern, [WorkLevel]));
   if not OnWorkLevel then
     Exit(dsTrialEnd);
+  if FLanding.Running then
+    Exit(dsAirDoor);
   if FPastAirDoor then
-    Exit(dsNone);
+    Exit(dsHullEnd);
   if FPastLauncher then
     Exit(dsAirDoor);
   if FPastBunker then
@@ -6246,6 +6337,41 @@ procedure TMoonGame.DebugJumpToAirDoor;
 begin
   FPastAirDoor := True;
   RestartLevel;
+end;
+
+// The far plane ridden on at the flight's pace to where a fight
+// DebugFightSeconds long leaves it: the farm's dome in, the sun behind
+// it. One that has flown as long already stays where it is
+procedure TMoonGame.DebugRideToFightEnd;
+begin
+  // A plane that is not there keeps no clock to ride by
+  if not FLevel.FarPlane.Present then
+    Exit;
+  var PointB := TFarPlane.Create(FLevel.FarPlane);
+  try
+    PointB.RideToEmblem;
+    var FightEnd := PointB.Clock + DebugFightSeconds * FarPlaneTicksPerSecond;
+    while FFarPlane.Clock < FightEnd do
+    begin
+      FFarPlane.Tick(BeltFlight / BeltCruise);
+      FFangs.Tick(FFarPlane.Offsets[fmFangs]);
+    end;
+  finally
+    PointB.Free;
+  end;
+end;
+
+// The hull's end as a whole fight comes to it: the far plane where the
+// fight's end finds it, the hull's last life taken - the crack, the burst
+// and the end track follow by themselves. Aboard only: the lives are armed
+// a tick after the stop before this one
+procedure TMoonGame.DebugJumpToHullEnd;
+begin
+  if FHero.Dead or not FHullLives.Armed then
+    Exit;
+  DebugRideToFightEnd;
+  FHullLives.Resume(1);
+  WoundHull;
 end;
 
 // The titles' clock and their track on to a breath before the next cue;
@@ -6427,7 +6553,266 @@ begin
     if Group.Screen = FHero.Screen then
       FPads.RequestRestore(Group.Tag, HeroRides, nil, CalmPace);
 end;
+
+// Seconds of the wall clock since the performance counter stood at AStart
+function SecondsSince(AStart: UInt64): Double;
+begin
+  Result := (SDL_GetPerformanceCounter - AStart) / SDL_GetPerformanceFrequency;
+end;
+
+// The window's viewport in pixels. It is told in the units of the scale,
+// so it is asked at a scale of 1
+function WindowViewInPixels(ARenderer: PSdlRenderer): TSdlRect;
+var
+  ScaleX, ScaleY: Single;
+begin
+  SDL_RenderGetScale(ARenderer, @ScaleX, @ScaleY);
+  SDL_RenderSetScale(ARenderer, 1, 1);
+  SDL_RenderGetViewport(ARenderer, @Result);
+  SDL_RenderSetScale(ARenderer, ScaleX, ScaleY);
+end;
+
+// What is drawn on the window so far, its viewport's pixels; nil when they
+// cannot be read. The caller frees it
+function ReadWindowFrame(ARenderer: PSdlRenderer): PSdlSurface;
+begin
+  var View := WindowViewInPixels(ARenderer);
+  Result := SDL_CreateRGBSurfaceWithFormat(0, View.W, View.H, 32,
+    SdlPixelFormatAbgr8888);
+  if Result = nil then
+    Exit;
+  if SDL_RenderReadPixels(ARenderer, nil, SdlPixelFormatAbgr8888,
+    Result.Pixels, Result.Pitch) = 0 then
+    Exit;
+  SDL_FreeSurface(Result);
+  Result := nil;
+end;
+
+// The widest gap between the same colors of two pixels. Their alpha is
+// not seen on the window: it is not compared
+function ColorGap(AFirst, ASecond: Cardinal): Integer;
+begin
+  Result := 0;
+  for var i := 0 to 2 do
+  begin
+    var Gap := Abs(Integer((AFirst shr (8 * i)) and $FF) -
+      Integer((ASecond shr (8 * i)) and $FF));
+    if Gap > Result then
+      Result := Gap;
+  end;
+end;
+
+// How many pixels of two frames of one size differ; AWidestGap - the
+// widest gap of a color among them, of 255
+function CountFrameDifferences(AFirst, ASecond: PSdlSurface;
+  out AWidestGap: Integer): Integer;
+var
+  First, Second: PCardinal;
+begin
+  Result := 0;
+  AWidestGap := 0;
+  First := AFirst.Pixels;
+  Second := ASecond.Pixels;
+  for var i := 1 to AFirst.W * AFirst.H do
+  begin
+    var Gap := ColorGap(First^, Second^);
+    Inc(First);
+    Inc(Second);
+    if Gap = 0 then
+      Continue;
+    Inc(Result);
+    if Gap > AWidestGap then
+      AWidestGap := Gap;
+  end;
+end;
+
+// The count of two frames' differences as a line of text; frames that
+// differ are left in ADir as pictures
+function DescribeFrameDifferences(ADirect, AThrough: PSdlSurface;
+  const ADir: string): string;
+const
+  DirectFile = 'frame-direct.png';
+  TargetFile = 'frame-target.png';
+var
+  WidestGap: Integer;
+begin
+  if (ADirect = nil) or (AThrough = nil) then
+    Exit('frames: not read: ' + SdlErrorText);
+
+  var Differing := CountFrameDifferences(ADirect, AThrough, WidestGap);
+  Result := Format('frames: %d of %d pixels differ',
+    [Differing, ADirect.W * ADirect.H]);
+  if Differing = 0 then
+    Exit;
+
+  ForceDirectories(ADir);
+  IMG_SavePNG(ADirect, PAnsiChar(SdlText(TPath.Combine(ADir, DirectFile))));
+  IMG_SavePNG(AThrough, PAnsiChar(SdlText(TPath.Combine(ADir, TargetFile))));
+  Result := Format('frames: %d of %d differ, gap %d of 255, see %s',
+    [Differing, ADirect.W * ADirect.H, WidestGap, ADir]);
+end;
+
+// A report of the debug keyboard: the caption, and the ticker - fullscreen
+// has no caption to read it in
+procedure TMoonGame.DebugSay(const AReport: string);
+begin
+  FMessages.AddTicker(AReport, TickerNoticeTicks);
+  SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(AReport)));
+end;
+
+// Z: the next way of the frame to the window
+procedure TMoonGame.DebugCycleFrameWay;
+begin
+  if FDebugFrame.Way = High(TDebugFrameWay) then
+    FDebugFrame.Way := Low(TDebugFrameWay)
+  else
+    FDebugFrame.Way := Succ(FDebugFrame.Way);
+  FDebugFrame.WaySince := SDL_GetPerformanceCounter;
+
+  if FDebugFrame.Way = fwDirect then
+    DebugSay('frame: straight to the window')
+  else
+    // Said by the frame, once the target has its size
+    FDebugFrame.Unsaid := True;
+end;
+
+// C: the play layer rides off to the right and is back, over and over. It
+// rides the target: from the straight way the frame goes through it
+procedure TMoonGame.DebugToggleCastOff;
+begin
+  FDebugFrame.CastOff := not FDebugFrame.CastOff;
+  FDebugFrame.CastOffSince := SDL_GetPerformanceCounter;
+  if FDebugFrame.CastOff and (FDebugFrame.Way = fwDirect) then
+    FDebugFrame.Way := fwTarget;
+
+  if FDebugFrame.CastOff then
+    DebugSay('play layer: cast off, over and over')
+  else
+    DebugSay('play layer: at its place');
+end;
+
+// The bank of the Z key's way now, degrees
+function TMoonGame.DebugBank: Single;
+begin
+  case FDebugFrame.Way of
+    fwBanked:
+      Result := DebugBankDegrees;
+    fwSwinging:
+      begin
+        var Swing: Double := 2 * Pi * SecondsSince(FDebugFrame.WaySince) /
+          DebugSwingSeconds;
+        Result := DebugBankDegrees * (1 - Cos(Swing)) / 2;
+      end;
+  else
+    Result := 0;
+  end;
+end;
+
+// How far the C key has the play layer cast off now, units: a frame's
+// width over the cast-off's seconds, slow at both ends, held there for a
+// breath, and from its place again
+function TMoonGame.DebugCastOff: Single;
+begin
+  Result := 0;
+  if not FDebugFrame.CastOff then
+    Exit;
+
+  var Lap: Double := DebugCastOffSeconds + DebugCastOffHoldSeconds;
+  var Laps: Double := SecondsSince(FDebugFrame.CastOffSince) / Lap;
+  var Share: Double := Frac(Laps) * Lap / DebugCastOffSeconds;
+  if Share > 1 then
+    Share := 1;
+  Result := FrameWidth * Sqr(Share) * (3 - 2 * Share);
+end;
+
+// What the target came to: once after the Z key, and whenever the
+// window's size makes it anew
+procedure TMoonGame.DebugSayFrameWay;
+const
+  WayNames: array [TDebugFrameWay] of string = ('straight',
+    'through the target', 'banked', 'swinging');
+begin
+  FDebugFrame.Unsaid := False;
+  var Size := FFrameTarget.TextureSize;
+  DebugSay(Format('frame: %s, grown %.3f, target %dx%d',
+    [WayNames[FDebugFrame.Way], FFrameTarget.Cover, Size.X, Size.Y]));
+end;
+
+// No texture of the size the window asks for: the straight way is the
+// only one
+procedure TMoonGame.DebugRefuseTarget;
+begin
+  var Size := FFrameTarget.TextureSize;
+  FDebugFrame.Way := fwDirect;
+  FDebugFrame.CastOff := False;
+  DebugSay(Format('frame: no target of %dx%d, drawn straight: %s',
+    [Size.X, Size.Y, SdlErrorText]));
+end;
+
+// Q: the frame of one moment drawn straight to the window and through the
+// target unbanked, both read back from the window and compared
+procedure TMoonGame.DebugCompareFrameWays(AAlpha: Double);
+const
+  FramesDir = 'dump';
+var
+  Direct, Through: PSdlSurface;
+begin
+  FDebugFrame.CompareDue := False;
+  Direct := nil;
+  Through := nil;
+  try
+    DrawFarLayers(AAlpha);
+    DrawPlayLayers(AAlpha);
+    Direct := ReadWindowFrame(FRenderer);
+
+    if FFrameTarget.Open(0, FrameBackground) then
+    begin
+      DrawFarLayers(AAlpha);
+      DrawPlayLayers(AAlpha);
+      FFrameTarget.Close;
+      Through := ReadWindowFrame(FRenderer);
+    end;
+
+    DebugSay(DescribeFrameDifferences(Direct, Through, FramesDir));
+  finally
+    SDL_FreeSurface(Through);
+    SDL_FreeSurface(Direct);
+  end;
+  // The frame that follows starts from the bare background, as every frame
+  ClearFrame;
+end;
 {$ENDIF} // DEBUGKEYS
+
+// The frame of the play by the way the Z key has chosen. True - the far
+// and the play layers are drawn; False - they are the caller's to draw,
+// straight to the window
+function TMoonGame.DebugDrawThroughTarget(AAlpha: Double): Boolean;
+begin
+  Result := False;
+{$IFDEF DEBUGKEYS}
+  if FFrameTarget = nil then
+    FFrameTarget := TFrameTarget.Create(FRenderer, FrameWidth, FrameHeight,
+      DebugBankDegrees);
+  if FDebugFrame.CompareDue then
+    DebugCompareFrameWays(AAlpha);
+  if FDebugFrame.Way = fwDirect then
+    Exit;
+  if not FFrameTarget.Open(DebugBank, FrameBackground) then
+  begin
+    DebugRefuseTarget;
+    Exit;
+  end;
+
+  DrawFarLayers(AAlpha);
+  FFrameTarget.ShiftLayers(DebugCastOff, 0);
+  DrawPlayLayers(AAlpha);
+  FFrameTarget.Close;
+
+  if FDebugFrame.Unsaid or FFrameTarget.Rebuilt then
+    DebugSayFrameWay;
+  Result := True;
+{$ENDIF}
+end;
 
 // The menu-state debug keys: the two trailer frames. True = consumed.
 function TMoonGame.HandleDebugMenuKey(AScancode: Integer): Boolean;
@@ -6514,6 +6899,13 @@ begin
       // Two minutes of the titles pass before their flight - too long to
       // tune against
       DebugNextTitlesCue;
+    ScancodeZ:
+      DebugCycleFrameWay;
+    ScancodeC:
+      DebugToggleCastOff;
+    ScancodeQ:
+      // At the next frame: the comparison draws
+      FDebugFrame.CompareDue := True;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption

@@ -203,6 +203,7 @@
         <DCCReference Include="Core\Effects.Debris.pas"/>
         <DCCReference Include="Core\Render.Dynamics.pas"/>
         <DCCReference Include="Core\Render.Shake.pas"/>
+        <DCCReference Include="Core\Render.Target.pas"/>
         <DCCReference Include="Game\Hero.pas"/>
         <DCCReference Include="Game\Bullets.pas"/>
         <DCCReference Include="Game\Monsters.pas"/>

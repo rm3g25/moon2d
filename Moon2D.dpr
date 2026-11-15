@@ -51,6 +51,7 @@ uses
   Effects.Debris in 'Core\Effects.Debris.pas',
   Render.Dynamics in 'Core\Render.Dynamics.pas',
   Render.Shake in 'Core\Render.Shake.pas',
+  Render.Target in 'Core\Render.Target.pas',
   Hero in 'Game\Hero.pas',
   Bullets in 'Game\Bullets.pas',
   Monsters in 'Game\Monsters.pas',
