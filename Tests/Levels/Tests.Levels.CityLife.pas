@@ -14,6 +14,11 @@
   flashes for its flash ticks once a period. A node's place rounds half up,
   as the stand's does.
 
+  The titles' eye passing the emblem: far from the sign's cue the sign is
+  its own, about the cue it burns steady, and on it it stutters as the
+  stand's neonOnCue has it - dim, dim, dark, dim - each dip from its first
+  second up to, not at, its last.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Levels.CityLife;
@@ -70,6 +75,17 @@ type
     procedure TestBeaconSeedRoundsHalfUpAsTheStand;
     [Test]
     procedure TestBeaconSeedIsThePlaceOnItsFrame;
+  end;
+
+  [TestFixture]
+  TSignOnCueTests = class
+  public
+    [Test]
+    procedure TestFarFromTheCueTheSignIsItsOwn;
+    [Test]
+    procedure TestAboutTheCueTheSignBurnsSteady;
+    [Test]
+    procedure TestOnTheCueTheSignStutters;
   end;
 
 implementation
@@ -414,7 +430,43 @@ begin
     BeaconSeed(0, BeaconNodeZ, BeaconNodeX), 'Another place on the same frame');
 end;
 
+// TSignOnCueTests
+
+const
+  SignSlack = 1e-9;
+  OwnLevel = 0.37;
+  Dim = 0.12;
+
+procedure TSignOnCueTests.TestFarFromTheCueTheSignIsItsOwn;
+begin
+  Assert.IsTrue(Abs(SignOnCue(OwnLevel, -4.01) - OwnLevel) < SignSlack, 'Before');
+  Assert.IsTrue(Abs(SignOnCue(OwnLevel, 4.01) - OwnLevel) < SignSlack, 'After');
+  Assert.IsTrue(Abs(SignOnCue(0, -30)) < SignSlack, 'Dark of itself, long before');
+end;
+
+procedure TSignOnCueTests.TestAboutTheCueTheSignBurnsSteady;
+begin
+  Assert.IsTrue(Abs(SignOnCue(0, -4) - 1) < SignSlack, 'From four seconds before');
+  Assert.IsTrue(Abs(SignOnCue(OwnLevel, -1) - 1) < SignSlack, 'A second before');
+  Assert.IsTrue(Abs(SignOnCue(0, 0.2) - 1) < SignSlack, 'Between the dips');
+  Assert.IsTrue(Abs(SignOnCue(0, 0.7) - 1) < SignSlack, 'Lit after them');
+  Assert.IsTrue(Abs(SignOnCue(0, 4) - 1) < SignSlack, 'To four seconds after');
+end;
+
+procedure TSignOnCueTests.TestOnTheCueTheSignStutters;
+begin
+  Assert.IsTrue(Abs(SignOnCue(1, -0.12) - Dim) < SignSlack, 'Dim from just before');
+  Assert.IsTrue(Abs(SignOnCue(1, 0) - 1) < SignSlack, 'Lit on the cue');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.1) - Dim) < SignSlack, 'Dim again');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.16) - 1) < SignSlack, 'Up to, not at, its end');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.3)) < SignSlack, 'Dark');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.49)) < SignSlack, 'Dark a fifth of a second');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.6) - Dim) < SignSlack, 'Dim once more');
+  Assert.IsTrue(Abs(SignOnCue(1, 0.63) - 1) < SignSlack, 'And lit');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TCityLifeTests);
+  TDUnitX.RegisterTestFixture(TSignOnCueTests);
 
 end.

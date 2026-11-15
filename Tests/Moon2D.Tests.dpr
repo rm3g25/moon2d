@@ -62,6 +62,7 @@ uses
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',
   Tests.Render.Monochrome in 'Render\Tests.Render.Monochrome.pas',
   Tests.Render.Target in 'Render\Tests.Render.Target.pas',
+  Tests.Render.Flare in 'Render\Tests.Render.Flare.pas',
   Tests.Game.Fangs in 'Game\Tests.Game.Fangs.pas',
   Tests.Hud.GoRight in 'Hud\Tests.Hud.GoRight.pas',
   Tests.Hud.Energy in 'Hud\Tests.Hud.Energy.pas',

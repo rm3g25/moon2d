@@ -76,7 +76,10 @@
   for the eye's rest alone: lifted or pushed, it melts (FloorKeep) into the
   plane under it - the "plane" section, a tile of the ground from straight
   above (Levels.GroundPlane); the numbers of the slabs, of the sharp edge
-  and of the melt are that section's.
+  and of the melt are that section's. Inside a dome's glass the eye looks
+  through the dome wherever it looks (EyeInside): the sun is as covered as
+  it can be. The nearest building in front of the eye is the city's front
+  card (FrontDepth): a far rib nearer than that stands over the buildings.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -109,13 +112,15 @@ type
   // The titles' eye over a far plane that stands. Ride - how far along the
   // strip it has flown from where the world stood, the city's units, below
   // 0 to the left; Lift - up from its rest, Push - into the screen, the
-  // camera's units; Seconds - of its flight. Not Flying - the chase: the far
-  // plane is where its offsets have it
+  // camera's units; Seconds - of its flight; SignSince - seconds of it from
+  // the cue the TEK sign stutters on, below 0 before it. Not Flying - the
+  // chase: the far plane is where its offsets have it
   TFarPlaneEye = record
     Flying: Boolean;
     Ride: Double;
     Lift, Push: Double;
     Seconds: Double;
+    SignSince: Double;
     // Neither lifted nor pushed: every number of the chase is as it was
     function AtRest: Boolean;
   end;
@@ -557,6 +562,19 @@ type
     function FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
       const AEye: TFarPlaneEye; const AAt: TFramePoint; out AScreen: TSdlFPoint;
       out ANearness: Single): Boolean;
+    // FramePoint for a point the caller has found in front of the eye,
+    // however near it
+    procedure ProjectFramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
+      const AEye: TFarPlaneEye; const AAt: TFramePoint; out AScreen: TSdlFPoint;
+      out ANearness: Single);
+    // The eye inside the glass of a dome - not a capsule - with the city's
+    // layer ridden ACityOffset: wherever it looks, it looks through the dome
+    function EyeInside(const AFrame: TDomeFrame; ACityOffset: Double;
+      const AEye: TFarPlaneEye): Boolean;
+    // How far in front of the eye the nearest building of the city stands,
+    // the camera's units, one the eye has passed not counted; MaxDouble -
+    // none
+    function FrontDepth(const AEye: TFarPlaneEye): Double;
     // How much of the tunnel has left the screen, 0 .. 1
     function TunnelPassed(const AOffsets: TFarPlaneOffsets): Single;
     // How much of its colour a band keeps where the offsets have taken it
@@ -827,7 +845,9 @@ begin
         Result := Max(Result,
           CarriedCover(Sun, Base, Element.X - AOffsets[Layer.Motion], Element.W));
   for var Frame in Frames do
-    if Frame.TintsSun then
+    if Frame.TintsSun and EyeInside(Frame, AOffsets[fmCity], AEye) then
+      Result := 1
+    else if Frame.TintsSun then
       Result := Max(Result, CarriedCover(Sun, Base, Frame.X - AOffsets[fmCity], Frame.W));
 end;
 
@@ -847,14 +867,50 @@ function TFarPlaneDef.FramePoint(const AFrame: TDomeFrame; ACityOffset: Double;
   out ANearness: Single): Boolean;
 begin
   Result := Camera.Focal + AAt.Z - AEye.Push >= Camera.Focal * FrameNearestShare;
-  if not Result then
-    Exit;
+  if Result then
+    ProjectFramePoint(AFrame, ACityOffset, AEye, AAt, AScreen, ANearness);
+end;
+
+procedure TFarPlaneDef.ProjectFramePoint(const AFrame: TDomeFrame;
+  ACityOffset: Double; const AEye: TFarPlaneEye; const AAt: TFramePoint;
+  out AScreen: TSdlFPoint; out ANearness: Single);
+begin
   ANearness := Camera.Focal / (Camera.Focal + AAt.Z - AEye.Push);
   var Middle: Double := ScreenWidth / 2;
   var Centre: Double := AFrame.X + AFrame.W / 2 - ACityOffset - Middle;
   AScreen.X := Middle + (Centre + AAt.X) * ANearness;
   AScreen.Y := Camera.Horizon +
     (Camera.BaseY - Camera.Horizon - AAt.Y + AEye.Lift) * ANearness;
+end;
+
+// A dome's glass is a half-ellipsoid as wide as deep about its centre on
+// the base line, the camera's focal length into the screen
+function TFarPlaneDef.EyeInside(const AFrame: TDomeFrame; ACityOffset: Double;
+  const AEye: TFarPlaneEye): Boolean;
+begin
+  if (AFrame.Kind = fkCapsule) or AEye.AtRest then
+    Exit(False);
+  var Radius: Double := AFrame.W / 2;
+  var Across: Double := (ACityOffset + ScreenWidth / 2 - AFrame.X - Radius) / Radius;
+  var Into: Double := (AEye.Push - Camera.Focal) / Radius;
+  var Up: Double := EyeHeight(AEye) / AFrame.H;
+  Result := Across * Across + Into * Into + Up * Up < 1;
+end;
+
+function TFarPlaneDef.FrontDepth(const AEye: TFarPlaneEye): Double;
+begin
+  Result := MaxDouble;
+  for var Layer in Layers do
+  begin
+    if Layer.Motion <> fmCity then
+      Continue;
+    for var Element in Layer.Elements do
+    begin
+      var Depth: Double := Camera.Focal / Nearness(Element.DepthY) - AEye.Push;
+      if (Depth > EyeNearest) and (Depth < Result) then
+        Result := Depth;
+    end;
+  end;
 end;
 
 function TCityFarm.GlassOf(const APiece: string; out AGlass: TFarmGlass): Boolean;

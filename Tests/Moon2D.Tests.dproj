@@ -115,6 +115,7 @@
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Render\Tests.Render.Monochrome.pas"/>
         <DCCReference Include="Render\Tests.Render.Target.pas"/>
+        <DCCReference Include="Render\Tests.Render.Flare.pas"/>
         <DCCReference Include="Game\Tests.Game.Fangs.pas"/>
         <DCCReference Include="Game\Tests.Game.Uptake.pas"/>
         <DCCReference Include="Game\Tests.Game.HeroOrbs.pas"/>

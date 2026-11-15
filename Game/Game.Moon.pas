@@ -24,7 +24,7 @@ uses
   Levels.FarPlane,
   Render.Tiles, Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero,
   Bullets, Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
-  Render.Font, Render.Target,
+  Render.Font, Render.Target, Render.Flare,
   Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
@@ -140,6 +140,8 @@ type
     // The frame of the titles' flight goes through a texture; made with a
     // level whose titles fly, nil with any other
     FFrameTarget: TFrameTarget;
+    // The sun's flare over the frame of the flight, with the target
+    FFlarePainter: TFlarePainter;
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
     FShowAtlas: Boolean; // F: raw font atlas (orientation check)
@@ -590,6 +592,7 @@ type
     procedure DrawHud(AAlpha: Double);
     procedure DrawFinale(AAlpha: Double);
     function FlightEye(AAlpha: Single): TFarPlaneEye;
+    function FlightStand(AAlpha: Single): Double;
     function EyeOffsets(AAlpha: Single): TFarPlaneOffsets;
     procedure DrawBackdrop(AAlpha: Single);
     procedure DrawFangs(AAlpha: Single);
@@ -632,6 +635,9 @@ const
   FontFileName = 'fonty.png';
   // What a frame is cleared to: bare wherever nothing is drawn over it
   FrameBackground: TSdlColor = (R: 10; G: 12; B: 40; A: 255);
+  // The sky of the titles' flight: what the frame bares lowered by the
+  // pitch
+  FlightSky: TSdlColor = (R: 0; G: 0; B: 0; A: 255);
 
   SoundsDir = 'sounds';
   MusicDir = 'music';
@@ -939,6 +945,7 @@ const
   // Where the Z key's line stands on the frame
   FlightReadoutLeft = 8;
   FlightReadoutTop = 8;
+  FlightReadoutStep = 10;
 {$ENDIF}
 
 // Every player-facing string lives in lang\*.json now (part 6): the
@@ -1071,6 +1078,7 @@ end;
 
 destructor TMoonGame.Destroy;
 begin
+  FFlarePainter.Free;
   FFrameTarget.Free;
   // Before the menu: it draws the menu's logo
   FTitlesPainter.Free;
@@ -1275,10 +1283,14 @@ begin
       FRoad);
   end;
   FTitles.Arm(FLevel.Titles);
+  FreeAndNil(FFlarePainter);
   FreeAndNil(FFrameTarget);
   if FLevel.Titles.Flies then
+  begin
     FFrameTarget := TFrameTarget.Create(FRenderer, FrameWidth, FrameHeight,
       FLevel.Titles.Path.SteepestBank);
+    FFlarePainter := TFlarePainter.Create(FRenderer, FrameWidth, FrameHeight);
+  end;
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -6057,23 +6069,46 @@ begin
 end;
 
 // The frame of the titles' flight: the far layers under the eye, the play
-// layer cast off to the right by its nearness, the dark of the flight's end
-// over both; no HUD. Through the target the play layer rides off by whole
-// pixels; with no target it is cut at the flight's first frame
+// layer cast off to the right by its nearness, all of it lowered by the
+// eye's pitch and banked by its bank; the sun's flare over it, level on
+// the window; the dark of the flight's end over all; no HUD. Through the
+// target the play layer rides off by whole pixels; with no target it is
+// cut at the flight's first frame, and the frame is neither lowered nor
+// banked
 procedure TMoonGame.DrawFinale(AAlpha: Double);
 begin
+  var Path := FTitles.EyeAt(AAlpha, FlightStand(AAlpha));
   var CastOff: Single := -FlightEye(AAlpha).Ride * FLevel.FarPlane.PlayNearness;
-  var Framed := (FFrameTarget <> nil) and FFrameTarget.Open(0, FrameBackground);
+  var Drop: Single := FLevel.FarPlane.Camera.Focal * Tan(DegToRad(Path.Pitch));
+  var Framed := (FFrameTarget <> nil) and FFrameTarget.Open(Path.Bank, Drop, FlightSky);
   DrawFarLayers(AAlpha);
   if Framed and (CastOff < FrameWidth) then
   begin
     FFrameTarget.ShiftLayers(CastOff, 0);
     DrawPlayLayers(AAlpha);
   end;
+
+  var Sun := FLevel.FarPlane.Sun;
+  var SunAt: TSdlFPoint;
+  SunAt.X := Sun.X;
+  SunAt.Y := Sun.Y;
   if Framed then
+  begin
     FFrameTarget.Close;
+    SunAt := FFrameTarget.ScreenPoint(Sun.X, Sun.Y);
+  end;
+  var Cover := FLevel.FarPlane.SunCover(EyeOffsets(AAlpha), FlightEye(AAlpha));
+  FFlarePainter.Draw(FlareAt(FTitles.FlareSince(AAlpha), Cover), SunAt);
+
   FTitlesPainter.DrawTail(AAlpha);
   DrawFlightReadout(AAlpha);
+end;
+
+// The place of the city's strip in the middle of the screen where the
+// world stands, between the ticks
+function TMoonGame.FlightStand(AAlpha: Single): Double;
+begin
+  Result := FFarPlane.OffsetsAt(AAlpha)[fmCity] + FLevel.FarPlane.ScreenWidth / 2;
 end;
 
 // The titles' eye over the far plane between the ticks: how far along the
@@ -6084,14 +6119,14 @@ begin
   Result := Default(TFarPlaneEye);
   if not FTitles.Flying then
     Exit;
-  var Stand: Double := FFarPlane.OffsetsAt(AAlpha)[fmCity] +
-    FLevel.FarPlane.ScreenWidth / 2;
+  var Stand := FlightStand(AAlpha);
   var Eye := FTitles.EyeAt(AAlpha, Stand);
   Result.Flying := True;
   Result.Ride := Eye.Along - Stand;
   Result.Lift := Eye.Lift;
   Result.Push := Eye.Push;
   Result.Seconds := FTitles.FlightSeconds(AAlpha);
+  Result.SignSince := FTitles.SignSince(AAlpha);
 end;
 
 // The far plane's offsets between the ticks, as the titles' eye has them
@@ -6618,8 +6653,9 @@ end;
 
 // Z: where the titles' flight is, in the corner of the frame it is judged
 // on - the flight's second, the track's own place, the place of the city's
-// strip under the eye. The track's place less the flight's cue against the
-// flight's second is how far the clock has gone from the track
+// strip under the eye, its lift and push; under it the frame's bank and
+// pitch. The track's place less the flight's cue against the flight's
+// second is how far the clock has gone from the track
 procedure TMoonGame.DrawFlightReadout(AAlpha: Double);
 begin
 {$IFDEF DEBUGKEYS}
@@ -6630,6 +6666,9 @@ begin
   FFont.DrawSmall(Format('flight %.2f  track %.2f  eye %.0f  lift %.1f  push %.1f',
     [FTitles.FlightSeconds(AAlpha), FAudio.MusicSeconds, Along, Eye.Lift, Eye.Push]),
     FlightReadoutLeft, FlightReadoutTop);
+  var Path := FTitles.EyeAt(AAlpha, FlightStand(AAlpha));
+  FFont.DrawSmall(Format('bank %.1f  pitch %.1f', [Path.Bank, Path.Pitch]),
+    FlightReadoutLeft, FlightReadoutTop + FlightReadoutStep);
 {$ENDIF}
 end;
 

@@ -30,8 +30,12 @@
   (TFarPlaneDef.FramePoint): a shadow is cut where it passes the eye where
   the eye now is, and out of its rest the eye may stand near a frame and
   see it far to its sides, so only the eye at rest culls one by the
-  screen. A rib with an end nearer the eye than FrameNearestShare of the
-  focal length is still dropped whole.
+  screen. Close past a rib the eye cuts it a few units before itself, not
+  drops it: the rib sweeps the frame as the eye goes by, and running at the
+  eye it is far thicker at its near end - a wedge, not a stroke. Inside a
+  dome the eye has buildings behind it too: a rib of the far half nearer
+  the eye than the nearest building in front of it (the city's front card,
+  TFarPlaneDef.FrontDepth) stands over the buildings, with the near half.
 
   TDomeFrames is the geometry: it does not touch SDL - the ribs, the
   shadows and the beacons on the screen, in units, for a ride of the city.
@@ -56,11 +60,12 @@ const
   ShadowSamples = 16;
 
 type
-  // A rib of a frame on the screen, in units: A to B, W thick. Its rim of
-  // light lies on the side of Normal, Light bright, 0..1
+  // A rib of a frame on the screen, in units: A to B, W thick - WA at A, WB
+  // at B. Its rim of light lies on the side of Normal, Light bright, 0..1
   TFrameRib = record
     A, B: TSdlFPoint;
     W: Single;
+    WA, WB: Single;
     // How deep its middle stands behind its frame's centre, units; below
     // zero - in front of it
     Z: Single;
@@ -70,6 +75,9 @@ type
     Farm: Boolean;
     // Its colour, the rim's aside
     Dark: TSdlColor;
+    // Running at the eye, far thicker at one end than at the other: drawn
+    // as a wedge
+    function Wedge: Boolean;
   end;
 
   // A point along a rib's shadow, in units: its middle, the half width of
@@ -130,10 +138,12 @@ type
       FarBeaconCount, NearBeaconCount: Integer;
     end;
     // Where the frames are seen from: how far the city's layer has ridden
-    // left, and the titles' eye over it
+    // left, the titles' eye over it, and how far in front of the eye the
+    // city's nearest building stands
     TSight = record
       CityOffset: Double;
       Eye: TFarPlaneEye;
+      Front: Double;
     end;
   private
     FDef: TFarPlaneDef;
@@ -151,6 +161,9 @@ type
     function DropToFloor(const AAt: TPoint3): TPoint3;
     function CutAtEye(const ASight: TSight; const AFrom, ATo: TPoint3;
       out AFromShare, AToShare: Double): Boolean;
+    function DepthOf(const ASight: TSight; const AAt: TPoint3): Double;
+    function RibInFront(const ASight: TSight; const AFrom, ATo: TPoint3;
+      out ASeenFrom, ASeenTo: TPoint3): Boolean;
     procedure LightRim(var ARib: TFrameRib);
     procedure AddFrame(AFrame: Integer; const ASight: TSight; var AFill: TViewFill);
     procedure AddBeacons(AFrame: Integer; const ASight: TSight; var AFill: TViewFill);
@@ -193,6 +206,8 @@ type
     procedure MeasurePixel;
     function StripEnd(const AAt, ANormal: TSdlFPoint;
       AShift, ACoreHalf, AOuterHalf, APeak: Single): TStripEnd;
+    function SolidEnd(const AAt, ANormal: TSdlFPoint;
+      AShift, AHalfWidth: Single): TStripEnd;
     function SolidStrip(const AFrom, ATo, ANormal: TSdlFPoint;
       AShift, AHalfWidth: Single): TStrip;
     function AddVertex(AX, AY: Single; AColor: TSdlColor): Integer;
@@ -200,6 +215,9 @@ type
     procedure AddStrip(const AStrip: TStrip; AColor: TSdlColor);
     procedure AddStroke(const AShadow: TRibShadow);
     procedure AddDisc(const ACentre: TSdlFPoint; ARadius: Single; AColor: TSdlColor);
+    procedure AddRod(const ARib: TFrameRib);
+    procedure AddWedge(const ARib: TFrameRib);
+    procedure AddRim(const ARib: TFrameRib; AShiftA, AShiftB, AWidth: Single);
     procedure Flush;
   public
     // AGlow - a point glow (Render.Glow) the caller owns and keeps alive
@@ -249,6 +267,11 @@ const
   // A shadow is cut this many units in front of that plane: cut on it, the
   // arithmetic could put its end behind it
   EyeCutMargin = 1E-3;
+  // A rib is drawn up to this far from the eye, the camera's units: close
+  // past one it is cut there, not dropped
+  RibNearest = 4;
+  // A rib this many times thicker at one end than at the other is a wedge
+  RibWedgeFrom = 1.3;
   // How much wider than its rib a shadow's dark is drawn
   ShadowWidening = 1.4;
   // The rim: how far from the sun it fades, units, the least of it far off
@@ -449,6 +472,18 @@ begin
   Result.Y := AlongX / RibLength;
 end;
 
+function TFrameRib.Wedge: Boolean;
+begin
+  var Thicker: Single := WA;
+  var Thinner: Single := WB;
+  if WB > WA then
+  begin
+    Thicker := WB;
+    Thinner := WA;
+  end;
+  Result := Thicker > RibWedgeFrom * Thinner;
+end;
+
 { TDomeFrames }
 
 constructor TDomeFrames.Create(const ADef: TFarPlaneDef);
@@ -594,6 +629,31 @@ begin
     AToShare := Crossing;
 end;
 
+function TDomeFrames.DepthOf(const ASight: TSight; const AAt: TPoint3): Double;
+begin
+  Result := FDef.Camera.Focal + AAt.Z - ASight.Eye.Push;
+end;
+
+// The part of an edge in front of the eye, cut RibNearest before it; False
+// - none of it
+function TDomeFrames.RibInFront(const ASight: TSight; const AFrom, ATo: TPoint3;
+  out ASeenFrom, ASeenTo: TPoint3): Boolean;
+begin
+  var FromDepth := DepthOf(ASight, AFrom);
+  var ToDepth := DepthOf(ASight, ATo);
+  ASeenFrom := AFrom;
+  ASeenTo := ATo;
+  Result := (FromDepth >= RibNearest) or (ToDepth >= RibNearest);
+  var Whole := (FromDepth >= RibNearest) and (ToDepth >= RibNearest);
+  if not Result or Whole then
+    Exit;
+  var Cut := PointBetween(AFrom, ATo, (RibNearest - FromDepth) / (ToDepth - FromDepth));
+  if FromDepth < RibNearest then
+    ASeenFrom := Cut
+  else
+    ASeenTo := Cut;
+end;
+
 procedure TDomeFrames.LightRim(var ARib: TFrameRib);
 begin
   ARib.Normal := NormalOf(ARib.A, ARib.B);
@@ -651,21 +711,27 @@ procedure TDomeFrames.AddEdge(const AFrame: TDomeFrame; const ASight: TSight;
 var
   Rib: TFrameRib;
   NearnessA, NearnessB: Single;
+  From, Till: TPoint3;
 begin
-  var From := AEdge.A;
-  var Till := AEdge.B;
-  var Seen := FDef.FramePoint(AFrame, ASight.CityOffset, ASight.Eye, From, Rib.A, NearnessA) and
-    FDef.FramePoint(AFrame, ASight.CityOffset, ASight.Eye, Till, Rib.B, NearnessB);
-  if not Seen then
+  if not RibInFront(ASight, AEdge.A, AEdge.B, From, Till) then
     Exit;
-  Rib.Z := (From.Z + Till.Z) / 2;
+  FDef.ProjectFramePoint(AFrame, ASight.CityOffset, ASight.Eye, From, Rib.A, NearnessA);
+  FDef.ProjectFramePoint(AFrame, ASight.CityOffset, ASight.Eye, Till, Rib.B, NearnessB);
+  Rib.Z := (AEdge.A.Z + AEdge.B.Z) / 2;
   var Thickness: Single := AFrame.Rib * AEdge.Thickening;
   Rib.W := Thickness * (NearnessA + NearnessB) / 2;
+  Rib.WA := Thickness * NearnessA;
+  Rib.WB := Thickness * NearnessB;
   Rib.Farm := AOfFarm;
   Rib.Dark := RibDark;
   LightRim(Rib);
 
-  if Rib.Z > 0 then
+  var Deepest: Double := DepthOf(ASight, AEdge.A);
+  if DepthOf(ASight, AEdge.B) > Deepest then
+    Deepest := DepthOf(ASight, AEdge.B);
+  // At rest the far half stands behind the buildings, as the chase has it
+  var BehindTheCity := ASight.Eye.AtRest or (Deepest >= ASight.Front);
+  if (Rib.Z > 0) and BehindTheCity then
   begin
     AFill.View.Far[AFill.FarCount] := Rib;
     Inc(AFill.FarCount);
@@ -678,7 +744,7 @@ begin
 
   var Lifted := (AEdge.A.Y > OverEquator) or (AEdge.B.Y > OverEquator);
   if Lifted and (FToSun.Y > 0) then
-    AddShadow(AFrame, ASight, From, Till, Thickness, AFill);
+    AddShadow(AFrame, ASight, AEdge.A, AEdge.B, Thickness, AFill);
 end;
 
 procedure TDomeFrames.AddFrame(AFrame: Integer; const ASight: TSight;
@@ -736,6 +802,7 @@ var
 begin
   Sight.CityOffset := ACityOffset;
   Sight.Eye := AEye;
+  Sight.Front := FDef.FrontDepth(AEye);
   Fill := Default(TViewFill);
   var Most := 0;
   for var Edges in FEdges do
@@ -813,12 +880,20 @@ end;
 function TDomeFramePainter.SolidStrip(const AFrom, ATo, ANormal: TSdlFPoint;
   AShift, AHalfWidth: Single): TStrip;
 begin
+  Result.AtFrom := SolidEnd(AFrom, ANormal, AShift, AHalfWidth);
+  Result.AtTo := SolidEnd(ATo, ANormal, AShift, AHalfWidth);
+end;
+
+// Across one end of a band, its middle AShift along ANormal, AHalfWidth to
+// each side: solid inside, fading out over one pixel at both edges
+function TDomeFramePainter.SolidEnd(const AAt, ANormal: TSdlFPoint;
+  AShift, AHalfWidth: Single): TStripEnd;
+begin
   var Inner: Single := AHalfWidth - FPixel / 2;
   if Inner < 0 then
     Inner := 0;
   var Outer: Single := AHalfWidth + FPixel / 2;
-  Result.AtFrom := StripEnd(AFrom, ANormal, AShift, Inner, Outer, 1);
-  Result.AtTo := StripEnd(ATo, ANormal, AShift, Inner, Outer, 1);
+  Result := StripEnd(AAt, ANormal, AShift, Inner, Outer, 1);
 end;
 
 function TDomeFramePainter.AddVertex(AX, AY: Single; AColor: TSdlColor): Integer;
@@ -950,27 +1025,60 @@ begin
   SDL_RenderSetClipRect(FRenderer, nil);
 end;
 
+// A rib of one width: a stroke with round ends, a pixel wide at the least
+procedure TDomeFramePainter.AddRod(const ARib: TFrameRib);
+begin
+  var Width: Single := Max(ARib.W, FPixel);
+  AddStrip(SolidStrip(ARib.A, ARib.B, ARib.Normal, 0, Width / 2), ARib.Dark);
+  AddDisc(ARib.A, Width / 2, ARib.Dark);
+  AddDisc(ARib.B, Width / 2, ARib.Dark);
+  AddRim(ARib, Width * RimShift, Width * RimShift, Width * RimWidth);
+end;
+
+// A rib running at the eye: as wide at each end as it is there, no round
+// ends
+procedure TDomeFramePainter.AddWedge(const ARib: TFrameRib);
+var
+  Strip: TStrip;
+begin
+  Strip.AtFrom := SolidEnd(ARib.A, ARib.Normal, 0, ARib.WA / 2);
+  Strip.AtTo := SolidEnd(ARib.B, ARib.Normal, 0, ARib.WB / 2);
+  AddStrip(Strip, ARib.Dark);
+  var Thinner: Single := ARib.WA;
+  if ARib.WB < Thinner then
+    Thinner := ARib.WB;
+  AddRim(ARib, ARib.WA * RimShift, ARib.WB * RimShift, Thinner * RimWidth);
+end;
+
+// The rim AShiftA off the rib's middle at A and AShiftB at B, toward the
+// sun, AWidth wide and a pixel at the least
+procedure TDomeFramePainter.AddRim(const ARib: TFrameRib; AShiftA, AShiftB,
+  AWidth: Single);
+var
+  Strip: TStrip;
+begin
+  if ARib.Light < LeastRim then
+    Exit;
+  var Rim := RimColor;
+  Rim.A := Round(255 * Min(ARib.Light, Single(1)));
+  var RimWide: Single := AWidth;
+  if RimWide < FPixel then
+    RimWide := FPixel;
+  Strip.AtFrom := SolidEnd(ARib.A, ARib.Normal, AShiftA, RimWide / 2);
+  Strip.AtTo := SolidEnd(ARib.B, ARib.Normal, AShiftB, RimWide / 2);
+  AddStrip(Strip, Rim);
+end;
+
 // Each rib dark, then its rim: the next rib over it covers both, as the
 // stand strokes them
 procedure TDomeFramePainter.DrawRibs(const ARibs: TArray<TFrameRib>);
 begin
   MeasurePixel;
   for var Rib in ARibs do
-  begin
-    var Width: Single := Max(Rib.W, FPixel);
-    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, 0, Width / 2), Rib.Dark);
-    AddDisc(Rib.A, Width / 2, Rib.Dark);
-    AddDisc(Rib.B, Width / 2, Rib.Dark);
-    if Rib.Light < LeastRim then
-      Continue;
-    var Rim := RimColor;
-    Rim.A := Round(255 * Min(Rib.Light, Single(1)));
-    var RimWide: Single := Width * RimWidth;
-    if RimWide < FPixel then
-      RimWide := FPixel;
-    AddStrip(SolidStrip(Rib.A, Rib.B, Rib.Normal, Width * RimShift, RimWide / 2),
-      Rim);
-  end;
+    if Rib.Wedge then
+      AddWedge(Rib)
+    else
+      AddRod(Rib);
   Flush;
 end;
 

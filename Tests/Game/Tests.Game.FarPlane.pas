@@ -48,10 +48,13 @@
   horizon, its slabs start where the stand's rows do, and behind the eye
   it has none. A dome takes less of the sun for an eye pushed toward it; a
   frame's point stands where the stand projects it, and one at the eye is
-  not seen. Level 2 reads its plane; a plane is read as written, and one
-  without a camera, with a floor that melts over nothing or is cut into
-  no slabs raises. Till the titles' path is flown to, no frame of level 2
-  comes so near the eye that a rib would be dropped.
+  not seen. Inside a dome's glass the eye sees the sun through the dome,
+  wherever the dome stands before the sun; past the glass, at its rest or
+  under a capsule it is in no dome. The city's front card is its nearest
+  building in front of the eye, one the eye has passed not counted, and
+  none once the eye has passed them all. Level 2 reads its plane; a plane
+  is read as written, and one without a camera, with a floor that melts
+  over nothing or is cut into no slabs raises.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -225,6 +228,14 @@ type
     procedure TestTheEyeSeesAFramesPointWhereTheStandHasIt;
     [Test]
     procedure TestAFramesPointAtTheEyeIsNotSeen;
+    [Test]
+    procedure TestInsideTheGlassTheEyeSeesTheSunThroughTheDome;
+    [Test]
+    procedure TestPastTheGlassTheEyeIsInNoDome;
+    [Test]
+    procedure TestAtItsRestOrUnderACapsuleTheEyeIsInNoDome;
+    [Test]
+    procedure TestTheFrontCardIsTheNearestBuildingBeforeTheEye;
   end;
 
   [TestFixture]
@@ -330,8 +341,6 @@ type
     procedure TestAFloorThatMeltsOverNothingRaises;
     [Test]
     procedure TestAFloorCutIntoNoSlabsRaises;
-    [Test]
-    procedure TestTillItIsFlownNoFrameStandsAtTheEye;
   end;
 
 implementation
@@ -1857,36 +1866,77 @@ begin
     end, EFarPlaneError);
 end;
 
-// A rib with an end nearer the eye than FrameNearestShare of the focal
-// length is dropped whole: the flight is flown only as far as no frame
-// comes that near
-procedure TFarPlaneReadTests.TestTillItIsFlownNoFrameStandsAtTheEye;
+// The dome of StandFrames: 512 wide from x 468, 170 tall. The city ridden
+// so far that the dome's centre stands in the middle of the screen, the
+// eye at the depth of its centre, lifted halfway up its glass
 const
-  Step = 0.05;
+  DomeCentred = 468;
+  // The eye 85 over the crater floor: half the dome's height
+  HalfwayUp = 57;
+
+function InsideTheDome: TFarPlaneEye;
 begin
-  var Level := TLevel.Create;
-  try
-    Level.LoadFromFile(TPath.Combine(BinDir, LevelTwoFile));
-    var Plane := Level.FarPlane;
-    var Nearest: Double := Plane.Camera.Focal * FrameNearestShare;
-    var Stand: Double := Plane.CityLength;
-    var Seconds: Double := 0;
-    while Seconds <= Level.Titles.FlightTill do
-    begin
-      var Push := Level.Titles.Path.EyeAt(Seconds, Stand).Push;
-      for var Frame in Plane.Frames do
-      begin
-        var HalfDepth: Double := Frame.W / 2;
-        if Frame.Kind = fkCapsule then
-          HalfDepth := Frame.D / 2;
-        Assert.IsTrue(Plane.Camera.Focal - HalfDepth - Push >= Nearest,
-          'Its nearest rib is whole before the eye');
-      end;
-      Seconds := Seconds + Step;
-    end;
-  finally
-    Level.Free;
-  end;
+  Result := Lifted(HalfwayUp, Focal);
+  Result.Ride := 0;
+end;
+
+procedure TFarPlaneEyeTests.TestInsideTheGlassTheEyeSeesTheSunThroughTheDome;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  var Offsets := StandingAt(DomeCentred);
+  Assert.IsTrue(Def.EyeInside(Def.Frames[0], DomeCentred, InsideTheDome), 'Inside');
+  Assert.IsTrue(Abs(Def.SunCover(Offsets, InsideTheDome) - 1) < ShareSlack,
+    'Through the dome, all of the tint');
+
+  // Two hundred units to the side of its middle, a dome before nothing
+  var Aside := StandingAt(DomeCentred + 200);
+  Assert.IsTrue(Def.EyeInside(Def.Frames[0], DomeCentred + 200, InsideTheDome),
+    'Inside still');
+  Assert.IsTrue(Abs(Def.SunCover(Aside, InsideTheDome) - 1) < ShareSlack,
+    'Wherever the dome stands before the sun');
+end;
+
+procedure TFarPlaneEyeTests.TestPastTheGlassTheEyeIsInNoDome;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  var Dome := Def.Frames[0];
+  var Behind := Lifted(HalfwayUp, Focal + Dome.W / 2 + 1);
+  Assert.IsFalse(Def.EyeInside(Dome, DomeCentred, Behind), 'Past its back');
+  var Over := Lifted(Dome.H, Focal);
+  Assert.IsFalse(Def.EyeInside(Dome, DomeCentred, Over), 'Over its crown');
+  Assert.IsFalse(Def.EyeInside(Dome, DomeCentred + Dome.W / 2 + 1, InsideTheDome),
+    'Beside it');
+end;
+
+procedure TFarPlaneEyeTests.TestAtItsRestOrUnderACapsuleTheEyeIsInNoDome;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera + StandFrames));
+  Assert.IsFalse(Def.EyeInside(Def.Frames[0], DomeCentred, RestEye), 'At rest');
+
+  var Farm := ReadFromLayout(DepthLayout(StandCamera + CapsuleFrames));
+  var Capsule := Farm.Frames[0];
+  var Under := Lifted(10, Focal);
+  Assert.IsFalse(Farm.EyeInside(Capsule, Capsule.X + Capsule.W / 2 - 256, Under),
+    'A capsule is no dome');
+end;
+
+// The buildings of DepthLayout: below the base line 1024 / 1.5 from the
+// eye at rest, on it 1024, halfway to the horizon 2048, on the horizon
+// at the least nearness
+procedure TFarPlaneEyeTests.TestTheFrontCardIsTheNearestBuildingBeforeTheEye;
+const
+  BelowBaseLine = Focal / 1.5;
+  OnBaseLine = Focal;
+  Halfway = 2 * Focal;
+  OnHorizon = Focal / 0.05;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera));
+  Assert.IsTrue(Abs(Def.FrontDepth(RestEye) - BelowBaseLine) < RideSlack, 'At rest');
+  Assert.IsTrue(Abs(Def.FrontDepth(Lifted(0, 700)) - (OnBaseLine - 700)) < RideSlack,
+    'The one below the base line passed');
+  Assert.IsTrue(Abs(Def.FrontDepth(Lifted(0, OnBaseLine - 5)) - (Halfway - OnBaseLine + 5)) <
+    RideSlack, 'One five units before the eye is passed too');
+  Assert.IsTrue(Def.FrontDepth(Lifted(0, OnHorizon)) = MaxDouble, 'None once all are passed');
 end;
 
 initialization

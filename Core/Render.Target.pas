@@ -11,6 +11,12 @@
   A layer of the frame may be drawn moved by whole pixels, where an
   origin in units moves it a unit at a step.
 
+  The frame may be lowered before it turns - the pitch of the titles'
+  flight, the nose up taking the picture down: the copy is turned about
+  the point of the frame that comes to the window's middle, and the frame's
+  place on the window is cleared to the background first, for the top it
+  bares.
+
   A card with no texture large enough for the banked frame gets one for
   the frame as it is, and the frame goes through it level: the layers
   still move, the bank is not played.
@@ -29,6 +35,15 @@ uses
   Sdl2.Core;
 
 type
+  // How a frame comes to the window: Width by Height units, grown Cover
+  // times, lowered Drop units and banked BankDegrees about its middle
+  TFrameTurn = record
+    Width, Height: Integer;
+    BankDegrees, Drop, Cover: Single;
+    // Where a point of the frame, units, lands on the window
+    function PointAt(AX, AY: Single): TSdlFPoint;
+  end;
+
   TFrameTarget = class
   private
     FRenderer: PSdlRenderer;
@@ -40,6 +55,8 @@ type
     FTextureSize: TSdlPoint;
     FRebuilt: Boolean;
     FBankDegrees: Single;
+    FDrop: Single;
+    FBackground: TSdlColor;
     FCover: Single;
     FWindowScale: Single;
     FScale: Single;
@@ -47,6 +64,7 @@ type
     function SizeAt(AWindowScale: Single): TSdlPoint;
     procedure Rebuild(const ASize: TSdlPoint);
     procedure PlaceLayers(AShiftX, AShiftY: Integer);
+    procedure ClearFramePlace;
   public
     // AFrameWidth by AFrameHeight - the frame in units, the renderer's
     // logical size. The texture has room for a bank of AMaxBankDegrees
@@ -55,17 +73,21 @@ type
       AFrameHeight: Integer; AMaxBankDegrees: Single);
     destructor Destroy; override;
     // From here to Close the drawing lands in the texture, in the frame's
-    // units as on the window. Called with the window on the receiving
-    // end. False - there is no texture, not even for the frame unbanked:
-    // nothing is changed, and the frame is the caller's to draw straight
-    function Open(ABankDegrees: Single; const ABackground: TSdlColor): Boolean;
+    // units as on the window; on the window it is lowered ADrop units and
+    // banked. Called with the window on the receiving end. False - there
+    // is no texture, not even for the frame unbanked: nothing is changed,
+    // and the frame is the caller's to draw straight
+    function Open(ABankDegrees, ADrop: Single; const ABackground: TSdlColor): Boolean;
     // What is drawn next lands so far, in units, from the frame's place -
     // rounded to whole pixels - and is cut at the frame's edge moved with
     // it. 0, 0 is the frame's place again
     procedure ShiftLayers(AUnitsX, AUnitsY: Single);
     // The window is on the receiving end again, as it was, and the frame
-    // is on it, banked
+    // is on it, lowered and banked
     procedure Close;
+    // Where a point of the frame, units, stands on the window after the
+    // last Close
+    function ScreenPoint(AX, AY: Single): TSdlFPoint;
     // The last Open made the texture anew: the window's size has changed
     property Rebuilt: Boolean read FRebuilt;
     property TextureSize: TSdlPoint read FTextureSize;
@@ -154,7 +176,7 @@ begin
   SDL_RenderSetScale(FRenderer, FScale, FScale);
 end;
 
-function TFrameTarget.Open(ABankDegrees: Single;
+function TFrameTarget.Open(ABankDegrees, ADrop: Single;
   const ABackground: TSdlColor): Boolean;
 var
   ScaleX, ScaleY: Single;
@@ -181,6 +203,8 @@ begin
 
   FWindowScale := ScaleX;
   FBankDegrees := ABankDegrees;
+  FDrop := ADrop;
+  FBackground := ABackground;
   if FLevelOnly then
     FBankDegrees := 0;
   FCover := BankCover(FBankDegrees, FUnits.X, FUnits.Y);
@@ -215,11 +239,12 @@ var
   Pivot: TSdlFPoint;
 begin
   SDL_SetRenderTarget(FRenderer, nil);
+  ClearFramePlace;
 
-  // The frame's middle in the texture goes to the frame's middle on the
-  // window, and the texture turns about it
+  // The point of the frame ADrop over its middle goes to the frame's
+  // middle on the window, and the texture turns about it
   var PivotX: Double := FPlace.X + FUnits.X * FScale / 2;
-  var PivotY: Double := FPlace.Y + FUnits.Y * FScale / 2;
+  var PivotY: Double := FPlace.Y + (FUnits.Y / 2 - FDrop) * FScale;
   Pivot.X := PivotX;
   Pivot.Y := PivotY;
   Place.X := FUnits.X * FWindowScale / 2 - PivotX;
@@ -227,9 +252,9 @@ begin
   Place.W := FTextureSize.X;
   Place.H := FTextureSize.Y;
 
-  // Unbanked every texel lies on its pixel: taken as it is, the picture
-  // is the one drawn straight to the window
-  if FBankDegrees = 0 then
+  // Unbanked and not lowered every texel lies on its pixel: taken as it
+  // is, the picture is the one drawn straight to the window
+  if (FBankDegrees = 0) and (FDrop = 0) then
     SDL_SetTextureScaleMode(FTexture, SdlScaleModeNearest)
   else
     SDL_SetTextureScaleMode(FTexture, SdlScaleModeLinear);
@@ -239,6 +264,46 @@ begin
   SDL_RenderCopyExF(FRenderer, FTexture, nil, @Place, FBankDegrees, @Pivot,
     SdlFlipNone);
   SDL_RenderSetScale(FRenderer, FWindowScale, FWindowScale);
+end;
+
+// What a lowered frame bares on the window is the background, as the
+// texture's own margin is
+procedure TFrameTarget.ClearFramePlace;
+var
+  Place: TSdlFRect;
+begin
+  Place.X := 0;
+  Place.Y := 0;
+  Place.W := FUnits.X;
+  Place.H := FUnits.Y;
+  SDL_SetRenderDrawBlendMode(FRenderer, SdlBlendModeNone);
+  SDL_SetRenderDrawColor(FRenderer, FBackground.R, FBackground.G, FBackground.B,
+    FBackground.A);
+  SDL_RenderFillRectF(FRenderer, @Place);
+end;
+
+function TFrameTarget.ScreenPoint(AX, AY: Single): TSdlFPoint;
+var
+  Turn: TFrameTurn;
+begin
+  Turn.Width := FUnits.X;
+  Turn.Height := FUnits.Y;
+  Turn.BankDegrees := FBankDegrees;
+  Turn.Drop := FDrop;
+  Turn.Cover := FCover;
+  Result := Turn.PointAt(AX, AY);
+end;
+
+// SDL turns a copy clockwise on the window, as a canvas turns its picture
+function TFrameTurn.PointAt(AX, AY: Single): TSdlFPoint;
+begin
+  var Turn: Double := BankDegrees * Pi / 180;
+  var MiddleX: Double := Width / 2;
+  var MiddleY: Double := Height / 2;
+  var AcrossX: Double := (AX - MiddleX) * Cover;
+  var AcrossY: Double := (AY + Drop - MiddleY) * Cover;
+  Result.X := MiddleX + AcrossX * Cos(Turn) - AcrossY * Sin(Turn);
+  Result.Y := MiddleY + AcrossX * Sin(Turn) + AcrossY * Cos(Turn);
 end;
 
 end.

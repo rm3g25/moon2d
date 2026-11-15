@@ -3,7 +3,9 @@
   the far plane's clock (Levels.FarPlane: "cityLights", "emblem",
   "beacons"): a sign's breath and its tired faults, a window waking for a
   span, the TEK emblem going out and lighting again part by part, a
-  beacon's flash.
+  beacon's flash. The titles' eye passes the emblem on a cue of the track:
+  about the cue the sign burns steady whatever its own dice say, and
+  stutters as the eye goes by (SignOnCue).
 
   The dice are a 32-bit integer hash (lowbias32), seeded by places - a
   building's in the city's list and a light's in its piece, a node's on its
@@ -55,6 +57,9 @@ function EmblemPartLevel(const AEmblem: TCityEmblem; const AFlicker: TCityFlicke
 // ANodeX, ANodeZ on the unit half-sphere
 function BeaconSeed(AFrame: Integer; ANodeX, ANodeZ: Double): Cardinal;
 function BeaconLevel(const ABeacons: TCityBeacons; ASeed: Cardinal; ATick: Integer): Double;
+// A part of the emblem at ALevel, as the titles' eye passing it ASince
+// seconds from the cue sees it: steady about the cue, a stutter on it
+function SignOnCue(ALevel, ASince: Double): Double;
 
 implementation
 
@@ -99,6 +104,24 @@ const
   // A node's place to a thousandth, shifted to stay above zero
   NodeGrid = 1000;
   NodeGridShift = 100000;
+
+  // So many seconds either side of the sign's cue its own dice are not
+  // heard
+  SignCueReach = 4;
+
+type
+  // Seconds from the sign's cue, From to Till, the level the sign drops to
+  TSignDip = record
+    From, Till: Double;
+    Level: Double;
+  end;
+
+const
+  SignStutter: array [0..3] of TSignDip = (
+    (From: -0.12; Till: 0; Level: 0.12),
+    (From: 0.1; Till: 0.16; Level: 0.12),
+    (From: 0.3; Till: 0.5; Level: 0),
+    (From: 0.58; Till: 0.63; Level: 0.12));
 
 // The low 32 bits of the product, in halves: no step overflows, so the
 // checked builds take it as it is
@@ -264,6 +287,16 @@ begin
   Result := ABeacons.GlowLevel;
   if (ATick + Phase) mod Period < ABeacons.FlashTicks then
     Result := ABeacons.FlashLevel;
+end;
+
+function SignOnCue(ALevel, ASince: Double): Double;
+begin
+  if Abs(ASince) > SignCueReach then
+    Exit(ALevel);
+  for var Dip in SignStutter do
+    if (ASince >= Dip.From) and (ASince < Dip.Till) then
+      Exit(Dip.Level);
+  Result := 1;
 end;
 
 end.

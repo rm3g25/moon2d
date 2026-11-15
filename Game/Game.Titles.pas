@@ -13,8 +13,10 @@
   track far off still takes it at once.
 
   The flight is flown as far as the titles' file has it flown
-  (TTitlesDef.FlightTill) - for the time being short of the path's end; the
-  frame goes dark over its last second, and there it ends.
+  (TTitlesDef.FlightTill) - the path's end, while the stars are not in the
+  game; the frame goes dark over its last second, and there it ends. On
+  the way the eye passes the TEK sign and the sun comes out of the dome's
+  glass, each on a cue by the flight's seconds (SignSince, FlareSince).
 
   Only the clock, its cues, the eye and how much of the card shows: the
   track, the logo, the gate's lamp and the drawing are the caller's. No SDL.
@@ -88,6 +90,10 @@ type
     function FlashLevel(AAlpha: Single): Single;
     // The flight's own seconds between the ticks; 0 before it
     function FlightSeconds(AAlpha: Single): Double;
+    // The flight's seconds from the cue the TEK sign stutters on, and from
+    // the one the sun flares on; below 0 before each
+    function SignSince(AAlpha: Single): Double;
+    function FlareSince(AAlpha: Single): Double;
     // The eye between the ticks. AStand - the place of the city's strip
     // that stands in the middle of the screen where the world stands; not
     // flying, the eye is at its rest there
@@ -253,6 +259,17 @@ begin
   Result := SecondsAt(AAlpha) - FDef.Cues.Flight;
   if Result < 0 then
     Result := 0;
+end;
+
+// The flight's own cues stand by its seconds, not on the track's beats
+function TTitles.SignSince(AAlpha: Single): Double;
+begin
+  Result := FlightSeconds(AAlpha) - (FDef.Cues.Neon - FDef.Cues.Flight);
+end;
+
+function TTitles.FlareSince(AAlpha: Single): Double;
+begin
+  Result := FlightSeconds(AAlpha) - (FDef.Cues.Flare - FDef.Cues.Flight);
 end;
 
 function TTitles.EyeAt(AAlpha: Single; AStand: Double): TEye;

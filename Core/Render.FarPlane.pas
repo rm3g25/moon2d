@@ -912,7 +912,9 @@ begin
 end;
 
 // It stands on the lower point of its frame - the first part - at the tip
-// of the building, as near as the building; it is never mirrored
+// of the building, as near as the building; it is never mirrored. The
+// titles' eye passes it on a cue: about it the sign burns steady and
+// stutters
 procedure TFarPlanePainter.DrawEmblem(const AElement: TFarPlaneElement;
   ALeft, AHeight: Double; ATick: Integer);
 begin
@@ -935,6 +937,8 @@ begin
   for var i := 0 to High(Emblem.Parts) do
   begin
     var Level := EmblemPartLevel(Emblem, FDef.Lights.Flicker, i, ATick);
+    if FEye.Flying then
+      Level := SignOnCue(Level, FEye.SignSince);
     GlowInto(FEmblemHalos[i], BoxPlace(Emblem.Halos[i], Left, Top, Width, Height),
       Emblem.Color, Emblem.HaloLevel * Level);
     GlowInto(FEmblemTubes[i], BoxPlace(Emblem.Parts[i], Left, Top, Width, Height),

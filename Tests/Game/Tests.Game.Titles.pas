@@ -16,7 +16,8 @@
   seconds and stands where the world stood before it. The flight ends
   once, at the second the titles' file has it flown to, the frame gone
   dark over the second before; a clear ends it. Titles without a path
-  never fly.
+  never fly. The sign's stutter and the sun's flare count the flight's
+  seconds from their own cues, below zero before them.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -119,6 +120,8 @@ type
     procedure TestTheFrameGoesDarkOverTheLastSecond;
     [Test]
     procedure TestClearEndsTheFlight;
+    [Test]
+    procedure TestTheSignAndTheFlareCountFromTheirCues;
   end;
 
 implementation
@@ -145,6 +148,9 @@ const
   Lifted = 40.0;
   // The titles' file has the path flown short of its end
   FlownTill = 8.0;
+  // The sign stutters three seconds into the flight, the sun flares at five
+  SignCue = FlightCue + 3;
+  FlareCue = FlightCue + 5;
   // Where the world of the tests stands
   Stand = 2400.0;
 
@@ -171,6 +177,8 @@ function FlyingTitles: TTitlesDef;
 begin
   Result := TestTitles;
   Result.Cues.Flight := FlightCue;
+  Result.Cues.Neon := SignCue;
+  Result.Cues.Flare := FlareCue;
   Result.Path.Keys := [KeyFromStand(0, 0, 0),
     KeyFromStand(CastOffSeconds, CastOffWay, 0),
     KeyFromStand(RestTill, RestTillWay, 0),
@@ -560,6 +568,19 @@ begin
   FTitles.Start;
   RunToFlight;
   Assert.IsTrue(FTitles.Flying, 'It flies again');
+end;
+
+procedure TTitlesFlightTests.TestTheSignAndTheFlareCountFromTheirCues;
+begin
+  Assert.IsTrue(Abs(FTitles.SignSince(1) + 3) < ClockSlack, 'Three seconds before the sign');
+  Assert.IsTrue(Abs(FTitles.FlareSince(1) + 5) < ClockSlack, 'Five before the flare');
+
+  RunToFlight;
+  FlyPast(4);
+  var Flown := FTitles.FlightSeconds(1);
+  Assert.IsTrue(Abs(FTitles.SignSince(1) - (Flown - 3)) < ClockSlack, 'Past the sign''s cue');
+  Assert.IsTrue(Abs(FTitles.FlareSince(1) - (Flown - 5)) < ClockSlack, 'Not yet the flare''s');
+  Assert.IsTrue(FTitles.FlareSince(1) < 0, 'The sun not out yet');
 end;
 
 initialization

@@ -5,6 +5,12 @@
   steeper bank; an upright frame as the same one on its side; and grown so,
   it covers the unbanked frame's corners with nothing to spare.
 
+  Where a point of the frame lands on the window: unturned where it
+  stands; lowered by the drop; banked clockwise, as SDL turns a copy, about
+  the frame's middle, the point the drop brings there standing still; and
+  the sun of the titles where the stand's turned canvas has it at 23.2 and
+  29.2 s of the flight.
+
   The texture, the viewport and the copy are the card's: a live run.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
@@ -35,7 +41,23 @@ type
     procedure TestTheGrownFrameCoversTheCornersAndNoMore;
   end;
 
+  [TestFixture]
+  TFrameTurnTests = class
+  public
+    [Test]
+    procedure TestUnturnedAPointStandsWhereItIs;
+    [Test]
+    procedure TestTheDropLowersAPoint;
+    [Test]
+    procedure TestABankTurnsClockwiseAboutTheMiddle;
+    [Test]
+    procedure TestTheSunStandsWhereTheStandHasIt;
+  end;
+
 implementation
+
+uses
+  Sdl2.Core;
 
 const
   FrameWide = 512;
@@ -107,7 +129,68 @@ begin
   Assert.IsTrue(UpperCorner >= -CornerSlack, 'With nothing to spare: it lies on the edge');
 end;
 
+// TFrameTurnTests
+
+const
+  PointSlack = 0.001;
+  SunX = 288;
+  SunY = 208;
+
+function Turned(ABankDegrees, ADrop: Single): TFrameTurn;
+begin
+  Result.Width := FrameWide;
+  Result.Height := FrameTall;
+  Result.BankDegrees := ABankDegrees;
+  Result.Drop := ADrop;
+  Result.Cover := BankCover(ABankDegrees, FrameWide, FrameTall);
+end;
+
+function Lands(const ATurn: TFrameTurn; AX, AY, AWantX, AWantY: Single): Boolean;
+begin
+  var At := ATurn.PointAt(AX, AY);
+  Result := (Abs(At.X - AWantX) < PointSlack) and (Abs(At.Y - AWantY) < PointSlack);
+end;
+
+procedure TFrameTurnTests.TestUnturnedAPointStandsWhereItIs;
+begin
+  Assert.IsTrue(Lands(Turned(0, 0), SunX, SunY, SunX, SunY), 'The sun');
+  Assert.IsTrue(Lands(Turned(0, 0), 0, 0, 0, 0), 'A corner');
+end;
+
+procedure TFrameTurnTests.TestTheDropLowersAPoint;
+begin
+  Assert.IsTrue(Lands(Turned(0, 30), SunX, SunY, SunX, SunY + 30), 'Thirty units down');
+end;
+
+procedure TFrameTurnTests.TestABankTurnsClockwiseAboutTheMiddle;
+begin
+  var Quarter := Turned(90, 0);
+  Quarter.Cover := 1;
+  Assert.IsTrue(Lands(Quarter, FrameWide / 2 + 100, FrameTall / 2,
+    FrameWide / 2, FrameTall / 2 + 100), 'Right of the middle goes down');
+  var Flight := Turned(14, 40);
+  Assert.IsTrue(Lands(Flight, FrameWide / 2, FrameTall / 2 - 40, FrameWide / 2, FrameTall / 2),
+    'What the drop brings to the middle stands still');
+end;
+
+// The stand's turnFrame on its canvas, the sun put through its transform
+procedure TFrameTurnTests.TestTheSunStandsWhereTheStandHasIt;
+const
+  // 23.2 s: banked 14, level
+  BankedX = 291.13822331338326;
+  BankedY = 222.0799404361714;
+  // 29.2 s: banked 0.5, the nose up 7 - the frame lowered 1024 tan 7
+  ClimbBank = 0.5;
+  ClimbDrop = 125.73139036457431;
+  ClimbX = 287.1187132935531;
+  ClimbY = 335.6521207353218;
+begin
+  Assert.IsTrue(Lands(Turned(FlightBank, 0), SunX, SunY, BankedX, BankedY), 'Out of the dome');
+  Assert.IsTrue(Lands(Turned(ClimbBank, ClimbDrop), SunX, SunY, ClimbX, ClimbY), 'Climbing');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TBankCoverTests);
+  TDUnitX.RegisterTestFixture(TFrameTurnTests);
 
 end.

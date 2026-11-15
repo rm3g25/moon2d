@@ -5,9 +5,11 @@
   it raises. Titles without a path do not fly; a path is read as written,
   each key placed where the world stood, from there or along the strip; a
   path wants its flight's cue after the flash, two keys at the least and
-  each after the one before it. A path is flown to its last key, or
-  short of it as far as the file says, and one flown nowhere raises. The
-  file level 2 ships reads, and flies on past the eye's rest.
+  each after the one before it. Titles that fly read the flight's own cues
+  - the sign's and the flare's - and want them in the flight, the flare
+  after the sign. A path is flown to its last key, or short of it as far as
+  the file says, and one flown nowhere raises. The file level 2 ships
+  reads, and flies to its last key.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -55,6 +57,12 @@ type
     procedure TestAPathFlownNowhereRaises;
     [Test]
     procedure TestTheFileOfLevelTwoFlies;
+    [Test]
+    procedure TestTheFlightsOwnCuesAreRead;
+    [Test]
+    procedure TestASignNotInTheFlightRaises;
+    [Test]
+    procedure TestAFlareNotAfterTheSignRaises;
   end;
 
 implementation
@@ -66,7 +74,7 @@ const
   Slack = 0.0001;
   ShippedFile = 'finale.json';
   GoodCues = '"card": 10, "cardOut": 16, "flash": 17';
-  FlyingCues = GoodCues + ', "flight": 19';
+  FlyingCues = GoodCues + ', "flight": 19, "neon": 20, "flare": 22';
   // Where the world stood; so far from there, lifted; a place of the strip,
   // pushed, banked and pitched
   GoodKeys = '{"t": 0, "x": null, "y": 0, "z": 0, "bank": 0, "pitch": 0},'
@@ -279,7 +287,40 @@ begin
     'The camera leaves a logo that has flared');
   Assert.IsTrue(Titles.Path.Keys[0].Placing = epStand, 'From where the world stood');
   Assert.IsTrue(Titles.Path.RestTill > 0, 'It leaves along the strip, at its rest');
-  Assert.IsTrue(Titles.FlightTill > Titles.Path.RestTill, 'Flown on past its rest');
+  var LastKey := Titles.Path.Keys[High(Titles.Path.Keys)].Seconds;
+  Assert.IsTrue(Abs(Titles.FlightTill - LastKey) < Slack, 'Flown to its last key');
+end;
+
+procedure TTitlesReadTests.TestTheFlightsOwnCuesAreRead;
+begin
+  var Titles := ReadFromText(FlyingTitlesFile(FlyingCues, GoodKeys));
+  Assert.IsTrue(Abs(Titles.Cues.Neon - 20) < Slack, 'The sign''s');
+  Assert.IsTrue(Abs(Titles.Cues.Flare - 22) < Slack, 'The flare''s');
+end;
+
+procedure TTitlesReadTests.TestASignNotInTheFlightRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(FlyingTitlesFile(GoodCues + ', "flight": 19, "flare": 22', GoodKeys));
+    end, ETitlesError, 'No sign''s cue');
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(FlyingTitlesFile(GoodCues + ', "flight": 19, "neon": 19, "flare": 22',
+        GoodKeys));
+    end, ETitlesError, 'The sign as the camera leaves');
+end;
+
+procedure TTitlesReadTests.TestAFlareNotAfterTheSignRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(FlyingTitlesFile(GoodCues + ', "flight": 19, "neon": 20, "flare": 20',
+        GoodKeys));
+    end, ETitlesError);
 end;
 
 initialization

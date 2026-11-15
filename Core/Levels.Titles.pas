@@ -7,9 +7,10 @@
   tools/chase/build_stand.py plays on the stand. Titles without a path do
   not fly: the card and the logo are all of them. A path may say how far
   it is flown ("flownTill", a second of the flight) while the game does not
-  fly all of it; with none it is flown to its last key. The keys the game
-  does not play yet - the flight's own cues, the lines at the stars - are
-  let be.
+  fly all of it; with none it is flown to its last key. Titles that fly
+  read the flight's own cues too - the sign's stutter and the sun's flare.
+  What the game does not play yet - the sections the lines at the stars
+  hang on - is let be.
 
   No SDL.
 
@@ -28,11 +29,14 @@ type
 
   // Seconds of the end track, which starts with the titles' clock. Card -
   // the studio's card comes in, gone by CardOut; Flash - the logo flares;
-  // Flight - the camera leaves, read for titles that fly
+  // Flight - the camera leaves; Neon - the TEK sign stutters as the eye
+  // goes by; Flare - the sun comes out of the dome's glass. The last three
+  // are read for titles that fly
   TTitlesCues = record
     Card, CardOut: Double;
     Flash: Double;
     Flight: Double;
+    Neon, Flare: Double;
   end;
 
   TTitlesDef = record
@@ -79,6 +83,8 @@ begin
   Result.CardOut := AObj.GetValue<Double>('cardOut');
   Result.Flash := AObj.GetValue<Double>('flash');
   Result.Flight := AObj.GetValue<Double>('flight', 0);
+  Result.Neon := AObj.GetValue<Double>('neon', 0);
+  Result.Flare := AObj.GetValue<Double>('flare', 0);
 end;
 
 // "dx" places the key from where the world stood, "x" along the strip; a
@@ -123,8 +129,9 @@ begin
       raise ETitlesError.CreateFmt(STitlesKeyOutOfOrder, [ALevelId, i + 1]);
 end;
 
-// The card is gone before the logo flares where it stood, and the camera
-// leaves a logo that has flared
+// The card is gone before the logo flares where it stood, the camera
+// leaves a logo that has flared, and the sign and the sun come in the
+// flight, in that order
 procedure CheckOrder(const ADef: TTitlesDef; const ALevelId: string);
 begin
   var Cues := ADef.Cues;
@@ -132,8 +139,14 @@ begin
     raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'cardOut']);
   if Cues.Flash <= Cues.CardOut then
     raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'flash']);
-  if ADef.Path.Present and (Cues.Flight <= Cues.Flash) then
+  if not ADef.Path.Present then
+    Exit;
+  if Cues.Flight <= Cues.Flash then
     raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'flight']);
+  if Cues.Neon <= Cues.Flight then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'neon']);
+  if Cues.Flare <= Cues.Neon then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'flare']);
 end;
 
 // No "path" - titles that do not fly

@@ -27,7 +27,11 @@
 
   The titles' eye pushed toward a frame sees its ribs thicker, lifted it
   sees the frame sink by more than its lift, and out of its rest it culls
-  no frame by the screen's sides.
+  no frame by the screen's sides. Pushed through the frame's front, it cuts
+  a rib that passes it a few units before itself, no nearer; the rib cut
+  there runs at the eye and is a wedge, where at rest no rib is one. Inside
+  the frame, a rib of its far half nearer the eye than the city's front
+  card stands over the buildings with the near half; at rest none does.
 
   How the ribs look - the rim's colour, the smoothing of their edges, the
   glare - has no test here: none of it shows without drawing.
@@ -108,6 +112,19 @@ type
     procedure TestBeaconsFarBehindNearInFront;
     [Test]
     procedure TestBeaconsRideWithTheCity;
+  end;
+
+  [TestFixture]
+  TFramesAtTheEyeTests = class
+  public
+    [Test]
+    procedure TestARibPassingTheEyeIsCutBeforeIt;
+    [Test]
+    procedure TestTheRibCutAtTheEyeIsAWedge;
+    [Test]
+    procedure TestAtRestNoRibIsAWedge;
+    [Test]
+    procedure TestInsideAFarRibBeforeTheFrontCardStandsOverTheBuildings;
   end;
 
   [TestFixture]
@@ -601,6 +618,108 @@ begin
   end;
 end;
 
+// TFramesAtTheEyeTests
+
+const
+  // The game's: a rib is cut this far before the eye, and the ring is so
+  // many ribs thick
+  RibNearest = 4;
+  RingThickening = 1.6;
+  // The eye pushed so far that the frame's front stands two units behind it
+  ThroughTheFront = Focal - FrameWidth / 2 + 2;
+  // The city's two rows: one in front of the frame, 910 from the eye at
+  // rest, and one behind its centre, 1150 from it - their feet as near as
+  // that
+  FrontRowY = Horizon + (BaseY - Horizon) * Focal / 910;
+  BackRowY = Horizon + (BaseY - Horizon) * Focal / 1150;
+
+function EyePushed(ALift, APush: Double): TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
+  Result.Flying := True;
+  Result.Lift := ALift;
+  Result.Push := APush;
+end;
+
+function ViewWith(const ADef: TFarPlaneDef; const AEye: TFarPlaneEye): TFrameView;
+begin
+  var Frames := TDomeFrames.Create(ADef);
+  try
+    Result := Frames.View(FrameX + FrameWidth / 2 - Middle, AEye);
+  finally
+    Frames.Free;
+  end;
+end;
+
+function Building(const AId: string; AFeetY: Single): TFarPlaneElement;
+begin
+  Result := Default(TFarPlaneElement);
+  Result.Id := AId;
+  Result.X := FrameX;
+  Result.Y := AFeetY;
+  Result.W := 40;
+  Result.DepthY := AFeetY;
+end;
+
+function ThickerEnd(const ARib: TFrameRib): Single;
+begin
+  Result := ARib.WA;
+  if ARib.WB > Result then
+    Result := ARib.WB;
+end;
+
+procedure TFramesAtTheEyeTests.TestARibPassingTheEyeIsCutBeforeIt;
+begin
+  var View := ViewWith(StandDef, EyePushed(0, ThroughTheFront));
+  var CutEnd: Single := FrameRib * Focal / RibNearest;
+  var Cut := False;
+  for var Rib in AllRibs(View) do
+  begin
+    Assert.IsTrue(ThickerEnd(Rib) <= RingThickening * CutEnd + Slack,
+      'No end nearer the eye than the cut');
+    if ThickerEnd(Rib) >= CutEnd - Slack then
+      Cut := True;
+  end;
+  Assert.IsTrue(Cut, 'A rib cut at the eye, not dropped');
+end;
+
+procedure TFramesAtTheEyeTests.TestTheRibCutAtTheEyeIsAWedge;
+begin
+  var View := ViewWith(StandDef, EyePushed(0, ThroughTheFront));
+  var CutEnd: Single := FrameRib * Focal / RibNearest;
+  for var Rib in AllRibs(View) do
+    if ThickerEnd(Rib) >= CutEnd - Slack then
+      Assert.IsTrue(Rib.Wedge, 'Far thicker at its near end');
+end;
+
+procedure TFramesAtTheEyeTests.TestAtRestNoRibIsAWedge;
+begin
+  var View := ViewWith(StandDef, RestEye);
+  Assert.IsTrue(RibCount(View) > 0, 'The frame is seen');
+  for var Rib in AllRibs(View) do
+    Assert.IsFalse(Rib.Wedge, 'A stroke');
+end;
+
+procedure TFramesAtTheEyeTests.TestInsideAFarRibBeforeTheFrontCardStandsOverTheBuildings;
+begin
+  var Def := StandDef;
+  Def.Layers[0].Elements := [Building('front', FrontRowY), Building('back', BackRowY)];
+
+  var AtRest := ViewWith(Def, RestEye);
+  for var Rib in AtRest.Near do
+    Assert.IsFalse(Rib.Z > 0, 'At rest the far half stands behind the buildings');
+
+  // At the frame's centre the front row is behind the eye, the back row
+  // 126 before it
+  var Inside := ViewWith(Def, EyePushed(50, Focal));
+  Assert.IsTrue(Length(Inside.Far) > 0, 'The far half beyond the back row behind it');
+  var Over := False;
+  for var Rib in Inside.Near do
+    if Rib.Z > 0 then
+      Over := True;
+  Assert.IsTrue(Over, 'A rib of the far half before the back row over the buildings');
+end;
+
 // TCapsuleFrameTests
 
 const
@@ -721,6 +840,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TDomeFramesTests);
+  TDUnitX.RegisterTestFixture(TFramesAtTheEyeTests);
   TDUnitX.RegisterTestFixture(TCapsuleFrameTests);
 
 end.
