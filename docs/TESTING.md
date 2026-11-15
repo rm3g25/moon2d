@@ -145,6 +145,7 @@ Tests\
     Tests.Render.DomeFrames.pas  the geometry of the chase city's dome frames and their beacons,
                                  the farm's capsule among them
     Tests.Render.Target.pas      how many times a banked frame is grown to cover its place
+    Tests.Render.Flare.pas       the sun's flare of the titles: its curve and its mesh
   Scenes\
     Tests.Scenes.Director.pas
   Sprites\

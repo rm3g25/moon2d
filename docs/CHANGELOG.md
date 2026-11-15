@@ -7,6 +7,32 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.134 - the dome and the climb.** The titles' flight is
+flown whole (`finale-flight.md`, "The dome and the climb in the game"):
+from 19.11 s, straight at the main dome, to the black at 32.6 s. A rib at
+the eye is cut 4 units before it, not dropped, and one running at the eye
+is drawn as a wedge, as thick at each end as its nearness there
+(`TDomeFrames.RibInFront`, `TFrameRib.WA`, `WB`, `Wedge`;
+`TDomeFramePainter.AddWedge`, `AddRim`); a rib of the far half nearer the
+eye than the city's nearest building before it stands over the buildings
+(`TFarPlaneDef.FrontDepth`), the far half behind them at rest as ever.
+Inside the main dome's glass the eye sees the sun through it
+(`TFarPlaneDef.EyeInside`, in `SunCover`). The TEK sign burns steady about
+the cue `neon` and stutters on it (`Levels.CityLife.SignOnCue`, the eye's
+`SignSince`). The frame banks by the path's bank and is lowered by the
+pitch before it turns (`TFrameTarget.Open(bank, drop, background)`, the
+drop at the copy's pivot, the bared top cleared to the flight's black sky).
+On the cue `flare` the sun floods the lens (`Render.Flare`, new: `FlareAt`,
+`FlareMesh`, `TFlarePainter` - the stand's radial gradients as fans of
+corners carrying the stops' colours, added on the window about where the
+sun lands after the turn, `TFrameTarget.ScreenPoint`). `bin/finale.json`
+loses `flownTill`; `Levels.Titles` reads the cues `neon` and `flare` and
+wants them in the flight, the flare after the sign. The flight still ends
+in the dark and the menu, now at 32.6 s, till the stars. Before the run
+the Delphi arithmetic was held against the stand's own functions over the
+whole path. Tests: 29 new, 1 gone. Next: the end - the stars, the Earth,
+the last screen (3.0.135).
+
 2026-11-15: **3.0.133 - the turn toward the main dome.** The titles'
 eye leaves its rest (`finale-flight.md`, "The turn in the game"). Stage 2c
 of the flight is cut in two; this is its first piece, 12.7 to 19.11 s:

@@ -1344,9 +1344,9 @@ In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
 
 ## The titles
 
-State: written, 45 tests (3.0.131 to 3.0.133,
+State: written, 49 tests (3.0.131 to 3.0.134,
 `docs/mechanics/finale-flight.md`, "The titles' head as built", "T1 in the
-game", "The turn in the game"). The logo's flare, the card's font and place are the painter's,
+game", "The turn in the game", "The dome and the climb in the game"). The logo's flare, the card's font and place are the painter's,
 whether the flash lands on the band's kick is the mixer's, and how the
 flight looks is the frame's: a live run.
 
@@ -1395,6 +1395,7 @@ its rest at 6 s. Started in the setup.
 | `TestTheFlightEndsOnceWhereTheEyeLeavesItsRest` | in 20 s one cue, on the tick the flight reaches 6 s | the game flies what it cannot draw yet, or never leaves the flight |
 | `TestTheFrameGoesDarkOverTheLastSecond` | none two ticks before 5 s; about half at 5.5; dark at 6 | the flight is cut in the light, or the pan is flown in the dark |
 | `TestClearEndsTheFlight` | cleared in the flight: not flying, 0 s; started again: it flies | a restart of the end keeps the eye away from the hero |
+| `TestTheSignAndTheFlareCountFromTheirCues` (3.0.134) | the sign's cue 3 s into the flight, the flare's 5: -3 and -5 before the flight; 4 s in, the flight's seconds less 3 and less 5 | the sign stutters and the sun flares off their seconds of the flight |
 
 ### Levels.Titles
 
@@ -1419,7 +1420,10 @@ beside the tests.
 | `TestAPathIsFlownToItsLastKey` (3.0.133) | a path with no `flownTill`: flown till 9.5 s, its last key's | a whole path is cut short, or never ends |
 | `TestAPathMayBeFlownShortOfItsEnd` (3.0.133) | `flownTill` 6.5: flown till 6.5 s, all three keys read | the game flies into a part of the flight it cannot draw yet |
 | `TestAPathFlownNowhereRaises` (3.0.133) | `flownTill` 0: `ETitlesError` | the flight ends on its first tick and says nothing |
-| `TestTheFileOfLevelTwoFlies` | `finale.json`: flies, the flight after the flash, its first key where the world stood, at rest for a while, and flown on past its rest | the shipped titles stand on the logo for good |
+| `TestTheFileOfLevelTwoFlies` | `finale.json`: flies, the flight after the flash, its first key where the world stood, at rest for a while, and (3.0.134) flown to its last key | the shipped titles stand on the logo for good, or the flight is cut short of the black |
+| `TestTheFlightsOwnCuesAreRead` (3.0.134) | the sign's cue at 20, the flare's at 22, as in the file | the sign stutters on the flare's second |
+| `TestASignNotInTheFlightRaises` (3.0.134) | no `neon`; `neon` on the flight's second: `ETitlesError` | the sign stutters before the camera leaves, or never |
+| `TestAFlareNotAfterTheSignRaises` (3.0.134) | the flare on the sign's second: `ETitlesError` | the sun comes out before the eye is in the dome |
 
 ## The eye over the far plane
 
@@ -1491,7 +1495,8 @@ time, as long.
 
 ## The eye lifted and pushed
 
-State: written, 22 tests (3.0.133, `docs/mechanics/finale-flight.md`, "The
+State: written, 21 tests (3.0.133; the one that held the flight short of a
+rib at the eye went with 3.0.134, `docs/mechanics/finale-flight.md`, "The
 turn in the game"). How the band gives way to the plane, the pace of the
 hills and the fangs at the eye and the look of the dome growing are the
 frame's: a live run against the stand. Before the run the Delphi
@@ -1531,7 +1536,6 @@ In the fixture `TFarPlaneReadTests`.
 | `TestAPlaneWithoutACameraRaises` | a plane and no camera: `EFarPlaneError` | a plane with no eye over it divides by nothing |
 | `TestAFloorThatMeltsOverNothingRaises` | the melt from 2 to 2: `EFarPlaneError` | the band pops off on one tick, or a division by nothing |
 | `TestAFloorCutIntoNoSlabsRaises` | slabs 0 deep: `EFarPlaneError` | the floor is cut for ever |
-| `TestTillItIsFlownNoFrameStandsAtTheEye` | level 2's own layout and titles, every 0.05 s till the path is flown to: the nearest glass of every frame at 0.15 of the focal length or further | the flight is flown into the dome before a rib at the eye is cut, and ribs vanish whole (goes with the dome's stage) |
 
 ### Render.DomeFrames and Levels.Farm under the eye
 
@@ -1571,9 +1575,73 @@ the stand's eye 16 s into the flight, a pixel of the stand's stage (1440 by
 | `TestTheFirstTurnCoversTheLeftEdge` | each row's first turn at the left edge or left of it, and reaching past it | a strip of black at the frame's left |
 | `TestAFinerWindowTakesAFinerCopy` | half the pixel: a copy one less squeezed, the same ground | the plane shimmers at 4K or is soft at 1080 |
 
+## The dome and the climb
+
+State: written, 21 tests (3.0.134, `docs/mechanics/finale-flight.md`, "The
+dome and the climb in the game"). How the wedges sweep the frame, the
+sign's stutter as the eye goes by, the flare and the pitch are the frame's:
+a live run against the stand. Before the run the Delphi arithmetic was held
+against the stand's own functions over the whole path, 0 to 32.6 s (the
+same section, "Held against the stand before the run").
+
+### Render.DomeFrames: at the eye
+
+Fixture `TFramesAtTheEyeTests` in `Tests\Render\Tests.Render.DomeFrames.pas`,
+over the stand's dome of `TDomeFramesTests` centred on the screen.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestARibPassingTheEyeIsCutBeforeIt` | pushed till the frame's front is 2 behind the eye: no end nearer than the cut (as thick as the rib at 256 times its nearness, the ring's 1.6 of that); a rib cut there | ribs at the eye vanish whole, or stretch past it across the frame |
+| `TestTheRibCutAtTheEyeIsAWedge` | every rib cut at the eye: a wedge | the rib that sweeps the frame is a stroke as thick at its far end as at its near |
+| `TestAtRestNoRibIsAWedge` | the frame at rest: seen, no wedge | the chase's frames change their look |
+| `TestInsideAFarRibBeforeTheFrontCardStandsOverTheBuildings` | a row of buildings 910 off and one 1150 off: at rest no rib of the far half with the near; at the frame's centre, lifted 50, the far half beyond the back row behind the buildings, and a rib of it before that row over them | inside the dome the buildings cover the ribs in front of them, or the chase's far half comes over its city |
+
+### Levels.FarPlane: inside the glass, the front card
+
+In the fixture `TFarPlaneEyeTests` of `Tests\Game\Tests.Game.FarPlane.pas`,
+over the dome of `StandFrames` (512 by 170 from x 468) and the city in
+depth of `DepthLayout`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestInsideTheGlassTheEyeSeesTheSunThroughTheDome` | the eye at the dome's centre, halfway up: inside, the sun all of the tint; 200 to the side: inside still, all of it | the sun is white in the dome as it leaves the sun's span |
+| `TestPastTheGlassTheEyeIsInNoDome` | a unit past its back, over its crown, a unit beside it: not inside | the sun stays pink after the eye is out |
+| `TestAtItsRestOrUnderACapsuleTheEyeIsInNoDome` | at rest: not inside; under the farm's capsule: not inside | the chase's sun turns pink, or the farm's dome counts as the glass the eye is in |
+| `TestTheFrontCardIsTheNearestBuildingBeforeTheEye` | at rest 682.67 (the row below the base line); pushed 700 - that row passed, 324; pushed 1019 - the base line 5 off passed too, 1029; pushed past all - none | the far ribs come over the buildings in the chase, or stay behind ones the eye has passed |
+
+### Levels.CityLife: the sign on its cue
+
+Fixture `TSignOnCueTests` in `Tests\Levels\Tests.Levels.CityLife.pas`: the
+stand's `neonOnCue`, its dips and its reach of four seconds.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestFarFromTheCueTheSignIsItsOwn` | 4.01 s either side: its own level, a dark one too | the sign burns steady through the whole flight |
+| `TestAboutTheCueTheSignBurnsSteady` | from 4 s before to 4 s after, between and after the dips: lit | the sign's own dice put it out as the eye goes by |
+| `TestOnTheCueTheSignStutters` | dim from -0.12, lit on the cue, dim at 0.1, lit at 0.16, dark from 0.3 to 0.5, dim at 0.6, lit at 0.63 | the stutter comes off the beat of the stand, or holds a dip a frame too long |
+
+### Render.Flare
+
+Fixture `TFlareTests` in `Tests\Render\Tests.Render.Flare.pas` (new): the
+stand's `flareNow` and `drawFlare`, the sun at 288, 208 of a frame 512 by
+384.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestNothingBeforeTheCue` | before and on the cue: none | the sun flares inside the glass |
+| `TestAtTheEndOfItsAttackAllOfItBlows` | 0.12 s in: all of it, blown; halfway up its attack: half | the flood comes slow, or jumps |
+| `TestItSettlesToItsHold` | 1.4 s past the attack: the burst at e^-3; long after: 0.42, no burst | the lens stays blown, or the glow goes out |
+| `TestACoveredSunFlaresAsFarAsItIsFree` | covered: none; a quarter covered: three quarters | the dome's pink sun flares white |
+| `TestNoFlareNoMesh` | no flare: no corners, no triangles | an empty mesh goes to the card every frame |
+| `TestARingAtEveryStopAndTheVeil` | six gradients of a middle and two rings of 64, and the veil's four corners; every index a corner of the mesh | a gradient loses a stop, or a triangle points past the mesh |
+| `TestTheBloomsMiddleIsOnTheSun` | its middle on the sun at 242 (0.95); its outer ring 150 off, clear | the bloom stands off the sun, or ends in a hard edge |
+| `TestTheStreakIsTheFramesWidthAndFlat` | 512 each way, 17.92 tall | the streak is a disc, or stops short of the frame's edges |
+| `TestTheGhostsLieOnTheLineThroughTheMiddle` | their middles at 0.55, 1.35, 1.8 and 2.3 of the way from the sun to the frame's middle | the ghosts scatter |
+| `TestTheVeilIsTheBurstSquaredOverTheFrame` | at the peak 153 (0.6) from corner to corner of the frame; 0.3 s into the settling by the burst squared | the white hangs on, or covers a part of the frame |
+
 ## The frame's target
 
-State: written, 6 tests (after 3.0.131, `docs/mechanics/finale-flight.md`,
+State: written, 10 tests (after 3.0.131 and 3.0.134, `docs/mechanics/finale-flight.md`,
 "The spike of the target texture"). The texture, the viewport and the
 copy to the window are the card's: a live run (the Q key that counted the
 pixels went with 3.0.132; the titles' flight draws through the target).
@@ -1591,3 +1659,15 @@ game's frame, 512 by 384, and the 14 degrees of the titles' flight.
 | `TestASteeperBankGrowsMore` | 1 < 5 degrees < 14 < 25 | the growth stands still or falls as the bank steepens |
 | `TestAnUprightFrameAsOneOnItsSide` | 384 by 512 as 512 by 384 | a frame taller than wide is grown by its shorter side: bare corners |
 | `TestTheGrownFrameCoversTheCornersAndNoMore` | grown and banked 14 degrees, both corners of the unbanked frame lie inside it, the upper one on its edge | a corner of the window is bare, or the frame is grown past what the bank asks |
+
+Fixture `TFrameTurnTests` (3.0.134): where a point of the frame lands on
+the window (`TFrameTurn.PointAt`, what `TFrameTarget.ScreenPoint` asks
+after a `Close`). The stand's numbers are its `turnFrame` put through the
+canvas's transform.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestUnturnedAPointStandsWhereItIs` | no bank, no drop: the sun at 288, 208 and a corner where they are | the flare stands off the sun in the level frame |
+| `TestTheDropLowersAPoint` | a drop of 30: thirty units down | the flare stays while the sun sinks under the pitch |
+| `TestABankTurnsClockwiseAboutTheMiddle` | 90 degrees, no growth: right of the middle goes down; banked 14 and dropped 40, what the drop brings to the middle stands still | the flare and the turned frame turn opposite ways |
+| `TestTheSunStandsWhereTheStandHasIt` | 23.2 s - banked 14: 291.138, 222.080; 29.2 s - banked 0.5, dropped 125.73: 287.119, 335.652 | the flare is laid off the sun the stand has it on |
