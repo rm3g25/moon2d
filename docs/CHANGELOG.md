@@ -7,6 +7,34 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.132 - the first leg of the titles' flight.** The
+camera leaves (`finale-flight.md`, "T1 in the game"). A bar after the
+logo's flash, on the cue `flight` of `bin/finale.json`, the game goes into
+`gsFinale`: the keys, the mouse and Escape are cut, the hero comes down
+where he is and stands, the HUD and the crosshair are gone, the world goes
+on. The eye flies the path's keys (`Levels.EyePath`, new - the stand's
+monotone cubic, number for number; read by `Levels.Titles`) by the
+flight's own seconds (`TTitles.FlightSeconds`), and in the flight the
+titles' clock goes by the ticks alone: the mixer tells the track's place
+in steps of its buffer, and a clock leaning after it would shake the
+camera. As far as the eye keeps its rest - 12.7 s, the cast-off and the
+pan - the flight is the far plane's offsets carried by the eye's ride,
+each layer by the depth its speed gives it (`TFarPlaneDef.Ridden`,
+`MotionNearness`), the crater floor cut into slabs so the domes do not
+slide on it and its far edge sharpened (`FloorSlabs`, `FloorFadeAt`;
+`TFarPlanePainter.Draw` takes the eye), the fangs' row rolled on to its
+left under the eye (`TFangRow.FlyBack`), and the play layer - the road,
+the gate, the logo, the barge and the hero on it - cast off to the right
+eleven times as fast as the city, through the frame's target by whole
+pixels (`TMoonGame.DrawFinale`). For the time being the flight ends
+there: the frame goes dark over its last second and the game is in the
+menu, the end track playing on, nothing to continue. `Render.Target`
+falls back to an unbanked texture on a card that refuses the banked one.
+The spike's debug keys Z, C and Q are gone with their code; Z now shows a
+line of the flight in the corner, and End in the flight is the door of
+point C again. The fixtures of `Tests.Game.Titles` and
+`Tests.Levels.Titles` were not registered with the runner: they are.
+
 2026-11-15: **3.0.131 - the titles' head.** The end of level 2 has the
 head of its titles (`finale-flight.md`, "The titles' head as built"), over
 the picture the flight ends on and with the hero still his own. A clock

@@ -1,6 +1,6 @@
 # The flight to the stars: the build of the titles
 
-Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); the game's build decided ("Decided 2026-11-15: the game") and its first stage built - the titles' head, 3.0.131 ("The titles' head as built"), cut down to the card and the logo, the promise and the credits moved to the stars ("Decided 2026-11-15, later"); the flight itself not in the game yet. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
+Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); the game's build decided ("Decided 2026-11-15: the game") and its first stage built - the titles' head, 3.0.131 ("The titles' head as built"), cut down to the card and the logo, the promise and the credits moved to the stars ("Decided 2026-11-15, later"); the spike of the target texture run ("The spike of the target texture"); the flight's first leg - the cast-off and the pan, as far as the eye keeps its rest - in the game, 3.0.132 ("T1 in the game"), ending for the time being in the dark and the menu; the dome, the climb and the stars not in the game yet. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
 
 ## Decided 2026-11-14: the build
 
@@ -75,7 +75,7 @@ The flight of `finale.md` was laid out in 58 s by guess: lattice at 16-22, insid
 
 ## The homes
 
-As proposed, with the names of "Decided 2026-11-15: the game"; written so far - `Levels.Titles` (the cues), `Game.Titles`, `Hud.Titles`, the logo's flare and the track's place (3.0.131).
+As proposed, with the names of "Decided 2026-11-15: the game"; written so far - `Levels.Titles`, `Game.Titles`, `Hud.Titles`, the logo's flare and the track's place (3.0.131), `Render.Target` (the spike), `Levels.EyePath` and the eye at its rest in `Levels.FarPlane`, `Render.FarPlane` and `Game.Fangs` (3.0.132).
 
 | unit | what |
 |---|---|
@@ -248,6 +248,35 @@ Left for the stages to come:
 - The growth covers the corners with nothing to spare: the pixel of a corner may take a little of the background. Not seen in the run.
 - A play layer moved through the viewport is cut at its own left edge: smoke or sparks left of it are cut with it.
 
+## T1 in the game (3.0.132)
+
+Stage 2b of the game: the camera leaves. The flight is flown as far as the eye keeps its rest - to the key at 12.7 s, the cast-off and the pan - and ends there for the time being.
+
+**Decided before the code (2026-11-15):**
+- **In the flight the clock goes by the ticks alone.** The titles' clock leaned toward the track's place by a tenth of its way every tick, and the mixer tells that place in steps of its buffer - 1024 frames, 23 ms, against a tick of 30: read off the code, not measured, that is a pace shaking by some 7% from tick to tick, with the fangs passing at over a thousand units a second. The card and the flash do not show it; a camera would. So from the cue `flight` on nothing leans; a track further than half a second off still takes the clock at once - the game stood, and the picture catches the music up. The flight's own cues stand by its seconds anyway. The lines at the stars will hang on the track's downbeats again: fades do not show the steps.
+- **The spike's debug keys Z, C and Q are gone**, with their code: the real cast-off stands for C, Q has answered, the bank comes back as the path's own with the dome.
+- **No play layer riding by whole units through an origin** for a card with no target: not every painter of the play layer takes an origin, and it would be a second way to do the same thing, with holes. `Render.Target` falls back by itself to a texture for the frame level when the banked size is refused; with no texture at all the play layer is cut at the flight's first frame.
+
+**As built:**
+- **The data** (`Levels.Titles`, `Levels.EyePath`, new): the cue `flight` and the `path` of `bin/finale.json`. Titles without a path do not fly. A path wants its cue after the flash, two keys at the least and each after the one before it, or the level does not load.
+- **The path** (`TEyePath.EyeAt`): the stand's `pathTangents`, `pathValue`, `pathPlaces` and `eyeAt`, number for number - the tests hold it to the stand's own numbers. `RestTill` - the last key of the leading keys at rest, 12.7 s: a key at rest after keys at rest has a level tangent, so up to it the cubic never leaves the rest. The game flies to there and no further, by the path and by no number of its own.
+- **The clock** (`TTitles`): the cue `FlightStarts`, once; `FlightSeconds` - the clock less the cue; `EyeAt`; the cue `FlightEnds` at `RestTill`, once; `TailLevel` - the dark over the frame through the flight's last second (`TitlesTailSeconds` 1).
+- **The state** (`TMoonGame`, `gsFinale`): on `FlightStarts` the held keys are let go and the queued bonus dropped (`BeginFinale`); keys, the mouse's buttons and its aim are not heard, Escape among them; `Update` goes on as in the play - the world ticks, he comes down where he is and stands. On `FlightEnds` the game is in the menu with nothing to continue and nowhere for Escape to go back to, the titles cleared, the end track playing on (`LeaveFinale`).
+- **The eye over the far plane** (`TFarPlaneEye`, `TFarPlaneDef`): at its rest the eye's flight is its ride along the strip and nothing more, so the stand's frame is the chase's own frame with every layer's offset carried by the ride times the layer's nearness (`Ridden`, `MotionNearness`: the city 1, the ridge 0.35, the near ground 14 / 3, the fangs 20 / 3; the tunnel, long gone, 0); the layout's `road` is read now, for the play layer's 11 (`PlayNearness`). No ride - the offsets to the bit. `Nearness`, `ElementLeft` and `FramePoint` are not touched: the lift and the push are the dome's stage.
+- **The floor** (`FloorSlabs`, `FloorFadeAt`, `TFarPlanePainter.DrawFloorSlabs`): the stand's `drawFloorUnderEye` and `floorFade` at the eye's rest - slabs 6 deep, each by the nearness of its middle and none slower than the ridge, a slab's far edge fading in over the one behind it across 2; the band's top fading in over 16 units at the first tick and 1.5 after four seconds. The game draws quads, not rows: a slab is cut at the depths where a fade ends, and where two fades run at once - a quad's alpha runs straight between its edges, and they multiply - four times finer; against the stand's rows the alpha is within 0.002. The band's own drawing (`DrawBandRows`) now takes its rows; the chase's two - the fade and the rest - give the quads they gave.
+- **The fangs** (`TFangRow.FlyBack`): the row is rolled on to the left of the oldest fang kept, by the same dice and the same rules - the road between two, a screen of road between two tall ones, the ones kept counted. The road to the first one back is the dice's but never shorter than the way to the left edge: the fang that stood there was let go past it, and its heir does not come up on the screen as the eye turns back. Rolled after the titles' tick, as far as that tick's frames will see.
+- **The frame** (`DrawFinale`): the far layers under the eye; the play layer - all of `DrawPlayLayers`, the logo and its sparks with it - moved to the right by the ride times 11 through `TFrameTarget.ShiftLayers`, not drawn once a frame's width away (6.4 s); the tail's dark over both; no HUD, no crosshair. The target is made with a level whose titles fly, with room for the path's steepest bank, and opened level.
+- **Debug**: Z - a line in the corner of the flight: its second, the track's own place, the eye's place along the strip. The track's place less 19.32 against the flight's second is how far the clock has gone from the track. In the flight only Z and End are heard; End is the door of point C again, the hero his own.
+- **Tests**: `Tests.Levels.EyePath` (new) 13, `Tests.Levels.Titles` +7, `Tests.Game.Titles` +1 and `TTitlesFlightTests` 11, `TFarPlaneEyeTests` 11 in `Tests.Game.FarPlane`, `Tests.Game.Fangs` +7. The tables: `docs/testing/game.md`, "The titles" and "The eye over the far plane". The two fixtures of 3.0.131 were not registered with the runner; they are.
+
+**Where the game is not the stand, said aloud:**
+- The fill under the band's foot (`floorFootColour`) is not drawn: at the eye's rest the near hills cover it whole. It comes with the plane.
+- At the flight's first tick the floor in slabs is the chase's band but for two strips two units deep, 6 and 12 under the horizon, where a slab's feather lies inside the top's fade: a slab drawn at part of its alpha under another at part of its own covers a little more than one band would - a few levels of 255, the stand's own arithmetic.
+- The fangs flown back are new ones: the row's dice, not the ones that went by in the fight.
+- The numbers of the slabs and of the sharp edge are constants of `Levels.FarPlane` till the layout's `plane` section takes them.
+
+**First guesses for the live run:** the second of the tail's dark; the cut of the crosshair at the cue; the fangs' pace on the pan (a doubt of the stand's already); whether the clock by the ticks stays with the track through the flight - the Z key's line tells.
+
 ## Decided 2026-11-14: the ground for a lifted eye
 
 Stage T2; the plane is on the stand since the first laying of the flight through the dome (above), the rest not built. What the push to the dome, the climb out of it and the Moon below stand on.
@@ -264,5 +293,5 @@ Stage T2; the plane is on the stand since the first laying of the flight through
 - **The target texture**: answered - "The spike of the target texture". What it left open is listed there.
 - **The Moon below (T5)** - the least solved. A flat floor's horizon stays at the eye's height however high the eye goes, and the eye may not pitch down (a card from above is a flat picture). The limb is to be made: the horizon bent and sunk by the height. A globe may not be needed at all.
 - **Cards close by**: the kit is 5.9 px a unit; nearer than three times its rest a building is soft at 4K.
-- **The sync**: 123 s by ticks drifts against the audio device; the track's position is the cure, to be measured live.
+- **The sync**: 123 s by ticks drifts against the audio device; the track's position is the cure, to be measured live. In the flight the cure shakes the camera, and the clock goes by the ticks ("T1 in the game"): how far it drifts over the flight's half minute is to be read off the Z key's line.
 - **A short fight**: the world stands early and the pan is short; the path's time is the track's, so the eye goes slower, not sooner.

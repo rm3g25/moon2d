@@ -87,9 +87,9 @@ Tests\
     Tests.Game.Wreckage.pas  what is left of the Ram's hull: its pieces flying, falling slowly, taken back by the wind
     Tests.Game.Landing.pas  the end of the flight: the slowdown, the road's stop, the stand, the hand-over
     Tests.Game.Gate.pas    the gate at the end of the flight: its lamp's turn, the facade's place along the road
-    Tests.Game.Titles.pas  the titles' clock: by the ticks and by the track, the flash, how much of the card shows
-    Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read
-    Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read
+    Tests.Game.Titles.pas  the titles' clock: by the ticks and by the track, the flash, how much of the card shows; the flight: its cues, its seconds, the eye, the tail
+    Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read; under the titles' eye: the layers' nearness, the ride, the floor's slabs
+    Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read; the row flown back over
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
@@ -103,6 +103,8 @@ Tests\
     Tests.Levels.CityLife.pas  the clock of the chase city's lights, against
                                tables made by the stand's own functions
     Tests.Levels.Doors.pas     the doors a level shuts
+    Tests.Levels.EyePath.pas   the way of the titles' eye, against the
+                               stand's own numbers
     Tests.Levels.Farm.pas      the farm's grow lights against the stand's
                                ticks, its light and its meshes
     Tests.Levels.Grid.pas      the collision grid's rows erased and restored
@@ -115,7 +117,7 @@ Tests\
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
     Tests.Levels.Scenes.pas    the parser of the scenes, and the load
-    Tests.Levels.Titles.pas    the titles of a level read: the cues, the faults, the shipped file
+    Tests.Levels.Titles.pas    the titles of a level read: the cues, the path, the faults, the shipped file
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas

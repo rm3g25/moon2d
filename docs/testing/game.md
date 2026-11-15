@@ -1344,10 +1344,11 @@ In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
 
 ## The titles
 
-State: written, 23 tests (3.0.131, `docs/mechanics/finale-flight.md`, "The
-titles' head as built"). The logo's flare, the card's font and place are
-the painter's, and whether the flash lands on the band's kick is the
-mixer's: a live run.
+State: written, 42 tests (3.0.131 and 3.0.132,
+`docs/mechanics/finale-flight.md`, "The titles' head as built", "T1 in the
+game"). The logo's flare, the card's font and place are the painter's,
+whether the flash lands on the band's kick is the mixer's, and how the
+flight looks is the frame's: a live run.
 
 ### Game.Titles
 
@@ -1362,7 +1363,7 @@ with `JumpTo`, the clock run with no place told.
 | `TestStartingTwiceDoesNotSetTheClockBack` | 10 ticks, started again: 10 ticks still | a second burst cue restarts the titles |
 | `TestByTicksASecondIsThirtyThreeTicks` | started: running; 33 ticks: 1 s | the clock without a mixer runs at another rate |
 | `TestBetweenTicksTheClockLiesBetweenThem` | 5 ticks in: the last tick 4, this one 5, halfway 4.5 | a fade steps at 33 Hz |
-| `TestTheClockLeansTowardTheTrackByHalfATickAtTheMost` | the track 0.3 s ahead: a tick and a half on; 0.3 behind: half a tick on | the clock snaps to the track's buffer steps, or does not follow it |
+| `TestTheClockLeansTowardTheTrackByHalfATickAtTheMost` | a second in, the track 0.3 s ahead: a tick and a half on; 0.3 behind: half a tick on | the clock snaps to the track's buffer steps, or does not follow it |
 | `TestTheClockComesToATrackCloseBy` | the track 0.05 s ahead for 200 ticks: on it within a millisecond | the lean never closes the gap: the cues drift off the beat |
 | `TestTheClockNeverGoesBack` | the track up to 0.4 s behind, 60 ticks: each tick later than the last | the card fades backward, the flash's cue is crossed twice |
 | `TestATrackFarOffTakesTheClockAtOnce` | the track at 30 s: the clock at 30, nothing between the ticks | a seek leaves the clock creeping after the track for minutes |
@@ -1374,6 +1375,26 @@ with `JumpTo`, the clock run with no place told.
 | `TestNotRunningNothingShows` | armed, the clock put mid-card and at 180: no card, no logo, no flash | a restart leaves the card or the logo on the screen |
 | `TestClearStopsItAndItCanStartAgain` | past the flash, cleared: not running, no logo, the clock 0; started: the flash again | a second win of the fight has no flash |
 | `TestTheNextCueIsTheFirstPastASecond` | after 0 the card; after it the flash; none past it | the debug key jumps back, or past a cue |
+| `TestWithoutAPathTheTitlesNeverFly` | run to 180 s: no cue of a flight, not flying, the eye where the world stood | titles of a card and a logo take the keys away and go dark |
+
+Fixture `TTitlesFlightTests` in the same unit: the same cues and a path -
+the flight's cue at 19; keys from where the world stood, at rest to the
+left by 100 at 4 s and by 300 at 6 s, lifted 40 at 9 s, so the eye leaves
+its rest at 6 s. Started in the setup.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTheFlightStartsOnceAtItsCue` | flying on the tick the clock reaches 19, the logo flared by then; no cue in the 10 s after | the camera leaves before the flash, late, or every tick |
+| `TestAJumpPastTheFlashAndTheFlightGivesBoth` | jumped to 20: the next tick tells the flash and the flight | the debug key or a stall skips the flare or the flight |
+| `TestBeforeTheFlightItsSecondsAreZero` | at 18: not flying, 0 s of flight, no dark | the eye is carried before its cue |
+| `TestTheFlightsSecondsRunFromItsCue` | on the starting tick the clock less 19, and 0 at the tick before; 50 ticks on, 50 ticks more, between the ticks a tick less | the eye jumps at the start, or flies at another rate than the clock |
+| `TestInTheFlightTheClockLeansNoMore` | the track 0.3 s ahead: the clock a tick on and no more | the camera shakes by the steps of the mixer's buffer |
+| `TestInTheFlightATrackFarOffTakesTheClockStill` | the track 2 s ahead: the clock on it, the flight's seconds with it | after a stall the picture never catches the music up |
+| `TestBeforeTheFlightTheEyeStandsWhereTheWorldStood` | at 18: the eye at the stand, at its rest | the far plane is ridden before the camera leaves |
+| `TestTheEyeGoesThePathByTheFlightsSeconds` | 2 s in: the path's place at that second, left of the stand and short of the cast-off's end; 7.5 s in: lifted | the eye goes by the track's clock, or by another path |
+| `TestTheFlightEndsOnceWhereTheEyeLeavesItsRest` | in 20 s one cue, on the tick the flight reaches 6 s | the game flies what it cannot draw yet, or never leaves the flight |
+| `TestTheFrameGoesDarkOverTheLastSecond` | none two ticks before 5 s; about half at 5.5; dark at 6 | the flight is cut in the light, or the pan is flown in the dark |
+| `TestClearEndsTheFlight` | cleared in the flight: not flying, 0 s; started again: it flies | a restart of the end keeps the eye away from the hero |
 
 ### Levels.Titles
 
@@ -1389,12 +1410,88 @@ beside the tests.
 | `TestTheCuesAreReadAsWritten` | present; the three seconds as in the file | a cue is read into another's place |
 | `TestACueNotAfterTheOneBeforeItRaises` | the flash before the card is out; the card out as it comes in: `ETitlesError` | the card and the logo stand together, or the card never shows |
 | `TestTheFileOfLevelTwoReads` | `finale.json` beside the tests: present, the flash at 17.21 | the shipped titles do not load |
+| `TestWithoutAPathTheTitlesDoNotFly` | a file of cues alone: present, does not fly | a level with a card and a logo wants a path |
+| `TestThePathIsReadAsWritten` | the flight at 19; three keys: an `x` of null - where the world stood; a `dx` of -45 - from there, lifted 2; an `x` of 1730 at 9.5 s - along the strip, pushed 25, banked 5, pitched 3 | a key is placed by the wrong rule, or a channel is read into another's place |
+| `TestAPathWithoutItsFlightsCueRaises` | a path and no `flight`: `ETitlesError` | the camera leaves at the track's first second |
+| `TestAFlightNotAfterTheFlashRaises` | the flight on the flash's second: `ETitlesError` | the camera leaves a logo that has not flared |
+| `TestAPathOfOneKeyRaises` | one key: `ETitlesError` | a path with no way crashes in the cubic |
+| `TestAKeyNotAfterTheOneBeforeItRaises` | two keys on one second: `ETitlesError` | a division by zero in the middle of the flight |
+| `TestTheFileOfLevelTwoFlies` | `finale.json`: flies, the flight after the flash, its first key where the world stood, at rest for a while | the shipped titles stand on the logo for good |
+
+## The eye over the far plane
+
+State: written, 31 tests (3.0.132, `docs/mechanics/finale-flight.md`, "T1
+in the game"). The floor's slabs on the screen, the play layer's cast-off
+and the fangs' look at the pan's pace are the frame's: a live run against
+the stand.
+
+### Levels.EyePath
+
+Fixture `TEyePathTests` in `Tests\Levels\Tests.Levels.EyePath.pas`: the
+keys of `bin/finale.json` of the day the tests were written, the world
+standing at 2412 (a fight of 220 s) or at 1492 (one of 60 s). The numbers
+of `TestFliesAsTheStandFliesIt` are `eyeAt` of the stand's page run over
+those keys.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestThroughEveryKey` | at each key placed along the strip: its place, lift, push, bank and pitch | the path misses the cell of the dome it was laid through |
+| `TestStandsAtItsEnds` | 5 s before: where the world stood, at rest; a minute after: the last key | the eye flies on past the black, or starts off its place |
+| `TestBetweenTwoKeysNeverPastEither` | 19 moments in every span: the lift and the push between the two keys' | the cubic overshoots: the eye dips under the floor or through a rib |
+| `TestAKeyFromTheStandFollowsTheStand` | at 6.34 s: 45 to the left of either stand | the cast-off depends on how long the fight was |
+| `TestAKeyAlongTheStripDoesNotFollowTheStand` | at 11.6 s: 1730 from a stand of 2412 and of 2300 | the landmarks of the city move with the fight's length |
+| `TestTheEyeNeverFliesToTheRight` | every 0.05 s of both flights: never to the right of where it was | after a short fight the eye flies back to the right |
+| `TestAfterAShortFightTheEyeWaitsWhereTheWorldStood` | from 1492: 1292 at 8.43 s and still at 12.7 s; 1215 at 14.84 s | the eye stands on the logo, or jumps to the pan's landmarks |
+| `TestFliesAsTheStandFliesIt` | six places along the strip to 12.7 s, and the lift, push, bank and pitch at four later seconds: the stand's, to six places | the game's flight is not the one taken on the stand |
+| `TestKeepsItsRestTillTheLastKeyAtRest` | 12.7 s; every 0.1 s up to it: no lift, push, bank or pitch at all | the game flies a lift it cannot draw yet, or ends the leg early |
+| `TestAPathAllAtRestRestsToItsEnd` | three keys at rest: its last second | a level pan is cut at its first key |
+| `TestAPathLiftedFromItsFirstKeyNeverRests` | the first key lifted: 0 | a lifted start is flown as a level one |
+| `TestTheSteepestBankEitherWay` | the day's path: 14; a key banked -20: 20 | the target has no room for a bank to the other side |
+| `TestNoPathTheEyeStands` | no keys, and one key: no path; the eye where the world stood, at rest | a level without a path crashes in the cubic |
+
+### Levels.FarPlane: the eye
+
+Fixture `TFarPlaneEyeTests` in `Tests\Game\Tests.Game.FarPlane.pas`: the
+shipped layout's speeds (the road 33, the city 3, the ridge 0.35 of it,
+the near ground 14, the fangs 20), its camera (the horizon 238, the base
+line 266) and its floor (238 to 320, fading in over 16).
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestALayerStandsAsNearAsItsSpeedSays` | the city 1, the ridge 0.35, the near ground 14 / 3, the fangs 20 / 3, the tunnel 0, the play layer 11 | a layer flies by at another pace than it rode in the chase |
+| `TestWithoutARoadThePlayLayerHasNoDepth` | a layout with no `road`: 0 | a layout of the tests divides by nothing, or the play layer leaves by a guess |
+| `TestNoRideAndTheOffsetsAreTheSame` | a ride of 0: every offset equal, to the bit | the frame of the flight's first tick is not the chase's |
+| `TestTheRideCarriesEachLayerByItsNearness` | 300 to the left: the city 300, the ridge 105, the near ground 1400, the fangs 2000, the tunnel none | the layers slide on one another as the eye flies |
+| `TestTheFloorIsCutIntoSlabsToItsFoot` | 14 slabs from the band's top, each 6 deep, one where the other ends, the last cut at 82 | the floor has a gap, or runs on under the hills |
+| `TestUnriddenEverySlabStandsWhereTheBandStood` | a ride of 0: every slab's offset the city's, to the bit | the floor jumps as the camera leaves |
+| `TestASlabRidesByTheNearnessOfItsMiddle` | a ride of 28: the third slab 15, the last 81; each nearer one further | the domes' rings slide on the floor |
+| `TestNoSlabRidesSlowerThanTheRidge` | a ride of 280: the first two slabs 98, the third more | the far strip of the floor stands still against the mountains |
+| `TestWithoutACameraTheFloorIsOneSheet` | no camera: one slab, all of the band, riding with the city | a flat city divides by no eye's height |
+| `TestTheFloorsEdgeSharpensOverTheFirstSeconds` | 16 at the first tick, 8.75 at 2 s, 1.5 at 4 s and at 12 s | the floor's edge pops, or never sharpens |
+| `TestAnEdgeSharperThanTheLineStays` | a band fading over 1: 1 | a sharp band is softened by the flight |
+
+### Game.Fangs: flown back over
+
+In the fixture `TFangRowTests` of `Tests\Game\Tests.Game.Fangs.pas`: the
+row ridden a long chase, then the eye back over it a tick's way at a
+time, as long.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTurnedBackNothingComesUpOnTheScreen` | flown back at the place the row stands: as many fangs right of the left edge as before | a fang pops up beside the barge as the camera leaves |
+| `TestFlownBackEachComesInAtTheLeftEdge` | each new one's right edge within a tick's way of the left edge as it comes | fangs pop up inside the frame on the pan, or come late |
+| `TestFlownBackTheRoadBetweenTwoIsWithinItsRange` | left to right through the whole row: every road between two within the kit's range | the row rolled back is crowded or bare beside the row kept |
+| `TestFlownBackNeverTwoTallOnTheScreen` | a screen of road between any two tall ones, the ones kept among them; more than one tall | two tall fangs hide the city on the pan |
+| `TestFlownBackNoneIsLetGo` | the count never falls | a fang goes out in the middle of the frame |
+| `TestFlownBackTheSameDiceGiveTheSameRow` | two rows of one seed turned back at one place, one flown tick by tick, one at once: the same fangs | the row depends on the frame rate |
+| `TestNoFangsFlownBackSendsNone` | a far plane without fangs: none | a level without the kit crashes in the flight |
 
 ## The frame's target
 
 State: written, 6 tests (after 3.0.131, `docs/mechanics/finale-flight.md`,
 "The spike of the target texture"). The texture, the viewport and the
-copy to the window are the card's: a live run, and the Q key's count.
+copy to the window are the card's: a live run (the Q key that counted the
+pixels went with 3.0.132; the titles' flight draws through the target).
 
 ### Render.Target
 
