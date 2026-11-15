@@ -1344,11 +1344,14 @@ In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
 
 ## The titles
 
-State: written, 49 tests (3.0.131 to 3.0.134,
+State: written, 67 tests (3.0.131 to 3.0.135,
 `docs/mechanics/finale-flight.md`, "The titles' head as built", "T1 in the
-game", "The turn in the game", "The dome and the climb in the game"). The logo's flare, the card's font and place are the painter's,
+game", "The turn in the game", "The dome and the climb in the game", "The
+end at the stars in the game"). The logo's flare, the card's font and place are the painter's,
 whether the flash lands on the band's kick is the mixer's, and how the
-flight looks is the frame's: a live run.
+flight looks is the frame's: a live run. So is the menu's sky under the
+rise - the stars' shares and their wrap, the nebula added, the Earth - and
+the last screen's clicks: none of it is in an interface.
 
 ### Game.Titles
 
@@ -1392,10 +1395,31 @@ its rest at 6 s. Started in the setup.
 | `TestInTheFlightATrackFarOffTakesTheClockStill` | the track 2 s ahead: the clock on it, the flight's seconds with it | after a stall the picture never catches the music up |
 | `TestBeforeTheFlightTheEyeStandsWhereTheWorldStood` | at 18: the eye at the stand, at its rest | the far plane is ridden before the camera leaves |
 | `TestTheEyeGoesThePathByTheFlightsSeconds` | 2 s in: the path's place at that second, left of the stand and short of the cast-off's end; 7.5 s in: lifted | the eye goes by the track's clock, or by another path |
-| `TestTheFlightEndsOnceWhereTheEyeLeavesItsRest` | in 20 s one cue, on the tick the flight reaches 6 s | the game flies what it cannot draw yet, or never leaves the flight |
+| `TestThePathIsFlownFromWhereItIsFlownTo` (3.0.135, in the stead of the flight's end) | not before the flight, not two ticks short of 8 s; from 8 s on, flown | the sky draws over a flight still going, or never takes the frame |
+| `TestPastThePathTheClockLeansAgain` (3.0.135) | the path flown, the track 0.3 s ahead: a tick and a half on | the lines at the stars drift off the beat |
 | `TestTheFrameGoesDarkOverTheLastSecond` | none two ticks before 5 s; about half at 5.5; dark at 6 | the flight is cut in the light, or the pan is flown in the dark |
 | `TestClearEndsTheFlight` | cleared in the flight: not flying, 0 s; started again: it flies | a restart of the end keeps the eye away from the hero |
 | `TestTheSignAndTheFlareCountFromTheirCues` (3.0.134) | the sign's cue 3 s into the flight, the flare's 5: -3 and -5 before the flight; 4 s in, the flight's seconds less 3 and less 5 | the sign stutters and the sun flares off their seconds of the flight |
+| `TestWithoutTheStarsTheLastScreenComesWhereThePathIsFlown` (3.0.135) | titles that fly with no sky, the last screen at the path's 8 s: once, on that tick; no sky | a level whose titles fly to no stars never ends |
+
+Fixture `TTitlesStarsTests` in the same unit (3.0.135): the card and the
+flash as above, the flight at 19 on a path whose nose comes up from 4 s to
+20 degrees at its end at 10 s; the sky at 27, its rest at 35, the mission
+at 36, the promise at 38, the credits at 42, the last screen at 51, the
+track's end at 60. Started in the setup.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTheSkyComesOnceAtItsCue` | to 180 s one cue, on the tick the clock reaches 27 | no stars, or the Earth set out every tick |
+| `TestTheStarsComeInOverAFadeTheNebulaSlower` | none of either before; half a second and a tick in: the stars by a second, the nebula by four; whole four seconds in | the sky pops in, or the nebula with the stars |
+| `TestTheSkyStandsHighAndComesDownToItsRest` | above its rest before the cue, all of it on the cue, lower at every sixteenth to its rest, none on it and after | the sky jumps, climbs back, or never settles |
+| `TestTheSkyComesDownAsFastAsThePitchRose` | a millisecond in: falling as fast as the tangent of the path's pitch grows there, within 2% | the stars come in with a jolt against the climb |
+| `TestThePhrasesComeOnTheirCuesAndGoWithTheCredits` | the mission whole by the promise's cue, the promise none on it and whole a fade on; both half half a fade before the credits, none on them | a phrase stands over the credits, or comes off its beat |
+| `TestTheCreditsComeOneAfterAnotherToTheLastScreen` | each line whole in the middle of its third, the others none; all gone by the last screen | two lines on one row, or one over the author |
+| `TestTheLastScreenComesOnceAtItsCue` | none before 51, nothing of it; once by the track's end, all of it | the mouse comes early, or never |
+| `TestTheTracksEndComesOnce` | one cue to 180 s, on the tick the clock reaches 60 | the last screen stands for good, or the menu's theme restarts every tick |
+| `TestTheNextCueWalksTheStars` | after the flash the sky, then the mission, the credits, the last screen, the track's end; none past it | the debug key skips a stage of the end |
+| `TestTitlesThatDoNotEndAtTheStarsShowNoneOfThem` | titles that fly with no sky: no cue of it, no stars, no rise, no phrase, no credits | a sky of zeroes draws over a flight |
 
 ### Levels.Titles
 
@@ -1424,6 +1448,12 @@ beside the tests.
 | `TestTheFlightsOwnCuesAreRead` (3.0.134) | the sign's cue at 20, the flare's at 22, as in the file | the sign stutters on the flare's second |
 | `TestASignNotInTheFlightRaises` (3.0.134) | no `neon`; `neon` on the flight's second: `ETitlesError` | the sign stutters before the camera leaves, or never |
 | `TestAFlareNotAfterTheSignRaises` (3.0.134) | the flare on the sign's second: `ETitlesError` | the sun comes out before the eye is in the dome |
+| `TestTheStarsCuesAndTheTrackAreRead` (3.0.135) | at the stars; the sky 30, its rest 40, the mission 41, the promise 43, the credits 47, the last screen 56, the track 238 | a cue of the end read into another's place |
+| `TestAStarsCueNotAfterTheOneBeforeItRaises` (3.0.135) | the sky on the flare's second; the promise on the mission's; no last screen: `ETitlesError` | the phrases stand together, or the end has no last screen |
+| `TestATrackEndingBeforeTheLastScreenRaises` (3.0.135) | a track of 50 s with the last screen at 56: `ETitlesError` | the titles leave for the menu before the last screen |
+| `TestStarsWithoutAFlightRaise` (3.0.135) | the end's cues and no path: `ETitlesError` | a sky with nothing to rise out of |
+| `TestWithoutTheStarsTheLastScreenComesAsThePathIsFlown` (3.0.135) | flying, `flownTill` 6.5, no sky: the last screen at 25.5 | titles that fly to no stars never end |
+| `TestTheFileOfLevelTwoEndsAtTheStars` (3.0.135) | `finale.json`: at the stars, the sky while the eye still climbs, the track past the last screen | the shipped end comes after the black, or is cut by the track |
 
 ## The eye over the far plane
 

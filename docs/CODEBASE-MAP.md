@@ -1574,7 +1574,7 @@ copies only get less squeezed), the far quads one more after them. The
 meshes (`TMesh`) grow by doubling and are kept between frames. Owned by
 `TFarPlanePainter`.
 
-### `Core/Levels.Titles.pas` (~195 lines, 3.0.134)
+### `Core/Levels.Titles.pas` (~260 lines, 3.0.135)
 The titles that close a level, as data (`docs/mechanics/finale-flight.md`,
 "The timeline", "The file of the path"): the cues of its end track and
 the way of the camera's flight. A level names the file in its `titles`
@@ -1604,6 +1604,15 @@ stars - are let be. No SDL.
   read for titles that fly; `CheckOrder` wants the sign's after the
   flight's and the flare's after the sign's. `bin/finale.json` has no
   `flownTill`: the path is flown whole.
+- 3.0.135, **the end at the stars**: `TTitlesCues.Stars`, `Still`,
+  `Mission`, `Promise`, `Credits`, `Last`; **`TTitlesDef.TrackSeconds`**
+  (the file's `track.seconds`, 0 when absent) and
+  **`EndsAtTheStars`** (flies, with a sky's cue). `CheckTheStars` - a
+  sky without a flight raises (`STitlesStarsWithoutFlight`); the sky after
+  the flare, its rest after it, the mission after the sky, the promise,
+  the credits and the last screen each after the one before; a track
+  ending before the last screen raises (`STitlesTrackTooShort`). Titles
+  that fly with no sky have `Last` where the path is flown.
 - Tests: `Tests.Levels.Titles`.
 
 ### `Core/Levels.EyePath.pas` (~205 lines, 3.0.132)
@@ -4820,7 +4829,7 @@ the plate once the bar has come up (`DrawSmall`, centred); hot, the cells
 take the thirds' colours and pulse between `PulseFloor` 0.5 and full, a
 glow over the full ones at the peak.
 
-### `Hud/Hud.Titles.pas` (~130 lines, 3.0.132)
+### `Hud/Hud.Titles.pas` (~230 lines, 3.0.135)
 What the titles show (`docs/mechanics/finale-flight.md`, "The titles' head
 as built"), as `TTitles` says. **`THudTitles`** -
 `Create(renderer, font, logo, titles)` (none owned but its `THudBrush`),
@@ -4832,6 +4841,16 @@ the frame the white of the flash (`FlashWhite` 0.85 at the most). Nothing
 while the titles do not run. 3.0.132: **`DrawTail(alpha)`** - the dark
 the flight ends in (`TTitles.TailLevel`), over the whole frame, the far
 layers too: drawn by itself, after the frame's target is closed.
+3.0.135: `DrawTail` is **`DrawDark`** (`TTitles.DarkLevel`), kept: the
+eye's dark over the path's last second. **`DrawAtTheStars(alpha)`** - the
+phrases (`endingMission` at y 262, `endingReturn` at 287, the big font,
+centred) and the lines of the credits (`creditsLine3..5`, the small font,
+centred at 280), each at its level. **`DrawLast(level)`** - the last
+screen: `endingAuthor` (big, y 230), `endingAuthorNote` (small, 247),
+`endingMenu` (big, 285). **`HitsAuthor(x, y)`**, **`HitsMainMenu(x, y)`**
+- the same geometry (`AuthorRect` - the wider of the author's line and
+its note, from one's top to the other's foot; `MainMenuRect`), 3 units of
+margin.
 
 ### `Game/Game.Explosions.pas` (~400 lines)
 The one home of "something blew up" - the look, not the mechanics (the
@@ -7014,7 +7033,7 @@ nothing. The lamp's rules know no SDL.
   steady.
 - Tests: `Tests.Game.Gate`.
 
-### `Game/Game.Titles.pas` (~290 lines, 3.0.134)
+### `Game/Game.Titles.pas` (~440 lines, 3.0.135)
 The titles over the picture the flight ends on
 (`docs/mechanics/finale-flight.md`, "The titles' head as built"): their
 clock and what it tells. The track, the logo, the gate's lamp and the
@@ -7052,7 +7071,25 @@ drawing are the caller's. No SDL.
 - 3.0.134: **`SignSince(alpha)`**, **`FlareSince(alpha)`** - the flight's
   seconds less the second of the flight its cue stands on; below zero
   before it. The flight ends at the path's last key, 32.6 s.
-- Tests: `Tests.Game.Titles` (`TTitlesTests`, `TTitlesFlightTests`).
+- 3.0.135, **the end at the stars**: `FlightEnds` and `TitlesTailSeconds`
+  gone; `TailLevel` is **`DarkLevel`** (`TitlesDarkSeconds` 1),
+  **`PathFlown`** - the eye at the path's end; from there the clock leans
+  toward the track again. The cues **`SkyComes`** (titles that end at the
+  stars), **`LastComes`** (where `Cues.Last` is above 0), **`TrackEnds`**
+  (where `TrackSeconds` is), once each; `AtTheStars`, `LastShown`.
+  **`StarsLevel`** (a fade from the sky's cue), **`NebulaLevel`**
+  (`TitlesNebulaSeconds` 4), **`SkyRise(alpha)`** - how far above its rest
+  the sky stands, as a tangent of pitch: all of it (`FSkyRiseTan`, from
+  `Arm`: the pace the tangent of the path's pitch grows at on the sky's
+  cue, `PitchTangentPace`, times the time to `Still` over
+  `SkyEasePower` 3) till the cue, `(1 - s)^3` of it to `Still`, none
+  after; **`MissionLevel`**, **`PromiseLevel`** (in from their cues, out
+  by `Credits`), **`CreditLevel(index)`** (`TitlesCreditLines` 3 sharing
+  `Credits` to `Last`), **`LastLevel`**. `CueAfter` walks the card, the
+  flash, the sky, the mission, the credits, the last screen and the
+  track's end.
+- Tests: `Tests.Game.Titles` (`TTitlesTests`, `TTitlesFlightTests`,
+  `TTitlesStarsTests`).
 
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
 What is left of a barge that breaks in the air fight
@@ -7444,7 +7481,7 @@ picture's corner as painted.
   `TUptakePainter` (the first `alive` frame of a pickup's set, at
   `SpriteSize`).
 
-### `Menu/Menu.Starfield.pas` (~250 lines)
+### `Menu/Menu.Starfield.pas` (~280 lines)
 The stars of the menu sky, generated, not loaded. **`TStarfield`** of
 `TStar` records.
 - Three depth layers (`StarLayers`: density per 10000 square units, speed
@@ -7458,6 +7495,11 @@ The stars of the menu sky, generated, not loaded. **`TStarfield`** of
   with the timestep alpha; zoom > 1 spreads the stars from the frame center
   by each star's share (the submenu dolly). Textures: an 8 px point and a
   48 px flare from `Render.Glow`.
+- 3.0.135: `Draw(alpha, zoom, level = 1, rise = 0)` - the stars' level
+  and the sky's rise, each star lifted by the rise times its `ZoomShare`;
+  `RisenStarY(y, size, height, rise)` (implementation) - the field endless above and
+  below, a star between half its size over the top edge and half under
+  the bottom. At 1 and 0 the menu as it was.
 
 ### `Core/Render.Globe.pas` (~650 lines)
 A body of the sky as a lit sphere on the CPU. **`TGlobe`** takes a sprite
@@ -7495,14 +7537,20 @@ air color are `TGlobeChannels` - red, green, blue).
   walk over a quarter million texels. Users: `Menu.Globe` (the menu moon),
   `TSkyGlobe` of `Levels.Dynamics`.
 
-### `Menu/Menu.Globe.pas` (~95 lines)
-The moon of the menu as a spinning `TGlobe`. **`TMoonGlobe`** takes the ui
-set and the map name (`moonmap`, 2048x1024) and owns the look as a typed
-constant `MoonLook` (512 texels, regolith, the axis leaning 18 and tipping
-12 degrees so the spin reads as a globe, earthshine on the night side, the
-cool 2008 tint, no air). The sun stands still, up and to the left; `Tick`
-spins one turn in 2640 ticks (80 s), `Draw(dest)` draws untinted, at full
-level.
+### `Menu/Menu.Globe.pas` (~165 lines, 3.0.135)
+A body of the menu's sky as a spinning `TGlobe`. **`TMenuGlobe`**
+(`TMoonGlobe` till 3.0.135) takes a sprite set and a **`TMenuBody`** - the
+map names, the look, the still sun, the meridian faced at first:
+**`MoonBody(map)`** - `MoonLook` (512 texels, regolith, the axis leaning
+18 and tipping 12 degrees so the spin reads as a globe, earthshine on the
+night side, the cool 2008 tint, no air), the sun up and to the left;
+**`EarthBody(map, night)`** (3.0.135) - `EarthLook`, level 1's Earth
+(`TSkyGlobe` of `Levels.Dynamics` with level1.json's: matte, tilt -20,
+air 0.6, city lights x2.5) at 512 texels, facing 45 east, the sun from
+the left - the right half in the night, its cities lit. `Tick` spins one
+turn in 2640 ticks (80 s); `Draw(dest)` draws untinted at full level -
+a body with air through `DestFor`, its disc filling the square and its
+halo past it.
 
 ### `Menu/Menu.Logo.pas` (~220 lines)
 The title logo and the light it sheds. **`TMenuLogo`** loads `logo.png`
@@ -7546,7 +7594,7 @@ with air beside it is a `TEmberSeed` with the alpha slope as its normal).
   to the units of the rectangle, so the trailer's larger logo scales its
   sparks too. Drawn with the `gsPoint` glow.
 
-### `Menu/Menu.pas` (~915 lines)
+### `Menu/Menu.pas` (~1010 lines)
 The main menu: the sky rig, the screens, the dolly between them.
 - **Records**: `TLevelChoice` (fileName + localized title; discovery is done by
   the composition root, which owns the file system), `TMenuResult` (command +
@@ -7560,7 +7608,7 @@ The main menu: the sky rig, the screens, the dolly between them.
   the live sky rig alone, with or without the logo. Only the debug keys can
   enter one, so with DEBUGKEYS off the state stays skNone.
 - **`TMoonMenu`** - the sky texture (16:9 nebula, `CoverSource` crops it to
-  the frame, `SkyShade` dims it), `TStarfield`, `TMoonGlobe` (sized by the
+  the frame, `SkyShade` dims it), `TStarfield`, `TMenuGlobe` (sized by the
   frame height, `MoonDiameter`), `TMenuLogo`, a `THudBrush` for the
   difficulty cells, an item list per screen, language flags (owned textures,
   240x160 drawn into 30x20 units; `FlagRect` is the draw AND hit-test
@@ -7588,6 +7636,19 @@ The main menu: the sky rig, the screens, the dolly between them.
     and hit-testing. Properties `HasActiveGame`, `Difficulty`, `Language`
     (the setter rebuilds captions through `Tr` - set it AFTER the dictionary
     swap), `Logo` (3.0.131: lent to the titles, `Hud.Titles`).
+  - 3.0.135, **the sky the titles end on**: `Create` takes the levels' sky
+    set (`sky.mset`, nil allowed) and makes **`FEarth`** from it
+    (`EarthBody`). **`TSkyView`** (`Stars`, `Nebula` - 0..1; `Rise` -
+    units at the near stars' depth) and **`RestingSky`** (1, 1, 0);
+    **`DrawSkyAs(alpha, view)`** - `DrawSky` is it at rest: the nebula
+    lifted by `NebulaRiseShare` 0.4 of the rise and, below a whole level,
+    added dimmed over the frame (its blend mode restored); the stars by
+    `TStarfield.Draw` with the level and the rise; the globe lifted by
+    `GlobeRiseShare` 0.25. **`ShowEarth`** - the main screen undollied,
+    the Earth in the moon's place from the right edge (`MoonDriftLimit`),
+    `EarthEntryDriftY` 60 (y 169), level; then the drift's own respawns.
+    **`ShowMoon`** - the moon back, entering half seen as at the start;
+    nothing when it is there. `Tick` spins the body shown.
 
 ### `Game/Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
@@ -7681,7 +7742,7 @@ the hero wears is not here: that is `THero.HeroForm` (`hfNormal`,
   hero's); ticked, struck, drawn, carried through a door, taken by
   `TakesAt`, cleared and collapsed with the others.
 
-### `Game/Game.Moon.pas` (~6950 lines)
+### `Game/Game.Moon.pas` (~7030 lines)
 The whole game-flow state machine (`TMoonGame`) - the game the program
 runs. Moved out of `Moon2D.dpr` word for word before stage 8 of arena 3,
 so a unit (and later a test) can reach it. `interface` holds
@@ -8141,8 +8202,8 @@ so a unit (and later a test) can reach it. `interface` holds
     `FUptake.Clear`, before `FShroud.Clear`. The destructor frees the
     painter, then the count, after the ceremony and before the shroud's
     pair.
-  - Drawing/input: `AdvanceBriefing`, `DrawEnding`, `DrawCenteredBig`,
-    `HitEndingLine`, `HandleEndingClick`, `CrosshairFrame`,
+  - Drawing/input: `AdvanceBriefing`, `DrawEnding(alpha)`,
+    `HandleEndingClick`, `LeaveEndingForMenu` (3.0.135), `CrosshairFrame`,
     `HandleKey/MouseMove/MouseButton` (S/Down hold `FHeldDown` - the drop
     through a pad).
   - Debug: `HandleDebugKey`, `HandleDebugMenuKey`, `UpdateInspectorCaption`,
@@ -8612,6 +8673,29 @@ so a unit (and later a test) can reach it. `interface` holds
   SunCover)`; then the tail. The Z key's line has a second one under it
   (`FlightReadoutStep`): the bank and the pitch. The flight ends at 32.6
   s, the path's end.
+- 3.0.135, **the end at the stars** (`finale-flight.md`, "The end at the
+  stars in the game"). **`FSkySet`** (`sky.mset`) is opened with the game
+  and lent to the menu. `TickTitles`: the logo ticked by the titles only
+  till the sky (then the menu ticks it), the fangs rolled back only till
+  then; on `SkyComes` `FMenu.ShowEarth`; on `LastComes` in the flight
+  **`BeginEnding`**; on `TrackEnds` **`EndTitles`** - the titles cleared,
+  the last screen to the menu (`LeaveEndingForMenu`), or in the menu its
+  theme. `LeaveFinale` gone. `Update`: at the stars (`gsFinale` with
+  `AtTheStars`) and on the last screen the world is left behind - the menu
+  ticks, the titles tick, nothing else; in the menu past the last screen
+  the titles tick with their track. **`DrawFinale`**: the path flown - the
+  black (**`ClearFrameBlack`**, `FlightSky`) and **`DrawTitlesSky`** (the
+  menu's `DrawSkyAs` with the titles' levels and `SkyRise` times the
+  layout's focal, then `Hud.Titles.DrawAtTheStars`); before that, the
+  flight as it was, its dark (`DrawDark`) and, from the sky's cue, the
+  sky over it. **`BeginEnding`** - `gsEnding`, `FResumeState` the menu, no
+  game to continue, the main screen; **`DrawEnding(alpha)`** - the black,
+  the menu's sky at rest, `DrawLast` (its fade where the titles brought
+  it, whole from the door), the crosshair; **`HandleEndingClick`** through
+  `HitsAuthor` / `HitsMainMenu`; **`LeaveEndingForMenu`** - `gsMenu`, the
+  main screen, the menu's theme unless the end track plays. `LoadLevel`
+  calls `FMenu.ShowMoon`. Debug: X heard in the flight and, alone, on the
+  last screen; End puts the moon back.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -10072,6 +10156,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
 | The farm under the long dome (3.0.129): a capsule frame at the end of the city's strip, greenhouses whose glass glows on clocks of their own, their light in the dome's air, on its far ribs and on the floor in front of it, the sun's glare giving way to the glass - tick for tick as on the stand | Levels.Capsule.pas (`CapsulePoint`, `CapsuleShape`) + Levels.Farm.pas (`FarmGlowLevel`, `FarmView`, `FarmLight`, `Exposed`, `FarmAirMesh`, `FarmApronMesh`) + Levels.FarPlane.pas (`TDomeFrameKind`, `TCityFarm`, `GlareLevel`, `FramePoint`) + Render.DomeFrames.pas (`FrameEdges`, `CapsuleBeaconNodes`, `TFrameRib.Farm`, `Dark`, `DrawGlare`) + Render.FarPlane.pas (`LoadFarm`, `DrawGlass`, `DrawAir`, `DrawApron`, `DrawLightMesh`, `LightFarRibs`) + bin/chase-backdrop.json (`frames` dome-farm, `farm`) + chase-backdrop.mset (`agro-*`, `hall-*`, `svc-*` and their `-glow`) + tools/chase (`stand.template.html` - the reference, `make_glow.py`, `place_farm.py`, `pack_set.py`) + Tests.Levels.Capsule.pas, Tests.Levels.Farm.pas, Tests.Render.DomeFrames.pas, Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md, "The farm") |
 | The gate at the end of the flight (3.0.130): the sealed door of the arena given a body - a facade with a gate on the far end of the road come back, riding in with it and stopping at the right edge of the screen, put in the night; its status lamp red, amber over half a second on a promise - the titles' flare, the debug key X till then | Game.Gate.pas (`TGate`, `TGatePainter`, `GateLeft`, `GateLampColor`) + Game.Road.pas (`Arrived`) + Levels.Dynamics.pas (`DrawLamp` public) + Game.Moon.pas (`FGate`, `FGatePainter`, `GateSprite`, `TickLanding`, `ClearPier`, the key X) + tools/gate/build_gate.py + level2-objects.mset (`s13-gate`) + Tests.Game.Gate (+docs/mechanics/finale.md) |
+| The end of the titles at the stars (3.0.135): the menu's sky rising into the frame from the black while the eye climbs and slowing to its rest, the nebula after the stars, the Earth of level 1 in the moon's place, the two phrases, the credits, the last screen with its link and the way to the menu, the track's end into the menu's theme | Levels.Titles.pas (the cues `stars`, `still`, `mission`, `promise`, `credits`, `last`, `track.seconds`) + Game.Titles.pas (`SkyComes`, `LastComes`, `TrackEnds`, `SkyRise`, `StarsLevel`, `NebulaLevel`, `MissionLevel`, `PromiseLevel`, `CreditLevel`, `LastLevel`, `PathFlown`, `DarkLevel`) + Hud.Titles.pas (`DrawAtTheStars`, `DrawLast`, `HitsAuthor`, `HitsMainMenu`, `DrawDark`) + Menu.pas (`TSkyView`, `DrawSkyAs`, `ShowEarth`, `ShowMoon`) + Menu.Starfield.pas (the level and the rise, `RisenStarY`) + Menu.Globe.pas (`TMenuGlobe`, `EarthBody`) + Game.Moon.pas (`DrawTitlesSky`, `BeginEnding`, `DrawEnding`, `LeaveEndingForMenu`, `EndTitles`) + Localization.pas, bin/lang (the ending's keys) + bin/finale.json |
 | The dome and the climb of the titles' flight (3.0.134): in through the main dome past the TEK sign on its cue, the ribs cut at the eye and drawn as wedges, the far ones before the city's front card over the buildings, the sun pink inside the glass, out banked into the flare, the climb with the frame lowered by the pitch, the path flown whole | Render.DomeFrames.pas (`RibInFront`, `TFrameRib.WA`, `WB`, `Wedge`, `TSight.Front`, `AddWedge`, `AddRim`) + Levels.FarPlane.pas (`ProjectFramePoint`, `EyeInside`, `FrontDepth`, `TFarPlaneEye.SignSince`) + Levels.CityLife.pas (`SignOnCue`) + Render.FarPlane.pas (`DrawEmblem`) + Render.Flare.pas (new) + Render.Target.pas (`Open` with the drop, `ClearFramePlace`, `ScreenPoint`, `TFrameTurn`) + Levels.Titles.pas (the cues `neon`, `flare`) + Game.Titles.pas (`SignSince`, `FlareSince`) + Game.Moon.pas (`DrawFinale`, `FlightStand`, `FFlarePainter`) + bin/finale.json (no `flownTill`) |
 | The turn of the titles' flight (3.0.133): the eye lifted and pushed toward the main dome, every layer carried by its depth, the plane of the ground and the floor's band melting into it, the flight flown to the path's `flownTill` | Levels.FarPlane.pas (`TFarPlaneEye.Lift`, `Push`, `EyeNearness`, `Carry`, `FloorCarry`, `FloorKeep`, the `plane` section of bin/chase-backdrop.json) + Levels.GroundPlane.pas (`PlaneRow`) + Render.GroundPlane.pas (`TGroundPlanePainter`) + Render.FarPlane.pas (`FCarry`, `DrawFloorFoot`, `DrawBeamGlints`) + Render.DomeFrames.pas (`View` with the eye) + Levels.Farm.pas (the eye in `FarmView` and the meshes) + Game.Fangs.pas (`TFangPainter.Draw` with the eye) + Levels.Titles.pas (`FlightTill`, `flownTill` of bin/finale.json) + Game.Moon.pas (`FlightEye`) + tools/chase/make_ground.py (`ground-top-0`..`7` of chase-backdrop.mset) |
 | The first leg of the titles' flight (3.0.132): the state `gsFinale`, the eye flown the path's keys at its rest - the cast-off and the pan -, the far plane's layers carried by the eye's ride, the floor in slabs, the fangs rolled back, the play layer cast off through the frame's target, the dark and the menu at its end, the debug key Z | Levels.EyePath.pas (`TEyePath`) + Levels.Titles.pas (the cue `flight`, the `path` of bin/finale.json) + Game.Titles.pas (`FlightStarts`, `FlightSeconds`, `EyeAt`, `FlightEnds`, `TailLevel`) + Levels.FarPlane.pas (`TFarPlaneEye`, `Ridden`, `MotionNearness`, `PlayNearness`, `FloorSlabs`, `FloorFadeAt`) + Render.FarPlane.pas (`Draw` with the eye, `DrawFloorSlabs`, `DrawBandRows`) + Game.Fangs.pas (`FlyBack`) + Render.Target.pas (`ShiftLayers`, the level-only texture) + Hud.Titles.pas (`DrawTail`) + Game.Moon.pas (`BeginFinale`, `LeaveFinale`, `DrawFinale`, `FlightEye`, `EyeOffsets`, `DrawFlightReadout`) + Tests.Levels.EyePath, Tests.Levels.Titles, Tests.Game.Titles, Tests.Game.FarPlane, Tests.Game.Fangs (+docs/mechanics/finale-flight.md, "T1 in the game") |

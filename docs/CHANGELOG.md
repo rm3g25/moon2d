@@ -7,6 +7,30 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.135 - the end at the stars.** The titles are whole
+(`finale-flight.md`, "Decided 2026-11-15: the end at the stars", "The end
+at the stars in the game"). At F+31, while the eye still climbs, the
+menu's sky comes out of the black above its rest and comes down - as fast
+as the path's pitch rose there, slowing to its rest by 67.94 s
+(`TTitles.SkyRise`): the stars by their layers' depths, the nebula after
+them and less, the Earth of level 1 in the moon's place from the right
+edge (`Menu.Globe` - `TMenuGlobe`, `MoonBody`, `EarthBody`; the menu's
+`TSkyView`, `DrawSkyAs`, `ShowEarth`, `ShowMoon`; `sky.mset` opened with
+the game). The world is left behind; the path's dark stays, as the eye's
+(`DarkLevel`, `DrawDark`). "The mission on the Moon is not over." on
+67.94, "The Master will return in a new form" two bars later, the three
+lines of the credits to 91.14, and the last screen - "Ilia Kuzmin" and its
+note with the link, "Main menu" - over the menu's sky, mouse only
+(`gsEnding` rebuilt, `Hud.Titles.DrawLast`, `HitsAuthor`, `HitsMainMenu`).
+The end track plays on in the menu; at its end the last screen gives way
+to the menu and the menu plays its theme (`TrackEnds`). The clock leans
+toward the track again once the path is flown. `bin/finale.json` has the
+end's cues; `Levels.Titles` reads them, with the track's length. The
+flight's time-beings are gone (`FlightEnds`, `LeaveFinale`), and the 2008
+farewell (`endingLine1-5`) with them; the X key walks the end's cues.
+Tests: 19 new, 1 gone. Next: the live run of the end; then the level
+editor.
+
 2026-11-15: **3.0.134 - the dome and the climb.** The titles' flight is
 flown whole (`finale-flight.md`, "The dome and the climb in the game"):
 from 19.11 s, straight at the main dome, to the black at 32.6 s. A rib at

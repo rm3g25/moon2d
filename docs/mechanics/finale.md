@@ -320,7 +320,7 @@ The menu logo is `TMenuLogo` (letters, a halo computed from their alpha, embers 
 
 ### The climb
 - The picture and what rides on it stand in the world: the world is the bottom screen, the extension (one more screen, outpainted upward from the arena's backdrop to black) is above it. The camera goes up by one screen.
-- The stars: the menu's own `TStarfield`, `TMoonGlobe` and nebula. The menu's `DrawSky` gets an opacity (1 by default, so the menu and the story screen do not change). Because the climb ends on the very sky the menu draws, the exit is not a cut: the items come in over a sky already there.
+- The stars: the menu's own `TStarfield`, `TMoonGlobe` (`TMenuGlobe` since 3.0.135) and nebula. The menu's `DrawSky` gets an opacity (1 by default, so the menu and the story screen do not change). Because the climb ends on the very sky the menu draws, the exit is not a cut: the items come in over a sky already there.
 - Optional polish: the stars drift down at their three depth rates while the camera climbs (a vertical parallax in `TStarfield.Draw`). Without it they stay in their own motion, which is enough.
 
 ### The camera - the one real risk

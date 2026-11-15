@@ -1,6 +1,6 @@
 # The flight to the stars: the build of the titles
 
-Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); the game's build decided ("Decided 2026-11-15: the game") and its first stage built - the titles' head, 3.0.131 ("The titles' head as built"), cut down to the card and the logo, the promise and the credits moved to the stars ("Decided 2026-11-15, later"); the spike of the target texture run ("The spike of the target texture"); the flight's first leg - the cast-off and the pan, as far as the eye keeps its rest - in the game, 3.0.132 ("T1 in the game"); the turn toward the main dome - the eye lifted and pushed, the plane of the ground, the floor's band melting into it - in the game, 3.0.133 ("The turn in the game"); the dome and the climb - the ribs cut at the eye, the sign on its cue, the bank, the flare, the pitch, the black - in the game, 3.0.134 ("The dome and the climb in the game"), the path flown whole and ending for the time being in the dark and the menu at 32.6 s; the stars not in the game yet. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
+Status: the build plan decided and the track's beat map taken (2026-11-14); stage T1 - the camera - built on the stand, its path laid a third time after two looks and found tolerable at the third (2026-11-14, below); the ground for a lifted eye decided, its first sheet generated and laid as a plane on the stand; the flight through the main dome - the sign, the rib, the sun, the first of the climb - laid on the stand and taken after three looks ("The flight through the dome", below); the game's build decided ("Decided 2026-11-15: the game") and its first stage built - the titles' head, 3.0.131 ("The titles' head as built"), cut down to the card and the logo, the promise and the credits moved to the stars ("Decided 2026-11-15, later"); the spike of the target texture run ("The spike of the target texture"); the flight's first leg - the cast-off and the pan, as far as the eye keeps its rest - in the game, 3.0.132 ("T1 in the game"); the turn toward the main dome - the eye lifted and pushed, the plane of the ground, the floor's band melting into it - in the game, 3.0.133 ("The turn in the game"); the dome and the climb - the ribs cut at the eye, the sign on its cue, the bank, the flare, the pitch, the black - in the game, 3.0.134 ("The dome and the climb in the game"), the path flown whole; the end at the stars - the menu's sky coming down into the frame as the eye still climbs, the Earth of level 1, the two phrases, the credits, the last screen, the track's end into the menu - in the game, 3.0.135 ("The end at the stars in the game"): the titles are whole. The design is `finale.md` ("Decided 2026-11-13: the gate, and the flight to the stars"): its order, its flight, its stages T1-T6. This file is how that design is built: the track's map, the timeline hung on it, the camera, the file of its path, the homes of the code, the order of the work, and the journal of the stages.
 
 ## Decided 2026-11-14: the build
 
@@ -45,9 +45,13 @@ Seconds of the track, which starts with the hull's burst (T0; `finale.md`); the 
 | 36.22 | 16.9 | the track's second section begins; the eye is in its turn toward the dome |
 | 40.03 | 20.71 | the TEK sign stutters as the eye goes by it |
 | 42.52 | 23.20 | out through a cell of the main dome's back, close past its ribs, banked - and the sun floods the frame |
-| 50.3 | 31 | the sun gone under the frame: the black, and the stars of the menu |
-| 67.94, 91.14, 122.74 | 48.6, 71.8, 103.4 | the next sections' downbeats and the break: where the lines at the stars may hang ("A sketch of the stars") |
-| 236.3 | | the track ends; the menu's theme takes over |
+| 50.32 | 31 | the sun gone under the frame: the stars of the menu come out of the black high and come down, the Earth sets out from the right (`stars`) |
+| 51.92 | 32.6 | the path's end, dark: the sky alone from here |
+| 67.94 | 48.62 | the sky at its rest (`still`); "The mission on the Moon is not over." on the section's downbeat (`mission`) |
+| 72.21 | | two bars on: "The Master will return in a new form" (`promise`) |
+| 78.62 | | both gone; the three lines of the credits, one after another, 4.17 s each (`credits`) |
+| 91.14 | | on the section's downbeat: the last screen (`last`) |
+| 238.36 | | the track's end (its length in the file; heard to 236.3): the last screen gives way to the menu, the menu plays its theme |
 
 The flight of `finale.md` was laid out in 58 s by guess: lattice at 16-22, inside to 30, the sunrise to 38, the Moon below to 50, the pitch to 58. The track asks for nearly the same, a little later through the dome.
 
@@ -90,8 +94,8 @@ As proposed, with the names of "Decided 2026-11-15: the game"; written so far - 
 | `Render.Flare` (Core, new, T4) | the sunrise: halos, the streak, the exposure curve |
 | `Game.Titles` (Game, new) | `TTitles` - the clock from T0 and the cues. No SDL |
 | `Hud.Titles` (Hud, new) | the card, the promise, the credits, the last screen |
-| `Menu` | `TMenuLogo.Flare`, an opacity for `DrawSky`, the Earth in the Moon's place |
-| `Audio` | the track's position, the end of a track |
+| `Menu` | `TMenuLogo.Flare`; the sky as the titles show it (`DrawSkyAs`, 3.0.135), the Earth in the Moon's place (`ShowEarth`, `Menu.Globe`) |
+| `Audio` | the track's position. The end of the track is the titles' clock reaching the track's length - no detection in the mixer (3.0.135) |
 | `Game.Moon` | the wiring: `gsFinale`, `gsEnding` rebuilt |
 
 ## The order
@@ -342,6 +346,38 @@ Stage 2c of the game, its second piece: from 19.11 s, straight at the main dome,
 - **The flare's glow stays** at 0.42 after it settles, as on the stand, to the black and its last second: the ghosts and the bloom over the dark till the menu.
 
 **First guesses for the live run:** the wedge's sweep across the frame at 20.7 s and on the way out - whether the cut at 4 units shows as a pop; the sign's stutter landing as the sign passes; the flare's strength on the window against the stand's page; the bank's linear filter over the city; the pitch's sub-pixel drop; the menu after 32.6 s over a frame that still glows.
+
+## Decided 2026-11-15: the end at the stars
+
+Answered to the forks of the end's talk, before its code:
+- **The stars come at F+31** (50.32 s of the track), over a frame still flying, and come down as the eye rises into them - from above, the nebula too; on their own they crawl as on the menu (to the right, as the menu has them). The camera stops slowly, and the phrases come.
+- **The dark of the path's last second stays**, as the eye's: it darkens the world and the flare's glow; the sky comes over it. Of the time-being of the flight's end, the exit to the menu goes (`FlightEnds`, `LeaveFinale`); the dark is kept and renamed (`DarkLevel`, `DrawDark`, `TitlesDarkSeconds`).
+- **The Earth** sets out from the right at once, seen already while the sky comes down; the size of the menu's moon; lit from the left, her cities on the night half (of the two lights of the sketch, the one with the lights - the author named none, the recommended one was taken).
+- **The pace, variant B**: the mission's phrase on 67.94, the promise two bars later, both gone by 78.62; the credits a line at a time to the last screen; the last screen on 91.14.
+- **The clock leans toward the track again** once the path is flown.
+- **The track's end takes the last screen to the main menu**, and the menu plays its theme. With no track the clock reaches the track's length by the ticks and does the same.
+- **The states**: `gsFinale` through the stars, the phrases and the credits; `gsEnding` the last screen; "Main menu" - the menu over the same sky, the end track playing on.
+
+## The end at the stars in the game (3.0.135)
+
+Stage 3 of the game, the last of the titles: from F+31 to the track's end.
+- **The data** (`Levels.Titles`): the cues `stars` 50.32, `still` 67.94, `mission` 67.94, `promise` 72.21, `credits` 78.62, `last` 91.14 of `bin/finale.json`, and the track's `seconds` 238.36. They go together: a sky without a flight raises; each after the one before it; the track lasting past the last screen. Titles that fly with no sky have the last screen where the path is flown.
+- **The rise** (`TTitles.SkyRise`): the sky stands above its rest, at the near stars' depth, as far as the focal length times a tangent. At the sky's cue it comes down as fast as the tangent of the path's pitch was growing there (the path's own arithmetic: 0.0700 a second at F+31, the pitch 13 degrees) and slows as `(1 - s)^3` to its rest on `still`: 421 units in all over 17.62 s - 68 left 8 s in, 14 at 12 s. The path stands at F+32.6 as it always did; the sky does not stop with it.
+- **The shares of the rise** (`Menu`): the stars by their layer's dolly share (0.4 / 0.7 / 1.0 - the menu's own depths), the nebula as the far stars (0.4: 168 units), the globe 0.25 (105 units) - so the Earth comes in from the right and not from above. The star field goes on above and below (`RisenStarY`).
+- **The levels**: the stars in over a second from the sky's cue, the nebula over four (added over the frame while it comes in: over the frame still going dark it makes no hole). Over the path's last second the world and the flare's glow go dark as they did; from F+32.6 the frame is cleared black and the sky is all.
+- **The Earth** (`Menu.Globe`, `EarthBody`): `earth` and `earth-night` of `sky.mset` (1024 by 512), the look of level 1's globe at 512 texels, facing 45 east, the sun from the left and a little up. In the moon's place from the sky's cue (`TMoonMenu.ShowEarth`): from the right edge (drift 650), at y 169, level, 1 drift a tick as the moon - her middle in the middle of the frame about 70 s, gone by the left about 90; then the moon's own rules, a random way. Back to the moon when a level loads.
+- **The world is left behind** from the sky's cue: the menu's sky and the titles' clock tick, nothing else - the frame shows only the sun's edge and the glow by then.
+- **The lines** (`Hud.Titles`): the phrases big, centred at y 262 and 287; the credits small at 280, three, sharing 78.62 to 91.14 evenly (4.17 s, about two bars, each); a second in and out each. The last screen: "Ilia Kuzmin" big at 230, its note small at 247, "Main menu" big at 285 - drawn and clicked by one geometry, a click 3 units off still taking it. The author's two lines open the link.
+- **The last screen** (`gsEnding`): the menu's sky at rest, the lines coming in over a second, the hero's crosshair; mouse only. "Main menu": the menu over the same sky, the logo and no "Continue"; the end track plays on, and the titles' clock with it. At the track's end (238.36 by the clock) the last screen gives way to the menu, and the menu - there already or now - plays its theme. The door out of a last level's last screen, with no titles, comes to the same screen over the moon's sky.
+- **Debug**: X goes on to two seconds before the next cue in the flight too - the sky, the mission, the credits, the last screen, the track's end - and on the last screen alone; End puts the moon back.
+- **Tests**: `TTitlesStarsTests` 10 (new) and +3 in `Tests.Game.Titles`, 1 gone; `Tests.Levels.Titles` +6. The menu's sky under the rise - the stars' wrap, the shares, the Earth - is left to the eye: nothing of it is in an interface. Written without a compiler, as all here.
+
+**Where the game is not the sketch, said aloud:**
+- **The stars crawl right**, as on the menu - "to the left, as on the main menu" was said; the menu's stars go right and its moon left. Turning them is a line in `Menu.Starfield`, the menu with them.
+- **The Earth is gone by the last screen** (about 90 s), and comes again on a way of chance: she may cross the last screen's lines.
+- **No mixer detection of a track's end**: the end is the clock at the track's length; a track cut short in the file would end late.
+
+**First guesses for the live run:** the rise - 421 units, and how slowly it stops; the shares 0.4 and 0.25; the second of the stars' fade and the four of the nebula's; the Earth's light and her y; the lines' rows; the credits' 4.17 s.
 
 ## Decided 2026-11-14: the ground for a lifted eye
 

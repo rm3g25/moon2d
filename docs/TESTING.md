@@ -87,7 +87,7 @@ Tests\
     Tests.Game.Wreckage.pas  what is left of the Ram's hull: its pieces flying, falling slowly, taken back by the wind
     Tests.Game.Landing.pas  the end of the flight: the slowdown, the road's stop, the stand, the hand-over
     Tests.Game.Gate.pas    the gate at the end of the flight: its lamp's turn, the facade's place along the road
-    Tests.Game.Titles.pas  the titles' clock: by the ticks and by the track, the flash, how much of the card shows; the flight: its cues, its seconds, the eye, the tail
+    Tests.Game.Titles.pas  the titles' clock: by the ticks and by the track, the flash, how much of the card shows; the flight: its cues, its seconds, the eye, the dark; the end at the stars: the sky, its rise, the phrases, the credits, the last screen, the track's end
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read; under the titles' eye: the layers' nearness, the ride, the floor's slabs
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read; the row flown back over
     Tests.Game.Shroud.pas
@@ -119,7 +119,7 @@ Tests\
     Tests.Levels.Graph.pas
     Tests.Levels.Pads.pas
     Tests.Levels.Scenes.pas    the parser of the scenes, and the load
-    Tests.Levels.Titles.pas    the titles of a level read: the cues, the path, the faults, the shipped file
+    Tests.Levels.Titles.pas    the titles of a level read: the cues, the path, the end at the stars, the faults, the shipped file
   Monsters\
     Tests.Monsters.pas
     Tests.Monsters.Bodies.pas
