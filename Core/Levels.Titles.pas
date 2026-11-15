@@ -9,8 +9,11 @@
   it is flown ("flownTill", a second of the flight) while the game does not
   fly all of it; with none it is flown to its last key. Titles that fly
   read the flight's own cues too - the sign's stutter and the sun's flare.
-  What the game does not play yet - the sections the lines at the stars
-  hang on - is let be.
+  Titles that fly may end at the stars: their cues for the sky, the
+  phrases, the credits and the last screen go together; without them the
+  last screen comes as the path is flown. The track's length, where the
+  file gives it, is where the titles end. The sections of the track are
+  let be.
 
   No SDL.
 
@@ -31,12 +34,20 @@ type
   // the studio's card comes in, gone by CardOut; Flash - the logo flares;
   // Flight - the camera leaves; Neon - the TEK sign stutters as the eye
   // goes by; Flare - the sun comes out of the dome's glass. The last three
-  // are read for titles that fly
+  // are read for titles that fly. At the stars: Stars - the sky comes out of
+  // the black, standing high; Still - it is at its rest; Mission and
+  // Promise - the two phrases come in; Credits - they are gone, the lines of
+  // the credits come; Last - the last screen. Zero - titles that do not end
+  // at the stars; for those that fly Last is where the path is flown
   TTitlesCues = record
     Card, CardOut: Double;
     Flash: Double;
     Flight: Double;
     Neon, Flare: Double;
+    Stars, Still: Double;
+    Mission, Promise: Double;
+    Credits: Double;
+    Last: Double;
   end;
 
   TTitlesDef = record
@@ -47,7 +58,11 @@ type
     // The second of the flight the path is flown to: its last key's, or
     // the path's "flownTill" while the game does not fly all of it
     FlightTill: Double;
+    // The track's length, where the titles end; 0 - not given
+    TrackSeconds: Double;
     function Flies: Boolean;
+    // Flies and comes to the stars of the menu after the flight
+    function EndsAtTheStars: Boolean;
   end;
 
 // The titles of the level ARoot: its "titles" section names the file,
@@ -71,10 +86,18 @@ resourcestring
     + 'after the one before it';
   STitlesFlownNowhere = 'Level "%s": the path of its titles is flown till %g s - '
     + 'a second of the flight above zero';
+  STitlesStarsWithoutFlight = 'Level "%s": its titles come to the stars, but do not fly';
+  STitlesTrackTooShort = 'Level "%s": the track of its titles ends before their '
+    + 'last screen';
 
 function TTitlesDef.Flies: Boolean;
 begin
   Result := Present and Path.Present;
+end;
+
+function TTitlesDef.EndsAtTheStars: Boolean;
+begin
+  Result := Flies and (Cues.Stars > 0);
 end;
 
 function ReadCues(const AObj: TJSONObject): TTitlesCues;
@@ -85,6 +108,12 @@ begin
   Result.Flight := AObj.GetValue<Double>('flight', 0);
   Result.Neon := AObj.GetValue<Double>('neon', 0);
   Result.Flare := AObj.GetValue<Double>('flare', 0);
+  Result.Stars := AObj.GetValue<Double>('stars', 0);
+  Result.Still := AObj.GetValue<Double>('still', 0);
+  Result.Mission := AObj.GetValue<Double>('mission', 0);
+  Result.Promise := AObj.GetValue<Double>('promise', 0);
+  Result.Credits := AObj.GetValue<Double>('credits', 0);
+  Result.Last := AObj.GetValue<Double>('last', 0);
 end;
 
 // "dx" places the key from where the world stood, "x" along the strip; a
@@ -149,6 +178,39 @@ begin
     raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'flare']);
 end;
 
+// The sky comes after the sun, and stands still after it comes; the
+// phrases come once the sky is out, the credits after them, the last
+// screen after the credits, and the track lasts to it
+procedure CheckTheStars(const ADef: TTitlesDef; const ALevelId: string);
+begin
+  var Cues := ADef.Cues;
+  if not ADef.Path.Present then
+    raise ETitlesError.CreateFmt(STitlesStarsWithoutFlight, [ALevelId]);
+  if Cues.Stars <= Cues.Flare then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'stars']);
+  if Cues.Still <= Cues.Stars then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'still']);
+  if Cues.Mission <= Cues.Stars then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'mission']);
+  if Cues.Promise <= Cues.Mission then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'promise']);
+  if Cues.Credits <= Cues.Promise then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'credits']);
+  if Cues.Last <= Cues.Credits then
+    raise ETitlesError.CreateFmt(STitlesCueOutOfOrder, [ALevelId, 'last']);
+  if (ADef.TrackSeconds > 0) and (ADef.TrackSeconds <= Cues.Last) then
+    raise ETitlesError.CreateFmt(STitlesTrackTooShort, [ALevelId]);
+end;
+
+function ReadTrackSeconds(const ARoot: TJSONObject): Double;
+var
+  Track: TJSONObject;
+begin
+  Result := 0;
+  if ARoot.TryGetValue<TJSONObject>('track', Track) then
+    Result := Track.GetValue<Double>('seconds', 0);
+end;
+
 // No "path" - titles that do not fly
 function ReadTitlesFile(const AFileName, ALevelId: string): TTitlesDef;
 var
@@ -173,6 +235,11 @@ begin
         raise ETitlesError.CreateFmt(STitlesFlownNowhere, [ALevelId, Result.FlightTill]);
     end;
     CheckOrder(Result, ALevelId);
+    Result.TrackSeconds := ReadTrackSeconds(Root);
+    if Result.Cues.Stars > 0 then
+      CheckTheStars(Result, ALevelId)
+    else if Result.Path.Present then
+      Result.Cues.Last := Result.Cues.Flight + Result.FlightTill;
     Result.Present := True;
   finally
     Root.Free;

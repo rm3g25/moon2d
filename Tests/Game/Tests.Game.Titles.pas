@@ -13,11 +13,22 @@
   own seconds run from the cue, zero before it. In the flight the clock
   goes by the ticks alone, a track close by leaning it no more, and a
   track far off takes it still. The eye goes the path by the flight's
-  seconds and stands where the world stood before it. The flight ends
-  once, at the second the titles' file has it flown to, the frame gone
-  dark over the second before; a clear ends it. Titles without a path
-  never fly. The sign's stutter and the sun's flare count the flight's
-  seconds from their own cues, below zero before them.
+  seconds and stands where the world stood before it. The path is flown
+  from the second the titles' file has it flown to, the frame gone dark
+  over the second before, and from there the clock leans again; a clear
+  ends the flight. Titles without a path never fly. The sign's stutter and
+  the sun's flare count the flight's seconds from their own cues, below
+  zero before them.
+
+  Titles that end at the stars: the sky comes once, on its cue; its stars
+  come in over a fade, its nebula slower; it stands high till it comes,
+  as high as the pitch rose there makes it, and comes down to its rest by
+  its cue, first as fast as the pitch rose, then ever slower. The phrases
+  come on their cues and go as the credits come; the lines of the credits
+  come one after another and share the time to the last screen. The last
+  screen comes once, on its cue; titles that fly with no stars have theirs
+  where the path is flown. The track's end comes once. The next cue walks
+  them all.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -115,16 +126,55 @@ type
     [Test]
     procedure TestTheEyeGoesThePathByTheFlightsSeconds;
     [Test]
-    procedure TestTheFlightEndsOnceWhereItIsFlownTo;
+    procedure TestThePathIsFlownFromWhereItIsFlownTo;
+    [Test]
+    procedure TestPastThePathTheClockLeansAgain;
     [Test]
     procedure TestTheFrameGoesDarkOverTheLastSecond;
     [Test]
     procedure TestClearEndsTheFlight;
     [Test]
     procedure TestTheSignAndTheFlareCountFromTheirCues;
+    [Test]
+    procedure TestWithoutTheStarsTheLastScreenComesWhereThePathIsFlown;
+  end;
+
+  [TestFixture]
+  TTitlesStarsTests = class
+  private
+    FTitles: TTitles;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestTheSkyComesOnceAtItsCue;
+    [Test]
+    procedure TestTheStarsComeInOverAFadeTheNebulaSlower;
+    [Test]
+    procedure TestTheSkyStandsHighAndComesDownToItsRest;
+    [Test]
+    procedure TestTheSkyComesDownAsFastAsThePitchRose;
+    [Test]
+    procedure TestThePhrasesComeOnTheirCuesAndGoWithTheCredits;
+    [Test]
+    procedure TestTheCreditsComeOneAfterAnotherToTheLastScreen;
+    [Test]
+    procedure TestTheLastScreenComesOnceAtItsCue;
+    [Test]
+    procedure TestTheTracksEndComesOnce;
+    [Test]
+    procedure TestTheNextCueWalksTheStars;
+    [Test]
+    procedure TestTitlesThatDoNotEndAtTheStarsShowNoneOfThem;
   end;
 
 implementation
+
+uses
+  System.Math;
 
 const
   Tick = 1 / TitlesTicksPerSecond;
@@ -153,6 +203,21 @@ const
   FlareCue = FlightCue + 5;
   // Where the world of the tests stands
   Stand = 2400.0;
+  // The titles that end at the stars: the path's nose comes up from four
+  // seconds to its end at ten, the sky comes at eight of the flight, stands
+  // still at sixteen; the phrases, the credits, the last screen, the end
+  PitchFrom = 4.0;
+  PathEnd = 10.0;
+  EndPitch = 20.0;
+  StarsCue = FlightCue + 8;
+  StillCue = FlightCue + 16;
+  MissionCue = FlightCue + 17;
+  PromiseCue = FlightCue + 19;
+  CreditsCue = FlightCue + 23;
+  LastCue = FlightCue + 32;
+  TrackEnd = FlightCue + 41;
+  // The flight as many seconds before the cue as after it, for a pace
+  PaceSpan = 0.01;
 
 function TestTitles: TTitlesDef;
 begin
@@ -184,6 +249,33 @@ begin
     KeyFromStand(RestTill, RestTillWay, 0),
     KeyFromStand(LiftedSeconds, LiftedWay, Lifted)];
   Result.FlightTill := FlownTill;
+end;
+
+// A key at ASeconds on the strip's place 0, pitched APitch
+function PitchedKey(ASeconds, APitch: Double): TEyeKey;
+begin
+  Result := Default(TEyeKey);
+  Result.Seconds := ASeconds;
+  Result.Placing := epFromStand;
+  Result.Pitch := APitch;
+end;
+
+function StarsTitles: TTitlesDef;
+begin
+  Result := TestTitles;
+  Result.Cues.Flight := FlightCue;
+  Result.Cues.Neon := SignCue;
+  Result.Cues.Flare := FlareCue;
+  Result.Path.Keys := [PitchedKey(0, 0), PitchedKey(PitchFrom, 0),
+    PitchedKey(PathEnd, EndPitch)];
+  Result.FlightTill := PathEnd;
+  Result.Cues.Stars := StarsCue;
+  Result.Cues.Still := StillCue;
+  Result.Cues.Mission := MissionCue;
+  Result.Cues.Promise := PromiseCue;
+  Result.Cues.Credits := CreditsCue;
+  Result.Cues.Last := LastCue;
+  Result.TrackSeconds := TrackEnd;
 end;
 
 procedure TTitlesTests.Setup;
@@ -461,7 +553,7 @@ begin
   FTitles.Tick(NoTrackSeconds);
   Assert.IsFalse(FTitles.Flying, 'Not yet');
   Assert.IsTrue(Abs(FTitles.FlightSeconds(1)) < ClockSlack, 'Zero');
-  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1))) < LevelSlack, 'No dark');
+  Assert.IsTrue(Abs(Double(FTitles.DarkLevel(1))) < LevelSlack, 'No dark');
 end;
 
 procedure TTitlesFlightTests.TestTheFlightsSecondsRunFromItsCue;
@@ -528,34 +620,42 @@ begin
   Assert.IsTrue(FTitles.EyeAt(1, Stand).Lift > 0, 'Lifted past its rest');
 end;
 
-procedure TTitlesFlightTests.TestTheFlightEndsOnceWhereItIsFlownTo;
+procedure TTitlesFlightTests.TestThePathIsFlownFromWhereItIsFlownTo;
+begin
+  Assert.IsFalse(FTitles.PathFlown, 'Not before the flight');
+  RunToFlight;
+  FlyPast(FlownTill - 2 * Tick);
+  Assert.IsFalse(FTitles.PathFlown, 'Not short of the second');
+  FlyPast(FlownTill);
+  Assert.IsTrue(FTitles.PathFlown, 'From the second it is flown to');
+  FTitles.Tick(NoTrackSeconds);
+  Assert.IsTrue(FTitles.PathFlown, 'And on');
+end;
+
+procedure TTitlesFlightTests.TestPastThePathTheClockLeansAgain;
+const
+  Ahead = 0.3;
 begin
   RunToFlight;
-  var Ends := 0;
-  var EndedAt: Double := 0;
-  for var i := 1 to 20 * TitlesTicksPerSecond do
-    if FTitles.Tick(NoTrackSeconds).FlightEnds then
-    begin
-      Inc(Ends);
-      EndedAt := FTitles.FlightSeconds(1);
-    end;
-  Assert.AreEqual(1, Ends, 'Once');
-  Assert.IsTrue(EndedAt >= FlownTill, 'Not before the second it is flown to');
-  Assert.IsTrue(EndedAt < FlownTill + Tick + ClockSlack, 'On that tick');
+  FlyPast(FlownTill);
+  var Before := FTitles.Seconds;
+  FTitles.Tick(Before + Tick + Ahead);
+  Assert.IsTrue(Abs(FTitles.Seconds - (Before + 1.5 * Tick)) < ClockSlack,
+    'A tick and half a tick more: the eye stands, the lines want the beat');
 end;
 
 procedure TTitlesFlightTests.TestTheFrameGoesDarkOverTheLastSecond;
 begin
   RunToFlight;
-  FlyPast(FlownTill - TitlesTailSeconds - 2 * Tick);
-  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1))) < LevelSlack, 'None before the last second');
+  FlyPast(FlownTill - TitlesDarkSeconds - 2 * Tick);
+  Assert.IsTrue(Abs(Double(FTitles.DarkLevel(1))) < LevelSlack, 'None before the last second');
 
-  FlyPast(FlownTill - TitlesTailSeconds / 2);
-  var Halfway: Double := FTitles.TailLevel(1);
+  FlyPast(FlownTill - TitlesDarkSeconds / 2);
+  var Halfway: Double := FTitles.DarkLevel(1);
   Assert.IsTrue((Halfway > 0.45) and (Halfway < 0.6), 'Half dark halfway');
 
   FlyPast(FlownTill);
-  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1)) - 1) < LevelSlack, 'Dark at its end');
+  Assert.IsTrue(Abs(Double(FTitles.DarkLevel(1)) - 1) < LevelSlack, 'Dark at its end');
 end;
 
 procedure TTitlesFlightTests.TestClearEndsTheFlight;
@@ -583,8 +683,216 @@ begin
   Assert.IsTrue(FTitles.FlareSince(1) < 0, 'The sun not out yet');
 end;
 
+// As Levels.Titles reads it: no stars, the last screen where the path is
+// flown
+procedure TTitlesFlightTests.TestWithoutTheStarsTheLastScreenComesWhereThePathIsFlown;
+begin
+  var Def := FlyingTitles;
+  Def.Cues.Last := FlightCue + FlownTill;
+  FTitles.Arm(Def);
+  FTitles.Start;
+  var Comes := 0;
+  var CameAt: Double := 0;
+  while FTitles.Seconds <= LongAfter do
+    if FTitles.Tick(NoTrackSeconds).LastComes then
+    begin
+      Inc(Comes);
+      CameAt := FTitles.FlightSeconds(1);
+    end;
+  Assert.AreEqual(1, Comes, 'Once');
+  Assert.IsTrue(CameAt >= FlownTill, 'Not before the path is flown');
+  Assert.IsTrue(CameAt < FlownTill + Tick + ClockSlack, 'On that tick');
+  Assert.IsFalse(FTitles.AtTheStars, 'No sky');
+end;
+
+// TTitlesStarsTests
+
+procedure TTitlesStarsTests.Setup;
+begin
+  FTitles := TTitles.Create;
+  FTitles.Arm(StarsTitles);
+  FTitles.Start;
+end;
+
+procedure TTitlesStarsTests.TearDown;
+begin
+  FTitles.Free;
+end;
+
+procedure TTitlesStarsTests.TestTheSkyComesOnceAtItsCue;
+begin
+  var Comes := 0;
+  var CameAt: Double := 0;
+  while FTitles.Seconds <= LongAfter do
+    if FTitles.Tick(NoTrackSeconds).SkyComes then
+    begin
+      Inc(Comes);
+      CameAt := FTitles.Seconds;
+    end;
+  Assert.AreEqual(1, Comes, 'Once');
+  Assert.IsTrue(CameAt >= StarsCue, 'Not before its cue');
+  Assert.IsTrue(CameAt < StarsCue + Tick + ClockSlack, 'On the tick of its cue');
+end;
+
+procedure TTitlesStarsTests.TestTheStarsComeInOverAFadeTheNebulaSlower;
+begin
+  FTitles.JumpTo(StarsCue - 1);
+  FTitles.Tick(NoTrackSeconds);
+  Assert.IsTrue(Abs(Double(FTitles.StarsLevel(1))) < LevelSlack, 'No stars before');
+  Assert.IsTrue(Abs(Double(FTitles.NebulaLevel(1))) < LevelSlack, 'No nebula before');
+
+  FTitles.JumpTo(StarsCue + TitlesFadeSeconds / 2);
+  FTitles.Tick(NoTrackSeconds);
+  var Halfway: Double := TitlesFadeSeconds / 2 + Tick;
+  Assert.IsTrue(Abs(FTitles.StarsLevel(1) - Halfway / TitlesFadeSeconds) < LevelSlack,
+    'The stars coming in');
+  Assert.IsTrue(Abs(FTitles.NebulaLevel(1) - Halfway / TitlesNebulaSeconds) < LevelSlack,
+    'The nebula slower');
+
+  FTitles.JumpTo(StarsCue + TitlesNebulaSeconds);
+  FTitles.Tick(NoTrackSeconds);
+  Assert.IsTrue(Abs(FTitles.StarsLevel(1) - 1) < LevelSlack, 'All the stars');
+  Assert.IsTrue(Abs(FTitles.NebulaLevel(1) - 1) < LevelSlack, 'All the nebula');
+end;
+
+procedure TTitlesStarsTests.TestTheSkyStandsHighAndComesDownToItsRest;
+begin
+  FTitles.JumpTo(StarsCue - 1);
+  var Highest := FTitles.SkyRise(1);
+  Assert.IsTrue(Highest > 0, 'Above its rest before it comes');
+
+  FTitles.JumpTo(StarsCue);
+  Assert.IsTrue(Abs(FTitles.SkyRise(1) - Highest) < ClockSlack, 'All of it as it comes');
+  var Before := Highest;
+  for var i := 1 to 15 do
+  begin
+    FTitles.JumpTo(StarsCue + i * (StillCue - StarsCue) / 16);
+    var Lower := FTitles.SkyRise(1);
+    Assert.IsTrue(Lower < Before, 'Down, all the way');
+    Before := Lower;
+  end;
+  FTitles.JumpTo(StillCue);
+  Assert.IsTrue(Abs(FTitles.SkyRise(1)) < ClockSlack, 'At its rest by its cue');
+  FTitles.JumpTo(LongAfter);
+  Assert.IsTrue(Abs(FTitles.SkyRise(1)) < ClockSlack, 'And after');
+end;
+
+// The pace the tangent of the path's pitch rose at as the sky came, worked
+// out from the path itself
+procedure TTitlesStarsTests.TestTheSkyComesDownAsFastAsThePitchRose;
+const
+  Step = 0.001;
+  PaceSlack = 0.02;
+begin
+  var Path := StarsTitles.Path;
+  var At: Double := StarsCue - FlightCue;
+  var Pace: Double := (Tan(DegToRad(Path.EyeAt(At + PaceSpan, 0).Pitch)) -
+    Tan(DegToRad(Path.EyeAt(At - PaceSpan, 0).Pitch))) / (2 * PaceSpan);
+  Assert.IsTrue(Pace > 0, 'The nose comes up there');
+
+  FTitles.JumpTo(StarsCue);
+  var Start := FTitles.SkyRise(1);
+  FTitles.JumpTo(StarsCue + Step);
+  var Fall: Double := (Start - FTitles.SkyRise(1)) / Step;
+  Assert.IsTrue(Abs(Fall / Pace - 1) < PaceSlack, 'As fast as the pitch rose');
+end;
+
+procedure TTitlesStarsTests.TestThePhrasesComeOnTheirCuesAndGoWithTheCredits;
+begin
+  FTitles.JumpTo(MissionCue - 0.1);
+  Assert.IsTrue(Abs(Double(FTitles.MissionLevel(1))) < LevelSlack, 'No mission yet');
+  FTitles.JumpTo(PromiseCue);
+  Assert.IsTrue(Abs(FTitles.MissionLevel(1) - 1) < LevelSlack, 'The mission whole');
+  Assert.IsTrue(Abs(Double(FTitles.PromiseLevel(1))) < LevelSlack, 'The promise on its cue');
+  FTitles.JumpTo(PromiseCue + TitlesFadeSeconds);
+  Assert.IsTrue(Abs(FTitles.PromiseLevel(1) - 1) < LevelSlack, 'The promise whole');
+  FTitles.JumpTo(CreditsCue - TitlesFadeSeconds / 2);
+  Assert.IsTrue(Abs(FTitles.MissionLevel(1) - 0.5) < LevelSlack, 'The mission going');
+  Assert.IsTrue(Abs(FTitles.PromiseLevel(1) - 0.5) < LevelSlack, 'The promise going');
+  FTitles.JumpTo(CreditsCue);
+  Assert.IsTrue(Abs(Double(FTitles.MissionLevel(1))) < LevelSlack, 'Gone as the credits come');
+  Assert.IsTrue(Abs(Double(FTitles.PromiseLevel(1))) < LevelSlack, 'Both');
+end;
+
+procedure TTitlesStarsTests.TestTheCreditsComeOneAfterAnotherToTheLastScreen;
+begin
+  var Span: Double := (LastCue - CreditsCue) / TitlesCreditLines;
+  for var Line := 0 to TitlesCreditLines - 1 do
+  begin
+    FTitles.JumpTo(CreditsCue + (Line + 0.5) * Span);
+    for var Other := 0 to TitlesCreditLines - 1 do
+      if Other = Line then
+        Assert.IsTrue(Abs(FTitles.CreditLevel(Other, 1) - 1) < LevelSlack, 'Its line whole')
+      else
+        Assert.IsTrue(Abs(Double(FTitles.CreditLevel(Other, 1))) < LevelSlack,
+          'The others not there');
+  end;
+  FTitles.JumpTo(LastCue);
+  for var Line := 0 to TitlesCreditLines - 1 do
+    Assert.IsTrue(Abs(Double(FTitles.CreditLevel(Line, 1))) < LevelSlack,
+      'All gone by the last screen');
+end;
+
+procedure TTitlesStarsTests.TestTheLastScreenComesOnceAtItsCue;
+begin
+  var Comes := 0;
+  while FTitles.Seconds <= LastCue - 2 * Tick do
+    if FTitles.Tick(NoTrackSeconds).LastComes then
+      Inc(Comes);
+  Assert.AreEqual(0, Comes, 'None before its cue');
+  Assert.IsFalse(FTitles.LastShown, 'Not shown');
+  Assert.IsTrue(Abs(Double(FTitles.LastLevel(1))) < LevelSlack, 'Nothing of it');
+  while FTitles.Seconds <= TrackEnd - 2 * Tick do
+    if FTitles.Tick(NoTrackSeconds).LastComes then
+      Inc(Comes);
+  Assert.AreEqual(1, Comes, 'Once');
+  Assert.IsTrue(FTitles.LastShown, 'Shown');
+  Assert.IsTrue(Abs(FTitles.LastLevel(1) - 1) < LevelSlack, 'All of it');
+end;
+
+procedure TTitlesStarsTests.TestTheTracksEndComesOnce;
+begin
+  var Ends := 0;
+  var EndedAt: Double := 0;
+  while FTitles.Seconds <= LongAfter do
+    if FTitles.Tick(NoTrackSeconds).TrackEnds then
+    begin
+      Inc(Ends);
+      EndedAt := FTitles.Seconds;
+    end;
+  Assert.AreEqual(1, Ends, 'Once');
+  Assert.IsTrue(EndedAt >= TrackEnd, 'Not before the track''s length');
+  Assert.IsTrue(EndedAt < TrackEnd + Tick + ClockSlack, 'On that tick');
+end;
+
+procedure TTitlesStarsTests.TestTheNextCueWalksTheStars;
+begin
+  Assert.IsTrue(Abs(FTitles.CueAfter(FlashCue) - StarsCue) < ClockSlack, 'The sky');
+  Assert.IsTrue(Abs(FTitles.CueAfter(StarsCue) - MissionCue) < ClockSlack, 'The mission');
+  Assert.IsTrue(Abs(FTitles.CueAfter(MissionCue) - CreditsCue) < ClockSlack, 'The credits');
+  Assert.IsTrue(Abs(FTitles.CueAfter(CreditsCue) - LastCue) < ClockSlack, 'The last screen');
+  Assert.IsTrue(Abs(FTitles.CueAfter(LastCue) - TrackEnd) < ClockSlack, 'The track''s end');
+  Assert.IsTrue(FTitles.CueAfter(TrackEnd) < 0, 'None past it');
+end;
+
+procedure TTitlesStarsTests.TestTitlesThatDoNotEndAtTheStarsShowNoneOfThem;
+begin
+  FTitles.Arm(FlyingTitles);
+  FTitles.Start;
+  var Comes := 0;
+  while FTitles.Seconds <= LongAfter do
+    if FTitles.Tick(NoTrackSeconds).SkyComes then
+      Inc(Comes);
+  Assert.AreEqual(0, Comes, 'No sky');
+  Assert.IsTrue(Abs(Double(FTitles.StarsLevel(1))) < LevelSlack, 'No stars');
+  Assert.IsTrue(Abs(FTitles.SkyRise(1)) < ClockSlack, 'No rise');
+  Assert.IsTrue(Abs(Double(FTitles.MissionLevel(1))) < LevelSlack, 'No phrase');
+  Assert.IsTrue(Abs(Double(FTitles.CreditLevel(0, 1))) < LevelSlack, 'No credits');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTitlesTests);
   TDUnitX.RegisterTestFixture(TTitlesFlightTests);
+  TDUnitX.RegisterTestFixture(TTitlesStarsTests);
 
 end.

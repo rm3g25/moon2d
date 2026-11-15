@@ -50,9 +50,9 @@ const
 type
   // gsMenu: the moon-over-starfield menu (Menu) - the boot state.
   // gsIntro: the level's story text waits for a key.
-  // gsFinale: the titles' flight - the world goes on, the keys and the
-  // mouse are cut, no HUD.
-  // gsEnding: the campaign-end screen - mouse-only exit (part 5.4).
+  // gsFinale: the titles' flight and the stars after it - the world goes
+  // on till the sky comes, the keys and the mouse are cut, no HUD.
+  // gsEnding: the last screen over the menu's sky - mouse only.
   TGameState = (gsMenu, gsIntro, gsPlaying, gsFinale, gsEnding);
 
   TArmorPings = record
@@ -96,6 +96,8 @@ type
     // every level, both owned here.
     FUiSet: TSpriteSet;
     FWeaponSet: TSpriteSet;
+    // The levels' sky art, for the Earth of the menu the titles end on
+    FSkySet: TSpriteSet;
     FSprites: TSpriteRenderer;
     FTiles: TTileScreenRenderer;
     FObjects: TObjectScreenRenderer;
@@ -407,7 +409,6 @@ type
     procedure DebugRebuildPads;
     procedure DebugRestorePads;
 {$ENDIF}
-    function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
     procedure FireTriggersOf(AIndex, AScreen: Integer;
       AGrades: TDifficultyGrades; const ATriggers: TEntityTriggers);
@@ -475,7 +476,7 @@ type
     procedure TickLanding;
     procedure TickTitles;
     procedure BeginFinale;
-    procedure LeaveFinale;
+    procedure EndTitles;
     procedure CarryOutBreakup(const ACue: TBreakupCue);
     procedure BurstTheHull;
     procedure BlowWreckPiece(AIndex: Integer);
@@ -556,9 +557,9 @@ type
     function BulletStruckRamBunker(const ABullet: TBullet): Boolean;
     function CurrentLevelIsLast: Boolean;
     procedure BeginEnding;
-    procedure DrawEnding;
-    procedure DrawCenteredBig(const AText: string; ARow: Integer);
+    procedure DrawEnding(AAlpha: Double);
     procedure HandleEndingClick;
+    procedure LeaveEndingForMenu;
     procedure ProcessKillStreak;
     procedure AwardStreakBonus(const ABig, ASmall: string; APoints: Integer);
     procedure StartPlaying;
@@ -591,6 +592,8 @@ type
     procedure DrawPlayLayers(AAlpha: Double);
     procedure DrawHud(AAlpha: Double);
     procedure DrawFinale(AAlpha: Double);
+    procedure DrawTitlesSky(AAlpha: Double);
+    procedure ClearFrameBlack;
     function FlightEye(AAlpha: Single): TFarPlaneEye;
     function FlightStand(AAlpha: Single): Double;
     function EyeOffsets(AAlpha: Single): TFarPlaneOffsets;
@@ -977,13 +980,6 @@ const
   // nothing flies in through it and no gravel falls into it
   CannonSmokeTicks = 50;
 
-  // Campaign-end screen layout, in Render.Font grid steps
-  EndingTextColumn = 3;    // farewell prose column (small font)
-  EndingTextFirstRow = 7;  // first prose row (small line steps)
-  EndingAuthorRow = 14;    // clickable big lines, centered
-  EndingMenuRow = 17;
-  EndingClickRows = 2;     // click band height of a big line
-
 constructor TMoonGame.Create(const AMonsters: TMonsterRegistry;
   const ARenderer: PSdlRenderer; const AWindow: PSdlWindow;
   const ALevels: TArray<TLevelChoice>; const AConfig: TGameConfig);
@@ -1004,6 +1000,8 @@ begin
     FUiSet := TSpriteSet.Create(SpriteSetsDir + 'ui.mset');
   if FileExists(SpriteSetsDir + 'weapon.mset') then
     FWeaponSet := TSpriteSet.Create(SpriteSetsDir + 'weapon.mset');
+  if FileExists(SpriteSetsDir + 'sky.mset') then
+    FSkySet := TSpriteSet.Create(SpriteSetsDir + 'sky.mset');
   FSprites := TSpriteRenderer.Create(ARenderer, FrameWidth, FrameHeight);
   FMonsterBullets := TBurst.Create(ARenderer, 'bull');
   FFont := TMoonFont.Create(ARenderer, FontFileName, FontOrientation,
@@ -1068,7 +1066,7 @@ begin
   FSpinHum.Channel := -1;
 
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
-    FUiSet, FWeaponSet);
+    FUiSet, FWeaponSet, FSkySet);
   FMenu.Difficulty := FDifficulty;
   FTitlesPainter := THudTitles.Create(ARenderer, FFont, FMenu.Logo, FTitles);
   FState := gsMenu;
@@ -1173,6 +1171,7 @@ begin
   FLevelSets.Free;
   FUiSet.Free;
   FWeaponSet.Free;
+  FSkySet.Free;
   FLevel.Free; // owned here since the menu became the level picker
   inherited;
 end;
@@ -1283,6 +1282,8 @@ begin
       FRoad);
   end;
   FTitles.Arm(FLevel.Titles);
+  // The Earth stood in the menu the titles ended on, and in no other
+  FMenu.ShowMoon;
   FreeAndNil(FFlarePainter);
   FreeAndNil(FFrameTarget);
   if FLevel.Titles.Flies then
@@ -1518,49 +1519,36 @@ begin
     SameText(FLevels[High(FLevels)].FileName, FLevelFile);
 end;
 
+// The last screen, over the menu's sky: after the titles at the stars, or
+// straight from the door out of the last level's last screen
 procedure TMoonGame.BeginEnding;
 begin
   FState := gsEnding;
-  // The campaign is over: nothing to resume behind the farewell
+  // The campaign is over: nothing to resume behind the last screen, and
+  // Escape on the menu after it comes back to the menu
+  FResumeState := gsMenu;
   FMenu.HasActiveGame := False;
+  FMenu.ShowMain;
   ReleaseHeldKeys;
-  // The current track keeps playing under the farewell - the 2008 exit
-  // was silence via GameFree; a track feels kinder (tweak on review)
 end;
 
-procedure TMoonGame.DrawCenteredBig(const AText: string; ARow: Integer);
+// The sky as the menu has it at rest - the titles leave it so - and the
+// last screen over it, coming in on its cue; the calm green crosshair to
+// click with
+procedure TMoonGame.DrawEnding(AAlpha: Double);
 begin
-  FFont.DrawBig(AText, (FrameWidth - FFont.BigTextWidth(AText)) / 2,
-    ARow * SmallLineStep);
-end;
-
-procedure TMoonGame.DrawEnding;
-begin
-  var Lines: TArray<string> := [Tr(SEndingLine1), Tr(SEndingLine2),
-    Tr(SEndingLine3), Tr(SEndingLine4), Tr(SEndingLine5)];
-  for var i := 0 to High(Lines) do
-    FFont.DrawSmall(Lines[i], EndingTextColumn * LegacyColumnWidth,
-      (EndingTextFirstRow + i) * SmallLineStep);
-
-  DrawCenteredBig(Tr(SEndingAuthor), EndingAuthorRow);
-  DrawCenteredBig(Tr(SEndingMenu), EndingMenuRow);
-  // A pointer to click with: the calm green crosshair
+  ClearFrameBlack;
+  FMenu.DrawSky(AAlpha);
+  var Level: Single := 1;
+  if FTitles.LastShown then
+    Level := FTitles.LastLevel(AAlpha);
+  FTitlesPainter.DrawLast(Level);
   FHero.DrawCrosshair(FSprites, 1);
-end;
-
-function TMoonGame.HitEndingLine(const AText: string;
-  ATopRow: Integer): Boolean;
-begin
-  var Left := (FrameWidth - FFont.BigTextWidth(AText)) / 2;
-  Result := (FMouseGX >= Left) and
-    (FMouseGX <= Left + FFont.BigTextWidth(AText)) and
-    (FMouseGY >= ATopRow * SmallLineStep) and
-    (FMouseGY <= (ATopRow + EndingClickRows) * SmallLineStep);
 end;
 
 procedure TMoonGame.HandleEndingClick;
 begin
-  if HitEndingLine(Tr(SEndingAuthor), EndingAuthorRow) then
+  if FTitlesPainter.HitsAuthor(FMouseGX, FMouseGY) then
   begin
     // The browser must land in a visible window - fullscreen drops
     // first. SetFullscreen, not ToggleFullscreen: the player did not
@@ -1568,13 +1556,20 @@ begin
     SetFullscreen(False);
     OpenWebPage(AuthorLinkedInUrl);
   end
-  else if HitEndingLine(Tr(SEndingMenu), EndingMenuRow) then
-  begin
-    // OpenMenu keeps the level track by design (the pause menu); the
-    // campaign exit deserves the title theme instead
+  else if FTitlesPainter.HitsMainMenu(FMouseGX, FMouseGY) then
+    LeaveEndingForMenu;
+end;
+
+// The items come in over the same sky. The end track plays on in the menu
+// and the titles' clock with it, till the track is over (EndTitles); any
+// other track gives way to the menu's theme
+procedure TMoonGame.LeaveEndingForMenu;
+begin
+  FState := gsMenu;
+  FResumeState := gsMenu;
+  FMenu.ShowMain;
+  if not FAudio.Plays(EndMusicFile) then
     FAudio.PlayMusic(MenuMusicFile, mmLoop);
-    OpenMenu;
-  end;
 end;
 
 // The 2008 outer loop was 'while True do begin StartLevel; FreeLevel
@@ -4763,7 +4758,10 @@ end;
 // The titles' clock goes by the end track where the mixer tells its place
 // and by the ticks where it does not. At the flash the logo flares, the
 // screen jolts and the gate's lamp turns amber; at the flight's cue the
-// camera leaves, and the fangs' row is rolled back under the eye
+// camera leaves, and the fangs' row is rolled back under the eye. At the
+// sky's cue the Earth sets out in the menu's sky; at the last screen's the
+// mouse is his again; at the track's end the titles are done. From the sky
+// on the menu ticks its logo itself
 procedure TMoonGame.TickTitles;
 begin
   if not FTitles.Running then
@@ -4772,7 +4770,7 @@ begin
   if FAudio.Plays(EndMusicFile) then
     TrackSeconds := FAudio.MusicSeconds;
   var Cue := FTitles.Tick(TrackSeconds);
-  if FTitles.LogoShown then
+  if FTitles.LogoShown and not FTitles.AtTheStars then
     FMenu.Logo.Tick;
   if Cue.Flashes then
   begin
@@ -4784,10 +4782,14 @@ begin
     BeginFinale;
   // After the clock's tick: the row is rolled as far back as this tick's
   // frames will see
-  if FTitles.Flying then
+  if FTitles.Flying and not FTitles.AtTheStars then
     FFangs.FlyBack(EyeOffsets(1)[fmFangs]);
-  if Cue.FlightEnds then
-    LeaveFinale;
+  if Cue.SkyComes then
+    FMenu.ShowEarth;
+  if Cue.LastComes and (FState = gsFinale) then
+    BeginEnding;
+  if Cue.TrackEnds then
+    EndTitles;
 end;
 
 // The camera leaves: the keys and the mouse are his no more, and what he
@@ -4799,15 +4801,15 @@ begin
   FBonusActivateQueued := False;
 end;
 
-// For the time being the flight ends in the dark, and the dark in the
-// menu: nothing to come back to there, and the end track plays on
-procedure TMoonGame.LeaveFinale;
+// The end track is over: the last screen gives way to the menu, and the
+// menu - there already, or now - plays its theme
+procedure TMoonGame.EndTitles;
 begin
-  FState := gsMenu;
-  FResumeState := gsMenu;
-  FMenu.HasActiveGame := False;
-  FMenu.ShowMain;
   FTitles.Clear;
+  if FState = gsEnding then
+    LeaveEndingForMenu
+  else if FState = gsMenu then
+    FAudio.PlayMusic(MenuMusicFile, mmLoop);
 end;
 
 // What the hull's end did this tick, carried out: the crack's flash and
@@ -5678,10 +5680,20 @@ begin
       FBriefing.Tick;
     if (FState = gsIntro) and FBriefing.KeyStruck then
       FAudio.Play(TerminalKeySoundFile);
+    // Past the last screen the titles go on with their track, to its end
+    if (FState = gsMenu) and FTitles.LastShown then
+      TickTitles;
     Exit;
   end;
-  if FState = gsEnding then
-    Exit; // the farewell screen is static; only the mouse works there
+  // At the stars and on the last screen the world is left behind: the sky
+  // of the menu and the titles' clock go on
+  var LeftBehind := (FState = gsFinale) and FTitles.AtTheStars;
+  if LeftBehind or (FState = gsEnding) then
+  begin
+    FMenu.Tick;
+    TickTitles;
+    Exit;
+  end;
 
   FMessages.Tick;
   if FMessages.TerminalKeyStruck then
@@ -5942,7 +5954,7 @@ begin
         FBriefing.Draw(Tr(SPressAnyKey));
       end;
     gsEnding:
-      DrawEnding;
+      DrawEnding(AAlpha);
     gsPlaying:
       begin
         DrawFarLayers(AAlpha);
@@ -6071,12 +6083,20 @@ end;
 // The frame of the titles' flight: the far layers under the eye, the play
 // layer cast off to the right by its nearness, all of it lowered by the
 // eye's pitch and banked by its bank; the sun's flare over it, level on
-// the window; the dark of the flight's end over all; no HUD. Through the
+// the window; the dark of the path's end over all; no HUD. Through the
 // target the play layer rides off by whole pixels; with no target it is
 // cut at the flight's first frame, and the frame is neither lowered nor
-// banked
+// banked. The sky of the menu comes over the dark; once the path is flown
+// it is all there is, with the lines at the stars
 procedure TMoonGame.DrawFinale(AAlpha: Double);
 begin
+  if FTitles.PathFlown then
+  begin
+    ClearFrameBlack;
+    DrawTitlesSky(AAlpha);
+    DrawFlightReadout(AAlpha);
+    Exit;
+  end;
   var Path := FTitles.EyeAt(AAlpha, FlightStand(AAlpha));
   var CastOff: Single := -FlightEye(AAlpha).Ride * FLevel.FarPlane.PlayNearness;
   var Drop: Single := FLevel.FarPlane.Camera.Focal * Tan(DegToRad(Path.Pitch));
@@ -6100,8 +6120,32 @@ begin
   var Cover := FLevel.FarPlane.SunCover(EyeOffsets(AAlpha), FlightEye(AAlpha));
   FFlarePainter.Draw(FlareAt(FTitles.FlareSince(AAlpha), Cover), SunAt);
 
-  FTitlesPainter.DrawTail(AAlpha);
+  FTitlesPainter.DrawDark(AAlpha);
+  if FTitles.AtTheStars then
+    DrawTitlesSky(AAlpha);
   DrawFlightReadout(AAlpha);
+end;
+
+// The menu's sky as the titles have it - the stars and the nebula coming
+// in, the whole of it standing as high as the eye has still to rise - and
+// the phrases and the credits over it
+procedure TMoonGame.DrawTitlesSky(AAlpha: Double);
+var
+  View: TSkyView;
+begin
+  View.Stars := FTitles.StarsLevel(AAlpha);
+  View.Nebula := FTitles.NebulaLevel(AAlpha);
+  View.Rise := FTitles.SkyRise(AAlpha) * FLevel.FarPlane.Camera.Focal;
+  FMenu.DrawSkyAs(AAlpha, View);
+  FTitlesPainter.DrawAtTheStars(AAlpha);
+end;
+
+// The sky of the titles stands on black, not on the frame's own blue
+procedure TMoonGame.ClearFrameBlack;
+begin
+  SDL_SetRenderDrawColor(FRenderer, FlightSky.R, FlightSky.G, FlightSky.B,
+    FlightSky.A);
+  SDL_RenderClear(FRenderer);
 end;
 
 // The place of the city's strip in the middle of the screen where the
@@ -6698,8 +6742,11 @@ begin
   Result := False;
 {$IFDEF DEBUGKEYS}
   // The titles' flight is watched, not played: of the debug keyboard it
-  // leaves the readout and the way back to the end's start
-  if (FState = gsFinale) and not (AScancode in [ScancodeZ, ScancodeEnd]) then
+  // leaves the readout, the way on to the next cue and the way back to the
+  // end's start; the last screen leaves the way on alone
+  if (FState = gsFinale) and not (AScancode in [ScancodeX, ScancodeZ, ScancodeEnd]) then
+    Exit;
+  if (FState = gsEnding) and (AScancode <> ScancodeX) then
     Exit;
   case AScancode of
     ScancodeT:
@@ -6795,9 +6842,10 @@ begin
       DebugBrowseScreen(-1);
     ScancodeEnd:
       begin
-        // Out of the flight the hero is his own again
+        // Out of the flight the hero is his own again, under his moon
         if FState = gsFinale then
           FState := gsPlaying;
+        FMenu.ShowMoon;
         DebugJumpToWork;
       end;
   else
@@ -6857,8 +6905,13 @@ begin
     Exit;
   end;
 
+  // Mouse only by design: no key leaves the last screen
   if FState = gsEnding then
-    Exit; // mouse-only by design: no key leaves the farewell screen
+  begin
+    if AAction = kaDown then
+      HandleDebugKey(AScancode);
+    Exit;
+  end;
 
   // The titles' flight is not his to steer or to leave: Escape too
   if FState = gsFinale then

@@ -11,6 +11,12 @@
   the file says, and one flown nowhere raises. The file level 2 ships
   reads, and flies to its last key.
 
+  Titles that end at the stars read their cues and the track's length as
+  written; a cue of theirs not after the one before it raises, and so do
+  a track that ends before the last screen and stars without a flight.
+  Titles that fly with no stars have their last screen where the path is
+  flown. The file level 2 ships ends at the stars.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Levels.Titles;
@@ -63,6 +69,18 @@ type
     procedure TestASignNotInTheFlightRaises;
     [Test]
     procedure TestAFlareNotAfterTheSignRaises;
+    [Test]
+    procedure TestTheStarsCuesAndTheTrackAreRead;
+    [Test]
+    procedure TestAStarsCueNotAfterTheOneBeforeItRaises;
+    [Test]
+    procedure TestATrackEndingBeforeTheLastScreenRaises;
+    [Test]
+    procedure TestStarsWithoutAFlightRaise;
+    [Test]
+    procedure TestWithoutTheStarsTheLastScreenComesAsThePathIsFlown;
+    [Test]
+    procedure TestTheFileOfLevelTwoEndsAtTheStars;
   end;
 
 implementation
@@ -82,6 +100,8 @@ const
     + '{"t": 9.5, "x": 1730, "y": 0, "z": 25, "bank": 5, "pitch": 3}';
   // The band of level 2's end track comes in on this second
   ShippedFlash = 17.21;
+  StarsCues = FlyingCues + ', "stars": 30, "still": 40, "mission": 41, '
+    + '"promise": 43, "credits": 47, "last": 56';
 
 function BinDir: string;
 begin
@@ -103,6 +123,14 @@ function ShortFlownFile(const AFlownTill: string): string;
 begin
   Result := '{"cues": {' + FlyingCues + '}, "path": {"flownTill": ' + AFlownTill
     + ', "keys": [' + GoodKeys + ']}}';
+end;
+
+// Flying titles that end at the stars, ACues theirs, the track ATrack
+// long
+function StarsFile(const ACues, ATrack: string): string;
+begin
+  Result := '{"track": {"seconds": ' + ATrack + '}, "cues": {' + ACues
+    + '}, "path": {"keys": [' + GoodKeys + ']}}';
 end;
 
 // The titles of a level whose section names AFile in ADir
@@ -321,6 +349,76 @@ begin
       ReadFromText(FlyingTitlesFile(GoodCues + ', "flight": 19, "neon": 20, "flare": 20',
         GoodKeys));
     end, ETitlesError);
+end;
+
+procedure TTitlesReadTests.TestTheStarsCuesAndTheTrackAreRead;
+begin
+  var Titles := ReadFromText(StarsFile(StarsCues, '238'));
+  Assert.IsTrue(Titles.EndsAtTheStars, 'At the stars');
+  Assert.IsTrue(Abs(Titles.Cues.Stars - 30) < Slack, 'The sky');
+  Assert.IsTrue(Abs(Titles.Cues.Still - 40) < Slack, 'Its rest');
+  Assert.IsTrue(Abs(Titles.Cues.Mission - 41) < Slack, 'The mission');
+  Assert.IsTrue(Abs(Titles.Cues.Promise - 43) < Slack, 'The promise');
+  Assert.IsTrue(Abs(Titles.Cues.Credits - 47) < Slack, 'The credits');
+  Assert.IsTrue(Abs(Titles.Cues.Last - 56) < Slack, 'The last screen');
+  Assert.IsTrue(Abs(Titles.TrackSeconds - 238) < Slack, 'The track''s length');
+end;
+
+procedure TTitlesReadTests.TestAStarsCueNotAfterTheOneBeforeItRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(StarsFile(FlyingCues + ', "stars": 22, "still": 40, "mission": 41, '
+        + '"promise": 43, "credits": 47, "last": 56', '238'));
+    end, ETitlesError, 'The sky with the flare');
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(StarsFile(FlyingCues + ', "stars": 30, "still": 40, "mission": 41, '
+        + '"promise": 41, "credits": 47, "last": 56', '238'));
+    end, ETitlesError, 'The promise with the mission');
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(StarsFile(FlyingCues + ', "stars": 30, "still": 40, "mission": 41, '
+        + '"promise": 43, "credits": 47', '238'));
+    end, ETitlesError, 'No last screen');
+end;
+
+procedure TTitlesReadTests.TestATrackEndingBeforeTheLastScreenRaises;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(StarsFile(StarsCues, '50'));
+    end, ETitlesError);
+end;
+
+procedure TTitlesReadTests.TestStarsWithoutAFlightRaise;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      ReadFromText(TitlesFile(GoodCues + ', "stars": 30, "still": 40, "mission": 41, '
+        + '"promise": 43, "credits": 47, "last": 56'));
+    end, ETitlesError);
+end;
+
+procedure TTitlesReadTests.TestWithoutTheStarsTheLastScreenComesAsThePathIsFlown;
+begin
+  var Titles := ReadFromText(ShortFlownFile('6.5'));
+  Assert.IsFalse(Titles.EndsAtTheStars, 'No stars');
+  Assert.IsTrue(Abs(Titles.Cues.Last - (19 + 6.5)) < Slack, 'Where the path is flown');
+end;
+
+procedure TTitlesReadTests.TestTheFileOfLevelTwoEndsAtTheStars;
+begin
+  var Titles := ReadNamed(ShippedFile, BinDir);
+  Assert.IsTrue(Titles.EndsAtTheStars, 'At the stars');
+  Assert.IsTrue(Titles.Cues.Stars - Titles.Cues.Flight < Titles.FlightTill,
+    'The sky comes while the eye still climbs');
+  Assert.IsTrue(Titles.TrackSeconds > Titles.Cues.Last, 'The track outlasts the last screen');
 end;
 
 initialization

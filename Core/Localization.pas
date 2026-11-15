@@ -50,14 +50,13 @@ type
 const
   // --- In-game texts (composition root / HUD / cinematics) ---
   SFellIntoPit = 'fellIntoPit';
-  // The campaign-end screen (part 5.4); the author line matches the
-  // LinkedIn profile name and stays Latin in both languages
-  SEndingLine1 = 'endingLine1';
-  SEndingLine2 = 'endingLine2';
-  SEndingLine3 = 'endingLine3';
-  SEndingLine4 = 'endingLine4';
-  SEndingLine5 = 'endingLine5';
+  // The end at the stars and the last screen (finale-flight.md): the two
+  // phrases, then the author - his line matches the LinkedIn profile name
+  // and stays Latin in both languages - with its note
+  SEndingMission = 'endingMission';
+  SEndingReturn = 'endingReturn';
   SEndingAuthor = 'endingAuthor';
+  SEndingAuthorNote = 'endingAuthorNote';
   SEndingMenu = 'endingMenu';
   SHitByBullet = 'hitByBullet';
   SHurtByMonster = 'hurtByMonster';
@@ -178,8 +177,8 @@ const
   // the key constants above - there is no second hand-written list
   // (the PreloadSounds pattern).
   AllTextKeys: TArray<string> = [
-    SFellIntoPit, SEndingLine1, SEndingLine2, SEndingLine3, SEndingLine4,
-    SEndingLine5, SEndingAuthor, SEndingMenu, SHitByBullet, SHurtByMonster,
+    SFellIntoPit, SEndingMission, SEndingReturn, SEndingAuthor,
+    SEndingAuthorNote, SEndingMenu, SHitByBullet, SHurtByMonster,
     SHurtByBlast,
     SStreakBigTen, SStreakSmallTen, SStreakBigInvincible,
     SStreakSmallInvincible, SStreakBigWarGod, SStreakSmallWarGod,

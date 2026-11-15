@@ -14,7 +14,9 @@
   moon itself is a spinning globe (Menu.Globe), the stars are drawn
   (Menu.Starfield), the logo sheds its own light (Menu.Logo). Entering
   a submenu dollies the sky in: nebula, stars and moon grow toward the
-  frame center, each by its depth; leaving dollies it back. The 2008 NDC
+  frame center, each by its depth; leaving dollies it back. The titles
+  that end the campaign rise into this sky (DrawSkyAs) and leave the Earth
+  of level 1 in the moon's place (ShowEarth) till a game starts. The 2008 NDC
   geometry is converted once into 512x384 game units (1 NDC-x = 256
   units, 1 NDC-y = 192 units) and frozen as constants.
 
@@ -58,6 +60,14 @@ type
 
   TMenuScreen = (msMain, msLevelSelect, msCredits, msQuitConfirm);
 
+  // How the sky is shown: how much of the stars and of the nebula, 0..1,
+  // and how far above its rest it stands, units at the near stars' depth
+  TSkyView = record
+    Stars: Single;
+    Nebula: Single;
+    Rise: Single;
+  end;
+
   // Trailer frames: the live sky rig alone, with or without the logo.
   // Entered by the host's debug keys, left by any key or click - so
   // with DEBUGKEYS off nothing can enter one and the state stays skNone.
@@ -93,7 +103,11 @@ type
     FSpriteSet: TSpriteSet; // attached, not owned; nil = folder era
     FSkyTexture: PSdlTexture;
     FSkySource: TSdlRect; // the part of the sky art the frame shows
-    FGlobe: TMoonGlobe;
+    FGlobe: TMenuGlobe;
+    // In the moon's place on the menu the titles end on; nil without the
+    // sky's art
+    FEarth: TMenuGlobe;
+    FShowsEarth: Boolean;
     FLogo: TMenuLogo;
     FStarfield: TStarfield;
     FBrush: THudBrush;
@@ -139,17 +153,29 @@ type
     procedure DrawCursor;
     procedure DrawVersion;
   public
+    // ASkySet - the sky's art of the levels (the Earth's maps); nil - the
+    // moon stays in every menu
     constructor Create(const ARenderer: PSdlRenderer;
       const ASprites: TSpriteRenderer; const AFont: TMoonFont;
       const ALevels: TArray<TLevelChoice>; const ASpriteSet: TSpriteSet;
-      const AWeaponSet: TSpriteSet);
+      const AWeaponSet: TSpriteSet; const ASkySet: TSpriteSet);
     destructor Destroy; override;
 
     procedure ShowMain;
+    // The main screen with the sky at rest, undollied, and the Earth
+    // setting out from the right edge in the moon's place, level across
+    // the upper half; from her next coming she drifts as the moon does.
+    // The moon stays without the sky's art
+    procedure ShowEarth;
+    // The moon back, entering as at the start
+    procedure ShowMoon;
     procedure Tick;
     // Sky + stars + moon, no logo and no items: the story screen reuses
     // it as scenery - in 2008 the text was typed right over the live menu
     procedure DrawSky(AAlpha: Double);
+    // The sky as AView has it; where it does not cover, the frame shows -
+    // the caller clears it black
+    procedure DrawSkyAs(AAlpha: Double; const AView: TSkyView);
     procedure Draw(AAlpha: Double);
     procedure MouseMove(AX, AY: Integer);
     // Left click at the last known mouse position.
@@ -173,6 +199,10 @@ type
     // the setter rebuilds the current screen's captions through Tr
     property Language: TLanguage read FLanguage write SetLanguage;
   end;
+
+const
+  // The menu's own sky: all of it, at its rest
+  RestingSky: TSkyView = (Stars: 1; Nebula: 1; Rise: 0);
 
 implementation
 
@@ -199,6 +229,9 @@ const
   // tuning knob, and the stored pixels keep their dither
   SkyShade = 170;
   MoonMapFile = 'moonmap.png';   // 2048x1024 equirectangular surface
+  // Level 1's Earth in sky.mset: day and city lights, 1024x512 each
+  EarthMapName = 'earth';
+  EarthNightMapName = 'earth-night';
   LogoFile = 'logo.png';         // 2:1, letters alone, transparent around
 
   // TMoonDrift passport, verbatim MoonTimer / LoadMoonTexture:
@@ -215,6 +248,15 @@ const
   StarZoom = 0.2; // the near layer; farther layers take their share
   SkyZoom = 0.04;
   DollyTicks = 26; // 0.8 s
+
+  // The rise: the near stars take all of it, farther ones their share of
+  // the dolly (Menu.Starfield); the nebula as the farthest stars; the
+  // globe less, so that it comes in from the right and not from above
+  NebulaRiseShare = 0.4;
+  GlobeRiseShare = 0.25;
+  // The Earth's first way: from the right edge, level, her middle at
+  // y 169 - over the lines of the titles
+  EarthEntryDriftY = 60;
 
   // The globe is round and sized by the frame's height, so it keeps its
   // share of the picture when the frame grows wide. The 2008 quad was
@@ -345,7 +387,7 @@ end;
 constructor TMoonMenu.Create(const ARenderer: PSdlRenderer;
   const ASprites: TSpriteRenderer; const AFont: TMoonFont;
   const ALevels: TArray<TLevelChoice>; const ASpriteSet: TSpriteSet;
-  const AWeaponSet: TSpriteSet);
+  const AWeaponSet: TSpriteSet; const ASkySet: TSpriteSet);
 begin
   inherited Create;
   FSpriteSet := ASpriteSet;
@@ -365,7 +407,10 @@ begin
   SDL_SetTextureScaleMode(FSkyTexture, SdlScaleModeLinear);
   SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
   FSkySource := CoverSource(FSkyTexture, FrameWidth / FrameHeight);
-  FGlobe := TMoonGlobe.Create(ARenderer, ASpriteSet, MoonMapFile);
+  FGlobe := TMenuGlobe.Create(ARenderer, ASpriteSet, MoonBody(MoonMapFile));
+  if ASkySet <> nil then
+    FEarth := TMenuGlobe.Create(ARenderer, ASkySet,
+      EarthBody(EarthMapName, EarthNightMapName));
   FLogo := TMenuLogo.Create(ARenderer, ASpriteSet, LogoFile);
   // Flags are plain rectangles - no transparency, the color-key
   // machinery stays out (the Union Jack navy would survive the
@@ -395,6 +440,7 @@ begin
     if Assigned(FFlagTextures[Language]) then
       SDL_DestroyTexture(FFlagTextures[Language]);
   FLogo.Free;
+  FEarth.Free;
   FGlobe.Free;
   if Assigned(FSkyTexture) then
     SDL_DestroyTexture(FSkyTexture);
@@ -521,6 +567,27 @@ end;
 procedure TMoonMenu.ShowMain;
 begin
   ShowScreen(msMain);
+end;
+
+procedure TMoonMenu.ShowEarth;
+begin
+  ShowMain;
+  FDepth := 0;
+  if FEarth = nil then
+    Exit;
+  FShowsEarth := True;
+  FMoon.DriftX := MoonDriftLimit;
+  FMoon.DriftY := EarthEntryDriftY;
+  FMoon.DeltaY := 0;
+end;
+
+procedure TMoonMenu.ShowMoon;
+begin
+  if not FShowsEarth then
+    Exit;
+  FShowsEarth := False;
+  FMoon.Respawn;
+  FMoon.DriftX := MoonFirstEntryX;
 end;
 
 // Verbatim vertical rhythm of 2008: item i (1-based) sat at big row
@@ -691,7 +758,10 @@ procedure TMoonMenu.Tick;
 begin
   // MoonTimer + StarsTimer of 2008, fused: one heartbeat for the sky
   FMoon.Tick;
-  FGlobe.Tick;
+  if FShowsEarth then
+    FEarth.Tick
+  else
+    FGlobe.Tick;
   FStarfield.Tick;
   FLogo.Tick;
   FDepth := FDepth + DepthStep;
@@ -714,21 +784,40 @@ begin
 end;
 
 procedure TMoonMenu.DrawSky(AAlpha: Double);
+begin
+  DrawSkyAs(AAlpha, RestingSky);
+end;
+
+procedure TMoonMenu.DrawSkyAs(AAlpha: Double; const AView: TSkyView);
 var
   Dest: TSdlFRect;
 begin
   var Depth := DrawDepth(AAlpha);
 
   // Sky fills the frame edge to edge (PutSkyTexture quad -1..1); the
-  // dolly grows the quad past the edges, the renderer clips it
+  // dolly grows the quad past the edges, the renderer clips it. A nebula
+  // coming in is added, dimmed, over what the frame holds - over the black
+  // the same as a fainter one, over a frame still going dark no hole in it
   var Zoom := 1 + SkyZoom * Depth;
   Dest.W := FrameWidth * Zoom;
   Dest.H := FrameHeight * Zoom;
   Dest.X := (FrameWidth - Dest.W) / 2;
-  Dest.Y := (FrameHeight - Dest.H) / 2;
-  SDL_RenderCopyF(FRenderer, FSkyTexture, @FSkySource, @Dest);
+  Dest.Y := (FrameHeight - Dest.H) / 2 - AView.Rise * NebulaRiseShare;
+  if AView.Nebula >= 1 then
+    SDL_RenderCopyF(FRenderer, FSkyTexture, @FSkySource, @Dest)
+  else if AView.Nebula > 0 then
+  begin
+    var Shade: Byte := Round(SkyShade * AView.Nebula);
+    var BlendMode: Integer;
+    SDL_GetTextureBlendMode(FSkyTexture, @BlendMode);
+    SDL_SetTextureBlendMode(FSkyTexture, SdlBlendModeAdd);
+    SDL_SetTextureColorMod(FSkyTexture, Shade, Shade, Shade);
+    SDL_RenderCopyF(FRenderer, FSkyTexture, @FSkySource, @Dest);
+    SDL_SetTextureColorMod(FSkyTexture, SkyShade, SkyShade, SkyShade);
+    SDL_SetTextureBlendMode(FSkyTexture, BlendMode);
+  end;
 
-  FStarfield.Draw(AAlpha, 1 + StarZoom * Depth);
+  FStarfield.Draw(AAlpha, 1 + StarZoom * Depth, AView.Stars, AView.Rise);
 
   // The moon slides MoonDriftSpeed per tick; the interpolation must use
   // the same constant or the two would silently disagree. Its drift
@@ -737,13 +826,17 @@ begin
   var DriftX := FMoon.DriftX - MoonDriftSpeed * AAlpha;
   var DriftY := FMoon.DriftY + FMoon.DeltaY * AAlpha;
   var CenterX := FrameWidth / 2 + DriftX * MoonUnitsPerDriftX * Zoom;
-  var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY * Zoom;
+  var CenterY := FrameHeight / 2 - DriftY * MoonUnitsPerDriftY * Zoom -
+    AView.Rise * GlobeRiseShare;
   var Diameter := MoonDiameter * Zoom;
   Dest.X := CenterX - Diameter / 2;
   Dest.Y := CenterY - Diameter / 2;
   Dest.W := Diameter;
   Dest.H := Diameter;
-  FGlobe.Draw(Dest);
+  if FShowsEarth then
+    FEarth.Draw(Dest)
+  else
+    FGlobe.Draw(Dest);
 end;
 
 // The logo greets fresh visitors; over a running game the menu keeps

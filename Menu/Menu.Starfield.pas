@@ -10,7 +10,10 @@
   of a layer is a density times the frame area: a wider frame gets more
   stars, not stretched ones. Draw takes a zoom about the frame center;
   each layer answers with its share of it, the near layer with all, so
-  a dolly toward the sky reads as depth.
+  a dolly toward the sky reads as depth. A rise lifts the sky above its
+  rest by the same shares - an eye climbing into it sees it come down, the
+  near layer fastest - and the field is endless upward: a star risen past
+  the top edge is met again under the bottom one.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -48,14 +51,17 @@ type
     FFlareTexture: PSdlTexture;
     FStars: TArray<TStar>;
     FWidth, FHeight: Single;
-    procedure DrawStar(const AStar: TStar; AAlpha: Double; AZoom: Single);
+    procedure DrawStar(const AStar: TStar; AAlpha: Double; AZoom, ALevel,
+      ARise: Single);
   public
     constructor Create(ARenderer: PSdlRenderer; AWidth, AHeight: Single);
     destructor Destroy; override;
     procedure Tick;
     // AZoom = 1 is the sky at rest; above it the frame center stays and
-    // the stars spread out from it
-    procedure Draw(AAlpha: Double; AZoom: Single);
+    // the stars spread out from it. ALevel - how much of the stars shows;
+    // ARise - how far above its rest the near layer stands, units
+    procedure Draw(AAlpha: Double; AZoom: Single; ALevel: Single = 1;
+      ARise: Single = 0);
   end;
 
 implementation
@@ -121,6 +127,20 @@ const
   // shrinks a texture more than about twice
   PointTextureSide = 8;
   FlareTextureSide = 48;
+
+// Where a star of AY stands with the sky risen ARise, in a field AHeight
+// tall that goes on above and below: its center between half its size
+// above the top edge and half below the bottom one
+function RisenStarY(AY, ASize, AHeight, ARise: Single): Single;
+begin
+  Result := AY - ARise;
+  var Span: Single := AHeight + ASize;
+  var Top: Single := -ASize / 2;
+  while Result < Top do
+    Result := Result + Span;
+  while Result >= Top + Span do
+    Result := Result - Span;
+end;
 
 function TSpan.At(AFraction: Single): Single;
 begin
@@ -222,16 +242,19 @@ begin
     AdvanceStar(FStars[i], FWidth);
 end;
 
-procedure TStarfield.Draw(AAlpha: Double; AZoom: Single);
+procedure TStarfield.Draw(AAlpha: Double; AZoom: Single; ALevel: Single;
+  ARise: Single);
 begin
+  if ALevel <= 0 then
+    Exit;
   for var Star in FStars do
-    DrawStar(Star, AAlpha, AZoom);
+    DrawStar(Star, AAlpha, AZoom, ALevel, ARise);
 end;
 
 // Interpolated with the timestep alpha: the far layer moves a few
 // hundredths of a unit per tick and would shimmer otherwise
-procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double;
-  AZoom: Single);
+procedure TStarfield.DrawStar(const AStar: TStar; AAlpha: Double; AZoom,
+  ALevel, ARise: Single);
 begin
   var Texture := FPointTexture;
   if AStar.IsFlare then
@@ -239,10 +262,13 @@ begin
 
   var Phase := AStar.Twinkle.Phase + AStar.Twinkle.Step * AAlpha;
   var Dip := AStar.Twinkle.Depth * (0.5 + 0.5 * Sin(Phase));
-  var Level := AStar.Brightness * (1 - Dip);
+  var Level := AStar.Brightness * (1 - Dip) * ALevel;
   var Zoom := 1 + (AZoom - 1) * AStar.ZoomShare;
   var CenterX := FWidth / 2 + (AStar.X + AStar.Speed * AAlpha - FWidth / 2) * Zoom;
-  var CenterY := FHeight / 2 + (AStar.Y - FHeight / 2) * Zoom;
+  var StarY := AStar.Y;
+  if ARise <> 0 then
+    StarY := RisenStarY(AStar.Y, AStar.Size, FHeight, ARise * AStar.ZoomShare);
+  var CenterY := FHeight / 2 + (StarY - FHeight / 2) * Zoom;
   DrawGlow(FRenderer, Texture, CenterX, CenterY, AStar.Size * Zoom,
     AStar.Tint, Level);
 end;
