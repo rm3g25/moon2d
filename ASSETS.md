@@ -216,7 +216,13 @@ many buildings to a sheet - landmark towers, housing, low outskirts,
 industry, and the monorail's parts -, the first described in words alone and
 the rest made with the first attached; cut one PNG a building, their edges cleaned, by
 `tools/chase/cut_sheet.py`. The dome frames over them are drawn by code. New
-art for the chase of the level 2 finale.
+art for the chase of the level 2 finale. Since 3.0.133 the set holds the
+ground from straight above as well - `ground-top-0` .. `ground-top-7`, the
+tile of the plane under the titles' lifted eye and its squeezed copies: one
+generation of the same model with the floor's band attached
+(`tools/chase/ground-top.png`; the prompt is in
+`docs/mechanics/chase-backdrop.md`, "The prompts"), its light raised and the
+copies made by `tools/chase/make_ground.py`.
 
 **`bin/sounds/armor1.wav`-`armor3.wav`, `ricochet.wav`** - since 3.0.20,
 synthesised by `tools/sounds/armor.py`: a struck steel plate and the whine

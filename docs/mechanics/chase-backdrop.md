@@ -599,6 +599,7 @@ python tools/chase/make_emblem.py <emblem>.png                   (the TEK sign, 
 python tools/chase/make_glow.py <work> agro,hall,svc [--write]   (the farm's glass, beside its pieces)
 python tools/chase/place_farm.py [seed]                          (the farm's first placement)
 python tools/chase/pack_set.py <work>
+python tools/chase/make_ground.py                                (the plane's tile and its copies, into the set; after pack_set)
 python tools/chase/build_stand.py chase-stand.html [--track]
 ```
 
@@ -812,6 +813,26 @@ LIGHT: Backlit. One low sun, white and hard, stands directly BEHIND the parts, s
 
 BACKGROUND: Fully transparent PNG with a real alpha channel and clean edges - no coloured fringe, no halo, no outline around the objects. No sky, no stars, no ground outside the objects, no checkerboard pattern, no white or grey background, no cast shadows. Every object fits inside the image with a clear empty margin on every side.
 ```
+
+### 16. The ground from above - `ground-top.png`, square 1024x1024, the floor's texture attached
+
+The tile of the plane under the titles' lifted eye (`finale-flight.md`, "The ground for a lifted eye"), taken at the second generation (2026-11-14). Attach `floor-tex.png` of the set. It lies in `tools/chase/ground-top.png`, upscaled by the generator to 1254 square, its weave of 2 px taken out; `tools/chase/make_ground.py` packs it into the set as `ground-top-0` .. `ground-top-7`.
+
+```
+A seamless, tileable ground texture: a field of low dunes on the floor of a lunar crater, seen from STRAIGHT ABOVE - a flat orthographic top-down view, like an orbital photograph taken looking vertically down near the lunar terminator, when the sun is almost on the horizon. No perspective, no horizon, no vanishing: every part of the image is at the same scale. Square image, 1024x1024.
+
+The ground is covered with large, low, rounded dunes and mounds of dark basalt regolith, irregular in shape and size, scattered unevenly with no rows and no grid: about 8 to 12 dunes across the image width. Between them the ground is smooth with only faint ripples. No pebbles, no balls, no round stones, no boulders. Two or three small shallow craterlets at most. Nothing standing out - no large crater, no track, no crack (the image will be repeated side by side in both directions). The pattern continues across all four edges, so the image tiles seamlessly left-right and top-bottom.
+
+LIGHT - the most important part: one very low sun beyond the TOP edge of the image. Every dune has a thin, bright, warm bronze crescent of light along its side facing the TOP, and throws a long, solid, near-black shadow straight toward the BOTTOM edge - each shadow two to three times as long as its dune is wide, a clean dark shape with a soft edge, not streaks and not drips. The shadows cover about half of the ground. HIGH contrast: near-black shadows, dark neutral grey ground, bright bronze highlights.
+
+COLOUR: neutral dark grey basalt, almost black in the shadows - not brown, not earthy. The warm bronze colour appears only in the sunlit highlights.
+
+The texture fills the WHOLE image, edge to edge, fully opaque - no transparency.
+
+STYLE: Use the attached image only for colour, material and mood - it is this very ground seen at a grazing angle; do not copy its viewpoint. Photoreal, crisp, no painterly blur, no film grain, no text. Airless Moon: no haze, no fog, no bloom. No buildings, no objects, no sky.
+```
+
+What did not work in the first prompt: "fine grain" and "low contrast" - at a grazing angle everything is squeezed 12 to 36 times, and a fine grain averages into an even grey.
 
 ## Open
 

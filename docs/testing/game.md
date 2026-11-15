@@ -1344,9 +1344,9 @@ In `Tests\Game\Tests.Game.Road.pas`, fixture `TRoadEndTests`, +1.
 
 ## The titles
 
-State: written, 42 tests (3.0.131 and 3.0.132,
+State: written, 45 tests (3.0.131 to 3.0.133,
 `docs/mechanics/finale-flight.md`, "The titles' head as built", "T1 in the
-game"). The logo's flare, the card's font and place are the painter's,
+game", "The turn in the game"). The logo's flare, the card's font and place are the painter's,
 whether the flash lands on the band's kick is the mixer's, and how the
 flight looks is the frame's: a live run.
 
@@ -1416,7 +1416,10 @@ beside the tests.
 | `TestAFlightNotAfterTheFlashRaises` | the flight on the flash's second: `ETitlesError` | the camera leaves a logo that has not flared |
 | `TestAPathOfOneKeyRaises` | one key: `ETitlesError` | a path with no way crashes in the cubic |
 | `TestAKeyNotAfterTheOneBeforeItRaises` | two keys on one second: `ETitlesError` | a division by zero in the middle of the flight |
-| `TestTheFileOfLevelTwoFlies` | `finale.json`: flies, the flight after the flash, its first key where the world stood, at rest for a while | the shipped titles stand on the logo for good |
+| `TestAPathIsFlownToItsLastKey` (3.0.133) | a path with no `flownTill`: flown till 9.5 s, its last key's | a whole path is cut short, or never ends |
+| `TestAPathMayBeFlownShortOfItsEnd` (3.0.133) | `flownTill` 6.5: flown till 6.5 s, all three keys read | the game flies into a part of the flight it cannot draw yet |
+| `TestAPathFlownNowhereRaises` (3.0.133) | `flownTill` 0: `ETitlesError` | the flight ends on its first tick and says nothing |
+| `TestTheFileOfLevelTwoFlies` | `finale.json`: flies, the flight after the flash, its first key where the world stood, at rest for a while, and flown on past its rest | the shipped titles stand on the logo for good |
 
 ## The eye over the far plane
 
@@ -1485,6 +1488,88 @@ time, as long.
 | `TestFlownBackNoneIsLetGo` | the count never falls | a fang goes out in the middle of the frame |
 | `TestFlownBackTheSameDiceGiveTheSameRow` | two rows of one seed turned back at one place, one flown tick by tick, one at once: the same fangs | the row depends on the frame rate |
 | `TestNoFangsFlownBackSendsNone` | a far plane without fangs: none | a level without the kit crashes in the flight |
+
+## The eye lifted and pushed
+
+State: written, 22 tests (3.0.133, `docs/mechanics/finale-flight.md`, "The
+turn in the game"). How the band gives way to the plane, the pace of the
+hills and the fangs at the eye and the look of the dome growing are the
+frame's: a live run against the stand. Before the run the Delphi
+arithmetic was held against the stand's own functions over the whole flown
+path (the same section, "Held against the stand before the run").
+
+### Levels.FarPlane: the eye out of its rest
+
+In the fixture `TFarPlaneEyeTests` of `Tests\Game\Tests.Game.FarPlane.pas`,
+its layout now with the shipped `plane` section. The stand's eye is the one
+16 s into the flight after a fight of 220 s: ridden 1374.12 to the left,
+lifted 5.99, pushed 93.16; the numbers are `eyeNearness`, `eyePoint`,
+`floorKeep`, `drawFloorUnderEye` and `frameProject` of the stand's page.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestAtItsRestTheEyeCarriesNothing` | the eye ridden and neither lifted nor pushed: the city, the ridge, the near ground and the fangs as near as they stood and carried nowhere, to the bit; the floor too, all of its band kept | the chase's frame, or the flight's first leg, moves by a hair |
+| `TestThePushBringsEveryLayerNearer` | the stand's eye: the base line 1.1001, the ridge 0.3615, the near ground 8.1096, the fangs 16.9421 | a layer comes at the eye at another pace than on the stand |
+| `TestALayerTheEyeHasPassedIsNotSeen` | the fangs, 153.6 off: pushed to 13 units of them - seen; to 11 - not, no nearness; the city still ahead | a fang the size of the screen hangs before the eye, or a layer is drawn inside out behind it |
+| `TestACarriedPlaceStandsWhereTheStandHasIt` | the place 600, 200 of the base line at 634.43, 202.78; 100, 300 of the near ground at -15.09, 394.30; and back to its rest | a building and its lights part, or the hills sink at another pace |
+| `TestTheFloorMeltsAsTheEyeLeavesItsRest` | lifted 2 and pushed 30: all of it; the stand's 0.8893 at 15.5 s and 0.5109 at 16 s; lifted 14: none; pushed 200: none | the band pops off, or lies stretched over the plane for good |
+| `TestTheFloorGrowsDownFromTheHorizon` | across 1.1001, down 1.3353; its top on the horizon, its foot at 347.50 | the band slides off the horizon or its foot bares the black |
+| `TestUnderTheEyeTheSlabsStartWhereTheStandsDo` | 14 slabs; the pictures of slabs 0, 2 and 10 start at -1900.63, -1587.58 and 1003.81 of the screen | the rows of dunes slide against the rings as the eye turns in |
+| `TestBehindTheEyeTheFloorHasNoSlabs` | pushed a focal length: no slabs, the band not seen | a division by nothing in the dome |
+| `TestThePushedEyeSeesADomeTakeLessOfTheSun` | a dome's edge 24 left of the sun: half the tint at rest; pushed half the way to the base line, 16 left: a third; pushed past it: none | the sun turns pink before the dome is on it |
+| `TestTheEyeSeesAFramesPointWhereTheStandHasIt` | the point 30, 80, -120 of the main dome under the stand's eye: -102.50, 179.89, as near as 1.2629 | the ribs and the buildings under them part |
+| `TestAFramesPointAtTheEyeIsNotSeen` | the dome's near foot, 768 off: pushed 500 - seen; pushed 700 - not | a rib at the eye is drawn across the whole frame |
+
+### Levels.FarPlane: the plane read
+
+In the fixture `TFarPlaneReadTests`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestLevelTwoReadsItsPlane` | the shipped level: a plane, its tile named, a copy at the least, a floor cut into slabs | the shipped titles fly over a black floor |
+| `TestThePlaneIsReadAsWritten` | the tile, 8 copies, 2 of the tile's width, a turn of 448, the far ground from 1500 to 3000 and its colour (the mean's 38 at 0.45: 17), the melt's ends, the slab, the sharp edge, the foot's colour; none without the section | a number of the section is read into another's place |
+| `TestAPlaneWithoutACameraRaises` | a plane and no camera: `EFarPlaneError` | a plane with no eye over it divides by nothing |
+| `TestAFloorThatMeltsOverNothingRaises` | the melt from 2 to 2: `EFarPlaneError` | the band pops off on one tick, or a division by nothing |
+| `TestAFloorCutIntoNoSlabsRaises` | slabs 0 deep: `EFarPlaneError` | the floor is cut for ever |
+| `TestTillItIsFlownNoFrameStandsAtTheEye` | level 2's own layout and titles, every 0.05 s till the path is flown to: the nearest glass of every frame at 0.15 of the focal length or further | the flight is flown into the dome before a rib at the eye is cut, and ribs vanish whole (goes with the dome's stage) |
+
+### Render.DomeFrames and Levels.Farm under the eye
+
+In `TDomeFramesTests` of `Tests\Render\Tests.Render.DomeFrames.pas` and
+`TFarmLightTests` of `Tests\Levels\Tests.Levels.Farm.pas`.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestThePushedEyeSeesTheFrameNearer` | pushed a quarter of the focal length: every rib still seen, their thickness more in all | the dome does not grow as the eye flies at it |
+| `TestTheLiftedEyeSeesTheFrameSink` | lifted 20: the frame's lowest end more than 20 lower | the dome hangs in the air over the sinking floor |
+| `TestOutOfItsRestTheEyeCullsNoFrame` | the frame two screens off: no rib at rest, ribs with the eye pushed by 1 | a dome near the eye loses its sides |
+| `TestThePushedEyeSeesTheSourceNearer` | pushed half the way to the hall, lifted 10: its source twice as near, twice as far from the middle of the horizon, sunk by the lift times its nearness, as strong | the farm's light parts from its glass |
+| `TestAGreenhouseTheEyeHasPassedIsDark` | pushed two focal lengths: no source | a greenhouse behind the eye lights the frame |
+
+## The plane under the eye
+
+State: written, 9 tests (3.0.133, the same section). How the dunes read
+under the lifted eye, the far rows in motion and the copies' grain are the
+frame's: a live run.
+
+### Levels.GroundPlane
+
+Fixture `TGroundPlaneTests` in `Tests\Levels\Tests.Levels.GroundPlane.pas`:
+the shipped camera, ridge and `plane` of the day the tests were written,
+the stand's eye 16 s into the flight, a pixel of the stand's stage (1440 by
+1080) and a tile of 1254 rows. The rows are `drawPlane` of the stand's page.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestTheRowsAreTheStands` | the stand's rows 704, 744, 800, 900 and 1079: as far off (2786.7 to 238.7), from the copies 7, 6, 4, 2 and 1, the same row of each, as large across, the turns laid alike, the first 0.97 gone to the far ground | the game's ground is not the one taken on the stand |
+| `TestTheLowerTheRowTheNearer` | down those rows: each nearer, from a copy no more squeezed | the copies go out of order and a batch is drawn from the wrong one |
+| `TestNoGroundOverTheHorizon` | a row on the horizon and one over it: none | a division by nothing on the horizon's row |
+| `TestNoGroundBeyondTheRidgesFoot` | the stand's row 690: none; its row 704: ground | the black sea beyond the ridge is back |
+| `TestFarOffARowGoesToTheFarGroundsColour` | 18 s into the flight, a row 2028 off: 0.2847 gone; a row near the eye: none | the far dunes come round as a grid, or the near ones go grey |
+| `TestTheTileComesRoundEveryTurnAlongTheStrip` | the eye a turn on: the same picture; half a turn on: another, from the same row | a seam rides along the plane |
+| `TestTheTileComesRoundEveryTurnIntoTheDepth` | the eye a turn in: the same row of the tile; half a turn in: another | a seam comes at the eye |
+| `TestTheFirstTurnCoversTheLeftEdge` | each row's first turn at the left edge or left of it, and reaching past it | a strip of black at the frame's left |
+| `TestAFinerWindowTakesAFinerCopy` | half the pixel: a copy one less squeezed, the same ground | the plane shimmers at 4K or is soft at 1080 |
 
 ## The frame's target
 

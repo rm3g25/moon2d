@@ -108,6 +108,8 @@ Tests\
     Tests.Levels.Farm.pas      the farm's grow lights against the stand's
                                ticks, its light and its meshes
     Tests.Levels.Grid.pas      the collision grid's rows erased and restored
+    Tests.Levels.GroundPlane.pas  the plane under the titles' lifted eye,
+                               the stand's rows of it
     Tests.Levels.Monorail.pas  the chase city's train, against tables made
                                by the stand's own functions
     Tests.Levels.Dynamics.pas  the craft, the looks of a beam, the dust,

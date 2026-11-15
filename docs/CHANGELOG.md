@@ -7,6 +7,38 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-15: **3.0.133 - the turn toward the main dome.** The titles'
+eye leaves its rest (`finale-flight.md`, "The turn in the game"). Stage 2c
+of the flight is cut in two; this is its first piece, 12.7 to 19.11 s:
+the way to the left gives over to the way in at the pan's pace, the eye
+lifted to 44 and pushed 540 into the screen. `TFarPlaneEye` takes `Lift`
+and `Push`, and the far plane a depth to fly through: a layer that stood
+`Focal / K` from the eye stands that much less the push from it
+(`TFarPlaneDef.EyeNearness`), and what is drawn on it at rest is grown
+about the middle of the horizon and sunk by the lift (`Carry`,
+`TEyeCarry` - the stand's `underEye`); nearer than 12 units it is behind
+the eye and not drawn. Every quad and glow of `Render.FarPlane` goes
+through the carry of what is being drawn - a building with its lights by
+its feet, the train, a searchlight's beam, the ridge and the near ground
+each as one - and the fangs as a layer of their own (`TFangPainter`); the
+frames take the eye into their projection (`FramePoint`,
+`TDomeFrames.View`), and so do the sun's cover and the farm's light. Under
+it all lies the ground as a plane (`Levels.GroundPlane`,
+`Render.GroundPlane`, new): the tile seen from straight above
+(`ground-top-0`..`7` in `chase-backdrop.mset`, packed with its squeezed
+copies by `tools/chase/make_ground.py`), laid from under the eye to the
+ridge's foot a row of the window's pixels at a time, each row from the
+copy its depth asks, the far rows gone to the tile's mean colour. The
+floor's band lies over it and melts as the eye lifts and pushes
+(`FloorKeep`, `FloorCarry`); its numbers and the plane's are the layout's
+new `plane` section, which the stand reads too. The flight is flown as far
+as the path's `flownTill` in `bin/finale.json` (`TTitlesDef.FlightTill`) -
+19.11 s, before the dome's glass - and ends there in the dark and the menu
+as it did; a rib at the eye is not cut yet, and a test holds the flown part
+to where none is near. Before the run the Delphi arithmetic was held
+against the stand's own functions over the whole flown path. Tests: 34
+new. Next: the dome and the climb (3.0.134), then the end (3.0.135).
+
 2026-11-15: **3.0.132 - the first leg of the titles' flight.** The
 camera leaves (`finale-flight.md`, "T1 in the game"). A bar after the
 logo's flash, on the cue `flight` of `bin/finale.json`, the game goes into

@@ -126,6 +126,8 @@ chase as data: over `Render.Brush` for the colours of its sun) /
 over `Levels.FarPlane` and the dice of `Levels.CityLife`) /
 `Levels.EyePath` (the way of the titles' eye, 3.0.132: over no unit of
 the game) /
+`Levels.GroundPlane` (the plane under the titles' lifted eye, 3.0.133:
+over `Levels.FarPlane`) /
 `Levels.Titles` (the titles of a level as data, 3.0.131: over
 `Levels.EyePath`) /
 `Levels.Capsule` (the shape of the farm's capsule frame, 3.0.129: over
@@ -491,7 +493,7 @@ screen dump of `Game.Moon`.
   False the pictures of the belt are left out: the road that runs out is
   drawn tile by tile by `Game.Road`'s painter in their place.
 
-### `Core/Render.FarPlane.pas` (~1240 lines, 3.0.132)
+### `Core/Render.FarPlane.pas` (~1385 lines, 3.0.133)
 - **`TFarPlanePainter`** - draws the far plane of a chase
   (`Levels.FarPlane`) where its offsets have taken it, in place of the
   screen's backdrop: the black sky, the sun, then the layers back to
@@ -611,7 +613,40 @@ screen dump of `Game.Moon`.
   slab where a fade ends (the slab's feather, the band's top by
   `FloorFadeAt`) and, where both run, `FineCuts` 4 times finer - a quad's
   alpha runs straight and the two fades multiply.
-### `Core/Render.DomeFrames.pas` (~965 lines, 3.0.129)
+- 3.0.133, **the eye out of its rest** (`finale-flight.md`, "The turn in
+  the game"; the stand's `underEye`, `beamUnderEye`, `floorSpan`,
+  `groundSpan`). **`FCarry`** (`TEyeCarry`) - how the eye has what is
+  being drawn now: `AddQuad`, `GlowInto` and `AddBeamPiece` put every
+  place through it (**`Carried(rect)`**), so a thing is laid out where it
+  stands at rest and nothing of its drawing knows the eye.
+  **`CarryOf(motion, depthY)`** - a thing of the city by the depth of its
+  feet, any other layer as one. Who sets it: `DrawLayer` for a layer's
+  band (a layer the eye has passed is not drawn at all), `DrawElements`
+  for each element (one behind the eye is skipped, its lights with it),
+  `DrawTrain` by the line's nearness, `DrawBeamsBefore` by each lamp's,
+  `DrawFloorSlabs` by `TFarPlaneDef.FloorCarry`; `DrawBeacons` and
+  `DrawBeamGlints` set it to `Uncarried` - the frames' beacons and ribs
+  are on the screen already. `DrawElement` and `DrawTrain` tell "off the
+  screen" by the carried place. **`DrawBeamGlints(lamp)`** carries the
+  beam to the ribs: its lamp's place, its length to the glass and the
+  size of its glints by the lamp's carry, the level read at the beam's
+  own distance. **`FGround`** (`TGroundPlanePainter`, owned) draws the
+  plane after the sun, before the layers. `DrawFloorSlabs`: nothing when
+  the band keeps none of itself (`FloorKeep`) or stands behind the eye;
+  the band's colour carries the keep in its alpha; **`DrawFloorFoot`** -
+  under the band's carried foot a rectangle of `Plane.Floor.Foot` at the
+  same share (only with a plane). `DrawLayer` is cut by its phases:
+  **`DrawOnGround(cityOffset, top, bottom)`** - the frames' shadows and
+  the farm's apron clipped to a ground (nothing when the ground has sunk
+  under the screen), **`DrawBehindCity`** - the floor's part of the
+  screen (its band at the eye's rest; out of it from the horizon down),
+  the far ribs lit and drawn, the far beacons, **`DrawElements`** - the
+  loop of the elements with the train and the beams at their depths,
+  **`DrawOverCity`** - the air, the near ribs and beacons, the glints,
+  the glare. The near ground's shadows start where its band's top now
+  stands. `DrawSun` and the glare ask `SunCover` and `GlareLevel` with
+  the eye.
+### `Core/Render.DomeFrames.pas` (~975 lines, 3.0.133)
 The dome frames of a chase's city (`docs/mechanics/chase-backdrop.md`,
 "The city"): geodesic half-ellipsoids drawn by code through the city's
 camera, riding with the city past the fixed sun. The stand
@@ -688,6 +723,14 @@ camera, riding with the city past the fixed sun. The stand
   dark (26, 23, 21) till `Render.FarPlane` lights the farm's far ribs;
   `DrawRibs` draws each in its own. **`DrawGlare(cover, level)`** - both
   glows times the level (`TFarPlaneDef.GlareLevel`).
+- 3.0.133, **the titles' eye** (`finale-flight.md`, "The turn in the
+  game"): **`View(cityOffset, eye)`** - the ride and the eye go down the
+  private methods as one `TSight`; every point is projected with the eye
+  (`TFarPlaneDef.FramePoint`); `CutAtEye` cuts a shadow at the plane the
+  eye now stands on (the push added); `AddFrame` culls a frame by the
+  screen's sides only at the eye's rest. A rib with an end nearer than
+  `FrameNearestShare` is still dropped whole: the cut at the eye is the
+  dome's stage.
 
 ### `Core/Render.Dynamics.pas` (~515 lines)
 - **`TDynamicScreenRenderer`** - brings the level's dynamic objects
@@ -1246,7 +1289,7 @@ Level data model + JSON parser. No game logic.
   gives every erased row back. The road of the chase running out is air,
   a pad standing in for what is left of it. Tests: `Tests.Levels.Grid`.
 
-### `Core/Levels.FarPlane.pas` (~1530 lines, 3.0.132)
+### `Core/Levels.FarPlane.pas` (~1735 lines, 3.0.133)
 The far plane of a chase as data (`docs/mechanics/chase-backdrop.md`): a
 strip of layers riding left behind the play layer at speeds of their own,
 and a sun under them all. A level names the screen and the layout in its
@@ -1386,9 +1429,83 @@ No SDL.
   sharper than that kept. `FloorSlabFeather` 2. The lift and the push are
   not played yet: `Nearness`, `ElementLeft` and `FramePoint` are the
   chase's.
+- 3.0.133, **the eye lifted and pushed** (`finale-flight.md`, "The turn in
+  the game"; the stand's `eyeNearness`, `eyePoint`, `underEye`, `eyeSpan`,
+  `spanOnScreen`, `floorKeep`). `TFarPlaneEye` takes **`Lift`** and
+  **`Push`** (the camera's units from its rest) and **`AtRest`**.
+  **`EyeNearness(eye, restNearness)`** - a layer that stood `Focal / K`
+  off stands that much less the push off: `Focal` over it, 0 nearer than
+  `EyeNearest` 12 (behind the eye); at rest, with no camera or for a layer
+  of no nearness - the nearness given, to the bit. **`TEyeCarry`**
+  (`Seen`, `ScaleX`, `ScaleY`, `ShiftX`, `ShiftY`; `ScreenX`, `ScreenY`,
+  `RestX`) and **`Carry(eye, restNearness)`** - what is drawn on a layer
+  at rest grown about the middle of the horizon by the nearness now over
+  the nearness at rest and sunk by the lift times the nearness now;
+  **`Uncarried`** at rest. **`FloorCarry(eye)`** - the floor's band:
+  across by the base line's nearness, down from the horizon by that times
+  the eye's height over its height at rest (**`EyeHeight`**).
+  **`FloorKeep(eye)`** - 1 less a smooth step of the lift over the melt's
+  span, times the same of the push. `FloorSlabs(band, cityOffset, eye)`
+  takes the eye: a slab's share is its middle's nearness now, none under
+  the ridge's now, its offset the ride times that over the base line's
+  nearness - a picture at rest, for `FloorCarry`; none behind the eye.
+  `FramePoint`, `SunCover` and `GlareLevel` take the eye: a frame's point
+  through the pushed depth and sunk by the lift; a dome's span where the
+  base line's carry has it (`CarriedCover`), none behind the eye.
+  **`TGroundPlaneDef`** (`Plane`: `Tile`, `TileUnits`, `Levels`,
+  `WideLevels`, `FarFrom`, `FarTill`, `FarShade`, `Mean`; `FarColor`) and
+  **`TPlaneFloor`** (`Floor`: the melt's two spans, `SlabDeep`,
+  `SlabFeather`, `SharpSeconds`, `SharpFade`, `Foot`) - the layout's
+  `plane` section (`ReadPlane`, `ReadPlaneFloor`): absent - no plane, the
+  band never melts and is one sheet; a plane with no camera, a tile of no
+  size, no copies, a melt over nothing, slabs of no depth or an edge
+  sharpened over no time raise (`SFarPlaneBadPlane`). The constants
+  `FloorSlabDeep`, `FloorSlabFeather`, `FloorSharpFade` and
+  `FloorSharpSeconds` are gone into it. **`SmoothShare(value, from,
+  till)`** - the smooth step this unit and `Levels.GroundPlane` share.
 - Tests: `Tests.Game.FarPlane` (`TFarPlaneEyeTests` for the eye).
 
-### `Core/Levels.Titles.pas` (~170 lines, 3.0.132)
+### `Core/Levels.GroundPlane.pas` (~115 lines, 3.0.133)
+The crater floor as a plane under the titles' lifted eye
+(`finale-flight.md`, "The ground for a lifted eye", "The turn in the
+game"): the stand's `drawPlane`, number for number. No SDL.
+- **`TPlaneRow`** - a row of the screen on the plane: `Ground` (False over
+  the horizon or beyond the ridge's foot), `Depth` (units off the eye),
+  `Level` (the copy of the tile, 0 the tile itself), `TileRow` (the row of
+  that copy, a share of its height from its top), `Scale` (units of the
+  screen to a unit of the plane), `FirstTurn` (where the turn of the tile
+  over the screen's left edge begins: at 0 or left of it), `FarShare` (how
+  far gone to the far ground's colour).
+- **`PlaneRow(def, eye, eyeAlong, down, pixel, tileRows)`** - the row
+  whose middle lies `down` units under the horizon and is `pixel` units
+  deep: the depth is the eye's height times the focal length over `down`;
+  the copy is the binary logarithm of how many rows of the tile the row
+  covers, rounded a half up as the stand rounds, the deepest at the most;
+  the tile turns every `TileUnits` along the strip from the strip's start
+  and into the depth from the eye's rest; the far share is the greater of
+  a smooth step over the last copy and one over `FarFrom`..`FarTill`.
+  `WorldEnd` - the ridge's depth less the push; a ridge of no nearness
+  ends nothing.
+- Tests: `Tests.Levels.GroundPlane`.
+
+### `Core/Render.GroundPlane.pas` (~200 lines, 3.0.133)
+Draws that plane. **`TGroundPlanePainter`**: `Create(renderer, cache,
+def)` resolves the copies `<tile>-0` .. of the set (one the set lacks
+raises at level load; filtered linearly) and reads the tile's rows off the
+first; a far plane without a plane draws none. **`Draw(eye, eyeAlong)`** -
+nothing at the eye's rest; else a row of the window's pixels at a time
+from the horizon down (`PixelDeep` - the renderer's scale, the target's
+grown one with it): for a row on the ground, a quad for each turn of the
+tile across the screen (`AddTileRow` - SDL has no sampler that wraps), all
+of it from the one row `TileRow` of the copy, and where the row goes to
+the far ground a plain quad of `FarColor` at that share (`AddFarRow`); a
+row all gone draws no tile. The rows of one copy are one
+`SDL_RenderGeometry` (`Flush` when the copy changes - down the screen the
+copies only get less squeezed), the far quads one more after them. The
+meshes (`TMesh`) grow by doubling and are kept between frames. Owned by
+`TFarPlanePainter`.
+
+### `Core/Levels.Titles.pas` (~185 lines, 3.0.133)
 The titles that close a level, as data (`docs/mechanics/finale-flight.md`,
 "The timeline", "The file of the path"): the cues of its end track and
 the way of the camera's flight. A level names the file in its `titles`
@@ -1410,6 +1527,10 @@ stars - are let be. No SDL.
   `x` - along the strip; else (`x` null or absent) where the world stood.
   `CheckPath` - two keys at the least, each after the one before it;
   `CheckOrder` - a path wants its `flight` after the flash.
+- 3.0.133: **`FlightTill`** - the second of the flight the path is flown
+  to: the path's `flownTill`, or its last key's second with none; 0 or
+  less raises (`STitlesFlownNowhere`). `bin/finale.json` has 19.11 for the
+  time being.
 - Tests: `Tests.Levels.Titles`.
 
 ### `Core/Levels.EyePath.pas` (~205 lines, 3.0.132)
@@ -1453,7 +1574,7 @@ order.
   every `BeltEvery` cells, the barrel's ends among them; an edge shorter
   than 1e-6 dropped (the ends' feet rows collapse onto the poles).
 
-### `Core/Levels.Farm.pas` (~375 lines, 3.0.129)
+### `Core/Levels.Farm.pas` (~390 lines, 3.0.133)
 The light of the farm at a ride of the city and a tick of the far plane's
 clock (`docs/mechanics/chase-backdrop.md`, "The farm"). No SDL. The
 stand's functions of the same names are the reference.
@@ -1484,6 +1605,13 @@ stand's functions of the same names are the reference.
   `ApronGap` at every rib's foot; lit at the foot by the light 4 units over
   it at `ApronLevel`, dark `ApronLength` out toward the eye; a foot off the
   screen or behind the eye skipped.
+- 3.0.133: `FarmView(def, offsets, eye, tick, heights)`, `FarmAirMesh` and
+  `FarmApronMesh(..., eye)` take the titles' eye (the stand's
+  `farmSources` under `eyePoint`): a greenhouse is asked within the span
+  of its layer the eye has on the screen, its source stands where the
+  carry of its depth has its glass, as near as the eye has it; one behind
+  the eye gives none; the meshes' points go through `FramePoint` with the
+  eye.
 
 ### `Core/Levels.CityLife.pas` (~270 lines, 3.0.92)
 How bright each light of the chase's city is at a tick of the far plane's
@@ -6809,7 +6937,7 @@ nothing. The lamp's rules know no SDL.
   steady.
 - Tests: `Tests.Game.Gate`.
 
-### `Game/Game.Titles.pas` (~270 lines, 3.0.132)
+### `Game/Game.Titles.pas` (~270 lines, 3.0.133)
 The titles over the picture the flight ends on
 (`docs/mechanics/finale-flight.md`, "The titles' head as built"): their
 clock and what it tells. The track, the logo, the gate's lamp and the
@@ -6842,6 +6970,8 @@ drawing are the caller's. No SDL.
   **`FlightEnds`**, once, and **`TailLevel(alpha)`** - the dark over the
   frame through the `TitlesTailSeconds` 1 before it. `Clear` ends the
   flight.
+- 3.0.133: `FFlightTill` is the titles' `FlightTill` - how far the file
+  has the path flown - and no more the path's `RestTill`.
 - Tests: `Tests.Game.Titles` (`TTitlesTests`, `TTitlesFlightTests`).
 
 ### `Game/Game.Pieces.pas` (~270 lines, 3.0.121)
@@ -6939,7 +7069,7 @@ tick. Knows neither the belt, the hero nor SDL.
   one, as `OffsetsAt` lies (`Clock` - 1 + alpha; 0 before the road): the
   train glides with the city.
 
-### `Game/Game.Fangs.pas` (~305 lines, 3.0.132)
+### `Game/Game.Fangs.pas` (~315 lines, 3.0.133)
 The fangs of the chase (`docs/mechanics/arena-3/chase.md`, "Stage 11b-2 as
 built"): spurs of basalt rising from below the bottom edge, riding by on
 a motion of their own between the near ground and the road, behind the
@@ -6975,6 +7105,10 @@ play layer. The rules and the drawing, as the wrecks and the capsules.
   the left edge, so nothing comes up on the screen as the eye turns
   back. A fang let go by `Tick` has the left end found anew
   (`FBackOpen`).
+- 3.0.133: `TFangPainter.Draw(offsets, eye)` - the row carried as one
+  layer of the fangs' nearness (`TFarPlaneDef.Carry`): each fang's place
+  and size through the carry, "off the screen" told by the carried place;
+  nothing once the eye has passed the layer.
 ### `Game/Game.OrbLauncher.pas` (~120 lines, 3.0.116)
 The orb launcher coming once the Ram hangs, as a pickup (`arena-3/evolution.md`, "Stage
 17a as built"). Knows neither the Ram, the hero nor the shroud.
@@ -8382,6 +8516,11 @@ so a unit (and later a test) can reach it. `interface` holds
   shows the flight's second, `FAudio.MusicSeconds` and the eye's place
   along the strip at `FlightReadoutLeft`, `FlightReadoutTop`; End in the
   flight puts the state back to `gsPlaying` and is the door of point C.
+- 3.0.133, **the turn** (`finale-flight.md`, "The turn in the game"):
+  `FlightEye` gives the eye's `Lift` and `Push` off the path with its
+  ride; `DrawFangs` hands the eye to the fangs' painter beside the
+  offsets; the Z key's line tells the lift and the push too. The flight
+  ends where `TTitlesDef.FlightTill` has it - 19.11 s for the time being.
 
 ### `Moon2D.dpr` (~200 lines)
 The program: the start-up and nothing else. `RunGame` (the actual main:
@@ -9239,6 +9378,18 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
   tables are in `docs/testing/game.md`, "The titles" and "The eye over
   the far plane". `TTitlesTests` and `TTitlesReadTests` register
   themselves from this version on.
+- 3.0.133: **`Levels/Tests.Levels.GroundPlane.pas`** -
+  **`TGroundPlaneTests`** (9), the plane's rows against the stand's;
+  `TFarPlaneEyeTests` +11 (the eye lifted and pushed: the nearness, the
+  carry, the melt, the floor's carry and slabs, the sun, a frame's point)
+  and `TFarPlaneReadTests` +6 (the plane read, its faults, the flown part
+  clear of the frames) in `Tests.Game.FarPlane`; `TDomeFramesTests` +3,
+  `TFarmLightTests` +2, `TTitlesReadTests` +3 (`flownTill`). 34 in all;
+  the tables are in `docs/testing/game.md`, "The eye lifted and pushed"
+  and "The plane under the eye". The tests that called `FramePoint`,
+  `SunCover`, `GlareLevel`, `View`, `FarmView` and the farm's meshes hand
+  them the eye at its rest (`RestEye`); `FloorSlabs` takes an eye that
+  rides (`Riding`).
 - **`run-tests.cmd`** (repository root) - builds the Debug configuration
   and runs it; exit code 0 / 1 (a red test) / 2 (the build failed).
 
@@ -9820,6 +9971,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | The end of the fight in the air (3.0.128): the hull's last life - the crack, the throe over the middle of the screen with its jets coughing, the burst into big pieces that fall slowly in fire and smoke, a series of blasts on them; the music cut, the bar gone, the hero spared, the moon form off in its dark orbs, carried onto the main barge; the bullets and shells quenched, the flock closed then let go, the magnet's barge dropped; the flight slowing to a stand, the road coming back, the main barge docked against it and carried to the left edge, the end track | Game.Breakup.pas (`TBreakup`) + Game.Wreckage.pas (`TWreckage`, `TWreckagePainter`) + Game.Landing.pas (`TLanding`) + Game.Ram.pas (`Wreck`, `TickBreakup`, `HullMiddle`, `ThroePopAt`, `Present`, `TRamPainter.Shatter`) + Game.Belt.pas (`Run(speed, ticks)`, `RampTravelLeft`) + Game.Road.pas (`Arrive`) + Game.Barge.pas (`Berth`, `Dock`, `Ride`, `bsBerthing`, `bsBerthed`, `bsDocked`) + Game.Flock.pas (`Close`, `Disperse`, `Drop`) + Game.HullLives.pas (`Retire`) + Game.Henshin.pas (`RemoveForm`, `ShedMoonSuit`) + Game.HeroOrbs.pas (`FMoonShed`, `ShedMoonSuit`) + Monsters.Hull.pas (`Whole`, `Worn`, `Chassis`) + Game.Moon.pas (`WoundHull`, `EndTheFight`, `TickLanding`, `DockBarge`, `HeroOnTheHarbour`, `CarryOutBreakup`, `TickWreckage`) + tools/sounds/finale.py + Tests.Game.Breakup.pas, Tests.Game.Wreckage.pas, Tests.Game.Landing.pas and the other units' tests (+docs/mechanics/finale.md, stage 19) |
 | The farm under the long dome (3.0.129): a capsule frame at the end of the city's strip, greenhouses whose glass glows on clocks of their own, their light in the dome's air, on its far ribs and on the floor in front of it, the sun's glare giving way to the glass - tick for tick as on the stand | Levels.Capsule.pas (`CapsulePoint`, `CapsuleShape`) + Levels.Farm.pas (`FarmGlowLevel`, `FarmView`, `FarmLight`, `Exposed`, `FarmAirMesh`, `FarmApronMesh`) + Levels.FarPlane.pas (`TDomeFrameKind`, `TCityFarm`, `GlareLevel`, `FramePoint`) + Render.DomeFrames.pas (`FrameEdges`, `CapsuleBeaconNodes`, `TFrameRib.Farm`, `Dark`, `DrawGlare`) + Render.FarPlane.pas (`LoadFarm`, `DrawGlass`, `DrawAir`, `DrawApron`, `DrawLightMesh`, `LightFarRibs`) + bin/chase-backdrop.json (`frames` dome-farm, `farm`) + chase-backdrop.mset (`agro-*`, `hall-*`, `svc-*` and their `-glow`) + tools/chase (`stand.template.html` - the reference, `make_glow.py`, `place_farm.py`, `pack_set.py`) + Tests.Levels.Capsule.pas, Tests.Levels.Farm.pas, Tests.Render.DomeFrames.pas, Tests.Game.FarPlane.pas (+docs/mechanics/chase-backdrop.md, "The farm") |
 | The gate at the end of the flight (3.0.130): the sealed door of the arena given a body - a facade with a gate on the far end of the road come back, riding in with it and stopping at the right edge of the screen, put in the night; its status lamp red, amber over half a second on a promise - the titles' flare, the debug key X till then | Game.Gate.pas (`TGate`, `TGatePainter`, `GateLeft`, `GateLampColor`) + Game.Road.pas (`Arrived`) + Levels.Dynamics.pas (`DrawLamp` public) + Game.Moon.pas (`FGate`, `FGatePainter`, `GateSprite`, `TickLanding`, `ClearPier`, the key X) + tools/gate/build_gate.py + level2-objects.mset (`s13-gate`) + Tests.Game.Gate (+docs/mechanics/finale.md) |
+| The turn of the titles' flight (3.0.133): the eye lifted and pushed toward the main dome, every layer carried by its depth, the plane of the ground and the floor's band melting into it, the flight flown to the path's `flownTill` | Levels.FarPlane.pas (`TFarPlaneEye.Lift`, `Push`, `EyeNearness`, `Carry`, `FloorCarry`, `FloorKeep`, the `plane` section of bin/chase-backdrop.json) + Levels.GroundPlane.pas (`PlaneRow`) + Render.GroundPlane.pas (`TGroundPlanePainter`) + Render.FarPlane.pas (`FCarry`, `DrawFloorFoot`, `DrawBeamGlints`) + Render.DomeFrames.pas (`View` with the eye) + Levels.Farm.pas (the eye in `FarmView` and the meshes) + Game.Fangs.pas (`TFangPainter.Draw` with the eye) + Levels.Titles.pas (`FlightTill`, `flownTill` of bin/finale.json) + Game.Moon.pas (`FlightEye`) + tools/chase/make_ground.py (`ground-top-0`..`7` of chase-backdrop.mset) |
 | The first leg of the titles' flight (3.0.132): the state `gsFinale`, the eye flown the path's keys at its rest - the cast-off and the pan -, the far plane's layers carried by the eye's ride, the floor in slabs, the fangs rolled back, the play layer cast off through the frame's target, the dark and the menu at its end, the debug key Z | Levels.EyePath.pas (`TEyePath`) + Levels.Titles.pas (the cue `flight`, the `path` of bin/finale.json) + Game.Titles.pas (`FlightStarts`, `FlightSeconds`, `EyeAt`, `FlightEnds`, `TailLevel`) + Levels.FarPlane.pas (`TFarPlaneEye`, `Ridden`, `MotionNearness`, `PlayNearness`, `FloorSlabs`, `FloorFadeAt`) + Render.FarPlane.pas (`Draw` with the eye, `DrawFloorSlabs`, `DrawBandRows`) + Game.Fangs.pas (`FlyBack`) + Render.Target.pas (`ShiftLayers`, the level-only texture) + Hud.Titles.pas (`DrawTail`) + Game.Moon.pas (`BeginFinale`, `LeaveFinale`, `DrawFinale`, `FlightEye`, `EyeOffsets`, `DrawFlightReadout`) + Tests.Levels.EyePath, Tests.Levels.Titles, Tests.Game.Titles, Tests.Game.FarPlane, Tests.Game.Fangs (+docs/mechanics/finale-flight.md, "T1 in the game") |
 | The titles' head (3.0.131): the clock from the hull's burst on the end track's place, the studio's card, the logo's flare on the band's kick with the white flash, the jolt and the gate's lamp, the HUD's panels gone at the hand-over, the debug key X | Game.Titles.pas (`TTitles`) + Levels.Titles.pas (`ReadTitles`, the `titles` section of level2.json, bin/finale.json) + Hud.Titles.pas (`THudTitles`) + Menu.Logo.pas (`Flare`) + Menu.Embers.pas (`Burst`) + Audio.pas (`MusicSeconds`, `SeekMusic`) + Game.Moon.pas (`TickTitles`, `DrawPanels`, `DebugNextTitlesCue`) + Tests.Game.Titles, Tests.Levels.Titles (+docs/mechanics/finale-flight.md) |
 | The knocked barge burning and listing (3.0.124): a flame, a glow, black smoke and the bolts of a short where the shell struck, the smoke streamed back by the flight's wind; the barge listing to that side ever more, drawn, not felt - its rider drawn on the slope and sliding down it, its rigs turning with it, its lamps and jet out | Game.BargeFire.pas (`TBargeFire`, `TBargeWound`) + Game.Flock.pas (`Knock(i, hitAcross)`, `Heel`, `HitAcross`) + Pads.World.pas (`Heel`, `HeelAt`, `HeelLift`, `RiderSlide`) + Hero.pas (`RideDeck`, `DeckLift`) + Monsters.pas (`DeckLift`) + Game.Moon.pas (`TickBargeFire`, `BargeSmokeWindShare`, `HeelRigs`, `FlockPadKnocked`, `TickFlock`, `TickShellsAloft`) + Tests.Pads.World.pas, Tests.Game.Flock.pas (+docs/mechanics/arena-3/ram-air.md, "After the live run of 3.0.123") |
