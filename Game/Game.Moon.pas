@@ -21,6 +21,7 @@ interface
 uses
   System.Generics.Collections, Sdl2.Core, Sprites.Sets, Game.Config, Game.Loop,
   Monsters.Defs, Render.Sprites, Levels.Defs, Levels.Events, Levels.Dynamics,
+  Levels.FarPlane,
   Render.Tiles, Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero,
   Bullets, Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
   Render.Font, Render.Target,
@@ -49,8 +50,10 @@ const
 type
   // gsMenu: the moon-over-starfield menu (Menu) - the boot state.
   // gsIntro: the level's story text waits for a key.
+  // gsFinale: the titles' flight - the world goes on, the keys and the
+  // mouse are cut, no HUD.
   // gsEnding: the campaign-end screen - mouse-only exit (part 5.4).
-  TGameState = (gsMenu, gsIntro, gsPlaying, gsEnding);
+  TGameState = (gsMenu, gsIntro, gsPlaying, gsFinale, gsEnding);
 
   TArmorPings = record
     WaitTicks: Integer; // until the next one may sound
@@ -76,23 +79,6 @@ type
   // The stops of the End key on level 2, in their order
   TDebugStop = (dsTrialEnd, dsRam, dsPastBunker, dsAboard, dsAirDoor,
     dsHullEnd);
-
-  // The ways of the Z key: the frame of the play drawn straight to the
-  // window, through the target unbanked, banked, and swinging to the bank
-  // and back
-  TDebugFrameWay = (fwDirect, fwTarget, fwBanked, fwSwinging);
-
-  // What the Z, C and Q keys have set. WaySince and CastOffSince - the
-  // performance counter at the key; Unsaid - the caption is owed what the
-  // target came to; CompareDue - the comparison is owed, at the next frame
-  TDebugFrame = record
-    Way: TDebugFrameWay;
-    WaySince: UInt64;
-    CastOff: Boolean;
-    CastOffSince: UInt64;
-    Unsaid: Boolean;
-    CompareDue: Boolean;
-  end;
 {$ENDIF}
 
   TMoonGame = class(TGameApp)
@@ -151,12 +137,13 @@ type
     FGoRight: THudGoRight;
     FEnergyGauge: THudEnergy;
     FRenderer: PSdlRenderer; // kept for level restarts
-    // The frame of the play through a texture; made at the Z key
+    // The frame of the titles' flight goes through a texture; made with a
+    // level whose titles fly, nil with any other
     FFrameTarget: TFrameTarget;
 {$IFDEF DEBUGKEYS}
     FInspect: Boolean; // T: show tile name under cursor in the title
     FShowAtlas: Boolean; // F: raw font atlas (orientation check)
-    FDebugFrame: TDebugFrame;
+    FShowFlight: Boolean; // Z: where the titles' flight is, in the corner
 {$ENDIF}
     FMouseGX, FMouseGY: Integer;
     FWindow: PSdlWindow;
@@ -393,7 +380,7 @@ type
     function HandleDebugMenuKey(AScancode: Integer): Boolean;
     procedure UpdateInspectorCaption;
     procedure DrawAtlasOverlay;
-    function DebugDrawThroughTarget(AAlpha: Double): Boolean;
+    procedure DrawFlightReadout(AAlpha: Double);
 {$IFDEF DEBUGKEYS}
     procedure NudgeCrosshair(ADX, ADY: Integer);
     procedure NudgeMinigunMuzzle(ADX, ADY, ADLen: Integer);
@@ -417,14 +404,6 @@ type
     procedure DumpLevelScreens;
     procedure DebugRebuildPads;
     procedure DebugRestorePads;
-    procedure DebugSay(const AReport: string);
-    procedure DebugCycleFrameWay;
-    procedure DebugToggleCastOff;
-    function DebugBank: Single;
-    function DebugCastOff: Single;
-    procedure DebugSayFrameWay;
-    procedure DebugRefuseTarget;
-    procedure DebugCompareFrameWays(AAlpha: Double);
 {$ENDIF}
     function HitEndingLine(const AText: string; ATopRow: Integer): Boolean;
     procedure FireScreenTriggers;
@@ -493,6 +472,8 @@ type
     procedure TickLandingCarry;
     procedure TickLanding;
     procedure TickTitles;
+    procedure BeginFinale;
+    procedure LeaveFinale;
     procedure CarryOutBreakup(const ACue: TBreakupCue);
     procedure BurstTheHull;
     procedure BlowWreckPiece(AIndex: Integer);
@@ -607,6 +588,9 @@ type
     procedure DrawFarLayers(AAlpha: Double);
     procedure DrawPlayLayers(AAlpha: Double);
     procedure DrawHud(AAlpha: Double);
+    procedure DrawFinale(AAlpha: Double);
+    function FlightEye(AAlpha: Single): TFarPlaneEye;
+    function EyeOffsets(AAlpha: Single): TFarPlaneOffsets;
     procedure DrawBackdrop(AAlpha: Single);
     procedure DrawFangs(AAlpha: Single);
     procedure DrawPanels(AAlpha: Single);
@@ -619,6 +603,7 @@ type
     procedure AdvanceToNextLevel;
     procedure OpenMenu;
     procedure ResumeGame;
+    procedure ReleaseHeldKeys;
     procedure ApplyMenuResult(const AResult: TMenuResult);
     procedure SetFullscreen(AValue: Boolean);
     procedure ToggleFullscreen;
@@ -639,7 +624,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.Math, System.IOUtils,
-  Sdl2.Image, Levels.Pads, Levels.FarPlane, Pads.Flights, Game.Space,
+  Sdl2.Image, Levels.Pads, Pads.Flights, Game.Space,
   Localization, Orbs.Moonrite, Game.Shield, Game.Wheel, Game.Takeoff;
 
 const
@@ -908,7 +893,6 @@ const
   // minigun muzzle on the arrow cluster (4/6/8/2, +/-), the retired
   // crosshair calibrator on the corners (7/9/1/3).
   ScancodeB = 5;  // trailer frame, bare sky (menu only)
-  ScancodeC = 6; // the play layer cast off in the frame's target, over and over
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
@@ -920,14 +904,13 @@ const
   ScancodeN = 17; // cycle the font filtering (redrawn atlas only)
   ScancodeO = 18; // a third of the lives of the Ram's head at once
   ScancodeP = 19; // every screen's tiles as pictures, for repainting
-  ScancodeQ = 20; // the frame drawn both ways and compared, pixel by pixel
   ScancodeR = 21; // rebuild the pad group of the hero's screen
   ScancodeT = 23; // tile inspector in the window title
   ScancodeU = 24; // the burst at once in the moon's look: no rite, no suit
   ScancodeV = 25; // trailer frame, centered logo (menu only)
   ScancodeX = 27; // the titles on to a breath before their next cue
   ScancodeY = 28; // fly the pad group of the hero's screen back to its places
-  ScancodeZ = 29; // the frame's way to the window: straight, a target, banked
+  ScancodeZ = 29; // where the titles' flight is, in the corner of the frame
   ScancodePageUp = 75; // browse screens
   ScancodePageDown = 78;
   // A step a press: the trial won, the Ram, past the bunker, aboard, the
@@ -950,17 +933,12 @@ const
   RamScreen = 13;
   // The gun a walk to the Ram has taken on screen 10
   DupletPickupId = 'weaponDuplet';
-  // The Z key's bank - the steepest of the titles' flight - and how long
-  // a swing to it and back takes
-  DebugBankDegrees = 14;
-  DebugSwingSeconds = 6;
-  // The C key's cast-off: as long as the end track's break, where the
-  // titles' flight casts off, and how long the play layer stays away
-  DebugCastOffSeconds = 6.34;
-  DebugCastOffHoldSeconds = 1.5;
   // How long from point B the fight of the End key's last stop has been
   // on: the one the chase's stand plays the titles after
   DebugFightSeconds = 220;
+  // Where the Z key's line stands on the frame
+  FlightReadoutLeft = 8;
+  FlightReadoutTop = 8;
 {$ENDIF}
 
 // Every player-facing string lives in lang\*.json now (part 6): the
@@ -1297,6 +1275,10 @@ begin
       FRoad);
   end;
   FTitles.Arm(FLevel.Titles);
+  FreeAndNil(FFrameTarget);
+  if FLevel.Titles.Flies then
+    FFrameTarget := TFrameTarget.Create(FRenderer, FrameWidth, FrameHeight,
+      FLevel.Titles.Path.SteepestBank);
   var World: TDynamicWorld;
   World.LocateParent := LocateParent;
   World.Solid := SolidUnderPoint;
@@ -1529,11 +1511,7 @@ begin
   FState := gsEnding;
   // The campaign is over: nothing to resume behind the farewell
   FMenu.HasActiveGame := False;
-  FHeldLeft := False;
-  FHeldRight := False;
-  FHeldJump := False;
-  FHeldDown := False;
-  FHeldFire := False;
+  ReleaseHeldKeys;
   // The current track keeps playing under the farewell - the 2008 exit
   // was silence via GameFree; a track feels kinder (tweak on review)
 end;
@@ -1602,17 +1580,22 @@ begin
   OpenMenu;
 end;
 
-procedure TMoonGame.OpenMenu;
+// Keys released while the game does not listen never reach it; a stale
+// held flag would sprint the hero the moment it listens again
+procedure TMoonGame.ReleaseHeldKeys;
 begin
-  FResumeState := FState;
-  FState := gsMenu;
-  // Keys released while the menu is up never reach the game; a stale
-  // held flag would sprint the hero the moment the menu closes
   FHeldLeft := False;
   FHeldRight := False;
   FHeldJump := False;
   FHeldDown := False;
   FHeldFire := False;
+end;
+
+procedure TMoonGame.OpenMenu;
+begin
+  FResumeState := FState;
+  FState := gsMenu;
+  ReleaseHeldKeys;
   FMenu.ShowMain;
   // Level music keeps playing under the menu - verbatim 2008 behavior.
   // The victory track is a sound of the world: it waits, or the events
@@ -4767,7 +4750,8 @@ end;
 
 // The titles' clock goes by the end track where the mixer tells its place
 // and by the ticks where it does not. At the flash the logo flares, the
-// screen jolts and the gate's lamp turns amber
+// screen jolts and the gate's lamp turns amber; at the flight's cue the
+// camera leaves, and the fangs' row is rolled back under the eye
 procedure TMoonGame.TickTitles;
 begin
   if not FTitles.Running then
@@ -4778,11 +4762,40 @@ begin
   var Cue := FTitles.Tick(TrackSeconds);
   if FTitles.LogoShown then
     FMenu.Logo.Tick;
-  if not Cue.Flashes then
-    Exit;
-  FMenu.Logo.Flare(TitlesFlareStrength);
-  FShake.AddTrauma(TitlesFlashTrauma);
-  FGate.Promise;
+  if Cue.Flashes then
+  begin
+    FMenu.Logo.Flare(TitlesFlareStrength);
+    FShake.AddTrauma(TitlesFlashTrauma);
+    FGate.Promise;
+  end;
+  if Cue.FlightStarts then
+    BeginFinale;
+  // After the clock's tick: the row is rolled as far back as this tick's
+  // frames will see
+  if FTitles.Flying then
+    FFangs.FlyBack(EyeOffsets(1)[fmFangs]);
+  if Cue.FlightEnds then
+    LeaveFinale;
+end;
+
+// The camera leaves: the keys and the mouse are his no more, and what he
+// held is let go - he comes down where he is and stands
+procedure TMoonGame.BeginFinale;
+begin
+  FState := gsFinale;
+  ReleaseHeldKeys;
+  FBonusActivateQueued := False;
+end;
+
+// For the time being the flight ends in the dark, and the dark in the
+// menu: nothing to come back to there, and the end track plays on
+procedure TMoonGame.LeaveFinale;
+begin
+  FState := gsMenu;
+  FResumeState := gsMenu;
+  FMenu.HasActiveGame := False;
+  FMenu.ShowMain;
+  FTitles.Clear;
 end;
 
 // What the hull's end did this tick, carried out: the crack's flash and
@@ -5724,7 +5737,9 @@ begin
     FBelt.Tick;
     BeltWay := -FBelt.Speed;
     FFarPlane.Tick(FBelt.Speed / BeltCruise);
-    FFangs.Tick(FFarPlane.Offsets[fmFangs]);
+    // Under the titles' eye the row follows the eye (TickTitles)
+    if not FTitles.Flying then
+      FFangs.Tick(FFarPlane.Offsets[fmFangs]);
   end;
 
   // The road that runs out and the barge, before the pads they move
@@ -5918,13 +5933,12 @@ begin
       DrawEnding;
     gsPlaying:
       begin
-        if not DebugDrawThroughTarget(AAlpha) then
-        begin
-          DrawFarLayers(AAlpha);
-          DrawPlayLayers(AAlpha);
-        end;
+        DrawFarLayers(AAlpha);
+        DrawPlayLayers(AAlpha);
         DrawHud(AAlpha);
       end;
+    gsFinale:
+      DrawFinale(AAlpha);
   end;
 
   DrawAtlasOverlay;
@@ -6042,6 +6056,50 @@ begin
   FTitlesPainter.Draw(FShake.Offset(scWorld), AAlpha);
 end;
 
+// The frame of the titles' flight: the far layers under the eye, the play
+// layer cast off to the right by its nearness, the dark of the flight's end
+// over both; no HUD. Through the target the play layer rides off by whole
+// pixels; with no target it is cut at the flight's first frame
+procedure TMoonGame.DrawFinale(AAlpha: Double);
+begin
+  var CastOff: Single := -FlightEye(AAlpha).Ride * FLevel.FarPlane.PlayNearness;
+  var Framed := (FFrameTarget <> nil) and FFrameTarget.Open(0, FrameBackground);
+  DrawFarLayers(AAlpha);
+  if Framed and (CastOff < FrameWidth) then
+  begin
+    FFrameTarget.ShiftLayers(CastOff, 0);
+    DrawPlayLayers(AAlpha);
+  end;
+  if Framed then
+    FFrameTarget.Close;
+  FTitlesPainter.DrawTail(AAlpha);
+  DrawFlightReadout(AAlpha);
+end;
+
+// The titles' eye over the far plane between the ticks: how far along the
+// strip it has flown from where the world stands. Not flying outside the
+// flight
+function TMoonGame.FlightEye(AAlpha: Single): TFarPlaneEye;
+begin
+  Result := Default(TFarPlaneEye);
+  if not FTitles.Flying then
+    Exit;
+  var Stand: Double := FFarPlane.OffsetsAt(AAlpha)[fmCity] +
+    FLevel.FarPlane.ScreenWidth / 2;
+  Result.Flying := True;
+  Result.Ride := FTitles.EyeAt(AAlpha, Stand).Along - Stand;
+  Result.Seconds := FTitles.FlightSeconds(AAlpha);
+end;
+
+// The far plane's offsets between the ticks, as the titles' eye has them
+function TMoonGame.EyeOffsets(AAlpha: Single): TFarPlaneOffsets;
+begin
+  Result := FFarPlane.OffsetsAt(AAlpha);
+  var Eye := FlightEye(AAlpha);
+  if Eye.Flying then
+    Result := FLevel.FarPlane.Ridden(Result, Eye.Ride);
+end;
+
 // Cursor and HUD are glass over the world: they stand while it shakes
 procedure TMoonGame.DrawHud(AAlpha: Double);
 begin
@@ -6084,8 +6142,8 @@ end;
 procedure TMoonGame.DrawBackdrop(AAlpha: Single);
 begin
   if FHero.Screen = FLevel.FarPlane.Screen then
-    FFarPlanePainter.Draw(FFarPlane.OffsetsAt(AAlpha), FFarPlane.Clock,
-      FFarPlane.ClockAt(AAlpha), FTiles.Backdrop(FHero.Screen))
+    FFarPlanePainter.Draw(FFarPlane.OffsetsAt(AAlpha), FlightEye(AAlpha),
+      FFarPlane.Clock, FFarPlane.ClockAt(AAlpha), FTiles.Backdrop(FHero.Screen))
   else
     FTiles.DrawBackground(FHero.Screen);
 end;
@@ -6095,7 +6153,7 @@ end;
 procedure TMoonGame.DrawFangs(AAlpha: Single);
 begin
   if FHero.Screen = FLevel.FarPlane.Screen then
-    FFangPainter.Draw(FFarPlane.OffsetsAt(AAlpha));
+    FFangPainter.Draw(EyeOffsets(AAlpha));
 end;
 
 // The far ledge stands on the backdrop, so on the screen of a chase it
@@ -6553,264 +6611,21 @@ begin
     if Group.Screen = FHero.Screen then
       FPads.RequestRestore(Group.Tag, HeroRides, nil, CalmPace);
 end;
-
-// Seconds of the wall clock since the performance counter stood at AStart
-function SecondsSince(AStart: UInt64): Double;
-begin
-  Result := (SDL_GetPerformanceCounter - AStart) / SDL_GetPerformanceFrequency;
-end;
-
-// The window's viewport in pixels. It is told in the units of the scale,
-// so it is asked at a scale of 1
-function WindowViewInPixels(ARenderer: PSdlRenderer): TSdlRect;
-var
-  ScaleX, ScaleY: Single;
-begin
-  SDL_RenderGetScale(ARenderer, @ScaleX, @ScaleY);
-  SDL_RenderSetScale(ARenderer, 1, 1);
-  SDL_RenderGetViewport(ARenderer, @Result);
-  SDL_RenderSetScale(ARenderer, ScaleX, ScaleY);
-end;
-
-// What is drawn on the window so far, its viewport's pixels; nil when they
-// cannot be read. The caller frees it
-function ReadWindowFrame(ARenderer: PSdlRenderer): PSdlSurface;
-begin
-  var View := WindowViewInPixels(ARenderer);
-  Result := SDL_CreateRGBSurfaceWithFormat(0, View.W, View.H, 32,
-    SdlPixelFormatAbgr8888);
-  if Result = nil then
-    Exit;
-  if SDL_RenderReadPixels(ARenderer, nil, SdlPixelFormatAbgr8888,
-    Result.Pixels, Result.Pitch) = 0 then
-    Exit;
-  SDL_FreeSurface(Result);
-  Result := nil;
-end;
-
-// The widest gap between the same colors of two pixels. Their alpha is
-// not seen on the window: it is not compared
-function ColorGap(AFirst, ASecond: Cardinal): Integer;
-begin
-  Result := 0;
-  for var i := 0 to 2 do
-  begin
-    var Gap := Abs(Integer((AFirst shr (8 * i)) and $FF) -
-      Integer((ASecond shr (8 * i)) and $FF));
-    if Gap > Result then
-      Result := Gap;
-  end;
-end;
-
-// How many pixels of two frames of one size differ; AWidestGap - the
-// widest gap of a color among them, of 255
-function CountFrameDifferences(AFirst, ASecond: PSdlSurface;
-  out AWidestGap: Integer): Integer;
-var
-  First, Second: PCardinal;
-begin
-  Result := 0;
-  AWidestGap := 0;
-  First := AFirst.Pixels;
-  Second := ASecond.Pixels;
-  for var i := 1 to AFirst.W * AFirst.H do
-  begin
-    var Gap := ColorGap(First^, Second^);
-    Inc(First);
-    Inc(Second);
-    if Gap = 0 then
-      Continue;
-    Inc(Result);
-    if Gap > AWidestGap then
-      AWidestGap := Gap;
-  end;
-end;
-
-// The count of two frames' differences as a line of text; frames that
-// differ are left in ADir as pictures
-function DescribeFrameDifferences(ADirect, AThrough: PSdlSurface;
-  const ADir: string): string;
-const
-  DirectFile = 'frame-direct.png';
-  TargetFile = 'frame-target.png';
-var
-  WidestGap: Integer;
-begin
-  if (ADirect = nil) or (AThrough = nil) then
-    Exit('frames: not read: ' + SdlErrorText);
-
-  var Differing := CountFrameDifferences(ADirect, AThrough, WidestGap);
-  Result := Format('frames: %d of %d pixels differ',
-    [Differing, ADirect.W * ADirect.H]);
-  if Differing = 0 then
-    Exit;
-
-  ForceDirectories(ADir);
-  IMG_SavePNG(ADirect, PAnsiChar(SdlText(TPath.Combine(ADir, DirectFile))));
-  IMG_SavePNG(AThrough, PAnsiChar(SdlText(TPath.Combine(ADir, TargetFile))));
-  Result := Format('frames: %d of %d differ, gap %d of 255, see %s',
-    [Differing, ADirect.W * ADirect.H, WidestGap, ADir]);
-end;
-
-// A report of the debug keyboard: the caption, and the ticker - fullscreen
-// has no caption to read it in
-procedure TMoonGame.DebugSay(const AReport: string);
-begin
-  FMessages.AddTicker(AReport, TickerNoticeTicks);
-  SDL_SetWindowTitle(FWindow, PAnsiChar(SdlText(AReport)));
-end;
-
-// Z: the next way of the frame to the window
-procedure TMoonGame.DebugCycleFrameWay;
-begin
-  if FDebugFrame.Way = High(TDebugFrameWay) then
-    FDebugFrame.Way := Low(TDebugFrameWay)
-  else
-    FDebugFrame.Way := Succ(FDebugFrame.Way);
-  FDebugFrame.WaySince := SDL_GetPerformanceCounter;
-
-  if FDebugFrame.Way = fwDirect then
-    DebugSay('frame: straight to the window')
-  else
-    // Said by the frame, once the target has its size
-    FDebugFrame.Unsaid := True;
-end;
-
-// C: the play layer rides off to the right and is back, over and over. It
-// rides the target: from the straight way the frame goes through it
-procedure TMoonGame.DebugToggleCastOff;
-begin
-  FDebugFrame.CastOff := not FDebugFrame.CastOff;
-  FDebugFrame.CastOffSince := SDL_GetPerformanceCounter;
-  if FDebugFrame.CastOff and (FDebugFrame.Way = fwDirect) then
-    FDebugFrame.Way := fwTarget;
-
-  if FDebugFrame.CastOff then
-    DebugSay('play layer: cast off, over and over')
-  else
-    DebugSay('play layer: at its place');
-end;
-
-// The bank of the Z key's way now, degrees
-function TMoonGame.DebugBank: Single;
-begin
-  case FDebugFrame.Way of
-    fwBanked:
-      Result := DebugBankDegrees;
-    fwSwinging:
-      begin
-        var Swing: Double := 2 * Pi * SecondsSince(FDebugFrame.WaySince) /
-          DebugSwingSeconds;
-        Result := DebugBankDegrees * (1 - Cos(Swing)) / 2;
-      end;
-  else
-    Result := 0;
-  end;
-end;
-
-// How far the C key has the play layer cast off now, units: a frame's
-// width over the cast-off's seconds, slow at both ends, held there for a
-// breath, and from its place again
-function TMoonGame.DebugCastOff: Single;
-begin
-  Result := 0;
-  if not FDebugFrame.CastOff then
-    Exit;
-
-  var Lap: Double := DebugCastOffSeconds + DebugCastOffHoldSeconds;
-  var Laps: Double := SecondsSince(FDebugFrame.CastOffSince) / Lap;
-  var Share: Double := Frac(Laps) * Lap / DebugCastOffSeconds;
-  if Share > 1 then
-    Share := 1;
-  Result := FrameWidth * Sqr(Share) * (3 - 2 * Share);
-end;
-
-// What the target came to: once after the Z key, and whenever the
-// window's size makes it anew
-procedure TMoonGame.DebugSayFrameWay;
-const
-  WayNames: array [TDebugFrameWay] of string = ('straight',
-    'through the target', 'banked', 'swinging');
-begin
-  FDebugFrame.Unsaid := False;
-  var Size := FFrameTarget.TextureSize;
-  DebugSay(Format('frame: %s, grown %.3f, target %dx%d',
-    [WayNames[FDebugFrame.Way], FFrameTarget.Cover, Size.X, Size.Y]));
-end;
-
-// No texture of the size the window asks for: the straight way is the
-// only one
-procedure TMoonGame.DebugRefuseTarget;
-begin
-  var Size := FFrameTarget.TextureSize;
-  FDebugFrame.Way := fwDirect;
-  FDebugFrame.CastOff := False;
-  DebugSay(Format('frame: no target of %dx%d, drawn straight: %s',
-    [Size.X, Size.Y, SdlErrorText]));
-end;
-
-// Q: the frame of one moment drawn straight to the window and through the
-// target unbanked, both read back from the window and compared
-procedure TMoonGame.DebugCompareFrameWays(AAlpha: Double);
-const
-  FramesDir = 'dump';
-var
-  Direct, Through: PSdlSurface;
-begin
-  FDebugFrame.CompareDue := False;
-  Direct := nil;
-  Through := nil;
-  try
-    DrawFarLayers(AAlpha);
-    DrawPlayLayers(AAlpha);
-    Direct := ReadWindowFrame(FRenderer);
-
-    if FFrameTarget.Open(0, FrameBackground) then
-    begin
-      DrawFarLayers(AAlpha);
-      DrawPlayLayers(AAlpha);
-      FFrameTarget.Close;
-      Through := ReadWindowFrame(FRenderer);
-    end;
-
-    DebugSay(DescribeFrameDifferences(Direct, Through, FramesDir));
-  finally
-    SDL_FreeSurface(Through);
-    SDL_FreeSurface(Direct);
-  end;
-  // The frame that follows starts from the bare background, as every frame
-  ClearFrame;
-end;
 {$ENDIF} // DEBUGKEYS
 
-// The frame of the play by the way the Z key has chosen. True - the far
-// and the play layers are drawn; False - they are the caller's to draw,
-// straight to the window
-function TMoonGame.DebugDrawThroughTarget(AAlpha: Double): Boolean;
+// Z: where the titles' flight is, in the corner of the frame it is judged
+// on - the flight's second, the track's own place, the place of the city's
+// strip under the eye. The track's place less the flight's cue against the
+// flight's second is how far the clock has gone from the track
+procedure TMoonGame.DrawFlightReadout(AAlpha: Double);
 begin
-  Result := False;
 {$IFDEF DEBUGKEYS}
-  if FFrameTarget = nil then
-    FFrameTarget := TFrameTarget.Create(FRenderer, FrameWidth, FrameHeight,
-      DebugBankDegrees);
-  if FDebugFrame.CompareDue then
-    DebugCompareFrameWays(AAlpha);
-  if FDebugFrame.Way = fwDirect then
+  if not FShowFlight or not FTitles.Flying then
     Exit;
-  if not FFrameTarget.Open(DebugBank, FrameBackground) then
-  begin
-    DebugRefuseTarget;
-    Exit;
-  end;
-
-  DrawFarLayers(AAlpha);
-  FFrameTarget.ShiftLayers(DebugCastOff, 0);
-  DrawPlayLayers(AAlpha);
-  FFrameTarget.Close;
-
-  if FDebugFrame.Unsaid or FFrameTarget.Rebuilt then
-    DebugSayFrameWay;
-  Result := True;
+  var Along: Double := EyeOffsets(AAlpha)[fmCity] + FLevel.FarPlane.ScreenWidth / 2;
+  FFont.DrawSmall(Format('flight %.2f  track %.2f  eye %.0f',
+    [FTitles.FlightSeconds(AAlpha), FAudio.MusicSeconds, Along]),
+    FlightReadoutLeft, FlightReadoutTop);
 {$ENDIF}
 end;
 
@@ -6839,6 +6654,10 @@ function TMoonGame.HandleDebugKey(AScancode: Integer): Boolean;
 begin
   Result := False;
 {$IFDEF DEBUGKEYS}
+  // The titles' flight is watched, not played: of the debug keyboard it
+  // leaves the readout and the way back to the end's start
+  if (FState = gsFinale) and not (AScancode in [ScancodeZ, ScancodeEnd]) then
+    Exit;
   case AScancode of
     ScancodeT:
       FInspect := not FInspect;
@@ -6900,12 +6719,7 @@ begin
       // tune against
       DebugNextTitlesCue;
     ScancodeZ:
-      DebugCycleFrameWay;
-    ScancodeC:
-      DebugToggleCastOff;
-    ScancodeQ:
-      // At the next frame: the comparison draws
-      FDebugFrame.CompareDue := True;
+      FShowFlight := not FShowFlight;
     // Weapon-4 muzzle tuner on the arrow cluster - the keys a hand
     // reaches for first: 4/6 = X, 8/2 = Y (8 lifts, 2 lowers),
     // plus/minus = barrel length; values land in the window caption
@@ -6937,7 +6751,12 @@ begin
     ScancodePageUp:
       DebugBrowseScreen(-1);
     ScancodeEnd:
-      DebugJumpToWork;
+      begin
+        // Out of the flight the hero is his own again
+        if FState = gsFinale then
+          FState := gsPlaying;
+        DebugJumpToWork;
+      end;
   else
     Exit;
   end;
@@ -6997,6 +6816,14 @@ begin
 
   if FState = gsEnding then
     Exit; // mouse-only by design: no key leaves the farewell screen
+
+  // The titles' flight is not his to steer or to leave: Escape too
+  if FState = gsFinale then
+  begin
+    if AAction = kaDown then
+      HandleDebugKey(AScancode);
+    Exit;
+  end;
 
   if FState = gsMenu then
   begin
@@ -7082,6 +6909,9 @@ begin
     Exit; // the click that closed the story must not fire the weapon
   end;
 
+  if FState = gsFinale then
+    Exit;
+
   if AButton = 1 then // left
     FHeldFire := ADown;
   if (AButton = 3) and ADown then // right: spend the bonus slot
@@ -7094,6 +6924,9 @@ begin
   FMouseGX := AX;
   FMouseGY := AY;
   FMenu.MouseMove(AX, AY);
+  // In the titles' flight his arm stays where he left it
+  if FState = gsFinale then
+    Exit;
   if Assigned(FHero) then // no hero exists until the first level loads
     FHero.SetMouse(AX, AY);
 end;

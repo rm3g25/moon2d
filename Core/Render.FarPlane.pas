@@ -50,6 +50,12 @@
   its layer is drawn: the arena before the chase costs one picture more,
   the cliff's end over the wall.
 
+  Under the titles' eye (TFarPlaneEye) the world stands and the eye flies
+  along the strip: every layer is drawn where the eye's ride has it
+  (TFarPlaneDef.Ridden), and the crater floor in slabs
+  (TFarPlaneDef.FloorSlabs), far to near, each slab's far edge fading in
+  over the one behind it. Not flying, the frame is the chase's own.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Render.FarPlane;
@@ -84,6 +90,12 @@ type
     // A point along a beam, units from its lamp, and its level there
     TBeamSample = record
       Distance, Level: Double;
+    end;
+    // A strip of a band across: From to Till of its depth, units from its
+    // top, and how much of its alpha each of the two edges keeps
+    TBandRows = record
+      From, Till: Single;
+      FromKeeps, TillKeeps: Single;
     end;
   private
     FRenderer: PSdlRenderer;
@@ -120,16 +132,26 @@ type
     // The farm at this frame's clock and ride: the city's layer and the
     // near ground's both draw from it
     FFarm: TFarmView;
+    // The titles' eye of this frame, and where the world stands under it
+    FEye: TFarPlaneEye;
+    FStand: TFarPlaneOffsets;
     FVertices: TArray<TSdlVertex>;
     FIndices: TArray<Integer>;
     procedure AddQuad(const APlace, ASource: TSdlFRect; AColor: TSdlColor;
       const AAlpha: TQuadAlpha);
-    procedure AddBandPiece(const ATurn: TBandTurn; ALeft, ARight: Double);
+    procedure AddBandPiece(const ATurn: TBandTurn; const ARows: TArray<TBandRows>;
+      ALeft, ARight: Double);
     procedure Flush(ATexture: PSdlTexture);
     function FirstSeenLayer(const AOffsets: TFarPlaneOffsets): Integer;
     procedure DrawSky;
     procedure DrawSun(const AOffsets: TFarPlaneOffsets);
+    // The band ridden AOffset, each turn of its texture in ARows
+    procedure DrawBandRows(ALayer: Integer; AOffset: Double; AColor: TSdlColor;
+      const ARows: TArray<TBandRows>);
     procedure DrawBand(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
+    // The crater floor under the titles' eye; AOffsets - where the eye has
+    // the layers
+    procedure DrawFloorSlabs(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
     // False - it stands off the screen, nothing drawn
     function DrawElement(const AElement: TFarPlaneElement;
       ATexture: PSdlTexture; ALeft: Double; AColor: TSdlColor): Boolean;
@@ -182,11 +204,13 @@ type
     constructor Create(ARenderer: PSdlRenderer; ACache: TSpriteCache;
       const ADef: TFarPlaneDef);
     destructor Destroy; override;
-    // ATick - the far plane's clock (TFarPlane.Clock), AClock - the same
-    // between its ticks, as the offsets are (TFarPlane.ClockAt); ABackdrop -
-    // the screen's own, drawn where its element rides
-    procedure Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer; AClock: Double;
-      const ABackdrop: TBackdropView);
+    // AOffsets - where the far plane stands; AEye - the titles' eye over
+    // it, not Flying in a chase; ATick - the far plane's clock
+    // (TFarPlane.Clock), AClock - the same between its ticks, as the offsets
+    // are (TFarPlane.ClockAt); ABackdrop - the screen's own, drawn where its
+    // element rides
+    procedure Draw(const AOffsets: TFarPlaneOffsets; const AEye: TFarPlaneEye;
+      ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
   end;
 
 implementation
@@ -458,9 +482,10 @@ begin
   DrawGlow(FRenderer, FDiscGlow, Sun.X, Sun.Y, Sun.Disc * 2, Color, 1);
 end;
 
-// A piece of one turn of a band, ALeft to ARight on the screen: its top
-// faded in when the band fades, its start faded in over the band's feather
-procedure TFarPlanePainter.AddBandPiece(const ATurn: TBandTurn; ALeft, ARight: Double);
+// A piece of one turn of a band, ALeft to ARight on the screen, in ARows:
+// its start faded in over the band's feather
+procedure TFarPlanePainter.AddBandPiece(const ATurn: TBandTurn;
+  const ARows: TArray<TBandRows>; ALeft, ARight: Double);
 
   function StartShare(AX: Double): Single;
   begin
@@ -473,49 +498,47 @@ procedure TFarPlanePainter.AddBandPiece(const ATurn: TBandTurn; ALeft, ARight: D
 begin
   var Band := FDef.Layers[ATurn.Layer].Band;
   var Height := Band.Bottom - Band.Top;
-  var FadeShare: Single := Band.FadeTop / Height;
-  if FadeShare > 1 then
-    FadeShare := 1;
   var U := (ALeft - ATurn.Left) / ATurn.Width;
   var UWidth := (ARight - ALeft) / ATurn.Width;
   var LeftKeeps := StartShare(ALeft);
   var RightKeeps := StartShare(ARight);
-  if FadeShare > 0 then
-    AddQuad(FloatRect(ALeft, Band.Top, ARight - ALeft, Band.FadeTop),
-      FloatRect(U, 0, UWidth, FadeShare), ATurn.Color,
-      QuadAlpha(LeftKeeps, RightKeeps, 0, 1));
-  AddQuad(FloatRect(ALeft, Band.Top + Band.FadeTop, ARight - ALeft, Height - Band.FadeTop),
-    FloatRect(U, FadeShare, UWidth, 1 - FadeShare), ATurn.Color,
-    QuadAlpha(LeftKeeps, RightKeeps, 1, 1));
+  for var Rows in ARows do
+  begin
+    var FromShare: Single := Rows.From / Height;
+    var TillShare: Single := Rows.Till / Height;
+    AddQuad(FloatRect(ALeft, Band.Top + Rows.From, ARight - ALeft, Rows.Till - Rows.From),
+      FloatRect(U, FromShare, UWidth, TillShare - FromShare), ATurn.Color,
+      QuadAlpha(LeftKeeps, RightKeeps, Rows.FromKeeps, Rows.TillKeeps));
+  end;
 end;
 
 // One turn of the texture after another from left of the screen, the turn
 // under the band's start cut there and cut again where its feather ends
-procedure TFarPlanePainter.DrawBand(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
+procedure TFarPlanePainter.DrawBandRows(ALayer: Integer; AOffset: Double;
+  AColor: TSdlColor; const ARows: TArray<TBandRows>);
 var
   ScreenWidth, Visible, FeatherEnd: Double;
   Turn: TBandTurn;
 begin
   var Band := FDef.Layers[ALayer].Band;
   var Texture := FBands[ALayer];
-  var Offset: Double := AOffsets[FDef.Layers[ALayer].Motion];
   ScreenWidth := FDef.ScreenWidth;
   Turn.Layer := ALayer;
-  Turn.Color := ShadeColor(FDef.BandShade(Band, AOffsets));
+  Turn.Color := AColor;
   Turn.Width := (Band.Bottom - Band.Top) / TextureAspect(Texture);
   Turn.Start := NoStart;
   Visible := 0;
   FeatherEnd := 0;
   if Band.From >= 0 then
   begin
-    Turn.Start := Band.From - Offset;
+    Turn.Start := Band.From - AOffset;
     Visible := Max(Visible, Turn.Start);
     FeatherEnd := Turn.Start + Band.FeatherLeft;
   end;
   if Visible >= ScreenWidth then
     Exit;
 
-  Turn.Left := -FMod(Offset, Turn.Width);
+  Turn.Left := -FMod(AOffset, Turn.Width);
   if Turn.Left > 0 then
     Turn.Left := Turn.Left - Turn.Width;
   while Turn.Left < ScreenWidth do
@@ -524,14 +547,126 @@ begin
     var Right: Double := Min(Turn.Left + Turn.Width, ScreenWidth);
     if (Left < FeatherEnd) and (FeatherEnd < Right) then
     begin
-      AddBandPiece(Turn, Left, FeatherEnd);
-      AddBandPiece(Turn, FeatherEnd, Right);
+      AddBandPiece(Turn, ARows, Left, FeatherEnd);
+      AddBandPiece(Turn, ARows, FeatherEnd, Right);
     end
     else if Right > Left then
-      AddBandPiece(Turn, Left, Right);
+      AddBandPiece(Turn, ARows, Left, Right);
     Turn.Left := Turn.Left + Turn.Width;
   end;
   Flush(Texture);
+end;
+
+// A band whole: its top faded in when the band fades, the rest under it
+function WholeBand(const ABand: TFarPlaneBand): TArray<TFarPlanePainter.TBandRows>;
+var
+  Fade, Body: TFarPlanePainter.TBandRows;
+begin
+  var Height: Single := ABand.Bottom - ABand.Top;
+  Fade.From := 0;
+  Fade.Till := ABand.FadeTop;
+  if Fade.Till > Height then
+    Fade.Till := Height;
+  Fade.FromKeeps := 0;
+  Fade.TillKeeps := 1;
+  Body.From := Fade.Till;
+  Body.Till := Height;
+  Body.FromKeeps := 1;
+  Body.TillKeeps := 1;
+
+  Result := [Body];
+  if Fade.Till > 0 then
+    Result := [Fade, Body];
+end;
+
+procedure TFarPlanePainter.DrawBand(ALayer: Integer; const AOffsets: TFarPlaneOffsets);
+begin
+  var Layer := FDef.Layers[ALayer];
+  DrawBandRows(ALayer, AOffsets[Layer.Motion],
+    ShadeColor(FDef.BandShade(Layer.Band, AOffsets)), WholeBand(Layer.Band));
+end;
+
+// The rows of a slab of the floor, ATop to AFoot of its band's depth: its
+// far edge fading in over AFeather, the band's top over AFade. A quad's
+// alpha runs straight between its edges and the two fades multiply, so a
+// strip where both run is cut finer
+function SlabRows(ATop, AFoot, AFeather, AFade: Single): TArray<TFarPlanePainter.TBandRows>;
+const
+  FineCuts = 4;
+
+  function Keeps(ADepth: Single): Single;
+  begin
+    Result := 1;
+    if (AFade > 0) and (ADepth < AFade) then
+      Result := ADepth / AFade;
+    if (AFeather > 0) and (ADepth < ATop + AFeather) then
+      Result := Result * (ADepth - ATop) / AFeather;
+  end;
+
+var
+  Marks: TArray<Single>;
+  Rows: TFarPlanePainter.TBandRows;
+begin
+  // Where a fade ends inside the slab, the nearer end first
+  var FeatherEnd: Single := ATop + AFeather;
+  var First: Single := FeatherEnd;
+  var Second: Single := AFade;
+  if Second < First then
+  begin
+    First := AFade;
+    Second := FeatherEnd;
+  end;
+  Marks := [ATop];
+  if (First > ATop) and (First < AFoot) then
+    Marks := Marks + [First];
+  if (Second > First) and (Second > ATop) and (Second < AFoot) then
+    Marks := Marks + [Second];
+  Marks := Marks + [AFoot];
+
+  Result := [];
+  for var i := 0 to High(Marks) - 1 do
+  begin
+    var BothFade := (AFeather > 0) and (Marks[i] < FeatherEnd) and (Marks[i] < AFade);
+    var Cuts := 1;
+    if BothFade then
+      Cuts := FineCuts;
+    var Step: Single := (Marks[i + 1] - Marks[i]) / Cuts;
+    for var j := 0 to Cuts - 1 do
+    begin
+      Rows.From := Marks[i] + Step * j;
+      Rows.Till := Marks[i] + Step * (j + 1);
+      if j = Cuts - 1 then
+        Rows.Till := Marks[i + 1];
+      Rows.FromKeeps := Keeps(Rows.From);
+      Rows.TillKeeps := Keeps(Rows.Till);
+      Result := Result + [Rows];
+    end;
+  end;
+end;
+
+// Far to near: a slab runs on under the feather of the one in front of it,
+// which fades in over it - a near dune before a far one
+procedure TFarPlanePainter.DrawFloorSlabs(ALayer: Integer;
+  const AOffsets: TFarPlaneOffsets);
+begin
+  var Band := FDef.Layers[ALayer].Band;
+  var Deep: Single := Band.Bottom - Band.Top;
+  var Fade := FDef.FloorFadeAt(Band, FEye.Seconds);
+  var Color := ShadeColor(FDef.BandShade(Band, AOffsets));
+  var Slabs := FDef.FloorSlabs(Band, FStand[fmCity], FEye.Ride);
+  for var i := 0 to High(Slabs) do
+  begin
+    var Feather: Single := 0;
+    if i > 0 then
+      Feather := FloorSlabFeather;
+    var Foot := Slabs[i].Bottom;
+    if i < High(Slabs) then
+      Foot := Foot + FloorSlabFeather;
+    if Foot > Deep then
+      Foot := Deep;
+    DrawBandRows(ALayer, Slabs[i].Offset, Color,
+      SlabRows(Slabs[i].Top, Foot, Feather, Fade));
+  end;
 end;
 
 function TFarPlanePainter.DrawElement(const AElement: TFarPlaneElement;
@@ -994,7 +1129,10 @@ procedure TFarPlanePainter.DrawLayer(ALayer: Integer; const AOffsets: TFarPlaneO
   ATick: Integer; AClock: Double; const ABackdrop: TBackdropView);
 begin
   var Layer := FDef.Layers[ALayer];
-  if Layer.Band.Present then
+  var FloorUnderEye := FEye.Flying and (Layer.Motion = fmCity);
+  if Layer.Band.Present and FloorUnderEye then
+    DrawFloorSlabs(ALayer, AOffsets)
+  else if Layer.Band.Present then
     DrawBand(ALayer, AOffsets);
   if Layer.Band.Present and (Layer.Motion = fmGround) and FFrames.Present then
   begin
@@ -1076,21 +1214,28 @@ begin
   end;
 end;
 
-procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets; ATick: Integer;
-  AClock: Double; const ABackdrop: TBackdropView);
+procedure TFarPlanePainter.Draw(const AOffsets: TFarPlaneOffsets;
+  const AEye: TFarPlaneEye; ATick: Integer; AClock: Double;
+  const ABackdrop: TBackdropView);
 begin
+  FEye := AEye;
+  FStand := AOffsets;
+  var Offsets := AOffsets;
+  if AEye.Flying then
+    Offsets := FDef.Ridden(AOffsets, AEye.Ride);
+
   if FFrames.Present then
-    FFrameView := FFrames.View(AOffsets[fmCity]);
-  FFarm := FarmView(FDef, AOffsets, ATick, FCityHeights);
-  var First := FirstSeenLayer(AOffsets);
+    FFrameView := FFrames.View(Offsets[fmCity]);
+  FFarm := FarmView(FDef, Offsets, ATick, FCityHeights);
+  var First := FirstSeenLayer(Offsets);
   if First < 0 then
   begin
     DrawSky;
-    DrawSun(AOffsets);
+    DrawSun(Offsets);
     First := 0;
   end;
   for var i := First to High(FDef.Layers) do
-    DrawLayer(i, AOffsets, ATick, AClock, ABackdrop);
+    DrawLayer(i, Offsets, ATick, AClock, ABackdrop);
 end;
 
 end.

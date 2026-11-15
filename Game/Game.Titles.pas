@@ -6,8 +6,18 @@
   by the ticks where it does not. On it: the studio's card comes and goes,
   and the logo flares and stands. The hero is his own through it.
 
-  Only the clock, its one cue and how much of the card shows: the track,
-  the logo, the gate's lamp and the drawing are the caller's. No SDL.
+  Titles with a path fly: at its cue the camera leaves, and the eye goes
+  the path (Levels.EyePath) by the flight's own seconds. In the flight the
+  clock goes by the ticks alone: the track tells its place in steps of the
+  mixer's buffer, and a clock leaning after it would shake the camera. A
+  track far off still takes it at once.
+
+  For the time being the flight is flown as far as the eye keeps its rest
+  (TEyePath.RestTill); the frame goes dark over its last second, and there
+  it ends.
+
+  Only the clock, its cues, the eye and how much of the card shows: the
+  track, the logo, the gate's lamp and the drawing are the caller's. No SDL.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -17,7 +27,7 @@ unit Game.Titles;
 interface
 
 uses
-  Levels.Titles;
+  Levels.Titles, Levels.EyePath;
 
 const
   // The fixed timestep: the cues' seconds in ticks
@@ -29,11 +39,17 @@ const
   // Handed to Tick for a track that tells no place: the clock counts its
   // ticks alone
   NoTrackSeconds = -1.0;
+  // The frame goes dark over this long before the flight ends
+  TitlesTailSeconds = 1.0;
 
 type
   TTitlesCue = record
     // The clock has come to the flash: the logo flares, once
     Flashes: Boolean;
+    // The clock has come to the flight: the camera leaves, once
+    FlightStarts: Boolean;
+    // The flight has come to where it ends, once
+    FlightEnds: Boolean;
   end;
 
   TTitles = class
@@ -43,6 +59,10 @@ type
     FSeconds, FLastSeconds: Double;
     FFlashed: Boolean;
     FSinceFlash: Integer;
+    FFlying: Boolean;
+    FFlightOver: Boolean;
+    // The second of the flight it ends on
+    FFlightTill: Double;
   public
     // ADef - the level's; without titles Start starts nothing
     procedure Arm(const ADef: TTitlesDef);
@@ -51,8 +71,9 @@ type
     // A death before the end, a new level: none
     procedure Clear;
     // ATrackSeconds - the place of the end track, below zero when the
-    // mixer tells none. The clock goes a tick on and leans toward the
-    // track by half a tick at the most; a track far off takes it at once
+    // mixer tells none. The clock goes a tick on and, before the flight,
+    // leans toward the track by half a tick at the most; a track far off
+    // takes it at once
     function Tick(ATrackSeconds: Double): TTitlesCue;
     // The clock put at ASeconds, with nothing between
     procedure JumpTo(ASeconds: Double);
@@ -65,10 +86,20 @@ type
     // The white over the frame at the flash, 1 on its tick and gone
     // TitlesFlashTicks later
     function FlashLevel(AAlpha: Single): Single;
+    // The flight's own seconds between the ticks; 0 before it
+    function FlightSeconds(AAlpha: Single): Double;
+    // The eye between the ticks. AStand - the place of the city's strip
+    // that stands in the middle of the screen where the world stands; not
+    // flying, the eye is at its rest there
+    function EyeAt(AAlpha: Single; AStand: Double): TEye;
+    // The dark over the frame as the flight ends, 0..1, between the ticks
+    function TailLevel(AAlpha: Single): Single;
     property Running: Boolean read FRunning;
     property Seconds: Double read FSeconds;
     // From the flash on the logo stands
     property LogoShown: Boolean read FFlashed;
+    // From the flight's cue on
+    property Flying: Boolean read FFlying;
   end;
 
 implementation
@@ -120,6 +151,7 @@ end;
 procedure TTitles.Arm(const ADef: TTitlesDef);
 begin
   FDef := ADef;
+  FFlightTill := ADef.Path.RestTill;
   Clear;
 end;
 
@@ -137,6 +169,8 @@ begin
   FLastSeconds := 0;
   FFlashed := False;
   FSinceFlash := 0;
+  FFlying := False;
+  FFlightOver := False;
 end;
 
 function TTitles.Tick(ATrackSeconds: Double): TTitlesCue;
@@ -151,7 +185,7 @@ begin
     var Off: Double := ATrackSeconds - FSeconds;
     if Abs(Off) > TrackJumpSeconds then
       JumpTo(ATrackSeconds)
-    else
+    else if not FFlying then
       FSeconds := FSeconds + Lean(Off);
   end;
 
@@ -161,6 +195,18 @@ begin
   begin
     FFlashed := True;
     Result.Flashes := True;
+  end;
+
+  if FDef.Flies and not FFlying and (FSeconds >= FDef.Cues.Flight) then
+  begin
+    FFlying := True;
+    Result.FlightStarts := True;
+  end;
+  var Landed := FFlying and (FSeconds - FDef.Cues.Flight >= FFlightTill);
+  if Landed and not FFlightOver then
+  begin
+    FFlightOver := True;
+    Result.FlightEnds := True;
   end;
 end;
 
@@ -197,6 +243,29 @@ begin
   if not FFlashed then
     Exit(0);
   Result := Confine(1 - (FSinceFlash + AAlpha) / TitlesFlashTicks);
+end;
+
+// On the tick the flight starts the last tick lies before its cue
+function TTitles.FlightSeconds(AAlpha: Single): Double;
+begin
+  if not FFlying then
+    Exit(0);
+  Result := SecondsAt(AAlpha) - FDef.Cues.Flight;
+  if Result < 0 then
+    Result := 0;
+end;
+
+function TTitles.EyeAt(AAlpha: Single; AStand: Double): TEye;
+begin
+  Result := FDef.Path.EyeAt(FlightSeconds(AAlpha), AStand);
+end;
+
+function TTitles.TailLevel(AAlpha: Single): Single;
+begin
+  if not FFlying then
+    Exit(0);
+  var IntoTail: Double := FlightSeconds(AAlpha) - (FFlightTill - TitlesTailSeconds);
+  Result := Confine(IntoTail / TitlesTailSeconds);
 end;
 
 end.

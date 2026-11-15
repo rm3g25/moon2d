@@ -31,6 +31,16 @@
   them. Level 2 reads its farm under a capsule; a frame of an unknown kind,
   a capsule of odd rows or deeper than long, and a farm under a dome raise.
 
+  Under the titles' eye the layers have a depth by their speeds - the city
+  1, the ridge its share, the near ground and the fangs theirs over the
+  city's cruise, the tunnel none, the play layer the road's - and the
+  eye's ride carries each by it; no ride, and the offsets are the same to
+  the bit. The crater floor is cut into slabs from its band's top to its
+  foot; unridden, every slab stands where the band stood; ridden, a slab
+  goes by the nearness of its middle and none slower than the ridge;
+  without a camera the floor is one sheet. The floor's far edge sharpens
+  over the flight's first seconds, and one sharper than that stays.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.FarPlane;
@@ -148,6 +158,39 @@ type
     procedure TestWithoutACameraTheCityIsFlat;
     [Test]
     procedure TestOtherLayersRideFlat;
+  end;
+
+  [TestFixture]
+  TFarPlaneEyeTests = class
+  private
+    FDef: TFarPlaneDef;
+    FFloor: TFarPlaneBand;
+  public
+    [Setup]
+    procedure Setup;
+
+    [Test]
+    procedure TestALayerStandsAsNearAsItsSpeedSays;
+    [Test]
+    procedure TestWithoutARoadThePlayLayerHasNoDepth;
+    [Test]
+    procedure TestNoRideAndTheOffsetsAreTheSame;
+    [Test]
+    procedure TestTheRideCarriesEachLayerByItsNearness;
+    [Test]
+    procedure TestTheFloorIsCutIntoSlabsToItsFoot;
+    [Test]
+    procedure TestUnriddenEverySlabStandsWhereTheBandStood;
+    [Test]
+    procedure TestASlabRidesByTheNearnessOfItsMiddle;
+    [Test]
+    procedure TestNoSlabRidesSlowerThanTheRidge;
+    [Test]
+    procedure TestWithoutACameraTheFloorIsOneSheet;
+    [Test]
+    procedure TestTheFloorsEdgeSharpensOverTheFirstSeconds;
+    [Test]
+    procedure TestAnEdgeSharperThanTheLineStays;
   end;
 
   [TestFixture]
@@ -759,6 +802,183 @@ begin
   Assert.AreEqual(Double(-Ride), Drift(FDef, 'rock', Ride), DepthSlack);
 end;
 
+// TFarPlaneEyeTests
+
+const
+  // The shipped layout's speeds and floor of the day the tests were written
+  EyeSpeeds = '"speeds": {"road": 33, "tunnelPeak": 6, "tunnelCruise": 6, "easeSec": 3,'
+    + ' "cityShareInTunnel": 0.5, "cityCruise": 3, "cityBrakeZone": 512,'
+    + ' "cityLeast": 0.3, "ridgeShareOfCity": 0.35, "ground": 14, "fangs": 20},';
+  EyeFloor = '"band": {"texture": "floor-tex", "fadeTop": 16, "top": 238, "bottom": 320}';
+  FloorDeep = 82;
+  FloorSlabCount = 14;
+  FloorOwnFade = 16;
+  RidgeShare = 0.35;
+  GroundNearness = 14 / 3;
+  FangNearness = 20 / 3;
+  RoadNearness = 11;
+  // The camera's eye over the floor: its base line under its horizon
+  EyeHeight = 28;
+  // The shares are a Single's
+  ShareSlack = 0.00001;
+  RideSlack = 0.001;
+
+// ACamera - that section with its comma, or none
+function EyeLayout(const ACamera: string): string;
+begin
+  Result := '{"screen": {"w": 512, "h": 384},'
+    + '"sun": {"x": 288, "y": 208, "disc": 7, "halo": 120,'
+    + ' "white": [255, 250, 240], "tint": [255, 128, 112], "tintRamp": 48},'
+    + EyeSpeeds + ACamera
+    + '"layers": [{"id": "city", "speed": "city", "length": 2688, ' + EyeFloor + '}]}';
+end;
+
+// The far plane at a stand with the city ridden ACity
+function StandingAt(ACity: Double): TFarPlaneOffsets;
+begin
+  Result[fmRidge] := ACity * RidgeShare;
+  Result[fmCity] := ACity;
+  Result[fmTunnel] := 4000;
+  Result[fmGround] := 9000;
+  Result[fmFangs] := 12000;
+end;
+
+procedure TFarPlaneEyeTests.Setup;
+begin
+  FDef := ReadFromLayout(EyeLayout(StandCamera));
+  FFloor := FDef.Layers[0].Band;
+end;
+
+procedure TFarPlaneEyeTests.TestALayerStandsAsNearAsItsSpeedSays;
+begin
+  Assert.IsTrue(Abs(FDef.MotionNearness(fmCity) - 1) < ShareSlack, 'The city');
+  Assert.IsTrue(Abs(FDef.MotionNearness(fmRidge) - RidgeShare) < ShareSlack, 'The ridge');
+  Assert.IsTrue(Abs(FDef.MotionNearness(fmGround) - GroundNearness) < ShareSlack,
+    'The near ground');
+  Assert.IsTrue(Abs(FDef.MotionNearness(fmFangs) - FangNearness) < ShareSlack, 'The fangs');
+  Assert.IsTrue(Abs(FDef.MotionNearness(fmTunnel)) < ShareSlack, 'The tunnel: long gone');
+  Assert.IsTrue(Abs(FDef.PlayNearness - RoadNearness) < ShareSlack, 'The play layer');
+end;
+
+procedure TFarPlaneEyeTests.TestWithoutARoadThePlayLayerHasNoDepth;
+begin
+  var Def := ReadFromLayout(DepthLayout(StandCamera));
+  Assert.IsTrue(Abs(Def.PlayNearness) < ShareSlack, 'The eye does not carry it');
+end;
+
+procedure TFarPlaneEyeTests.TestNoRideAndTheOffsetsAreTheSame;
+begin
+  var Stands := StandingAt(2156.25);
+  var Carried := FDef.Ridden(Stands, 0);
+  for var Motion := Low(TFarPlaneMotion) to High(TFarPlaneMotion) do
+    Assert.IsTrue(Carried[Motion] = Stands[Motion], 'To the bit');
+end;
+
+procedure TFarPlaneEyeTests.TestTheRideCarriesEachLayerByItsNearness;
+const
+  Way = -300;
+begin
+  var Stands := StandingAt(2156);
+  var Carried := FDef.Ridden(Stands, Way);
+  var City: Double := Carried[fmCity] - Stands[fmCity];
+  var Ridge: Double := Carried[fmRidge] - Stands[fmRidge];
+  var Ground: Double := Carried[fmGround] - Stands[fmGround];
+  var Fangs: Double := Carried[fmFangs] - Stands[fmFangs];
+  Assert.IsTrue(Abs(City - Way) < RideSlack, 'The city: the ride');
+  Assert.IsTrue(Abs(Ridge - Way * RidgeShare) < RideSlack, 'The ridge: its share');
+  Assert.IsTrue(Abs(Ground - Way * GroundNearness) < RideSlack, 'The near ground');
+  Assert.IsTrue(Abs(Fangs - Way * FangNearness) < RideSlack, 'The fangs');
+  Assert.IsTrue(Carried[fmTunnel] = Stands[fmTunnel], 'The tunnel stands');
+end;
+
+procedure TFarPlaneEyeTests.TestTheFloorIsCutIntoSlabsToItsFoot;
+begin
+  var Slabs := FDef.FloorSlabs(FFloor, 2156, -100);
+  Assert.AreEqual(FloorSlabCount, Integer(Length(Slabs)), 'As many as the band is deep');
+  var Top: Double := Slabs[0].Top;
+  Assert.IsTrue(Abs(Top) < ShareSlack, 'From the band''s top');
+  for var i := 0 to High(Slabs) - 1 do
+  begin
+    var Deep: Double := Slabs[i].Bottom - Slabs[i].Top;
+    var Gap: Double := Slabs[i + 1].Top - Slabs[i].Bottom;
+    Assert.IsTrue(Abs(Deep - FloorSlabDeep) < ShareSlack, 'A slab deep');
+    Assert.IsTrue(Abs(Gap) < ShareSlack, 'One where the other ends');
+  end;
+  var Foot: Double := Slabs[High(Slabs)].Bottom;
+  Assert.IsTrue(Abs(Foot - FloorDeep) < ShareSlack, 'The last cut at the band''s foot');
+end;
+
+procedure TFarPlaneEyeTests.TestUnriddenEverySlabStandsWhereTheBandStood;
+const
+  City = 2156.25;
+begin
+  for var Slab in FDef.FloorSlabs(FFloor, City, 0) do
+    Assert.IsTrue(Slab.Offset = City, 'To the bit');
+end;
+
+// A ride of one eye's height: a slab goes the depth of its middle under
+// the horizon
+procedure TFarPlaneEyeTests.TestASlabRidesByTheNearnessOfItsMiddle;
+const
+  City = 2156;
+  Third = 2;
+  ThirdMiddle = 15;
+  LastMiddle = 81;
+begin
+  var Slabs := FDef.FloorSlabs(FFloor, City, -EyeHeight);
+  Assert.IsTrue(Abs(Slabs[Third].Offset - (City - ThirdMiddle)) < RideSlack, 'The third');
+  Assert.IsTrue(Abs(Slabs[High(Slabs)].Offset - (City - LastMiddle)) < RideSlack,
+    'The last, by the middle it would have whole');
+  for var i := Third to High(Slabs) - 1 do
+    Assert.IsTrue(Slabs[i + 1].Offset < Slabs[i].Offset, 'The nearer overtakes the farther');
+end;
+
+procedure TFarPlaneEyeTests.TestNoSlabRidesSlowerThanTheRidge;
+const
+  City = 2156;
+  Way = -280;
+begin
+  var Slabs := FDef.FloorSlabs(FFloor, City, Way);
+  var WithTheRidge: Double := City + Way * RidgeShare;
+  Assert.IsTrue(Abs(Slabs[0].Offset - WithTheRidge) < RideSlack, 'The first: as the ridge');
+  Assert.IsTrue(Abs(Slabs[1].Offset - WithTheRidge) < RideSlack, 'The second: as the ridge');
+  Assert.IsTrue(Slabs[2].Offset < WithTheRidge - 1, 'The third: by its own depth');
+end;
+
+procedure TFarPlaneEyeTests.TestWithoutACameraTheFloorIsOneSheet;
+const
+  City = 2156;
+  Way = -280;
+begin
+  var Def := ReadFromLayout(EyeLayout(''));
+  var Slabs := Def.FloorSlabs(Def.Layers[0].Band, City, Way);
+  Assert.AreEqual(1, Integer(Length(Slabs)), 'One');
+  var Foot: Double := Slabs[0].Bottom;
+  Assert.IsTrue(Abs(Foot - FloorDeep) < ShareSlack, 'All of the band');
+  Assert.IsTrue(Abs(Slabs[0].Offset - (City + Way)) < RideSlack, 'Riding with the city');
+end;
+
+procedure TFarPlaneEyeTests.TestTheFloorsEdgeSharpensOverTheFirstSeconds;
+begin
+  var AtFirst: Double := FDef.FloorFadeAt(FFloor, 0);
+  var Halfway: Double := FDef.FloorFadeAt(FFloor, FloorSharpSeconds / 2);
+  var Sharp: Double := FDef.FloorFadeAt(FFloor, FloorSharpSeconds);
+  var Later: Double := FDef.FloorFadeAt(FFloor, FloorSharpSeconds * 3);
+  Assert.IsTrue(Abs(AtFirst - FloorOwnFade) < ShareSlack, 'The band''s own at the first tick');
+  Assert.IsTrue(Abs(Halfway - (FloorOwnFade + FloorSharpFade) / 2) < ShareSlack,
+    'Halfway there halfway through');
+  Assert.IsTrue(Abs(Sharp - FloorSharpFade) < ShareSlack, 'A soft line');
+  Assert.IsTrue(Abs(Later - FloorSharpFade) < ShareSlack, 'And no sharper');
+end;
+
+procedure TFarPlaneEyeTests.TestAnEdgeSharperThanTheLineStays;
+begin
+  var Band := FFloor;
+  Band.FadeTop := 1;
+  var Sharp: Double := FDef.FloorFadeAt(Band, FloorSharpSeconds);
+  Assert.IsTrue(Abs(Sharp - 1) < ShareSlack, 'As it was');
+end;
+
 // TFarPlaneShadeTests
 
 const
@@ -1300,6 +1520,7 @@ initialization
   TDUnitX.RegisterTestFixture(TFarPlaneTests);
   TDUnitX.RegisterTestFixture(TFarPlaneSunTests);
   TDUnitX.RegisterTestFixture(TFarPlaneDepthTests);
+  TDUnitX.RegisterTestFixture(TFarPlaneEyeTests);
   TDUnitX.RegisterTestFixture(TFarPlaneShadeTests);
   TDUnitX.RegisterTestFixture(TFarPlaneReadTests);
 

@@ -11,6 +11,10 @@
   A layer of the frame may be drawn moved by whole pixels, where an
   origin in units moves it a unit at a step.
 
+  A card with no texture large enough for the banked frame gets one for
+  the frame as it is, and the frame goes through it level: the layers
+  still move, the bank is not played.
+
   Deliberately not here: what is drawn, and the HUD - that goes to the
   window after Close and stands level whatever the bank.
 
@@ -30,6 +34,8 @@ type
     FRenderer: PSdlRenderer;
     FUnits: TSdlPoint;
     FMaxCover: Single;
+    // The card refused the banked frame's size: every bank is played level
+    FLevelOnly: Boolean;
     FTexture: PSdlTexture;
     FTextureSize: TSdlPoint;
     FRebuilt: Boolean;
@@ -50,8 +56,8 @@ type
     destructor Destroy; override;
     // From here to Close the drawing lands in the texture, in the frame's
     // units as on the window. Called with the window on the receiving
-    // end. False - there is no texture (too large for the card): nothing
-    // is changed, and the frame is the caller's to draw straight
+    // end. False - there is no texture, not even for the frame unbanked:
+    // nothing is changed, and the frame is the caller's to draw straight
     function Open(ABankDegrees: Single; const ABackground: TSdlColor): Boolean;
     // What is drawn next lands so far, in units, from the frame's place -
     // rounded to whole pixels - and is cut at the frame's edge moved with
@@ -158,6 +164,14 @@ begin
   var Size := SizeAt(ScaleX);
   if (Size.X <> FTextureSize.X) or (Size.Y <> FTextureSize.Y) then
     Rebuild(Size);
+  // Not asked for again at a smaller window: the bank would come and go
+  // with the window's size
+  if (FTexture = nil) and not FLevelOnly then
+  begin
+    FLevelOnly := True;
+    FMaxCover := 1;
+    Rebuild(SizeAt(ScaleX));
+  end;
   if FTexture = nil then
     Exit(False);
   // The window's viewport, scale and logical size are kept by SDL till
@@ -167,7 +181,9 @@ begin
 
   FWindowScale := ScaleX;
   FBankDegrees := ABankDegrees;
-  FCover := BankCover(ABankDegrees, FUnits.X, FUnits.Y);
+  if FLevelOnly then
+    FBankDegrees := 0;
+  FCover := BankCover(FBankDegrees, FUnits.X, FUnits.Y);
   if FCover > FMaxCover then
     FCover := FMaxCover;
   FScale := FWindowScale * FCover;

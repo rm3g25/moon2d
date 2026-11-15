@@ -1,5 +1,5 @@
 {
-  "about": "The titles that close level 2 (docs/mechanics/finale-flight.md): the end track, its cues, and the way of the camera's flight to the stars. The stand (tools/chase) plays the flight from this file; the game plays the card and the flash (Levels.Titles) and does not fly yet.",
+  "about": "The titles that close level 2 (docs/mechanics/finale-flight.md): the end track, its cues, and the way of the camera's flight to the stars. The stand (tools/chase) plays the flight from this file; the game plays the card, the flash and the flight as far as the eye keeps its rest (Levels.Titles, Levels.EyePath) - the cast-off and the pan.",
   "track": {
     "about": "bin/music/credits.ogg as tools/finale/beat_map.py hears it: its length in seconds, its tempo, and its first downbeat - the kick the band comes in on. A bar is four beats.",
     "file": "credits.ogg", "seconds": 238.36, "bpm": 112.35, "downbeat": 17.21

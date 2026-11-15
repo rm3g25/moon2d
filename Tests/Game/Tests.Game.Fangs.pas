@@ -11,6 +11,12 @@
   A fang is dark in the tunnel and lighter out of it. The layout reads its
   fangs; a kit or a range that makes no sense raises.
 
+  Flown back over, the row is rolled on to its left: nothing comes up on
+  the screen as the eye turns back, each new fang comes in at the left
+  edge, the road between two stays within its range and no two tall ones
+  share a screen, the ones kept among them; none is let go; the same dice
+  give the same row; a far plane without fangs sends none.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Fangs;
@@ -33,6 +39,11 @@ type
     // Where on the screen each was when it was sent
     FCameIn: TArray<Double>;
     procedure Ride(ATicks: Integer);
+    // The eye back over the row a tick's way at a time; where the right
+    // edge of each fang that came stood on the screen as it came
+    function FlyBack(ATicks: Integer): TArray<Double>;
+    // How many fangs of the row stand right of the left edge
+    function RightOfTheLeftEdge: Integer;
   public
     [Setup]
     procedure Setup;
@@ -69,6 +80,20 @@ type
     procedure TestNoFangsSendsNone;
     [Test]
     procedure TestTheirLayerRunsAtItsSpeed;
+    [Test]
+    procedure TestTurnedBackNothingComesUpOnTheScreen;
+    [Test]
+    procedure TestFlownBackEachComesInAtTheLeftEdge;
+    [Test]
+    procedure TestFlownBackTheRoadBetweenTwoIsWithinItsRange;
+    [Test]
+    procedure TestFlownBackNeverTwoTallOnTheScreen;
+    [Test]
+    procedure TestFlownBackNoneIsLetGo;
+    [Test]
+    procedure TestFlownBackTheSameDiceGiveTheSameRow;
+    [Test]
+    procedure TestNoFangsFlownBackSendsNone;
   end;
 
   [TestFixture]
@@ -119,6 +144,8 @@ const
   Step = Speed / FarPlaneTicksPerSecond;
   // About ten minutes of chase
   LongRide = 20000;
+  // The eye's way back over the row, as long
+  BackRide = LongRide;
   ScaleLeast = 0.5;
   ScaleMost = 0.8;
   GapLeast = 50;
@@ -223,6 +250,31 @@ begin
         FCameIn := FCameIn + [Fang.X - FTravel];
       end;
   end;
+end;
+
+function TFangRowTests.FlyBack(ATicks: Integer): TArray<Double>;
+begin
+  Result := [];
+  for var i := 1 to ATicks do
+  begin
+    var Before := Length(FRow.Fangs);
+    FTravel := FTravel - Step;
+    FRow.FlyBack(FTravel);
+    for var j := 0 to Length(FRow.Fangs) - Before - 1 do
+    begin
+      var Came := FRow.Fangs[j];
+      var RightEdge: Double := Came.X + Came.W - FTravel;
+      Result := Result + [RightEdge];
+    end;
+  end;
+end;
+
+function TFangRowTests.RightOfTheLeftEdge: Integer;
+begin
+  Result := 0;
+  for var Fang in FRow.Fangs do
+    if Fang.X + Fang.W - FTravel > Slack then
+      Inc(Result);
 end;
 
 procedure TFangRowTests.TestTheFirstWaitsAtTheRightEdge;
@@ -410,6 +462,104 @@ begin
   finally
     Plane.Free;
     Belt.Free;
+  end;
+end;
+
+// The first one back may not be due yet: what is counted is the fangs
+// right of the left edge, before and after
+procedure TFangRowTests.TestTurnedBackNothingComesUpOnTheScreen;
+begin
+  Ride(LongRide);
+  var Before := RightOfTheLeftEdge;
+  FRow.FlyBack(FTravel);
+  Assert.AreEqual(Before, RightOfTheLeftEdge, 'None new right of the left edge');
+end;
+
+procedure TFangRowTests.TestFlownBackEachComesInAtTheLeftEdge;
+begin
+  Ride(LongRide);
+  FRow.FlyBack(FTravel);
+  var CameIn := FlyBack(BackRide);
+  Assert.IsTrue(Length(CameIn) > 0, 'Some came');
+  for var RightEdge in CameIn do
+  begin
+    Assert.IsTrue(RightEdge >= -Slack, 'Not sent ahead of its time');
+    Assert.IsTrue(RightEdge < Step + Slack, 'Not sent late, inside');
+  end;
+end;
+
+procedure TFangRowTests.TestFlownBackTheRoadBetweenTwoIsWithinItsRange;
+begin
+  Ride(LongRide);
+  FlyBack(BackRide);
+  // The row keeps its fangs left to right
+  var Row := FRow.Fangs;
+  for var i := 1 to High(Row) do
+  begin
+    var Gap := Row[i].X - (Row[i - 1].X + Row[i - 1].W);
+    Assert.IsTrue((Gap >= GapLeast - Slack) and (Gap <= GapMost + Slack),
+      Format('Fang %d: %g', [i, Gap]));
+  end;
+end;
+
+procedure TFangRowTests.TestFlownBackNeverTwoTallOnTheScreen;
+begin
+  Ride(LongRide);
+  FlyBack(BackRide);
+  var Tall := 0;
+  var LastTallEnd: Double := -MaxInt;
+  for var Fang in FRow.Fangs do
+  begin
+    if not Fang.Tall then
+      Continue;
+    Inc(Tall);
+    Assert.IsTrue(Fang.X - LastTallEnd >= FDef.ScreenWidth - Slack,
+      'A screen of road between two tall ones');
+    LastTallEnd := Fang.X + Fang.W;
+  end;
+  Assert.IsTrue(Tall > 1, 'Tall ones among them');
+end;
+
+procedure TFangRowTests.TestFlownBackNoneIsLetGo;
+begin
+  Ride(LongRide);
+  var Kept := Length(FRow.Fangs);
+  for var i := 1 to BackRide do
+  begin
+    FTravel := FTravel - Step;
+    FRow.FlyBack(FTravel);
+    Assert.IsTrue(Length(FRow.Fangs) >= Kept, 'None gone');
+    Kept := Length(FRow.Fangs);
+  end;
+end;
+
+procedure TFangRowTests.TestFlownBackTheSameDiceGiveTheSameRow;
+begin
+  var Other := TFangRow.Create(FDef, TestSeed);
+  try
+    Ride(LongRide);
+    Other.Tick(FTravel);
+    // Both turned back at the same place: the first one back stands by it
+    FRow.FlyBack(FTravel);
+    Other.FlyBack(FTravel);
+    FlyBack(BackRide);
+    Other.FlyBack(FTravel);
+    Assert.AreEqual(Integer(Length(FRow.Fangs)), Integer(Length(Other.Fangs)), 'As many');
+    for var i := 0 to High(FRow.Fangs) do
+      Assert.IsTrue(SameFang(FRow.Fangs[i], Other.Fangs[i]), Format('Fang %d', [i]));
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TFangRowTests.TestNoFangsFlownBackSendsNone;
+begin
+  var Row := TFangRow.Create(ReadFromLayout(FangLayout('')), TestSeed);
+  try
+    Row.FlyBack(-LongRide);
+    Assert.AreEqual(0, Integer(Length(Row.Fangs)));
+  finally
+    Row.Free;
   end;
 end;
 

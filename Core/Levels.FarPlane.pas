@@ -17,8 +17,7 @@
   the near ground, the tunnel, the city, the ridge; how fast each runs is
   Game.FarPlane's business. An element marked "existing" is the screen's
   own backdrop, riding with its layer. The keys only the stand reads (the
-  road's speed and ramp, the cliff's edge marks, the city's kit) are let
-  be.
+  road's ramp, the cliff's edge marks, the city's kit) are let be.
 
   The city has a depth. One camera ("camera": the crater floor's horizon,
   the domes' base line, the focal length) sets how near a thing of it is
@@ -56,6 +55,19 @@
   ("searchlights") wander over the sky from the main dome; where a beam
   points at a time is Levels.Searchlights'.
 
+  The titles' eye flies back over the far plane where the world has come
+  to a stand (docs/mechanics/finale-flight.md, "The camera"). The layers
+  get a depth from their speeds - one riding K times the city's cruise
+  stands K times as near - so the eye's way along the strip carries each
+  by its nearness (Ridden). The crater floor is a picture in a band, and a
+  band rides as one sheet: under the eye it is cut across into slabs, each
+  carried by the nearness of its middle, the way a building's feet
+  standing there are, and none slower than the ridge that rises from the
+  floor's far edge (FloorSlabs); that edge, faded into the ridge for the
+  chase, sharpens over the flight's first seconds (FloorFadeAt). The
+  arithmetic is the stand's (drawFloorUnderEye, floorFade). The eye of
+  these lines keeps its rest: lifted or pushed, it is not played yet.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Levels.FarPlane;
@@ -72,6 +84,18 @@ const
   FrameNearestShare = 0.15;
   // The ring a frame stands on is this many ribs thick
   FrameRingThickening = 1.6;
+  // Under the titles' eye the crater floor rides in slabs this deep, units
+  // of its band - as deep as the painted relief is tall: thinner, a long
+  // pan shears the painting into streaks; deeper, the domes' rings slide
+  // on it. A slab's far edge fades in over the one behind it across the
+  // feather
+  FloorSlabDeep = 6;
+  FloorSlabFeather = 2;
+  // The floor's far edge sharpens to a soft line this deep over this many
+  // seconds of the flight: two layers showing through each other read as
+  // one sliding on the other
+  FloorSharpFade = 1.5;
+  FloorSharpSeconds = 4;
 
 type
   EFarPlaneError = class(Exception);
@@ -80,6 +104,24 @@ type
 
   // How far each motion has taken its layers to the left, in units
   TFarPlaneOffsets = array [TFarPlaneMotion] of Double;
+
+  // The titles' eye over a far plane that stands. Ride - how far along the
+  // strip it has flown from where the world stood, the city's units, below
+  // 0 to the left; Seconds - of its flight. Not Flying - the chase: the far
+  // plane is where its offsets have it
+  TFarPlaneEye = record
+    Flying: Boolean;
+    Ride: Double;
+    Seconds: Double;
+  end;
+
+  // A slab of the crater floor under the titles' eye: Top to Bottom of its
+  // band's depth, units from the band's top; Offset - how far its picture
+  // has ridden to the left
+  TFloorSlab = record
+    Top, Bottom: Single;
+    Offset: Double;
+  end;
 
   TFarPlaneSun = record
     X, Y: Single;
@@ -338,6 +380,8 @@ type
     RidgeShareOfCity: Single;
     Ground: Single;
     Fangs: Single;
+    // The play layer's: how near it stands; 0 - the layout names none
+    Road: Single;
   end;
 
   TFarPlaneBand = record
@@ -464,6 +508,22 @@ type
     // tunnel while the tunnel is all on the screen, the common one once it
     // has left; AJitter percent off it
     function FangTint(AJitter: Integer; const AOffsets: TFarPlaneOffsets): TColorTint;
+    // How near the layers of a motion stand, the city's base line 1, by
+    // their speeds. The tunnel is long gone when the eye flies: 0, the eye
+    // does not carry it
+    function MotionNearness(AMotion: TFarPlaneMotion): Double;
+    // How near the play layer stands: the road over the city's cruise
+    function PlayNearness: Double;
+    // The offsets as the eye has them ARide along the strip from where
+    // they stand: each motion carried by its nearness
+    function Ridden(const AOffsets: TFarPlaneOffsets; ARide: Double): TFarPlaneOffsets;
+    // The band of the crater floor in slabs, far to near, with the city
+    // standing at ACityOffset and the eye ARide along the strip from there
+    function FloorSlabs(const ABand: TFarPlaneBand;
+      ACityOffset, ARide: Double): TArray<TFloorSlab>;
+    // Over how many units the top of the floor's band fades in at
+    // ASeconds of the eye's flight
+    function FloorFadeAt(const ABand: TFarPlaneBand; ASeconds: Double): Single;
   end;
 
 // The "farPlane" section of a level and its layout; absent = no far plane.
@@ -723,6 +783,92 @@ begin
   Result.B := Channel(Fangs.TintInTunnel.B, Fangs.Tint.B, Passed);
 end;
 
+function TFarPlaneDef.MotionNearness(AMotion: TFarPlaneMotion): Double;
+begin
+  // A city that does not ride gives its layers no depth
+  if Speeds.CityCruise <= 0 then
+    Exit(0);
+  case AMotion of
+    fmCity:
+      Result := 1;
+    fmRidge:
+      Result := Speeds.RidgeShareOfCity;
+    fmGround:
+      Result := Speeds.Ground / Speeds.CityCruise;
+    fmFangs:
+      Result := Speeds.Fangs / Speeds.CityCruise;
+  else
+    Result := 0;
+  end;
+end;
+
+function TFarPlaneDef.PlayNearness: Double;
+begin
+  if Speeds.CityCruise <= 0 then
+    Exit(0);
+  Result := Speeds.Road / Speeds.CityCruise;
+end;
+
+function TFarPlaneDef.Ridden(const AOffsets: TFarPlaneOffsets;
+  ARide: Double): TFarPlaneOffsets;
+begin
+  for var Motion := Low(TFarPlaneMotion) to High(TFarPlaneMotion) do
+    Result[Motion] := AOffsets[Motion] + ARide * MotionNearness(Motion);
+end;
+
+// A slab rides by the nearness of its middle, as feet standing there
+// would; the last one, cut short by the band's foot, by the middle it
+// would have whole. Without a camera the floor has no depth: one sheet
+function TFarPlaneDef.FloorSlabs(const ABand: TFarPlaneBand;
+  ACityOffset, ARide: Double): TArray<TFloorSlab>;
+var
+  Slab: TFloorSlab;
+begin
+  Result := [];
+  var Deep: Single := ABand.Bottom - ABand.Top;
+  if not Camera.Present then
+  begin
+    Slab.Top := 0;
+    Slab.Bottom := Deep;
+    Slab.Offset := ACityOffset + ARide;
+    Result := [Slab];
+    Exit;
+  end;
+
+  var RidgeShare := MotionNearness(fmRidge);
+  var EyeHeight: Double := Camera.BaseY - Camera.Horizon;
+  var Top: Single := 0;
+  while Top < Deep do
+  begin
+    var Middle: Double := ABand.Top + Top + FloorSlabDeep / 2;
+    var Share: Double := (Middle - Camera.Horizon) / EyeHeight;
+    if Share < RidgeShare then
+      Share := RidgeShare;
+    Slab.Top := Top;
+    Slab.Bottom := Top + FloorSlabDeep;
+    if Slab.Bottom > Deep then
+      Slab.Bottom := Deep;
+    Slab.Offset := ACityOffset + ARide * Share;
+    Result := Result + [Slab];
+    Top := Top + FloorSlabDeep;
+  end;
+end;
+
+function TFarPlaneDef.FloorFadeAt(const ABand: TFarPlaneBand;
+  ASeconds: Double): Single;
+begin
+  var Sharp: Single := FloorSharpFade;
+  if ABand.FadeTop < Sharp then
+    Sharp := ABand.FadeTop;
+  var Share: Double := ASeconds / FloorSharpSeconds;
+  if Share < 0 then
+    Share := 0
+  else if Share > 1 then
+    Share := 1;
+  var Sharpened: Double := Share * Share * (3 - 2 * Share);
+  Result := ABand.FadeTop + (Sharp - ABand.FadeTop) * Sharpened;
+end;
+
 function TFarPlaneFangs.Present: Boolean;
 begin
   Result := Length(Kinds) > 0;
@@ -793,6 +939,7 @@ begin
   Result.RidgeShareOfCity := AObj.GetValue<Double>('ridgeShareOfCity');
   Result.Ground := AObj.GetValue<Double>('ground', 0);
   Result.Fangs := AObj.GetValue<Double>('fangs', 0);
+  Result.Road := AObj.GetValue<Double>('road', 0);
 end;
 
 function ReadBand(const ALayer: TJSONObject): TFarPlaneBand;

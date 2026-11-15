@@ -8,6 +8,15 @@
   the flash is gone in its ticks. The card comes in and is gone by its
   out, before the flash. A clear stops it, and it can start again.
 
+  Titles with a path fly: the flight starts once, on the tick the clock
+  reaches its cue - a jump past the flash and the cue gives both - and its
+  own seconds run from the cue, zero before it. In the flight the clock
+  goes by the ticks alone, a track close by leaning it no more, and a
+  track far off takes it still. The eye goes the path by the flight's
+  seconds and stands where the world stood before it. The flight ends
+  once, where the eye leaves its rest, the frame gone dark over the second
+  before; a clear ends it. Titles without a path never fly.
+
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
 unit Tests.Game.Titles;
@@ -16,7 +25,7 @@ interface
 
 uses
   DUnitX.TestFramework,
-  Levels.Titles, Game.Titles;
+  Levels.EyePath, Levels.Titles, Game.Titles;
 
 type
   [TestFixture]
@@ -69,6 +78,46 @@ type
     procedure TestClearStopsItAndItCanStartAgain;
     [Test]
     procedure TestTheNextCueIsTheFirstPastASecond;
+    [Test]
+    procedure TestWithoutAPathTheTitlesNeverFly;
+  end;
+
+  [TestFixture]
+  TTitlesFlightTests = class
+  private
+    FTitles: TTitles;
+    // Ticks by the ticks alone till the flight starts; how many ticks
+    function RunToFlight: Integer;
+    // Ticks by the ticks alone till the flight's own clock is past ASeconds
+    procedure FlyPast(ASeconds: Double);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestTheFlightStartsOnceAtItsCue;
+    [Test]
+    procedure TestAJumpPastTheFlashAndTheFlightGivesBoth;
+    [Test]
+    procedure TestBeforeTheFlightItsSecondsAreZero;
+    [Test]
+    procedure TestTheFlightsSecondsRunFromItsCue;
+    [Test]
+    procedure TestInTheFlightTheClockLeansNoMore;
+    [Test]
+    procedure TestInTheFlightATrackFarOffTakesTheClockStill;
+    [Test]
+    procedure TestBeforeTheFlightTheEyeStandsWhereTheWorldStood;
+    [Test]
+    procedure TestTheEyeGoesThePathByTheFlightsSeconds;
+    [Test]
+    procedure TestTheFlightEndsOnceWhereTheEyeLeavesItsRest;
+    [Test]
+    procedure TestTheFrameGoesDarkOverTheLastSecond;
+    [Test]
+    procedure TestClearEndsTheFlight;
   end;
 
 implementation
@@ -83,6 +132,18 @@ const
   FlashCue = 17.0;
   // Well past the last of the cues
   LongAfter = 180.0;
+  // The flight of the tests: the camera leaves two seconds after the
+  // flash, casts off to the left at its rest and lifts from RestTill on
+  FlightCue = 19.0;
+  CastOffSeconds = 4.0;
+  CastOffWay = -100.0;
+  RestTill = 6.0;
+  RestTillWay = -300.0;
+  LiftedSeconds = 9.0;
+  LiftedWay = -500.0;
+  Lifted = 40.0;
+  // Where the world of the tests stands
+  Stand = 2400.0;
 
 function TestTitles: TTitlesDef;
 begin
@@ -91,6 +152,26 @@ begin
   Result.Cues.Card := CardCue;
   Result.Cues.CardOut := CardOutCue;
   Result.Cues.Flash := FlashCue;
+end;
+
+// A key so far from where the world stood, lifted ALift
+function KeyFromStand(ASeconds, AWay, ALift: Double): TEyeKey;
+begin
+  Result := Default(TEyeKey);
+  Result.Seconds := ASeconds;
+  Result.Placing := epFromStand;
+  Result.Place := AWay;
+  Result.Lift := ALift;
+end;
+
+function FlyingTitles: TTitlesDef;
+begin
+  Result := TestTitles;
+  Result.Cues.Flight := FlightCue;
+  Result.Path.Keys := [KeyFromStand(0, 0, 0),
+    KeyFromStand(CastOffSeconds, CastOffWay, 0),
+    KeyFromStand(RestTill, RestTillWay, 0),
+    KeyFromStand(LiftedSeconds, LiftedWay, Lifted)];
 end;
 
 procedure TTitlesTests.Setup;
@@ -168,11 +249,16 @@ const
   Ahead = 0.3;
 begin
   FTitles.Start;
-  FTitles.Tick(Tick + Ahead);
-  Assert.AreEqual(1.5 * Tick, FTitles.Seconds, ClockSlack,
+  // A second in: a track behind the clock still tells a place, none below
+  // zero
+  Run(TitlesTicksPerSecond);
+  var Before := FTitles.Seconds;
+  FTitles.Tick(Before + Tick + Ahead);
+  Assert.AreEqual(Before + 1.5 * Tick, FTitles.Seconds, ClockSlack,
     'A tick and half a tick more');
-  FTitles.Tick(FTitles.Seconds + Tick - Ahead);
-  Assert.AreEqual(2 * Tick, FTitles.Seconds, ClockSlack,
+  Before := FTitles.Seconds;
+  FTitles.Tick(Before + Tick - Ahead);
+  Assert.AreEqual(Before + 0.5 * Tick, FTitles.Seconds, ClockSlack,
     'A tick less half a tick');
 end;
 
@@ -296,5 +382,184 @@ begin
   Assert.AreEqual(FlashCue, FTitles.CueAfter(CardCue), ClockSlack, 'The flash');
   Assert.IsTrue(FTitles.CueAfter(FlashCue) < 0, 'None past the last');
 end;
+
+procedure TTitlesTests.TestWithoutAPathTheTitlesNeverFly;
+begin
+  FTitles.Start;
+  var Starts := 0;
+  while FTitles.Seconds <= LongAfter do
+    if FTitles.Tick(NoTrackSeconds).FlightStarts then
+      Inc(Starts);
+  Assert.AreEqual(0, Starts, 'No cue of a flight');
+  Assert.IsFalse(FTitles.Flying, 'Not flying');
+  Assert.IsTrue(Abs(FTitles.EyeAt(1, Stand).Along - Stand) < ClockSlack,
+    'The eye where the world stood');
+end;
+
+// TTitlesFlightTests
+
+procedure TTitlesFlightTests.Setup;
+begin
+  FTitles := TTitles.Create;
+  FTitles.Arm(FlyingTitles);
+  FTitles.Start;
+end;
+
+procedure TTitlesFlightTests.TearDown;
+begin
+  FTitles.Free;
+end;
+
+function TTitlesFlightTests.RunToFlight: Integer;
+begin
+  Result := 0;
+  repeat
+    Inc(Result);
+  until FTitles.Tick(NoTrackSeconds).FlightStarts;
+end;
+
+procedure TTitlesFlightTests.FlyPast(ASeconds: Double);
+begin
+  while FTitles.FlightSeconds(1) <= ASeconds do
+    FTitles.Tick(NoTrackSeconds);
+end;
+
+procedure TTitlesFlightTests.TestTheFlightStartsOnceAtItsCue;
+begin
+  RunToFlight;
+  Assert.IsTrue(FTitles.Flying, 'Flying');
+  Assert.IsTrue(FTitles.Seconds >= FlightCue, 'Not before its cue');
+  Assert.IsTrue(FTitles.Seconds < FlightCue + Tick + ClockSlack, 'On the tick of its cue');
+  Assert.IsTrue(FTitles.LogoShown, 'The logo has flared by then');
+  for var i := 1 to 10 * TitlesTicksPerSecond do
+    Assert.IsFalse(FTitles.Tick(NoTrackSeconds).FlightStarts, 'Never again');
+end;
+
+procedure TTitlesFlightTests.TestAJumpPastTheFlashAndTheFlightGivesBoth;
+begin
+  FTitles.JumpTo(FlightCue + 1);
+  var Cue := FTitles.Tick(NoTrackSeconds);
+  Assert.IsTrue(Cue.Flashes, 'The flash');
+  Assert.IsTrue(Cue.FlightStarts, 'And the flight');
+end;
+
+procedure TTitlesFlightTests.TestBeforeTheFlightItsSecondsAreZero;
+begin
+  FTitles.JumpTo(FlightCue - 1);
+  FTitles.Tick(NoTrackSeconds);
+  Assert.IsFalse(FTitles.Flying, 'Not yet');
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(1)) < ClockSlack, 'Zero');
+  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1))) < LevelSlack, 'No dark');
+end;
+
+procedure TTitlesFlightTests.TestTheFlightsSecondsRunFromItsCue;
+const
+  Ticks = 50;
+begin
+  RunToFlight;
+  var AtStart: Double := FTitles.Seconds - FlightCue;
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(1) - AtStart) < ClockSlack, 'From its cue');
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(0)) < ClockSlack,
+    'The last tick lay before the cue: zero');
+  for var i := 1 to Ticks do
+    FTitles.Tick(NoTrackSeconds);
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(1) - (AtStart + Ticks * Tick)) < ClockSlack,
+    'A tick a tick');
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(0) - (AtStart + (Ticks - 1) * Tick)) < ClockSlack,
+    'Between the ticks');
+end;
+
+procedure TTitlesFlightTests.TestInTheFlightTheClockLeansNoMore;
+const
+  Ahead = 0.3;
+begin
+  RunToFlight;
+  var Before := FTitles.Seconds;
+  FTitles.Tick(Before + Tick + Ahead);
+  Assert.IsTrue(Abs(FTitles.Seconds - (Before + Tick)) < ClockSlack,
+    'A tick and no more: the camera wants an even clock');
+end;
+
+procedure TTitlesFlightTests.TestInTheFlightATrackFarOffTakesTheClockStill;
+const
+  Ahead = 2.0;
+begin
+  RunToFlight;
+  var TrackAt: Double := FTitles.Seconds + Tick + Ahead;
+  FTitles.Tick(TrackAt);
+  Assert.IsTrue(Abs(FTitles.Seconds - TrackAt) < ClockSlack, 'On the track');
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(1) - (TrackAt - FlightCue)) < ClockSlack,
+    'The flight with it');
+end;
+
+procedure TTitlesFlightTests.TestBeforeTheFlightTheEyeStandsWhereTheWorldStood;
+begin
+  FTitles.JumpTo(FlightCue - 1);
+  FTitles.Tick(NoTrackSeconds);
+  var Eye := FTitles.EyeAt(1, Stand);
+  Assert.IsTrue(Abs(Eye.Along - Stand) < ClockSlack, 'Where the world stood');
+  Assert.IsTrue(Abs(Eye.Lift) < ClockSlack, 'At its rest');
+end;
+
+procedure TTitlesFlightTests.TestTheEyeGoesThePathByTheFlightsSeconds;
+begin
+  RunToFlight;
+  FlyPast(CastOffSeconds / 2);
+  var Flown := FTitles.FlightSeconds(1);
+  var Eye := FTitles.EyeAt(1, Stand);
+  var ByThePath := FlyingTitles.Path.EyeAt(Flown, Stand);
+  Assert.IsTrue(Abs(Eye.Along - ByThePath.Along) < ClockSlack, 'The path''s place');
+  Assert.IsTrue(Eye.Along < Stand, 'Cast off to the left');
+  Assert.IsTrue(Eye.Along > Stand + CastOffWay, 'Not at the cast-off''s end yet');
+
+  FlyPast((RestTill + LiftedSeconds) / 2);
+  Assert.IsTrue(FTitles.EyeAt(1, Stand).Lift > 0, 'Lifted past its rest');
+end;
+
+procedure TTitlesFlightTests.TestTheFlightEndsOnceWhereTheEyeLeavesItsRest;
+begin
+  RunToFlight;
+  var Ends := 0;
+  var EndedAt: Double := 0;
+  for var i := 1 to 20 * TitlesTicksPerSecond do
+    if FTitles.Tick(NoTrackSeconds).FlightEnds then
+    begin
+      Inc(Ends);
+      EndedAt := FTitles.FlightSeconds(1);
+    end;
+  Assert.AreEqual(1, Ends, 'Once');
+  Assert.IsTrue(EndedAt >= RestTill, 'Not before the eye leaves its rest');
+  Assert.IsTrue(EndedAt < RestTill + Tick + ClockSlack, 'On that tick');
+end;
+
+procedure TTitlesFlightTests.TestTheFrameGoesDarkOverTheLastSecond;
+begin
+  RunToFlight;
+  FlyPast(RestTill - TitlesTailSeconds - 2 * Tick);
+  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1))) < LevelSlack, 'None before the last second');
+
+  FlyPast(RestTill - TitlesTailSeconds / 2);
+  var Halfway: Double := FTitles.TailLevel(1);
+  Assert.IsTrue((Halfway > 0.45) and (Halfway < 0.6), 'Half dark halfway');
+
+  FlyPast(RestTill);
+  Assert.IsTrue(Abs(Double(FTitles.TailLevel(1)) - 1) < LevelSlack, 'Dark at its end');
+end;
+
+procedure TTitlesFlightTests.TestClearEndsTheFlight;
+begin
+  RunToFlight;
+  FlyPast(1);
+  FTitles.Clear;
+  Assert.IsFalse(FTitles.Flying, 'Not flying');
+  Assert.IsTrue(Abs(FTitles.FlightSeconds(1)) < ClockSlack, 'Its seconds at zero');
+  FTitles.Start;
+  RunToFlight;
+  Assert.IsTrue(FTitles.Flying, 'It flies again');
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTitlesTests);
+  TDUnitX.RegisterTestFixture(TTitlesFlightTests);
 
 end.

@@ -18,6 +18,10 @@
   moment the road runs. A fang sent comes in at the right edge and is let
   go once past the left one.
 
+  The titles' eye flies back over the row (FlyBack): the fangs let go are
+  gone, so the row is rolled on to the left of the oldest one kept, by the
+  same dice and the same rules, each coming in at the left edge.
+
   TFangRow is the rules: it does not know the belt or SDL - the game hands
   in how far the fangs' layer has ridden (Game.FarPlane). TFangPainter
   draws them, dark in the tunnel and lighter out of it, as the near ground.
@@ -54,11 +58,22 @@ type
     FCursor: Double;
     // The right edge of the last tall one along the layer
     FTallEnd: Double;
+    // Flown back over: where the right edge of the next fang to the left
+    // goes, and the left edge of the leftmost tall one. Not FBackOpen -
+    // both are to be found from the fangs kept
+    FBackOpen: Boolean;
+    FBackCursor: Double;
+    FBackTallStart: Double;
     FFangs: TArray<TFang>;
     function RollBetween(ALeast, AMost: Single): Single;
     function RollKind(ATall: Boolean): Integer;
     function HasTallKind: Boolean;
+    // A fang of the dice, all but its place; ATallRoom - a tall one would
+    // have a screen of road to the nearest tall one
+    function RollFang(ATallRoom: Boolean): TFang;
     function NextFang: TFang;
+    function PreviousFang: TFang;
+    procedure OpenBack(ATravel: Double);
     procedure LetGoPassed(ATravel: Double);
   public
     // ADef - the level's far plane; one without fangs sends none.
@@ -69,6 +84,9 @@ type
     // ATravel - how far the fangs' layer has ridden left: the fangs past
     // the left edge go, the ones due by now come in at the right
     procedure Tick(ATravel: Double);
+    // The eye flies back, the layer ridden only ATravel now: the fangs due
+    // on the left come in at the left edge; none is let go
+    procedure FlyBack(ATravel: Double);
     property Def: TFarPlaneDef read FDef;
     property Fangs: TArray<TFang> read FFangs;
   end;
@@ -100,6 +118,7 @@ const
   NonZeroSeed = 1;
   MirrorShare = 0.5;
   NoTallYet = -MaxInt;
+  NoTallAhead = MaxInt;
 
 constructor TFangRow.Create(const ADef: TFarPlaneDef; ASeed: Cardinal);
 begin
@@ -113,6 +132,7 @@ begin
   FDice.Seed := ASeed or NonZeroSeed;
   FCursor := FDef.ScreenWidth;
   FTallEnd := NoTallYet;
+  FBackOpen := False;
   FFangs := [];
 end;
 
@@ -142,12 +162,11 @@ begin
   Result := Candidates[Pick];
 end;
 
-function TFangRow.NextFang: TFang;
+function TFangRow.RollFang(ATallRoom: Boolean): TFang;
 begin
   var Fangs := FDef.Fangs;
   Result := Default(TFang);
-  var TallRoom := FCursor - FTallEnd >= FDef.ScreenWidth;
-  Result.Tall := TallRoom and (FDice.NextUnit < Fangs.TallShare) and HasTallKind;
+  Result.Tall := ATallRoom and (FDice.NextUnit < Fangs.TallShare) and HasTallKind;
   Result.Kind := RollKind(Result.Tall);
   var Kind := Fangs.Kinds[Result.Kind];
 
@@ -165,13 +184,55 @@ begin
 
   Result.Mirror := FDice.NextUnit < MirrorShare;
   Result.Jitter := Round(RollBetween(-Fangs.TintJitter, Fangs.TintJitter));
+end;
+
+function TFangRow.NextFang: TFang;
+begin
+  Result := RollFang(FCursor - FTallEnd >= FDef.ScreenWidth);
   Result.X := FCursor;
 
-  FCursor := FCursor + Result.W + RollBetween(Fangs.GapLeast, Fangs.GapMost);
+  FCursor := FCursor + Result.W +
+    RollBetween(FDef.Fangs.GapLeast, FDef.Fangs.GapMost);
   if Result.Tall then
     FTallEnd := Result.X + Result.W;
 end;
 
+// The row to the left of the oldest fang kept, or of the one still to come
+// when none is. The road to the first one back is the dice's, but never
+// shorter than the way to the left edge: the fang that stood there was let
+// go past it, and its heir does not come up on the screen. A tall one kept
+// is the tall one a new one keeps its screen of road from
+procedure TFangRow.OpenBack(ATravel: Double);
+begin
+  var Leftmost := FCursor;
+  FBackTallStart := NoTallAhead;
+  for var Fang in FFangs do
+  begin
+    if Fang.X < Leftmost then
+      Leftmost := Fang.X;
+    if Fang.Tall and (Fang.X < FBackTallStart) then
+      FBackTallStart := Fang.X;
+  end;
+  var Gap: Double := RollBetween(FDef.Fangs.GapLeast, FDef.Fangs.GapMost);
+  var ToEdge: Double := Leftmost - ATravel;
+  if Gap < ToEdge then
+    Gap := ToEdge;
+  FBackCursor := Leftmost - Gap;
+  FBackOpen := True;
+end;
+
+function TFangRow.PreviousFang: TFang;
+begin
+  Result := RollFang(FBackTallStart - FBackCursor >= FDef.ScreenWidth);
+  Result.X := FBackCursor - Result.W;
+
+  FBackCursor := Result.X - RollBetween(FDef.Fangs.GapLeast, FDef.Fangs.GapMost);
+  if Result.Tall then
+    FBackTallStart := Result.X;
+end;
+
+// A fang gone moves the row's left end: flown back over anew, it is found
+// anew
 procedure TFangRow.LetGoPassed(ATravel: Double);
 var
   Kept: TArray<TFang>;
@@ -180,6 +241,8 @@ begin
   for var Fang in FFangs do
     if Fang.X + Fang.W - ATravel > 0 then
       Kept := Kept + [Fang];
+  if Length(Kept) < Length(FFangs) then
+    FBackOpen := False;
   FFangs := Kept;
 end;
 
@@ -190,6 +253,16 @@ begin
   while FCursor - ATravel <= FDef.ScreenWidth do
     FFangs := FFangs + [NextFang];
   LetGoPassed(ATravel);
+end;
+
+procedure TFangRow.FlyBack(ATravel: Double);
+begin
+  if not FDef.Fangs.Present then
+    Exit;
+  if not FBackOpen then
+    OpenBack(ATravel);
+  while FBackCursor - ATravel >= 0 do
+    FFangs := [PreviousFang] + FFangs;
 end;
 
 constructor TFangPainter.Create(ARenderer: PSdlRenderer; ACache: TSpriteCache;

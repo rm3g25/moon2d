@@ -4,7 +4,8 @@
   logo flaring where the card stood, over the farm's crown; and the white
   of the logo's flash over the frame. Each as the titles' clock says
   (Game.Titles). They stand in the world, so they are drawn where its shake
-  has it.
+  has it. The dark the flight ends in lies over the whole frame, the far
+  layers too: it is drawn by itself, last.
 
   Moon 2D remake. Requires Delphi 10.3+ (inline var).
 }
@@ -34,6 +35,8 @@ type
     destructor Destroy; override;
     // AOrigin - the world's shake
     procedure Draw(const AOrigin: TSdlPoint; AAlpha: Single);
+    // The dark over the frame as the flight ends
+    procedure DrawTail(AAlpha: Single);
   end;
 
 implementation
@@ -51,6 +54,7 @@ const
   // The frame at the flash is this white at the most
   FlashWhite = 0.85;
   OpaqueAlpha = 255;
+  TailDark: TRgb = (R: 0; G: 0; B: 0);
 
 constructor THudTitles.Create(ARenderer: PSdlRenderer; const AFont: TMoonFont;
   ALogo: TMenuLogo; ATitles: TTitles);
@@ -111,6 +115,16 @@ begin
   DrawCard(AOrigin, AAlpha);
   DrawLogo(AOrigin, AAlpha);
   DrawFlash(AAlpha);
+end;
+
+procedure THudTitles.DrawTail(AAlpha: Single);
+begin
+  var Level := FTitles.TailLevel(AAlpha);
+  if Level <= 0 then
+    Exit;
+  FBrush.BeginDraw;
+  FBrush.Fill(0, 0, FrameWidth, FrameHeight, TailDark, Level);
+  FBrush.EndDraw;
 end;
 
 end.

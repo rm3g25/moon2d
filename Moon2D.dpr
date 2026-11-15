@@ -27,6 +27,7 @@ uses
   Levels.Tint in 'Core\Levels.Tint.pas',
   Levels.Dynamics in 'Core\Levels.Dynamics.pas',
   Levels.FarPlane in 'Core\Levels.FarPlane.pas',
+  Levels.EyePath in 'Core\Levels.EyePath.pas',
   Levels.Titles in 'Core\Levels.Titles.pas',
   Levels.CityLife in 'Core\Levels.CityLife.pas',
   Levels.Monorail in 'Core\Levels.Monorail.pas',
