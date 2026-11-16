@@ -2499,6 +2499,9 @@ Most of the vocabulary since 3.0.54 belongs to the gravel arena of level
   honeycomb's fall on - `TMoonGame.CrumbleHoneycomb`; `Track` when absent).
 - 3.0.84: `TRamOrders.MedkitPads` (`"medkitPads"`, a list of pad tags -
   the hunter's medkits come down onto one; `SEventBadRamPads`).
+- 3.0.138: `TRamOrders.Title` (`"bigMessage"` / `"bigMessageEn"`, as a
+  boss's trigger names it; empty when absent) - `TMoonGame` keeps it in
+  `FRamTitle` and shows it big on the cue `Locked`.
 
 ### `Core/Levels.Scenes.pas` (~565 lines)
 The `scenes` section of level JSON (3.0.62): model and parser, no game
@@ -4774,8 +4777,9 @@ panel grows on its right (`docs/mechanics/arena-3/energy.md`, stage 6).
 The score display: the bonus charge in the top-right corner, the twin of the
 heart monitor, widened on the left by the reward slot (150 units against the
 monitor's 118). **`THudCharge`** - `Tick(score, streak, bonus, novice)` once
-per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
-= no reward spent yet), `Draw`.
+per logic tick (bonus = the reward held, bkNone when the slot is empty;
+insists = the game asks the slot to insist - before the first reward spent and
+while the hero is at `BonusNagHealth` or less, 3.0.138), `Draw`.
 - The readout (37 units - three digits plus two units of air a side - capped
   at 999), a bar filling toward
   `BonusCost` with a tick every ten points (a stiff spring, so a kill jolts),
@@ -4788,8 +4792,8 @@ per logic tick (bonus = the reward held, bkNone when the slot is empty; novice
   the corner like a hotkey badge. On award, sparks burst from the bar and are
   pulled into the slot; the icon appears with a flash when they land. The
   frame flashes white when the reward is spent.
-- A novice gets insisted on: the slot pulses and the right button blinks like
-  a press. After the first reward spent the button stays lit, dim and still.
+- An insisting slot pulses and the right button blinks like a press;
+  otherwise the button stays lit, dim and still.
 - Streak endings are told apart by the score: reset with points = the tenth
   kill paid out (white flash), reset without = a hit (red flash on the lost
   cells).
@@ -7817,7 +7821,8 @@ so a unit (and later a test) can reach it. `interface` holds
   2008 - the entry point and what a heroX / heroY trigger wrote), score +
   kill streak, per-entity trigger-fired flags, the bonus slot
   (+ its queued activation; `FBonusLearned` - the first reward spent - is the
-  one thing that survives levels, so the HUD insists once per launch), the
+  one thing that survives levels, so the HUD insists once per launch;
+  `FBonusNagTicks` - the pause between two reminders of a held reward), the
   gravel trial's screen (`FGravelScreen`) and what the events told it -
   the bank its medkits come down onto (`FMedkitBank`), the monster and the
   bank of its wave (`FWaveMonster`, `FWaveBank`), the body of its open sky
@@ -8107,7 +8112,10 @@ so a unit (and later a test) can reach it. `interface` holds
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
     reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use; the
-    aura reward goes to `CastAura`). The
+    aura reward goes to `CastAura`), `RemindOfBonus` (3.0.138: a wound that
+    leaves `BonusNagHealth` or less with a reward held names it with its
+    button - `bonusWaitsFmt` over `bonusHudHint` - no oftener than
+    `BonusNagTicks`; called from `HurtHero`). The
     ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (`StartCountdown`) and the gravel trigger (`Start`,
     straight in), ticked in

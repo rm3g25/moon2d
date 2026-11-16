@@ -476,9 +476,10 @@ the brake, the patrol's marks.
 | `TestShieldTakesABullet` | a bullet into the hull meets the shield within the margin before the outline; one over the machine flies on | bullets pass the hull, or the shield hangs in the air over it |
 | `TestAbsentMeetsNothing` | before a start, and while the music fades, no touch and no block | an unseen machine wounds or stops bullets |
 | `TestHoldsTheBodyAndAMarginPastIt` | a body 10 by 10: the middle, a unit and a half past the side and over the top are held; past the margin, and under its foot, not | the shield is no wider than the body, or reaches into the floor |
-| `TestRamIsRead` | a ram action: `eaRam`, its stop, track and fade-out | a member is read from another key |
+| `TestRamIsRead` | a ram action: `eaRam`, its stop, track and fade-out; no title when none is named | a member is read from another key |
+| `TestTitleIsRead` | `bigMessage` is the base (Russian), `bigMessageEn` the English (3.0.138) | the Ram's name is read from another key, or one language takes the other's |
 | `TestBadRamRaises` | each raises `ELevelEventError`: no stop, a stop off either edge, no track | a Ram with nowhere to stop or no track loads |
-| `TestLevelTwoArenaBringsTheRam` | `level2.json`: on screen 13 one ram action, on arrival, stop 260, `boss3.ogg`, and no music action | the arena's music is started by an event again, or the Ram is lost |
+| `TestLevelTwoArenaBringsTheRam` | `level2.json`: on screen 13 one ram action, on arrival, stop 260, `boss3.ogg`, and no music action; it names its title (3.0.138) | the arena's music is started by an event again, or the Ram is lost |
 
 Left to the eye: the picture - the mast between the hull's halves, the
 clips, the sway, the lamps, the honeycomb along the outline; the throw

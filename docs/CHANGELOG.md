@@ -7,6 +7,24 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-16: **3.0.138 - the bonus reminder.** A first-time player stuck on
+arena 2 never saw his bonuses (`hud.md`, "Напоминание о бонусе"). A
+wound that leaves the hero at 2 health or less with a reward held names it
+with its button - "BONUS WAITING: X" over "Right mouse button to
+activate" - no oftener than every 15 s (`RemindOfBonus`,
+`BonusNagHealth`, `BonusNagTicks`); the slot insists, pulsing with the
+button blinking, before the first reward spent as before and now also
+while the hero is that low (`THudCharge.Tick`'s `AInsists`). On entering
+each arena the terminal types the rule, in other words each time, again
+after every death (data only): level 1 screen 17 before TEK-R1
+(`s17-bonus-reminder`), level 2 screen 9 before the gravels
+(`s09-bonus-reminder`) and screen 13 before the Ram
+(`s13-bonus-reminder`). The Ram is announced as TEK-R1 is on
+level 1: the `ram` action names it (`"bigMessage"`, `TRamOrders.Title`),
+shown big as its head locks (`ram.md`, "The announcement"). Tests: 1
+new (`TestTitleIsRead`), 2 edited; the reminder itself - the game and
+the drawing - by eye.
+
 2026-11-15: **3.0.137 - the release of 3.0.** The debug keyboard is off
 (`Moon2D.inc`: the dot back on `DEBUGKEYS`): the End key's stops, the X
 of the titles, the tuners and the inspectors are compiled out. Nothing

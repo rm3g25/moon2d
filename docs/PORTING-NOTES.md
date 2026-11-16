@@ -1,6 +1,10 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-15: **3.0.137 - the release of 3.0** (tag `v3.0`): the
+Status at 2026-11-16: **3.0.138 - the bonus reminder** after a first
+player's run (`hud.md`, "Напоминание о бонусе"); next in line: the held
+bonus saving the hero from death (3.0.139) and arena 3's rewards after
+the second head (3.0.140) - the handoff `claude/difficulty-easing-handoff.md`
+in the project. Before it, 3.0.137 - the release of 3.0 (tag `v3.0`): the
 debug keyboard off in `Moon2D.inc`. Before it, 3.0.136 - the way back to the stone on screen 11
 (the shard a step back up, a deck going down through the grid leaves its
 rider on it) and the tunnels' dust four times as fast
