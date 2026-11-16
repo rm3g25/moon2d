@@ -7,6 +7,17 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-17: **3.0.140 - points for the Ram's heads.** Each head of the
+Ram that dies pays 25 points - the hunter, the sweeper, the bunker - and
+a "+25" rises over the blast as it does over a killed monster. One place:
+`TickRam`, on the Ram's `Blast` cue (`TRam.KillHead` sets it once a
+head), `RamHeadScore`. Three heads are 75 points, more than one turn of
+the roulette (50); the death still takes the score back
+(`RestartLevel`). Not done, though the handoff had it as decided: after
+the second head the roulette giving only health and a reward held in the
+slot turning into health - the author wanted the points only. No tests:
+nothing pure to test; by eye, with O (a third of a head's lives at once).
+
 2026-11-16: **3.0.139 - the bonus saves.** A wound that would take the
 last health, with a reward in the slot, spends the reward instead
 (`SaveByBonus`, called from `HurtHero` before `FHero.Kill`): the hero

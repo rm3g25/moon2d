@@ -253,3 +253,10 @@ The shuttle's medkits on the thirds, in a unit of their own, `Game.Capsules` (`T
 - **The data**: the `ram` action takes `"medkitPads"`, a list of pad tags (`TRamOrders.MedkitPads`; anything else - `SEventBadRamPads`).
 - **Tests**: `Tests.Game.Capsules` (7: onto its mark and never past it, down within two seconds; braking at the end; lands once and opens once; the medkit on the mark after the landing; the shell gone after; two land each on its own; a clear takes them away). `TRamHunterTests` and `TRamSweeperTests`: `TestEachThirdCallsTheShuttle` (one call a third, none for the last life). `TRamLevelTests`: `TestMedkitPadsAreRead`, two refusals more in `TestBadRamRaises`, and the pads the arena of level 2 names stand on it.
 - First guesses for the live run: the fall's length, the jet, the opening of the shell, the clack, the gap at the wall.
+
+### Points for the heads (3.0.140)
+Each head of the Ram that dies pays 25 points: the hunter, the sweeper, the bunker. `TMoonGame.TickRam` pays them on the `Blast` cue, which `TRam.KillHead` raises once a head - the hunter and the bunker at once, the sweeper after its retreat and overload at the wall - so a fight pays 75 at most. A `+25` rises over `BlastAt` as over a killed monster (`AddScorePopup`), centred by its width. The score is the monsters' kind: a death takes it back with `RestartLevel`, so a head fought over again pays nothing the second time round. 75 is more than a turn of the roulette (50): a reward comes sooner in the fight.
+
+- Not done: the roulette giving only health after the second head, and a reward in the slot turning into health. The handoff of 3.0.139 had them as decided; the author took them back before the code - the points only.
+- No tests: the pay is one `Inc` in `TMoonGame`, nothing pure to lift out. By eye: O wounds a head by a third (three presses a head), the score is in the HUD.
+- First guesses for the live run: the `+25` reads over the blast; 75 for the three heads is not too much against the roulette.

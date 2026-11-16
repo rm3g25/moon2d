@@ -1,11 +1,14 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-16: **3.0.139 - the bonus saves**: a reward held in
+Status at 2026-11-17: **3.0.140 - points for the Ram's heads**: each head
+that dies pays 25 and a "+25" rises over its blast (`hud.md`, "Сессия:
+очки за головы Тарана"; `arena-3/ram.md`, "Points for the heads"); next in line:
+the live run of 3.0.139 and 3.0.140, then the level editor (ROADMAP,
+step 3) - the handoff `claude/difficulty-easing-handoff.md` in the
+project. Before it, 3.0.139 - the bonus saves: a reward held in
 the slot is spent instead of the hero's death - he stands up with 5
 health, and the slot now crosses into the next level (`hud.md`, "Бонус
-спасает от смерти"); next in line: arena 3's rewards after the second
-head (3.0.140) - the handoff `claude/difficulty-easing-handoff.md` in the
-project. Before it, 3.0.138 - the bonus reminder after a first player's
+спасает от смерти"). Before it, 3.0.138 - the bonus reminder after a first player's
 run (`hud.md`, "Напоминание о бонусе"). Before it, 3.0.137 - the release of 3.0 (tag `v3.0`): the
 debug keyboard off in `Moon2D.inc`. Before it, 3.0.136 - the way back to the stone on screen 11
 (the shard a step back up, a deck going down through the grid leaves its

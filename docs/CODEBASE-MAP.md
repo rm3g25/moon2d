@@ -8310,6 +8310,12 @@ so a unit (and later a test) can reach it. `interface` holds
   (`padclack.wav` on `Landed`, `SpawnStanding` of `MedkitMonsterId` on
   each mark `Opened`). Drawn after the sphere; cleared where the wrecks
   are.
+- 3.0.140, **points for the heads**: `TickRam`, on the Ram's `Blast` cue
+  (one a head - `TRam.KillHead` is its only setter): `Inc(FScore,
+  RamHeadScore)` (25, a `const` of the method) and a `+25` popup
+  (`FMessages.AddScorePopup`) centred on `BlastAt` by its width
+  (`SmallAdvance`), a line up (`SmallLineStep`). The death takes the score
+  back as ever (`RestartLevel`). No tests: nothing pure to test.
 - 3.0.85, **the stone's charge in the fight**: `FStoneTank`
   (`StoneTankSeed`). `TickRam`: `Start` on `Locked`, `HeadDown` with
   `FOrbs.Energy` on `Blast`, and last `FOrbs.Charge(FStoneTank.Tick(...))`.
