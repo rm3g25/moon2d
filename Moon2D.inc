@@ -17,12 +17,13 @@
 // inspector, F font atlas, N font filtering, G defensive aura, M music
 // mute, P screen pictures for repainting, R rebuild of the screen's pad
 // group, Y its flight back to the level file's places, V/B trailer
-// frames, numpad tuners for the minigun muzzle and the crosshair.
+// frames (B in play: 50 points at once, a reward on the next tick),
+// numpad tuners for the minigun muzzle and the crosshair.
 //
 // Off since 2.1.1: releases were being built from the Debug
 // configuration and carried the whole keyboard into shipping archives.
 // Remove the dot below for a session of tuning, put it back after.
-{.$DEFINE DEBUGKEYS}
+{$DEFINE DEBUGKEYS}
 
 // TITLESTATS - the frame instrument: once a second the window title
 // prints fps, the worst frame of that second and the worst

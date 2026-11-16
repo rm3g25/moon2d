@@ -20,6 +20,18 @@ const
   // climbing past the cost while a reward waits
   BonusCost = 50;
 
+// What is left of the score when a reward is spent. Never below zero: a
+// reward carried into a new level is spent against a score that restarted
+function ScoreAfterSpend(AScore: Integer): Integer;
+
 implementation
+
+uses
+  System.Math;
+
+function ScoreAfterSpend(AScore: Integer): Integer;
+begin
+  Result := Max(0, AScore - BonusCost);
+end;
 
 end.

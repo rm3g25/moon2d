@@ -576,6 +576,8 @@ type
     procedure EchoAftershock;
     procedure CureHero;
     procedure RemindOfBonus;
+    procedure SpendBonus;
+    procedure SaveByBonus;
     procedure GrantMercy(ATicks: Integer);
     function HeroCenter: TSdlFPoint;
     function HeroStandsIn(ACol, ARow: Integer): Boolean;
@@ -828,6 +830,11 @@ const
   // BonusNagTicks (15 s)
   BonusNagHealth = 2;
   BonusNagTicks = 495;
+  // The health a reward gives, whether it is spent on purpose or at the
+  // hero's last breath
+  BonusHealthGain = 5;
+  // A hero saved by a reward is spared this long after, about 3 s at 33 Hz
+  SavedMercyTicks = 100;
   // The sweeper's medkits stand on the road this far from the wall away
   // from the Ram: the middle of a cell
   MedkitWallGap = 16;
@@ -909,7 +916,7 @@ const
   // The developer keyboard. The numpad carries the two tuners: the
   // minigun muzzle on the arrow cluster (4/6/8/2, +/-), the retired
   // crosshair calibrator on the corners (7/9/1/3).
-  ScancodeB = 5;  // trailer frame, bare sky (menu only)
+  ScancodeB = 5;  // trailer frame, bare sky (menu); in play, 50 points at once
   ScancodeF = 9;  // raw font atlas view (orientation check)
   ScancodeG = 10; // summon the defensive aura on the hero
   ScancodeH = 11; // pour the fire rain over the hero's screen
@@ -1590,7 +1597,10 @@ begin
   for var i := 0 to High(FLevels) - 1 do
     if SameText(FLevels[i].FileName, FLevelFile) then
     begin
+      // LoadLevel empties the slot; the campaign hands it back
+      var Carried := FBonus;
       LoadLevel(FLevels[i + 1].FileName);
+      FBonus := Carried;
       Exit;
     end;
   OpenMenu;
@@ -2624,9 +2634,16 @@ begin
   GrantMercy(HurtMercyTicks);
 end;
 
+// Paid on use, not on the roll
+procedure TMoonGame.SpendBonus;
+begin
+  FScore := ScoreAfterSpend(FScore);
+  FBonus := bkNone;
+  FBonusLearned := True;
+end;
+
 procedure TMoonGame.ActivateQueuedBonus;
 const
-  HealCharges = 5;
   ExplosionFan: TFanShape =
     (Rows: 12; Cols: 22; BaseSpeed: 4; SpeedSpread: 2);
 begin
@@ -2647,7 +2664,7 @@ begin
 
   case FBonus of
     bkHealth:
-      for var i := 1 to HealCharges do
+      for var i := 1 to BonusHealthGain do
         CureHero;
     bkFireRain:
       FOrbs.PourRain;
@@ -2662,9 +2679,7 @@ begin
         FShake.AddTrauma(BonusExplosionTrauma);
       end;
   end;
-  Dec(FScore, BonusCost); // paid on use, not on the roll
-  FBonus := bkNone;
-  FBonusLearned := True;
+  SpendBonus;
 end;
 
 // A player who never learned the right click learns it here: the reward
@@ -2676,6 +2691,20 @@ begin
   FBonusNagTicks := BonusNagTicks;
   FMessages.ShowBig(Format(Tr(SBonusWaitsFmt), [BonusDisplayName(FBonus)]),
     BigMessageTicks, Tr(SBonusHudHint));
+end;
+
+// The wound that would kill him finds a reward in the slot: it is spent
+// as a life, and he stands up with what the health reward gives
+procedure TMoonGame.SaveByBonus;
+begin
+  var Spent := BonusDisplayName(FBonus);
+  SpendBonus;
+  for var i := 1 to BonusHealthGain do
+    CureHero;
+  GrantMercy(SavedMercyTicks);
+  FShroud.Start(ReviveLook);
+  FAudio.Play(BonusSoundFile);
+  FMessages.ShowBig(Format(Tr(SBonusSavedFmt), [Spent]), BigMessageTicks);
 end;
 
 procedure TMoonGame.StartPlaying;
@@ -3127,6 +3156,11 @@ begin
   FKillStreak := 0; // 2008 reset it at every damage site (752/781/985)
   Dec(FHeroHealth);
   GrantMercy(HurtMercyTicks);
+  if (FHeroHealth <= 0) and (FBonus <> bkNone) then
+  begin
+    SaveByBonus;
+    Exit;
+  end;
   if FHeroHealth <= 0 then
   begin
     FHero.Kill; // the d-frames play; the world keeps moving without him
@@ -6796,6 +6830,11 @@ begin
     ScancodeI:
       // A long fight replayed from its start costs lives to tune against
       CureHero;
+    ScancodeB:
+      // A reward takes 50 points - too many kills to tune the rewards
+      // against. The roulette spins on the next tick, as the kills had
+      // paid for it
+      Inc(FScore, BonusCost);
     ScancodeO:
       // Three heads of the Ram stand between the start and the chase - too
       // far to tune against

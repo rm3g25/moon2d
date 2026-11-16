@@ -112,6 +112,7 @@
         <DCCReference Include="Game\Tests.Game.Gate.pas"/>
         <DCCReference Include="Game\Tests.Game.Titles.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
+        <DCCReference Include="Game\Tests.Game.Bonus.pas"/>
         <DCCReference Include="Render\Tests.Render.DomeFrames.pas"/>
         <DCCReference Include="Render\Tests.Render.Monochrome.pas"/>
         <DCCReference Include="Render\Tests.Render.Target.pas"/>

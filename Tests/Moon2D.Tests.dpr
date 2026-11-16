@@ -59,6 +59,7 @@ uses
   Tests.Game.Gate in 'Game\Tests.Game.Gate.pas',
   Tests.Game.Titles in 'Game\Tests.Game.Titles.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
+  Tests.Game.Bonus in 'Game\Tests.Game.Bonus.pas',
   Tests.Render.DomeFrames in 'Render\Tests.Render.DomeFrames.pas',
   Tests.Render.Monochrome in 'Render\Tests.Render.Monochrome.pas',
   Tests.Render.Target in 'Render\Tests.Render.Target.pas',

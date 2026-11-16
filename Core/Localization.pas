@@ -85,6 +85,8 @@ const
   SBonusHudHint = 'bonusHudHint';
   // A reward held while the hero is near death, named again
   SBonusWaitsFmt = 'bonusWaitsFmt';
+  // A reward spent as a life at the hero's last breath
+  SBonusSavedFmt = 'bonusSavedFmt';
   // The header over the comm terminal: the channel speaks until a voice
   // has a name
   STerminalHeader = 'terminalHeader';
@@ -188,7 +190,7 @@ const
     SMoonFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
     SBonusAwardFmt, SBrokeThrough, SBonusHudHint, SBonusWaitsFmt, STerminalHeader,
-    SBriefingHeader, SStrikeWhatGlows, SHullArmour,
+    SBonusSavedFmt, SBriefingHeader, SStrikeWhatGlows, SHullArmour,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyTitle,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,
