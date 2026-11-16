@@ -5129,6 +5129,18 @@
       ]
     },
     {
+      "id": "s17-bonus-reminder",
+      "screen": 17,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "hint",
+          "text": "Перед боем: накопленный бонус включается правой кнопкой мыши.",
+          "textEn": "Before the fight: your stored bonus goes off with the right mouse button."
+        }
+      ]
+    },
+    {
       "id": "bossSmokes",
       "screen": 17,
       "when": "livesBelow",

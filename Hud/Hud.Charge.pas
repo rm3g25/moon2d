@@ -8,8 +8,9 @@
   waiting; the number keeps climbing past the cost until the reward is
   spent. The reward itself flies as sparks from the bar into a slot at
   the panel's left edge, with a mouse glyph in its corner: the right
-  button spends it. Until the player has spent one, the slot insists -
-  it pulses and the button blinks. The streak row shows the ten kills
+  button spends it. When the game asks - before the first reward spent,
+  and while the hero is near death - the slot insists: it pulses and
+  the button blinks. The streak row shows the ten kills
   without a scratch that the game rewards but never showed.
 
   The panel observes rather than listens: it takes the score, the
@@ -49,7 +50,7 @@ type
     FScore: Integer;
     FStreak: Integer;
     FBonus: TBonusKind;
-    FNovice: Boolean; // no reward spent yet: the slot insists
+    FInsists: Boolean;
     FTick: Integer;
     FBarShown: Single; // the bar eases toward the score, this is where it is
     FBarSpeed: Single;
@@ -83,10 +84,10 @@ type
     constructor Create(ARenderer: PSdlRenderer; AFrameWidth: Integer);
     destructor Destroy; override;
     // Once per logic tick: the score, the kill streak, the reward held
-    // (bkNone when the slot is empty) and whether the player has yet to
-    // spend a reward, all as of now
+    // (bkNone when the slot is empty) and whether its slot insists, all
+    // as of now
     procedure Tick(AScore, AStreak: Integer; ABonus: TBonusKind;
-      ANovice: Boolean);
+      AInsists: Boolean);
     procedure Draw;
   end;
 
@@ -139,7 +140,7 @@ const
   SlotY = PanelY + SlotInset;
   IconScale = 2;
   IconInset = (SlotCell - IconSize * IconScale) div 2;
-  NovicePulseSpeed = 0.2;
+  InsistPulseSpeed = 0.2;
 
   // The mouse glyph hangs off the cell's corner like a hotkey badge
   MouseOverhangX = 2;
@@ -193,7 +194,7 @@ begin
 end;
 
 procedure THudCharge.Tick(AScore, AStreak: Integer; ABonus: TBonusKind;
-  ANovice: Boolean);
+  AInsists: Boolean);
 begin
   Inc(FTick);
   ReactToScore(AScore);
@@ -202,7 +203,7 @@ begin
   FScore := AScore;
   FStreak := AStreak;
   FBonus := ABonus;
-  FNovice := ANovice;
+  FInsists := AInsists;
 
   EaseBar;
   MoveSparks;
@@ -387,9 +388,9 @@ begin
 
   FBrush.Fill(FSlotX, SlotY, SlotCell, SlotCell, BonusColor, 0.08);
   FBrush.Frame(FSlotX, SlotY, SlotCell, SlotCell, BonusColor, 0.6);
-  if FNovice then
+  if FInsists then
     FBrush.Glow(FSlotX - 1, SlotY - 1, SlotCell + 2, SlotCell + 2, BonusColor,
-      0.25 + 0.25 * Sin(FTick * NovicePulseSpeed));
+      0.25 + 0.25 * Sin(FTick * InsistPulseSpeed));
   DrawBonusIcon(FSlotX + IconInset, SlotY + IconInset);
   DrawMouse(FSlotX + SlotCell + MouseOverhangX - MouseGlyphWidth,
     SlotY + SlotCell + MouseOverhangY - MouseGlyphHeight);
@@ -416,8 +417,8 @@ begin
   end;
 end;
 
-// A novice sees the right button blink like a press; after the first
-// reward spent it stays lit, quietly
+// An insisting slot blinks the right button like a press; otherwise it
+// stays lit, quietly
 procedure THudCharge.DrawMouse(AX, AY: Single);
 const
   FullSize = 1;
@@ -428,7 +429,7 @@ end;
 
 function THudCharge.MouseButtonAlpha: Single;
 begin
-  if not FNovice then
+  if not FInsists then
     Exit(0.6);
   if (FTick mod MouseBlinkPeriod) < MouseBlinkLit then
     Exit(1);

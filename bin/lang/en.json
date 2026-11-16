@@ -30,6 +30,7 @@
   "bonusAwardFmt": "BONUS: %s",
   "brokeThrough": "You sealed the breach!",
   "bonusHudHint": "Right mouse button to activate",
+  "bonusWaitsFmt": "BONUS WAITING: %s",
   "terminalHeader": "COMM",
   "briefingHeader": "MISSION LOG",
   "strikeWhatGlows": "Strike what glows",

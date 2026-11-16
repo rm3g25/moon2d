@@ -6012,6 +6012,20 @@
       ]
     },
     {
+      "id": "s09-bonus-reminder",
+      "screen": 9,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "hint",
+          "header": "ЧЕЛНОК",
+          "headerEn": "SHUTTLE",
+          "text": "Мастер, очки копятся в бонус. Правая кнопка мыши - применить.",
+          "textEn": "Master, your points build up into a bonus. Right mouse button to use it."
+        }
+      ]
+    },
+    {
       "id": "s09-act1",
       "screen": 9,
       "when": "actReached", "act": 1,
@@ -6247,13 +6261,29 @@
       ]
     },
     {
+      "id": "s13-bonus-reminder",
+      "screen": 13,
+      "when": "enterScreen",
+      "then": [
+        {
+          "action": "hint",
+          "header": "ЧЕЛНОК",
+          "headerEn": "SHUTTLE",
+          "text": "Мастер, машина крепкая. Бонусы - правой кнопкой мыши, не жалейте их.",
+          "textEn": "Master, the machine is tough. Bonuses - right mouse button, do not spare them."
+        }
+      ]
+    },
+    {
       "id": "s13-ram",
       "screen": 13,
       "when": "enterScreen",
       "then": [
         {"action": "ram", "stop": 260, "file": "boss3.ogg",
          "flightFile": "flight.ogg", "fadeOut": 2.5,
-         "medkitPads": ["s13-pad-2", "s13-pad-3"]}
+         "medkitPads": ["s13-pad-2", "s13-pad-3"],
+         "bigMessage": "Таран - боевая машина TEK-R13",
+         "bigMessageEn": "The Ram - TEK-R13 war machine"}
       ]
     }
   ],

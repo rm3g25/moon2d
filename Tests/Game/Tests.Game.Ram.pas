@@ -571,6 +571,8 @@ type
     [Test]
     procedure TestFlightTrackIsRead;
     [Test]
+    procedure TestTitleIsRead;
+    [Test]
     procedure TestMedkitPadsAreRead;
     [Test]
     procedure TestBadRamRaises;
@@ -822,6 +824,7 @@ uses
   Game.Charge,
   Game.Dive,
   Game.Breakup,
+  Game.Config,
   Levels.Defs;
 
 const
@@ -1311,6 +1314,7 @@ begin
   Assert.AreEqual(2.5, Action.Ram.SilenceSeconds, 0.001,
     'The fade-out to silence');
   Assert.AreEqual(0, Length(Action.Ram.MedkitPads), 'No medkit pads named');
+  Assert.AreEqual('', Action.Ram.Title.Values[lgEnglish], 'No title named');
 end;
 
 procedure TRamLevelTests.TestFlightTrackIsRead;
@@ -1319,6 +1323,15 @@ begin
     Actions[0];
   Assert.AreEqual('b.ogg', Action.Ram.Track, 'The fight''s');
   Assert.AreEqual('f.ogg', Action.Ram.FlightTrack, 'The flight''s');
+end;
+
+procedure TRamLevelTests.TestTitleIsRead;
+begin
+  var Action := RamEvents(
+    ',"stop":260,"file":"b.ogg","bigMessage":"ru","bigMessageEn":"en"')[0].
+    Actions[0];
+  Assert.AreEqual('ru', Action.Ram.Title.Values[lgRussian], 'The base');
+  Assert.AreEqual('en', Action.Ram.Title.Values[lgEnglish], 'The sibling');
 end;
 
 procedure TRamLevelTests.TestMedkitPadsAreRead;
@@ -1378,6 +1391,7 @@ begin
         Assert.AreEqual('flight.ogg', Action.Ram.FlightTrack,
           'The track of the flight');
         Assert.IsTrue(Length(Action.Ram.MedkitPads) > 0, 'Medkit pads named');
+        Assert.AreNotEqual('', Action.Ram.Title.Values[lgEnglish], 'Announced');
         for var Tag in Action.Ram.MedkitPads do
           Assert.IsTrue(ArenaHasPad(Level, Tag),
             Format('Pad "%s" stands in the arena', [Tag]));

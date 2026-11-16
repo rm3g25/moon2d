@@ -25,7 +25,7 @@ uses
   Render.Tiles, Render.Objects, Effects.Debris, Render.Dynamics, Render.Shake, Hero,
   Bullets, Monsters, Monsters.Pilot, Pads.Shelf, Pads.World, Pads.Drift, Pads.Arena,
   Render.Font, Render.Target, Render.Flare,
-  Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus,
+  Hud.Briefing, Hud.Messages, Render.Brush, Hud.Vitals, Game.Bonus, Localization,
   Game.Henshin, Game.Shroud, Game.Uptake, Game.Sphere, Game.Trial, Game.Press,
   Game.Arrivals, Game.Cannons, Game.Ram, Game.Wrecks, Game.Capsules,
   Game.Shells,
@@ -174,6 +174,7 @@ type
     FShells: TBunkerShells;
     FShellPainter: TShellPainter;
     FRamMedkitPads: TArray<string>; // tags of the hunter's
+    FRamTitle: TLocalizedText;
     // The bunker is dead: a death comes back right before the henshin
     FPastBunker: Boolean;
     // Between the heads' wounds and the gauge of the form's charge
@@ -294,6 +295,7 @@ type
     // Set by the first reward spent and kept across levels: until then
     // the HUD slot insists and the award names the mouse button
     FBonusLearned: Boolean;
+    FBonusNagTicks: Integer; // until a held reward may be named again
     FMenu: TMoonMenu;
     FLevelLoaded: Boolean;      // 'StartGame' of 2008
     FResumeState: TGameState;   // where Escape-to-menu came from
@@ -573,6 +575,7 @@ type
     function SolidUnderPoint(AX, AY: Single): Boolean;
     procedure EchoAftershock;
     procedure CureHero;
+    procedure RemindOfBonus;
     procedure GrantMercy(ATicks: Integer);
     function HeroCenter: TSdlFPoint;
     function HeroStandsIn(ACol, ARow: Integer): Boolean;
@@ -631,7 +634,7 @@ implementation
 uses
   Winapi.Windows, Winapi.ShellAPI, System.SysUtils, System.Math, System.IOUtils,
   Sdl2.Image, Levels.Pads, Pads.Flights, Game.Space,
-  Localization, Orbs.Moonrite, Game.Shield, Game.Wheel, Game.Takeoff;
+  Orbs.Moonrite, Game.Shield, Game.Wheel, Game.Takeoff;
 
 const
   AuthorLinkedInUrl = 'https://www.linkedin.com/in/kusmin-ilia/';
@@ -820,6 +823,11 @@ const
   // right of the middle: the right is his, the machine comes from the left
   PastBunkerHealth = 5;
   PastBunkerHeroX = 352.0;
+  // A reward held at this health or less is called to the player: the slot
+  // insists and a wound names the reward, no oftener than every
+  // BonusNagTicks (15 s)
+  BonusNagHealth = 2;
+  BonusNagTicks = 495;
   // The sweeper's medkits stand on the road this far from the wall away
   // from the Ram: the middle of a cell
   MedkitWallGap = 16;
@@ -1461,6 +1469,7 @@ begin
   FStreakBonusCount := 0;
   FBonus := bkNone;
   FBonusActivateQueued := False;
+  FBonusNagTicks := 0;
   FGlowHintTold := False;
   FTriggerFired := nil;
   SetLength(FTriggerFired,
@@ -2658,6 +2667,17 @@ begin
   FBonusLearned := True;
 end;
 
+// A player who never learned the right click learns it here: the reward
+// he holds is named with its button when it can still save him
+procedure TMoonGame.RemindOfBonus;
+begin
+  if (FBonus = bkNone) or (FHeroHealth > BonusNagHealth) or (FBonusNagTicks > 0) then
+    Exit;
+  FBonusNagTicks := BonusNagTicks;
+  FMessages.ShowBig(Format(Tr(SBonusWaitsFmt), [BonusDisplayName(FBonus)]),
+    BigMessageTicks, Tr(SBonusHudHint));
+end;
+
 procedure TMoonGame.StartPlaying;
 begin
   FState := gsPlaying;
@@ -3119,7 +3139,9 @@ begin
     // hero kills the reborn boss. (2008 raced its GameOver timer against
     // ToEndLev and the menu won - same spirit, cleaner mechanics.)
     FEndLevelTimer := 0;
-  end;
+  end
+  else
+    RemindOfBonus;
 end;
 
 procedure TMoonGame.RestartLevel;
@@ -3205,6 +3227,7 @@ begin
   // Score burns on restart (anti-farm), so the unspent reward burns too
   FBonus := bkNone;
   FBonusActivateQueued := False;
+  FBonusNagTicks := 0;
   // The boss regrows calm, so his rage track must not outlive him -
   // and win.ogg dies with the cancelled exit. FCurrentMusic covers the
   // screens that have no changeMusic trigger of their own (most of
@@ -3403,6 +3426,7 @@ end;
 procedure TMoonGame.StartRam(const AOrders: TRamOrders);
 begin
   FRamMedkitPads := AOrders.MedkitPads;
+  FRamTitle := AOrders.Title;
   if FPastLauncher then
   begin
     ResumeAboard(AOrders);
@@ -4416,9 +4440,14 @@ begin
     FShake.AddTrauma(Cue.Jolt);
   if Cue.Locked and not FAudio.Plays(FRam.Track) then
     ChangeMusic(FRam.Track);
-  // The stone wakes to the fight as the first head locks
+  // The stone wakes to the fight as the first head locks, and the machine
+  // is named
   if Cue.Locked then
+  begin
     FStoneTank.Start;
+    if FRamTitle.Current <> '' then
+      FMessages.ShowBig(FRamTitle.Current, BigMessageTicks);
+  end;
   if Cue.Shot then
   begin
     // A bullet's picture hangs a sprite over its point (BulletStretch)
@@ -5700,7 +5729,10 @@ begin
     FAudio.Play(TerminalKeySoundFile);
   FVitals.Tick(FHeroHealth, FHurtCooldown > 0);
   FMarks.Tick(FHeroHealth, FHurtCooldown > 0, FHero.Screen);
-  FCharge.Tick(FScore, FKillStreak, FBonus, not FBonusLearned);
+  if FBonusNagTicks > 0 then
+    Dec(FBonusNagTicks);
+  var SlotInsists := not FBonusLearned or (FHeroHealth <= BonusNagHealth);
+  FCharge.Tick(FScore, FKillStreak, FBonus, SlotInsists);
   FGoRight.Tick;
   // Down to 0 and no further: below 0 is no victory at all
   if FVictoryLeft > ADeltaSeconds then

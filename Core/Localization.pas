@@ -83,6 +83,8 @@ const
   SBonusAwardFmt = 'bonusAwardFmt';
   SBrokeThrough = 'brokeThrough';
   SBonusHudHint = 'bonusHudHint';
+  // A reward held while the hero is near death, named again
+  SBonusWaitsFmt = 'bonusWaitsFmt';
   // The header over the comm terminal: the channel speaks until a voice
   // has a name
   STerminalHeader = 'terminalHeader';
@@ -185,7 +187,7 @@ const
     SPressAnyKey, SEvolution, SIceForm, SIceFormPerk, SMoonForm,
     SMoonFormPerk, SIceRegen,
     SBonusHealth, SBonusFireRain, SBonusAura, SBonusExplosion,
-    SBonusAwardFmt, SBrokeThrough, SBonusHudHint, STerminalHeader,
+    SBonusAwardFmt, SBrokeThrough, SBonusHudHint, SBonusWaitsFmt, STerminalHeader,
     SBriefingHeader, SStrikeWhatGlows, SHullArmour,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
     SLevelSelectTitle, SBack, SDifficultyTitle,

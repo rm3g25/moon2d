@@ -30,6 +30,7 @@
   "bonusAwardFmt": "БОНУС: %s",
   "brokeThrough": "Вы закрыли прорыв!",
   "bonusHudHint": "Правая кнопка мыши для активации",
+  "bonusWaitsFmt": "БОНУС ЖДЁТ: %s",
   "terminalHeader": "СВЯЗЬ",
   "briefingHeader": "ЖУРНАЛ МИССИИ",
   "strikeWhatGlows": "Бей по тому, что светится",

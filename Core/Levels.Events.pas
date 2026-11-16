@@ -78,6 +78,9 @@ type
     FlightTrack: string;
     SilenceSeconds: Single;
     MedkitPads: TArray<string>; // tags
+    // Shown big as the head locks, as a boss's trigger shows its own;
+    // empty when the level names none
+    Title: TLocalizedText;
   end;
 
   // A body let in along a row of the screen: which monster, the sprite list
@@ -458,6 +461,7 @@ begin
   AAction.Ram.FlightTrack := AObj.GetValue<string>('flightFile',
     AAction.Ram.Track);
   AAction.Ram.SilenceSeconds := AAction.FadeOutSeconds;
+  AAction.Ram.Title := ReadLocalizedText(AObj, 'bigMessage');
   AAction.Ram.MedkitPads := [];
   var Pads := AObj.GetValue('medkitPads');
   if Pads = nil then
