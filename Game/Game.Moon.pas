@@ -4388,6 +4388,8 @@ end;
 // bullets are the monsters' own: they wound as theirs do, and the hero's
 // shots can meet them.
 procedure TMoonGame.TickRam;
+const
+  RamHeadScore = 25;
 begin
   var Target := Default(TRamTarget);
   Target.Alive := not FHero.Dead;
@@ -4496,6 +4498,11 @@ begin
       FPastBunker := True;
       FEnergyGauge.Lift;
     end;
+    Inc(FScore, RamHeadScore);
+    var Reward := '+' + IntToStr(RamHeadScore);
+    FMessages.AddScorePopup(Reward,
+      Cue.BlastAt.X - Length(Reward) * SmallAdvance / 2,
+      Cue.BlastAt.Y - SmallLineStep);
     FStoneTank.HeadDown(FOrbs.Energy);
     FExplosions.Detonate(Cue.BlastAt.X, Cue.BlastAt.Y, ekMachine);
     if Cue.Shock then
