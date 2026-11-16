@@ -1702,3 +1702,20 @@ canvas's transform.
 | `TestTheDropLowersAPoint` | a drop of 30: thirty units down | the flare stays while the sun sinks under the pitch |
 | `TestABankTurnsClockwiseAboutTheMiddle` | 90 degrees, no growth: right of the middle goes down; banked 14 and dropped 40, what the drop brings to the middle stands still | the flare and the turned frame turn opposite ways |
 | `TestTheSunStandsWhereTheStandHasIt` | 23.2 s - banked 14: 291.138, 222.080; 29.2 s - banked 0.5, dropped 125.73: 287.119, 335.652 | the flare is laid off the sun the stand has it on |
+
+## The bonus
+
+State: written, 3 tests (3.0.139, `docs/mechanics/hud.md`, "Бонус спасает
+от смерти"). Only the pure part is tried: what a spend leaves of the
+score. The rescue itself lives in `TMoonGame` and its drawing: a live run.
+
+### Game.Bonus
+
+Fixture `TBonusTests` in `Tests\Game\Tests.Game.Bonus.pas`; no object, one
+function.
+
+| Test | Holds | Turns red when |
+|---|---|---|
+| `TestSpendingTakesTheCost` | cost + 30: 30 | a spend takes more or less than the cost |
+| `TestSpendingTheExactCostLeavesZero` | exactly the cost: 0 | a reward paid for to the point leaves something over, or goes under |
+| `TestSpendingBelowTheCostStopsAtZero` | 0 and cost - 1: 0 | a carried reward drives a fresh score negative: the readout shows -50 and the next reward waits for 100 |

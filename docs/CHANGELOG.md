@@ -7,6 +7,24 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-16: **3.0.139 - the bonus saves.** A wound that would take the
+last health, with a reward in the slot, spends the reward instead
+(`SaveByBonus`, called from `HurtHero` before `FHero.Kill`): the hero
+stands up with 5 health, what the health reward gives
+(`BonusHealthGain`), under the shroud of a rebirth and about 3 s of
+mercy (`SavedMercyTicks`), the fanfare once, "THE BONUS SAVED YOU: X"
+big (`hud.md`, "Бонус спасает от смерти"). On every difficulty; the
+reward's own effect does not work, the points are paid as on any spend
+(`SpendBonus`). A pit goes through `HurtHero` and costs the reward the
+same way. The slot now outlives a change of level
+(`AdvanceToNextLevel`): the score restarts, the reward stays; a new game
+from the menu starts empty, a death burns it as before. A spend takes
+the cost off the score down to zero and no lower
+(`ScoreAfterSpend`): a carried reward is spent on a fresh score. Tests: 3
+new (`TBonusTests`); the rescue itself - the game and the drawing - by
+eye. Debug key B in play gives 50 points at once, the roulette spins on
+the next tick (`Moon2D.inc`: the dot off `DEBUGKEYS` to have it).
+
 2026-11-16: **3.0.138 - the bonus reminder.** A first-time player stuck on
 arena 2 never saw his bonuses (`hud.md`, "Напоминание о бонусе"). A
 wound that leaves the hero at 2 health or less with a reward held names it

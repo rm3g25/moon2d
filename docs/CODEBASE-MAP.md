@@ -4668,12 +4668,14 @@ Monster behavior (data-driven off `TMonsterDef`) plus the field managing them.
   The terminal knows nothing of the fight: a hint that must wait for one is
   a level event (`Levels.Events`) that starts it after the last body falls.
 
-### `Game/Game.Bonus.pas` (~25 lines)
+### `Game/Game.Bonus.pas` (~37 lines)
 The vocabulary of the bonus roulette, shared by the game that runs it and the
 HUD that shows it: **`TBonusKind`** (bkNone/Health/FireRain/Aura/Explosion;
 bkNone = empty slot) and `BonusCost=50`. Since 2.5.2 the cost is paid when
 the reward is activated, not when it is rolled, so the score keeps climbing
-past 50 while a reward waits.
+past 50 while a reward waits. `ScoreAfterSpend` (3.0.139): the score after a
+spend - the cost off, never below zero, because a reward carried into a new
+level is spent on a score that restarted. Tests: `Tests.Game.Bonus.pas`.
 
 ### `Core/Game.Space.pas` (~45 lines)
 The two sizes of the coordinate space, kept apart on purpose. The SCREEN is
@@ -8111,11 +8113,21 @@ so a unit (and later a test) can reach it. `interface` holds
     the hero's screen, honest screen units - no bullet -1 row), `ProcessKillStreak`, `AwardStreakBonus`.
   - Bonus: `CureHero` (+1 up to 10 - also the ceremony's cure callback),
     `AwardRandomBonus` (the headline carries the mouse hint until the first
-    reward is spent), `ActivateQueuedBonus` (pays `BonusCost` on use; the
+    reward is spent), `ActivateQueuedBonus` (pays on use through `SpendBonus`; the
     aura reward goes to `CastAura`), `RemindOfBonus` (3.0.138: a wound that
     leaves `BonusNagHealth` or less with a reward held names it with its
     button - `bonusWaitsFmt` over `bonusHudHint` - no oftener than
-    `BonusNagTicks`; called from `HurtHero`). The
+    `BonusNagTicks`; called from `HurtHero`), `SpendBonus`
+    (3.0.139: the reward paid for with `ScoreAfterSpend`, the slot emptied,
+    `FBonusLearned` set - the one place for a click and for a rescue),
+    `SaveByBonus` (3.0.139: `HurtHero` calls it in place of `FHero.Kill`,
+    the one place of the hero's death, when the wound would kill and a
+    reward is held: the reward spent as a life, `BonusHealthGain` health by
+    `CureHero`, `GrantMercy(SavedMercyTicks)`, `ReviveLook`, `bonus.wav`
+    once, `bonusSavedFmt` big; a pit rides the same way), and the slot's
+    carry in `AdvanceToNextLevel` (3.0.139: `FBonus` set aside across
+    `LoadLevel`, which empties it - the menu's new game must start empty;
+    `RestartLevel` still burns it). The
     ceremony itself is driven through `FHenshin`: started
     by `meHenshin` (`StartCountdown`) and the gravel trigger (`Start`,
     straight in), ticked in
@@ -10148,7 +10160,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | What is made of a picture's alpha - the mask, the halo, the points: for one more thing that glows in its own shape | Render.Silhouette.pas (+Render.Glow.pas `BlurImage`, `CreateGlowFromImage`) |
 | Level content / triggers / screens | levelN.json + Levels.Defs.pas |
 | A level event: when it fires, what it does; a new condition or action | `events` in levelN.json + Levels.Events.pas (model) + Events.Director.pas (runner) |
-| Game flow / state machine / scoring / bonuses | Game.Moon.pas (+Game.Bonus.pas) |
+| Game flow / state machine / scoring / bonuses | Game.Moon.pas (+Game.Bonus.pas) + Tests.Game.Bonus.pas |
 | The gravel trial: acts and batches, the gate, the breath between acts, the herald, the aimed rain, pit and side returns, the medkits (per 15 kills, the middle of an act), the open sky, the wave of the finale and its cap; where a body comes down | Game.Trial.pas (rules) + Game.Moon.pas (`TickGravelAttack`, `LetDownFromSky`, `LetDownMedkit`, `LetDownWave`, `WaveSideWanted`, `HeroColumn`, `ArriveAgain`, `FireTriggersOf`) + `screenTriggers` (`gravelBoss`, `finale`) in level2.json + docs/mechanics/arena-2.md |
 | The gravel arena's room act by act: which shelves wake, sleep or blink, in which order, sparing the hero or not | `events` of screen 9 in level2.json (`s09-act1`..`s09-done`) + the banks of the shelves there + Levels.Events.pas (`ShelfActions`, `TBankTelling`) + Pads.World.pas (`TellBank`, `OrderedBank`, `Picked`, `ProgramWait`) + Pads.Shelf.pas (`Command`) + docs/mechanics/arena-2.md |
 | The violet light of an arrival; the herald's | Game.Arrivals.pas (+Game.Moon.pas `LetDownFromSky`, `ArriveAgain`) |

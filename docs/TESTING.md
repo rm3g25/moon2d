@@ -90,6 +90,7 @@ Tests\
     Tests.Game.Titles.pas  the titles' clock: by the ticks and by the track, the flash, how much of the card shows; the flight: its cues, its seconds, the eye, the dark; the end at the stars: the sky, its rise, the phrases, the credits, the last screen, the track's end
     Tests.Game.FarPlane.pas  the far plane of the chase: its layers' ride, the sun's tint, a band's shade, the city's depth, the city's clock, the layout read; under the titles' eye: the layers' nearness, the ride, the floor's slabs
     Tests.Game.Fangs.pas   the fangs of the chase: their row, their tint, the layout read; the row flown back over
+    Tests.Game.Bonus.pas   what a spent reward leaves of the score: the cost off, never below zero
     Tests.Game.Shroud.pas
     Tests.Game.Trial.pas
     Tests.Game.Uptake.pas
