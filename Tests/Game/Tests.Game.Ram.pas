@@ -751,7 +751,7 @@ type
     [Test]
     procedure TestTheLastLifeBlowsItUpAndTheHuntBegins;
     [Test]
-    procedure TestTheLastThirdTakesTwiceTheStrikes;
+    procedure TestTheLastThirdTakesMoreStrikes;
     [Test]
     procedure TestNoFallBackInTheFirstPhase;
     [Test]
@@ -2985,33 +2985,33 @@ begin
   Assert.AreEqual(0, Rest, 'The last third and the blast: none');
 end;
 
-// Twelve lives: eight strikes take the first two thirds, a life each;
-// the last four take twice as many, and each tells the stone half a life
-procedure TRamBunkerTests.TestTheLastThirdTakesTwiceTheStrikes;
+// Fifteen lives: ten strikes take the first two thirds, a life each; the
+// last five take fourteen, and each tells the stone 5/14 of a life
+procedure TRamBunkerTests.TestTheLastThirdTakesMoreStrikes;
 const
-  // 150 times this is 12
-  LivesShare = 0.08;
+  // 150 times this is 15
+  LivesShare = 0.1;
 begin
   var Hero := HeroOnAPad(ChaseHeroX, ChaseDeckY);
   RaiseTheBunker(Hero, LivesShare);
   WaitForTheWindow(Hero);
-  Assert.AreEqual(12, FRam.FullLives, 'Twelve lives');
-  StrikeTheHatch(8);
-  Assert.AreEqual(4, FRam.Lives, 'A life a strike till the last third');
-  Assert.AreEqual(1 / 12, Double(FRam.HitShare), 0.0001, 'A whole life told');
+  Assert.AreEqual(15, FRam.FullLives, 'Fifteen lives');
+  StrikeTheHatch(10);
+  Assert.AreEqual(5, FRam.Lives, 'A life a strike till the last third');
+  Assert.AreEqual(1 / 15, Double(FRam.HitShare), 0.0001, 'A whole life told');
+  StrikeTheHatch(2);
+  Assert.AreEqual(5, FRam.Lives, 'Two strikes of the last third: no life');
+  Assert.AreEqual(1 / 42, Double(FRam.HitShare), 0.0001, '5/14 of a life told');
   StrikeTheHatch(1);
-  Assert.AreEqual(4, FRam.Lives, 'The first strike of the last third: no life');
-  Assert.AreEqual(1 / 24, Double(FRam.HitShare), 0.0001, 'Half a life told');
-  StrikeTheHatch(1);
-  Assert.AreEqual(3, FRam.Lives, 'The second: a life');
-  var Strikes := 2;
+  Assert.AreEqual(4, FRam.Lives, 'The third: a life');
+  var Strikes := 3;
   while FRam.Lives > 0 do
   begin
     StrikeTheHatch(1);
     Inc(Strikes);
   end;
-  Assert.AreEqual(BunkerLastThirdStrikes * 4, Strikes,
-    'The last third took twice its lives in strikes');
+  Assert.AreEqual(BunkerLastThirdStrikes, Strikes,
+    'The last third took 2.8 times its lives in strikes');
 end;
 
 procedure TRamBunkerTests.TestTheLastLifeBlowsItUpAndTheHuntBegins;

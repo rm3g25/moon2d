@@ -1,6 +1,11 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-17: **3.0.140 - points for the Ram's heads**: each head
+Status at 2026-11-17: **3.0.141 - only health saves, the hunt holds
+longer**: only the health reward in the slot stands in for a death (a
+hoard of points was a stock of lives), and the bunker's last third takes
+2.8 strikes a life in place of 2 (`hud.md`, "Сессия: спасает только
+здоровье"; `arena-3/chase.md`, "The last third held 40% longer"). Before
+it, 3.0.140 - points for the Ram's heads: each head
 that dies pays 25 and a "+25" rises over its blast (`hud.md`, "Сессия:
 очки за головы Тарана"; `arena-3/ram.md`, "Points for the heads"); next in line:
 the live run of 3.0.139 and 3.0.140, then the level editor (ROADMAP,

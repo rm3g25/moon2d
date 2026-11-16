@@ -3156,7 +3156,9 @@ begin
   FKillStreak := 0; // 2008 reset it at every damage site (752/781/985)
   Dec(FHeroHealth);
   GrantMercy(HurtMercyTicks);
-  if (FHeroHealth <= 0) and (FBonus <> bkNone) then
+  // Only the health reward stands in for a death: any reward would make
+  // a hoard of points a stock of lives
+  if (FHeroHealth <= 0) and (FBonus = bkHealth) then
   begin
     SaveByBonus;
     Exit;

@@ -7,6 +7,19 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-17: **3.0.141 - only health saves, the hunt holds longer.** A
+wound that would kill is taken by the reward in the slot only when it is
+the health reward (`HurtHero`, `FBonus = bkHealth`); any other lets the
+death come and burns as before. With every reward a life, a hoard of
+points (300 and more) became a stock of lives (`hud.md`, "Сессия: спасает
+только здоровье"). The bunker's last third - the hunt - holds 40% longer:
+14 strikes take 5 lives (`BunkerLastThirdStrikes`,
+`BunkerLastThirdLives`), 2.8 a life in place of 2; its first two thirds
+and the bounds of the thirds as before (`arena-3/chase.md`, "The last
+third held 40% longer"). Tests: `TestTheLastThirdTakesTwiceTheStrikes`
+became `TestTheLastThirdTakesMoreStrikes` (15 lives, 14 strikes for the
+last five); the rescue - by eye.
+
 2026-11-17: **3.0.140 - points for the Ram's heads.** Each head of the
 Ram that dies pays 25 points - the hunter, the sweeper, the bunker - and
 a "+25" rises over the blast as it does over a killed monster. One place:

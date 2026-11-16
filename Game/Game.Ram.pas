@@ -274,8 +274,10 @@ const
   SweeperLives = 140;
   BunkerLives = 150;
   // The bunker's last third - the hunt, the hull turned round - holds out
-  // this many times its share of the row: a life every this many strikes
-  BunkerLastThirdStrikes = 2;
+  // 2.8 times its share of the row: BunkerLastThirdStrikes strikes take
+  // BunkerLastThirdLives lives
+  BunkerLastThirdStrikes = 14;
+  BunkerLastThirdLives = 5;
   // Units a tick, as TBurst.NewBullet takes them
   HunterBulletSpeed = 6;
   SweeperBulletSpeed = 5;
@@ -525,9 +527,10 @@ type
     FLives, FFullLives: Integer;
     FLivesShare: Single; // the grade's
     FThirds: Integer; // the thirds of the head's lives told so far
-    // The bunker's last third: strikes since it last lost a life; the
+    // The bunker's last third: the wear toward its next life,
+    // BunkerLastThirdLives a strike, a life at BunkerLastThirdStrikes; the
     // share of the head's lives the last strike took
-    FLastThirdStrikes: Integer;
+    FLastThirdWear: Integer;
     FHitShare: Single;
     FHeadKilled: Boolean; // the last life is gone; it blows up next tick
     FKilled: TRamHead; // the head the change of heads began with
@@ -2994,7 +2997,7 @@ begin
   FFullLives := Max(1, Round(BunkerLives * FLivesShare));
   FLives := FFullLives;
   FThirds := 0;
-  FLastThirdStrikes := 0;
+  FLastThirdWear := 0;
   FHitShare := 0;
   FHurtTicks := 0;
   FHitTicks := NoHitTicks;
@@ -3667,18 +3670,18 @@ begin
     (Tier = 2);
 end;
 
-// A strike that goes in: a life, but in the last third only every
-// BunkerLastThirdStrikes-th strike takes one
+// A strike that goes in: a life, but in the last third a run of
+// BunkerLastThirdStrikes strikes takes only BunkerLastThirdLives
 procedure TRam.TakeBunkerLife;
 begin
   FHitShare := 1 / FFullLives;
   if Tier = 2 then
   begin
-    FHitShare := FHitShare / BunkerLastThirdStrikes;
-    Inc(FLastThirdStrikes);
-    if FLastThirdStrikes < BunkerLastThirdStrikes then
+    FHitShare := FHitShare * BunkerLastThirdLives / BunkerLastThirdStrikes;
+    Inc(FLastThirdWear, BunkerLastThirdLives);
+    if FLastThirdWear < BunkerLastThirdStrikes then
       Exit;
-    FLastThirdStrikes := 0;
+    Dec(FLastThirdWear, BunkerLastThirdStrikes);
   end;
   Dec(FLives);
   if FLives <= 0 then

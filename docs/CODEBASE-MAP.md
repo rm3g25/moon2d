@@ -6417,9 +6417,10 @@ monster. The game carries out the cue.
   `StrikeBoxes`; `StrikeArmour` per shield; the point posed again), and
   with the honeycomb up `BlockBareAloft` - a bullet that would strike the
   magnet, a nozzle or the hull past the outline is taken there, the
-  honeycomb flaring. The bunker's last third takes a life every
-  `BunkerLastThirdStrikes` 2 strikes (`TakeBunkerLife`; `HitShare` - the
-  share of the lives a strike took, which the game tells the stone tank).
+  honeycomb flaring. The bunker's last third takes `BunkerLastThirdLives`
+  5 lives a run of `BunkerLastThirdStrikes` 14 strikes, 2.8 a life since
+  3.0.141 (`TakeBunkerLife`, `FLastThirdWear`; `HitShare` - the share of
+  the lives a strike took, which the game tells the stone tank).
   The game: a medkit on every fourth small barge
   (`TFlockMedkit`, `FlockMedkitEvery`, `TickFlockMedkit`,
   `DropFlockMedkit` in `Game.Moon`).
@@ -8121,8 +8122,9 @@ so a unit (and later a test) can reach it. `interface` holds
     (3.0.139: the reward paid for with `ScoreAfterSpend`, the slot emptied,
     `FBonusLearned` set - the one place for a click and for a rescue),
     `SaveByBonus` (3.0.139: `HurtHero` calls it in place of `FHero.Kill`,
-    the one place of the hero's death, when the wound would kill and a
-    reward is held: the reward spent as a life, `BonusHealthGain` health by
+    the one place of the hero's death, when the wound would kill and the
+    health reward is held - only it since 3.0.141, any other reward lets
+    the death come: the reward spent as a life, `BonusHealthGain` health by
     `CureHero`, `GrantMercy(SavedMercyTicks)`, `ReviveLook`, `bonus.wav`
     once, `bonusSavedFmt` big; a pit rides the same way), and the slot's
     carry in `AdvanceToNextLevel` (3.0.139: `FBonus` set aside across
