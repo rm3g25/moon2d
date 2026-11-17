@@ -1,7 +1,10 @@
 # Moon 2D Remake - handoff notes (3.0.x: finishing after the 2008 mode left)
 
-Status at 2026-11-17: **3.0.141 - only health saves, the hunt holds
-longer**: only the health reward in the slot stands in for a death (a
+Status at 2026-11-17: **3.0.142 - the volume of the music and of the
+sounds**: the menu's new Sound screen, two rows of ten cells, saved in
+settings.json (`menu.md`, "Sound: the volume of the music and of the
+sounds"). Before it, 3.0.141 - only health saves, the hunt holds
+longer: only the health reward in the slot stands in for a death (a
 hoard of points was a stock of lives), and the bunker's last third takes
 2.8 strikes a life in place of 2 (`hud.md`, "Сессия: спасает только
 здоровье"; `arena-3/chase.md`, "The last third held 40% longer"). Before

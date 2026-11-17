@@ -7,6 +7,21 @@ journal of the mechanic's file under `mechanics/` (see `README.md`).
 Versions before 2.2.0 have no entry here: their story is
 `PORT-JOURNAL.md`, the roadmap of the port as it was kept.
 
+2026-11-17: **3.0.142 - the volume of the music and of the sounds.** The
+main screen of the menu has a new item, Sound, opening its own screen: two
+rows of ten cells, Music and Sounds, the difficulty's cells in one column.
+A click on a cell lights the row up to it, a click on the last lit cell
+puts it out - that is how one cell reaches silence; the wheel over a row
+moves it a cell a notch. Both volumes live in the `audio` section of
+settings.json (`music`, `sounds`, 0..10, full by default; out of range is
+the nearest end) and hold at once on what plays. In `Audio` the player's
+volume stands over everything: the music's over `SetMusicLevel` and the
+pause, and over the tracks played as sounds (the victory track); the
+sounds' as each chunk's own volume (`Mix_VolumeChunk`), not a channel's.
+The cells are heard squared (`LoudnessGain`). A change of the sounds plays
+the medkit's sound to hear it by (`menu.md`, "Sound: the volume of the
+music and of the sounds"). Tests: `Tests.Game.Config` (5).
+
 2026-11-17: **3.0.141 - only health saves, the hunt holds longer.** A
 wound that would kill is taken by the reward in the slot only when it is
 the health reward (`HurtHero`, `FBonus = bkHealth`); any other lets the

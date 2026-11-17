@@ -974,7 +974,11 @@ the sound bank.
   (`sounds\`, strict: a missing file raises `EAudioError` - at startup for what
   `Game.Moon` preloads, on first `Play` for a name it did not),
   `PlayMusic`/`StopMusic` (`music\`, OGG, lenient: a missing track skips
-  silently), `ToggleMusicMuted` (`MusicMuted` reads it back), `Enabled`
+  silently), `ToggleMusicMuted` (`MusicMuted` reads it back),
+  `SetMusicVolume`/`SetSoundVolume` (3.0.142: the player's volumes 0..1,
+  heard squared - `LoudnessGain`; the music's over `SetMusicLevel`, the
+  hush and the tracks played as sounds, the sounds' as each chunk's own
+  volume via `Mix_VolumeChunk` in `ApplyChunkVolume`), `Enabled`
   (False when the mixer DLL is absent
   -> every call becomes a no-op). `MixChannels` = 32: a one-shot with no free
   channel is dropped in silence, and the chain gun's 2.4 s shots alone hold
@@ -1037,14 +1041,18 @@ no version resource, so nothing else has to agree with it.
 - **`TLanguage`** = (`lgEnglish`, `lgRussian`); `LanguageIds` ('en'/'ru') - one
   vocabulary serving both config files and the dictionary file names.
 - **`TGameConfig`** (record) - window w/h, fullscreen, vsync, fpsCap, tickRate,
-  difficulty, language; `Defaults` factory.
+  difficulty, language, music and sound volume; `Defaults` factory.
+- **`TVolume`** = 0..10 (3.0.142), `VolumeSteps` = 10: the player's volume in
+  the menu's cells; read from the `audio` section (`music`, `sounds`), out of
+  range clamped to the nearest end (`ClampVolume`).
 - Two layers over `Defaults`: `bin\config.json` (shipped, read only) and
   `%APPDATA%\Moon2D\settings.json` (the player's choices; the path comes from
   `UserSettingsFileName`). `LoadGameConfig(shipped, settings)` overlays them in
   that order, key by key (private `OverlayConfigFile`); a file with any problem
   is skipped whole and the layers below stay - configuration is a preference,
   never a reason to crash.
-- Savers: `SaveGameDifficulty`, `SaveGameLanguage`, `SaveWindowFullscreen` -
+- Savers: `SaveGameDifficulty`, `SaveGameLanguage`, `SaveWindowFullscreen`,
+  `SaveMusicVolume`, `SaveSoundVolume` -
   one key each into settings.json through the private `SaveKey` (section, key,
   owned `TJSONValue`). The folder is created on the first save, an unparsable
   file is left alone, a locked one is swallowed. Nothing writes config.json.
@@ -7648,7 +7656,8 @@ The main menu: the sky rig, the screens, the dolly between them.
     reuses the live sky as scenery), `MouseMove`, `Click -> TMenuResult`,
     `HandleEscape` (True = consumed), `ShowShowcase`/`ShowcaseActive`/
     `EndShowcase`, `DrawVersion` (the `vX.Y.Z` tag in the bottom-right corner
-    of every menu screen), `DrawDifficultyCells`, `DrawDifficultyNote` (the
+    of every menu screen), `DrawCells` (a row of cells lit from the left:
+    the difficulty's and the volumes'), `DrawDifficultyNote` (the
     grade's name and, over a running game, when it bites - while the cursor
     rests on the item), `DrawCredits` (five lines on the 2008 rows).
     `ItemWidth` = caption plus whatever rides after it, one width for drawing
@@ -7668,11 +7677,21 @@ The main menu: the sky rig, the screens, the dolly between them.
     `EarthEntryDriftY` 60 (y 169), level; then the drift's own respawns.
     **`ShowMoon`** - the moon back, entering half seen as at the start;
     nothing when it is there. `Tick` spins the body shown.
+  - 3.0.142, **the Sound screen** (`msSound`, opened by `iaSound` on the
+    main screen): Music and Sounds (`iaMusicVolume`, `iaSoundVolume`), ten
+    cells each in one column (`VolumeCellsLeft`, `VolumeCellsWidth`).
+    `TryHoveredVolumeCell` (1-based, a gap belongs to the cell on its
+    left), `ClickedVolume` (a click on the last lit cell puts it out),
+    `ClickVolume`, `SetVolume`, **`Wheel(notches)`** - a cell a notch over
+    a row. Commands `mcSetMusicVolume`, `mcSetSoundVolume` with
+    `TMenuResult.Volume`; display copies `MusicVolume`, `SoundVolume`.
 
 ### `Game/Game.Loop.pas` (~385 lines)
 Host: window and renderer plus the fixed-timestep loop.
 - **`TGameApp`** (abstract) - `Update(dt)` (fixed), `Render(renderer, alpha)`
   (alpha = the interpolation fraction), `HandleKey/MouseMove/MouseButton`,
+  `HandleMouseWheel(notches)` (3.0.142; `WheelNotches` undoes a flipped
+  wheel),
   `RequestQuit` / `QuitRequested`.
 - **`TGameHost`** - `Create(config, title)`: declares per-monitor DPI
   awareness before `SDL_Init`, creates the window and renderer (the D3D11
@@ -9625,10 +9644,12 @@ the project's search path (`..\Core`, `..\Game`, `..\Game\Orbs`,
 ### `config.json` (tiny)
 Shipped defaults: `window` (width/height/fullscreen/vsync/fpsCap) + `game`
 (tickRate, difficulty id, language id). Read by `Game.Config`, never written by
-the game.
+the game. An `audio` section (`music`, `sounds`, 0..10) is read too; the
+shipped file has none - full volume is the default.
 
 The player's layer, `%APPDATA%\Moon2D\settings.json`, has the same shape but
-holds only the keys the player touched (difficulty, language, fullscreen - or
+holds only the keys the player touched (difficulty, language, fullscreen, the
+volumes - or
 anything written in by hand) and overrides config.json key by key. It lives
 outside the game folder: not in the repository, not in a release, kept when a
 new release is unpacked over the old one.
@@ -10230,6 +10251,7 @@ made again in 3.0.83). 3.0.116: `orblauncher.wav`, `orbhit.wav`
 | Screen transitions / checkpoints; where a pit or death returns the hero on a screen | Game.Moon.pas (`HandleScreenTransitions`, `ArriveOnScreen`, `PinRespawnPoint`, `HandlePitFall`, `MoveCheckpoint`) + `respawns` and the `respawn` action in levelN.json + Levels.Defs.pas (`TRespawnPoint`, `CheckRespawns`, `CheckRespawnCell`) + Levels.Events.pas (`eaRespawn`) |
 | A jet under a pad: its color, length and strength, the flare around a flight, a coughing engine | the smoke part of a rig in levelN.json (`heatTint`, `speed`, `life`, `intensity`, `surge`, `flow`) + Levels.Dynamics.pas (`TSmoke`, `FollowEffort`, `EffortEaseTicks`) + Pads.World.pas (`Effort`, `Thrusting`, `ThrustLeadTicks`) + Pads.Plunge.pas `Effort` + Game.Moon.pas `LocateParent` |
 | Menu screens / layout / language switching / trailer showcase frames | Menu.pas + Localization.pas |
+| The volume of the music and of the sounds (3.0.142): the Sound screen, its cells and the wheel, settings.json | Menu.pas (`msSound`, `ClickedVolume`, `Wheel`, `DrawCells`) + Game.Config.pas (`TVolume`, `SaveMusicVolume`, `SaveSoundVolume`) + Audio.pas (`SetMusicVolume`, `SetSoundVolume`, `LoudnessGain`) + Game.Loop.pas (`HandleMouseWheel`) + Sdl2.Core.pas (`TSdlMouseWheelEvent`) + Game.Moon.pas (`ApplyMenuResult`, `VolumeSampleSoundFile`) + Localization.pas, bin/lang + Tests.Game.Config.pas (+docs/mechanics/menu.md) |
 | Menu sky: stars, the spinning moon, the dolly into a submenu | Menu.Starfield.pas / Menu.Globe.pas / Menu.pas (`DrawSky`, `*Zoom`) |
 | A lit sphere: shading, terminator, atmosphere, night lights | Render.Globe.pas |
 | The Earth in a level's sky; its phase and the dawn | `dynamics` (`globe`) and `events` (`sun`) in levelN.json + Levels.Dynamics.pas (`TSkyGlobe`) + the `earth` / `earth-night` maps in `sky.mset` (shared, declared in `objectSets`) + Render.Globe.pas |

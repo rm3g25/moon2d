@@ -1,10 +1,50 @@
-# Menu: the sky, the logo, the difficulty, the zoom
+# Menu: the sky, the logo, the difficulty, the zoom, the sound
 
 The main menu rebuilt for 3.0: the sky drawn by code, the logo with a
 glow of its own (`Menu.Logo`), the difficulty items, the zoom into the
 level.
 
 ## Journal
+
+### Sound: the volume of the music and of the sounds (3.0.142, 2026-11-17)
+
+Asked for: the volume of the music and of the sounds, down to silence.
+Two new items were too many for the main screen, so they live on a screen
+of their own.
+
+- The main screen: Sound after Difficulty (`iaSound`), opening `msSound`
+  - Music, Sounds, Back. Its title is the item's own word (`sound`).
+- Each row: ten cells (`VolumeSteps`, `TVolume` = 0..10) of the
+  difficulty's size and gap, both rows' cells in one column after the
+  longer caption (`VolumeCellsLeft`). Chosen over a click cycling the row
+  (the difficulty's way: one step down is a whole round) and over a
+  separate "off" mark (one more thing to click in the row).
+- A click on a cell lights the row up to it; on the last lit cell - puts
+  it out (`ClickedVolume`), so the first cell goes to silence. A gap
+  belongs to the cell on its left: no dead spots. A click on the caption
+  does nothing. The wheel over a row: a cell a notch (`Wheel`, the host's
+  `HandleMouseWheel`; a flipped wheel is turned back in `WheelNotches`).
+- settings.json: `audio` - `music`, `sounds` (`SaveMusicVolume`,
+  `SaveSoundVolume`), saved on every change as the difficulty is; out of
+  range takes the nearest end (`ClampVolume`): a hand-written -1 meant
+  silence, not full.
+- `Audio`: the player's volumes over everything else - `FMusicVolume`
+  times the scenes' `SetMusicLevel` and the pause's hush, and over the
+  tracks played as sounds (the victory track: it is music to the ear);
+  `FSoundVolume` as each sound chunk's own volume (`Mix_VolumeChunk`),
+  set on load and on a change - a channel plays any chunk, so a channel's
+  volume cannot tell a sound from a track. Applied at once, on what
+  already plays too. The cells are heard squared (`LoudnessGain`): with
+  linear shares the change sat in the last two cells. The debug key M
+  (mute the music for a trailer) stays on top.
+- A change of the sounds plays `medic.wav` (0.23 s) - the menu has no
+  sound of its own to hear the new level by; the music is heard anyway.
+- Tests: `Tests.Game.Config` - full with no files, settings over the
+  shipped file, the nearest end, a save read back, a save keeping the
+  other keys. The menu and the mixer - by ear and eye.
+- For the live run: the squared curve (is the lowest cell audible, is the
+  middle the middle); the sample's choice; the rows' width in English and
+  Russian against the frame's right edge (about 490 of 512).
 
 ### Сессия: меню - небо, логотип, сложность, наезд, v3.0.3 (2026-09-28/29)
 
