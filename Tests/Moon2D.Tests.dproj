@@ -110,6 +110,7 @@
         <DCCReference Include="Game\Tests.Game.Wreckage.pas"/>
         <DCCReference Include="Game\Tests.Game.Landing.pas"/>
         <DCCReference Include="Game\Tests.Game.Gate.pas"/>
+        <DCCReference Include="Game\Tests.Game.Config.pas"/>
         <DCCReference Include="Game\Tests.Game.Titles.pas"/>
         <DCCReference Include="Game\Tests.Game.FarPlane.pas"/>
         <DCCReference Include="Game\Tests.Game.Bonus.pas"/>

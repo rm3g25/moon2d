@@ -31,6 +31,10 @@ type
   // - which dictionary file to read - is Localization's business.
   TLanguage = (lgEnglish, lgRussian);
 
+  // The player's volume, in cells of the menu: 0 - silence,
+  // VolumeSteps - full
+  TVolume = 0..10;
+
   TGameConfig = record
     WindowWidth: Integer;
     WindowHeight: Integer;
@@ -40,6 +44,8 @@ type
     TickRate: Integer; // fixed logic updates per second
     Difficulty: TDifficulty;
     Language: TLanguage;
+    MusicVolume: TVolume;
+    SoundVolume: TVolume;
     class function Defaults: TGameConfig; static;
   end;
 
@@ -52,6 +58,7 @@ const
   // Protocol ids for the "language" key of the config files AND the names of
   // the dictionary files (lang\en.json) - one vocabulary, two readers
   LanguageIds: array [TLanguage] of string = ('en', 'ru');
+  VolumeSteps = High(TVolume);
 
 // %APPDATA%\Moon2D\settings.json - the player's layer.
 function UserSettingsFileName: string;
@@ -77,6 +84,11 @@ procedure SaveGameLanguage(const AFileName: string; AValue: TLanguage);
 // "window" section.
 procedure SaveWindowFullscreen(const AFileName: string; AValue: Boolean);
 
+// Same contract as SaveGameDifficulty, for the "music" and "sounds" keys
+// of the "audio" section.
+procedure SaveMusicVolume(const AFileName: string; AValue: TVolume);
+procedure SaveSoundVolume(const AFileName: string; AValue: TVolume);
+
 implementation
 
 uses
@@ -90,6 +102,9 @@ const
   FullscreenKey = 'fullscreen';
   DifficultyKey = 'difficulty';
   LanguageKey = 'language';
+  AudioSectionKey = 'audio';
+  MusicVolumeKey = 'music';
+  SoundVolumeKey = 'sounds';
 
   SettingsFolderName = 'Moon2D';
   SettingsFileName = 'settings.json';
@@ -111,6 +126,20 @@ begin
   Result.TickRate := 33;
   Result.Difficulty := dfNormal;
   Result.Language := lgEnglish; // the release speaks English first
+  Result.MusicVolume := VolumeSteps;
+  Result.SoundVolume := VolumeSteps;
+end;
+
+// Out of range is the nearest end, not a fallback to full: a hand-edited
+// -1 meant silence
+function ClampVolume(AValue: Integer): TVolume;
+begin
+  if AValue < Low(TVolume) then
+    Result := Low(TVolume)
+  else if AValue > High(TVolume) then
+    Result := High(TVolume)
+  else
+    Result := AValue;
 end;
 
 // Deliberately lenient, in contrast to ParseGrades/GradeOf in
@@ -197,6 +226,15 @@ begin
           LanguageIds[Result.Language]);
         Result.Language := LanguageFromId(LanguageId);
       end;
+
+      var Audio := Root.GetValue<TJSONObject>(AudioSectionKey, nil);
+      if Assigned(Audio) then
+      begin
+        Result.MusicVolume := ClampVolume(Audio.GetValue<Integer>(
+          MusicVolumeKey, Result.MusicVolume));
+        Result.SoundVolume := ClampVolume(Audio.GetValue<Integer>(
+          SoundVolumeKey, Result.SoundVolume));
+      end;
     finally
       Root.Free;
     end;
@@ -278,6 +316,18 @@ end;
 procedure SaveWindowFullscreen(const AFileName: string; AValue: Boolean);
 begin
   SaveKey(AFileName, WindowSectionKey, FullscreenKey, TJSONBool.Create(AValue));
+end;
+
+procedure SaveMusicVolume(const AFileName: string; AValue: TVolume);
+begin
+  SaveKey(AFileName, AudioSectionKey, MusicVolumeKey,
+    TJSONNumber.Create(AValue));
+end;
+
+procedure SaveSoundVolume(const AFileName: string; AValue: TVolume);
+begin
+  SaveKey(AFileName, AudioSectionKey, SoundVolumeKey,
+    TJSONNumber.Create(AValue));
 end;
 
 end.

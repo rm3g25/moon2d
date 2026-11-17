@@ -57,6 +57,7 @@ uses
   Tests.Game.Wreckage in 'Game\Tests.Game.Wreckage.pas',
   Tests.Game.Landing in 'Game\Tests.Game.Landing.pas',
   Tests.Game.Gate in 'Game\Tests.Game.Gate.pas',
+  Tests.Game.Config in 'Game\Tests.Game.Config.pas',
   Tests.Game.Titles in 'Game\Tests.Game.Titles.pas',
   Tests.Game.FarPlane in 'Game\Tests.Game.FarPlane.pas',
   Tests.Game.Bonus in 'Game\Tests.Game.Bonus.pas',

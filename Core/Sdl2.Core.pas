@@ -52,6 +52,11 @@ const
   SdlEventMouseMotion = $400;
   SdlEventMouseButtonDown = $401;
   SdlEventMouseButtonUp = $402;
+  SdlEventMouseWheel = $403;
+
+  // SDL_MouseWheelDirection: flipped - the system turned the wheel round
+  // (natural scrolling), the counts come negated
+  SdlMouseWheelFlipped = 1;
 
   // SDL_RendererFlip
   SdlFlipNone = 0;
@@ -209,6 +214,18 @@ type
     Y: Int32;
   end;
 
+  // The head of SDL_MouseWheelEvent: the fields after Direction (precise
+  // counts, mouse place) came in later versions and are not read
+  TSdlMouseWheelEvent = record
+    EventType: UInt32;
+    Timestamp: UInt32;
+    WindowId: UInt32;
+    Which: UInt32;
+    X: Int32;
+    Y: Int32; // notches, positive away from the player
+    Direction: UInt32;
+  end;
+
   // SDL_Event is a C union 56 bytes wide; the padding arm guarantees the
   // full size so SDL can write any event into it safely.
   TSdlEvent = record
@@ -217,6 +234,7 @@ type
       1: (Key: TSdlKeyboardEvent);
       2: (Motion: TSdlMouseMotionEvent);
       3: (Button: TSdlMouseButtonEvent);
+      5: (Wheel: TSdlMouseWheelEvent);
       4: (Padding: array [0..55] of Byte);
   end;
   PSdlEvent = ^TSdlEvent;

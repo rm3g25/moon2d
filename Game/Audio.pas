@@ -65,6 +65,9 @@ function Mix_LoadWAV_RW(ASrc: PSdlRWops; AFreeSrc: Integer): PMixChunk;
   cdecl; external MixerLib name 'Mix_LoadWAV_RW' delayed;
 procedure Mix_FreeChunk(AChunk: PMixChunk); cdecl;
   external MixerLib name 'Mix_FreeChunk' delayed;
+// The chunk's own volume, 0..128, over every channel that plays it
+function Mix_VolumeChunk(AChunk: PMixChunk; AVolume: Integer): Integer; cdecl;
+  external MixerLib name 'Mix_VolumeChunk' delayed;
 // Same story: Mix_PlayChannel is a macro over this
 function Mix_PlayChannelTimed(AChannel: Integer; AChunk: PMixChunk;
   ALoops, ATicks: Integer): Integer; cdecl;
@@ -144,6 +147,11 @@ type
     FEnabled: Boolean;
     FMusicMuted: Boolean;
     FMusicLevel: Single; // 0..1 of the full volume
+    // The player's volumes as the menu sets them, 0..1, over everything
+    // else: FMusicVolume over the music and the tracks played as sounds,
+    // FSoundVolume over the sounds
+    FMusicVolume: Single;
+    FSoundVolume: Single;
     // The pause's own share of the volume, apart from FMusicLevel: 1, or
     // fading by FHushStep a tick; paused at 0
     FHush: Single;
@@ -165,6 +173,8 @@ type
       THeldSound;
     function StillHeld(const ASound: THeldSound): Boolean;
     procedure ApplyMusicVolume;
+    procedure ApplyChunkVolume(AChunks: TDictionary<string, PMixChunk>;
+      AShare: Single);
     procedure TickHush;
     procedure ClearHush;
   public
@@ -194,6 +204,11 @@ type
     // The music at a share of its volume, 0..1; it stays at it through
     // track changes. Muting outranks it.
     procedure SetMusicLevel(ALevel: Single);
+    // The player's volume of the music and of the sounds, 0..1 - the share
+    // of the menu's cells. Each holds through everything, at once on what
+    // already plays; 0 is silence.
+    procedure SetMusicVolume(AShare: Single);
+    procedure SetSoundVolume(AShare: Single);
     // AFadeSeconds above 0 brings the track in from silence
     procedure PlayMusic(const AFileName: string; AMode: TMusicMode;
       AFadeSeconds: Single = 0);
@@ -244,8 +259,22 @@ resourcestring
 
 const
   MillisecondsPerSecond = 1000;
+  MixMaxVolume = 128; // MIX_MAX_VOLUME of SDL_mixer.h
   // The game ticks the bank: the pause fades by its ticks
   LogicTicksPerSecond = 33;
+
+// Equal steps of the cells must sound as equal steps, and the ear hears
+// loudness, not amplitude: linear shares put all the change into the
+// last two cells
+function LoudnessGain(AShare: Single): Single;
+begin
+  Result := AShare * AShare;
+end;
+
+function ChunkVolume(AShare: Single): Integer;
+begin
+  Result := Round(MixMaxVolume * LoudnessGain(AShare));
+end;
 
 function MixerBytesPerSecond: Integer;
 const
@@ -278,6 +307,8 @@ begin
   FSounds := TDictionary<string, PMixChunk>.Create;
   FTracks := TDictionary<string, PMixChunk>.Create;
   FMusicLevel := 1;
+  FMusicVolume := 1;
+  FSoundVolume := 1;
   FHush := 1;
   try
     // Delay-loaded import: a missing SDL2_mixer.dll surfaces exactly
@@ -322,6 +353,7 @@ begin
   if Chunk = nil then
     raise EAudioError.CreateFmt(SSoundLoadFailed,
       [FSoundsDir + AFileName, SdlErrorText]);
+  Mix_VolumeChunk(Chunk, ChunkVolume(FSoundVolume));
   FSounds.Add(AFileName, Chunk);
 end;
 
@@ -382,8 +414,11 @@ begin
     Exit;
   if FTracks.ContainsKey(AFileName) then
     Exit;
-  FTracks.Add(AFileName, Mix_LoadWAV_RW(
-    SDL_RWFromFile(PAnsiChar(SdlText(FMusicDir + AFileName)), 'rb'), 1));
+  var Chunk := Mix_LoadWAV_RW(
+    SDL_RWFromFile(PAnsiChar(SdlText(FMusicDir + AFileName)), 'rb'), 1);
+  if Chunk <> nil then
+    Mix_VolumeChunk(Chunk, ChunkVolume(FMusicVolume));
+  FTracks.Add(AFileName, Chunk);
 end;
 
 function TSoundBank.PlayTrackHeld(const AFileName: string): THeldSound;
@@ -434,18 +469,42 @@ begin
   ApplyMusicVolume;
 end;
 
+procedure TSoundBank.SetMusicVolume(AShare: Single);
+begin
+  FMusicVolume := AShare;
+  ApplyMusicVolume;
+  ApplyChunkVolume(FTracks, FMusicVolume);
+end;
+
+procedure TSoundBank.SetSoundVolume(AShare: Single);
+begin
+  FSoundVolume := AShare;
+  ApplyChunkVolume(FSounds, FSoundVolume);
+end;
+
 // Music volume is global mixer state: it survives Halt/Load/Play, so a
 // track change while muted stays silent until the toggle flips back
 procedure TSoundBank.ApplyMusicVolume;
-const
-  MixMaxVolume = 128; // MIX_MAX_VOLUME of SDL_mixer.h
 begin
   if not FEnabled then
     Exit;
   if FMusicMuted then
     Mix_VolumeMusic(0)
   else
-    Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel * FHush));
+    Mix_VolumeMusic(Round(MixMaxVolume * FMusicLevel * FHush *
+      LoudnessGain(FMusicVolume)));
+end;
+
+// A chunk's volume, not a channel's: a channel plays any sound, and the
+// sounds and the tracks played as sounds share the channels
+procedure TSoundBank.ApplyChunkVolume(AChunks: TDictionary<string, PMixChunk>;
+  AShare: Single);
+begin
+  if not FEnabled then
+    Exit;
+  for var Chunk in AChunks.Values do
+    if Chunk <> nil then
+      Mix_VolumeChunk(Chunk, ChunkVolume(AShare));
 end;
 
 procedure TSoundBank.PlayMusic(const AFileName: string; AMode: TMusicMode;

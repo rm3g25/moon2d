@@ -41,6 +41,8 @@ type
     // size is active) - for Moon 2D that is the frame of Game.Space.
     procedure HandleMouseMove(AX, AY: Integer); virtual;
     procedure HandleMouseButton(AButton: Integer; ADown: Boolean); virtual;
+    // ANotches: positive - turned away from the player, negative - toward
+    procedure HandleMouseWheel(ANotches: Integer); virtual;
 
     procedure RequestQuit;
     property QuitRequested: Boolean read FQuitRequested;
@@ -98,6 +100,10 @@ begin
 end;
 
 procedure TGameApp.HandleMouseButton(AButton: Integer; ADown: Boolean);
+begin
+end;
+
+procedure TGameApp.HandleMouseWheel(ANotches: Integer);
 begin
 end;
 
@@ -231,6 +237,13 @@ begin
     Format('%s [%s]', [FBaseTitle, FRendererBackend]))));
 end;
 
+function WheelNotches(const AWheel: TSdlMouseWheelEvent): Integer;
+begin
+  Result := AWheel.Y;
+  if AWheel.Direction = SdlMouseWheelFlipped then
+    Result := -Result;
+end;
+
 procedure TGameHost.PumpEvents(const AApp: TGameApp);
 var
   Event: TSdlEvent;
@@ -250,6 +263,8 @@ begin
         AApp.HandleMouseButton(Event.Button.Button, True);
       SdlEventMouseButtonUp:
         AApp.HandleMouseButton(Event.Button.Button, False);
+      SdlEventMouseWheel:
+        AApp.HandleMouseWheel(WheelNotches(Event.Wheel));
     end;
 end;
 

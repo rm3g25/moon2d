@@ -49,16 +49,18 @@ type
   // What the click asked the game to do. mcNone covers both a miss and
   // a navigation click that the menu resolved internally.
   TMenuCommand = (mcNone, mcStartLevel, mcResume, mcToggleFullscreen,
-    mcSetDifficulty, mcSetLanguage, mcQuit);
+    mcSetDifficulty, mcSetLanguage, mcSetMusicVolume, mcSetSoundVolume,
+    mcQuit);
 
   TMenuResult = record
     Command: TMenuCommand;
     LevelFile: string;        // meaningful for mcStartLevel only
     Difficulty: TDifficulty;  // meaningful for mcSetDifficulty only
     Language: TLanguage;      // meaningful for mcSetLanguage only
+    Volume: TVolume; // meaningful for mcSetMusicVolume and mcSetSoundVolume
   end;
 
-  TMenuScreen = (msMain, msLevelSelect, msCredits, msQuitConfirm);
+  TMenuScreen = (msMain, msLevelSelect, msCredits, msQuitConfirm, msSound);
 
   // How the sky is shown: how much of the stars and of the nebula, 0..1,
   // and how far above its rest it stands, units at the near stars' depth
@@ -76,7 +78,8 @@ type
   // Menu-internal item actions; navigation ones resolve inside the menu,
   // the rest surface as TMenuCommand.
   TItemAction = (iaNewGame, iaResume, iaFullscreen, iaDifficulty,
-    iaCredits, iaAskQuit, iaBack, iaStartLevel, iaConfirmQuit);
+    iaCredits, iaAskQuit, iaBack, iaStartLevel, iaConfirmQuit, iaSound,
+    iaMusicVolume, iaSoundVolume);
 
   TMenuItem = record
     Caption: string;
@@ -123,6 +126,9 @@ type
     FMouseX, FMouseY: Integer;
     FHasActiveGame: Boolean;
     FDifficulty: TDifficulty; // display copy: the cells and the note follow it
+    // Display copies as well, in cells
+    FMusicVolume: TVolume;
+    FSoundVolume: TVolume;
     // Owned flag textures per language; the yellow box marks FLanguage
     FFlagTextures: array [TLanguage] of PSdlTexture;
     FLanguage: TLanguage;
@@ -141,12 +147,16 @@ type
     function FlagRect(ALanguage: TLanguage): TSdlFRect;
     function TryHoveredFlag(out ALanguage: TLanguage): Boolean;
     function ExecuteItem(const AItem: TMenuItem): TMenuResult;
+    function VolumeCellsLeft: Double;
+    function TryHoveredVolumeCell(out ACell: Integer): Boolean;
+    function SetVolume(AAction: TItemAction; AValue: TVolume): TMenuResult;
+    function ClickVolume(AAction: TItemAction): TMenuResult;
     function DepthStep: Single;
     function DrawDepth(AAlpha: Double): Single;
     procedure DrawLogo(AAlpha: Double);
     procedure DrawShowcaseLogo(AAlpha: Double);
     procedure DrawItems;
-    procedure DrawDifficultyCells(AX, AY: Double);
+    procedure DrawCells(AX, AY: Double; ACount, ALit: Integer);
     procedure DrawFlags;
     procedure DrawCredits;
     procedure DrawDifficultyNote;
@@ -180,6 +190,9 @@ type
     procedure MouseMove(AX, AY: Integer);
     // Left click at the last known mouse position.
     function Click: TMenuResult;
+    // The wheel turned at the last known mouse position: over a volume
+    // row, a cell per notch
+    function Wheel(ANotches: Integer): TMenuResult;
     // Escape pressed while the menu is up. True = the menu consumed it
     // (stepped back from a sub-screen); False = main screen, the caller
     // decides (resume the game or ignore).
@@ -195,6 +208,8 @@ type
     // Lent to the titles, which flare it over the world (Hud.Titles)
     property Logo: TMenuLogo read FLogo;
     property Difficulty: TDifficulty read FDifficulty write FDifficulty;
+    property MusicVolume: TVolume read FMusicVolume write FMusicVolume;
+    property SoundVolume: TVolume read FSoundVolume write FSoundVolume;
     // Set by the composition root AFTER it swapped the dictionary -
     // the setter rebuilds the current screen's captions through Tr
     property Language: TLanguage read FLanguage write SetLanguage;
@@ -303,6 +318,10 @@ const
     (DifficultyGrades - 1) * DifficultyCellGap;
   // The glyph color of the fonty atlas
   MenuInkColor: TRgb = (R: 188; G: 255; B: 0);
+  // The volume rows: a cell per step, as big as the difficulty's, all
+  // the cells of both rows in one column
+  VolumeCellsWidth = VolumeSteps * DifficultyCellSize +
+    (VolumeSteps - 1) * DifficultyCellGap;
 
   // The language flags (part 6.2): top-right corner of the main screen,
   // rightmost = highest TLanguage id. Files follow LanguageIds - a
@@ -535,6 +554,7 @@ begin
         // The survivor of the 2008 'Опции' screen and its grade
         // submenu: a click cycles the grade in place, the cells show it
         AddItem(Tr(SDifficultyTitle), iaDifficulty);
+        AddItem(Tr(SSound), iaSound);
         AddItem(Tr(SCredits), iaCredits);
         AddItem(Tr(SQuit), iaAskQuit);
       end;
@@ -560,6 +580,13 @@ begin
         FTitle := Tr(SQuitTitle);
         AddItem(Tr(SYes), iaConfirmQuit);
         AddItem(Tr(SNo), iaBack);
+      end;
+    msSound:
+      begin
+        FTitle := Tr(SSound);
+        AddItem(Tr(SMusicVolume), iaMusicVolume);
+        AddItem(Tr(SSoundVolume), iaSoundVolume);
+        AddItem(Tr(SBack), iaBack);
       end;
   end;
 end;
@@ -617,8 +644,35 @@ end;
 function TMoonMenu.ItemWidth(const AItem: TMenuItem): Double;
 begin
   Result := FFont.BigTextWidth(AItem.Caption);
-  if AItem.Action = iaDifficulty then
-    Result := Result + DifficultyCellsIndent + DifficultyCellsWidth;
+  case AItem.Action of
+    iaDifficulty:
+      Result := Result + DifficultyCellsIndent + DifficultyCellsWidth;
+    iaMusicVolume, iaSoundVolume:
+      Result := VolumeCellsLeft + VolumeCellsWidth - ItemColumnX;
+  end;
+end;
+
+// After the longer caption of the two rows
+function TMoonMenu.VolumeCellsLeft: Double;
+begin
+  var Widest: Double := 0;
+  for var Item in FItems do
+    if Item.Action in [iaMusicVolume, iaSoundVolume] then
+      Widest := Max(Widest, FFont.BigTextWidth(Item.Caption));
+  Result := ItemColumnX + Widest + DifficultyCellsIndent;
+end;
+
+// The cell under the mouse, 1-based; a gap belongs to the cell on its
+// left, so the row has no dead spots
+function TMoonMenu.TryHoveredVolumeCell(out ACell: Integer): Boolean;
+begin
+  var Offset: Double := FMouseX - VolumeCellsLeft;
+  Result := (Offset >= 0) and (Offset < VolumeCellsWidth);
+  if not Result then
+    Exit;
+  ACell := Trunc(Offset / (DifficultyCellSize + DifficultyCellGap)) + 1;
+  if ACell > VolumeSteps then
+    ACell := VolumeSteps;
 end;
 
 function TMoonMenu.FlagRect(ALanguage: TLanguage): TSdlFRect;
@@ -656,6 +710,66 @@ procedure TMoonMenu.MouseMove(AX, AY: Integer);
 begin
   FMouseX := AX;
   FMouseY := AY;
+end;
+
+// A click on a cell lights the row up to it; a click on the last lit
+// cell puts it out, which is how the first one reaches silence
+function ClickedVolume(ACurrent: TVolume; ACell: Integer): TVolume;
+begin
+  if ACell = ACurrent then
+    Result := ACell - 1
+  else
+    Result := ACell;
+end;
+
+function TMoonMenu.SetVolume(AAction: TItemAction;
+  AValue: TVolume): TMenuResult;
+begin
+  Result := Default(TMenuResult);
+  Result.Volume := AValue;
+  if AAction = iaMusicVolume then
+  begin
+    FMusicVolume := AValue;
+    Result.Command := mcSetMusicVolume;
+  end
+  else
+  begin
+    FSoundVolume := AValue;
+    Result.Command := mcSetSoundVolume;
+  end;
+end;
+
+// A click on the caption does nothing: only the cells hold a value
+function TMoonMenu.ClickVolume(AAction: TItemAction): TMenuResult;
+var
+  Cell: Integer;
+begin
+  Result := Default(TMenuResult);
+  if not TryHoveredVolumeCell(Cell) then
+    Exit;
+  var Current := FSoundVolume;
+  if AAction = iaMusicVolume then
+    Current := FMusicVolume;
+  Result := SetVolume(AAction, ClickedVolume(Current, Cell));
+end;
+
+function TMoonMenu.Wheel(ANotches: Integer): TMenuResult;
+begin
+  Result := Default(TMenuResult);
+  if FShowcase <> skNone then
+    Exit;
+  var Index := HoveredIndex;
+  if Index < 0 then
+    Exit;
+  var Action := FItems[Index].Action;
+  if not (Action in [iaMusicVolume, iaSoundVolume]) then
+    Exit;
+  var Current: Integer := FSoundVolume;
+  if Action = iaMusicVolume then
+    Current := FMusicVolume;
+  var Turned: Integer := EnsureRange(Current + ANotches, 0, VolumeSteps);
+  if Turned <> Current then
+    Result := SetVolume(Action, Turned);
 end;
 
 // Wild wraps around to normal
@@ -696,6 +810,10 @@ begin
       end;
     iaConfirmQuit:
       Result.Command := mcQuit;
+    iaSound:
+      ShowScreen(msSound);
+    iaMusicVolume, iaSoundVolume:
+      Result := ClickVolume(AItem.Action);
   end;
 end;
 
@@ -862,9 +980,16 @@ begin
   for var i := 0 to High(FItems) do
   begin
     FFont.DrawBig(FItems[i].Caption, ItemColumnX, ItemTop(i));
-    if FItems[i].Action = iaDifficulty then
-      DrawDifficultyCells(ItemColumnX + FFont.BigTextWidth(FItems[i].Caption) +
-        DifficultyCellsIndent, ItemTop(i));
+    case FItems[i].Action of
+      iaDifficulty:
+        DrawCells(ItemColumnX + FFont.BigTextWidth(FItems[i].Caption) +
+          DifficultyCellsIndent, ItemTop(i), DifficultyGrades,
+          Ord(FDifficulty) + 1);
+      iaMusicVolume:
+        DrawCells(VolumeCellsLeft, ItemTop(i), VolumeSteps, FMusicVolume);
+      iaSoundVolume:
+        DrawCells(VolumeCellsLeft, ItemTop(i), VolumeSteps, FSoundVolume);
+    end;
     // Faux bold on hover: the same caption a hair to the right fattens
     // every stroke (2008 signalled hover only through the cursor)
     if i = Hovered then
@@ -873,15 +998,16 @@ begin
   end;
 end;
 
-// Grades fill from the left: normal lights one cell, wild all of them
-procedure TMoonMenu.DrawDifficultyCells(AX, AY: Double);
+// The cells fill from the left: normal lights one cell of the
+// difficulty, wild all of them
+procedure TMoonMenu.DrawCells(AX, AY: Double; ACount, ALit: Integer);
 begin
   var RowY := AY + DifficultyCellTop;
   FBrush.BeginDraw;
-  for var i := 0 to DifficultyGrades - 1 do
+  for var i := 0 to ACount - 1 do
   begin
     var CellX := AX + i * (DifficultyCellSize + DifficultyCellGap);
-    if i <= Ord(FDifficulty) then
+    if i < ALit then
       FBrush.FullCell(CellX, RowY, DifficultyCellSize, DifficultyCellSize,
         MenuInkColor, 1)
     else

@@ -107,6 +107,10 @@ const
   SLevelSelectTitle = 'levelSelectTitle';
   SBack = 'back';
   SDifficultyTitle = 'difficultyTitle';
+  // The item of the main screen and the title of the screen it opens
+  SSound = 'sound';
+  SMusicVolume = 'musicVolume';
+  SSoundVolume = 'soundVolume';
   SDiffNormal = 'diffNormal';
   SDiffHard = 'diffHard';
   SDiffWild = 'diffWild';
@@ -192,7 +196,8 @@ const
     SBonusAwardFmt, SBrokeThrough, SBonusHudHint, SBonusWaitsFmt, STerminalHeader,
     SBonusSavedFmt, SBriefingHeader, SStrikeWhatGlows, SHullArmour,
     SMainTitle, SNewGame, SResume, SFullscreen, SCredits, SQuit,
-    SLevelSelectTitle, SBack, SDifficultyTitle,
+    SLevelSelectTitle, SBack, SDifficultyTitle, SSound, SMusicVolume,
+    SSoundVolume,
     SDiffNormal, SDiffHard, SDiffWild, SDiffHintLive,
     SCreditsTitle, SCreditsDone, SQuitTitle, SYes, SNo, SLogoCaption,
     SCreditsLine1, SCreditsLine2, SCreditsLine3, SCreditsLine4,

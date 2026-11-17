@@ -629,6 +629,7 @@ type
       AIsRepeat: Boolean); override;
     procedure HandleMouseMove(AX, AY: Integer); override;
     procedure HandleMouseButton(AButton: Integer; ADown: Boolean); override;
+    procedure HandleMouseWheel(ANotches: Integer); override;
   end;
 
 implementation
@@ -658,6 +659,8 @@ const
   PainSoundFile = 'pain.wav';         // hero hit (moon.dpr 751/984)
   PitSoundFile = 'down.wav';          // fell into a pit (780)
   BonusSoundFile = 'bonus.wav'; // the roulette fanfare (1829)
+  // Played as the sound volume changes in the menu, to hear the new one
+  VolumeSampleSoundFile = 'medic.wav';
   // The boss's armor bursting into his rage: what a machine dies with
   RageBlastSoundFile = 'platform.wav';
   BossCrashSoundFile = 'crash.wav';
@@ -1074,6 +1077,8 @@ begin
   FPress := TPress.Create;
   FArmorPings.Dice.Seed := ArmorPingSeed;
   FAudio := TSoundBank.Create(SoundsDir, MusicDir);
+  FAudio.SetMusicVolume(AConfig.MusicVolume / VolumeSteps);
+  FAudio.SetSoundVolume(AConfig.SoundVolume / VolumeSteps);
   PreloadSounds;
   FVictory.Channel := -1;
   FVictoryLeft := NoVictoryLeft;
@@ -1083,6 +1088,8 @@ begin
   FMenu := TMoonMenu.Create(ARenderer, FSprites, FFont, ALevels,
     FUiSet, FWeaponSet, FSkySet);
   FMenu.Difficulty := FDifficulty;
+  FMenu.MusicVolume := AConfig.MusicVolume;
+  FMenu.SoundVolume := AConfig.SoundVolume;
   FTitlesPainter := THudTitles.Create(ARenderer, FFont, FMenu.Logo, FTitles);
   FState := gsMenu;
   FResumeState := gsMenu;
@@ -1690,6 +1697,17 @@ begin
         LoadLanguage(AResult.Language);
         SaveGameLanguage(UserSettingsFileName, AResult.Language);
         FMenu.Language := AResult.Language;
+      end;
+    mcSetMusicVolume:
+      begin
+        FAudio.SetMusicVolume(AResult.Volume / VolumeSteps);
+        SaveMusicVolume(UserSettingsFileName, AResult.Volume);
+      end;
+    mcSetSoundVolume:
+      begin
+        FAudio.SetSoundVolume(AResult.Volume / VolumeSteps);
+        SaveSoundVolume(UserSettingsFileName, AResult.Volume);
+        FAudio.Play(VolumeSampleSoundFile);
       end;
     mcQuit:
       RequestQuit;
@@ -7092,6 +7110,12 @@ begin
     FHeldFire := ADown;
   if (AButton = 3) and ADown then // right: spend the bonus slot
     FBonusActivateQueued := True;
+end;
+
+procedure TMoonGame.HandleMouseWheel(ANotches: Integer);
+begin
+  if FState = gsMenu then
+    ApplyMenuResult(FMenu.Wheel(ANotches));
 end;
 
 procedure TMoonGame.HandleMouseMove(AX, AY: Integer);
